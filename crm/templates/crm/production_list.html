@@ -1,0 +1,340 @@
+{% extends "crm/base.html" %}
+{% load static %}
+{% block content %}
+
+<style>
+  .prod-list-page {
+    max-width: 1180px;
+    margin: 24px auto 40px auto;
+  }
+
+  .prod-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+
+  .prod-list-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #ffffff;
+  }
+
+  .prod-list-sub {
+    font-size: 13px;
+    color: #9ca3af;
+  }
+
+  .prod-stats {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    font-size: 12px;
+  }
+
+  .prod-stat-pill {
+    padding: 4px 9px;
+    border-radius: 999px;
+    border: 1px solid #374151;
+    background: #020617;
+    color: #e5e7eb;
+  }
+
+  .prod-list-card {
+    background: #050816;
+    border-radius: 14px;
+    border: 1px solid #1f2937;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+    box-shadow: 0 0 16px rgba(0,0,0,0.6);
+  }
+
+  .prod-list-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+
+  .prod-list-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .prod-list-thumb {
+    width: 46px;
+    height: 46px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #374151;
+    background: #020617;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: #6b7280;
+  }
+
+  .prod-list-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .prod-list-order-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #f9fafb;
+  }
+
+  .prod-list-order-meta {
+    font-size: 12px;
+    color: #9ca3af;
+  }
+
+  .prod-list-badge-status {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 999px;
+  }
+  .prod-list-badge-status.done { background:#16a34a; color:#ffffff; }
+  .prod-list-badge-status.in_progress { background:#0ea5e9; color:#020617; }
+  .prod-list-badge-status.hold { background:#78350f; color:#fef3c7; }
+  .prod-list-badge-status.planning { background:#4b5563; color:#f9fafb; }
+
+  .prod-list-progress-text {
+    font-size: 11px;
+    color: #9ca3af;
+  }
+
+  /* small stage strip */
+
+  .stage-strip-small {
+    display: flex;
+    border-radius: 999px;
+    overflow: hidden;
+    border: 1px solid #27272a;
+    background: #020617;
+    margin-top: 4px;
+  }
+
+  .stage-strip-small-item {
+    flex: 1 1 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 4px 6px;
+    font-size: 11px;
+    font-weight: 600;
+    border-right: 1px solid #020617;
+    white-space: nowrap;
+    color: #e5e7eb;
+  }
+  .stage-strip-small-item:last-child {
+    border-right: none;
+  }
+
+  .stage-strip-small-item.planned { background:#111827; }
+  .stage-strip-small-item.current { background:#1d4ed8; }
+  .stage-strip-small-item.done { background:#16a34a; }
+  .stage-strip-small-item.delay { background:#b91c1c; }
+  .stage-strip-small-item.hold { background:#78350f; }
+
+  .stage-emoji {
+    font-size: 13px;
+  }
+
+  .prod-list-bottom {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: center;
+    margin-top: 6px;
+    flex-wrap: wrap;
+  }
+
+  .prod-list-info-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 11px;
+    color: #9ca3af;
+  }
+
+  .prod-list-info-row strong {
+    color: #e5e7eb;
+  }
+
+  .prod-list-actions a {
+    font-size: 11px;
+  }
+
+  .badge-delay-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    display: inline-block;
+    margin-right: 4px;
+    background: #b91c1c;
+  }
+
+  @media (max-width: 768px) {
+    .prod-list-info-row {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
+</style>
+
+<div class="prod-list-page">
+
+  <div class="prod-list-header">
+    <div>
+      <div class="prod-list-title">Production orders</div>
+      <div class="prod-list-sub">
+        Track all bulk orders with live stage flow
+      </div>
+    </div>
+
+    <div class="prod-stats">
+      <div class="prod-stat-pill">
+        Total orders {{ total_orders }}
+      </div>
+      <div class="prod-stat-pill">
+        Active {{ active_orders }}
+      </div>
+      <div class="prod-stat-pill">
+        Delayed {{ delayed_orders }}
+      </div>
+      <div class="prod-stat-pill">
+        Total pieces {{ total_pieces }}
+      </div>
+      <div class="prod-stat-pill">
+        Reject {{ total_reject }} ({{ reject_percent }} percent)
+      </div>
+    </div>
+  </div>
+
+  {% if orders_data %}
+    {% for row in orders_data %}
+      {% with order=row.order stages=row.stages percent=row.percent_done has_delay=row.has_delay %}
+        <div class="prod-list-card">
+
+          <!-- top row -->
+          <div class="prod-list-top">
+            <div class="prod-list-main">
+              <div class="prod-list-thumb">
+                {% if order.product and order.product.image %}
+                  <img src="{{ order.product.image.url }}" alt="{{ order.product.name }}">
+                {% elif order.style_image %}
+                  <img src="{{ order.style_image.url }}" alt="{{ order.title }}">
+                {% else %}
+                  <span>Style</span>
+                {% endif %}
+              </div>
+              <div>
+                <div class="prod-list-order-title">
+                  {{ order.title }}
+                </div>
+                <div class="prod-list-order-meta">
+                  Code {{ order.order_code }}{% if order.customer %} · {{ order.customer.name|default:order.customer }}{% endif %}
+                </div>
+              </div>
+            </div>
+
+            <div class="text-end">
+              <div>
+                <span class="prod-list-badge-status {{ order.status }}">
+                  {{ order.get_status_display }}
+                </span>
+              </div>
+              <div class="prod-list-progress-text mt-1">
+                {{ percent }} percent complete
+              </div>
+            </div>
+          </div>
+
+          <!-- small stage strip -->
+          <div class="stage-strip-small">
+            {% for s in stages %}
+              <div class="stage-strip-small-item
+                {% if s.status == 'done' %}done
+                {% elif s.status == 'in_progress' %}current
+                {% elif s.status == 'delay' %}delay
+                {% elif s.status == 'hold' %}hold
+                {% else %}planned{% endif %}">
+                <span class="stage-emoji">
+                  {% if s.stage_key == "development" %}🧠
+                  {% elif s.stage_key == "sampling" %}🧪
+                  {% elif s.stage_key == "cutting" %}✂️
+                  {% elif s.stage_key == "sewing" %}🧵
+                  {% elif s.stage_key == "ironing" %}🧺
+                  {% elif s.stage_key == "qc" %}✅
+                  {% elif s.stage_key == "finishing" %}✨
+                  {% elif s.stage_key == "packing" %}📦
+                  {% elif s.stage_key == "shipping" %}🚚
+                  {% else %}⚙️{% endif %}
+                </span>
+                <span>
+                  {{ s.display_name|default:s.get_stage_key_display }}
+                </span>
+              </div>
+            {% empty %}
+              <div class="stage-strip-small-item planned">
+                No stages set
+              </div>
+            {% endfor %}
+          </div>
+
+          <!-- bottom row -->
+          <div class="prod-list-bottom">
+            <div class="prod-list-info-row">
+              <div>
+                <strong>{{ order.qty_total }}</strong> pcs
+              </div>
+              <div>
+                Sample {{ order.sample_deadline|date:"Y-m-d"|default:"-" }}
+              </div>
+              <div>
+                Bulk {{ order.bulk_deadline|date:"Y-m-d"|default:"-" }}
+              </div>
+              <div>
+                {% if has_delay %}
+                  <span class="badge-delay-dot"></span>Possible delay
+                {% else %}
+                  On track
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="prod-list-actions">
+              <a href="{% url 'production_detail' order.pk %}"
+                 class="btn btn-sm btn-outline-light">
+                Open
+              </a>
+              <a href="{% url 'production_next_stage' order.pk %}"
+                 class="btn btn-sm btn-warning">
+                Next stage
+              </a>
+            </div>
+          </div>
+
+        </div>
+      {% endwith %}
+    {% endfor %}
+  {% else %}
+    <div class="alert alert-secondary">
+      No production orders yet.
+    </div>
+  {% endif %}
+
+</div>
+
+{% endblock %}

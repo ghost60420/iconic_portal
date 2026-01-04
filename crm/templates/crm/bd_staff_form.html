@@ -1,0 +1,259 @@
+{% extends "crm/base.html" %}
+{% block content %}
+
+<style>
+  :root{
+    --bg:#020617;
+    --panel:#0b1220;
+    --panel2:#030712;
+    --line:#334155;
+    --line2:#111827;
+    --text:#f9fafb;
+    --muted:#94a3b8;
+    --gold1:#ffe39b;
+    --gold2:#e4c067;
+    --danger:#f87171;
+  }
+
+  .wrapx{ max-width: 980px; margin: 0 auto; color: var(--text); }
+
+  .cardx{
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    box-shadow: 0 14px 34px rgba(0,0,0,0.40);
+    overflow: hidden;
+  }
+
+  .topbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:12px;
+    flex-wrap:wrap;
+    margin-bottom: 14px;
+  }
+
+  .title{
+    margin:0;
+    font-weight: 900;
+    letter-spacing: 0.2px;
+    font-size: 20px;
+  }
+  .subtitle{
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 700;
+    line-height: 1.35;
+  }
+
+  .btnPill{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    padding:8px 14px;
+    border-radius:999px;
+    font-size:12px;
+    font-weight:900;
+    border:1px solid rgba(255,255,255,0.14);
+    text-decoration:none;
+    white-space:nowrap;
+    background: linear-gradient(145deg, #111827, var(--bg));
+    color: var(--text);
+    box-shadow: 0 3px 0 #020617;
+  }
+  .btnPill:hover{ filter: brightness(1.05); text-decoration:none; }
+
+  .btnGold{
+    background: linear-gradient(145deg, var(--gold1), var(--gold2));
+    color:#121212;
+    border-color:#f6d488;
+    box-shadow: 0 3px 0 #8a6b24;
+  }
+  .btnGold:hover{ filter: brightness(1.03); }
+
+  .formCard{
+    background: var(--panel);
+    border-top: 1px solid var(--line2);
+    padding: 16px;
+  }
+
+  .fieldGrid{
+    display:grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  @media (min-width: 820px){
+    .fieldGrid.two{
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+  }
+
+  .label{
+    font-size: 12px;
+    font-weight: 900;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+  .help{
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 700;
+    line-height: 1.35;
+  }
+
+  .err{
+    margin-top: 6px;
+    color: var(--danger);
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  input, select, textarea{
+    background: var(--panel2) !important;
+    border: 1px solid #4b5563 !important;
+    color: var(--text) !important;
+    border-radius: 12px !important;
+    padding: 10px 12px !important;
+    font-weight: 800 !important;
+    width: 100%;
+  }
+
+  input:focus, select:focus, textarea:focus{
+    outline: none !important;
+    border-color: rgba(255,227,155,0.55) !important;
+    box-shadow: 0 0 0 3px rgba(255,227,155,0.18) !important;
+  }
+
+  .checkRow{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding: 10px 12px;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    background: var(--panel2);
+  }
+
+  .checkRow input{
+    width: 18px;
+    height: 18px;
+    padding: 0 !important;
+    border-radius: 6px !important;
+  }
+
+  .actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:10px;
+    margin-top: 6px;
+  }
+
+  .alertBox{
+    border: 1px solid #7f1d1d;
+    background: var(--panel2);
+    color: var(--text);
+    border-radius: 12px;
+    padding: 10px 12px;
+    font-weight: 800;
+    font-size: 12px;
+    margin-bottom: 12px;
+  }
+</style>
+
+<div class="container-fluid">
+  <div class="wrapx">
+
+    <div class="topbar">
+      <div>
+        <h2 class="title">
+          {% if mode == "edit" or row %}Edit Bangladesh Staff{% else %}Add Bangladesh Staff{% endif %}
+        </h2>
+        <div class="subtitle">
+          Keep the staff list clean and consistent. Use simple role names and monthly salary in BDT.
+        </div>
+      </div>
+
+      <a href="{% url 'bd_staff_list' %}" class="btnPill">
+        ← Back
+      </a>
+    </div>
+
+    <div class="cardx">
+      <div class="formCard">
+
+        {% if form.non_field_errors %}
+          <div class="alertBox">
+            {{ form.non_field_errors }}
+          </div>
+        {% endif %}
+
+        <form method="post" novalidate>
+          {% csrf_token %}
+
+          <div class="fieldGrid two">
+            <div>
+              <div class="label">Name</div>
+              {{ form.name }}
+              {% for e in form.name.errors %}
+                <div class="err">{{ e }}</div>
+              {% endfor %}
+            </div>
+
+            <div>
+              <div class="label">Role</div>
+              {{ form.role }}
+              <div class="help">Example operator, helper, cutting master, merchandiser</div>
+              {% for e in form.role.errors %}
+                <div class="err">{{ e }}</div>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="fieldGrid two" style="margin-top:14px;">
+            <div>
+              <div class="label">Base salary BDT</div>
+              {{ form.base_salary_bdt }}
+              <div class="help">Monthly base salary in BDT. Numbers only.</div>
+              {% for e in form.base_salary_bdt.errors %}
+                <div class="err">{{ e }}</div>
+              {% endfor %}
+            </div>
+
+            <div>
+              <div class="label">Active</div>
+              <div class="checkRow">
+                {{ form.is_active }}
+                <div style="font-weight:900;">Is active</div>
+              </div>
+              {% for e in form.is_active.errors %}
+                <div class="err">{{ e }}</div>
+              {% endfor %}
+            </div>
+          </div>
+
+          {% for hidden in form.hidden_fields %}
+            {{ hidden }}
+          {% endfor %}
+
+          <div class="actions" style="margin-top:14px;">
+            <button type="submit" class="btnPill btnGold" style="border:none; min-width:140px;">
+              Save
+            </button>
+          </div>
+
+        </form>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}

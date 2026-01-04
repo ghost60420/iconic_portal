@@ -1,0 +1,325 @@
+{% extends "crm/base.html" %}
+{% load humanize %}
+{% block content %}
+
+<style>
+  :root{
+    --bg:#020617;
+    --line:#334155;
+    --text:#f9fafb;
+    --muted:#9ca3af;
+    --good:#4ade80;
+    --warn:#fbbf24;
+    --bad:#fb7185;
+  }
+
+  .wrap{
+    max-width:1200px;
+    margin:0 auto;
+    color:var(--text);
+  }
+
+  .head{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:12px;
+    flex-wrap:wrap;
+    margin-bottom:14px;
+  }
+
+  .title{
+    margin:0;
+    font-weight:900;
+  }
+
+  .sub{
+    margin-top:4px;
+    font-size:12px;
+    font-weight:800;
+    color:var(--muted);
+    line-height:1.35;
+  }
+
+  .topbar{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+
+  .pill{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:8px 14px;
+    border-radius:999px;
+    font-weight:900;
+    font-size:12px;
+    border:1px solid rgba(255,255,255,0.14);
+    background:linear-gradient(145deg,#0f172a,var(--bg));
+    color:var(--text);
+    text-decoration:none;
+    white-space:nowrap;
+  }
+  .pill:hover{ filter:brightness(1.05); text-decoration:none; }
+
+  .pill.gold{
+    background:linear-gradient(145deg,#f5d580,#d4b35f);
+    color:#111827;
+    border-color:rgba(255,215,128,0.55);
+  }
+
+  .cardx{
+    background:linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+    border:1px solid var(--line);
+    border-radius:16px;
+    overflow:hidden;
+  }
+
+  .filters{
+    padding:12px;
+    border-bottom:1px solid rgba(148,163,184,0.18);
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+
+  .ctrl{
+    background:#030712;
+    border:1px solid rgba(148,163,184,0.35);
+    color:var(--text);
+    border-radius:12px;
+    padding:9px 12px;
+    font-weight:800;
+    font-size:13px;
+    outline:none;
+    min-width:220px;
+  }
+  .ctrl.sm{ min-width:160px; }
+  .ctrl:focus{ border-color:rgba(245,213,128,0.6); }
+
+  table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:13px;
+  }
+
+  th, td{
+    padding:10px 12px;
+    border-bottom:1px solid rgba(148,163,184,0.18);
+    text-align:left;
+    font-weight:800;
+    vertical-align:middle;
+  }
+
+  th{
+    font-size:11px;
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:0.4px;
+  }
+
+  tbody tr{
+    cursor:pointer;
+  }
+
+  tbody tr:hover{
+    background:rgba(255,255,255,0.03);
+  }
+
+  .mono{
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  }
+
+  .status{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    font-size:11px;
+    font-weight:900;
+    padding:6px 10px;
+    border-radius:999px;
+    border:1px solid rgba(255,255,255,0.14);
+    background:rgba(255,255,255,0.03);
+    white-space:nowrap;
+  }
+  .draft{ color:#e5e7eb; }
+  .sent{ color:var(--warn); }
+  .partial{ color:var(--warn); }
+  .paid{ color:var(--good); }
+  .cancelled{ color:var(--bad); }
+  .unknown{ color:#e5e7eb; }
+
+  .right{ text-align:right; }
+
+  .link{
+    color:#fbbf24;
+    text-decoration:none;
+    font-weight:900;
+  }
+  .link:hover{ text-decoration:underline; }
+
+  @media (max-width: 900px){
+    table{ font-size:12px; }
+    th:nth-child(3), td:nth-child(3){ display:none; }
+  }
+  @media (max-width: 650px){
+    th:nth-child(2), td:nth-child(2){ display:none; }
+    .ctrl{ min-width:160px; }
+  }
+</style>
+
+<div class="container-fluid">
+  <div class="wrap">
+
+    <div class="head">
+      <div>
+        <h2 class="title">Invoices</h2>
+        <div class="sub">
+          All invoices in the system. Use search and filter to find invoices fast.
+        </div>
+      </div>
+
+      <div class="topbar">
+        <a href="{% url 'invoice_add' %}" class="pill gold">Add invoice</a>
+      </div>
+    </div>
+
+    <div class="cardx">
+
+      <div class="filters">
+        <input class="ctrl" id="q" type="text" placeholder="Search invoice, customer, order" autocomplete="off">
+        <select class="ctrl sm" id="statusFilter">
+          <option value="">All status</option>
+          <option value="draft">Draft</option>
+          <option value="sent">Sent</option>
+          <option value="partial">Partly paid</option>
+          <option value="paid">Paid</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </div>
+
+      <table id="invTable">
+        <thead>
+          <tr>
+            <th>Invoice</th>
+            <th>Customer</th>
+            <th>Order</th>
+            <th>Status</th>
+            <th class="right">Total</th>
+            <th class="right">Balance</th>
+            <th class="right">Action</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {% for inv in invoices %}
+            {% with st=inv.status|default:"unknown"|lower cur=inv.currency|default:"" %}
+            <tr class="invRow"
+                data-status="{{ st }}"
+                data-href="{% url 'invoice_view' inv.pk %}">
+
+              <td class="mono">
+                {{ inv.invoice_number|default:"-" }}
+              </td>
+
+              <td>
+                {{ inv.customer|default:"-" }}
+              </td>
+
+              <td>
+                {{ inv.order|default:"-" }}
+              </td>
+
+              <td>
+                <span class="status {% if st %}{{ st }}{% else %}unknown{% endif %}">
+                  {{ inv.get_status_display|default:"Unknown" }}
+                </span>
+              </td>
+
+              <td class="right">
+                {% if cur %}{{ cur }} {% endif %}
+                {{ inv.total_amount|default_if_none:0|floatformat:2|intcomma }}
+              </td>
+
+              <td class="right">
+                {% if cur %}{{ cur }} {% endif %}
+                {{ inv.balance|default_if_none:0|floatformat:2|intcomma }}
+              </td>
+
+              <td class="right" onclick="event.stopPropagation();">
+                <a class="link" href="{% url 'invoice_view' inv.pk %}">View</a>
+              </td>
+
+            </tr>
+            {% endwith %}
+          {% empty %}
+            <tr>
+              <td colspan="7" style="text-align:center; color:var(--muted); padding:20px;">
+                No invoices found
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+    </div>
+
+  </div>
+</div>
+
+<script>
+  (function(){
+    var q = document.getElementById("q");
+    var statusFilter = document.getElementById("statusFilter");
+    var rows = Array.prototype.slice.call(document.querySelectorAll(".invRow"));
+
+    function norm(s){
+      return (s || "").toString().toLowerCase().trim();
+    }
+
+    function rowText(r){
+      var tds = r.querySelectorAll("td");
+      var parts = [];
+      for(var i = 0; i < tds.length; i++){
+        parts.push(norm(tds[i].innerText));
+      }
+      return parts.join(" ");
+    }
+
+    function apply(){
+      var textQ = norm(q && q.value);
+      var st = norm(statusFilter && statusFilter.value);
+
+      rows.forEach(function(r){
+        var hay = rowText(r);
+        var rowSt = norm(r.getAttribute("data-status"));
+
+        var okText = !textQ || hay.indexOf(textQ) >= 0;
+        var okSt = !st || rowSt === st;
+
+        r.style.display = (okText && okSt) ? "" : "none";
+      });
+    }
+
+    rows.forEach(function(r){
+      r.addEventListener("click", function(e){
+        var t = e.target;
+        var tag = t && t.tagName ? t.tagName.toLowerCase() : "";
+        if(tag === "a" || tag === "button" || tag === "input" || tag === "select" || tag === "textarea" || (t.closest && t.closest("a"))) return;
+
+        var href = r.getAttribute("data-href");
+        if(href) window.location.href = href;
+      });
+    });
+
+    if(q){ q.addEventListener("input", apply); }
+    if(statusFilter){ statusFilter.addEventListener("change", apply); }
+
+    apply();
+  })();
+</script>
+
+{% endblock %}

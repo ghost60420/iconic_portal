@@ -1,0 +1,279 @@
+{% extends "crm/base.html" %}
+{% block content %}
+
+<style>
+  .ship-page {
+    max-width: 1100px;
+    margin: 16px auto;
+    padding: 0 8px;
+    color: #f9fafb;
+  }
+
+  .ship-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+
+  .ship-title {
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  .ship-actions .btn {
+    margin-left: 4px;
+    margin-bottom: 4px;
+  }
+
+  .btn {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-size: 12px;
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .btn-slate {
+    background: #020617;
+    color: #e5e7eb;
+    border-color: #374151;
+  }
+
+  .btn-gold {
+    background: linear-gradient(135deg, #facc15, #f97316);
+    color: #111827;
+    border-color: #fbbf24;
+    font-weight: 600;
+  }
+
+  .btn-gold-soft {
+    background: rgba(250, 204, 21, 0.12);
+    color: #facc15;
+    border-color: #facc15;
+  }
+
+  .btn-small {
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+
+  .card-box {
+    background: radial-gradient(circle at top left, #111827, #020617);
+    border: 1px solid #1f2937;
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.7);
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid #4b5563;
+    font-size: 11px;
+    color: #e5e7eb;
+    background: #020617;
+  }
+
+  .pill-green {
+    border-color: #22c55e;
+    color: #bbf7d0;
+    background: rgba(34, 197, 94, 0.1);
+  }
+
+  .pill-blue {
+    border-color: #0ea5e9;
+    color: #7dd3fc;
+    background: rgba(56, 189, 248, 0.1);
+  }
+
+  .muted {
+    font-size: 12px;
+    color: #9ca3af;
+  }
+
+  table.table-dark {
+    font-size: 12px;
+  }
+
+  thead tr {
+    background: #020617;
+  }
+
+  .status-pill {
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+  }
+
+  .status-planned {
+    background: rgba(148, 163, 184, 0.25);
+    color: #e5e7eb;
+  }
+
+  .status-booked {
+    background: rgba(59, 130, 246, 0.25);
+    color: #bfdbfe;
+  }
+
+  .status-shipped {
+    background: rgba(234, 179, 8, 0.25);
+    color: #facc15;
+  }
+
+  .status-delivered {
+    background: rgba(22, 163, 74, 0.25);
+    color: #bbf7d0;
+  }
+
+  .status-cancelled {
+    background: rgba(248, 113, 113, 0.25);
+    color: #fecaca;
+  }
+</style>
+
+<div class="ship-page">
+
+  <div class="ship-header">
+    <div class="ship-title">
+      📦 Shipments
+    </div>
+    <div class="ship-actions">
+      <a href="{% url 'opportunities_list' %}" class="btn btn-slate btn-small">
+        Back to opportunities
+      </a>
+      <a href="{% url 'shipment_add' %}" class="btn btn-gold btn-small">
+        Add shipment
+      </a>
+    </div>
+  </div>
+
+  <!-- summary bar -->
+  <div class="card-box" style="margin-bottom:10px;">
+    <div class="row">
+      <div class="col-md-3 col-6" style="margin-bottom:6px;">
+        <div class="muted">Total shipments</div>
+        <div class="pill pill-green">
+          {{ total_shipments }} shipments
+        </div>
+      </div>
+      <div class="col-md-3 col-6" style="margin-bottom:6px;">
+        <div class="muted">Total boxes</div>
+        <div class="pill pill-blue">
+          {{ total_boxes }} boxes
+        </div>
+      </div>
+      <div class="col-md-3 col-6" style="margin-bottom:6px;">
+        <div class="muted">Total weight</div>
+        <div class="pill">
+          {{ total_weight }} kg
+        </div>
+      </div>
+      <div class="col-md-3 col-6" style="margin-bottom:6px;">
+        <div class="muted">Total shipping cost</div>
+        <div class="pill">
+          {{ total_cost_bdt }} taka
+          {% if total_cost_cad %}
+            &nbsp; | &nbsp; {{ total_cost_cad }} cad
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- table -->
+  <div class="card-box">
+    {% if shipments %}
+      <div class="table-responsive">
+        <table class="table table-dark table-sm table-striped mb-0">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Carrier</th>
+              <th>Tracking</th>
+              <th>Order</th>
+              <th>Customer</th>
+              <th>Boxes</th>
+              <th>Weight kg</th>
+              <th>Cost BDT</th>
+              <th>Cost CAD</th>
+              <th>Status</th>
+              <th style="width:80px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in shipments %}
+              <tr>
+                <td>{{ s.ship_date|date:"Y-m-d"|default:"-" }}</td>
+                <td>{{ s.get_carrier_display }}</td>
+                <td>
+                  {% if s.tracking_number %}
+                    {% if s.tracking_url %}
+                      <a href="{{ s.tracking_url }}" target="_blank">
+                        {{ s.tracking_number }}
+                      </a>
+                    {% else %}
+                      {{ s.tracking_number }}
+                    {% endif %}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td>
+                  {% if s.order %}
+                    <a href="{% url 'production_detail' s.order.pk %}">
+                      {{ s.order.order_code|default:s.order.pk }}
+                    </a>
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td>
+                  {% if s.customer %}
+                    {{ s.customer.name|default:s.customer }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td>{{ s.box_count|default:"-" }}</td>
+                <td>{{ s.total_weight_kg|default:"-" }}</td>
+                <td>{{ s.cost_bdt|default:"-" }}</td>
+                <td>{{ s.cost_cad|default:"-" }}</td>
+                <td>
+                  <span class="status-pill
+                    {% if s.status == 'planned' %}status-planned{% endif %}
+                    {% if s.status == 'booked' %}status-booked{% endif %}
+                    {% if s.status == 'shipped' %}status-shipped{% endif %}
+                    {% if s.status == 'delivered' %}status-delivered{% endif %}
+                    {% if s.status == 'cancelled' %}status-cancelled{% endif %}
+                  ">
+                    {{ s.get_status_display }}
+                  </span>
+                </td>
+                <td>
+                  <a href="{% url 'shipment_detail' s.pk %}" class="btn btn-slate btn-small">
+                    View
+                  </a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="muted mb-0">
+        No shipments added yet.
+      </p>
+    {% endif %}
+  </div>
+
+</div>
+
+{% endblock %}

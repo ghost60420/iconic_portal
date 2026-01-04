@@ -1,0 +1,477 @@
+{% include "crm/navbar.html" %}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>
+        {% if mode == "edit" %}Edit product{% else %}Add product{% endif %} - Iconic CRM
+    </title>
+    <style>
+        body {
+            background: #000;
+            color: #f5d580;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        a {
+            color: #f5d580;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .page {
+            max-width: 1100px;
+            margin: 20px auto 40px auto;
+            padding: 0 15px;
+        }
+
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .header-title {
+            font-size: 22px;
+            font-weight: bold;
+        }
+        .header-sub {
+            font-size: 13px;
+            color: #c7b36b;
+        }
+
+        .btn {
+            background: #f5d580;
+            color: #000;
+            padding: 7px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-secondary {
+            background: #222;
+            color: #f5d580;
+            border: 1px solid #444;
+        }
+
+        /* layout */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1.7fr 1.3fr;
+            gap: 18px;
+        }
+        @media (max-width: 900px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: #101010;
+            border-radius: 12px;
+            border: 1px solid #333;
+            box-shadow: 0 0 16px rgba(0,0,0,0.6);
+            padding: 14px 16px;
+            font-size: 13px;
+            margin-bottom: 16px;
+        }
+        .card-title {
+            font-size: 15px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 4px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px 18px;
+        }
+        .form-row {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+        .label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #c7b36b;
+        }
+        input[type="text"],
+        input[type="number"],
+        input[type="file"],
+        select,
+        textarea {
+            background: #000;
+            color: #f5d580;
+            border-radius: 5px;
+            border: 1px solid #444;
+            padding: 6px 8px;
+            font-size: 13px;
+        }
+        textarea {
+            resize: vertical;
+        }
+        .muted {
+            color: #888;
+            font-size: 12px;
+        }
+
+        .image-preview-box {
+            margin-top: 6px;
+            border-radius: 10px;
+            border: 1px solid #333;
+            background: #050505;
+            padding: 6px;
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .image-preview-box img {
+            max-width: 100%;
+            max-height: 160px;
+            border-radius: 8px;
+            object-fit: cover;
+        }
+
+        /* AI side card */
+        .ai-card {
+            background: #101010;
+            border-radius: 12px;
+            border: 1px solid #333;
+            box-shadow: 0 0 16px rgba(0,0,0,0.6);
+            padding: 12px 14px;
+            font-size: 13px;
+        }
+        .ai-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 6px;
+        }
+        .ai-title {
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .ai-note {
+            font-size: 11px;
+            color: #a4925c;
+            margin-top: 4px;
+        }
+        .ai-output {
+            margin-top: 8px;
+            background: #050505;
+            border-radius: 8px;
+            border: 1px solid #333;
+            padding: 8px;
+            min-height: 80px;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        .ai-status {
+            font-size: 11px;
+            color: #aaa;
+            margin-left: 6px;
+        }
+        .ai-hint {
+            font-size: 11px;
+            color: #888;
+            margin-top: 6px;
+        }
+
+        .footer-actions {
+            margin-top: 12px;
+            display: flex;
+            justify-content: flex-start;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+
+    <div class="header-row">
+        <div>
+            <div class="header-title">
+                {% if mode == "edit" %}
+                    Edit product
+                {% else %}
+                    Add product
+                {% endif %}
+            </div>
+            {% if form.instance and form.instance.product_code %}
+                <div class="header-sub">
+                    Code {{ form.instance.product_code }}
+                </div>
+            {% endif %}
+        </div>
+        <div>
+            <a href="{% url 'products_list' %}" class="btn btn-secondary">Back to products</a>
+        </div>
+    </div>
+
+    {% if form.non_field_errors %}
+        <div class="card" style="border-color:#aa4444; color:#ffbdbd;">
+            {{ form.non_field_errors }}
+        </div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <div class="main-grid">
+            <!-- left side: main form -->
+            <div>
+                <div class="card">
+                    <div class="card-title">Main information</div>
+
+                    <div class="form-grid">
+                        <!-- product code (read only) -->
+                        <div class="form-row">
+                            <label class="label">Product code</label>
+                            <input
+                                type="text"
+                                name="product_code"
+                                value="{{ form.product_code.value|default_if_none:'' }}"
+                                readonly
+                            >
+                            <span class="muted">Auto created when you save.</span>
+                        </div>
+
+                        <!-- name -->
+                        <div class="form-row">
+                            <label for="{{ form.name.id_for_label }}" class="label">Name</label>
+                            {{ form.name }}
+                        </div>
+
+                        <!-- type -->
+                        <div class="form-row">
+                            <label for="{{ form.product_type.id_for_label }}" class="label">
+                                Product type
+                            </label>
+                            {{ form.product_type }}
+                            <span class="muted">Matches how you quote orders.</span>
+                        </div>
+
+                        <!-- category -->
+                        <div class="form-row">
+                            <label for="{{ form.product_category.id_for_label }}" class="label">
+                                Product category
+                            </label>
+                            {{ form.product_category }}
+                        </div>
+
+                        <!-- GSM with datalist -->
+                        <div class="form-row">
+                            <label class="label">Default GSM</label>
+                            <input
+                                type="text"
+                                id="id_default_gsm"
+                                name="default_gsm"
+                                list="gsm-options"
+                                value="{{ form.default_gsm.value|default_if_none:'' }}"
+                            >
+                            <datalist id="gsm-options">
+                                {% if gsm_master %}
+                                    {% for g in gsm_master %}
+                                        <option value="{{ g.name }}"></option>
+                                    {% endfor %}
+                                {% endif %}
+                            </datalist>
+                            <span class="muted">
+                                Choose from list or type a new GSM. New values will be added to basics.
+                            </span>
+                        </div>
+
+                        <!-- fabric with datalist -->
+                        <div class="form-row">
+                            <label class="label">Default fabric</label>
+                            <input
+                                type="text"
+                                id="id_default_fabric"
+                                name="default_fabric"
+                                list="fabric-options"
+                                value="{{ form.default_fabric.value|default_if_none:'' }}"
+                            >
+                            <datalist id="fabric-options">
+                                {% if fabric_master %}
+                                    {% for f in fabric_master %}
+                                        <option value="{{ f.name }}"></option>
+                                    {% endfor %}
+                                {% endif %}
+                            </datalist>
+                            <span class="muted">
+                                Pick from basics or type a new fabric name.
+                            </span>
+                        </div>
+
+                        <!-- MOQ -->
+                        <div class="form-row">
+                            <label for="{{ form.default_moq.id_for_label }}" class="label">
+                                Default MOQ
+                            </label>
+                            {{ form.default_moq }}
+                        </div>
+
+                        <!-- price -->
+                        <div class="form-row">
+                            <label for="{{ form.default_price.id_for_label }}" class="label">
+                                Default price
+                            </label>
+                            {{ form.default_price }}
+                        </div>
+
+                        <!-- status -->
+                        <div class="form-row">
+                            <label for="{{ form.is_active.id_for_label }}" class="label">
+                                Status
+                            </label>
+                            {{ form.is_active }}
+                            <span class="muted">Uncheck to archive this product.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Notes</div>
+                    <div class="form-row">
+                        {{ form.notes }}
+                        <span class="muted">
+                            You can paste AI ideas here for future quoting.
+                        </span>
+                    </div>
+                </div>
+
+                <div class="footer-actions">
+                    <button type="submit" class="btn">
+                        Save product
+                    </button>
+                </div>
+            </div>
+
+            <!-- right side: image and AI -->
+            <div>
+                <div class="card">
+                    <div class="card-title">Product image</div>
+                    <div class="form-row">
+                        {{ form.image }}
+                        <span class="muted">
+                            Use a simple front or flat lay shot. Optional but helpful.
+                        </span>
+                    </div>
+                    <div class="image-preview-box">
+                        {% if form.instance and form.instance.image %}
+                            <img src="{{ form.instance.image.url }}" alt="{{ form.instance.name }}">
+                        {% else %}
+                            <span class="muted">No image yet.</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="ai-card">
+                    <div class="ai-header">
+                        <div class="ai-title">AI helper for this product</div>
+                        <div>
+                            <button type="button" class="btn" id="ai-form-btn">
+                                Ask AI
+                            </button>
+                            <span class="ai-status" id="ai-form-status"></span>
+                        </div>
+                    </div>
+                    <div class="ai-note">
+                        AI will read the name, type, and category and suggest GSM, fabric ideas,
+                        price level, and use cases. You can then adjust your fields and notes.
+                    </div>
+                    <div class="ai-output" id="ai-form-output">
+                        AI suggestion will show here.
+                    </div>
+                    <div class="ai-hint">
+                        Tip: Press Ask AI after you fill the name, type, and category.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </form>
+
+    <!-- hidden form for CSRF -->
+    <form id="ai-form-csrf" style="display:none;">
+        {% csrf_token %}
+    </form>
+</div>
+
+<script>
+(function () {
+    const btn = document.getElementById("ai-form-btn");
+    if (!btn) return;
+
+    const outBox = document.getElementById("ai-form-output");
+    const statusSpan = document.getElementById("ai-form-status");
+
+    function getCsrf() {
+        const tokenField = document.querySelector(
+            "#ai-form-csrf input[name='csrfmiddlewaretoken']"
+        );
+        return tokenField ? tokenField.value : "";
+    }
+
+    btn.addEventListener("click", function () {
+        const nameInput = document.getElementById("id_name");
+        const typeInput = document.getElementById("id_product_type");
+        const catInput = document.getElementById("id_product_category");
+
+        const name = nameInput ? nameInput.value.trim() : "";
+        const ptype = typeInput ? typeInput.options[typeInput.selectedIndex].text : "";
+        const cat = catInput ? catInput.options[catInput.selectedIndex].text : "";
+
+        if (!name) {
+            outBox.textContent = "Please fill the product name first.";
+            return;
+        }
+
+        statusSpan.textContent = "Thinking with AI...";
+        outBox.textContent = "";
+
+        fetch("{% url 'product_ai_suggest' %}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-CSRFToken": getCsrf()
+            },
+            body: new URLSearchParams({
+                name: name,
+                product_type: ptype,
+                product_category: cat
+            })
+        })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (data.ok) {
+                outBox.textContent = data.suggestion;
+                statusSpan.textContent = "Ready";
+            } else {
+                outBox.textContent = data.error || "AI could not answer.";
+                statusSpan.textContent = "";
+            }
+        })
+        .catch(function (err) {
+            console.error(err);
+            outBox.textContent = "Error talking to AI.";
+            statusSpan.textContent = "";
+        });
+    });
+})();
+</script>
+
+</body>
+</html>

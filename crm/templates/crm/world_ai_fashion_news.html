@@ -1,0 +1,41 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+
+  <h1 class="h3 mb-3">AI fashion notes</h1>
+  <p class="text-muted small mb-4">
+    Simple notes that you can read before buyer calls.
+  </p>
+
+  <div class="row g-3">
+    <div class="col-md-8">
+      <div class="card bg-dark border-secondary text-light">
+        <div class="card-body">
+          <h2 class="h5 mb-3">Today focus</h2>
+          <ul class="small text-muted mb-0">
+            <li>Green factories and safety are strong selling points for Bangladesh.</li>
+            <li>Active and lounge sets are safe options for many new brands.</li>
+            <li>Offer one normal fabric and one eco fabric choice when possible.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card bg-dark border-secondary text-light h-100">
+        <div class="card-body">
+          <h2 class="h6 mb-2">Next step</h2>
+          <p class="small text-muted mb-3">
+            Later we can connect this page to the Iconic AI brain so it can read your leads and orders and give custom notes.
+          </p>
+          <a href="/world-tools/" class="btn btn-sm btn-outline-light w-100">
+            Back to world tools
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,119 @@
+{% extends "crm/base.html" %}
+{% block content %}
+
+<style>
+  .page-wrap{max-width:900px;margin:16px auto 28px auto;padding:0 10px;color:#f9fafb;}
+  .topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
+  .title{font-size:18px;font-weight:900;margin:0;}
+  .sub{font-size:12px;color:#9ca3af;margin-top:4px;}
+  .cardx{background:#020617;border:1px solid #374151;border-radius:14px;box-shadow:0 10px 26px rgba(0,0,0,0.45);}
+  label{font-size:11px;color:#e5e7eb;margin-bottom:4px;display:block;font-weight:800;}
+  input,select,textarea{background:#020617;color:#f9fafb;border:1px solid #374151;border-radius:10px;padding:10px 10px;font-size:12px;width:100%;}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:#facc15;box-shadow:0 0 0 2px rgba(250,204,21,0.20);}
+  textarea{min-height:90px;}
+  .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}
+  .btn{display:inline-block;padding:10px 14px;border-radius:999px;border:1px solid transparent;font-size:12px;font-weight:900;cursor:pointer;text-decoration:none;white-space:nowrap;}
+  .btn-gold{background:linear-gradient(135deg,#facc15,#f97316);color:#111827;border-color:#fbbf24;}
+  .btn-slate{background:#020617;color:#e5e7eb;border-color:#374151;}
+  .errorlist{margin:6px 0 0 0;padding-left:14px;font-size:11px;color:#fecaca;}
+  .errorlist li{list-style:disc;}
+  .note{font-size:11px;color:#9ca3af;margin-top:8px;}
+  .checkRow{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #334155;border-radius:10px;background:#030712;}
+  .checkRow input{width:18px;height:18px;}
+</style>
+
+<div class="page-wrap">
+
+  <div class="topbar">
+    <div>
+      <h2 class="title">Edit payroll</h2>
+      <div class="sub">{{ row.staff.name }} for {{ row.year }}-{{ row.month }}</div>
+    </div>
+    <div>
+      <a class="btn btn-slate" href="{% url 'bd_staff_month_list' %}?year={{ row.year }}&month={{ row.month }}">Back</a>
+    </div>
+  </div>
+
+  <div class="cardx">
+    <div style="padding:14px 14px 0 14px;">
+      {% if form.non_field_errors %}
+        <ul class="errorlist">
+          {% for e in form.non_field_errors %}<li>{{ e }}</li>{% endfor %}
+        </ul>
+      {% endif %}
+    </div>
+
+    <div style="padding:14px;">
+      <form method="post" novalidate>
+        {% csrf_token %}
+
+        <div class="grid">
+          <div>
+            <label>Base salary (BDT)</label>
+            {{ form.base_salary_bdt }}
+            {{ form.base_salary_bdt.errors }}
+          </div>
+
+          <div>
+            <label>OT hours</label>
+            {{ form.overtime_hours }}
+            {{ form.overtime_hours.errors }}
+          </div>
+
+          <div>
+            <label>OT rate (BDT)</label>
+            {{ form.overtime_rate_bdt }}
+            {{ form.overtime_rate_bdt.errors }}
+          </div>
+
+          <div>
+            <label>Bonus (BDT)</label>
+            {{ form.bonus_bdt }}
+            {{ form.bonus_bdt.errors }}
+          </div>
+
+          <div>
+            <label>Deduction (BDT)</label>
+            {{ form.deduction_bdt }}
+            {{ form.deduction_bdt.errors }}
+          </div>
+
+          <div>
+            <label>Paid</label>
+            <div class="checkRow">
+              {{ form.is_paid }}
+              <div style="font-weight:900;">Mark as paid</div>
+            </div>
+            {{ form.is_paid.errors }}
+          </div>
+
+          <div>
+            <label>Paid date</label>
+            {{ form.paid_date }}
+            {{ form.paid_date.errors }}
+            <div class="note">If paid is checked and date is empty, it will auto set today.</div>
+          </div>
+        </div>
+
+        <div style="margin-top:10px;">
+          <label>Note</label>
+          {{ form.note }}
+          {{ form.note.errors }}
+        </div>
+
+        {% for hidden in form.hidden_fields %}
+          {{ hidden }}
+        {% endfor %}
+
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-gold" type="submit">Save</button>
+          <a class="btn btn-slate" href="{% url 'bd_staff_month_list' %}?year={{ row.year }}&month={{ row.month }}">Cancel</a>
+        </div>
+
+      </form>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}

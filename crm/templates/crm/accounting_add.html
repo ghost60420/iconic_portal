@@ -1,0 +1,465 @@
+{% extends "crm/base.html" %}
+{% block content %}
+
+<div class="container-fluid" style="color:#f9fafb; max-width:1200px;">
+
+  <style>
+    .pageWrap{ padding: 10px 6px; }
+    .topBar{
+      display:flex; justify-content:space-between; align-items:flex-start;
+      gap:12px; flex-wrap:wrap; margin-bottom:14px;
+    }
+    .title{ margin:0; font-size:26px; font-weight:900; letter-spacing:0.2px; }
+    .subTitle{ margin-top:4px; font-size:12px; color:#9ca3af; max-width:760px; }
+
+    .btnSoft{
+      display:inline-flex; align-items:center; justify-content:center;
+      padding:10px 14px; border-radius:999px; font-size:12px; font-weight:800;
+      text-decoration:none; border:1px solid rgba(255,255,255,0.14);
+      background:#0b1220; color:#f9fafb; box-shadow: 0 10px 22px rgba(0,0,0,0.35);
+    }
+
+    .cardX{
+      background:#020617; border:1px solid #334155; border-radius:16px;
+      box-shadow: 0 18px 40px rgba(0,0,0,0.40);
+      overflow:hidden;
+    }
+    .cardHead{
+      padding:14px 16px; border-bottom:1px solid #0f1a2d;
+      display:flex; justify-content:space-between; align-items:center;
+      flex-wrap:wrap; gap:10px;
+    }
+    .cardHeadTitle{ font-size:14px; font-weight:900; margin:0; }
+    .cardBody{ padding:16px; padding-bottom:90px; }
+
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap:12px;
+    }
+    .col12{ grid-column: span 12; }
+    .col6{ grid-column: span 6; }
+    .col4{ grid-column: span 4; }
+    .col3{ grid-column: span 3; }
+
+    @media (max-width: 992px){
+      .col6,.col4,.col3{ grid-column: span 12; }
+    }
+
+    .fieldLabel{
+      font-size:11px; font-weight:900; color:#e5e7eb;
+      margin-bottom:6px; display:block; letter-spacing:0.3px;
+      text-transform:uppercase;
+    }
+    .hint{ font-size:11px; color:#94a3b8; margin-top:6px; }
+    .err{ font-size:12px; color:#fca5a5; margin-top:6px; font-weight:800; }
+
+    input, select, textarea{
+      width:100%;
+      background:#030712 !important;
+      border:1px solid #475569 !important;
+      color:#f9fafb !important;
+      border-radius:12px !important;
+      padding:10px 12px !important;
+      outline:none !important;
+      box-shadow:none !important;
+    }
+    textarea{ min-height:110px; resize:vertical; }
+    input:focus, select:focus, textarea:focus{
+      border-color:#f5d580 !important;
+      box-shadow: 0 0 0 4px rgba(245,213,128,0.18) !important;
+    }
+
+    .actionsSticky{
+      position:sticky;
+      bottom:0;
+      z-index:50;
+      display:flex;
+      justify-content:flex-end;
+      gap:10px;
+      flex-wrap:wrap;
+      padding:14px 16px;
+      background: rgba(2,6,23,0.92);
+      border-top:1px solid #0f1a2d;
+      backdrop-filter: blur(10px);
+    }
+    .btnAction{
+      padding:10px 16px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:900;
+      border:1px solid rgba(255,255,255,0.14);
+      text-decoration:none;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      min-width:120px;
+    }
+    .btnSave{
+      background: linear-gradient(145deg, #ffe39b, #e4c067);
+      color:#0b0b0b;
+      border-color:#f6d488;
+    }
+    .btnCancel{
+      background:#0b1220;
+      color:#e5e7eb;
+      border-color:#334155;
+    }
+
+    .fileList{
+      margin-top:8px;
+      padding:10px 12px;
+      border:1px dashed #475569;
+      border-radius:12px;
+      background:#020617;
+      font-size:12px;
+      color:#cbd5e1;
+    }
+    .fileList strong{ color:#f9fafb; }
+    .fileItem{ margin-top:4px; word-break:break-word; }
+
+    .aiBox{
+      border:1px solid #334155;
+      background:#020617;
+      border-radius:14px;
+      padding:12px;
+    }
+    .aiTitle{
+      font-size:13px;
+      font-weight:900;
+      margin:0;
+      color:#f9fafb;
+    }
+    .aiText{
+      font-size:12px;
+      font-weight:700;
+      color:#cbd5e1;
+      margin-top:4px;
+      margin-bottom:10px;
+      line-height:1.35;
+    }
+    .aiRow{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .aiBtn{
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,0.14);
+      background: linear-gradient(145deg, #ffe39b, #e4c067);
+      color:#0b0b0b;
+      font-weight:900;
+      font-size:12px;
+      padding:10px 14px;
+      cursor:pointer;
+      min-width:160px;
+    }
+    .aiBtn:disabled{
+      opacity:0.65;
+      cursor:not-allowed;
+    }
+    .aiMsg{
+      font-size:12px;
+      font-weight:800;
+      color:#cbd5e1;
+    }
+    .aiOk{ color:#86efac; }
+    .aiBad{ color:#ffb4b4; }
+  </style>
+
+  <div class="pageWrap">
+
+    <div class="topBar">
+      <div>
+        <h2 class="title">Add accounting entry</h2>
+        <div class="subTitle">
+          Record money in and money out for Canada or Bangladesh. Fill the fields, add files if needed, then save.
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 flex-wrap">
+        <a class="btnSoft" href="{% url 'accounting_entry_list' %}">Back to accounting list</a>
+      </div>
+    </div>
+
+    <div class="cardX">
+      <div class="cardHead">
+        <div>
+          <p class="cardHeadTitle">Entry details</p>
+          <div class="hint">Tip: write description first, then use AI Helper to fill side and type.</div>
+        </div>
+      </div>
+
+      <div class="cardBody">
+
+        <form method="post" enctype="multipart/form-data" novalidate>
+          {% csrf_token %}
+
+          {% if form.non_field_errors %}
+            <div class="err">{{ form.non_field_errors }}</div>
+          {% endif %}
+
+          <div class="grid">
+
+            <div class="col3">
+              <label class="fieldLabel" for="{{ form.date.id_for_label }}">Date</label>
+              {{ form.date }}
+              {% if form.date.errors %}<div class="err">{{ form.date.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col3">
+              <label class="fieldLabel" for="{{ form.side.id_for_label }}">Side</label>
+              {{ form.side }}
+              {% if form.side.errors %}<div class="err">{{ form.side.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col3">
+              <label class="fieldLabel" for="{{ form.direction.id_for_label }}">Flow</label>
+              {{ form.direction }}
+              {% if form.direction.errors %}<div class="err">{{ form.direction.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col3">
+              <label class="fieldLabel" for="{{ form.main_type.id_for_label }}">Main type</label>
+              {{ form.main_type }}
+              {% if form.main_type.errors %}<div class="err">{{ form.main_type.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col4">
+              <label class="fieldLabel" for="{{ form.sub_type.id_for_label }}">Sub type</label>
+              {{ form.sub_type }}
+              {% if form.sub_type.errors %}<div class="err">{{ form.sub_type.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col4">
+              <label class="fieldLabel" for="{{ form.customer.id_for_label }}">Customer</label>
+              {{ form.customer }}
+              {% if form.customer.errors %}<div class="err">{{ form.customer.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col4">
+              <label class="fieldLabel" for="{{ form.opportunity.id_for_label }}">Opportunity</label>
+              {{ form.opportunity }}
+              {% if form.opportunity.errors %}<div class="err">{{ form.opportunity.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col6">
+              <label class="fieldLabel" for="{{ form.production_order.id_for_label }}">Production order</label>
+              {{ form.production_order }}
+              {% if form.production_order.errors %}<div class="err">{{ form.production_order.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col6">
+              <label class="fieldLabel" for="{{ form.shipment.id_for_label }}">Shipment</label>
+              {{ form.shipment }}
+              {% if form.shipment.errors %}<div class="err">{{ form.shipment.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col3">
+              <label class="fieldLabel" for="{{ form.currency.id_for_label }}">Currency</label>
+              {{ form.currency }}
+              {% if form.currency.errors %}<div class="err">{{ form.currency.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col3">
+              <label class="fieldLabel" for="{{ form.amount_original.id_for_label }}">Amount original</label>
+              {{ form.amount_original }}
+              {% if form.amount_original.errors %}<div class="err">{{ form.amount_original.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col3">
+              <label class="fieldLabel" for="{{ form.rate_to_cad.id_for_label }}">Rate to CAD</label>
+              {{ form.rate_to_cad }}
+              {% if form.rate_to_cad.errors %}<div class="err">{{ form.rate_to_cad.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col3">
+              <label class="fieldLabel" for="{{ form.rate_to_bdt.id_for_label }}">Rate to BDT</label>
+              {{ form.rate_to_bdt }}
+              {% if form.rate_to_bdt.errors %}<div class="err">{{ form.rate_to_bdt.errors }}</div>{% endif %}
+            </div>
+
+            <div class="col12">
+              <div class="aiBox">
+                <p class="aiTitle">AI Helper</p>
+                <div class="aiText">
+                  Write description, then click Suggest. It will fill side, flow, main type, and sub type.
+                </div>
+                <div class="aiRow">
+                  <button type="button" class="aiBtn" id="aiSuggestBtn">Suggest and apply</button>
+                  <div class="aiMsg" id="aiSuggestMsg">Ready.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col6">
+              <label class="fieldLabel" for="{{ form.description.id_for_label }}">Description</label>
+              {{ form.description }}
+              {% if form.description.errors %}<div class="err">{{ form.description.errors }}</div>{% endif %}
+              <div class="hint">Example: fabric, trims, salary, rent, courier, client payment</div>
+            </div>
+
+            <div class="col6">
+              <label class="fieldLabel" for="{{ form.internal_note.id_for_label }}">Internal note</label>
+              {{ form.internal_note }}
+              {% if form.internal_note.errors %}<div class="err">{{ form.internal_note.errors }}</div>{% endif %}
+              <div class="hint">Only your team will see this.</div>
+            </div>
+
+            <div class="col12">
+              <label class="fieldLabel" for="{{ form.attachments.id_for_label }}">Attachments</label>
+              {{ form.attachments }}
+              {% if form.attachments.errors %}<div class="err">{{ form.attachments.errors }}</div>{% endif %}
+
+              <div class="hint">Upload invoice, receipt, bank slip, or any file. You can upload many files.</div>
+
+              <div id="fileBox" class="fileList" style="display:none;">
+                <strong>Selected files</strong>
+                <div id="fileItems"></div>
+              </div>
+            </div>
+
+          </div>
+
+          <div class="actionsSticky">
+            <a class="btnAction btnCancel" href="{% url 'accounting_entry_list' %}">Cancel</a>
+            <button class="btnAction btnSave" type="submit">Save entry</button>
+          </div>
+
+        </form>
+
+      </div>
+    </div>
+
+    <div class="hint" style="margin-top:10px;">
+      Tip: For Bangladesh daily costs pick side Bangladesh and use BDT. For Canada pick side Canada and use CAD.
+    </div>
+
+  </div>
+</div>
+
+<script>
+  (function(){
+    // ------- file list preview -------
+    var input = document.getElementById("{{ form.attachments.id_for_label }}");
+    var box = document.getElementById("fileBox");
+    var items = document.getElementById("fileItems");
+    if(input && box && items){
+      var render = function(){
+        items.innerHTML = "";
+        if(!input.files || input.files.length === 0){
+          box.style.display = "none";
+          return;
+        }
+        box.style.display = "block";
+        for(var i=0; i<input.files.length; i++){
+          var d = document.createElement("div");
+          d.className = "fileItem";
+          d.textContent = (i+1) + ". " + input.files[i].name;
+          items.appendChild(d);
+        }
+      };
+      input.addEventListener("change", render);
+      render();
+    }
+
+    // ------- AI suggest -------
+    var btn = document.getElementById("aiSuggestBtn");
+    var msg = document.getElementById("aiSuggestMsg");
+
+    function setMsg(text, cls){
+      if(!msg){ return; }
+      msg.className = "aiMsg " + (cls || "");
+      msg.textContent = text;
+    }
+
+    function getCookie(name){
+      var value = "; " + document.cookie;
+      var parts = value.split("; " + name + "=");
+      if(parts.length === 2) return parts.pop().split(";").shift();
+      return "";
+    }
+
+    function setSelectValueByExact(selectEl, value){
+      if(!selectEl || !value){ return false; }
+      for(var i=0; i<selectEl.options.length; i++){
+        if(selectEl.options[i].value === value){
+          selectEl.value = value;
+          return true;
+        }
+      }
+      return false;
+    }
+
+    if(btn){
+      btn.addEventListener("click", function(){
+        var descEl = document.getElementById("{{ form.description.id_for_label }}");
+        var text = descEl ? (descEl.value || "") : "";
+        text = text.trim();
+
+        if(!text){
+          setMsg("Write a description first.", "aiBad");
+          return;
+        }
+
+        btn.disabled = true;
+        setMsg("Working...", "");
+
+        fetch("{% url 'accounting_ai_suggest' %}", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": getCookie("csrftoken")
+          },
+          body: JSON.stringify({ text: text }),
+          credentials: "same-origin"
+        })
+        .then(function(res){
+          if(!res.ok){ throw new Error("bad response"); }
+          return res.json();
+        })
+        .then(function(data){
+          if(!data || !data.ok){
+            setMsg("Could not suggest. Try again.", "aiBad");
+            return;
+          }
+
+          var s = data.suggestions || {};
+
+          var sideEl = document.getElementById("{{ form.side.id_for_label }}");
+          var dirEl = document.getElementById("{{ form.direction.id_for_label }}");
+          var mainEl = document.getElementById("{{ form.main_type.id_for_label }}");
+          var subEl = document.getElementById("{{ form.sub_type.id_for_label }}");
+
+          var changed = 0;
+
+          if(setSelectValueByExact(sideEl, s.side)){ changed++; }
+          if(setSelectValueByExact(dirEl, s.direction)){ changed++; }
+          if(setSelectValueByExact(mainEl, s.main_type)){ changed++; }
+
+          if(subEl && s.sub_type){
+            subEl.value = s.sub_type;
+            changed++;
+          }
+
+          if(changed > 0){
+            setMsg("Suggested and applied.", "aiOk");
+          }else{
+            setMsg("No matching values found in your dropdowns.", "aiBad");
+          }
+        })
+        .catch(function(){
+          setMsg("Error. Try again.", "aiBad");
+        })
+        .finally(function(){
+          btn.disabled = false;
+        });
+      });
+    }
+  })();
+</script>
+
+{% endblock %}

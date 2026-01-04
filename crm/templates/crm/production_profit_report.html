@@ -1,0 +1,331 @@
+{% extends "crm/base.html" %}
+{% load humanize %}
+{% block content %}
+
+<style>
+  .pp-wrap { color:#f9fafb; }
+
+  .pp-title{
+    color:#ffffff;
+    font-weight:900;
+    font-size:30px;
+    letter-spacing:0.3px;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.75);
+  }
+
+  .pp-sub{
+    color:#f1f5f9;
+    font-weight:800;
+    font-size:14px;
+    line-height:1.5;
+  }
+
+  .pp-card{
+    background:#020617;
+    border:1px solid #475569;
+    border-radius:16px;
+    box-shadow: 0 12px 28px rgba(0,0,0,0.55);
+  }
+
+  .pp-head{ color:#facc15; font-weight:900; }
+
+  .pp-filter label{ color:#ffffff; font-weight:900; }
+  .pp-filter input{
+    background:#0b1220;
+    border:1px solid #475569;
+    color:#ffffff;
+    font-weight:900;
+  }
+  .pp-filter input:focus{
+    background:#0b1220;
+    color:#ffffff;
+    border-color:#facc15;
+    box-shadow: 0 0 0 0.2rem rgba(250,204,21,0.18);
+  }
+
+  .pp-table{
+    font-size:14px;
+    border-color:#475569;
+  }
+
+  .pp-table thead th{
+    color:#fff7c2 !important;
+    font-weight:900;
+    background:#0b1220 !important;
+    border-bottom:2px solid #475569 !important;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    white-space: nowrap;
+  }
+
+  .pp-table tbody td{
+    color:#ffffff !important;
+    font-weight:900;
+    border-top:1px solid rgba(71,85,105,0.85) !important;
+    white-space: nowrap;
+  }
+
+  .pp-table tbody tr:nth-child(odd) td{
+    background: rgba(255,255,255,0.04) !important;
+  }
+
+  .pp-table tbody tr:hover td{
+    background: rgba(250,204,21,0.12) !important;
+  }
+
+  .pp-muted{ color:#e2e8f0 !important; font-weight:900; }
+  .pp-note{
+    color:#f1f5f9;
+    font-weight:800;
+    font-size:13px;
+    line-height:1.5;
+  }
+
+  .pp-badge{
+    font-weight:900;
+    padding:6px 10px;
+    border-radius:999px;
+  }
+
+  .pp-money{ font-variant-numeric: tabular-nums; }
+
+  /* Sorting */
+  .pp-sort{ cursor:pointer; user-select:none; }
+  .pp-sort .pp-arrow{ opacity:0.6; margin-left:6px; font-size:12px; }
+  .pp-sort[data-sort="asc"] .pp-arrow{ opacity:1; }
+  .pp-sort[data-sort="desc"] .pp-arrow{ opacity:1; }
+</style>
+
+<div class="container-fluid pp-wrap">
+  <div style="max-width:1500px;margin:0 auto;">
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
+      <div>
+        <div class="pp-title">Production profit report</div>
+
+        <div class="pp-sub mt-2">
+          Revenue from Canada IN. Cost from Bangladesh OUT.
+          Swing sub type is
+          <span style="color:#facc15;">{{ SWING_SUB_TYPE|default:"Swing Charge" }}</span>.
+          Bangladesh swing is shown in BDT.
+        </div>
+      </div>
+
+      <a class="btn btn-outline-light btn-sm rounded-pill fw-bold"
+         href="{% url 'accounting_entry_list' %}">
+        Back
+      </a>
+    </div>
+
+    <!-- Filter -->
+    <div class="card mb-3 pp-card">
+      <div class="card-body pp-filter">
+        <form method="get" class="row g-3 align-items-end">
+          <div class="col-sm-2">
+            <label class="form-label">Year</label>
+            <input class="form-control form-control-sm" name="year"
+                   value="{{ filter_year|default_if_none:'' }}">
+          </div>
+
+          <div class="col-sm-2">
+            <label class="form-label">Month</label>
+            <input class="form-control form-control-sm" name="month"
+                   value="{{ filter_month|default_if_none:'' }}">
+          </div>
+
+          <div class="col-sm-2">
+            <button class="btn btn-warning btn-sm w-100 rounded-pill fw-bold">
+              Apply
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card pp-card">
+      <div class="card-header" style="border-bottom:1px solid #111827;">
+        <span class="pp-head" style="font-size:16px;">All orders</span>
+      </div>
+
+      <div class="card-body">
+        <div class="table-responsive" style="max-height:520px;">
+          <table id="ppTable" class="table table-dark table-sm align-middle pp-table">
+            <thead>
+              <tr>
+                <th class="pp-sort" data-type="text">Order <span class="pp-arrow">↕</span></th>
+                <th class="pp-sort" data-type="text">Product <span class="pp-arrow">↕</span></th>
+                <th class="text-end pp-sort" data-type="num">Pcs <span class="pp-arrow">↕</span></th>
+                <th class="pp-sort" data-type="text">Order type <span class="pp-arrow">↕</span></th>
+
+                <th class="text-end pp-sort" data-type="num">Revenue CAD <span class="pp-arrow">↕</span></th>
+                <th class="text-end pp-sort" data-type="num">Swing CAD <span class="pp-arrow">↕</span></th>
+                <th class="text-end pp-sort" data-type="num">Swing BDT <span class="pp-arrow">↕</span></th>
+
+                <th class="text-end pp-sort" data-type="num">BD sewing BDT <span class="pp-arrow">↕</span></th>
+                <th class="text-end pp-sort" data-type="num">BD total cost BDT <span class="pp-arrow">↕</span></th>
+
+                <th class="text-end pp-sort" data-type="num">Cost CAD <span class="pp-arrow">↕</span></th>
+                <th class="text-end pp-sort" data-type="num">Profit CAD <span class="pp-arrow">↕</span></th>
+                <th class="text-end pp-sort" data-type="num">Margin % <span class="pp-arrow">↕</span></th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {% for r in rows %}
+              <tr>
+                <td class="fw-bold">
+                  {{ r.order_code|default:r.production_order_id|default:"" }}
+                </td>
+
+                <td>
+                  {{ r.product_type|default:"" }}
+                </td>
+
+                <td class="text-end pp-money">
+                  {{ r.pcs|default:0|intcomma }}
+                </td>
+
+                <td>
+                  {% with ot=r.order_type|default:"" %}
+                    {% if ot == "fob" %}
+                      <span class="badge bg-primary pp-badge">FOB</span>
+                    {% elif ot == "sewing_charge" %}
+                      <span class="badge bg-warning text-dark pp-badge">Sewing</span>
+                    {% elif ot == "canada_full" %}
+                      <span class="badge bg-success pp-badge">Canada D2D</span>
+                    {% else %}
+                      <span class="badge bg-secondary pp-badge">
+                        {{ r.order_type_label|default:"Other" }}
+                      </span>
+                    {% endif %}
+                  {% endwith %}
+                </td>
+
+                <td class="text-end pp-money">
+                  {{ r.revenue_cad|default:0|floatformat:2|intcomma }}
+                </td>
+
+                <td class="text-end pp-money">
+                  {{ r.swing_cad|default:0|floatformat:2|intcomma }}
+                </td>
+
+                <td class="text-end pp-money">
+                  {{ r.swing_bdt|default:0|floatformat:2|intcomma }}
+                </td>
+
+                <td class="text-end pp-money">
+                  {{ r.bd_sewing_bdt|default:0|floatformat:2|intcomma }}
+                </td>
+
+                <td class="text-end pp-money">
+                  {{ r.bd_total_cost_bdt|default:0|floatformat:2|intcomma }}
+                </td>
+
+                <td class="text-end pp-money">
+                  {{ r.cost_cad|default:0|floatformat:2|intcomma }}
+                </td>
+
+                <td class="text-end fw-bold pp-money"
+                    style="color:{% if r.profit_cad|default:0 < 0 %}#ff6b6b{% else %}#4ade80{% endif %};">
+                  {{ r.profit_cad|default:0|floatformat:2|intcomma }}
+                </td>
+
+                <td class="text-end fw-bold pp-money">
+                  {{ r.margin_pct|default:0|floatformat:1 }}%
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="12" class="text-center pp-muted">
+                  No rows found
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mt-3 pp-note">
+          Swing BDT comes from Bangladesh OUT entries with sub type
+          <span style="color:#facc15;">{{ SWING_SUB_TYPE|default:"Swing Charge" }}</span>.
+          BD sewing BDT comes from Production Order sewing cost.
+          BD total cost BDT comes from Production Order total cost fields.
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  (function () {
+    const table = document.getElementById("ppTable");
+    if (!table) return;
+
+    const thead = table.querySelector("thead");
+    const tbody = table.querySelector("tbody");
+    if (!thead || !tbody) return;
+
+    const headers = Array.from(thead.querySelectorAll("th.pp-sort"));
+
+    function getBodyRows() {
+      return Array.from(tbody.querySelectorAll("tr"))
+        .filter(tr => tr.querySelectorAll("td").length > 0);
+    }
+
+    function getCellSortValue(tr, idx, type) {
+      const td = tr.children[idx];
+      if (!td) return { text: "", num: null };
+
+      const rawText = (td.textContent || "").replace(/\s+/g, " ").trim();
+
+      if (type === "num") {
+        const cleaned = rawText.replace(/,/g, "").replace(/%/g, "").trim();
+        const n = Number(cleaned);
+        return { text: rawText, num: Number.isFinite(n) ? n : null };
+      }
+
+      // text
+      return { text: rawText.toLowerCase(), num: null };
+    }
+
+    function sortByColumn(colIdx, headerEl) {
+      const type = headerEl.getAttribute("data-type") || "text";
+      const current = headerEl.getAttribute("data-sort") || "none";
+      const next = current === "asc" ? "desc" : "asc";
+
+      headers.forEach(h => h.removeAttribute("data-sort"));
+      headerEl.setAttribute("data-sort", next);
+
+      const data = getBodyRows().map(tr => {
+        const v = getCellSortValue(tr, colIdx, type);
+        return { tr, v };
+      });
+
+      data.sort((a, b) => {
+        let cmp = 0;
+
+        if (type === "num" && a.v.num !== null && b.v.num !== null) {
+          cmp = a.v.num - b.v.num;
+        } else {
+          cmp = (a.v.text || "").localeCompare((b.v.text || ""));
+        }
+
+        return next === "asc" ? cmp : -cmp;
+      });
+
+      data.forEach(x => tbody.appendChild(x.tr));
+    }
+
+    headers.forEach((th, idx) => {
+      th.addEventListener("click", function () {
+        sortByColumn(idx, th);
+      });
+    });
+  })();
+</script>
+
+{% endblock %}

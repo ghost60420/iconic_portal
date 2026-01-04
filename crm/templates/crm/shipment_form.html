@@ -1,0 +1,353 @@
+{% extends "crm/base.html" %}
+{% block content %}
+
+<style>
+  .ship-page {
+    max-width: 780px;
+    margin: 16px auto;
+    padding: 0 8px;
+    color: #f9fafb;
+  }
+
+  .ship-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+
+  .ship-title {
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  .ship-sub {
+    font-size: 12px;
+    color: #9ca3af;
+  }
+
+  .ship-actions .btn {
+    margin-left: 4px;
+    margin-bottom: 4px;
+  }
+
+  .btn {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-size: 12px;
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .btn-slate {
+    background: #020617;
+    color: #e5e7eb;
+    border-color: #374151;
+  }
+
+  .btn-gold {
+    background: linear-gradient(135deg, #facc15, #f97316);
+    color: #111827;
+    border-color: #fbbf24;
+    font-weight: 600;
+  }
+
+  .btn-small {
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+
+  .card-box {
+    background: radial-gradient(circle at top left, #111827, #020617);
+    border: 1px solid #1f2937;
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.7);
+  }
+
+  .card-title {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    border-bottom: 1px solid #1f2937;
+    padding-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .card-title span.emoji {
+    font-size: 15px;
+  }
+
+  label {
+    font-size: 11px;
+    color: #e5e7eb;
+    margin-bottom: 2px;
+  }
+
+  input,
+  select,
+  textarea {
+    background: #020617;
+    color: #f9fafb;
+    border: 1px solid #374151;
+    border-radius: 6px;
+    padding: 4px 6px;
+    font-size: 12px;
+    width: 100%;
+  }
+
+  input:focus,
+  select:focus,
+  textarea:focus {
+    outline: none;
+    border-color: #facc15;
+    box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.35);
+  }
+
+  .field-row {
+    margin-bottom: 8px;
+  }
+
+  .muted {
+    font-size: 11px;
+    color: #9ca3af;
+  }
+
+  .errorlist {
+    margin: 0 0 6px 0;
+    padding-left: 14px;
+    font-size: 11px;
+    color: #fecaca;
+  }
+
+  .errorlist li {
+    list-style: disc;
+  }
+
+  .badge-soft {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    border: 1px solid #4b5563;
+    background: #020617;
+    color: #e5e7eb;
+  }
+</style>
+
+<div class="ship-page">
+
+  <div class="ship-header">
+    <div>
+      <div class="ship-title">
+        {% if is_edit %}
+          Edit shipment
+        {% else %}
+          Add new shipment
+        {% endif %}
+      </div>
+      <div class="ship-sub">
+        Link to production order and opportunity, set carrier, boxes, weight and cost in taka and cad.
+      </div>
+    </div>
+    <div class="ship-actions">
+      {% if order %}
+        <a href="{% url 'production_detail' order.pk %}" class="btn btn-slate btn-small">Back to work order</a>
+      {% else %}
+        <a href="{% url 'shipment_list' %}" class="btn btn-slate btn-small">Back to shipments</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card-box">
+
+    {% if form.errors %}
+      <ul class="errorlist">
+        {% for field in form %}
+          {% for err in field.errors %}
+            <li>{{ field.label }}: {{ err }}</li>
+          {% endfor %}
+        {% endfor %}
+        {% for err in form.non_field_errors %}
+          <li>{{ err }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    <form method="post">
+      {% csrf_token %}
+
+      <div class="card-title">
+        <span class="emoji">🧵</span>
+        Link info
+      </div>
+
+      <div class="row">
+        <div class="col-md-6 field-row">
+          <label>Production order</label>
+
+          {% if order %}
+            <div class="badge-soft">
+              {{ order.order_code|default:order.title|default:"Order" }}
+            </div>
+
+            {# IMPORTANT: submit the FK even when the dropdown is hidden #}
+            {% if form.production_order %}
+              {{ form.production_order.as_hidden }}
+            {% endif %}
+            {% if form.order %}
+              {{ form.order.as_hidden }}
+            {% endif %}
+
+          {% else %}
+            {# Show whichever field exists in your form #}
+            {% if form.production_order %}
+              {{ form.production_order }}
+              {% if form.production_order.errors %}
+                <ul class="errorlist">
+                  {% for err in form.production_order.errors %}<li>{{ err }}</li>{% endfor %}
+                </ul>
+              {% endif %}
+            {% elif form.order %}
+              {{ form.order }}
+              {% if form.order.errors %}
+                <ul class="errorlist">
+                  {% for err in form.order.errors %}<li>{{ err }}</li>{% endfor %}
+                </ul>
+              {% endif %}
+            {% else %}
+              <div class="muted">No order field found in ShipmentForm.</div>
+            {% endif %}
+          {% endif %}
+        </div>
+
+        <div class="col-md-6 field-row">
+          <label>Opportunity</label>
+          {% if form.opportunity %}
+            {{ form.opportunity }}
+            {% if form.opportunity.errors %}
+              <ul class="errorlist">
+                {% for err in form.opportunity.errors %}<li>{{ err }}</li>{% endfor %}
+              </ul>
+            {% endif %}
+          {% else %}
+            <div class="muted">No opportunity field.</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-md-6 field-row">
+          <label>Customer</label>
+          {% if form.customer %}
+            {{ form.customer }}
+            {% if form.customer.errors %}
+              <ul class="errorlist">
+                {% for err in form.customer.errors %}<li>{{ err }}</li>{% endfor %}
+              </ul>
+            {% endif %}
+          {% else %}
+            <div class="muted">No customer field.</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card-title" style="margin-top:10px;">
+        <span class="emoji">🚚</span>
+        Shipment basics
+      </div>
+
+      <div class="row">
+        <div class="col-md-4 field-row">
+          <label>Carrier</label>
+          {{ form.carrier }}
+        </div>
+        <div class="col-md-4 field-row">
+          <label>Tracking number</label>
+          {{ form.tracking_number }}
+        </div>
+        <div class="col-md-4 field-row">
+          <label>Ship date</label>
+          {{ form.ship_date }}
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-md-4 field-row">
+          <label>Shipment type</label>
+          {{ form.shipment_type }}
+        </div>
+        <div class="col-md-4 field-row">
+          <label>Status</label>
+          {{ form.status }}
+        </div>
+      </div>
+
+      <div class="card-title" style="margin-top:10px;">
+        <span class="emoji">📦</span>
+        Boxes and weight
+      </div>
+
+      <div class="row">
+        <div class="col-md-4 field-row">
+          <label>Number of boxes</label>
+          {{ form.box_count }}
+        </div>
+        <div class="col-md-4 field-row">
+          <label>Total weight in kg</label>
+          {{ form.total_weight_kg }}
+        </div>
+      </div>
+
+      <div class="card-title" style="margin-top:10px;">
+        <span class="emoji">💰</span>
+        Shipping cost
+      </div>
+
+      <div class="row">
+        <div class="col-md-4 field-row">
+          <label>Cost in taka</label>
+          {{ form.cost_bdt }}
+        </div>
+        <div class="col-md-4 field-row">
+          <label>Cost in cad</label>
+          {{ form.cost_cad }}
+        </div>
+      </div>
+
+      <div class="card-title" style="margin-top:10px;">
+        <span class="emoji">📝</span>
+        Notes
+      </div>
+
+      <div class="field-row">
+        {{ form.notes }}
+        <div class="muted" style="margin-top:2px;">
+          Use this for carton mark, special request or custom info.
+        </div>
+      </div>
+
+      <div style="margin-top:10px; display:flex; gap:6px; flex-wrap:wrap;">
+        <button type="submit" class="btn btn-gold btn-small">
+          {% if is_edit %}Save changes{% else %}Save shipment{% endif %}
+        </button>
+
+        {% if order %}
+          <a href="{% url 'production_detail' order.pk %}" class="btn btn-slate btn-small">Cancel</a>
+        {% else %}
+          <a href="{% url 'shipment_list' %}" class="btn btn-slate btn-small">Cancel</a>
+        {% endif %}
+      </div>
+
+    </form>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,820 @@
+{% extends "crm/base.html" %}
+{% load static %}
+{% block content %}
+
+<style>
+  .prod-add-page {
+    max-width: 880px;
+    margin: 24px auto 40px auto;
+  }
+
+  .prod-add-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+  }
+
+  .prod-add-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #ffffff;
+  }
+
+  .prod-add-sub {
+    font-size: 13px;
+    color: #9ca3af;
+  }
+
+  .prod-add-card {
+    background: #050816;
+    border-radius: 14px;
+    border: 1px solid #1f2937;
+    padding: 16px 18px;
+    box-shadow: 0 0 22px rgba(0,0,0,0.7);
+    margin-bottom: 16px;
+  }
+
+  .prod-add-card-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #f9fafb;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #111827;
+    padding-bottom: 6px;
+  }
+
+  .prod-add-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 14px 24px;
+  }
+
+  .prod-add-field {
+    font-size: 13px;
+  }
+
+  .prod-add-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #9ca3af;
+    margin-bottom: 4px;
+  }
+
+  .prod-add-help {
+    font-size: 11px;
+    color: #6b7280;
+    margin-top: 2px;
+  }
+
+  .prod-add-card input,
+  .prod-add-card select,
+  .prod-add-card textarea {
+    background: #020617;
+    border: 1px solid #374151;
+    border-radius: 6px;
+    color: #e5e7eb;
+    font-size: 13px;
+    padding: 6px 8px;
+    width: 100%;
+  }
+
+  .prod-add-card textarea {
+    min-height: 70px;
+  }
+
+  .prod-add-card input:focus,
+  .prod-add-card select:focus,
+  .prod-add-card textarea:focus {
+    border-color: #facc15;
+    outline: none;
+    box-shadow: 0 0 0 1px rgba(250,204,21,0.3);
+  }
+
+  .prod-add-errors {
+    color: #fca5a5;
+    font-size: 11px;
+    margin-top: 3px;
+  }
+
+  .prod-add-top-errors {
+    color: #fecaca;
+    background: #450a0a;
+    border: 1px solid #7f1d1d;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 12px;
+    margin-bottom: 10px;
+  }
+
+  .prod-add-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 6px;
+  }
+
+  .prod-style-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1.1fr);
+    gap: 18px;
+  }
+
+  @media (max-width: 900px) {
+    .prod-style-layout {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  .prod-style-left .prod-add-field + .prod-add-field {
+    margin-top: 8px;
+  }
+
+  .prod-style-right {
+    border-left: 1px solid #1f2937;
+    padding-left: 16px;
+  }
+
+  @media (max-width: 900px) {
+    .prod-style-right {
+      border-left: none;
+      border-top: 1px solid #1f2937;
+      padding-left: 0;
+      padding-top: 12px;
+      margin-top: 4px;
+    }
+  }
+
+  .prod-ai-box,
+  .prod-lib-box {
+    background: #020617;
+    border-radius: 10px;
+    border: 1px solid #111827;
+    padding: 10px 10px 8px 10px;
+    margin-bottom: 10px;
+  }
+
+  .prod-ai-title,
+  .prod-lib-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #facc15;
+    margin-bottom: 4px;
+  }
+
+  .prod-ai-text,
+  .prod-lib-text {
+    font-size: 11px;
+    color: #9ca3af;
+    margin-bottom: 4px;
+  }
+
+  .prod-lib-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+  }
+
+  .prod-lib-tag {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    border: 1px solid #374151;
+    color: #e5e7eb;
+    background: rgba(15,23,42,0.8);
+    white-space: nowrap;
+  }
+
+  .prod-ai-link {
+    font-size: 11px;
+    margin-top: 4px;
+  }
+
+  .size-grid-block {
+    margin-top: 6px;
+  }
+
+  .size-grid-wrapper {
+    margin-top: 4px;
+  }
+
+  .size-grid-label-row,
+  .size-grid-input-row {
+    display: grid;
+    grid-template-columns: repeat(9, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .size-grid-label {
+    font-size: 11px;
+    text-align: center;
+    color: #9ca3af;
+  }
+
+  .size-grid-input {
+    background: #020617;
+    border: 1px solid #374151;
+    border-radius: 6px;
+    color: #e5e7eb;
+    font-size: 12px;
+    padding: 4px 6px;
+    text-align: center;
+    width: 100%;
+  }
+
+  .size-grid-input:focus {
+    border-color: #facc15;
+    outline: none;
+    box-shadow: 0 0 0 1px rgba(250,204,21,0.3);
+  }
+
+  .prod-add-hidden {
+    display: none;
+  }
+</style>
+
+<div class="prod-add-page">
+
+  <div class="prod-add-header">
+    <div>
+      <div class="prod-add-title">
+        {% if is_edit %}
+          Edit production order
+        {% else %}
+          Add production order
+        {% endif %}
+      </div>
+      <div class="prod-add-sub">
+        {% if is_edit and order %}
+          Code {{ order.order_code }} created {{ order.created_at|date:"Y-m-d" }}
+        {% else %}
+          Link to opportunity and customer to track cost and profit
+        {% endif %}
+      </div>
+    </div>
+
+    <div>
+      {% if is_edit and order %}
+        <a href="{% url 'production_detail' order.pk %}" class="btn btn-outline-light btn-sm">
+          Back to order
+        </a>
+      {% else %}
+        <a href="{% url 'production_list' %}" class="btn btn-outline-light btn-sm">
+          Back to production list
+        </a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if form.errors %}
+    <div class="prod-add-top-errors">
+      Please fix the fields marked in red.
+    </div>
+  {% endif %}
+
+  <form method="post" enctype="multipart/form-data" id="prod-form">
+    {% csrf_token %}
+
+    <div class="prod-add-card">
+      <div class="prod-add-card-title">Order information</div>
+
+      <div class="prod-add-row">
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Title</div>
+          {{ form.title }}
+          {% if form.title.errors %}
+            <div class="prod-add-errors">{{ form.title.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Customer</div>
+          {{ form.customer }}
+          {% if form.customer.errors %}
+            <div class="prod-add-errors">{{ form.customer.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Lead optional</div>
+          {{ form.lead }}
+          {% if form.lead.errors %}
+            <div class="prod-add-errors">{{ form.lead.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Opportunity optional</div>
+          {{ form.opportunity }}
+          {% if form.opportunity.errors %}
+            <div class="prod-add-errors">{{ form.opportunity.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Product optional</div>
+          {{ form.product }}
+          {% if form.product.errors %}
+            <div class="prod-add-errors">{{ form.product.errors|striptags }}</div>
+          {% endif %}
+          <div class="prod-add-help">
+            Leave empty if this order is mixed
+          </div>
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Factory</div>
+          {{ form.factory_location }}
+          {% if form.factory_location.errors %}
+            <div class="prod-add-errors">{{ form.factory_location.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Order type</div>
+          {{ form.order_type }}
+          {% if form.order_type.errors %}
+            <div class="prod-add-errors">{{ form.order_type.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Total pieces</div>
+          {{ form.qty_total }}
+          {% if form.qty_total.errors %}
+            <div class="prod-add-errors">{{ form.qty_total.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Sample date</div>
+          {{ form.sample_deadline }}
+          {% if form.sample_deadline.errors %}
+            <div class="prod-add-errors">{{ form.sample_deadline.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Bulk date</div>
+          {{ form.bulk_deadline }}
+          {% if form.bulk_deadline.errors %}
+            <div class="prod-add-errors">{{ form.bulk_deadline.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Style image</div>
+          {{ form.style_image }}
+          {% if form.style_image.errors %}
+            <div class="prod-add-errors">{{ form.style_image.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field" style="grid-column:1 / -1;">
+          <div class="prod-add-label">Notes</div>
+          {{ form.notes }}
+          {% if form.notes.errors %}
+            <div class="prod-add-errors">{{ form.notes.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+      </div>
+    </div>
+
+    <div class="prod-add-card">
+      <div class="prod-add-card-title">Style and work order details</div>
+
+      <div class="prod-style-layout">
+
+        <div class="prod-style-left">
+
+          <div class="prod-add-field">
+            <div class="prod-add-label">Style name</div>
+            {{ form.style_name }}
+            <div class="prod-add-help">
+              Main style name or code. You can list more than one if needed.
+            </div>
+            {% if form.style_name.errors %}
+              <div class="prod-add-errors">{{ form.style_name.errors|striptags }}</div>
+            {% endif %}
+          </div>
+
+          <div class="prod-add-field">
+            <div class="prod-add-label">Color info</div>
+            {{ form.color_info }}
+            <div class="prod-add-help">
+              Example black, cocoa, sand. You can write one line for every color.
+            </div>
+            {% if form.color_info.errors %}
+              <div class="prod-add-errors">{{ form.color_info.errors|striptags }}</div>
+            {% endif %}
+          </div>
+
+          <div class="prod-add-field size-grid-block" style="grid-column:1 / -1;">
+            <div class="prod-add-label">Sizes and ratio up to 5XL</div>
+
+            <div class="size-grid-wrapper">
+              <div class="size-grid-label-row">
+                <div class="size-grid-label">XS</div>
+                <div class="size-grid-label">S</div>
+                <div class="size-grid-label">M</div>
+                <div class="size-grid-label">L</div>
+                <div class="size-grid-label">XL</div>
+                <div class="size-grid-label">2XL</div>
+                <div class="size-grid-label">3XL</div>
+                <div class="size-grid-label">4XL</div>
+                <div class="size-grid-label">5XL</div>
+              </div>
+              <div class="size-grid-input-row">
+                <input type="number" min="0" class="size-grid-input" data-size-field="XS" placeholder="0">
+                <input type="number" min="0" class="size-grid-input" data-size-field="S" placeholder="0">
+                <input type="number" min="0" class="size-grid-input" data-size-field="M" placeholder="0">
+                <input type="number" min="0" class="size-grid-input" data-size-field="L" placeholder="0">
+                <input type="number" min="0" class="size-grid-input" data-size-field="XL" placeholder="0">
+                <input type="number" min="0" class="size-grid-input" data-size-field="2XL" placeholder="0">
+                <input type="number" min="0" class="size-grid-input" data-size-field="3XL" placeholder="0">
+                <input type="number" min="0" class="size-grid-input" data-size-field="4XL" placeholder="0">
+                <input type="number" min="0" class="size-grid-input" data-size-field="5XL" placeholder="0">
+              </div>
+            </div>
+
+            <div class="prod-add-help">
+              Fill how many pieces for every size. System will store this inside the size ratio note field.
+            </div>
+
+            <div class="prod-add-hidden">
+              {{ form.size_ratio_note }}
+            </div>
+
+            {% if form.size_ratio_note.errors %}
+              <div class="prod-add-errors">{{ form.size_ratio_note.errors|striptags }}</div>
+            {% endif %}
+          </div>
+
+          <div class="prod-add-field">
+            <div class="prod-add-label">Accessories and trims</div>
+            {{ form.accessories_note }}
+            <div class="prod-add-help">
+              List drawcord, zipper type, buttons, labels, patches, tags and other trims.
+            </div>
+            {% if form.accessories_note.errors %}
+              <div class="prod-add-errors">{{ form.accessories_note.errors|striptags }}</div>
+            {% endif %}
+          </div>
+
+          <div class="prod-add-field">
+            <div class="prod-add-label">Packaging details</div>
+            {{ form.packaging_note }}
+            <div class="prod-add-help">
+              Polybag, bundle, carton mark, size sticker and any special pack.
+            </div>
+            {% if form.packaging_note.errors %}
+              <div class="prod-add-errors">{{ form.packaging_note.errors|striptags }}</div>
+            {% endif %}
+          </div>
+
+          <div class="prod-add-field">
+            <div class="prod-add-label">Extra order notes</div>
+            {{ form.extra_order_note }}
+            <div class="prod-add-help">
+              Use this for print position, measurement file name, shipping note and anything special.
+            </div>
+            {% if form.extra_order_note.errors %}
+              <div class="prod-add-errors">{{ form.extra_order_note.errors|striptags }}</div>
+            {% endif %}
+          </div>
+
+        </div>
+
+        <div class="prod-style-right">
+
+          <div class="prod-ai-box">
+            <div class="prod-ai-title">AI helper</div>
+            <div class="prod-ai-text">
+              AI will read this order and give a short plan for fabric, trims and timeline.
+            </div>
+            <div class="prod-ai-text">
+              First save the order. Then open the detail page to use full AI brain.
+            </div>
+            {% if is_edit and order %}
+              <div class="prod-ai-link">
+                <a href="{% url 'production_detail' order.pk %}" class="btn btn-sm btn-warning">
+                  Open AI on detail page
+                </a>
+              </div>
+            {% else %}
+              <div class="prod-ai-link">
+                After you create this order you will see the AI button on the detail page.
+              </div>
+            {% endif %}
+          </div>
+
+          <div class="prod-lib-box">
+            <div class="prod-lib-title">Library quick view</div>
+            <div class="prod-lib-text">
+              Use this as a guide when you fill the sheet. Later we will link it to the full library.
+            </div>
+            <div class="prod-lib-text">Common fabrics</div>
+            <div class="prod-lib-tags">
+              <span class="prod-lib-tag">300 GSM fleece</span>
+              <span class="prod-lib-tag">220 GSM jersey</span>
+              <span class="prod-lib-tag">Nylon spandex</span>
+              <span class="prod-lib-tag">Bamboo lycra</span>
+            </div>
+            <div class="prod-lib-text" style="margin-top:6px;">Common trims</div>
+            <div class="prod-lib-tags">
+              <span class="prod-lib-tag">Metal zipper</span>
+              <span class="prod-lib-tag">Nylon zipper</span>
+              <span class="prod-lib-tag">Woven label</span>
+              <span class="prod-lib-tag">Heat seal tag</span>
+              <span class="prod-lib-tag">Swing tag</span>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+
+    <div class="prod-add-card">
+      <div class="prod-add-card-title">Fabric and cost in taka</div>
+
+      <div class="prod-add-row">
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Fabric required kg</div>
+          {{ form.fabric_required_kg }}
+          <div class="prod-add-help">Total fabric needed for this order</div>
+          {% if form.fabric_required_kg.errors %}
+            <div class="prod-add-errors">{{ form.fabric_required_kg.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Fabric received kg</div>
+          {{ form.fabric_received_kg }}
+          <div class="prod-add-help">Fabric that came to the factory</div>
+          {% if form.fabric_received_kg.errors %}
+            <div class="prod-add-errors">{{ form.fabric_received_kg.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Fabric used kg</div>
+          {{ form.fabric_used_kg }}
+          <div class="prod-add-help">Fabric actually used in production</div>
+          {% if form.fabric_used_kg.errors %}
+            <div class="prod-add-errors">{{ form.fabric_used_kg.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Fabric cost per kg taka</div>
+          {{ form.fabric_cost_per_kg_bdt }}
+          <div class="prod-add-help">Rate per kg system will calculate total</div>
+          {% if form.fabric_cost_per_kg_bdt.errors %}
+            <div class="prod-add-errors">{{ form.fabric_cost_per_kg_bdt.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Thread cost taka</div>
+          {{ form.material_thread_cost_bdt }}
+          <div class="prod-add-help">Total thread cost for full order not per piece</div>
+          {% if form.material_thread_cost_bdt.errors %}
+            <div class="prod-add-errors">{{ form.material_thread_cost_bdt.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Zipper cost taka</div>
+          {{ form.material_zipper_cost_bdt }}
+          <div class="prod-add-help">Total zipper cost for full order</div>
+          {% if form.material_zipper_cost_bdt.errors %}
+            <div class="prod-add-errors">{{ form.material_zipper_cost_bdt.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Accessories cost taka</div>
+          {{ form.material_accessories_cost_bdt }}
+          <div class="prod-add-help">Total cost of all extra items for this order</div>
+          {% if form.material_accessories_cost_bdt.errors %}
+            <div class="prod-add-errors">{{ form.material_accessories_cost_bdt.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Label cost taka</div>
+          {{ form.material_label_cost_bdt }}
+          <div class="prod-add-help">Total woven label or print label cost</div>
+          {% if form.material_label_cost_bdt.errors %}
+            <div class="prod-add-errors">{{ form.material_label_cost_bdt.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Other material cost taka</div>
+          {{ form.material_other_cost_bdt }}
+          <div class="prod-add-help">Any other material cost for full order</div>
+          {% if form.material_other_cost_bdt.errors %}
+            <div class="prod-add-errors">{{ form.material_other_cost_bdt.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Cutting cost taka</div>
+          {{ form.production_cutting_cost_bdt }}
+          <div class="prod-add-help">Total cutting labour cost for this order</div>
+          {% if form.production_cutting_cost_bdt.errors %}
+            <div class="prod-add-errors">{{ form.production_cutting_cost_bdt.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Sewing cost taka</div>
+          {{ form.production_sewing_cost_bdt }}
+          <div class="prod-add-help">Total sewing labour cost for this order</div>
+          {% if form.production_sewing_cost_bdt.errors %}
+            <div class="prod-add-errors">{{ form.production_sewing_cost_bdt.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Finishing cost taka</div>
+          {{ form.production_finishing_cost_bdt }}
+          <div class="prod-add-help">Total finishing cost for this order</div>
+          {% if form.production_finishing_cost_bdt.errors %}
+            <div class="prod-add-errors">{{ form.production_finishing_cost_bdt.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Packing cost taka</div>
+          {{ form.production_packing_cost_bdt }}
+          <div class="prod-add-help">Total packing cost for this order</div>
+          {% if form.production_packing_cost_bdt.errors %}
+            <div class="prod-add-errors">{{ form.production_packing_cost_bdt.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Overhead cost taka</div>
+          {{ form.production_overhead_cost_bdt }}
+          <div class="prod-add-help">Factory overhead share for this order total only</div>
+          {% if form.production_overhead_cost_bdt.errors %}
+            <div class="prod-add-errors">{{ form.production_overhead_cost_bdt.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Other work cost taka</div>
+          {{ form.production_other_cost_bdt }}
+          <div class="prod-add-help">Any extra work cost for full order</div>
+          {% if form.production_other_cost_bdt.errors %}
+            <div class="prod-add-errors">{{ form.production_other_cost_bdt.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Remake needed</div>
+          {{ form.remake_required }}
+          <div class="prod-add-help">Tick only if factory will remake pieces</div>
+          {% if form.remake_required.errors %}
+            <div class="prod-add-errors">{{ form.remake_required.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Remake quantity</div>
+          {{ form.remake_qty }}
+          <div class="prod-add-help">How many pieces will be remade</div>
+          {% if form.remake_qty.errors %}
+            <div class="prod-add-errors">{{ form.remake_qty.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Remake cost taka</div>
+          {{ form.remake_cost_bdt }}
+          <div class="prod-add-help">Total extra cost for remake pieces</div>
+          {% if form.remake_cost_bdt.errors %}
+            <div class="prod-add-errors">{{ form.remake_cost_bdt.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+      </div>
+    </div>
+
+    <div class="prod-add-actions">
+      {% if is_edit and order %}
+        <a href="{% url 'production_detail' order.pk %}" class="btn btn-outline-secondary btn-sm">
+          Cancel
+        </a>
+      {% else %}
+        <a href="{% url 'production_list' %}" class="btn btn-outline-secondary btn-sm">
+          Cancel
+        </a>
+      {% endif %}
+      <button type="submit" class="btn btn-warning btn-sm">
+        {% if is_edit %}
+          Save changes
+        {% else %}
+          Create order
+        {% endif %}
+      </button>
+    </div>
+
+  </form>
+
+</div>
+
+<script>
+  (function () {
+    function normKey(k) {
+      return (k || "").toString().trim().toUpperCase();
+    }
+
+    function parseSizeRatio(text) {
+      // supports: "XS 10, S 20" or "XS:10, S:20" or "XS=10"
+      var out = {};
+      if (!text) return out;
+
+      text.split(",").forEach(function (chunk) {
+        var c = chunk.trim();
+        if (!c) return;
+
+        var m = c.match(/^([A-Za-z0-9]+)\s*[:= ]\s*([0-9]+)$/);
+        if (m) {
+          out[normKey(m[1])] = m[2];
+          return;
+        }
+
+        var parts = c.split(/\s+/);
+        if (parts.length >= 2) {
+          out[normKey(parts[0])] = parts[1];
+        }
+      });
+
+      return out;
+    }
+
+    function buildSizeRatio(sizeKeys, inputs) {
+      var out = [];
+      sizeKeys.forEach(function (key) {
+        var el = inputs[key];
+        if (!el) return;
+        var v = (el.value || "").trim();
+        if (v !== "" && v !== "0") {
+          out.push(key + " " + v);
+        }
+      });
+      return out.join(", ");
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+      var form = document.getElementById("prod-form");
+      if (!form) return;
+
+      // always target the real Django field by name
+      var sizeField = form.querySelector('[name="size_ratio_note"]');
+      if (!sizeField) return;
+
+      var sizeKeys = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"];
+      var inputs = {};
+
+      sizeKeys.forEach(function (key) {
+        inputs[key] = form.querySelector('[data-size-field="' + key + '"]');
+      });
+
+      // fill grid on page load if edit
+      var parsed = parseSizeRatio(sizeField.value);
+      sizeKeys.forEach(function (key) {
+        if (inputs[key] && parsed[key]) {
+          inputs[key].value = parsed[key];
+        }
+      });
+
+      // keep hidden field in sync while typing
+      sizeKeys.forEach(function (key) {
+        var el = inputs[key];
+        if (!el) return;
+        el.addEventListener("input", function () {
+          sizeField.value = buildSizeRatio(sizeKeys, inputs);
+        });
+      });
+
+      // final write before submit
+      form.addEventListener("submit", function () {
+        sizeField.value = buildSizeRatio(sizeKeys, inputs);
+      });
+    });
+  })();
+</script>
+
+{% endblock %}

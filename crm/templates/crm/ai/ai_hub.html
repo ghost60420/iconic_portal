@@ -1,0 +1,218 @@
+{% extends "crm/base.html" %}
+{% block content %}
+
+<style>
+  .ai-wrap{
+    color:#f9fafb;
+    max-width:1200px;
+    margin:0 auto;
+  }
+  .ai-sub{
+    font-size:12px;
+    color:#9ca3af;
+    font-weight:800;
+  }
+  .ai-card{
+    background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+    border:1px solid #334155;
+    border-radius:18px;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.55);
+    overflow:hidden;
+  }
+  .ai-card-body{
+    padding:16px;
+  }
+  .ai-title{
+    font-weight:900;
+    margin:0 0 6px 0;
+    font-size:18px;
+  }
+  .ai-desc{
+    font-size:12px;
+    color:#9ca3af;
+    font-weight:800;
+    line-height:1.35;
+  }
+  .ai-btn{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:9px 14px;
+    border-radius:999px;
+    font-weight:900;
+    font-size:12px;
+    text-decoration:none;
+    border:1px solid rgba(255,255,255,0.18);
+    background: linear-gradient(145deg, #0f172a, #020617);
+    color:#f9fafb;
+  }
+  .ai-btn:hover{ filter:brightness(1.05); }
+  .ai-btn-gold{
+    border-color:#f6d488;
+    background: linear-gradient(145deg, #ffe39b, #e4c067);
+    color:#111827;
+    box-shadow: 0 3px 0 #8a6b24;
+  }
+  .ai-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:6px 10px;
+    border-radius:999px;
+    font-size:11px;
+    font-weight:900;
+    color:#e5e7eb;
+    border:1px solid #334155;
+    background: rgba(255,255,255,0.03);
+    white-space:nowrap;
+  }
+  .ai-badge-ok{
+    background:#16a34a;
+    border-color:#16a34a;
+    color:#0b0f1a;
+  }
+  .ai-badge-bad{
+    background:#ef4444;
+    border-color:#ef4444;
+    color:#fff;
+  }
+  .ai-badge-warn{
+    background:#f59e0b;
+    border-color:#f59e0b;
+    color:#0b0f1a;
+  }
+  .ai-grid{
+    display:grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap:12px;
+  }
+  @media (max-width: 900px){
+    .ai-grid{ grid-template-columns: 1fr; }
+  }
+  .ai-top-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:12px;
+    flex-wrap:wrap;
+    margin-bottom:12px;
+  }
+  .ai-status-row{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    margin:10px 0 16px 0;
+  }
+</style>
+
+<div class="container-fluid">
+  <div class="ai-wrap">
+
+    <div class="ai-top-row">
+      <div>
+        <h2 class="mb-1" style="font-weight:900;">AI Central Hub</h2>
+        <div class="ai-sub">Superuser only. One place for all AI tools.</div>
+
+        <div class="ai-status-row">
+          <span class="ai-badge">
+            <span>📊</span>
+            Score: {{ score|default:0 }}
+          </span>
+
+          {% if cards.key_loaded %}
+            <span class="ai-badge ai-badge-ok">
+              <span>🔑</span> Key loaded
+            </span>
+          {% else %}
+            <span class="ai-badge ai-badge-bad">
+              <span>🔑</span> Key missing
+            </span>
+          {% endif %}
+
+          {% if cards.provider_name %}
+            <span class="ai-badge">
+              <span>🏷️</span> {{ cards.provider_name }}
+            </span>
+          {% endif %}
+
+          {% if cards.errors_24h and cards.errors_24h|add:0 > 0 %}
+            <span class="ai-badge ai-badge-warn">
+              <span>⚠️</span> Errors 24h: {{ cards.errors_24h }}
+            </span>
+          {% else %}
+            <span class="ai-badge ai-badge-ok">
+              <span>✅</span> Errors 24h: 0
+            </span>
+          {% endif %}
+
+          <span class="ai-badge">
+            <span>🕒</span>
+            Last request:
+            {% if cards.last_request_time %}
+              {{ cards.last_request_time }}
+            {% else %}
+              None
+            {% endif %}
+          </span>
+        </div>
+      </div>
+
+      <div class="ai-badge">
+        <span>👤</span>
+        {{ request.user.get_username }}
+      </div>
+    </div>
+
+    <div class="ai-grid">
+
+      <div class="ai-card">
+        <div class="ai-card-body">
+          <div class="ai-title">AI Assistant</div>
+          <div class="ai-desc">
+            Ask questions about your CRM. Get clear next steps and action tips.
+          </div>
+
+          <div class="mt-3">
+            <a class="ai-btn ai-btn-gold" href="{% url 'ai_assistant' %}">
+              <span>🤖</span> Open Assistant
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div class="ai-card">
+        <div class="ai-card-body">
+          <div class="ai-title">AI Health Monitor</div>
+          <div class="ai-desc">
+            Find missing data, overdue work, and risk flags across the CRM.
+          </div>
+
+          <div class="mt-3">
+            <a class="ai-btn" href="{% url 'ai_health_monitor' %}">
+              <span>🩺</span> Open Health Monitor
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div class="ai-card">
+        <div class="ai-card-body">
+          <div class="ai-title">AI System Status</div>
+          <div class="ai-desc">
+            Provider, key status, request logs, and usage limits.
+          </div>
+
+          <div class="mt-3">
+            <a class="ai-btn" href="{% url 'ai_system_status' %}">
+              <span>⚙️</span> Open System Status
+            </a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}

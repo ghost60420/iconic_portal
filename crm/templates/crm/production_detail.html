@@ -1,0 +1,981 @@
+{% extends "crm/base.html" %}
+{% load static %}
+{% block content %}
+
+<style>
+  .prod-page {
+    max-width: 1100px;
+    margin: 20px auto 44px auto;
+    padding: 0 10px;
+  }
+
+  .cardx {
+    background: #050816;
+    border: 1px solid #1f2937;
+    border-radius: 14px;
+    box-shadow: 0 0 18px rgba(0,0,0,0.7);
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+
+  .headerx {
+    background: radial-gradient(circle at top left, #1f2937, #050505);
+    border: 1px solid #1f2937;
+    border-radius: 14px;
+    box-shadow: 0 0 22px rgba(0,0,0,0.7);
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+
+  .header-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .header-left {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    min-width: 260px;
+  }
+
+  .thumb-wrap {
+    width: 64px;
+    height: 64px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #374151;
+    background: #020617;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: #6b7280;
+    flex: 0 0 auto;
+  }
+
+  .thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .title {
+    font-size: 20px;
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1.2;
+  }
+
+  .sub {
+    font-size: 12px;
+    color: #9ca3af;
+    margin-top: 2px;
+  }
+
+  .status-badge {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid rgba(255,255,255,0.12);
+    user-select: none;
+  }
+
+  .status-badge.done { background: #16a34a; color: #ffffff; }
+  .status-badge.in_progress { background: #0ea5e9; color: #020617; }
+  .status-badge.hold { background: #78350f; color: #fef3c7; }
+  .status-badge.planning { background: #4b5563; color: #f9fafb; }
+  .status-badge.delay { background: #b91c1c; color: #ffffff; }
+
+  .progress-label {
+    font-size: 12px;
+    color: #9ca3af;
+    margin-top: 4px;
+  }
+
+  .meta-grid {
+    margin-top: 10px;
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .meta-item {
+    grid-column: span 3;
+    background: rgba(2,6,23,0.6);
+    border: 1px solid #111827;
+    border-radius: 12px;
+    padding: 10px;
+  }
+
+  .meta-label {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #9ca3af;
+    margin-bottom: 2px;
+  }
+
+  .meta-value {
+    font-size: 13px;
+    color: #f9fafb;
+    font-weight: 600;
+  }
+
+  .meta-value.muted {
+    color: #6b7280;
+    font-weight: 400;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 8px 0 12px 0;
+  }
+
+  .section-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #f9fafb;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .stage-wrap {
+    margin-top: 6px;
+  }
+
+  .stage-strip {
+    display: flex;
+    align-items: stretch;
+    border-radius: 999px;
+    overflow: hidden;
+    border: 1px solid #27272a;
+    background: #020617;
+  }
+
+  .stage-item {
+    flex: 1 1 0;
+    text-align: center;
+    padding: 7px 6px;
+    font-size: 11px;
+    font-weight: 700;
+    border-right: 1px solid #020617;
+    color: #e5e7eb;
+    white-space: nowrap;
+    text-decoration: none;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    transition: transform 0.08s ease, filter 0.08s ease;
+    cursor: pointer;
+  }
+
+  .stage-item:last-child { border-right: none; }
+
+  .stage-item:hover {
+    filter: brightness(1.07);
+    transform: translateY(-1px);
+  }
+
+  .stage-item.planned { background: #111827; }
+  .stage-item.current { background: #1d4ed8; }
+  .stage-item.done { background: #16a34a; }
+  .stage-item.delay { background: #b91c1c; }
+  .stage-item.hold { background: #78350f; }
+
+  .stage-emoji {
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .progress-row {
+    margin-top: 10px;
+  }
+
+  .stage-dates-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+
+  .toggle-btn {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid #4b5563;
+    background: #020617;
+    color: #e5e7eb;
+    cursor: pointer;
+  }
+
+  .toggle-btn:hover {
+    border-color: #facc15;
+    color: #facc15;
+  }
+
+  .stage-table {
+    margin-top: 8px;
+    border-radius: 12px;
+    border: 1px solid #111827;
+    background: #020617;
+    overflow: hidden;
+  }
+
+  .stage-row {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr) minmax(0, 1.1fr);
+    gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid #111827;
+    font-size: 12px;
+  }
+
+  .stage-row:last-child { border-bottom: none; }
+
+  .stage-name {
+    font-weight: 800;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    color: #f9fafb;
+  }
+
+  .small-label {
+    font-size: 11px;
+    color: #9ca3af;
+    margin-bottom: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .val {
+    font-size: 12px;
+    color: #e5e7eb;
+    font-weight: 600;
+  }
+
+  .grid-two {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .note-box {
+    background: rgba(2,6,23,0.6);
+    border: 1px solid #111827;
+    border-radius: 12px;
+    padding: 12px;
+  }
+
+  .note-title {
+    font-size: 13px;
+    font-weight: 800;
+    color: #f9fafb;
+    margin-bottom: 6px;
+    border-bottom: 1px solid #111827;
+    padding-bottom: 6px;
+  }
+
+  .prewrap {
+    white-space: pre-wrap;
+    font-size: 12px;
+    color: #e5e7eb;
+  }
+
+  .muted {
+    color: #6b7280;
+  }
+
+  .dpr-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  .inputx {
+    background: #020617;
+    border: 1px solid #374151;
+    border-radius: 8px;
+    color: #e5e7eb;
+    font-size: 13px;
+    padding: 8px 10px;
+    width: 100%;
+  }
+
+  .inputx:focus {
+    border-color: #facc15;
+    outline: none;
+    box-shadow: 0 0 0 1px rgba(250,204,21,0.3);
+  }
+
+  .sheet-top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px 18px;
+    margin-top: 8px;
+  }
+
+  .sheet-label {
+    font-size: 11px;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 2px;
+  }
+
+  .sheet-value {
+    font-size: 13px;
+    color: #f9fafb;
+    font-weight: 600;
+  }
+
+  .sheet-value.muted {
+    color: #6b7280;
+    font-weight: 400;
+  }
+
+  .size-grid {
+    border-radius: 12px;
+    border: 1px solid #111827;
+    background: #020617;
+    overflow: hidden;
+    margin-top: 6px;
+  }
+
+  .size-grid-row {
+    display: grid;
+    grid-template-columns: repeat(9, minmax(0, 1fr));
+  }
+
+  .size-cell {
+    font-size: 11px;
+    padding: 8px 6px;
+    text-align: center;
+    border-right: 1px solid #0b1120;
+    border-bottom: 1px solid #0b1120;
+    color: #e5e7eb;
+  }
+
+  .size-cell:last-child { border-right: none; }
+
+  .size-head .size-cell {
+    font-weight: 800;
+    background: rgba(15,23,42,0.6);
+  }
+
+  .size-summary {
+    margin-top: 6px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .size-summary.ok { color: #22c55e; }
+  .size-summary.warn { color: #f97316; }
+
+  .attach-list {
+    margin-top: 8px;
+    font-size: 12px;
+  }
+
+  .attach-list ul {
+    list-style: none;
+    padding-left: 0;
+    margin: 0;
+  }
+
+  .attach-list li {
+    margin-bottom: 6px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .attach-list a {
+    color: #e5e7eb;
+    text-decoration: underline;
+    text-decoration-color: #4b5563;
+  }
+
+  .attach-list a:hover {
+    text-decoration-color: #facc15;
+  }
+
+  /* important: keep stage buttons clean */
+  .stage-form {
+    flex: 1 1 0;
+    margin: 0;
+  }
+  .stage-btn {
+    width: 100%;
+    border: 0;
+    outline: none;
+    background: transparent;
+    padding: 0;
+  }
+
+  @media (max-width: 900px) {
+    .meta-item { grid-column: span 6; }
+  }
+
+  @media (max-width: 768px) {
+    .meta-item { grid-column: span 12; }
+    .grid-two { grid-template-columns: 1fr; }
+    .sheet-top { grid-template-columns: 1fr; }
+    .stage-row { grid-template-columns: 1fr; }
+    .dpr-grid { grid-template-columns: 1fr; }
+    .stage-strip { overflow-x: auto; }
+    .stage-item { min-width: 140px; }
+    .stage-form { flex: 0 0 auto; }
+  }
+</style>
+
+<div class="prod-page">
+
+  <div class="cardx">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+      <div>
+        <div style="font-size:15px; font-weight:800; color:#fefce8;">
+          Production order: {{ order.title }}
+        </div>
+        <div class="sub">
+          Total pieces: {{ order.qty_total }}
+          {% if opportunity %}
+            <span> • Opportunity: {{ opportunity.opportunity_id }}</span>
+          {% endif %}
+        </div>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        {% if opportunity %}
+          <a href="{% url 'opportunity_detail' opportunity.pk %}" class="btn btn-gold btn-sm">View opportunity</a>
+        {% endif %}
+        {% if lead %}
+          <a href="{% url 'lead_detail' lead.pk %}" class="btn btn-outline-light btn-sm">View lead</a>
+        {% endif %}
+        {% if customer %}
+          <a href="{% url 'customer_detail' customer.pk %}" class="btn btn-outline-secondary btn-sm">View customer</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="headerx">
+    <div class="header-top">
+      <div class="header-left">
+        <div class="thumb-wrap">
+          {% if order.product and order.product.image %}
+            <img src="{{ order.product.image.url }}" alt="{{ order.product.name }}" class="thumb">
+          {% elif order.style_image %}
+            <img src="{{ order.style_image.url }}" alt="{{ order.title }}" class="thumb">
+          {% else %}
+            <span>Style</span>
+          {% endif %}
+        </div>
+        <div>
+          <div class="title">{{ order.title }}</div>
+          <div class="sub">
+            Order code <strong>{{ order.order_code }}</strong>
+          </div>
+        </div>
+      </div>
+
+      <div style="text-align:right;">
+        <div>
+          <span class="status-badge {{ order.status }}">
+            {{ order.get_status_display }}
+          </span>
+        </div>
+        <div class="progress-label">
+          {{ percent_done }} percent complete
+          {% if order_delayed %}
+            <span style="color:#fca5a5;"> • Possible delay</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="meta-grid">
+      <div class="meta-item">
+        <div class="meta-label">Customer</div>
+        <div class="meta-value {% if not order.customer %}muted{% endif %}">
+          {% if order.customer %}{{ order.customer.name|default:order.customer }}{% else %}Not set{% endif %}
+        </div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Product</div>
+        <div class="meta-value {% if not order.product %}muted{% endif %}">
+          {% if order.product %}{{ order.product.name|default:order.product }}{% else %}Not set{% endif %}
+        </div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Order type</div>
+        <div class="meta-value">{{ order.get_order_type_display }}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Total pieces</div>
+        <div class="meta-value">{{ order.qty_total }}</div>
+      </div>
+
+      <div class="meta-item">
+        <div class="meta-label">Sample date</div>
+        <div class="meta-value {% if not order.sample_deadline %}muted{% endif %}">
+          {{ order.sample_deadline|date:"Y-m-d"|default:"-" }}
+        </div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Bulk date</div>
+        <div class="meta-value {% if not order.bulk_deadline %}muted{% endif %}">
+          {{ order.bulk_deadline|date:"Y-m-d"|default:"-" }}
+        </div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Factory</div>
+        <div class="meta-value {% if not order.factory_location %}muted{% endif %}">
+          {{ order.get_factory_location_display|default:"-" }}
+        </div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Created</div>
+        <div class="meta-value">
+          {{ order.created_at|date:"Y-m-d"|default:"-" }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <a href="{% url 'production_list' %}" class="btn btn-outline-secondary btn-sm">Back</a>
+    <a href="{% url 'production_edit' order.pk %}" class="btn btn-outline-light btn-sm">Edit</a>
+    <a href="{% url 'production_next_stage' order.pk %}" class="btn btn-warning btn-sm">Next stage</a>
+    <a href="{% url 'production_ai_help' order.pk %}" class="btn btn-outline-light btn-sm">AI help</a>
+  </div>
+
+  <div class="cardx">
+    <div class="section-title">Stage flow</div>
+
+    <div class="stage-wrap">
+      <div class="stage-strip">
+        {% for stage in stages %}
+          <form method="post"
+                action="{% url 'production_stage_click' stage.id %}"
+                class="stage-form">
+            {% csrf_token %}
+            <button type="submit" class="stage-btn">
+              <div class="stage-item
+                {% if stage.status == 'done' %}done
+                {% elif stage.status == 'in_progress' %}current
+                {% elif stage.status == 'delay' %}delay
+                {% elif stage.status == 'hold' %}hold
+                {% else %}planned{% endif %}">
+                <span class="stage-emoji">
+                  {% if stage.stage_key == "development" %}🧠
+                  {% elif stage.stage_key == "sampling" %}🧪
+                  {% elif stage.stage_key == "cutting" %}✂️
+                  {% elif stage.stage_key == "sewing" %}🧵
+                  {% elif stage.stage_key == "ironing" %}🧺
+                  {% elif stage.stage_key == "qc" %}✅
+                  {% elif stage.stage_key == "finishing" %}✨
+                  {% elif stage.stage_key == "packing" %}📦
+                  {% elif stage.stage_key == "shipping" %}🚚
+                  {% else %}⚙️{% endif %}
+                </span>
+                <span>{{ stage.display_name|default:stage.get_stage_key_display }}</span>
+              </div>
+            </button>
+          </form>
+        {% empty %}
+          <div class="stage-item planned">No stages</div>
+        {% endfor %}
+      </div>
+
+      <div class="progress-row">
+        <div class="progress-label">Progress {{ percent_done }} percent</div>
+        <div class="progress" style="height:8px;">
+          <div
+            class="progress-bar {% if order_delayed %}bg-danger{% else %}bg-warning{% endif %}"
+            role="progressbar"
+            style="width: {{ percent_done }}%;"
+          ></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage-dates-head">
+      <div class="section-title" style="margin:0;">Stage dates</div>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <button type="button" id="stage-dates-toggle" class="toggle-btn">Hide</button>
+        <div class="muted" style="font-size:12px;">Click stage name below to edit dates</div>
+      </div>
+    </div>
+
+    <div class="stage-table" id="stage-dates-body">
+      {% for stage in stages %}
+        <div class="stage-row">
+          <div class="stage-name">
+            <span class="stage-emoji">
+              {% if stage.stage_key == "development" %}🧠
+              {% elif stage.stage_key == "sampling" %}🧪
+              {% elif stage.stage_key == "cutting" %}✂️
+              {% elif stage.stage_key == "sewing" %}🧵
+              {% elif stage.stage_key == "ironing" %}🧺
+              {% elif stage.stage_key == "qc" %}✅
+              {% elif stage.stage_key == "finishing" %}✨
+              {% elif stage.stage_key == "packing" %}📦
+              {% elif stage.stage_key == "shipping" %}🚚
+              {% else %}⚙️{% endif %}
+            </span>
+
+            <a href="{% url 'production_stage_edit' stage.id %}"
+               style="color:#f9fafb; text-decoration:underline; text-decoration-color:#4b5563;">
+              {{ stage.display_name|default:stage.get_stage_key_display }}
+            </a>
+          </div>
+
+          <div>
+            <div class="small-label">Planned</div>
+            <div class="val">
+              {{ stage.planned_start|date:"Y-m-d"|default:"-" }} to {{ stage.planned_end|date:"Y-m-d"|default:"-" }}
+            </div>
+          </div>
+
+          <div>
+            <div class="small-label">Actual</div>
+            <div class="val">
+              {{ stage.actual_start|date:"Y-m-d"|default:"-" }} to {{ stage.actual_end|date:"Y-m-d"|default:"-" }}
+            </div>
+          </div>
+        </div>
+      {% empty %}
+        <div style="padding:12px;" class="muted">No stages created yet for this order.</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="cardx">
+    <div class="grid-two">
+      <div class="note-box">
+        <div class="note-title">Notes</div>
+        <div class="prewrap">
+          {% if order.notes %}{{ order.notes }}{% else %}<span class="muted">No notes yet.</span>{% endif %}
+        </div>
+      </div>
+
+      <div class="note-box">
+        <div class="note-title">AI advice</div>
+        <div class="prewrap">
+          {% if order.ai_note %}{{ order.ai_note }}{% else %}<span class="muted">No AI note yet. Use AI help.</span>{% endif %}
+        </div>
+        <div style="text-align:right; margin-top:10px;">
+          <a href="{% url 'production_ai_help' order.pk %}" class="btn btn-outline-warning btn-sm">
+            Update AI summary
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <div class="note-box" style="margin-top:12px;">
+      <div class="note-title">Daily production report</div>
+      <form method="post" action="{% url 'production_dpr' order.pk %}">
+        {% csrf_token %}
+        <div class="dpr-grid">
+          <div>
+            <div class="small-label">Today pieces</div>
+            <input type="number" name="dpr_qty" min="0" required class="inputx">
+          </div>
+          <div>
+            <div class="small-label">Note</div>
+            <input type="text" name="dpr_note" class="inputx">
+          </div>
+        </div>
+        <div style="text-align:right; margin-top:10px;">
+          <button type="submit" class="btn btn-warning btn-sm">Add daily report</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="cardx">
+    <div class="section-title">Order sheet details</div>
+
+    <div class="sheet-top">
+      <div>
+        <div class="sheet-label">Style name</div>
+        <div class="sheet-value {% if not order.style_name %}muted{% endif %}">
+          {{ order.style_name|default:"not set" }}
+        </div>
+      </div>
+      <div>
+        <div class="sheet-label">Color info</div>
+        <div class="sheet-value {% if not order.color_info %}muted{% endif %}">
+          {{ order.color_info|default:"not set" }}
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;">
+      <div class="sheet-label">Size grid up to 5XL</div>
+
+      {% if size_grid %}
+        <div class="size-grid">
+          <div class="size-grid-row size-head">
+            {% for item in size_grid %}
+              <div class="size-cell">{{ item.label }}</div>
+            {% endfor %}
+          </div>
+          <div class="size-grid-row">
+            {% for item in size_grid %}
+              <div class="size-cell">{% if item.qty %}{{ item.qty }}{% else %}-{% endif %}</div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="size-summary
+          {% if size_total and order.qty_total and size_total == order.qty_total %}ok
+          {% elif size_total %}warn{% endif %}">
+          {% if size_total %}
+            Size total {{ size_total }}
+            {% if order.qty_total %} of order total {{ order.qty_total }}{% endif %}
+          {% else %}
+            No size ratio set for this order.
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="sheet-value muted">No size ratio set.</div>
+      {% endif %}
+    </div>
+
+    <div style="margin-top:12px;">
+      <div class="sheet-label">Accessories and trims</div>
+      <div class="prewrap {% if not order.accessories_note %}muted{% endif %}">
+        {{ order.accessories_note|default:"not set" }}
+      </div>
+    </div>
+
+    <div style="margin-top:12px;">
+      <div class="sheet-label">Packaging details</div>
+      <div class="prewrap {% if not order.packaging_note %}muted{% endif %}">
+        {{ order.packaging_note|default:"not set" }}
+      </div>
+    </div>
+
+    <div style="margin-top:12px;">
+      <div class="sheet-label">Extra order notes</div>
+      <div class="prewrap {% if not order.extra_order_note %}muted{% endif %}">
+        {{ order.extra_order_note|default:"not set" }}
+      </div>
+    </div>
+
+    <div style="margin-top:14px;">
+      <div class="sheet-label">Attachments</div>
+
+      <form action="{% url 'production_attachment_add' order.pk %}"
+            method="post"
+            enctype="multipart/form-data"
+            style="margin-top:8px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+        {% csrf_token %}
+        <input type="file" name="file" class="inputx" style="max-width:260px; padding:6px 8px;">
+        <input type="text" name="name" placeholder="File name optional" class="inputx" style="max-width:260px;">
+        <button type="submit" class="btn btn-warning btn-sm">Upload</button>
+      </form>
+
+      <div class="attach-list">
+        {% if attachments %}
+          <ul>
+            {% for att in attachments %}
+              <li>
+                <a href="{{ att.file.url }}" target="_blank">{{ att.name|default:att.file.name }}</a>
+                <form action="{% url 'production_attachment_delete' order.pk att.pk %}" method="post" style="display:inline;">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-outline-danger btn-sm"
+                          onclick="return confirm('Delete this file?');">
+                    Delete
+                  </button>
+                </form>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <div class="muted">No files added yet.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="cardx">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+      <div class="section-title" style="margin:0;">Shipping for this order</div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a href="{% url 'shipping_add_for_order' order.pk %}" class="btn btn-warning btn-sm">Add shipment</a>
+        <a href="{% url 'shipment_list' %}" class="btn btn-outline-light btn-sm">Open shipping list</a>
+      </div>
+    </div>
+
+    <div style="margin-top:10px;">
+      {% if shipments %}
+        <div class="table-responsive">
+          <table class="table table-dark table-sm align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Carrier</th>
+                <th>Tracking</th>
+                <th>Boxes</th>
+                <th>Weight kg</th>
+                <th>Cost BDT</th>
+                <th>Cost CAD</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for s in shipments %}
+                <tr>
+                  <td>{{ s.ship_date|date:"Y-m-d"|default:"-" }}</td>
+                  <td>{{ s.get_carrier_display }}</td>
+                  <td>
+                    {% if s.tracking_number %}
+                      {% if s.tracking_url %}
+                        <a href="{{ s.tracking_url }}" target="_blank">{{ s.tracking_number }}</a>
+                      {% else %}
+                        {{ s.tracking_number }}
+                      {% endif %}
+                    {% else %}
+                      -
+                    {% endif %}
+                  </td>
+                  <td>{{ s.box_count|default:"-" }}</td>
+                  <td>{{ s.total_weight_kg|default:"-" }}</td>
+                  <td>{{ s.cost_bdt|default:"-" }}</td>
+                  <td>{{ s.cost_cad|default:"-" }}</td>
+                  <td>{{ s.get_status_display }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="muted" style="font-size:13px;">No shipments yet.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="cardx">
+    <div class="section-title">Costs in taka</div>
+
+    <div class="meta-grid" style="margin-top:10px;">
+      <div class="meta-item">
+        <div class="meta-label">Fabric required kg</div>
+        <div class="meta-value">{{ order.fabric_required_kg|default:"not set" }}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Fabric received kg</div>
+        <div class="meta-value">{{ order.fabric_received_kg|default:"not set" }}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Fabric used kg</div>
+        <div class="meta-value">{{ order.fabric_used_kg|default:"not set" }}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Fabric cost per kg</div>
+        <div class="meta-value">{{ order.fabric_cost_per_kg_bdt|default:"not set" }}</div>
+      </div>
+
+      <div class="meta-item">
+        <div class="meta-label">Thread cost</div>
+        <div class="meta-value">{{ order.material_thread_cost_bdt|default:"not set" }}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Zipper cost</div>
+        <div class="meta-value">{{ order.material_zipper_cost_bdt|default:"not set" }}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Accessories cost</div>
+        <div class="meta-value">{{ order.material_accessories_cost_bdt|default:"not set" }}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Label cost</div>
+        <div class="meta-value">{{ order.material_label_cost_bdt|default:"not set" }}</div>
+      </div>
+
+      <div class="meta-item">
+        <div class="meta-label">Cutting cost</div>
+        <div class="meta-value">{{ order.production_cutting_cost_bdt|default:"not set" }}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Sewing cost</div>
+        <div class="meta-value">{{ order.production_sewing_cost_bdt|default:"not set" }}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Finishing cost</div>
+        <div class="meta-value">{{ order.production_finishing_cost_bdt|default:"not set" }}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Packing cost</div>
+        <div class="meta-value">{{ order.production_packing_cost_bdt|default:"not set" }}</div>
+      </div>
+
+      <div class="meta-item">
+        <div class="meta-label">Overhead cost</div>
+        <div class="meta-value">{{ order.production_overhead_cost_bdt|default:"not set" }}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Other work cost</div>
+        <div class="meta-value">{{ order.production_other_cost_bdt|default:"not set" }}</div>
+      </div>
+
+      <div class="meta-item">
+        <div class="meta-label">Remake needed</div>
+        <div class="meta-value">{% if order.remake_required %}Yes{% else %}No{% endif %}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Remake qty</div>
+        <div class="meta-value">{{ order.remake_qty|default:"not set" }}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Remake cost</div>
+        <div class="meta-value">{{ order.remake_cost_bdt|default:"not set" }}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Total actual cost</div>
+        <div class="meta-value">{{ order.actual_total_cost_bdt|default:"not set" }}</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var toggle = document.getElementById("stage-dates-toggle");
+    var body = document.getElementById("stage-dates-body");
+    if (!toggle || !body) return;
+
+    toggle.addEventListener("click", function () {
+      var hidden = body.style.display === "none";
+      if (hidden) {
+        body.style.display = "";
+        toggle.textContent = "Hide";
+      } else {
+        body.style.display = "none";
+        toggle.textContent = "Show";
+      }
+    });
+  });
+</script>
+
+{% endblock %}

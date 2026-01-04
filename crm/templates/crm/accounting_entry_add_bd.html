@@ -1,0 +1,544 @@
+{% extends "crm/base.html" %}
+{% load humanize %}
+{% block content %}
+
+<style>
+  :root{
+    --bg:#020617;
+    --bg2:#030712;
+    --line:#374151;
+    --line2:#111827;
+    --text:#f9fafb;
+    --muted:#cbd5e1;
+    --good:#86efac;
+    --warn:#facc15;
+    --bad:#ffb4b4;
+    --gold1:#f5d580;
+    --gold2:#d4b35f;
+  }
+
+  .wrap{ color:var(--text); }
+  .shell{ max-width: 1120px; margin:0 auto; }
+
+  .head{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:14px;
+    flex-wrap:wrap;
+    margin-bottom:14px;
+  }
+
+  .title{ margin:0; font-weight:900; font-size:28px; letter-spacing:0.2px; color:var(--text); }
+  .sub{ font-size:12px; color:var(--muted); font-weight:800; margin-top:6px; }
+
+  .pillbar{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+
+  .pill{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:8px 14px;
+    border-radius:999px;
+    font-size:12px;
+    font-weight:900;
+    border:1px solid rgba(255,255,255,0.14);
+    text-decoration:none;
+    background: linear-gradient(145deg,#0f172a,var(--bg));
+    color:var(--text);
+    box-shadow:0 3px 0 #020617;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .pill:hover{ opacity:0.95; color:var(--text); text-decoration:none; }
+
+  .pill-gold{
+    background: linear-gradient(145deg,var(--gold1),var(--gold2));
+    color:#050505;
+    border:1px solid #e5c670;
+    box-shadow:0 3px 0 #8a6b24;
+  }
+
+  .cardx{
+    background:var(--bg);
+    border:1px solid var(--line);
+    border-radius:16px;
+    box-shadow:0 14px 34px rgba(0,0,0,0.38);
+    overflow:hidden;
+  }
+
+  .lockBox{
+    border:1px solid rgba(34,197,94,0.30);
+    background: rgba(34,197,94,0.10);
+    border-radius:14px;
+    padding:12px 14px;
+    margin-bottom:14px;
+  }
+  .lockTop{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  .lockTitle{
+    margin:0;
+    font-weight:900;
+    font-size:12px;
+    color:#bbf7d0;
+  }
+  .lockBadges{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .lockNote{
+    margin-top:8px;
+    font-size:12px;
+    font-weight:800;
+    color:#e5e7eb;
+  }
+
+  .badgePill{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:6px 10px;
+    border-radius:999px;
+    font-size:12px;
+    font-weight:900;
+    border:1px solid rgba(255,255,255,0.16);
+    background:#0b1220;
+    color:var(--text);
+  }
+  .badgeGood{ border-color: rgba(34,197,94,0.45); }
+  .badgeBlue{ border-color: rgba(59,130,246,0.45); }
+  .badgeRed{ border-color: rgba(239,68,68,0.45); }
+
+  .label{
+    font-size:12px;
+    color:#ffffff;
+    font-weight:900;
+    margin-bottom:6px;
+  }
+  .help{
+    font-size:11px;
+    color:#9ca3af;
+    font-weight:800;
+    margin-top:6px;
+    line-height:1.35;
+  }
+
+  .inp, .sel, .txt{
+    background:var(--bg2) !important;
+    border:1px solid #4b5563 !important;
+    color:var(--text) !important;
+    font-weight:800 !important;
+    border-radius:12px !important;
+  }
+  .inp:focus, .sel:focus, .txt:focus{
+    border-color:var(--warn) !important;
+    box-shadow: 0 0 0 0.2rem rgba(250,204,21,0.15) !important;
+  }
+
+  .fieldBox{
+    border:1px solid rgba(255,255,255,0.10);
+    background: rgba(0,0,0,0.14);
+    border-radius:14px;
+    padding:12px;
+  }
+
+  .divider{
+    height:1px;
+    background: var(--line2);
+    margin:12px 0;
+  }
+
+  .searchInput{
+    width:100%;
+    height:40px;
+    padding:8px 12px;
+    border-radius:12px;
+    border:1px solid #4b5563;
+    background:var(--bg2);
+    color:var(--text);
+    font-weight:800;
+    outline:none;
+  }
+  .searchInput:focus{
+    border-color:var(--warn);
+    box-shadow: 0 0 0 0.2rem rgba(250,204,21,0.15);
+  }
+
+  .searchRow{
+    display:flex;
+    gap:8px;
+    align-items:center;
+    margin-top:8px;
+    flex-wrap:wrap;
+  }
+
+  .miniBtn{
+    height:36px;
+    padding:0 12px;
+    border-radius:999px;
+    border:1px solid rgba(255,255,255,0.16);
+    background: rgba(255,255,255,0.08);
+    color:var(--text);
+    font-weight:900;
+    font-size:12px;
+    cursor:pointer;
+  }
+  .miniBtn:hover{ background: rgba(255,255,255,0.12); }
+
+  .miniBtnGold{
+    background: linear-gradient(145deg,var(--gold1),var(--gold2));
+    color:#050505;
+    border:1px solid #e5c670;
+  }
+  .miniBtnGold:hover{ opacity:0.95; }
+
+  .alertFix{
+    border:1px solid rgba(239,68,68,0.35);
+    background: rgba(239,68,68,0.10);
+    color:#fecaca;
+    font-weight:900;
+    border-radius:14px;
+    padding:12px 14px;
+    font-size:12px;
+    margin-bottom:12px;
+  }
+
+  datalist option{ color:#000; }
+</style>
+
+<div class="container-fluid wrap">
+  <div class="shell">
+
+    <div class="head">
+      <div>
+        <h2 class="title">Add Bangladesh accounting entry</h2>
+        <div class="sub">This page is locked to Bangladesh entries only.</div>
+      </div>
+
+      <div class="pillbar">
+        <a href="{% url 'accounting_bd_grid' %}" class="pill">Back</a>
+      </div>
+    </div>
+
+    <div class="lockBox">
+      <div class="lockTop">
+        <p class="lockTitle">Locked settings</p>
+
+        <div class="lockBadges">
+          <span class="badgePill badgeGood">Side {{ lock_side|default:"BD" }}</span>
+          <span class="badgePill badgeBlue">Currency {{ lock_currency|default:"BDT" }}</span>
+        </div>
+      </div>
+
+      <div class="lockNote">
+        These fields are hidden so nobody can change them by mistake.
+      </div>
+    </div>
+
+    <div class="cardx">
+      <div class="card-body p-3">
+
+        {% if form.errors %}
+          <div class="alertFix">
+            Please fix the errors and try again.
+          </div>
+        {% endif %}
+
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+
+          {% if form.side %}{{ form.side.as_hidden }}{% endif %}
+          {% if form.currency %}{{ form.currency.as_hidden }}{% endif %}
+          {% if form.rate_to_cad %}{{ form.rate_to_cad.as_hidden }}{% endif %}
+          {% if form.rate_to_bdt %}{{ form.rate_to_bdt.as_hidden }}{% endif %}
+
+          <div class="fieldBox">
+            <div class="row g-2">
+
+              <div class="col-md-3">
+                <div class="label">Date</div>
+                {{ form.date }}
+                {% if form.date.errors %}
+                  <div class="text-danger" style="font-weight:900; margin-top:8px;">
+                    {{ form.date.errors }}
+                  </div>
+                {% endif %}
+              </div>
+
+              <div class="col-md-3">
+                <div class="label">Flow</div>
+
+                <input
+                  list="direction_list"
+                  name="direction"
+                  id="id_direction"
+                  value="{{ form.direction.value|default_if_none:'' }}"
+                  class="searchInput"
+                  placeholder="Type or pick"
+                >
+                <datalist id="direction_list">
+                  <option value="IN"></option>
+                  <option value="OUT"></option>
+                </datalist>
+
+                <div class="help">IN means money received. OUT means money spent.</div>
+
+                {% if form.direction.errors %}
+                  <div class="text-danger" style="font-weight:900; margin-top:8px;">
+                    {{ form.direction.errors }}
+                  </div>
+                {% endif %}
+              </div>
+
+              <div class="col-md-3">
+                <div class="label">Status</div>
+                {{ form.status }}
+                {% if form.status.errors %}
+                  <div class="text-danger" style="font-weight:900; margin-top:8px;">
+                    {{ form.status.errors }}
+                  </div>
+                {% endif %}
+              </div>
+
+              <div class="col-md-3">
+                <div class="label">Main type</div>
+                {{ form.main_type }}
+                {% if form.main_type.errors %}
+                  <div class="text-danger" style="font-weight:900; margin-top:8px;">
+                    {{ form.main_type.errors }}
+                  </div>
+                {% endif %}
+              </div>
+
+              <div class="col-md-3">
+                <div class="label">Sub type</div>
+                {{ form.sub_type }}
+                {% if form.sub_type.errors %}
+                  <div class="text-danger" style="font-weight:900; margin-top:8px;">
+                    {{ form.sub_type.errors }}
+                  </div>
+                {% endif %}
+              </div>
+
+              <div class="col-md-3">
+                <div class="label">Production order</div>
+
+                <input
+                  id="prod_search"
+                  type="text"
+                  class="searchInput"
+                  placeholder="Search order then pick from list"
+                  autocomplete="off"
+                />
+
+                <div class="searchRow">
+                  <button type="button" class="miniBtn" id="prod_clear">Clear</button>
+                  <button type="button" class="miniBtn miniBtnGold" id="prod_show_all">Show all</button>
+                </div>
+
+                <div style="margin-top:8px;">
+                  {{ form.production_order }}
+                </div>
+
+                <div class="help">
+                  You can type to filter the list, then select from the dropdown.
+                </div>
+              </div>
+
+              <div class="col-md-3">
+                <div class="label">Shipment</div>
+
+                <input
+                  id="ship_search"
+                  type="text"
+                  class="searchInput"
+                  placeholder="Search shipment then pick from list"
+                  autocomplete="off"
+                />
+
+                <div class="searchRow">
+                  <button type="button" class="miniBtn" id="ship_clear">Clear</button>
+                  <button type="button" class="miniBtn miniBtnGold" id="ship_show_all">Show all</button>
+                </div>
+
+                <div style="margin-top:8px;">
+                  {{ form.shipment }}
+                </div>
+
+                <div class="help">
+                  Use search to narrow down the list, then select from the dropdown.
+                </div>
+              </div>
+
+              <div class="col-md-3">
+                <div class="label">Amount BDT</div>
+                {{ form.amount_original }}
+                <div class="help">Only BDT is allowed for Bangladesh entries.</div>
+                {% if form.amount_original.errors %}
+                  <div class="text-danger" style="font-weight:900; margin-top:8px;">
+                    {{ form.amount_original.errors }}
+                  </div>
+                {% endif %}
+              </div>
+
+              <div class="col-md-6">
+                <div class="label">Attachments</div>
+                {{ form.attachments }}
+                <div class="help">You can add more than one file.</div>
+
+                {% if form.attachments.errors %}
+                  <div class="text-danger" style="font-weight:900; margin-top:8px;">
+                    {{ form.attachments.errors }}
+                  </div>
+                {% endif %}
+              </div>
+
+              <div class="col-12">
+                <div class="label">Description</div>
+                {{ form.description }}
+                {% if form.description.errors %}
+                  <div class="text-danger" style="font-weight:900; margin-top:8px;">
+                    {{ form.description.errors }}
+                  </div>
+                {% endif %}
+              </div>
+
+              <div class="col-12">
+                <div class="label">Internal note</div>
+                {{ form.internal_note }}
+                {% if form.internal_note.errors %}
+                  <div class="text-danger" style="font-weight:900; margin-top:8px;">
+                    {{ form.internal_note.errors }}
+                  </div>
+                {% endif %}
+              </div>
+
+            </div>
+
+            <div class="divider"></div>
+
+            <button type="submit" class="pill pill-gold">
+              Save entry
+            </button>
+
+          </div>
+        </form>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  (function () {
+    function addClassByTag(id){
+      var el = document.getElementById(id);
+      if(!el) return;
+      var tag = (el.tagName || "").toLowerCase();
+      if(tag === "select") el.classList.add("sel");
+      else if(tag === "textarea") el.classList.add("txt");
+      else el.classList.add("inp");
+    }
+
+    [
+      "id_date","id_status","id_main_type","id_sub_type",
+      "id_production_order","id_shipment","id_amount_original",
+      "id_description","id_internal_note","id_attachments"
+    ].forEach(addClassByTag);
+
+    var dateEl = document.getElementById("id_date");
+    if (dateEl) {
+      dateEl.setAttribute("type", "date");
+      dateEl.setAttribute("inputmode", "none");
+      dateEl.classList.add("inp");
+
+      dateEl.addEventListener("focus", function(){
+        try { if (dateEl.showPicker) dateEl.showPicker(); } catch(e){}
+      });
+      dateEl.addEventListener("click", function(){
+        try { if (dateEl.showPicker) dateEl.showPicker(); } catch(e){}
+      });
+    }
+
+    var dirEl = document.getElementById("id_direction");
+    if (dirEl) {
+      dirEl.classList.add("inp");
+    }
+
+    function cacheOptions(selectEl){
+      var arr = [];
+      for(var i=0;i<selectEl.options.length;i++){
+        var o = selectEl.options[i];
+        arr.push({ value: o.value, text: o.text });
+      }
+      return arr;
+    }
+
+    function renderOptions(selectEl, list, keepValue){
+      var current = keepValue ? selectEl.value : "";
+      selectEl.innerHTML = "";
+      for(var i=0;i<list.length;i++){
+        var o = document.createElement("option");
+        o.value = list[i].value;
+        o.text = list[i].text;
+        selectEl.appendChild(o);
+      }
+      if(keepValue){
+        selectEl.value = current;
+      }
+    }
+
+    function setupSearch(selectId, inputId, clearId, showAllId){
+      var sel = document.getElementById(selectId);
+      var inp = document.getElementById(inputId);
+      var btnClear = document.getElementById(clearId);
+      var btnAll = document.getElementById(showAllId);
+
+      if(!sel || !inp) return;
+
+      var all = cacheOptions(sel);
+
+      function doFilter(){
+        var q = (inp.value || "").toLowerCase().trim();
+        if(!q){
+          renderOptions(sel, all, true);
+          return;
+        }
+        var filtered = all.filter(function(item){
+          return (item.text || "").toLowerCase().indexOf(q) !== -1;
+        });
+        if(filtered.length === 0){
+          filtered = [{ value: "", text: "No match found" }];
+        }
+        renderOptions(sel, filtered, true);
+      }
+
+      inp.addEventListener("input", doFilter);
+
+      if(btnClear){
+        btnClear.addEventListener("click", function(){
+          inp.value = "";
+          sel.value = "";
+          renderOptions(sel, all, false);
+          inp.focus();
+        });
+      }
+
+      if(btnAll){
+        btnAll.addEventListener("click", function(){
+          inp.value = "";
+          renderOptions(sel, all, true);
+          sel.focus();
+        });
+      }
+    }
+
+    setupSearch("id_production_order", "prod_search", "prod_clear", "prod_show_all");
+    setupSearch("id_shipment", "ship_search", "ship_clear", "ship_show_all");
+  })();
+</script>
+
+{% endblock %}

@@ -1,0 +1,219 @@
+{% extends "crm/base.html" %}
+{% block content %}
+
+<style>
+  .wrap{ max-width:1100px; margin:0 auto; color:#f9fafb; }
+  .cardx{
+    background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+    border:1px solid #334155;
+    border-radius:18px;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.55);
+    overflow:hidden;
+    margin-top:12px;
+  }
+  .pad{ padding:14px; }
+  .title{ margin:0; font-weight:900; }
+  .sub{ margin-top:4px; font-size:12px; font-weight:800; color:#9ca3af; }
+  .msg{ padding:10px 12px; border-radius:14px; border:1px solid rgba(148,163,184,0.22); margin-bottom:10px; }
+  .in{ background: rgba(255,255,255,0.03); }
+  .out{ background: rgba(250,204,21,0.08); border-color:#facc15; }
+  .meta{ font-size:11px; color:#9ca3af; font-weight:800; margin-bottom:6px; }
+  .badge{
+    display:inline-flex; align-items:center; gap:6px;
+    padding:6px 10px; border-radius:999px;
+    font-size:11px; font-weight:900;
+    border:1px solid #334155; background: rgba(255,255,255,0.03);
+    color:#e5e7eb;
+  }
+  .bad{ background:#ef4444; border-color:#ef4444; color:#fff; }
+  .ok{ background:#16a34a; border-color:#16a34a; color:#0b0f1a; }
+
+  .btn{
+    display:inline-flex; align-items:center; gap:8px;
+    padding:9px 14px; border-radius:999px;
+    font-weight:900; font-size:12px; text-decoration:none;
+    border:1px solid rgba(255,255,255,0.18);
+    background: linear-gradient(145deg, #0f172a, #020617);
+    color:#f9fafb;
+    cursor:pointer;
+  }
+  .btn:hover{ filter:brightness(1.05); }
+
+  .input, textarea{
+    width:100%;
+    background:#020617;
+    border:1px solid #334155;
+    color:#f9fafb;
+    border-radius:12px;
+    padding:10px;
+    font-size:13px;
+    font-weight:700;
+  }
+  textarea{ min-height:90px; }
+
+  .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:10px; }
+  .hint{ font-size:11px; color:#9ca3af; font-weight:800; }
+</style>
+
+<div class="container-fluid">
+  <div class="wrap">
+
+    <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:flex-start;">
+      <div>
+        <h2 class="title">WhatsApp Thread 💬</h2>
+        <div class="sub">
+          {{ thread.wa_name|default:"Unknown" }} · {{ thread.wa_phone }}
+          {% if thread.lead %}
+            · Lead:
+            <a href="{% url 'lead_detail' thread.lead.pk %}">{{ thread.lead.account_brand }}</a>
+          {% endif %}
+        </div>
+      </div>
+
+      <div>
+        {% if thread.needs_human %}
+          <span class="badge bad">Needs human</span>
+        {% else %}
+          <span class="badge ok">OK</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="cardx">
+      <div class="pad">
+        {% if messages %}
+          {% for m in messages %}
+            <div class="msg {% if m.direction == 'in' %}in{% else %}out{% endif %}">
+              <div class="meta">
+                {% if m.direction == "in" %}Client{% else %}Team{% endif %}
+                · {{ m.created_at|date:"Y-m-d H:i" }}
+              </div>
+              <div style="white-space:pre-wrap;">{{ m.body }}</div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="sub">No messages in this thread yet.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="cardx">
+      <div class="pad">
+        <h3 class="title" style="font-size:16px;">AI draft 🤖</h3>
+        <div class="sub">Generate a draft, review it, then click send.</div>
+
+        <form id="csrf-box" style="display:none;">{% csrf_token %}</form>
+
+        <textarea class="input" id="draftBox" placeholder="AI draft will appear here">{{ thread.ai_draft }}</textarea>
+
+        <div class="row">
+          <button class="btn" type="button" id="btnDraft">✨ Generate AI draft</button>
+          <button class="btn" type="button" id="btnSend">✉️ Send message</button>
+          <span class="hint" id="statusBox"></span>
+        </div>
+
+        <hr style="margin:14px 0; border-color:#334155;">
+
+        <h3 class="title" style="font-size:16px;">Manual message</h3>
+        <div class="sub">You can also type your own message here.</div>
+
+        <textarea class="input" id="manualBox" placeholder="Type reply here"></textarea>
+
+        <div class="row">
+          <button class="btn" type="button" id="btnSendManual">Send manual</button>
+          <span class="hint" id="statusBox2"></span>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  const draftBox = document.getElementById("draftBox");
+  const manualBox = document.getElementById("manualBox");
+
+  const btnDraft = document.getElementById("btnDraft");
+  const btnSend = document.getElementById("btnSend");
+  const btnSendManual = document.getElementById("btnSendManual");
+
+  const statusBox = document.getElementById("statusBox");
+  const statusBox2 = document.getElementById("statusBox2");
+
+  function getCsrf() {
+    const t = document.querySelector("#csrf-box input[name='csrfmiddlewaretoken']");
+    return t ? t.value : "";
+  }
+
+  function postForm(url, data) {
+    return fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "X-CSRFToken": getCsrf()
+      },
+      body: new URLSearchParams(data || {})
+    }).then(r => r.json());
+  }
+
+  function setStatus(el, text) {
+    if (el) el.textContent = text || "";
+  }
+
+  if (btnDraft) {
+    btnDraft.addEventListener("click", function () {
+      setStatus(statusBox, "Thinking...");
+      postForm("{% url 'wa_send_ai_draft' thread.pk %}", {})
+        .then(function (data) {
+          if (data.ok) {
+            draftBox.value = data.draft || "";
+            setStatus(statusBox, "Draft ready ✅");
+          } else {
+            setStatus(statusBox, data.error || "AI error");
+          }
+        })
+        .catch(function () {
+          setStatus(statusBox, "Error");
+        });
+    });
+  }
+
+  function sendText(text, statusEl) {
+    const msg = (text || "").trim();
+    if (!msg) {
+      setStatus(statusEl, "Empty message");
+      return;
+    }
+
+    setStatus(statusEl, "Sending...");
+    postForm("{% url 'wa_send' thread.pk %}", { text: msg })
+      .then(function (data) {
+        if (data.ok) {
+          setStatus(statusEl, "Sent ✅");
+          window.location.reload();
+        } else {
+          setStatus(statusEl, data.error || "Send failed");
+        }
+      })
+      .catch(function () {
+        setStatus(statusEl, "Error");
+      });
+  }
+
+  if (btnSend) {
+    btnSend.addEventListener("click", function () {
+      sendText(draftBox.value, statusBox);
+    });
+  }
+
+  if (btnSendManual) {
+    btnSendManual.addEventListener("click", function () {
+      sendText(manualBox.value, statusBox2);
+    });
+  }
+})();
+</script>
+
+{% endblock %}

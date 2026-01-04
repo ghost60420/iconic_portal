@@ -1,0 +1,457 @@
+{% include "crm/navbar.html" %}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>
+        {% if mode == "edit" %}Edit accessory{% else %}Add accessory{% endif %} - Iconic CRM
+    </title>
+    <style>
+        body {
+            background: #000;
+            color: #f5d580;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        a {
+            color: #f5d580;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .page {
+            max-width: 1100px;
+            margin: 20px auto 40px auto;
+            padding: 0 15px;
+        }
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .header-title {
+            font-size: 22px;
+            font-weight: bold;
+        }
+        .header-sub {
+            font-size: 13px;
+            color: #c7b36b;
+        }
+        .btn {
+            background: #f5d580;
+            color: #000;
+            padding: 7px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-secondary {
+            background: #222;
+            color: #f5d580;
+            border: 1px solid #444;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1.7fr 1.3fr;
+            gap: 18px;
+        }
+        @media (max-width: 900px) {
+            .main-grid { grid-template-columns: 1fr; }
+        }
+        .card {
+            background: #101010;
+            border-radius: 12px;
+            border: 1px solid #333;
+            box-shadow: 0 0 16px rgba(0,0,0,0.6);
+            padding: 14px 16px;
+            font-size: 13px;
+            margin-bottom: 16px;
+        }
+        .card-title {
+            font-size: 15px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 4px;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px 18px;
+        }
+        .form-row {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+        .label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #c7b36b;
+        }
+        input[type="text"],
+        input[type="number"],
+        input[type="file"],
+        textarea {
+            background: #000;
+            color: #f5d580;
+            border-radius: 5px;
+            border: 1px solid #444;
+            padding: 6px 8px;
+            font-size: 13px;
+        }
+        textarea { resize: vertical; }
+        .muted { color: #888; font-size: 12px; }
+
+        .image-preview-box {
+            margin-top: 6px;
+            border-radius: 10px;
+            border: 1px solid #333;
+            background: #050505;
+            padding: 6px;
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .image-preview-box img {
+            max-width: 100%;
+            max-height: 160px;
+            border-radius: 8px;
+            object-fit: cover;
+        }
+
+        .ai-card {
+            background: #101010;
+            border-radius: 12px;
+            border: 1px solid #333;
+            box-shadow: 0 0 16px rgba(0,0,0,0.6);
+            padding: 12px 14px;
+            font-size: 13px;
+        }
+        .ai-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 6px;
+        }
+        .ai-title {
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .ai-note {
+            font-size: 11px;
+            color: #a4925c;
+            margin-top: 4px;
+        }
+        .ai-output {
+            margin-top: 8px;
+            background: #050505;
+            border-radius: 8px;
+            border: 1px solid #333;
+            padding: 8px;
+            min-height: 80px;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        .ai-status {
+            font-size: 11px;
+            color: #aaa;
+            margin-left: 6px;
+        }
+        .ai-hint {
+            font-size: 11px;
+            color: #888;
+            margin-top: 6px;
+        }
+
+        .footer-actions {
+            margin-top: 12px;
+            display: flex;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+
+    <div class="header-row">
+        <div>
+            <div class="header-title">
+                {% if mode == "edit" %}Edit accessory{% else %}Add accessory{% endif %}
+            </div>
+            {% if accessory %}
+                <div class="header-sub">
+                    {{ accessory.accessory_code }}
+                </div>
+            {% endif %}
+        </div>
+        <div>
+            <a href="{% url 'accessories_list' %}" class="btn btn-secondary">Back to accessories</a>
+        </div>
+    </div>
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <div class="main-grid">
+            <div>
+                <div class="card">
+                    <div class="card-title">Accessory information</div>
+
+                    <div class="form-grid">
+                        <div class="form-row">
+                            <label class="label">Name</label>
+                            {{ form.name }}
+                        </div>
+
+                        <div class="form-row">
+                            <label class="label">Type</label>
+                            <input
+                                type="text"
+                                name="accessory_type"
+                                id="id_accessory_type"
+                                list="acc-type-list"
+                                value="{{ form.accessory_type.value|default_if_none:'' }}"
+                            >
+                            <datalist id="acc-type-list">
+                                {% for v in acc_type_list %}
+                                    <option value="{{ v }}"></option>
+                                {% endfor %}
+                            </datalist>
+                            <span class="muted">
+                                Pick from list or type a new type.
+                            </span>
+                        </div>
+
+                        <div class="form-row">
+                            <label class="label">Size</label>
+                            <input
+                                type="text"
+                                name="size"
+                                id="id_size"
+                                list="acc-size-list"
+                                value="{{ form.size.value|default_if_none:'' }}"
+                            >
+                            <datalist id="acc-size-list">
+                                {% for v in acc_size_list %}
+                                    <option value="{{ v }}"></option>
+                                {% endfor %}
+                            </datalist>
+                        </div>
+
+                        <div class="form-row">
+                            <label class="label">Color</label>
+                            <input
+                                type="text"
+                                name="color"
+                                id="id_color"
+                                list="acc-color-list"
+                                value="{{ form.color.value|default_if_none:'' }}"
+                            >
+                            <datalist id="acc-color-list">
+                                {% for v in acc_color_list %}
+                                    <option value="{{ v }}"></option>
+                                {% endfor %}
+                            </datalist>
+                        </div>
+
+                        <div class="form-row">
+                            <label class="label">Material</label>
+                            <input
+                                type="text"
+                                name="material"
+                                id="id_material"
+                                list="acc-material-list"
+                                value="{{ form.material.value|default_if_none:'' }}"
+                            >
+                            <datalist id="acc-material-list">
+                                {% for v in acc_material_list %}
+                                    <option value="{{ v }}"></option>
+                                {% endfor %}
+                            </datalist>
+                        </div>
+
+                        <div class="form-row">
+                            <label class="label">Finish</label>
+                            <input
+                                type="text"
+                                name="finish"
+                                id="id_finish"
+                                list="acc-finish-list"
+                                value="{{ form.finish.value|default_if_none:'' }}"
+                            >
+                            <datalist id="acc-finish-list">
+                                {% for v in acc_finish_list %}
+                                    <option value="{{ v }}"></option>
+                                {% endfor %}
+                            </datalist>
+                        </div>
+
+                        <div class="form-row">
+                            <label class="label">Supplier</label>
+                            <input
+                                type="text"
+                                name="supplier"
+                                id="id_supplier"
+                                list="acc-supplier-list"
+                                value="{{ form.supplier.value|default_if_none:'' }}"
+                            >
+                            <datalist id="acc-supplier-list">
+                                {% for v in acc_supplier_list %}
+                                    <option value="{{ v }}"></option>
+                                {% endfor %}
+                            </datalist>
+                        </div>
+
+                        <div class="form-row">
+                            <label class="label">Price per unit</label>
+                            {{ form.price_per_unit }}
+                        </div>
+
+                        <div class="form-row">
+                            <label class="label">Active</label>
+                            {{ form.is_active }}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Notes</div>
+                    <div class="form-row">
+                        {{ form.notes }}
+                        <span class="muted">
+                            Save any AI ideas here for this accessory.
+                        </span>
+                    </div>
+                </div>
+
+                <div class="footer-actions">
+                    <button type="submit" class="btn">Save accessory</button>
+                </div>
+            </div>
+
+            <div>
+                <div class="card">
+                    <div class="card-title">Image</div>
+                    <div class="form-row">
+                        {{ form.image }}
+                        <span class="muted">
+                            Optional, but helpful for the library.
+                        </span>
+                    </div>
+                    <div class="image-preview-box">
+                        {% if form.instance and form.instance.image %}
+                            <img src="{{ form.instance.image.url }}" alt="{{ form.instance.name }}">
+                        {% else %}
+                            <span class="muted">No image yet.</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="ai-card">
+                    <div class="ai-header">
+                        <div class="ai-title">AI for this accessory</div>
+                        <div>
+                            <button type="button" class="btn" id="ai-acc-btn">Ask AI</button>
+                            <span class="ai-status" id="ai-acc-status"></span>
+                        </div>
+                    </div>
+                    <div class="ai-note">
+                        AI will use name, type, color, and material to suggest use cases,
+                        price level ideas, and production notes.
+                    </div>
+                    <div class="ai-output" id="ai-acc-output">
+                        AI suggestion will show here.
+                    </div>
+                    <div class="ai-hint">
+                        Tip: copy good lines into notes.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <form id="ai-acc-csrf" style="display:none;">
+        {% csrf_token %}
+    </form>
+</div>
+
+<script>
+(function () {
+    const btn = document.getElementById("ai-acc-btn");
+    if (!btn) return;
+
+    const outBox = document.getElementById("ai-acc-output");
+    const statusSpan = document.getElementById("ai-acc-status");
+
+    function getCsrf() {
+        const tokenField = document.querySelector(
+            "#ai-acc-csrf input[name='csrfmiddlewaretoken']"
+        );
+        return tokenField ? tokenField.value : "";
+    }
+
+    btn.addEventListener("click", function () {
+        const nameEl = document.getElementById("id_name");
+        const typeEl = document.getElementById("id_accessory_type");
+        const colorEl = document.getElementById("id_color");
+        const materialEl = document.getElementById("id_material");
+
+        const name = nameEl ? nameEl.value.trim() : "";
+        const accType = typeEl ? typeEl.value.trim() : "";
+        const color = colorEl ? colorEl.value.trim() : "";
+        const material = materialEl ? materialEl.value.trim() : "";
+
+        if (!name) {
+            outBox.textContent = "Please fill the accessory name first.";
+            return;
+        }
+
+        statusSpan.textContent = "Thinking with AI...";
+        outBox.textContent = "";
+
+        fetch("{% url 'accessory_ai_suggest' %}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-CSRFToken": getCsrf()
+            },
+            body: new URLSearchParams({
+                name: name,
+                accessory_type: accType,
+                color: color,
+                material: material
+            })
+        })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (data.ok) {
+                outBox.textContent = data.suggestion;
+                statusSpan.textContent = "Ready";
+            } else {
+                outBox.textContent = data.error || "AI could not answer.";
+                statusSpan.textContent = "";
+            }
+        })
+        .catch(function (err) {
+            console.error(err);
+            outBox.textContent = "Error talking to AI.";
+            statusSpan.textContent = "";
+        });
+    });
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,119 @@
+{% extends "crm/base.html" %}
+{% block content %}
+
+<style>
+  .wrap{max-width:700px;margin:16px auto 28px auto;padding:0 10px;color:#f9fafb;}
+  .btn{display:inline-block;padding:10px 14px;border-radius:999px;border:1px solid transparent;font-size:12px;font-weight:900;cursor:pointer;text-decoration:none;white-space:nowrap;}
+  .btn-slate{background:#020617;color:#e5e7eb;border-color:#374151;}
+  .btn-gold{background:linear-gradient(135deg,#facc15,#f97316);color:#111827;border-color:#fbbf24;}
+  .cardx{background:#020617;border:1px solid #374151;border-radius:14px;box-shadow:0 10px 26px rgba(0,0,0,0.45);}
+  label{font-size:11px;color:#e5e7eb;margin-bottom:4px;display:block;font-weight:800;}
+  input,select,textarea{background:#020617;color:#f9fafb;border:1px solid #374151;border-radius:10px;padding:10px 10px;font-size:12px;width:100%;}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:#facc15;box-shadow:0 0 0 2px rgba(250,204,21,0.20);}
+  textarea{min-height:90px;}
+  .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+  .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}
+  .sub{font-size:12px;color:#9ca3af;margin-top:4px;}
+  .errorlist{margin:6px 0 0 0;padding-left:14px;font-size:11px;color:#fecaca;}
+  .errorlist li{list-style:disc;}
+  .checkRow{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #334155;border-radius:10px;background:#030712;}
+  .checkRow input{width:18px;height:18px;}
+</style>
+
+<div class="wrap">
+
+  <a class="btn btn-slate" href="{% url 'bd_staff_month_list' %}{% if row %}?year={{ row.year }}&month={{ row.month }}{% endif %}">
+    ← Back
+  </a>
+
+  <h2 style="margin:12px 0 0 0;font-size:18px;font-weight:900;">
+    Edit payroll
+  </h2>
+
+  {% if row %}
+    <div class="sub">{{ row.staff.name }} for {{ row.year }}-{{ row.month }}</div>
+  {% endif %}
+
+  <div class="cardx" style="margin-top:12px;">
+    <div style="padding:14px;">
+
+      {% if form.non_field_errors %}
+        <ul class="errorlist">
+          {% for e in form.non_field_errors %}<li>{{ e }}</li>{% endfor %}
+        </ul>
+      {% endif %}
+
+      <form method="post" novalidate>
+        {% csrf_token %}
+
+        <div class="grid3">
+          <div>
+            <label>Base salary (BDT)</label>
+            {{ form.base_salary_bdt }}
+            {{ form.base_salary_bdt.errors }}
+          </div>
+
+          <div>
+            <label>OT hours</label>
+            {{ form.overtime_hours }}
+            {{ form.overtime_hours.errors }}
+          </div>
+
+          <div>
+            <label>OT rate (BDT)</label>
+            {{ form.overtime_rate_bdt }}
+            {{ form.overtime_rate_bdt.errors }}
+          </div>
+        </div>
+
+        <div class="grid" style="margin-top:10px;">
+          <div>
+            <label>Bonus (BDT)</label>
+            {{ form.bonus_bdt }}
+            {{ form.bonus_bdt.errors }}
+          </div>
+
+          <div>
+            <label>Deduction (BDT)</label>
+            {{ form.deduction_bdt }}
+            {{ form.deduction_bdt.errors }}
+          </div>
+        </div>
+
+        <div style="margin-top:10px;">
+          <label>Paid</label>
+          <div class="checkRow">
+            {{ form.is_paid }}
+            <div style="font-weight:900;">Mark as paid</div>
+          </div>
+          {{ form.is_paid.errors }}
+        </div>
+
+        <div style="margin-top:10px;">
+          <label>Paid date</label>
+          {{ form.paid_date }}
+          {{ form.paid_date.errors }}
+        </div>
+
+        <div style="margin-top:10px;">
+          <label>Note</label>
+          {{ form.note }}
+          {{ form.note.errors }}
+        </div>
+
+        {% for hidden in form.hidden_fields %}
+          {{ hidden }}
+        {% endfor %}
+
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-gold" type="submit">Save</button>
+          <a class="btn btn-slate" href="{% url 'bd_staff_month_list' %}{% if row %}?year={{ row.year }}&month={{ row.month }}{% endif %}">Cancel</a>
+        </div>
+
+      </form>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}

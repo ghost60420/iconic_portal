@@ -1,0 +1,343 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+
+<style>
+  .opp-page {
+    max-width: 1200px;
+    margin: 18px auto 32px auto;
+    padding: 0 10px;
+    color: #f9fafb;
+    font-family: Arial, sans-serif;
+  }
+
+  .opp-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+
+  .opp-title-block {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 240px;
+  }
+
+  .opp-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #f9fafb;
+  }
+
+  .opp-subtitle {
+    font-size: 12px;
+    color: #9ca3af;
+  }
+
+  .opp-subtitle strong {
+    color: #e5e7eb;
+  }
+
+  .opp-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid #1f2937;
+    background: #0b1220;
+    color: #e5e7eb;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+    height: 34px;
+    line-height: 1;
+  }
+  .btn:hover { filter: brightness(1.06); }
+  .btn:active { transform: translateY(1px); }
+
+  .btn-primary {
+    border-color: #2b3647;
+    background: #101a2c;
+    color: #f9fafb;
+  }
+
+  .card-shell {
+    margin-top: 10px;
+    background: #0b1220;
+    border-radius: 14px;
+    border: 1px solid #1f2937;
+    padding: 12px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  }
+
+  .card-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+
+  .card-title {
+    font-size: 14px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #f9fafb;
+  }
+
+  .card-note {
+    font-size: 12px;
+    color: #9ca3af;
+  }
+
+  .filter-bar {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: end;
+    margin-bottom: 10px;
+    padding: 10px;
+    border-radius: 12px;
+    border: 1px solid #1f2937;
+    background: #070d18;
+  }
+
+  .field {
+    min-width: 180px;
+    flex: 1;
+  }
+
+  .label {
+    display: block;
+    font-size: 11px;
+    color: #9ca3af;
+    margin-bottom: 6px;
+  }
+
+  .input, .select {
+    width: 100%;
+    height: 34px;
+    border-radius: 10px;
+    border: 1px solid #263245;
+    background: #0b1220;
+    color: #f9fafb;
+    padding: 6px 10px;
+    font-size: 12px;
+    outline: none;
+  }
+  .input:focus, .select:focus {
+    border-color: #3b4a63;
+    box-shadow: 0 0 0 2px rgba(59, 74, 99, 0.35);
+  }
+
+  .filter-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  table.opp-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin-top: 6px;
+    overflow: hidden;
+    border-radius: 12px;
+  }
+
+  table.opp-table th,
+  table.opp-table td {
+    padding: 10px 10px;
+    border-bottom: 1px solid #162033;
+    text-align: left;
+    vertical-align: middle;
+  }
+
+  table.opp-table th {
+    background: #070d18;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: #9ca3af;
+  }
+
+  table.opp-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .opp-id-link {
+    color: #f9fafb;
+    font-weight: 800;
+    text-decoration: none;
+  }
+  .opp-id-link:hover { text-decoration: underline; }
+
+  .text-muted-row { color: #9ca3af; }
+  .text-right { text-align: right; }
+
+  .pill-stage {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid #263245;
+    font-size: 11px;
+    background: #070d18;
+    color: #e5e7eb;
+    font-weight: 700;
+  }
+
+  @media (max-width: 768px) {
+    .opp-title { font-size: 20px; }
+    .card-shell { padding: 10px; }
+    table.opp-table th, table.opp-table td { padding: 9px 8px; }
+    .filter-bar { padding: 10px; }
+  }
+</style>
+
+<div class="opp-page">
+
+  <div class="opp-header">
+    <div class="opp-title-block">
+      <div class="opp-title">Opportunities</div>
+      <div class="opp-subtitle">
+        Total <strong>{{ opportunities|length }}</strong> deals in this view.
+      </div>
+    </div>
+
+    <div class="opp-actions">
+      <a href="{% url 'leads_list' %}" class="btn">View leads</a>
+      <a href="{% url 'add_opportunity' %}" class="btn btn-primary">Add opportunity</a>
+    </div>
+  </div>
+
+  <div class="card-shell">
+    <div class="card-header-row">
+      <div class="card-title">All opportunities</div>
+      <div class="card-note">Click on the opportunity id to open the full detail page.</div>
+    </div>
+
+    <form method="get" class="filter-bar">
+      <div class="field">
+        <label class="label">Search</label>
+        <input
+          class="input"
+          type="text"
+          name="q"
+          value="{{ request.GET.q|default:'' }}"
+          placeholder="Opportunity, brand, lead id"
+        >
+      </div>
+
+      <div class="field" style="min-width:160px;max-width:220px;">
+        <label class="label">Stage</label>
+        <select class="select" name="stage">
+          <option value="" {% if not request.GET.stage %}selected{% endif %}>All</option>
+          <option value="Prospecting" {% if request.GET.stage == "Prospecting" %}selected{% endif %}>Prospecting</option>
+          <option value="Sampling" {% if request.GET.stage == "Sampling" %}selected{% endif %}>Sampling</option>
+          <option value="Quoted" {% if request.GET.stage == "Quoted" %}selected{% endif %}>Quoted</option>
+          <option value="Negotiation" {% if request.GET.stage == "Negotiation" %}selected{% endif %}>Negotiation</option>
+          <option value="Won" {% if request.GET.stage == "Won" %}selected{% endif %}>Won</option>
+          <option value="Lost" {% if request.GET.stage == "Lost" %}selected{% endif %}>Lost</option>
+        </select>
+      </div>
+
+      <div class="filter-actions">
+        <button class="btn btn-primary" type="submit">Apply</button>
+        <a class="btn" href="{% url 'opportunities_list' %}">Reset</a>
+      </div>
+    </form>
+
+    <table class="opp-table">
+      <thead>
+        <tr>
+          <th>Opportunity</th>
+          <th>Lead</th>
+          <th>Brand</th>
+          <th>Stage</th>
+          <th>Product</th>
+          <th class="text-right">Order value</th>
+          <th>Created</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% with selected_stage=request.GET.stage|default:"" %}
+          {% for opp in opportunities|dictsortreversed:"created_date" %}
+            {% if selected_stage == "" or opp.stage == selected_stage %}
+              <tr>
+                <td>
+                  <a href="{% url 'opportunity_detail' opp.pk %}" class="opp-id-link">
+                    {{ opp.opportunity_id }}
+                  </a>
+                </td>
+
+                <td>
+                  {% if opp.lead %}
+                    {{ opp.lead.lead_id }}
+                  {% else %}
+                    <span class="text-muted-row">no lead</span>
+                  {% endif %}
+                </td>
+
+                <td>
+                  {% if opp.lead %}
+                    {{ opp.lead.account_brand }}
+                  {% else %}
+                    <span class="text-muted-row">not set</span>
+                  {% endif %}
+                </td>
+
+                <td><span class="pill-stage">{{ opp.stage }}</span></td>
+
+                <td>{{ opp.product_category }} / {{ opp.product_type }}</td>
+
+                <td class="text-right">
+                  {% if opp.order_value %}
+                    {{ opp.order_value }}
+                  {% else %}
+                    <span class="text-muted-row">not set</span>
+                  {% endif %}
+                </td>
+
+                <td>{{ opp.created_date }}</td>
+              </tr>
+            {% endif %}
+          {% empty %}
+            <tr>
+              <td colspan="7" class="text-muted-row">No opportunities yet.</td>
+            </tr>
+          {% endfor %}
+        {% endwith %}
+      </tbody>
+    </table>
+
+    {% if request.GET.q %}
+      <div class="text-muted-row" style="margin-top:10px;font-size:12px;">
+        Search is ready in the UI. To make it work, we need to filter in the view using the q value.
+      </div>
+    {% endif %}
+
+  </div>
+
+</div>
+
+{% endblock %}

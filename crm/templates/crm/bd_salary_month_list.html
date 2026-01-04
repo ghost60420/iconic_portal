@@ -1,0 +1,142 @@
+{% extends "crm/base.html" %}
+{% block content %}
+
+<style>
+  .page {max-width:1200px;margin:16px auto 28px auto;padding:0 10px;color:#f9fafb;}
+  .top {display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start;}
+  .title {font-size:22px;font-weight:900;}
+  .sub {font-size:12px;color:#9ca3af;margin-top:2px;}
+  .card {background:radial-gradient(circle at top left,#111827,#020617);border:1px solid #1f2937;border-radius:14px;padding:12px;box-shadow:0 0 12px rgba(0,0,0,.6);}
+  .grid4 {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:12px;}
+  .stat {padding:12px;border-radius:12px;border:1px solid #1f2937;background:#020617;}
+  .stat .k {font-size:11px;color:#9ca3af}
+  .stat .v {font-size:22px;font-weight:900;margin-top:4px}
+  .filters {display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:12px}
+  label {font-size:11px;color:#e5e7eb;margin-bottom:4px;display:block;}
+  input,select {background:#020617;color:#f9fafb;border:1px solid #374151;border-radius:10px;padding:10px 10px;font-size:12px;min-width:220px;}
+  .btn {display:inline-block;padding:10px 14px;border-radius:999px;border:1px solid transparent;font-size:12px;font-weight:800;text-decoration:none;cursor:pointer;white-space:nowrap;}
+  .btn-gold {background:linear-gradient(135deg,#facc15,#f97316);color:#111827;border-color:#fbbf24;}
+  .btn-green {background:linear-gradient(135deg,#22c55e,#16a34a);color:#04150a;border-color:#22c55e;}
+  .btn-slate {background:#020617;color:#e5e7eb;border-color:#374151;}
+  table {width:100%;border-collapse:collapse;margin-top:12px;}
+  th,td {padding:10px;border-bottom:1px solid #1f2937;font-size:12px;}
+  th {color:#9ca3af;font-weight:800;text-align:left;}
+  td {color:#f9fafb;}
+  .right {text-align:right;}
+  .muted {color:#9ca3af}
+</style>
+
+<div class="page">
+
+  <div class="top">
+    <div>
+      <div class="title">BD payroll months</div>
+      <div class="sub">One row per staff per month. Track overtime, bonus, deduction, and paid status.</div>
+    </div>
+    <div>
+      <a class="btn btn-slate" href="{% url 'bd_staff_list' %}">Back to staff</a>
+    </div>
+  </div>
+
+  <div class="grid4">
+    <div class="stat">
+      <div class="k">Total payroll (BDT)</div>
+      <div class="v">{{ total_payroll|floatformat:2 }}</div>
+    </div>
+    <div class="stat">
+      <div class="k">Overtime (BDT)</div>
+      <div class="v">{{ total_ot|floatformat:2 }}</div>
+    </div>
+    <div class="stat">
+      <div class="k">Bonus (BDT)</div>
+      <div class="v">{{ total_bonus|floatformat:2 }}</div>
+    </div>
+    <div class="stat">
+      <div class="k">Deduction (BDT)</div>
+      <div class="v">{{ total_deduction|floatformat:2 }}</div>
+      <div class="k" style="margin-top:8px;">Paid {{ paid_count }} | Unpaid {{ unpaid_count }}</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:12px;">
+
+    <form method="get" class="filters">
+      <div>
+        <label>Year</label>
+        <input type="text" name="year" value="{{ year }}">
+      </div>
+
+      <div>
+        <label>Month</label>
+        <select name="month">
+          <option value="all" {% if month == "all" %}selected{% endif %}>All months</option>
+          {% for m in month_choices %}
+            <option value="{{ m }}" {% if month_i == m %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <button class="btn btn-gold" type="submit">Apply</button>
+    </form>
+
+    <form method="post" action="{% url 'bd_staff_month_generate' %}" style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+      {% csrf_token %}
+      <input type="hidden" name="year" value="{{ year }}">
+      <div>
+        <label>Generate for month</label>
+        <select name="month">
+          {% for m in month_choices %}
+            <option value="{{ m }}" {% if month_i == m %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button class="btn btn-green" type="submit">Generate payroll for this month</button>
+      <div class="muted" style="font-size:11px;">This creates rows for active staff only. No duplicates.</div>
+    </form>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Staff</th>
+          <th class="right">Base</th>
+          <th class="right">OT hours</th>
+          <th class="right">OT rate</th>
+          <th class="right">OT total</th>
+          <th class="right">Bonus</th>
+          <th class="right">Deduction</th>
+          <th class="right">Final pay</th>
+          <th class="right">Edit</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if rows %}
+          {% for r in rows %}
+            <tr>
+              <td>{{ r.staff.name }}</td>
+              <td class="right">{{ r.base_salary_bdt|floatformat:2 }}</td>
+              <td class="right">{{ r.overtime_hours|floatformat:2 }}</td>
+              <td class="right">{{ r.overtime_rate_bdt|floatformat:2 }}</td>
+              <td class="right">{{ r.overtime_total_bdt|floatformat:2 }}</td>
+              <td class="right">{{ r.bonus_bdt|floatformat:2 }}</td>
+              <td class="right">{{ r.deduction_bdt|floatformat:2 }}</td>
+              <td class="right">{{ r.final_pay_bdt|floatformat:2 }}</td>
+              <td class="right">
+                <a class="btn btn-slate" href="{% url 'bd_staff_month_edit' r.pk %}">Edit</a>
+              </td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="9" class="muted">
+              No rows found. Click Generate payroll for this month first.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+
+  </div>
+
+</div>
+
+{% endblock %}

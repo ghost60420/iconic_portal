@@ -1,0 +1,465 @@
+{% extends "crm/base.html" %}
+{% load humanize %}
+{% block content %}
+
+<style>
+  :root{
+    --bg:#020617;
+    --bg2:#030712;
+    --line:#374151;
+    --line2:#111827;
+    --text:#f9fafb;
+    --muted:#cbd5e1;
+    --muted2:#9ca3af;
+    --gold:#facc15;
+    --good:#86efac;
+    --bad:#ffb4b4;
+  }
+
+  .bd-wrap{ color:var(--text); }
+  .bd-max{ max-width:1500px; margin:0 auto; }
+
+  .bd-card{
+    background:var(--bg);
+    border:1px solid var(--line);
+    border-radius:16px;
+    box-shadow:0 14px 34px rgba(0,0,0,0.38);
+    overflow:hidden;
+  }
+
+  .bd-title{ font-size:26px; font-weight:900; color:#fff; margin:0; }
+  .bd-sub{ font-size:13px; font-weight:800; color:#e5e7eb; line-height:1.4; margin-top:6px; }
+  .bd-label{ font-size:12px; font-weight:900; color:#fff; }
+  .bd-help{ font-size:11px; font-weight:800; color:var(--muted2); }
+
+  .bd-input, .bd-select, .bd-text{
+    background:var(--bg2) !important;
+    border:1px solid #4b5563 !important;
+    color:var(--text) !important;
+    font-weight:800 !important;
+  }
+  .bd-input::placeholder{ color:#94a3b8; font-weight:800; }
+  .bd-input:focus, .bd-select:focus, .bd-text:focus{
+    border-color:var(--gold) !important;
+    box-shadow: 0 0 0 0.2rem rgba(250,204,21,0.15) !important;
+  }
+
+  .bd-pillbar{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  .bd-pill{
+    text-decoration:none;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:8px 14px;
+    border-radius:999px;
+    font-weight:900;
+    font-size:12px;
+    border:1px solid rgba(255,255,255,0.14);
+    background:linear-gradient(145deg,#111827,var(--bg));
+    color:var(--text);
+    box-shadow:0 3px 0 #020617;
+    white-space:nowrap;
+    cursor:pointer;
+  }
+  .bd-pill:hover{ filter:brightness(1.05); color:var(--text); }
+  .bd-pill-gold{
+    background:linear-gradient(145deg,#ffe39b,#e4c067);
+    color:#121212;
+    border-color:#f6d488;
+    box-shadow:0 3px 0 #8a6b24;
+  }
+
+  .bd-badge{ font-weight:900; border-radius:999px; padding:6px 10px; }
+
+  .bd-kpis{ display:flex; flex-wrap:wrap; gap:10px; }
+  .bd-kpi{
+    border:1px solid rgba(255,255,255,0.12);
+    background:rgba(0,0,0,0.18);
+    border-radius:14px;
+    padding:10px 12px;
+    min-width: 220px;
+  }
+  .bd-kpi-label{ font-size:11px; font-weight:900; letter-spacing:0.45px; text-transform:uppercase; color:#e5e7eb; }
+  .bd-kpi-val{ margin-top:6px; font-size:18px; font-weight:900; color:var(--text); }
+
+  .bd-table thead th{
+    color:#fde68a !important;
+    font-weight:900;
+    border-bottom:1px solid #334155 !important;
+    white-space:nowrap;
+  }
+  .bd-table td{
+    color:var(--text) !important;
+    font-weight:800;
+    vertical-align:middle;
+  }
+  .bd-desc{
+    max-width:420px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+
+  .pickerBox{
+    border:1px solid rgba(255,255,255,0.12);
+    background:rgba(0,0,0,0.18);
+    border-radius:14px;
+    padding:10px 12px;
+  }
+  .pickerRow{
+    display:flex;
+    gap:10px;
+    align-items:flex-end;
+    flex-wrap:wrap;
+  }
+  .pickerCol{ min-width:220px; flex:1; }
+  .tinyBtn{
+    height:36px;
+    border-radius:12px;
+    border:1px solid rgba(255,255,255,0.16);
+    background:rgba(255,255,255,0.08);
+    color:var(--text);
+    font-weight:900;
+    padding:0 12px;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .tinyBtn:hover{ background:rgba(255,255,255,0.14); }
+  .tinyBtnGold{
+    border-color: rgba(250,204,21,0.30);
+    background: rgba(250,204,21,0.12);
+  }
+</style>
+
+<div class="container-fluid bd-wrap">
+  <div class="bd-max">
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+      <div>
+        <h2 class="bd-title">Bangladesh daily account</h2>
+        <div class="bd-sub">
+          This page is locked to Bangladesh.
+          Side is <span style="color:var(--gold);font-weight:900;">BD</span>
+          and direction is <span style="color:var(--gold);font-weight:900;">OUT</span>.
+        </div>
+      </div>
+
+      <div class="bd-pillbar">
+        <a href="{% url 'accounting_bd_grid' %}" class="bd-pill bd-pill-gold">Bangladesh grid</a>
+        <a href="{% url 'accounting_entry_list' %}?side=BD" class="bd-pill">All BD entries</a>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="bd-card mb-3">
+      <div class="card-body p-3">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+          <div>
+            <div class="bd-label" style="font-size:14px;">This month overview</div>
+            <div class="bd-help">Based on selected year and month in the top filters.</div>
+          </div>
+
+          <div class="bd-pillbar">
+            <span class="badge text-bg-danger bd-badge">OUT locked</span>
+            <span class="badge text-bg-secondary bd-badge">BD locked</span>
+          </div>
+        </div>
+
+        <div class="bd-kpis mt-3">
+          <div class="bd-kpi">
+            <div class="bd-kpi-label">Total out</div>
+            <div class="bd-kpi-val" style="color:var(--bad);">
+              {{ this_month_spent_bdt|default_if_none:0|floatformat:2|intcomma }} BDT
+            </div>
+          </div>
+
+          <div class="bd-kpi">
+            <div class="bd-kpi-label">Remaining</div>
+            <div class="bd-kpi-val" style="{% if remaining_month_bdt and remaining_month_bdt < 0 %}color:var(--bad);{% else %}color:var(--good);{% endif %}">
+              {{ remaining_month_bdt|default_if_none:0|floatformat:2|intcomma }} BDT
+            </div>
+          </div>
+
+          <div class="bd-kpi">
+            <div class="bd-kpi-label">Monthly target</div>
+            <div class="bd-kpi-val">
+              {{ monthly_target_bdt|default_if_none:0|floatformat:2|intcomma }} BDT
+            </div>
+          </div>
+
+          <div class="bd-kpi">
+            <div class="bd-kpi-label">Net</div>
+            <div class="bd-kpi-val">
+              {{ net_bdt|default_if_none:0|floatformat:2|intcomma }} BDT
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Form -->
+    <div class="bd-card mb-3">
+      <div class="card-body p-3">
+
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+          <div style="font-size:14px;font-weight:900;color:#ffffff;">
+            Add Bangladesh daily entry
+          </div>
+          <div class="bd-help">
+            Keep it short and clear so you can track later.
+          </div>
+        </div>
+
+        {% if form.errors %}
+          <div class="alert alert-danger fw-bold">
+            Please fix the errors and try again.
+          </div>
+        {% endif %}
+
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+
+          {# keep locked fields hidden if they exist in the form #}
+          {% if form.side %}{{ form.side.as_hidden }}{% endif %}
+          {% if form.direction %}{{ form.direction.as_hidden }}{% endif %}
+          {% if form.currency %}{{ form.currency.as_hidden }}{% endif %}
+          {% if form.rate_to_cad %}{{ form.rate_to_cad.as_hidden }}{% endif %}
+          {% if form.rate_to_bdt %}{{ form.rate_to_bdt.as_hidden }}{% endif %}
+
+          <div class="row g-2">
+
+            <div class="col-md-3">
+              <div class="bd-label mb-1">Date</div>
+              {{ form.date }}
+            </div>
+
+            <div class="col-md-3">
+              <div class="bd-label mb-1">Main type</div>
+              {{ form.main_type }}
+            </div>
+
+            <div class="col-md-3">
+              <div class="bd-label mb-1">Sub type</div>
+              {{ form.sub_type }}
+            </div>
+
+            <div class="col-md-3">
+              <div class="bd-label mb-1">Amount BDT</div>
+              {{ form.amount_original }}
+            </div>
+
+            <div class="col-12">
+              <div class="bd-label mb-1">Description</div>
+              {{ form.description }}
+            </div>
+
+            {# Production order searchable + dropdown fallback #}
+            {% if form.production_order %}
+              <div class="col-12">
+                <div class="pickerBox mt-1">
+                  <div class="bd-label mb-2">Production order</div>
+
+                  <div class="pickerRow">
+                    <div class="pickerCol">
+                      <div class="bd-help mb-1">Search</div>
+                      <input id="poSearch" type="text" class="form-control form-control-sm bd-input"
+                             placeholder="Type to search order code or name">
+                    </div>
+
+                    <div class="pickerCol">
+                      <div class="bd-help mb-1">Select</div>
+                      <div id="poSelectWrap">
+                        {{ form.production_order }}
+                      </div>
+                    </div>
+
+                    <div>
+                      <button type="button" class="tinyBtn tinyBtnGold" id="poClearBtn">Clear</button>
+                    </div>
+                  </div>
+
+                  <div class="bd-help mt-2">
+                    You can search first, then pick from the list. Dropdown still works.
+                  </div>
+                </div>
+              </div>
+            {% endif %}
+
+            {# Shipment searchable + dropdown fallback #}
+            {% if form.shipment %}
+              <div class="col-12">
+                <div class="pickerBox mt-2">
+                  <div class="bd-label mb-2">Shipment</div>
+
+                  <div class="pickerRow">
+                    <div class="pickerCol">
+                      <div class="bd-help mb-1">Search</div>
+                      <input id="shipSearch" type="text" class="form-control form-control-sm bd-input"
+                             placeholder="Type to search shipment code or note">
+                    </div>
+
+                    <div class="pickerCol">
+                      <div class="bd-help mb-1">Select</div>
+                      <div id="shipSelectWrap">
+                        {{ form.shipment }}
+                      </div>
+                    </div>
+
+                    <div>
+                      <button type="button" class="tinyBtn tinyBtnGold" id="shipClearBtn">Clear</button>
+                    </div>
+                  </div>
+
+                  <div class="bd-help mt-2">
+                    You can search first, then pick from the list. Dropdown still works.
+                  </div>
+                </div>
+              </div>
+            {% endif %}
+
+            {% if form.attachments %}
+              <div class="col-md-6">
+                <div class="bd-label mb-1">Attachments</div>
+                {{ form.attachments }}
+                <div class="bd-help mt-1">You can add more than one file.</div>
+              </div>
+            {% endif %}
+
+          </div>
+
+          <button type="submit" class="btn btn-warning btn-sm mt-3 rounded-pill fw-bold">
+            Save entry
+          </button>
+        </form>
+
+      </div>
+    </div>
+
+    <!-- List -->
+    <div class="bd-card">
+      <div class="card-header py-2" style="border-bottom:1px solid #1f2937;">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div style="font-size:14px;font-weight:900;color:#fde68a;">Latest Bangladesh entries</div>
+          <div class="bd-help">{% if entries %}Showing {{ entries|length }}{% else %}Showing 0{% endif %}</div>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-dark table-sm mb-0 bd-table" style="font-size:12px;">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Main type</th>
+              <th>Sub type</th>
+              <th>Description</th>
+              <th class="text-end">BDT</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if entries %}
+              {% for e in entries %}
+                <tr>
+                  <td class="nowrap">{{ e.date|date:"Y-m-d" }}</td>
+                  <td class="nowrap">{{ e.get_main_type_display }}</td>
+                  <td class="nowrap">{{ e.sub_type|default:"" }}</td>
+                  <td class="bd-desc">{{ e.description|default:"" }}</td>
+                  <td class="text-end nowrap">
+                    {{ e.amount_bdt|default:e.amount_original|default_if_none:0|floatformat:2|intcomma }}
+                  </td>
+                </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="5" class="text-center py-3" style="color:var(--muted);font-weight:900;">
+                  No Bangladesh entries yet.
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card-body pt-2">
+        <div class="bd-help">
+          Note: This page saves BD OUT only. Canada pages will be separate.
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  (function () {
+    // Add input classes for consistent dark UI
+    const ids = ["id_date","id_main_type","id_sub_type","id_amount_original","id_description","id_production_order","id_shipment","id_attachments"];
+    ids.forEach(function(id){
+      const el = document.getElementById(id);
+      if (!el) return;
+      const tag = (el.tagName || "").toLowerCase();
+      if (tag === "select") el.classList.add("bd-select");
+      else if (tag === "textarea") el.classList.add("bd-text");
+      else el.classList.add("bd-input");
+    });
+
+    // Lightweight search for select options (keeps dropdown as fallback)
+    function wireSearch(searchId, selectId, clearBtnId){
+      const search = document.getElementById(searchId);
+      const select = document.getElementById(selectId);
+      const clearBtn = document.getElementById(clearBtnId);
+      if (!search || !select) return;
+
+      const all = [];
+      for (let i = 0; i < select.options.length; i++){
+        const o = select.options[i];
+        all.push({ value: o.value, text: o.text });
+      }
+
+      function rebuild(filterText){
+        const keepValue = select.value;
+        const q = (filterText || "").toLowerCase().trim();
+
+        select.innerHTML = "";
+        for (let i = 0; i < all.length; i++){
+          const row = all[i];
+          if (i === 0 && row.value === "") {
+            const opt0 = new Option(row.text, row.value);
+            select.add(opt0);
+            continue;
+          }
+          if (!q || row.text.toLowerCase().includes(q)){
+            select.add(new Option(row.text, row.value));
+          }
+        }
+
+        // try to keep selection
+        let found = false;
+        for (let j = 0; j < select.options.length; j++){
+          if (select.options[j].value === keepValue){
+            found = true;
+            break;
+          }
+        }
+        if (found) select.value = keepValue;
+      }
+
+      search.addEventListener("input", function(){
+        rebuild(search.value);
+      });
+
+      if (clearBtn){
+        clearBtn.addEventListener("click", function(){
+          search.value = "";
+          select.value = "";
+          rebuild("");
+        });
+      }
+    }
+
+    wireSearch("poSearch", "id_production_order", "poClearBtn");
+    wireSearch("shipSearch", "id_shipment", "shipClearBtn");
+  })();
+</script>
+
+{% endblock %}

@@ -1,0 +1,245 @@
+Lunch{% extends "crm/base.html" %}
+{% block content %}
+
+<style>
+  .page-customer {
+    max-width: 1100px;
+    margin: 16px auto;
+    padding: 0 8px;
+    color: #f9fafb;
+  }
+
+  .cust-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+
+  .cust-title {
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  .cust-sub {
+    font-size: 12px;
+    color: #9ca3af;
+  }
+
+  .cust-actions .btn {
+    margin-left: 4px;
+    margin-bottom: 4px;
+  }
+
+  .btn {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-size: 12px;
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .btn-slate {
+    background: #020617;
+    color: #e5e7eb;
+    border-color: #374151;
+  }
+
+  .btn-gold {
+    background: linear-gradient(135deg, #facc15, #f97316);
+    color: #111827;
+    border-color: #fbbf24;
+    font-weight: 600;
+  }
+
+  .table-wrap {
+    background: radial-gradient(circle at top left, #111827, #020617);
+    border-radius: 10px;
+    border: 1px solid #1f2937;
+    padding: 8px 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.7);
+  }
+
+  .table {
+    font-size: 12px;
+    margin-bottom: 0;
+  }
+
+  .table thead th {
+    border-bottom-color: #374151;
+    color: #e5e7eb;
+    white-space: nowrap;
+  }
+
+  .table tbody tr:hover {
+    background: rgba(15, 23, 42, 0.9);
+  }
+
+  .pill-small {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 999px;
+    border: 1px solid #4b5563;
+    font-size: 11px;
+    color: #e5e7eb;
+    background: #020617;
+  }
+
+  .pill-country {
+    border-color: #0ea5e9;
+    color: #7dd3fc;
+  }
+
+  .muted {
+    font-size: 11px;
+    color: #9ca3af;
+  }
+
+  .search-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 6px;
+    align-items: center;
+  }
+
+  .search-row input {
+    flex: 1;
+    min-width: 180px;
+    background: #020617;
+    color: #f9fafb;
+    border: 1px solid #374151;
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+
+  .search-row input:focus {
+    outline: none;
+    border-color: #facc15;
+    box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.35);
+  }
+</style>
+
+<div class="page-customer">
+
+  <div class="cust-header">
+    <div>
+      <div class="cust-title">
+        👥 Customers
+      </div>
+      <div class="cust-sub">
+        Simple view of all customer records for sales and production follow up.
+      </div>
+    </div>
+    <div class="cust-actions">
+      <!-- keep this if you already have add customer url in your project -->
+      {# <a href="{% url 'customer_add' %}" class="btn btn-gold btn-sm">Add customer</a> #}
+      <a href="/opportunities/" class="btn btn-slate btn-sm">Back to opportunities</a>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+
+    <!-- simple local search (front end only) -->
+    <div class="search-row">
+      <input
+        type="text"
+        id="customer-search"
+        placeholder="Quick filter by name, brand, email or city"
+      >
+      <span class="muted">
+        Live filter only on this page
+      </span>
+    </div>
+
+    {% if customers %}
+      <div class="table-responsive">
+        <table class="table table-dark table-striped table-sm align-middle" id="customer-table">
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th>Brand</th>
+              <th>Email</th>
+              <th>Phone</th>
+              <th>Market</th>
+              <th>City</th>
+              <th>Country</th>
+              <th>Created</th>
+              <th style="text-align:right;">View</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in customers %}
+              <tr>
+                <td>
+                  <strong>{{ c.name|default:c.contact_name|default:"No name" }}</strong>
+                </td>
+                <td>{{ c.account_brand|default:"" }}</td>
+                <td>{{ c.email|default:"" }}</td>
+                <td>{{ c.phone|default:"" }}</td>
+                <td>
+                  {% if c.market %}
+                    <span class="pill-small">
+                      {{ c.get_market_display|default:c.market }}
+                    </span>
+                  {% endif %}
+                </td>
+                <td>{{ c.city|default:c.shipping_city|default:"" }}</td>
+                <td>
+                  {% if c.country or c.shipping_country %}
+                    <span class="pill-small pill-country">
+                      {{ c.country|default:c.shipping_country }}
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="muted">
+                  {{ c.created_date|date:"Y-m-d" }}
+                </td>
+                <td style="text-align:right;">
+                  <a
+                    href="{% url 'customer_detail' c.pk %}"
+                    class="btn btn-slate btn-small"
+                  >
+                    Open
+                  </a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="muted mb-0">
+        No customers found.
+      </p>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  (function () {
+    const input = document.getElementById("customer-search");
+    const table = document.getElementById("customer-table");
+    if (!input || !table) {
+      return;
+    }
+
+    input.addEventListener("input", function () {
+      const value = input.value.toLowerCase();
+      const rows = table.querySelectorAll("tbody tr");
+
+      rows.forEach(function (row) {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.indexOf(value) !== -1 ? "" : "none";
+      });
+    });
+  })();
+</script>
+
+{% endblock %} the truck wait

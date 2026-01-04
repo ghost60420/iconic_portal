@@ -1,0 +1,9 @@
+<h2>Success</h2>
+
+<p>CAD Amount: {{ transfer.amount_cad }}</p>
+<p>BDT Amount: {{ transfer.amount_bdt }}</p>
+<p>Receiver: {{ transfer.receiver_name }}</p>
+<p>Method: {{ transfer.get_sent_method_display }}</p>
+<p>Date: {{ transfer.created_at }}</p>
+
+<a href="/send-money/">Send another</a>

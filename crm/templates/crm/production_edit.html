@@ -1,0 +1,479 @@
+{% extends "crm/base.html" %}
+{% load static %}
+{% block content %}
+
+<style>
+  .prod-edit-page{
+    max-width:1100px;
+    margin:24px auto;
+    padding:0 10px;
+  }
+
+  .prod-edit-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:12px;
+  }
+
+  .prod-edit-title{
+    font-size:20px;
+    font-weight:700;
+    color:#f9fafb;
+  }
+
+  .prod-edit-sub{
+    font-size:12px;
+    color:#9ca3af;
+    margin-top:3px;
+  }
+
+  .prod-edit-card{
+    background:radial-gradient(circle at top left,#020617,#050505);
+    border-radius:14px;
+    border:1px solid #1f2937;
+    padding:16px 18px;
+    margin-bottom:14px;
+    box-shadow:0 0 18px rgba(0,0,0,0.55);
+  }
+
+  .prod-edit-card-title{
+    font-size:14px;
+    font-weight:600;
+    color:#fef3c7;
+    margin-bottom:10px;
+    border-bottom:1px solid #111827;
+    padding-bottom:6px;
+  }
+
+  .prod-edit-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+    gap:10px 20px;
+  }
+
+  .prod-edit-field label{
+    font-size:11px;
+    color:#e5e7eb;
+    margin-bottom:4px;
+    display:block;
+  }
+
+  .prod-edit-help{
+    font-size:11px;
+    color:#9ca3af;
+    margin-top:4px;
+  }
+
+  .prod-edit-error{
+    font-size:11px;
+    color:#fca5a5;
+    margin-top:4px;
+  }
+
+  .prod-edit-actions{
+    margin-top:10px;
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+
+  /* Force nice dark fields */
+  .prod-edit-card input[type="text"],
+  .prod-edit-card input[type="number"],
+  .prod-edit-card input[type="date"],
+  .prod-edit-card input[type="email"],
+  .prod-edit-card input[type="url"],
+  .prod-edit-card input[type="file"],
+  .prod-edit-card select,
+  .prod-edit-card textarea{
+    width:100%;
+    background:#020617;
+    color:#e5e7eb;
+    border:1px solid #374151;
+    border-radius:10px;
+    padding:9px 10px;
+    font-size:13px;
+    outline:none;
+  }
+
+  .prod-edit-card textarea{
+    min-height:110px;
+    resize:vertical;
+  }
+
+  .prod-edit-card input:focus,
+  .prod-edit-card select:focus,
+  .prod-edit-card textarea:focus{
+    border-color:#facc15;
+    box-shadow:0 0 0 2px rgba(250,204,21,0.18);
+  }
+
+  /* Checkbox look */
+  .check-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:10px;
+    border:1px solid #111827;
+    border-radius:12px;
+    background:rgba(2,6,23,0.55);
+    height:100%;
+  }
+  .check-row input{
+    width:18px;
+    height:18px;
+    accent-color:#facc15;
+  }
+  .check-row span{
+    color:#e5e7eb;
+    font-size:13px;
+    font-weight:600;
+  }
+
+  .readonly-box{
+    width:100%;
+    background:rgba(2,6,23,0.65);
+    color:#e5e7eb;
+    border:1px solid #374151;
+    border-radius:10px;
+    padding:9px 10px;
+    font-size:13px;
+    opacity:0.75;
+  }
+
+  @media (max-width:520px){
+    .prod-edit-card{ padding:14px 14px; }
+  }
+</style>
+
+<div class="prod-edit-page">
+
+  <div class="prod-edit-header">
+    <div>
+      <div class="prod-edit-title">Edit production order</div>
+      <div class="prod-edit-sub">
+        Code {{ order.order_code }} · Created {{ order.created_at|date:"Y-m-d" }}
+      </div>
+    </div>
+    <div>
+      <a href="{% url 'production_detail' order.pk %}" class="btn btn-outline-light btn-sm">
+        Back to order
+      </a>
+    </div>
+  </div>
+
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger">
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+
+    <div class="prod-edit-card">
+      <div class="prod-edit-card-title">Basic information</div>
+      <div class="prod-edit-grid">
+
+        <div class="prod-edit-field">
+          <label for="{{ form.title.id_for_label }}">Title</label>
+          {{ form.title }}
+          {% for e in form.title.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label>Order code</label>
+          <div class="readonly-box">{{ order.order_code }}</div>
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.factory_location.id_for_label }}">Factory</label>
+          {{ form.factory_location }}
+          {% for e in form.factory_location.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.order_type.id_for_label }}">Order type</label>
+          {{ form.order_type }}
+          {% for e in form.order_type.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.status.id_for_label }}">Status</label>
+          {{ form.status }}
+          {% for e in form.status.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+      </div>
+    </div>
+
+    <div class="prod-edit-card">
+      <div class="prod-edit-card-title">Links</div>
+      <div class="prod-edit-grid">
+
+        <div class="prod-edit-field">
+          <label for="{{ form.lead.id_for_label }}">Lead</label>
+          {{ form.lead }}
+          {% for e in form.lead.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.opportunity.id_for_label }}">Opportunity</label>
+          {{ form.opportunity }}
+          {% for e in form.opportunity.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.customer.id_for_label }}">Customer</label>
+          {{ form.customer }}
+          {% for e in form.customer.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.product.id_for_label }}">Product</label>
+          {{ form.product }}
+          {% for e in form.product.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+      </div>
+    </div>
+
+    <div class="prod-edit-card">
+      <div class="prod-edit-card-title">Timeline and quantity</div>
+      <div class="prod-edit-grid">
+
+        <div class="prod-edit-field">
+          <label for="{{ form.sample_deadline.id_for_label }}">Sample deadline</label>
+          {{ form.sample_deadline }}
+          {% for e in form.sample_deadline.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.bulk_deadline.id_for_label }}">Bulk deadline</label>
+          {{ form.bulk_deadline }}
+          {% for e in form.bulk_deadline.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.qty_total.id_for_label }}">Total pieces</label>
+          {{ form.qty_total }}
+          {% for e in form.qty_total.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.qty_reject.id_for_label }}">Reject pieces</label>
+          {{ form.qty_reject }}
+          {% for e in form.qty_reject.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+      </div>
+    </div>
+
+    <div class="prod-edit-card">
+      <div class="prod-edit-card-title">Style and work order details</div>
+      <div class="prod-edit-grid">
+
+        <div class="prod-edit-field">
+          <label for="{{ form.style_name.id_for_label }}">Style name</label>
+          {{ form.style_name }}
+          {% for e in form.style_name.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.color_info.id_for_label }}">Color info</label>
+          {{ form.color_info }}
+          {% for e in form.color_info.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.size_ratio_note.id_for_label }}">Size and ratio</label>
+          {{ form.size_ratio_note }}
+          {% for e in form.size_ratio_note.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.accessories_note.id_for_label }}">Accessories</label>
+          {{ form.accessories_note }}
+          {% for e in form.accessories_note.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.packaging_note.id_for_label }}">Packaging</label>
+          {{ form.packaging_note }}
+          {% for e in form.packaging_note.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.extra_order_note.id_for_label }}">Extra order note</label>
+          {{ form.extra_order_note }}
+          {% for e in form.extra_order_note.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+      </div>
+    </div>
+
+    <div class="prod-edit-card">
+      <div class="prod-edit-card-title">Fabric in kg and taka</div>
+      <div class="prod-edit-grid">
+
+        <div class="prod-edit-field">
+          <label for="{{ form.fabric_required_kg.id_for_label }}">Required kg</label>
+          {{ form.fabric_required_kg }}
+          {% for e in form.fabric_required_kg.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.fabric_received_kg.id_for_label }}">Received kg</label>
+          {{ form.fabric_received_kg }}
+          {% for e in form.fabric_received_kg.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.fabric_used_kg.id_for_label }}">Used kg</label>
+          {{ form.fabric_used_kg }}
+          {% for e in form.fabric_used_kg.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.fabric_cost_per_kg_bdt.id_for_label }}">Fabric cost per kg taka</label>
+          {{ form.fabric_cost_per_kg_bdt }}
+          {% for e in form.fabric_cost_per_kg_bdt.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+      </div>
+    </div>
+
+    <div class="prod-edit-card">
+      <div class="prod-edit-card-title">Material cost in taka</div>
+      <div class="prod-edit-grid">
+
+        <div class="prod-edit-field">
+          <label for="{{ form.material_thread_cost_bdt.id_for_label }}">Thread</label>
+          {{ form.material_thread_cost_bdt }}
+          {% for e in form.material_thread_cost_bdt.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.material_zipper_cost_bdt.id_for_label }}">Zipper</label>
+          {{ form.material_zipper_cost_bdt }}
+          {% for e in form.material_zipper_cost_bdt.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.material_accessories_cost_bdt.id_for_label }}">Accessories</label>
+          {{ form.material_accessories_cost_bdt }}
+          {% for e in form.material_accessories_cost_bdt.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.material_label_cost_bdt.id_for_label }}">Labels</label>
+          {{ form.material_label_cost_bdt }}
+          {% for e in form.material_label_cost_bdt.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.material_other_cost_bdt.id_for_label }}">Other material</label>
+          {{ form.material_other_cost_bdt }}
+          {% for e in form.material_other_cost_bdt.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+      </div>
+    </div>
+
+    <div class="prod-edit-card">
+      <div class="prod-edit-card-title">Production cost in taka</div>
+      <div class="prod-edit-grid">
+
+        <div class="prod-edit-field">
+          <label for="{{ form.production_cutting_cost_bdt.id_for_label }}">Cutting</label>
+          {{ form.production_cutting_cost_bdt }}
+          {% for e in form.production_cutting_cost_bdt.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.production_sewing_cost_bdt.id_for_label }}">Sewing</label>
+          {{ form.production_sewing_cost_bdt }}
+          {% for e in form.production_sewing_cost_bdt.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.production_finishing_cost_bdt.id_for_label }}">Finishing</label>
+          {{ form.production_finishing_cost_bdt }}
+          {% for e in form.production_finishing_cost_bdt.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.production_packing_cost_bdt.id_for_label }}">Packing</label>
+          {{ form.production_packing_cost_bdt }}
+          {% for e in form.production_packing_cost_bdt.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.production_overhead_cost_bdt.id_for_label }}">Overhead</label>
+          {{ form.production_overhead_cost_bdt }}
+          {% for e in form.production_overhead_cost_bdt.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.production_other_cost_bdt.id_for_label }}">Other</label>
+          {{ form.production_other_cost_bdt }}
+          {% for e in form.production_other_cost_bdt.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+      </div>
+    </div>
+
+    <div class="prod-edit-card">
+      <div class="prod-edit-card-title">Remake and notes</div>
+      <div class="prod-edit-grid">
+
+        <div class="prod-edit-field">
+          <label for="{{ form.remake_required.id_for_label }}">Remake required</label>
+          <div class="check-row">
+            {{ form.remake_required }}
+            <span>Yes</span>
+          </div>
+          {% for e in form.remake_required.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.remake_qty.id_for_label }}">Remake quantity</label>
+          {{ form.remake_qty }}
+          {% for e in form.remake_qty.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.remake_cost_bdt.id_for_label }}">Remake cost taka</label>
+          {{ form.remake_cost_bdt }}
+          {% for e in form.remake_cost_bdt.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field" style="grid-column:1 / -1;">
+          <label for="{{ form.notes.id_for_label }}">Notes</label>
+          {{ form.notes }}
+          {% for e in form.notes.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+          <div class="prod-edit-help">You can keep short internal notes here.</div>
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.style_image.id_for_label }}">Style image</label>
+          {{ form.style_image }}
+          {% for e in form.style_image.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+      </div>
+    </div>
+
+    <div class="prod-edit-actions">
+      <button type="submit" class="btn btn-warning btn-sm">Save changes</button>
+      <a href="{% url 'production_detail' order.pk %}" class="btn btn-outline-light btn-sm">Cancel</a>
+    </div>
+
+  </form>
+</div>
+
+{% endblock %}

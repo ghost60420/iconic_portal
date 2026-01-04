@@ -1,0 +1,424 @@
+{% load static %}
+{% load crm_groups %}
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Iconic CRM</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <style>
+    :root{
+      --bg:#060606;
+      --panel:#0b0d10;
+      --panel2:#0f172a;
+      --border:#2a2f38;
+      --text:#f8f9fa;
+      --muted:#a8b0bd;
+
+      --gold1:#ffe39b;
+      --gold2:#e4c067;
+    }
+
+    body{
+      background:var(--bg);
+      color:var(--text);
+      font-family: Arial, sans-serif;
+    }
+
+    a{ color:#f5d580; text-decoration:none; }
+    a:hover{ color:#ffe9a8; }
+
+    .crm-topbar{
+      background: linear-gradient(180deg, rgba(20,24,32,0.95), rgba(10,12,16,0.92));
+      border-bottom: 1px solid var(--border);
+      padding: 10px 14px;
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+      font-size:14px;
+      position: sticky;
+      top: 0;
+      z-index: 2000;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.55);
+    }
+
+    .crm-nav-group{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      align-items:center;
+    }
+
+    /* One style for all buttons */
+    .crm-nav-item{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:9px 14px;
+      border-radius:12px;
+      font-size:13px;
+      font-weight:800;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.04);
+      color: #f3f4f6;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+      transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+      white-space: nowrap;
+      cursor:pointer;
+      user-select:none;
+      line-height:1;
+    }
+
+    .crm-nav-item span{ font-size:15px; }
+
+    .crm-nav-item:hover{
+      transform: translateY(-1px);
+      background: rgba(255,255,255,0.06);
+      border-color: rgba(245, 213, 128, 0.32);
+      color:#ffe9a8;
+      text-decoration:none;
+    }
+
+    .crm-nav-item:active{
+      transform: translateY(0px);
+    }
+
+    /* Optional highlight for key buttons, but still same style */
+    .crm-nav-item.hot{
+      border-color: rgba(255, 227, 155, 0.35);
+      box-shadow: 0 10px 22px rgba(255, 209, 120, 0.10);
+    }
+
+    .crm-nav-item:focus{
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(245,213,128,0.18), 0 10px 20px rgba(0,0,0,0.35);
+    }
+
+    .crm-spacer{ flex: 1 1 auto; }
+    .crm-wrapper{ padding:16px 20px 40px 20px; }
+
+    .crm-dropdown{
+      position:relative;
+      display:inline-flex;
+      align-items:center;
+    }
+
+    .crm-dropdown-menu{
+      position:absolute;
+      top: calc(100% + 10px);
+      left:0;
+      min-width:270px;
+      padding:10px;
+      border-radius:14px;
+      background: linear-gradient(145deg, #0f172a, #020617);
+      border: 1px solid #334155;
+      box-shadow: 0 16px 30px rgba(0,0,0,0.65);
+
+      display:block;
+      opacity:0;
+      visibility:hidden;
+      pointer-events:none;
+      transform: translateY(6px);
+      transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
+
+      z-index:9999;
+    }
+
+    .crm-dropdown:hover .crm-dropdown-menu,
+    .crm-dropdown.is-open .crm-dropdown-menu{
+      opacity:1;
+      visibility:visible;
+      pointer-events:auto;
+      transform: translateY(0);
+    }
+
+    .crm-dropdown-menu::before{
+      content:"";
+      position:absolute;
+      left:0;
+      top:-14px;
+      height:14px;
+      width:100%;
+    }
+
+    .crm-dd-title{
+      font-size:11px;
+      color:#cbd5e1;
+      font-weight:900;
+      margin:0 0 8px 2px;
+    }
+
+    .crm-dd-item{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:10px 12px;
+      border-radius:12px;
+      color:#ffffff;
+      border:1px solid transparent;
+      background: rgba(255,255,255,0.04);
+      transition: all 0.15s ease;
+      margin-bottom:8px;
+      font-weight:900;
+      font-size:13px;
+    }
+
+    .crm-dd-item:hover{
+      background: rgba(245, 213, 128, 0.12);
+      border-color: rgba(245, 213, 128, 0.28);
+      color:#ffe9a8;
+      transform: translateY(-1px);
+    }
+
+    .crm-dd-item:last-child{ margin-bottom:0; }
+
+    .crm-dd-hint{
+      font-size:11px;
+      color:#e5e7eb;
+      margin-top:6px;
+      line-height:1.3;
+      font-weight:800;
+    }
+
+    .crm-userbox{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+
+    .crm-username{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:9px 12px;
+      border-radius:12px;
+      border:1px solid rgba(148,163,184,0.22);
+      background: rgba(255,255,255,0.03);
+      color:#e5e7eb;
+      font-weight:900;
+      font-size:12px;
+      white-space:nowrap;
+    }
+
+    .crm-logout-form{ margin:0; }
+
+    @media (max-width: 768px){
+      .crm-dropdown-menu{
+        left:auto;
+        right:0;
+        min-width:240px;
+      }
+      .crm-topbar{
+        padding: 10px 10px;
+      }
+      .crm-wrapper{
+        padding:14px 12px 34px 12px;
+      }
+      .crm-nav-item{
+        padding:8px 12px;
+        border-radius:12px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  {% if request.user.is_authenticated %}
+    <div class="crm-topbar">
+
+      <!-- core -->
+      <div class="crm-nav-group">
+        <a href="{% url 'leads_list' %}" class="crm-nav-item hot"><span>🧲</span><strong>Leads</strong></a>
+        <a href="{% url 'opportunities_list' %}" class="crm-nav-item hot"><span>📈</span><strong>Opportunities</strong></a>
+        <a href="{% url 'customers_list' %}" class="crm-nav-item hot"><span>👥</span><strong>Customers</strong></a>
+
+        <a href="{% url 'calendar_list' %}" class="crm-nav-item"><span>📅</span><strong>Calendar</strong></a>
+        <a href="{% url 'production_list' %}" class="crm-nav-item"><span>🏭</span><strong>Production</strong></a>
+        <a href="{% url 'shipment_list' %}" class="crm-nav-item"><span>📦</span><strong>Shipping</strong></a>
+
+        <!-- Marketing shows everywhere -->
+        <a href="/marketing/" class="crm-nav-item"><span>📣</span><strong>Marketing</strong></a>
+
+        <!-- WhatsApp -->
+        <a href="{% url 'wa_inbox' %}" class="crm-nav-item"><span>💬</span><strong>WhatsApp</strong></a>
+
+        {% if request.user.is_superuser %}
+          <a href="{% url 'main_dashboard' %}" class="crm-nav-item">
+            <span>🧠</span><strong>Main Dashboard</strong>
+          </a>
+
+          {% url 'ai_hub' as ai_hub_url %}
+          {% if ai_hub_url %}
+            <a href="{{ ai_hub_url }}" class="crm-nav-item">
+              <span>🤖</span><strong>AI</strong>
+            </a>
+          {% endif %}
+        {% endif %}
+      </div>
+
+      <!-- library dropdown -->
+      <div class="crm-nav-group">
+
+        <div class="crm-dropdown" id="libraryDropdown">
+          <a href="{% url 'products_list' %}" class="crm-nav-item" id="libraryBtn" aria-haspopup="true" aria-expanded="false">
+            <span>📚</span><strong>Library</strong>
+          </a>
+
+          <div class="crm-dropdown-menu" id="libraryMenu" role="menu">
+            <div class="crm-dd-title">Library</div>
+
+            {% url 'products_list' as l1 %}{% if l1 %}<a class="crm-dd-item" href="{{ l1 }}">👕 Products</a>{% endif %}
+            {% url 'fabrics_list' as l2 %}{% if l2 %}<a class="crm-dd-item" href="{{ l2 }}">🧵 Fabrics</a>{% endif %}
+            {% url 'accessories_list' as l3 %}{% if l3 %}<a class="crm-dd-item" href="{{ l3 }}">🧷 Accessories</a>{% endif %}
+            {% url 'trims_list' as l4 %}{% if l4 %}<a class="crm-dd-item" href="{{ l4 }}">🎀 Trims</a>{% endif %}
+            {% url 'threads_list' as l5 %}{% if l5 %}<a class="crm-dd-item" href="{{ l5 }}">🪡 Threads</a>{% endif %}
+
+            <div class="crm-dd-hint">
+              All product and material lists in one place.
+            </div>
+          </div>
+        </div>
+
+        <a href="{% url 'inventory_list' %}" class="crm-nav-item"><span>📦</span><strong>Inventory</strong></a>
+        <a href="{% url 'world_tools' %}" class="crm-nav-item"><span>🌍</span><strong>World tools</strong></a>
+
+        <a href="{% url 'email_sync_dashboard' %}" class="crm-nav-item">
+          <span>📨</span><strong>Email Sync</strong>
+        </a>
+
+        <!-- accounting dropdown -->
+        <div class="crm-dropdown" id="accountingDropdown">
+          <a href="{% url 'accounting_home' %}" class="crm-nav-item hot" id="accountingBtn" aria-haspopup="true" aria-expanded="false">
+            <span>💰</span><strong>Accounting</strong>
+          </a>
+
+          <div class="crm-dropdown-menu" id="accountingMenu" role="menu">
+            <div class="crm-dd-title">Accounting shortcuts</div>
+
+            <!-- Invoices link added here -->
+            <a class="crm-dd-item" href="{% url 'invoice_list' %}">🧾 Invoices</a>
+
+            {% if user|is_ca %}
+              {% url 'accounting_entry_list' as u1 %}{% if u1 %}<a class="crm-dd-item" href="{{ u1 }}">🌎 All entries</a>{% endif %}
+              {% url 'accounting_ca_master' as u2 %}{% if u2 %}<a class="crm-dd-item" href="{{ u2 }}">💸 Money transfer</a>{% endif %}
+              {% url 'accounting_ca_grid' as u3 %}{% if u3 %}<a class="crm-dd-item" href="{{ u3 }}">🧾 Canada grid</a>{% endif %}
+            {% endif %}
+
+            {% url 'accounting_bd_dashboard' as u4 %}{% if u4 %}<a class="crm-dd-item" href="{{ u4 }}">🇧🇩 Bangladesh dashboard</a>{% endif %}
+            {% url 'accounting_bd_grid' as u5 %}{% if u5 %}<a class="crm-dd-item" href="{{ u5 }}">🧾 Bangladesh grid</a>{% endif %}
+            {% url 'accounting_bd_daily' as u6 %}{% if u6 %}<a class="crm-dd-item" href="{{ u6 }}">📅 Bangladesh daily sheet</a>{% endif %}
+
+            {% url 'accounting_entry_add_bd' as u7 %}{% if u7 %}<a class="crm-dd-item" href="{{ u7 }}">➕ Add Bangladesh entry</a>{% endif %}
+            {% url 'accounting_entry_add_ca' as u8 %}{% if u8 %}<a class="crm-dd-item" href="{{ u8 }}">➕ Add Canada entry</a>{% endif %}
+
+            {% url 'bd_staff_list' as u9 %}{% if u9 %}<a class="crm-dd-item" href="{{ u9 }}">👥 Bangladesh staff</a>{% endif %}
+            {% url 'bd_staff_month_list' as u10 %}{% if u10 %}<a class="crm-dd-item" href="{{ u10 }}">🧾 BD payroll months</a>{% endif %}
+            {% url 'bd_staff_add' as u11 %}{% if u11 %}<a class="crm-dd-item" href="{{ u11 }}">➕ Add BD staff</a>{% endif %}
+
+            <div class="crm-dd-hint">
+              BD users see BD pages. CA users see master pages too.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="crm-spacer"></div>
+
+      <!-- user -->
+      <div class="crm-userbox">
+        <div class="crm-username">
+          <span>👤</span> {{ request.user.get_username }}
+        </div>
+
+        <form method="post" action="{% url 'logout' %}" class="crm-logout-form">
+          {% csrf_token %}
+          <button type="submit" class="crm-nav-item">
+            <span>🚪</span><strong>Logout</strong>
+          </button>
+        </form>
+
+        <noscript>
+          <a href="{% url 'logout' %}" class="crm-nav-item"><span>🚪</span><strong>Logout</strong></a>
+        </noscript>
+      </div>
+
+    </div>
+  {% endif %}
+
+  <div class="crm-wrapper">
+    {% if messages %}
+      <div class="mb-3">
+        {% for message in messages %}
+          <div class="alert alert-{{ message.tags }} mb-2">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    (function () {
+      function setupDropdown(dropdownId, btnId) {
+        const dd = document.getElementById(dropdownId);
+        const btn = document.getElementById(btnId);
+        if (!dd || !btn) return;
+
+        let closeTimer = null;
+
+        function openMenu() {
+          if (closeTimer) clearTimeout(closeTimer);
+          dd.classList.add("is-open");
+          btn.setAttribute("aria-expanded", "true");
+        }
+
+        function closeMenuDelayed() {
+          if (closeTimer) clearTimeout(closeTimer);
+          closeTimer = setTimeout(() => {
+            dd.classList.remove("is-open");
+            btn.setAttribute("aria-expanded", "false");
+          }, 350);
+        }
+
+        function closeMenuNow() {
+          if (closeTimer) clearTimeout(closeTimer);
+          dd.classList.remove("is-open");
+          btn.setAttribute("aria-expanded", "false");
+        }
+
+        dd.addEventListener("mouseenter", openMenu);
+        dd.addEventListener("mouseleave", closeMenuDelayed);
+
+        btn.addEventListener("click", function (e) {
+          if (!dd.classList.contains("is-open")) {
+            e.preventDefault();
+            openMenu();
+          }
+        });
+
+        document.addEventListener("click", function (e) {
+          if (dd && !dd.contains(e.target)) closeMenuNow();
+        });
+
+        document.addEventListener("keydown", function (e) {
+          if (e.key === "Escape") closeMenuNow();
+        });
+      }
+
+      setupDropdown("accountingDropdown", "accountingBtn");
+      setupDropdown("libraryDropdown", "libraryBtn");
+    })();
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,266 @@
+{% include "crm/navbar.html" %}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>{{ mode|title }} Thread - Iconic CRM</title>
+
+    <style>
+        body { background:#000; color:#f5d580; font-family:Arial,sans-serif; margin:0; padding:0; }
+        .page {
+            max-width: 1000px;
+            margin: 20px auto;
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            padding: 0 20px 30px 20px;
+        }
+        .card {
+            background:#111;
+            border-radius:10px;
+            border:1px solid #222;
+            padding:20px 22px;
+            box-shadow:0 0 12px rgba(0,0,0,0.5);
+        }
+        h1 { text-align:center; margin-top:0; margin-bottom:18px; }
+        .section-title { margin:18px 0 8px 0; font-size:15px; border-bottom:1px solid #333; padding-bottom:4px; }
+        .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px 20px; }
+        .field-box { display:flex; flex-direction:column; }
+        label { font-size:13px; margin-bottom:3px; color:#e0c979; }
+        input, textarea {
+            background:#000; color:#f5d580; border:1px solid #444;
+            padding:7px; border-radius:6px; font-size:13px;
+        }
+        textarea { min-height:60px; }
+        .hint { font-size:11px; color:#9d8d5b; margin-top:2px; }
+        .btn-main {
+            margin-top:20px; width:100%; background:#f5d580; color:#000;
+            padding:10px; font-weight:bold; border-radius:6px; cursor:pointer;
+        }
+        .top-links { text-align:right; margin-bottom:10px; font-size:13px; }
+        .top-links a { color:#f5d580; text-decoration:none; margin-left:10px; }
+        .side-title { font-size:15px; margin-bottom:8px; }
+        select {
+            background:#000; color:#f5d580; border:1px solid #444;
+            padding:7px; border-radius:6px; font-size:13px; width:100%;
+        }
+        .ai-btn {
+            margin-top:10px; width:100%; padding:8px; border-radius:6px;
+            border:0; font-size:13px; font-weight:bold; cursor:pointer;
+            background:#f5d580; color:#000;
+        }
+        .ai-result {
+            margin-top:10px; font-size:12px; background:#080808;
+            border-radius:6px; border:1px solid #333; padding:8px;
+            max-height:200px; overflow-y:auto; white-space:pre-line;
+        }
+        .img-preview { margin-top:10px; max-width:140px; border-radius:6px; border:1px solid #333; }
+        .small-text { font-size:11px; color:#99906b; }
+    </style>
+</head>
+
+<body>
+
+<div class="page">
+
+    <div class="card">
+        <div class="top-links">
+            <a href="{% url 'threads_list' %}">Back to threads</a>
+        </div>
+
+        <h1>{{ mode|title }} Thread</h1>
+
+        <form method="post" enctype="multipart/form-data" id="threadForm">
+            {% csrf_token %}
+
+            <div class="section-title">Basic information</div>
+
+            <div class="form-grid">
+                <div class="field-box">
+                    <label>{{ form.name.label }}</label>
+                    {{ form.name }}
+                    <div class="hint">Example: 40 or polyester core spun</div>
+                </div>
+
+                <div class="field-box">
+                    <label>{{ form.thread_type.label }}</label>
+                    {{ form.thread_type }}
+                    <div class="hint">Sewing, top stitch, embroidery</div>
+                </div>
+
+                <div class="field-box">
+                    <label>{{ form.count.label }}</label>
+                    {{ form.count }}
+                    <div class="hint">Example: 40 or, 30 or, tex size</div>
+                </div>
+
+                <div class="field-box">
+                    <label>{{ form.color.label }}</label>
+                    {{ form.color }}
+                    <div class="hint">Shade number or name</div>
+                </div>
+
+                <div class="field-box">
+                    <label>{{ form.brand.label }}</label>
+                    {{ form.brand }}
+                    <div class="hint">Example: Coats, local brand name</div>
+                </div>
+
+                <div class="field-box">
+                    <label>{{ form.use_for.label }}</label>
+                    {{ form.use_for }}
+                    <div class="hint">What stitch and product this thread is used for</div>
+                </div>
+
+                <div class="field-box">
+                    <label>{{ form.price_per_cone.label }}</label>
+                    {{ form.price_per_cone }}
+                    <div class="hint">Price per cone or spool</div>
+                </div>
+
+                <div class="field-box">
+                    <label>{{ form.image.label }}</label>
+                    {{ form.image }}
+                    <div class="hint">Upload cone photo</div>
+                    {% if thread and thread.image %}
+                        <img src="{{ thread.image.url }}" class="img-preview">
+                    {% endif %}
+                </div>
+
+                <div class="field-box">
+                    <label>{{ form.is_active.label }}</label>
+                    {{ form.is_active }}
+                    <div class="hint">Uncheck if not used now</div>
+                </div>
+            </div>
+
+            <div class="section-title">Notes</div>
+            {{ form.notes }}
+
+            <button type="submit" class="btn-main">
+                {% if mode == "edit" %}Save changes{% else %}Add thread{% endif %}
+            </button>
+        </form>
+    </div>
+
+    <div class="card">
+        <div class="side-title">Textile book presets</div>
+        <div class="small-text">
+            Load common thread bases from your book.
+        </div>
+        <br>
+        <select id="threadPreset">
+            <option value="">Choose preset</option>
+            <option value="coats_40_sewing">Coats 40 or sewing thread</option>
+            <option value="core_spun_topstitch">Core spun top stitch thread</option>
+        </select>
+
+        <hr style="border-color:#222; margin:18px 0;">
+
+        <div class="side-title">AI style suggestion</div>
+        <div class="small-text">
+            Helper explains where this thread works best in production.
+        </div>
+
+        <button type="button" class="ai-btn" id="threadSuggestBtn">
+            Suggest notes and use
+        </button>
+
+        <div class="ai-result" id="threadAiResult"></div>
+    </div>
+
+</div>
+
+<script>
+    const threadBook = {
+        "coats_40_sewing": {
+            name: "Coats 40 or polyester core spun",
+            thread_type: "Sewing",
+            count: "40 or",
+            color: "Standard brand shade",
+            brand: "Coats",
+            use_for: "General joining seams for knit and woven tops.",
+            price_per_cone: "2.40",
+            notes: "All round sewing thread for most machines and fabrics."
+        },
+        "core_spun_topstitch": {
+            name: "Poly core spun top stitch thread",
+            thread_type: "Top stitch",
+            count: "30 or",
+            color: "Contrast color for top stitch",
+            brand: "Generic",
+            use_for: "Visible top stitch on denim and outerwear.",
+            price_per_cone: "2.80",
+            notes: "Stronger, thicker look for visible seams."
+        }
+    };
+
+    function fillThreadFields(data) {
+        const mapping = {
+            name: "id_name",
+            thread_type: "id_thread_type",
+            count: "id_count",
+            color: "id_color",
+            brand: "id_brand",
+            use_for: "id_use_for",
+            price_per_cone: "id_price_per_cone",
+            notes: "id_notes"
+        };
+
+        for (const key in mapping) {
+            const el = document.getElementById(mapping[key]);
+            if (el && data[key] !== undefined) {
+                el.value = data[key];
+            }
+        }
+    }
+
+    const threadPreset = document.getElementById("threadPreset");
+    if (threadPreset) {
+        threadPreset.addEventListener("change", function () {
+            const preset = threadBook[this.value];
+            if (preset) {
+                fillThreadFields(preset);
+            }
+        });
+    }
+
+    const threadSuggestBtn = document.getElementById("threadSuggestBtn");
+    const threadAiResult = document.getElementById("threadAiResult");
+
+    if (threadSuggestBtn && threadAiResult) {
+        threadSuggestBtn.addEventListener("click", function () {
+            const name = document.getElementById("id_name").value;
+            const type = document.getElementById("id_thread_type").value;
+            const useFor = document.getElementById("id_use_for").value;
+
+            let text = "Suggested use and notes will show here.";
+
+            if (name || type || useFor) {
+                text = "";
+                text += "Thread idea:\n";
+                text += "- Name: " + (name || "no name set") + "\n";
+                text += "- Type: " + (type || "no type set") + "\n";
+
+                if (useFor) {
+                    text += "- Use: " + useFor + "\n";
+                }
+
+                text += "\nRecommended use:\n";
+                if ((type || "").toLowerCase().includes("top")) {
+                    text += "Use on visible stitch lines to highlight seams.\n";
+                } else {
+                    text += "Use as main joining thread for seams mentioned above.\n";
+                }
+
+                text += "\nYou can edit this text and paste it into notes.";
+            }
+
+            threadAiResult.textContent = text;
+        });
+    }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,229 @@
+{% extends "crm/base.html" %}
+{% block content %}
+
+<style>
+  .card-soft {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 18px;
+  }
+  .stat-link {
+    text-decoration: none;
+    color: inherit;
+    display: block;
+  }
+  .stat-box:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255,255,255,0.22);
+    transition: 0.15s ease;
+  }
+  .stat-active {
+    border-color: rgba(255,193,7,0.55) !important;
+    box-shadow: 0 0 0 1px rgba(255,193,7,0.25) inset;
+  }
+  .table td, .table th { vertical-align: middle; }
+</style>
+
+<div class="container-fluid">
+
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div>
+      <h3 class="mb-1">Email Sync</h3>
+      <div class="text-secondary">Lead inbox and Info inbox monitoring</div>
+    </div>
+
+    <div class="d-flex align-items-center gap-2">
+      <form method="post" action="{% url 'email_sync_run' %}" class="m-0">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-warning btn-sm px-3">
+          🔄 Run Sync
+        </button>
+      </form>
+
+      <a href="{% url 'email_sync_dashboard' %}" class="btn btn-outline-light btn-sm px-3">
+        Refresh
+      </a>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+
+    <div class="col-md-4">
+      <a class="stat-link" href="{% url 'email_sync_dashboard' %}?range=24h{% if label %}&label={{ label }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}">
+        <div class="p-3 stat-box card-soft {% if range == '24h' %}stat-active{% endif %}">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="fw-bold">Last 24 hours</div>
+              <div class="small text-secondary">All synced emails</div>
+            </div>
+            <div class="small text-secondary">View</div>
+          </div>
+          <div class="fs-3 mt-2">{{ stats.total_24h }}</div>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-md-4">
+      <a class="stat-link" href="{% url 'email_sync_dashboard' %}?flag=form{% if label %}&label={{ label }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}">
+        <div class="p-3 stat-box card-soft {% if flag == 'form' %}stat-active{% endif %}">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="fw-bold">Form entries</div>
+              <div class="small text-secondary">Should become leads</div>
+            </div>
+            <div class="small text-secondary">View</div>
+          </div>
+          <div class="fs-3 mt-2">{{ stats.forms_24h }}</div>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-md-4">
+      <a class="stat-link" href="{% url 'email_sync_dashboard' %}?flag=candidate{% if label %}&label={{ label }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}">
+        <div class="p-3 stat-box card-soft {% if flag == 'candidate' %}stat-active{% endif %}">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="fw-bold">Lead candidates</div>
+              <div class="small text-secondary">From info inbox</div>
+            </div>
+            <div class="small text-secondary">View</div>
+          </div>
+          <div class="fs-3 mt-2">{{ stats.candidates_24h }}</div>
+        </div>
+      </a>
+    </div>
+
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-lg-4">
+      <div class="p-3 card-soft h-100">
+        <div class="fw-bold mb-2">Threads</div>
+        <div class="small text-secondary mb-3">Latest email threads</div>
+
+        <div class="list-group">
+          {% for t in threads %}
+            <div class="list-group-item bg-transparent text-light border-secondary rounded-3 mb-2">
+              <div class="fw-bold">{{ t.subject|default:"(no subject)" }}</div>
+              <div class="small text-secondary">
+                {{ t.label }} · {{ t.from_email }} · {{ t.last_message_at }}
+              </div>
+            </div>
+          {% empty %}
+            <div class="text-secondary small">No threads yet.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-8">
+      <div class="p-3 card-soft h-100">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+          <div>
+            <div class="fw-bold">Synced Email Grid</div>
+            <div class="small text-secondary">
+              Filter by inbox, then use Form or Lead flags
+            </div>
+          </div>
+        </div>
+
+        <form method="get" class="row g-2 align-items-end mb-3">
+          <input type="hidden" name="range" value="{{ range }}">
+          <div class="col-md-5">
+            <label class="form-label small text-secondary">Search</label>
+            <input
+              name="q"
+              value="{{ q }}"
+              class="form-control form-control-sm"
+              placeholder="Search subject, sender, or text"
+            >
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label small text-secondary">Inbox</label>
+            <select name="label" class="form-select form-select-sm">
+              <option value="" {% if not label %}selected{% endif %}>All</option>
+              <option value="lead" {% if label == "lead" %}selected{% endif %}>Lead</option>
+              <option value="info" {% if label == "info" %}selected{% endif %}>Info</option>
+            </select>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label small text-secondary">Filter</label>
+            <select name="flag" class="form-select form-select-sm">
+              <option value="" {% if not flag %}selected{% endif %}>All</option>
+              <option value="form" {% if flag == "form" %}selected{% endif %}>Form entries</option>
+              <option value="candidate" {% if flag == "candidate" %}selected{% endif %}>Lead candidates</option>
+            </select>
+          </div>
+
+          <div class="col-md-1 d-grid">
+            <button type="submit" class="btn btn-sm btn-outline-light">Go</button>
+          </div>
+        </form>
+
+        <div class="table-responsive">
+          <table class="table table-dark table-hover align-middle mb-0">
+            <thead>
+              <tr class="text-secondary small">
+                <th style="width:110px;">Inbox</th>
+                <th style="width:210px;">Time</th>
+                <th style="width:230px;">From</th>
+                <th>Subject</th>
+                <th style="width:150px;">Flags</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {% for m in grid %}
+                <tr>
+                  <td class="text-uppercase small">
+                    <span class="badge rounded-pill text-bg-secondary">
+                      {{ m.thread.label }}
+                    </span>
+                  </td>
+
+                  <td class="small text-secondary">
+                    {{ m.created_at }}
+                  </td>
+
+                  <td>
+                    <div class="fw-bold small">{{ m.from_name|default:"" }}</div>
+                    <div class="small text-secondary">{{ m.from_email }}</div>
+                  </td>
+
+                  <td>
+                    <div class="fw-bold">{{ m.subject|default:"(no subject)" }}</div>
+                    <div class="small text-secondary">
+                      {{ m.body_text|truncatechars:120 }}
+                    </div>
+                  </td>
+
+                  <td class="small">
+                    {% if m.is_form_entry %}
+                      <span class="badge rounded-pill text-bg-warning">Form</span>
+                    {% endif %}
+                    {% if m.is_lead_candidate %}
+                      <span class="badge rounded-pill text-bg-info">Lead</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="5" class="text-secondary small">
+                    No synced emails yet. Click Run Sync.
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}

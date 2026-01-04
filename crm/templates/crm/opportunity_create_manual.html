@@ -1,0 +1,246 @@
+{% extends "crm/base.html" %}
+{% load static %}
+{% block content %}
+
+<style>
+    .page-opp-form {
+        max-width: 900px;
+        margin: 20px auto 40px auto;
+        padding: 0 10px;
+        color: #f9fafb;
+    }
+
+    .opp-form-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 14px;
+        flex-wrap: wrap;
+    }
+
+    .opp-form-title {
+        font-size: 20px;
+        font-weight: 700;
+        color: #fefce8;
+    }
+
+    .opp-form-sub {
+        font-size: 12px;
+        color: #9ca3af;
+    }
+
+    .btn {
+        display: inline-block;
+        padding: 6px 12px;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        font-size: 13px;
+        cursor: pointer;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    .btn-gold {
+        background: linear-gradient(135deg, #facc15, #f97316);
+        color: #111827;
+        border-color: #fbbf24;
+        font-weight: 600;
+    }
+
+    .btn-slate {
+        background: #020617;
+        color: #e5e7eb;
+        border-color: #374151;
+    }
+
+    .btn-small {
+        padding: 4px 10px;
+        font-size: 12px;
+        border-radius: 999px;
+    }
+
+    .card {
+        background: radial-gradient(circle at top left, #111827, #020617);
+        border: 1px solid #1f2937;
+        border-radius: 14px;
+        padding: 14px 14px;
+        box-shadow: 0 0 18px rgba(0, 0, 0, 0.7);
+        margin-bottom: 14px;
+    }
+
+    .card-title {
+        font-size: 14px;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: #fefce8;
+        border-bottom: 1px solid #111827;
+        padding-bottom: 4px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .card-title span.emoji {
+        font-size: 16px;
+    }
+
+    .form-grid-2 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px 12px;
+    }
+
+    .form-row-full {
+        margin-top: 10px;
+    }
+
+    label {
+        display: block;
+        margin-bottom: 3px;
+        font-size: 12px;
+        color: #e5e7eb;
+    }
+
+    select,
+    input {
+        width: 100%;
+        background: #020617;
+        color: #f9fafb;
+        border: 1px solid #374151;
+        border-radius: 8px;
+        padding: 6px 8px;
+        font-size: 13px;
+    }
+
+    select:focus,
+    input:focus {
+        outline: none;
+        border-color: #facc15;
+        box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.4);
+    }
+
+    .muted {
+        font-size: 12px;
+        color: #9ca3af;
+        margin-top: 4px;
+    }
+
+    @media (max-width: 768px) {
+        .form-grid-2 {
+            grid-template-columns: minmax(0, 1fr);
+        }
+    }
+</style>
+
+<div class="page-opp-form">
+
+    <div class="opp-form-header">
+        <div>
+            <div class="opp-form-title">➕ Add new opportunity</div>
+            <div class="opp-form-sub">
+                Link the deal to a lead and customer. Sales team can set type, stage, and value.
+            </div>
+        </div>
+        <div>
+            <a href="{% url 'opportunities_list' %}" class="btn btn-slate btn-small">
+                Back to opportunity list
+            </a>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">
+            <span class="emoji">📎</span> Link to lead and customer
+        </div>
+
+        <form method="post">
+            {% csrf_token %}
+
+            <div class="form-grid-2">
+                <div>
+                    <label>Lead</label>
+                    <select name="lead_id" required>
+                        {% for l in leads %}
+                            <option value="{{ l.id }}">
+                                {{ l.lead_id }} – {{ l.account_brand }} – {{ l.contact_name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <div class="muted">
+                        Pick the main lead for this deal.
+                    </div>
+                </div>
+
+                <div>
+                    <label>Customer</label>
+                    <select name="customer_id">
+                        <option value="">No customer</option>
+                        {% for c in customers %}
+                            <option value="{{ c.id }}">
+                                {{ c.customer_code }} – {{ c.account_brand }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <div class="muted">
+                        Link to customer record if already created.
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-title" style="margin-top:14px;">
+                <span class="emoji">🧵</span> Basic deal info
+            </div>
+
+            <div class="form-grid-2">
+                <div>
+                    <label>Stage</label>
+                    <select name="stage">
+                        {% for value,label in stage_choices %}
+                            <option value="{{ value }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label>Product type</label>
+                    <select name="product_type">
+                        {% for value,label in product_type_choices %}
+                            <option value="{{ value }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label>Product category</label>
+                    <select name="product_category">
+                        {% for value,label in product_category_choices %}
+                            <option value="{{ value }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label>MOQ units</label>
+                    <input type="number" name="moq_units" min="0" placeholder="For example 200">
+                </div>
+
+                <div>
+                    <label>Order value in taka</label>
+                    <input type="number" step="0.01" name="order_value" placeholder="Only sales team can see this">
+                </div>
+            </div>
+
+            <div class="form-row-full" style="margin-top:14px;">
+                <button type="submit" class="btn btn-gold">
+                    Save opportunity
+                </button>
+                <span class="muted">
+                    After save you will be taken to the opportunity detail page.
+                </span>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}

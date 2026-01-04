@@ -1,0 +1,103 @@
+{% extends "crm/base.html" %}
+{% load static %}
+
+{% block content %}
+
+<style>
+    .form-card {
+        background: #0f172a;
+        padding: 20px;
+        border-radius: 12px;
+        max-width: 600px;
+        margin: 30px auto;
+        border: 1px solid #1e293b;
+        color: #f1f5f9;
+    }
+    label { font-size: 13px; color: #e2e8f0; }
+    input, select {
+        width: 100%;
+        padding: 8px;
+        background: #020617;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        color: #f8fafc;
+        margin-bottom: 10px;
+    }
+    .btn-gold {
+        background: #facc15;
+        border: none;
+        padding: 10px 16px;
+        border-radius: 6px;
+        color: black;
+        font-weight: bold;
+    }
+</style>
+
+<div class="form-card">
+    <h2 style="margin-bottom: 15px;">Add Opportunity Manually</h2>
+
+    <form method="post">
+        {% csrf_token %}
+
+        <label>Search Customer</label>
+        <input type="text" id="customerSearch" placeholder="Type to search" onkeyup="filterDropdown('customerSearch', 'customerSelect')">
+
+        <select name="customer" id="customerSelect">
+            <option value="">Select Customer</option>
+            {% for c in customers %}
+                <option value="{{ c.id }}">{{ c.account_brand }} ({{ c.email }})</option>
+            {% endfor %}
+        </select>
+
+        <label>Search Lead</label>
+        <input type="text" id="leadSearch" placeholder="Type to search" onkeyup="filterDropdown('leadSearch', 'leadSelect')">
+
+        <select name="lead" id="leadSelect">
+            <option value="">Select Lead</option>
+            {% for l in leads %}
+                <option value="{{ l.id }}">{{ l.contact_name }} — {{ l.email }}</option>
+            {% endfor %}
+        </select>
+
+        <label>Stage</label>
+        <select name="stage">
+            {% for value,label in stage_choices %}
+                <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+        </select>
+
+        <label>Product Type</label>
+        <select name="product_type">
+            {% for value,label in type_choices %}
+                <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+        </select>
+
+        <label>Product Category</label>
+        <select name="product_category">
+            {% for value,label in category_choices %}
+                <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+        </select>
+
+        <label>MOQ Units</label>
+        <input type="number" name="moq_units">
+
+        <button type="submit" class="btn-gold">Save Opportunity</button>
+    </form>
+</div>
+
+<script>
+function filterDropdown(inputId, dropdownId) {
+    const input = document.getElementById(inputId);
+    const dropdown = document.getElementById(dropdownId);
+    const filter = input.value.toLowerCase();
+
+    for (let i = 0; i < dropdown.options.length; i++) {
+        let txt = dropdown.options[i].text.toLowerCase();
+        dropdown.options[i].style.display = txt.includes(filter) ? "" : "none";
+    }
+}
+</script>
+
+{% endblock %}

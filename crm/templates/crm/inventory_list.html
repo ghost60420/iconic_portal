@@ -1,0 +1,326 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+<style>
+  /* scope all inventory styles */
+  .inv-page {
+      color: #f5f5f5;
+  }
+
+  /* make all small / muted text readable on dark bg */
+  .inv-page .text-muted,
+  .inv-page small,
+  .inv-page .form-label {
+      color: #d8d8d8 !important;
+  }
+
+  /* SmartBrain message needs even more contrast */
+  .inv-page #smartbrain-message,
+  .inv-page .smart-card .small.text-muted {
+      color: #e6e6e6 !important;
+  }
+
+  /* form fields for dark mode */
+  .inv-page .form-control,
+  .inv-page select.form-control,
+  .inv-page .form-control-sm {
+      background-color: #050505;
+      border-color: #444;
+      color: #f5f5f5;
+  }
+  .inv-page .form-control:focus,
+  .inv-page select.form-control:focus {
+      background-color: #050505;
+      border-color: #f5d580;
+      box-shadow: 0 0 0 0.1rem rgba(245,213,128,0.35);
+      color: #ffffff;
+  }
+  .inv-page .form-control::placeholder {
+      color: #a0a0a0;
+      opacity: 1;
+  }
+
+  /* cards */
+  .inv-card {
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 12px;
+      padding: 14px;
+      height: 100%;
+      transition: all 0.18s ease-out;
+  }
+  .inv-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 10px 22px rgba(0,0,0,0.6);
+      border-color: rgba(245,213,128,0.6);
+  }
+  .inv-card.low-stock {
+      border-color: #b00020;
+      box-shadow: 0 0 0 1px rgba(176,0,32,0.4);
+  }
+  .inv-thumb {
+      width: 100%;
+      height: 140px;
+      object-fit: cover;
+      border-radius: 8px;
+      background: #222;
+  }
+  .badge-soft {
+      background: rgba(245,213,128,0.12);
+      border: 1px solid rgba(245,213,128,0.4);
+      border-radius: 999px;
+      padding: 2px 9px;
+      font-size: 11px;
+      color: #f5d580;
+  }
+
+  /* summary cards */
+  .smart-card {
+      background: #131313;
+      border-radius: 12px;
+      border: 1px solid #333;
+      padding: 16px;
+      height: 100%;
+  }
+  .inv-summary-number {
+      font-size: 20px;
+      font-weight: 600;
+      color: #f5f5f5;
+  }
+  .inv-summary-label {
+      font-size: 12px;
+      color: #d0d0d0;
+  }
+  .inv-summary-icon {
+      font-size: 18px;
+      margin-right: 6px;
+  }
+
+  .smart-chip {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(245,213,128,0.1);
+      border: 1px solid #f5d58033;
+      color: #f5d580;
+  }
+
+  /* sticky filters on top when you scroll */
+  .inv-filter-wrapper {
+      z-index: 20;
+  }
+
+  /* better spacing on small screens */
+  @media (max-width: 767px) {
+      .inv-summary-number {
+          font-size: 17px;
+      }
+      .inv-summary-label {
+          font-size: 11px;
+      }
+  }
+</style>
+
+<div class="container mt-4 inv-page">
+
+  <!-- header -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h2 class="text-warning mb-0">Inventory</h2>
+      <small class="text-muted">View stock, cost and low stock items</small>
+    </div>
+    <a href="{% url 'inventory_add' %}" class="btn btn-warning btn-lg">
+      Add inventory item
+    </a>
+  </div>
+
+  <!-- summary and SmartBrain -->
+  <div class="row mb-4">
+
+    <!-- numbers -->
+    <div class="col-md-8 mb-3">
+      <div class="row g-3">
+        <div class="col-6 col-md-3">
+          <div class="smart-card">
+            <div class="inv-summary-label">
+              <span class="inv-summary-icon">📦</span>Items
+            </div>
+            <div class="inv-summary-number">{{ total_items }}</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="smart-card">
+            <div class="inv-summary-label">
+              <span class="inv-summary-icon">📊</span>Total quantity
+            </div>
+            <div class="inv-summary-number">{{ total_quantity }}</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3 mt-3 mt-md-0">
+          <div class="smart-card">
+            <div class="inv-summary-label">
+              <span class="inv-summary-icon">💰</span>Total value
+            </div>
+            <div class="inv-summary-number">{{ total_value }}</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3 mt-3 mt-md-0">
+          <div class="smart-card">
+            <div class="inv-summary-label">
+              <span class="inv-summary-icon">⚠️</span>Low stock items
+            </div>
+            <div class="inv-summary-number">{{ low_stock_count }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SmartBrain summary box (visual for now) -->
+    <div class="col-md-4 mb-3">
+      <div class="smart-card">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div class="text-warning fw-semibold">SmartBrain insights</div>
+          <span class="smart-chip">AI SmartBrain</span>
+        </div>
+        <div class="small text-muted mb-2" id="smartbrain-message">
+          {{ smartbrain_message }}
+        </div>
+        <textarea class="form-control mb-2" rows="2"
+                  placeholder="Ask SmartBrain about inventory or reorder ideas"></textarea>
+        <button type="button" class="btn btn-outline-warning w-100 btn-sm" disabled>
+          SmartBrain live chat coming later
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- filters, sticky -->
+  <div class="inv-filter-wrapper sticky-top" style="top: 64px;">
+    <div class="smart-card mb-3">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label small mb-1 text-muted">Search</label>
+          <input type="text" name="q" value="{{ search }}"
+                 class="form-control form-control-sm"
+                 placeholder="Name, code or sku">
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label small mb-1 text-muted">Category</label>
+          <select name="category" class="form-control form-control-sm">
+            <option value="">All categories</option>
+            <option value="thread" {% if selected_category == "thread" %}selected{% endif %}>Thread</option>
+            <option value="needle" {% if selected_category == "needle" %}selected{% endif %}>Needle</option>
+            <option value="accessory" {% if selected_category == "accessory" %}selected{% endif %}>Accessory</option>
+            <option value="trim" {% if selected_category == "trim" %}selected{% endif %}>Trim</option>
+            <option value="fabric_roll" {% if selected_category == "fabric_roll" %}selected{% endif %}>Fabric roll</option>
+            <option value="polybag" {% if selected_category == "polybag" %}selected{% endif %}>Polybag</option>
+            <option value="carton" {% if selected_category == "carton" %}selected{% endif %}>Carton</option>
+            <option value="other" {% if selected_category == "other" %}selected{% endif %}>Other</option>
+          </select>
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label small mb-1 text-muted">Status</label>
+          <select name="status" class="form-control form-control-sm">
+            <option value="all" {% if selected_status == "all" %}selected{% endif %}>All items</option>
+            <option value="active" {% if selected_status == "active" %}selected{% endif %}>Active only</option>
+            <option value="inactive" {% if selected_status == "inactive" %}selected{% endif %}>Inactive only</option>
+          </select>
+        </div>
+
+        <div class="col-md-2 d-grid">
+          <button type="submit" class="btn btn-outline-light btn-sm mt-3 mt-md-0">
+            Filter
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- grid -->
+  {% if items %}
+    <div class="row g-3">
+      {% for item in items %}
+        <div class="col-12 col-sm-6 col-lg-3">
+          <div class="inv-card {% if item.min_level and item.quantity and item.quantity <= item.min_level %}low-stock{% endif %}">
+            {% if item.image %}
+              <img src="{{ item.image.url }}" class="inv-thumb mb-2" alt="{{ item.name }}">
+            {% else %}
+              <div class="inv-thumb mb-2 d-flex align-items-center justify-content-center text-muted small">
+                No image
+              </div>
+            {% endif %}
+
+            <div class="d-flex justify-content-between align-items-start mb-1">
+              <div>
+                <div class="fw-semibold text-light">{{ item.name }}</div>
+                <div class="text-muted small">
+                  {{ item.get_category_display }}
+                </div>
+              </div>
+              {% if item.min_level and item.quantity and item.quantity <= item.min_level %}
+                <span class="badge bg-danger">Low stock</span>
+              {% elif item.is_active %}
+                <span class="badge bg-success">Active</span>
+              {% else %}
+                <span class="badge bg-secondary">Inactive</span>
+              {% endif %}
+            </div>
+
+            <div class="small mb-1">
+              {% if item.product %}<span class="badge-soft me-1">Product</span>{% endif %}
+              {% if item.fabric %}<span class="badge-soft me-1">Fabric</span>{% endif %}
+              {% if item.accessory %}<span class="badge-soft me-1">Accessory</span>{% endif %}
+              {% if item.trim %}<span class="badge-soft me-1">Trim</span>{% endif %}
+              {% if item.thread_option %}<span class="badge-soft me-1">Thread</span>{% endif %}
+            </div>
+
+            <div class="text-muted small mb-1">
+              Code {{ item.code|default:"Not set" }}
+              · sku {{ item.sku|default:"Not set" }}
+            </div>
+
+            <div class="mt-1 small">
+              <div class="d-flex justify-content-between">
+                <span>Qty</span>
+                <span>{{ item.quantity }} {{ item.unit_type }}</span>
+              </div>
+              <div class="d-flex justify-content-between">
+                <span>Minimum</span>
+                <span>{{ item.min_level }}</span>
+              </div>
+            </div>
+
+            <div class="mt-2 small d-flex justify-content-between">
+              <span>Unit cost</span>
+              <span>{{ item.unit_cost|default:"0.00" }}</span>
+            </div>
+
+            <div class="mt-3 d-flex justify-content-between">
+              <a href="{% url 'inventory_detail' item.pk %}"
+                 class="btn btn-sm btn-outline-light">
+                Detail
+              </a>
+              <!-- Quick reorder now sends user to the detail page reorder box -->
+              <a href="{% url 'inventory_detail' item.pk %}#reorder-box"
+                 class="btn btn-sm btn-warning">
+                Quick reorder
+              </a>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="text-center text-muted py-4">
+      No inventory items yet.
+      <br>
+      <a href="{% url 'inventory_add' %}" class="btn btn-warning mt-2">
+        Add first item
+      </a>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

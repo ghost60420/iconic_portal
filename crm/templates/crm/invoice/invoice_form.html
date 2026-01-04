@@ -1,0 +1,528 @@
+{% extends "crm/base.html" %}
+{% load humanize %}
+{% block content %}
+
+<style>
+  :root{
+    --bg:#020617;
+    --bg2:#030712;
+    --line:#334155;
+    --text:#f9fafb;
+    --muted:#9ca3af;
+    --good:#4ade80;
+    --bad:#fb7185;
+    --warn:#fbbf24;
+  }
+
+  .wrap{
+    max-width:980px;
+    margin:0 auto;
+    color:var(--text);
+  }
+
+  .head{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:12px;
+    flex-wrap:wrap;
+    margin-bottom:14px;
+  }
+
+  .title{
+    margin:0;
+    font-weight:900;
+    letter-spacing:0.2px;
+  }
+
+  .sub{
+    margin-top:4px;
+    font-size:12px;
+    font-weight:800;
+    color:var(--muted);
+    line-height:1.35;
+  }
+
+  .btnbar{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+
+  .pill{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:8px 14px;
+    border-radius:999px;
+    font-weight:900;
+    font-size:12px;
+    border:1px solid rgba(255,255,255,0.14);
+    background:linear-gradient(145deg,#0f172a,var(--bg));
+    color:var(--text);
+    text-decoration:none;
+    box-shadow:0 3px 0 #020617;
+    white-space:nowrap;
+  }
+  .pill:hover{ filter:brightness(1.05); text-decoration:none; }
+
+  .pill.gold{
+    background:linear-gradient(145deg,#f5d580,#d4b35f);
+    color:#111827;
+    border-color:rgba(255,215,128,0.55);
+  }
+
+  .cardx{
+    background:linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+    border:1px solid var(--line);
+    border-radius:18px;
+    box-shadow:0 16px 36px rgba(0,0,0,0.55);
+    overflow:hidden;
+  }
+  .pad{ padding:14px; }
+
+  .grid2{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap:12px;
+  }
+  @media (max-width: 850px){
+    .grid2{ grid-template-columns:1fr; }
+  }
+
+  .row2{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap:12px;
+  }
+  @media (max-width: 600px){
+    .row2{ grid-template-columns:1fr; }
+  }
+
+  label{
+    display:block;
+    font-size:12px;
+    font-weight:900;
+    color:#e5e7eb;
+    margin-bottom:6px;
+  }
+
+  .help{
+    font-size:11px;
+    font-weight:800;
+    color:var(--muted);
+    margin-top:6px;
+    line-height:1.35;
+  }
+
+  .err{
+    margin-top:8px;
+    padding:10px 12px;
+    border-radius:12px;
+    border:1px solid rgba(251,113,133,0.55);
+    background:rgba(251,113,133,0.08);
+    color:#fecdd3;
+    font-size:12px;
+    font-weight:800;
+    line-height:1.35;
+  }
+
+  .warnBox{
+    margin-top:10px;
+    padding:10px 12px;
+    border-radius:12px;
+    border:1px solid rgba(251,191,36,0.40);
+    background:rgba(251,191,36,0.10);
+    color:#fde68a;
+    font-size:12px;
+    font-weight:900;
+    line-height:1.35;
+    display:none;
+  }
+
+  .form-control, .form-select, textarea, input, select{
+    width:100% !important;
+    background:var(--bg2) !important;
+    border:1px solid rgba(148,163,184,0.35) !important;
+    color:var(--text) !important;
+    border-radius:12px !important;
+    padding:10px 12px !important;
+    font-weight:800 !important;
+  }
+  textarea{ min-height:110px; }
+
+  .rowTitle{
+    margin:0 0 10px 0;
+    font-size:13px;
+    font-weight:900;
+    color:var(--text);
+  }
+
+  .actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-top:12px;
+  }
+
+  .btnx{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:10px 16px;
+    border-radius:999px;
+    font-weight:900;
+    font-size:13px;
+    border:1px solid rgba(255,255,255,0.14);
+    text-decoration:none;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+
+  .btn-save{
+    background:linear-gradient(145deg,#f5d580,#d4b35f);
+    color:#111827;
+    border-color:rgba(255,215,128,0.55);
+  }
+  .btn-save:hover{ filter:brightness(1.05); }
+
+  .btn-cancel{
+    background:rgba(255,255,255,0.03);
+    color:var(--text);
+  }
+  .btn-cancel:hover{ filter:brightness(1.05); }
+
+  .mono{
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  }
+
+  .previewBox{
+    margin-top:10px;
+    padding:10px 12px;
+    border-radius:14px;
+    border:1px solid rgba(148,163,184,0.22);
+    background:rgba(255,255,255,0.03);
+    font-size:12px;
+    font-weight:900;
+    display:flex;
+    justify-content:space-between;
+    gap:10px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+  .previewBox span{ color:var(--muted); font-weight:900; }
+
+  .previewRight{
+    display:flex;
+    gap:8px;
+    align-items:center;
+  }
+</style>
+
+<div class="container-fluid">
+  <div class="wrap">
+
+    <div class="head">
+      <div>
+        <h2 class="title">
+          {% if mode == "edit" %}Edit invoice{% else %}Add invoice{% endif %}
+        </h2>
+
+        <div class="sub">
+          {% if mode == "edit" and invoice %}
+            Invoice <span class="mono">{{ invoice.invoice_number }}</span>
+          {% else %}
+            Create a new invoice record
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="btnbar">
+        <a class="pill" href="{% url 'invoice_list' %}">Back to invoices</a>
+        {% if mode == "edit" and invoice %}
+          <a class="pill gold" href="{% url 'invoice_view' invoice.pk %}">View invoice</a>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="cardx">
+      <div class="pad">
+
+        {% if form.non_field_errors %}
+          <div class="err">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        {% if form.errors %}
+          <div class="err">Please fix the errors below and save again.</div>
+        {% endif %}
+
+        <form method="post" novalidate>
+          {% csrf_token %}
+
+          <div class="grid2">
+
+            <div>
+              <p class="rowTitle">Links</p>
+
+              <div class="mb-3">
+                <label for="{{ form.order.id_for_label }}">Order</label>
+                {{ form.order }}
+                {% if form.order.errors %}<div class="err">{{ form.order.errors }}</div>{% endif %}
+                <div class="help">Optional. Link to a production order.</div>
+              </div>
+
+              <div class="mb-3">
+                <label for="{{ form.customer.id_for_label }}">Customer</label>
+                {{ form.customer }}
+                {% if form.customer.errors %}<div class="err">{{ form.customer.errors }}</div>{% endif %}
+                <div class="help">Optional. Choose customer if available.</div>
+              </div>
+
+              <p class="rowTitle">Basics</p>
+
+              <div class="mb-3">
+                <label for="{{ form.invoice_number.id_for_label }}">Invoice number</label>
+                {{ form.invoice_number }}
+                {% if form.invoice_number.errors %}<div class="err">{{ form.invoice_number.errors }}</div>{% endif %}
+                <div class="help">Must be unique.</div>
+              </div>
+
+              <div class="row2">
+                <div class="mb-3">
+                  <label for="{{ form.issue_date.id_for_label }}">Issue date</label>
+                  {{ form.issue_date }}
+                  {% if form.issue_date.errors %}<div class="err">{{ form.issue_date.errors }}</div>{% endif %}
+                </div>
+
+                <div class="mb-3">
+                  <label for="{{ form.due_date.id_for_label }}">Due date</label>
+                  {{ form.due_date }}
+                  {% if form.due_date.errors %}<div class="err">{{ form.due_date.errors }}</div>{% endif %}
+                </div>
+              </div>
+
+              <div class="row2">
+                <div class="mb-3">
+                  <label for="{{ form.currency.id_for_label }}">Currency</label>
+                  {{ form.currency }}
+                  {% if form.currency.errors %}<div class="err">{{ form.currency.errors }}</div>{% endif %}
+                </div>
+
+                <div class="mb-3">
+                  <label for="{{ form.status.id_for_label }}">Status</label>
+                  {{ form.status }}
+                  {% if form.status.errors %}<div class="err">{{ form.status.errors }}</div>{% endif %}
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <p class="rowTitle">Amounts</p>
+
+              <div class="row2">
+                <div class="mb-3">
+                  <label for="{{ form.subtotal.id_for_label }}">Subtotal</label>
+                  {{ form.subtotal }}
+                  {% if form.subtotal.errors %}<div class="err">{{ form.subtotal.errors }}</div>{% endif %}
+                </div>
+
+                <div class="mb-3">
+                  <label for="{{ form.shipping_amount.id_for_label }}">Shipping</label>
+                  {{ form.shipping_amount }}
+                  {% if form.shipping_amount.errors %}<div class="err">{{ form.shipping_amount.errors }}</div>{% endif %}
+                </div>
+              </div>
+
+              <div class="row2">
+                <div class="mb-3">
+                  <label for="{{ form.discount_amount.id_for_label }}">Discount</label>
+                  {{ form.discount_amount }}
+                  {% if form.discount_amount.errors %}<div class="err">{{ form.discount_amount.errors }}</div>{% endif %}
+                </div>
+
+                <div class="mb-3">
+                  <label for="{{ form.tax_amount.id_for_label }}">Tax</label>
+                  {{ form.tax_amount }}
+                  {% if form.tax_amount.errors %}<div class="err">{{ form.tax_amount.errors }}</div>{% endif %}
+                </div>
+              </div>
+
+              <div class="mb-3">
+                <label for="{{ form.total_amount.id_for_label }}">Total amount</label>
+                {{ form.total_amount }}
+                {% if form.total_amount.errors %}<div class="err">{{ form.total_amount.errors }}</div>{% endif %}
+                <div class="help">Auto rule: subtotal + shipping + tax minus discount.</div>
+                <div class="warnBox" id="ruleWarn">
+                  Total does not match the rule. Click Auto calculate total.
+                </div>
+              </div>
+
+              <div class="mb-3">
+                <label for="{{ form.paid_amount.id_for_label }}">Paid amount</label>
+                {{ form.paid_amount }}
+                {% if form.paid_amount.errors %}<div class="err">{{ form.paid_amount.errors }}</div>{% endif %}
+              </div>
+
+              <div class="previewBox" id="previewBox">
+                <div><span>Balance preview</span></div>
+                <div class="previewRight">
+                  <span class="mono" id="curPreview"></span>
+                  <div class="mono" id="balancePreview">0.00</div>
+                </div>
+              </div>
+
+              <div class="mb-3" style="margin-top:12px;">
+                <label for="{{ form.notes.id_for_label }}">Notes</label>
+                {{ form.notes }}
+                {% if form.notes.errors %}<div class="err">{{ form.notes.errors }}</div>{% endif %}
+              </div>
+
+            </div>
+
+          </div>
+
+          <div class="actions">
+            <button type="button" class="btnx btn-cancel" id="calcBtn">Auto calculate total</button>
+
+            <a class="btnx btn-cancel" href="{% url 'invoice_list' %}">Cancel</a>
+
+            <button class="btnx btn-save" type="submit" id="saveBtn">Save</button>
+          </div>
+
+        </form>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  (function(){
+    function byId(id){ return document.getElementById(id); }
+
+    function n(v){
+      var x = parseFloat((v || "").toString().replace(/,/g,""));
+      return isNaN(x) ? 0 : x;
+    }
+
+    function fmt2(v){
+      return (Math.round(v * 100) / 100).toFixed(2);
+    }
+
+    function setVal(el, v){
+      if(!el) return;
+      el.value = fmt2(v);
+    }
+
+    var subtotal = byId("id_subtotal");
+    var shipping = byId("id_shipping_amount");
+    var discount = byId("id_discount_amount");
+    var tax = byId("id_tax_amount");
+    var total = byId("id_total_amount");
+    var paid = byId("id_paid_amount");
+    var currency = byId("id_currency");
+
+    var balancePreview = byId("balancePreview");
+    var curPreview = byId("curPreview");
+    var ruleWarn = byId("ruleWarn");
+    var calcBtn = byId("calcBtn");
+
+    function refreshCurrency(){
+      if(!curPreview) return;
+      var cur = "";
+      if(currency){
+        cur = (currency.value || "").toString().trim();
+      }
+      curPreview.textContent = cur ? (cur + " ") : "";
+    }
+
+    function calcRuleTotal(){
+      var t =
+        n(subtotal && subtotal.value) +
+        n(shipping && shipping.value) +
+        n(tax && tax.value) -
+        n(discount && discount.value);
+
+      if(t < 0) t = 0;
+      return t;
+    }
+
+    function refreshBalance(){
+      var t = n(total && total.value);
+      var p = n(paid && paid.value);
+      var b = t - p;
+      if(b < 0) b = 0;
+      if(balancePreview) balancePreview.textContent = fmt2(b);
+    }
+
+    function checkRuleWarn(){
+      if(!ruleWarn || !total) return;
+      var rule = calcRuleTotal();
+      var current = n(total.value);
+      var diff = Math.abs(rule - current);
+      ruleWarn.style.display = (diff > 0.009) ? "block" : "none";
+    }
+
+    function autoTotal(){
+      if(!total) return;
+      var t = calcRuleTotal();
+      setVal(total, t);
+      refreshBalance();
+      checkRuleWarn();
+    }
+
+    // Make total read only but still posted
+    if(total){
+      total.setAttribute("readonly", "readonly");
+      total.setAttribute("inputmode","decimal");
+    }
+
+    [subtotal, shipping, discount, tax].forEach(function(el){
+      if(!el) return;
+      el.setAttribute("inputmode","decimal");
+      el.addEventListener("input", function(){
+        autoTotal(); // auto update total live
+      });
+    });
+
+    if(paid){
+      paid.setAttribute("inputmode","decimal");
+      paid.addEventListener("input", function(){
+        refreshBalance();
+      });
+    }
+
+    if(currency){
+      currency.addEventListener("change", function(){
+        refreshCurrency();
+      });
+    }
+
+    if(calcBtn){
+      calcBtn.addEventListener("click", function(){
+        autoTotal();
+      });
+    }
+
+    // Disable save on submit (avoid double submit)
+    var saveBtn = byId("saveBtn");
+    var formEl = saveBtn ? saveBtn.closest("form") : null;
+    if(formEl && saveBtn){
+      formEl.addEventListener("submit", function(){
+        autoTotal();
+        saveBtn.disabled = true;
+        saveBtn.style.opacity = "0.8";
+      });
+    }
+
+    refreshCurrency();
+    autoTotal();
+    refreshBalance();
+    checkRuleWarn();
+  })();
+</script>
+
+{% endblock %}

@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Trim detail Iconic CRM</title>
+    <style>
+        body {
+            background: #050505;
+            color: #f5d580;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        a {
+            color: #f5d580;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .page {
+            max-width: 1100px;
+            margin: 20px auto 40px auto;
+            padding: 0 15px;
+        }
+
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+        .header-main {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .header-title {
+            font-size: 22px;
+            font-weight: bold;
+        }
+        .header-sub {
+            font-size: 12px;
+            color: #aaaaaa;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-main {
+            background: #f5d580;
+            color: #000;
+        }
+        .btn-secondary {
+            background: #222;
+            color: #f5d580;
+            border: 1px solid #444;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 2.1fr 1fr;
+            gap: 18px;
+        }
+
+        .card {
+            background: #111;
+            border-radius: 8px;
+            border: 1px solid #333;
+            padding: 14px;
+            font-size: 13px;
+        }
+
+        .card-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+        .card-title {
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .card-sub {
+            font-size: 11px;
+            color: #aaaaaa;
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+        }
+        .pill-code {
+            background: #222;
+            border: 1px solid #555;
+            color: #f5d580;
+        }
+        .pill-type {
+            background: #1e2430;
+            border: 1px solid #3c4c7a;
+            color: #c8d4ff;
+        }
+        .pill-active {
+            background: #1f3d1f;
+            border: 1px solid #3c7a3c;
+            color: #c5f5c5;
+        }
+        .pill-inactive {
+            background: #3d1f1f;
+            border: 1px solid #7a3c3c;
+            color: #f5c5c5;
+        }
+
+        .top-row {
+            display: grid;
+            grid-template-columns: 150px 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+            align-items: center;
+        }
+
+        .thumb {
+            width: 140px;
+            height: 140px;
+            border-radius: 8px;
+            background: #0a0a0a;
+            border: 1px solid #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        .thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .thumb-placeholder {
+            font-size: 11px;
+            color: #777;
+            text-align: center;
+            padding: 10px;
+        }
+
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px 18px;
+            font-size: 12px;
+        }
+        .meta-label {
+            color: #aaaaaa;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .meta-value {
+            margin-top: 2px;
+        }
+
+        .section-title {
+            font-size: 13px;
+            font-weight: bold;
+            margin: 10px 0 4px 0;
+        }
+        .notes-box {
+            background: #090909;
+            border-radius: 6px;
+            border: 1px solid #333;
+            padding: 8px 10px;
+            font-size: 13px;
+            min-height: 40px;
+        }
+        .muted {
+            color: #888;
+            font-size: 12px;
+        }
+
+        .ai-title {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 6px;
+        }
+        .ai-block {
+            margin-bottom: 10px;
+        }
+        .ai-block-title {
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+        .ai-block-text {
+            font-size: 12px;
+            color: #cccccc;
+        }
+
+        @media (max-width: 880px) {
+            .layout {
+                grid-template-columns: 1fr;
+            }
+            .top-row {
+                grid-template-columns: 1fr;
+                justify-items: start;
+            }
+        }
+    </style>
+</head>
+<body>
+
+{% include "crm/navbar.html" %}
+
+<div class="page">
+
+    <div class="header-row">
+        <div class="header-main">
+            <div class="header-title">Trim detail</div>
+            <div class="header-sub">
+                Quick view of this trim for sampling and bulk orders
+            </div>
+        </div>
+        <div>
+            <a href="{% url 'trims_list' %}" class="btn btn-secondary">Back to trims</a>
+            {% if trim %}
+                <a href="{% url 'trim_edit' trim.pk %}" class="btn btn-main">Edit trim</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="layout">
+
+        <!-- main detail card -->
+        <div class="card">
+            <div class="card-header-row">
+                <div>
+                    <div class="card-title">{{ trim.name }}</div>
+                    <div class="card-sub">
+                        Main info for production and sampling team
+                    </div>
+                </div>
+                <div>
+                    {% if trim.trim_code %}
+                        <span class="pill pill-code">Code {{ trim.trim_code }}</span>
+                    {% endif %}
+                    {% if trim.trim_type %}
+                        <span class="pill pill-type">{{ trim.trim_type }}</span>
+                    {% endif %}
+                    {% if trim.is_active %}
+                        <span class="pill pill-active">Active</span>
+                    {% else %}
+                        <span class="pill pill-inactive">Inactive</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="top-row">
+                <div class="thumb">
+                    {% if trim.image %}
+                        <img src="{{ trim.image.url }}" alt="{{ trim.name }}">
+                    {% else %}
+                        <div class="thumb-placeholder">
+                            No image yet<br>
+                            Add a clear close view of this trim
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="meta-grid">
+                    <div>
+                        <div class="meta-label">Type</div>
+                        <div class="meta-value">
+                            {% if trim.trim_type %}
+                                {{ trim.trim_type }}
+                            {% else %}
+                                <span class="muted">Not set</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div>
+                        <div class="meta-label">Width</div>
+                        <div class="meta-value">
+                            {% if trim.width %}
+                                {{ trim.width }}
+                            {% else %}
+                                <span class="muted">Example 1 inch, 2 cm</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div>
+                        <div class="meta-label">Color</div>
+                        <div class="meta-value">
+                            {% if trim.color %}
+                                {{ trim.color }}
+                            {% else %}
+                                <span class="muted">Example black, bone, neon green</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="meta-label">Material</div>
+                        <div class="meta-value">
+                            {% if trim.material %}
+                                {{ trim.material }}
+                            {% else %}
+                                <span class="muted">Example cotton tape, polyester tape, metal</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div>
+                        <div class="meta-label">Price per meter</div>
+                        <div class="meta-value">
+                            {% if trim.price_per_meter %}
+                                {{ trim.price_per_meter }}
+                            {% else %}
+                                <span class="muted">Set for bulk costing</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div>
+                        <div class="meta-label">Record dates</div>
+                        <div class="meta-value muted">
+                            Created
+                            {% if trim.created_at %}
+                                {{ trim.created_at|date:"Y m d" }}
+                            {% else %}
+                                n a
+                            {% endif %}
+                            <br>
+                            Updated
+                            {% if trim.updated_at %}
+                                {{ trim.updated_at|date:"Y m d" }}
+                            {% else %}
+                                n a
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-title">Notes</div>
+            <div class="notes-box">
+                {% if trim.notes %}
+                    {{ trim.notes|linebreaksbr }}
+                {% else %}
+                    <span class="muted">
+                        Use this space for details like wash care, matching body, sewing tips,
+                        or which buyers use this trim.
+                    </span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- ai helper card -->
+        <div class="card">
+            <div class="ai-title">AI helper for trims</div>
+
+            <div class="ai-block">
+                <div class="ai-block-title">Suggested use</div>
+                <div class="ai-block-text">
+                    Think where this trim fits best.  
+                    For example  
+                    neck tape for tees  
+                    zipper tape for jackets  
+                    waistband for shorts  
+                    or binding for armholes and neck.
+                </div>
+            </div>
+
+            <div class="ai-block">
+                <div class="ai-block-title">Quality and production notes</div>
+                <div class="ai-block-text">
+                    Add if this trim should be preshrunk  
+                    if color must be very stable  
+                    and if any special needle, tension or machine setup is needed.
+                </div>
+            </div>
+
+            <div class="ai-block">
+                <div class="ai-block-title">Pricing hints</div>
+                <div class="ai-block-text">
+                    Set a clear price per meter and note if the supplier has
+                    a minimum order, like 500 meters per color.
+                </div>
+            </div>
+
+            <div class="ai-block">
+                <div class="ai-block-title">Team guide</div>
+                <div class="ai-block-text">
+                    When your team adds a new trim they can fill  
+                    type, width, color, material, price, and notes.  
+                    That keeps sampling and bulk work clean and clear.
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+</body>
+</html>

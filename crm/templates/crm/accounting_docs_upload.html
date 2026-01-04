@@ -1,0 +1,135 @@
+{% extends "crm/base.html" %}
+{% block content %}
+
+<style>
+  .doc-wrap{ max-width:1100px; margin:0 auto; }
+  .doc-card{
+    background:#020617;
+    border:1px solid #374151;
+    border-radius:16px;
+    box-shadow:0 14px 34px rgba(0,0,0,0.38);
+    overflow:hidden;
+  }
+  .doc-title{ margin:0; font-weight:900; color:#f9fafb; }
+  .doc-sub{ color:#cbd5e1; font-size:12px; font-weight:800; margin-top:6px; }
+  .doc-label{ font-size:12px; color:#e5e7eb; font-weight:900; margin-bottom:6px; }
+  .doc-input{
+    background:#030712 !important;
+    border:1px solid #4b5563 !important;
+    color:#f9fafb !important;
+    font-weight:800 !important;
+  }
+  .doc-help{ font-size:11px; color:#cbd5e1; font-weight:800; margin-top:6px; }
+  .pill{
+    display:inline-flex; align-items:center; gap:8px;
+    padding:8px 14px; border-radius:999px;
+    font-weight:900; font-size:12px;
+    border:1px solid #374151;
+    background:linear-gradient(145deg,#0f172a,#020617);
+    color:#f9fafb; text-decoration:none;
+    box-shadow:0 3px 0 #020617;
+    white-space:nowrap;
+  }
+  .pill-gold{
+    background:linear-gradient(145deg,#f5d580,#d4b35f);
+    color:#050505;
+    border:1px solid #e5c670;
+    box-shadow:0 3px 0 #8a6b24;
+  }
+</style>
+
+<div class="doc-wrap">
+  <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+    <div>
+      <h2 class="doc-title">Upload accounting documents</h2>
+      <div class="doc-sub">Side is locked to: <strong>{{ side|default:"" }}</strong></div>
+    </div>
+
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="pill" href="{% url 'accounting_entry_list' %}">Back to entries</a>
+      <a class="pill pill-gold" href="{% url 'accounting_home' %}">Accounting home</a>
+    </div>
+  </div>
+
+  {% if form.errors %}
+    <div class="alert alert-danger">Please fix the errors and try again.</div>
+  {% endif %}
+
+  <div class="doc-card">
+    <div class="card-body p-3">
+
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <div class="row g-3">
+
+          <div class="col-md-4">
+            <div class="doc-label">Files</div>
+            {{ form.files }}
+            <div class="doc-help">You can select more than one file.</div>
+            {% if form.files.errors %}<div class="text-danger small mt-1">{{ form.files.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-4">
+            <div class="doc-label">Direction</div>
+            {{ form.direction }}
+            {% if form.direction.errors %}<div class="text-danger small mt-1">{{ form.direction.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-4">
+            <div class="doc-label">Main type</div>
+            {{ form.main_type }}
+            {% if form.main_type.errors %}<div class="text-danger small mt-1">{{ form.main_type.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-4">
+            <div class="doc-label">Sub type</div>
+            {{ form.sub_type }}
+            {% if form.sub_type.errors %}<div class="text-danger small mt-1">{{ form.sub_type.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-4">
+            <div class="doc-label">Amount</div>
+            {{ form.amount }}
+            {% if form.amount.errors %}<div class="text-danger small mt-1">{{ form.amount.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-4">
+            <div class="doc-label">Invoice number</div>
+            {{ form.invoice_number }}
+            {% if form.invoice_number.errors %}<div class="text-danger small mt-1">{{ form.invoice_number.errors }}</div>{% endif %}
+          </div>
+
+          <div class="col-12">
+            <div class="doc-label">Note</div>
+            {{ form.note }}
+            {% if form.note.errors %}<div class="text-danger small mt-1">{{ form.note.errors }}</div>{% endif %}
+          </div>
+
+        </div>
+
+        <div class="d-flex gap-2 flex-wrap mt-3">
+          <button type="submit" class="btn btn-warning rounded-pill" style="font-weight:900;">
+            Upload and create entry
+          </button>
+          <a class="btn btn-outline-light rounded-pill" style="font-weight:900;" href="{% url 'accounting_entry_list' %}">
+            Cancel
+          </a>
+        </div>
+
+      </form>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  (function(){
+    var inputs = document.querySelectorAll("input, select, textarea");
+    for(var i=0;i<inputs.length;i++){
+      inputs[i].classList.add("doc-input");
+    }
+  })();
+</script>
+
+{% endblock %}

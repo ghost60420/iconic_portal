@@ -1,0 +1,101 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h1 class="h4 mb-1">
+        {% if mode == "edit" %}Edit event{% else %}Add event{% endif %}
+      </h1>
+      <p class="text-muted small mb-0">
+        Keep all calls, follow ups, sample work and shipping dates in one simple place.
+      </p>
+    </div>
+    <a href="{% url 'calendar_list' %}" class="btn btn-outline-light btn-sm">
+      Back to calendar
+    </a>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-8">
+      <div class="card bg-dark border-secondary text-light">
+        <div class="card-body">
+          <form method="post" novalidate>
+            {% csrf_token %}
+
+            <div class="mb-3">
+              <label class="form-label">Title</label>
+              {{ form.title }}
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Start</label>
+                {{ form.start_datetime }}
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">End</label>
+                {{ form.end_datetime }}
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-4 mb-3">
+                <label class="form-label">Type</label>
+                {{ form.event_type }}
+              </div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label">Priority</label>
+                {{ form.priority }}
+              </div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label">Status</label>
+                {{ form.status }}
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-4 mb-3">
+                <label class="form-label">Link to lead</label>
+                {{ form.lead }}
+              </div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label">Link to opportunity</label>
+                {{ form.opportunity }}
+              </div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label">Link to customer</label>
+                {{ form.customer }}
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">Short note</label>
+              {{ form.note }}
+              <div class="form-text text-muted">
+                Only for you and the team, not shared with the client.
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary">
+              Save event
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="card bg-dark border-secondary text-light">
+        <div class="card-body">
+          <h2 class="h6 mb-2">AI note</h2>
+          <p class="small text-muted mb-0">
+            Later we can auto write a summary here from the lead or opportunity
+            details, so you can see context before a call.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

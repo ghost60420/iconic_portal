@@ -1,0 +1,101 @@
+{% extends "crm/base.html" %}
+{% block content %}
+
+<style>
+  .ai-wrap{ max-width:1100px; margin:0 auto; }
+  .ai-card{
+    background: rgba(2,6,23,0.75);
+    border: 1px solid rgba(148,163,184,0.25);
+    border-radius: 18px;
+    box-shadow: 0 16px 36px rgba(0,0,0,0.55);
+    overflow: hidden;
+  }
+  .ai-head{ padding:14px 16px; border-bottom:1px solid rgba(148,163,184,0.18); }
+  .ai-title{ margin:0; font-weight:900; font-size:18px; }
+  .ai-sub{ margin-top:4px; font-size:12px; color:#cbd5e1; font-weight:800; }
+
+  .ai-body{ padding:14px 16px; }
+  .ai-chat{
+    height: 420px;
+    overflow:auto;
+    border-radius: 14px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(148,163,184,0.18);
+    padding: 12px;
+  }
+  .msg{
+    padding:10px 12px;
+    border-radius: 14px;
+    margin-bottom:10px;
+    font-weight:800;
+    font-size:13px;
+    line-height:1.35;
+    border: 1px solid rgba(148,163,184,0.18);
+  }
+  .msg.user{ background: rgba(245,213,128,0.10); }
+  .msg.ai{ background: rgba(59,130,246,0.08); }
+
+  .ai-form{ display:flex; gap:10px; margin-top:12px; }
+  .ai-form input{
+    flex:1;
+    background:#030712;
+    border:1px solid #475569;
+    color:#f9fafb;
+    font-weight:800;
+    border-radius: 14px;
+    padding: 12px 12px;
+  }
+  .ai-form button{
+    border:none;
+    border-radius:999px;
+    padding: 10px 16px;
+    font-weight:900;
+    background: linear-gradient(145deg, #ffe39b, #e4c067);
+    color:#0b0b0b;
+    box-shadow: 0 4px 0 #8a6b24;
+    min-width: 120px;
+  }
+</style>
+
+<div class="ai-wrap">
+  <div class="ai-card">
+    <div class="ai-head">
+      <h2 class="ai-title">AI Assistant</h2>
+      <div class="ai-sub">Superuser only. Ask questions about sales, production, shipping, and money.</div>
+    </div>
+
+    <div class="ai-body">
+      <div class="ai-chat" id="aiChat">
+        {% if history %}
+          {% for m in history %}
+            <div class="msg {% if m.role == 'user' %}user{% else %}ai{% endif %}">
+              <div style="opacity:0.85; font-size:11px; margin-bottom:6px;">
+                {% if m.role == 'user' %}You{% else %}AI{% endif %}
+              </div>
+              <div>{{ m.text|linebreaksbr }}</div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="msg ai">
+            Ask: "What is the status of sales this month?"
+          </div>
+        {% endif %}
+      </div>
+
+      <form class="ai-form" method="post">
+        {% csrf_token %}
+        <input name="message" placeholder="Type your question" autocomplete="off" />
+        <button type="submit">Send</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function(){
+    var el = document.getElementById("aiChat");
+    if(el){ el.scrollTop = el.scrollHeight; }
+  })();
+</script>
+
+{% endblock %}

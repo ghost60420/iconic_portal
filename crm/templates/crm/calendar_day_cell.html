@@ -1,0 +1,87 @@
+{# shared content for one day cell #}
+<div class="calendar-day-header">
+  <a
+    href="?year={{ current_month|date:'Y' }}&month={{ current_month|date:'n' }}&day={{ day.date|date:'Y-m-d' }}&view={{ current_view }}"
+    class="text-decoration-none text-reset d-flex justify-content-between w-100"
+  >
+    <span class="calendar-day-number">
+      {{ day.date.day }}
+    </span>
+    {% if day.is_today %}
+      <span class="calendar-today-pill">Today</span>
+    {% endif %}
+  </a>
+</div>
+
+<div class="calendar-events-wrap">
+  {% if day.events %}
+    {% with day.events|length as total_events %}
+      {% for e in day.events|slice:":3" %}
+        <div class="calendar-event-row">
+          <a
+            href="{% url 'calendar_edit' e.pk %}"
+            class="calendar-event-link"
+          >
+            <div class="calendar-event-top">
+              <span
+                class="calendar-event-badge
+                  {% if e.event_type == 'call' %}
+                    bg-primary
+                  {% elif e.event_type == 'follow_up' %}
+                    bg-info text-dark
+                  {% elif e.event_type == 'sample' %}
+                    bg-warning text-dark
+                  {% elif e.event_type == 'production' %}
+                    bg-secondary
+                  {% elif e.event_type == 'shipping' %}
+                    bg-success
+                  {% elif e.event_type == 'payment' %}
+                    bg-danger
+                  {% else %}
+                    bg-dark
+                  {% endif %}
+                "
+              >
+                {{ e.get_event_type_display }}
+              </span>
+
+              {% if e.priority == "high" %}
+                <span class="calendar-event-badge bg-danger">H</span>
+              {% elif e.priority == "medium" %}
+                <span class="calendar-event-badge bg-warning text-dark">M</span>
+              {% else %}
+                <span class="calendar-event-badge bg-secondary">L</span>
+              {% endif %}
+
+              {% if e.status == "done" %}
+                <span class="calendar-event-badge bg-success">Done</span>
+              {% elif e.status == "in_work" %}
+                <span class="calendar-event-badge bg-info text-dark">Work</span>
+              {% else %}
+                <span class="calendar-event-badge bg-dark">Plan</span>
+              {% endif %}
+            </div>
+
+            <div class="calendar-event-title">
+              {{ e.title }}
+            </div>
+            <div class="calendar-event-time">
+              {{ e.start_datetime|time:"h:i A" }}
+            </div>
+          </a>
+        </div>
+      {% endfor %}
+
+      {% if total_events > 3 %}
+        <div class="calendar-more-line">
+          <a
+            href="?year={{ current_month|date:'Y' }}&month={{ current_month|date:'n' }}&day={{ day.date|date:'Y-m-d' }}&view=day"
+            class="text-decoration-none text-info"
+          >
+            + {{ total_events|add:"-3" }} more
+          </a>
+        </div>
+      {% endif %}
+    {% endwith %}
+  {% endif %}
+</div>

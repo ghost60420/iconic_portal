@@ -1,0 +1,195 @@
+{% load static %}
+
+<div class="topnav">
+  <div class="topnav-inner">
+
+    <div class="nav-left nav-scroll">
+      {% url 'leads_list' as u_leads %}
+      <a class="navitem" href="{{ u_leads }}">Leads</a>
+
+      {% url 'opportunities_list' as u_opps %}
+      <a class="navitem" href="{{ u_opps }}">Opportunities</a>
+
+      {% url 'customers_list' as u_customers %}
+      <a class="navitem" href="{{ u_customers }}">Customers</a>
+
+      {% url 'products_list' as u_products %}
+      <a class="navitem" href="{{ u_products }}">Products</a>
+
+      {% url 'fabrics_list' as u_fabrics %}
+      <a class="navitem" href="{{ u_fabrics }}">Fabrics</a>
+
+      {% url 'accessories_list' as u_accessories %}
+      <a class="navitem" href="{{ u_accessories }}">Accessories</a>
+
+      {% url 'trims_list' as u_trims %}
+      <a class="navitem" href="{{ u_trims }}">Trims</a>
+
+      {% url 'threads_list' as u_threads %}
+      <a class="navitem" href="{{ u_threads }}">Threads</a>
+
+      {% url 'inventory_list' as u_inventory %}
+      <a class="navitem" href="{{ u_inventory }}">Inventory</a>
+
+      {% url 'world_tools' as u_world %}
+      <a class="navitem" href="{{ u_world }}">World tools</a>
+    </div>
+
+    <div class="nav-right nav-scroll">
+      {% url 'calendar_list' as u_calendar %}
+      <a class="navitem" href="{{ u_calendar }}">Calendar</a>
+
+      {% url 'production_list' as u_production %}
+      <a class="navitem" href="{{ u_production }}">Production</a>
+
+      {% url 'shipment_list' as u_shipping %}
+      <a class="navitem" href="{{ u_shipping }}">Shipping</a>
+
+      {% url 'wa_inbox' as u_wa %}
+      <a class="navitem navitem-warm" href="{{ u_wa }}">WhatsApp</a>
+
+      {% url 'email_sync_dashboard' as u_email %}
+      <a class="navitem" href="{{ u_email }}">Email Sync</a>
+
+      {% url 'accounting_home' as u_acc %}
+      <a class="navitem navitem-warm" href="{{ u_acc }}">Accounting</a>
+
+      {% url 'main_dashboard' as u_dash %}
+      <a class="navitem navitem-warm" href="{{ u_dash }}">Main Dashboard</a>
+
+      {% url 'ai_hub' as u_ai %}
+      <a class="navitem navitem-warm" href="{{ u_ai }}">AI</a>
+
+      <span class="navitem navitem-off">Library</span>
+
+      <span class="navuser">{{ request.user.username|default:"User" }}</span>
+
+      {% url 'logout' as u_logout %}
+      <a class="navitem navitem-logout" href="{{ u_logout }}">Logout</a>
+    </div>
+
+  </div>
+</div>
+
+<style>
+  /* fixed modern top bar */
+  .topnav{
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 9999;
+    background: rgba(6,10,18,0.90);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    backdrop-filter: blur(14px);
+  }
+
+  .topnav-inner{
+    max-width: 1500px;
+    margin: 0 auto;
+    padding: 10px 14px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+
+  /* two groups, both can scroll */
+  .nav-left{
+    flex: 1;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .nav-right{
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .nav-scroll{
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    scrollbar-width: none;
+  }
+
+  .nav-scroll::-webkit-scrollbar{
+    display: none;
+  }
+
+  /* modern pill buttons */
+  .navitem{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 9px 12px;
+    font-size: 13px;
+    line-height: 1;
+    color: #e5e7eb;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 999px;
+    text-decoration: none;
+    transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+  }
+
+  .navitem:hover{
+    background: rgba(255,255,255,0.09);
+    border-color: rgba(255,255,255,0.16);
+    transform: translateY(-1px);
+    text-decoration: none;
+  }
+
+  .navitem-warm{
+    background: rgba(250,204,21,0.10);
+    border-color: rgba(250,204,21,0.28);
+    color: #facc15;
+  }
+
+  .navitem-warm:hover{
+    background: rgba(250,204,21,0.16);
+    border-color: rgba(250,204,21,0.36);
+  }
+
+  .navitem-logout{
+    background: rgba(239,68,68,0.12);
+    border-color: rgba(239,68,68,0.28);
+    color: #fecaca;
+  }
+
+  .navitem-logout:hover{
+    background: rgba(239,68,68,0.18);
+    border-color: rgba(239,68,68,0.36);
+  }
+
+  .navitem-off{
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .navuser{
+    display: inline-flex;
+    align-items: center;
+    padding: 9px 10px;
+    font-size: 13px;
+    color: #9ca3af;
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 999px;
+    background: rgba(255,255,255,0.03);
+  }
+
+  /* IMPORTANT: fixed navbar spacing so pages do not go under it */
+  body{
+    padding-top: 64px;
+  }
+
+  @media (max-width: 900px){
+    .topnav-inner{
+      padding: 10px 10px;
+    }
+    body{
+      padding-top: 72px;
+    }
+  }
+</style>

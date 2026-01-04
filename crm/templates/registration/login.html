@@ -1,0 +1,137 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Iconic CRM Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <style>
+    body{
+      min-height:100vh;
+      margin:0;
+      background:
+        linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0.75)),
+        url("{% static 'img/iconic-login-bg.png' %}") center center / cover no-repeat;
+      color:#f9fafb;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-family: Arial, sans-serif;
+    }
+    .cardx{
+      width: 420px;
+      max-width: 92vw;
+      background: rgba(2,6,23,0.88);
+      border:1px solid rgba(148,163,184,0.35);
+      border-radius:18px;
+      box-shadow: 0 18px 40px rgba(0,0,0,0.65);
+      overflow:hidden;
+      backdrop-filter: blur(6px);
+    }
+    .top{
+      padding:18px 18px 10px 18px;
+      border-bottom:1px solid rgba(148,163,184,0.22);
+    }
+    .title{
+      margin:0;
+      font-weight:900;
+      font-size:20px;
+      letter-spacing:0.2px;
+    }
+    .sub{
+      margin-top:6px;
+      font-size:12px;
+      color:#cbd5e1;
+      font-weight:700;
+    }
+    .body{
+      padding:18px;
+    }
+    label{
+      font-size:12px;
+      font-weight:800;
+      color:#e5e7eb;
+      margin-bottom:6px;
+      display:block;
+    }
+    input{
+      width:100%;
+      background:#030712 !important;
+      border:1px solid #475569 !important;
+      color:#f9fafb !important;
+      font-weight:800 !important;
+      border-radius:12px !important;
+      padding:10px 12px !important;
+      outline:none !important;
+    }
+    input:focus{
+      border-color:#f5d580 !important;
+      box-shadow: 0 0 0 3px rgba(245,213,128,0.18) !important;
+    }
+    .btnx{
+      width:100%;
+      border:none;
+      border-radius:999px;
+      padding:10px 14px;
+      font-weight:900;
+      background: linear-gradient(145deg, #ffe39b, #e4c067);
+      color:#0b0b0b;
+      box-shadow: 0 4px 0 #8a6b24;
+    }
+    .btnx:hover{ filter:brightness(1.03); }
+    .err{
+      background: rgba(239,68,68,0.15);
+      border: 1px solid rgba(239,68,68,0.35);
+      color:#fecaca;
+      padding:10px 12px;
+      border-radius:12px;
+      font-size:12px;
+      font-weight:800;
+      margin-bottom:12px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="cardx">
+    <div class="top">
+      <h1 class="title">Iconic CRM</h1>
+      <div class="sub">Sign in to access your dashboard</div>
+    </div>
+
+    <div class="body">
+
+      {% if messages %}
+        {% for message in messages %}
+          <div class="err">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+
+      {% if form.errors %}
+        <div class="err">Wrong username or password.</div>
+      {% endif %}
+
+      <form method="post">
+        {% csrf_token %}
+
+        <div class="mb-3">
+          <label for="id_username">Username</label>
+          {{ form.username }}
+        </div>
+
+        <div class="mb-3">
+          <label for="id_password">Password</label>
+          {{ form.password }}
+        </div>
+
+        <button class="btnx" type="submit">Login</button>
+      </form>
+
+    </div>
+  </div>
+
+</body>
+</html>

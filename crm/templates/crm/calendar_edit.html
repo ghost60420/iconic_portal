@@ -1,0 +1,229 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+<style>
+  .event-page-wrap {
+    max-width: 900px;
+    margin: 20px auto;
+  }
+
+  .event-header-card,
+  .event-card {
+    background: #111111;
+    border-radius: 10px;
+    border: 1px solid #333333;
+    padding: 16px 18px;
+    margin-bottom: 14px;
+  }
+
+  .event-header-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .event-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #ffffff;
+  }
+
+  .event-sub {
+    font-size: 13px;
+    color: #bbbbbb;
+    margin-top: 4px;
+  }
+
+  .event-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+  }
+
+  .badge-pill {
+    display: inline-block;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid #444444;
+    background: #1b1b1b;
+    color: #f5f5f5;
+  }
+
+  .event-header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .btn-slim {
+    font-size: 13px;
+    padding: 5px 12px;
+    border-radius: 6px;
+    border: 1px solid #444444;
+    background: #1f1f1f;
+    color: #f5f5f5;
+    text-decoration: none;
+    display: inline-block;
+  }
+
+  .btn-slim-primary {
+    background: #0d6efd;
+    border-color: #0d6efd;
+    color: #ffffff;
+  }
+
+  .btn-slim:hover {
+    filter: brightness(1.1);
+    text-decoration: none;
+  }
+
+  .event-card-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #ffffff;
+    margin-bottom: 10px;
+  }
+
+  /* form styling */
+  .event-form p {
+    margin-bottom: 10px;
+  }
+
+  .event-form label {
+    display: block;
+    font-size: 13px;
+    margin-bottom: 3px;
+    color: #dddddd;
+  }
+
+  .event-form input,
+  .event-form select,
+  .event-form textarea {
+    width: 100%;
+    background: #000000;
+    color: #f5f5f5;
+    border: 1px solid #444444;
+    border-radius: 5px;
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+
+  .event-form textarea {
+    min-height: 80px;
+  }
+
+  .event-form .helptext {
+    font-size: 11px;
+    color: #aaaaaa;
+  }
+
+  .event-form ul.errorlist {
+    margin: 3px 0 0 0;
+    padding-left: 14px;
+    font-size: 11px;
+    color: #ffb3b3;
+  }
+
+  .event-form-actions {
+    margin-top: 12px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .btn-main {
+    display: inline-block;
+    padding: 7px 16px;
+    font-size: 13px;
+    border-radius: 6px;
+    border: none;
+    background: #0d6efd;
+    color: #ffffff;
+    cursor: pointer;
+  }
+
+  .btn-main:hover {
+    filter: brightness(1.08);
+  }
+
+  .btn-ghost {
+    display: inline-block;
+    padding: 7px 16px;
+    font-size: 13px;
+    border-radius: 6px;
+    border: 1px solid #555555;
+    background: #181818;
+    color: #f5f5f5;
+    text-decoration: none;
+  }
+
+  .btn-ghost:hover {
+    filter: brightness(1.08);
+    text-decoration: none;
+  }
+</style>
+
+<div class="event-page-wrap">
+
+  <!-- header card -->
+  <div class="event-header-card">
+    <div class="event-header-top">
+      <div>
+        <div class="event-title">Edit event</div>
+        <div class="event-sub">
+          {{ event.title }}  
+        </div>
+        <div class="event-badges">
+          <span class="badge-pill">
+            {{ event.get_event_type_display }}
+          </span>
+          <span class="badge-pill">
+            Status: {{ event.get_status_display }}
+          </span>
+          <span class="badge-pill">
+            Priority: {{ event.get_priority_display }}
+          </span>
+        </div>
+      </div>
+
+      <div class="event-header-actions">
+        <a href="{% url 'calendar_event_detail' event.pk %}" class="btn-slim">
+          View event
+        </a>
+        <a href="{% url 'calendar_list' %}" class="btn-slim">
+          Back to calendar
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- form card -->
+  <div class="event-card">
+    <div class="event-card-title">Event form</div>
+    <p style="font-size:12px;color:#bbbbbb;margin-bottom:10px;">
+      Change any field and save.  
+      AI will update the summary if needed.
+    </p>
+
+    <form method="post" class="event-form">
+      {% csrf_token %}
+
+      {{ form.non_field_errors }}
+
+      {{ form.as_p }}
+
+      <div class="event-form-actions">
+        <button type="submit" class="btn-main">Save changes</button>
+        <a href="{% url 'calendar_event_detail' event.pk %}" class="btn-ghost">
+          Cancel
+        </a>
+      </div>
+    </form>
+  </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,244 @@
+{% extends "crm/base.html" %}
+{% block content %}
+
+<style>
+  .wrap{ max-width:1100px; margin:0 auto; color:#f9fafb; }
+  .cardx{
+    background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+    border:1px solid #334155;
+    border-radius:18px;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.55);
+    overflow:hidden;
+  }
+  .pad{ padding:14px; }
+  .title{ margin:0; font-weight:900; }
+  .sub{ margin-top:4px; font-size:12px; font-weight:800; color:#9ca3af; }
+  .rowx{ display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+
+  .toolbar{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    align-items:center;
+    margin-top:10px;
+  }
+
+  .input{
+    background:#020617;
+    border:1px solid #334155;
+    color:#f9fafb;
+    border-radius:999px;
+    padding:10px 12px;
+    font-size:13px;
+    font-weight:800;
+    min-width:260px;
+  }
+
+  .chip{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:9px 12px;
+    border-radius:999px;
+    border:1px solid rgba(255,255,255,0.18);
+    background: rgba(255,255,255,0.03);
+    color:#f9fafb;
+    font-size:12px;
+    font-weight:900;
+    cursor:pointer;
+    user-select:none;
+    text-decoration:none;
+  }
+  .chip:hover{ filter:brightness(1.05); }
+  .chip.active{
+    border-color:#facc15;
+    box-shadow: 0 0 0 1px rgba(250,204,21,0.25);
+  }
+
+  .item{
+    padding:12px;
+    border-radius:14px;
+    border:1px solid rgba(148,163,184,0.22);
+    background: rgba(255,255,255,0.03);
+    margin-bottom:10px;
+    display:flex;
+    justify-content:space-between;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  .name{ font-weight:900; margin:0; }
+  .meta{ font-size:12px; color:#cbd5e1; font-weight:800; margin-top:4px; }
+
+  .badge{
+    display:inline-flex; align-items:center; gap:6px;
+    padding:6px 10px; border-radius:999px;
+    font-size:11px; font-weight:900;
+    border:1px solid #334155; background: rgba(255,255,255,0.03);
+    color:#e5e7eb;
+    white-space:nowrap;
+  }
+  .bad{ background:#ef4444; border-color:#ef4444; color:#fff; }
+  .ok{ background:#16a34a; border-color:#16a34a; color:#0b0f1a; }
+  .off{ background:#64748b; border-color:#64748b; color:#0b0f1a; }
+
+  .btn{
+    display:inline-flex; align-items:center; gap:8px;
+    padding:9px 14px; border-radius:999px;
+    font-weight:900; font-size:12px; text-decoration:none;
+    border:1px solid rgba(255,255,255,0.18);
+    background: linear-gradient(145deg, #0f172a, #020617);
+    color:#f9fafb;
+  }
+  .btn:hover{ filter:brightness(1.05); }
+
+  .leadlink a{ color:#facc15; text-decoration:none; }
+  .leadlink a:hover{ text-decoration:underline; }
+
+  .muted{ color:#9ca3af; font-weight:800; font-size:12px; }
+
+</style>
+
+<div class="container-fluid">
+  <div class="wrap">
+
+    <div class="rowx">
+      <div>
+        <h2 class="title">WhatsApp Inbox 📲</h2>
+        <div class="sub">Incoming chats. Search and filter, then open a thread to reply.</div>
+
+        <div class="toolbar">
+          <input id="q" class="input" type="text" placeholder="Search name, phone, or lead brand">
+
+          <a href="#" class="chip active" data-filter="all">All</a>
+          <a href="#" class="chip" data-filter="human">Needs human</a>
+          <a href="#" class="chip" data-filter="aioff">AI off</a>
+        </div>
+      </div>
+
+      <div class="muted">
+        Total: {{ threads|length }}
+      </div>
+    </div>
+
+    <div class="cardx">
+      <div class="pad">
+
+        {% if threads %}
+          <div id="list">
+            {% for t in threads %}
+              <div
+                class="item"
+                data-name="{{ t.wa_name|default:''|lower }}"
+                data-phone="{{ t.wa_phone|default:'' }}"
+                data-lead="{% if t.lead %}{{ t.lead.account_brand|default:''|lower }}{% else %}{% endif %}"
+                data-needs-human="{% if t.needs_human %}1{% else %}0{% endif %}"
+                data-ai-enabled="{% if t.ai_enabled %}1{% else %}0{% endif %}"
+              >
+                <div>
+                  <p class="name">{{ t.wa_name|default:"Unknown" }} ({{ t.wa_phone }})</p>
+
+                  <div class="meta">
+                    Last:
+                    {% if t.last_message_at %}
+                      {{ t.last_message_at|date:"Y-m-d H:i" }}
+                    {% else %}
+                      No messages
+                    {% endif %}
+
+                    {% if t.lead %}
+                      · <span class="leadlink">Lead: <a href="{% url 'lead_detail' t.lead.pk %}">{{ t.lead.account_brand }}</a></span>
+                    {% endif %}
+                  </div>
+                </div>
+
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                  {% if t.needs_human %}
+                    <span class="badge bad">Needs human</span>
+                  {% else %}
+                    <span class="badge ok">OK</span>
+                  {% endif %}
+
+                  {% if t.ai_enabled %}
+                    <span class="badge ok">AI on</span>
+                  {% else %}
+                    <span class="badge off">AI off</span>
+                  {% endif %}
+
+                  <a class="btn" href="{% url 'wa_thread' t.pk %}">Open</a>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+
+          <div id="empty" class="sub" style="display:none;">No threads match your filters.</div>
+
+        {% else %}
+          <div class="sub">No WhatsApp threads yet.</div>
+        {% endif %}
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  const q = document.getElementById("q");
+  const chips = document.querySelectorAll(".chip[data-filter]");
+  const items = document.querySelectorAll("#list .item");
+  const empty = document.getElementById("empty");
+
+  let currentFilter = "all";
+
+  function norm(s) {
+    return (s || "").toString().toLowerCase().trim();
+  }
+
+  function matchFilter(el) {
+    const needsHuman = el.getAttribute("data-needs-human") === "1";
+    const aiEnabled = el.getAttribute("data-ai-enabled") === "1";
+
+    if (currentFilter === "human") return needsHuman;
+    if (currentFilter === "aioff") return !aiEnabled;
+    return true;
+  }
+
+  function matchSearch(el, term) {
+    if (!term) return true;
+    const name = norm(el.getAttribute("data-name"));
+    const phone = norm(el.getAttribute("data-phone"));
+    const lead = norm(el.getAttribute("data-lead"));
+    return name.includes(term) || phone.includes(term) || lead.includes(term);
+  }
+
+  function apply() {
+    const term = norm(q ? q.value : "");
+    let shown = 0;
+
+    items.forEach(function (el) {
+      const ok = matchFilter(el) && matchSearch(el, term);
+      el.style.display = ok ? "flex" : "none";
+      if (ok) shown += 1;
+    });
+
+    if (empty) empty.style.display = shown === 0 ? "block" : "none";
+  }
+
+  chips.forEach(function (c) {
+    c.addEventListener("click", function (e) {
+      e.preventDefault();
+      currentFilter = c.getAttribute("data-filter") || "all";
+      chips.forEach(x => x.classList.remove("active"));
+      c.classList.add("active");
+      apply();
+    });
+  });
+
+  if (q) q.addEventListener("input", apply);
+
+  apply();
+})();
+</script>
+
+{% endblock %}

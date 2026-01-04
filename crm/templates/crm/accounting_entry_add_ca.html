@@ -1,0 +1,468 @@
+{% extends "crm/base.html" %}
+{% load humanize %}
+{% block content %}
+
+<style>
+  :root{
+    --bg:#020617;
+    --bg2:#030712;
+    --line:#374151;
+    --line2:#111827;
+    --text:#f9fafb;
+    --muted:#cbd5e1;
+    --gold:#facc15;
+  }
+
+  .ca-wrap { color:var(--text); }
+
+  .ca-shell{
+    max-width:1200px;
+    margin:0 auto;
+  }
+
+  .ca-card {
+    background:linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+    border:1px solid rgba(255,255,255,0.10);
+    border-radius:18px;
+    box-shadow:0 18px 42px rgba(0,0,0,0.40);
+    overflow:hidden;
+    backdrop-filter: blur(6px);
+  }
+
+  .ca-title { color:#ffffff; font-weight:950; font-size:28px; margin:0; letter-spacing:0.2px; }
+  .ca-sub { color:#e5e7eb; font-weight:800; font-size:13px; line-height:1.4; margin-top:6px; }
+  .ca-label { color:#ffffff; font-weight:900; font-size:12px; }
+  .ca-help { color:#9ca3af; font-weight:700; font-size:11px; }
+
+  .ca-input, .ca-select, .ca-text {
+    background:rgba(3,7,18,0.92) !important;
+    border:1px solid rgba(255,255,255,0.16) !important;
+    color:var(--text) !important;
+    font-weight:800 !important;
+    border-radius:14px !important;
+  }
+  .ca-input:focus, .ca-select:focus, .ca-text:focus {
+    border-color:var(--gold) !important;
+    box-shadow: 0 0 0 0.2rem rgba(250,204,21,0.14) !important;
+  }
+
+  .ca-lock {
+    border:1px solid rgba(250,204,21,0.30);
+    background: rgba(250,204,21,0.08);
+    color:#fde68a;
+    font-weight:900;
+    border-radius:16px;
+    padding:12px 14px;
+    font-size:12px;
+  }
+  .ca-badge { font-weight:900; border-radius:999px; padding:6px 10px; }
+
+  .topbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:12px;
+    flex-wrap:wrap;
+    margin-bottom:14px;
+  }
+
+  .pill{
+    text-decoration:none;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    padding:9px 14px;
+    border-radius:999px;
+    font-weight:950;
+    font-size:12px;
+    border:1px solid rgba(255,255,255,0.14);
+    background:rgba(255,255,255,0.06);
+    color:var(--text);
+    white-space:nowrap;
+    cursor:pointer;
+  }
+  .pill:hover{ opacity:0.95; color:var(--text); }
+  .pill-gold{
+    background:linear-gradient(145deg,#ffe39b,#e4c067);
+    color:#101010;
+    border-color:#f6d488;
+  }
+
+  .searchbox{
+    display:flex;
+    gap:8px;
+    align-items:center;
+    margin-bottom:6px;
+  }
+  .mini-btn{
+    height:38px;
+    padding:0 12px;
+    border-radius:14px;
+    border:1px solid rgba(255,255,255,0.14);
+    background:rgba(255,255,255,0.06);
+    color:var(--text);
+    font-weight:950;
+    font-size:12px;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .mini-btn:hover{ background:rgba(255,255,255,0.10); }
+
+  .money-wrap{
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .money-sign{
+    height:38px;
+    min-width:40px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border-radius:14px;
+    background:rgba(255,255,255,0.06);
+    border:1px solid rgba(255,255,255,0.14);
+    color:#ffe39b;
+    font-weight:950;
+  }
+
+  .date-wrap{
+    position:relative;
+  }
+  .date-icon{
+    position:absolute;
+    right:12px;
+    top:50%;
+    transform:translateY(-50%);
+    pointer-events:none;
+    color:#d1d5db;
+    font-weight:950;
+    font-size:12px;
+    opacity:0.9;
+  }
+
+  datalist option{ color:#000; }
+</style>
+
+<div class="container-fluid ca-wrap">
+  <div class="ca-shell">
+
+    <div class="topbar">
+      <div>
+        <h2 class="ca-title">Add Canada accounting entry</h2>
+        <div class="ca-sub">This page is locked to Canada entries only.</div>
+      </div>
+
+      <div class="d-flex gap-2 flex-wrap">
+        <a href="{% url 'accounting_entry_list' %}" class="pill">Back</a>
+        <a href="{% url 'accounting_ca_master' %}" class="pill pill-gold">Canada dashboard</a>
+      </div>
+    </div>
+
+    <div class="ca-lock mb-3">
+      Locked settings:
+      <span class="badge text-bg-secondary ca-badge">Side {{ lock_side|default:"CA" }}</span>
+      <span class="badge text-bg-success ca-badge">Direction {{ lock_direction|default:"IN" }}</span>
+      <span class="badge text-bg-primary ca-badge">Currency {{ lock_currency|default:"CAD" }}</span>
+      <span style="display:block;margin-top:6px;color:#e5e7eb;font-weight:800;">
+        These fields are hidden so nobody can change them by mistake.
+      </span>
+    </div>
+
+    <div class="card ca-card">
+      <div class="card-body p-3">
+
+        {% if form.errors %}
+          <div class="alert alert-danger fw-bold">
+            Please fix the errors and try again.
+          </div>
+        {% endif %}
+
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+
+          {% if form.side %}{{ form.side.as_hidden }}{% endif %}
+          {% if form.direction %}{{ form.direction.as_hidden }}{% endif %}
+          {% if form.currency %}{{ form.currency.as_hidden }}{% endif %}
+          {% if form.rate_to_cad %}{{ form.rate_to_cad.as_hidden }}{% endif %}
+          {% if form.rate_to_bdt %}{{ form.rate_to_bdt.as_hidden }}{% endif %}
+
+          <div class="row g-2">
+
+            <div class="col-md-3">
+              <div class="ca-label mb-1">Date</div>
+              <div class="date-wrap">
+                {{ form.date }}
+                <span class="date-icon">CAL</span>
+              </div>
+              {% if form.date.errors %}
+                <div class="text-danger small fw-bold mt-1">{{ form.date.errors }}</div>
+              {% endif %}
+            </div>
+
+            <div class="col-md-3">
+              <div class="ca-label mb-1">Status</div>
+              <input
+                list="status_list"
+                name="status"
+                id="id_status"
+                value="{{ form.status.value|default_if_none:'' }}"
+                class="form-control ca-input"
+                placeholder="Type or pick"
+              >
+              <datalist id="status_list">
+                <option value="PAID"></option>
+                <option value="UNPAID"></option>
+                <option value="PENDING"></option>
+                <option value="PARTIAL"></option>
+              </datalist>
+            </div>
+
+            <div class="col-md-3">
+              <div class="ca-label mb-1">Main type</div>
+              <input
+                list="maintype_list"
+                name="main_type"
+                id="id_main_type"
+                value="{{ form.main_type.value|default_if_none:'' }}"
+                class="form-control ca-input"
+                placeholder="Type or pick"
+              >
+              <datalist id="maintype_list">
+                <option value="INCOME"></option>
+                <option value="COGS"></option>
+                <option value="EXPENSE"></option>
+                <option value="TRANSFER"></option>
+                <option value="TAX"></option>
+                <option value="OTHER"></option>
+              </datalist>
+            </div>
+
+            <div class="col-md-3">
+              <div class="ca-label mb-1">Sub type</div>
+              <input
+                list="subtype_list"
+                name="sub_type"
+                id="id_sub_type"
+                value="{{ form.sub_type.value|default_if_none:'' }}"
+                class="form-control ca-input"
+                placeholder="Type or pick"
+              >
+              <datalist id="subtype_list">
+                <option value="Fabric"></option>
+                <option value="Trims"></option>
+                <option value="Printing"></option>
+                <option value="Embroidery"></option>
+                <option value="Packaging"></option>
+                <option value="Shipping"></option>
+                <option value="Rent"></option>
+                <option value="Utilities"></option>
+                <option value="Transport"></option>
+                <option value="Repair"></option>
+                <option value="Tax"></option>
+                <option value="Send to BD"></option>
+                <option value="Receive from CA"></option>
+                <option value="Swing Charge"></option>
+              </datalist>
+            </div>
+
+            <div class="col-md-4">
+              <div class="ca-label mb-1">Customer</div>
+
+              <div class="searchbox">
+                <input
+                  type="text"
+                  id="custSearch"
+                  class="form-control ca-input"
+                  placeholder="Search customer"
+                  autocomplete="off"
+                >
+                <button type="button" class="mini-btn" id="custClear">Clear</button>
+              </div>
+
+              {{ form.customer }}
+              <div class="ca-help mt-1">Type to filter, or use the dropdown.</div>
+            </div>
+
+            <div class="col-md-4">
+              <div class="ca-label mb-1">Opportunity</div>
+
+              <div class="searchbox">
+                <input
+                  type="text"
+                  id="oppSearch"
+                  class="form-control ca-input"
+                  placeholder="Search opportunity"
+                  autocomplete="off"
+                >
+                <button type="button" class="mini-btn" id="oppClear">Clear</button>
+              </div>
+
+              {{ form.opportunity }}
+              <div class="ca-help mt-1">Type to filter, or use the dropdown.</div>
+            </div>
+
+            <div class="col-md-4">
+              <div class="ca-label mb-1">Production order</div>
+
+              <div class="searchbox">
+                <input
+                  type="text"
+                  id="poSearch"
+                  class="form-control ca-input"
+                  placeholder="Search production order"
+                  autocomplete="off"
+                >
+                <button type="button" class="mini-btn" id="poClear">Clear</button>
+              </div>
+
+              {{ form.production_order }}
+              <div class="ca-help mt-1">Type to filter, or use the dropdown.</div>
+            </div>
+
+            <div class="col-md-4">
+              <div class="ca-label mb-1">Shipment</div>
+
+              <div class="searchbox">
+                <input
+                  type="text"
+                  id="shipSearch"
+                  class="form-control ca-input"
+                  placeholder="Search shipment"
+                  autocomplete="off"
+                >
+                <button type="button" class="mini-btn" id="shipClear">Clear</button>
+              </div>
+
+              {{ form.shipment }}
+              <div class="ca-help mt-1">Type to filter, or use the dropdown.</div>
+            </div>
+
+            <div class="col-md-4">
+              <div class="ca-label mb-1">Amount</div>
+
+              <div class="money-wrap">
+                <div class="money-sign">$</div>
+                <div style="flex:1;">
+                  {{ form.amount_original }}
+                </div>
+              </div>
+
+              <div class="ca-help mt-1">This is saved as CAD on Canada entry.</div>
+            </div>
+
+            <div class="col-md-6">
+              <div class="ca-label mb-1">Attachments</div>
+              {{ form.attachments }}
+              <div class="ca-help mt-1">You can add more than one file if your form supports it.</div>
+            </div>
+
+            <div class="col-12">
+              <div class="ca-label mb-1">Description</div>
+              {{ form.description }}
+            </div>
+
+            <div class="col-12">
+              <div class="ca-label mb-1">Internal note</div>
+              {{ form.internal_note }}
+            </div>
+
+          </div>
+
+          <div class="d-flex gap-2 flex-wrap mt-3">
+            <button type="submit" class="pill pill-gold">Save entry</button>
+            <a href="{% url 'accounting_entry_list' %}" class="pill">Cancel</a>
+          </div>
+
+        </form>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  (function () {
+    function addClasses(id){
+      const el = document.getElementById(id);
+      if (!el) return;
+      const tag = (el.tagName || "").toLowerCase();
+      if (tag === "select") el.classList.add("ca-select");
+      else if (tag === "textarea") el.classList.add("ca-text");
+      else el.classList.add("ca-input");
+    }
+
+    [
+      "id_date",
+      "id_customer","id_opportunity","id_production_order","id_shipment",
+      "id_amount_original","id_description","id_internal_note","id_attachments"
+    ].forEach(addClasses);
+
+    var dateEl = document.getElementById("id_date");
+    if (dateEl) {
+      dateEl.setAttribute("type", "date");
+      dateEl.setAttribute("inputmode", "none");
+      dateEl.classList.add("ca-input");
+
+      dateEl.addEventListener("focus", function(){
+        try { if (dateEl.showPicker) dateEl.showPicker(); } catch(e){}
+      });
+      dateEl.addEventListener("click", function(){
+        try { if (dateEl.showPicker) dateEl.showPicker(); } catch(e){}
+      });
+    }
+
+    function makeSearchable(selectId, searchId, clearId){
+      const sel = document.getElementById(selectId);
+      const inp = document.getElementById(searchId);
+      const clr = document.getElementById(clearId);
+      if (!sel || !inp) return;
+
+      const original = [];
+      for (let i = 0; i < sel.options.length; i++){
+        original.push({ value: sel.options[i].value, text: sel.options[i].text });
+      }
+
+      function rebuild(filterText){
+        const current = sel.value;
+        sel.innerHTML = "";
+
+        const q = (filterText || "").toLowerCase().trim();
+
+        for (let i = 0; i < original.length; i++){
+          const o = original[i];
+          const isEmpty = !o.value;
+          const txt = (o.text || "").toLowerCase();
+
+          if (isEmpty || !q || txt.indexOf(q) !== -1){
+            const opt = document.createElement("option");
+            opt.value = o.value;
+            opt.text = o.text;
+            sel.appendChild(opt);
+          }
+        }
+
+        sel.value = current;
+        if (sel.value !== current) sel.selectedIndex = 0;
+      }
+
+      inp.addEventListener("input", function(){ rebuild(inp.value); });
+
+      if (clr){
+        clr.addEventListener("click", function(){
+          inp.value = "";
+          rebuild("");
+        });
+      }
+    }
+
+    makeSearchable("id_customer", "custSearch", "custClear");
+    makeSearchable("id_opportunity", "oppSearch", "oppClear");
+    makeSearchable("id_production_order", "poSearch", "poClear");
+    makeSearchable("id_shipment", "shipSearch", "shipClear");
+  })();
+</script>
+
+{% endblock %}

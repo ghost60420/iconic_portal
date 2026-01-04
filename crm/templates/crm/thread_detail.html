@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Thread detail Iconic CRM</title>
+
+    <style>
+        body {
+            background: #050505;
+            color: #f5d580;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        a {
+            color: #f5d580;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .page {
+            max-width: 1100px;
+            margin: 20px auto 40px auto;
+            padding: 0 15px;
+        }
+
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .title-block h1 {
+            margin: 0;
+            font-size: 22px;
+        }
+        .title-meta {
+            margin-top: 6px;
+            font-size: 13px;
+            color: #d9c17a;
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            margin-right: 6px;
+        }
+        .pill-type {
+            background: #222;
+            border: 1px solid #444;
+            color: #f5d580;
+        }
+        .pill-active {
+            background: #1f3d1f;
+            border: 1px solid #3c7a3c;
+            color: #c5f5c5;
+        }
+        .pill-inactive {
+            background: #3d1f1f;
+            border: 1px solid #7a3c3c;
+            color: #f5c5c5;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-main {
+            background: #f5d580;
+            color: #000;
+        }
+        .btn-secondary {
+            background: #222;
+            color: #f5d580;
+            border: 1px solid #444;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 18px;
+        }
+        .card {
+            background: #111;
+            border-radius: 8px;
+            border: 1px solid #333;
+            padding: 14px;
+            font-size: 13px;
+        }
+        .card-title {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #f5d580;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px 18px;
+        }
+        .info-label {
+            font-size: 12px;
+            color: #b8a76a;
+        }
+        .info-value {
+            font-size: 13px;
+            color: #f7e6a8;
+        }
+
+        .meta-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px 18px;
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        .image-box {
+            background: #050505;
+            border-radius: 8px;
+            border: 1px solid #333;
+            padding: 10px;
+            text-align: center;
+        }
+        .image-box img {
+            max-width: 100%;
+            border-radius: 6px;
+            border: 1px solid #333;
+        }
+        .image-hint {
+            font-size: 12px;
+            color: #aaa;
+            margin-top: 6px;
+        }
+
+        @media (max-width: 800px) {
+            .layout {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+
+{% include "crm/navbar.html" %}
+
+<div class="page">
+
+    <div class="header-row">
+        <div class="title-block">
+            <h1>{{ thread.name }}</h1>
+            <div class="title-meta">Code {{ thread.thread_code }}</div>
+
+            <div style="margin-top: 8px;">
+                {% if thread.thread_type %}
+                    <span class="pill pill-type">{{ thread.thread_type }}</span>
+                {% endif %}
+
+                {% if thread.is_active %}
+                    <span class="pill pill-active">Active</span>
+                {% else %}
+                    <span class="pill pill-inactive">Inactive</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div>
+            <a href="{% url 'threads_list' %}" class="btn btn-secondary">Back</a>
+            <a href="{% url 'thread_edit' thread.pk %}" class="btn btn-main">Edit thread</a>
+        </div>
+    </div>
+
+    <div class="layout">
+
+        <!-- LEFT SIDE DETAILS -->
+        <div class="card">
+            <div class="card-title">Thread details</div>
+
+            <div class="info-grid">
+
+                <div>
+                    <div class="info-label">Thread type</div>
+                    <div class="info-value">
+                        {% if thread.thread_type %}{{ thread.thread_type }}{% else %}Not set{% endif %}
+                    </div>
+                </div>
+
+                <div>
+                    <div class="info-label">Color</div>
+                    <div class="info-value">
+                        {% if thread.color %}{{ thread.color }}{% else %}Not set{% endif %}
+                    </div>
+                </div>
+
+                <div>
+                    <div class="info-label">Count</div>
+                    <div class="info-value">
+                        {% if thread.count %}{{ thread.count }}{% else %}Not set{% endif %}
+                    </div>
+                </div>
+
+                <div>
+                    <div class="info-label">Brand</div>
+                    <div class="info-value">
+                        {% if thread.brand %}{{ thread.brand }}{% else %}Not set{% endif %}
+                    </div>
+                </div>
+
+                <div>
+                    <div class="info-label">Use for</div>
+                    <div class="info-value">
+                        {% if thread.use_for %}{{ thread.use_for }}{% else %}Not set{% endif %}
+                    </div>
+                </div>
+
+                <div>
+                    <div class="info-label">Price per cone</div>
+                    <div class="info-value">
+                        {% if thread.price_per_cone %}
+                            {{ thread.price_per_cone }}
+                        {% else %}
+                            Not set
+                        {% endif %}
+                    </div>
+                </div>
+
+            </div>
+
+            <br>
+
+            <div class="card-title" style="font-size: 13px;">Notes</div>
+            <div style="white-space: pre-wrap; font-size: 13px;">
+                {% if thread.notes %}
+                    {{ thread.notes }}
+                {% else %}
+                    No notes added yet.
+                {% endif %}
+            </div>
+
+            <br>
+
+            <div class="card-title" style="font-size: 13px;">Record info</div>
+            <div class="meta-grid">
+                <div>
+                    Created:
+                    {% if thread.created_at %}
+                        {{ thread.created_at|date:"Y m d H:i" }}
+                    {% else %}
+                        Not set
+                    {% endif %}
+                </div>
+                <div>
+                    Updated:
+                    {% if thread.updated_at %}
+                        {{ thread.updated_at|date:"Y m d H:i" }}
+                    {% else %}
+                        Not set
+                    {% endif %}
+                </div>
+            </div>
+
+        </div>
+
+        <!-- RIGHT SIDE IMAGE -->
+        <div class="card">
+            <div class="card-title">Thread image</div>
+
+            <div class="image-box">
+                {% if thread.image %}
+                    <img src="{{ thread.image.url }}" alt="{{ thread.name }}">
+                {% else %}
+                    <div class="image-hint">
+                        No image uploaded <br>
+                        Add one from the edit page.
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="image-hint">
+                Upload a clear reel or cone image for production reference.
+            </div>
+        </div>
+
+    </div>
+
+</div>
+</body>
+</html>

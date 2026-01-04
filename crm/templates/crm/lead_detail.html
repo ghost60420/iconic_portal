@@ -1,0 +1,666 @@
+{% extends "crm/base.html" %}
+{% load static %}
+
+{% block content %}
+
+<style>
+  .page {
+    max-width: 1200px;
+    margin: 18px auto 40px auto;
+    padding: 0 12px 20px 12px;
+    color: #f9fafb;
+    font-family: Arial, sans-serif;
+  }
+
+  a { color: #facc15; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+
+  h1 {
+    margin: 0 0 6px 0;
+    font-size: 22px;
+    color: #fef9c3;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    border: 1px solid #4b5563;
+    margin-left: 6px;
+  }
+  .badge-status { background: rgba(37, 99, 235, 0.1); border-color: #60a5fa; color: #bfdbfe; }
+  .badge-priority { background: rgba(234, 179, 8, 0.1); border-color: #facc15; color: #fef3c7; }
+
+  .tag {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: #020617;
+    border: 1px solid #374151;
+    margin-right: 5px;
+    font-size: 12px;
+    color: #e5e7eb;
+  }
+
+  .top-links a { margin-left: 10px; font-size: 13px; }
+
+  .section {
+    margin-top: 14px;
+    padding: 14px 14px 12px 14px;
+    border-radius: 12px;
+    border: 1px solid #1f2937;
+    background: radial-gradient(circle at top left, #111827, #020617);
+    box-shadow: 0 0 14px rgba(0, 0, 0, 0.6);
+  }
+
+  .section-title {
+    margin-top: 0;
+    margin-bottom: 8px;
+    font-size: 17px;
+    font-weight: 600;
+    color: #fefce8;
+  }
+
+  .section-row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .section-half { flex: 1; min-width: 260px; }
+
+  .row-label { font-weight: bold; width: 180px; font-size: 13px; color: #e5e7eb; }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 13px; }
+  th, td { border-bottom: 1px solid #1f2937; padding: 6px 8px; vertical-align: top; }
+  th {
+    background: #020617;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: #9ca3af;
+  }
+  tbody tr:nth-child(even) { background: rgba(15, 23, 42, 0.6); }
+  tbody tr:hover { background: rgba(30, 64, 175, 0.35); }
+
+  input, select, textarea {
+    background: #020617;
+    color: #f9fafb;
+    border: 1px solid #374151;
+    padding: 7px 10px;
+    border-radius: 8px;
+    font-size: 13px;
+  }
+  textarea { width: 100%; min-height: 80px; }
+  input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: #facc15;
+    box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.3);
+  }
+
+  button {
+    padding: 7px 12px;
+    border-radius: 999px;
+    border: 1px solid #fbbf24;
+    background: linear-gradient(135deg, #facc15, #f97316);
+    color: #111827;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  button:hover { filter: brightness(1.03); }
+  .button-ghost { background: #020617; color: #e5e7eb; border-color: #4b5563; }
+
+  .comment {
+    padding: 8px 10px;
+    margin-top: 6px;
+    border-radius: 8px;
+    background: #020617;
+    border: 1px solid #374151;
+    font-size: 13px;
+  }
+  .comment.pinned { border-color: #facc15; background: rgba(250, 204, 21, 0.08); }
+  .comment-meta { font-size: 11px; color: #e5e7eb; margin-bottom: 4px; }
+
+  .lead-ai-card {
+    background: radial-gradient(circle at top left, #111827, #020617);
+    border: 1px solid #1f2937;
+    border-radius: 12px;
+    padding: 12px;
+    margin-top: 14px;
+    box-shadow: 0 0 14px rgba(0, 0, 0, 0.6);
+    font-size: 13px;
+  }
+
+  .lead-ai-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .lead-ai-title { font-size: 14px; font-weight: 800; color: #fefce8; }
+  .lead-ai-note { font-size: 11px; color: #c0ae6c; margin-top: 2px; }
+
+  #lead-ai-question { width: 100%; }
+
+  #lead-ai-output {
+    margin-top: 10px;
+    background: #020617;
+    border-radius: 10px;
+    border: 1px solid #1f2937;
+    padding: 10px;
+    font-size: 12px;
+    white-space: pre-wrap;
+    min-height: 90px;
+    color: #e5e7eb;
+  }
+
+  #lead-ai-log {
+    margin-top: 8px;
+    max-height: 180px;
+    overflow-y: auto;
+    background: #020617;
+    border-radius: 10px;
+    border: 1px solid #1f2937;
+    padding: 8px;
+    font-size: 12px;
+  }
+
+  .small { font-size: 12px; color: #e5e7eb; }
+
+  .wa-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .wa-btn {
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:8px 12px;
+    border-radius:999px;
+    border:1px solid rgba(255,255,255,0.18);
+    background:#020617;
+    color:#f9fafb;
+    font-size:12px;
+    font-weight:800;
+  }
+  .wa-btn:hover { filter:brightness(1.05); text-decoration:none; }
+  .wa-green { border-color:#22c55e; }
+  .wa-gold { border-color:#facc15; }
+
+  .email-preview {
+    margin-top: 10px;
+    display: none;
+    border: 1px solid #1f2937;
+    border-radius: 10px;
+    background: #020617;
+    padding: 10px;
+    font-size: 12px;
+    white-space: pre-wrap;
+  }
+
+  @media (max-width: 768px) {
+    .top-bar { flex-direction: column; }
+  }
+</style>
+
+<div class="page">
+
+  <div class="top-bar">
+    <div>
+      <h1>
+        {{ lead.account_brand }}
+        <span class="badge badge-status">{{ lead.lead_status }}</span>
+        <span class="badge badge-priority">{{ lead.priority }}</span>
+      </h1>
+
+      <div>
+        <span class="tag">Lead {{ lead.lead_id }}</span>
+        <span class="tag">Market {{ lead.get_market_display }}</span>
+        {% if lead.country %}<span class="tag">{{ lead.country }}</span>{% endif %}
+      </div>
+
+      <div class="wa-row">
+        <a class="wa-btn wa-gold" target="_blank" href="https://wa.me/16045006009">📲 WhatsApp Iconic</a>
+        <a class="wa-btn wa-gold" href="{% url 'wa_inbox' %}">💬 WhatsApp Inbox</a>
+
+        {% if lead.phone %}
+          <a class="wa-btn wa-green" target="_blank"
+             href="https://wa.me/{{ lead.phone|cut:'+'|cut:' '|cut:'-'|cut:'('|cut:')' }}">
+            💬 WhatsApp Client
+          </a>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="top-links">
+      <a href="{% url 'leads_list' %}">All leads</a>
+      <a href="{% url 'edit_lead' lead.pk %}">Edit</a>
+      <a href="{% url 'calendar_add' %}?lead={{ lead.pk }}">Add follow up</a>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2 class="section-title">Lead information</h2>
+
+    <div class="section-row">
+      <div class="section-half">
+        <table>
+          <tr><td class="row-label">Contact name</td><td>{{ lead.contact_name }}</td></tr>
+          <tr><td class="row-label">Email</td><td>{{ lead.email }}</td></tr>
+          <tr><td class="row-label">Phone</td><td>{{ lead.phone }}</td></tr>
+          <tr><td class="row-label">Website</td><td>{{ lead.company_website }}</td></tr>
+          <tr><td class="row-label">City</td><td>{{ lead.city }}</td></tr>
+          <tr><td class="row-label">Owner</td><td>{{ lead.owner }}</td></tr>
+        </table>
+      </div>
+
+      <div class="section-half">
+        <table>
+          <tr><td class="row-label">Product interest</td><td>{{ lead.product_interest }}</td></tr>
+          <tr><td class="row-label">Order quantity</td><td>{{ lead.order_quantity }}</td></tr>
+
+          <!-- CHANGE 1: Budget shows CAD and BDT -->
+          <tr>
+            <td class="row-label">Budget</td>
+            <td>
+              <div>CAD {{ budget_cad }}</div>
+              {% if budget_bdt and budget_bdt > 0 %}
+                <div style="margin-top:4px;color:#9ca3af;">
+                  BDT {{ budget_bdt }}
+                  {% if cad_to_bdt and cad_to_bdt > 0 %}
+                    <span style="color:#6b7280;">(1 CAD = {{ cad_to_bdt }})</span>
+                  {% endif %}
+                </div>
+              {% endif %}
+            </td>
+          </tr>
+
+          <tr><td class="row-label">Source</td><td>{{ lead.source }}</td></tr>
+          <tr><td class="row-label">Lead type</td><td>{{ lead.lead_type }}</td></tr>
+          <tr><td class="row-label">Next follow up</td><td>{{ lead.next_followup }}</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <table style="margin-top: 10px;">
+      <tr>
+        <td class="row-label">Attachment</td>
+        <td>
+          {% if lead.attachment %}
+            <a href="{{ lead.attachment.url }}" target="_blank">Download</a>
+          {% else %}
+            None
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td class="row-label">Notes</td>
+        <td>{{ lead.notes|linebreaksbr }}</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2 class="section-title">Client profile and convert</h2>
+    <p class="small">This will create an opportunity and customer record from this lead.</p>
+    <form method="post" action="{% url 'convert_lead_to_opportunity' lead.pk %}">
+      {% csrf_token %}
+      <button type="submit">Convert to opportunity ✅</button>
+    </form>
+  </div>
+
+  <div class="section">
+    <h2 class="section-title">Tasks and reminders</h2>
+
+    <form method="post" style="margin-bottom: 10px;">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="add_task">
+
+      <div class="section-row">
+        <div class="section-half">
+          <label>Title</label>
+          <input type="text" name="task_title">
+
+          <label style="margin-top:6px;">Assigned to</label>
+          <input type="text" name="task_assigned_to">
+        </div>
+
+        <div class="section-half">
+          <label>Due date</label>
+
+          <!-- CHANGE 2: Date picker (already calendar in browser) -->
+          <input type="date" name="task_due_date">
+
+          <label style="margin-top:6px;">Priority</label>
+          <select name="task_priority">
+            <option value="Low">Low</option>
+            <option value="Medium" selected>Medium</option>
+            <option value="High">High</option>
+            <option value="Hot">Hot</option>
+          </select>
+        </div>
+      </div>
+
+      <label style="margin-top:8px;display:block;">Description</label>
+      <textarea name="task_description"></textarea>
+
+      <button type="submit" style="margin-top:8px;">Add task</button>
+    </form>
+
+    {% if tasks %}
+      <table>
+        <thead>
+          <tr>
+            <th>Title</th><th>Due</th><th>Status</th><th>Priority</th><th>Assigned</th><th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in tasks %}
+            <tr>
+              <td>{{ t.title }}</td>
+              <td>{{ t.due_date }}</td>
+              <td>{{ t.status }}</td>
+              <td>{{ t.priority }}</td>
+              <td>{{ t.assigned_to }}</td>
+              <td>
+                {% if t.status != "Done" %}
+                  <form method="post" style="display:inline;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="complete_task">
+                    <input type="hidden" name="task_id" value="{{ t.id }}">
+                    <button type="submit" class="button-ghost">Mark done</button>
+                  </form>
+                {% else %}
+                  Done
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="small">No tasks yet.</p>
+    {% endif %}
+  </div>
+
+  <div class="section">
+    <h2 class="section-title">Chatter feed</h2>
+
+    <form method="post" style="margin-bottom: 10px;">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="add_comment">
+      <label>Add internal note</label>
+      <textarea name="comment_text"></textarea>
+      <button type="submit" style="margin-top:6px;">Add note</button>
+    </form>
+
+    {% if comments %}
+      {% for c in comments %}
+        <div class="comment {% if c.pinned %}pinned{% endif %}">
+          <div class="comment-meta">
+            {{ c.created_at|date:"Y-m-d H:i" }}
+            {% if c.author %} — {{ c.author }}{% endif %}
+            {% if c.is_ai %} (AI){% endif %}
+          </div>
+          <div>{{ c.content|linebreaksbr }}</div>
+
+          <form method="post" style="margin-top: 4px;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="toggle_pin_comment">
+            <input type="hidden" name="comment_id" value="{{ c.id }}">
+            <button type="submit" class="button-ghost">
+              {% if c.pinned %}Unpin{% else %}Pin{% endif %}
+            </button>
+          </form>
+        </div>
+      {% endfor %}
+    {% else %}
+      <p class="small">No notes yet.</p>
+    {% endif %}
+  </div>
+
+  <div class="lead-ai-card">
+    <div class="lead-ai-header">
+      <div>
+        <div class="lead-ai-title">Lead AI brain 🤖</div>
+        <div class="lead-ai-note">Fast summary, next step, and reply ideas.</div>
+      </div>
+
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button type="button" id="btn-suggest">✨ Suggest</button>
+        <button type="button" class="button-ghost" id="btn-thanks">✉️ Thank you</button>
+        <button type="button" class="button-ghost" id="btn-meet">📅 Confirm meeting</button>
+      </div>
+    </div>
+
+    <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
+      <div style="flex:1; min-width:260px;">
+        <input id="lead-ai-question" type="text" placeholder="Ask your own question about this lead">
+      </div>
+      <div>
+        <button type="button" id="lead-ai-chat-btn" class="button-ghost">Ask AI</button>
+      </div>
+      <div style="display:flex; align-items:center;">
+        <span id="lead-ai-status" style="font-size:11px;color:#9ca3af;"></span>
+      </div>
+    </div>
+
+    <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
+      <div style="min-width:200px;">
+        <div class="small" style="margin-bottom:6px;">Meeting date</div>
+        <input type="date" id="meeting-date">
+      </div>
+      <div style="min-width:200px;">
+        <div class="small" style="margin-bottom:6px;">Meeting time</div>
+        <input type="time" id="meeting-time">
+      </div>
+      <div style="min-width:140px;">
+        <div class="small" style="margin-bottom:6px;">Time zone</div>
+        <select id="meeting-tz">
+          <option value="PST" selected>PST</option>
+          <option value="EST">EST</option>
+          <option value="CST">CST</option>
+          <option value="MST">MST</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="lead-ai-output">AI answer will appear here.</div>
+
+    <div class="email-preview" id="email-preview">
+      <div><strong>Subject:</strong> <span id="email-subject"></span></div>
+      <div style="margin-top:8px;"><strong>Body:</strong></div>
+      <div id="email-body"></div>
+    </div>
+
+    <div id="lead-ai-log">
+      <div style="color:#6b7280;font-size:11px;">AI history will show here.</div>
+    </div>
+
+    <form id="lead-ai-csrf" style="display:none;">{% csrf_token %}</form>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  const outBox = document.getElementById("lead-ai-output");
+  const statusBox = document.getElementById("lead-ai-status");
+  const logBox = document.getElementById("lead-ai-log");
+  const qInput = document.getElementById("lead-ai-question");
+  const chatBtn = document.getElementById("lead-ai-chat-btn");
+
+  const btnSuggest = document.getElementById("btn-suggest");
+  const btnThanks = document.getElementById("btn-thanks");
+  const btnMeet = document.getElementById("btn-meet");
+
+  const dateEl = document.getElementById("meeting-date");
+  const timeEl = document.getElementById("meeting-time");
+  const tzEl = document.getElementById("meeting-tz");
+
+  const emailPreview = document.getElementById("email-preview");
+  const emailSubject = document.getElementById("email-subject");
+  const emailBody = document.getElementById("email-body");
+
+  function getCsrf() {
+    const t = document.querySelector("#lead-ai-csrf input[name='csrfmiddlewaretoken']");
+    return t ? t.value : "";
+  }
+
+  function appendChat(senderLabel, text) {
+    const div = document.createElement("div");
+    div.style.marginBottom = "6px";
+    div.innerHTML = "<strong>" + senderLabel + "</strong>: " + (text || "");
+    logBox.appendChild(div);
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+
+  function postForm(url, dataObj) {
+    return fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "X-CSRFToken": getCsrf()
+      },
+      body: new URLSearchParams(dataObj || {})
+    }).then(r => r.json());
+  }
+
+  function showEmail(subject, body) {
+    emailPreview.style.display = "block";
+    emailSubject.textContent = subject || "";
+    emailBody.textContent = body || "";
+  }
+
+  function clearEmail() {
+    emailPreview.style.display = "none";
+    emailSubject.textContent = "";
+    emailBody.textContent = "";
+  }
+
+  function callSuggest() {
+    statusBox.textContent = "Thinking...";
+    outBox.textContent = "";
+    clearEmail();
+
+    postForm("{% url 'ai_lead_suggest' lead.pk %}", {})
+      .then(function (data) {
+        if (data.ok) {
+          outBox.textContent = data.answer || "No answer.";
+          appendChat("AI", data.answer || "");
+          statusBox.textContent = "Ready ✅";
+        } else {
+          outBox.textContent = data.error || "AI error.";
+          statusBox.textContent = "";
+        }
+      })
+      .catch(function () {
+        outBox.textContent = "Error talking to AI.";
+        statusBox.textContent = "";
+      });
+  }
+
+  function callChat(userText) {
+    statusBox.textContent = "Thinking...";
+    outBox.textContent = "";
+    clearEmail();
+
+    postForm("{% url 'ai_lead_suggest' lead.pk %}", { q: userText })
+      .then(function (data) {
+        if (data.ok) {
+          outBox.textContent = data.answer || "No answer.";
+          appendChat("AI", data.answer || "");
+          statusBox.textContent = "Ready ✅";
+        } else {
+          outBox.textContent = data.error || "AI error.";
+          statusBox.textContent = "";
+        }
+      })
+      .catch(function () {
+        outBox.textContent = "Error talking to AI.";
+        statusBox.textContent = "";
+      });
+  }
+
+  function callThankYou() {
+    statusBox.textContent = "Sending...";
+    outBox.textContent = "";
+    clearEmail();
+
+    postForm("{% url 'ai_lead_send_thankyou' lead.pk %}", {})
+      .then(function (data) {
+        if (data.ok) {
+          outBox.textContent = "Thank you email sent ✅";
+          appendChat("AI", "Thank you email sent ✅");
+          showEmail(data.subject, data.body);
+          statusBox.textContent = "Done ✅";
+        } else {
+          outBox.textContent = data.error || "Could not send.";
+          statusBox.textContent = "";
+        }
+      })
+      .catch(function () {
+        outBox.textContent = "Error sending email.";
+        statusBox.textContent = "";
+      });
+  }
+
+  function callMeetingConfirm() {
+    const d = (dateEl && dateEl.value) ? dateEl.value : "";
+    const t = (timeEl && timeEl.value) ? timeEl.value : "";
+    const z = (tzEl && tzEl.value) ? tzEl.value : "PST";
+
+    if (!d || !t) {
+      outBox.textContent = "Please set meeting date and time first.";
+      return;
+    }
+
+    statusBox.textContent = "Sending...";
+    outBox.textContent = "";
+    clearEmail();
+
+    postForm("{% url 'ai_lead_send_meeting_confirm' lead.pk %}", {
+      meeting_date: d,
+      meeting_time: t,
+      meeting_tz: z
+    })
+    .then(function (data) {
+      if (data.ok) {
+        outBox.textContent = "Meeting confirm email sent ✅";
+        appendChat("AI", "Meeting confirm email sent ✅");
+        showEmail(data.subject, data.body);
+        statusBox.textContent = "Done ✅";
+      } else {
+        outBox.textContent = data.error || "Could not send.";
+        statusBox.textContent = "";
+      }
+    })
+    .catch(function () {
+      outBox.textContent = "Error sending email.";
+      statusBox.textContent = "";
+    });
+  }
+
+  if (btnSuggest) btnSuggest.addEventListener("click", callSuggest);
+
+  if (chatBtn && qInput) {
+    chatBtn.addEventListener("click", function () {
+      const q = (qInput.value || "").trim();
+      if (!q) return;
+      appendChat("You", q);
+      qInput.value = "";
+      callChat(q);
+    });
+  }
+
+  if (btnThanks) btnThanks.addEventListener("click", callThankYou);
+  if (btnMeet) btnMeet.addEventListener("click", callMeetingConfirm);
+})();
+</script>
+
+{% endblock %}

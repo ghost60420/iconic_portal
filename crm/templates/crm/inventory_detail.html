@@ -1,0 +1,397 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+<style>
+  /* Page wrapper for inventory screens */
+  .inv-page {
+      max-width: 1180px;
+      margin: 0 auto;
+  }
+
+  /* Cards */
+  .inv-detail-card {
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 12px;
+      height: auto;              /* important: no forced 100% height */
+  }
+
+  .inv-detail-header-badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(245,213,128,0.08);
+      border: 1px solid rgba(245,213,128,0.4);
+      color: #f5d580;
+  }
+
+  .inv-detail-stat {
+      background: #151515;
+      border-radius: 8px;
+      padding: 8px 10px;
+      border: 1px solid #2a2a2a;
+      margin-bottom: 8px;
+  }
+
+  .inv-detail-stat-label {
+      font-size: 12px;
+      color: #d0d0d0;
+  }
+
+  .inv-detail-stat-value {
+      font-size: 16px;
+      color: #ffffff;
+      font-weight: 600;
+  }
+
+  .inv-detail-image-box {
+      background: #151515;
+      border-radius: 10px;
+      border: 1px solid #2b2b2b;
+      overflow: hidden;
+      margin-bottom: 10px;
+  }
+
+  .inv-detail-image-box img {
+      width: 100%;
+      max-height: 240px;
+      object-fit: cover;
+      display: block;
+  }
+
+  .badge-soft {
+      background: rgba(245,213,128,0.12);
+      border: 1px solid rgba(245,213,128,0.4);
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 11px;
+      color: #f5d580;
+  }
+
+  .smart-card {
+      background: #131313;
+      border-radius: 10px;
+      border: 1px solid #333;
+      padding: 10px;
+      height: auto;
+  }
+
+  .smart-chip {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(245,213,128,0.12);
+      border: 1px solid rgba(245,213,128,0.4);
+      color: #f5d580;
+  }
+
+  .reorder-history-box {
+      background: #111;
+      border-radius: 10px;
+      border: 1px solid #333;
+      padding: 10px;
+      margin-top: 10px;
+  }
+
+  .reorder-row {
+      font-size: 13px;
+      border-bottom: 1px solid #262626;
+      padding: 5px 0;
+  }
+  .reorder-row:last-child {
+      border-bottom: none;
+  }
+
+  /* Make muted text readable only on inventory pages */
+  .inv-page .text-muted {
+      color: #cfcfcf !important;
+  }
+
+  .inv-page small,
+  .inv-page .small {
+      font-size: 12px;
+      color: #cfcfcf;
+  }
+</style>
+
+<div class="container mt-4 inventory-detail-page">
+
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-start mb-3">
+    <div>
+      <div class="d-flex align-items-center gap-2 mb-1">
+        <h2 class="mb-0 text-light" style="font-size: 22px;">{{ item.name }}</h2>
+        {% if item.is_active %}
+          <span class="badge bg-success">Active</span>
+        {% else %}
+          <span class="badge bg-secondary">Inactive</span>
+        {% endif %}
+      </div>
+      <div class="inv-muted">
+        Category: {{ item.get_category_display }} /
+        Code: {{ item.code|default:"Not set" }} /
+        SKU: {{ item.sku|default:"Not set" }}
+      </div>
+    </div>
+
+    <div class="d-flex inv-header-actions">
+      <a href="{% url 'inventory_list' %}" class="btn btn-outline-light me-2">
+        Back to inventory
+      </a>
+      <a href="{% url 'inventory_detail_pdf' item.pk %}" class="btn btn-outline-info me-2">
+        Download PDF
+      </a>
+      <a href="{% url 'inventory_edit' item.pk %}" class="btn btn-warning me-2">
+        Edit item
+      </a>
+      <form action="{% url 'inventory_delete' item.pk %}" method="post"
+            onsubmit="return confirm('Delete this inventory item?');">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-outline-danger">
+          Delete
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="row">
+
+    <!-- Left side -->
+    <div class="col-md-4 mb-3">
+
+      <!-- Image -->
+      <div class="inv-detail-image-box">
+        {% if item.image %}
+          <img src="{{ item.image.url }}" alt="{{ item.name }}">
+        {% else %}
+          <div class="d-flex justify-content-center align-items-center"
+               style="height:200px; color:#b3b3b3; font-size:13px;">
+            No image uploaded
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- Linked records -->
+      <div class="inv-detail-card">
+        <div class="d-flex justify-content-between mb-2">
+          <span class="inv-small-label">Linked records</span>
+          <span class="inv-detail-header-badge">Library links</span>
+        </div>
+
+        <div class="mb-2">
+          {% if item.product %}<span class="badge-soft me-1">Product</span>{% endif %}
+          {% if item.fabric %}<span class="badge-soft me-1">Fabric</span>{% endif %}
+          {% if item.accessory %}<span class="badge-soft me-1">Accessory</span>{% endif %}
+          {% if item.trim %}<span class="badge-soft me-1">Trim</span>{% endif %}
+          {% if item.thread_option %}<span class="badge-soft me-1">Thread</span>{% endif %}
+          {% if not item.product and not item.fabric and not item.accessory and not item.trim and not item.thread_option %}
+            <span class="inv-muted">No linked item yet</span>
+          {% endif %}
+        </div>
+
+        <div class="inv-muted">
+          Location: {{ item.location|default:"Not set" }}<br>
+          Unit type: {{ item.unit_type|default:"Not set" }}<br>
+          Created: {{ item.created_at|date:"Y M d" }}<br>
+          Updated: {{ item.updated_at|date:"Y M d" }}
+        </div>
+      </div>
+
+      <!-- Notes -->
+      <div class="inv-detail-card">
+        <div class="d-flex justify-content-between mb-2">
+          <span class="inv-small-label">Notes</span>
+        </div>
+        {% if item.notes %}
+          <pre class="mb-0"
+               style="white-space:pre-wrap; font-size:13px; color:#e5e5e5; background:none; border:none; padding:0;">
+{{ item.notes }}</pre>
+        {% else %}
+          <span class="inv-muted">No notes saved for this item.</span>
+        {% endif %}
+      </div>
+
+    </div>
+
+    <!-- Right side -->
+    <div class="col-md-8 mb-3">
+
+      <!-- Stock and value -->
+      <div class="inv-detail-card">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div class="inv-small-label">Stock and value</div>
+          {% if item.min_level and item.quantity and item.quantity <= item.min_level %}
+            <span class="badge bg-danger">Low stock</span>
+          {% endif %}
+        </div>
+
+        <div class="row inv-tight-row">
+          <div class="col-sm-6 col-lg-4">
+            <div class="inv-detail-stat">
+              <div class="inv-detail-stat-label">📦 Quantity</div>
+              <div class="inv-detail-stat-value">
+                {{ item.quantity|default:"0" }} {{ item.unit_type }}
+              </div>
+            </div>
+          </div>
+
+          <div class="col-sm-6 col-lg-4">
+            <div class="inv-detail-stat">
+              <div class="inv-detail-stat-label">🎯 Minimum level</div>
+              <div class="inv-detail-stat-value">
+                {{ item.min_level|default:"0" }}
+              </div>
+            </div>
+          </div>
+
+          <div class="col-sm-6 col-lg-4">
+            <div class="inv-detail-stat">
+              <div class="inv-detail-stat-label">💰 Unit cost</div>
+              <div class="inv-detail-stat-value">
+                {% if item.unit_cost %}
+                  {{ item.unit_cost }}
+                {% else %}
+                  Not set
+                {% endif %}
+              </div>
+            </div>
+          </div>
+
+          <div class="col-sm-6 col-lg-4">
+            <div class="inv-detail-stat">
+              <div class="inv-detail-stat-label">📊 Total value</div>
+              <div class="inv-detail-stat-value">
+                {% if total_value %}
+                  {{ total_value }}
+                {% else %}
+                  Not available
+                {% endif %}
+              </div>
+            </div>
+          </div>
+
+          <div class="col-sm-6 col-lg-4">
+            <div class="inv-detail-stat">
+              <div class="inv-detail-stat-label">📍 Location</div>
+              <div class="inv-detail-stat-value">
+                {{ item.location|default:"Not set" }}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {% if item.min_level and item.quantity and item.quantity <= item.min_level %}
+          <div class="alert alert-warning mt-2 mb-0 small">
+            This item is at or under the minimum level. Please plan a reorder.
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- SmartBrain and Quick reorder row -->
+      <div class="row">
+        <!-- SmartBrain -->
+        <div class="col-md-6 mb-3">
+          <div class="smart-card">
+            <div class="d-flex justify-content-between mb-1">
+              <span class="text-warning">SmartBrain insights</span>
+              <span class="smart-chip">AI SmartBrain</span>
+            </div>
+            <div id="smartbrain-detail-text" class="inv-muted mb-2">
+              This area will show AI advice for this item later.
+              It can explain reorder ideas and stock risk in simple English.
+            </div>
+            <button type="button"
+                    class="btn btn-outline-warning btn-sm w-100"
+                    disabled>
+              SmartBrain live link coming soon
+            </button>
+          </div>
+        </div>
+
+        <!-- Quick reorder -->
+        <div class="col-md-6 mb-3" id="reorder-box">
+          <div class="smart-card">
+            <div class="d-flex justify-content-between mb-1">
+              <span class="text-light">Quick reorder</span>
+              <span class="inv-detail-header-badge">For this item</span>
+            </div>
+
+            <form method="post">
+              {% csrf_token %}
+              <input type="hidden" name="quick_reorder" value="1">
+
+              <div class="mb-2">
+                <label class="form-label inv-small-label">
+                  Reorder quantity
+                </label>
+                <input type="number"
+                       step="0.01"
+                       name="reorder_quantity"
+                       class="form-control form-control-sm"
+                       placeholder="Example 50">
+              </div>
+
+              <div class="mb-2">
+                <label class="form-label inv-small-label">
+                  Note
+                </label>
+                <textarea name="reorder_note"
+                          rows="2"
+                          class="form-control form-control-sm"
+                          placeholder="For which buyer, style or shipment"></textarea>
+              </div>
+
+              <button type="submit" class="btn btn-warning w-100 btn-sm">
+                Save reorder for this item
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reorder history -->
+      <div class="reorder-history-box">
+        <div class="d-flex justify-content-between mb-1">
+          <span class="inv-small-label">Reorder history</span>
+          <span class="inv-muted">
+            Showing last 10 records
+          </span>
+        </div>
+
+        {% if reorders %}
+          {% for r in reorders %}
+            <div class="reorder-row d-flex justify-content-between">
+              <div>
+                <div style="color:#f5f5f5;">
+                  {{ r.quantity }} {{ item.unit_type }}
+                </div>
+                <div class="inv-muted">
+                  {{ r.created_at|date:"Y M d H:i" }}
+                  {% if r.note %}
+                    · {{ r.note }}
+                  {% endif %}
+                </div>
+              </div>
+              <div class="inv-muted text-end">
+                {% if r.created_by %}
+                  By {{ r.created_by.username }}
+                {% else %}
+                  User not set
+                {% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="inv-muted">
+            No reorder records yet for this item.
+          </div>
+        {% endif %}
+      </div>
+
+    </div>
+  </div>
+
+</div>
+{% endblock %}

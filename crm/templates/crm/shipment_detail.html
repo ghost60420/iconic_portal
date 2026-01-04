@@ -1,0 +1,396 @@
+{% extends "crm/base.html" %}
+{% block content %}
+
+<style>
+  .ship-page {
+    max-width: 960px;
+    margin: 16px auto;
+    padding: 0 10px 24px 10px;
+    color: #f9fafb;
+  }
+
+  .ship-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+
+  .ship-title {
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  .ship-subtitle {
+    font-size: 12px;
+    color: #9ca3af;
+  }
+
+  .ship-actions .btn {
+    margin-left: 4px;
+    margin-bottom: 4px;
+  }
+
+  .btn {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-size: 12px;
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .btn-slate {
+    background: #020617;
+    color: #e5e7eb;
+    border-color: #374151;
+  }
+
+  .btn-gold {
+    background: linear-gradient(135deg, #facc15, #f97316);
+    color: #111827;
+    border-color: #fbbf24;
+    font-weight: 600;
+  }
+
+  .btn-soft {
+    background: rgba(148, 163, 184, 0.2);
+    color: #e5e7eb;
+    border-color: #64748b;
+  }
+
+  .btn-small {
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid #4b5563;
+    font-size: 11px;
+    background: #020617;
+    color: #e5e7eb;
+  }
+
+  .pill-green {
+    border-color: #22c55e;
+    color: #bbf7d0;
+    background: rgba(22, 163, 74, 0.25);
+  }
+
+  .pill-orange {
+    border-color: #f97316;
+    color: #fed7aa;
+    background: rgba(248, 113, 113, 0.15);
+  }
+
+  .pill-sky {
+    border-color: #0ea5e9;
+    color: #bae6fd;
+    background: rgba(8, 47, 73, 0.7);
+  }
+
+  .card-shell {
+    background: radial-gradient(circle at top left, #111827, #020617);
+    border: 1px solid #1f2937;
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.7);
+  }
+
+  .card-shell + .card-shell {
+    margin-top: 12px;
+  }
+
+  .card-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    border-bottom: 1px solid #111827;
+    padding-bottom: 4px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .card-title-row span.emoji {
+    margin-right: 4px;
+  }
+
+  .ship-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 18px;
+    row-gap: 4px;
+    font-size: 13px;
+  }
+
+  .ship-row {
+    display: flex;
+    margin-bottom: 2px;
+  }
+
+  .ship-label {
+    color: #9ca3af;
+    width: 130px;
+    font-size: 12px;
+  }
+
+  .ship-value {
+    font-size: 13px;
+    color: #f9fafb;
+  }
+
+  .muted {
+    color: #9ca3af;
+    font-size: 12px;
+  }
+
+  @media (max-width: 768px) {
+    .ship-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .ship-label {
+      width: 120px;
+    }
+  }
+</style>
+
+<div class="ship-page">
+
+  <!-- header -->
+  <div class="ship-header">
+    <div>
+      <div class="ship-title">
+        📦 Shipment detail
+      </div>
+      <div class="ship-subtitle">
+        ID {{ shipment.id }}{% if shipment.ship_date %} • Ship date {{ shipment.ship_date }}{% endif %}
+      </div>
+    </div>
+
+    <div class="ship-actions">
+      <a href="{% url 'shipment_list' %}" class="btn btn-slate btn-small">Back to list</a>
+      <a href="{% url 'shipment_edit' shipment.pk %}" class="btn btn-soft btn-small">Edit</a>
+
+      {% if shipment.customer and shipment.customer.email %}
+        <a href="{% url 'shipment_notify_customer' shipment.pk %}" class="btn btn-gold btn-small">
+          Email customer
+        </a>
+      {% endif %}
+
+      <a href="{% url 'shipment_refresh_tracking' shipment.pk %}" class="btn btn-soft btn-small">
+        Refresh tracking
+      </a>
+    </div>
+  </div>
+
+  <!-- summary strip -->
+  <div class="card-shell" style="margin-bottom:10px;">
+    <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+      <span class="pill pill-sky">
+        {{ shipment.get_carrier_display }}{% if shipment.shipment_type %} • {{ shipment.get_shipment_type_display }}{% endif %}
+      </span>
+
+      {% if shipment.ship_date %}
+        <span class="pill">
+          Ship date {{ shipment.ship_date }}
+        </span>
+      {% endif %}
+
+      <span class="pill {% if shipment.status == 'delivered' %}pill-green{% else %}pill-orange{% endif %}">
+        Status {{ shipment.get_status_display }}
+      </span>
+
+      {% if shipment.cost_bdt %}
+        <span class="pill pill-green">
+          Cost {{ shipment.cost_bdt }} taka
+        </span>
+      {% endif %}
+
+      {% if shipment.cost_cad %}
+        <span class="pill">
+          Cost {{ shipment.cost_cad }} cad
+        </span>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- main info cards -->
+  <div class="card-shell">
+    <div class="card-title-row">
+      <div>
+        <span class="emoji">🚚</span> Shipping info
+      </div>
+    </div>
+
+    <div class="ship-grid">
+
+      <div class="ship-row">
+        <div class="ship-label">Carrier</div>
+        <div class="ship-value">{{ shipment.get_carrier_display }}</div>
+      </div>
+
+      <div class="ship-row">
+        <div class="ship-label">Tracking</div>
+        <div class="ship-value">
+          {% if shipment.tracking_number %}
+            {% if shipment.tracking_url %}
+              <a href="{{ shipment.tracking_url }}" target="_blank" style="color:#fbbf24;">
+                {{ shipment.tracking_number }}
+              </a>
+            {% else %}
+              {{ shipment.tracking_number }}
+            {% endif %}
+          {% else %}
+            <span class="muted">Not set</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="ship-row">
+        <div class="ship-label">Ship date</div>
+        <div class="ship-value">
+          {% if shipment.ship_date %}
+            {{ shipment.ship_date }}
+          {% else %}
+            <span class="muted">Not set</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="ship-row">
+        <div class="ship-label">Shipment type</div>
+        <div class="ship-value">
+          {% if shipment.shipment_type %}
+            {{ shipment.get_shipment_type_display }}
+          {% else %}
+            <span class="muted">Not set</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="ship-row">
+        <div class="ship-label">Boxes</div>
+        <div class="ship-value">
+          {% if shipment.box_count %}
+            {{ shipment.box_count }}
+          {% else %}
+            <span class="muted">Not set</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="ship-row">
+        <div class="ship-label">Total weight kg</div>
+        <div class="ship-value">
+          {% if shipment.total_weight_kg %}
+            {{ shipment.total_weight_kg }}
+          {% else %}
+            <span class="muted">Not set</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="ship-row">
+        <div class="ship-label">Cost taka</div>
+        <div class="ship-value">
+          {% if shipment.cost_bdt %}
+            {{ shipment.cost_bdt }}
+          {% else %}
+            <span class="muted">Not set</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="ship-row">
+        <div class="ship-label">Cost cad</div>
+        <div class="ship-value">
+          {% if shipment.cost_cad %}
+            {{ shipment.cost_cad }}
+          {% else %}
+            <span class="muted">Not set</span>
+          {% endif %}
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="card-shell">
+    <div class="card-title-row">
+      <div>
+        <span class="emoji">👥</span> Linked records
+      </div>
+    </div>
+
+    <div class="ship-row">
+      <div class="ship-label">Opportunity</div>
+      <div class="ship-value">
+        {% if shipment.opportunity %}
+          <a href="{% url 'opportunity_detail' shipment.opportunity.pk %}" style="color:#fbbf24;">
+            {{ shipment.opportunity.opportunity_id }}
+          </a>
+        {% else %}
+          <span class="muted">None</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="ship-row">
+      <div class="ship-label">Order</div>
+      <div class="ship-value">
+        {% if shipment.order %}
+          <a href="{% url 'production_detail' shipment.order.pk %}" style="color:#fbbf24;">
+            {{ shipment.order.order_code }} {{ shipment.order.title }}
+          </a>
+        {% else %}
+          <span class="muted">None</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="ship-row">
+      <div class="ship-label">Customer</div>
+      <div class="ship-value">
+        {% if shipment.customer %}
+          {{ shipment.customer.name|default:shipment.customer }}
+        {% else %}
+          <span class="muted">None</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="card-shell">
+    <div class="card-title-row">
+      <div>
+        <span class="emoji">📝</span> Notes
+      </div>
+    </div>
+    <p class="ship-value" style="margin-bottom:0;">
+      {% if shipment.notes %}
+        {{ shipment.notes|linebreaksbr }}
+      {% else %}
+        <span class="muted">No notes for this shipment.</span>
+      {% endif %}
+    </p>
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% if shipment.customer and shipment.customer.email %}
+<a href="{% url 'shipment_notify_customer' shipment.pk %}" 
+   class="btn btn-gold btn-small">
+  Email customer
+</a>
+{% endif %}

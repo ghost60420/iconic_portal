@@ -1,0 +1,332 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Accessory detail Iconic CRM</title>
+    <style>
+        body {
+            background: #050505;
+            color: #f5d580;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        a {
+            color: #f5d580;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .page {
+            max-width: 1100px;
+            margin: 20px auto 40px auto;
+            padding: 0 15px;
+        }
+
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .title-block h1 {
+            margin: 0;
+            font-size: 22px;
+        }
+        .title-meta {
+            margin-top: 6px;
+            font-size: 13px;
+            color: #d9c17a;
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            margin-right: 6px;
+        }
+        .pill-type {
+            background: #222;
+            border: 1px solid #444;
+            color: #f5d580;
+        }
+        .pill-active {
+            background: #1f3d1f;
+            border: 1px solid #3c7a3c;
+            color: #c5f5c5;
+        }
+        .pill-inactive {
+            background: #3d1f1f;
+            border: 1px solid #7a3c3c;
+            color: #f5c5c5;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-main {
+            background: #f5d580;
+            color: #000;
+        }
+        .btn-secondary {
+            background: #222;
+            color: #f5d580;
+            border: 1px solid #444;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 18px;
+        }
+        .card {
+            background: #111;
+            border-radius: 8px;
+            border: 1px solid #333;
+            padding: 14px;
+            font-size: 13px;
+        }
+        .card-title {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #f5d580;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px 18px;
+        }
+        .info-row-label {
+            font-size: 12px;
+            color: #b8a76a;
+        }
+        .info-row-value {
+            font-size: 13px;
+            color: #f7e6a8;
+        }
+
+        .meta-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px 18px;
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        .image-box {
+            background: #050505;
+            border-radius: 8px;
+            border: 1px solid #333;
+            padding: 10px;
+            text-align: center;
+        }
+        .image-box img {
+            max-width: 100%;
+            border-radius: 6px;
+            border: 1px solid #333;
+        }
+        .image-hint {
+            font-size: 12px;
+            color: #aaa;
+            margin-top: 6px;
+        }
+
+        .notes-text {
+            white-space: pre-wrap;
+            font-size: 13px;
+            color: #f7e6a8;
+        }
+
+        @media (max-width: 800px) {
+            .layout {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+
+{% include "crm/navbar.html" %}
+
+<div class="page">
+
+    <div class="header-row">
+        <div class="title-block">
+            <h1>{{ accessory.name }}</h1>
+            <div class="title-meta">
+                Code {{ accessory.accessory_code }}
+                {% if accessory.accessory_type %}
+                    • {{ accessory.accessory_type }}
+                {% endif %}
+            </div>
+            <div style="margin-top: 6px;">
+                {% if accessory.accessory_type %}
+                    <span class="pill pill-type">{{ accessory.accessory_type }}</span>
+                {% endif %}
+                {% if accessory.is_active %}
+                    <span class="pill pill-active">Active in library</span>
+                {% else %}
+                    <span class="pill pill-inactive">Not active</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="header-actions">
+            <a href="{% url 'accessories_list' %}" class="btn btn-secondary">Back to accessories</a>
+            <a href="{% url 'accessory_edit' accessory.pk %}" class="btn btn-main">Edit accessory</a>
+        </div>
+    </div>
+
+    <div class="layout">
+
+        <!-- left side details -->
+        <div class="card">
+            <div class="card-title">Accessory details</div>
+
+            <div class="info-grid">
+                <div>
+                    <div class="info-row-label">Size</div>
+                    <div class="info-row-value">
+                        {% if accessory.size %}
+                            {{ accessory.size }}
+                        {% else %}
+                            Not set
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div>
+                    <div class="info-row-label">Color</div>
+                    <div class="info-row-value">
+                        {% if accessory.color %}
+                            {{ accessory.color }}
+                        {% else %}
+                            Not set
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div>
+                    <div class="info-row-label">Material</div>
+                    <div class="info-row-value">
+                        {% if accessory.material %}
+                            {{ accessory.material }}
+                        {% else %}
+                            Not set
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div>
+                    <div class="info-row-label">Finish</div>
+                    <div class="info-row-value">
+                        {% if accessory.finish %}
+                            {{ accessory.finish }}
+                        {% else %}
+                            Not set
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div>
+                    <div class="info-row-label">Supplier</div>
+                    <div class="info-row-value">
+                        {% if accessory.supplier %}
+                            {{ accessory.supplier }}
+                        {% else %}
+                            Not set
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div>
+                    <div class="info-row-label">Price per unit</div>
+                    <div class="info-row-value">
+                        {% if accessory.price_per_unit %}
+                            {{ accessory.price_per_unit }}
+                        {% else %}
+                            Not set
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 14px;">
+                <div class="card-title" style="font-size: 13px;">Notes</div>
+                <div class="notes-text">
+                    {% if accessory.notes %}
+                        {{ accessory.notes }}
+                    {% else %}
+                        No notes yet. Use this space for care, packing, and production comments.
+                    {% endif %}
+                </div>
+            </div>
+
+            <div style="margin-top: 14px;">
+                <div class="card-title" style="font-size: 13px;">Record info</div>
+                <div class="meta-grid">
+                    <div>
+                        Created
+                        {% if accessory.created_at %}
+                            {{ accessory.created_at|date:"Y m d H:i" }}
+                        {% else %}
+                            Not set
+                        {% endif %}
+                    </div>
+                    <div>
+                        Last update
+                        {% if accessory.updated_at %}
+                            {{ accessory.updated_at|date:"Y m d H:i" }}
+                        {% else %}
+                            Not set
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- right side image -->
+        <div class="card">
+            <div class="card-title">Accessory image</div>
+
+            <div class="image-box">
+                {% if accessory.image %}
+                    <img src="{{ accessory.image.url }}" alt="{{ accessory.name }}">
+                {% else %}
+                    <div class="image-hint">
+                        No image added yet
+                        <br>
+                        You can upload a clear photo on the edit page.
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="image-hint">
+                Use this image to show how the item looks in real life
+                for example a close view of the zip head or button face.
+            </div>
+        </div>
+
+    </div>
+
+</div>
+</body>
+</html>

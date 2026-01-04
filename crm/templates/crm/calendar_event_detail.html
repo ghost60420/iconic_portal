@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Event detail - Iconic CRM</title>
+  <style>
+    body {
+      background: #050505;
+      color: #f5d580;
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    a {
+      color: #f5d580;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .top-nav {
+      background: #000;
+      padding: 10px 0 4px 0;
+      border-bottom: 1px solid #222;
+    }
+    .nav-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .nav-item {
+      display: inline-block;
+      padding: 6px 10px;
+      font-size: 13px;
+      font-weight: bold;
+      border-radius: 6px;
+      border: 1px solid #e4c56a;
+      background: linear-gradient(145deg, #f5d580, #d4b35f);
+      color: #000;
+      box-shadow: 0 3px 0 #8a6b24;
+      cursor: pointer;
+      transition: all 0.1s ease;
+      white-space: nowrap;
+    }
+    .nav-item:hover {
+      transform: translateY(1px);
+      box-shadow: 0 1px 0 #8a6b24;
+    }
+    .nav-item-active {
+      background: linear-gradient(145deg, #ffe08a, #f5d580);
+      box-shadow: 0 4px 0 #b8860b;
+    }
+
+    .wrapper {
+      max-width: 1100px;
+      margin: 20px auto;
+      background: #111;
+      padding: 20px;
+      border-radius: 10px;
+      border: 1px solid #333;
+      box-shadow: 0 0 12px rgba(0, 0, 0, 0.6);
+    }
+
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+
+    .event-title {
+      font-size: 22px;
+      margin: 0 0 6px 0;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      border: 1px solid #555;
+      margin-right: 5px;
+    }
+    .badge-type {
+      background: #262010;
+    }
+    .badge-priority {
+      background: #3a2210;
+    }
+    .badge-status {
+      background: #152015;
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 3px 7px;
+      border-radius: 10px;
+      background: #222;
+      border: 1px solid #444;
+      margin-right: 5px;
+      font-size: 12px;
+    }
+
+    .section {
+      margin-top: 18px;
+      padding: 14px;
+      border-radius: 8px;
+      border: 1px solid #333;
+      background: #151515;
+    }
+    .section-title {
+      margin: 0 0 10px 0;
+      font-size: 16px;
+    }
+
+    .two-col {
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+    .col-half {
+      width: 100%;
+    }
+    @media (min-width: 900px) {
+      .col-half {
+        width: 50%;
+      }
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th, td {
+      padding: 5px 6px;
+      border: 1px solid #333;
+    }
+    th {
+      background: #222;
+      text-align: left;
+    }
+    .row-label {
+      width: 160px;
+      font-weight: bold;
+    }
+
+    button {
+      padding: 6px 12px;
+      background: #f5d580;
+      color: #000;
+      border: none;
+      cursor: pointer;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    button:hover {
+      opacity: 0.9;
+    }
+
+    .pill-btn {
+      padding: 4px 9px;
+      border-radius: 999px;
+      font-size: 11px;
+      border: 1px solid #e4c56a;
+      background: #151515;
+      color: #f5d580;
+      cursor: pointer;
+    }
+    .pill-btn:hover {
+      background: #262010;
+    }
+
+    .ai-output-box {
+      margin-top: 6px;
+      background: #050505;
+      border-radius: 6px;
+      border: 1px solid #333;
+      padding: 8px;
+      font-size: 12px;
+      white-space: pre-wrap;
+      min-height: 70px;
+    }
+
+    .small-muted {
+      font-size: 11px;
+      color: #c0ae6c;
+    }
+
+  </style>
+</head>
+<body>
+
+<div class="top-nav">
+  <div class="nav-inner">
+    <a href="{% url 'leads_list' %}" class="nav-item">Leads</a>
+    <a href="{% url 'opportunities_list' %}" class="nav-item">Opportunities</a>
+    <a href="{% url 'products_list' %}" class="nav-item">Products</a>
+    <a href="{% url 'customers_list' %}" class="nav-item">Customers</a>
+    <a href="#" class="nav-item">Dashboard</a>
+    <a href="{% url 'calendar_list' %}" class="nav-item nav-item-active">Calendar</a>
+    <a href="#" class="nav-item">Marketing</a>
+    <a href="#" class="nav-item">Production</a>
+    <a href="#" class="nav-item">Accounting</a>
+    <a href="#" class="nav-item">Shipping</a>
+    <a href="#" class="nav-item">Factory</a>
+    <a href="#" class="nav-item">Inventory</a>
+  </div>
+</div>
+
+<div class="wrapper">
+  <div class="top-bar">
+    <div>
+      <h1 class="event-title">{{ event.title }}</h1>
+      <div>
+        <span class="badge badge-type">{{ event.get_event_type_display }}</span>
+        <span class="badge badge-priority">Priority: {{ event.get_priority_display }}</span>
+        <span class="badge badge-status">Status: {{ event.get_status_display }}</span>
+      </div>
+      <div style="margin-top:6px;">
+        {% if event.lead %}
+          <span class="tag">Lead: {{ event.lead.account_brand }} ({{ event.lead.lead_id }})</span>
+        {% endif %}
+        {% if event.customer %}
+          <span class="tag">Customer: {{ event.customer.account_brand }}</span>
+        {% endif %}
+        {% if event.opportunity %}
+          <span class="tag">Opportunity linked</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div style="text-align:right;">
+      <a href="{% url 'calendar_list' %}" style="font-size:12px;">Back to calendar</a><br>
+      <a href="{% url 'calendar_edit' event.pk %}" style="font-size:12px;">Edit event</a>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2 class="section-title">Event details</h2>
+    <div class="two-col">
+      <div class="col-half">
+        <table>
+          <tr>
+            <td class="row-label">Start</td>
+            <td>{{ event.start_datetime }}</td>
+          </tr>
+          <tr>
+            <td class="row-label">End</td>
+            <td>
+              {% if event.end_datetime %}
+                {{ event.end_datetime }}
+              {% else %}
+                Not set
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td class="row-label">Production stage</td>
+            <td>
+              {% if event.production_stage %}
+                {{ event.get_production_stage_display }}
+              {% else %}
+                None
+              {% endif %}
+            </td>
+          </tr>
+        </table>
+      </div>
+      <div class="col-half">
+        <table>
+          <tr>
+            <td class="row-label">Assigned to</td>
+            <td>
+              {% if event.assigned_to_name %}
+                {{ event.assigned_to_name }}
+              {% else %}
+                Not set
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td class="row-label">Reminder</td>
+            <td>
+              {% if event.reminder_minutes_before %}
+                {{ event.reminder_minutes_before }} minutes before
+              {% else %}
+                None
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td class="row-label">Note</td>
+            <td>{{ event.note|default:"-" }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2 class="section-title">AI helper for this event</h2>
+    <div class="small-muted">
+      AI reads this event and gives summary, follow up and next step ideas.
+    </div>
+
+    <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">
+      <button type="button" class="pill-btn" data-mode="summary">Summary</button>
+      <button type="button" class="pill-btn" data-mode="follow_up">Follow up text</button>
+      <button type="button" class="pill-btn" data-mode="next_steps">Next steps</button>
+      <button type="button" class="pill-btn" data-mode="reminder">Reminder note</button>
+    </div>
+
+    <div style="margin-top:8px;">
+      <input id="event-ai-question"
+             type="text"
+             placeholder="Ask AI something about this event"
+             style="width:100%;background:#000;color:#f5d580;border:1px solid #333;border-radius:4px;padding:6px 7px;font-size:12px;">
+      <button type="button" id="event-ai-chat-btn" style="margin-top:4px;font-size:12px;">
+        Ask AI
+      </button>
+      <span id="event-ai-status" class="small-muted" style="margin-left:6px;"></span>
+    </div>
+
+    <div id="event-ai-output" class="ai-output-box">
+      AI answer will appear here.
+    </div>
+
+    <form id="event-ai-csrf" style="display:none;">
+      {% csrf_token %}
+    </form>
+  </div>
+
+  <div class="section">
+    <h2 class="section-title">Upcoming events for same lead</h2>
+    {% if upcoming_for_lead %}
+      <table>
+        <thead>
+          <tr>
+            <th style="width:40%;">Title</th>
+            <th style="width:30%;">Time</th>
+            <th style="width:30%;">Type</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in upcoming_for_lead %}
+            <tr>
+              <td>
+                <a href="{% url 'calendar_event_detail' e.pk %}">
+                  {{ e.title }}
+                </a>
+              </td>
+              <td>{{ e.start_datetime }}</td>
+              <td>{{ e.get_event_type_display }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="small-muted">No other upcoming events for this lead.</p>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+  (function () {
+    const outBox = document.getElementById("event-ai-output");
+    const statusBox = document.getElementById("event-ai-status");
+    const qInput = document.getElementById("event-ai-question");
+    const chatBtn = document.getElementById("event-ai-chat-btn");
+    const buttons = document.querySelectorAll("button[data-mode]");
+
+    function getCsrf() {
+      const t = document.querySelector("#event-ai-csrf input[name='csrfmiddlewaretoken']");
+      return t ? t.value : "";
+    }
+
+    function callEventAI(mode, userText) {
+      statusBox.textContent = "AI is thinking";
+      outBox.textContent = "";
+
+      const body = new URLSearchParams();
+      body.append("mode", mode);
+      if (userText) {
+        body.append("user_text", userText);
+      }
+
+      fetch("{% url 'calendar_event_ai' event.pk %}", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-CSRFToken": getCsrf()
+        },
+        body: body.toString()
+      })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.ok) {
+          outBox.textContent = data.text || "No answer from AI.";
+          statusBox.textContent = "Ready";
+        } else {
+          outBox.textContent = data.error || "AI could not answer.";
+          statusBox.textContent = "";
+        }
+      })
+      .catch(function (e) {
+        console.error(e);
+        outBox.textContent = "Error talking to AI.";
+        statusBox.textContent = "";
+      });
+    }
+
+    buttons.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        const mode = btn.getAttribute("data-mode");
+        callEventAI(mode, "");
+      });
+    });
+
+    if (chatBtn && qInput) {
+      chatBtn.addEventListener("click", function () {
+        const q = qInput.value.trim();
+        if (!q) return;
+        callEventAI("chat", q);
+        qInput.value = "";
+      });
+    }
+  })();
+</script>
+
+</body>
+</html>

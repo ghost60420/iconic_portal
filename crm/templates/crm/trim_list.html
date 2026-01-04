@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Trim library Iconic CRM</title>
+    <style>
+        body {
+            background: #050505;
+            color: #f5d580;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        a {
+            color: #f5d580;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .page {
+            max-width: 1100px;
+            margin: 20px auto 40px auto;
+            padding: 0 15px;
+        }
+
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .header-main {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .header-title {
+            font-size: 22px;
+            font-weight: bold;
+        }
+        .header-sub {
+            font-size: 12px;
+            color: #aaaaaa;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-main {
+            background: #f5d580;
+            color: #000;
+        }
+        .btn-secondary {
+            background: #222;
+            color: #f5d580;
+            border: 1px solid #444;
+        }
+
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+        }
+        .filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            font-size: 12px;
+        }
+        .field label {
+            color: #aaaaaa;
+        }
+        .field input,
+        .field select {
+            background: #000;
+            color: #f5d580;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 4px 7px;
+            font-size: 12px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        th, td {
+            padding: 6px 8px;
+            border-bottom: 1px solid #222;
+        }
+        th {
+            text-align: left;
+            background: #111;
+            font-size: 12px;
+        }
+        tr:nth-child(even) {
+            background: #0b0b0b;
+        }
+
+        .thumb-col {
+            width: 52px;
+        }
+        .thumb {
+            width: 40px;
+            height: 40px;
+            border-radius: 6px;
+            background: #090909;
+            border: 1px solid #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        .thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .thumb-placeholder {
+            font-size: 9px;
+            color: #777;
+            text-align: center;
+            padding: 3px;
+        }
+
+        .code-pill {
+            display: inline-block;
+            padding: 2px 7px;
+            border-radius: 999px;
+            border: 1px solid #555;
+            font-size: 11px;
+            background: #111;
+        }
+
+        .name-main {
+            font-weight: bold;
+        }
+        .name-sub {
+            font-size: 11px;
+            color: #aaaaaa;
+        }
+
+        .status-pill {
+            display: inline-block;
+            padding: 2px 7px;
+            border-radius: 999px;
+            font-size: 11px;
+        }
+        .status-active {
+            background: #163716;
+            border: 1px solid #2f6a2f;
+            color: #c4f5c4;
+        }
+        .status-inactive {
+            background: #3a1717;
+            border: 1px solid #6f2e2e;
+            color: #f5c4c4;
+        }
+
+        .muted {
+            color: #888;
+            font-size: 11px;
+        }
+
+        @media (max-width: 880px) {
+            .toolbar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+    </style>
+</head>
+<body>
+
+{% include "crm/navbar.html" %}
+
+<div class="page">
+
+    <div class="header-row">
+        <div class="header-main">
+            <div class="header-title">Trim library</div>
+            <div class="header-sub">
+                All tapes, bands, and other trims used in sampling and bulk
+            </div>
+        </div>
+        <div>
+            <a href="{% url 'trim_add' %}" class="btn btn-main">Add new trim</a>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <form method="get" class="filters">
+            <div class="field">
+                <label for="search_text">Search name</label>
+                <input id="search_text" type="text" name="q" value="{{ q }}" placeholder="Search trim name">
+            </div>
+
+            <div class="field">
+                <label for="trim_type">Trim type</label>
+                <select id="trim_type" name="trim_type">
+                    <option value="">Any type</option>
+                    <option value="Neck tape" {% if trim_type == "Neck tape" %}selected{% endif %}>Neck tape</option>
+                    <option value="Elastic" {% if trim_type == "Elastic" %}selected{% endif %}>Elastic</option>
+                    <option value="Drawcord" {% if trim_type == "Drawcord" %}selected{% endif %}>Drawcord</option>
+                    <option value="Binding" {% if trim_type == "Binding" %}selected{% endif %}>Binding</option>
+                    <option value="Waistband" {% if trim_type == "Waistband" %}selected{% endif %}>Waistband</option>
+                </select>
+            </div>
+
+            <div class="field">
+                <label for="color_filter">Main color</label>
+                <input id="color_filter" type="text" name="color" value="{{ color }}" placeholder="Example black">
+            </div>
+
+            <div class="field" style="margin-top: 16px;">
+                <button type="submit" class="btn btn-secondary">Filter</button>
+                <a href="{% url 'trims_list' %}" class="btn btn-secondary">Clear</a>
+            </div>
+        </form>
+    </div>
+
+    {% if trims %}
+        <table>
+            <thead>
+                <tr>
+                    <th class="thumb-col"></th>
+                    <th>Code</th>
+                    <th>Trim</th>
+                    <th>Type</th>
+                    <th>Width</th>
+                    <th>Color</th>
+                    <th>Material</th>
+                    <th>Price per meter</th>
+                    <th>Updated</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for trim in trims %}
+                <tr>
+                    <td class="thumb-col">
+                        <div class="thumb">
+                            {% if trim.image %}
+                                <img src="{{ trim.image.url }}" alt="{{ trim.name }}">
+                            {% else %}
+                                <div class="thumb-placeholder">No image</div>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        {% if trim.trim_code %}
+                            <span class="code-pill">{{ trim.trim_code }}</span>
+                        {% else %}
+                            <span class="muted">Not set</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="name-main">
+                            <a href="{% url 'trim_detail' trim.pk %}">
+                                {{ trim.name }}
+                            </a>
+                        </div>
+                        <div class="name-sub">
+                            {% if trim.is_active %}
+                                <span class="status-pill status-active">Active</span>
+                            {% else %}
+                                <span class="status-pill status-inactive">Inactive</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        {% if trim.trim_type %}
+                            {{ trim.trim_type }}
+                        {% else %}
+                            <span class="muted">Not set</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if trim.width %}
+                            {{ trim.width }}
+                        {% else %}
+                            <span class="muted">Example 1 inch</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if trim.color %}
+                            {{ trim.color }}
+                        {% else %}
+                            <span class="muted">Not set</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if trim.material %}
+                            {{ trim.material }}
+                        {% else %}
+                            <span class="muted">Not set</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if trim.price_per_meter %}
+                            {{ trim.price_per_meter }}
+                        {% else %}
+                            <span class="muted">Set for costing</span>
+                        {% endif %}
+                    </td>
+                    <td class="muted">
+                        {% if trim.updated_at %}
+                            {{ trim.updated_at|date:"Y m d" }}
+                        {% else %}
+                            n a
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="muted">
+            No trims yet. Add neck tapes, elastics, drawcords, and other trims here so the full team can see the same data.
+        </p>
+    {% endif %}
+
+</div>
+</body>
+</html>

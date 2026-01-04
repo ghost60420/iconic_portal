@@ -1,0 +1,260 @@
+{% extends "crm/base.html" %}
+{% load crm_groups %}
+{% load humanize %}
+
+{% block content %}
+
+{% if request.user|can_view_accounting_bd %}
+
+<div class="container-fluid" style="color:#f9fafb;">
+
+  <style>
+    .bd-btn {
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:8px 14px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:700;
+      border:1px solid rgba(255,255,255,0.14);
+      text-decoration:none;
+      box-shadow:
+        0 4px 0 rgba(0,0,0,0.55),
+        0 10px 24px rgba(0,0,0,0.45),
+        inset 0 1px 0 rgba(255,255,255,0.10);
+      transform: translateY(0);
+      transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+      white-space:nowrap;
+    }
+    .bd-btn:hover{
+      transform: translateY(2px);
+      box-shadow:
+        0 2px 0 rgba(0,0,0,0.55),
+        0 6px 16px rgba(0,0,0,0.40),
+        inset 0 1px 0 rgba(255,255,255,0.14);
+      filter: brightness(1.03);
+      text-decoration:none;
+    }
+    .bd-btn:active{
+      transform: translateY(4px);
+      box-shadow: 0 1px 0 rgba(0,0,0,0.65);
+    }
+    .bd-btn-gold{
+      background: linear-gradient(145deg, #ffe39b, #e4c067);
+      color:#121212;
+      border-color:#f6d488;
+    }
+    .bd-btn-dark{
+      background: linear-gradient(145deg, #111827, #020617);
+      color:#f5d580;
+      border-color:#4b5563;
+    }
+    .bd-card{
+      background:#020617;
+      border:1px solid #374151;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+      border-radius: 14px;
+    }
+    .bd-input{
+      background:#030712 !important;
+      border-color:#4b5563 !important;
+      color:#f9fafb !important;
+    }
+    .bd-target-red{
+      color:#ef4444;
+      font-weight:800;
+    }
+  </style>
+
+  <!-- header -->
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+      <h2 class="mb-1">Bangladesh Dashboard</h2>
+      <div style="font-size:12px; color:#9ca3af;">
+        Bangladesh money in and money out in BDT.
+      </div>
+    </div>
+
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{% url 'accounting_bd_dashboard' %}" class="bd-btn bd-btn-dark">📊 Bangladesh dashboard</a>
+      <a href="{% url 'accounting_bd_daily' %}" class="bd-btn bd-btn-dark">📅 Bangladesh daily</a>
+      <a href="{% url 'bd_staff_list' %}" class="bd-btn bd-btn-dark">👥 Staff</a>
+      <a href="{% url 'bd_staff_month_list' %}" class="bd-btn bd-btn-dark">🧾 Payroll</a>
+
+      <a href="{% url 'production_profit_report' %}" class="bd-btn bd-btn-dark">
+        📈 Production profit
+      </a>
+
+      {% if request.user|can_edit_bd_entries %}
+        <a href="{% url 'accounting_entry_add_bd' %}" class="bd-btn bd-btn-gold">➕ Add entry</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- summary cards -->
+  <div class="row mb-3">
+    <div class="col-md-3 mb-2">
+      <div class="card bd-card">
+        <div class="card-body p-3">
+          <div style="font-size:11px; text-transform:uppercase; color:#9ca3af;">Total money in</div>
+          <div style="font-size:22px; font-weight:800; color:#4ade80;">
+            {{ total_in_bdt|default_if_none:0|floatformat:2|intcomma }} BDT
+          </div>
+          <div style="font-size:11px; color:#6b7280;">All money coming in for this view.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3 mb-2">
+      <div class="card bd-card">
+        <div class="card-body p-3">
+          <div style="font-size:11px; text-transform:uppercase; color:#9ca3af;">Total money out</div>
+          <div style="font-size:22px; font-weight:800; color:#f97373;">
+            {{ total_out_bdt|default_if_none:0|floatformat:2|intcomma }} BDT
+          </div>
+          <div style="font-size:11px; color:#6b7280;">Total cost for this view.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3 mb-2">
+      <div class="card bd-card">
+        <div class="card-body p-3">
+          <div style="font-size:11px; text-transform:uppercase; color:#9ca3af;">Net result</div>
+          <div style="font-size:22px; font-weight:800; {% if net_bdt and net_bdt < 0 %}color:#f97373;{% else %}color:#4ade80;{% endif %}">
+            {{ net_bdt|default_if_none:0|floatformat:2|intcomma }} BDT
+          </div>
+          <div style="font-size:11px; color:#6b7280;">Money in minus money out.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3 mb-2">
+      <div class="card bd-card">
+        <div class="card-body p-3">
+          <div style="font-size:11px; text-transform:uppercase; color:#9ca3af;">Monthly target</div>
+          <div class="bd-target-red" style="font-size:22px;">
+            {{ monthly_target_bdt|default_if_none:0|floatformat:0|intcomma }} BDT
+          </div>
+          <div style="font-size:11px; color:#6b7280;">Factory monthly target.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- filters -->
+  <div class="card bd-card mb-3">
+    <div class="card-body p-3">
+      <form method="get" class="row g-2 align-items-end" style="font-size:13px;">
+        <div class="col-sm-3">
+          <label class="form-label mb-1">Year</label>
+          <input type="text" name="year" value="{{ filter_year }}" class="form-control form-control-sm bd-input" placeholder="2025">
+        </div>
+
+        <div class="col-sm-3">
+          <label class="form-label mb-1">Month</label>
+          <select name="month" class="form-select form-select-sm bd-input">
+            <option value="" {% if not filter_month %}selected{% endif %}>All months</option>
+            <option value="1" {% if filter_month == "1" %}selected{% endif %}>January</option>
+            <option value="2" {% if filter_month == "2" %}selected{% endif %}>February</option>
+            <option value="3" {% if filter_month == "3" %}selected{% endif %}>March</option>
+            <option value="4" {% if filter_month == "4" %}selected{% endif %}>April</option>
+            <option value="5" {% if filter_month == "5" %}selected{% endif %}>May</option>
+            <option value="6" {% if filter_month == "6" %}selected{% endif %}>June</option>
+            <option value="7" {% if filter_month == "7" %}selected{% endif %}>July</option>
+            <option value="8" {% if filter_month == "8" %}selected{% endif %}>August</option>
+            <option value="9" {% if filter_month == "9" %}selected{% endif %}>September</option>
+            <option value="10" {% if filter_month == "10" %}selected{% endif %}>October</option>
+            <option value="11" {% if filter_month == "11" %}selected{% endif %}>November</option>
+            <option value="12" {% if filter_month == "12" %}selected{% endif %}>December</option>
+          </select>
+        </div>
+
+        <div class="col-sm-3 d-flex gap-2">
+          <button type="submit" class="bd-btn bd-btn-gold w-100" style="justify-content:center;">
+            Apply
+          </button>
+        </div>
+
+        <div class="col-sm-3 d-flex gap-2">
+          <a href="{% url 'accounting_bd_dashboard' %}" class="bd-btn bd-btn-dark w-100" style="justify-content:center;">
+  Reset
+</a>
+            Reset
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- grid table -->
+  <div class="card bd-card">
+    <div class="card-header py-2" style="border-bottom:1px solid #1f2937;">
+      <div class="d-flex justify-content-between align-items-center">
+        <span style="font-size:14px; font-weight:800;">Bangladesh entries</span>
+        <span style="font-size:11px; color:#9ca3af;">Showing {{ entries|length }} records</span>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-dark table-sm mb-0" style="font-size:12px;">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Flow</th>
+            <th>Main type</th>
+            <th>Sub type</th>
+            <th>Description</th>
+            <th class="text-end">Amount BDT</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% if entries %}
+          {% for e in entries %}
+            <tr>
+              <td>{{ e.date|date:"Y-m-d" }}</td>
+
+              <td>
+                {% if e.direction == "IN" %}
+                  <span class="badge rounded-pill text-bg-success">In</span>
+                {% else %}
+                  <span class="badge rounded-pill text-bg-danger">Out</span>
+                {% endif %}
+              </td>
+
+              <td>{{ e.get_main_type_display|default:e.main_type }}</td>
+              <td>{{ e.sub_type|default:"" }}</td>
+
+              <td style="max-width:320px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                {{ e.description|default:"" }}
+              </td>
+
+              <td class="text-end">
+                {{ e.amount_original|default_if_none:0|floatformat:2|intcomma }}
+              </td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="6" class="text-center text-muted py-3">
+              No Bangladesh entries yet.
+            </td>
+          </tr>
+        {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+{% else %}
+  <div class="container py-4">
+    <div class="alert alert-danger">
+      You do not have permission to view this page.
+    </div>
+  </div>
+{% endif %}
+
+{% endblock %}

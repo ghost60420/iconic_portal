@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Thread library Iconic CRM</title>
+    <style>
+        body {
+            background: #050505;
+            color: #f5d580;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        a {
+            color: #f5d580;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .page {
+            max-width: 1100px;
+            margin: 20px auto 40px auto;
+            padding: 0 15px;
+        }
+
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+        .header-title {
+            font-size: 22px;
+            font-weight: bold;
+        }
+        .header-sub {
+            font-size: 12px;
+            color: #aaa;
+            margin-top: 4px;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-main {
+            background: #f5d580;
+            color: #000;
+        }
+        .btn-secondary {
+            background: #222;
+            color: #f5d580;
+            border: 1px solid #444;
+        }
+
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .search-form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+        .search-form input,
+        .search-form select {
+            background: #000;
+            color: #f5d580;
+            border: 1px solid #444;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        th, td {
+            border: 1px solid #262626;
+            padding: 6px 8px;
+            text-align: left;
+        }
+        th {
+            background: #101010;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        tr:nth-child(even) {
+            background: #090909;
+        }
+        tr:nth-child(odd) {
+            background: #050505;
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 11px;
+        }
+        .pill-type {
+            background: #222;
+            border: 1px solid #444;
+            color: #f5d580;
+        }
+        .pill-active {
+            background: #1f3d1f;
+            border: 1px solid #3c7a3c;
+            color: #c5f5c5;
+        }
+        .pill-inactive {
+            background: #3d1f1f;
+            border: 1px solid #7a3c3c;
+            color: #f5c5c5;
+        }
+
+        .thumb-box {
+            width: 40px;
+            height: 40px;
+            border-radius: 4px;
+            background: #111;
+            border: 1px solid #333;
+            overflow: hidden;
+        }
+        .thumb-box img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .thumb-placeholder {
+            font-size: 9px;
+            color: #777;
+            text-align: center;
+            padding-top: 10px;
+        }
+
+        .muted {
+            color: #888;
+            font-size: 12px;
+        }
+
+        @media (max-width: 800px) {
+            .toolbar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            table {
+                font-size: 12px;
+            }
+            th, td {
+                padding: 5px 6px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+{% include "crm/navbar.html" %}
+
+<div class="page">
+
+    <div class="header-row">
+        <div>
+            <div class="header-title">Thread library</div>
+            <div class="header-sub">
+                Store common thread options for sampling and bulk work
+            </div>
+        </div>
+        <div>
+            <a href="{% url 'thread_add' %}" class="btn btn-main">Add thread</a>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <form method="get" class="search-form">
+            <input
+                type="text"
+                name="q"
+                value="{{ q }}"
+                placeholder="Search by name or code"
+            >
+            <select name="thread_type">
+                <option value="">Any type</option>
+                <option value="Polyester" {% if thread_type == "Polyester" %}selected{% endif %}>Polyester</option>
+                <option value="Cotton" {% if thread_type == "Cotton" %}selected{% endif %}>Cotton</option>
+                <option value="Core spun" {% if thread_type == "Core spun" %}selected{% endif %}>Core spun</option>
+            </select>
+
+            <input
+                type="text"
+                name="color"
+                value="{{ color }}"
+                placeholder="Color filter"
+            >
+
+            <button type="submit" class="btn btn-main">Filter</button>
+            <a href="{% url 'threads_list' %}" class="btn btn-secondary">Clear</a>
+        </form>
+    </div>
+
+    {% if threads %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Image</th>
+                    <th>Code</th>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Color</th>
+                    <th>Count</th>
+                    <th>Brand</th>
+                    <th>Use for</th>
+                    <th>Price cone</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in threads %}
+                <tr>
+                    <td>
+                        <div class="thumb-box">
+                            {% if t.image %}
+                                <img src="{{ t.image.url }}" alt="{{ t.name }}">
+                            {% else %}
+                                <div class="thumb-placeholder">No image</div>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>{{ t.thread_code }}</td>
+                    <td>
+                        <a href="{% url 'thread_detail' t.pk %}">
+                            {{ t.name }}
+                        </a>
+                    </td>
+                    <td>
+                        {% if t.thread_type %}
+                            <span class="pill pill-type">{{ t.thread_type }}</span>
+                        {% else %}
+                            <span class="muted">Not set</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ t.color|default:"" }}</td>
+                    <td>{{ t.count|default:"" }}</td>
+                    <td>{{ t.brand|default:"" }}</td>
+                    <td>
+                        {% if t.use_for %}
+                            {{ t.use_for|truncatechars:40 }}
+                        {% else %}
+                            <span class="muted">Not set</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if t.price_per_cone %}
+                            {{ t.price_per_cone }}
+                        {% else %}
+                            <span class="muted">Not set</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if t.is_active %}
+                            <span class="pill pill-active">Active</span>
+                        {% else %}
+                            <span class="pill pill-inactive">Inactive</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="muted">No thread records yet. Add common sewing cones here.</p>
+    {% endif %}
+
+</div>
+</body>
+</html>

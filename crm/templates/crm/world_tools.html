@@ -1,0 +1,696 @@
+{% extends 'crm/base.html' %}
+
+{% block content %}
+<style>
+  /* Bigger clock text */
+  .clock-city {
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .clock-time {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    font-family: "Courier New", monospace;
+  }
+  .clock-remove {
+    padding: 0 6px;
+    font-size: 11px;
+    line-height: 1;
+  }
+
+  /* Weather card styling */
+  .weather-row {
+    background: #1f1f1f;
+    padding: 12px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+  }
+  .weather-city {
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .weather-temp {
+    font-size: 20px;
+    font-weight: 700;
+    color: #f5d580;
+  }
+  .weather-pill {
+    background: #333;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: #f5d580;
+  }
+  .weather-remove {
+    padding: 0 6px;
+    font-size: 11px;
+    margin-top: 6px;
+  }
+</style>
+
+<div class="container mt-4">
+
+  <!-- header -->
+  <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+    <div>
+      <h1 class="h3 mb-1">World tools</h1>
+      <p class="text-muted small mb-0">
+        Time, money, weather and fabric signals to help your daily Iconic work.
+      </p>
+    </div>
+    <div class="card bg-dark border-secondary text-light" style="min-width:260px;">
+      <div class="card-body py-2 px-3">
+        <div class="small text-muted">AI note</div>
+        <div class="small">
+          Keep buyer time zones, sample rates and season feel in one view before calls.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- first row -->
+  <div class="row g-3 mb-3">
+
+    <!-- clock card -->
+    <div class="col-md-4">
+      <div class="card bg-dark border-secondary text-light h-100">
+        <div class="card-body d-flex flex-column">
+          <h2 class="h5 mb-3">World clock</h2>
+
+          <div id="clockList" class="small mb-3">
+            <!-- filled by script -->
+          </div>
+
+          <form id="clockForm" class="small mt-auto">
+            <div class="mb-1 text-muted">Add city (UTC offset)</div>
+            <div class="row g-1">
+              <div class="col-6">
+                <input
+                  type="text"
+                  id="clockCity"
+                  class="form-control form-control-sm"
+                  placeholder="City name"
+                >
+              </div>
+              <div class="col-3">
+                <input
+                  type="number"
+                  step="0.5"
+                  id="clockOffset"
+                  class="form-control form-control-sm"
+                  placeholder="Offset"
+                >
+              </div>
+              <div class="col-3 d-grid">
+                <button type="submit" class="btn btn-sm btn-outline-light">
+                  Add
+                </button>
+              </div>
+            </div>
+            <div class="text-muted small mt-1">
+              Example: Dhaka 6, Vancouver minus 8.
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- currency card -->
+    <div class="col-md-4">
+      <div class="card bg-dark border-secondary text-light h-100">
+        <div class="card-body d-flex flex-column">
+          <h2 class="h5 mb-3">Currency converter</h2>
+
+          <div class="mb-2">
+            <label class="form-label form-label-sm">Amount</label>
+            <input
+              id="amountInput"
+              type="number"
+              value="1"
+              class="form-control form-control-sm"
+            >
+          </div>
+
+          <div class="row g-2 mb-2">
+            <div class="col-6">
+              <label class="form-label form-label-sm">From</label>
+              <select id="fromSelect" class="form-select form-select-sm">
+                <option value="USD">USD</option>
+                <option value="CAD">CAD</option>
+                <option value="EUR">EUR</option>
+                <option value="BDT">BDT</option>
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label form-label-sm">To</label>
+              <select id="toSelect" class="form-select form-select-sm">
+                <option value="CAD">CAD</option>
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+                <option value="BDT">BDT</option>
+              </select>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            class="btn btn-sm btn-primary w-100 mb-2"
+            onclick="convertCurrency()"
+          >
+            Convert
+          </button>
+
+          <p id="currencyResult" class="small mb-1"></p>
+          <p id="currencyError" class="small text-warning mb-0"></p>
+
+          <hr class="border-secondary my-3">
+
+          <p class="text-muted small mb-1">AI tip</p>
+          <p class="text-muted small mb-0">
+            Rates are only for talk. Keep final numbers inside your costing sheets.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- buyer weather card -->
+    <div class="col-md-4">
+      <div class="card bg-dark border-secondary text-light h-100">
+        <div class="card-body d-flex flex-column">
+          <h2 class="h5 mb-3">Buyer weather</h2>
+
+          <div id="weatherList" class="small mb-3">
+            <!-- filled by script -->
+          </div>
+
+          <!-- digital weather form -->
+          <form id="weatherForm" class="small mt-auto">
+            <div class="mb-1 text-muted">Add city weather</div>
+            <div class="row g-1 mb-1">
+              <div class="col-5">
+                <input
+                  type="text"
+                  id="weatherCity"
+                  class="form-control form-control-sm"
+                  placeholder="City"
+                >
+              </div>
+              <div class="col-3">
+                <input
+                  type="number"
+                  id="weatherTemp"
+                  class="form-control form-control-sm"
+                  placeholder="Temp °C"
+                >
+              </div>
+              <div class="col-4">
+                <select
+                  id="weatherCondition"
+                  class="form-select form-select-sm"
+                >
+                  <option value="sunny">Sunny</option>
+                  <option value="cloudy">Cloudy</option>
+                  <option value="rainy">Rainy</option>
+                  <option value="snow">Snow</option>
+                  <option value="hot">Hot</option>
+                </select>
+              </div>
+            </div>
+            <div class="row g-1 mb-1">
+              <div class="col-12">
+                <input
+                  type="text"
+                  id="weatherNote"
+                  class="form-control form-control-sm"
+                  placeholder="Short note, example hoodies time"
+                >
+              </div>
+            </div>
+            <div class="row g-1">
+              <div class="col-12 d-grid">
+                <button type="submit" class="btn btn-sm btn-outline-light">
+                  Add city
+                </button>
+              </div>
+            </div>
+          </form>
+
+          <div class="text-muted small mt-2">
+            Idea: cold and rainy cities push hoodies and fleece, warm and sunny cities push light weight or resort.
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- second row -->
+  <div class="row g-3">
+
+    <!-- shipping -->
+    <div class="col-md-4">
+      <div class="card bg-dark border-secondary text-light h-100">
+        <div class="card-body">
+          <h2 class="h5 mb-3">Shipping time map</h2>
+
+          <div class="table-responsive">
+            <table class="table table-sm table-dark table-borderless mb-2">
+              <thead>
+                <tr class="text-muted small">
+                  <th>Route</th>
+                  <th>Sea days</th>
+                  <th>Air days</th>
+                </tr>
+              </thead>
+              <tbody class="small">
+                <tr>
+                  <td>Dhaka to Vancouver</td>
+                  <td>30 to 35</td>
+                  <td>5 to 7</td>
+                </tr>
+                <tr>
+                  <td>Dhaka to Toronto</td>
+                  <td>28 to 32</td>
+                  <td>4 to 6</td>
+                </tr>
+                <tr>
+                  <td>Dhaka to New York</td>
+                  <td>25 to 30</td>
+                  <td>4 to 6</td>
+                </tr>
+                <tr>
+                  <td>Dhaka to London</td>
+                  <td>22 to 28</td>
+                  <td>3 to 5</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p class="text-muted small mb-0">
+            AI note: for rush orders compare air cost with near country options.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- currency trend -->
+    <div class="col-md-4">
+      <div class="card bg-dark border-secondary text-light h-100">
+        <div class="card-body d-flex flex-column">
+          <h2 class="h5 mb-3">USD to CAD trend</h2>
+
+          <canvas id="currencyTrendChart" height="140"></canvas>
+
+          <p class="text-muted small mt-3 mb-0">
+            Simple sample trend to feel direction only.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- fabric index -->
+    <div class="col-md-4">
+      <div class="card bg-dark border-secondary text-light h-100">
+        <div class="card-body d-flex flex-column">
+          <h2 class="h5 mb-3">Fabric price index</h2>
+
+          <div class="table-responsive">
+            <table class="table table-sm table-dark table-borderless mb-2 small">
+              <thead class="text-muted">
+                <tr>
+                  <th>Fabric</th>
+                  <th>GSM</th>
+                  <th>USD per kg</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Cotton single jersey</td>
+                  <td>180 to 200</td>
+                  <td>4.2</td>
+                </tr>
+                <tr>
+                  <td>Cotton fleece</td>
+                  <td>300 to 320</td>
+                  <td>5.3</td>
+                </tr>
+                <tr>
+                  <td>Cotton terry</td>
+                  <td>260 to 280</td>
+                  <td>4.8</td>
+                </tr>
+                <tr>
+                  <td>Poly spandex jersey</td>
+                  <td>220 to 240</td>
+                  <td>5.9</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p class="text-muted small mb-0">
+            Later you can update these from real mill quotes.
+          </p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+  // small helpers for browser storage
+  function loadJson(key, defaultValue) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return defaultValue;
+      return JSON.parse(raw);
+    } catch (e) {
+      return defaultValue;
+    }
+  }
+  function saveJson(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (e) {}
+  }
+
+  // CLOCK
+
+  function getClockCities() {
+    const defaultCities = [
+      { name: "Vancouver", offset: -8 },
+      { name: "New York", offset: -5 },
+      { name: "London", offset: 0 },
+      { name: "Dhaka", offset: 6 }
+    ];
+    return loadJson("worldToolsClockCities", defaultCities);
+  }
+
+  function setClockCities(list) {
+    saveJson("worldToolsClockCities", list);
+  }
+
+  function formatTimeOfDay(date) {
+    let hours = date.getHours();
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    const seconds = String(date.getSeconds()).padStart(2, "0");
+    const ampm = hours >= 12 ? "PM" : "AM";
+    hours = hours % 12;
+    if (hours === 0) hours = 12;
+    return String(hours).padStart(2, "0") + ":" + minutes + ":" + seconds + " " + ampm;
+  }
+
+  function updateClock() {
+    const cities = getClockCities();
+    const container = document.getElementById("clockList");
+    if (!container) return;
+
+    const now = new Date();
+    const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
+
+    let html = "";
+    cities.forEach(function (city, index) {
+      const cityDate = new Date(utcMs + city.offset * 3600000);
+      const timeString = formatTimeOfDay(cityDate);
+      html += `
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div class="clock-city">
+            ${city.name}
+            <span class="text-muted small">(UTC ${city.offset >= 0 ? "+" : ""}${city.offset})</span>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <span class="clock-time">${timeString}</span>
+            <button type="button" class="btn btn-sm btn-outline-light clock-remove" data-index="${index}">
+              x
+            </button>
+          </div>
+        </div>
+      `;
+    });
+
+    container.innerHTML = html;
+
+    container.querySelectorAll(".clock-remove").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        const idx = parseInt(this.getAttribute("data-index"));
+        const list = getClockCities();
+        list.splice(idx, 1);
+        setClockCities(list);
+        updateClock();
+      });
+    });
+  }
+
+  function initClockForm() {
+    const form = document.getElementById("clockForm");
+    if (!form) return;
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      const nameInput = document.getElementById("clockCity");
+      const offsetInput = document.getElementById("clockOffset");
+      const name = (nameInput.value || "").trim();
+      const offset = parseFloat(offsetInput.value);
+
+      if (!name || isNaN(offset)) {
+        alert("Please enter city and offset.");
+        return;
+      }
+
+      const list = getClockCities();
+      list.push({ name: name, offset: offset });
+      setClockCities(list);
+
+      nameInput.value = "";
+      offsetInput.value = "";
+      updateClock();
+    });
+  }
+
+  // BUYER WEATHER
+
+  function getWeatherCities() {
+    const defaultWeather = [
+      { city: "Vancouver", temp: 8, note: "Cool and cloudy", condition: "cloudy" },
+      { city: "Toronto", temp: 2, note: "Cold, chance of snow", condition: "snow" },
+      { city: "New York", temp: 10, note: "Mild and clear", condition: "sunny" },
+      { city: "London", temp: 7, note: "Cloudy and light rain", condition: "rainy" },
+      { city: "Dhaka", temp: 24, note: "Warm and humid", condition: "hot" }
+    ];
+    return loadJson("worldToolsWeatherCities", defaultWeather);
+  }
+
+  function setWeatherCities(list) {
+    saveJson("worldToolsWeatherCities", list);
+  }
+
+  function getConditionIcon(cond) {
+    const c = (cond || "").toLowerCase();
+    if (c === "sunny") return "☀";
+    if (c === "cloudy") return "☁";
+    if (c === "rainy") return "🌧";
+    if (c === "snow") return "❄";
+    if (c === "hot") return "🔥";
+    return "⛅";
+  }
+
+  function getConditionText(cond) {
+    const c = (cond || "").toLowerCase();
+    if (c === "sunny") return "Sunny";
+    if (c === "cloudy") return "Cloudy";
+    if (c === "rainy") return "Rainy";
+    if (c === "snow") return "Snow";
+    if (c === "hot") return "Hot";
+    return "Mixed";
+  }
+
+  function renderWeather() {
+    const list = getWeatherCities();
+    const box = document.getElementById("weatherList");
+    if (!box) return;
+
+    let html = "";
+    list.forEach(function (item, index) {
+      const icon = getConditionIcon(item.condition);
+      const text = getConditionText(item.condition);
+      html += `
+        <div class="weather-row d-flex justify-content-between align-items-center">
+          <div>
+            <div class="weather-city">${item.city}</div>
+            <div class="small">${item.note}</div>
+          </div>
+          <div class="text-end">
+            <div class="weather-temp mb-1">${item.temp}°C</div>
+            <div class="weather-pill">
+              <span>${icon}</span> ${text}
+            </div>
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-light weather-remove"
+              data-index="${index}"
+            >
+              x
+            </button>
+          </div>
+        </div>
+      `;
+    });
+
+    box.innerHTML = html;
+
+    box.querySelectorAll(".weather-remove").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        const idx = parseInt(this.getAttribute("data-index"));
+        const items = getWeatherCities();
+        items.splice(idx, 1);
+        setWeatherCities(items);
+        renderWeather();
+      });
+    });
+  }
+
+  function initWeatherForm() {
+    const form = document.getElementById("weatherForm");
+    if (!form) return;
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      const cityInput = document.getElementById("weatherCity");
+      const tempInput = document.getElementById("weatherTemp");
+      const noteInput = document.getElementById("weatherNote");
+      const condSelect = document.getElementById("weatherCondition");
+
+      const city = (cityInput.value || "").trim();
+      const temp = parseFloat(tempInput.value);
+      const note = (noteInput.value || "").trim();
+      const cond = condSelect.value || "cloudy";
+
+      if (!city || isNaN(temp)) {
+        alert("Please enter city and temperature.");
+        return;
+      }
+
+      const items = getWeatherCities();
+      items.push({
+        city: city,
+        temp: temp,
+        note: note || "Custom note",
+        condition: cond
+      });
+      setWeatherCities(items);
+
+      cityInput.value = "";
+      tempInput.value = "";
+      noteInput.value = "";
+      condSelect.value = "sunny";
+      renderWeather();
+    });
+  }
+
+  // CURRENCY (offline sample rates)
+
+  const offlineRates = {
+    "USD_CAD": 1.37,
+    "CAD_USD": 0.73,
+    "USD_BDT": 120,
+    "BDT_USD": 0.0083,
+    "CAD_BDT": 88,
+    "BDT_CAD": 0.0114,
+    "EUR_USD": 1.09,
+    "USD_EUR": 0.92,
+    "EUR_CAD": 1.49,
+    "CAD_EUR": 0.67
+  };
+
+  function getOfflineRate(from, to) {
+    if (from === to) return 1;
+    const key = from + "_" + to;
+    return offlineRates[key] || null;
+  }
+
+  function convertCurrency() {
+    const amountInput = document.getElementById("amountInput");
+    const fromSelect = document.getElementById("fromSelect");
+    const toSelect = document.getElementById("toSelect");
+    const resultEl = document.getElementById("currencyResult");
+    const errorEl = document.getElementById("currencyError");
+
+    const amount = parseFloat(amountInput.value || "0");
+    const from = fromSelect.value;
+    const to = toSelect.value;
+
+    resultEl.textContent = "";
+    errorEl.textContent = "";
+
+    if (!amount || amount <= 0) {
+      errorEl.textContent = "Please enter a number bigger than zero.";
+      return;
+    }
+
+    const rate = getOfflineRate(from, to);
+    if (!rate) {
+      errorEl.textContent = "No sample rate set for this pair. You can update the table in code later.";
+      return;
+    }
+
+    const converted = (amount * rate).toFixed(2);
+    resultEl.innerHTML =
+      amount.toFixed(2) + " " + from +
+      " is about <strong>" + converted + " " + to + "</strong>";
+    errorEl.textContent =
+      "Sample rates only. For final money use bank or your costing sheet.";
+  }
+
+  // CURRENCY TREND CHART
+
+  function renderCurrencyTrend() {
+    const ctx = document.getElementById("currencyTrendChart");
+    if (!ctx || !window.Chart) return;
+
+    const labels = ["Day 1", "Day 2", "Day 3", "Day 4", "Day 5", "Day 6", "Day 7"];
+    const data = [1.34, 1.35, 1.36, 1.37, 1.38, 1.37, 1.36];
+
+    new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: [{
+          label: "USD to CAD (sample)",
+          data: data,
+          tension: 0.3,
+          borderWidth: 2,
+          pointRadius: 2
+        }]
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { font: { size: 10 } } },
+          y: { ticks: { font: { size: 10 } } }
+        }
+      }
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    initClockForm();
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    initWeatherForm();
+    renderWeather();
+
+    convertCurrency();
+    renderCurrencyTrend();
+  });
+</script>
+{% endblock %}

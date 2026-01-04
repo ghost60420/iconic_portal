@@ -1,0 +1,215 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+<style>
+  .inventory-page {
+      max-width: 1100px;
+      margin: 0 auto;
+  }
+  .inv-form-card {
+      background: #121212;
+      border: 1px solid #303030;
+      border-radius: 14px;
+      padding: 18px;
+      margin-bottom: 18px;
+  }
+  .inv-form-label {
+      font-size: 13px;
+      color: #f0f0f0;
+      margin-bottom: 4px;
+  }
+  .inv-form-help {
+      font-size: 11px;
+      color: #c0c0c0;
+  }
+  .inv-form-card-title {
+      font-size: 13px;
+      color: #e5e5e5;
+      margin-bottom: 8px;
+  }
+  .inv-form-header-note {
+      font-size: 12px;
+      color: #cfcfcf;
+  }
+  .inv-form-status-box {
+      background: #141414;
+      border-radius: 10px;
+      border: 1px solid #303030;
+      padding: 12px;
+  }
+</style>
+
+<div class="container mt-4 inventory-page">
+
+  <!-- header -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      {% if item %}
+        <h2 class="text-warning mb-0">Edit inventory item</h2>
+        <div class="inv-form-header-note">
+          Update stock, links and notes for this item.
+        </div>
+      {% else %}
+        <h2 class="text-warning mb-0">Add inventory item</h2>
+        <div class="inv-form-header-note">
+          Create a new record in your inventory.
+        </div>
+      {% endif %}
+    </div>
+
+    <a href="{% url 'inventory_list' %}" class="btn btn-outline-light">
+      Back to inventory
+    </a>
+  </div>
+
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+
+    <div class="row">
+      <!-- left column -->
+      <div class="col-md-8">
+
+        <!-- basic info -->
+        <div class="inv-form-card">
+          <div class="inv-form-card-title">Basic info</div>
+
+          <div class="mb-3">
+            <label class="inv-form-label">Name</label>
+            {{ form.name }}
+          </div>
+
+          <div class="row">
+            <div class="col-md-4 mb-3">
+              <label class="inv-form-label">Category</label>
+              {{ form.category }}
+            </div>
+            <div class="col-md-4 mb-3">
+              <label class="inv-form-label">Code</label>
+              {{ form.code }}
+            </div>
+            <div class="col-md-4 mb-3">
+              <label class="inv-form-label">SKU</label>
+              {{ form.sku }}
+            </div>
+          </div>
+        </div>
+
+        <!-- library links -->
+        <div class="inv-form-card">
+          <div class="inv-form-card-title">Link to library items</div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="inv-form-label">Product</label>
+              {{ form.product }}
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="inv-form-label">Fabric</label>
+              {{ form.fabric }}
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-4 mb-3">
+              <label class="inv-form-label">Accessory</label>
+              {{ form.accessory }}
+            </div>
+            <div class="col-md-4 mb-3">
+              <label class="inv-form-label">Trim</label>
+              {{ form.trim }}
+            </div>
+            <div class="col-md-4 mb-3">
+              <label class="inv-form-label">Thread option</label>
+              {{ form.thread_option }}
+            </div>
+          </div>
+        </div>
+
+        <!-- stock info -->
+        <div class="inv-form-card">
+          <div class="inv-form-card-title">Stock and value</div>
+          <div class="row">
+            <div class="col-md-4 mb-3">
+              <label class="inv-form-label">Unit type</label>
+              {{ form.unit_type }}
+            </div>
+            <div class="col-md-4 mb-3">
+              <label class="inv-form-label">Unit cost</label>
+              {{ form.unit_cost }}
+            </div>
+            <div class="col-md-4 mb-3">
+              <label class="inv-form-label">Quantity</label>
+              {{ form.quantity }}
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-4 mb-3">
+              <label class="inv-form-label">Minimum level</label>
+              {{ form.min_level }}
+            </div>
+            <div class="col-md-8 mb-3">
+              <label class="inv-form-label">Location in factory or store</label>
+              {{ form.location }}
+              <div class="inv-form-help">
+                Example: Warehouse A, rack 4, box 7.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- notes -->
+        <div class="inv-form-card mb-4">
+          <div class="inv-form-card-title">Notes</div>
+          {{ form.notes }}
+          <div class="inv-form-help mt-1">
+            You can write any special instructions here.
+          </div>
+        </div>
+
+      </div>
+
+      <!-- right column -->
+      <div class="col-md-4">
+
+        <!-- image -->
+        <div class="inv-form-card">
+          <div class="inv-form-card-title">Image</div>
+
+          {% if item and item.image %}
+            <div class="mb-2" style="background:#151515; border-radius:10px; overflow:hidden;">
+              <img src="{{ item.image.url }}"
+                   alt="{{ item.name }}"
+                   style="width:100%; max-height:220px; object-fit:cover;">
+            </div>
+            <div class="inv-form-help mb-2">
+              Current image. You can upload a new one to replace it.
+            </div>
+          {% endif %}
+
+          {{ form.image }}
+        </div>
+
+        <!-- status -->
+        <div class="inv-form-card">
+          <div class="inv-form-card-title">Status</div>
+          <div class="inv-form-status-box">
+            <div class="form-check form-switch">
+              {{ form.is_active }}
+              <label class="form-check-label ms-2" style="color:#f0f0f0;">
+                Item is active and in use
+              </label>
+            </div>
+            <div class="inv-form-help mt-1">
+              Turn this off for old items you no longer use.
+            </div>
+          </div>
+        </div>
+
+        <!-- submit -->
+        <button type="submit" class="btn btn-warning w-100 mt-2 mb-4">
+          Save inventory item
+        </button>
+
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,293 @@
+{% extends "crm/base.html" %}
+{% block content %}
+
+<style>
+  .wrap{ max-width:1100px; margin:0 auto; color:#f9fafb; }
+
+  .cardx{
+    background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+    border:1px solid #334155;
+    border-radius:18px;
+    box-shadow:0 16px 36px rgba(0,0,0,0.55);
+    overflow:hidden;
+  }
+
+  .pad{ padding:14px; }
+  .title{ margin:0; font-weight:900; }
+  .sub{ margin-top:4px; font-size:12px; font-weight:800; color:#9ca3af; }
+
+  .rowx{
+    display:flex;
+    justify-content:space-between;
+    gap:12px;
+    flex-wrap:wrap;
+    align-items:center;
+    margin-bottom:12px;
+  }
+
+  .score{
+    display:inline-flex;
+    align-items:center;
+    gap:10px;
+    padding:10px 14px;
+    border-radius:999px;
+    border:1px solid #334155;
+    background: rgba(255,255,255,0.03);
+    font-weight:900;
+  }
+
+  .alertBox{
+    border:1px solid rgba(245,158,11,0.55);
+    background: rgba(245,158,11,0.10);
+    color:#fde68a;
+    border-radius:14px;
+    padding:10px 12px;
+    font-weight:800;
+    font-size:12px;
+    margin: 10px 0 14px 0;
+  }
+
+  .cards{
+    display:grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap:10px;
+    margin:10px 0 14px 0;
+  }
+
+  @media (max-width: 1100px){
+    .cards{ grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+  @media (max-width: 700px){
+    .cards{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+
+  .mini{
+    padding:10px 12px;
+    border-radius:14px;
+    border:1px solid rgba(148,163,184,0.22);
+    background: rgba(255,255,255,0.03);
+    min-width: 0;
+  }
+  .mini h4{
+    margin:0;
+    font-size:12px;
+    font-weight:900;
+    color:#e5e7eb;
+  }
+  .mini .v{
+    margin-top:6px;
+    font-weight:900;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .mini .small{
+    margin-top:4px;
+    font-size:11px;
+    color:#9ca3af;
+    font-weight:800;
+  }
+
+  .item{
+    padding:12px;
+    border-radius:14px;
+    border:1px solid rgba(148,163,184,0.22);
+    background: rgba(255,255,255,0.03);
+    margin-bottom:10px;
+  }
+  .item:last-child{ margin-bottom:0; }
+
+  .topline{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+
+  .name{ font-weight:900; margin:0; }
+  .detail{
+    margin-top:6px;
+    font-size:12px;
+    color:#e5e7eb;
+    font-weight:800;
+    line-height: 1.35;
+    word-break: break-word;
+  }
+
+  .badge{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:6px 10px;
+    border-radius:999px;
+    font-weight:900;
+    font-size:11px;
+    border:1px solid rgba(255,255,255,0.16);
+    line-height:1;
+  }
+  .badge-ok{ background:#16a34a; color:#06130a; border-color: rgba(34,197,94,0.45); }
+  .badge-warn{ background:#f59e0b; color:#111827; border-color: rgba(245,158,11,0.55); }
+  .badge-bad{ background:#ef4444; color:#140607; border-color: rgba(239,68,68,0.55); }
+
+  .tblWrap{ overflow-x:auto; }
+  .tbl{
+    width:100%;
+    border-collapse:collapse;
+    font-size:12px;
+    min-width: 760px;
+  }
+  .tbl th{
+    text-align:left;
+    padding:8px;
+    border-bottom:1px solid #334155;
+    color:#e5e7eb;
+    font-weight:900;
+    white-space:nowrap;
+  }
+  .tbl td{
+    padding:8px;
+    border-bottom:1px solid rgba(148,163,184,0.18);
+    color:#e5e7eb;
+    font-weight:800;
+    vertical-align:top;
+  }
+  .muted2{ color:#9ca3af; font-weight:800; }
+</style>
+
+<div class="container-fluid">
+  <div class="wrap">
+
+    <div class="rowx">
+      <div>
+        <h2 class="title">AI Health Monitor</h2>
+        <div class="sub">Quick system checks. Read only.</div>
+      </div>
+
+      <div class="score">
+        <span>Health score</span>
+        <span style="font-size:18px;">{{ score|default:0 }}</span>
+      </div>
+    </div>
+
+    {% if db_error %}
+      <div class="alertBox">
+        {{ db_error }}
+      </div>
+    {% endif %}
+
+    <div class="cards">
+      <div class="mini">
+        <h4>Provider</h4>
+        <div class="v">{{ cards.provider_name|default:"OpenAI" }}</div>
+        <div class="small">AI provider</div>
+      </div>
+
+      <div class="mini">
+        <h4>API Key</h4>
+        {% if cards.key_loaded %}
+          <div class="v">Loaded</div>
+          <div class="small">Ready to call</div>
+        {% else %}
+          <div class="v">Missing</div>
+          <div class="small">Set OPENAI_API_KEY</div>
+        {% endif %}
+      </div>
+
+      <div class="mini">
+        <h4>Model</h4>
+        <div class="v">{{ cards.model_name|default:"Not set" }}</div>
+        <div class="small">From settings</div>
+      </div>
+
+      <div class="mini">
+        <h4>Errors 24h</h4>
+        <div class="v">{{ cards.errors_24h|default:0 }}</div>
+        <div class="small">AI errors only</div>
+      </div>
+
+      <div class="mini">
+        <h4>Last request</h4>
+        <div class="v">
+          {% if cards.last_request_time %}
+            {{ cards.last_request_time }}
+          {% else %}
+            None
+          {% endif %}
+        </div>
+        <div class="small">From AI logs</div>
+      </div>
+    </div>
+
+    <div class="cardx">
+      <div class="pad">
+        {% if checks %}
+          {% for c in checks %}
+            <div class="item">
+              <div class="topline">
+                <p class="name">{{ c.name }}</p>
+
+                {% if c.status == "ok" %}
+                  <span class="badge badge-ok">OK</span>
+                {% elif c.status == "warn" %}
+                  <span class="badge badge-warn">Warning</span>
+                {% else %}
+                  <span class="badge badge-bad">Bad</span>
+                {% endif %}
+              </div>
+
+              <div class="detail">{{ c.detail }}</div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="muted2">No checks yet.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div style="margin-top:14px;">
+      <h3 class="title" style="font-size:16px;">Error history</h3>
+      <div class="sub">Latest errors from AI logs.</div>
+
+      <div class="cardx" style="margin-top:10px;">
+        <div class="pad">
+          <div class="tblWrap">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Feature</th>
+                  <th>Provider</th>
+                  <th>Message</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in recent_errors %}
+                  <tr>
+                    <td>{{ row.created_at }}</td>
+                    <td>{{ row.feature|default:"" }}</td>
+                    <td>{{ row.provider|default:"" }}</td>
+                    <td style="word-break:break-word;">
+                      {{ row.message|default:"" }}
+                      {% if row.error_type %}
+                        <div class="muted2" style="margin-top:6px;">{{ row.error_type }}</div>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="4">No errors yet</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}

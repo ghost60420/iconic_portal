@@ -1,0 +1,505 @@
+{% extends "crm/base.html" %}
+{% load static %}
+
+{% block content %}
+
+<style>
+  :root{
+    --bg:#020617;
+    --panel:#0b1220;
+    --panel2:#0f172a;
+    --line:#334155;
+    --text:#f9fafb;
+    --muted:#9ca3af;
+    --gold:#facc15;
+  }
+
+  .page{
+    max-width:1200px;
+    margin:18px auto 50px auto;
+    padding:0 12px;
+    color:var(--text);
+  }
+
+  a{ color:var(--gold); text-decoration:none; }
+  a:hover{ text-decoration:underline; }
+
+  .page-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:12px;
+  }
+
+  .page-title{
+    margin:0;
+    font-size:24px;
+    font-weight:900;
+    color:#fef9c3;
+    letter-spacing:0.2px;
+  }
+
+  .page-subtitle{
+    margin-top:4px;
+    font-size:12px;
+    color:var(--muted);
+  }
+
+  .page-actions{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    align-items:center;
+  }
+
+  .btn-main{
+    padding:7px 14px;
+    border-radius:999px;
+    border:1px solid rgba(255,255,255,0.14);
+    background: linear-gradient(145deg, #f5d580, #d4b35f);
+    color:#111827;
+    font-size:12px;
+    font-weight:900;
+    cursor:pointer;
+    display:inline-block;
+    white-space:nowrap;
+    box-shadow:0 3px 0 #020617;
+    transition: all 0.12s ease;
+  }
+  .btn-main:hover{
+    filter:brightness(1.05);
+    text-decoration:none;
+  }
+
+  .btn-ghost{
+    padding:7px 14px;
+    border-radius:999px;
+    border:1px solid rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.04);
+    color:#e5e7eb;
+    font-size:12px;
+    font-weight:900;
+    cursor:pointer;
+    display:inline-block;
+    white-space:nowrap;
+    transition: all 0.12s ease;
+  }
+  .btn-ghost:hover{
+    filter:brightness(1.05);
+    text-decoration:none;
+  }
+
+  .card{
+    background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:12px;
+    box-shadow:0 16px 36px rgba(0,0,0,0.35);
+    margin-bottom:14px;
+  }
+
+  .card-title{
+    font-size:14px;
+    font-weight:900;
+    color:#fefce8;
+    margin:0;
+  }
+
+  .card-note{
+    font-size:11px;
+    color:var(--muted);
+    margin-top:4px;
+    line-height:1.3;
+    font-weight:800;
+  }
+
+  .ai-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+
+  .ai-controls{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+
+  .pill-select{
+    background:var(--bg);
+    color:var(--text);
+    border:1px solid rgba(148,163,184,0.35);
+    border-radius:999px;
+    padding:6px 10px;
+    font-size:12px;
+    font-weight:900;
+  }
+
+  .ai-input-row{
+    margin-top:10px;
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+
+  .ai-input{
+    flex:1;
+    min-width:240px;
+    background:var(--bg);
+    color:var(--text);
+    border:1px solid rgba(148,163,184,0.35);
+    border-radius:12px;
+    padding:8px 10px;
+    font-size:12px;
+    font-weight:900;
+  }
+
+  .ai-status{
+    font-size:11px;
+    color:var(--muted);
+    font-weight:800;
+  }
+
+  .ai-output{
+    margin-top:10px;
+    background:var(--bg);
+    border:1px solid rgba(148,163,184,0.22);
+    border-radius:12px;
+    padding:10px;
+    font-size:12px;
+    white-space:pre-wrap;
+    min-height:70px;
+    color:#e5e7eb;
+    font-weight:800;
+  }
+
+  .filters{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    align-items:flex-end;
+    margin-top:10px;
+  }
+
+  .field{
+    display:flex;
+    flex-direction:column;
+    gap:5px;
+    min-width:160px;
+  }
+
+  .label{
+    font-size:11px;
+    color:var(--muted);
+    font-weight:900;
+  }
+
+  .input{
+    background:var(--bg);
+    color:var(--text);
+    border:1px solid rgba(148,163,184,0.35);
+    border-radius:12px;
+    padding:8px 10px;
+    font-size:12px;
+    font-weight:900;
+  }
+
+  .table-shell{
+    background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+    border-radius:16px;
+    border:1px solid var(--line);
+    padding:12px;
+    box-shadow:0 16px 36px rgba(0,0,0,0.35);
+  }
+
+  .table-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:10px;
+  }
+
+  .table-title{
+    font-size:14px;
+    font-weight:900;
+    color:#fefce8;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+
+  table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:12px;
+  }
+
+  th, td{
+    padding:8px 8px;
+    border-bottom:1px solid rgba(148,163,184,0.18);
+    text-align:left;
+    vertical-align:top;
+    font-weight:800;
+  }
+
+  th{
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.35px;
+    color:var(--muted);
+  }
+
+  tbody tr:nth-child(even){
+    background: rgba(15, 23, 42, 0.35);
+  }
+
+  tbody tr:hover{
+    background: rgba(245, 213, 128, 0.10);
+  }
+
+  .lead-link{
+    color:var(--gold);
+    font-weight:900;
+  }
+
+  .muted{
+    color:var(--muted);
+  }
+
+  .badge{
+    display:inline-block;
+    padding:3px 8px;
+    border-radius:999px;
+    border:1px solid rgba(148,163,184,0.35);
+    font-size:11px;
+    color:#e5e7eb;
+    background: rgba(255,255,255,0.03);
+    white-space:nowrap;
+    font-weight:900;
+  }
+
+  @media (max-width:768px){
+    th, td{ padding:7px 6px; }
+  }
+</style>
+
+<div class="page">
+
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Leads</h1>
+      <div class="page-subtitle">
+        Total <strong>{{ leads|length }}</strong> leads in this view.
+        <span class="muted">Sorted newest first.</span>
+      </div>
+    </div>
+
+    <div class="page-actions">
+      <a href="/leads/add/" class="btn-main">Add lead</a>
+      <a href="/opportunities/" class="btn-ghost">View opportunities</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ai-row">
+      <div>
+        <div class="card-title">Lead AI overview</div>
+        <div class="card-note">
+          Ask for a quick overview, today focus, risk leads, or hot leads.
+        </div>
+      </div>
+
+      <div class="ai-controls">
+        <select id="leads-ai-mode" class="pill-select">
+          <option value="overview">Overview</option>
+          <option value="today_focus">Today focus</option>
+          <option value="risk_view">Risk leads</option>
+          <option value="hot_view">Hot leads</option>
+        </select>
+
+        <button type="button" class="btn-main" id="leads-ai-btn">Ask AI</button>
+      </div>
+    </div>
+
+    <div class="ai-input-row">
+      <input
+        id="leads-ai-question"
+        type="text"
+        class="ai-input"
+        placeholder="Add a question if you want, like: who should we call today"
+      >
+      <span id="leads-ai-status" class="ai-status"></span>
+    </div>
+
+    <div id="leads-ai-output" class="ai-output">
+      Ready. Click Ask AI.
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Filters</div>
+    <div class="card-note">Use these to find leads fast.</div>
+
+    <form method="get" class="filters">
+      <div class="field" style="min-width:260px;">
+        <div class="label">Search</div>
+        <input class="input" name="q" value="{{ request.GET.q|default:'' }}" placeholder="Name, brand, email, phone, notes">
+      </div>
+
+      <div class="field">
+        <div class="label">Status</div>
+        <input class="input" name="status" value="{{ request.GET.status|default:'' }}" placeholder="New, Contacted, etc">
+      </div>
+
+      <div class="field">
+        <div class="label">Market</div>
+        <input class="input" name="market" value="{{ request.GET.market|default:'' }}" placeholder="Canada, USA, etc">
+      </div>
+
+      <div class="field">
+        <div class="label">Owner</div>
+        <input class="input" name="owner" value="{{ request.GET.owner|default:'' }}" placeholder="Refat, etc">
+      </div>
+
+      <div class="field" style="min-width:120px;">
+        <button class="btn-main" type="submit">Apply</button>
+      </div>
+
+      <div class="field" style="min-width:120px;">
+        <a class="btn-ghost" href="{% url 'leads_list' %}">Clear</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="table-shell">
+    <div class="table-head">
+      <div class="table-title">All leads</div>
+      <div class="card-note">Click Lead id to open the lead detail page.</div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Lead id</th>
+          <th>Account or brand</th>
+          <th>Contact name</th>
+          <th>Sales rep</th>
+          <th>Market</th>
+          <th>Status</th>
+          <th>Created</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for lead in leads %}
+          <tr>
+            <td>
+              <a href="{% url 'lead_detail' lead.pk %}" class="lead-link">
+                {{ lead.lead_id }}
+              </a>
+            </td>
+            <td>{{ lead.account_brand }}</td>
+            <td>{{ lead.contact_name }}</td>
+
+            <td>
+              {% if lead.owner %}
+                <span class="badge">
+                  {% if lead.owner.get_full_name %}
+                    {{ lead.owner.get_full_name }}
+                  {% else %}
+                    {{ lead.owner }}
+                  {% endif %}
+                </span>
+              {% else %}
+                <span class="muted">Unassigned</span>
+              {% endif %}
+            </td>
+
+            <td>{{ lead.get_market_display }}</td>
+            <td>{{ lead.lead_status }}</td>
+            <td class="muted">{{ lead.created_date }}</td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="7" class="muted">No leads yet.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+  function getCookie(name) {
+    const value = "; " + document.cookie;
+    const parts = value.split("; " + name + "=");
+    if (parts.length === 2) return parts.pop().split(";").shift();
+    return "";
+  }
+
+  function buildPrompt(mode, extraQ) {
+    const modeText = {
+      overview: "Give a short overview of leads and next steps.",
+      today_focus: "Tell me who to focus on today and why.",
+      risk_view: "List risk leads and what to do next.",
+      hot_view: "List hot leads that look ready to move forward."
+    }[mode] || "Give a short overview of leads.";
+
+    if (extraQ) return modeText + "\\n\\nExtra question:\\n" + extraQ;
+    return modeText;
+  }
+
+  (function () {
+    const btn = document.getElementById("leads-ai-btn");
+    const outBox = document.getElementById("leads-ai-output");
+    const statusBox = document.getElementById("leads-ai-status");
+    const modeBox = document.getElementById("leads-ai-mode");
+    const qBox = document.getElementById("leads-ai-question");
+
+    if (!btn) return;
+
+    btn.addEventListener("click", async function () {
+      const mode = (modeBox.value || "overview");
+      const extraQ = (qBox.value || "").trim();
+      const prompt = buildPrompt(mode, extraQ);
+
+      statusBox.textContent = "Working...";
+      outBox.textContent = "Loading...";
+
+      try {
+        const res = await fetch("/ai/assistant/ask/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "X-CSRFToken": getCookie("csrftoken")
+          },
+          body: new URLSearchParams({ q: prompt }).toString()
+        });
+
+        const data = await res.json();
+        if (!data.ok) {
+          statusBox.textContent = "Error";
+          outBox.textContent = data.error || "AI failed.";
+          return;
+        }
+
+        statusBox.textContent = "Done";
+        outBox.textContent = data.answer || "No answer returned.";
+      } catch (e) {
+        statusBox.textContent = "Error";
+        outBox.textContent = "AI request failed.";
+      }
+    });
+  })();
+</script>
+
+{% endblock %}

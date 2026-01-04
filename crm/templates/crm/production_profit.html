@@ -1,0 +1,200 @@
+{# ========================= #}
+{# templates/crm/production_profit.html #}
+{# Create this new file #}
+{# ========================= #}
+
+{% extends "crm/base.html" %}
+{% block content %}
+
+<div class="container-fluid" style="color:#ffffff;">
+
+  <style>
+    .pp-card{
+      background:#020617;
+      border:1px solid #374151;
+      border-radius:14px;
+      box-shadow:0 12px 30px rgba(0,0,0,0.35);
+    }
+    .pp-label{
+      font-size:12px;
+      text-transform:uppercase;
+      color:#cbd5e1;
+      font-weight:900;
+      letter-spacing:0.4px;
+    }
+    .pp-value{
+      font-size:22px;
+      font-weight:900;
+      color:#ffffff;
+      line-height:1.15;
+    }
+    .pp-input{
+      background:#030712 !important;
+      border-color:#4b5563 !important;
+      color:#ffffff !important;
+      font-weight:800;
+    }
+    .pp-table th{
+      color:#ffffff !important;
+      font-weight:900 !important;
+      white-space:nowrap;
+      border-color:#111827 !important;
+    }
+    .pp-table td{
+      color:#ffffff !important;
+      font-weight:700;
+      vertical-align:middle;
+      border-color:#111827 !important;
+    }
+    .nowrap{ white-space:nowrap; }
+  </style>
+
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+      <h2 class="mb-1" style="font-weight:900;">Production profit report</h2>
+      <div style="font-size:12px;color:#cbd5e1;font-weight:700;">
+        Profit rule: Profit equals Swing charge minus Bangladesh cost. All shown in CAD.
+      </div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{% url 'accounting_entry_list' %}" class="btn btn-outline-light btn-sm rounded-pill" style="font-weight:900;">All entries</a>
+      <a href="{% url 'accounting_bd_grid' %}" class="btn btn-outline-light btn-sm rounded-pill" style="font-weight:900;">Bangladesh grid</a>
+    </div>
+  </div>
+
+  <div class="row mb-3">
+    <div class="col-md-3 mb-2">
+      <div class="card pp-card">
+        <div class="card-body p-3">
+          <div class="pp-label">Total swing CAD</div>
+          <div class="pp-value" style="color:#86efac;">{{ total_swing|default_if_none:0|floatformat:2 }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3 mb-2">
+      <div class="card pp-card">
+        <div class="card-body p-3">
+          <div class="pp-label">Total cost CAD</div>
+          <div class="pp-value" style="color:#ffb4b4;">{{ total_cost|default_if_none:0|floatformat:2 }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3 mb-2">
+      <div class="card pp-card">
+        <div class="card-body p-3">
+          <div class="pp-label">Total profit CAD</div>
+          <div class="pp-value" style="{% if total_profit < 0 %}color:#ffb4b4;{% else %}color:#86efac;{% endif %}">
+            {{ total_profit|default_if_none:0|floatformat:2 }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3 mb-2">
+      <div class="card pp-card">
+        <div class="card-body p-3">
+          <div class="pp-label">Total margin percent</div>
+          <div class="pp-value" style="{% if total_margin < 0 %}color:#ffb4b4;{% else %}color:#86efac;{% endif %}">
+            {{ total_margin|default_if_none:0|floatformat:1 }} %
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card pp-card mb-3">
+    <div class="card-body p-3">
+      <form method="get" class="row g-2 align-items-end" style="font-size:13px;font-weight:800;">
+
+        <div class="col-sm-2">
+          <label class="form-label mb-1" style="color:#ffffff;font-weight:900;">Year</label>
+          <input type="text" name="year" value="{{ filter_year }}" class="form-control form-control-sm pp-input" placeholder="2025">
+        </div>
+
+        <div class="col-sm-2">
+          <label class="form-label mb-1" style="color:#ffffff;font-weight:900;">Month</label>
+          <select name="month" class="form-select form-select-sm pp-input">
+            <option value="" {% if not filter_month %}selected{% endif %}>All</option>
+            <option value="1" {% if filter_month|stringformat:"s" == "1" %}selected{% endif %}>Jan</option>
+            <option value="2" {% if filter_month|stringformat:"s" == "2" %}selected{% endif %}>Feb</option>
+            <option value="3" {% if filter_month|stringformat:"s" == "3" %}selected{% endif %}>Mar</option>
+            <option value="4" {% if filter_month|stringformat:"s" == "4" %}selected{% endif %}>Apr</option>
+            <option value="5" {% if filter_month|stringformat:"s" == "5" %}selected{% endif %}>May</option>
+            <option value="6" {% if filter_month|stringformat:"s" == "6" %}selected{% endif %}>Jun</option>
+            <option value="7" {% if filter_month|stringformat:"s" == "7" %}selected{% endif %}>Jul</option>
+            <option value="8" {% if filter_month|stringformat:"s" == "8" %}selected{% endif %}>Aug</option>
+            <option value="9" {% if filter_month|stringformat:"s" == "9" %}selected{% endif %}>Sep</option>
+            <option value="10" {% if filter_month|stringformat:"s" == "10" %}selected{% endif %}>Oct</option>
+            <option value="11" {% if filter_month|stringformat:"s" == "11" %}selected{% endif %}>Nov</option>
+            <option value="12" {% if filter_month|stringformat:"s" == "12" %}selected{% endif %}>Dec</option>
+          </select>
+        </div>
+
+        <div class="col-sm-4">
+          <label class="form-label mb-1" style="color:#ffffff;font-weight:900;">Order code</label>
+          <input type="text" name="order" value="{{ filter_order }}" class="form-control form-control-sm pp-input" placeholder="Example PO 1001">
+        </div>
+
+        <div class="col-sm-2">
+          <button type="submit" class="btn btn-warning btn-sm w-100 rounded-pill" style="font-weight:900;">Apply</button>
+        </div>
+
+        <div class="col-sm-2">
+          <a href="{% url 'production_profit_report' %}" class="btn btn-outline-light btn-sm w-100 rounded-pill" style="font-weight:900;">Reset</a>
+        </div>
+
+      </form>
+    </div>
+  </div>
+
+  <div class="card pp-card">
+    <div class="card-header py-2" style="border-bottom:1px solid #1f2937;">
+      <div class="d-flex justify-content-between align-items-center">
+        <span style="font-size:14px;font-weight:900;color:#ffffff;">Orders</span>
+        <span style="font-size:11px;color:#cbd5e1;font-weight:700;">Showing {{ rows|length }} orders</span>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-dark table-sm mb-0 pp-table" style="font-size:12px;">
+        <thead>
+          <tr>
+            <th class="nowrap">Order id</th>
+            <th class="text-end nowrap">Swing CAD</th>
+            <th class="text-end nowrap">Cost CAD</th>
+            <th class="text-end nowrap">Profit CAD</th>
+            <th class="text-end nowrap">Margin percent</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if rows %}
+            {% for r in rows %}
+              <tr>
+                <td class="nowrap">{{ r.order_id }}</td>
+                <td class="text-end nowrap">{{ r.swing_cad|default_if_none:0|floatformat:2 }}</td>
+                <td class="text-end nowrap">{{ r.cost_cad|default_if_none:0|floatformat:2 }}</td>
+                <td class="text-end nowrap" style="{% if r.profit_cad < 0 %}color:#ffb4b4;{% else %}color:#86efac;{% endif %}">
+                  {{ r.profit_cad|default_if_none:0|floatformat:2 }}
+                </td>
+                <td class="text-end nowrap" style="{% if r.margin_pct < 0 %}color:#ffb4b4;{% else %}color:#86efac;{% endif %}">
+                  {{ r.margin_pct|default_if_none:0|floatformat:1 }} %
+                </td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="5" class="text-center py-3" style="color:#cbd5e1;font-weight:800;">
+                No production orders found in this view.
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}

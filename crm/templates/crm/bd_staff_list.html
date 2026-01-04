@@ -1,0 +1,158 @@
+{% extends "crm/base.html" %}
+{% block content %}
+
+<style>
+  .btn-3d {
+    border-radius: 999px;
+    font-weight: 700;
+    padding: 8px 14px;
+    border: 1px solid rgba(255,255,255,0.18);
+    box-shadow:
+      0 10px 22px rgba(0,0,0,0.45),
+      inset 0 1px 0 rgba(255,255,255,0.14);
+    transform: translateY(0);
+    transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+  }
+  .btn-3d:active {
+    transform: translateY(2px);
+    box-shadow:
+      0 6px 14px rgba(0,0,0,0.40),
+      inset 0 1px 0 rgba(255,255,255,0.10);
+  }
+
+  .btn-gold {
+    background: linear-gradient(145deg, #f5d580, #d4b35f);
+    color: #050505;
+    border-color: rgba(255,215,128,0.55);
+  }
+  .btn-gold:hover { filter: brightness(1.05); }
+
+  .btn-dark3d {
+    background: linear-gradient(145deg, #0f172a, #020617);
+    color: #e5e7eb;
+    border-color: rgba(148,163,184,0.22);
+  }
+  .btn-dark3d:hover { filter: brightness(1.08); }
+
+  .card-neo {
+    background: radial-gradient(circle at top, #0b1224, #020617);
+    border: 1px solid #374151;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.55);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+
+  .card-neo .card-header {
+    background: rgba(2,6,23,0.75);
+    border-bottom: 1px solid #1f2937;
+  }
+
+  .table thead th {
+    color: #cbd5e1;
+    font-weight: 700;
+    border-color: #1f2937;
+  }
+  .table td {
+    border-color: #1f2937;
+  }
+
+  .badge-soft {
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 11px;
+    display: inline-block;
+  }
+  .badge-yes {
+    background: rgba(34,197,94,0.16);
+    color: #86efac;
+    border: 1px solid rgba(34,197,94,0.35);
+  }
+  .badge-no {
+    background: rgba(148,163,184,0.14);
+    color: #cbd5e1;
+    border: 1px solid rgba(148,163,184,0.25);
+  }
+</style>
+
+<div class="container-fluid" style="color:#f9fafb;">
+
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+      <h2 class="mb-1">Bangladesh staff</h2>
+      <div style="font-size:12px; color:#9ca3af;">
+        All factory staff used for salary and overtime.
+      </div>
+    </div>
+
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{% url 'bd_staff_month_list' %}"
+         class="btn btn-outline-light btn-sm rounded-pill">
+        Payroll months
+      </a>
+
+      <a href="{% url 'bd_staff_add' %}"
+         class="btn btn-warning btn-sm rounded-pill">
+        Add Bangladesh staff
+      </a>
+    </div>
+  </div>
+
+  <div class="card card-neo">
+    <div class="card-header py-2">
+      <div class="d-flex justify-content-between align-items-center">
+        <span style="font-size:14px; font-weight:800;">Staff list</span>
+        <span style="font-size:11px; color:#9ca3af;">
+          {{ staff_list|length }} staff
+        </span>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-dark table-sm mb-0" style="font-size:12px;">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Role</th>
+            <th class="text-end">Base salary BDT</th>
+            <th>Active</th>
+            <th class="text-end">Edit</th>
+          </tr>
+        </thead>
+
+        <tbody>
+        {% if staff_list %}
+          {% for s in staff_list %}
+            <tr>
+              <td style="font-weight:700;">{{ s.name }}</td>
+              <td>{{ s.role|default:"" }}</td>
+              <td class="text-end">{{ s.base_salary_bdt|floatformat:2 }}</td>
+              <td>
+                {% if s.is_active %}
+                  <span class="badge-soft badge-yes">Yes</span>
+                {% else %}
+                  <span class="badge-soft badge-no">No</span>
+                {% endif %}
+              </td>
+              <td class="text-end">
+                <a href="{% url 'bd_staff_edit' s.pk %}" class="btn btn-3d btn-dark3d btn-sm">
+                  Edit
+                </a>
+              </td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="5" class="text-center text-muted py-3">
+              No staff yet. Click Add Bangladesh staff.
+            </td>
+          </tr>
+        {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}

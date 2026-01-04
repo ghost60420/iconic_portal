@@ -1,0 +1,230 @@
+{% extends "crm/base.html" %}
+{% load tz %}
+{% block content %}
+
+<style>
+  .bd-wrap { max-width: 1200px; margin: 0 auto; }
+  .bd-card { background:#020617; border:1px solid #374151; border-radius:14px; }
+  .bd-card .card-body { padding: 14px; }
+  .bd-k { font-size:11px; color:#9ca3af; }
+  .bd-v { font-size:22px; font-weight:700; }
+  .bd-v-green { color:#4ade80; }
+  .bd-v-red { color:#f97373; }
+  .bd-form label { font-size:12px; color:#e5e7eb; margin-bottom:6px; }
+  .bd-form .form-control, .bd-form .form-select {
+    background:#030712;
+    border-color:#4b5563;
+    color:#f9fafb;
+  }
+</style>
+
+<div class="container-fluid bd-wrap" style="color:#f9fafb;">
+
+  <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+    <div>
+      <h2 class="mb-1">BD payroll months</h2>
+      <div style="font-size:12px; color:#9ca3af;">
+        One row per staff per month. Track overtime, bonus, deduction, and paid status.
+      </div>
+    </div>
+
+    <a href="{% url 'bd_staff_list' %}" class="btn btn-outline-light btn-sm rounded-pill">
+      Back to staff
+    </a>
+  </div>
+
+  <div class="row g-2 mb-3">
+    <div class="col-12 col-md-3">
+      <div class="bd-card h-100">
+        <div class="card-body">
+          <div class="bd-k">Total payroll (BDT)</div>
+          <div class="bd-v bd-v-green">{{ total_payroll|default:"0.00"|floatformat:2 }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-md-3">
+      <div class="bd-card h-100">
+        <div class="card-body">
+          <div class="bd-k">Overtime (BDT)</div>
+          <div class="bd-v">{{ total_ot|default:"0.00"|floatformat:2 }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-md-2">
+      <div class="bd-card h-100">
+        <div class="card-body">
+          <div class="bd-k">Bonus</div>
+          <div class="bd-v">{{ total_bonus|default:"0.00"|floatformat:2 }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-md-2">
+      <div class="bd-card h-100">
+        <div class="card-body">
+          <div class="bd-k">Deduction</div>
+          <div class="bd-v bd-v-red">{{ total_deduction|default:"0.00"|floatformat:2 }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-md-2">
+      <div class="bd-card h-100">
+        <div class="card-body">
+          <div class="bd-k">Paid and Unpaid</div>
+          <div class="mt-2">
+            <span class="badge bg-success">{{ paid_count|default:"0" }}</span>
+            <span class="badge bg-secondary">{{ unpaid_count|default:"0" }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bd-card mb-3">
+    <div class="card-body bd-form">
+
+      <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-3">
+          <label class="form-label mb-1">Year</label>
+          <input id="yearInput" type="number" name="year" value="{{ year }}" class="form-control form-control-sm">
+        </div>
+
+        <div class="col-12 col-md-3">
+          <label class="form-label mb-1">Month</label>
+          <select id="monthInput" name="month" class="form-select form-select-sm">
+            <option value="all" {% if month == "all" %}selected{% endif %}>All months</option>
+            <option value="1" {% if month_i == 1 %}selected{% endif %}>January</option>
+            <option value="2" {% if month_i == 2 %}selected{% endif %}>February</option>
+            <option value="3" {% if month_i == 3 %}selected{% endif %}>March</option>
+            <option value="4" {% if month_i == 4 %}selected{% endif %}>April</option>
+            <option value="5" {% if month_i == 5 %}selected{% endif %}>May</option>
+            <option value="6" {% if month_i == 6 %}selected{% endif %}>June</option>
+            <option value="7" {% if month_i == 7 %}selected{% endif %}>July</option>
+            <option value="8" {% if month_i == 8 %}selected{% endif %}>August</option>
+            <option value="9" {% if month_i == 9 %}selected{% endif %}>September</option>
+            <option value="10" {% if month_i == 10 %}selected{% endif %}>October</option>
+            <option value="11" {% if month_i == 11 %}selected{% endif %}>November</option>
+            <option value="12" {% if month_i == 12 %}selected{% endif %}>December</option>
+          </select>
+        </div>
+
+        <div class="col-12 col-md-3">
+          <form method="get">
+            <input type="hidden" name="year" id="fYear" value="{{ year }}">
+            <input type="hidden" name="month" id="fMonth" value="{{ month }}">
+            <button class="btn btn-warning btn-sm w-100 rounded-pill" type="submit">Apply</button>
+          </form>
+        </div>
+
+        <div class="col-12 col-md-3">
+          <form method="post" action="{% url 'bd_staff_month_generate' %}">
+            {% csrf_token %}
+            <input type="hidden" name="year" id="genYear" value="{{ year }}">
+            <input type="hidden" name="month" id="genMonth" value="">
+            <button class="btn btn-success btn-sm w-100 rounded-pill" type="submit">
+              Generate payroll for this month
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <div style="font-size:11px; color:#9ca3af; margin-top:8px;">
+        Generate creates rows for active staff only. No duplicates. If Month is All months, it uses the current month.
+      </div>
+
+    </div>
+  </div>
+
+  <div class="bd-card">
+    <div class="table-responsive">
+      <table class="table table-dark table-sm mb-0" style="font-size:12px;">
+        <thead>
+          <tr>
+            <th>Staff</th>
+            <th class="text-end">Base</th>
+            <th class="text-end">OT hours</th>
+            <th class="text-end">OT rate</th>
+            <th class="text-end">OT total</th>
+            <th class="text-end">Bonus</th>
+            <th class="text-end">Deduction</th>
+            <th class="text-end">Final</th>
+            <th>Paid</th>
+            <th>Edit</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% if rows %}
+          {% for r in rows %}
+          <tr>
+            <td>{{ r.staff.name }}</td>
+            <td class="text-end">{{ r.base_salary_bdt|floatformat:2 }}</td>
+            <td class="text-end">{{ r.overtime_hours|floatformat:2 }}</td>
+            <td class="text-end">{{ r.overtime_rate_bdt|floatformat:2 }}</td>
+            <td class="text-end">{{ r.overtime_total_bdt|floatformat:2 }}</td>
+            <td class="text-end">{{ r.bonus_bdt|floatformat:2 }}</td>
+            <td class="text-end">{{ r.deduction_bdt|floatformat:2 }}</td>
+            <td class="text-end"><strong>{{ r.final_pay_bdt|floatformat:2 }}</strong></td>
+            <td>
+              {% if r.is_paid %}
+                <span class="badge bg-success">Yes</span>
+              {% else %}
+                <span class="badge bg-secondary">No</span>
+              {% endif %}
+            </td>
+            <td>
+              <a href="{% url 'bd_staff_month_edit' r.pk %}" class="btn btn-outline-light btn-sm rounded-pill">
+                Edit
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="10" class="text-center text-muted py-3">
+              No rows yet. Pick a year and month, then Generate payroll.
+            </td>
+          </tr>
+        {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  (function () {
+    const yearInput = document.getElementById("yearInput");
+    const monthInput = document.getElementById("monthInput");
+
+    const fYear = document.getElementById("fYear");
+    const fMonth = document.getElementById("fMonth");
+
+    const genYear = document.getElementById("genYear");
+    const genMonth = document.getElementById("genMonth");
+
+    function syncAll() {
+      const year = (yearInput.value || "").trim();
+      const month = (monthInput.value || "all").trim();
+
+      fYear.value = year || "{{ year }}";
+      fMonth.value = month || "all";
+
+      genYear.value = year || "{{ year }}";
+      if (!month || month === "all") {
+        genMonth.value = "";
+      } else {
+        genMonth.value = month;
+      }
+    }
+
+    yearInput.addEventListener("input", syncAll);
+    monthInput.addEventListener("change", syncAll);
+    syncAll();
+  })();
+</script>
+
+{% endblock %}

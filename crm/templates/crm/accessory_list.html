@@ -1,0 +1,338 @@
+{% include "crm/navbar.html" %}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Accessory library - Iconic CRM</title>
+    <style>
+        body {
+            background: #000;
+            color: #f5d580;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        a {
+            color: #f5d580;
+            text-decoration: none;
+        }
+
+        .page {
+            max-width: 1200px;
+            margin: 20px auto 40px auto;
+            padding: 0 15px;
+        }
+        .header-title {
+            font-size: 22px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+
+        /* toolbar */
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+        .toolbar-left {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .search-box input {
+            background: #000;
+            color: #f5d580;
+            border: 1px solid #444;
+            padding: 6px 8px;
+            border-radius: 4px;
+            font-size: 13px;
+            min-width: 190px;
+        }
+        select {
+            background: #000;
+            color: #f5d580;
+            border: 1px solid #444;
+            padding: 6px 8px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        .btn {
+            background: #f5d580;
+            color: #000;
+            padding: 7px 14px;
+            border-radius: 5px;
+            font-size: 13px;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-secondary {
+            background: #222;
+            color: #f5d580;
+            border: 1px solid #444;
+        }
+
+        /* AI helper card */
+        .ai-card {
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 12px 14px;
+            font-size: 13px;
+            margin-bottom: 18px;
+        }
+        .ai-card-title {
+            font-weight: bold;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+        .ai-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            margin-top: 6px;
+        }
+        .ai-field label {
+            display: block;
+            font-size: 11px;
+            margin-bottom: 2px;
+            color: #d9c17a;
+        }
+        .ai-field input {
+            width: 100%;
+            background: #000;
+            color: #f5d580;
+            border-radius: 4px;
+            border: 1px solid #444;
+            padding: 5px 6px;
+            font-size: 12px;
+        }
+        .ai-actions {
+            margin-top: 8px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .ai-note {
+            font-size: 11px;
+            color: #a4925c;
+        }
+        .ai-output {
+            margin-top: 8px;
+            background: #050505;
+            border-radius: 6px;
+            border: 1px solid #333;
+            padding: 8px;
+            min-height: 60px;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+
+        /* table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        th, td {
+            border: 1px solid #333;
+            padding: 6px 8px;
+            text-align: left;
+        }
+        th {
+            background: #111;
+            color: #f5d580;
+        }
+        tr:nth-child(even) {
+            background: #101010;
+        }
+
+        .preview-img {
+            max-width: 70px;
+            max-height: 70px;
+            border-radius: 6px;
+            border: 1px solid #333;
+        }
+        .muted {
+            font-size: 12px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+
+    <div class="header-title">Accessory library</div>
+
+    <div class="toolbar">
+        <form method="get" class="toolbar-left">
+            <div class="search-box">
+                <input type="text" name="q" value="{{ q }}" placeholder="Search by name">
+            </div>
+            <div>
+                <input type="text"
+                       name="accessory_type"
+                       value="{{ accessory_type }}"
+                       placeholder="Type (zipper, button)">
+            </div>
+            <div>
+                <input type="text"
+                       name="color"
+                       value="{{ color }}"
+                       placeholder="Color">
+            </div>
+            <button type="submit" class="btn">Filter</button>
+            <a href="{% url 'accessories_list' %}" class="btn btn-secondary">Clear</a>
+        </form>
+
+        <a href="{% url 'accessory_add' %}" class="btn">Add accessory</a>
+    </div>
+
+    <!-- AI helper -->
+    <div class="ai-card">
+        <div class="ai-card-title">AI ideas for a new accessory</div>
+        <div class="ai-note">
+            Fill the fields and AI will suggest material, use case, and price level.
+        </div>
+
+        <div class="ai-grid">
+            <div class="ai-field">
+                <label>Name</label>
+                <input id="acc-ai-name" type="text" placeholder="Example: Metal zipper number five">
+            </div>
+            <div class="ai-field">
+                <label>Type</label>
+                <input id="acc-ai-type" type="text" placeholder="Zipper, button, elastic">
+            </div>
+            <div class="ai-field">
+                <label>Color</label>
+                <input id="acc-ai-color" type="text" placeholder="Black, nickel, gold">
+            </div>
+        </div>
+
+        <div class="ai-actions">
+            <button type="button" class="btn" id="acc-ai-btn">Ask AI</button>
+            <span class="ai-note" id="acc-ai-status"></span>
+        </div>
+
+        <div class="ai-output" id="acc-ai-output">
+            AI suggestion will appear here.
+        </div>
+    </div>
+
+    {% if accessories %}
+        <table>
+            <thead>
+            <tr>
+                <th>Preview</th>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Color</th>
+                <th>Created</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for a in accessories %}
+                <tr>
+                    <td>
+                        {% if a.image %}
+                            <img src="{{ a.image.url }}" alt="{{ a.name }}" class="preview-img">
+                        {% else %}
+                            <span class="muted">No image</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{% url 'accessory_detail' a.pk %}">
+                            {{ a.name }}
+                        </a>
+                    </td>
+                    <td>{{ a.accessory_type }}</td>
+                    <td>{{ a.color }}</td>
+                    <td>
+                        {% if a.created_at %}
+                            {{ a.created_at|date:"Y m d" }}
+                        {% else %}
+                            <span class="muted">Not set</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="muted">No accessories yet.</p>
+    {% endif %}
+
+    <!-- hidden form only for CSRF -->
+    <form id="acc-ai-csrf" style="display:none;">
+        {% csrf_token %}
+    </form>
+
+</div>
+
+<script>
+(function () {
+    const btn = document.getElementById("acc-ai-btn");
+    if (!btn) return;
+
+    const nameInput = document.getElementById("acc-ai-name");
+    const typeInput = document.getElementById("acc-ai-type");
+    const colorInput = document.getElementById("acc-ai-color");
+    const outBox = document.getElementById("acc-ai-output");
+    const statusSpan = document.getElementById("acc-ai-status");
+
+    function getCsrf() {
+        const tokenField = document.querySelector("#acc-ai-csrf input[name='csrfmiddlewaretoken']");
+        return tokenField ? tokenField.value : "";
+    }
+
+    btn.addEventListener("click", function () {
+        const name = nameInput.value.trim();
+        const accType = typeInput.value.trim();
+        const color = colorInput.value.trim();
+
+        if (!name) {
+            outBox.textContent = "Please type a name first.";
+            return;
+        }
+
+        statusSpan.textContent = "Thinking...";
+        outBox.textContent = "";
+
+        fetch("{% url 'accessory_ai_suggest' %}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-CSRFToken": getCsrf()
+            },
+            body: new URLSearchParams({
+                name: name,
+                accessory_type: accType,
+                color: color
+            })
+        }).then(function (res) {
+            return res.json();
+        }).then(function (data) {
+            if (data.ok) {
+                outBox.textContent = data.suggestion;
+                statusSpan.textContent = "Ready";
+            } else {
+                outBox.textContent = data.error || "AI could not answer.";
+                statusSpan.textContent = "";
+            }
+        }).catch(function (err) {
+            outBox.textContent = "Error talking to AI.";
+            statusSpan.textContent = "";
+            console.error(err);
+        });
+    });
+})();
+</script>
+
+</body>
+</html>

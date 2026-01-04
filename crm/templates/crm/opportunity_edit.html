@@ -1,0 +1,167 @@
+{% extends "crm/base.html" %}
+{% load static %}
+
+{% block content %}
+
+<style>
+    .page-opp-edit {
+        max-width: 800px;
+        margin: 20px auto;
+        padding: 0 10px;
+        color: #f9fafb;
+    }
+
+    .card {
+        background: radial-gradient(circle at top left, #111827, #020617);
+        border: 1px solid #1f2937;
+        border-radius: 10px;
+        padding: 12px 14px;
+        box-shadow: 0 0 12px rgba(0, 0, 0, 0.7);
+    }
+
+    .card-title {
+        font-size: 15px;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: #fefce8;
+        border-bottom: 1px solid #111827;
+        padding-bottom: 4px;
+    }
+
+    label {
+        font-size: 12px;
+        color: #e5e7eb;
+        display: block;
+        margin-bottom: 3px;
+    }
+
+    input,
+    select,
+    textarea {
+        width: 100%;
+        background: #020617;
+        color: #f9fafb;
+        border: 1px solid #374151;
+        border-radius: 6px;
+        padding: 5px 7px;
+        font-size: 12px;
+        margin-bottom: 8px;
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+        outline: none;
+        border-color: #facc15;
+        box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.4);
+    }
+
+    .row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .col {
+        flex: 1;
+        min-width: 180px;
+    }
+
+    .btn {
+        display: inline-block;
+        padding: 5px 12px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        font-size: 12px;
+        cursor: pointer;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    .btn-gold {
+        background: linear-gradient(135deg, #facc15, #f97316);
+        color: #111827;
+        border-color: #fbbf24;
+        font-weight: 600;
+    }
+
+    .btn-slate {
+        background: #020617;
+        color: #e5e7eb;
+        border-color: #374151;
+    }
+
+    .btn-row {
+        margin-top: 10px;
+        display: flex;
+        gap: 8px;
+    }
+
+    .muted {
+        font-size: 11px;
+        color: #9ca3af;
+        margin-top: 6px;
+    }
+</style>
+
+<div class="page-opp-edit">
+    <div class="card">
+        <div class="card-title">
+            Edit opportunity
+            <span style="font-size:12px; color:#facc15;">
+                {{ opportunity.opportunity_id }} / {{ opportunity.lead.account_brand }}
+            </span>
+        </div>
+
+        <form method="post">
+            {% csrf_token %}
+
+            <div class="row">
+                <div class="col">
+                    <label>Product type</label>
+                    <input type="text"
+                           name="product_type"
+                           value="{{ opportunity.product_type }}">
+                </div>
+                <div class="col">
+                    <label>Product category</label>
+                    <input type="text"
+                           name="product_category"
+                           value="{{ opportunity.product_category }}">
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col">
+                    <label>MOQ units</label>
+                    <input type="number"
+                           name="moq_units"
+                           value="{{ opportunity.moq_units }}">
+                </div>
+                <div class="col">
+                    <label>Order value (taka)</label>
+                    <input type="number"
+                           name="order_value"
+                           value="{{ opportunity.order_value }}">
+                </div>
+            </div>
+
+            <label>Notes</label>
+            <textarea name="notes" rows="3">{{ opportunity.notes }}</textarea>
+
+            <div class="btn-row">
+                <button type="submit" class="btn btn-gold">Save changes</button>
+                <a href="{% url 'opportunity_detail' opportunity.pk %}" class="btn btn-slate">
+                    Cancel
+                </a>
+            </div>
+
+            <p class="muted">
+                Use this screen to set the sales order value and notes.
+                Profit is calculated on the detail page from order value and production cost.
+            </p>
+        </form>
+    </div>
+</div>
+
+{% endblock %}

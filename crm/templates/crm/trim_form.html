@@ -1,0 +1,422 @@
+{% include "crm/navbar.html" %}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>
+        {% if mode == "edit" %}Edit trim{% else %}Add trim{% endif %} - Iconic CRM
+    </title>
+    <style>
+        body {
+            background: #000;
+            color: #f5d580;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        a {
+            color: #f5d580;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .page {
+            max-width: 1100px;
+            margin: 20px auto 40px auto;
+            padding: 0 15px;
+        }
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .header-title {
+            font-size: 22px;
+            font-weight: bold;
+        }
+        .header-sub {
+            font-size: 13px;
+            color: #c7b36b;
+        }
+        .btn {
+            background: #f5d580;
+            color: #000;
+            padding: 7px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-secondary {
+            background: #222;
+            color: #f5d580;
+            border: 1px solid #444;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1.7fr 1.3fr;
+            gap: 18px;
+        }
+        @media (max-width: 900px) {
+            .main-grid { grid-template-columns: 1fr; }
+        }
+        .card {
+            background: #101010;
+            border-radius: 12px;
+            border: 1px solid #333;
+            box-shadow: 0 0 16px rgba(0,0,0,0.6);
+            padding: 14px 16px;
+            font-size: 13px;
+            margin-bottom: 16px;
+        }
+        .card-title {
+            font-size: 15px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 4px;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px 18px;
+        }
+        .form-row {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+        .label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #c7b36b;
+        }
+        input[type="text"],
+        input[type="number"],
+        input[type="file"],
+        textarea {
+            background: #000;
+            color: #f5d580;
+            border-radius: 5px;
+            border: 1px solid #444;
+            padding: 6px 8px;
+            font-size: 13px;
+        }
+        textarea { resize: vertical; }
+        .muted { color: #888; font-size: 12px; }
+
+        .image-preview-box {
+            margin-top: 6px;
+            border-radius: 10px;
+            border: 1px solid #333;
+            background: #050505;
+            padding: 6px;
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .image-preview-box img {
+            max-width: 100%;
+            max-height: 160px;
+            border-radius: 8px;
+            object-fit: cover;
+        }
+
+        .ai-card {
+            background: #101010;
+            border-radius: 12px;
+            border: 1px solid #333;
+            box-shadow: 0 0 16px rgba(0,0,0,0.6);
+            padding: 12px 14px;
+            font-size: 13px;
+        }
+        .ai-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 6px;
+        }
+        .ai-title {
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .ai-note {
+            font-size: 11px;
+            color: #a4925c;
+            margin-top: 4px;
+        }
+        .ai-output {
+            margin-top: 8px;
+            background: #050505;
+            border-radius: 8px;
+            border: 1px solid #333;
+            padding: 8px;
+            min-height: 80px;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        .ai-status {
+            font-size: 11px;
+            color: #aaa;
+            margin-left: 6px;
+        }
+        .ai-hint {
+            font-size: 11px;
+            color: #888;
+            margin-top: 6px;
+        }
+
+        .footer-actions {
+            margin-top: 12px;
+            display: flex;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+
+    <div class="header-row">
+        <div>
+            <div class="header-title">
+                {% if mode == "edit" %}Edit trim{% else %}Add trim{% endif %}
+            </div>
+            {% if trim %}
+                <div class="header-sub">
+                    {{ trim.trim_code }}
+                </div>
+            {% endif %}
+        </div>
+        <div>
+            <a href="{% url 'trims_list' %}" class="btn btn-secondary">Back to trims</a>
+        </div>
+    </div>
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <div class="main-grid">
+            <div>
+                <div class="card">
+                    <div class="card-title">Trim information</div>
+
+                    <div class="form-grid">
+                        <div class="form-row">
+                            <label class="label">Name</label>
+                            {{ form.name }}
+                        </div>
+
+                        <div class="form-row">
+                            <label class="label">Type</label>
+                            <input
+                                type="text"
+                                name="trim_type"
+                                id="id_trim_type"
+                                list="trim-type-list"
+                                value="{{ form.trim_type.value|default_if_none:'' }}"
+                            >
+                            <datalist id="trim-type-list">
+                                {% for v in trim_type_list %}
+                                    <option value="{{ v }}"></option>
+                                {% endfor %}
+                            </datalist>
+                        </div>
+
+                        <div class="form-row">
+                            <label class="label">Width</label>
+                            <input
+                                type="text"
+                                name="width"
+                                id="id_width"
+                                list="trim-width-list"
+                                value="{{ form.width.value|default_if_none:'' }}"
+                            >
+                            <datalist id="trim-width-list">
+                                {% for v in trim_width_list %}
+                                    <option value="{{ v }}"></option>
+                                {% endfor %}
+                            </datalist>
+                        </div>
+
+                        <div class="form-row">
+                            <label class="label">Color</label>
+                            <input
+                                type="text"
+                                name="color"
+                                id="id_color"
+                                list="trim-color-list"
+                                value="{{ form.color.value|default_if_none:'' }}"
+                            >
+                            <datalist id="trim-color-list">
+                                {% for v in trim_color_list %}
+                                    <option value="{{ v }}"></option>
+                                {% endfor %}
+                            </datalist>
+                        </div>
+
+                        <div class="form-row">
+                            <label class="label">Material</label>
+                            <input
+                                type="text"
+                                name="material"
+                                id="id_material"
+                                list="trim-material-list"
+                                value="{{ form.material.value|default_if_none:'' }}"
+                            >
+                            <datalist id="trim-material-list">
+                                {% for v in trim_material_list %}
+                                    <option value="{{ v }}"></option>
+                                {% endfor %}
+                            </datalist>
+                        </div>
+
+                        <div class="form-row">
+                            <label class="label">Price per meter</label>
+                            {{ form.price_per_meter }}
+                        </div>
+
+                        <div class="form-row">
+                            <label class="label">Active</label>
+                            {{ form.is_active }}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Notes</div>
+                    <div class="form-row">
+                        {{ form.notes }}
+                        <span class="muted">
+                            Save any AI notes here for this trim.
+                        </span>
+                    </div>
+                </div>
+
+                <div class="footer-actions">
+                    <button type="submit" class="btn">Save trim</button>
+                </div>
+            </div>
+
+            <div>
+                <div class="card">
+                    <div class="card-title">Image</div>
+                    <div class="form-row">
+                        {{ form.image }}
+                        <span class="muted">
+                            Optional, but good for quick reference.
+                        </span>
+                    </div>
+                    <div class="image-preview-box">
+                        {% if form.instance and form.instance.image %}
+                            <img src="{{ form.instance.image.url }}" alt="{{ form.instance.name }}">
+                        {% else %}
+                            <span class="muted">No image yet.</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="ai-card">
+                    <div class="ai-header">
+                        <div class="ai-title">AI for this trim</div>
+                        <div>
+                            <button type="button" class="btn" id="ai-trim-btn">Ask AI</button>
+                            <span class="ai-status" id="ai-trim-status"></span>
+                        </div>
+                    </div>
+                    <div class="ai-note">
+                        AI will use name, type, width, and material to suggest typical use,
+                        sewing notes, and price level guidance.
+                    </div>
+                    <div class="ai-output" id="ai-trim-output">
+                        AI suggestion will show here.
+                    </div>
+                    <div class="ai-hint">
+                        Tip: copy good lines into notes.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <form id="ai-trim-csrf" style="display:none;">
+        {% csrf_token %}
+    </form>
+</div>
+
+<script>
+(function () {
+    const btn = document.getElementById("ai-trim-btn");
+    if (!btn) return;
+
+    const outBox = document.getElementById("ai-trim-output");
+    const statusSpan = document.getElementById("ai-trim-status");
+
+    function getCsrf() {
+        const tokenField = document.querySelector(
+            "#ai-trim-csrf input[name='csrfmiddlewaretoken']"
+        );
+        return tokenField ? tokenField.value : "";
+    }
+
+    btn.addEventListener("click", function () {
+        const nameEl = document.getElementById("id_name");
+        const typeEl = document.getElementById("id_trim_type");
+        const widthEl = document.getElementById("id_width");
+        const materialEl = document.getElementById("id_material");
+
+        const name = nameEl ? nameEl.value.trim() : "";
+        const trimType = typeEl ? typeEl.value.trim() : "";
+        const width = widthEl ? widthEl.value.trim() : "";
+        const material = materialEl ? materialEl.value.trim() : "";
+
+        if (!name) {
+            outBox.textContent = "Please fill the trim name first.";
+            return;
+        }
+
+        statusSpan.textContent = "Thinking with AI...";
+        outBox.textContent = "";
+
+        fetch("{% url 'trim_ai_suggest' %}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-CSRFToken": getCsrf()
+            },
+            body: new URLSearchParams({
+                name: name,
+                trim_type: trimType,
+                width: width,
+                material: material
+            })
+        })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (data.ok) {
+                outBox.textContent = data.suggestion;
+                statusSpan.textContent = "Ready";
+            } else {
+                outBox.textContent = data.error || "AI could not answer.";
+                statusSpan.textContent = "";
+            }
+        })
+        .catch(function (err) {
+            console.error(err);
+            outBox.textContent = "Error talking to AI.";
+            statusSpan.textContent = "";
+        });
+    });
+})();
+</script>
+
+</body>
+</html>

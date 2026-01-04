@@ -1,0 +1,569 @@
+{% include "crm/navbar.html" %}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Fabric detail - Iconic CRM</title>
+    <style>
+        body {
+            background: #000;
+            color: #f5d580;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        a {
+            color: #f5d580;
+            text-decoration: none;
+        }
+        .page {
+            max-width: 1200px;
+            margin: 20px auto 40px auto;
+            padding: 0 15px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .header-title {
+            font-size: 22px;
+            font-weight: bold;
+        }
+        .muted {
+            color: #aaa;
+            font-size: 12px;
+        }
+        .btn {
+            display: inline-block;
+            padding: 6px 12px;
+            background: #f5d580;
+            color: #000;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .btn-secondary {
+            background: #222;
+            color: #f5d580;
+            border: 1px solid #444;
+        }
+        .btn-small {
+            padding: 4px 8px;
+            font-size: 12px;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 2fr 1.4fr;
+            gap: 18px;
+        }
+        @media (max-width: 900px) {
+            .layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 12px 14px;
+            margin-bottom: 12px;
+        }
+        .card-title {
+            font-size: 15px;
+            font-weight: bold;
+            margin-bottom: 6px;
+        }
+        .card-sub {
+            font-size: 12px;
+            color: #c0ae6c;
+            margin-bottom: 6px;
+        }
+
+        .fabric-top {
+            display: flex;
+            gap: 14px;
+        }
+        .fabric-image-box {
+            width: 150px;
+            min-height: 120px;
+            border-radius: 10px;
+            border: 1px solid #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            overflow: hidden;
+        }
+        .fabric-image-box img {
+            max-width: 100%;
+            max-height: 100%;
+            display: block;
+        }
+
+        .fabric-meta {
+            font-size: 13px;
+        }
+        .meta-row {
+            margin-bottom: 4px;
+        }
+        .meta-label {
+            display: inline-block;
+            width: 120px;
+            color: #d7be73;
+        }
+
+        .grid-two {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 6px 16px;
+            font-size: 13px;
+        }
+
+        .notes-box {
+            width: 100%;
+            min-height: 80px;
+            background: #050505;
+            border-radius: 6px;
+            border: 1px solid #333;
+            padding: 8px;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+
+        /* AI section */
+        .ai-card {
+            background: #111;
+            border: 1px solid #444;
+            border-radius: 10px;
+            padding: 12px 14px;
+            font-size: 13px;
+        }
+        .ai-quick-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+        .ai-chip {
+            background: #222;
+            color: #f5d580;
+            border-radius: 999px;
+            border: 1px solid #444;
+            padding: 4px 10px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+        .ai-chip:hover {
+            background: #333;
+        }
+        .ai-status {
+            font-size: 11px;
+            color: #c0ae6c;
+            margin-top: 4px;
+        }
+        .ai-output {
+            margin-top: 8px;
+            background: #050505;
+            border-radius: 6px;
+            border: 1px solid #333;
+            padding: 8px;
+            min-height: 80px;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+
+        .ai-compare-row {
+            margin-top: 6px;
+            font-size: 12px;
+        }
+        .ai-compare-row input {
+            width: 100%;
+            background: #000;
+            color: #f5d580;
+            border-radius: 4px;
+            border: 1px solid #444;
+            padding: 5px 6px;
+            font-size: 12px;
+            margin-top: 2px;
+        }
+
+        .ai-chat-box {
+            margin-top: 10px;
+            border-top: 1px solid #333;
+            padding-top: 8px;
+        }
+        .ai-chat-input-row {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 6px;
+        }
+        .ai-chat-input-row input {
+            flex: 1;
+            background: #000;
+            color: #f5d580;
+            border-radius: 4px;
+            border: 1px solid #444;
+            padding: 6px 8px;
+            font-size: 13px;
+        }
+        .ai-chat-log {
+            max-height: 180px;
+            overflow-y: auto;
+            background: #050505;
+            border-radius: 6px;
+            border: 1px solid #333;
+            padding: 6px;
+            font-size: 12px;
+        }
+        .chat-line {
+            margin-bottom: 4px;
+        }
+        .chat-tag {
+            font-weight: bold;
+            color: #d7be73;
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+
+    <div class="header">
+        <div>
+            <div class="header-title">
+                Fabric detail
+                {% if fabric.fabric_code %}
+                    <span style="font-size:13px; color:#d7be73;">{{ fabric.fabric_code }}</span>
+                {% endif %}
+            </div>
+            <div class="muted">
+                {% if fabric.created_at %}
+                    Created {{ fabric.created_at }}
+                {% else %}
+                    Created date not set
+                {% endif %}
+            </div>
+        </div>
+        <div>
+            <a href="{% url 'fabrics_list' %}" class="btn btn-secondary">Back to fabrics</a>
+            <a href="{% url 'fabric_edit' fabric.pk %}" class="btn">Edit fabric</a>
+        </div>
+    </div>
+
+    <div class="layout">
+        <!-- left side: fabric info -->
+        <div>
+            <div class="card">
+                <div class="card-title">{{ fabric.name }}</div>
+                <div class="card-sub">
+                    Basic info from library
+                </div>
+
+                <div class="fabric-top">
+                    <div class="fabric-image-box">
+                        {% if fabric.image %}
+                            <img src="{{ fabric.image.url }}" alt="{{ fabric.name }}">
+                        {% else %}
+                            <span class="muted">No image</span>
+                        {% endif %}
+                    </div>
+                    <div class="fabric-meta">
+                        <div class="meta-row">
+                            <span class="meta-label">Group</span>
+                            <span>{{ fabric.fabric_group|default:"Not set" }}</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">Type</span>
+                            <span>{{ fabric.fabric_type|default:"Not set" }}</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">Structure</span>
+                            <span>{{ fabric.knit_structure|default:fabric.weave|default:"Not set" }}</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">GSM</span>
+                            <span>{{ fabric.gsm|default:"Not set" }}</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">Composition</span>
+                            <span>{{ fabric.composition|default:"Not set" }}</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">Price per kg</span>
+                            <span>
+                                {% if fabric.price_per_kg %}
+                                    {{ fabric.price_per_kg }}
+                                {% else %}
+                                    <span class="muted">Not set</span>
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">Price per meter</span>
+                            <span>
+                                {% if fabric.price_per_meter %}
+                                    {{ fabric.price_per_meter }}
+                                {% else %}
+                                    <span class="muted">Not set</span>
+                                {% endif %}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top:10px;" class="grid-two">
+                    <div>
+                        <div class="meta-row">
+                            <span class="meta-label">Stretch</span>
+                            <span>{{ fabric.stretch_type|default:"Not set" }}</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">Surface</span>
+                            <span>{{ fabric.surface|default:"Not set" }}</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">Handfeel</span>
+                            <span>{{ fabric.handfeel|default:"Not set" }}</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">Drape</span>
+                            <span>{{ fabric.drape|default:"Not set" }}</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">Warmth</span>
+                            <span>{{ fabric.warmth|default:"Not set" }}</span>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="meta-row">
+                            <span class="meta-label">Weight class</span>
+                            <span>{{ fabric.weight_class|default:"Not set" }}</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">Breathability</span>
+                            <span>{{ fabric.breathability|default:"Not set" }}</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">Sheerness</span>
+                            <span>{{ fabric.sheerness|default:"Not set" }}</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">Shrinkage</span>
+                            <span>{{ fabric.shrinkage|default:"Not set" }}</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">Durability</span>
+                            <span>{{ fabric.durability|default:"Not set" }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Color and notes</div>
+                <div class="meta-row">
+                    <span class="meta-label">Color options</span>
+                    <span>{{ fabric.color_options|default:"Not set" }}</span>
+                </div>
+                <div style="margin-top:6px;">
+                    <div class="muted" style="margin-bottom:4px;">
+                        All AI ideas are also saved here as notes for this fabric.
+                    </div>
+                    <div class="notes-box">
+                        {% if fabric.notes %}
+                            {{ fabric.notes }}
+                        {% else %}
+                            <span class="muted">No notes yet. Use AI on the right to create notes.</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- right side: AI panel -->
+        <div>
+            <div class="ai-card">
+                <div class="card-title">AI fabric assistant</div>
+                <div class="card-sub">
+                    Uses the fabric info on this page and saves answers into notes.
+                </div>
+
+                <div class="ai-quick-row">
+                    <div class="ai-chip" data-mode="summary">Summary</div>
+                    <div class="ai-chip" data-mode="use_cases">Use cases</div>
+                    <div class="ai-chip" data-mode="ideal_products">Ideal products</div>
+                    <div class="ai-chip" data-mode="costing">Costing view</div>
+                    <div class="ai-chip" data-mode="properties">Properties</div>
+                    <div class="ai-chip" data-mode="bom">BOM idea</div>
+                    <div class="ai-chip" data-mode="moq_lead">MOQ and lead</div>
+                </div>
+
+                <div class="ai-compare-row">
+                    <label for="ai-compare-input">
+                        Compare with another fabric
+                    </label>
+                    <input
+                        id="ai-compare-input"
+                        type="text"
+                        placeholder="Example: 280 gsm brushed fleece, cotton rich"
+                    >
+                    <button
+                        type="button"
+                        class="btn btn-small"
+                        id="ai-compare-btn"
+                        style="margin-top:4px;"
+                    >
+                        Ask AI to compare
+                    </button>
+                </div>
+
+                <div class="ai-status" id="ai-status">
+                    Ready
+                </div>
+                <div class="ai-output" id="ai-output">
+                    AI answer will appear here.
+                </div>
+
+                <div class="ai-chat-box">
+                    <div class="card-sub">
+                        Ask a custom question for this fabric
+                    </div>
+                    <div class="ai-chat-input-row">
+                        <input
+                            type="text"
+                            id="ai-chat-input"
+                            placeholder="Example: Is this fabric good for winter hoodies"
+                        >
+                        <button type="button" class="btn btn-small" id="ai-chat-btn">
+                            Ask AI
+                        </button>
+                    </div>
+                    <div class="ai-chat-log" id="ai-chat-log">
+                        <div class="muted">
+                            Chat history will show here. Answers are also saved in notes.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- csrf helper form -->
+    <form id="fabric-ai-csrf" style="display:none;">
+        {% csrf_token %}
+    </form>
+
+</div>
+
+<script>
+    (function () {
+        function getCsrf() {
+            const token = document.querySelector(
+                "#fabric-ai-csrf input[name='csrfmiddlewaretoken']"
+            );
+            return token ? token.value : "";
+        }
+
+        const statusBox = document.getElementById("ai-status");
+        const outputBox = document.getElementById("ai-output");
+        const chatInput = document.getElementById("ai-chat-input");
+        const chatLog = document.getElementById("ai-chat-log");
+        const chatBtn = document.getElementById("ai-chat-btn");
+        const compareInput = document.getElementById("ai-compare-input");
+        const compareBtn = document.getElementById("ai-compare-btn");
+
+        const chipNodes = document.querySelectorAll(".ai-chip");
+
+        function callFabricAi(mode, extraData) {
+            statusBox.textContent = "AI is thinking";
+            outputBox.textContent = "";
+            const body = {
+                mode: mode
+            };
+            if (extraData) {
+                for (const k in extraData) {
+                    body[k] = extraData[k];
+                }
+            }
+
+            fetch("{% url 'fabric_ai_detail' fabric.pk %}", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "X-CSRFToken": getCsrf()
+                },
+                body: new URLSearchParams(body)
+            })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                if (data.ok) {
+                    outputBox.textContent = data.text || "No answer from AI.";
+                    statusBox.textContent = "Saved into notes";
+                    if (mode !== "chat") {
+                        const div = document.createElement("div");
+                        div.className = "chat-line";
+                        div.innerHTML = "<span class='chat-tag'>AI</span>: " +
+                            (data.text || "");
+                        chatLog.appendChild(div);
+                        chatLog.scrollTop = chatLog.scrollHeight;
+                    }
+                } else {
+                    statusBox.textContent = "";
+                    outputBox.textContent = data.error || "AI could not answer.";
+                }
+            })
+            .catch(function (err) {
+                console.error(err);
+                statusBox.textContent = "";
+                outputBox.textContent = "Error talking to AI.";
+            });
+        }
+
+        chipNodes.forEach(function (chip) {
+            chip.addEventListener("click", function () {
+                const mode = chip.getAttribute("data-mode");
+                callFabricAi(mode, {});
+            });
+        });
+
+        if (compareBtn) {
+            compareBtn.addEventListener("click", function () {
+                const text = compareInput.value.trim();
+                if (!text) {
+                    outputBox.textContent = "Please type the other fabric first.";
+                    return;
+                }
+                callFabricAi("compare", {compare_text: text});
+            });
+        }
+
+        if (chatBtn && chatInput) {
+            chatBtn.addEventListener("click", function () {
+                const question = chatInput.value.trim();
+                if (!question) {
+                    return;
+                }
+                const userDiv = document.createElement("div");
+                userDiv.className = "chat-line";
+                userDiv.innerHTML = "<span class='chat-tag'>You</span>: " +
+                    question;
+                chatLog.appendChild(userDiv);
+                chatLog.scrollTop = chatLog.scrollHeight;
+
+                chatInput.value = "";
+                callFabricAi("chat", {user_text: question});
+            });
+        }
+    })();
+</script>
+
+</body>
+</html>

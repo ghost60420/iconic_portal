@@ -1,0 +1,521 @@
+{% include "crm/navbar.html" %}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>{{ mode|title }} Fabric - Iconic CRM</title>
+
+    <style>
+        body {
+            background: #000;
+            color: #f5d580;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        .page {
+            max-width: 1000px;
+            margin: 20px auto;
+            background: #111;
+            padding: 20px 25px 30px 25px;
+            border-radius: 10px;
+            border: 1px solid #222;
+            box-shadow: 0 0 12px rgba(0,0,0,0.5);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 22px;
+        }
+
+        .top-row {
+            display: grid;
+            grid-template-columns: 3fr 2fr;
+            gap: 15px;
+            margin-bottom: 10px;
+        }
+
+        .ai-card {
+            background: #050505;
+            border-radius: 8px;
+            border: 1px solid #333;
+            padding: 10px 12px;
+            font-size: 12px;
+        }
+
+        .ai-title {
+            font-weight: bold;
+            margin-bottom: 4px;
+            font-size: 13px;
+        }
+
+        .ai-fields {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 6px;
+            margin-top: 6px;
+        }
+
+        .ai-field label {
+            display: block;
+            font-size: 11px;
+            margin-bottom: 2px;
+            color: #d9c17a;
+        }
+
+        .ai-field input,
+        .ai-field select {
+            width: 100%;
+            background: #000;
+            color: #f5d580;
+            border-radius: 4px;
+            border: 1px solid #444;
+            padding: 5px 6px;
+            font-size: 12px;
+        }
+
+        .ai-actions {
+            margin-top: 6px;
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            font-size: 11px;
+        }
+
+        .ai-output {
+            margin-top: 6px;
+            background: #000;
+            border-radius: 6px;
+            border: 1px solid #333;
+            padding: 6px;
+            min-height: 50px;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px 24px;
+            margin-top: 10px;
+        }
+
+        label {
+            font-size: 13px;
+            margin-bottom: 3px;
+            color: #e0c979;
+        }
+
+        .field-box {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 4px;
+        }
+
+        input, select, textarea {
+            background: #000;
+            color: #f5d580;
+            border: 1px solid #444;
+            padding: 7px;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+
+        textarea {
+            min-height: 60px;
+        }
+
+        .hint {
+            font-size: 11px;
+            color: #9d8d5b;
+            margin-top: 2px;
+        }
+
+        .section-title {
+            margin: 18px 0 8px 0;
+            font-size: 16px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 4px;
+        }
+
+        .btn {
+            margin-top: 18px;
+            display: block;
+            width: 100%;
+            background: #f5d580;
+            color: #000;
+            padding: 10px;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            border: none;
+        }
+
+        .img-preview {
+            margin-top: 8px;
+            max-width: 140px;
+            border-radius: 6px;
+            border: 1px solid #333;
+        }
+
+        .small-select {
+            margin-bottom: 4px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="page">
+
+    <h1>{{ mode|title }} Fabric</h1>
+
+    <div class="top-row">
+        <div style="font-size:13px; color:#cbb674;">
+            This page holds your base fabrics.  
+            Your team can reuse these for costing and development.
+        </div>
+
+        <div class="ai-card">
+            <div class="ai-title">AI helper for this fabric</div>
+            <div style="font-size:11px; color:#a4925c;">
+                Type the name, group, and type.  
+                AI will suggest GSM, composition, feel, and best use.
+            </div>
+
+            <div class="ai-fields">
+                <div class="ai-field">
+                    <label>Fabric name</label>
+                    <input id="ai-fabric-name" type="text"
+                           placeholder="Example Single jersey cotton">
+                </div>
+                <div class="ai-field">
+                    <label>Group</label>
+                    <input id="ai-fabric-group" type="text"
+                           placeholder="Knit or Woven">
+                </div>
+                <div class="ai-field">
+                    <label>Type</label>
+                    <input id="ai-fabric-type" type="text"
+                           placeholder="Jersey, Rib, Fleece">
+                </div>
+            </div>
+
+            <div class="ai-actions">
+                <button type="button" class="btn" id="ai-fabric-btn" style="width:auto; padding:6px 10px; font-size:12px;">
+                    Ask AI
+                </button>
+                <span id="ai-fabric-status" style="font-size:11px; color:#a4925c;"></span>
+            </div>
+
+            <div class="ai-output" id="ai-fabric-output">
+                AI suggestion will appear here.
+            </div>
+        </div>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" style="margin-top:10px;">
+        {% csrf_token %}
+
+        <div class="section-title">Basic information</div>
+
+        <div class="form-grid">
+
+            <div class="field-box">
+                <label>{{ form.name.label }}</label>
+                {{ form.name }}
+                <div class="hint">Example Single jersey cotton</div>
+            </div>
+
+            <div class="field-box">
+                <label>Fabric group</label>
+
+                <select id="fg-master" class="small-select">
+                    <option value="">Select from list</option>
+                    {% for g in fabric_groups %}
+                        <option value="{{ g.name }}">{{ g.name }}</option>
+                    {% endfor %}
+                </select>
+
+                {{ form.fabric_group }}
+                <div class="hint">Use the list or type knit, woven, or other. New items are saved.</div>
+            </div>
+
+            <div class="field-box">
+                <label>Fabric type</label>
+
+                <select id="ft-master" class="small-select">
+                    <option value="">Select from list</option>
+                    {% for t in fabric_types %}
+                        <option value="{{ t.name }}">{{ t.name }}</option>
+                    {% endfor %}
+                </select>
+
+                {{ form.fabric_type }}
+                <div class="hint">Example jersey, rib, fleece. New items are saved.</div>
+            </div>
+
+            <div class="field-box">
+                <label>Knit structure</label>
+
+                <select id="ks-master" class="small-select">
+                    <option value="">Select from list</option>
+                    {% for ks in knit_structures %}
+                        <option value="{{ ks.name }}">{{ ks.name }}</option>
+                    {% endfor %}
+                </select>
+
+                {{ form.knit_structure }}
+                <div class="hint">Only for knit bases. Example single jersey, interlock, pique.</div>
+            </div>
+
+            <div class="field-box">
+                <label>Weave</label>
+
+                <select id="wv-master" class="small-select">
+                    <option value="">Select from list</option>
+                    {% for w in weaves %}
+                        <option value="{{ w.name }}">{{ w.name }}</option>
+                    {% endfor %}
+                </select>
+
+                {{ form.weave }}
+                <div class="hint">Only for woven bases. Example twill, poplin, canvas.</div>
+            </div>
+
+            <div class="field-box">
+                <label>{{ form.construction.label }}</label>
+                {{ form.construction }}
+                <div class="hint">Example 40/1 x 40/1, 150 GSM.</div>
+            </div>
+
+            <div class="field-box">
+                <label>{{ form.composition.label }}</label>
+                {{ form.composition }}
+                <div class="hint">Example 95 percent cotton 5 percent spandex.</div>
+            </div>
+
+            <div class="field-box">
+                <label>{{ form.gsm.label }}</label>
+                {{ form.gsm }}
+                <div class="hint">Fabric weight. Example 180.</div>
+            </div>
+
+        </div>
+
+        <div class="section-title">Feel and performance</div>
+
+        <div class="form-grid">
+
+            <div class="field-box">
+                <label>{{ form.stretch_type.label }}</label>
+                {{ form.stretch_type }}
+                <div class="hint">No stretch, two way, or four way.</div>
+            </div>
+
+            <div class="field-box">
+                <label>Surface</label>
+
+                <select id="sf-master" class="small-select">
+                    <option value="">Select from list</option>
+                    {% for s in surfaces %}
+                        <option value="{{ s.name }}">{{ s.name }}</option>
+                    {% endfor %}
+                </select>
+
+                {{ form.surface }}
+                <div class="hint">Smooth, brushed, textured, etc. New items are saved.</div>
+            </div>
+
+            <div class="field-box">
+                <label>Handfeel</label>
+
+                <select id="hf-master" class="small-select">
+                    <option value="">Select from list</option>
+                    {% for h in handfeels %}
+                        <option value="{{ h.name }}">{{ h.name }}</option>
+                    {% endfor %}
+                </select>
+
+                {{ form.handfeel }}
+                <div class="hint">Soft, buttery, crisp, etc. New items are saved.</div>
+            </div>
+
+            <div class="field-box">
+                <label>{{ form.drape.label }}</label>
+                {{ form.drape }}
+                <div class="hint">How the fabric hangs. Example fluid or stiff.</div>
+            </div>
+
+            <div class="field-box">
+                <label>{{ form.weight_class.label }}</label>
+                {{ form.weight_class }}
+                <div class="hint">Light, medium, or heavy.</div>
+            </div>
+
+            <div class="field-box">
+                <label>{{ form.warmth.label }}</label>
+                {{ form.warmth }}
+                <div class="hint">Cool, normal, or warm.</div>
+            </div>
+
+            <div class="field-box">
+                <label>{{ form.breathability.label }}</label>
+                {{ form.breathability }}
+                <div class="hint">Low, medium, or high.</div>
+            </div>
+
+            <div class="field-box">
+                <label>{{ form.sheerness.label }}</label>
+                {{ form.sheerness }}
+                <div class="hint">Opaque, semi sheer, or sheer.</div>
+            </div>
+
+            <div class="field-box">
+                <label>{{ form.shrinkage.label }}</label>
+                {{ form.shrinkage }}
+                <div class="hint">Example three percent after wash.</div>
+            </div>
+
+            <div class="field-box">
+                <label>{{ form.durability.label }}</label>
+                {{ form.durability }}
+                <div class="hint">Low, medium, or high.</div>
+            </div>
+
+        </div>
+
+        <div class="section-title">Color, price and image</div>
+
+        <div class="form-grid">
+
+            <div class="field-box">
+                <label>{{ form.color_options.label }}</label>
+                {{ form.color_options }}
+                <div class="hint">List key colors or say lab dip only.</div>
+            </div>
+
+            <div class="field-box">
+                <label>{{ form.price_per_kg.label }}</label>
+                {{ form.price_per_kg }}
+                <div class="hint">Use if your supplier quotes per kg.</div>
+            </div>
+
+            <div class="field-box">
+                <label>{{ form.price_per_meter.label }}</label>
+                {{ form.price_per_meter }}
+                <div class="hint">Use if your supplier quotes per meter.</div>
+            </div>
+
+            <div class="field-box">
+                <label>{{ form.image.label }}</label>
+                {{ form.image }}
+                <div class="hint">Upload a clear fabric photo or scan.</div>
+
+                {% if fabric and fabric.image %}
+                    <img src="{{ fabric.image.url }}" class="img-preview" alt="{{ fabric.name }}">
+                {% endif %}
+            </div>
+
+        </div>
+
+        <div class="section-title">Notes</div>
+        {{ form.notes }}
+
+        <button type="submit" class="btn">
+            {% if mode == "edit" %}Save changes{% else %}Add fabric{% endif %}
+        </button>
+
+    </form>
+
+    <!-- hidden form only for CSRF for AI -->
+    <form id="ai-fabric-csrf-form" style="display:none;">
+        {% csrf_token %}
+    </form>
+
+</div>
+
+<script>
+    (function () {
+        // helper for dropdowns that fill text inputs
+        function hookSelectToInput(selectId, inputName) {
+            const sel = document.getElementById(selectId);
+            const inp = document.querySelector("input[name='" + inputName + "']");
+            if (!sel || !inp) return;
+            sel.addEventListener("change", function () {
+                if (sel.value) {
+                    inp.value = sel.value;
+                }
+            });
+        }
+
+        hookSelectToInput("fg-master", "fabric_group");
+        hookSelectToInput("ft-master", "fabric_type");
+        hookSelectToInput("ks-master", "knit_structure");
+        hookSelectToInput("wv-master", "weave");
+        hookSelectToInput("sf-master", "surface");
+        hookSelectToInput("hf-master", "handfeel");
+
+        // AI helper
+        const btn = document.getElementById("ai-fabric-btn");
+        if (!btn) return;
+
+        const nameInput = document.getElementById("ai-fabric-name");
+        const groupInput = document.getElementById("ai-fabric-group");
+        const typeInput = document.getElementById("ai-fabric-type");
+        const outBox = document.getElementById("ai-fabric-output");
+        const statusSpan = document.getElementById("ai-fabric-status");
+
+        function getCsrf() {
+            const tokenField = document.querySelector("#ai-fabric-csrf-form input[name='csrfmiddlewaretoken']");
+            return tokenField ? tokenField.value : "";
+        }
+
+        btn.addEventListener("click", function () {
+            const name = nameInput.value.trim() || "";
+            const group = groupInput.value.trim() || "";
+            const ftype = typeInput.value.trim() || "";
+
+            if (!name) {
+                outBox.textContent = "Please type a fabric name first.";
+                return;
+            }
+
+            statusSpan.textContent = "Thinking with AI...";
+            outBox.textContent = "";
+
+            fetch("{% url 'fabric_ai_suggest' %}", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "X-CSRFToken": getCsrf()
+                },
+                body: new URLSearchParams({
+                    name: name,
+                    group: group,
+                    fabric_type: ftype
+                })
+            }).then(function (res) {
+                return res.json();
+            }).then(function (data) {
+                if (data.ok) {
+                    outBox.textContent = data.suggestion;
+                    statusSpan.textContent = "Ready";
+                } else {
+                    outBox.textContent = data.error || "AI could not answer.";
+                    statusSpan.textContent = "";
+                }
+            }).catch(function (err) {
+                outBox.textContent = "Error talking to AI.";
+                statusSpan.textContent = "";
+                console.error(err);
+            });
+        });
+    })();
+</script>
+
+</body>
+</html>

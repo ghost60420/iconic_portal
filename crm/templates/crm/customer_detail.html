@@ -1,0 +1,677 @@
+{% include "crm/navbar.html" %}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Customer detail - Iconic CRM</title>
+    <style>
+        body {
+            background: radial-gradient(circle at top, #020617, #000000);
+            color: #f9fafb;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        a {
+            color: #f5d580;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .page {
+            max-width: 1200px;
+            margin: 20px auto 40px auto;
+            padding: 0 15px 30px 15px;
+        }
+
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+        .header-title {
+            font-size: 22px;
+            font-weight: bold;
+            color: #fef9c3;
+        }
+        .header-sub {
+            font-size: 13px;
+            color: #e5e7eb;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #facc15, #f97316);
+            color: #111827;
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 600;
+            border: 1px solid #fbbf24;
+            cursor: pointer;
+            display: inline-block;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+        .btn-secondary {
+            background: #020617;
+            color: #f5d580;
+            border: 1px solid #4b5563;
+        }
+        .btn-small {
+            padding: 4px 10px;
+            font-size: 12px;
+        }
+
+        .tag-active {
+            padding: 2px 8px;
+            border-radius: 999px;
+            border: 1px solid #22c55e;
+            font-size: 11px;
+            color: #bbf7d0;
+            background: rgba(22, 163, 74, 0.12);
+        }
+        .tag-inactive {
+            padding: 2px 8px;
+            border-radius: 999px;
+            border: 1px solid #f97373;
+            font-size: 11px;
+            color: #fecaca;
+            background: rgba(239, 68, 68, 0.16);
+        }
+
+        .muted {
+            color: #9ca3af;
+            font-size: 12px;
+        }
+
+        .layout-main {
+            display: grid;
+            grid-template-columns: 1.5fr 1.5fr;
+            gap: 18px;
+        }
+        @media (max-width: 900px) {
+            .layout-main {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: radial-gradient(circle at top left, #111827, #020617);
+            border-radius: 14px;
+            border: 1px solid #1f2937;
+            padding: 12px 14px;
+            margin-bottom: 12px;
+            font-size: 13px;
+            box-shadow: 0 0 16px rgba(0, 0, 0, 0.7);
+        }
+        .card-title {
+            font-size: 15px;
+            font-weight: bold;
+            margin-bottom: 6px;
+            border-bottom: 1px solid #1f2937;
+            padding-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .card-title span.emoji {
+            font-size: 16px;
+        }
+        .card-sub {
+            font-size: 12px;
+            color: #eab308;
+            margin-bottom: 4px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px 16px;
+        }
+        .info-row {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .info-label {
+            font-size: 11px;
+            color: #c7b36b;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+        .info-value {
+            font-size: 13px;
+            color: #f9fafb;
+        }
+
+        .stat-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+        .stat-chip {
+            min-width: 120px;
+            padding: 6px 10px;
+            border-radius: 10px;
+            background: #020617;
+            border: 1px solid #4b3a14;
+            font-size: 12px;
+        }
+        .stat-label {
+            font-size: 11px;
+            color: #eab308;
+        }
+        .stat-value {
+            font-size: 14px;
+            font-weight: bold;
+            color: #fef9c3;
+        }
+
+        .notes-box {
+            margin-top: 6px;
+            background: #020617;
+            border-radius: 8px;
+            border: 1px solid #1f2937;
+            padding: 8px;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+
+        .table-small {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+        .table-small th,
+        .table-small td {
+            border-bottom: 1px solid #1f2937;
+            padding: 4px 3px;
+            text-align: left;
+        }
+        .table-small th {
+            background: #020617;
+            color: #e5e7eb;
+        }
+        .table-small tr:hover {
+            background: rgba(15, 23, 42, 0.9);
+        }
+
+        /* AI area */
+        .ai-card {
+            background: radial-gradient(circle at top left, #111827, #020617);
+            border-radius: 14px;
+            border: 1px solid #1f2937;
+            padding: 12px 14px;
+            font-size: 13px;
+            box-shadow: 0 0 16px rgba(0, 0, 0, 0.7);
+        }
+        .ai-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        .ai-title {
+            font-size: 15px;
+            font-weight: bold;
+            color: #fef9c3;
+        }
+        .ai-note {
+            font-size: 11px;
+            color: #eab308;
+            margin-bottom: 6px;
+        }
+
+        .ai-chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+        .ai-chip {
+            background: #020617;
+            color: #f5d580;
+            border: 1px solid #4b5563;
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+        .ai-chip:hover {
+            background: #111827;
+        }
+
+        .ai-two-col {
+            display: grid;
+            grid-template-columns: 1.1fr 0.9fr;
+            gap: 10px;
+        }
+        @media (max-width: 900px) {
+            .ai-two-col {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .ai-output-box {
+            background: #020617;
+            border-radius: 8px;
+            border: 1px solid #1f2937;
+            padding: 8px;
+            min-height: 90px;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        .ai-status {
+            font-size: 11px;
+            color: #9ca3af;
+            margin-top: 4px;
+        }
+
+        .ai-email-box,
+        .ai-custom-box {
+            background: #020617;
+            border-radius: 8px;
+            border: 1px solid #1f2937;
+            padding: 8px;
+            font-size: 12px;
+        }
+        .ai-email-box label,
+        .ai-custom-box label {
+            display: block;
+            font-size: 11px;
+            color: #c7b36b;
+            margin-bottom: 2px;
+        }
+        .ai-email-box input,
+        .ai-email-box select,
+        .ai-custom-box input {
+            width: 100%;
+            background: #000;
+            color: #f5d580;
+            border-radius: 6px;
+            border: 1px solid #4b5563;
+            padding: 5px 6px;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        .ai-chat-log {
+            max-height: 180px;
+            overflow-y: auto;
+            margin-top: 6px;
+            background: #020617;
+            border-radius: 6px;
+            border: 1px solid #1f2937;
+            padding: 6px;
+            font-size: 12px;
+        }
+        .chat-line {
+            margin-bottom: 4px;
+        }
+        .chat-tag {
+            font-weight: bold;
+            color: #facc15;
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+
+    <div class="header-row">
+        <div>
+            <div class="header-title">
+                {{ customer.account_brand }}
+                <span style="font-size:14px; color:#eab308;">
+                    [{{ customer.customer_code }}]
+                </span>
+            </div>
+            <div class="header-sub">
+                Contact {{ customer.contact_name }} |
+                {{ customer.email }} |
+                {{ customer.phone }}
+                {% if customer.is_active %}
+                    | <span class="tag-active">Active</span>
+                {% else %}
+                    | <span class="tag-inactive">Inactive</span>
+                {% endif %}
+            </div>
+        </div>
+        <div>
+            <a href="{% url 'customers_list' %}" class="btn btn-secondary btn-small">Back to customers</a>
+        </div>
+    </div>
+
+    <div class="layout-main">
+        <!-- left side: info and history -->
+        <div>
+            <div class="card">
+                <div class="card-title">
+                    <span class="emoji">📇</span>
+                    Customer overview
+                </div>
+                <div class="card-sub">
+                    Market and contact details.
+                </div>
+                <div class="info-grid">
+                    <div class="info-row">
+                        <div class="info-label">Market</div>
+                        <div class="info-value">{{ customer.market|default:"Not set" }}</div>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-label">Created</div>
+                        <div class="info-value">
+                            {% if customer.created_date %}
+                                {{ customer.created_date }}
+                            {% else %}
+                                <span class="muted">Not set</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-label">Shipping name</div>
+                        <div class="info-value">
+                            {{ customer.shipping_name|default:"Not set" }}
+                        </div>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-label">Shipping address</div>
+                        <div class="info-value">
+                            {{ customer.shipping_address1 }} {{ customer.shipping_city }} {{ customer.shipping_country }}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stat-row">
+                    <div class="stat-chip">
+                        <div class="stat-label">Total revenue</div>
+                        <div class="stat-value">
+                            {{ total_revenue }}
+                        </div>
+                    </div>
+                    <div class="stat-chip">
+                        <div class="stat-label">Total orders</div>
+                        <div class="stat-value">
+                            {{ total_orders }}
+                        </div>
+                    </div>
+                    <div class="stat-chip">
+                        <div class="stat-label">Open opportunities</div>
+                        <div class="stat-value">
+                            {{ opportunities|length }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">
+                    <span class="emoji">🎯</span>
+                    Recent opportunities
+                </div>
+                {% if opportunities %}
+                    <table class="table-small">
+                        <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Stage</th>
+                            <th>Type</th>
+                            <th>Category</th>
+                            <th>Value</th>
+                            <th>Date</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% for o in opportunities|slice:":8" %}
+                            <tr>
+                                <td>{{ o.opportunity_id }}</td>
+                                <td>{{ o.stage }}</td>
+                                <td>{{ o.product_type }}</td>
+                                <td>{{ o.product_category }}</td>
+                                <td>
+                                    {% if o.order_value %}
+                                        {{ o.order_value }}
+                                    {% else %}
+                                        <span class="muted">n/a</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ o.created_date }}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <div class="muted">
+                        No opportunities yet.
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="card">
+                <div class="card-title">
+                    <span class="emoji">📝</span>
+                    Customer notes
+                </div>
+                <div class="card-sub">
+                    AI answers also save here inside notes.
+                </div>
+                <div class="notes-box">
+                    {% if customer.notes %}
+                        {{ customer.notes }}
+                    {% else %}
+                        <span class="muted">
+                            No notes yet. Use the AI panel to create smart notes.
+                        </span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- right side: AI brain -->
+        <div>
+            <div class="ai-card">
+                <div class="ai-header-row">
+                    <div class="ai-title">AI smart brain for this customer</div>
+                </div>
+                <div class="ai-note">
+                    AI reads all history and gives clear steps.  
+                    Answers are also saved into notes for this customer.
+                </div>
+
+                <div class="ai-chip-row">
+                    <div class="ai-chip" data-mode="overview">Analyze customer</div>
+                    <div class="ai-chip" data-mode="followup">Suggest next follow up</div>
+                    <div class="ai-chip" data-mode="order_size">Predict order size</div>
+                    <div class="ai-chip" data-mode="product_ideas">Recommend products</div>
+                    <div class="ai-chip" data-mode="risk_score">Risk and potential</div>
+                    <div class="ai-chip" data-mode="full_summary">Full summary</div>
+                </div>
+
+                <div class="ai-two-col">
+                    <!-- left: AI main output -->
+                    <div>
+                        <div class="ai-output-box" id="ai-output">
+                            AI answer will appear here.
+                        </div>
+                        <div class="ai-status" id="ai-status">
+                            Ready
+                        </div>
+                        <div class="ai-chat-log" id="ai-chat-log">
+                            <div class="muted">
+                                Small history of AI replies will show here.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- right: email and custom question -->
+                    <div>
+                        <div class="ai-email-box">
+                            <label for="ai-email-purpose">Email purpose</label>
+                            <input
+                                id="ai-email-purpose"
+                                type="text"
+                                placeholder="Example follow up after sample sent"
+                            >
+
+                            <label for="ai-email-tone">Email tone</label>
+                            <select id="ai-email-tone">
+                                <option value="">Friendly</option>
+                                <option value="very friendly and warm">Very friendly</option>
+                                <option value="short and direct">Short and direct</option>
+                                <option value="formal and professional">Formal</option>
+                            </select>
+
+                            <button
+                                type="button"
+                                class="btn btn-small"
+                                id="ai-email-btn"
+                                style="margin-top:4px;"
+                            >
+                                AI write email
+                            </button>
+                        </div>
+
+                        <div class="ai-custom-box" style="margin-top:8px;">
+                            <label for="ai-custom-question">Custom question for AI</label>
+                            <input
+                                id="ai-custom-question"
+                                type="text"
+                                placeholder="Example How can we upsell this client"
+                            >
+                            <button
+                                type="button"
+                                class="btn btn-small"
+                                id="ai-custom-btn"
+                                style="margin-top:4px;"
+                            >
+                                Ask custom
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- csrf helper -->
+                <form id="customer-ai-csrf" style="display:none;">
+                    {% csrf_token %}
+                </form>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+(function () {
+    function getCsrf() {
+        const token = document.querySelector(
+            "#customer-ai-csrf input[name='csrfmiddlewaretoken']"
+        );
+        return token ? token.value : "";
+    }
+
+    const outBox = document.getElementById("ai-output");
+    const statusBox = document.getElementById("ai-status");
+    const chatLog = document.getElementById("ai-chat-log");
+
+    const chips = document.querySelectorAll(".ai-chip");
+    const emailBtn = document.getElementById("ai-email-btn");
+    const emailPurposeInput = document.getElementById("ai-email-purpose");
+    const emailToneSelect = document.getElementById("ai-email-tone");
+
+    const customBtn = document.getElementById("ai-custom-btn");
+    const customInput = document.getElementById("ai-custom-question");
+
+    function appendChat(role, text) {
+        const div = document.createElement("div");
+        div.className = "chat-line";
+        div.innerHTML =
+            "<span class='chat-tag'>" + role + "</span>: " +
+            (text || "");
+        chatLog.appendChild(div);
+        chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    function callCustomerAi(mode, extra) {
+        statusBox.textContent = "AI is thinking";
+        outBox.textContent = "";
+        extra = extra || {};
+
+        const body = {mode: mode};
+        for (const k in extra) {
+            body[k] = extra[k];
+        }
+
+        fetch("{% url 'customer_ai_detail' customer.pk %}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-CSRFToken": getCsrf()
+            },
+            body: new URLSearchParams(body)
+        })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (data.ok) {
+                outBox.textContent = data.text || "No answer from AI.";
+                statusBox.textContent = "Saved to notes";
+
+                appendChat("AI", data.text || "");
+            } else {
+                outBox.textContent = data.error || "AI could not answer.";
+                statusBox.textContent = "";
+            }
+        })
+        .catch(function (err) {
+            console.error(err);
+            outBox.textContent = "Error talking to AI.";
+            statusBox.textContent = "";
+        });
+    }
+
+    chips.forEach(function (chip) {
+        chip.addEventListener("click", function () {
+            const mode = chip.getAttribute("data-mode");
+            callCustomerAi(mode, {});
+        });
+    });
+
+    if (emailBtn) {
+        emailBtn.addEventListener("click", function () {
+            const purpose = emailPurposeInput.value.trim();
+            const tone = emailToneSelect.value.trim();
+
+            appendChat("You", "Write email. Purpose " + (purpose || "follow up") +
+                ". Tone " + (tone || "friendly"));
+
+            callCustomerAi("email_followup", {
+                email_purpose: purpose,
+                email_tone: tone
+            });
+        });
+    }
+
+    if (customBtn) {
+        customBtn.addEventListener("click", function () {
+            const q = customInput.value.trim();
+            if (!q) {
+                return;
+            }
+            appendChat("You", q);
+            customInput.value = "";
+            callCustomerAi("custom", {question: q});
+        });
+    }
+})();
+</script>
+
+</body>
+</html>

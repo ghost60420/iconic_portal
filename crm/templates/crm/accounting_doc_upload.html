@@ -1,0 +1,198 @@
+{% extends "crm/base.html" %}
+{% load humanize %}
+{% load crm_groups %}
+{% block content %}
+
+<style>
+  :root{
+    --bg:#020617;
+    --bg2:#030712;
+    --line:#374151;
+    --text:#f9fafb;
+    --muted:#cbd5e1;
+    --gold:#facc15;
+  }
+
+  .wrap{max-width:1100px;margin:0 auto;color:var(--text)}
+  .cardx{background:var(--bg);border:1px solid var(--line);border-radius:16px;box-shadow:0 14px 34px rgba(0,0,0,0.38);overflow:hidden}
+  .title{font-weight:900;font-size:24px;margin:0}
+  .sub{font-size:12px;color:var(--muted);font-weight:800;margin-top:6px}
+  .label{font-size:12px;font-weight:900;color:var(--text);margin-bottom:6px}
+  .help{font-size:11px;color:var(--muted);font-weight:700;margin-top:6px}
+
+  .inp,.sel,.txt{
+    width:100%;
+    background:var(--bg2)!important;
+    color:var(--text)!important;
+    border:1px solid #4b5563!important;
+    border-radius:12px!important;
+    font-weight:800!important;
+    padding:10px 12px!important;
+  }
+  .inp:focus,.sel:focus,.txt:focus{
+    border-color:var(--gold)!important;
+    box-shadow:0 0 0 .2rem rgba(250,204,21,.15)!important;
+    outline:none!important;
+  }
+
+  .pill{
+    text-decoration:none;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:9px 14px;
+    border-radius:999px;
+    font-weight:900;
+    font-size:12px;
+    border:1px solid rgba(255,255,255,0.14);
+    background:linear-gradient(145deg,#0f172a,var(--bg));
+    color:var(--text);
+    white-space:nowrap;
+    cursor:pointer;
+  }
+  .pill:hover{opacity:.95;color:var(--text);text-decoration:none}
+  .pill-gold{
+    background:linear-gradient(145deg,#ffe39b,#e4c067);
+    color:#101010;
+    border-color:#f6d488;
+  }
+
+  .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}
+  .col-12{grid-column:span 12}
+  .col-6{grid-column:span 6}
+  .col-4{grid-column:span 4}
+  .col-3{grid-column:span 3}
+
+  @media(max-width:900px){
+    .col-6,.col-4,.col-3{grid-column:span 12}
+  }
+</style>
+
+<div class="container-fluid">
+  <div class="wrap">
+
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+      <div>
+        <h2 class="title">Upload accounting documents</h2>
+        <div class="sub">
+          Upload invoice or bill files here. Add a short note so you can find it later.
+        </div>
+      </div>
+      <div class="d-flex gap-2 flex-wrap">
+        <a class="pill" href="{% url 'accounting_entry_list' %}">Back to entries</a>
+      </div>
+    </div>
+
+    <div class="cardx">
+      <div class="p-3">
+
+        {% if messages %}
+          {% for m in messages %}
+            <div class="alert {% if m.tags %}alert-{{ m.tags }}{% else %}alert-info{% endif %} fw-bold">
+              {{ m }}
+            </div>
+          {% endfor %}
+        {% endif %}
+
+        {% if form.errors %}
+          <div class="alert alert-danger fw-bold">
+            Please fix the errors and try again.
+          </div>
+        {% endif %}
+
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+
+          <div class="grid">
+
+            <div class="col-12">
+              <div class="label">Files</div>
+              {{ form.files }}
+              <div class="help">You can select multiple files.</div>
+              {% if form.files.errors %}
+                <div class="text-danger small fw-bold mt-1">{{ form.files.errors }}</div>
+              {% endif %}
+            </div>
+
+            <div class="col-3">
+              <div class="label">Direction</div>
+              {{ form.direction }}
+              {% if form.direction.errors %}
+                <div class="text-danger small fw-bold mt-1">{{ form.direction.errors }}</div>
+              {% endif %}
+            </div>
+
+            <div class="col-3">
+              <div class="label">Main type</div>
+              {{ form.main_type }}
+              {% if form.main_type.errors %}
+                <div class="text-danger small fw-bold mt-1">{{ form.main_type.errors }}</div>
+              {% endif %}
+            </div>
+
+            <div class="col-6">
+              <div class="label">Sub type</div>
+              {{ form.sub_type }}
+              {% if form.sub_type.errors %}
+                <div class="text-danger small fw-bold mt-1">{{ form.sub_type.errors }}</div>
+              {% endif %}
+            </div>
+
+            <div class="col-4">
+              <div class="label">Amount</div>
+              {{ form.amount }}
+              {% if form.amount.errors %}
+                <div class="text-danger small fw-bold mt-1">{{ form.amount.errors }}</div>
+              {% endif %}
+            </div>
+
+            <div class="col-4">
+              <div class="label">Invoice number</div>
+              {{ form.invoice_number }}
+              {% if form.invoice_number.errors %}
+                <div class="text-danger small fw-bold mt-1">{{ form.invoice_number.errors }}</div>
+              {% endif %}
+            </div>
+
+            <div class="col-12">
+              <div class="label">Note</div>
+              {{ form.note }}
+              <div class="help">Example: Water bill December, Fabric payment, Courier invoice.</div>
+              {% if form.note.errors %}
+                <div class="text-danger small fw-bold mt-1">{{ form.note.errors }}</div>
+              {% endif %}
+            </div>
+
+          </div>
+
+          <div class="d-flex gap-2 flex-wrap mt-3">
+            <button type="submit" class="pill pill-gold">Upload</button>
+            <a class="pill" href="{% url 'accounting_entry_list' %}">Cancel</a>
+          </div>
+
+        </form>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  (function(){
+    function addClassById(id, cls){
+      var el = document.getElementById(id);
+      if(!el) return;
+      el.classList.add(cls);
+    }
+    addClassById("id_files","inp");
+    addClassById("id_direction","sel");
+    addClassById("id_main_type","sel");
+    addClassById("id_sub_type","inp");
+    addClassById("id_amount","inp");
+    addClassById("id_invoice_number","inp");
+    addClassById("id_note","txt");
+  })();
+</script>
+
+{% endblock %}

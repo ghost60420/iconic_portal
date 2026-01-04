@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>
+        {% if lead %}Edit lead{% else %}Add lead{% endif %} - Iconic CRM
+    </title>
+    <style>
+        body {
+            background: #020617;
+            color: #f9fafb;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        a {
+            color: #facc15;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .wrapper {
+            max-width: 1040px;
+            margin: 20px auto 40px auto;
+            background: radial-gradient(circle at top left, #111827, #020617);
+            padding: 20px 20px 24px 20px;
+            border-radius: 14px;
+            border: 1px solid #1f2937;
+            box-shadow: 0 0 18px rgba(0, 0, 0, 0.7);
+        }
+
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 22px;
+            color: #fef9c3;
+        }
+
+        .top-links a {
+            margin-left: 8px;
+            font-size: 13px;
+        }
+
+        .pill-label {
+            display: inline-block;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            color: #e5e7eb;
+            margin-bottom: 4px;
+        }
+
+        .section {
+            margin-top: 16px;
+            padding: 14px 14px 12px 14px;
+            border-radius: 12px;
+            border: 1px solid #1f2937;
+            background: #020617;
+        }
+
+        .section-title {
+            margin-top: 0;
+            margin-bottom: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #fefce8;
+        }
+
+        .section-sub {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-bottom: 8px;
+        }
+
+        .section-row {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .section-half {
+            flex: 1;
+            min-width: 260px;
+        }
+
+        label {
+            display: block;
+            margin-top: 8px;
+            font-size: 12px;
+            color: #e5e7eb;
+        }
+
+        .label-required {
+            color: #f97316;
+            margin-left: 2px;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            padding: 6px 8px;
+            margin-top: 4px;
+            background: #020617;
+            color: #f9fafb;
+            border: 1px solid #374151;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        textarea {
+            min-height: 90px;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #facc15;
+            box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.35);
+        }
+
+        .help-text {
+            font-size: 11px;
+            color: #9ca3af;
+            margin-top: 2px;
+        }
+
+        button {
+            margin-top: 18px;
+            padding: 7px 18px;
+            background: linear-gradient(135deg, #facc15, #f97316);
+            color: #111827;
+            border-radius: 999px;
+            border: 1px solid #fbbf24;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        button:hover {
+            filter: brightness(1.03);
+        }
+
+        /* Django error styling (if you use form.errors) */
+        .errorlist {
+            margin: 4px 0 0 0;
+            padding: 0;
+            list-style: none;
+            font-size: 11px;
+            color: #fecaca;
+        }
+        .errorlist li {
+            margin: 0;
+        }
+
+        @media (max-width: 720px) {
+            .wrapper {
+                margin: 10px;
+                padding: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+
+    <div class="top-bar">
+        <div>
+            <h1>
+                {% if lead %}Edit lead{% else %}Add lead{% endif %}
+            </h1>
+            <div class="pill-label">
+                Core details and follow up for this lead.
+            </div>
+        </div>
+        <div class="top-links">
+            <a href="{% url 'leads_list' %}">All leads</a>
+            {% if lead %}
+                <a href="{% url 'lead_detail' lead.pk %}">Back to lead</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <!-- Basic information -->
+        <div class="section">
+            <h2 class="section-title">Basic information</h2>
+            <div class="section-sub">
+                Brand details and main contact information.
+            </div>
+
+            <div class="section-row">
+                <div class="section-half">
+                    <label>
+                        {{ form.account_brand.label }}
+                        {% if form.account_brand.field.required %}
+                            <span class="label-required">*</span>
+                        {% endif %}
+                    </label>
+                    {{ form.account_brand }}
+
+                    <label>{{ form.contact_name.label }}</label>
+                    {{ form.contact_name }}
+
+                    <label>{{ form.email.label }}</label>
+                    {{ form.email }}
+
+                    <label>{{ form.phone.label }}</label>
+                    {{ form.phone }}
+
+                    <label>{{ form.company_website.label }}</label>
+                    {{ form.company_website }}
+
+                    <label>{{ form.market.label }}</label>
+                    {{ form.market }}
+
+                    <label>{{ form.country.label }}</label>
+                    {{ form.country }}
+
+                    <label>{{ form.city.label }}</label>
+                    {{ form.city }}
+                </div>
+
+                <div class="section-half">
+                    <label>{{ form.product_interest.label }}</label>
+                    {{ form.product_interest }}
+
+                    <label>{{ form.order_quantity.label }}</label>
+                    {{ form.order_quantity }}
+
+                    <label>{{ form.budget.label }}</label>
+                    {{ form.budget }}
+
+                    <label>{{ form.preferred_contact_time.label }}</label>
+                    {{ form.preferred_contact_time }}
+
+                    <label>{{ form.source.label }}</label>
+                    {{ form.source }}
+
+                    <label>{{ form.lead_type.label }}</label>
+                    {{ form.lead_type }}
+
+                    <label>{{ form.lead_status.label }}</label>
+                    {{ form.lead_status }}
+
+                    <label>{{ form.priority.label }}</label>
+                    {{ form.priority }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Owner and follow up -->
+        <div class="section">
+            <h2 class="section-title">Owner and follow up</h2>
+            <div class="section-sub">
+                Assign the lead and set the next follow up date.
+            </div>
+
+            <div class="section-row">
+                <div class="section-half">
+                    <label>{{ form.owner.label }}</label>
+                    {{ form.owner }}
+                </div>
+                <div class="section-half">
+                    <label>{{ form.next_followup.label }}</label>
+                    {{ form.next_followup }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Attachment and notes -->
+        <div class="section">
+            <h2 class="section-title">Attachment and notes</h2>
+            <div class="section-sub">
+                Upload any files and store extra information for this lead.
+            </div>
+
+            <label>{{ form.attachment.label }}</label>
+            {{ form.attachment }}
+
+            <label style="margin-top:10px;">{{ form.notes.label }}</label>
+            {{ form.notes }}
+        </div>
+
+        <button type="submit">
+            {% if lead %}Update lead{% else %}Save lead{% endif %}
+        </button>
+    </form>
+</div>
+</body>
+</html>
