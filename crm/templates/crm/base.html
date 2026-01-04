@@ -46,6 +46,7 @@
       z-index: 2000;
       backdrop-filter: blur(8px);
       box-shadow: 0 10px 30px rgba(0,0,0,0.55);
+      overflow: visible;
     }
 
     .crm-nav-group{
@@ -55,7 +56,6 @@
       align-items:center;
     }
 
-    /* One style for all buttons */
     .crm-nav-item{
       display:inline-flex;
       align-items:center;
@@ -89,7 +89,6 @@
       transform: translateY(0px);
     }
 
-    /* Optional highlight for key buttons, but still same style */
     .crm-nav-item.hot{
       border-color: rgba(255, 227, 155, 0.35);
       box-shadow: 0 10px 22px rgba(255, 209, 120, 0.10);
@@ -127,7 +126,7 @@
       transform: translateY(6px);
       transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
 
-      z-index:9999;
+      z-index:30000;
     }
 
     .crm-dropdown:hover .crm-dropdown-menu,
@@ -234,7 +233,6 @@
   {% if request.user.is_authenticated %}
     <div class="crm-topbar">
 
-      <!-- core -->
       <div class="crm-nav-group">
         <a href="{% url 'leads_list' %}" class="crm-nav-item hot"><span>🧲</span><strong>Leads</strong></a>
         <a href="{% url 'opportunities_list' %}" class="crm-nav-item hot"><span>📈</span><strong>Opportunities</strong></a>
@@ -244,10 +242,7 @@
         <a href="{% url 'production_list' %}" class="crm-nav-item"><span>🏭</span><strong>Production</strong></a>
         <a href="{% url 'shipment_list' %}" class="crm-nav-item"><span>📦</span><strong>Shipping</strong></a>
 
-        <!-- Marketing shows everywhere -->
         <a href="/marketing/" class="crm-nav-item"><span>📣</span><strong>Marketing</strong></a>
-
-        <!-- WhatsApp -->
         <a href="{% url 'wa_inbox' %}" class="crm-nav-item"><span>💬</span><strong>WhatsApp</strong></a>
 
         {% if request.user.is_superuser %}
@@ -264,7 +259,6 @@
         {% endif %}
       </div>
 
-      <!-- library dropdown -->
       <div class="crm-nav-group">
 
         <div class="crm-dropdown" id="libraryDropdown">
@@ -288,13 +282,28 @@
         </div>
 
         <a href="{% url 'inventory_list' %}" class="crm-nav-item"><span>📦</span><strong>Inventory</strong></a>
-        <a href="{% url 'world_tools' %}" class="crm-nav-item"><span>🌍</span><strong>World tools</strong></a>
+
+        <div class="crm-dropdown" id="worldDropdown">
+          <a href="{% url 'world_tools' %}" class="crm-nav-item" id="worldBtn" aria-haspopup="true" aria-expanded="false">
+            <span>🌍</span><strong>World</strong>
+          </a>
+
+          <div class="crm-dropdown-menu" id="worldMenu" role="menu">
+            <div class="crm-dd-title">World shortcuts</div>
+            <a class="crm-dd-item" href="{% url 'world_tools' %}">🧰 World tools</a>
+            <a class="crm-dd-item" href="{% url 'world_dashboard' %}">📊 World dashboard</a>
+            <a class="crm-dd-item" href="{% url 'world_ai_fashion_news' %}">🧠 AI fashion notes</a>
+
+            <div class="crm-dd-hint">
+              Quick access to world pages.
+            </div>
+          </div>
+        </div>
 
         <a href="{% url 'email_sync_dashboard' %}" class="crm-nav-item">
           <span>📨</span><strong>Email Sync</strong>
         </a>
 
-        <!-- accounting dropdown -->
         <div class="crm-dropdown" id="accountingDropdown">
           <a href="{% url 'accounting_home' %}" class="crm-nav-item hot" id="accountingBtn" aria-haspopup="true" aria-expanded="false">
             <span>💰</span><strong>Accounting</strong>
@@ -303,7 +312,6 @@
           <div class="crm-dropdown-menu" id="accountingMenu" role="menu">
             <div class="crm-dd-title">Accounting shortcuts</div>
 
-            <!-- Invoices link added here -->
             <a class="crm-dd-item" href="{% url 'invoice_list' %}">🧾 Invoices</a>
 
             {% if user|is_ca %}
@@ -332,7 +340,6 @@
 
       <div class="crm-spacer"></div>
 
-      <!-- user -->
       <div class="crm-userbox">
         <div class="crm-username">
           <span>👤</span> {{ request.user.get_username }}
@@ -417,6 +424,7 @@
 
       setupDropdown("accountingDropdown", "accountingBtn");
       setupDropdown("libraryDropdown", "libraryBtn");
+      setupDropdown("worldDropdown", "worldBtn");
     })();
   </script>
 
