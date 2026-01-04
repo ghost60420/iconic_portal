@@ -2,166 +2,357 @@
 
 {% block content %}
 <style>
-  .world-wrap {
-      max-width: 1200px;
-      margin: 0 auto;
+  :root{
+    --bg:#060606;
+    --panel:#0b0d10;
+    --panel2:#0f172a;
+    --border:#2a2f38;
+    --text:#f9fafb;
+    --muted:#a8b0bd;
+    --gold1:#ffe39b;
+    --gold2:#e4c067;
   }
-  .world-card {
-      background: #111;
-      border-radius: 14px;
-      border: 1px solid #333;
-      padding: 18px 20px;
-      color: #f5f5f5;
-      margin-bottom: 16px;
+
+  .wd-wrap{
+    max-width: 1200px;
+    margin: 16px auto 28px auto;
+    padding: 0 10px;
+    color: var(--text);
   }
-  .world-title {
-      font-size: 17px;
-      font-weight: 600;
-      color: #ffffff;
+
+  .wd-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:12px;
+    flex-wrap:wrap;
+    margin-bottom: 14px;
   }
-  .world-sub {
-      font-size: 13px;
-      color: #bbbbbb;
-      margin-top: 4px;
+
+  .wd-title{
+    font-size: 22px;
+    font-weight: 900;
+    color: #fff;
+    margin: 0;
+    letter-spacing: 0.2px;
   }
-  .world-tag {
-      font-size: 11px;
-      padding: 3px 10px;
-      border-radius: 999px;
-      background: rgba(245,213,128,0.12);
-      border: 1px solid rgba(245,213,128,0.5);
-      color: #f5d580;
+
+  .wd-sub{
+    margin-top: 4px;
+    font-size: 13px;
+    color: var(--muted);
   }
-  .world-button-small {
-      font-size: 12px;
-      padding: 4px 12px;
-      border-radius: 999px;
+
+  .wd-actions{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    align-items:center;
   }
-  #ai-fashion-text {
-      font-size: 13px;
-      color: #e6e6e6;
-      margin-top: 10px;
-      white-space: pre-wrap;
+
+  .wd-btn{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:10px 14px;
+    border-radius: 12px;
+    font-weight: 900;
+    font-size: 13px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.05);
+    color: #f3f4f6;
+    text-decoration:none;
+    transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+    white-space: nowrap;
+  }
+
+  .wd-btn:hover{
+    transform: translateY(-1px);
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.18);
+    color: #fff;
+  }
+
+  .wd-btn-gold{
+    background: linear-gradient(180deg, rgba(255,227,155,0.18), rgba(228,192,103,0.10));
+    border-color: rgba(255,227,155,0.25);
+  }
+
+  .wd-grid{
+    display:grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 12px;
+  }
+
+  .wd-card{
+    background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+    overflow:hidden;
+  }
+
+  .wd-card-inner{
+    padding: 14px;
+  }
+
+  .wd-card-title{
+    font-size: 14px;
+    font-weight: 900;
+    margin: 0 0 10px 0;
+    color: #fff;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+
+  .wd-note{
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .wd-list{
+    display:flex;
+    flex-direction:column;
+    gap: 10px;
+  }
+
+  .wd-item{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.10);
+    background: rgba(0,0,0,0.28);
+  }
+
+  .wd-item-left{
+    display:flex;
+    flex-direction:column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .wd-item-title{
+    font-weight: 900;
+    font-size: 13px;
+    color: #fff;
+    line-height: 1.1;
+  }
+
+  .wd-item-sub{
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.2;
+  }
+
+  .wd-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,227,155,0.25);
+    background: rgba(255,227,155,0.10);
+    font-size: 12px;
+    font-weight: 900;
+    color: var(--gold1);
+    white-space: nowrap;
+  }
+
+  .wd-ai-box{
+    padding: 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.10);
+    background: rgba(0,0,0,0.28);
+    white-space: pre-wrap;
+    font-size: 13px;
+    color: #e6e6e6;
+    line-height: 1.4;
+    min-height: 90px;
+  }
+
+  .wd-ai-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 12px;
+    font-weight: 900;
+    font-size: 13px;
+    border: 1px solid rgba(255,227,155,0.25);
+    background: linear-gradient(180deg, rgba(255,227,155,0.25), rgba(228,192,103,0.12));
+    color: #fff;
+    cursor:pointer;
+    transition: transform 0.12s ease, background 0.12s ease;
+  }
+
+  .wd-ai-btn:hover{
+    transform: translateY(-1px);
+    background: linear-gradient(180deg, rgba(255,227,155,0.30), rgba(228,192,103,0.16));
+  }
+
+  .span-4{ grid-column: span 4; }
+  .span-6{ grid-column: span 6; }
+  .span-12{ grid-column: span 12; }
+
+  @media (max-width: 992px){
+    .span-4{ grid-column: span 12; }
+    .span-6{ grid-column: span 12; }
   }
 </style>
 
-<div class="container mt-4 world-wrap">
+<div class="wd-wrap">
 
-  <h2 class="text-warning mb-1">World tools</h2>
-  <p class="text-muted mb-4">
-    Quick view of time, money and fashion news for Iconic.
-  </p>
-
-  <div class="row">
-    <!-- World clock -->
-    <div class="col-md-8">
-      <div class="world-card">
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            <div class="world-title">World clock</div>
-            <div class="world-sub">
-              Time uses your computer clock. Later we can add more city times.
-            </div>
-          </div>
-          <span class="btn btn-warning world-button-small">
-            Live on your browser time
-          </span>
-        </div>
-      </div>
+  <div class="wd-header">
+    <div>
+      <h1 class="wd-title">World dashboard</h1>
+      <div class="wd-sub">Quick view of time, money and fashion news for Iconic.</div>
     </div>
 
-    <!-- Currency watch -->
-    <div class="col-md-4">
-      <div class="world-card">
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            <div class="world-title">Currency watch</div>
-            <div class="world-sub">
-              Later this can use live rates. For now you can change numbers by hand.
-            </div>
-          </div>
-          <span class="btn btn-outline-light world-button-small">
-            Sample data
-          </span>
-        </div>
-      </div>
+    <div class="wd-actions">
+      <a class="wd-btn wd-btn-gold" href="{% url 'world_tools' %}">🧰 World tools</a>
+      <a class="wd-btn" href="{% url 'main_dashboard' %}">🧠 Main dashboard</a>
     </div>
   </div>
 
-  <!-- Fashion news with AI -->
-  <div class="world-card mt-2">
-    <div class="d-flex justify-content-between align-items-center mb-1">
-      <div>
-        <div class="world-title">Fashion and apparel news</div>
-        <div class="world-sub">
+  <div class="wd-grid">
+
+    <!-- CLOCK -->
+    <div class="wd-card span-8">
+      <div class="wd-card-inner">
+        <div class="wd-card-title">🕒 World clock</div>
+        <div class="wd-note" style="margin-bottom:10px;">
+          Time uses your browser time. Later we can show more cities live.
+        </div>
+
+        <div class="wd-list">
+          <div class="wd-item">
+            <div class="wd-item-left">
+              <div class="wd-item-title">Live on your browser</div>
+              <div class="wd-item-sub">This section is a quick reminder for calls</div>
+            </div>
+            <span class="wd-pill">Live</span>
+          </div>
+
+          {% if cities %}
+            {% for c in cities %}
+              <div class="wd-item">
+                <div class="wd-item-left">
+                  <div class="wd-item-title">{{ c.name }}</div>
+                  <div class="wd-item-sub">{{ c.tz }}</div>
+                </div>
+                <span class="wd-pill">Timezone</span>
+              </div>
+            {% endfor %}
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- CURRENCY -->
+    <div class="wd-card span-4">
+      <div class="wd-card-inner">
+        <div class="wd-card-title">💱 Currency watch</div>
+        <div class="wd-note" style="margin-bottom:10px;">
+          Later this can use live rates. For now it shows sample pairs.
+        </div>
+
+        <div class="wd-list">
+          {% if currencies %}
+            {% for x in currencies %}
+              <div class="wd-item">
+                <div class="wd-item-left">
+                  <div class="wd-item-title">{{ x.pair }}</div>
+                  <div class="wd-item-sub">Sample pair</div>
+                </div>
+                <span class="wd-pill">Watch</span>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="wd-item">
+              <div class="wd-item-left">
+                <div class="wd-item-title">No pairs found</div>
+                <div class="wd-item-sub">Add sample pairs in views.py</div>
+              </div>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- AI FASHION NEWS -->
+    <div class="wd-card span-12">
+      <div class="wd-card-inner">
+        <div class="wd-card-title">📰 Fashion and apparel news <span class="wd-pill">AI SmartBrain</span></div>
+        <div class="wd-note" style="margin-bottom:10px;">
           Short daily ideas about trends that may help Iconic.
         </div>
+
+        <button id="ai-fashion-btn" type="button" class="wd-ai-btn" onclick="loadFashionNews()">
+          Ask AI for todays fashion update
+        </button>
+
+        <div id="ai-fashion-text" class="wd-ai-box" style="margin-top:10px;">
+          Click the button to get a short update for today.
+        </div>
       </div>
-      <span class="world-tag">AI SmartBrain</span>
     </div>
 
-    <button id="ai-fashion-btn"
-            type="button"
-            class="btn btn-warning world-button-small mt-2"
-            onclick="loadFashionNews()">
-      Ask AI for todays fashion update
-    </button>
-
-    <div id="ai-fashion-text" class="mt-2">
-      Click the button to get a short update for today.
-    </div>
   </div>
-
 </div>
 
 <script>
-  // small helper to read csrftoken from cookie
   function getCookie(name) {
-      let cookieValue = null;
-      if (document.cookie && document.cookie !== "") {
-          const cookies = document.cookie.split(";");
-          for (let i = 0; i < cookies.length; i++) {
-              const cookie = cookies[i].trim();
-              if (cookie.substring(0, name.length + 1) === (name + "=")) {
-                  cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                  break;
-              }
-          }
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== "") {
+      const cookies = document.cookie.split(";");
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + "=")) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
       }
-      return cookieValue;
+    }
+    return cookieValue;
   }
 
   function loadFashionNews() {
-      const btn = document.getElementById("ai-fashion-btn");
-      const box = document.getElementById("ai-fashion-text");
+    const btn = document.getElementById("ai-fashion-btn");
+    const box = document.getElementById("ai-fashion-text");
 
-      btn.disabled = true;
-      btn.textContent = "Thinking...";
-      box.textContent = "Please wait, AI is preparing todays note...";
+    btn.disabled = true;
+    btn.textContent = "Thinking...";
+    box.textContent = "Please wait, AI is preparing todays note...";
 
-      fetch("{% url 'world_ai_fashion_news' %}", {
-          method: "POST",
-          headers: {
-              "Content-Type": "application/json",
-              "X-CSRFToken": getCookie("csrftoken"),
-          },
-          body: "{}",
-      })
-      .then(resp => resp.json())
-      .then(data => {
-          if (data.ok) {
-              box.textContent = data.text;
-          } else {
-              box.textContent = "Could not load news. Error: " + (data.error || "unknown problem");
-          }
-      })
-      .catch(err => {
-          box.textContent = "Could not reach the server. Please try again.";
-      })
-      .finally(() => {
-          btn.disabled = false;
-          btn.textContent = "Ask AI for todays fashion update";
-      });
+    fetch("{% url 'world_ai_fashion_news' %}", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": getCookie("csrftoken")
+      },
+      body: "{}"
+    })
+    .then(resp => resp.json())
+    .then(data => {
+      if (data.ok) {
+        box.textContent = data.text;
+      } else {
+        box.textContent = "Could not load news. Error: " + (data.error || "unknown problem");
+      }
+    })
+    .catch(() => {
+      box.textContent = "Could not reach the server. Please try again.";
+    })
+    .finally(() => {
+      btn.disabled = false;
+      btn.textContent = "Ask AI for todays fashion update";
+    });
   }
 </script>
 {% endblock %}
