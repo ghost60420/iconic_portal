@@ -1,37 +1,189 @@
 {% extends "crm/base.html" %}
 
 {% block content %}
-<div class="container mt-4">
+<style>
+  :root{
+    --bg:#060606;
+    --panel:#0b0d10;
+    --border:#2a2f38;
+    --text:#f9fafb;
+    --muted:#a8b0bd;
+    --gold1:#ffe39b;
+    --gold2:#e4c067;
+  }
 
-  <h1 class="h3 mb-3">AI fashion notes</h1>
-  <p class="text-muted small mb-4">
-    Simple notes that you can read before buyer calls.
-  </p>
+  .ain-wrap{
+    max-width: 1100px;
+    margin: 16px auto 28px auto;
+    padding: 0 10px;
+    color: var(--text);
+  }
 
-  <div class="row g-3">
-    <div class="col-md-8">
-      <div class="card bg-dark border-secondary text-light">
-        <div class="card-body">
-          <h2 class="h5 mb-3">Today focus</h2>
-          <ul class="small text-muted mb-0">
-            <li>Green factories and safety are strong selling points for Bangladesh.</li>
-            <li>Active and lounge sets are safe options for many new brands.</li>
-            <li>Offer one normal fabric and one eco fabric choice when possible.</li>
-          </ul>
-        </div>
+  .ain-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:12px;
+    flex-wrap:wrap;
+    margin-bottom: 14px;
+  }
+
+  .ain-title{
+    font-size: 22px;
+    font-weight: 900;
+    margin: 0;
+    color:#fff;
+  }
+
+  .ain-sub{
+    margin-top: 4px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .ain-actions{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+
+  .ain-btn{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:10px 14px;
+    border-radius: 12px;
+    font-weight: 900;
+    font-size: 13px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.05);
+    color: #f3f4f6;
+    text-decoration:none;
+    transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+    white-space: nowrap;
+  }
+
+  .ain-btn:hover{
+    transform: translateY(-1px);
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.18);
+    color:#fff;
+  }
+
+  .ain-btn-gold{
+    background: linear-gradient(180deg, rgba(255,227,155,0.18), rgba(228,192,103,0.10));
+    border-color: rgba(255,227,155,0.25);
+  }
+
+  .ain-grid{
+    display:grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 12px;
+  }
+
+  .ain-card{
+    background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+    overflow:hidden;
+  }
+
+  .ain-card-inner{
+    padding: 14px;
+  }
+
+  .ain-card-title{
+    font-size: 14px;
+    font-weight: 900;
+    margin: 0 0 10px 0;
+    color:#fff;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+
+  .ain-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,227,155,0.25);
+    background: rgba(255,227,155,0.10);
+    font-size: 12px;
+    font-weight: 900;
+    color: var(--gold1);
+    white-space: nowrap;
+  }
+
+  .ain-list{
+    margin: 0;
+    padding-left: 18px;
+    color: #e7e7e7;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .ain-list li{ margin-bottom: 8px; }
+  .ain-list li:last-child{ margin-bottom: 0; }
+
+  .span-8{ grid-column: span 8; }
+  .span-4{ grid-column: span 4; }
+
+  @media (max-width: 992px){
+    .span-8{ grid-column: span 12; }
+    .span-4{ grid-column: span 12; }
+  }
+
+  .ain-note{
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+</style>
+
+<div class="ain-wrap">
+
+  <div class="ain-header">
+    <div>
+      <h1 class="ain-title">AI fashion notes</h1>
+      <div class="ain-sub">Simple notes you can read before buyer calls.</div>
+    </div>
+
+    <div class="ain-actions">
+      <a class="ain-btn ain-btn-gold" href="{% url 'world_tools' %}">🧰 World tools</a>
+      <a class="ain-btn" href="{% url 'world_dashboard' %}">🌍 World dashboard</a>
+      <a class="ain-btn" href="{% url 'main_dashboard' %}">🧠 Main dashboard</a>
+    </div>
+  </div>
+
+  <div class="ain-grid">
+    <div class="ain-card span-8">
+      <div class="ain-card-inner">
+        <div class="ain-card-title">📌 Today focus <span class="ain-pill">Quick read</span></div>
+
+        <ul class="ain-list">
+          <li>Green factories and safety are strong selling points for Bangladesh.</li>
+          <li>Activewear and lounge sets are safe options for many new brands.</li>
+          <li>Offer one normal fabric and one eco fabric option when possible.</li>
+          <li>For small orders, focus on fewer colors to keep cost lower.</li>
+          <li>For repeat buyers, push fast sampling and clear QC checkpoints.</li>
+        </ul>
       </div>
     </div>
 
-    <div class="col-md-4">
-      <div class="card bg-dark border-secondary text-light h-100">
-        <div class="card-body">
-          <h2 class="h6 mb-2">Next step</h2>
-          <p class="small text-muted mb-3">
-            Later we can connect this page to the Iconic AI brain so it can read your leads and orders and give custom notes.
-          </p>
-          <a href="/world-tools/" class="btn btn-sm btn-outline-light w-100">
-            Back to world tools
-          </a>
+    <div class="ain-card span-4">
+      <div class="ain-card-inner">
+        <div class="ain-card-title">✅ Next step</div>
+        <div class="ain-note">
+          Later we can connect this page to your AI brain so it can read leads and orders and give custom notes.
+        </div>
+
+        <div style="margin-top:12px; display:flex; flex-direction:column; gap:10px;">
+          <a class="ain-btn ain-btn-gold" href="{% url 'world_tools' %}">Back to world tools</a>
+          <a class="ain-btn" href="{% url 'world_dashboard' %}">Open world dashboard</a>
         </div>
       </div>
     </div>

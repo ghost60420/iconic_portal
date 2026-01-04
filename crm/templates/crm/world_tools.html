@@ -263,6 +263,92 @@
   .span-6{ grid-column: span 6; }
   .span-12{ grid-column: span 12; }
 
+  /* dropdown */
+  .wt-dd{
+    position: relative;
+    display: inline-block;
+  }
+
+  .wt-dd-btn{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:10px 14px;
+    border-radius:12px;
+    font-size:13px;
+    font-weight:900;
+    border:1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.05);
+    color:#f3f4f6;
+    cursor:pointer;
+    user-select:none;
+    line-height:1;
+    transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+    white-space: nowrap;
+  }
+
+  .wt-dd-btn:hover{
+    transform: translateY(-1px);
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.18);
+    color:#fff;
+  }
+
+  .wt-dd-menu{
+    display:none;
+    position:absolute;
+    right:0;
+    top: calc(100% + 8px);
+    min-width: 260px;
+    background: #0b0d10;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 14px;
+    box-shadow: 0 14px 40px rgba(0,0,0,0.55);
+    overflow:hidden;
+    z-index: 9999;
+  }
+
+  .wt-dd.open .wt-dd-menu{
+    display:block;
+  }
+
+  .wt-dd-link{
+    display:flex;
+    gap:10px;
+    align-items:flex-start;
+    padding: 12px 12px;
+    text-decoration:none;
+    color:#f3f4f6;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+
+  .wt-dd-link:last-child{
+    border-bottom: none;
+  }
+
+  .wt-dd-link:hover{
+    background: rgba(255,255,255,0.06);
+    color:#fff;
+  }
+
+  .wt-dd-ico{
+    font-size: 16px;
+    line-height: 1;
+    margin-top: 1px;
+  }
+
+  .wt-dd-title{
+    font-weight: 900;
+    font-size: 13px;
+    margin: 0;
+  }
+
+  .wt-dd-sub{
+    margin: 2px 0 0 0;
+    font-size: 12px;
+    color: #a8b0bd;
+  }
+
   @media (max-width: 992px){
     .span-4{ grid-column: span 12; }
     .span-6{ grid-column: span 12; }
@@ -270,6 +356,7 @@
     .wt-row-2{ grid-template-columns: 1fr; }
     .wt-row-4{ grid-template-columns: 1fr; }
     .wt-item-right{ justify-content:flex-start; }
+    .wt-dd-menu{ left:0; right:auto; }
   }
 </style>
 
@@ -282,7 +369,31 @@
     </div>
 
     <div class="wt-actions">
-      <a class="wt-btn wt-btn-gold" href="{% url 'world_dashboard' %}">🌍 World dashboard</a>
+
+      <div class="wt-dd" id="wt-dd">
+        <button type="button" class="wt-dd-btn" id="wt-dd-btn">
+          🌍 World pages <span style="opacity:0.9;">▾</span>
+        </button>
+
+        <div class="wt-dd-menu" id="wt-dd-menu">
+          <a class="wt-dd-link" href="{% url 'world_dashboard' %}">
+            <div class="wt-dd-ico">📊</div>
+            <div>
+              <div class="wt-dd-title">World dashboard</div>
+              <div class="wt-dd-sub">Time, currency, and AI update</div>
+            </div>
+          </a>
+
+          <a class="wt-dd-link" href="{% url 'world_ai_fashion_news' %}">
+            <div class="wt-dd-ico">🧠</div>
+            <div>
+              <div class="wt-dd-title">AI fashion notes</div>
+              <div class="wt-dd-sub">Quick notes before buyer calls</div>
+            </div>
+          </a>
+        </div>
+      </div>
+
       <a class="wt-btn" href="{% url 'main_dashboard' %}">🧠 Main dashboard</a>
     </div>
   </div>
@@ -503,6 +614,32 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
+  // dropdown open close
+  (function () {
+    const wrap = document.getElementById("wt-dd");
+    const btn = document.getElementById("wt-dd-btn");
+    const menu = document.getElementById("wt-dd-menu");
+    if (!wrap || !btn || !menu) return;
+
+    function closeMenu() {
+      wrap.classList.remove("open");
+    }
+
+    btn.addEventListener("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      wrap.classList.toggle("open");
+    });
+
+    document.addEventListener("click", function () {
+      closeMenu();
+    });
+
+    menu.addEventListener("click", function (e) {
+      e.stopPropagation();
+    });
+  })();
+
   function loadJson(key, defaultValue) {
     try {
       const raw = localStorage.getItem(key);
@@ -757,7 +894,7 @@
     errorEl.textContent = "Sample rates only. Final money should be confirmed.";
   }
 
-  // TREND CHART (avoid double render)
+  // TREND CHART
   let _trendChart = null;
   function renderCurrencyTrend() {
     const canvas = document.getElementById("currencyTrendChart");
