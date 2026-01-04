@@ -8,3 +8,21 @@ venv/
 .envvenv/
 .idea/
 .vscode/
+
+# secrets
+.env
+
+# database
+db.sqlite3
+*.sqlite3
+*.sqlite3-journal
+
+# media and logs
+media/
+*.log
+
+# python
+__pycache__/
+*.pyc
+venv/
+.env/
