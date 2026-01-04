@@ -1,362 +1,498 @@
-{% extends 'crm/base.html' %}
+{% extends "crm/base.html" %}
 
 {% block content %}
 <style>
-  /* Bigger clock text */
-  .clock-city {
-    font-size: 15px;
-    font-weight: 600;
-  }
-  .clock-time {
-    font-size: 18px;
-    font-weight: 700;
-    letter-spacing: 1px;
-    font-family: "Courier New", monospace;
-  }
-  .clock-remove {
-    padding: 0 6px;
-    font-size: 11px;
-    line-height: 1;
+  :root{
+    --bg:#060606;
+    --panel:#0b0d10;
+    --panel2:#0f172a;
+    --border:#2a2f38;
+    --text:#f9fafb;
+    --muted:#a8b0bd;
+    --gold1:#ffe39b;
+    --gold2:#e4c067;
   }
 
-  /* Weather card styling */
-  .weather-row {
-    background: #1f1f1f;
-    padding: 12px;
-    border-radius: 6px;
-    margin-bottom: 8px;
+  .wt-wrap{
+    max-width: 1200px;
+    margin: 16px auto 28px auto;
+    padding: 0 10px;
+    color: var(--text);
   }
-  .weather-city {
-    font-size: 15px;
-    font-weight: 600;
+
+  .wt-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:12px;
+    flex-wrap:wrap;
+    margin-bottom: 14px;
   }
-  .weather-temp {
-    font-size: 20px;
-    font-weight: 700;
-    color: #f5d580;
+
+  .wt-title{
+    font-size: 22px;
+    font-weight: 900;
+    color: #fff;
+    margin: 0;
+    letter-spacing: 0.2px;
   }
-  .weather-pill {
-    background: #333;
-    padding: 4px 10px;
-    border-radius: 20px;
+
+  .wt-sub{
+    margin-top: 4px;
     font-size: 13px;
-    font-weight: 600;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    color: #f5d580;
+    color: var(--muted);
   }
-  .weather-remove {
-    padding: 0 6px;
-    font-size: 11px;
-    margin-top: 6px;
+
+  .wt-actions{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+
+  .wt-btn{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:10px 14px;
+    border-radius: 12px;
+    font-weight: 800;
+    font-size: 13px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.05);
+    color: #f3f4f6;
+    text-decoration:none;
+    transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+    white-space: nowrap;
+  }
+
+  .wt-btn:hover{
+    transform: translateY(-1px);
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.18);
+    color: #fff;
+  }
+
+  .wt-btn-gold{
+    background: linear-gradient(180deg, rgba(255,227,155,0.18), rgba(228,192,103,0.10));
+    border-color: rgba(255,227,155,0.25);
+  }
+
+  .wt-grid{
+    display:grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 12px;
+  }
+
+  .wt-card{
+    background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+    overflow:hidden;
+  }
+
+  .wt-card-inner{
+    padding: 14px;
+  }
+
+  .wt-card-title{
+    font-size: 14px;
+    font-weight: 900;
+    margin: 0 0 10px 0;
+    color: #fff;
+    letter-spacing: 0.2px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+
+  .wt-note{
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .wt-divider{
+    height: 1px;
+    background: rgba(255,255,255,0.10);
+    margin: 12px 0;
+  }
+
+  .wt-input, .wt-select{
+    width:100%;
+    padding: 10px 10px;
+    border-radius: 12px;
+    background: rgba(0,0,0,0.35);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+  }
+
+  .wt-input:focus, .wt-select:focus{
+    border-color: rgba(255,227,155,0.35);
+    box-shadow: 0 0 0 3px rgba(255,227,155,0.10);
+  }
+
+  .wt-row{
+    display:grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+  }
+
+  .wt-row-2{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .wt-row-4{
+    display:grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 8px;
+  }
+
+  .wt-submit{
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 12px;
+    font-weight: 900;
+    font-size: 13px;
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.06);
+    color: #fff;
+    cursor:pointer;
+    transition: transform 0.12s ease, background 0.12s ease;
+  }
+
+  .wt-submit:hover{
+    transform: translateY(-1px);
+    background: rgba(255,255,255,0.09);
+  }
+
+  .wt-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.04);
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--gold1);
+  }
+
+  .wt-list{
+    display:flex;
+    flex-direction:column;
+    gap: 10px;
+  }
+
+  .wt-item{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.10);
+    background: rgba(0,0,0,0.28);
+  }
+
+  .wt-item-left{
+    display:flex;
+    flex-direction:column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .wt-item-title{
+    font-weight: 900;
+    font-size: 13px;
+    color: #fff;
+    line-height: 1.1;
+  }
+
+  .wt-item-sub{
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.2;
+  }
+
+  .wt-item-right{
+    display:flex;
+    align-items:center;
+    gap: 10px;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+  }
+
+  .wt-time{
+    font-family: "Courier New", monospace;
+    font-size: 16px;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+  }
+
+  .wt-remove{
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.05);
+    color: #fff;
+    border-radius: 999px;
+    padding: 7px 10px;
+    font-size: 12px;
+    font-weight: 900;
+    cursor:pointer;
+    transition: background 0.12s ease, transform 0.12s ease;
+  }
+
+  .wt-remove:hover{
+    transform: translateY(-1px);
+    background: rgba(255,255,255,0.09);
+  }
+
+  .wt-warn{
+    color: #f5d580;
+    font-size: 12px;
+    margin-top: 8px;
+  }
+
+  /* grid spans */
+  .span-4{ grid-column: span 4; }
+  .span-6{ grid-column: span 6; }
+  .span-12{ grid-column: span 12; }
+
+  @media (max-width: 992px){
+    .span-4{ grid-column: span 12; }
+    .span-6{ grid-column: span 12; }
+    .wt-row{ grid-template-columns: 1fr; }
+    .wt-row-2{ grid-template-columns: 1fr; }
+    .wt-row-4{ grid-template-columns: 1fr; }
+    .wt-item-right{ justify-content:flex-start; }
   }
 </style>
 
-<div class="container mt-4">
+<div class="wt-wrap">
 
-  <!-- header -->
-  <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+  <div class="wt-header">
     <div>
-      <h1 class="h3 mb-1">World tools</h1>
-      <p class="text-muted small mb-0">
-        Time, money, weather and fabric signals to help your daily Iconic work.
-      </p>
+      <h1 class="wt-title">World tools</h1>
+      <div class="wt-sub">Time, money, weather and simple signals for daily work.</div>
     </div>
-    <div class="card bg-dark border-secondary text-light" style="min-width:260px;">
-      <div class="card-body py-2 px-3">
-        <div class="small text-muted">AI note</div>
-        <div class="small">
-          Keep buyer time zones, sample rates and season feel in one view before calls.
-        </div>
-      </div>
+
+    <div class="wt-actions">
+      <a class="wt-btn wt-btn-gold" href="{% url 'world_dashboard' %}">🌍 World dashboard</a>
+      <a class="wt-btn" href="{% url 'main_dashboard' %}">🧠 Main dashboard</a>
     </div>
   </div>
 
-  <!-- first row -->
-  <div class="row g-3 mb-3">
+  <div class="wt-grid">
 
-    <!-- clock card -->
-    <div class="col-md-4">
-      <div class="card bg-dark border-secondary text-light h-100">
-        <div class="card-body d-flex flex-column">
-          <h2 class="h5 mb-3">World clock</h2>
+    <!-- CLOCK -->
+    <div class="wt-card span-4">
+      <div class="wt-card-inner">
+        <div class="wt-card-title">🕒 World clock</div>
 
-          <div id="clockList" class="small mb-3">
-            <!-- filled by script -->
+        <div id="clockList" class="wt-list"></div>
+
+        <div class="wt-divider"></div>
+
+        <form id="clockForm">
+          <div class="wt-note" style="margin-bottom:8px;">Add city and UTC offset</div>
+
+          <div class="wt-row">
+            <input id="clockCity" class="wt-input" placeholder="City name">
+            <input id="clockOffset" class="wt-input" type="number" step="0.5" placeholder="UTC offset">
+            <button type="submit" class="wt-submit">Add</button>
           </div>
 
-          <form id="clockForm" class="small mt-auto">
-            <div class="mb-1 text-muted">Add city (UTC offset)</div>
-            <div class="row g-1">
-              <div class="col-6">
-                <input
-                  type="text"
-                  id="clockCity"
-                  class="form-control form-control-sm"
-                  placeholder="City name"
-                >
-              </div>
-              <div class="col-3">
-                <input
-                  type="number"
-                  step="0.5"
-                  id="clockOffset"
-                  class="form-control form-control-sm"
-                  placeholder="Offset"
-                >
-              </div>
-              <div class="col-3 d-grid">
-                <button type="submit" class="btn btn-sm btn-outline-light">
-                  Add
-                </button>
-              </div>
-            </div>
-            <div class="text-muted small mt-1">
-              Example: Dhaka 6, Vancouver minus 8.
-            </div>
-          </form>
+          <div class="wt-note" style="margin-top:8px;">
+            Example: Dhaka 6, London 0, Vancouver minus 8
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- CURRENCY -->
+    <div class="wt-card span-4">
+      <div class="wt-card-inner">
+        <div class="wt-card-title">💱 Currency converter</div>
+
+        <div class="wt-row-2" style="margin-bottom:8px;">
+          <div>
+            <div class="wt-note" style="margin-bottom:6px;">Amount</div>
+            <input id="amountInput" class="wt-input" type="number" value="1">
+          </div>
+          <div style="display:flex;align-items:flex-end;">
+            <button type="button" class="wt-submit" onclick="convertCurrency()">Convert</button>
+          </div>
+        </div>
+
+        <div class="wt-row-2">
+          <div>
+            <div class="wt-note" style="margin-bottom:6px;">From</div>
+            <select id="fromSelect" class="wt-select">
+              <option value="USD">USD</option>
+              <option value="CAD">CAD</option>
+              <option value="EUR">EUR</option>
+              <option value="BDT">BDT</option>
+            </select>
+          </div>
+          <div>
+            <div class="wt-note" style="margin-bottom:6px;">To</div>
+            <select id="toSelect" class="wt-select">
+              <option value="CAD">CAD</option>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+              <option value="BDT">BDT</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;">
+          <div id="currencyResult" style="font-size:13px;font-weight:800;"></div>
+          <div id="currencyError" class="wt-warn"></div>
+        </div>
+
+        <div class="wt-divider"></div>
+
+        <div class="wt-note">
+          Sample rates only. Final money should be confirmed by bank or your costing sheet.
         </div>
       </div>
     </div>
 
-    <!-- currency card -->
-    <div class="col-md-4">
-      <div class="card bg-dark border-secondary text-light h-100">
-        <div class="card-body d-flex flex-column">
-          <h2 class="h5 mb-3">Currency converter</h2>
+    <!-- WEATHER -->
+    <div class="wt-card span-4">
+      <div class="wt-card-inner">
+        <div class="wt-card-title">🌦 Buyer weather</div>
 
-          <div class="mb-2">
-            <label class="form-label form-label-sm">Amount</label>
-            <input
-              id="amountInput"
-              type="number"
-              value="1"
-              class="form-control form-control-sm"
-            >
+        <div id="weatherList" class="wt-list"></div>
+
+        <div class="wt-divider"></div>
+
+        <form id="weatherForm">
+          <div class="wt-note" style="margin-bottom:8px;">Add city weather note</div>
+
+          <div class="wt-row-4" style="margin-bottom:8px;">
+            <input id="weatherCity" class="wt-input" placeholder="City">
+            <input id="weatherTemp" class="wt-input" type="number" placeholder="Temp C">
+            <select id="weatherCondition" class="wt-select">
+              <option value="sunny">Sunny</option>
+              <option value="cloudy">Cloudy</option>
+              <option value="rainy">Rainy</option>
+              <option value="snow">Snow</option>
+              <option value="hot">Hot</option>
+            </select>
+            <button type="submit" class="wt-submit">Add</button>
           </div>
 
-          <div class="row g-2 mb-2">
-            <div class="col-6">
-              <label class="form-label form-label-sm">From</label>
-              <select id="fromSelect" class="form-select form-select-sm">
-                <option value="USD">USD</option>
-                <option value="CAD">CAD</option>
-                <option value="EUR">EUR</option>
-                <option value="BDT">BDT</option>
-              </select>
-            </div>
-            <div class="col-6">
-              <label class="form-label form-label-sm">To</label>
-              <select id="toSelect" class="form-select form-select-sm">
-                <option value="CAD">CAD</option>
-                <option value="USD">USD</option>
-                <option value="EUR">EUR</option>
-                <option value="BDT">BDT</option>
-              </select>
-            </div>
+          <input id="weatherNote" class="wt-input" placeholder="Short note example hoodies time">
+          <div class="wt-note" style="margin-top:8px;">
+            Cold cities push fleece. Warm cities push light items and resort.
           </div>
+        </form>
+      </div>
+    </div>
 
-          <button
-            type="button"
-            class="btn btn-sm btn-primary w-100 mb-2"
-            onclick="convertCurrency()"
-          >
-            Convert
-          </button>
+    <!-- SHIPPING -->
+    <div class="wt-card span-4">
+      <div class="wt-card-inner">
+        <div class="wt-card-title">🚚 Shipping time map</div>
 
-          <p id="currencyResult" class="small mb-1"></p>
-          <p id="currencyError" class="small text-warning mb-0"></p>
+        <div style="overflow:auto;">
+          <table style="width:100%; font-size:12px; border-collapse: collapse;">
+            <thead>
+              <tr style="color:var(--muted);">
+                <th style="text-align:left; padding:8px 6px;">Route</th>
+                <th style="text-align:left; padding:8px 6px;">Sea days</th>
+                <th style="text-align:left; padding:8px 6px;">Air days</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="padding:8px 6px;">Dhaka to Vancouver</td>
+                <td style="padding:8px 6px;">30 to 35</td>
+                <td style="padding:8px 6px;">5 to 7</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 6px;">Dhaka to Toronto</td>
+                <td style="padding:8px 6px;">28 to 32</td>
+                <td style="padding:8px 6px;">4 to 6</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 6px;">Dhaka to New York</td>
+                <td style="padding:8px 6px;">25 to 30</td>
+                <td style="padding:8px 6px;">4 to 6</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 6px;">Dhaka to London</td>
+                <td style="padding:8px 6px;">22 to 28</td>
+                <td style="padding:8px 6px;">3 to 5</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
-          <hr class="border-secondary my-3">
-
-          <p class="text-muted small mb-1">AI tip</p>
-          <p class="text-muted small mb-0">
-            Rates are only for talk. Keep final numbers inside your costing sheets.
-          </p>
+        <div class="wt-note" style="margin-top:10px;">
+          Tip: for rush orders compare air cost with near country options.
         </div>
       </div>
     </div>
 
-    <!-- buyer weather card -->
-    <div class="col-md-4">
-      <div class="card bg-dark border-secondary text-light h-100">
-        <div class="card-body d-flex flex-column">
-          <h2 class="h5 mb-3">Buyer weather</h2>
-
-          <div id="weatherList" class="small mb-3">
-            <!-- filled by script -->
-          </div>
-
-          <!-- digital weather form -->
-          <form id="weatherForm" class="small mt-auto">
-            <div class="mb-1 text-muted">Add city weather</div>
-            <div class="row g-1 mb-1">
-              <div class="col-5">
-                <input
-                  type="text"
-                  id="weatherCity"
-                  class="form-control form-control-sm"
-                  placeholder="City"
-                >
-              </div>
-              <div class="col-3">
-                <input
-                  type="number"
-                  id="weatherTemp"
-                  class="form-control form-control-sm"
-                  placeholder="Temp °C"
-                >
-              </div>
-              <div class="col-4">
-                <select
-                  id="weatherCondition"
-                  class="form-select form-select-sm"
-                >
-                  <option value="sunny">Sunny</option>
-                  <option value="cloudy">Cloudy</option>
-                  <option value="rainy">Rainy</option>
-                  <option value="snow">Snow</option>
-                  <option value="hot">Hot</option>
-                </select>
-              </div>
-            </div>
-            <div class="row g-1 mb-1">
-              <div class="col-12">
-                <input
-                  type="text"
-                  id="weatherNote"
-                  class="form-control form-control-sm"
-                  placeholder="Short note, example hoodies time"
-                >
-              </div>
-            </div>
-            <div class="row g-1">
-              <div class="col-12 d-grid">
-                <button type="submit" class="btn btn-sm btn-outline-light">
-                  Add city
-                </button>
-              </div>
-            </div>
-          </form>
-
-          <div class="text-muted small mt-2">
-            Idea: cold and rainy cities push hoodies and fleece, warm and sunny cities push light weight or resort.
-          </div>
+    <!-- TREND -->
+    <div class="wt-card span-4">
+      <div class="wt-card-inner">
+        <div class="wt-card-title">📈 USD to CAD trend</div>
+        <canvas id="currencyTrendChart" height="150"></canvas>
+        <div class="wt-note" style="margin-top:10px;">
+          Sample chart for direction only.
         </div>
       </div>
     </div>
 
-  </div>
+    <!-- FABRIC -->
+    <div class="wt-card span-4">
+      <div class="wt-card-inner">
+        <div class="wt-card-title">🧵 Fabric price index</div>
 
-  <!-- second row -->
-  <div class="row g-3">
-
-    <!-- shipping -->
-    <div class="col-md-4">
-      <div class="card bg-dark border-secondary text-light h-100">
-        <div class="card-body">
-          <h2 class="h5 mb-3">Shipping time map</h2>
-
-          <div class="table-responsive">
-            <table class="table table-sm table-dark table-borderless mb-2">
-              <thead>
-                <tr class="text-muted small">
-                  <th>Route</th>
-                  <th>Sea days</th>
-                  <th>Air days</th>
-                </tr>
-              </thead>
-              <tbody class="small">
-                <tr>
-                  <td>Dhaka to Vancouver</td>
-                  <td>30 to 35</td>
-                  <td>5 to 7</td>
-                </tr>
-                <tr>
-                  <td>Dhaka to Toronto</td>
-                  <td>28 to 32</td>
-                  <td>4 to 6</td>
-                </tr>
-                <tr>
-                  <td>Dhaka to New York</td>
-                  <td>25 to 30</td>
-                  <td>4 to 6</td>
-                </tr>
-                <tr>
-                  <td>Dhaka to London</td>
-                  <td>22 to 28</td>
-                  <td>3 to 5</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <p class="text-muted small mb-0">
-            AI note: for rush orders compare air cost with near country options.
-          </p>
+        <div style="overflow:auto;">
+          <table style="width:100%; font-size:12px; border-collapse: collapse;">
+            <thead>
+              <tr style="color:var(--muted);">
+                <th style="text-align:left; padding:8px 6px;">Fabric</th>
+                <th style="text-align:left; padding:8px 6px;">GSM</th>
+                <th style="text-align:left; padding:8px 6px;">USD per kg</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="padding:8px 6px;">Cotton single jersey</td>
+                <td style="padding:8px 6px;">180 to 200</td>
+                <td style="padding:8px 6px;">4.2</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 6px;">Cotton fleece</td>
+                <td style="padding:8px 6px;">300 to 320</td>
+                <td style="padding:8px 6px;">5.3</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 6px;">Cotton terry</td>
+                <td style="padding:8px 6px;">260 to 280</td>
+                <td style="padding:8px 6px;">4.8</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 6px;">Poly spandex jersey</td>
+                <td style="padding:8px 6px;">220 to 240</td>
+                <td style="padding:8px 6px;">5.9</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-      </div>
-    </div>
 
-    <!-- currency trend -->
-    <div class="col-md-4">
-      <div class="card bg-dark border-secondary text-light h-100">
-        <div class="card-body d-flex flex-column">
-          <h2 class="h5 mb-3">USD to CAD trend</h2>
-
-          <canvas id="currencyTrendChart" height="140"></canvas>
-
-          <p class="text-muted small mt-3 mb-0">
-            Simple sample trend to feel direction only.
-          </p>
-        </div>
-      </div>
-    </div>
-
-    <!-- fabric index -->
-    <div class="col-md-4">
-      <div class="card bg-dark border-secondary text-light h-100">
-        <div class="card-body d-flex flex-column">
-          <h2 class="h5 mb-3">Fabric price index</h2>
-
-          <div class="table-responsive">
-            <table class="table table-sm table-dark table-borderless mb-2 small">
-              <thead class="text-muted">
-                <tr>
-                  <th>Fabric</th>
-                  <th>GSM</th>
-                  <th>USD per kg</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>Cotton single jersey</td>
-                  <td>180 to 200</td>
-                  <td>4.2</td>
-                </tr>
-                <tr>
-                  <td>Cotton fleece</td>
-                  <td>300 to 320</td>
-                  <td>5.3</td>
-                </tr>
-                <tr>
-                  <td>Cotton terry</td>
-                  <td>260 to 280</td>
-                  <td>4.8</td>
-                </tr>
-                <tr>
-                  <td>Poly spandex jersey</td>
-                  <td>220 to 240</td>
-                  <td>5.9</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <p class="text-muted small mb-0">
-            Later you can update these from real mill quotes.
-          </p>
+        <div class="wt-note" style="margin-top:10px;">
+          Later you can update these from real mill quotes.
         </div>
       </div>
     </div>
@@ -367,7 +503,6 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
-  // small helpers for browser storage
   function loadJson(key, defaultValue) {
     try {
       const raw = localStorage.getItem(key);
@@ -377,6 +512,7 @@
       return defaultValue;
     }
   }
+
   function saveJson(key, value) {
     try {
       localStorage.setItem(key, JSON.stringify(value));
@@ -384,7 +520,6 @@
   }
 
   // CLOCK
-
   function getClockCities() {
     const defaultCities = [
       { name: "Vancouver", offset: -8 },
@@ -421,17 +556,16 @@
     cities.forEach(function (city, index) {
       const cityDate = new Date(utcMs + city.offset * 3600000);
       const timeString = formatTimeOfDay(cityDate);
+
       html += `
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <div class="clock-city">
-            ${city.name}
-            <span class="text-muted small">(UTC ${city.offset >= 0 ? "+" : ""}${city.offset})</span>
+        <div class="wt-item">
+          <div class="wt-item-left">
+            <div class="wt-item-title">${city.name}</div>
+            <div class="wt-item-sub">UTC ${city.offset >= 0 ? "+" : ""}${city.offset}</div>
           </div>
-          <div class="d-flex align-items-center gap-2">
-            <span class="clock-time">${timeString}</span>
-            <button type="button" class="btn btn-sm btn-outline-light clock-remove" data-index="${index}">
-              x
-            </button>
+          <div class="wt-item-right">
+            <div class="wt-time">${timeString}</div>
+            <button type="button" class="wt-remove" data-index="${index}">Remove</button>
           </div>
         </div>
       `;
@@ -439,7 +573,7 @@
 
     container.innerHTML = html;
 
-    container.querySelectorAll(".clock-remove").forEach(function (btn) {
+    container.querySelectorAll(".wt-remove").forEach(function (btn) {
       btn.addEventListener("click", function () {
         const idx = parseInt(this.getAttribute("data-index"));
         const list = getClockCities();
@@ -462,7 +596,7 @@
       const offset = parseFloat(offsetInput.value);
 
       if (!name || isNaN(offset)) {
-        alert("Please enter city and offset.");
+        alert("Please enter a city and UTC offset.");
         return;
       }
 
@@ -476,8 +610,7 @@
     });
   }
 
-  // BUYER WEATHER
-
+  // WEATHER
   function getWeatherCities() {
     const defaultWeather = [
       { city: "Vancouver", temp: 8, note: "Cool and cloudy", condition: "cloudy" },
@@ -503,16 +636,6 @@
     return "⛅";
   }
 
-  function getConditionText(cond) {
-    const c = (cond || "").toLowerCase();
-    if (c === "sunny") return "Sunny";
-    if (c === "cloudy") return "Cloudy";
-    if (c === "rainy") return "Rainy";
-    if (c === "snow") return "Snow";
-    if (c === "hot") return "Hot";
-    return "Mixed";
-  }
-
   function renderWeather() {
     const list = getWeatherCities();
     const box = document.getElementById("weatherList");
@@ -520,26 +643,14 @@
 
     let html = "";
     list.forEach(function (item, index) {
-      const icon = getConditionIcon(item.condition);
-      const text = getConditionText(item.condition);
       html += `
-        <div class="weather-row d-flex justify-content-between align-items-center">
-          <div>
-            <div class="weather-city">${item.city}</div>
-            <div class="small">${item.note}</div>
+        <div class="wt-item">
+          <div class="wt-item-left">
+            <div class="wt-item-title">${item.city} <span class="wt-pill">${getConditionIcon(item.condition)} ${item.temp} C</span></div>
+            <div class="wt-item-sub">${item.note || ""}</div>
           </div>
-          <div class="text-end">
-            <div class="weather-temp mb-1">${item.temp}°C</div>
-            <div class="weather-pill">
-              <span>${icon}</span> ${text}
-            </div>
-            <button
-              type="button"
-              class="btn btn-sm btn-outline-light weather-remove"
-              data-index="${index}"
-            >
-              x
-            </button>
+          <div class="wt-item-right">
+            <button type="button" class="wt-remove" data-index="${index}">Remove</button>
           </div>
         </div>
       `;
@@ -547,7 +658,7 @@
 
     box.innerHTML = html;
 
-    box.querySelectorAll(".weather-remove").forEach(function (btn) {
+    box.querySelectorAll(".wt-remove").forEach(function (btn) {
       btn.addEventListener("click", function () {
         const idx = parseInt(this.getAttribute("data-index"));
         const items = getWeatherCities();
@@ -575,7 +686,7 @@
       const cond = condSelect.value || "cloudy";
 
       if (!city || isNaN(temp)) {
-        alert("Please enter city and temperature.");
+        alert("Please enter a city and temperature.");
         return;
       }
 
@@ -597,7 +708,6 @@
   }
 
   // CURRENCY (offline sample rates)
-
   const offlineRates = {
     "USD_CAD": 1.37,
     "CAD_USD": 0.73,
@@ -638,33 +748,35 @@
 
     const rate = getOfflineRate(from, to);
     if (!rate) {
-      errorEl.textContent = "No sample rate set for this pair. You can update the table in code later.";
+      errorEl.textContent = "No sample rate set for this pair. Update it later in code.";
       return;
     }
 
     const converted = (amount * rate).toFixed(2);
-    resultEl.innerHTML =
-      amount.toFixed(2) + " " + from +
-      " is about <strong>" + converted + " " + to + "</strong>";
-    errorEl.textContent =
-      "Sample rates only. For final money use bank or your costing sheet.";
+    resultEl.innerHTML = amount.toFixed(2) + " " + from + " is about <strong>" + converted + " " + to + "</strong>";
+    errorEl.textContent = "Sample rates only. Final money should be confirmed.";
   }
 
-  // CURRENCY TREND CHART
-
+  // TREND CHART (avoid double render)
+  let _trendChart = null;
   function renderCurrencyTrend() {
-    const ctx = document.getElementById("currencyTrendChart");
-    if (!ctx || !window.Chart) return;
+    const canvas = document.getElementById("currencyTrendChart");
+    if (!canvas || !window.Chart) return;
 
-    const labels = ["Day 1", "Day 2", "Day 3", "Day 4", "Day 5", "Day 6", "Day 7"];
+    if (_trendChart) {
+      _trendChart.destroy();
+      _trendChart = null;
+    }
+
+    const labels = ["Day 1","Day 2","Day 3","Day 4","Day 5","Day 6","Day 7"];
     const data = [1.34, 1.35, 1.36, 1.37, 1.38, 1.37, 1.36];
 
-    new Chart(ctx, {
+    _trendChart = new Chart(canvas, {
       type: "line",
       data: {
         labels: labels,
         datasets: [{
-          label: "USD to CAD (sample)",
+          label: "USD to CAD",
           data: data,
           tension: 0.3,
           borderWidth: 2,
