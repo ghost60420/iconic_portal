@@ -3114,56 +3114,13 @@ def inventory_ai_overview(request):
     except Exception as e:
         return JsonResponse({"ok": False, "error": str(e)})
 
-    # -----------------------------------------
-    # World Dashboard page
-    # -----------------------------------------
-    from django.shortcuts import render  # this should already be at top of file
+# -----------------------------------------
+# World Dashboard and Tools
+# -----------------------------------------
 
-def world_dashboard(request):
-        # sample clock city names
-        clocks = [
-            {"name": "Vancouver"},
-            {"name": "Toronto"},
-            {"name": "New York"},
-            {"name": "London"},
-            {"name": "Dhaka"},
-        ]
+def world_tools(request):
+    return render(request, "crm/world_tools.html")
 
-        # sample currency rates
-        rates = [
-            {"pair": "BDT to CAD", "rate": "0.0123"},
-            {"pair": "CAD to BDT", "rate": "81.30"},
-            {"pair": "CAD to USD", "rate": "0.73"},
-            {"pair": "USD to EUR", "rate": "0.92"},
-        ]
-
-        # sample fashion news
-        news_items = [
-            {
-                "title": "Bangladesh remains key sourcing hub",
-                "source": "Global Apparel Report",
-                "summary": "More brands are moving orders to Bangladesh for green factories.",
-            },
-            {
-                "title": "Slow fashion demand grows",
-                "source": "Fashion Weekly",
-                "summary": "Many labels now want smaller runs with fast repeats.",
-            },
-            {
-                "title": "Activewear demand stays strong",
-                "source": "Market Watch",
-                "summary": "Comfort and athleisure styles keep growing worldwide.",
-            },
-        ]
-
-        context = {
-            "clocks": clocks,
-            "rates": rates,
-            "news_items": news_items,
-        }
-        return render(request, "crm/world_dashboard.html", context)
-from openai import OpenAI
-client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
 def world_dashboard(request):
     cities = [
@@ -3181,127 +3138,50 @@ def world_dashboard(request):
         {"pair": "GBP → BDT"},
     ]
 
-    # AI Fashion Daily Summary
-    ai_fashion_update = ""
-    try:
-        prompt = (
-            "Give me a short, simple daily update about global fashion and apparel "
-            "industry trends. Include only key changes, new risks, or opportunities "
-            "that matter for a clothing manufacturer in Bangladesh and Canada. "
-            "Use max 6 lines and very simple English."
-        )
-
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are the AI Trend Analyst for a clothing manufacturer."},
-                {"role": "user", "content": prompt},
-            ],
-        )
-
-        ai_fashion_update = response.choices[0].message.content
-
-    except Exception as e:
-        ai_fashion_update = "AI Trend Update unavailable right now."
+    ai_fashion_update = "AI Trend Update unavailable right now."
+    if "_ai_client" in globals() and _ai_client:
+        try:
+            prompt = (
+                "Give a short daily update about global fashion and apparel trends. "
+                "Only key changes, risks, or chances for a clothing manufacturer in Bangladesh and Canada. "
+                "Max 6 lines. Simple English."
+            )
+            response = _ai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are the trend analyst for a clothing manufacturer."},
+                    {"role": "user", "content": prompt},
+                ],
+            )
+            ai_fashion_update = response.choices[0].message.content
+        except Exception:
+            pass
 
     context = {
         "cities": cities,
         "currencies": currencies,
         "ai_fashion_update": ai_fashion_update,
     }
-
     return render(request, "crm/world_dashboard.html", context)
 
+
 @require_POST
 def world_ai_fashion_news(request):
-    """
-    Returns a short AI update about current fashion and apparel news
-    and how it might affect Iconic.
-    """
+    if not ("_ai_client" in globals() and _ai_client):
+        return JsonResponse({"ok": False, "error": "AI is not configured on server."})
+
     try:
-        response = client.chat.completions.create(
+        response = _ai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are an assistant for a small apparel manufacturer "
-                        "called Iconic Apparel House. "
-                        "You give very short, practical updates."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        "Give a short daily style update for the global fashion "
-                        "and apparel industry. "
-                        "Use 4 to 6 bullet points. "
-                        "Focus on:\n"
-                        "- Any trend that could affect hoodie, activewear or kidswear demand\n"
-                        "- Any fabric or sustainability news\n"
-                        "- Any risk or opportunity for a small factory in Bangladesh "
-                        "working with Canadian and US brands.\n"
-                        "Use simple English."
-                    ),
-                },
+                {"role": "system", "content": "You are an assistant for Iconic Apparel House. Keep it short and useful."},
+                {"role": "user", "content": "Give 4 to 6 bullet points about fashion and apparel news. Simple English."},
             ],
         )
-
         text = response.choices[0].message.content
         return JsonResponse({"ok": True, "text": text})
-
-    except Exception as e:
-        # We keep the error simple so it does not break the page
-        return JsonResponse({"ok": False, "error": str(e)})
-@require_POST
-def world_ai_fashion_news(request):
-    """
-    Short AI update for fashion and apparel news
-    that may affect Iconic.
-    """
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are an assistant for Iconic Apparel House, a small "
-                        "garment factory. You give very short, useful updates."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        "Give a short daily update about global fashion and "
-                        "apparel news. Use 4 to 6 bullet points. "
-                        "Focus on:\n"
-                        "- trends that affect hoodies, activewear or kidswear\n"
-                        "- fabric or sustainability news\n"
-                        "- any risk or chance for a factory in Bangladesh "
-                        "working with Canada and USA brands.\n"
-                        "Use simple English."
-                    ),
-                },
-            ],
-        )
-
-        text = response.choices[0].message.content
-        return JsonResponse({"ok": True, "text": text})
-
     except Exception as e:
         return JsonResponse({"ok": False, "error": str(e)})
-
-# other view functions above this
-
-def world_dashboard(request):
-    return render(request, "crm/world_dashboard.html")
-
-def world_tools(request):
-    return render(request, "crm/world_tools.html")
-def world_ai_fashion_news(request):
-    return render(request, "crm/world_ai_fashion_news.html")
-
 
 ## =====================================
 # CALENDAR VIEWS
