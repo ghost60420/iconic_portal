@@ -459,12 +459,27 @@ Keep the answer short.
 # LEAD AND OPPORTUNITY LISTS AND BASIC CRUD
 # ===================================================
 
+from django.core.paginator import Paginator
+from django.shortcuts import render
+from crm.models import Lead
+
 def leads_list(request):
-    leads = Lead.objects.all().order_by("-created_date", "-id")
-    context = {"leads": leads}
+    per_page = request.GET.get("per_page", "50")
+    if per_page not in ["20", "50", "100"]:
+        per_page = "50"
+    per_page = int(per_page)
+
+    qs = Lead.objects.all().order_by("-created_date", "-id")
+
+    paginator = Paginator(qs, per_page)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
+    context = {
+        "page_obj": page_obj,
+        "per_page": per_page,
+    }
     return render(request, "crm/leads_list.html", context)
-
-
 
 def opportunities_list(request):
     opportunities = Opportunity.objects.select_related("lead").order_by(

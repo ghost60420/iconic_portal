@@ -286,6 +286,46 @@
     font-weight:900;
   }
 
+  .pager{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-top:12px;
+  }
+
+  .pager-left{
+    display:flex;
+    gap:8px;
+    align-items:center;
+    flex-wrap:wrap;
+  }
+
+  .pager-right{
+    display:flex;
+    gap:6px;
+    align-items:center;
+    flex-wrap:wrap;
+  }
+
+  .page-chip{
+    padding:6px 10px;
+    border-radius:999px;
+    border:1px solid rgba(148,163,184,0.22);
+    background: rgba(255,255,255,0.03);
+    color:#e5e7eb;
+    font-size:12px;
+    font-weight:900;
+    display:inline-block;
+  }
+
+  .page-chip.active{
+    background: rgba(245, 213, 128, 0.14);
+    border-color: rgba(245, 213, 128, 0.35);
+    color:#fefce8;
+  }
+
   @media (max-width:768px){
     th, td{ padding:7px 6px; }
   }
@@ -297,13 +337,12 @@
     <div>
       <h1 class="page-title">Leads</h1>
       <div class="page-subtitle">
-        Total <strong>{{ leads|length }}</strong> leads in this view.
+        Total <strong>{{ page_obj.paginator.count }}</strong> leads.
         <span class="muted">Sorted newest first.</span>
       </div>
     </div>
 
     <div class="page-actions">
-
       <a href="/leads/add/" class="btn-main">Add lead</a>
       <a href="/opportunities/" class="btn-ghost">View opportunities</a>
     </div>
@@ -370,6 +409,15 @@
         <input class="input" name="owner" value="{{ request.GET.owner|default:'' }}" placeholder="Refat, etc">
       </div>
 
+      <div class="field">
+        <div class="label">Per page</div>
+        <select class="pill-select" name="per_page">
+          <option value="20" {% if per_page == 20 %}selected{% endif %}>20</option>
+          <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+          <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+        </select>
+      </div>
+
       <div class="field" style="min-width:120px;">
         <button class="btn-main" type="submit">Apply</button>
       </div>
@@ -400,7 +448,7 @@
       </thead>
 
       <tbody>
-        {% for lead in leads %}
+        {% for lead in page_obj.object_list %}
           <tr>
             <td>
               <a href="{% url 'lead_detail' lead.pk %}" class="lead-link">
@@ -435,6 +483,31 @@
         {% endfor %}
       </tbody>
     </table>
+
+    <div class="pager">
+      <div class="pager-left">
+        <span class="muted">
+          Showing
+          {{ page_obj.start_index }} to {{ page_obj.end_index }}
+          of {{ page_obj.paginator.count }}
+        </span>
+      </div>
+
+      <div class="pager-right">
+        {% if page_obj.has_previous %}
+          <a class="btn-ghost" href="?{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.market %}market={{ request.GET.market|urlencode }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner|urlencode }}&{% endif %}per_page={{ per_page }}&page={{ page_obj.previous_page_number }}">Prev</a>
+        {% endif %}
+
+        <span class="page-chip active">
+          Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+        </span>
+
+        {% if page_obj.has_next %}
+          <a class="btn-ghost" href="?{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.market %}market={{ request.GET.market|urlencode }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner|urlencode }}&{% endif %}per_page={{ per_page }}&page={{ page_obj.next_page_number }}">Next</a>
+        {% endif %}
+      </div>
+    </div>
+
   </div>
 
 </div>
