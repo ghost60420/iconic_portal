@@ -389,6 +389,11 @@
     <div class="card-note">Use these to find leads fast.</div>
 
     <form method="get" class="filters">
+      <div class="field" style="min-width:180px;">
+        <div class="label">Lead ID</div>
+        <input class="input" name="lead_id" value="{{ request.GET.lead_id|default:'' }}" placeholder="176, 900, etc">
+      </div>
+
       <div class="field" style="min-width:260px;">
         <div class="label">Search</div>
         <input class="input" name="q" value="{{ request.GET.q|default:'' }}" placeholder="Name, brand, email, phone, notes">
@@ -412,9 +417,9 @@
       <div class="field">
         <div class="label">Per page</div>
         <select class="pill-select" name="per_page">
-          <option value="20" {% if per_page == 20 %}selected{% endif %}>20</option>
-          <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
-          <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+          <option value="20" {% if per_page|stringformat:"s" == "20" %}selected{% endif %}>20</option>
+          <option value="50" {% if per_page|stringformat:"s" == "50" %}selected{% endif %}>50</option>
+          <option value="100" {% if per_page|stringformat:"s" == "100" %}selected{% endif %}>100</option>
         </select>
       </div>
 
@@ -448,7 +453,7 @@
       </thead>
 
       <tbody>
-        {% for lead in page_obj.object_list %}
+        {% for lead in page_obj %}
           <tr>
             <td>
               <a href="{% url 'lead_detail' lead.pk %}" class="lead-link">
@@ -495,7 +500,7 @@
 
       <div class="pager-right">
         {% if page_obj.has_previous %}
-          <a class="btn-ghost" href="?{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.market %}market={{ request.GET.market|urlencode }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner|urlencode }}&{% endif %}per_page={{ per_page }}&page={{ page_obj.previous_page_number }}">Prev</a>
+          <a class="btn-ghost" href="?{% if request.GET.lead_id %}lead_id={{ request.GET.lead_id|urlencode }}&{% endif %}{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.market %}market={{ request.GET.market|urlencode }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page={{ page_obj.previous_page_number }}">Prev</a>
         {% endif %}
 
         <span class="page-chip active">
@@ -503,7 +508,7 @@
         </span>
 
         {% if page_obj.has_next %}
-          <a class="btn-ghost" href="?{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.market %}market={{ request.GET.market|urlencode }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner|urlencode }}&{% endif %}per_page={{ per_page }}&page={{ page_obj.next_page_number }}">Next</a>
+          <a class="btn-ghost" href="?{% if request.GET.lead_id %}lead_id={{ request.GET.lead_id|urlencode }}&{% endif %}{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.market %}market={{ request.GET.market|urlencode }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page={{ page_obj.next_page_number }}">Next</a>
         {% endif %}
       </div>
     </div>
