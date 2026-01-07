@@ -458,20 +458,52 @@ Keep the answer short.
 # ===================================================
 # LEAD AND OPPORTUNITY LISTS AND BASIC CRUD
 # ===================================================
-
-from django.core.paginator import Paginator
 from django.shortcuts import render
+from django.core.paginator import Paginator
+from django.db.models import Q
+
 from crm.models import Lead
 
 def leads_list(request):
-    per_page = request.GET.get("per_page", "50")
+    q = (request.GET.get("q") or "").strip()
+    status = (request.GET.get("status") or "").strip()
+    market = (request.GET.get("market") or "").strip()
+    owner = (request.GET.get("owner") or "").strip()
+    lead_id = (request.GET.get("lead_id") or "").strip()
+
+    per_page = (request.GET.get("per_page") or "50").strip()
     if per_page not in ["20", "50", "100"]:
         per_page = "50"
-    per_page = int(per_page)
+    per_page_int = int(per_page)
 
     qs = Lead.objects.all().order_by("-created_date", "-id")
 
-    paginator = Paginator(qs, per_page)
+    if lead_id:
+        qs = qs.filter(lead_id__icontains=lead_id)
+
+    if q:
+        qs = qs.filter(
+            Q(contact_name__icontains=q) |
+            Q(account_brand__icontains=q) |
+            Q(email__icontains=q) |
+            Q(phone__icontains=q) |
+            Q(notes__icontains=q)
+        )
+
+    if status:
+        qs = qs.filter(lead_status__icontains=status)
+
+    if market:
+        qs = qs.filter(market__icontains=market)
+
+    if owner:
+        qs = qs.filter(
+            Q(owner__username__icontains=owner) |
+            Q(owner__first_name__icontains=owner) |
+            Q(owner__last_name__icontains=owner)
+        )
+
+    paginator = Paginator(qs, per_page_int)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
@@ -480,7 +512,6 @@ def leads_list(request):
         "per_page": per_page,
     }
     return render(request, "crm/leads_list.html", context)
-
 def opportunities_list(request):
     opportunities = Opportunity.objects.select_related("lead").order_by(
         "-created_date",

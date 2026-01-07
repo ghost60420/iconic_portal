@@ -4,7 +4,7 @@ from django.urls import path
 from . import views_invoice as inv
 from . import views
 from . import views_ai as ai
-
+from .whatsapp_webhook import whatsapp_webhook
 from crm import views_email
 from crm import views_whatsapp as wa
 from . import views_accounting as acc
@@ -194,6 +194,7 @@ urlpatterns = [
     path("whatsapp/<int:pk>/send/", wa.wa_send, name="wa_send"),
     path("whatsapp/<int:pk>/send-ai-draft/", wa.wa_send_ai_draft, name="wa_send_ai_draft"),
     path("whatsapp/webhook/", wa.wa_webhook, name="wa_webhook"),
+    path("api/whatsapp/webhook/", whatsapp_webhook),
 
     # Email Sync
     path("email-sync/", views_email.email_sync_dashboard, name="email_sync_dashboard"),
