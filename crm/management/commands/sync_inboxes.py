@@ -30,6 +30,7 @@ def _norm_enc(enc: str) -> str:
         return "cp874"
     if e in ["utf8", "utf-8"]:
         return "utf-8"
+    # unknown enc names can crash decode, so keep safe fallback later
     return e
 
 
@@ -43,7 +44,10 @@ def _safe_decode_bytes(b: bytes, enc: str) -> str:
         try:
             return b.decode("utf-8", errors="ignore")
         except Exception:
-            return ""
+            try:
+                return b.decode("latin-1", errors="ignore")
+            except Exception:
+                return ""
 
 
 def _decode(value) -> str:
@@ -130,7 +134,6 @@ def _extract_form_entry_number(subject: str) -> str:
     m = re.search(r"#\s*(\d+)", subject or "")
     return m.group(1) if m else ""
 
-
 def _is_form_entry(subject: str, body_text: str, body_html: str) -> bool:
     s = (subject or "").lower()
     t = (body_text or "").lower()
@@ -138,16 +141,29 @@ def _is_form_entry(subject: str, body_text: str, body_html: str) -> bool:
 
     if "new form entry" in s:
         return True
+    if "website form submission" in s:
+        return True
     if "website form submission" in t:
         return True
     if "website form submission" in h:
         return True
+    if "new website form submission" in t:
+        return True
+    if "new website form submission" in h:
+        return True
     return False
-
 
 def _extract_email_from_anywhere(text: str) -> str:
     m = re.search(r"([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})", text or "", re.I)
     return (m.group(1) if m else "").strip()
+
+
+def _clean_value(v: str) -> str:
+    v = (v or "").strip()
+    # remove common wrappers
+    v = re.sub(r"(?i)^mailto:\s*", "", v).strip()
+    v = re.sub(r"[<>\"']", "", v).strip()
+    return v
 
 
 def _parse_form_fields(body_text: str, body_html: str) -> dict:
@@ -163,16 +179,17 @@ def _parse_form_fields(body_text: str, body_html: str) -> dict:
         for i, ln in enumerate(lines):
             low = ln.lower()
 
-            # case: "Email Address: test@test.com"
             if any(a in low for a in alias_list):
+                # "Email Address: test@test.com"
                 if ":" in ln:
                     right = ln.split(":", 1)[1].strip()
+                    right = _clean_value(right)
                     if right:
                         return right
 
-                # case: label line then value next line
+                # label then next line
                 if i + 1 < len(lines):
-                    return lines[i + 1].strip()
+                    return _clean_value(lines[i + 1].strip())
         return ""
 
     name = find_after_any_label(FORM_FIELD_ALIASES["name"])
@@ -181,9 +198,11 @@ def _parse_form_fields(body_text: str, body_html: str) -> dict:
     company = find_after_any_label(FORM_FIELD_ALIASES["company"])
     notes = find_after_any_label(FORM_FIELD_ALIASES["notes"])
 
-    # if email still missing, try regex from all text
     if not email_addr:
         email_addr = _extract_email_from_anywhere(src)
+
+    # normalize email if it has extra text
+    email_addr = _extract_email_from_anywhere(email_addr) or email_addr
 
     return {
         "contact_name": (name or "")[:255],
@@ -245,14 +264,37 @@ def _create_or_update_lead_from_form(entry_no: str, parsed: dict):
     return lead, "created"
 
 
+def _thread_subject_key(subject: str) -> str:
+    """
+    Reduce duplicate threads.
+    For form emails we group by 'New Form Entry #1234'.
+    For others we group by clean subject.
+    """
+    s = (subject or "").strip()
+    if not s:
+        return ""
+    m = re.search(r"(?i)(new form entry\s*#\s*\d+)", s)
+    if m:
+        return m.group(1).strip()
+    # remove common prefixes
+    s2 = re.sub(r"(?i)^(re|fw|fwd)\s*:\s*", "", s).strip()
+    return s2[:255]
+
+
 class Command(BaseCommand):
-    help = "Sync lead and info inboxes via IMAP and store messages in DB. Creates Leads from form entry emails."
+    help = "Sync lead and info inboxes via IMAP and store messages. Creates Leads from form entry emails."
 
     def add_arguments(self, parser):
         parser.add_argument("--limit", type=int, default=200)
+        parser.add_argument(
+            "--backfill",
+            action="store_true",
+            help="Reparse existing saved messages to fill body_text and fix missing Lead fields.",
+        )
 
     def handle(self, *args, **opts):
         limit = int(opts["limit"] or 200)
+        do_backfill = bool(opts.get("backfill"))
 
         def get_cfg(label: str):
             obj = EmailInboxConfig.objects.filter(label=label, is_enabled=True).first()
@@ -333,12 +375,18 @@ class Command(BaseCommand):
                         body_text = _html_to_text(body_html)
 
                     is_form = _is_form_entry(subject, body_text, body_html)
+                    if not is_form:
+                        maybe = _parse_form_fields(body_text, body_html)
+                        if maybe.get("email") or maybe.get("phone") or maybe.get("contact_name"):
+                            is_form = True
+                            parsed = maybe
                     entry_no = _extract_form_entry_number(subject) if is_form else ""
 
                     parsed = {}
                     if is_form:
                         parsed = _parse_form_fields(body_text, body_html)
 
+                        # real sender often in body
                         if parsed.get("email"):
                             from_email = parsed["email"]
                         elif rt_email:
@@ -348,10 +396,13 @@ class Command(BaseCommand):
                         if parsed.get("contact_name"):
                             from_name = parsed["contact_name"]
 
+                    subject_key = _thread_subject_key(subject)
+
+                    # IMPORTANT: use subject_key to reduce duplicates
                     thread, _ = EmailThread.objects.get_or_create(
                         label=label,
                         mailbox=user,
-                        subject=(subject or "")[:255],
+                        subject=subject_key[:255],
                         defaults={
                             "from_email": (from_email or "")[:255],
                             "from_name": (from_name or "")[:255],
@@ -359,9 +410,44 @@ class Command(BaseCommand):
                         },
                     )
 
-                    if EmailMessage.objects.filter(thread=thread, imap_uid=uid_str).exists():
+                    existing = EmailMessage.objects.filter(thread=thread, imap_uid=uid_str).first()
+                    if existing and not do_backfill:
                         continue
 
+                    if existing and do_backfill:
+                        changed = False
+
+                        # fill missing bodies
+                        if (not (existing.body_text or "").strip()) and (body_text or "").strip():
+                            existing.body_text = body_text
+                            changed = True
+                        if (not (existing.body_html or "").strip()) and (body_html or "").strip():
+                            existing.body_html = body_html
+                            changed = True
+
+                        # for form emails fix sender
+                        if is_form:
+                            if parsed.get("email") and (existing.from_email or "").lower().endswith("@iconicapparelhouse.com"):
+                                existing.from_email = parsed["email"][:255]
+                                changed = True
+                            if parsed.get("contact_name") and not (existing.from_name or "").strip():
+                                existing.from_name = parsed["contact_name"][:255]
+                                changed = True
+
+                        if changed:
+                            existing.save()
+
+                        # backfill lead linkage and lead missing fields
+                        if is_form and entry_no:
+                            lead, _ = _create_or_update_lead_from_form(entry_no, parsed)
+
+                            if hasattr(existing, "lead") and lead and not getattr(existing, "lead_id", None):
+                                existing.lead = lead
+                                existing.save(update_fields=["lead"])
+
+                        continue
+
+                    # Create new message
                     msg_obj = EmailMessage.objects.create(
                         thread=thread,
                         imap_uid=uid_str,
@@ -377,11 +463,14 @@ class Command(BaseCommand):
 
                     if is_form and entry_no:
                         lead, status = _create_or_update_lead_from_form(entry_no, parsed)
+
                         if hasattr(msg_obj, "lead") and lead:
                             msg_obj.lead = lead
                             msg_obj.save(update_fields=["lead"])
+
                         self.stdout.write(f"Form entry #{entry_no}: lead {status}")
 
+                    # keep thread updated
                     thread.last_message_at = timezone.now()
                     thread.from_email = (from_email or "")[:255]
                     thread.from_name = (from_name or "")[:255]
