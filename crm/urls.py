@@ -1,13 +1,14 @@
 from django.urls import path
 from django.contrib.auth import views as auth_views
-from django.urls import path
-from . import views_invoice as inv
+
 from . import views
 from . import views_ai as ai
-from .whatsapp_webhook import whatsapp_webhook
+from . import views_invoice as inv
+from . import views_accounting as acc
+
 from crm import views_email
 from crm import views_whatsapp as wa
-from . import views_accounting as acc
+from crm.whatsapp_webhook import whatsapp_webhook
 
 
 urlpatterns = [
@@ -18,8 +19,8 @@ urlpatterns = [
     path("main-dashboard/", views.main_dashboard, name="main_dashboard"),
 
     # Auth (uncomment if you use them)
-    # path("login/", auth_views.LoginView.as_view(template_name="crm/login.html"), name="login"),
-    # path("logout/", auth_views.LogoutView.as_view(), name="logout"),
+    # path("accounts/login/", auth_views.LoginView.as_view(template_name="registration/login.html"), name="login"),
+    # path("accounts/logout/", auth_views.LogoutView.as_view(), name="logout"),
 
     # LEADS
     path("leads/", views.leads_list, name="leads_list"),
@@ -165,16 +166,15 @@ urlpatterns = [
     path("accounting/docs/upload/bd/", acc.accounting_doc_upload, name="accounting_docs_upload_bd"),
     path("accounting/entries/<int:pk>/attach/", acc.accounting_entry_attach, name="accounting_entry_attach"),
 
-    # BD STAFF and MONTHLY PAYROLL INPUT (use only these)
+    # BD STAFF
     path("bd-staff/", acc.bd_staff_list, name="bd_staff_list"),
     path("bd-staff/add/", acc.bd_staff_add, name="bd_staff_add"),
     path("bd-staff/<int:pk>/edit/", acc.bd_staff_edit, name="bd_staff_edit"),
-
     path("bd-staff/months/", acc.bd_staff_month_list, name="bd_staff_month_list"),
     path("bd-staff/months/generate/", acc.bd_staff_month_generate, name="bd_staff_month_generate"),
     path("bd-staff/months/<int:pk>/edit/", acc.bd_staff_month_edit, name="bd_staff_month_edit"),
 
-    # Compatibility aliases (so old templates do not break)
+    # Compatibility aliases
     path("bd-payroll/months/", acc.bd_staff_month_list, name="bd_payroll_months"),
     path("bd-payroll/months/generate/", acc.bd_staff_month_generate, name="bd_payroll_generate"),
     path("bd-payroll/months/<int:pk>/edit/", acc.bd_staff_month_edit, name="bd_payroll_edit"),
@@ -188,17 +188,20 @@ urlpatterns = [
     path("ai/opportunities/<int:pk>/suggest/", ai.ai_opportunity_suggest, name="ai_opportunity_suggest"),
     path("ai/production/<int:pk>/suggest/", ai.ai_production_suggest, name="ai_production_suggest"),
 
-    # WhatsApp
+    # WhatsApp UI
     path("whatsapp/", wa.wa_inbox, name="wa_inbox"),
     path("whatsapp/<int:pk>/", wa.wa_thread, name="wa_thread"),
     path("whatsapp/<int:pk>/send/", wa.wa_send, name="wa_send"),
     path("whatsapp/<int:pk>/send-ai-draft/", wa.wa_send_ai_draft, name="wa_send_ai_draft"),
-    path("whatsapp/webhook/", wa.wa_webhook, name="wa_webhook"),
-    path("api/whatsapp/webhook/", whatsapp_webhook),
+
+    # WhatsApp Webhook (Meta) use ONE route only
+    path("whatsapp/webhook/", whatsapp_webhook, name="wa_webhook"),
 
     # Email Sync
     path("email-sync/", views_email.email_sync_dashboard, name="email_sync_dashboard"),
     path("email-sync/run/", views_email.email_sync_run, name="email_sync_run"),
+
+    # Invoices
     path("invoices/", inv.invoice_list, name="invoice_list"),
     path("invoices/add/", inv.invoice_add, name="invoice_add"),
     path("invoices/<int:pk>/", inv.invoice_view, name="invoice_view"),
