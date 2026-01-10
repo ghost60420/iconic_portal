@@ -110,12 +110,26 @@
         {% endfor %}
       {% endif %}
 
-      {% if form.errors %}
+      {% if form.non_field_errors %}
+        <div class="err">
+          {% for err in form.non_field_errors %}
+            <div>{{ err }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      {% if form.errors and not form.non_field_errors %}
         <div class="err">Wrong username or password.</div>
       {% endif %}
 
-      <form method="post">
+      <form method="post" action="{% url 'login' %}">
         {% csrf_token %}
+
+        {% if next %}
+          <input type="hidden" name="{{ redirect_field_name }}" value="{{ next }}">
+        {% else %}
+          <input type="hidden" name="{{ redirect_field_name }}" value="/main-dashboard/">
+        {% endif %}
 
         <div class="mb-3">
           <label for="id_username">Username</label>
@@ -132,6 +146,19 @@
 
     </div>
   </div>
+
+  <script>
+    const u = document.getElementById("id_username");
+    const p = document.getElementById("id_password");
+    if (u) {
+      u.setAttribute("autocomplete", "username");
+      u.setAttribute("required", "required");
+    }
+    if (p) {
+      p.setAttribute("autocomplete", "current-password");
+      p.setAttribute("required", "required");
+    }
+  </script>
 
 </body>
 </html>

@@ -11,7 +11,7 @@ load_dotenv(BASE_DIR / ".env")
 # ======================
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "change_this_in_env")
-DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
+DEBUG = os.getenv("DJANGO_DEBUG", "0") == "1"
 
 # ======================
 # Hosts
@@ -20,13 +20,16 @@ DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
 ALLOWED_HOSTS = [
     "127.0.0.1",
     "localhost",
-    "10.0.0.99",
+    "3.84.200.98",
+    "femline.ca",
+    "www.femline.ca",
 ]
 
 CSRF_TRUSTED_ORIGINS = [
-    "http://127.0.0.1:8001",
-    "http://localhost:8001",
-    "http://10.0.0.99:8001",
+    "http://3.84.200.98",
+    "https://3.84.200.98",
+    "https://femline.ca",
+    "https://www.femline.ca",
 ]
 
 # ======================
@@ -57,7 +60,6 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "iconic_site.urls"
-
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
@@ -116,18 +118,30 @@ STATIC_URL = "/static/"
 STATIC_DIR = BASE_DIR / "static"
 STATICFILES_DIRS = [STATIC_DIR] if STATIC_DIR.exists() else []
 
+# IMPORTANT: this fixes collectstatic and lets nginx serve /static/
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ======================
-# Login redirects
+# Auth redirects
 # ======================
-
 LOGIN_URL = "/accounts/login/"
 LOGIN_REDIRECT_URL = "/main-dashboard/"
 LOGOUT_REDIRECT_URL = "/accounts/login/"
+
+# ======================
+# Role based access constants
+# ======================
+
+BD_TEAM_GROUP = "BD_TEAM"
+CA_TEAM_GROUP = "CA_TEAM"
+
+# Bangladesh team cannot access CA accounting module
+CA_ACCOUNTING_GROUP = "CA_ACCOUNTING"
 
 # ======================
 # OpenAI settings
@@ -150,7 +164,6 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER)
 
 # ======================
 # Email sync config (IMAP)
-# Put real values in .env
 # ======================
 
 EMAIL_SYNC = {
@@ -171,17 +184,17 @@ EMAIL_SYNC = {
         "use_ssl": os.getenv("INFO_IMAP_SSL", "1") == "1",
     },
 }
+
 EMAIL_SYNC_PASSWORDS = {
     "lead": os.getenv("LEAD_EMAIL_PASS", ""),
     "info": os.getenv("INFO_EMAIL_PASS", ""),
 }
 
 # ======================
-# Email monitor rules (NO DUPLICATES)
+# Email monitor rules
 # ======================
 
 EMAIL_MONITOR = {
-    # which inbox we treat as monitoring
     "monitor_label": "info",
     "form_subject_contains": [
         "new form entry",
@@ -209,14 +222,12 @@ EMAIL_MONITOR = {
 
 # ======================
 # WhatsApp settings (Meta Cloud API)
-# Put real values in .env
 # ======================
 
 WA_TOKEN = os.getenv("WA_TOKEN", "")
 WA_PHONE_NUMBER_ID = os.getenv("WA_PHONE_NUMBER_ID", "")
 WA_VERIFY_TOKEN = os.getenv("WA_VERIFY_TOKEN", "")
 WA_APP_SECRET = os.getenv("WA_APP_SECRET", "")
-
 WA_AUTO_REPLY_ENABLED = os.getenv("WA_AUTO_REPLY_ENABLED", "1") == "1"
 
 # ======================
@@ -226,9 +237,12 @@ WA_AUTO_REPLY_ENABLED = os.getenv("WA_AUTO_REPLY_ENABLED", "1") == "1"
 JAZZMIN_SETTINGS = {
     "site_title": "Iconic Admin",
     "site_header": "Iconic CRM Admin",
+    "site_brand": "Iconic CRM",
     "welcome_sign": "Welcome to Iconic CRM",
     "show_sidebar": True,
     "navigation_expanded": True,
+    "show_ui_builder": True,
+    "order_with_respect_to": ["crm", "auth"],
     "icons": {
         "auth.user": "fas fa-user",
         "auth.group": "fas fa-users",

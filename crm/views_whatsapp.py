@@ -1,10 +1,12 @@
 # crm/views_whatsapp.py
 import json
 import urllib.request
+import hmac
+import hashlib
 
 from django.conf import settings
-from django.contrib.auth.decorators import login_required, user_passes_test
-from django.http import JsonResponse, HttpResponse
+from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse, HttpResponse, HttpResponseForbidden
 from django.shortcuts import render, get_object_or_404
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
@@ -12,8 +14,6 @@ from django.views.decorators.http import require_POST
 
 from crm.models import Lead
 from crm.models_whatsapp import WhatsAppThread, WhatsAppMessage
-
-
 
 
 def _digits(s: str) -> str:
@@ -25,9 +25,6 @@ def _wa_api_ready() -> bool:
 
 
 def _wa_send_text(*, to_phone: str, text: str):
-    """
-    Uses urllib (built in). Returns (ok, error_text)
-    """
     if not _wa_api_ready():
         return False, "WhatsApp API not configured"
 
@@ -81,26 +78,20 @@ def _can_auto_reply(thread: WhatsAppThread) -> bool:
 
 
 @login_required
-
 def wa_inbox(request):
     threads = WhatsAppThread.objects.order_by("-last_message_at", "-id")[:200]
     return render(request, "crm/whatsapp/inbox.html", {"threads": threads})
 
 
 @login_required
-
 def wa_thread(request, pk):
     thread = get_object_or_404(WhatsAppThread, pk=pk)
-
-    # If your related_name is not "messages", change this line.
     msgs = thread.messages.order_by("created_at", "id")
-
     return render(request, "crm/whatsapp/thread.html", {"thread": thread, "messages": msgs})
 
 
 @require_POST
 @login_required
-
 def wa_send(request, pk):
     thread = get_object_or_404(WhatsAppThread, pk=pk)
     text = (request.POST.get("text") or "").strip()
@@ -126,7 +117,6 @@ def wa_send(request, pk):
 
 @require_POST
 @login_required
-
 def wa_send_ai_draft(request, pk):
     thread = get_object_or_404(WhatsAppThread, pk=pk)
 
@@ -134,7 +124,6 @@ def wa_send_ai_draft(request, pk):
     if not draft:
         return JsonResponse({"ok": False, "error": "Draft is empty"}, status=400)
 
-    # Save draft on thread if field exists
     if hasattr(thread, "ai_draft"):
         thread.ai_draft = draft
 
@@ -151,11 +140,9 @@ def wa_send_ai_draft(request, pk):
 
     thread.last_message_at = timezone.now()
 
-    # Mark as sent if field exists
     if hasattr(thread, "ai_sent"):
         thread.ai_sent = True
 
-    # Save only the fields that exist
     update_fields = ["last_message_at"]
     if hasattr(thread, "ai_draft"):
         update_fields.append("ai_draft")
@@ -169,29 +156,51 @@ def wa_send_ai_draft(request, pk):
 
 @csrf_exempt
 def wa_webhook(request):
-    # Verify webhook (GET)
+    # 1) GET: Meta verify
     if request.method == "GET":
-        verify_token = getattr(settings, "WA_VERIFY_TOKEN", "")
-        mode = request.GET.get("hub.mode")
-        token = request.GET.get("hub.verify_token")
-        challenge = request.GET.get("hub.challenge")
-        if mode == "subscribe" and token == verify_token:
-            return HttpResponse(challenge or "")
-        return HttpResponse("forbidden", status=403)
+        mode = request.GET.get("hub.mode", "")
+        token = request.GET.get("hub.verify_token", "")
+        challenge = request.GET.get("hub.challenge", "")
 
-    # Receive messages (POST)
-    try:
-        data = json.loads(request.body.decode("utf-8"))
-    except Exception:
-        return HttpResponse("bad", status=400)
+        if mode == "subscribe" and token == getattr(settings, "WA_VERIFY_TOKEN", ""):
+            return HttpResponse(challenge)
 
-    try:
-        entry = (data.get("entry") or [])[0]
-        changes = (entry.get("changes") or [])[0]
-        value = changes.get("value") or {}
+        return HttpResponseForbidden("forbidden")
+
+    # 2) POST: incoming messages
+    if request.method == "POST":
+        sig = request.headers.get("X-Hub-Signature-256", "")
+        app_secret = getattr(settings, "WA_APP_SECRET", "")
+
+        # Verify signature only if secret is set AND signature exists
+        if app_secret and sig.startswith("sha256="):
+            raw = request.body or b""
+            expected = "sha256=" + hmac.new(
+                app_secret.encode("utf-8"),
+                msg=raw,
+                digestmod=hashlib.sha256,
+            ).hexdigest()
+
+            if not hmac.compare_digest(expected, sig):
+                return HttpResponseForbidden("bad signature")
+
+        # Parse payload safely
+        try:
+            data = json.loads((request.body or b"{}").decode("utf-8"))
+        except Exception:
+            return HttpResponse("ok")
+
+        # If this is not a real WhatsApp payload, just accept
+        try:
+            entry = (data.get("entry") or [])[0]
+            changes = (entry.get("changes") or [])[0]
+            value = changes.get("value") or {}
+        except Exception:
+            return HttpResponse("ok")
 
         messages = value.get("messages") or []
         contacts = value.get("contacts") or []
+
         contact_name = ""
         if contacts:
             contact_name = (contacts[0].get("profile") or {}).get("name") or ""
@@ -204,12 +213,11 @@ def wa_webhook(request):
             if not wa_from:
                 continue
 
-            thread, _created = WhatsAppThread.objects.get_or_create(wa_phone=wa_from)
+            thread, _ = WhatsAppThread.objects.get_or_create(wa_phone=wa_from)
 
             if contact_name and not (thread.wa_name or ""):
                 thread.wa_name = contact_name
 
-            # Link lead by phone (best effort)
             if not getattr(thread, "lead_id", None):
                 lead = Lead.objects.filter(phone__icontains=wa_from).order_by("-id").first()
                 if lead:
@@ -223,15 +231,13 @@ def wa_webhook(request):
 
             thread.last_message_at = timezone.now()
 
-            # Human handoff flag
             if hasattr(thread, "needs_human"):
                 thread.needs_human = _should_flag_human(body)
 
-            # Safe auto reply
             if getattr(thread, "ai_enabled", True) and not getattr(thread, "needs_human", False):
                 if _wa_api_ready() and _can_auto_reply(thread):
                     reply_text = _auto_reply_text()
-                    ok2, _err2 = _wa_send_text(to_phone=thread.wa_phone, text=reply_text)
+                    ok2, _ = _wa_send_text(to_phone=thread.wa_phone, text=reply_text)
                     if ok2:
                         WhatsAppMessage.objects.create(
                             thread=thread,
@@ -243,8 +249,6 @@ def wa_webhook(request):
 
             thread.save()
 
-    except Exception:
-        # Keep webhook stable even if parsing fails
         return HttpResponse("ok")
 
-    return HttpResponse("ok")
+    return HttpResponseForbidden("forbidden")

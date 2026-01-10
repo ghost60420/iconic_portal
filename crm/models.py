@@ -2529,3 +2529,4 @@ class AccountingMonthlyTarget(models.Model):
 from .models_email import EmailThread, EmailMessage
 from .models_email_outbox import OutboundEmailLog
 from .models_email_config import EmailInboxConfig
+from .models_access import UserAccess

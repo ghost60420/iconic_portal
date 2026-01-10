@@ -5077,11 +5077,13 @@ from django.shortcuts import render
 from django.utils import timezone
 
 from .models import Lead, Opportunity, AccountingEntry, ProductionOrder, Shipment, BDStaffMonth
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import render
 
 @login_required
 def main_dashboard(request):
-    if not request.user.is_superuser:
-        return HttpResponseForbidden("No access.")
+    # Allow ALL logged in users (BD and CA)
+    return render(request, "crm/main_dashboard.html")
 
     today = timezone.localdate()
     start_7 = today - timedelta(days=6)
