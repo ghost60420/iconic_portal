@@ -13,42 +13,29 @@ from . import views_whatsapp as wa
 from . import views_accounting as acc
 from .whatsapp_webhook import whatsapp_webhook
 
-# IMPORTANT:
-# bd_blocked must be a decorator that returns a view (same as login_required)
-# It should block BD_TEAM only, and allow CA_TEAM and superuser.
 from .permissions import bd_blocked
 
-from django.urls import path
-from django.shortcuts import redirect
-from django.contrib.auth.decorators import login_required
 
-from .permissions import bd_blocked
-
-from . import views
-from . import views_accounting as acc
-# other imports...
-
-def bd_blocked_view(view_func):
-    return login_required(bd_blocked(view_func))
 def home_redirect(request):
+    # Root domain behavior
     if request.user.is_authenticated:
         return redirect("main_dashboard")
     return redirect("login")
 
 
-# Helper: always require login first, then apply BD block
 def bd_blocked_view(view_func):
+    # login first, then block BD_TEAM
     return login_required(bd_blocked(view_func))
 
 
 urlpatterns = [
-    # Home: login first, then dashboard
+    # Home
     path("", home_redirect, name="home"),
 
-    # Django auth urls (login name is "login")
+    # Auth (login url name is "login")
     path("accounts/", include("django.contrib.auth.urls")),
 
-    # Main dashboard (any logged in user)
+    # Main dashboard
     path("main-dashboard/", login_required(views.main_dashboard), name="main_dashboard"),
 
     # LEADS
@@ -133,8 +120,7 @@ urlpatterns = [
     # ACCOUNTING HOME (allowed for all logged in users)
     path("accounting/", login_required(acc.accounting_home), name="accounting_home"),
 
-    # CA ACCOUNTING (BLOCK BD TEAM)
-    path("accounting/ca/grid/", bd_blocked_view(acc.accounting_ca_grid), name="accounting_ca_grid"),
+    # CA ACCOUNTING (block BD)
     path("accounting/ca-master/", bd_blocked_view(acc.accounting_ca_master), name="accounting_ca_master"),
     path("accounting/ca/grid/", bd_blocked_view(acc.accounting_ca_grid), name="accounting_ca_grid"),
     path("accounting/entries/", bd_blocked_view(acc.accounting_entry_list), name="accounting_entry_list"),
@@ -148,7 +134,7 @@ urlpatterns = [
     path("accounting/bd-daily/", login_required(acc.accounting_bd_daily), name="accounting_bd_daily"),
     path("accounting/docs/upload/bd/", login_required(acc.accounting_doc_upload), name="accounting_docs_upload_bd"),
 
-    # Shared accounting tools (keep or remove based on your rules)
+    # Shared accounting tools
     path("accounting/entries/add/", login_required(acc.accounting_entry_add), name="accounting_entry_add"),
     path("accounting/entries/<int:pk>/edit/", login_required(acc.accounting_entry_edit), name="accounting_entry_edit"),
     path("accounting/entries/<int:pk>/delete/", login_required(acc.accounting_entry_delete), name="accounting_entry_delete"),
@@ -202,7 +188,7 @@ urlpatterns = [
     path("invoices/<int:pk>/", login_required(inv.invoice_view), name="invoice_view"),
     path("invoices/<int:pk>/edit/", login_required(inv.invoice_edit), name="invoice_edit"),
 
-    # Access manager pages (protect these, optional: superuser only in views)
+    # Access pages
     path("access/", login_required(access.access_list), name="access_list"),
     path("access/<int:user_id>/", login_required(access.access_edit), name="access_edit"),
 ]

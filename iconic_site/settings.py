@@ -11,7 +11,7 @@ load_dotenv(BASE_DIR / ".env")
 # ======================
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "change_this_in_env")
-DEBUG = os.getenv("DJANGO_DEBUG", "0") == "1"
+DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
 
 # ======================
 # Hosts
