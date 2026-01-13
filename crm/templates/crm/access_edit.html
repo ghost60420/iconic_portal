@@ -1,18 +1,68 @@
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Edit Access</title>
-</head>
-<body>
-  <h2>Edit Access: {{ target_user.username }}</h2>
+{% extends "crm/base.html" %}
 
-  <form method="post">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Save</button>
-  </form>
+{% block content %}
+<div class="container-fluid" style="max-width:900px;">
 
-  <p><a href="{% url 'access_list' %}">Back</a></p>
-</body>
-</html>
+  <div class="mb-3">
+    <h3 style="font-weight:900; color:#f8f9fa;">
+      Edit Access
+    </h3>
+    <div style="color:#a8b0bd; font-weight:700; font-size:13px;">
+      Update user permissions and roles.
+    </div>
+  </div>
+
+  <div class="card" style="background:#0b0d10; border:1px solid #2a2f38; border-radius:14px;">
+    <div class="card-body">
+
+      <div class="mb-3" style="font-weight:900; color:#e5e7eb;">
+        User:
+        <span style="color:#ffe39b;">
+          {{ target_user.username }}
+        </span>
+      </div>
+
+      <form method="post">
+        {% csrf_token %}
+
+        <div class="row g-3">
+          {% for field in form %}
+            <div class="col-12">
+              <label class="form-label" style="font-weight:800; color:#cbd5e1;">
+                {{ field.label }}
+              </label>
+              {{ field }}
+              {% if field.help_text %}
+                <div style="font-size:12px; color:#94a3b8;">
+                  {{ field.help_text }}
+                </div>
+              {% endif %}
+              {% for error in field.errors %}
+                <div style="color:#fca5a5; font-size:12px;">
+                  {{ error }}
+                </div>
+              {% endfor %}
+            </div>
+          {% endfor %}
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 mt-4">
+          <button type="submit" class="btn btn-warning" style="font-weight:900;">
+            Save Changes
+          </button>
+
+          {% url 'access_list' as list_url %}
+          {% if list_url %}
+            <a href="{{ list_url }}" class="btn btn-outline-light" style="font-weight:900;">
+              Back
+            </a>
+          {% endif %}
+        </div>
+
+      </form>
+
+    </div>
+  </div>
+
+</div>
+{% endblock %}

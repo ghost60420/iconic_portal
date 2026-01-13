@@ -39,6 +39,8 @@ from .models import (
     Shipment,
 )
 from .production_forms import ProductionOrderForm, ProductionStageForm
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import render
 
 logger = logging.getLogger(__name__)
 
@@ -5068,56 +5070,39 @@ def shipment_notify_customer(request, pk):
         messages.error(request, f"Could not send email. {e}")
 
     return redirect("shipment_detail", pk=pk)
-from datetime import date, timedelta
+from datetime import timedelta
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Sum, Q
 from django.db.models.functions import TruncDate
-from django.http import HttpResponseForbidden
 from django.shortcuts import render
 from django.utils import timezone
 
 from .models import Lead, Opportunity, AccountingEntry, ProductionOrder, Shipment, BDStaffMonth
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import render
+
 
 @login_required
 def main_dashboard(request):
-    # Allow ALL logged in users (BD and CA)
-    return render(request, "crm/main_dashboard.html")
-
     today = timezone.localdate()
     start_7 = today - timedelta(days=6)
     start_30 = today - timedelta(days=29)
     start_90 = today - timedelta(days=89)
     start_365 = today - timedelta(days=364)
 
-    # --------------------
-    # Leads
+    # Leads (uses created_date)
     leads_today = Lead.objects.filter(created_date=today).count()
     leads_7 = Lead.objects.filter(created_date__gte=start_7).count()
     leads_30 = Lead.objects.filter(created_date__gte=start_30).count()
     leads_90 = Lead.objects.filter(created_date__gte=start_90).count()
     leads_365 = Lead.objects.filter(created_date__gte=start_365).count()
 
-    # Safe daily trend for SQLite
-    lead_created_field = Lead._meta.get_field("created_date")
-    if lead_created_field.get_internal_type() == "DateField":
-        leads_daily_qs = (
-            Lead.objects.filter(created_date__gte=start_30)
-            .values(d=models.F("created_date"))
-            .annotate(c=Count("id"))
-            .order_by("d")
-        )
-    else:
-        leads_daily_qs = (
-            Lead.objects.filter(created_date__gte=start_30)
-            .annotate(d=TruncDate("created_date"))
-            .values("d")
-            .annotate(c=Count("id"))
-            .order_by("d")
-        )
+    # Daily lead trend (last 30) SQLite safe
+    leads_daily_qs = (
+        Lead.objects.filter(created_date__gte=start_30)
+        .values("created_date")
+        .annotate(c=Count("id"))
+        .order_by("created_date")
+    )
 
-    # --------------------
     # Opportunities
     opp_30 = Opportunity.objects.filter(created_date__gte=start_30).count()
     opp_90 = Opportunity.objects.filter(created_date__gte=start_90).count()
@@ -5129,78 +5114,20 @@ def main_dashboard(request):
         .order_by("-c")
     )
 
-    # --------------------
     # Accounting (last 30 days)
     acc_30 = AccountingEntry.objects.filter(date__gte=start_30)
     acc_income_cad_30 = acc_30.filter(direction="IN").aggregate(s=Sum("amount_cad"))["s"] or 0
     acc_out_cad_30 = acc_30.filter(direction="OUT").aggregate(s=Sum("amount_cad"))["s"] or 0
     acc_net_cad_30 = acc_income_cad_30 - acc_out_cad_30
 
-    # --------------------
     # Payroll (current month)
-    payroll_year = today.year
-    payroll_month = today.month
-    pm = BDStaffMonth.objects.filter(year=payroll_year, month=payroll_month)
-
+    pm = BDStaffMonth.objects.filter(year=today.year, month=today.month)
     payroll_total = pm.aggregate(s=Sum("final_pay_bdt"))["s"] or 0
     payroll_ot = pm.aggregate(s=Sum("overtime_total_bdt"))["s"] or 0
     payroll_bonus = pm.aggregate(s=Sum("bonus_bdt"))["s"] or 0
     payroll_deduction = pm.aggregate(s=Sum("deduction_bdt"))["s"] or 0
     payroll_paid = pm.filter(is_paid=True).count()
     payroll_unpaid = pm.filter(is_paid=False).count()
-
-    # --------------------
-    # Production status (safe)
-    prod_labels = ["On time", "Delayed", "Remake"]
-    prod_counts = [0, 0, 0]
-
-    if hasattr(ProductionOrder, "status"):
-        status_map = {
-            "on_time": 0, "ontime": 0, "on time": 0,
-            "delayed": 1, "late": 1,
-            "remake": 2, "rework": 2,
-        }
-        prod_rows = ProductionOrder.objects.values("status").annotate(c=Count("id"))
-        for r in prod_rows:
-            key = (r.get("status") or "").strip().lower()
-            idx = status_map.get(key)
-            if idx is not None:
-                prod_counts[idx] += int(r.get("c") or 0)
-
-    # --------------------
-    # Shipping status (safe)
-    ship_labels = ["This month"]
-    ship_shipped = [0]
-    ship_pending = [0]
-    ship_delayed = [0]
-
-    qs_ship = Shipment.objects.all()
-    month_start = today.replace(day=1)
-
-    if hasattr(Shipment, "ship_date"):
-        qs_ship = qs_ship.filter(ship_date__gte=month_start)
-    elif hasattr(Shipment, "created_at"):
-        qs_ship = qs_ship.filter(created_at__date__gte=month_start)
-
-    if hasattr(Shipment, "status"):
-        shipped_count = qs_ship.filter(status__iexact="shipped").count()
-        delayed_count = qs_ship.filter(Q(status__iexact="delayed") | Q(status__iexact="late")).count()
-        pending_count = qs_ship.exclude(status__iexact="shipped").count()
-
-        ship_shipped = [shipped_count]
-        ship_pending = [pending_count]
-        ship_delayed = [delayed_count]
-
-    # --------------------
-    # AI notes
-    ai_notes = []
-    if leads_7 == 0:
-        ai_notes.append("No leads in the last 7 days. Check website and campaigns.")
-    if opp_30 > 0 and leads_30 > 0:
-        conv = (opp_30 / max(leads_30, 1)) * 100
-        ai_notes.append(f"Lead to opportunity rate last 30 days is about {conv:.1f} percent.")
-    if acc_net_cad_30 < 0:
-        ai_notes.append("Last 30 days net cash is negative. Review top expenses and transfers.")
 
     ctx = {
         "leads_today": leads_today,
@@ -5219,101 +5146,22 @@ def main_dashboard(request):
         "acc_out_cad_30": acc_out_cad_30,
         "acc_net_cad_30": acc_net_cad_30,
 
-        "payroll_year": payroll_year,
-        "payroll_month": payroll_month,
         "payroll_total": payroll_total,
         "payroll_ot": payroll_ot,
         "payroll_bonus": payroll_bonus,
         "payroll_deduction": payroll_deduction,
         "payroll_paid": payroll_paid,
         "payroll_unpaid": payroll_unpaid,
-
-        "prod_labels": prod_labels,
-        "prod_counts": prod_counts,
-
-        "ship_labels": ship_labels,
-        "ship_shipped": ship_shipped,
-        "ship_pending": ship_pending,
-        "ship_delayed": ship_delayed,
-
-        "ai_notes": ai_notes,
     }
+
     return render(request, "crm/main_dashboard.html", ctx)
-
-from datetime import timedelta
-from django.contrib.auth.decorators import login_required, user_passes_test
-from django.db.models import Q
-from django.shortcuts import render
-from django.utils import timezone
-
-from crm.models_email import EmailThread, EmailMessage
+  
+ 
 
 
-def superuser_only(user):
-    return user.is_superuser
 
 
-@login_required
-@user_passes_test(superuser_only)
-def email_sync_dashboard(request):
-    now = timezone.now()
-    last_24h = now - timedelta(hours=24)
 
-    q = (request.GET.get("q") or "").strip()
-    label = (request.GET.get("label") or "").strip()   # lead / info / ""
-    flag = (request.GET.get("flag") or "").strip()     # form / candidate / ""
-    rng = (request.GET.get("range") or "").strip()     # 24h / ""
-
-    base = EmailMessage.objects.select_related("thread").all()
-
-    # Stats always from full base
-    stats = {
-        "total_24h": base.filter(created_at__gte=last_24h).count(),
-        "forms_24h": base.filter(created_at__gte=last_24h, is_form_entry=True).count(),
-        "candidates_24h": base.filter(created_at__gte=last_24h, is_lead_candidate=True).count(),
-    }
-
-    msgs = base
-
-    # Quick range filter
-    if rng == "24h":
-        msgs = msgs.filter(created_at__gte=last_24h)
-
-    # Inbox filter
-    if label in ["lead", "info"]:
-        msgs = msgs.filter(thread__label=label)
-
-    # Flag filter
-    if flag == "form":
-        msgs = msgs.filter(is_form_entry=True)
-    elif flag == "candidate":
-        msgs = msgs.filter(is_lead_candidate=True)
-
-    # Search
-    if q:
-        msgs = msgs.filter(
-            Q(subject__icontains=q)
-            | Q(from_email__icontains=q)
-            | Q(from_name__icontains=q)
-            | Q(body_text__icontains=q)
-        )
-
-    grid = msgs.order_by("-created_at")[:200]
-    threads = EmailThread.objects.order_by("-last_message_at")[:50]
-
-    return render(
-        request,
-        "crm/email_sync/dashboard.html",
-        {
-            "threads": threads,
-            "grid": grid,
-            "stats": stats,
-            "q": q,
-            "label": label,
-            "flag": flag,
-            "range": rng,
-        },
-    )
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect
 

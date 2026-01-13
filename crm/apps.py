@@ -5,4 +5,5 @@ class CrmConfig(AppConfig):
     name = "crm"
 
     def ready(self):
-        import crm.models_whatsapp  # noqa
+        from . import signals  # noqao
+

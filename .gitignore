@@ -1,28 +1,29 @@
-db.sqlite3
-*.pyc
+# python
 __pycache__/
-.env
-.env.*
-media/
+*.pyc
+
+# virtual env
 venv/
 .envvenv/
-.idea/
-.vscode/
 
-# secrets
+# env files
 .env
+.env.*
 
 # database
 db.sqlite3
 *.sqlite3
 *.sqlite3-journal
+*.db
+*.db-journal
 
-# media and logs
+# user files
 media/
 *.log
 
-# python
-__pycache__/
-*.pyc
-venv/
-.env/
+# editor
+.idea/
+.vscode/
+
+# collected static
+staticfiles/

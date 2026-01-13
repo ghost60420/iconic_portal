@@ -99,6 +99,12 @@
       box-shadow: 0 0 0 3px rgba(245,213,128,0.18), 0 10px 20px rgba(0,0,0,0.35);
     }
 
+    .crm-nav-item.is-disabled{
+      opacity: 0.55;
+      cursor: default;
+      pointer-events: none;
+    }
+
     .crm-spacer{ flex: 1 1 auto; }
     .crm-wrapper{ padding:16px 20px 40px 20px; }
 
@@ -177,6 +183,11 @@
 
     .crm-dd-item:last-child{ margin-bottom:0; }
 
+    .crm-dd-item.is-disabled{
+      opacity:0.55;
+      pointer-events:none;
+    }
+
     .crm-dd-hint{
       font-size:11px;
       color:#e5e7eb;
@@ -231,49 +242,155 @@
 <body>
 
   {% if request.user.is_authenticated %}
+
+    {% url 'leads_list' as leads_url %}
+    {% url 'opportunities_list' as opp_url %}
+    {% url 'customers_list' as cust_url %}
+    {% url 'calendar_list' as cal_url %}
+    {% url 'production_list' as prod_url %}
+    {% url 'shipment_list' as ship_url %}
+    {% url 'wa_inbox' as wa_url %}
+    {% url 'main_dashboard' as main_dash_url %}
+    {% url 'ai_hub' as ai_hub_url %}
+    {% url 'inventory_list' as inv_url %}
+    {% url 'world_tools' as world_tools_url %}
+    {% url 'world_dashboard' as world_dash_url %}
+    {% url 'world_ai_fashion_news' as world_ai_url %}
+    {% url 'email_sync_dashboard' as email_sync_url %}
+    {% url 'accounting_home' as acc_home_url %}
+    {% url 'invoice_list' as invoice_list_url %}
+    {% url 'logout' as logout_url %}
+    {% url 'access_list' as access_url %}
+    {% url 'admin:index' as admin_url %}
+
+    {% url 'products_list' as products_url %}
+    {% if not products_url %}{% url 'product_list' as products_url %}{% endif %}
+    {% if not products_url %}{% url 'products' as products_url %}{% endif %}
+
+    {% url 'fabrics_list' as fabrics_url %}
+    {% if not fabrics_url %}{% url 'fabric_list' as fabrics_url %}{% endif %}
+    {% if not fabrics_url %}{% url 'fabrics' as fabrics_url %}{% endif %}
+
+    {% url 'accessories_list' as accessories_url %}
+    {% if not accessories_url %}{% url 'accessory_list' as accessories_url %}{% endif %}
+    {% if not accessories_url %}{% url 'accessories' as accessories_url %}{% endif %}
+
+    {% url 'trims_list' as trims_url %}
+    {% if not trims_url %}{% url 'trim_list' as trims_url %}{% endif %}
+    {% if not trims_url %}{% url 'trims' as trims_url %}{% endif %}
+
+    {% url 'threads_list' as threads_url %}
+    {% if not threads_url %}{% url 'thread_list' as threads_url %}{% endif %}
+    {% if not threads_url %}{% url 'threads' as threads_url %}{% endif %}
+
+    {% url 'accounting_entry_list' as acc_all_entries_url %}
+    {% url 'accounting_ca_master' as acc_ca_master_url %}
+    {% url 'accounting_ca_grid' as acc_ca_grid_url %}
+    {% url 'accounting_bd_dashboard' as acc_bd_dash_url %}
+    {% url 'accounting_bd_grid' as acc_bd_grid_url %}
+    {% url 'accounting_bd_daily' as acc_bd_daily_url %}
+    {% url 'accounting_entry_add_bd' as acc_add_bd_url %}
+    {% url 'accounting_entry_add_ca' as acc_add_ca_url %}
+    {% url 'bd_staff_list' as bd_staff_list_url %}
+    {% url 'bd_staff_month_list' as bd_payroll_months_url %}
+    {% url 'bd_staff_add' as bd_staff_add_url %}
+
     <div class="crm-topbar">
 
       <div class="crm-nav-group">
-        <a href="{% url 'leads_list' %}" class="crm-nav-item hot"><span>🧲</span><strong>Leads</strong></a>
-        <a href="{% url 'opportunities_list' %}" class="crm-nav-item hot"><span>📈</span><strong>Opportunities</strong></a>
-        <a href="{% url 'customers_list' %}" class="crm-nav-item hot"><span>👥</span><strong>Customers</strong></a>
 
-        <a href="{% url 'calendar_list' %}" class="crm-nav-item"><span>📅</span><strong>Calendar</strong></a>
-        <a href="{% url 'production_list' %}" class="crm-nav-item"><span>🏭</span><strong>Production</strong></a>
-        <a href="{% url 'shipment_list' %}" class="crm-nav-item"><span>📦</span><strong>Shipping</strong></a>
+        {% if leads_url %}
+          <a href="{{ leads_url }}" class="crm-nav-item hot"><span>🧲</span><strong>Leads</strong></a>
+        {% endif %}
+
+        {% if opp_url %}
+          <a href="{{ opp_url }}" class="crm-nav-item hot"><span>📈</span><strong>Opportunities</strong></a>
+        {% endif %}
+
+        {% if cust_url %}
+          <a href="{{ cust_url }}" class="crm-nav-item hot"><span>👥</span><strong>Customers</strong></a>
+        {% endif %}
+
+        {% if cal_url %}
+          <a href="{{ cal_url }}" class="crm-nav-item"><span>📅</span><strong>Calendar</strong></a>
+        {% endif %}
+
+        {% if prod_url %}
+          <a href="{{ prod_url }}" class="crm-nav-item"><span>🏭</span><strong>Production</strong></a>
+        {% endif %}
+
+        {% if ship_url %}
+          <a href="{{ ship_url }}" class="crm-nav-item"><span>📦</span><strong>Shipping</strong></a>
+        {% endif %}
 
         <a href="/marketing/" class="crm-nav-item"><span>📣</span><strong>Marketing</strong></a>
-        <a href="{% url 'wa_inbox' %}" class="crm-nav-item"><span>💬</span><strong>WhatsApp</strong></a>
+
+        {% if wa_url %}
+          <a href="{{ wa_url }}" class="crm-nav-item"><span>💬</span><strong>WhatsApp</strong></a>
+        {% endif %}
 
         {% if request.user.is_superuser %}
-          <a href="{% url 'main_dashboard' %}" class="crm-nav-item">
-            <span>🧠</span><strong>Main Dashboard</strong>
-          </a>
 
-          {% url 'ai_hub' as ai_hub_url %}
+          {% if main_dash_url %}
+            <a href="{{ main_dash_url }}" class="crm-nav-item">
+              <span>🧠</span><strong>Main Dashboard</strong>
+            </a>
+          {% endif %}
+
           {% if ai_hub_url %}
             <a href="{{ ai_hub_url }}" class="crm-nav-item">
               <span>🤖</span><strong>AI</strong>
             </a>
           {% endif %}
+
         {% endif %}
       </div>
 
       <div class="crm-nav-group">
 
         <div class="crm-dropdown" id="libraryDropdown">
-          <a href="{% url 'products_list' %}" class="crm-nav-item" id="libraryBtn" aria-haspopup="true" aria-expanded="false">
+          <a
+            href="#"
+            class="crm-nav-item"
+            id="libraryBtn"
+            aria-haspopup="true"
+            aria-expanded="false"
+          >
             <span>📚</span><strong>Library</strong>
           </a>
 
           <div class="crm-dropdown-menu" id="libraryMenu" role="menu">
             <div class="crm-dd-title">Library</div>
 
-            {% url 'products_list' as l1 %}{% if l1 %}<a class="crm-dd-item" href="{{ l1 }}">👕 Products</a>{% endif %}
-            {% url 'fabrics_list' as l2 %}{% if l2 %}<a class="crm-dd-item" href="{{ l2 }}">🧵 Fabrics</a>{% endif %}
-            {% url 'accessories_list' as l3 %}{% if l3 %}<a class="crm-dd-item" href="{{ l3 }}">🧷 Accessories</a>{% endif %}
-            {% url 'trims_list' as l4 %}{% if l4 %}<a class="crm-dd-item" href="{{ l4 }}">🎀 Trims</a>{% endif %}
-            {% url 'threads_list' as l5 %}{% if l5 %}<a class="crm-dd-item" href="{{ l5 }}">🪡 Threads</a>{% endif %}
+            {% if products_url %}
+              <a class="crm-dd-item" href="{{ products_url }}">👕 Products</a>
+            {% else %}
+              <div class="crm-dd-item is-disabled">👕 Products</div>
+            {% endif %}
+
+            {% if fabrics_url %}
+              <a class="crm-dd-item" href="{{ fabrics_url }}">🧵 Fabrics</a>
+            {% else %}
+              <div class="crm-dd-item is-disabled">🧵 Fabrics</div>
+            {% endif %}
+
+            {% if accessories_url %}
+              <a class="crm-dd-item" href="{{ accessories_url }}">🧷 Accessories</a>
+            {% else %}
+              <div class="crm-dd-item is-disabled">🧷 Accessories</div>
+            {% endif %}
+
+            {% if trims_url %}
+              <a class="crm-dd-item" href="{{ trims_url }}">🎀 Trims</a>
+            {% else %}
+              <div class="crm-dd-item is-disabled">🎀 Trims</div>
+            {% endif %}
+
+            {% if threads_url %}
+              <a class="crm-dd-item" href="{{ threads_url }}">🪡 Threads</a>
+            {% else %}
+              <div class="crm-dd-item is-disabled">🪡 Threads</div>
+            {% endif %}
 
             <div class="crm-dd-hint">
               All product and material lists in one place.
@@ -281,18 +398,35 @@
           </div>
         </div>
 
-        <a href="{% url 'inventory_list' %}" class="crm-nav-item"><span>📦</span><strong>Inventory</strong></a>
+        {% if inv_url %}
+          <a href="{{ inv_url }}" class="crm-nav-item"><span>📦</span><strong>Inventory</strong></a>
+        {% endif %}
+
+        {% if access_url %}
+          <a href="{{ access_url }}" class="crm-nav-item"><span>🔐</span><strong>Access</strong></a>
+        {% endif %}
+
+        {% if request.user.is_superuser and admin_url %}
+          <a href="{{ admin_url }}" class="crm-nav-item"><span>🛠️</span><strong>Admin</strong></a>
+        {% endif %}
 
         <div class="crm-dropdown" id="worldDropdown">
-          <a href="{% url 'world_tools' %}" class="crm-nav-item" id="worldBtn" aria-haspopup="true" aria-expanded="false">
+          <a
+            href="{% if world_tools_url %}{{ world_tools_url }}{% else %}#{% endif %}"
+            class="crm-nav-item {% if not world_tools_url %}is-disabled{% endif %}"
+            id="worldBtn"
+            aria-haspopup="true"
+            aria-expanded="false"
+          >
             <span>🌍</span><strong>World</strong>
           </a>
 
           <div class="crm-dropdown-menu" id="worldMenu" role="menu">
             <div class="crm-dd-title">World shortcuts</div>
-            <a class="crm-dd-item" href="{% url 'world_tools' %}">🧰 World tools</a>
-            <a class="crm-dd-item" href="{% url 'world_dashboard' %}">📊 World dashboard</a>
-            <a class="crm-dd-item" href="{% url 'world_ai_fashion_news' %}">🧠 AI fashion notes</a>
+
+            {% if world_tools_url %}<a class="crm-dd-item" href="{{ world_tools_url }}">🧰 World tools</a>{% endif %}
+            {% if world_dash_url %}<a class="crm-dd-item" href="{{ world_dash_url }}">📊 World dashboard</a>{% endif %}
+            {% if world_ai_url %}<a class="crm-dd-item" href="{{ world_ai_url }}">🧠 AI fashion notes</a>{% endif %}
 
             <div class="crm-dd-hint">
               Quick access to world pages.
@@ -300,36 +434,44 @@
           </div>
         </div>
 
-        <a href="{% url 'email_sync_dashboard' %}" class="crm-nav-item">
-          <span>📨</span><strong>Email Sync</strong>
-        </a>
+        {% if email_sync_url %}
+          <a href="{{ email_sync_url }}" class="crm-nav-item">
+            <span>📨</span><strong>Email Sync</strong>
+          </a>
+        {% endif %}
 
         <div class="crm-dropdown" id="accountingDropdown">
-          <a href="{% url 'accounting_home' %}" class="crm-nav-item hot" id="accountingBtn" aria-haspopup="true" aria-expanded="false">
+          <a
+            href="{% if acc_home_url %}{{ acc_home_url }}{% else %}#{% endif %}"
+            class="crm-nav-item hot {% if not acc_home_url %}is-disabled{% endif %}"
+            id="accountingBtn"
+            aria-haspopup="true"
+            aria-expanded="false"
+          >
             <span>💰</span><strong>Accounting</strong>
           </a>
 
           <div class="crm-dropdown-menu" id="accountingMenu" role="menu">
             <div class="crm-dd-title">Accounting shortcuts</div>
 
-            <a class="crm-dd-item" href="{% url 'invoice_list' %}">🧾 Invoices</a>
+            {% if invoice_list_url %}<a class="crm-dd-item" href="{{ invoice_list_url }}">🧾 Invoices</a>{% endif %}
 
             {% if user|is_ca %}
-              {% url 'accounting_entry_list' as u1 %}{% if u1 %}<a class="crm-dd-item" href="{{ u1 }}">🌎 All entries</a>{% endif %}
-              {% url 'accounting_ca_master' as u2 %}{% if u2 %}<a class="crm-dd-item" href="{{ u2 }}">💸 Money transfer</a>{% endif %}
-              {% url 'accounting_ca_grid' as u3 %}{% if u3 %}<a class="crm-dd-item" href="{{ u3 }}">🧾 Canada grid</a>{% endif %}
+              {% if acc_all_entries_url %}<a class="crm-dd-item" href="{{ acc_all_entries_url }}">🌎 All entries</a>{% endif %}
+              {% if acc_ca_master_url %}<a class="crm-dd-item" href="{{ acc_ca_master_url }}">💸 Money transfer</a>{% endif %}
+              {% if acc_ca_grid_url %}<a class="crm-dd-item" href="{{ acc_ca_grid_url }}">🧾 Canada grid</a>{% endif %}
             {% endif %}
 
-            {% url 'accounting_bd_dashboard' as u4 %}{% if u4 %}<a class="crm-dd-item" href="{{ u4 }}">🇧🇩 Bangladesh dashboard</a>{% endif %}
-            {% url 'accounting_bd_grid' as u5 %}{% if u5 %}<a class="crm-dd-item" href="{{ u5 }}">🧾 Bangladesh grid</a>{% endif %}
-            {% url 'accounting_bd_daily' as u6 %}{% if u6 %}<a class="crm-dd-item" href="{{ u6 }}">📅 Bangladesh daily sheet</a>{% endif %}
+            {% if acc_bd_dash_url %}<a class="crm-dd-item" href="{{ acc_bd_dash_url }}">🇧🇩 Bangladesh dashboard</a>{% endif %}
+            {% if acc_bd_grid_url %}<a class="crm-dd-item" href="{{ acc_bd_grid_url }}">🧾 Bangladesh grid</a>{% endif %}
+            {% if acc_bd_daily_url %}<a class="crm-dd-item" href="{{ acc_bd_daily_url }}">📅 Bangladesh daily sheet</a>{% endif %}
 
-            {% url 'accounting_entry_add_bd' as u7 %}{% if u7 %}<a class="crm-dd-item" href="{{ u7 }}">➕ Add Bangladesh entry</a>{% endif %}
-            {% url 'accounting_entry_add_ca' as u8 %}{% if u8 %}<a class="crm-dd-item" href="{{ u8 }}">➕ Add Canada entry</a>{% endif %}
+            {% if acc_add_bd_url %}<a class="crm-dd-item" href="{{ acc_add_bd_url }}">➕ Add Bangladesh entry</a>{% endif %}
+            {% if acc_add_ca_url %}<a class="crm-dd-item" href="{{ acc_add_ca_url }}">➕ Add Canada entry</a>{% endif %}
 
-            {% url 'bd_staff_list' as u9 %}{% if u9 %}<a class="crm-dd-item" href="{{ u9 }}">👥 Bangladesh staff</a>{% endif %}
-            {% url 'bd_staff_month_list' as u10 %}{% if u10 %}<a class="crm-dd-item" href="{{ u10 }}">🧾 BD payroll months</a>{% endif %}
-            {% url 'bd_staff_add' as u11 %}{% if u11 %}<a class="crm-dd-item" href="{{ u11 }}">➕ Add BD staff</a>{% endif %}
+            {% if bd_staff_list_url %}<a class="crm-dd-item" href="{{ bd_staff_list_url }}">👥 Bangladesh staff</a>{% endif %}
+            {% if bd_payroll_months_url %}<a class="crm-dd-item" href="{{ bd_payroll_months_url }}">🧾 BD payroll months</a>{% endif %}
+            {% if bd_staff_add_url %}<a class="crm-dd-item" href="{{ bd_staff_add_url }}">➕ Add BD staff</a>{% endif %}
 
             <div class="crm-dd-hint">
               BD users see BD pages. CA users see master pages too.
@@ -345,16 +487,18 @@
           <span>👤</span> {{ request.user.get_username }}
         </div>
 
-        <form method="post" action="{% url 'logout' %}" class="crm-logout-form">
-          {% csrf_token %}
-          <button type="submit" class="crm-nav-item">
-            <span>🚪</span><strong>Logout</strong>
-          </button>
-        </form>
+        {% if logout_url %}
+          <form method="post" action="{{ logout_url }}" class="crm-logout-form">
+            {% csrf_token %}
+            <button type="submit" class="crm-nav-item">
+              <span>🚪</span><strong>Logout</strong>
+            </button>
+          </form>
 
-        <noscript>
-          <a href="{% url 'logout' %}" class="crm-nav-item"><span>🚪</span><strong>Logout</strong></a>
-        </noscript>
+          <noscript>
+            <a href="{{ logout_url }}" class="crm-nav-item"><span>🚪</span><strong>Logout</strong></a>
+          </noscript>
+        {% endif %}
       </div>
 
     </div>
@@ -407,8 +551,10 @@
         dd.addEventListener("mouseleave", closeMenuDelayed);
 
         btn.addEventListener("click", function (e) {
-          if (!dd.classList.contains("is-open")) {
-            e.preventDefault();
+          e.preventDefault();
+          if (dd.classList.contains("is-open")) {
+            closeMenuNow();
+          } else {
             openMenu();
           }
         });
