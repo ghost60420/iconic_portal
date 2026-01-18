@@ -20,6 +20,10 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import render
+from .models import Product, Fabric, Accessory, Trim, ThreadOption
+
 
 from .forms import BDStaffMonthForm, EventForm, LeadForm, ShipmentForm
 from .models import (
@@ -460,36 +464,42 @@ Keep the answer short.
 # ===================================================
 # LEAD AND OPPORTUNITY LISTS AND BASIC CRUD
 # ===================================================
-from django.shortcuts import render
+# crm/views.py (your leads list view)
 from django.core.paginator import Paginator
 from django.db.models import Q
+from django.shortcuts import render
 
-from crm.models import Lead
+from .models import Lead
 
 def leads_list(request):
+    lead_id = (request.GET.get("lead_id") or "").strip()
     q = (request.GET.get("q") or "").strip()
     status = (request.GET.get("status") or "").strip()
     market = (request.GET.get("market") or "").strip()
     owner = (request.GET.get("owner") or "").strip()
-    lead_id = (request.GET.get("lead_id") or "").strip()
 
-    per_page = (request.GET.get("per_page") or "50").strip()
-    if per_page not in ["20", "50", "100"]:
-        per_page = "50"
-    per_page_int = int(per_page)
+    sort = (request.GET.get("sort") or "new").strip().lower()
 
-    qs = Lead.objects.all().order_by("-created_date", "-id")
+    try:
+        per_page = int(request.GET.get("per_page") or 50)
+    except ValueError:
+        per_page = 50
+
+    if per_page not in (20, 50, 100):
+        per_page = 50
+
+    qs = Lead.objects.all()
 
     if lead_id:
         qs = qs.filter(lead_id__icontains=lead_id)
 
     if q:
         qs = qs.filter(
-            Q(contact_name__icontains=q) |
-            Q(account_brand__icontains=q) |
-            Q(email__icontains=q) |
-            Q(phone__icontains=q) |
-            Q(notes__icontains=q)
+            Q(account_brand__icontains=q)
+            | Q(contact_name__icontains=q)
+            | Q(email__icontains=q)
+            | Q(phone__icontains=q)
+            | Q(notes__icontains=q)
         )
 
     if status:
@@ -500,13 +510,18 @@ def leads_list(request):
 
     if owner:
         qs = qs.filter(
-            Q(owner__username__icontains=owner) |
-            Q(owner__first_name__icontains=owner) |
-            Q(owner__last_name__icontains=owner)
+            Q(owner__username__icontains=owner)
+            | Q(owner__first_name__icontains=owner)
+            | Q(owner__last_name__icontains=owner)
         )
 
-    paginator = Paginator(qs, per_page_int)
-    page_number = request.GET.get("page")
+    if sort == "old":
+        qs = qs.order_by("id")
+    else:
+        qs = qs.order_by("-id")
+
+    paginator = Paginator(qs, per_page)
+    page_number = request.GET.get("page") or 1
     page_obj = paginator.get_page(page_number)
 
     context = {
@@ -514,13 +529,14 @@ def leads_list(request):
         "per_page": per_page,
     }
     return render(request, "crm/leads_list.html", context)
-def opportunities_list(request):
-    opportunities = Opportunity.objects.select_related("lead").order_by(
-        "-created_date",
-        "-id",
-    )
-    context = {"opportunities": opportunities}
-    return render(request, "crm/opportunities_list.html", context)
+
+
+from django.shortcuts import render, redirect, get_object_or_404
+from django.utils import timezone
+from django.contrib import messages
+
+from .models import Lead, LeadActivity
+from .forms import LeadForm
 
 
 def add_lead(request):
@@ -528,8 +544,10 @@ def add_lead(request):
         form = LeadForm(request.POST, request.FILES)
         if form.is_valid():
             lead = form.save(commit=False)
+
             if not lead.created_date:
                 lead.created_date = timezone.now().date()
+
             lead.save()
 
             LeadActivity.objects.create(
@@ -538,14 +556,18 @@ def add_lead(request):
                 description="Lead created from form.",
             )
 
-            if lead.attachment:
+            if getattr(lead, "attachment", None):
                 LeadActivity.objects.create(
                     lead=lead,
                     activity_type="file_uploaded",
                     description=f"File uploaded: {lead.attachment.name}",
                 )
 
-            return redirect("leads_list")
+            messages.success(request, "Lead saved successfully.")
+            return redirect(f"{redirect('lead_detail', pk=lead.pk).url}?saved=1")
+        else:
+            messages.error(request, "Could not save. Please fix the errors below.")
+            print("LEAD FORM ERRORS:", form.errors.as_json())
     else:
         form = LeadForm()
 
@@ -559,18 +581,23 @@ def edit_lead(request, pk):
         form = LeadForm(request.POST, request.FILES, instance=lead)
         if form.is_valid():
             lead = form.save()
-            if lead.attachment:
+
+            if getattr(lead, "attachment", None):
                 LeadActivity.objects.create(
                     lead=lead,
                     activity_type="file_uploaded",
                     description=f"File uploaded or updated: {lead.attachment.name}",
                 )
-            return redirect("lead_detail", pk=lead.pk)
+
+            messages.success(request, "Lead updated successfully.")
+            return redirect(f"{redirect('lead_detail', pk=lead.pk).url}?saved=1")
+        else:
+            messages.error(request, "Could not save. Please fix the errors below.")
+            print("LEAD FORM ERRORS:", form.errors.as_json())
     else:
         form = LeadForm(instance=lead)
 
     return render(request, "crm/lead_form.html", {"form": form, "lead": lead})
-
 
 from .models import Lead, Customer, Opportunity
 
@@ -2871,22 +2898,7 @@ def thread_detail(request, pk):
     return render(request, "crm/thread_detail.html", context)
 
 
-# ===================================================
-# INVENTORY LIBRARY
-# ===================================================
-# ---------------------------------------------------
-# INVENTORY
-# ---------------------------------------------------
-from decimal import Decimal
 
-from django.contrib import messages
-from django.shortcuts import render, get_object_or_404, redirect
-from django.db.models import Q, Sum
-from django.views.decorators.http import require_POST
-from django.http import JsonResponse
-
-from .models import InventoryItem, InventoryReorder
-from .forms import InventoryItemForm
 
 
 # =========================
@@ -5261,3 +5273,45 @@ def add_opportunity(request):
     return render(request, "crm/add_opportunity.html", context)
 
 
+
+@login_required
+def library_home(request):
+    return render(request, "crm/library_home.html")
+
+
+
+
+
+@login_required
+def fabrics_list(request):
+    items = Fabric.objects.all().order_by("-id")
+    return render(request, "crm/library_list.html", {"title": "Fabrics", "items": items})
+
+
+@login_required
+def accessories_list(request):
+    items = Accessory.objects.all().order_by("-id")
+    return render(request, "crm/library_list.html", {"title": "Accessories", "items": items})
+
+
+@login_required
+def trims_list(request):
+    items = Trim.objects.all().order_by("-id")
+    return render(request, "crm/library_list.html", {"title": "Trims", "items": items})
+
+
+@login_required
+def threads_list(request):
+    items = ThreadOption.objects.all().order_by("-id")
+    return render(request, "crm/library_list.html", {"title": "Threads", "items": items})
+
+
+from django.shortcuts import render
+from .models import Opportunity
+
+def opportunities_list(request):
+    opportunities = Opportunity.objects.select_related("lead").order_by(
+        "-created_date",
+        "-id",
+    )
+    return render(request, "crm/opportunities_list.html", {"opportunities": opportunities})

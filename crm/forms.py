@@ -210,82 +210,81 @@ class AccountingEntryForm(forms.ModelForm):
 # --------------------------------------------------
 # BD daily entry form (supports multi attachments)
 # --------------------------------------------------
+# crm/forms.py
+
+from decimal import Decimal
+from django import forms
+from django.utils import timezone
+from .models import AccountingEntry, AccountingAttachment
+
+BD_DAILY_SUBTYPE_CHOICES = [
+    ("", "Select subtype"),
+    ("FABRIC", "Fabric and materials"),
+    ("TRIMS", "Trims and accessories"),
+    ("PRINT", "Printing outsourced"),
+    ("EMB", "Embroidery or special work"),
+    ("UTILITIES", "Electricity and utilities"),
+    ("RENT", "Factory rent"),
+    ("FOOD", "Tea, snacks, guest food"),
+    ("TRANSPORT", "Transport and courier"),
+    ("REPAIR", "Machine repair and service"),
+    ("OVERTIME", "Staff overtime"),
+    ("OTHER", "Other"),
+]
+
 class BDDailyEntryForm(forms.ModelForm):
-    quick_category = forms.ChoiceField(
-        choices=BD_DAILY_SUBTYPE_CHOICES,
-        label="Subtype",
-        required=True,
-        widget=forms.Select(attrs={"class": "form-select form-select-sm"}),
-    )
-
-    sub_type = forms.ChoiceField(
-        choices=BD_DAILY_SUBTYPE_CHOICES,
-        label="Subtype",
-        required=True,
-        widget=forms.Select(attrs={"class": "form-select form-select-sm"}),
-    )
-
     attachments = forms.FileField(
         required=False,
         widget=MultiFileInput(attrs={"class": "form-control form-control-sm", "multiple": True}),
-        help_text="You can select more than one file.",
-    )
-
-    main_type = forms.ChoiceField(
-        choices=MAIN_TYPE_CHOICES,
-        required=False,
-        widget=forms.Select(attrs={"class": "form-select form-select-sm"}),
     )
 
     class Meta:
         model = AccountingEntry
         fields = [
             "date",
-            "direction",
-            "main_type",
-            "quick_category",
             "sub_type",
-            "description",
             "amount_original",
-            "rate_to_cad",
+            "description",
             "attachments",
         ]
         widgets = {
             "date": forms.DateInput(attrs={"type": "date", "class": "form-control form-control-sm"}),
-            "direction": forms.Select(attrs={"class": "form-select form-select-sm"}),
-            "description": forms.Textarea(attrs={"rows": 2, "class": "form-control form-control-sm"}),
+            "sub_type": forms.Select(attrs={"class": "form-select form-select-sm"}, choices=BD_DAILY_SUBTYPE_CHOICES),
             "amount_original": forms.NumberInput(attrs={"class": "form-control form-control-sm", "step": "0.01"}),
-            "rate_to_cad": forms.NumberInput(attrs={"class": "form-control form-control-sm", "step": "0.0001"}),
+            "description": forms.Textarea(attrs={"rows": 2, "class": "form-control form-control-sm"}),
         }
 
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
 
-        self.fields["direction"].initial = "OUT"
-        self.fields["main_type"].initial = "EXPENSE"
-        self.fields["rate_to_cad"].initial = Decimal("0")
+        # required checks
+        self.fields["sub_type"].required = True
+        self.fields["amount_original"].required = True
+        self.fields["description"].required = True
 
-        # If user picks a category but not subtype, we will copy it into subtype
-        if not self.initial.get("sub_type"):
-            self.initial["sub_type"] = ""
+        if not self.initial.get("date"):
+            self.initial["date"] = timezone.localdate()
+
+    def clean_attachments(self):
+        files = self.files.getlist("attachments")
+        if len(files) > 10:
+            raise forms.ValidationError("Maximum 10 files allowed.")
+        return files
 
     def save(self, commit=True):
         obj = super().save(commit=False)
 
+        # LOCKED VALUES
         obj.side = "BD"
+        obj.direction = "OUT"
         obj.currency = "BDT"
+        obj.rate_to_bdt = Decimal("1")
+        obj.rate_to_cad = Decimal("0")
 
-        quick = (self.cleaned_data.get("quick_category") or "").strip()
-        chosen_sub = (self.cleaned_data.get("sub_type") or "").strip()
-
-        # If subtype not selected, use category as fallback
-        if not chosen_sub:
-            chosen_sub = quick
-
-        obj.sub_type = chosen_sub
-
-        if quick in ["FABRIC", "TRIMS", "PRINT", "EMB"]:
+        # main type auto
+        st = (obj.sub_type or "").strip()
+        if st in ["FABRIC", "TRIMS", "PRINT", "EMB"]:
             obj.main_type = "COGS"
         else:
             obj.main_type = "EXPENSE"

@@ -9,7 +9,7 @@ from django.db.models.functions import Coalesce
 from django.shortcuts import render
 from django.utils import timezone
 from django.contrib.auth.decorators import login_required
-
+from .forms import BDDailyEntryForm
 from .models import AccountingEntry
 from .decorators import bd_required
 import csv
@@ -713,6 +713,19 @@ def accounting_ca_grid(request):
 # --------------------
 # BD DAILY
 # --------------------
+from decimal import Decimal
+from django.contrib import messages
+from django.db.models import Sum
+from django.db.models.functions import Coalesce
+from django.shortcuts import redirect, render
+from django.utils import timezone
+
+from .models import AccountingEntry
+from .forms import BDDailyEntryForm
+
+BD_MONTHLY_TARGET_BDT = Decimal("0")  # keep your real value here
+
+
 @login_required
 @bd_required
 def accounting_bd_daily(request):
@@ -727,10 +740,12 @@ def accounting_bd_daily(request):
     if request.method == "POST":
         form = BDDailyEntryForm(request.POST, request.FILES, user=request.user)
         if form.is_valid():
-            entry = form.save(commit=True)
+            entry = form.save(commit=False)
             if not entry.created_by_id:
                 entry.created_by = request.user
-                entry.save(update_fields=["created_by"])
+            entry.save()
+            form.save_m2m()
+
             messages.success(request, "Bangladesh daily entry saved.")
             return redirect(f"/accounting/bd-daily/?year={y}&month={m}")
         messages.error(request, "Please fix the errors below.")
@@ -753,7 +768,7 @@ def accounting_bd_daily(request):
     )["x"]
 
     net_bdt = total_in - total_out
-    entries = qs.prefetch_related("attachments").order_by("-date", "-id")[:300]
+    entries = qs.order_by("-date", "-id")[:300]
 
     remaining_month_bdt = BD_MONTHLY_TARGET_BDT - total_out
 
@@ -772,8 +787,6 @@ def accounting_bd_daily(request):
             "net_bdt": net_bdt,
         },
     )
-
-
 # --------------------
 # ENTRY LIST
 from decimal import Decimal
