@@ -17,13 +17,48 @@ from django.utils import timezone
 # --------------------------------------------------
 # Shared widgets
 # --------------------------------------------------
+from django import forms
+from .models import Lead
+
+
+from django import forms
+from .models import Lead
+
+
 class LeadForm(forms.ModelForm):
     class Meta:
         model = Lead
-        fields = "__all__"
+        fields = [
+            "account_brand",
+            "company_website",
+            "market",
+            "country",
+            "city",
+            "source",
+            "lead_type",
+            "lead_status",
+            "priority",
+            "product_interest",
+            "order_quantity",
+            "budget",
+            "preferred_contact_time",
+            "owner",
+            "next_followup",
+            "contact_name",
+            "email",
+            "phone",
+            "attachment",
+            "notes",
+        ]
         widgets = {
-            "notes": forms.Textarea(attrs={"rows": 3, "class": "form-control"}),
+            "notes": forms.Textarea(attrs={"rows": 3}),
         }
+
+    def clean_email(self):
+        v = (self.cleaned_data.get("email") or "").strip().lower()
+        if v and "@" not in v:
+            raise forms.ValidationError("Email is not valid.")
+        return v
 
 class MultiFileInput(forms.ClearableFileInput):
     allow_multiple_selected = True
@@ -61,7 +96,8 @@ MAIN_TYPE_CHOICES = [
     ("OTHER", "Other"),
 ]
 
-BD_DAILY_CATEGORY_CHOICES = [
+BD_DAILY_SUBTYPE_CHOICES = [
+    ("", "Select subtype"),
     ("FABRIC", "Fabric and materials"),
     ("TRIMS", "Trims and accessories"),
     ("PRINT", "Printing outsourced"),
@@ -176,8 +212,15 @@ class AccountingEntryForm(forms.ModelForm):
 # --------------------------------------------------
 class BDDailyEntryForm(forms.ModelForm):
     quick_category = forms.ChoiceField(
-        choices=BD_DAILY_CATEGORY_CHOICES,
-        label="Category",
+        choices=BD_DAILY_SUBTYPE_CHOICES,
+        label="Subtype",
+        required=True,
+        widget=forms.Select(attrs={"class": "form-select form-select-sm"}),
+    )
+
+    sub_type = forms.ChoiceField(
+        choices=BD_DAILY_SUBTYPE_CHOICES,
+        label="Subtype",
         required=True,
         widget=forms.Select(attrs={"class": "form-select form-select-sm"}),
     )
@@ -210,7 +253,6 @@ class BDDailyEntryForm(forms.ModelForm):
         widgets = {
             "date": forms.DateInput(attrs={"type": "date", "class": "form-control form-control-sm"}),
             "direction": forms.Select(attrs={"class": "form-select form-select-sm"}),
-            "sub_type": forms.TextInput(attrs={"class": "form-control form-control-sm"}),
             "description": forms.Textarea(attrs={"rows": 2, "class": "form-control form-control-sm"}),
             "amount_original": forms.NumberInput(attrs={"class": "form-control form-control-sm", "step": "0.01"}),
             "rate_to_cad": forms.NumberInput(attrs={"class": "form-control form-control-sm", "step": "0.0001"}),
@@ -219,18 +261,29 @@ class BDDailyEntryForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
+
         self.fields["direction"].initial = "OUT"
         self.fields["main_type"].initial = "EXPENSE"
         self.fields["rate_to_cad"].initial = Decimal("0")
 
+        # If user picks a category but not subtype, we will copy it into subtype
+        if not self.initial.get("sub_type"):
+            self.initial["sub_type"] = ""
+
     def save(self, commit=True):
         obj = super().save(commit=False)
+
         obj.side = "BD"
         obj.currency = "BDT"
 
-        quick = self.cleaned_data.get("quick_category")
-        if not obj.sub_type:
-            obj.sub_type = quick
+        quick = (self.cleaned_data.get("quick_category") or "").strip()
+        chosen_sub = (self.cleaned_data.get("sub_type") or "").strip()
+
+        # If subtype not selected, use category as fallback
+        if not chosen_sub:
+            chosen_sub = quick
+
+        obj.sub_type = chosen_sub
 
         if quick in ["FABRIC", "TRIMS", "PRINT", "EMB"]:
             obj.main_type = "COGS"
@@ -246,7 +299,9 @@ class BDDailyEntryForm(forms.ModelForm):
                     original_name=(getattr(f, "name", "") or "")[:255],
                     uploaded_by=self.user,
                 )
+
         return obj
+
 from django import forms
 from .models import AccountingDocument
 
