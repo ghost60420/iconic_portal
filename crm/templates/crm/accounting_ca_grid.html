@@ -1,6 +1,7 @@
 {% extends "crm/base.html" %}
 {% load humanize %}
 {% block content %}
+
 <style>
   :root{
     --bg:#020617;
@@ -16,18 +17,8 @@
     --red: rgba(220,53,69,0.82);
   }
 
-  .grid-wrap{
-    max-width:1400px;
-    margin:0 auto;
-    color:var(--text);
-  }
-
-  .grid-title{
-    font-size:28px;
-    font-weight:900;
-    margin:8px 0 14px;
-    letter-spacing:0.2px;
-  }
+  .grid-wrap{ max-width:1400px; margin:0 auto; color:var(--text); }
+  .grid-title{ font-size:28px; font-weight:900; margin:8px 0 14px; letter-spacing:0.2px; }
 
   .filter-bar{
     display:flex;
@@ -41,18 +32,8 @@
     background:var(--bg);
   }
 
-  .filter-item{
-    display:flex;
-    flex-direction:column;
-    gap:6px;
-    min-width:190px;
-  }
-
-  .filter-item label{
-    font-size:12px;
-    color:var(--text);
-    font-weight:800;
-  }
+  .filter-item{ display:flex; flex-direction:column; gap:6px; min-width:190px; }
+  .filter-item label{ font-size:12px; margin:0; color:var(--text); font-weight:800; }
 
   .control{
     height:40px;
@@ -62,6 +43,7 @@
     color:var(--text);
     padding:8px 12px;
     outline:none;
+    color-scheme: dark;
     font-weight:800;
   }
 
@@ -69,8 +51,8 @@
     padding-right:36px;
     appearance:none;
     background-image:
-      linear-gradient(45deg, transparent 50%, #fff 50%),
-      linear-gradient(135deg, #fff 50%, transparent 50%),
+      linear-gradient(45deg, transparent 50%, rgba(255,255,255,0.85) 50%),
+      linear-gradient(135deg, rgba(255,255,255,0.85) 50%, transparent 50%),
       linear-gradient(to right, rgba(255,255,255,0.16), rgba(255,255,255,0.16));
     background-position:
       calc(100% - 18px) 16px,
@@ -82,6 +64,29 @@
       1px 22px;
     background-repeat:no-repeat;
   }
+
+  select.control option{ background:#0b0d10; color:var(--text); }
+
+  .actions{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+
+  .btn-modern{
+    height:40px;
+    border-radius:12px;
+    border:1px solid var(--line2);
+    background: rgba(255,255,255,0.10);
+    color:var(--text);
+    padding:0 14px;
+    font-weight:900;
+    cursor:pointer;
+    text-decoration:none;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    white-space:nowrap;
+  }
+
+  .btn-primary-modern{ background: var(--blue); border-color: rgba(13,110,253,0.98); }
+  .btn-danger-modern{ background: var(--red); border-color: rgba(220,53,69,0.90); }
 
   .table-wrap{
     overflow-x:auto;
@@ -95,40 +100,50 @@
     border-collapse:separate;
     border-spacing:0;
     min-width:1050px;
+    color:var(--text);
   }
 
-  table.ca-grid th{
-    background:var(--head);
-    padding:11px 10px;
-    font-weight:900;
-    position:sticky;
-    top:0;
+  table.ca-grid thead th{
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--head);
+    border-bottom: 1px solid var(--line);
+    padding: 11px 10px;
+    font-weight: 900;
+    white-space: nowrap;
+    color: var(--text);
   }
 
   table.ca-grid td{
-    padding:10px;
-    border-bottom:1px solid rgba(255,255,255,0.08);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    padding: 10px 10px;
+    vertical-align: top;
+    color: var(--text);
   }
 
-  table.ca-grid tbody tr:hover{
-    background:var(--hover);
+  table.ca-grid tbody tr:hover{ background: var(--hover); }
+
+  .num{ text-align:right; white-space:nowrap; font-variant-numeric: tabular-nums; }
+  .muted{ color: var(--muted); }
+  .dash{ color: var(--muted2); }
+  .nowrap{ white-space:nowrap; }
+
+  .tfoot-row th, .tfoot-row td{
+    background: rgba(0,0,0,0.42);
+    font-weight: 900;
+    border-top: 1px solid rgba(255,255,255,0.12);
+    padding: 12px 10px;
+    color: var(--text);
   }
 
-  .num{
-    text-align:right;
-    white-space:nowrap;
-  }
-
-  .muted{ color:var(--muted); }
-  .dash{ color:var(--muted2); }
-
-  .tfoot-row th,
-  .tfoot-row td{
-    background:#020617;
-    font-weight:900;
-    padding:12px 10px;
+  .cell-wrap{
+    white-space:normal;
+    word-break:break-word;
+    line-height:1.25;
   }
 </style>
+
 <div class="container-fluid" style="color:#f9fafb;">
   <div class="grid-wrap">
     <div class="grid-title">Canada accounting grid</div>
@@ -176,9 +191,7 @@
         <button class="btn-modern btn-primary-modern" type="submit">Apply</button>
 
         {% with monthv=month|default:"" catv=category|default:"" qv=q|default:"" %}
-          <a class="btn-modern" href="?month={{ monthv|urlencode }}&category={{ catv|urlencode }}&q={{ qv|urlencode }}&export=1">
-            Export CSV
-          </a>
+          <a class="btn-modern" href="?month={{ monthv|urlencode }}&category={{ catv|urlencode }}&q={{ qv|urlencode }}&export=1">Export CSV</a>
         {% endwith %}
 
         <a class="btn-modern btn-danger-modern" href="{% url 'accounting_ca_grid' %}">Clear</a>
@@ -204,29 +217,26 @@
           {% for r in rows %}
             <tr>
               <td class="muted nowrap">{{ r.date|date:"M d, Y" }}</td>
-
               <td class="cell-wrap">{{ r.description|default:"" }}</td>
-
               <td class="muted cell-wrap">{{ r.category|default:"" }}</td>
 
-              <td class="num">
-                {% if r.money_out and r.money_out != 0 %}
-                  {{ r.money_out|floatformat:2|intcomma }}
-                {% else %}
-                  <span class="dash">-</span>
-                {% endif %}
-              </td>
+  <td class="num">
+  {% if r.money_out and r.money_out != 0 %}
+    {{ r.money_out|floatformat:2|intcomma }}
+  {% else %}
+    <span class="dash">-</span>
+  {% endif %}
+</td>
+  <td class="num">
+  {% if r.money_in and r.money_in != 0 %}
+    {{ r.money_in|floatformat:2|intcomma }}
+  {% else %}
+    <span class="dash">-</span>
+  {% endif %}
+</td>
 
-              <td class="num">
-                {% if r.money_in and r.money_in != 0 %}
-                  {{ r.money_in|floatformat:2|intcomma }}
-                {% else %}
-                  <span class="dash">-</span>
-                {% endif %}
-              </td>
-
-              <td class="nowrap">{{ r.currency|default:"-" }}</td>
-              <td class="muted nowrap">{{ r.side|default:"-" }}</td>
+              <td class="nowrap">{{ r.currency|default:"CAD" }}</td>
+              <td class="muted nowrap">{{ r.side|default:"CA" }}</td>
             </tr>
           {% empty %}
             <tr>
@@ -243,6 +253,7 @@
             <th colspan="2"></th>
           </tr>
         </tfoot>
+
       </table>
     </div>
   </div>
