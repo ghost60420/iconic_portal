@@ -34,6 +34,7 @@ from crm.models import (
 )
 
 from crm.models_email_outbox import OutboundEmailLog
+from crm.permissions import get_access
 
 try:
     from crm.models import AISystemLog  # type: ignore
@@ -43,6 +44,18 @@ except Exception:
 
 def superuser_only(user):
     return bool(user and user.is_superuser)
+
+
+def can_ai_user(user):
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    try:
+        access = get_access(user)
+        return bool(getattr(access, "can_ai", False))
+    except Exception:
+        return False
 
 
 def _safe_email(value: str) -> str:
@@ -137,7 +150,7 @@ def _send_and_log_email(*, request, lead, to_email: str, subject: str, body: str
 # -------------------------
 
 @login_required
-@user_passes_test(superuser_only)
+@user_passes_test(can_ai_user)
 def ai_hub(request):
     try:
         report = build_health_checks()
@@ -155,7 +168,7 @@ def ai_hub(request):
 
 
 @login_required
-@user_passes_test(superuser_only)
+@user_passes_test(can_ai_user)
 def ai_assistant(request):
     today = timezone.localdate()
     last_30 = today - timedelta(days=30)
@@ -175,7 +188,7 @@ def ai_assistant(request):
 
 @require_POST
 @login_required
-@user_passes_test(superuser_only)
+@user_passes_test(can_ai_user)
 def ai_assistant_ask(request):
     q = (request.POST.get("q") or "").strip()
     if not q:
@@ -217,7 +230,7 @@ def ai_assistant_ask(request):
 
 
 @login_required
-@user_passes_test(superuser_only)
+@user_passes_test(can_ai_user)
 def ai_health_monitor(request):
     try:
         latest = AIHealthRun.objects.order_by("-created_at").first()
@@ -255,7 +268,7 @@ def ai_health_monitor(request):
 
 
 @login_required
-@user_passes_test(superuser_only)
+@user_passes_test(can_ai_user)
 def ai_system_status(request):
     try:
         report = build_health_checks()
@@ -345,7 +358,7 @@ def ai_system_status(request):
 
 @require_POST
 @login_required
-@user_passes_test(superuser_only)
+@user_passes_test(can_ai_user)
 def ai_lead_suggest(request, pk):
     lead = get_object_or_404(Lead, pk=pk)
     text = lead_suggestion(request=request, lead=lead)
@@ -354,7 +367,7 @@ def ai_lead_suggest(request, pk):
 
 @require_POST
 @login_required
-@user_passes_test(superuser_only)
+@user_passes_test(can_ai_user)
 def ai_opportunity_suggest(request, pk):
     opp = get_object_or_404(Opportunity, pk=pk)
     text = opportunity_suggestion(request=request, opp=opp)
@@ -363,7 +376,7 @@ def ai_opportunity_suggest(request, pk):
 
 @require_POST
 @login_required
-@user_passes_test(superuser_only)
+@user_passes_test(can_ai_user)
 def ai_production_suggest(request, pk):
     po = get_object_or_404(ProductionOrder, pk=pk)
     text = production_suggestion(request=request, po=po)
@@ -376,7 +389,7 @@ def ai_production_suggest(request, pk):
 
 @require_POST
 @login_required
-@user_passes_test(superuser_only)
+@user_passes_test(can_ai_user)
 def ai_lead_send_thankyou(request, pk):
     lead = get_object_or_404(Lead, pk=pk)
     to_email = _safe_email(getattr(lead, "email", ""))
@@ -432,7 +445,7 @@ Product: {getattr(lead, "product_interest", "")}
 
 @require_POST
 @login_required
-@user_passes_test(superuser_only)
+@user_passes_test(can_ai_user)
 def ai_lead_send_meeting_confirm(request, pk):
     lead = get_object_or_404(Lead, pk=pk)
     to_email = _safe_email(getattr(lead, "email", ""))

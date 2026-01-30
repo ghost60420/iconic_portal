@@ -40,6 +40,13 @@ urlpatterns = [
 
     path("main-dashboard/", login_required(views.main_dashboard), name="main_dashboard"),
 
+    # AI Hub
+    path("ai/", perm("can_ai", ai.ai_hub), name="ai_hub"),
+    path("ai/assistant/", perm("can_ai", ai.ai_assistant), name="ai_assistant"),
+    path("ai/assistant/ask/", perm("can_ai", ai.ai_assistant_ask), name="ai_assistant_ask"),
+    path("ai/health/", perm("can_ai", ai.ai_health_monitor), name="ai_health_monitor"),
+    path("ai/system-status/", perm("can_ai", ai.ai_system_status), name="ai_system_status"),
+
     path("leads/", perm("can_leads", views.leads_list), name="leads_list"),
     path("leads/add/", perm("can_leads", views.add_lead), name="lead_add"),
     path("leads/<int:pk>/", perm("can_leads", views.lead_detail), name="lead_detail"),
@@ -57,6 +64,7 @@ urlpatterns = [
     path("opportunities/<int:pk>/", perm("can_opportunities", views.opportunity_detail), name="opportunity_detail"),
     path("opportunities/<int:pk>/edit/", perm("can_opportunities", views.opportunity_edit), name="opportunity_edit"),
     path("opportunities/<int:pk>/ai/", perm("can_ai", views.opportunity_ai_detail), name="opportunity_ai_detail"),
+    path("opportunities/<int:pk>/ai/suggest/", perm("can_ai", ai.ai_opportunity_suggest), name="ai_opportunity_suggest"),
 
     path("customers/", perm("can_customers", views.customers_list), name="customers_list"),
     path("customers/<int:pk>/", perm("can_customers", views.customer_detail), name="customer_detail"),
@@ -132,6 +140,7 @@ urlpatterns = [
     path("production/<int:pk>/edit/", perm("can_production", views.production_edit), name="production_edit"),
     path("production/<int:pk>/next-stage/", perm("can_production", views.production_next_stage), name="production_next_stage"),
     path("production/<int:pk>/ai-help/", perm("can_ai", views.production_ai_help), name="production_ai_help"),
+    path("production/<int:pk>/ai/suggest/", perm("can_ai", ai.ai_production_suggest), name="ai_production_suggest"),
     path("production/<int:pk>/dpr/", perm("can_production", views.production_dpr), name="production_dpr"),
     path("production/stage/<int:stage_id>/click/", perm("can_production", views.production_stage_click), name="production_stage_click"),
     path("production/stage/<int:stage_id>/edit/", perm("can_production", views.production_stage_edit), name="production_stage_edit"),

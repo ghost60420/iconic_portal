@@ -43,7 +43,11 @@
       {% if u_dash %}<a class="navitem navitem-warm" href="{{ u_dash }}">Main Dashboard</a>{% endif %}
 
       {% url 'ai_hub' as u_ai %}
-      {% if u_ai %}<a class="navitem navitem-warm" href="{{ u_ai }}">AI</a>{% endif %}
+      {% if u_ai and request.user.is_authenticated %}
+        {% if request.user.is_superuser or request.user.access.can_ai %}
+          <a class="navitem navitem-warm" href="{{ u_ai }}">AI</a>
+        {% endif %}
+      {% endif %}
 
       <span class="navuser">{{ request.user.username|default:"User" }}</span>
 

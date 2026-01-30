@@ -301,7 +301,9 @@
           {% if main_dash_url %}
             <a href="{{ main_dash_url }}" class="crm-nav-item"><span>🧠</span><strong>Main Dashboard</strong></a>
           {% endif %}
-          {% if ai_hub_url %}
+        {% endif %}
+        {% if ai_hub_url and request.user.is_authenticated %}
+          {% if request.user.is_superuser or request.user.access.can_ai %}
             <a href="{{ ai_hub_url }}" class="crm-nav-item"><span>🤖</span><strong>AI</strong></a>
           {% endif %}
         {% endif %}
