@@ -1,305 +1,370 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="utf-8">
-    <title>
-        {% if lead %}Edit lead{% else %}Add lead{% endif %} - Iconic CRM
-    </title>
-    <style>
-        body {
-            background: #020617;
-            color: #f9fafb;
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-        }
+  <meta charset="utf-8">
+  <title>{% if lead %}Edit lead{% else %}Add lead{% endif %} - Iconic CRM</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
-        a {
-            color: #facc15;
-            text-decoration: none;
-        }
-        a:hover {
-            text-decoration: underline;
-        }
+  <style>
+    body {
+      background: #020617;
+      color: #f9fafb;
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+    a { color: #facc15; text-decoration: none; }
+    a:hover { text-decoration: underline; }
 
-        .wrapper {
-            max-width: 1040px;
-            margin: 20px auto 40px auto;
-            background: radial-gradient(circle at top left, #111827, #020617);
-            padding: 20px 20px 24px 20px;
-            border-radius: 14px;
-            border: 1px solid #1f2937;
-            box-shadow: 0 0 18px rgba(0, 0, 0, 0.7);
-        }
+    .wrapper {
+      max-width: 1100px;
+      margin: 18px auto 40px auto;
+      padding: 18px;
+    }
 
-        .top-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 12px;
-            margin-bottom: 14px;
-            flex-wrap: wrap;
-        }
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+      background: radial-gradient(circle at top left, #111827, #020617);
+      border: 1px solid #1f2937;
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 0 18px rgba(0,0,0,0.55);
+    }
 
-        h1 {
-            margin: 0;
-            font-size: 22px;
-            color: #fef9c3;
-        }
+    .title {
+      margin: 0;
+      font-size: 22px;
+      color: #fef9c3;
+      font-weight: 700;
+    }
 
-        .top-links a {
-            margin-left: 8px;
-            font-size: 13px;
-        }
+    .sub {
+      margin-top: 6px;
+      font-size: 12px;
+      color: #9ca3af;
+    }
 
-        .pill-label {
-            display: inline-block;
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-            color: #e5e7eb;
-            margin-bottom: 4px;
-        }
+    .links a { margin-left: 10px; font-size: 13px; }
 
-        .section {
-            margin-top: 16px;
-            padding: 14px 14px 12px 14px;
-            border-radius: 12px;
-            border: 1px solid #1f2937;
-            background: #020617;
-        }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 14px;
+    }
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+    }
 
-        .section-title {
-            margin-top: 0;
-            margin-bottom: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            color: #fefce8;
-        }
+    .card {
+      background: rgba(2,6,23,0.85);
+      border: 1px solid #1f2937;
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: 0 0 14px rgba(0,0,0,0.45);
+    }
 
-        .section-sub {
-            font-size: 12px;
-            color: #9ca3af;
-            margin-bottom: 8px;
-        }
+    .card-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #f9fafb;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #111827;
+    }
 
-        .section-row {
-            display: flex;
-            gap: 16px;
-            flex-wrap: wrap;
-        }
+    label {
+      display: block;
+      margin-top: 10px;
+      font-size: 12px;
+      color: #e5e7eb;
+    }
 
-        .section-half {
-            flex: 1;
-            min-width: 260px;
-        }
+    input, select, textarea {
+      width: 100%;
+      padding: 8px 10px;
+      margin-top: 6px;
+      background: rgba(3,7,18,0.9);
+      color: #f9fafb;
+      border: 1px solid #374151;
+      border-radius: 12px;
+      font-size: 13px;
+      box-sizing: border-box;
+    }
 
-        label {
-            display: block;
-            margin-top: 8px;
-            font-size: 12px;
-            color: #e5e7eb;
-        }
+    textarea { min-height: 110px; }
 
-        .label-required {
-            color: #f97316;
-            margin-left: 2px;
-        }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: #facc15;
+      box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.15);
+    }
 
-        input,
-        select,
-        textarea {
-            width: 100%;
-            padding: 6px 8px;
-            margin-top: 4px;
-            background: #020617;
-            color: #f9fafb;
-            border: 1px solid #374151;
-            border-radius: 8px;
-            font-size: 13px;
-        }
+    .help {
+      font-size: 11px;
+      color: #9ca3af;
+      margin-top: 4px;
+    }
 
-        textarea {
-            min-height: 90px;
-        }
+    .actions {
+      margin-top: 14px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
 
-        input:focus,
-        select:focus,
-        textarea:focus {
-            outline: none;
-            border-color: #facc15;
-            box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.35);
-        }
+    .btn {
+      padding: 9px 16px;
+      background: #facc15;
+      color: #111827;
+      border-radius: 999px;
+      border: none;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn:hover { filter: brightness(1.05); }
+    .btn:disabled { opacity: 0.7; cursor: not-allowed; }
 
-        .help-text {
-            font-size: 11px;
-            color: #9ca3af;
-            margin-top: 2px;
-        }
+    .errorlist {
+      margin: 6px 0 0 0;
+      padding: 0;
+      list-style: none;
+      font-size: 11px;
+      color: #fecaca;
+    }
 
-        button {
-            margin-top: 18px;
-            padding: 7px 18px;
-            background: linear-gradient(135deg, #facc15, #f97316);
-            color: #111827;
-            border-radius: 999px;
-            border: 1px solid #fbbf24;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-        }
+    .msg {
+      border-radius: 14px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      border: 1px solid rgba(148,163,184,0.25);
+      background: rgba(255,255,255,0.03);
+      font-size: 13px;
+      font-weight: 700;
+    }
 
-        button:hover {
-            filter: brightness(1.03);
-        }
+    .msg-success {
+      border-color: rgba(34,197,94,0.35);
+      background: rgba(34,197,94,0.10);
+      color: #bbf7d0;
+    }
 
-        /* Django error styling (if you use form.errors) */
-        .errorlist {
-            margin: 4px 0 0 0;
-            padding: 0;
-            list-style: none;
-            font-size: 11px;
-            color: #fecaca;
-        }
-        .errorlist li {
-            margin: 0;
-        }
+    .msg-error {
+      border-color: rgba(239,68,68,0.35);
+      background: rgba(239,68,68,0.10);
+      color: #fecaca;
+    }
 
-        @media (max-width: 720px) {
-            .wrapper {
-                margin: 10px;
-                padding: 16px;
-            }
-        }
-    </style>
+    .save-indicator,
+    .saving-indicator {
+      display: none;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 6px 10px;
+      border-radius: 999px;
+    }
+
+    .save-indicator {
+      color: #bbf7d0;
+      border: 1px solid rgba(34,197,94,0.35);
+      background: rgba(34,197,94,0.10);
+    }
+
+    .saving-indicator {
+      color: #fde68a;
+      border: 1px solid rgba(250,204,21,0.35);
+      background: rgba(250,204,21,0.10);
+    }
+  </style>
 </head>
+
 <body>
-<div class="wrapper">
+  <div class="wrapper">
 
     <div class="top-bar">
-        <div>
-            <h1>
-                {% if lead %}Edit lead{% else %}Add lead{% endif %}
-            </h1>
-            <div class="pill-label">
-                Core details and follow up for this lead.
-            </div>
-        </div>
-        <div class="top-links">
-            <a href="{% url 'leads_list' %}">All leads</a>
-            {% if lead %}
-                <a href="{% url 'lead_detail' lead.pk %}">Back to lead</a>
-            {% endif %}
-        </div>
+      <div>
+        <div class="title">{% if lead %}Edit lead{% else %}Add lead{% endif %}</div>
+        <div class="sub">Main details, contacts, and follow up.</div>
+      </div>
+      <div class="links">
+        <a href="{% url 'leads_list' %}">All leads</a>
+        {% if lead %}
+          <a href="{% url 'lead_detail' lead.pk %}">Back to lead</a>
+        {% endif %}
+      </div>
     </div>
 
-    <form method="post" enctype="multipart/form-data">
-        {% csrf_token %}
+    {% if messages %}
+      {% for message in messages %}
+        <div class="msg {% if message.tags == 'success' %}msg-success{% else %}msg-error{% endif %}">
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
 
-        <!-- Basic information -->
-        <div class="section">
-            <h2 class="section-title">Basic information</h2>
-            <div class="section-sub">
-                Brand details and main contact information.
-            </div>
+    {% if form.non_field_errors %}
+      <div class="msg msg-error">{{ form.non_field_errors }}</div>
+    {% endif %}
 
-            <div class="section-row">
-                <div class="section-half">
-                    <label>
-                        {{ form.account_brand.label }}
-                        {% if form.account_brand.field.required %}
-                            <span class="label-required">*</span>
-                        {% endif %}
-                    </label>
-                    {{ form.account_brand }}
+    <form method="post" action="" enctype="multipart/form-data" id="lead-form" novalidate>
+      {% csrf_token %}
 
-                    <label>{{ form.contact_name.label }}</label>
-                    {{ form.contact_name }}
+      <div class="grid">
 
-                    <label>{{ form.email.label }}</label>
-                    {{ form.email }}
+        <div class="card">
+          <div class="card-title">Basic information</div>
 
-                    <label>{{ form.phone.label }}</label>
-                    {{ form.phone }}
+          <label for="{{ form.account_brand.id_for_label }}">{{ form.account_brand.label }}</label>
+          {{ form.account_brand }}
+          {{ form.account_brand.errors }}
 
-                    <label>{{ form.company_website.label }}</label>
-                    {{ form.company_website }}
+          <label for="{{ form.company_website.id_for_label }}">{{ form.company_website.label }}</label>
+          {{ form.company_website }}
+          {{ form.company_website.errors }}
 
-                    <label>{{ form.market.label }}</label>
-                    {{ form.market }}
+          <label for="{{ form.market.id_for_label }}">{{ form.market.label }}</label>
+          {{ form.market }}
+          {{ form.market.errors }}
 
-                    <label>{{ form.country.label }}</label>
-                    {{ form.country }}
+          <label for="{{ form.country.id_for_label }}">{{ form.country.label }}</label>
+          {{ form.country }}
+          {{ form.country.errors }}
 
-                    <label>{{ form.city.label }}</label>
-                    {{ form.city }}
-                </div>
+          <label for="{{ form.city.id_for_label }}">{{ form.city.label }}</label>
+          {{ form.city }}
+          {{ form.city.errors }}
 
-                <div class="section-half">
-                    <label>{{ form.product_interest.label }}</label>
-                    {{ form.product_interest }}
+          <label for="{{ form.source.id_for_label }}">{{ form.source.label }}</label>
+          {{ form.source }}
+          {{ form.source.errors }}
 
-                    <label>{{ form.order_quantity.label }}</label>
-                    {{ form.order_quantity }}
+          <label for="{{ form.lead_type.id_for_label }}">{{ form.lead_type.label }}</label>
+          {{ form.lead_type }}
+          {{ form.lead_type.errors }}
 
-                    <label>{{ form.budget.label }}</label>
-                    {{ form.budget }}
+          <label for="{{ form.lead_status.id_for_label }}">{{ form.lead_status.label }}</label>
+          {{ form.lead_status }}
+          {{ form.lead_status.errors }}
 
-                    <label>{{ form.preferred_contact_time.label }}</label>
-                    {{ form.preferred_contact_time }}
-
-                    <label>{{ form.source.label }}</label>
-                    {{ form.source }}
-
-                    <label>{{ form.lead_type.label }}</label>
-                    {{ form.lead_type }}
-
-                    <label>{{ form.lead_status.label }}</label>
-                    {{ form.lead_status }}
-
-                    <label>{{ form.priority.label }}</label>
-                    {{ form.priority }}
-                </div>
-            </div>
+          <label for="{{ form.priority.id_for_label }}">{{ form.priority.label }}</label>
+          {{ form.priority }}
+          {{ form.priority.errors }}
         </div>
 
-        <!-- Owner and follow up -->
-        <div class="section">
-            <h2 class="section-title">Owner and follow up</h2>
-            <div class="section-sub">
-                Assign the lead and set the next follow up date.
-            </div>
+        <div class="card">
+          <div class="card-title">Order info</div>
 
-            <div class="section-row">
-                <div class="section-half">
-                    <label>{{ form.owner.label }}</label>
-                    {{ form.owner }}
-                </div>
-                <div class="section-half">
-                    <label>{{ form.next_followup.label }}</label>
-                    {{ form.next_followup }}
-                </div>
-            </div>
+          <label for="{{ form.product_interest.id_for_label }}">{{ form.product_interest.label }}</label>
+          {{ form.product_interest }}
+          {{ form.product_interest.errors }}
+
+          <label for="{{ form.order_quantity.id_for_label }}">{{ form.order_quantity.label }}</label>
+          {{ form.order_quantity }}
+          {{ form.order_quantity.errors }}
+
+          <label for="{{ form.budget.id_for_label }}">{{ form.budget.label }}</label>
+          {{ form.budget }}
+          {{ form.budget.errors }}
+
+          <label for="{{ form.preferred_contact_time.id_for_label }}">{{ form.preferred_contact_time.label }}</label>
+          {{ form.preferred_contact_time }}
+          {{ form.preferred_contact_time.errors }}
+
+          <label for="{{ form.owner.id_for_label }}">{{ form.owner.label }}</label>
+          {{ form.owner }}
+          {{ form.owner.errors }}
+
+          <label for="{{ form.next_followup.id_for_label }}">{{ form.next_followup.label }}</label>
+          {{ form.next_followup }}
+          {{ form.next_followup.errors }}
         </div>
 
-        <!-- Attachment and notes -->
-        <div class="section">
-            <h2 class="section-title">Attachment and notes</h2>
-            <div class="section-sub">
-                Upload any files and store extra information for this lead.
-            </div>
+        <div class="card">
+          <div class="card-title">Contact info</div>
 
-            <label>{{ form.attachment.label }}</label>
-            {{ form.attachment }}
+          <label for="{{ form.contact_name.id_for_label }}">{{ form.contact_name.label }}</label>
+          {{ form.contact_name }}
+          {{ form.contact_name.errors }}
 
-            <label style="margin-top:10px;">{{ form.notes.label }}</label>
-            {{ form.notes }}
+          <label for="{{ form.email.id_for_label }}">{{ form.email.label }}</label>
+          {{ form.email }}
+          {{ form.email.errors }}
+
+          <label for="{{ form.phone.id_for_label }}">{{ form.phone.label }}</label>
+          {{ form.phone }}
+          {{ form.phone.errors }}
+
+          <div class="help">If there is a second contact, add it in Notes for now.</div>
         </div>
 
-        <button type="submit">
-            {% if lead %}Update lead{% else %}Save lead{% endif %}
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <div class="card-title">Attachment and notes</div>
+
+        <label for="{{ form.attachment.id_for_label }}">{{ form.attachment.label }}</label>
+        {{ form.attachment }}
+        {{ form.attachment.errors }}
+
+        <label for="{{ form.notes.id_for_label }}" style="margin-top:12px;">{{ form.notes.label }}</label>
+        {{ form.notes }}
+        {{ form.notes.errors }}
+      </div>
+
+      <div class="actions">
+        <button class="btn" type="submit" id="save-btn">
+          {% if lead %}Update lead{% else %}Save lead{% endif %}
         </button>
+
+        <span class="saving-indicator" id="saving-indicator">Saving</span>
+        <span class="save-indicator" id="saved-indicator">Saved</span>
+      </div>
+
     </form>
-</div>
+
+  </div>
+
+  <script>
+    (function () {
+      const form = document.getElementById("lead-form");
+      const saveBtn = document.getElementById("save-btn");
+      const saving = document.getElementById("saving-indicator");
+      const saved = document.getElementById("saved-indicator");
+      if (!form || !saveBtn) return;
+
+      function hasErrors() {
+        return document.querySelectorAll(".errorlist li").length > 0;
+      }
+
+      form.addEventListener("submit", function () {
+        if (saving) saving.style.display = "inline-flex";
+        if (saved) saved.style.display = "none";
+        saveBtn.disabled = true;
+        saveBtn.textContent = "Saving";
+      });
+
+      // show Saved only when url has ?saved=1 AND the page has no errors
+      const params = new URLSearchParams(window.location.search || "");
+      if (params.get("saved") === "1" && !hasErrors()) {
+        if (saving) saving.style.display = "none";
+        if (saved) saved.style.display = "inline-flex";
+      } else {
+        if (saving) saving.style.display = "none";
+      }
+
+      // if form reloads with errors, enable button again
+      if (hasErrors()) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = "{% if lead %}Update lead{% else %}Save lead{% endif %}";
+      }
+    })();
+  </script>
 </body>
 </html>

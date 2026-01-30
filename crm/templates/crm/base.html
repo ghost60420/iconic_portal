@@ -85,9 +85,7 @@
       text-decoration:none;
     }
 
-    .crm-nav-item:active{
-      transform: translateY(0px);
-    }
+    .crm-nav-item:active{ transform: translateY(0px); }
 
     .crm-nav-item.hot{
       border-color: rgba(255, 227, 155, 0.35);
@@ -183,11 +181,6 @@
 
     .crm-dd-item:last-child{ margin-bottom:0; }
 
-    .crm-dd-item.is-disabled{
-      opacity:0.55;
-      pointer-events:none;
-    }
-
     .crm-dd-hint{
       font-size:11px;
       color:#e5e7eb;
@@ -263,37 +256,12 @@
     {% url 'access_list' as access_url %}
     {% url 'admin:index' as admin_url %}
 
+    {% url 'library_home' as library_home_url %}
     {% url 'products_list' as products_url %}
-    {% if not products_url %}{% url 'product_list' as products_url %}{% endif %}
-    {% if not products_url %}{% url 'products' as products_url %}{% endif %}
-
     {% url 'fabrics_list' as fabrics_url %}
-    {% if not fabrics_url %}{% url 'fabric_list' as fabrics_url %}{% endif %}
-    {% if not fabrics_url %}{% url 'fabrics' as fabrics_url %}{% endif %}
-
     {% url 'accessories_list' as accessories_url %}
-    {% if not accessories_url %}{% url 'accessory_list' as accessories_url %}{% endif %}
-    {% if not accessories_url %}{% url 'accessories' as accessories_url %}{% endif %}
-
     {% url 'trims_list' as trims_url %}
-    {% if not trims_url %}{% url 'trim_list' as trims_url %}{% endif %}
-    {% if not trims_url %}{% url 'trims' as trims_url %}{% endif %}
-
     {% url 'threads_list' as threads_url %}
-    {% if not threads_url %}{% url 'thread_list' as threads_url %}{% endif %}
-    {% if not threads_url %}{% url 'threads' as threads_url %}{% endif %}
-
-    {% url 'accounting_entry_list' as acc_all_entries_url %}
-    {% url 'accounting_ca_master' as acc_ca_master_url %}
-    {% url 'accounting_ca_grid' as acc_ca_grid_url %}
-    {% url 'accounting_bd_dashboard' as acc_bd_dash_url %}
-    {% url 'accounting_bd_grid' as acc_bd_grid_url %}
-    {% url 'accounting_bd_daily' as acc_bd_daily_url %}
-    {% url 'accounting_entry_add_bd' as acc_add_bd_url %}
-    {% url 'accounting_entry_add_ca' as acc_add_ca_url %}
-    {% url 'bd_staff_list' as bd_staff_list_url %}
-    {% url 'bd_staff_month_list' as bd_payroll_months_url %}
-    {% url 'bd_staff_add' as bd_staff_add_url %}
 
     <div class="crm-topbar">
 
@@ -330,28 +298,23 @@
         {% endif %}
 
         {% if request.user.is_superuser %}
-
           {% if main_dash_url %}
-            <a href="{{ main_dash_url }}" class="crm-nav-item">
-              <span>🧠</span><strong>Main Dashboard</strong>
-            </a>
+            <a href="{{ main_dash_url }}" class="crm-nav-item"><span>🧠</span><strong>Main Dashboard</strong></a>
           {% endif %}
-
           {% if ai_hub_url %}
-            <a href="{{ ai_hub_url }}" class="crm-nav-item">
-              <span>🤖</span><strong>AI</strong>
-            </a>
+            <a href="{{ ai_hub_url }}" class="crm-nav-item"><span>🤖</span><strong>AI</strong></a>
           {% endif %}
-
         {% endif %}
+
       </div>
 
       <div class="crm-nav-group">
 
+        {# FIX: Always show Library menu, do not depend on request.user.access #}
         <div class="crm-dropdown" id="libraryDropdown">
           <a
-            href="#"
-            class="crm-nav-item"
+            href="{% if library_home_url %}{{ library_home_url }}{% else %}#{% endif %}"
+            class="crm-nav-item {% if not library_home_url %}is-disabled{% endif %}"
             id="libraryBtn"
             aria-haspopup="true"
             aria-expanded="false"
@@ -362,35 +325,11 @@
           <div class="crm-dropdown-menu" id="libraryMenu" role="menu">
             <div class="crm-dd-title">Library</div>
 
-            {% if products_url %}
-              <a class="crm-dd-item" href="{{ products_url }}">👕 Products</a>
-            {% else %}
-              <div class="crm-dd-item is-disabled">👕 Products</div>
-            {% endif %}
-
-            {% if fabrics_url %}
-              <a class="crm-dd-item" href="{{ fabrics_url }}">🧵 Fabrics</a>
-            {% else %}
-              <div class="crm-dd-item is-disabled">🧵 Fabrics</div>
-            {% endif %}
-
-            {% if accessories_url %}
-              <a class="crm-dd-item" href="{{ accessories_url }}">🧷 Accessories</a>
-            {% else %}
-              <div class="crm-dd-item is-disabled">🧷 Accessories</div>
-            {% endif %}
-
-            {% if trims_url %}
-              <a class="crm-dd-item" href="{{ trims_url }}">🎀 Trims</a>
-            {% else %}
-              <div class="crm-dd-item is-disabled">🎀 Trims</div>
-            {% endif %}
-
-            {% if threads_url %}
-              <a class="crm-dd-item" href="{{ threads_url }}">🪡 Threads</a>
-            {% else %}
-              <div class="crm-dd-item is-disabled">🪡 Threads</div>
-            {% endif %}
+            {% if products_url %}<a class="crm-dd-item" href="{{ products_url }}">👕 Products</a>{% endif %}
+            {% if fabrics_url %}<a class="crm-dd-item" href="{{ fabrics_url }}">🧵 Fabrics</a>{% endif %}
+            {% if accessories_url %}<a class="crm-dd-item" href="{{ accessories_url }}">🧷 Accessories</a>{% endif %}
+            {% if trims_url %}<a class="crm-dd-item" href="{{ trims_url }}">🎀 Trims</a>{% endif %}
+            {% if threads_url %}<a class="crm-dd-item" href="{{ threads_url }}">🪡 Threads</a>{% endif %}
 
             <div class="crm-dd-hint">
               All product and material lists in one place.
@@ -435,9 +374,7 @@
         </div>
 
         {% if email_sync_url %}
-          <a href="{{ email_sync_url }}" class="crm-nav-item">
-            <span>📨</span><strong>Email Sync</strong>
-          </a>
+          <a href="{{ email_sync_url }}" class="crm-nav-item"><span>📨</span><strong>Email Sync</strong></a>
         {% endif %}
 
         <div class="crm-dropdown" id="accountingDropdown">
@@ -457,10 +394,22 @@
             {% if invoice_list_url %}<a class="crm-dd-item" href="{{ invoice_list_url }}">🧾 Invoices</a>{% endif %}
 
             {% if user|is_ca %}
+              {% url 'accounting_entry_list' as acc_all_entries_url %}
+              {% url 'accounting_ca_master' as acc_ca_master_url %}
+              {% url 'accounting_ca_grid' as acc_ca_grid_url %}
               {% if acc_all_entries_url %}<a class="crm-dd-item" href="{{ acc_all_entries_url }}">🌎 All entries</a>{% endif %}
               {% if acc_ca_master_url %}<a class="crm-dd-item" href="{{ acc_ca_master_url }}">💸 Money transfer</a>{% endif %}
               {% if acc_ca_grid_url %}<a class="crm-dd-item" href="{{ acc_ca_grid_url }}">🧾 Canada grid</a>{% endif %}
             {% endif %}
+
+            {% url 'accounting_bd_dashboard' as acc_bd_dash_url %}
+            {% url 'accounting_bd_grid' as acc_bd_grid_url %}
+            {% url 'accounting_bd_daily' as acc_bd_daily_url %}
+            {% url 'accounting_entry_add_bd' as acc_add_bd_url %}
+            {% url 'accounting_entry_add_ca' as acc_add_ca_url %}
+            {% url 'bd_staff_list' as bd_staff_list_url %}
+            {% url 'bd_staff_month_list' as bd_payroll_months_url %}
+            {% url 'bd_staff_add' as bd_staff_add_url %}
 
             {% if acc_bd_dash_url %}<a class="crm-dd-item" href="{{ acc_bd_dash_url }}">🇧🇩 Bangladesh dashboard</a>{% endif %}
             {% if acc_bd_grid_url %}<a class="crm-dd-item" href="{{ acc_bd_grid_url }}">🧾 Bangladesh grid</a>{% endif %}
@@ -478,6 +427,7 @@
             </div>
           </div>
         </div>
+
       </div>
 
       <div class="crm-spacer"></div>
@@ -538,7 +488,7 @@
           closeTimer = setTimeout(() => {
             dd.classList.remove("is-open");
             btn.setAttribute("aria-expanded", "false");
-          }, 350);
+          }, 250);
         }
 
         function closeMenuNow() {
@@ -551,10 +501,9 @@
         dd.addEventListener("mouseleave", closeMenuDelayed);
 
         btn.addEventListener("click", function (e) {
-          e.preventDefault();
-          if (dd.classList.contains("is-open")) {
-            closeMenuNow();
-          } else {
+          if (dd.classList.contains("is-disabled")) return;
+          if (!dd.classList.contains("is-open")) {
+            e.preventDefault();
             openMenu();
           }
         });

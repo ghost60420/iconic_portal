@@ -182,18 +182,20 @@ def run_and_store(created_by=None, notes: str = "") -> AIHealthRun:
 
     # Log into SystemActivityLog using the correct signature
     try:
+        meta = {
+            "score": run.score,
+            "ok_count": ok_count,
+            "warn_count": warn_count,
+            "bad_count": bad_count,
+        }
         log_activity(
-            actor=created_by,
-            area="ai",
-            action="health_run",
+            user=created_by,
+            feature="ai_health",
+            provider="local",
+            model_name="",
             level="info",
             message=f"AI health run stored. Score {run.score}",
-            meta={
-                "score": run.score,
-                "ok_count": ok_count,
-                "warn_count": warn_count,
-                "bad_count": bad_count,
-            },
+            error_detail=str(meta),
         )
     except Exception:
         pass

@@ -1,26 +1,29 @@
-from django import forms
+# crm/views_accounting.py (or wherever your accounting views live)
+
+import csv
+import io
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
-from crm.crm_groups import user_is_bd_only
-from decimal import Decimal
-from django.db.models import Sum
-from django.db.models.functions import Coalesce
-from django.shortcuts import render
-from django.utils import timezone
-from django.contrib.auth.decorators import login_required
-from .forms import BDDailyEntryForm
-from .models import AccountingEntry
-from .decorators import bd_required
-import csv
-import io
-from .crm_groups import user_is_bd_only, guess_add_side
+
+from .models import BDStaff, BDStaffMonth
+from .forms import BDStaffForm, BDStaffMonthForm
 from collections import defaultdict
 from decimal import Decimal
 from uuid import uuid4
-
+from decimal import Decimal
+from django.contrib.auth.decorators import login_required
+from django.db.models import Sum
+from django.db.models.functions import Coalesce
+from django.shortcuts import render
+from .decorators import bd_required
+from .models import AccountingEntry
 from openpyxl import Workbook
-
+import csv
+from decimal import Decimal
+from django.http import HttpResponse
+from django.db.models import Q
+from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db import transaction
@@ -42,26 +45,18 @@ from .models import (
 )
 
 from .forms import (
+    AccountingEntryForm,
     AccountingEntryAttachForm,
     AccountingDocumentForm,
+    BDDailyEntryForm,
+    BDStaffForm,
+    BDStaffMonthForm,
 )
 
 try:
     from .models import AccountingMonthLock
 except Exception:
     AccountingMonthLock = None
-
-try:
-    from .forms import AccountingEntryForm, BDDailyEntryForm
-except Exception:
-    AccountingEntryForm = None
-    BDDailyEntryForm = None
-
-try:
-    from .forms import BDStaffForm, BDStaffMonthForm
-except Exception:
-    BDStaffForm = None
-    BDStaffMonthForm = None
 
 
 # --------------------
@@ -85,6 +80,16 @@ def is_bd_user(user) -> bool:
 
 ca_required = user_passes_test(is_ca_user, login_url="/login/")
 bd_required = user_passes_test(is_bd_user, login_url="/login/")
+
+
+def user_is_bd_only(user) -> bool:
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return False
+    return user.groups.filter(name__in=["BD", "Bangladesh"]).exists() and not user.groups.filter(
+        name__in=["CA", "Canada"]
+    ).exists()
 
 
 def can_edit_entry(user, entry) -> bool:
@@ -113,13 +118,6 @@ def _parse_int(v):
         return int(str(v).strip())
     except Exception:
         return None
-
-
-def get_cad_to_bdt_rate() -> Decimal:
-    row = ExchangeRate.objects.order_by("-updated_at").first()
-    if row and row.cad_to_bdt and row.cad_to_bdt > 0:
-        return row.cad_to_bdt
-    return Decimal("0")
 
 
 def _get_rate_row():
@@ -165,6 +163,7 @@ def _audit(entry: AccountingEntry, action: str, user, before=None, after=None, n
     except Exception:
         pass
 
+
 def _save_attachments(entry, request, user, field_name="attachments") -> int:
     files = request.FILES.getlist(field_name)
     if not files:
@@ -179,14 +178,7 @@ def _save_attachments(entry, request, user, field_name="attachments") -> int:
             original_name=(getattr(f, "name", "") or "")[:255],
         )
         saved += 1
-
     return saved
-# --------------------
-# CONSTANTS
-# --------------------
-SWING_SUB_TYPE = "Swing Charge"
-BD_MONTHLY_TARGET_BDT = Decimal("400000")
-BD_WORKING_DAYS = Decimal("26")
 
 
 # --------------------
@@ -282,14 +274,6 @@ def _entry_export_row(e: AccountingEntry):
     ]
 
 
-def _xlsx_response(filename):
-    resp = HttpResponse(
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-    resp["Content-Disposition"] = f'attachment; filename="{filename}"'
-    return resp
-
-
 def _write_xlsx(qs, filename):
     wb = Workbook()
     ws = wb.active
@@ -302,8 +286,11 @@ def _write_xlsx(qs, filename):
     wb.save(bio)
     bio.seek(0)
 
-    resp = _xlsx_response(filename)
-    resp.write(bio.getvalue())
+    resp = HttpResponse(
+        bio.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    resp["Content-Disposition"] = f'attachment; filename="{filename}"'
     return resp
 
 
@@ -329,9 +316,13 @@ class SendMoneyToBdForm(forms.Form):
 # --------------------
 @login_required
 def accounting_entry_add(request):
-    if is_ca_user(request.user):
-        return redirect("accounting_entry_add_ca")
-    return redirect("accounting_entry_add_bd")
+    if user_is_bd_only(request.user):
+        return redirect("accounting_entry_add_bd")
+
+    side = (request.GET.get("side") or "").upper().strip()
+    if side == "BD":
+        return redirect("accounting_entry_add_bd")
+    return redirect("accounting_entry_add_ca")
 
 
 # --------------------
@@ -340,52 +331,32 @@ def accounting_entry_add(request):
 @login_required
 @ca_required
 def accounting_entry_add_ca(request):
-    if AccountingEntryForm is None:
-        return HttpResponse("AccountingEntryForm not found. Check crm/forms.py")
-
     LOCK_SIDE = "CA"
     LOCK_DIRECTION = "IN"
     LOCK_CURRENCY = "CAD"
 
     if request.method == "POST":
         form = AccountingEntryForm(request.POST, request.FILES)
-
         if form.is_valid():
             obj = form.save(commit=False)
-
             obj.side = LOCK_SIDE
             obj.direction = LOCK_DIRECTION
             obj.currency = LOCK_CURRENCY
             obj.created_by = request.user
-
             obj.save()
             form.save_m2m()
 
-            # Save uploaded files (attachments)
-            for f in request.FILES.getlist("attachments"):
-                AccountingAttachment.objects.create(
-                    entry=obj,
-                    file=f,
-                    uploaded_by=request.user,
-                    original_name=(getattr(f, "name", "") or "File")[:255],
-                )
-
+            _save_attachments(obj, request, request.user, "attachments")
             _audit(obj, "CREATE", request.user, after=_entry_snapshot(obj), note="CA add")
+
             messages.success(request, "Canada entry added.")
             return redirect("accounting_entry_list")
 
-        else:
-            print("FORM ERRORS:", form.errors)
-            print("POST keys:", list(request.POST.keys()))
-            print("FILES keys:", list(request.FILES.keys()))
-            messages.error(request, "Please fix the errors below.")
-
+        messages.error(request, "Please fix the errors below.")
     else:
-        form = AccountingEntryForm(initial={
-            "side": LOCK_SIDE,
-            "direction": LOCK_DIRECTION,
-            "currency": LOCK_CURRENCY,
-        })
+        form = AccountingEntryForm(
+            initial={"side": LOCK_SIDE, "direction": LOCK_DIRECTION, "currency": LOCK_CURRENCY}
+        )
 
     return render(
         request,
@@ -399,29 +370,24 @@ def accounting_entry_add_ca(request):
         },
     )
 
+
 # --------------------
 # ADD BD
 # --------------------
 @login_required
 @bd_required
 def accounting_entry_add_bd(request):
-    if AccountingEntryForm is None:
-        return HttpResponse("AccountingEntryForm not found. Check crm/forms.py")
-
     LOCK_SIDE = "BD"
     LOCK_CURRENCY = "BDT"
 
     if request.method == "POST":
         form = AccountingEntryForm(request.POST, request.FILES)
-
         if form.is_valid():
             obj = form.save(commit=False)
 
-            # Force BD rules
             obj.side = LOCK_SIDE
             obj.currency = LOCK_CURRENCY
 
-            # Very important: make sure direction is saved
             if not obj.direction:
                 obj.direction = (request.POST.get("direction") or "").strip()
 
@@ -429,13 +395,12 @@ def accounting_entry_add_bd(request):
             obj.save()
             form.save_m2m()
 
+            _save_attachments(obj, request, request.user, "attachments")
             _audit(obj, "CREATE", request.user, after=_entry_snapshot(obj), note="BD add")
+
             messages.success(request, "Bangladesh entry added.")
             return redirect("accounting_bd_grid")
 
-        print("FORM ERRORS:", form.errors)
-        print("POST keys:", list(request.POST.keys()))
-        print("FILES keys:", list(request.FILES.keys()))
         messages.error(request, "Please fix the errors below.")
     else:
         form = AccountingEntryForm(initial={"side": LOCK_SIDE, "currency": LOCK_CURRENCY})
@@ -443,23 +408,16 @@ def accounting_entry_add_bd(request):
     return render(
         request,
         "crm/accounting_entry_add_bd.html",
-        {
-            "form": form,
-            "lock_side": LOCK_SIDE,
-            "lock_currency": LOCK_CURRENCY,
-            "lock_mode": "BD_ADD",
-        },
+        {"form": form, "lock_side": LOCK_SIDE, "lock_currency": LOCK_CURRENCY, "lock_mode": "BD_ADD"},
     )
+
+
 # --------------------
 # EDIT AND DELETE
 # --------------------
 @login_required
 def accounting_entry_edit(request, pk):
-    if AccountingEntryForm is None:
-        return HttpResponse("AccountingEntryForm not found. Check crm/forms.py")
-
     entry = get_object_or_404(AccountingEntry, pk=pk)
-
     if not can_edit_entry(request.user, entry):
         return HttpResponseForbidden("You do not have permission to edit this entry.")
 
@@ -473,26 +431,20 @@ def accounting_entry_edit(request, pk):
         )
         if form.is_valid():
             obj = form.save(commit=False)
-
             obj.side = entry.side
             obj.direction = entry.direction
-
             obj.save()
             form.save_m2m()
 
+            _save_attachments(obj, request, request.user, "attachments")
+            _audit(entry, "UPDATE", request.user, after=_entry_snapshot(obj), note="Edit")
 
-
-            _audit(entry, "UPDATE", request.user, before=None, after=_entry_snapshot(obj), note="Edit")
             messages.success(request, "Updated.")
             return redirect("accounting_entry_list")
 
         messages.error(request, "Please fix the errors below.")
     else:
-        form = AccountingEntryForm(
-            instance=entry,
-            lock_side=entry.side,
-            lock_direction=entry.direction,
-        )
+        form = AccountingEntryForm(instance=entry, lock_side=entry.side, lock_direction=entry.direction)
 
     return render(request, "crm/accounting_edit.html", {"form": form, "entry": entry})
 
@@ -503,7 +455,6 @@ def accounting_entry_delete(request, pk):
         return HttpResponseForbidden("Delete must be POST.")
 
     entry = get_object_or_404(AccountingEntry, pk=pk)
-
     if not can_delete_entry(request.user, entry):
         return HttpResponseForbidden("You do not have permission to delete this entry.")
 
@@ -590,6 +541,7 @@ def accounting_ca_master(request):
                     currency="BDT",
                     amount_original=bdt_amount,
                     rate_to_cad=(Decimal("1") / cad_to_bdt if cad_to_bdt else Decimal("0")),
+                    rate_to_bdt=Decimal("1"),
                     description=desc_bd,
                     created_by=request.user,
                 )
@@ -602,16 +554,19 @@ def accounting_ca_master(request):
 
         messages.error(request, "Please fix the form errors and try again.")
 
-    return render(
-        request,
-        "crm/accounting_ca_master.html",
-        {"rate_row": rate_row, "send_form": send_form},
-    )
+    return render(request, "crm/accounting_ca_master.html", {"rate_row": rate_row, "send_form": send_form})
+from decimal import Decimal
+import csv
+
+from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
+from django.shortcuts import render
+from django.db.models import Q
+
+from .models import AccountingEntry
+from .views_accounting import ca_required  # if your decorator lives elsewhere, keep your current import
 
 
-# --------------------
-# CANADA GRID
-# --------------------
 @login_required
 @ca_required
 def accounting_ca_grid(request):
@@ -646,8 +601,14 @@ def accounting_ca_grid(request):
     total_in = Decimal("0")
 
     for e in qs:
-        amount = e.amount_cad or Decimal("0")
         direction = (e.direction or "").upper().strip()
+
+        amount_original = e.amount_original or Decimal("0")
+        amount_cad = e.amount_cad or Decimal("0")
+
+        # CA grid should show CAD.
+        # If amount_cad is still 0 (like your DB shows), fall back to amount_original.
+        amount = amount_cad if amount_cad != 0 else amount_original
 
         money_out = Decimal("0")
         money_in = Decimal("0")
@@ -688,8 +649,20 @@ def accounting_ca_grid(request):
         resp["Content-Disposition"] = 'attachment; filename="ca_accounting_grid.csv"'
         w = csv.writer(resp)
         w.writerow(["Date", "Description", "Category", "Money Out CAD", "Money In CAD", "Currency", "Side"])
+
         for r in rows:
-            w.writerow([r["date"], r["description"], r["category"], r["money_out"], r["money_in"], r["currency"], r["side"]])
+            w.writerow(
+                [
+                    r["date"],
+                    r["description"],
+                    r["category"],
+                    r["money_out"],
+                    r["money_in"],
+                    r["currency"],
+                    r["side"],
+                ]
+            )
+
         w.writerow([])
         w.writerow(["Totals", "", "", total_out, total_in, "", ""])
         return resp
@@ -708,30 +681,14 @@ def accounting_ca_grid(request):
             "total_in": total_in,
         },
     )
-
-
 # --------------------
 # BD DAILY
 # --------------------
-from decimal import Decimal
-from django.contrib import messages
-from django.db.models import Sum
-from django.db.models.functions import Coalesce
-from django.shortcuts import redirect, render
-from django.utils import timezone
-
-from .models import AccountingEntry
-from .forms import BDDailyEntryForm
-
-BD_MONTHLY_TARGET_BDT = Decimal("0")  # keep your real value here
-
+BD_MONTHLY_TARGET_BDT = Decimal("0")  # replace later if you want from DB
 
 @login_required
 @bd_required
 def accounting_bd_daily(request):
-    if BDDailyEntryForm is None:
-        return HttpResponse("BDDailyEntryForm not found. Check crm/forms.py")
-
     today = timezone.localdate()
 
     y = _parse_int(request.GET.get("year") or str(today.year)) or today.year
@@ -740,15 +697,14 @@ def accounting_bd_daily(request):
     if request.method == "POST":
         form = BDDailyEntryForm(request.POST, request.FILES, user=request.user)
         if form.is_valid():
-            entry = form.save(commit=False)
-            if not entry.created_by_id:
-                entry.created_by = request.user
-            entry.save()
-            form.save_m2m()
-
+            form.save()
             messages.success(request, "Bangladesh daily entry saved.")
             return redirect(f"/accounting/bd-daily/?year={y}&month={m}")
-        messages.error(request, "Please fix the errors below.")
+
+        # ADD THIS LINE
+        print("BD DAILY FORM ERRORS:", form.errors)
+
+        messages.error(request, "Please fix the errors and try again.")
     else:
         form = BDDailyEntryForm(initial={"date": today}, user=request.user)
 
@@ -769,7 +725,100 @@ def accounting_bd_daily(request):
 
     net_bdt = total_in - total_out
     entries = qs.order_by("-date", "-id")[:300]
+    remaining_month_bdt = BD_MONTHLY_TARGET_BDT - total_out
 
+    return render(
+        request,
+        "crm/accounting_bd_daily.html",
+        {
+            "form": form,
+            "entries": entries,
+            "today": today,
+            "filter_year": str(y),
+            "filter_month": str(m),
+            "monthly_target_bdt": BD_MONTHLY_TARGET_BDT,
+            "this_month_spent_bdt": total_out,
+            "remaining_month_bdt": remaining_month_bdt,
+            "net_bdt": net_bdt,
+        },
+    )
+
+
+# --------------------
+# BD GRID
+# --------------------
+# crm/views_accounting.py
+
+from decimal import Decimal
+from django.contrib import messages
+from django.db.models import Sum
+from django.db.models.functions import Coalesce
+from django.shortcuts import redirect, render
+from django.utils import timezone
+
+from .forms import BDDailyEntryForm
+from .models import AccountingEntry, AccountingAttachment
+
+
+@login_required
+@bd_required
+def accounting_bd_daily(request):
+    today = timezone.localdate()
+
+    def _parse_int(x):
+        try:
+            return int(str(x).strip())
+        except Exception:
+            return None
+
+    y = _parse_int(request.GET.get("year") or str(today.year)) or today.year
+    m = _parse_int(request.GET.get("month") or str(today.month)) or today.month
+
+    if request.method == "POST":
+        form = BDDailyEntryForm(request.POST, request.FILES, user=request.user)
+
+        if form.is_valid():
+            entry = form.save()
+
+            # Save attachments if any
+            files = request.FILES.getlist("attachments")
+            for f in files:
+                AccountingAttachment.objects.create(
+                    entry=entry,
+                    file=f,
+                    uploaded_by=request.user,
+                    original_name=(getattr(f, "name", "") or "")[:255],
+                )
+
+            messages.success(request, "Bangladesh daily entry saved.")
+            return redirect(f"/accounting/bd-daily/?year={y}&month={m}")
+
+        # This will help you see the real reason on screen
+        messages.error(request, f"Form errors: {form.errors.as_text()}")
+
+    else:
+        form = BDDailyEntryForm(initial={"date": today}, user=request.user)
+
+    qs = AccountingEntry.objects.filter(
+        side="BD",
+        currency="BDT",
+        date__year=y,
+        date__month=m,
+    )
+
+    total_in = qs.filter(direction="IN").aggregate(
+        x=Coalesce(Sum("amount_bdt"), Decimal("0"))
+    )["x"]
+
+    total_out = qs.filter(direction="OUT").aggregate(
+        x=Coalesce(Sum("amount_bdt"), Decimal("0"))
+    )["x"]
+
+    net_bdt = total_in - total_out
+
+    entries = qs.order_by("-date", "-id")[:300]
+
+    BD_MONTHLY_TARGET_BDT = Decimal("400000")
     remaining_month_bdt = BD_MONTHLY_TARGET_BDT - total_out
 
     return render(
@@ -789,13 +838,7 @@ def accounting_bd_daily(request):
     )
 # --------------------
 # ENTRY LIST
-from decimal import Decimal
-from django.contrib.auth.decorators import login_required
-from django.db.models import Q, Sum
-from django.db.models.functions import Coalesce
-from django.shortcuts import render
-from django.utils import timezone
-
+# --------------------
 @login_required
 def accounting_entry_list(request):
     today = timezone.localdate()
@@ -815,13 +858,10 @@ def accounting_entry_list(request):
 
     if filter_year.isdigit():
         qs = qs.filter(date__year=int(filter_year))
-
     if filter_month.isdigit():
         qs = qs.filter(date__month=int(filter_month))
-
     if filter_side in ["CA", "BD"]:
         qs = qs.filter(side=filter_side)
-
     if filter_main_type and filter_main_type != "ALL":
         qs = qs.filter(main_type=filter_main_type)
 
@@ -837,62 +877,27 @@ def accounting_entry_list(request):
 
     entries = list(qs[:500])
 
-    # Totals should use amount_original, because your amount_cad and amount_bdt are 0.00
     ca_qs = qs.filter(side="CA")
     bd_qs = qs.filter(side="BD")
 
-    total_ca_in = ca_qs.filter(direction="IN").aggregate(
-        x=Coalesce(Sum("amount_original"), Decimal("0"))
-    )["x"]
-    total_ca_out = ca_qs.filter(direction="OUT").aggregate(
-        x=Coalesce(Sum("amount_original"), Decimal("0"))
-    )["x"]
+    total_ca_in = ca_qs.filter(direction="IN").aggregate(x=Coalesce(Sum("amount_cad"), Decimal("0")))["x"]
+    total_ca_out = ca_qs.filter(direction="OUT").aggregate(x=Coalesce(Sum("amount_cad"), Decimal("0")))["x"]
     total_ca_net_cad = total_ca_in - total_ca_out
 
-    total_bd_in = bd_qs.filter(direction="IN").aggregate(
-        x=Coalesce(Sum("amount_original"), Decimal("0"))
-    )["x"]
-    total_bd_out = bd_qs.filter(direction="OUT").aggregate(
-        x=Coalesce(Sum("amount_original"), Decimal("0"))
-    )["x"]
+    total_bd_in = bd_qs.filter(direction="IN").aggregate(x=Coalesce(Sum("amount_bdt"), Decimal("0")))["x"]
+    total_bd_out = bd_qs.filter(direction="OUT").aggregate(x=Coalesce(Sum("amount_bdt"), Decimal("0")))["x"]
     total_bd_net_bdt = total_bd_in - total_bd_out
 
-    # For the top net cards (overall), keep them separate by currency
-    total_in_cad = ca_qs.filter(direction="IN").aggregate(
-        x=Coalesce(Sum("amount_original"), Decimal("0"))
-    )["x"]
-    total_out_cad = ca_qs.filter(direction="OUT").aggregate(
-        x=Coalesce(Sum("amount_original"), Decimal("0"))
-    )["x"]
-    net_cad = total_in_cad - total_out_cad
+    net_cad = total_ca_net_cad
+    net_bdt = total_bd_net_bdt
 
-    total_in_bdt = bd_qs.filter(direction="IN").aggregate(
-        x=Coalesce(Sum("amount_original"), Decimal("0"))
-    )["x"]
-    total_out_bdt = bd_qs.filter(direction="OUT").aggregate(
-        x=Coalesce(Sum("amount_original"), Decimal("0"))
-    )["x"]
-    net_bdt = total_in_bdt - total_out_bdt
-
-    # Production gross margin (best quick version based on your current data)
-    revenue_cad = ca_qs.filter(direction="IN").aggregate(
-        x=Coalesce(Sum("amount_original"), Decimal("0"))
-    )["x"]
-
-    cogs_cad = ca_qs.filter(main_type="COGS", direction="OUT").aggregate(
-        x=Coalesce(Sum("amount_original"), Decimal("0"))
-    )["x"]
-
+    revenue_cad = ca_qs.filter(direction="IN").aggregate(x=Coalesce(Sum("amount_cad"), Decimal("0")))["x"]
+    cogs_cad = ca_qs.filter(main_type="COGS", direction="OUT").aggregate(x=Coalesce(Sum("amount_cad"), Decimal("0")))["x"]
     gross_profit_cad = revenue_cad - cogs_cad
     gross_margin_pct = (gross_profit_cad / revenue_cad * Decimal("100")) if revenue_cad else Decimal("0")
 
-    total_income_cad = ca_qs.filter(direction="IN").aggregate(
-        x=Coalesce(Sum("amount_original"), Decimal("0"))
-    )["x"]
-
-    total_expense_cad = ca_qs.filter(direction="OUT").aggregate(
-        x=Coalesce(Sum("amount_original"), Decimal("0"))
-    )["x"]
+    total_income_cad = revenue_cad
+    total_expense_cad = ca_qs.filter(direction="OUT").aggregate(x=Coalesce(Sum("amount_cad"), Decimal("0")))["x"]
 
     return render(
         request,
@@ -917,6 +922,8 @@ def accounting_entry_list(request):
             "warnings": [],
         },
     )
+
+
 # --------------------
 # EXPORTS
 # --------------------
@@ -938,8 +945,6 @@ def accounting_list_export_xlsx(request):
     return _write_xlsx(qs, "accounting_entries.xlsx")
 
 
-
-
 # --------------------
 # MONTH CLOSE AND OPEN
 # --------------------
@@ -950,7 +955,7 @@ def accounting_close_month(request):
 
     year = _parse_int(request.POST.get("year") or request.GET.get("year"))
     month = _parse_int(request.POST.get("month") or request.GET.get("month"))
-    side = (request.POST.get("side") or request.GET.get("side") or "CA").strip()
+    side = (request.POST.get("side") or request.GET.get("side") or "CA").strip().upper()
 
     if not year or not month:
         messages.error(request, "Year and month required.")
@@ -976,7 +981,7 @@ def accounting_open_month(request):
 
     year = _parse_int(request.POST.get("year") or request.GET.get("year"))
     month = _parse_int(request.POST.get("month") or request.GET.get("month"))
-    side = (request.POST.get("side") or request.GET.get("side") or "CA").strip()
+    side = (request.POST.get("side") or request.GET.get("side") or "CA").strip().upper()
 
     if not year or not month:
         messages.error(request, "Year and month required.")
@@ -999,8 +1004,8 @@ def accounting_open_month(request):
 @login_required
 def accounting_files(request):
     qs = AccountingAttachment.objects.select_related("entry", "uploaded_by").order_by("-uploaded_at", "-id")
-    side = (request.GET.get("side") or "").strip()
-    if side:
+    side = (request.GET.get("side") or "").strip().upper()
+    if side in ["CA", "BD"]:
         qs = qs.filter(entry__side=side)
 
     entry_id = _parse_int(request.GET.get("entry_id"))
@@ -1026,8 +1031,348 @@ def accounting_audit_trail(request):
 
 
 # --------------------
-# AI PAGES
+# DOCS
 # --------------------
+@login_required
+def accounting_doc_upload(request):
+    if request.method == "POST":
+        form = AccountingDocumentForm(request.POST, request.FILES)
+        if form.is_valid():
+            obj = form.save(commit=False)
+            obj.uploaded_by = request.user
+            obj.save()
+            messages.success(request, "File uploaded.")
+            return redirect("accounting_doc_list")
+        messages.error(request, "Please fix the errors below.")
+    else:
+        form = AccountingDocumentForm()
+
+    return render(request, "crm/accounting_doc_upload.html", {"form": form})
+
+
+@login_required
+def accounting_doc_list(request):
+    q = (request.GET.get("q") or "").strip()
+    side = (request.GET.get("side") or "").strip().upper()
+
+    qs = AccountingDocument.objects.all()
+
+    if side in ["CA", "BD"]:
+        qs = qs.filter(side=side)
+
+    if q:
+        qs = qs.filter(
+            Q(title__icontains=q)
+            | Q(vendor__icontains=q)
+            | Q(note__icontains=q)
+        )
+
+    qs = qs.select_related("uploaded_by", "linked_entry")[:500]
+
+    return render(request, "crm/accounting_doc_list.html", {"rows": qs, "q": q, "side": side})
+
+
+@login_required
+def accounting_entry_attach(request, pk):
+    entry = get_object_or_404(AccountingEntry, pk=pk)
+
+    if request.method == "POST":
+        form = AccountingEntryAttachForm(request.POST, request.FILES)
+        if form.is_valid():
+            files = form.cleaned_data["files"]
+            note = (form.cleaned_data.get("note") or "").strip()
+
+            for f in files:
+                AccountingAttachment.objects.create(
+                    entry=entry,
+                    file=f,
+                    original_name=(getattr(f, "name", "") or "File")[:255],
+                    uploaded_by=request.user,
+                    note=note,
+                )
+
+            messages.success(request, "Files uploaded.")
+            return redirect("accounting_entry_list")
+
+        messages.error(request, "Please fix the errors below.")
+    else:
+        form = AccountingEntryAttachForm()
+
+    return render(request, "crm/accounting_entry_attach.html", {"entry": entry, "form": form})
+
+@login_required
+@bd_required
+def accounting_bd_dashboard(request):
+    year_raw = (request.GET.get("year") or "").strip()
+    month_raw = (request.GET.get("month") or "").strip()
+
+    qs = AccountingEntry.objects.filter(side="BD")
+
+    if year_raw.isdigit():
+        qs = qs.filter(date__year=int(year_raw))
+
+    if month_raw.isdigit():
+        m = int(month_raw)
+        if 1 <= m <= 12:
+            qs = qs.filter(date__month=m)
+
+    total_in_bdt = qs.filter(direction="IN").aggregate(
+        x=Coalesce(Sum("amount_original"), Decimal("0"))
+    )["x"]
+
+    total_out_bdt = qs.filter(direction="OUT").aggregate(
+        x=Coalesce(Sum("amount_original"), Decimal("0"))
+    )["x"]
+
+    net_bdt = total_in_bdt - total_out_bdt
+
+    return render(
+        request,
+        "crm/accounting_bd_dashboard.html",
+        {
+            "filter_year": year_raw,
+            "filter_month": month_raw,
+            "entries": qs.order_by("-date", "-id")[:200],
+            "total_in_bdt": total_in_bdt,
+            "total_out_bdt": total_out_bdt,
+            "net_bdt": net_bdt,
+        },
+    )
+
+from decimal import Decimal
+from django.contrib.auth.decorators import login_required
+from django.db.models import Sum, Q
+from django.db.models.functions import Coalesce
+from django.shortcuts import redirect, render
+from django.utils import timezone
+
+from .decorators import bd_required
+from .models import AccountingEntry
+
+
+@login_required
+@bd_required
+def accounting_bd_grid(request):
+    today = timezone.localdate()
+
+    year_raw = (request.GET.get("year") or str(today.year)).strip()
+    month_raw = (request.GET.get("month") or "").strip()
+    q = (request.GET.get("q") or "").strip()
+
+    qs = (
+        AccountingEntry.objects.filter(side="BD")
+        .order_by("-date", "-id")
+    )
+
+    if year_raw.isdigit():
+        qs = qs.filter(date__year=int(year_raw))
+
+    month = ""
+    if month_raw.isdigit():
+        m = int(month_raw)
+        if 1 <= m <= 12:
+            month = str(m)
+            qs = qs.filter(date__month=m)
+
+    if q:
+        qs = qs.filter(
+            Q(description__icontains=q)
+            | Q(sub_type__icontains=q)
+            | Q(main_type__icontains=q)
+            | Q(transfer_ref__icontains=q)
+        )
+
+    total_in_bdt = qs.filter(direction="IN").aggregate(
+        x=Coalesce(Sum("amount_original"), Decimal("0"))
+    )["x"]
+
+    total_out_bdt = qs.filter(direction="OUT").aggregate(
+        x=Coalesce(Sum("amount_original"), Decimal("0"))
+    )["x"]
+
+    net_bdt = total_in_bdt - total_out_bdt
+
+    return render(
+        request,
+        "crm/accounting_bd_grid.html",
+        {
+            "entries": list(qs[:500]),
+            "filter_year": year_raw,
+            "filter_month": month,
+            "q": q,
+            "total_in_bdt": total_in_bdt,
+            "total_out_bdt": total_out_bdt,
+            "net_bdt": net_bdt,
+            "monthly_target_bdt": Decimal("0"),
+        },
+    )
+
+
+@login_required
+@bd_required
+def accounting_bd_dashboard(request):
+    year_raw = (request.GET.get("year") or "").strip()
+    month_raw = (request.GET.get("month") or "").strip()
+
+    qs = AccountingEntry.objects.filter(side="BD")
+
+    if year_raw.isdigit():
+        qs = qs.filter(date__year=int(year_raw))
+
+    if month_raw.isdigit():
+        m = int(month_raw)
+        if 1 <= m <= 12:
+            qs = qs.filter(date__month=m)
+
+    total_in_bdt = qs.filter(direction="IN").aggregate(
+        x=Coalesce(Sum("amount_original"), Decimal("0"))
+    )["x"]
+
+    total_out_bdt = qs.filter(direction="OUT").aggregate(
+        x=Coalesce(Sum("amount_original"), Decimal("0"))
+    )["x"]
+
+    net_bdt = total_in_bdt - total_out_bdt
+
+    return render(
+        request,
+        "crm/accounting_bd_dashboard.html",
+        {
+            "filter_year": year_raw,
+            "filter_month": month_raw,
+            "entries": qs.order_by("-date", "-id")[:200],
+            "total_in_bdt": total_in_bdt,
+            "total_out_bdt": total_out_bdt,
+            "net_bdt": net_bdt,
+        },
+    )
+
+
+from decimal import Decimal
+from django.contrib.auth.decorators import login_required
+from django.db.models import Sum
+from django.db.models.functions import Coalesce
+from django.shortcuts import render
+from django.utils import timezone
+
+from .models import AccountingEntry, ProductionOrder
+
+
+def _parse_int(v):
+    try:
+        return int(str(v).strip())
+    except Exception:
+        return None
+
+
+def production_profit_rows(year=None, month=None):
+    base = AccountingEntry.objects.all()
+
+    if year:
+        base = base.filter(date__year=year)
+    if month:
+        base = base.filter(date__month=month)
+
+    order_ids = list(
+        base.exclude(production_order_id__isnull=True)
+        .values_list("production_order_id", flat=True)
+        .distinct()
+    )
+    order_ids = sorted({oid for oid in order_ids if oid})
+
+    if not order_ids:
+        return []
+
+    rev_by_order = dict(
+        AccountingEntry.objects.filter(
+            production_order_id__in=order_ids,
+            side="CA",
+            direction="IN",
+        )
+        .values("production_order_id")
+        .annotate(x=Coalesce(Sum("amount_cad"), Decimal("0")))
+        .values_list("production_order_id", "x")
+    )
+
+    cost_by_order = dict(
+        AccountingEntry.objects.filter(
+            production_order_id__in=order_ids,
+            side="BD",
+            direction="OUT",
+            main_type__in=["COGS", "EXPENSE"],
+        )
+        .values("production_order_id")
+        .annotate(x=Coalesce(Sum("amount_cad"), Decimal("0")))
+        .values_list("production_order_id", "x")
+    )
+
+    orders_map = ProductionOrder.objects.in_bulk(order_ids)
+
+    rows = []
+    for oid in order_ids:
+        revenue = rev_by_order.get(oid, Decimal("0")) or Decimal("0")
+        cost_cad = cost_by_order.get(oid, Decimal("0")) or Decimal("0")
+        profit = revenue - cost_cad
+        margin = (profit / revenue * Decimal("100")) if revenue else Decimal("0")
+
+        po = orders_map.get(oid)
+        order_code = str(oid)
+        product_type = ""
+        pcs = 0
+
+        if po:
+            order_code = po.order_code or str(po.id)
+            pcs = getattr(po, "qty_total", 0) or 0
+            product_type = getattr(po, "style_name", "") or getattr(po, "title", "") or ""
+
+        rows.append(
+            {
+                "production_order_id": oid,
+                "order_code": order_code,
+                "product_type": product_type,
+                "pcs": pcs,
+                "revenue_cad": revenue,
+                "cost_cad": cost_cad,
+                "profit_cad": profit,
+                "margin_pct": margin,
+            }
+        )
+
+    rows.sort(key=lambda r: r.get("profit_cad", Decimal("0")), reverse=True)
+    return rows
+
+
+@login_required
+def production_profit_report(request):
+    today = timezone.localdate()
+    y = _parse_int(request.GET.get("year") or str(today.year)) or today.year
+    m = _parse_int(request.GET.get("month") or str(today.month)) or today.month
+
+    rows = production_profit_rows(year=y, month=m)
+
+    return render(
+        request,
+        "crm/production_profit_report.html",
+        {
+            "rows": rows,
+            "filter_year": str(y),
+            "filter_month": str(m),
+        },
+    )
+
+from collections import defaultdict
+from decimal import Decimal
+
+from django.contrib.auth.decorators import login_required
+from django.db.models import Sum
+from django.db.models.functions import Coalesce
+from django.http import JsonResponse
+from django.shortcuts import render
+from django.utils import timezone
+
+from .models import AccountingEntry
+
+
 AI_RULES = [
     ("COGS", "Fabric", ["fabric", "knit", "dye", "yarn"]),
     ("COGS", "Trims", ["label", "tag", "button", "zip", "thread"]),
@@ -1043,6 +1388,13 @@ AI_RULES = [
 ]
 
 
+def _parse_int(v):
+    try:
+        return int(str(v).strip())
+    except Exception:
+        return None
+
+
 def ai_suggest_main_sub(description: str):
     text = (description or "").lower().strip()
     if not text:
@@ -1050,11 +1402,13 @@ def ai_suggest_main_sub(description: str):
 
     best = None
     best_hits = 0
+
     for main_type, sub_type, keys in AI_RULES:
         hits = 0
         for k in keys:
             if k in text:
                 hits += 1
+
         if hits > best_hits:
             best_hits = hits
             best = {"main_type": main_type, "sub_type": sub_type, "hits": hits}
@@ -1068,6 +1422,7 @@ def ai_suggest_main_sub(description: str):
         conf = 75
     else:
         conf = 60
+
     best["confidence"] = conf
     return best
 
@@ -1075,14 +1430,17 @@ def ai_suggest_main_sub(description: str):
 @login_required
 def accounting_ai_audit(request):
     today = timezone.localdate()
+
     y = _parse_int(request.GET.get("year") or str(today.year)) or today.year
     m = _parse_int(request.GET.get("month") or "") or None
     side = (request.GET.get("side") or "ALL").strip()
 
     qs = AccountingEntry.objects.all().order_by("-date", "-id")
     qs = qs.filter(date__year=y)
+
     if m:
         qs = qs.filter(date__month=m)
+
     if side in ["CA", "BD"]:
         qs = qs.filter(side=side)
 
@@ -1102,7 +1460,9 @@ def accounting_ai_audit(request):
 
         sug = ai_suggest_main_sub(e.description or "")
         if sug and ((e.main_type or "") != sug["main_type"]):
-            issues.append({"code": "ai_suggestion", "title": "Possible better category", "entry": e, "sug": sug})
+            issues.append(
+                {"code": "ai_suggestion", "title": "Possible better category", "entry": e, "sug": sug}
+            )
             by_type["ai_suggestion"].append(e)
 
     top_types = []
@@ -1129,349 +1489,99 @@ def accounting_ai_audit(request):
 def accounting_ai_suggest(request):
     desc = (request.GET.get("description") or "").strip()
     suggestion = ai_suggest_main_sub(desc)
+
     if not suggestion:
         return JsonResponse({"main_type": "OTHER", "sub_type": "", "confidence": 0})
-    return JsonResponse({
-        "main_type": suggestion["main_type"],
-        "sub_type": suggestion["sub_type"],
-        "confidence": suggestion["confidence"],
-    })
 
-
-# --------------------
-# BD DASHBOARD AND BD GRID
-# --------------------
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import render
-from django.db.models import Sum
-from decimal import Decimal
-
-from .models import AccountingEntry, BDMonthlyTarget
-from .decorators import bd_required
-
-
-@login_required
-@bd_required
-def accounting_bd_dashboard(request):
-    year_raw = (request.GET.get("year") or "").strip()
-    month_raw = (request.GET.get("month") or "").strip()
-
-    qs = AccountingEntry.objects.filter(side="BD")
-
-    if year_raw.isdigit():
-        qs = qs.filter(date__year=int(year_raw))
-
-    if month_raw.isdigit():
-        m = int(month_raw)
-        if 1 <= m <= 12:
-            qs = qs.filter(date__month=m)
-
-    total_in_bdt = qs.filter(direction="IN").aggregate(s=Sum("amount_original"))["s"] or Decimal("0")
-    total_out_bdt = qs.filter(direction="OUT").aggregate(s=Sum("amount_original"))["s"] or Decimal("0")
-    net_bdt = total_in_bdt - total_out_bdt
-
-    monthly_target_bdt = Decimal("0")
-    target_remaining_bdt = None
-    over_target_bdt = None
-
-    if year_raw.isdigit() and month_raw.isdigit():
-        y = int(year_raw)
-        m = int(month_raw)
-        if 1 <= m <= 12:
-            obj = BDMonthlyTarget.objects.filter(year=y, month=m).first()
-            if obj and obj.target_bdt is not None:
-                monthly_target_bdt = obj.target_bdt
-
-            if monthly_target_bdt > 0:
-                diff = net_bdt - monthly_target_bdt
-                if diff >= 0:
-                    over_target_bdt = diff
-                    target_remaining_bdt = Decimal("0")
-                else:
-                    over_target_bdt = Decimal("0")
-                    target_remaining_bdt = abs(diff)
-
-    context = {
-        "filter_year": year_raw,
-        "filter_month": month_raw,
-        "entries": qs.order_by("-date", "-id")[:200],
-        "total_in_bdt": total_in_bdt,
-        "total_out_bdt": total_out_bdt,
-        "net_bdt": net_bdt,
-        "monthly_target_bdt": monthly_target_bdt,
-        "target_remaining_bdt": target_remaining_bdt,
-        "over_target_bdt": over_target_bdt,
-    }
-
-    return render(request, "crm/accounting_bd_dashboard.html", context)
-
-@login_required
-# @bd_required
-def accounting_bd_grid_export_csv(request):
-    year = (request.GET.get("year") or "").strip()
-    month = (request.GET.get("month") or "").strip()
-
-    qs = AccountingEntry.objects.filter(side="BD").order_by("-date", "-id")
-
-    if year.isdigit():
-        qs = qs.filter(date__year=int(year))
-    if month.isdigit():
-        m = int(month)
-        if 1 <= m <= 12:
-            qs = qs.filter(date__month=m)
-
-    response = HttpResponse(content_type="text/csv")
-    response["Content-Disposition"] = 'attachment; filename="bd_grid.csv"'
-
-    writer = csv.writer(response)
-    writer.writerow(
-        [
-            "Date",
-            "Flow",
-            "Main type",
-            "Sub type",
-            "Description",
-            "Currency",
-            "Amount BDT",
-            "Order code",
-            "Shipment",
-        ]
+    return JsonResponse(
+        {
+            "main_type": suggestion["main_type"],
+            "sub_type": suggestion["sub_type"],
+            "confidence": suggestion["confidence"],
+        }
     )
 
-    for e in qs.select_related("production_order", "shipment"):
-        writer.writerow(
-            [
-                e.date.strftime("%Y-%m-%d") if e.date else "",
-                e.direction or "",
-                e.main_type or "",
-                e.sub_type or "",
-                e.description or "",
-                e.currency or "",
-                str(e.amount_original or 0),  # BDT for BD side
-                e.production_order.order_code if e.production_order else "",
-                str(e.shipment) if e.shipment else "",
-            ]
-        )
+import csv
+from decimal import Decimal
 
-    return response
+from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
+
+from .models import AccountingEntry
 
 
 @login_required
-# @bd_required
-def accounting_bd_grid_export_xlsx(request):
-    year = (request.GET.get("year") or "").strip()
-    month = (request.GET.get("month") or "").strip()
-
+def accounting_bd_grid_export_csv(request):
     qs = AccountingEntry.objects.filter(side="BD").order_by("-date", "-id")
 
-    if year.isdigit():
-        qs = qs.filter(date__year=int(year))
-    if month.isdigit():
-        m = int(month)
-        if 1 <= m <= 12:
-            qs = qs.filter(date__month=m)
+    resp = HttpResponse(content_type="text/csv")
+    resp["Content-Disposition"] = 'attachment; filename="bd_accounting_grid.csv"'
+    w = csv.writer(resp)
+
+    w.writerow(["Date", "Description", "Main Type", "Sub Type", "Direction", "Amount Original", "Currency"])
+
+    for e in qs:
+        w.writerow([
+            e.date,
+            (e.description or "").strip(),
+            (e.main_type or "").strip(),
+            (e.sub_type or "").strip(),
+            (e.direction or "").strip(),
+            e.amount_original or Decimal("0"),
+            (e.currency or "").strip(),
+        ])
+
+    return resp
+
+
+@login_required
+def accounting_bd_grid_export_xlsx(request):
+    try:
+        from openpyxl import Workbook
+    except Exception:
+        return HttpResponse("openpyxl is not installed", status=500)
+
+    qs = AccountingEntry.objects.filter(side="BD").order_by("-date", "-id")
 
     wb = Workbook()
     ws = wb.active
     ws.title = "BD Grid"
 
-    ws.append(
-        [
-            "Date",
-            "Flow",
-            "Main type",
-            "Sub type",
-            "Description",
-            "Currency",
-            "Amount BDT",
-            "Order code",
-            "Shipment",
-        ]
-    )
+    ws.append(["Date", "Description", "Main Type", "Sub Type", "Direction", "Amount Original", "Currency"])
 
-    for e in qs.select_related("production_order", "shipment"):
-        ws.append(
-            [
-                e.date.strftime("%Y-%m-%d") if e.date else "",
-                e.direction or "",
-                e.main_type or "",
-                e.sub_type or "",
-                e.description or "",
-                e.currency or "",
-                float(e.amount_original or 0),  # BDT for BD side
-                e.production_order.order_code if e.production_order else "",
-                str(e.shipment) if e.shipment else "",
-            ]
-        )
+    for e in qs:
+        ws.append([
+            e.date,
+            (e.description or "").strip(),
+            (e.main_type or "").strip(),
+            (e.sub_type or "").strip(),
+            (e.direction or "").strip(),
+            float(e.amount_original or Decimal("0")),
+            (e.currency or "").strip(),
+        ])
 
-    response = HttpResponse(
+    resp = HttpResponse(
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-    response["Content-Disposition"] = 'attachment; filename="bd_grid.xlsx"'
-    wb.save(response)
-    return response
-
-
-# --------------------
-# PRODUCTION PROFIT REPORT
-# --------------------
-def production_profit_rows(year=None, month=None):
-    base = AccountingEntry.objects.all()
-    if year:
-        base = base.filter(date__year=year)
-    if month:
-        base = base.filter(date__month=month)
-
-    order_ids = list(
-        base.exclude(production_order_id__isnull=True)
-        .values_list("production_order_id", flat=True)
-        .distinct()
-    )
-    order_ids = sorted({oid for oid in order_ids if oid})
-    if not order_ids:
-        return []
-
-    rev_by_order = dict(
-        AccountingEntry.objects.filter(production_order_id__in=order_ids, side="CA", direction="IN")
-        .values("production_order_id")
-        .annotate(x=Coalesce(Sum("amount_cad"), Decimal("0")))
-        .values_list("production_order_id", "x")
-    )
-
-    cost_by_order = dict(
-        AccountingEntry.objects.filter(
-            production_order_id__in=order_ids, side="BD", direction="OUT", main_type__in=["COGS", "EXPENSE"]
-        )
-        .values("production_order_id")
-        .annotate(x=Coalesce(Sum("amount_cad"), Decimal("0")))
-        .values_list("production_order_id", "x")
-    )
-
-    orders_map = ProductionOrder.objects.in_bulk(order_ids)
-    rows = []
-
-    for oid in order_ids:
-        revenue = rev_by_order.get(oid, Decimal("0")) or Decimal("0")
-        cost_cad = cost_by_order.get(oid, Decimal("0")) or Decimal("0")
-        profit = revenue - cost_cad
-        margin = (profit / revenue) * Decimal("100") if revenue else Decimal("0")
-
-        po = orders_map.get(oid)
-        order_code = str(oid)
-        product_type = ""
-        pcs = 0
-        if po:
-            order_code = po.order_code or str(po.id)
-            pcs = po.qty_total or 0
-            product_type = po.style_name or po.title or ""
-
-        rows.append(
-            {
-                "production_order_id": oid,
-                "order_code": order_code,
-                "product_type": product_type,
-                "pcs": pcs,
-                "revenue_cad": revenue,
-                "cost_cad": cost_cad,
-                "profit_cad": profit,
-                "margin_pct": margin,
-            }
-        )
-
-    rows.sort(key=lambda r: r.get("profit_cad", Decimal("0")), reverse=True)
-    return rows
-
+    resp["Content-Disposition"] = 'attachment; filename="bd_accounting_grid.xlsx"'
+    wb.save(resp)
+    return resp
 
 @login_required
-def production_profit_report(request):
-    today = timezone.localdate()
-    y = _parse_int(request.GET.get("year") or str(today.year)) or today.year
-    m = _parse_int(request.GET.get("month") or str(today.month)) or today.month
-
-    rows = production_profit_rows(year=y, month=m)
-    return render(
-        request,
-        "crm/production_profit_report.html",
-        {
-            "rows": rows,
-            "filter_year": str(y),
-            "filter_month": str(m),
-        },
-    )
-
-# --------------------
-# BD STAFF
-from decimal import Decimal
-
-from django.contrib import messages
-from django.contrib.auth.decorators import login_required
-from django.db import transaction
-from django.shortcuts import get_object_or_404, redirect, render
-from django.utils import timezone
-
-from .models import BDStaff, BDStaffMonth
-from .forms import BDStaffForm, BDStaffMonthForm
-
-# keep bd_required if you have it
-try:
-    from .decorators import bd_required
-except Exception:
-    def bd_required(view_func):
-        return view_func
-
-
-# -------------------------
-# Helpers
-# -------------------------
-def _dec(v):
-    try:
-        if v is None or v == "":
-            return Decimal("0.00")
-        return Decimal(str(v))
-    except Exception:
-        return Decimal("0.00")
-
-
-def _recalc_bd_staff_month(obj):
-    """
-    Safe recalc for overtime_total_bdt and final_pay_bdt.
-    Works even if the model does not have recalc_totals().
-    """
-    base = _dec(getattr(obj, "base_salary_bdt", 0))
-    ot_hours = _dec(getattr(obj, "overtime_hours", 0))
-    ot_rate = _dec(getattr(obj, "overtime_rate_bdt", 0))
-    bonus = _dec(getattr(obj, "bonus_bdt", 0))
-    deduction = _dec(getattr(obj, "deduction_bdt", 0))
-
-    ot_total = (ot_hours * ot_rate).quantize(Decimal("0.01"))
-    final_pay = (base + ot_total + bonus - deduction).quantize(Decimal("0.01"))
-
-    if hasattr(obj, "overtime_total_bdt"):
-        obj.overtime_total_bdt = ot_total
-    if hasattr(obj, "final_pay_bdt"):
-        obj.final_pay_bdt = final_pay
-
-
-# -------------------------
-# BD STAFF
-# -------------------------
-@login_required
-@bd_required
 def bd_staff_list(request):
-    staff = BDStaff.objects.all().order_by("name")
-    return render(request, "crm/bd_staff_list.html", {"staff_list": staff})
+    qs = BDStaff.objects.all().order_by("name")
+    return render(request, "crm/bd_staff_list.html", {"rows": qs})
 
 
 @login_required
-@bd_required
 def bd_staff_add(request):
     if request.method == "POST":
         form = BDStaffForm(request.POST)
         if form.is_valid():
             form.save()
-            messages.success(request, "Saved.")
+            messages.success(request, "Staff added.")
             return redirect("bd_staff_list")
-        messages.error(request, "Please fix the errors.")
+        messages.error(request, "Please fix the errors below.")
     else:
         form = BDStaffForm()
 
@@ -1479,355 +1589,69 @@ def bd_staff_add(request):
 
 
 @login_required
-@bd_required
 def bd_staff_edit(request, pk):
-    staff = get_object_or_404(BDStaff, pk=pk)
+    obj = get_object_or_404(BDStaff, pk=pk)
 
     if request.method == "POST":
-        form = BDStaffForm(request.POST, instance=staff)
+        form = BDStaffForm(request.POST, instance=obj)
         if form.is_valid():
             form.save()
-            messages.success(request, "Updated.")
+            messages.success(request, "Staff updated.")
             return redirect("bd_staff_list")
-        messages.error(request, "Please fix the errors.")
+        messages.error(request, "Please fix the errors below.")
     else:
-        form = BDStaffForm(instance=staff)
+        form = BDStaffForm(instance=obj)
 
-    return render(
-        request,
-        "crm/bd_staff_form.html",
-        {"form": form, "mode": "edit", "row": staff},
-    )
+    return render(request, "crm/bd_staff_form.html", {"form": form, "mode": "edit", "obj": obj})
 
 
-# -------------------------
-# BD STAFF MONTHS (Payroll input)
-# -------------------------
 @login_required
-@bd_required
 def bd_staff_month_list(request):
-    today = timezone.localdate()
-
-    year_raw = (request.GET.get("year") or str(today.year)).strip()
-    month_raw = (request.GET.get("month") or "all").strip()
-
-    # handle empty year like ?year=&month=1
-    try:
-        year_i = int(year_raw) if year_raw else today.year
-    except Exception:
-        year_i = today.year
-
-    qs = BDStaffMonth.objects.select_related("staff").filter(year=year_i)
-
-    month_i = None
-    if month_raw and month_raw != "all":
-        try:
-            month_i = int(month_raw)
-            if 1 <= month_i <= 12:
-                qs = qs.filter(month=month_i)
-            else:
-                month_i = None
-        except Exception:
-            month_i = None
-
-    rows = list(qs.order_by("staff__name"))
-
-    total_payroll = Decimal("0.00")
-    total_ot = Decimal("0.00")
-    total_bonus = Decimal("0.00")
-    total_deduction = Decimal("0.00")
-    paid_count = 0
-    unpaid_count = 0
-
-    for r in rows:
-        total_payroll += _dec(getattr(r, "final_pay_bdt", 0))
-        total_ot += _dec(getattr(r, "overtime_total_bdt", 0))
-        total_bonus += _dec(getattr(r, "bonus_bdt", 0))
-        total_deduction += _dec(getattr(r, "deduction_bdt", 0))
-        if getattr(r, "is_paid", False):
-            paid_count += 1
-        else:
-            unpaid_count += 1
-
-    return render(
-        request,
-        "crm/bd_staff_month_list.html",
-        {
-            "rows": rows,
-            "year": year_i,
-            "month": month_raw,
-            "month_i": month_i,
-            "month_choices": list(range(1, 13)),
-            "total_payroll": total_payroll,
-            "total_ot": total_ot,
-            "total_bonus": total_bonus,
-            "total_deduction": total_deduction,
-            "paid_count": paid_count,
-            "unpaid_count": unpaid_count,
-        },
-    )
+    qs = BDStaffMonth.objects.select_related("staff").order_by("-year", "-month", "staff__name")
+    return render(request, "crm/bd_staff_month_list.html", {"rows": qs})
 
 
 @login_required
-@bd_required
-@transaction.atomic
 def bd_staff_month_generate(request):
-    if request.method != "POST":
+    if request.method == "POST":
+        year = int(request.POST.get("year") or 0)
+        month = int(request.POST.get("month") or 0)
+
+        if year < 2000 or month < 1 or month > 12:
+            messages.error(request, "Invalid year or month.")
+            return redirect("bd_staff_month_list")
+
+        staff_qs = BDStaff.objects.filter(is_active=True)
+
+        created_count = 0
+        for s in staff_qs:
+            obj, created = BDStaffMonth.objects.get_or_create(
+                staff=s,
+                year=year,
+                month=month,
+                defaults={"base_salary_bdt": s.base_salary_bdt},
+            )
+            if created:
+                created_count += 1
+
+        messages.success(request, f"Generated {created_count} rows.")
         return redirect("bd_staff_month_list")
 
-    today = timezone.localdate()
-    year_raw = (request.POST.get("year") or str(today.year)).strip()
-    month_raw = (request.POST.get("month") or str(today.month)).strip()
-
-    try:
-        year_i = int(year_raw) if year_raw else today.year
-        month_i = int(month_raw)
-    except Exception:
-        messages.error(request, "Invalid year or month.")
-        return redirect("bd_staff_month_list")
-
-    if month_i < 1 or month_i > 12:
-        messages.error(request, "Month must be 1 to 12.")
-        return redirect("bd_staff_month_list")
-
-    staff_list = BDStaff.objects.filter(is_active=True).order_by("name")
-
-    created = 0
-    for st in staff_list:
-        _, was_created = BDStaffMonth.objects.get_or_create(
-            staff=st,
-            year=year_i,
-            month=month_i,
-            defaults={
-                "base_salary_bdt": st.base_salary_bdt or Decimal("0.00"),
-                "overtime_rate_bdt": Decimal("0.00"),
-                "overtime_hours": Decimal("0.00"),
-                "bonus_bdt": Decimal("0.00"),
-                "deduction_bdt": Decimal("0.00"),
-                "is_paid": False,
-                "paid_date": None,
-            },
-        )
-        if was_created:
-            created += 1
-
-    messages.success(request, f"Generated. New rows {created}.")
-    return redirect(f"/bd-staff/months/?year={year_i}&month={month_i}")
+    return render(request, "crm/bd_staff_month_generate.html")
 
 
 @login_required
-@bd_required
 def bd_staff_month_edit(request, pk):
-    row = get_object_or_404(BDStaffMonth.objects.select_related("staff"), pk=pk)
+    obj = get_object_or_404(BDStaffMonth, pk=pk)
 
     if request.method == "POST":
-        form = BDStaffMonthForm(request.POST, instance=row)
+        form = BDStaffMonthForm(request.POST, instance=obj)
         if form.is_valid():
-            obj = form.save(commit=False)
-
-            # always keep base salary
-            if _dec(getattr(obj, "base_salary_bdt", 0)) == 0 and getattr(obj, "staff", None):
-                staff_base = _dec(getattr(obj.staff, "base_salary_bdt", 0))
-                if staff_base != 0:
-                    obj.base_salary_bdt = staff_base
-
-            # auto set paid_date if paid but empty
-            if getattr(obj, "is_paid", False) and not getattr(obj, "paid_date", None):
-                obj.paid_date = timezone.localdate()
-            if not getattr(obj, "is_paid", False):
-                obj.paid_date = None
-
-            # recalc totals
-            if hasattr(obj, "recalc_totals"):
-                obj.recalc_totals()
-            else:
-                _recalc_bd_staff_month(obj)
-
-            obj.save()
-            messages.success(request, "Saved.")
-            return redirect(f"/bd-staff/months/?year={obj.year}&month={obj.month}")
-        messages.error(request, "Please fix the errors.")
-    else:
-        form = BDStaffMonthForm(instance=row)
-
-    # IMPORTANT: match your actual file name
-    return render(request, "crm/bd_staff_month_edit.html", {"form": form, "row": row})
-
-
-from django.contrib import messages
-from django.contrib.auth.decorators import login_required
-from django.db.models import Q
-from django.shortcuts import get_object_or_404, redirect, render
-
-from .models import AccountingDocument, AccountingEntry, AccountingAttachment
-from .forms import AccountingDocumentForm, AccountingEntryAttachForm
-
-
-@login_required
-def accounting_doc_upload(request):
-    if request.method == "POST":
-        form = AccountingDocumentForm(request.POST, request.FILES)
-        if form.is_valid():
-            obj = form.save(commit=False)
-            obj.uploaded_by = request.user
-            obj.save()
-            messages.success(request, "File uploaded.")
-            return redirect("accounting_doc_list")
+            form.save()
+            messages.success(request, "Month updated.")
+            return redirect("bd_staff_month_list")
         messages.error(request, "Please fix the errors below.")
     else:
-        form = AccountingDocumentForm()
+        form = BDStaffMonthForm(instance=obj)
 
-    return render(request, "crm/accounting_doc_upload.html", {"form": form})
-
-
-@login_required
-def accounting_doc_list(request):
-    q = (request.GET.get("q") or "").strip()
-    side = (request.GET.get("side") or "").strip()
-
-    qs = AccountingDocument.objects.all()
-
-    if side in ["CA", "BD"]:
-        qs = qs.filter(side=side)
-
-    if q:
-        qs = qs.filter(
-            Q(title__icontains=q)
-            | Q(vendor__icontains=q)
-            | Q(note__icontains=q)
-            | Q(original_name__icontains=q)
-        )
-
-    qs = qs.select_related("uploaded_by", "linked_entry")[:500]
-
-    return render(request, "crm/accounting_doc_list.html", {"rows": qs, "q": q, "side": side})
-
-
-@login_required
-def accounting_entry_attach(request, pk):
-    entry = get_object_or_404(AccountingEntry, pk=pk)
-
-    if request.method == "POST":
-        print("POST keys:", list(request.POST.keys()))
-        print("FILES keys:", list(request.FILES.keys()))
-        print("FILES:", request.FILES)
-        form = AccountingEntryAttachForm(request.POST, request.FILES)
-        if form.is_valid():
-            files = form.cleaned_data["files"]
-            note = (form.cleaned_data.get("note") or "").strip()
-
-            for f in files:
-                AccountingAttachment.objects.create(
-                    entry=entry,
-                    file=f,
-                    original_name=(getattr(f, "name", "") or "File")[:255],
-                    uploaded_by=request.user,
-                    note=note,
-                )
-
-            messages.success(request, "Files uploaded.")
-            return redirect("accounting_entry_list")
-        messages.error(request, "Please fix the errors below.")
-    else:
-        form = AccountingEntryAttachForm()
-
-    return render(request, "crm/accounting_entry_attach.html", {"entry": entry, "form": form})
-from django.shortcuts import redirect
-from django.contrib.auth.decorators import login_required
-
-def _user_is_bd_only(request):
-    u = request.user
-    if not u.is_authenticated:
-        return False
-
-    if u.is_superuser:
-        return False
-
-    # If user is in BD group, treat as BD user
-    if u.groups.filter(name__in=["BD", "Bangladesh"]).exists():
-        return True
-
-    return False
-
-
-def _guess_add_side(request):
-    side = (request.GET.get("side") or "").upper().strip()
-    if side in ("BD", "CA"):
-        return side
-
-    ref = (request.META.get("HTTP_REFERER") or "").lower()
-    if "/accounting/bd" in ref:
-        return "BD"
-    if "/accounting/ca" in ref:
-        return "CA"
-
-    return "CA"
-
-
-@login_required
-def accounting_entry_add(request):
-    # BD users always go to BD add page
-    if user_is_bd_only(request.user):
-        return redirect("accounting_entry_add_bd")
-
-    # CA and admin decide by side or referrer
-    side = (request.GET.get("side") or "").upper()
-
-    if side == "BD":
-        return redirect("accounting_entry_add_bd")
-
-    return redirect("accounting_entry_add_ca")
-
-@login_required
-@bd_required
-def accounting_bd_grid(request):
-    today = timezone.localdate()
-
-    year_raw = (request.GET.get("year") or str(today.year)).strip()
-    month_raw = (request.GET.get("month") or "").strip()
-
-    qs = (
-        AccountingEntry.objects
-        .filter(side="BD")
-        .select_related("production_order", "shipment")
-        .prefetch_related("attachments")
-        .order_by("-date", "-id")
-    )
-
-    year = str(today.year)
-    if year_raw.isdigit():
-        year = year_raw
-        qs = qs.filter(date__year=int(year_raw))
-
-    month = ""
-    if month_raw.isdigit():
-        m = int(month_raw)
-        if 1 <= m <= 12:
-            month = str(m)
-            qs = qs.filter(date__month=m)
-
-    total_in_bdt = qs.filter(direction="IN").aggregate(
-        x=Coalesce(Sum("amount_original"), Decimal("0"))
-    )["x"]
-
-    total_out_bdt = qs.filter(direction="OUT").aggregate(
-        x=Coalesce(Sum("amount_original"), Decimal("0"))
-    )["x"]
-
-    net_bdt = total_in_bdt - total_out_bdt
-
-    entries = list(qs[:500])
-
-    return render(
-        request,
-        "crm/accounting_bd_grid.html",
-        {
-            "entries": entries,
-            "filter_year": year,
-            "filter_month": month,
-            "total_in_bdt": total_in_bdt,
-            "total_out_bdt": total_out_bdt,
-            "net_bdt": net_bdt,
-            "monthly_target_bdt": Decimal("0"),  # you will replace this later with BDMonthlyTarget
-        },
-    )
+    return render(request, "crm/bd_staff_month_form.html", {"form": form, "obj": obj})

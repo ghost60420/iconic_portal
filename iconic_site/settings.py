@@ -10,8 +10,13 @@ load_dotenv(BASE_DIR / ".env")
 # Core Django settings
 # ======================
 
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "change_this_in_env")
-DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
+DEBUG = os.getenv("DJANGO_DEBUG", "0") == "1"
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "")
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = "change_this_in_env"
+    else:
+        raise RuntimeError("DJANGO_SECRET_KEY is missing. Set it in .env")
 
 # ======================
 # Hosts
@@ -24,9 +29,12 @@ ALLOWED_HOSTS = [
     "femline.ca",
     "www.femline.ca",
 ]
+_extra_hosts = os.getenv("DJANGO_ALLOWED_HOSTS", "")
+if _extra_hosts:
+    ALLOWED_HOSTS.extend([h.strip() for h in _extra_hosts.split(",") if h.strip()])
+    ALLOWED_HOSTS = list(dict.fromkeys(ALLOWED_HOSTS))
 
 CSRF_TRUSTED_ORIGINS = [
-    "http://3.84.200.98",
     "https://3.84.200.98",
     "https://femline.ca",
     "https://www.femline.ca",

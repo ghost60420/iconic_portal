@@ -1,7 +1,11 @@
 from django.contrib.auth.models import AnonymousUser
 
 from django.contrib.auth.decorators import login_required
+from django.contrib import messages
 from django.http import HttpResponseForbidden
+from django.shortcuts import get_object_or_404, redirect
+
+from .models import AccountingEntry
 
 def can_edit_entry(user, entry) -> bool:
     if not user or isinstance(user, AnonymousUser) or not getattr(user, "is_authenticated", False):

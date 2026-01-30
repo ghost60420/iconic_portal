@@ -1,34 +1,29 @@
 # crm/permissions.py
 
 from functools import wraps
-
 from django.http import HttpResponseForbidden
 
 from .models_access import UserAccess
 
+LIBRARY_FALLBACK_FLAGS = (
+    "can_products",
+    "can_fabrics",
+    "can_accessories",
+    "can_trims",
+    "can_threads",
+)
+
 
 def get_access(user):
-    """
-    Always return a UserAccess row for a logged in user.
-    """
     access, _ = UserAccess.objects.get_or_create(user=user)
     return access
 
 
 def bd_blocked(view_func):
-    """
-    Block BD role users only.
-    CA role users (and superusers) can pass.
-
-    Important:
-    Do not redirect to login here.
-    Use login_required in urls.py.
-    """
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
         user = request.user
 
-        # login_required should handle this
         if not user.is_authenticated:
             return HttpResponseForbidden("Login required")
 
@@ -37,7 +32,6 @@ def bd_blocked(view_func):
 
         access = get_access(user)
 
-        # BD is blocked
         if access.is_bd:
             return HttpResponseForbidden("No access")
 
@@ -46,24 +40,25 @@ def bd_blocked(view_func):
     return wrapper
 
 
-def require_access(flag_name):
-    """
-    Checkmark permission guard.
-    Example usage:
-      @login_required
-      @require_access("can_leads")
-      def leads_list(...):
+def _has_flag(access, flag_name):
+    if flag_name == "can_library":
+        if hasattr(access, "can_library"):
+            return bool(getattr(access, "can_library", False))
 
-    Important:
-    Do not redirect to login here.
-    Use login_required in urls.py.
-    """
+        for f in LIBRARY_FALLBACK_FLAGS:
+            if hasattr(access, f) and bool(getattr(access, f, False)):
+                return True
+        return False
+
+    return bool(getattr(access, flag_name, False))
+
+
+def require_access(flag_name):
     def decorator(view_func):
         @wraps(view_func)
         def wrapper(request, *args, **kwargs):
             user = request.user
 
-            # login_required should handle this
             if not user.is_authenticated:
                 return HttpResponseForbidden("Login required")
 
@@ -72,14 +67,45 @@ def require_access(flag_name):
 
             access = get_access(user)
 
-            # Hard safety rule: BD never allowed to CA accounting
             if flag_name == "can_accounting_ca" and access.is_bd:
                 return HttpResponseForbidden("No access")
 
-            if not getattr(access, flag_name, False):
+            if not _has_flag(access, flag_name):
                 return HttpResponseForbidden("No access")
 
             return view_func(request, *args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
+def require_any_access(*flag_names):
+    """
+    OR permission check.
+    Pass if user has any flag in flag_names.
+    If can_accounting_ca is included and user is BD, that flag is ignored.
+    """
+    def decorator(view_func):
+        @wraps(view_func)
+        def wrapper(request, *args, **kwargs):
+            user = request.user
+
+            if not user.is_authenticated:
+                return HttpResponseForbidden("Login required")
+
+            if user.is_superuser:
+                return view_func(request, *args, **kwargs)
+
+            access = get_access(user)
+
+            for f in flag_names:
+                if f == "can_accounting_ca" and access.is_bd:
+                    continue
+                if _has_flag(access, f):
+                    return view_func(request, *args, **kwargs)
+
+            return HttpResponseForbidden("No access")
 
         return wrapper
 

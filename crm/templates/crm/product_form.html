@@ -1,477 +1,514 @@
 {% include "crm/navbar.html" %}
+{% load static %}
 
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="utf-8">
-    <title>
-        {% if mode == "edit" %}Edit product{% else %}Add product{% endif %} - Iconic CRM
-    </title>
-    <style>
-        body {
-            background: #000;
-            color: #f5d580;
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-        }
-        a {
-            color: #f5d580;
-            text-decoration: none;
-        }
-        a:hover {
-            text-decoration: underline;
-        }
-        .page {
-            max-width: 1100px;
-            margin: 20px auto 40px auto;
-            padding: 0 15px;
-        }
+  <meta charset="utf-8">
+  <title>{% if mode == "edit" %}Edit product{% else %}Add product{% endif %} - Iconic CRM</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
-        .header-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
-        }
-        .header-title {
-            font-size: 22px;
-            font-weight: bold;
-        }
-        .header-sub {
-            font-size: 13px;
-            color: #c7b36b;
-        }
+  <style>
+    :root{
+      --bg:#060606;
+      --panel:#0b0d10;
+      --panel2:#0f172a;
+      --border:#2a2f38;
+      --text:#f8f9fa;
+      --muted:#a8b0bd;
+      --gold1:#ffe39b;
+      --gold2:#e4c067;
+      --danger:#ffb4b4;
+    }
 
-        .btn {
-            background: #f5d580;
-            color: #000;
-            padding: 7px 14px;
-            border-radius: 6px;
-            font-size: 13px;
-            font-weight: bold;
-            border: none;
-            cursor: pointer;
-        }
-        .btn-secondary {
-            background: #222;
-            color: #f5d580;
-            border: 1px solid #444;
-        }
+    body{
+      background:var(--bg);
+      color:var(--text);
+      font-family: Arial, sans-serif;
+      margin:0;
+    }
 
-        /* layout */
-        .main-grid {
-            display: grid;
-            grid-template-columns: 1.7fr 1.3fr;
-            gap: 18px;
-        }
-        @media (max-width: 900px) {
-            .main-grid {
-                grid-template-columns: 1fr;
-            }
-        }
+    a{ color:#f5d580; text-decoration:none; }
+    a:hover{ color:#ffe9a8; }
 
-        .card {
-            background: #101010;
-            border-radius: 12px;
-            border: 1px solid #333;
-            box-shadow: 0 0 16px rgba(0,0,0,0.6);
-            padding: 14px 16px;
-            font-size: 13px;
-            margin-bottom: 16px;
-        }
-        .card-title {
-            font-size: 15px;
-            font-weight: bold;
-            margin-bottom: 8px;
-            border-bottom: 1px solid #333;
-            padding-bottom: 4px;
-        }
+    .page{
+      max-width: 1100px;
+      margin: 18px auto 40px auto;
+      padding: 0 14px;
+    }
 
-        .form-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px 18px;
-        }
-        .form-row {
-            display: flex;
-            flex-direction: column;
-            gap: 3px;
-        }
-        .label {
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: #c7b36b;
-        }
-        input[type="text"],
-        input[type="number"],
-        input[type="file"],
-        select,
-        textarea {
-            background: #000;
-            color: #f5d580;
-            border-radius: 5px;
-            border: 1px solid #444;
-            padding: 6px 8px;
-            font-size: 13px;
-        }
-        textarea {
-            resize: vertical;
-        }
-        .muted {
-            color: #888;
-            font-size: 12px;
-        }
+    .topbar{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
 
-        .image-preview-box {
-            margin-top: 6px;
-            border-radius: 10px;
-            border: 1px solid #333;
-            background: #050505;
-            padding: 6px;
-            min-height: 80px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .image-preview-box img {
-            max-width: 100%;
-            max-height: 160px;
-            border-radius: 8px;
-            object-fit: cover;
-        }
+    .title{
+      margin:0;
+      font-size: 22px;
+      font-weight: 900;
+      color: var(--gold1);
+      letter-spacing: 0.2px;
+    }
 
-        /* AI side card */
-        .ai-card {
-            background: #101010;
-            border-radius: 12px;
-            border: 1px solid #333;
-            box-shadow: 0 0 16px rgba(0,0,0,0.6);
-            padding: 12px 14px;
-            font-size: 13px;
-        }
-        .ai-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 6px;
-        }
-        .ai-title {
-            font-size: 14px;
-            font-weight: bold;
-        }
-        .ai-note {
-            font-size: 11px;
-            color: #a4925c;
-            margin-top: 4px;
-        }
-        .ai-output {
-            margin-top: 8px;
-            background: #050505;
-            border-radius: 8px;
-            border: 1px solid #333;
-            padding: 8px;
-            min-height: 80px;
-            font-size: 12px;
-            white-space: pre-wrap;
-        }
-        .ai-status {
-            font-size: 11px;
-            color: #aaa;
-            margin-left: 6px;
-        }
-        .ai-hint {
-            font-size: 11px;
-            color: #888;
-            margin-top: 6px;
-        }
+    .subtitle{
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 800;
+      margin-top: 4px;
+    }
 
-        .footer-actions {
-            margin-top: 12px;
-            display: flex;
-            justify-content: flex-start;
-            gap: 10px;
-        }
-    </style>
+    .btn{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding: 9px 12px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 900;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.04);
+      color: #f3f4f6;
+      cursor:pointer;
+      user-select:none;
+      line-height: 1;
+      transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+      text-decoration:none;
+      white-space:nowrap;
+    }
+
+    .btn:hover{
+      transform: translateY(-1px);
+      background: rgba(255,255,255,0.06);
+      border-color: rgba(245, 213, 128, 0.32);
+      color:#ffe9a8;
+    }
+
+    .btn:active{ transform: translateY(0px); }
+
+    .btn-primary{
+      background: rgba(245, 213, 128, 0.16);
+      border-color: rgba(255, 227, 155, 0.30);
+      box-shadow: 0 10px 22px rgba(255, 209, 120, 0.10);
+    }
+
+    .card{
+      background: linear-gradient(180deg, rgba(15,23,42,0.55), rgba(2,6,23,0.65));
+      border: 1px solid rgba(148,163,184,0.22);
+      border-radius: 14px;
+      box-shadow: 0 18px 40px rgba(0,0,0,0.45);
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+
+    .card-title{
+      font-size: 14px;
+      font-weight: 900;
+      color: var(--gold1);
+      margin: 0 0 10px 0;
+      letter-spacing: 0.2px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.22);
+      background: rgba(255,255,255,0.03);
+      font-size: 12px;
+      font-weight: 800;
+      color: rgba(248,249,250,0.78);
+    }
+
+    .error-card{
+      border-color: rgba(255,180,180,0.45);
+      color: var(--danger);
+      background: rgba(255,180,180,0.05);
+    }
+
+    .main-grid{
+      display:grid;
+      grid-template-columns: 1.7fr 1.3fr;
+      gap: 14px;
+      align-items:start;
+    }
+
+    @media (max-width: 980px){
+      .main-grid{ grid-template-columns: 1fr; }
+    }
+
+    .form-grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 14px;
+    }
+
+    @media (max-width: 760px){
+      .form-grid{ grid-template-columns: 1fr; }
+    }
+
+    .form-row{
+      display:flex;
+      flex-direction:column;
+      gap: 6px;
+    }
+
+    .label{
+      font-size: 11px;
+      color: rgba(255,227,155,0.85);
+      font-weight: 900;
+      letter-spacing: 0.2px;
+      text-transform: uppercase;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    input[type="file"],
+    select,
+    textarea{
+      width: 100%;
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.12);
+      padding: 9px 10px;
+      font-size: 13px;
+      outline: none;
+    }
+
+    textarea{ resize: vertical; min-height: 120px; }
+
+    input[readonly]{
+      opacity: 0.85;
+      cursor: not-allowed;
+    }
+
+    .muted{
+      color: rgba(248,249,250,0.60);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .image-preview-box{
+      margin-top: 8px;
+      border-radius: 14px;
+      border: 1px solid rgba(148,163,184,0.22);
+      background: rgba(0,0,0,0.30);
+      padding: 10px;
+      min-height: 120px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+
+    .image-preview-box img{
+      width: 100%;
+      max-height: 220px;
+      object-fit: cover;
+      border-radius: 12px;
+      border: 1px solid rgba(148,163,184,0.22);
+      background: rgba(255,255,255,0.03);
+    }
+
+    .ai-note{
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 700;
+      margin-top: 6px;
+      line-height: 1.4;
+    }
+
+    .ai-output{
+      margin-top: 10px;
+      background: rgba(0,0,0,0.35);
+      border-radius: 14px;
+      border: 1px solid rgba(148,163,184,0.22);
+      padding: 10px 12px;
+      min-height: 96px;
+      font-size: 13px;
+      white-space: pre-wrap;
+      color: #f8f9fa;
+    }
+
+    .actions{
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+  </style>
 </head>
-<body>
-<div class="page">
 
-    <div class="header-row">
-        <div>
-            <div class="header-title">
-                {% if mode == "edit" %}
-                    Edit product
-                {% else %}
-                    Add product
-                {% endif %}
-            </div>
-            {% if form.instance and form.instance.product_code %}
-                <div class="header-sub">
-                    Code {{ form.instance.product_code }}
-                </div>
-            {% endif %}
-        </div>
-        <div>
-            <a href="{% url 'products_list' %}" class="btn btn-secondary">Back to products</a>
-        </div>
+<body>
+  <div class="page">
+
+    <div class="topbar">
+      <div>
+        <h1 class="title">
+          {% if mode == "edit" %}Edit product{% else %}Add product{% endif %}
+        </h1>
+
+        {% if form.instance and form.instance.product_code %}
+          <div class="subtitle">Code {{ form.instance.product_code }}</div>
+        {% else %}
+          <div class="subtitle">Create and save a new product for your library.</div>
+        {% endif %}
+      </div>
+
+      <a href="{% url 'products_list' %}" class="btn">⬅ Back to products</a>
     </div>
 
     {% if form.non_field_errors %}
-        <div class="card" style="border-color:#aa4444; color:#ffbdbd;">
-            {{ form.non_field_errors }}
-        </div>
+      <div class="card error-card">
+        {{ form.non_field_errors }}
+      </div>
     {% endif %}
 
     <form method="post" enctype="multipart/form-data">
-        {% csrf_token %}
+      {% csrf_token %}
 
-        <div class="main-grid">
-            <!-- left side: main form -->
-            <div>
-                <div class="card">
-                    <div class="card-title">Main information</div>
+      <div class="main-grid">
 
-                    <div class="form-grid">
-                        <!-- product code (read only) -->
-                        <div class="form-row">
-                            <label class="label">Product code</label>
-                            <input
-                                type="text"
-                                name="product_code"
-                                value="{{ form.product_code.value|default_if_none:'' }}"
-                                readonly
-                            >
-                            <span class="muted">Auto created when you save.</span>
-                        </div>
-
-                        <!-- name -->
-                        <div class="form-row">
-                            <label for="{{ form.name.id_for_label }}" class="label">Name</label>
-                            {{ form.name }}
-                        </div>
-
-                        <!-- type -->
-                        <div class="form-row">
-                            <label for="{{ form.product_type.id_for_label }}" class="label">
-                                Product type
-                            </label>
-                            {{ form.product_type }}
-                            <span class="muted">Matches how you quote orders.</span>
-                        </div>
-
-                        <!-- category -->
-                        <div class="form-row">
-                            <label for="{{ form.product_category.id_for_label }}" class="label">
-                                Product category
-                            </label>
-                            {{ form.product_category }}
-                        </div>
-
-                        <!-- GSM with datalist -->
-                        <div class="form-row">
-                            <label class="label">Default GSM</label>
-                            <input
-                                type="text"
-                                id="id_default_gsm"
-                                name="default_gsm"
-                                list="gsm-options"
-                                value="{{ form.default_gsm.value|default_if_none:'' }}"
-                            >
-                            <datalist id="gsm-options">
-                                {% if gsm_master %}
-                                    {% for g in gsm_master %}
-                                        <option value="{{ g.name }}"></option>
-                                    {% endfor %}
-                                {% endif %}
-                            </datalist>
-                            <span class="muted">
-                                Choose from list or type a new GSM. New values will be added to basics.
-                            </span>
-                        </div>
-
-                        <!-- fabric with datalist -->
-                        <div class="form-row">
-                            <label class="label">Default fabric</label>
-                            <input
-                                type="text"
-                                id="id_default_fabric"
-                                name="default_fabric"
-                                list="fabric-options"
-                                value="{{ form.default_fabric.value|default_if_none:'' }}"
-                            >
-                            <datalist id="fabric-options">
-                                {% if fabric_master %}
-                                    {% for f in fabric_master %}
-                                        <option value="{{ f.name }}"></option>
-                                    {% endfor %}
-                                {% endif %}
-                            </datalist>
-                            <span class="muted">
-                                Pick from basics or type a new fabric name.
-                            </span>
-                        </div>
-
-                        <!-- MOQ -->
-                        <div class="form-row">
-                            <label for="{{ form.default_moq.id_for_label }}" class="label">
-                                Default MOQ
-                            </label>
-                            {{ form.default_moq }}
-                        </div>
-
-                        <!-- price -->
-                        <div class="form-row">
-                            <label for="{{ form.default_price.id_for_label }}" class="label">
-                                Default price
-                            </label>
-                            {{ form.default_price }}
-                        </div>
-
-                        <!-- status -->
-                        <div class="form-row">
-                            <label for="{{ form.is_active.id_for_label }}" class="label">
-                                Status
-                            </label>
-                            {{ form.is_active }}
-                            <span class="muted">Uncheck to archive this product.</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-title">Notes</div>
-                    <div class="form-row">
-                        {{ form.notes }}
-                        <span class="muted">
-                            You can paste AI ideas here for future quoting.
-                        </span>
-                    </div>
-                </div>
-
-                <div class="footer-actions">
-                    <button type="submit" class="btn">
-                        Save product
-                    </button>
-                </div>
+        <div>
+          <div class="card">
+            <div class="card-title">
+              <span>Main information</span>
+              {% if mode == "edit" %}
+                <span class="pill">Editing</span>
+              {% else %}
+                <span class="pill">New</span>
+              {% endif %}
             </div>
 
-            <!-- right side: image and AI -->
-            <div>
-                <div class="card">
-                    <div class="card-title">Product image</div>
-                    <div class="form-row">
-                        {{ form.image }}
-                        <span class="muted">
-                            Use a simple front or flat lay shot. Optional but helpful.
-                        </span>
-                    </div>
-                    <div class="image-preview-box">
-                        {% if form.instance and form.instance.image %}
-                            <img src="{{ form.instance.image.url }}" alt="{{ form.instance.name }}">
-                        {% else %}
-                            <span class="muted">No image yet.</span>
-                        {% endif %}
-                    </div>
-                </div>
+            <div class="form-grid">
 
-                <div class="ai-card">
-                    <div class="ai-header">
-                        <div class="ai-title">AI helper for this product</div>
-                        <div>
-                            <button type="button" class="btn" id="ai-form-btn">
-                                Ask AI
-                            </button>
-                            <span class="ai-status" id="ai-form-status"></span>
-                        </div>
-                    </div>
-                    <div class="ai-note">
-                        AI will read the name, type, and category and suggest GSM, fabric ideas,
-                        price level, and use cases. You can then adjust your fields and notes.
-                    </div>
-                    <div class="ai-output" id="ai-form-output">
-                        AI suggestion will show here.
-                    </div>
-                    <div class="ai-hint">
-                        Tip: Press Ask AI after you fill the name, type, and category.
-                    </div>
-                </div>
+              <div class="form-row">
+                <label class="label">Product code</label>
+                <input
+                  type="text"
+                  name="product_code"
+                  value="{{ form.product_code.value|default_if_none:'' }}"
+                  readonly
+                >
+                <div class="muted">Auto created when you save.</div>
+              </div>
+
+              <div class="form-row">
+                <label for="{{ form.name.id_for_label }}" class="label">Name</label>
+                {{ form.name }}
+              </div>
+
+              <div class="form-row">
+                <label for="{{ form.product_type.id_for_label }}" class="label">Product type</label>
+                {{ form.product_type }}
+                <div class="muted">Matches how you quote orders.</div>
+              </div>
+
+              <div class="form-row">
+                <label for="{{ form.product_category.id_for_label }}" class="label">Product category</label>
+                {{ form.product_category }}
+              </div>
+
+              <div class="form-row">
+                <label class="label">Default GSM</label>
+                <input
+                  type="text"
+                  id="id_default_gsm"
+                  name="default_gsm"
+                  list="gsm-options"
+                  value="{{ form.default_gsm.value|default_if_none:'' }}"
+                >
+                <datalist id="gsm-options">
+                  {% if gsm_master %}
+                    {% for g in gsm_master %}
+                      <option value="{{ g.name }}"></option>
+                    {% endfor %}
+                  {% endif %}
+                </datalist>
+                <div class="muted">Choose from list or type a new GSM.</div>
+              </div>
+
+              <div class="form-row">
+                <label class="label">Default fabric</label>
+                <input
+                  type="text"
+                  id="id_default_fabric"
+                  name="default_fabric"
+                  list="fabric-options"
+                  value="{{ form.default_fabric.value|default_if_none:'' }}"
+                >
+                <datalist id="fabric-options">
+                  {% if fabric_master %}
+                    {% for f in fabric_master %}
+                      <option value="{{ f.name }}"></option>
+                    {% endfor %}
+                  {% endif %}
+                </datalist>
+                <div class="muted">Pick from basics or type a new fabric name.</div>
+              </div>
+
+              <div class="form-row">
+                <label for="{{ form.default_moq.id_for_label }}" class="label">Default MOQ</label>
+                {{ form.default_moq }}
+              </div>
+
+              <div class="form-row">
+                <label for="{{ form.default_price.id_for_label }}" class="label">Default price</label>
+                {{ form.default_price }}
+              </div>
+
+              <div class="form-row">
+                <label for="{{ form.is_active.id_for_label }}" class="label">Status</label>
+                {{ form.is_active }}
+                <div class="muted">Uncheck to archive this product.</div>
+              </div>
+
             </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Notes</div>
+            <div class="form-row">
+              {{ form.notes }}
+              <div class="muted">You can paste AI ideas here for future quoting.</div>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button type="submit" class="btn btn-primary">💾 Save product</button>
+          </div>
         </div>
 
+        <div>
+          <div class="card">
+            <div class="card-title">Product image</div>
+
+            <div class="form-row">
+              {{ form.image }}
+              <div class="muted">Optional but helpful for quick browsing.</div>
+            </div>
+
+            <div class="image-preview-box">
+              {% if form.instance and form.instance.image %}
+                <img src="{{ form.instance.image.url }}" alt="{{ form.instance.name }}">
+              {% else %}
+                <div class="muted">No image yet.</div>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span>AI helper for this product</span>
+              <span class="pill" id="ai-form-status">Idle</span>
+            </div>
+
+            <div class="ai-note">
+              AI will read the name, type, and category and suggest GSM, fabric ideas, price level, and use cases.
+            </div>
+
+            <div class="actions">
+              <button type="button" class="btn btn-primary" id="ai-form-btn">🤖 Ask AI</button>
+            </div>
+
+            <div class="ai-output" id="ai-form-output">AI suggestion will show here.</div>
+
+            <div class="ai-note">
+              Tip: Use Ask AI after you fill the name, type, and category.
+            </div>
+          </div>
+        </div>
+
+      </div>
     </form>
 
-    <!-- hidden form for CSRF -->
     <form id="ai-form-csrf" style="display:none;">
-        {% csrf_token %}
+      {% csrf_token %}
     </form>
-</div>
 
-<script>
-(function () {
-    const btn = document.getElementById("ai-form-btn");
-    if (!btn) return;
+  </div>
 
-    const outBox = document.getElementById("ai-form-output");
-    const statusSpan = document.getElementById("ai-form-status");
+  <script>
+    (function () {
+      const btn = document.getElementById("ai-form-btn");
+      if (!btn) return;
 
-    function getCsrf() {
-        const tokenField = document.querySelector(
-            "#ai-form-csrf input[name='csrfmiddlewaretoken']"
-        );
+      const outBox = document.getElementById("ai-form-output");
+      const statusPill = document.getElementById("ai-form-status");
+
+      function setStatus(text) {
+        if (statusPill) statusPill.textContent = text;
+      }
+
+      function getCsrf() {
+        const tokenField = document.querySelector("#ai-form-csrf input[name='csrfmiddlewaretoken']");
         return tokenField ? tokenField.value : "";
-    }
+      }
 
-    btn.addEventListener("click", function () {
+      btn.addEventListener("click", function () {
         const nameInput = document.getElementById("id_name");
         const typeInput = document.getElementById("id_product_type");
         const catInput = document.getElementById("id_product_category");
 
-        const name = nameInput ? nameInput.value.trim() : "";
-        const ptype = typeInput ? typeInput.options[typeInput.selectedIndex].text : "";
-        const cat = catInput ? catInput.options[catInput.selectedIndex].text : "";
+        const name = nameInput && nameInput.value ? nameInput.value.trim() : "";
+        const ptype = typeInput && typeInput.value ? typeInput.options[typeInput.selectedIndex].text : "";
+        const cat = catInput && catInput.value ? catInput.options[catInput.selectedIndex].text : "";
 
         if (!name) {
-            outBox.textContent = "Please fill the product name first.";
-            return;
+          outBox.textContent = "Please fill the product name first.";
+          setStatus("Idle");
+          return;
         }
 
-        statusSpan.textContent = "Thinking with AI...";
+        setStatus("Thinking");
         outBox.textContent = "";
 
         fetch("{% url 'product_ai_suggest' %}", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-                "X-CSRFToken": getCsrf()
-            },
-            body: new URLSearchParams({
-                name: name,
-                product_type: ptype,
-                product_category: cat
-            })
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "X-CSRFToken": getCsrf()
+          },
+          body: new URLSearchParams({
+            name: name,
+            product_type: ptype,
+            product_category: cat
+          })
         })
-        .then(function (res) { return res.json(); })
+        .then(async function (res) {
+          const isJson = (res.headers.get("content-type") || "").includes("application/json");
+          const data = isJson ? await res.json() : { ok: false, error: "Server response was not JSON." };
+          if (!res.ok) {
+            return { ok: false, error: data.error || ("Request failed. Status " + res.status) };
+          }
+          return data;
+        })
         .then(function (data) {
-            if (data.ok) {
-                outBox.textContent = data.suggestion;
-                statusSpan.textContent = "Ready";
-            } else {
-                outBox.textContent = data.error || "AI could not answer.";
-                statusSpan.textContent = "";
-            }
+          if (data && data.ok) {
+            outBox.textContent = data.suggestion || "";
+            setStatus("Ready");
+          } else {
+            outBox.textContent = (data && data.error) ? data.error : "AI could not answer.";
+            setStatus("Idle");
+          }
         })
         .catch(function (err) {
-            console.error(err);
-            outBox.textContent = "Error talking to AI.";
-            statusSpan.textContent = "";
+          console.error(err);
+          outBox.textContent = "Error talking to AI.";
+          setStatus("Idle");
         });
-    });
-})();
-</script>
-
+      });
+    })();
+  </script>
 </body>
 </html>

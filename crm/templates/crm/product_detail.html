@@ -3,426 +3,430 @@
 {% block content %}
 
 <style>
-  .product-page {
+  :root{
+    --bg:#060606;
+    --panel:#0b0d10;
+    --panel2:#0f172a;
+    --border:#2a2f38;
+    --text:#f8f9fa;
+    --muted:#a8b0bd;
+    --gold1:#ffe39b;
+    --gold2:#e4c067;
+    --gold3:#f5d580;
+  }
+
+  .product-page{
     max-width: 1180px;
-    margin: 24px auto;
+    margin: 18px auto 26px auto;
     padding: 0 10px;
+    color: var(--text);
   }
 
-  .prod-header-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-bottom: 16px;
+  .prod-header-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:12px;
+    flex-wrap:wrap;
+    margin-bottom: 14px;
   }
 
-  .prod-header-title {
+  .prod-header-title{
     font-size: 22px;
-    font-weight: 700;
-    color: #ffffff;
+    font-weight: 900;
     line-height: 1.2;
+    color: var(--gold1);
+    letter-spacing: 0.2px;
   }
 
-  .prod-header-sub {
+  .prod-header-sub{
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 6px;
+    font-weight: 800;
+  }
+
+  .btn-row{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+
+  .btn-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding: 9px 12px;
+    border-radius: 999px;
     font-size: 13px;
-    color: #9ca3af;
-    margin-top: 4px;
+    font-weight: 900;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.04);
+    color: #f3f4f6;
+    cursor:pointer;
+    user-select:none;
+    line-height: 1;
+    transition: transform 120ms ease, background 120ms ease, border-color 120ms ease, color 120ms ease;
+    text-decoration:none;
+    white-space:nowrap;
   }
 
-  .btn-row {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    align-items: center;
-  }
-
-  .btn-ghost {
-    background: rgba(2, 6, 23, 0.6);
-    border-radius: 999px;
-    border: 1px solid #374151;
-    color: #e5e7eb;
-    padding: 7px 12px;
-    font-size: 12px;
-    text-decoration: none;
-    transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    cursor: pointer;
-  }
-  .btn-ghost:hover {
-    background: rgba(17, 24, 39, 0.9);
-    border-color: #facc15;
+  .btn-pill:hover{
     transform: translateY(-1px);
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(245, 213, 128, 0.32);
+    color: var(--gold1);
   }
 
-  .btn-gold {
-    background: #f5d580;
-    border-radius: 999px;
-    border: none;
-    color: #111827;
-    padding: 7px 14px;
-    font-size: 12px;
-    font-weight: 700;
-    text-decoration: none;
-    transition: transform 120ms ease, background 120ms ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    cursor: pointer;
+  .btn-pill:active{ transform: translateY(0px); }
+
+  .btn-gold{
+    background: rgba(245, 213, 128, 0.16);
+    border-color: rgba(255, 227, 155, 0.30);
+    color: var(--gold1);
+    box-shadow: 0 10px 22px rgba(255, 209, 120, 0.10);
   }
-  .btn-gold:hover {
-    background: #ffe9a8;
-    color: #020617;
-    transform: translateY(-1px);
+
+  .btn-gold:hover{
+    background: rgba(245, 213, 128, 0.22);
+    color: #fff;
   }
-  .btn-gold:disabled,
-  .btn-ghost:disabled {
+
+  .btn-pill[aria-disabled="true"],
+  .btn-pill:disabled{
     opacity: 0.55;
     cursor: not-allowed;
     transform: none;
   }
 
-  /* main cards */
-
-  .prod-main-grid {
-    display: grid;
+  .prod-main-grid{
+    display:grid;
     grid-template-columns: 1.05fr 1.65fr;
-    gap: 18px;
-    margin-bottom: 18px;
+    gap: 14px;
+    margin-bottom: 14px;
   }
 
-  @media (max-width: 900px) {
-    .prod-main-grid {
-      grid-template-columns: 1fr;
-    }
+  @media (max-width: 900px){
+    .prod-main-grid{ grid-template-columns: 1fr; }
   }
 
-  .prod-card {
-    background: radial-gradient(circle at top left, rgba(31,41,55,0.95), rgba(5,5,5,0.95));
+  .prod-card{
+    background: linear-gradient(180deg, rgba(15,23,42,0.55), rgba(2,6,23,0.65));
     border-radius: 16px;
-    border: 1px solid #1f2937;
-    padding: 14px 16px;
-    font-size: 13px;
-    box-shadow: 0 0 22px rgba(0,0,0,0.55);
+    border: 1px solid rgba(148,163,184,0.22);
+    padding: 14px;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.45);
   }
 
-  .prod-card-title {
+  .prod-card-title{
     font-size: 14px;
-    font-weight: 700;
-    color: #f9fafb;
+    font-weight: 900;
+    color: var(--gold1);
     margin-bottom: 10px;
-    border-bottom: 1px solid #111827;
-    padding-bottom: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    flex-wrap:wrap;
   }
 
-  /* left preview */
+  .pill{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding: 7px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(148,163,184,0.22);
+    background: rgba(255,255,255,0.03);
+    font-size: 12px;
+    font-weight: 800;
+    color: rgba(248,249,250,0.80);
+    white-space:nowrap;
+  }
 
-  .prod-image-wrap {
+  .prod-image-wrap{
     border-radius: 14px;
-    border: 1px solid #334155;
-    background: rgba(2,6,23,0.85);
+    border: 1px solid rgba(148,163,184,0.22);
+    background: rgba(0,0,0,0.30);
     padding: 10px;
     min-height: 240px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
   }
 
-  .prod-image-wrap img {
-    width: 100%;
-    height: 100%;
-    max-height: 320px;
+  .prod-image-wrap img{
+    width:100%;
+    max-height: 340px;
     border-radius: 12px;
     object-fit: cover;
+    border: 1px solid rgba(148,163,184,0.22);
+    background: rgba(255,255,255,0.03);
   }
 
-  .prod-image-placeholder {
+  .prod-image-placeholder{
     font-size: 12px;
-    color: #6b7280;
-    text-align: center;
+    color: rgba(248,249,250,0.60);
+    text-align:center;
+    font-weight: 800;
   }
 
-  .badge-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
+  .badge-row{
+    display:flex;
+    flex-wrap:wrap;
+    gap: 8px;
     margin-top: 10px;
   }
 
-  .badge-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 10px;
+  .badge-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding: 7px 10px;
     border-radius: 999px;
-    font-size: 11px;
-    background: rgba(17, 24, 39, 0.8);
-    border: 1px solid #374151;
-    color: #e5e7eb;
-  }
-
-  .badge-pill strong {
-    font-weight: 700;
-    color: #facc15;
-  }
-
-  .badge-pill-muted {
-    background: rgba(2, 6, 23, 0.7);
-    border-color: #334155;
-    color: #9ca3af;
-  }
-
-  .prod-code-label {
     font-size: 12px;
-    color: #facc15;
+    border: 1px solid rgba(148,163,184,0.22);
+    background: rgba(255,255,255,0.03);
+    color: rgba(248,249,250,0.78);
+    font-weight: 800;
+  }
+
+  .badge-pill strong{
+    color: var(--gold2);
+    font-weight: 900;
+  }
+
+  .badge-muted{
+    opacity: 0.75;
+  }
+
+  .prod-code-label{
     margin-top: 10px;
-  }
-
-  /* right info */
-
-  .info-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px 20px;
-  }
-
-  @media (max-width: 520px) {
-    .info-grid {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .info-row {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    padding: 10px;
-    border-radius: 12px;
-    border: 1px solid rgba(17,24,39,0.9);
-    background: rgba(2,6,23,0.55);
-  }
-
-  .info-label {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #9ca3af;
-  }
-
-  .info-value {
-    font-size: 13px;
-    color: #f9fafb;
-    font-weight: 600;
-  }
-
-  .info-muted {
     font-size: 12px;
-    color: #6b7280;
-    font-weight: 500;
+    color: rgba(255,227,155,0.85);
+    font-weight: 900;
   }
 
-  /* notes */
-
-  .notes-card {
-    background: rgba(2,6,23,0.75);
-    border-radius: 16px;
-    border: 1px solid #1f2937;
-    padding: 12px 14px;
-    font-size: 13px;
-    margin-bottom: 16px;
-    box-shadow: 0 0 18px rgba(0,0,0,0.45);
-  }
-
-  .notes-title {
-    font-size: 14px;
-    font-weight: 700;
-    color: #f9fafb;
-    margin-bottom: 8px;
-    border-bottom: 1px solid #111827;
-    padding-bottom: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+  .info-grid{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
     gap: 10px;
   }
 
-  .notes-body {
-    white-space: pre-wrap;
-    color: #e5e7eb;
-    line-height: 1.45;
+  @media (max-width: 520px){
+    .info-grid{ grid-template-columns: 1fr; }
   }
 
-  /* AI helper */
-
-  .ai-card {
-    background: rgba(2,6,23,0.75);
-    border-radius: 16px;
-    border: 1px solid #1f2937;
-    padding: 12px 14px;
-    font-size: 13px;
-    box-shadow: 0 0 18px rgba(0,0,0,0.45);
+  .info-row{
+    display:flex;
+    flex-direction:column;
+    gap: 6px;
+    padding: 10px;
+    border-radius: 14px;
+    border: 1px solid rgba(148,163,184,0.22);
+    background: rgba(255,255,255,0.03);
   }
 
-  .ai-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-
-  .ai-title {
-    font-size: 14px;
-    font-weight: 700;
-    color: #f9fafb;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .ai-status {
+  .info-label{
     font-size: 11px;
-    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.2px;
+    color: rgba(248,249,250,0.60);
+    font-weight: 900;
   }
 
-  .ai-note {
+  .info-value{
+    font-size: 13px;
+    color: var(--text);
+    font-weight: 900;
+  }
+
+  .info-muted{
     font-size: 12px;
-    color: #a4925c;
-    margin-top: 6px;
+    color: rgba(248,249,250,0.60);
+    font-weight: 800;
+  }
+
+  .notes-card,
+  .ai-card{
+    background: linear-gradient(180deg, rgba(15,23,42,0.55), rgba(2,6,23,0.65));
+    border-radius: 16px;
+    border: 1px solid rgba(148,163,184,0.22);
+    padding: 14px;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.45);
+    margin-bottom: 14px;
+  }
+
+  .notes-title,
+  .ai-title{
+    font-size: 14px;
+    font-weight: 900;
+    color: var(--gold1);
+    margin-bottom: 10px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+
+  .notes-body{
+    white-space: pre-wrap;
+    color: rgba(248,249,250,0.86);
+    line-height: 1.5;
+    font-size: 13px;
+  }
+
+  .ai-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap: 10px;
+    flex-wrap:wrap;
+    margin-bottom: 8px;
+  }
+
+  .ai-status{
+    font-size: 12px;
+    font-weight: 800;
+    color: rgba(248,249,250,0.70);
+  }
+
+  .ai-note{
+    font-size: 12px;
+    color: rgba(248,249,250,0.60);
+    font-weight: 800;
     line-height: 1.4;
   }
 
-  .ai-output {
+  .ai-chip-row{
     margin-top: 10px;
-    background: rgba(3,7,18,0.9);
-    border-radius: 12px;
-    border: 1px solid #111827;
-    padding: 10px;
-    min-height: 84px;
-    font-size: 12px;
-    color: #e5e7eb;
-    white-space: pre-wrap;
-    line-height: 1.45;
-  }
-
-  .ai-chip-row {
-    margin-top: 10px;
-    display: flex;
-    flex-wrap: wrap;
+    display:flex;
+    flex-wrap:wrap;
     gap: 8px;
   }
 
-  .ai-chip {
-    background: rgba(17, 24, 39, 0.8);
-    color: #e5e7eb;
+  .ai-chip{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding: 9px 12px;
     border-radius: 999px;
-    border: 1px solid #374151;
-    padding: 6px 12px;
-    font-size: 11px;
-    cursor: pointer;
-    user-select: none;
-    transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
+    border: 1px solid rgba(148,163,184,0.22);
+    background: rgba(255,255,255,0.03);
+    color: rgba(248,249,250,0.80);
+    font-size: 12px;
+    font-weight: 900;
+    cursor:pointer;
+    user-select:none;
+    transition: transform 120ms ease, background 120ms ease, border-color 120ms ease, color 120ms ease;
   }
 
-  .ai-chip:hover {
-    background: rgba(31, 41, 55, 0.9);
-    border-color: #facc15;
+  .ai-chip:hover{
     transform: translateY(-1px);
+    border-color: rgba(245, 213, 128, 0.32);
+    color: var(--gold1);
+    background: rgba(255,255,255,0.05);
   }
 
-  .ai-chip.active {
-    border-color: #facc15;
-    background: rgba(250, 204, 21, 0.12);
+  .ai-chip.active{
+    border-color: rgba(255,227,155,0.38);
+    background: rgba(245,213,128,0.12);
+    color: var(--gold1);
   }
 
-  .ai-chip[aria-disabled="true"] {
+  .ai-chip[aria-disabled="true"]{
     opacity: 0.55;
     cursor: not-allowed;
     transform: none;
   }
 
-  .ai-chat-box {
-    margin-top: 12px;
-    border-top: 1px solid #111827;
-    padding-top: 10px;
-  }
-
-  .ai-chat-input-row {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 8px;
-    flex-wrap: wrap;
-  }
-
-  .ai-chat-input-row input {
-    flex: 1;
-    min-width: 240px;
-    background: rgba(3,7,18,0.9);
-    color: #e5e7eb;
-    border-radius: 10px;
-    border: 1px solid #374151;
-    padding: 9px 10px;
+  .ai-output{
+    margin-top: 10px;
+    background: rgba(0,0,0,0.30);
+    border-radius: 14px;
+    border: 1px solid rgba(148,163,184,0.22);
+    padding: 10px 12px;
+    min-height: 90px;
     font-size: 13px;
+    color: rgba(248,249,250,0.90);
+    white-space: pre-wrap;
+    line-height: 1.5;
   }
 
-  .ai-chat-input-row input:focus {
+  .ai-chat-box{
+    margin-top: 12px;
+    border-top: 1px solid rgba(148,163,184,0.18);
+    padding-top: 12px;
+  }
+
+  .ai-chat-input-row{
+    display:flex;
+    gap: 8px;
+    flex-wrap:wrap;
+    margin-top: 8px;
+  }
+
+  .ai-chat-input-row input{
+    flex:1;
+    min-width: 240px;
+    background: rgba(255,255,255,0.04);
+    color: var(--text);
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.12);
+    padding: 10px 12px;
+    font-size: 13px;
     outline: none;
-    border-color: #facc15;
-    box-shadow: 0 0 0 2px rgba(250,204,21,0.18);
   }
 
-  .ai-chat-log {
-    max-height: 220px;
+  .ai-chat-input-row input:focus{
+    border-color: rgba(245, 213, 128, 0.45);
+    box-shadow: 0 0 0 3px rgba(245,213,128,0.14);
+  }
+
+  .ai-chat-log{
+    margin-top: 10px;
+    max-height: 230px;
     overflow-y: auto;
-    background: rgba(3,7,18,0.9);
-    border-radius: 12px;
-    border: 1px solid #111827;
-    padding: 10px;
-    font-size: 12px;
-    color: #e5e7eb;
+    background: rgba(0,0,0,0.30);
+    border-radius: 14px;
+    border: 1px solid rgba(148,163,184,0.22);
+    padding: 10px 12px;
+    font-size: 13px;
+    color: rgba(248,249,250,0.86);
   }
 
-  .chat-line {
-    margin-bottom: 8px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid rgba(17, 24, 39, 0.75);
+  .chat-line{
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(148,163,184,0.14);
   }
-  .chat-line:last-child {
+  .chat-line:last-child{
     margin-bottom: 0;
     padding-bottom: 0;
     border-bottom: none;
   }
 
-  .chat-tag {
-    font-weight: 800;
-    color: #facc15;
+  .chat-tag{
+    font-weight: 900;
+    color: var(--gold2);
     margin-right: 6px;
   }
 
-  .ai-spinner {
-    width: 10px;
-    height: 10px;
+  .ai-spinner{
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
     border: 2px solid rgba(229,231,235,0.35);
-    border-top-color: rgba(250,204,21,0.9);
-    display: inline-block;
+    border-top-color: rgba(245,213,128,0.95);
+    display:inline-block;
     animation: spin 700ms linear infinite;
+    vertical-align: -2px;
   }
 
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 
 <div class="product-page">
@@ -443,12 +447,8 @@
     </div>
 
     <div class="btn-row">
-      <a href="{% url 'products_list' %}" class="btn-ghost">
-        ← Back
-      </a>
-      <a href="{% url 'product_edit' product.pk %}" class="btn-gold">
-        ✎ Edit
-      </a>
+      <a href="{% url 'products_list' %}" class="btn-pill">← Back</a>
+      <a href="{% url 'product_edit' product.pk %}" class="btn-pill btn-gold">✎ Edit</a>
     </div>
   </div>
 
@@ -457,6 +457,11 @@
     <div class="prod-card">
       <div class="prod-card-title">
         <span>Preview</span>
+        {% if product.is_active %}
+          <span class="pill">Active</span>
+        {% else %}
+          <span class="pill">Archived</span>
+        {% endif %}
       </div>
 
       <div class="prod-image-wrap">
@@ -478,17 +483,12 @@
           <strong>Category</strong>
           <span>{{ product.get_product_category_display|default:product.product_category|default:"Not set" }}</span>
         </div>
-        {% if product.is_active %}
-          <div class="badge-pill">
-            <strong>Status</strong>
-            <span>Active</span>
-          </div>
-        {% else %}
-          <div class="badge-pill badge-pill-muted">
-            <strong>Status</strong>
-            <span>Not active</span>
-          </div>
-        {% endif %}
+        <div class="badge-pill badge-muted">
+          <strong>MOQ</strong>
+          <span>
+            {% if product.default_moq %}{{ product.default_moq }}{% else %}Not set{% endif %}
+          </span>
+        </div>
       </div>
 
       <div class="prod-code-label">
@@ -525,7 +525,7 @@
         <div class="info-row">
           <div class="info-label">Default MOQ</div>
           <div class="info-value">
-            {% if product.default_moq %}{{ product.default_moq }} units{% else %}<span class="info-muted">Not set</span>{% endif %}
+            {% if product.default_moq %}{{ product.default_moq }}{% else %}<span class="info-muted">Not set</span>{% endif %}
           </div>
         </div>
 
@@ -538,12 +538,16 @@
 
         <div class="info-row">
           <div class="info-label">Created</div>
-          <div class="info-value">{{ product.created_at|date:"Y-m-d H:i" }}</div>
+          <div class="info-value">
+            {% if product.created_at %}{{ product.created_at|date:"Y-m-d H:i" }}{% else %}<span class="info-muted">Not set</span>{% endif %}
+          </div>
         </div>
 
         <div class="info-row">
           <div class="info-label">Last updated</div>
-          <div class="info-value">{{ product.updated_at|date:"Y-m-d H:i" }}</div>
+          <div class="info-value">
+            {% if product.updated_at %}{{ product.updated_at|date:"Y-m-d H:i" }}{% else %}<span class="info-muted">Not set</span>{% endif %}
+          </div>
         </div>
 
       </div>
@@ -554,36 +558,34 @@
   <div class="notes-card">
     <div class="notes-title">
       <span>Notes</span>
+      <span class="pill">Saved text lives here</span>
     </div>
     <div class="notes-body" id="product-notes-body">
       {% if product.notes %}
         {{ product.notes }}
       {% else %}
-        <span class="info-muted">No notes yet. AI answers from this page are also saved here.</span>
+        <span class="info-muted">No notes yet. AI answers from this page can be saved into notes.</span>
       {% endif %}
     </div>
   </div>
 
   <div class="ai-card">
-
     <div class="ai-header">
-      <div class="ai-title">
-        🤖 AI help for this product
-      </div>
+      <div class="ai-title">🤖 AI help for this product</div>
       <div class="ai-status" id="ai-prod-detail-status">Ready</div>
     </div>
 
     <div class="ai-note">
-      Uses this product data and saves the answer into notes.
+      Uses this product data. The server can also save the answer into notes.
     </div>
 
     <div class="ai-chip-row">
-      <div class="ai-chip" data-mode="summary">Summary</div>
-      <div class="ai-chip" data-mode="use_cases">Use cases</div>
-      <div class="ai-chip" data-mode="costing">Costing view</div>
-      <div class="ai-chip" data-mode="bundle">Bundle ideas</div>
-      <div class="ai-chip" data-mode="email">Email draft</div>
-      <div class="ai-chip" data-mode="spec">Spec reminder</div>
+      <button type="button" class="ai-chip" data-mode="summary">Summary</button>
+      <button type="button" class="ai-chip" data-mode="use_cases">Use cases</button>
+      <button type="button" class="ai-chip" data-mode="costing">Costing view</button>
+      <button type="button" class="ai-chip" data-mode="bundle">Bundle ideas</button>
+      <button type="button" class="ai-chip" data-mode="email">Email draft</button>
+      <button type="button" class="ai-chip" data-mode="spec">Spec reminder</button>
     </div>
 
     <div class="ai-output" id="ai-prod-detail-output">AI answer will appear here.</div>
@@ -595,18 +597,14 @@
         <input
           type="text"
           id="ai-prod-chat-input"
-          placeholder="Example: Write a short sales pitch for this hoodie"
+          placeholder="Example: Write a short sales pitch for this product"
           autocomplete="off"
         >
-        <button type="button" class="btn-gold" style="padding:8px 12px;" id="ai-prod-chat-btn">
-          Ask AI
-        </button>
+        <button type="button" class="btn-pill btn-gold" id="ai-prod-chat-btn">Ask AI</button>
       </div>
 
       <div class="ai-chat-log" id="ai-prod-chat-log">
-        <div class="info-muted" id="ai-chat-placeholder">
-          Chat history will show here.
-        </div>
+        <div class="info-muted" id="ai-chat-placeholder">Chat history will show here.</div>
       </div>
     </div>
 
@@ -618,149 +616,167 @@
 </div>
 
 <script>
-(function () {
-  const statusBox = document.getElementById("ai-prod-detail-status");
-  const outBox = document.getElementById("ai-prod-detail-output");
-  const chipNodes = document.querySelectorAll(".ai-chip");
-  const chatInput = document.getElementById("ai-prod-chat-input");
-  const chatBtn = document.getElementById("ai-prod-chat-btn");
-  const chatLog = document.getElementById("ai-prod-chat-log");
-  const chatPlaceholder = document.getElementById("ai-chat-placeholder");
+  (function () {
+    const statusBox = document.getElementById("ai-prod-detail-status");
+    const outBox = document.getElementById("ai-prod-detail-output");
+    const chipNodes = document.querySelectorAll(".ai-chip");
+    const chatInput = document.getElementById("ai-prod-chat-input");
+    const chatBtn = document.getElementById("ai-prod-chat-btn");
+    const chatLog = document.getElementById("ai-prod-chat-log");
+    const chatPlaceholder = document.getElementById("ai-chat-placeholder");
 
-  let isBusy = false;
+    let isBusy = false;
 
-  function getCsrf() {
-    const tokenField = document.querySelector("#ai-prod-detail-csrf input[name='csrfmiddlewaretoken']");
-    return tokenField ? tokenField.value : "";
-  }
-
-  function setBusy(on) {
-    isBusy = on;
-
-    chipNodes.forEach(function (c) {
-      c.setAttribute("aria-disabled", on ? "true" : "false");
-      if (on) c.classList.add("is-busy");
-      else c.classList.remove("is-busy");
-    });
-
-    if (chatBtn) chatBtn.disabled = on;
-    if (chatInput) chatInput.disabled = on;
-  }
-
-  function clearActiveChips() {
-    chipNodes.forEach(function (c) { c.classList.remove("active"); });
-  }
-
-  function addLine(tag, text) {
-    if (!chatLog) return;
-
-    if (chatPlaceholder && chatPlaceholder.parentNode) {
-      chatPlaceholder.parentNode.removeChild(chatPlaceholder);
+    function getCsrf() {
+      const tokenField = document.querySelector("#ai-prod-detail-csrf input[name='csrfmiddlewaretoken']");
+      return tokenField ? tokenField.value : "";
     }
 
-    const line = document.createElement("div");
-    line.className = "chat-line";
-
-    const t = document.createElement("span");
-    t.className = "chat-tag";
-    t.textContent = tag + ":";
-
-    const msg = document.createElement("span");
-    msg.textContent = " " + (text || "");
-
-    line.appendChild(t);
-    line.appendChild(msg);
-
-    chatLog.appendChild(line);
-    chatLog.scrollTop = chatLog.scrollHeight;
-  }
-
-  function safeText(s) {
-    return (s || "").toString();
-  }
-
-  function callProductAi(mode, extraData, clickedChip) {
-    if (isBusy) return;
-
-    setBusy(true);
-    if (statusBox) statusBox.innerHTML = "<span class='ai-spinner'></span> Thinking";
-    if (outBox) outBox.textContent = "";
-
-    if (clickedChip) {
-      clearActiveChips();
-      clickedChip.classList.add("active");
-    } else {
-      clearActiveChips();
-    }
-
-    const body = { mode: mode };
-    if (extraData) {
-      for (const k in extraData) body[k] = extraData[k];
-    }
-
-    fetch("{% url 'product_ai_detail' product.pk %}", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "X-CSRFToken": getCsrf()
-      },
-      body: new URLSearchParams(body)
-    })
-    .then(function (res) { return res.json(); })
-    .then(function (data) {
-      if (data && data.ok) {
-        const text = safeText(data.text) || "No answer from AI.";
-        if (outBox) outBox.textContent = text;
-        if (statusBox) statusBox.textContent = "Saved into notes";
-
-        if (mode === "chat") addLine("AI", text);
-        else addLine("AI", "[" + mode + "] " + text);
+    function setStatus(text, spinning) {
+      if (!statusBox) return;
+      if (spinning) {
+        statusBox.innerHTML = "<span class='ai-spinner'></span> " + text;
       } else {
-        if (outBox) outBox.textContent = safeText((data && data.error) ? data.error : "AI could not answer.");
-        if (statusBox) statusBox.textContent = "Error";
+        statusBox.textContent = text;
       }
-    })
-    .catch(function () {
-      if (outBox) outBox.textContent = "Error talking to AI.";
-      if (statusBox) statusBox.textContent = "Error";
-    })
-    .finally(function () {
-      setBusy(false);
-    });
-  }
+    }
 
-  chipNodes.forEach(function (chip) {
-    chip.addEventListener("click", function () {
+    function setBusy(on) {
+      isBusy = on;
+
+      chipNodes.forEach(function (c) {
+        c.setAttribute("aria-disabled", on ? "true" : "false");
+        if (on) c.classList.add("is-busy");
+        else c.classList.remove("is-busy");
+      });
+
+      if (chatBtn) chatBtn.disabled = on;
+      if (chatInput) chatInput.disabled = on;
+    }
+
+    function clearActiveChips() {
+      chipNodes.forEach(function (c) { c.classList.remove("active"); });
+    }
+
+    function addLine(tag, text) {
+      if (!chatLog) return;
+
+      if (chatPlaceholder && chatPlaceholder.parentNode) {
+        chatPlaceholder.parentNode.removeChild(chatPlaceholder);
+      }
+
+      const line = document.createElement("div");
+      line.className = "chat-line";
+
+      const t = document.createElement("span");
+      t.className = "chat-tag";
+      t.textContent = tag + ":";
+
+      const msg = document.createElement("span");
+      msg.textContent = " " + (text || "");
+
+      line.appendChild(t);
+      line.appendChild(msg);
+
+      chatLog.appendChild(line);
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    function safeText(s) {
+      return (s || "").toString();
+    }
+
+    function callProductAi(mode, extraData, clickedChip) {
       if (isBusy) return;
-      const mode = chip.getAttribute("data-mode");
-      callProductAi(mode, {}, chip);
-    });
-  });
 
-  function askChat() {
-    const question = (chatInput && chatInput.value) ? chatInput.value.trim() : "";
-    if (!question || isBusy) return;
+      setBusy(true);
+      setStatus("Thinking", true);
+      if (outBox) outBox.textContent = "";
 
-    addLine("You", question);
-    chatInput.value = "";
-    callProductAi("chat", { user_text: question }, null);
-  }
-
-  if (chatBtn) {
-    chatBtn.addEventListener("click", function () {
-      askChat();
-    });
-  }
-
-  if (chatInput) {
-    chatInput.addEventListener("keydown", function (e) {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        askChat();
+      if (clickedChip) {
+        clearActiveChips();
+        clickedChip.classList.add("active");
+      } else {
+        clearActiveChips();
       }
+
+      const body = { mode: mode };
+      if (extraData) {
+        for (const k in extraData) body[k] = extraData[k];
+      }
+
+      fetch("{% url 'product_ai_detail' product.pk %}", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-CSRFToken": getCsrf()
+        },
+        body: new URLSearchParams(body)
+      })
+      .then(async function (res) {
+        const isJson = (res.headers.get("content-type") || "").includes("application/json");
+        const data = isJson ? await res.json() : { ok: false, error: "Server response was not JSON." };
+        if (!res.ok) {
+          return { ok: false, error: data.error || ("Request failed. Status " + res.status) };
+        }
+        return data;
+      })
+      .then(function (data) {
+        if (data && data.ok) {
+          const text = safeText(data.text) || "No answer from AI.";
+          if (outBox) outBox.textContent = text;
+
+          if (data.saved) setStatus("Saved into notes", false);
+          else setStatus("Ready", false);
+
+          if (mode === "chat") addLine("AI", text);
+          else addLine("AI", "[" + mode + "] " + text);
+        } else {
+          if (outBox) outBox.textContent = safeText((data && data.error) ? data.error : "AI could not answer.");
+          setStatus("Error", false);
+        }
+      })
+      .catch(function () {
+        if (outBox) outBox.textContent = "Error talking to AI.";
+        setStatus("Error", false);
+      })
+      .finally(function () {
+        setBusy(false);
+      });
+    }
+
+    chipNodes.forEach(function (chip) {
+      chip.addEventListener("click", function () {
+        if (isBusy) return;
+        const mode = chip.getAttribute("data-mode");
+        callProductAi(mode, {}, chip);
+      });
     });
-  }
-})();
+
+    function askChat() {
+      const question = (chatInput && chatInput.value) ? chatInput.value.trim() : "";
+      if (!question || isBusy) return;
+
+      addLine("You", question);
+      chatInput.value = "";
+      callProductAi("chat", { user_text: question }, null);
+    }
+
+    if (chatBtn) {
+      chatBtn.addEventListener("click", function () {
+        askChat();
+      });
+    }
+
+    if (chatInput) {
+      chatInput.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          askChat();
+        }
+      });
+    }
+  })();
 </script>
 
 {% endblock %}

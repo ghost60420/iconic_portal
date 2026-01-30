@@ -150,59 +150,74 @@
     gap: 8px;
   }
 
-  .stage-wrap {
-    margin-top: 6px;
+  .stage-wrap { margin-top: 6px; }
+
+  /* Clean stage flow */
+  .stage-strip{
+    display:flex;
+    gap:10px;
+    padding:10px;
+    border-radius:14px;
+    border:1px solid #27272a;
+    background:#020617;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
   }
 
-  .stage-strip {
-    display: flex;
-    align-items: stretch;
-    border-radius: 999px;
-    overflow: hidden;
-    border: 1px solid #27272a;
-    background: #020617;
+  .stage-strip::-webkit-scrollbar{ height:8px; }
+  .stage-strip::-webkit-scrollbar-thumb{ background:#111827; border-radius:999px; }
+
+  .stage-form{ margin:0; flex:0 0 auto; }
+
+  .stage-btn{
+    border:0;
+    background:transparent;
+    padding:0;
+    outline:none;
   }
 
-  .stage-item {
-    flex: 1 1 0;
-    text-align: center;
-    padding: 7px 6px;
-    font-size: 11px;
-    font-weight: 700;
-    border-right: 1px solid #020617;
-    color: #e5e7eb;
-    white-space: nowrap;
-    text-decoration: none;
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    justify-content: center;
-    user-select: none;
-    transition: transform 0.08s ease, filter 0.08s ease;
-    cursor: pointer;
+  .stage-item{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:9px 12px;
+    border-radius:999px;
+    border:1px solid rgba(255,255,255,0.12);
+    font-size:12px;
+    font-weight:800;
+    color:#e5e7eb;
+    white-space:nowrap;
+    user-select:none;
+    cursor:pointer;
+    min-height:38px;
+    transition:filter 0.08s ease, transform 0.08s ease;
   }
 
-  .stage-item:last-child { border-right: none; }
+  .stage-item:hover{ filter:brightness(1.08); transform:translateY(-1px); }
 
-  .stage-item:hover {
-    filter: brightness(1.07);
-    transform: translateY(-1px);
+  .stage-item.planned{ background:#0b1222; }
+  .stage-item.current{ background:#1d4ed8; color:#ffffff; }
+  .stage-item.done{ background:#16a34a; color:#ffffff; }
+  .stage-item.delay{ background:#b91c1c; color:#ffffff; }
+  .stage-item.hold{ background:#78350f; color:#fef3c7; }
+
+  .stage-emoji{ font-size:14px; line-height:1; }
+
+  .stage-chip-dot{
+    width:8px;
+    height:8px;
+    border-radius:999px;
+    background:rgba(255,255,255,0.35);
   }
 
-  .stage-item.planned { background: #111827; }
-  .stage-item.current { background: #1d4ed8; }
-  .stage-item.done { background: #16a34a; }
-  .stage-item.delay { background: #b91c1c; }
-  .stage-item.hold { background: #78350f; }
-
-  .stage-emoji {
-    font-size: 12px;
-    line-height: 1;
+  .stage-item.current .stage-chip-dot,
+  .stage-item.done .stage-chip-dot,
+  .stage-item.delay .stage-chip-dot,
+  .stage-item.hold .stage-chip-dot{
+    background:rgba(255,255,255,0.85);
   }
 
-  .progress-row {
-    margin-top: 10px;
-  }
+  .progress-row { margin-top: 10px; }
 
   .stage-dates-head {
     display: flex;
@@ -297,9 +312,7 @@
     color: #e5e7eb;
   }
 
-  .muted {
-    color: #6b7280;
-  }
+  .muted { color: #6b7280; }
 
   .dpr-grid {
     display: grid;
@@ -413,22 +426,7 @@
     text-decoration-color: #4b5563;
   }
 
-  .attach-list a:hover {
-    text-decoration-color: #facc15;
-  }
-
-  /* important: keep stage buttons clean */
-  .stage-form {
-    flex: 1 1 0;
-    margin: 0;
-  }
-  .stage-btn {
-    width: 100%;
-    border: 0;
-    outline: none;
-    background: transparent;
-    padding: 0;
-  }
+  .attach-list a:hover { text-decoration-color: #facc15; }
 
   @media (max-width: 900px) {
     .meta-item { grid-column: span 6; }
@@ -440,9 +438,6 @@
     .sheet-top { grid-template-columns: 1fr; }
     .stage-row { grid-template-columns: 1fr; }
     .dpr-grid { grid-template-columns: 1fr; }
-    .stage-strip { overflow-x: auto; }
-    .stage-item { min-width: 140px; }
-    .stage-form { flex: 0 0 auto; }
   }
 </style>
 
@@ -576,13 +571,14 @@
                 action="{% url 'production_stage_click' stage.id %}"
                 class="stage-form">
             {% csrf_token %}
-            <button type="submit" class="stage-btn">
+            <button type="submit" class="stage-btn" title="Open {{ stage.display_name|default:stage.get_stage_key_display }}">
               <div class="stage-item
                 {% if stage.status == 'done' %}done
                 {% elif stage.status == 'in_progress' %}current
                 {% elif stage.status == 'delay' %}delay
                 {% elif stage.status == 'hold' %}hold
                 {% else %}planned{% endif %}">
+                <span class="stage-chip-dot"></span>
                 <span class="stage-emoji">
                   {% if stage.stage_key == "development" %}🧠
                   {% elif stage.stage_key == "sampling" %}🧪

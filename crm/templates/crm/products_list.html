@@ -1,372 +1,550 @@
 {% include "crm/navbar.html" %}
+{% load static %}
 
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="utf-8">
-    <title>Product library - Iconic CRM</title>
-    <style>
-        body {
-            background: #000;
-            color: #f5d580;
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-        }
-        .page {
-            max-width: 1200px;
-            margin: 20px auto 40px auto;
-            padding: 0 15px;
-        }
-        .header-title {
-            font-size: 22px;
-            font-weight: bold;
-            margin-bottom: 15px;
-        }
+  <meta charset="utf-8">
+  <title>Product library - Iconic CRM</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
-        /* filter bar */
-        .toolbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-bottom: 15px;
-        }
-        .toolbar-left {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-        .search-box input {
-            background: #000;
-            color: #f5d580;
-            border: 1px solid #444;
-            padding: 6px 8px;
-            border-radius: 4px;
-            font-size: 13px;
-            min-width: 190px;
-        }
-        select {
-            background: #000;
-            color: #f5d580;
-            border: 1px solid #444;
-            padding: 6px 8px;
-            border-radius: 4px;
-            font-size: 13px;
-        }
-        .btn {
-            background: #f5d580;
-            color: #000;
-            padding: 7px 14px;
-            border-radius: 5px;
-            font-size: 13px;
-            font-weight: bold;
-            border: none;
-            cursor: pointer;
-        }
-        .btn-secondary {
-            background: #222;
-            color: #f5d580;
-            border: 1px solid #444;
-        }
+  <style>
+    :root{
+      --bg:#060606;
+      --panel:#0b0d10;
+      --panel2:#0f172a;
+      --border:#2a2f38;
+      --text:#f8f9fa;
+      --muted:#a8b0bd;
+      --gold1:#ffe39b;
+      --gold2:#e4c067;
+    }
 
-        /* AI helper card */
-        .ai-row {
-            display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 15px;
-            margin-bottom: 18px;
-        }
-        .ai-card {
-            background: #111;
-            border: 1px solid #333;
-            border-radius: 10px;
-            padding: 12px 14px;
-            font-size: 13px;
-        }
-        .ai-card-title {
-            font-weight: bold;
-            margin-bottom: 6px;
-            font-size: 14px;
-        }
-        .ai-grid {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 8px;
-            margin-top: 6px;
-        }
-        .ai-field label {
-            display: block;
-            font-size: 11px;
-            margin-bottom: 2px;
-            color: #d9c17a;
-        }
-        .ai-field input,
-        .ai-field select {
-            width: 100%;
-            background: #000;
-            color: #f5d580;
-            border-radius: 4px;
-            border: 1px solid #444;
-            padding: 5px 6px;
-            font-size: 12px;
-        }
-        .ai-actions {
-            margin-top: 8px;
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-        .ai-note {
-            font-size: 11px;
-            color: #a4925c;
-        }
-        .ai-output {
-            margin-top: 8px;
-            background: #050505;
-            border-radius: 6px;
-            border: 1px solid #333;
-            padding: 8px;
-            min-height: 60px;
-            font-size: 12px;
-            white-space: pre-wrap;
-        }
+    body{
+      background:var(--bg);
+      color:var(--text);
+      font-family: Arial, sans-serif;
+      margin:0;
+    }
 
-        /* table */
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 13px;
-        }
-        th, td {
-            border: 1px solid #333;
-            padding: 6px 8px;
-        }
-        th {
-            background: #111;
-            color: #f5d580;
-            text-align: left;
-        }
-        tr:nth-child(even) { background: #101010; }
+    a{ color:#f5d580; text-decoration:none; }
+    a:hover{ color:#ffe9a8; }
 
-        .preview-img {
-            max-width: 70px;
-            max-height: 70px;
-            border-radius: 6px;
-            border: 1px solid #333;
-        }
+    .page{
+      max-width: 1200px;
+      margin: 18px auto 40px auto;
+      padding: 0 14px;
+    }
 
-        @media (max-width: 900px) {
-            .ai-row {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
+    .title-row{
+      display:flex;
+      align-items:flex-end;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-bottom: 12px;
+    }
+
+    .header-title{
+      font-size: 22px;
+      font-weight: 900;
+      margin: 0;
+      color: var(--gold1);
+      letter-spacing: 0.2px;
+    }
+
+    .subtle{
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+      font-weight: 700;
+    }
+
+    .card{
+      background: linear-gradient(180deg, rgba(15,23,42,0.55), rgba(2,6,23,0.65));
+      border: 1px solid rgba(148,163,184,0.22);
+      border-radius: 14px;
+      box-shadow: 0 18px 40px rgba(0,0,0,0.45);
+    }
+
+    .toolbar{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+      padding: 12px;
+    }
+
+    .toolbar-left{
+      display:flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items:center;
+      margin:0;
+    }
+
+    .field{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.04);
+    }
+
+    .field input,
+    .field select{
+      background: transparent;
+      color: var(--text);
+      border: none;
+      outline: none;
+      font-size: 13px;
+      min-width: 190px;
+    }
+
+    .field select{ min-width: 160px; }
+
+    .field input::placeholder{ color: rgba(248,249,250,0.55); }
+
+    .btn{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding: 9px 12px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 900;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.04);
+      color: #f3f4f6;
+      cursor:pointer;
+      user-select:none;
+      line-height: 1;
+      transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+      text-decoration:none;
+      white-space:nowrap;
+    }
+
+    .btn:hover{
+      transform: translateY(-1px);
+      background: rgba(255,255,255,0.06);
+      border-color: rgba(245, 213, 128, 0.32);
+      color:#ffe9a8;
+    }
+
+    .btn:active{ transform: translateY(0px); }
+
+    .btn-primary{
+      background: rgba(245, 213, 128, 0.16);
+      border-color: rgba(255, 227, 155, 0.30);
+      box-shadow: 0 10px 22px rgba(255, 209, 120, 0.10);
+    }
+
+    .btn- կարծում{
+      /* empty, no hyphen use requested */
+    }
+
+    .ai-row{
+      display:grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .ai-card{
+      padding: 14px;
+    }
+
+    .ai-card-title{
+      font-weight: 900;
+      font-size: 14px;
+      margin-bottom: 6px;
+      color: var(--gold1);
+    }
+
+    .ai-note{
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .ai-grid{
+      display:grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .ai-field label{
+      display:block;
+      font-size: 11px;
+      margin-bottom: 4px;
+      color: rgba(255,227,155,0.85);
+      font-weight: 900;
+      letter-spacing: 0.2px;
+    }
+
+    .ai-field input,
+    .ai-field select{
+      width: 100%;
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.12);
+      padding: 9px 10px;
+      font-size: 13px;
+      outline: none;
+    }
+
+    .ai-field input::placeholder{ color: rgba(248,249,250,0.55); }
+
+    .ai-actions{
+      margin-top: 10px;
+      display:flex;
+      gap: 10px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.22);
+      background: rgba(255,255,255,0.03);
+      font-size: 12px;
+      font-weight: 800;
+      color: rgba(248,249,250,0.75);
+    }
+
+    .ai-output{
+      margin-top: 10px;
+      background: rgba(0,0,0,0.35);
+      border-radius: 12px;
+      border: 1px solid rgba(148,163,184,0.22);
+      padding: 10px 12px;
+      min-height: 72px;
+      font-size: 13px;
+      white-space: pre-wrap;
+      color: #f8f9fa;
+    }
+
+    .tips ul{
+      margin: 0;
+      padding-left: 16px;
+      font-size: 12px;
+      line-height: 1.5;
+      color: rgba(248,249,250,0.80);
+      font-weight: 700;
+    }
+
+    .table-card{
+      padding: 12px;
+    }
+
+    .table-wrap{
+      width: 100%;
+      overflow-x: auto;
+      border-radius: 12px;
+      border: 1px solid rgba(148,163,184,0.22);
+      background: rgba(0,0,0,0.20);
+    }
+
+    table{
+      width:100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      min-width: 820px;
+    }
+
+    th, td{
+      padding: 10px 10px;
+      border-bottom: 1px solid rgba(148,163,184,0.16);
+      vertical-align: middle;
+    }
+
+    th{
+      text-align:left;
+      font-size: 12px;
+      letter-spacing: 0.2px;
+      color: rgba(255,227,155,0.90);
+      background: rgba(255,255,255,0.04);
+      font-weight: 900;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+
+    tr:hover td{
+      background: rgba(245, 213, 128, 0.06);
+    }
+
+    .muted{
+      color: rgba(248,249,250,0.55);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .preview-img{
+      width: 64px;
+      height: 64px;
+      object-fit: cover;
+      border-radius: 12px;
+      border: 1px solid rgba(148,163,184,0.22);
+      background: rgba(255,255,255,0.03);
+    }
+
+    .code{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+      color: rgba(248,249,250,0.85);
+      font-weight: 800;
+    }
+
+    .empty{
+      padding: 14px;
+      border: 1px dashed rgba(148,163,184,0.30);
+      border-radius: 14px;
+      color: rgba(248,249,250,0.75);
+      font-size: 13px;
+      font-weight: 700;
+      background: rgba(255,255,255,0.02);
+    }
+
+    @media (max-width: 980px){
+      .ai-row{ grid-template-columns: 1fr; }
+      .field input{ min-width: 160px; }
+      .field select{ min-width: 160px; }
+    }
+  </style>
 </head>
+
 <body>
-<div class="page">
+  <div class="page">
 
-    <div class="header-title">Product library</div>
+    <div class="title-row">
+      <div>
+        <h1 class="header-title">Product library</h1>
+        <div class="subtle">Search and manage products. Use AI to get quick specs ideas.</div>
+      </div>
+       <a href="/products/" class="btn">Clear</a>
+     
+    </div>
 
-    <div class="toolbar">
+    <div class="card">
+      <div class="toolbar">
         <form method="get" class="toolbar-left">
-            <div class="search-box">
-                <input type="text" name="q" value="{{ q }}" placeholder="Search by name">
-            </div>
-            <div>
-                <select name="product_type">
-                    <option value="">Any type</option>
-                    {% for value,label in type_choices %}
-                        <option value="{{ value }}" {% if product_type == value %}selected{% endif %}>
-                            {{ label }}
-                        </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div>
-                <select name="product_category">
-                    <option value="">Any category</option>
-                    {% for value,label in category_choices %}
-                        <option value="{{ value }}" {% if product_category == value %}selected{% endif %}>
-                            {{ label }}
-                        </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <button type="submit" class="btn">Filter</button>
-            <a href="{% url 'products_list' %}" class="btn btn-secondary">Clear</a>
+          <div class="field">
+            <span class="muted">🔎</span>
+            <input type="text" name="q" value="{{ q }}" placeholder="Search by name">
+          </div>
+
+          <div class="field">
+            <span class="muted">Type</span>
+            <select name="product_type">
+              <option value="">Any type</option>
+              {% for value,label in type_choices %}
+                <option value="{{ value }}" {% if product_type == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="field">
+            <span class="muted">Category</span>
+            <select name="product_category">
+              <option value="">Any category</option>
+              {% for value,label in category_choices %}
+                <option value="{{ value }}" {% if product_category == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <button type="submit" class="btn btn-primary">Filter</button>
+          <a href="{% url 'products_list' %}" class="btn">Clear</a>
         </form>
-
-        <a href="{% url 'product_add' %}" class="btn">Add product</a>
+      </div>
     </div>
 
-    <!-- AI helper row -->
+    <div style="height:12px;"></div>
+
     <div class="ai-row">
-        <div class="ai-card">
-            <div class="ai-card-title">AI ideas for a new product</div>
-            <div class="ai-note">
-                Fill the basic info and AI will suggest GSM, fabric, and a short use case.
-            </div>
+      <div class="card ai-card">
+        <div class="ai-card-title">AI ideas for a new product</div>
+        <div class="ai-note">Fill the basics and AI can suggest GSM, fabric, and a short use case.</div>
 
-            <div class="ai-grid">
-                <div class="ai-field">
-                    <label>Product name</label>
-                    <input id="ai-prod-name" type="text" placeholder="Example Hoodie set">
-                </div>
-                <div class="ai-field">
-                    <label>Type</label>
-                    <select id="ai-prod-type">
-                        <option value="">Select type</option>
-                        {% for value,label in type_choices %}
-                            <option value="{{ label }}">{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="ai-field">
-                    <label>Category</label>
-                    <select id="ai-prod-category">
-                        <option value="">Select category</option>
-                        {% for value,label in category_choices %}
-                            <option value="{{ label }}">{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
+        <div class="ai-grid">
+          <div class="ai-field">
+            <label>Product name</label>
+            <input id="ai-prod-name" type="text" placeholder="Example Heavy fleece hoodie set">
+          </div>
 
-            <div class="ai-actions">
-                <button type="button" class="btn" id="ai-prod-btn">Ask AI</button>
-                <span class="ai-note" id="ai-prod-status"></span>
-            </div>
+          <div class="ai-field">
+            <label>Type</label>
+            <select id="ai-prod-type">
+              <option value="">Select type</option>
+              {% for value,label in type_choices %}
+                <option value="{{ value }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
 
-            <div class="ai-output" id="ai-prod-output">
-                AI suggestion will appear here.
-            </div>
+          <div class="ai-field">
+            <label>Category</label>
+            <select id="ai-prod-category">
+              <option value="">Select category</option>
+              {% for value,label in category_choices %}
+                <option value="{{ value }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
         </div>
 
-        <div class="ai-card">
-            <div class="ai-card-title">Quick tips</div>
-            <ul style="margin:0; padding-left:16px; font-size:12px; line-height:1.4;">
-                <li>Use clear names like “Heavy fleece hoodie set”.</li>
-                <li>Type and category should match how your team quotes orders.</li>
-                <li>Copy any good AI lines into the product form when you add it.</li>
-            </ul>
+        <div class="ai-actions">
+          <button type="button" class="btn btn-primary" id="ai-prod-btn">🤖 Ask AI</button>
+          <span class="pill" id="ai-prod-status">Idle</span>
         </div>
+
+        <div class="ai-output" id="ai-prod-output">AI suggestion will appear here.</div>
+
+        <form id="ai-prod-csrf-form" style="display:none;">
+          {% csrf_token %}
+        </form>
+      </div>
+
+      <div class="card ai-card tips">
+        <div class="ai-card-title">Quick tips</div>
+        <ul>
+          <li>Use clear names like Heavy fleece hoodie set.</li>
+          <li>Type and category should match how your team quotes orders.</li>
+          <li>Copy good AI lines into the product form when you add it.</li>
+        </ul>
+      </div>
     </div>
 
-    {% if products %}
-        <table>
+    <div class="card table-card">
+      {% if products %}
+        <div class="table-wrap">
+          <table>
             <thead>
-            <tr>
-                <th>Code</th>
-                <th>Preview</th>
+              <tr>
+                <th style="width:110px;">Code</th>
+                <th style="width:90px;">Preview</th>
                 <th>Name</th>
-                <th>Type</th>
-                <th>Category</th>
-                <th>Default GSM</th>
-                <th>Default price</th>
-            </tr>
+                <th style="width:160px;">Type</th>
+                <th style="width:170px;">Category</th>
+                <th style="width:120px;">Default GSM</th>
+                <th style="width:130px;">Default price</th>
+              </tr>
             </thead>
             <tbody>
-            {% for p in products %}
+              {% for p in products %}
                 <tr>
-                    <td>{{ p.product_code }}</td>
-                    <td>
-                        {% if p.image %}
-                            <img src="{{ p.image.url }}" alt="{{ p.name }}" class="preview-img">
-                        {% else %}
-                            <span style="font-size:11px; color:#888;">No image</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <a href="{% url 'product_detail' p.pk %}" style="color:#f5d580;">
-                            {{ p.name }}
-                        </a>
-                    </td>
-                    <td>{{ p.get_product_type_display|default:p.product_type }}</td>
-                    <td>{{ p.get_product_category_display|default:p.product_category }}</td>
-                    <td>{{ p.default_gsm }}</td>
-                    <td>{{ p.default_price }}</td>
+                  <td class="code">{{ p.product_code }}</td>
+
+                  <td>
+                    {% if p.image %}
+                      <img src="{{ p.image.url }}" alt="{{ p.name }}" class="preview-img">
+                    {% else %}
+                      <span class="muted">No image</span>
+                    {% endif %}
+                  </td>
+
+                  <td>
+                    <a href="{% url 'product_detail' p.pk %}"><strong>{{ p.name }}</strong></a>
+                  </td>
+
+                  <td>{{ p.get_product_type_display|default:p.product_type }}</td>
+                  <td>{{ p.get_product_category_display|default:p.product_category }}</td>
+                  <td>{{ p.default_gsm }}</td>
+                  <td>{{ p.default_price }}</td>
                 </tr>
-            {% endfor %}
+              {% endfor %}
             </tbody>
-        </table>
-    {% else %}
-        <p style="font-size:13px; color:#aaa;">No products yet.</p>
-    {% endif %}
+          </table>
+        </div>
+      {% else %}
+        <div class="empty">No products yet.</div>
+      {% endif %}
+    </div>
 
-    <!-- hidden form only for CSRF -->
-    <form id="ai-prod-csrf-form" style="display:none;">
-        {% csrf_token %}
-    </form>
+  </div>
 
-</div>
-
-<script>
+  <script>
     (function () {
-        const btn = document.getElementById("ai-prod-btn");
-        if (!btn) return;
+      const btn = document.getElementById("ai-prod-btn");
+      if (!btn) return;
 
-        const nameInput = document.getElementById("ai-prod-name");
-        const typeInput = document.getElementById("ai-prod-type");
-        const catInput = document.getElementById("ai-prod-category");
-        const outBox = document.getElementById("ai-prod-output");
-        const statusSpan = document.getElementById("ai-prod-status");
+      const nameInput = document.getElementById("ai-prod-name");
+      const typeInput = document.getElementById("ai-prod-type");
+      const catInput = document.getElementById("ai-prod-category");
+      const outBox = document.getElementById("ai-prod-output");
+      const statusSpan = document.getElementById("ai-prod-status");
 
-        function getCsrf() {
-            const tokenField = document.querySelector(
-                "#ai-prod-csrf-form input[name='csrfmiddlewaretoken']"
-            );
-            return tokenField ? tokenField.value : "";
+      function getCsrf() {
+        const tokenField = document.querySelector("#ai-prod-csrf-form input[name='csrfmiddlewaretoken']");
+        return tokenField ? tokenField.value : "";
+      }
+
+      function setStatus(text) {
+        if (!statusSpan) return;
+        statusSpan.textContent = text;
+      }
+
+      btn.addEventListener("click", function () {
+        const name = (nameInput && nameInput.value ? nameInput.value : "").trim();
+        const ptype = (typeInput && typeInput.value ? typeInput.value : "").trim();
+        const cat = (catInput && catInput.value ? catInput.value : "").trim();
+
+        if (!name) {
+          outBox.textContent = "Please type a product name first.";
+          setStatus("Idle");
+          return;
         }
 
-        btn.addEventListener("click", function () {
-            const name = nameInput.value.trim();
-            const ptype = typeInput.value.trim();
-            const cat = catInput.value.trim();
+        setStatus("Thinking");
+        outBox.textContent = "";
 
-            if (!name) {
-                outBox.textContent = "Please type a product name first.";
-                statusSpan.textContent = "";
-                return;
-            }
-
-            statusSpan.textContent = "Thinking with AI...";
-            outBox.textContent = "";
-
-            fetch("{% url 'product_ai_suggest' %}", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "X-CSRFToken": getCsrf()
-                },
-                body: new URLSearchParams({
-                    name: name,
-                    product_type: ptype,
-                    product_category: cat
-                })
-            })
-            .then(function (res) {
-                return res.json();
-            })
-            .then(function (data) {
-                if (data.ok) {
-                    outBox.textContent = data.suggestion;
-                    statusSpan.textContent = "Ready";
-                } else {
-                    outBox.textContent = data.error || "AI could not answer.";
-                    statusSpan.textContent = "";
-                }
-            })
-            .catch(function (err) {
-                outBox.textContent = "Error talking to AI.";
-                statusSpan.textContent = "";
-                console.error(err);
-            });
+        fetch("/products/ai/suggest/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "X-CSRFToken": getCsrf()
+          },
+          body: new URLSearchParams({
+            name: name,
+            product_type: ptype,
+            product_category: cat
+          })
+        })
+        .then(async function (res) {
+          const isJson = (res.headers.get("content-type") || "").includes("application/json");
+          const data = isJson ? await res.json() : { ok: false, error: "Server response was not JSON." };
+          if (!res.ok) {
+            return { ok: false, error: data.error || ("Request failed. Status " + res.status) };
+          }
+          return data;
+        })
+        .then(function (data) {
+          if (data && data.ok) {
+            outBox.textContent = data.suggestion || "";
+            setStatus("Ready");
+          } else {
+            outBox.textContent = (data && data.error) ? data.error : "AI could not answer.";
+            setStatus("Idle");
+          }
+        })
+        .catch(function (err) {
+          outBox.textContent = "Error talking to AI.";
+          setStatus("Idle");
+          console.error(err);
         });
+      });
     })();
-</script>
-
+  </script>
 </body>
 </html>

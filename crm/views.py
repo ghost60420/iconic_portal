@@ -9,6 +9,10 @@ from django.db.models import Count, Sum, Q
 from django.db.models.functions import TruncDate
 from django.db import models
 from django.conf import settings
+try:
+    from openai import OpenAI
+except Exception:
+    OpenAI = None
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.mail import send_mail
@@ -47,6 +51,14 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 
 logger = logging.getLogger(__name__)
+
+def _get_openai_client():
+    api_key = (getattr(settings, "OPENAI_API_KEY", "") or "").strip()
+    if not api_key or OpenAI is None:
+        return None
+    return OpenAI(api_key=api_key)
+
+client = _get_openai_client()
 
 # One fixed stage order used everywhere
 STAGE_FLOW_ORDER = [
@@ -3266,12 +3278,7 @@ from .models import Event, Lead
 from .forms import EventForm
 
 # Optional OpenAI client (safe if package not installed)
-_ai_client = None
-try:
-    from openai import OpenAI
-    _ai_client = OpenAI(api_key=getattr(settings, "OPENAI_API_KEY", ""))
-except Exception:
-    _ai_client = None
+_ai_client = client
 # ==============================
 # EMAIL REMINDER HELPER
 # ==============================
@@ -5082,77 +5089,175 @@ def shipment_notify_customer(request, pk):
         messages.error(request, f"Could not send email. {e}")
 
     return redirect("shipment_detail", pk=pk)
+
 from datetime import timedelta
+from decimal import Decimal
+
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Sum, Q
-from django.db.models.functions import TruncDate
 from django.shortcuts import render
 from django.utils import timezone
 
-from .models import Lead, Opportunity, AccountingEntry, ProductionOrder, Shipment, BDStaffMonth
+from .models import Lead, Opportunity, AccountingEntry, BDStaffMonth
+
+# Optional models. If they do not exist, dashboard will still work.
+try:
+    from .models import ProductionOrder
+except Exception:
+    ProductionOrder = None
+
+try:
+    from .models import Shipment
+except Exception:
+    Shipment = None
+
+
+def _to_float(x):
+    if x is None:
+        return 0.0
+    if isinstance(x, Decimal):
+        return float(x)
+    try:
+        return float(x)
+    except Exception:
+        return 0.0
 
 
 @login_required
 def main_dashboard(request):
     today = timezone.localdate()
-    start_7 = today - timedelta(days=6)
     start_30 = today - timedelta(days=29)
-    start_90 = today - timedelta(days=89)
-    start_365 = today - timedelta(days=364)
 
-    # Leads (uses created_date)
+    # Leads
     leads_today = Lead.objects.filter(created_date=today).count()
-    leads_7 = Lead.objects.filter(created_date__gte=start_7).count()
     leads_30 = Lead.objects.filter(created_date__gte=start_30).count()
-    leads_90 = Lead.objects.filter(created_date__gte=start_90).count()
-    leads_365 = Lead.objects.filter(created_date__gte=start_365).count()
 
-    # Daily lead trend (last 30) SQLite safe
     leads_daily_qs = (
         Lead.objects.filter(created_date__gte=start_30)
         .values("created_date")
         .annotate(c=Count("id"))
         .order_by("created_date")
     )
+    lead_map = {row["created_date"]: int(row["c"]) for row in leads_daily_qs if row.get("created_date")}
+
+    leads_daily_labels = []
+    leads_daily_values = []
+    for i in range(30):
+        d = start_30 + timedelta(days=i)
+        leads_daily_labels.append(d.strftime("%Y-%m-%d"))
+        leads_daily_values.append(int(lead_map.get(d, 0)))
 
     # Opportunities
     opp_30 = Opportunity.objects.filter(created_date__gte=start_30).count()
-    opp_90 = Opportunity.objects.filter(created_date__gte=start_90).count()
-    opp_365 = Opportunity.objects.filter(created_date__gte=start_365).count()
 
-    opp_by_stage = (
+    opp_by_stage_qs = (
         Opportunity.objects.values("stage")
         .annotate(c=Count("id"))
         .order_by("-c")
     )
+    opp_stage_labels = []
+    opp_stage_values = []
+    for row in opp_by_stage_qs:
+        stage = (row.get("stage") or "").strip() or "Unknown"
+        opp_stage_labels.append(stage)
+        opp_stage_values.append(int(row.get("c") or 0))
 
-    # Accounting (last 30 days)
+    # Opp daily (for Leads vs Opportunities chart)
+    opp_daily_qs = (
+        Opportunity.objects.filter(created_date__gte=start_30)
+        .values("created_date")
+        .annotate(c=Count("id"))
+        .order_by("created_date")
+    )
+    opp_map = {row["created_date"]: int(row["c"]) for row in opp_daily_qs if row.get("created_date")}
+    opp_daily_values = []
+    for i in range(30):
+        d = start_30 + timedelta(days=i)
+        opp_daily_values.append(int(opp_map.get(d, 0)))
+
+    # Win vs Loss (safe guess using stage text)
+    won_count = Opportunity.objects.filter(Q(stage__icontains="won") | Q(stage__icontains="closed won")).count()
+    lost_count = Opportunity.objects.filter(Q(stage__icontains="lost") | Q(stage__icontains="closed lost")).count()
+    win_loss_labels = ["Won", "Lost"]
+    win_loss_values = [int(won_count), int(lost_count)]
+
+    # Lead funnel (safe guess using common lead_status words)
+    total_leads = Lead.objects.count()
+    qualified_leads = Lead.objects.filter(
+        Q(lead_status__icontains="qualified") | Q(lead_status__icontains="contacted") | Q(lead_status__icontains="warm")
+    ).count()
+    samples_count = Opportunity.objects.filter(Q(stage__icontains="sample")).count()
+    closed_won_count = won_count
+
+    funnel_labels = ["Leads", "Qualified", "Opportunities", "Samples", "Closed won"]
+    funnel_values = [int(total_leads), int(qualified_leads), int(Opportunity.objects.count()), int(samples_count), int(closed_won_count)]
+
+    # Accounting net per day (real cash flow line)
+    acc_qs = AccountingEntry.objects.filter(date__gte=start_30).values("date").annotate(
+        in_sum=Sum("amount_cad", filter=Q(direction="IN")),
+        out_sum=Sum("amount_cad", filter=Q(direction="OUT")),
+    )
+    acc_map = {}
+    for row in acc_qs:
+        d = row.get("date")
+        if not d:
+            continue
+        inc = _to_float(row.get("in_sum"))
+        out = _to_float(row.get("out_sum"))
+        acc_map[d] = inc - out
+
+    cash_daily_values = []
+    for i in range(30):
+        d = start_30 + timedelta(days=i)
+        cash_daily_values.append(_to_float(acc_map.get(d, 0)))
+
     acc_30 = AccountingEntry.objects.filter(date__gte=start_30)
-    acc_income_cad_30 = acc_30.filter(direction="IN").aggregate(s=Sum("amount_cad"))["s"] or 0
-    acc_out_cad_30 = acc_30.filter(direction="OUT").aggregate(s=Sum("amount_cad"))["s"] or 0
+    acc_income_cad_30 = _to_float(acc_30.filter(direction="IN").aggregate(s=Sum("amount_cad"))["s"])
+    acc_out_cad_30 = _to_float(acc_30.filter(direction="OUT").aggregate(s=Sum("amount_cad"))["s"])
     acc_net_cad_30 = acc_income_cad_30 - acc_out_cad_30
 
-    # Payroll (current month)
+    # Payroll
     pm = BDStaffMonth.objects.filter(year=today.year, month=today.month)
-    payroll_total = pm.aggregate(s=Sum("final_pay_bdt"))["s"] or 0
-    payroll_ot = pm.aggregate(s=Sum("overtime_total_bdt"))["s"] or 0
-    payroll_bonus = pm.aggregate(s=Sum("bonus_bdt"))["s"] or 0
-    payroll_deduction = pm.aggregate(s=Sum("deduction_bdt"))["s"] or 0
+    payroll_total = _to_float(pm.aggregate(s=Sum("final_pay_bdt"))["s"])
+    payroll_ot = _to_float(pm.aggregate(s=Sum("overtime_total_bdt"))["s"])
+    payroll_bonus = _to_float(pm.aggregate(s=Sum("bonus_bdt"))["s"])
+    payroll_deduction = _to_float(pm.aggregate(s=Sum("deduction_bdt"))["s"])
     payroll_paid = pm.filter(is_paid=True).count()
     payroll_unpaid = pm.filter(is_paid=False).count()
 
+    # Production status (optional)
+    prod_labels = ["On time", "Delayed", "Remake"]
+    prod_counts = [0, 0, 0]
+    if ProductionOrder is not None:
+        try:
+            on_time = ProductionOrder.objects.filter(Q(status__icontains="on time") | Q(status__icontains="ontime")).count()
+            delayed = ProductionOrder.objects.filter(Q(status__icontains="delay")).count()
+            remake = ProductionOrder.objects.filter(Q(status__icontains="remake") | Q(status__icontains="redo")).count()
+            prod_counts = [int(on_time), int(delayed), int(remake)]
+        except Exception:
+            pass
+
+    # Shipping status (optional)
+    ship_labels = ["This month"]
+    ship_shipped = [0]
+    ship_pending = [0]
+    ship_delayed = [0]
+    if Shipment is not None:
+        try:
+            shipped = Shipment.objects.filter(Q(status__icontains="ship") | Q(status__icontains="delivered")).count()
+            pending = Shipment.objects.filter(Q(status__icontains="pending") | Q(status__icontains="preparing")).count()
+            delayed = Shipment.objects.filter(Q(status__icontains="delay")).count()
+            ship_shipped = [int(shipped)]
+            ship_pending = [int(pending)]
+            ship_delayed = [int(delayed)]
+        except Exception:
+            pass
+
     ctx = {
         "leads_today": leads_today,
-        "leads_7": leads_7,
         "leads_30": leads_30,
-        "leads_90": leads_90,
-        "leads_365": leads_365,
-        "leads_daily": list(leads_daily_qs),
 
         "opp_30": opp_30,
-        "opp_90": opp_90,
-        "opp_365": opp_365,
-        "opp_by_stage": list(opp_by_stage),
 
         "acc_income_cad_30": acc_income_cad_30,
         "acc_out_cad_30": acc_out_cad_30,
@@ -5164,15 +5269,36 @@ def main_dashboard(request):
         "payroll_deduction": payroll_deduction,
         "payroll_paid": payroll_paid,
         "payroll_unpaid": payroll_unpaid,
+        "payroll_year": today.year,
+        "payroll_month": today.month,
+
+        # Charts
+        "leads_daily_labels": leads_daily_labels,
+        "leads_daily_values": leads_daily_values,
+
+        "opp_stage_labels": opp_stage_labels,
+        "opp_stage_values": opp_stage_values,
+
+        "opp_daily_values": opp_daily_values,
+
+        "win_loss_labels": win_loss_labels,
+        "win_loss_values": win_loss_values,
+
+        "funnel_labels": funnel_labels,
+        "funnel_values": funnel_values,
+
+        "cash_daily_values": cash_daily_values,
+
+        "prod_labels": prod_labels,
+        "prod_counts": prod_counts,
+
+        "ship_labels": ship_labels,
+        "ship_shipped": ship_shipped,
+        "ship_pending": ship_pending,
+        "ship_delayed": ship_delayed,
     }
 
     return render(request, "crm/main_dashboard.html", ctx)
-  
- 
-
-
-
-
 
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect

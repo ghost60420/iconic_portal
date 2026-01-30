@@ -5,74 +5,56 @@
 
     <div class="nav-left nav-scroll">
       {% url 'leads_list' as u_leads %}
-      <a class="navitem" href="{{ u_leads }}">Leads</a>
+      {% if u_leads %}<a class="navitem" href="{{ u_leads }}">Leads</a>{% endif %}
 
       {% url 'opportunities_list' as u_opps %}
-      <a class="navitem" href="{{ u_opps }}">Opportunities</a>
+      {% if u_opps %}<a class="navitem" href="{{ u_opps }}">Opportunities</a>{% endif %}
 
       {% url 'customers_list' as u_customers %}
-      <a class="navitem" href="{{ u_customers }}">Customers</a>
-
-      {% url 'products_list' as u_products %}
-      <a class="navitem" href="{{ u_products }}">Products</a>
-
-      {% url 'fabrics_list' as u_fabrics %}
-      <a class="navitem" href="{{ u_fabrics }}">Fabrics</a>
-
-      {% url 'accessories_list' as u_accessories %}
-      <a class="navitem" href="{{ u_accessories }}">Accessories</a>
-
-      {% url 'trims_list' as u_trims %}
-      <a class="navitem" href="{{ u_trims }}">Trims</a>
-
-      {% url 'threads_list' as u_threads %}
-      <a class="navitem" href="{{ u_threads }}">Threads</a>
+      {% if u_customers %}<a class="navitem" href="{{ u_customers }}">Customers</a>{% endif %}
 
       {% url 'inventory_list' as u_inventory %}
-      <a class="navitem" href="{{ u_inventory }}">Inventory</a>
+      {% if u_inventory %}<a class="navitem" href="{{ u_inventory }}">Inventory</a>{% endif %}
 
       {% url 'world_tools' as u_world %}
-      <a class="navitem" href="{{ u_world }}">World tools</a>
+      {% if u_world %}<a class="navitem" href="{{ u_world }}">World tools</a>{% endif %}
     </div>
 
     <div class="nav-right nav-scroll">
       {% url 'calendar_list' as u_calendar %}
-      <a class="navitem" href="{{ u_calendar }}">Calendar</a>
+      {% if u_calendar %}<a class="navitem" href="{{ u_calendar }}">Calendar</a>{% endif %}
 
       {% url 'production_list' as u_production %}
-      <a class="navitem" href="{{ u_production }}">Production</a>
+      {% if u_production %}<a class="navitem" href="{{ u_production }}">Production</a>{% endif %}
 
       {% url 'shipment_list' as u_shipping %}
-      <a class="navitem" href="{{ u_shipping }}">Shipping</a>
+      {% if u_shipping %}<a class="navitem" href="{{ u_shipping }}">Shipping</a>{% endif %}
 
       {% url 'wa_inbox' as u_wa %}
-      <a class="navitem navitem-warm" href="{{ u_wa }}">WhatsApp</a>
+      {% if u_wa %}<a class="navitem navitem-warm" href="{{ u_wa }}">WhatsApp</a>{% endif %}
 
       {% url 'email_sync_dashboard' as u_email %}
-      <a class="navitem" href="{{ u_email }}">Email Sync</a>
+      {% if u_email %}<a class="navitem" href="{{ u_email }}">Email Sync</a>{% endif %}
 
       {% url 'accounting_home' as u_acc %}
-      <a class="navitem navitem-warm" href="{{ u_acc }}">Accounting</a>
+      {% if u_acc %}<a class="navitem navitem-warm" href="{{ u_acc }}">Accounting</a>{% endif %}
 
       {% url 'main_dashboard' as u_dash %}
-      <a class="navitem navitem-warm" href="{{ u_dash }}">Main Dashboard</a>
+      {% if u_dash %}<a class="navitem navitem-warm" href="{{ u_dash }}">Main Dashboard</a>{% endif %}
 
       {% url 'ai_hub' as u_ai %}
-      <a class="navitem navitem-warm" href="{{ u_ai }}">AI</a>
-
-      <span class="navitem navitem-off">Library</span>
+      {% if u_ai %}<a class="navitem navitem-warm" href="{{ u_ai }}">AI</a>{% endif %}
 
       <span class="navuser">{{ request.user.username|default:"User" }}</span>
 
       {% url 'logout' as u_logout %}
-      <a class="navitem navitem-logout" href="{{ u_logout }}">Logout</a>
+      {% if u_logout %}<a class="navitem navitem-logout" href="{{ u_logout }}">Logout</a>{% endif %}
     </div>
 
   </div>
 </div>
 
 <style>
-  /* fixed modern top bar */
   .topnav{
     position: fixed;
     top: 0;
@@ -93,7 +75,6 @@
     align-items: center;
   }
 
-  /* two groups, both can scroll */
   .nav-left{
     flex: 1;
     display: flex;
@@ -118,7 +99,6 @@
     display: none;
   }
 
-  /* modern pill buttons */
   .navitem{
     display: inline-flex;
     align-items: center;
@@ -163,11 +143,6 @@
     border-color: rgba(239,68,68,0.36);
   }
 
-  .navitem-off{
-    opacity: 0.45;
-    cursor: not-allowed;
-  }
-
   .navuser{
     display: inline-flex;
     align-items: center;
@@ -179,7 +154,6 @@
     background: rgba(255,255,255,0.03);
   }
 
-  /* IMPORTANT: fixed navbar spacing so pages do not go under it */
   body{
     padding-top: 64px;
   }

@@ -157,7 +157,6 @@
       </div>
     </div>
 
-    <!-- Top KPIs -->
     <div class="grid-4 mb-3">
 
       <div class="cardx"><div class="card-pad">
@@ -191,9 +190,8 @@
 
     </div>
 
-    <!-- Payroll -->
     <div class="section-title">
-      BD payroll this month ({{ payroll_year }} {{ payroll_month }})
+      BD payroll this month ({{ payroll_year|default:"" }} {{ payroll_month|default:"" }})
     </div>
 
     <div class="grid-6 mb-3">
@@ -236,7 +234,6 @@
 
     </div>
 
-    <!-- Row 1 -->
     <div class="grid-2 mb-3">
 
       <div class="cardx">
@@ -297,7 +294,6 @@
 
     </div>
 
-    <!-- Row 2 -->
     <div class="grid-3 mb-3">
 
       <div class="cardx">
@@ -305,7 +301,7 @@
           <div class="box-head">
             <div>
               <p class="box-title">Lead funnel</p>
-              <div class="box-note">Fallback until connected</div>
+              <div class="box-note">Live</div>
             </div>
           </div>
           <div class="chartWrap sm">
@@ -319,7 +315,7 @@
           <div class="box-head">
             <div>
               <p class="box-title">Leads vs Opportunities</p>
-              <div class="box-note">Fallback until connected</div>
+              <div class="box-note">Live</div>
             </div>
           </div>
           <div class="chartWrap sm">
@@ -333,7 +329,7 @@
           <div class="box-head">
             <div>
               <p class="box-title">Cash flow</p>
-              <div class="box-note">Fallback until connected</div>
+              <div class="box-note">Live</div>
             </div>
           </div>
           <div class="chartWrap sm">
@@ -344,7 +340,6 @@
 
     </div>
 
-    <!-- Row 3 Production and Shipping -->
     <div class="grid-2 mb-3">
 
       <div class="cardx">
@@ -378,7 +373,7 @@
     </div>
 
     <div class="dash-sub" style="margin-top:10px;">
-      Next: connect funnel, win loss, cash timeline, and leads vs opportunities with real history.
+      Next: connect more items like top lead sources, conversion rate, and production timeline.
     </div>
 
   </div>
@@ -406,31 +401,54 @@
       }
     }
 
-    // Leads arrays (real)
     const leadsLabels = [
-      {% for row in leads_daily %}
-        "{{ row.d|date:'Y-m-d' }}"{% if not forloop.last %},{% endif %}
-      {% endfor %}
+      {% if leads_daily_labels %}
+        {% for v in leads_daily_labels %}
+          "{{ v }}"{% if not forloop.last %},{% endif %}
+        {% endfor %}
+      {% else %}
+        {% for row in leads_daily %}
+          "{{ row.created_date|default:'' }}"{% if not forloop.last %},{% endif %}
+        {% endfor %}
+      {% endif %}
     ];
+
     const leadsCounts = [
-      {% for row in leads_daily %}
-        {{ row.c|default:0 }}{% if not forloop.last %},{% endif %}
-      {% endfor %}
+      {% if leads_daily_values %}
+        {% for v in leads_daily_values %}
+          {{ v|default:0 }}{% if not forloop.last %},{% endif %}
+        {% endfor %}
+      {% else %}
+        {% for row in leads_daily %}
+          {{ row.c|default:0 }}{% if not forloop.last %},{% endif %}
+        {% endfor %}
+      {% endif %}
     ];
 
-    // Opp stages (real)
     const oppStageLabels = [
-      {% for row in opp_by_stage %}
-        "{{ row.stage|default:'Unknown' }}"{% if not forloop.last %},{% endif %}
-      {% endfor %}
-    ];
-    const oppStageCounts = [
-      {% for row in opp_by_stage %}
-        {{ row.c|default:0 }}{% if not forloop.last %},{% endif %}
-      {% endfor %}
+      {% if opp_stage_labels %}
+        {% for v in opp_stage_labels %}
+          "{{ v|default:'Unknown' }}"{% if not forloop.last %},{% endif %}
+        {% endfor %}
+      {% else %}
+        {% for row in opp_by_stage %}
+          "{{ row.stage|default:'Unknown' }}"{% if not forloop.last %},{% endif %}
+        {% endfor %}
+      {% endif %}
     ];
 
-    // Production (works if view sends prod_labels and prod_counts as lists)
+    const oppStageCounts = [
+      {% if opp_stage_values %}
+        {% for v in opp_stage_values %}
+          {{ v|default:0 }}{% if not forloop.last %},{% endif %}
+        {% endfor %}
+      {% else %}
+        {% for row in opp_by_stage %}
+          {{ row.c|default:0 }}{% if not forloop.last %},{% endif %}
+        {% endfor %}
+      {% endif %}
+    ];
+
     const prodLabels = [
       {% if prod_labels %}
         {% for v in prod_labels %}
@@ -450,7 +468,6 @@
       {% endif %}
     ];
 
-    // Shipping (works if view sends ship_* as lists)
     const shipLabels = [
       {% if ship_labels %}
         {% for v in ship_labels %}
@@ -488,18 +505,50 @@
       {% endif %}
     ];
 
-    // Fallback sections (kept safe)
-    const winLoss = [0, 0];
+    const winLoss = [
+      {% if win_loss %}
+        {{ win_loss.0|default:0 }}, {{ win_loss.1|default:0 }}
+      {% else %}
+        0, 0
+      {% endif %}
+    ];
+
     const funnelLabels = ["Leads","Qualified","Opportunities","Samples","Closed won"];
-    const funnelCounts = [0,0,0,0,0];
+    const funnelCounts = [
+      {% if funnel_counts %}
+        {{ funnel_counts.0|default:0 }},
+        {{ funnel_counts.1|default:0 }},
+        {{ funnel_counts.2|default:0 }},
+        {{ funnel_counts.3|default:0 }},
+        {{ funnel_counts.4|default:0 }}
+      {% else %}
+        0,0,0,0,0
+      {% endif %}
+    ];
 
     const leadsBarsLabels = leadsLabels.length ? leadsLabels : ["No data"];
     const leadsBarsLeads = leadsCounts.length ? leadsCounts : [0];
-    const leadsBarsOpp = leadsBarsLabels.map(function(){ return 0; });
 
-    const netCash30 = safeNumberFromTemplate("{{ acc_net_cad_30|default_if_none:0|floatformat:2 }}");
+    const leadsBarsOpp = [
+      {% if opp_daily_values %}
+        {% for v in opp_daily_values %}
+          {{ v|default:0 }}{% if not forloop.last %},{% endif %}
+        {% endfor %}
+      {% else %}
+        0
+      {% endif %}
+    ];
+
     const cashLabels = leadsBarsLabels;
-    const cashNet = cashLabels.map(function(){ return netCash30; });
+    const cashNet = [
+      {% if cash_daily_values %}
+        {% for v in cash_daily_values %}
+          {{ v|default:0 }}{% if not forloop.last %},{% endif %}
+        {% endfor %}
+      {% else %}
+        0
+      {% endif %}
+    ];
 
     const baseOpts = {
       responsive: true,
@@ -514,7 +563,6 @@
       }
     };
 
-    // Leads line
     makeChart("chartLeadsLine", {
       type: "line",
       data: {
@@ -531,7 +579,6 @@
       options: baseOpts
     });
 
-    // Opportunity stages pie
     makeChart("chartOppPie", {
       type: "pie",
       data: {
@@ -545,7 +592,6 @@
       }
     });
 
-    // Win loss donut (fallback)
     makeChart("chartWinLossDonut", {
       type: "doughnut",
       data: { labels: ["Won", "Lost"], datasets: [{ data: winLoss }] },
@@ -556,14 +602,12 @@
       }
     });
 
-    // Funnel (fallback)
     makeChart("chartFunnel", {
       type: "bar",
       data: { labels: funnelLabels, datasets: [{ label: "Count", data: funnelCounts, borderWidth: 1 }] },
       options: Object.assign({}, baseOpts, { indexAxis: "y" })
     });
 
-    // Leads vs opp bars (fallback)
     makeChart("chartLeadsBars", {
       type: "bar",
       data: {
@@ -576,7 +620,6 @@
       options: baseOpts
     });
 
-    // Cash mini (fallback)
     makeChart("chartCashMini", {
       type: "line",
       data: {
@@ -593,7 +636,6 @@
       options: baseOpts
     });
 
-    // Production status
     makeChart("chartProdHbar", {
       type: "bar",
       data: {
@@ -603,7 +645,6 @@
       options: Object.assign({}, baseOpts, { indexAxis: "y" })
     });
 
-    // Shipping status (stacked)
     makeChart("chartShipStack", {
       type: "bar",
       data: {

@@ -1,7 +1,7 @@
-from decimal import Decimal
-from django.conf import settings
 from django.db import models
-
+from django.conf import settings
+from decimal import Decimal
+from .models_access import UserAccess
 
 class BDMonthlyTarget(models.Model):
     year = models.PositiveIntegerField()
@@ -55,38 +55,6 @@ class AIHealthIssue(models.Model):
     def __str__(self):
         return f"{self.severity.upper()} - {self.title}"
 
-from django.db import models
-from django.conf import settings
-
-
-class AIHealthRun(models.Model):
-    created_at = models.DateTimeField(auto_now_add=True)
-    created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="ai_health_runs",
-    )
-
-    score = models.IntegerField(default=100)
-    ok_count = models.IntegerField(default=0)
-    warn_count = models.IntegerField(default=0)
-    bad_count = models.IntegerField(default=0)
-    notes = models.TextField(blank=True, default="")
-
-    class Meta:
-        ordering = ("-created_at",)
-
-    def __str__(self):
-        return f"HealthRun {self.id} score={self.score}"
-
-
-
-
-from django.conf import settings
-from django.db import models
-
 
 class AIHealthRun(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
@@ -115,7 +83,7 @@ class AIHealthRunCheck(models.Model):
     run = models.ForeignKey(AIHealthRun, on_delete=models.CASCADE, related_name="checks")
 
     name = models.CharField(max_length=120)
-    status = models.CharField(max_length=20, default="ok")  # ok, warn, bad
+    status = models.CharField(max_length=20, default="ok")
     detail = models.TextField(blank=True, default="")
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -126,9 +94,6 @@ class AIHealthRunCheck(models.Model):
 
     def __str__(self):
         return f"{self.name} {self.status}"
-
-from django.db import models
-from django.conf import settings
 
 
 class AISystemLog(models.Model):
@@ -184,14 +149,12 @@ class AISystemLog(models.Model):
             models.Index(fields=["provider", "level"]),
             models.Index(fields=["created_at"]),
         ]
-        # Important:
-        # You created the table manually in SQLite.
-        # This makes Django NOT try to create it again on AWS.
         managed = False
         db_table = "crm_aisystemlog"
 
     def __str__(self):
         return f"{self.created_at} {self.provider} {self.level} {self.feature}"
+
 
 class SystemActivityLog(models.Model):
     LEVEL_CHOICES = (
@@ -228,10 +191,28 @@ class SystemActivityLog(models.Model):
 
     def __str__(self):
         return f"{self.created_at} {self.level} {self.area} {self.action} {self.message}"
+# crm/models.py
+import string
+import secrets
+from django.db import models
+from django.utils import timezone
 
-# -----------------------------------
-# Lead dropdown choices
-# -----------------------------------
+
+# ----------------------------
+# Helpers
+# ----------------------------
+
+def generate_lead_id():
+    chars = string.ascii_uppercase + string.digits
+    while True:
+        lead_id = "L" + "".join(secrets.choice(chars) for _ in range(9))
+        if not Lead.objects.filter(lead_id=lead_id).exists():
+            return lead_id
+
+
+# ----------------------------
+# Dropdown choices
+# ----------------------------
 
 SOURCE_CHOICES = [
     ("Website Inquiry", "Website Inquiry"),
@@ -278,11 +259,9 @@ PRIORITY_CHOICES = [
 ]
 
 
-
-# -----------------------------------
-# Lead and customer models
-# -----------------------------------
-
+# ----------------------------
+# Lead model
+# ----------------------------
 
 class Lead(models.Model):
     MARKET_CHOICES = [
@@ -292,11 +271,17 @@ class Lead(models.Model):
         ("OTHER", "Other"),
     ]
 
-    market = models.CharField(max_length=10, choices=MARKET_CHOICES, default="BD")
-    lead_id = models.CharField(max_length=50, unique=True, blank=True)
+    market = models.CharField(max_length=10, choices=MARKET_CHOICES, default="CA")
 
-    account_brand = models.CharField(max_length=200)
-    contact_name = models.CharField(max_length=200)
+    lead_id = models.CharField(
+        max_length=20,
+        unique=True,
+        blank=True,
+        db_index=True,
+    )
+
+    account_brand = models.CharField(max_length=200, blank=True)
+    contact_name = models.CharField(max_length=200, blank=True)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=50, blank=True)
 
@@ -336,19 +321,26 @@ class Lead(models.Model):
     )
 
     owner = models.CharField(max_length=100, blank=True)
-    created_date = models.DateField(auto_now_add=True)
+    created_date = models.DateField(default=timezone.localdate)
     next_followup = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
 
     def save(self, *args, **kwargs):
         if not self.lead_id:
-            last_id = Lead.objects.count() + 1
-            self.lead_id = f"L{last_id:04}"
+            self.lead_id = generate_lead_id()
+
+        if not self.created_date:
+            self.created_date = timezone.localdate()
+
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.account_brand} ({self.lead_id})"
 
+
+# ----------------------------
+# Customer model
+# ----------------------------
 
 class Customer(models.Model):
     customer_code = models.CharField(max_length=50, unique=True, blank=True)
@@ -369,18 +361,18 @@ class Customer(models.Model):
     shipping_country = models.CharField(max_length=100, blank=True)
 
     is_active = models.BooleanField(default=True)
-    created_date = models.DateField(null=True, blank=True, editable=True)
+    created_date = models.DateField(default=timezone.localdate)
     notes = models.TextField(blank=True)
 
     def save(self, *args, **kwargs):
-        if not self.customer_code:
-            last_id = Customer.objects.count() + 1
-            self.customer_code = f"C{last_id:04}"
+        # never overwrite lead_id if it already exists
+        if not self.lead_id:
+            self.lead_id = generate_lead_id()
+
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.account_brand} [{self.customer_code}]"
-
 
 class LeadComment(models.Model):
     lead = models.ForeignKey(
@@ -396,7 +388,7 @@ class LeadComment(models.Model):
         blank=True,
     )
 
-    author = models.CharField(max_length=100, blank=True)
+    author = models.CharField(max_length=100, blank=True, default="")
     content = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -419,13 +411,13 @@ class LeadTask(models.Model):
 
     lead = models.ForeignKey(Lead, related_name="tasks", on_delete=models.CASCADE)
     title = models.CharField(max_length=200)
-    description = models.TextField(blank=True)
+    description = models.TextField(blank=True, default="")
     due_date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="Open")
     priority = models.CharField(
         max_length=20, choices=PRIORITY_CHOICES, default="Medium"
     )
-    assigned_to = models.CharField(max_length=100, blank=True)
+    assigned_to = models.CharField(max_length=100, blank=True, default="")
 
     created_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)
@@ -454,7 +446,7 @@ class LeadActivity(models.Model):
     lead = models.ForeignKey(Lead, related_name="activities", on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     activity_type = models.CharField(max_length=40, choices=ACTIVITY_TYPE_CHOICES)
-    description = models.TextField(blank=True)
+    description = models.TextField(blank=True, default="")
 
     class Meta:
         ordering = ["-created_at"]
@@ -463,9 +455,6 @@ class LeadActivity(models.Model):
         return f"{self.get_activity_type_display()} for {self.lead.lead_id}"
 
 
-# ======================================
-# OPPORTUNITY CORE MODELS PINNED BLOCK
-# ======================================
 
 
 # -----------------------------------
@@ -2372,16 +2361,32 @@ class AccountingMonthClose(models.Model):
     def __str__(self):
         return f"{self.year}-{self.month:02d} {self.side} closed"
 
-
 from decimal import Decimal
+from django.conf import settings
 from django.db import models
 
 
 class AccountingEntry(models.Model):
+    SIDE_CA = "CA"
+    SIDE_BD = "BD"
+
+    DIR_IN = "IN"
+    DIR_OUT = "OUT"
+
+    SIDE_CHOICES = [
+        (SIDE_CA, "Canada"),
+        (SIDE_BD, "Bangladesh"),
+    ]
+
+    DIRECTION_CHOICES = [
+        (DIR_IN, "In"),
+        (DIR_OUT, "Out"),
+    ]
+
     date = models.DateField()
 
-    side = models.CharField(max_length=2)         # CA or BD
-    direction = models.CharField(max_length=3)    # IN or OUT
+    side = models.CharField(max_length=2, choices=SIDE_CHOICES, db_index=True)
+    direction = models.CharField(max_length=3, choices=DIRECTION_CHOICES, db_index=True)
 
     status = models.CharField(max_length=20, blank=True, default="")
     main_type = models.CharField(max_length=30, blank=True, default="")
@@ -2444,7 +2449,7 @@ class AccountingEntry(models.Model):
     internal_note = models.TextField(blank=True, default="")
 
     created_by = models.ForeignKey(
-        "auth.User",
+        settings.AUTH_USER_MODEL,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
@@ -2454,17 +2459,23 @@ class AccountingEntry(models.Model):
 
     def save(self, *args, **kwargs):
         amt = self.amount_original or Decimal("0")
+        r_cad = self.rate_to_cad or Decimal("0")
+        r_bdt = self.rate_to_bdt or Decimal("0")
 
-        if (self.rate_to_cad or Decimal("0")) > 0:
-            self.amount_cad = (amt * self.rate_to_cad).quantize(Decimal("0.01"))
-        if (self.rate_to_bdt or Decimal("0")) > 0:
-            self.amount_bdt = (amt * self.rate_to_bdt).quantize(Decimal("0.01"))
+        if r_cad > 0:
+            self.amount_cad = (amt * r_cad).quantize(Decimal("0.01"))
+        else:
+            self.amount_cad = Decimal("0")
+
+        if r_bdt > 0:
+            self.amount_bdt = (amt * r_bdt).quantize(Decimal("0.01"))
+        else:
+            self.amount_bdt = Decimal("0")
 
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.date} {self.side} {self.direction} {self.amount_cad}"
-
 
 class AccountingMonthLock(models.Model):
         year = models.IntegerField(db_index=True)

@@ -1,5 +1,6 @@
 from datetime import timedelta
 import subprocess
+import sys
 
 from django.conf import settings
 from django.contrib import messages
@@ -74,7 +75,7 @@ def email_sync_dashboard(request):
 def email_sync_run(request):
     try:
         subprocess.run(
-            ["python3", "manage.py", "sync_inboxes", "--limit", "50"],
+            [sys.executable, "manage.py", "sync_inboxes", "--limit", "50"],
             check=True,
             cwd=str(settings.BASE_DIR),
         )

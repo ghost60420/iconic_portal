@@ -1,551 +1,749 @@
-{% include "crm/navbar.html" %}
+{% extends "crm/base.html" %}
+{% load static %}
+{% block content %}
 
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>Fabric library - Iconic CRM</title>
-    <style>
-        body {
-            background: #000;
-            color: #f5d580;
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-        }
-        a {
-            color: #f5d580;
-            text-decoration: none;
-        }
-        .page {
-            max-width: 1200px;
-            margin: 20px auto 40px auto;
-            padding: 0 15px;
-        }
-        .header-title {
-            font-size: 22px;
-            font-weight: bold;
-            margin-bottom: 15px;
-        }
+<style>
+  :root{
+    --bg:#060606;
+    --panel:#0b0d10;
+    --panel2:#0f172a;
+    --border:#2a2f38;
+    --text:#f8f9fa;
+    --muted:#a8b0bd;
+    --gold1:#ffe39b;
+    --gold2:#e4c067;
+  }
 
-        /* toolbar */
-        .toolbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-bottom: 15px;
-        }
-        .toolbar-left {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-        .search-box input {
-            background: #000;
-            color: #f5d580;
-            border: 1px solid #444;
-            padding: 6px 8px;
-            border-radius: 4px;
-            font-size: 13px;
-            min-width: 190px;
-        }
-        select {
-            background: #000;
-            color: #f5d580;
-            border: 1px solid #444;
-            padding: 6px 8px;
-            border-radius: 4px;
-            font-size: 13px;
-        }
-        .btn {
-            background: #f5d580;
-            color: #000;
-            padding: 7px 14px;
-            border-radius: 5px;
-            font-size: 13px;
-            font-weight: bold;
-            border: none;
-            cursor: pointer;
-        }
-        .btn-secondary {
-            background: #222;
-            color: #f5d580;
-            border: 1px solid #444;
-        }
+  .page{
+    max-width: 1200px;
+    margin: 18px auto 30px auto;
+    padding: 0 10px;
+    color: var(--text);
+  }
 
-        /* wide AI panel */
-        .ai-panel {
-            background: #111;
-            border-radius: 10px;
-            border: 1px solid #333;
-            padding: 14px 16px;
-            margin-bottom: 20px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.5);
-            font-size: 13px;
-        }
-        .ai-panel-title {
-            font-weight: bold;
-            font-size: 15px;
-            margin-bottom: 4px;
-        }
-        .ai-panel-note {
-            font-size: 11px;
-            color: #a4925c;
-            margin-bottom: 8px;
-        }
-        .ai-panel-grid {
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 8px 12px;
-        }
-        .ai-field {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-        }
-        .ai-field label {
-            font-size: 11px;
-            color: #d9c17a;
-        }
-        .ai-field input,
-        .ai-field select {
-            background: #000;
-            color: #f5d580;
-            border-radius: 4px;
-            border: 1px solid #444;
-            padding: 5px 6px;
-            font-size: 12px;
-        }
-        .ai-panel-actions {
-            margin-top: 10px;
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-        .ai-panel-output {
-            margin-top: 8px;
-            background: #050505;
-            border-radius: 6px;
-            border: 1px solid #333;
-            padding: 8px;
-            min-height: 60px;
-            font-size: 12px;
-            white-space: pre-wrap;
-        }
+  .header-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:12px;
+    flex-wrap:wrap;
+    margin-bottom: 12px;
+  }
 
-        /* table */
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 13px;
-        }
-        th, td {
-            border: 1px solid #333;
-            padding: 6px 8px;
-        }
-        th {
-            background: #111;
-            text-align: left;
-        }
-        tr:nth-child(even) {
-            background: #101010;
-        }
+  .header-title{
+    font-size: 22px;
+    font-weight: 900;
+    color: var(--gold1);
+    letter-spacing: 0.2px;
+  }
 
-        /* AI modal */
-        .ai-modal-backdrop {
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.75);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 999;
-        }
-        .ai-modal {
-            background: #111;
-            border: 1px solid #333;
-            border-radius: 10px;
-            max-width: 520px;
-            width: 90%;
-            padding: 14px 16px;
-            box-shadow: 0 0 15px rgba(0,0,0,0.8);
-            font-size: 13px;
-        }
-        .ai-modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-        }
-        .ai-modal-title {
-            font-weight: bold;
-            font-size: 14px;
-        }
-        .ai-modal-close {
-            cursor: pointer;
-            font-size: 14px;
-            color: #f5d580;
-        }
-        .ai-modal-body label {
-            font-size: 11px;
-            color: #d9c17a;
-        }
-        .ai-modal-body input {
-            width: 100%;
-            background: #000;
-            color: #f5d580;
-            border-radius: 4px;
-            border: 1px solid #444;
-            padding: 5px 6px;
-            font-size: 12px;
-            margin-bottom: 6px;
-        }
-        .ai-modal-output {
-            margin-top: 6px;
-            background: #050505;
-            border-radius: 6px;
-            border: 1px solid #333;
-            padding: 8px;
-            min-height: 60px;
-            font-size: 12px;
-            white-space: pre-wrap;
-        }
-        .muted {
-            font-size: 12px;
-            color: #aaa;
-        }
-    </style>
-</head>
-<body>
+  .header-sub{
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 6px;
+    font-weight: 800;
+  }
+
+  .toolbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom: 12px;
+  }
+
+  .toolbar-left{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+
+  .field{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+
+  .field label{
+    font-size: 11px;
+    color: rgba(248,249,250,0.60);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.2px;
+  }
+
+  .input,
+  .select{
+    background: rgba(255,255,255,0.04);
+    color: var(--text);
+    border: 1px solid rgba(255,255,255,0.12);
+    padding: 10px 12px;
+    border-radius: 14px;
+    font-size: 13px;
+    font-weight: 800;
+    outline: none;
+    min-width: 220px;
+  }
+
+  .select{ min-width: 180px; }
+
+  .input:focus,
+  .select:focus{
+    border-color: rgba(245, 213, 128, 0.45);
+    box-shadow: 0 0 0 3px rgba(245,213,128,0.14);
+  }
+
+  .btn{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding: 10px 12px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 900;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.04);
+    color: #f3f4f6;
+    cursor:pointer;
+    user-select:none;
+    line-height: 1;
+    transition: transform 120ms ease, background 120ms ease, border-color 120ms ease, color 120ms ease;
+    text-decoration:none;
+    white-space:nowrap;
+  }
+
+  .btn:hover{
+    transform: translateY(-1px);
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(245, 213, 128, 0.32);
+    color: var(--gold1);
+  }
+
+  .btn:active{ transform: translateY(0px); }
+
+  .btn-gold{
+    border-color: rgba(255, 227, 155, 0.30);
+    background: rgba(245, 213, 128, 0.16);
+    color: var(--gold1);
+    box-shadow: 0 10px 22px rgba(255, 209, 120, 0.10);
+  }
+
+  .btn-gold:hover{
+    background: rgba(245, 213, 128, 0.22);
+    color: #fff;
+  }
+
+  .btn-ghost{
+    background: rgba(2,6,23,0.55);
+    border-color: rgba(148,163,184,0.22);
+  }
+
+  .card{
+    background: linear-gradient(180deg, rgba(15,23,42,0.55), rgba(2,6,23,0.65));
+    border-radius: 16px;
+    border: 1px solid rgba(148,163,184,0.22);
+    padding: 14px;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.45);
+    margin-bottom: 12px;
+  }
+
+  .card-title{
+    font-size: 14px;
+    font-weight: 900;
+    color: var(--gold1);
+    margin-bottom: 8px;
+  }
+
+  .card-note{
+    font-size: 12px;
+    color: rgba(248,249,250,0.60);
+    font-weight: 800;
+    line-height: 1.4;
+  }
+
+  .ai-grid{
+    margin-top: 10px;
+    display:grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  @media (max-width: 980px){
+    .ai-grid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .input{ min-width: 200px; }
+  }
+
+  @media (max-width: 520px){
+    .ai-grid{ grid-template-columns: 1fr; }
+    .input, .select{ min-width: 100%; }
+  }
+
+  .ai-actions{
+    margin-top: 10px;
+    display:flex;
+    gap:10px;
+    align-items:center;
+    flex-wrap:wrap;
+  }
+
+  .ai-status{
+    font-size: 12px;
+    color: rgba(248,249,250,0.70);
+    font-weight: 800;
+  }
+
+  .ai-output{
+    margin-top: 10px;
+    background: rgba(0,0,0,0.30);
+    border-radius: 14px;
+    border: 1px solid rgba(148,163,184,0.22);
+    padding: 10px 12px;
+    min-height: 78px;
+    font-size: 13px;
+    color: rgba(248,249,250,0.90);
+    white-space: pre-wrap;
+    line-height: 1.5;
+  }
+
+  .table-wrap{
+    overflow:auto;
+    border-radius: 16px;
+    border: 1px solid rgba(148,163,184,0.22);
+    background: rgba(255,255,255,0.02);
+  }
+
+  table{
+    width:100%;
+    border-collapse: collapse;
+    min-width: 860px;
+    font-size: 13px;
+  }
+
+  th, td{
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(148,163,184,0.16);
+    vertical-align: top;
+  }
+
+  th{
+    text-align:left;
+    font-size: 11px;
+    color: rgba(248,249,250,0.60);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.2px;
+    background: rgba(2,6,23,0.55);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
+  tr:hover td{
+    background: rgba(245, 213, 128, 0.05);
+  }
+
+  .link{
+    color: var(--gold1);
+    text-decoration:none;
+    font-weight: 900;
+  }
+
+  .link:hover{
+    text-decoration: underline;
+  }
+
+  .pill{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(148,163,184,0.22);
+    background: rgba(255,255,255,0.03);
+    font-size: 12px;
+    font-weight: 900;
+    color: rgba(248,249,250,0.80);
+    white-space:nowrap;
+  }
+
+  .muted{
+    color: rgba(248,249,250,0.60);
+    font-weight: 800;
+    font-size: 13px;
+  }
+
+  /* modal */
+  .modal-backdrop{
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.72);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+    padding: 14px;
+  }
+
+  .modal{
+    width: 100%;
+    max-width: 620px;
+    background: linear-gradient(180deg, rgba(15,23,42,0.75), rgba(2,6,23,0.88));
+    border: 1px solid rgba(148,163,184,0.22);
+    border-radius: 16px;
+    box-shadow: 0 18px 60px rgba(0,0,0,0.70);
+    overflow: hidden;
+  }
+
+  .modal-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(148,163,184,0.18);
+  }
+
+  .modal-title{
+    font-size: 14px;
+    font-weight: 900;
+    color: var(--gold1);
+  }
+
+  .modal-close{
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.04);
+    color: rgba(248,249,250,0.85);
+    border-radius: 999px;
+    padding: 8px 10px;
+    cursor: pointer;
+    font-weight: 900;
+    font-size: 12px;
+    transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+  }
+
+  .modal-close:hover{
+    transform: translateY(-1px);
+    border-color: rgba(245, 213, 128, 0.32);
+    color: var(--gold1);
+    background: rgba(255,255,255,0.06);
+  }
+
+  .modal-body{
+    padding: 14px;
+  }
+
+  .modal-grid{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  @media (max-width: 620px){
+    .modal-grid{ grid-template-columns: 1fr; }
+  }
+
+  .spinner{
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid rgba(229,231,235,0.35);
+    border-top-color: rgba(245,213,128,0.95);
+    display:inline-block;
+    animation: spin 700ms linear infinite;
+    vertical-align: -2px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
 <div class="page">
 
-    <div class="header-title">Fabric library</div>
+  <div class="header-row">
+    <div>
+      <div class="header-title">Fabric library</div>
+      <div class="header-sub">Search, filter, and use AI to plan fabrics</div>
+    </div>
+    <div>
+      <a href="{% url 'fabric_add' %}" class="btn btn-gold">➕ Add fabric</a>
+    </div>
+  </div>
 
-    <div class="toolbar">
-        <form method="get" class="toolbar-left">
-            <div class="search-box">
-                <input type="text" name="q" value="{{ q }}" placeholder="Search by name">
-            </div>
-            <div>
-                <select name="fabric_group">
-                    <option value="">Any group</option>
-                    <option value="Knit" {% if fabric_group == "Knit" %}selected{% endif %}>Knit</option>
-                    <option value="Woven" {% if fabric_group == "Woven" %}selected{% endif %}>Woven</option>
-                    <option value="Other" {% if fabric_group == "Other" %}selected{% endif %}>Other</option>
-                </select>
-            </div>
-            <div>
-                <select name="fabric_type">
-                    <option value="">Any type</option>
-                    <option value="Jersey" {% if fabric_type == "Jersey" %}selected{% endif %}>Jersey</option>
-                    <option value="Rib" {% if fabric_type == "Rib" %}selected{% endif %}>Rib</option>
-                    <option value="Fleece" {% if fabric_type == "Fleece" %}selected{% endif %}>Fleece</option>
-                    <option value="Denim" {% if fabric_type == "Denim" %}selected{% endif %}>Denim</option>
-                </select>
-            </div>
-            <button type="submit" class="btn">Filter</button>
-            <a href="{% url 'fabrics_list' %}" class="btn btn-secondary">Clear</a>
-        </form>
+  <div class="card">
+    <div class="card-title">Filters</div>
 
-        <a href="{% url 'fabric_add' %}" class="btn">Add fabric</a>
+    <form method="get" class="toolbar">
+      <div class="toolbar-left">
+        <div class="field">
+          <label>Search</label>
+          <input class="input" type="text" name="q" value="{{ q }}" placeholder="Search by name">
+        </div>
+
+        <div class="field">
+          <label>Group</label>
+          <select class="select" name="fabric_group">
+            <option value="">Any group</option>
+            <option value="Knit" {% if fabric_group == "Knit" %}selected{% endif %}>Knit</option>
+            <option value="Woven" {% if fabric_group == "Woven" %}selected{% endif %}>Woven</option>
+            <option value="Other" {% if fabric_group == "Other" %}selected{% endif %}>Other</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Type</label>
+          <select class="select" name="fabric_type">
+            <option value="">Any type</option>
+            <option value="Jersey" {% if fabric_type == "Jersey" %}selected{% endif %}>Jersey</option>
+            <option value="Rib" {% if fabric_type == "Rib" %}selected{% endif %}>Rib</option>
+            <option value="Fleece" {% if fabric_type == "Fleece" %}selected{% endif %}>Fleece</option>
+            <option value="Denim" {% if fabric_type == "Denim" %}selected{% endif %}>Denim</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <button type="submit" class="btn btn-gold">Filter</button>
+        <a href="{% url 'fabrics_list' %}" class="btn btn-ghost">Clear</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-title">AI fabric planner</div>
+    <div class="card-note">
+      AI will suggest composition, GSM, stretch, and best use.
     </div>
 
-    <!-- wide AI planner -->
-    <div class="ai-panel">
-        <div class="ai-panel-title">AI fabric planner</div>
-        <div class="ai-panel-note">
-            Use this to plan a new fabric or check if a fabric idea matches your library.
-            AI will suggest composition, GSM, stretch, and best use.
-        </div>
+    <div class="ai-grid">
+      <div class="field">
+        <label>Fabric name</label>
+        <input id="ai-fabric-name" class="input" type="text" placeholder="Example Single jersey cotton">
+      </div>
 
-        <div class="ai-panel-grid">
-            <div class="ai-field">
-                <label>Fabric name</label>
-                <input id="ai-fabric-name" type="text" placeholder="Example Single jersey cotton">
-            </div>
-            <div class="ai-field">
-                <label>Group</label>
-                <select id="ai-fabric-group">
-                    <option value="">Select group</option>
-                    <option value="Knit">Knit</option>
-                    <option value="Woven">Woven</option>
-                    <option value="Other">Other</option>
-                </select>
-            </div>
-            <div class="ai-field">
-                <label>Type</label>
-                <select id="ai-fabric-type">
-                    <option value="">Select type</option>
-                    <option value="Jersey">Jersey</option>
-                    <option value="Rib">Rib</option>
-                    <option value="Fleece">Fleece</option>
-                    <option value="Denim">Denim</option>
-                </select>
-            </div>
-            <div class="ai-field">
-                <label>Main use case</label>
-                <input id="ai-fabric-use" type="text" placeholder="Example summer tee, heavy hoodie">
-            </div>
-        </div>
+      <div class="field">
+        <label>Group</label>
+        <select id="ai-fabric-group" class="select">
+          <option value="">Select group</option>
+          <option value="Knit">Knit</option>
+          <option value="Woven">Woven</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
 
-        <div class="ai-panel-actions">
-            <button type="button" class="btn" id="ai-fabric-btn">
-                Ask AI for fabric idea
-            </button>
-            <span class="ai-panel-note" id="ai-fabric-status"></span>
-        </div>
+      <div class="field">
+        <label>Type</label>
+        <select id="ai-fabric-type" class="select">
+          <option value="">Select type</option>
+          <option value="Jersey">Jersey</option>
+          <option value="Rib">Rib</option>
+          <option value="Fleece">Fleece</option>
+          <option value="Denim">Denim</option>
+        </select>
+      </div>
 
-        <div class="ai-panel-output" id="ai-fabric-output">
-            AI suggestion will appear here.
-        </div>
+      <div class="field">
+        <label>Main use case</label>
+        <input id="ai-fabric-use" class="input" type="text" placeholder="Example summer tee or heavy hoodie">
+      </div>
     </div>
+
+    <div class="ai-actions">
+      <button type="button" class="btn btn-gold" id="ai-fabric-btn">Ask AI</button>
+      <span class="ai-status" id="ai-fabric-status"></span>
+    </div>
+
+    <div class="ai-output" id="ai-fabric-output">AI suggestion will appear here.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Fabrics</div>
 
     {% if fabrics %}
+      <div class="table-wrap">
         <table>
-            <thead>
+          <thead>
             <tr>
-                <th>Name</th>
-                <th>Group</th>
-                <th>Type</th>
-                <th>GSM</th>
-                <th>Composition</th>
-                <th>Price per kg</th>
-                <th>Price per meter</th>
-                <th>AI</th>
+              <th>Name</th>
+              <th>Group</th>
+              <th>Type</th>
+              <th>GSM</th>
+              <th>Composition</th>
+              <th>Price per kg</th>
+              <th>Price per meter</th>
+              <th>AI</th>
             </tr>
-            </thead>
-            <tbody>
+          </thead>
+          <tbody>
             {% for f in fabrics %}
-                <tr>
-                    <td>
-                        <a href="{% url 'fabric_detail' f.pk %}">
-                            {{ f.name }}
-                        </a>
-                    </td>
-                    <td>{{ f.fabric_group }}</td>
-                    <td>{{ f.fabric_type }}</td>
-                    <td>{{ f.gsm }}</td>
-                    <td>{{ f.composition }}</td>
-                    <td>{{ f.price_per_kg }}</td>
-                    <td>{{ f.price_per_meter }}</td>
-                    <td>
-                        <button
-                            type="button"
-                            class="btn btn-secondary btn-ai-row"
-                            data-fabric-name="{{ f.name }}"
-                            data-fabric-group="{{ f.fabric_group }}"
-                            data-fabric-type="{{ f.fabric_type }}"
-                        >
-                            Ask AI
-                        </button>
-                    </td>
-                </tr>
+              <tr>
+                <td>
+                  <a class="link" href="{% url 'fabric_detail' f.pk %}">{{ f.name }}</a>
+                </td>
+                <td><span class="pill">{{ f.fabric_group|default:"-" }}</span></td>
+                <td><span class="pill">{{ f.fabric_type|default:"-" }}</span></td>
+                <td>{{ f.gsm|default:"-" }}</td>
+                <td>{{ f.composition|default:"-" }}</td>
+                <td>{{ f.price_per_kg|default:"-" }}</td>
+                <td>{{ f.price_per_meter|default:"-" }}</td>
+                <td>
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-ai-row"
+                    data-fabric-name="{{ f.name }}"
+                    data-fabric-group="{{ f.fabric_group }}"
+                    data-fabric-type="{{ f.fabric_type }}"
+                  >
+                    Ask AI
+                  </button>
+                </td>
+              </tr>
             {% endfor %}
-            </tbody>
+          </tbody>
         </table>
+      </div>
     {% else %}
-        <p class="muted">No fabrics yet.</p>
+      <div class="muted">No fabrics yet.</div>
     {% endif %}
+  </div>
 
-    <!-- hidden form for CSRF -->
-    <form id="ai-fabric-csrf" style="display:none;">
-        {% csrf_token %}
-    </form>
+  <form id="ai-fabric-csrf" style="display:none;">
+    {% csrf_token %}
+  </form>
 
-    <!-- AI modal for row level help -->
-    <div class="ai-modal-backdrop" id="ai-row-backdrop">
-        <div class="ai-modal">
-            <div class="ai-modal-header">
-                <div class="ai-modal-title">AI notes for this fabric</div>
-                <div class="ai-modal-close" id="ai-row-close">✕</div>
-            </div>
-            <div class="ai-modal-body">
-                <label>Fabric name</label>
-                <input id="ai-row-name" type="text">
+  <div class="modal-backdrop" id="ai-row-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal">
+      <div class="modal-head">
+        <div class="modal-title">AI notes for this fabric</div>
+        <button type="button" class="modal-close" id="ai-row-close">Close</button>
+      </div>
 
-                <label>Group</label>
-                <input id="ai-row-group" type="text">
-
-                <label>Type</label>
-                <input id="ai-row-type" type="text">
-
-                <div style="margin-top:6px;">
-                    <button type="button" class="btn" id="ai-row-btn">
-                        Ask AI about this fabric
-                    </button>
-                    <span class="ai-panel-note" id="ai-row-status"></span>
-                </div>
-
-                <div class="ai-modal-output" id="ai-row-output">
-                    AI will give notes about this fabric here.
-                </div>
-            </div>
+      <div class="modal-body">
+        <div class="modal-grid">
+          <div class="field">
+            <label>Fabric name</label>
+            <input id="ai-row-name" class="input" type="text">
+          </div>
+          <div class="field">
+            <label>Group</label>
+            <input id="ai-row-group" class="input" type="text">
+          </div>
+          <div class="field">
+            <label>Type</label>
+            <input id="ai-row-type" class="input" type="text">
+          </div>
+          <div class="field">
+            <label>Status</label>
+            <input id="ai-row-status-readonly" class="input" type="text" value="Ready" readonly>
+          </div>
         </div>
+
+        <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+          <button type="button" class="btn btn-gold" id="ai-row-btn">Ask AI</button>
+          <span class="ai-status" id="ai-row-status"></span>
+        </div>
+
+        <div class="ai-output" id="ai-row-output" style="margin-top:10px;">
+          AI will give notes about this fabric here.
+        </div>
+      </div>
     </div>
+  </div>
 
 </div>
 
 <script>
-    function getCsrfToken() {
-        const field = document.querySelector("#ai-fabric-csrf input[name='csrfmiddlewaretoken']");
-        return field ? field.value : "";
+  function getCsrfToken() {
+    const field = document.querySelector("#ai-fabric-csrf input[name='csrfmiddlewaretoken']");
+    return field ? field.value : "";
+  }
+
+  function safeText(s) {
+    return (s || "").toString();
+  }
+
+  async function postForm(url, params) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "X-CSRFToken": getCsrfToken()
+      },
+      body: new URLSearchParams(params).toString()
+    });
+
+    const isJson = (res.headers.get("content-type") || "").includes("application/json");
+    const data = isJson ? await res.json() : { ok: false, error: "Server response was not JSON." };
+
+    if (!res.ok) {
+      return { ok: false, error: data.error || ("Request failed. Status " + res.status) };
+    }
+    return data;
+  }
+
+  // AI planner panel
+  (function () {
+    const btn = document.getElementById("ai-fabric-btn");
+    if (!btn) return;
+
+    const nameInput = document.getElementById("ai-fabric-name");
+    const groupInput = document.getElementById("ai-fabric-group");
+    const typeInput = document.getElementById("ai-fabric-type");
+    const useInput = document.getElementById("ai-fabric-use");
+    const outBox = document.getElementById("ai-fabric-output");
+    const statusSpan = document.getElementById("ai-fabric-status");
+
+    let busy = false;
+
+    function setBusy(on) {
+      busy = on;
+      btn.disabled = on;
+      if (on) statusSpan.innerHTML = "<span class='spinner'></span> Thinking";
+      else statusSpan.textContent = "Ready";
     }
 
-    // wide panel AI
-    (function () {
-        const btn = document.getElementById("ai-fabric-btn");
-        if (!btn) return;
+    btn.addEventListener("click", async function () {
+      if (busy) return;
 
-        const nameInput = document.getElementById("ai-fabric-name");
-        const groupInput = document.getElementById("ai-fabric-group");
-        const typeInput = document.getElementById("ai-fabric-type");
-        const useInput = document.getElementById("ai-fabric-use");
-        const outBox = document.getElementById("ai-fabric-output");
-        const statusSpan = document.getElementById("ai-fabric-status");
+      const name = (nameInput.value || "").trim();
+      const group = (groupInput.value || "").trim();
+      const ftype = (typeInput.value || "").trim();
+      const useCase = (useInput.value || "").trim();
 
-        btn.addEventListener("click", function () {
-            const name = nameInput.value.trim();
-            const group = groupInput.value.trim();
-            const ftype = typeInput.value.trim();
-            const useCase = useInput.value.trim();
+      if (!name) {
+        outBox.textContent = "Please type a fabric name first.";
+        statusSpan.textContent = "";
+        return;
+      }
 
-            if (!name) {
-                outBox.textContent = "Please type a fabric name first.";
-                return;
-            }
+      setBusy(true);
+      outBox.textContent = "";
 
-            statusSpan.textContent = "Thinking with AI...";
-            outBox.textContent = "";
+      const payload = { name: name, group: group, fabric_type: ftype };
+      if (useCase) payload.use_case = useCase;
 
-            const payload = new URLSearchParams({
-                name: name,
-                group: group,
-                fabric_type: ftype
-            });
-
-            if (useCase) {
-                payload.append("use_case", useCase);
-            }
-
-            fetch("{% url 'fabric_ai_suggest' %}", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "X-CSRFToken": getCsrfToken()
-                },
-                body: payload.toString()
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.ok) {
-                    outBox.textContent = data.suggestion;
-                    statusSpan.textContent = "Ready";
-                } else {
-                    outBox.textContent = data.error || "AI could not answer.";
-                    statusSpan.textContent = "";
-                }
-            })
-            .catch(err => {
-                console.error(err);
-                outBox.textContent = "Error talking to AI.";
-                statusSpan.textContent = "";
-            });
-        });
-    })();
-
-    // row level modal AI
-    (function () {
-        const backdrop = document.getElementById("ai-row-backdrop");
-        const closeBtn = document.getElementById("ai-row-close");
-        const askBtn = document.getElementById("ai-row-btn");
-
-        const nameInput = document.getElementById("ai-row-name");
-        const groupInput = document.getElementById("ai-row-group");
-        const typeInput = document.getElementById("ai-row-type");
-        const outBox = document.getElementById("ai-row-output");
-        const statusSpan = document.getElementById("ai-row-status");
-
-        function openModal(name, group, type) {
-            nameInput.value = name || "";
-            groupInput.value = group || "";
-            typeInput.value = type || "";
-            outBox.textContent = "";
-            statusSpan.textContent = "";
-            backdrop.style.display = "flex";
+      try {
+        const data = await postForm("{% url 'fabric_ai_suggest' %}", payload);
+        if (data.ok) {
+          outBox.textContent = safeText(data.suggestion);
+          statusSpan.textContent = "Ready";
+        } else {
+          outBox.textContent = safeText(data.error) || "AI could not answer.";
+          statusSpan.textContent = "";
         }
-        function closeModal() {
-            backdrop.style.display = "none";
+      } catch (e) {
+        outBox.textContent = "Error talking to AI.";
+        statusSpan.textContent = "";
+        console.error(e);
+      } finally {
+        setBusy(false);
+      }
+    });
+  })();
+
+  // Row AI modal
+  (function () {
+    const backdrop = document.getElementById("ai-row-backdrop");
+    const closeBtn = document.getElementById("ai-row-close");
+    const askBtn = document.getElementById("ai-row-btn");
+
+    const nameInput = document.getElementById("ai-row-name");
+    const groupInput = document.getElementById("ai-row-group");
+    const typeInput = document.getElementById("ai-row-type");
+
+    const outBox = document.getElementById("ai-row-output");
+    const statusSpan = document.getElementById("ai-row-status");
+    const statusReadonly = document.getElementById("ai-row-status-readonly");
+
+    let busy = false;
+
+    function openModal(name, group, type) {
+      nameInput.value = name || "";
+      groupInput.value = group || "";
+      typeInput.value = type || "";
+      outBox.textContent = "AI will give notes about this fabric here.";
+      statusSpan.textContent = "";
+      if (statusReadonly) statusReadonly.value = "Ready";
+      backdrop.style.display = "flex";
+      backdrop.setAttribute("aria-hidden", "false");
+      setTimeout(function(){ nameInput.focus(); }, 0);
+    }
+
+    function closeModal() {
+      backdrop.style.display = "none";
+      backdrop.setAttribute("aria-hidden", "true");
+      busy = false;
+      if (askBtn) askBtn.disabled = false;
+    }
+
+    document.querySelectorAll(".btn-ai-row").forEach(function (b) {
+      b.addEventListener("click", function () {
+        const n = this.getAttribute("data-fabric-name");
+        const g = this.getAttribute("data-fabric-group");
+        const t = this.getAttribute("data-fabric-type");
+        openModal(n, g, t);
+      });
+    });
+
+    if (closeBtn) closeBtn.addEventListener("click", closeModal);
+
+    if (backdrop) {
+      backdrop.addEventListener("click", function (e) {
+        if (e.target === backdrop) closeModal();
+      });
+    }
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && backdrop.style.display === "flex") closeModal();
+    });
+
+    if (askBtn) {
+      askBtn.addEventListener("click", async function () {
+        if (busy) return;
+
+        const name = (nameInput.value || "").trim();
+        const group = (groupInput.value || "").trim();
+        const ftype = (typeInput.value || "").trim();
+
+        if (!name) {
+          outBox.textContent = "Please check that fabric name is filled.";
+          return;
         }
 
-        document.querySelectorAll(".btn-ai-row").forEach(function (btn) {
-            btn.addEventListener("click", function () {
-                const n = this.getAttribute("data-fabric-name");
-                const g = this.getAttribute("data-fabric-group");
-                const t = this.getAttribute("data-fabric-type");
-                openModal(n, g, t);
-            });
-        });
+        busy = true;
+        askBtn.disabled = true;
+        statusSpan.innerHTML = "<span class='spinner'></span> Thinking";
+        if (statusReadonly) statusReadonly.value = "Thinking";
+        outBox.textContent = "";
 
-        if (closeBtn) {
-            closeBtn.addEventListener("click", closeModal);
+        try {
+          const data = await postForm("{% url 'fabric_ai_suggest' %}", {
+            name: name,
+            group: group,
+            fabric_type: ftype
+          });
+
+          if (data.ok) {
+            outBox.textContent = safeText(data.suggestion);
+            statusSpan.textContent = "Ready";
+            if (statusReadonly) statusReadonly.value = "Ready";
+          } else {
+            outBox.textContent = safeText(data.error) || "AI could not answer.";
+            statusSpan.textContent = "Error";
+            if (statusReadonly) statusReadonly.value = "Error";
+          }
+        } catch (e) {
+          outBox.textContent = "Error talking to AI.";
+          statusSpan.textContent = "Error";
+          if (statusReadonly) statusReadonly.value = "Error";
+          console.error(e);
+        } finally {
+          busy = false;
+          askBtn.disabled = false;
         }
-        if (backdrop) {
-            backdrop.addEventListener("click", function (e) {
-                if (e.target === backdrop) {
-                    closeModal();
-                }
-            });
-        }
-
-        if (askBtn) {
-            askBtn.addEventListener("click", function () {
-                const name = nameInput.value.trim();
-                const group = groupInput.value.trim();
-                const ftype = typeInput.value.trim();
-
-                if (!name) {
-                    outBox.textContent = "Please check that fabric name is filled.";
-                    return;
-                }
-
-                statusSpan.textContent = "Thinking with AI...";
-                outBox.textContent = "";
-
-                fetch("{% url 'fabric_ai_suggest' %}", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/x-www-form-urlencoded",
-                        "X-CSRFToken": getCsrfToken()
-                    },
-                    body: new URLSearchParams({
-                        name: name,
-                        group: group,
-                        fabric_type: ftype
-                    }).toString()
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.ok) {
-                        outBox.textContent = data.suggestion;
-                        statusSpan.textContent = "Ready";
-                    } else {
-                        outBox.textContent = data.error || "AI could not answer.";
-                        statusSpan.textContent = "";
-                    }
-                })
-                .catch(err => {
-                    console.error(err);
-                    outBox.textContent = "Error talking to AI.";
-                    statusSpan.textContent = "";
-                });
-            });
-        }
-    })();
+      });
+    }
+  })();
 </script>
 
-</body>
-</html>
+{% endblock %}
