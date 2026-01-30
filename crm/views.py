@@ -5141,7 +5141,6 @@ def _to_float(x):
         return 0.0
 
 
-@login_required
 def _top_buckets(qs, key_name: str, limit: int = 6):
     rows = list(qs)
     labels = []
