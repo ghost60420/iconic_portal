@@ -74,6 +74,46 @@ urlpatterns = [
     path("inventory/<int:pk>/quick-reorder/", perm("can_inventory", views.inventory_quick_reorder), name="inventory_quick_reorder"),
     path("inventory/ai-overview/", perm("can_ai", views.inventory_ai_overview), name="inventory_ai_overview"),
 
+    # Library
+    path("library/", login_required(views.library_home), name="library_home"),
+
+    # Products
+    path("library/products/", login_required(views.products_list), name="products_list"),
+    path("library/products/add/", login_required(views.product_add), name="product_add"),
+    path("library/products/<int:pk>/", login_required(views.product_detail), name="product_detail"),
+    path("library/products/<int:pk>/edit/", login_required(views.product_edit), name="product_edit"),
+    path("library/products/<int:pk>/ai/", login_required(views.product_ai_detail), name="product_ai_detail"),
+    path("library/products/ai-suggest/", login_required(views.product_ai_suggest), name="product_ai_suggest"),
+
+    # Fabrics
+    path("library/fabrics/", login_required(views.fabrics_list), name="fabrics_list"),
+    path("library/fabrics/add/", login_required(views.fabric_add), name="fabric_add"),
+    path("library/fabrics/<int:pk>/", login_required(views.fabric_detail), name="fabric_detail"),
+    path("library/fabrics/<int:pk>/edit/", login_required(views.fabric_edit), name="fabric_edit"),
+    path("library/fabrics/<int:pk>/ai/", login_required(views.fabric_ai_detail), name="fabric_ai_detail"),
+    path("library/fabrics/ai-suggest/", login_required(views.fabric_ai_suggest), name="fabric_ai_suggest"),
+    path("library/fabrics/ai-focus/<int:pk>/", login_required(views.fabric_ai_focus), name="fabric_ai_focus"),
+
+    # Accessories
+    path("library/accessories/", login_required(views.accessories_list), name="accessories_list"),
+    path("library/accessories/add/", login_required(views.accessory_add), name="accessory_add"),
+    path("library/accessories/<int:pk>/", login_required(views.accessory_detail), name="accessory_detail"),
+    path("library/accessories/<int:pk>/edit/", login_required(views.accessory_edit), name="accessory_edit"),
+    path("library/accessories/ai-suggest/", login_required(views.accessory_ai_suggest), name="accessory_ai_suggest"),
+
+    # Trims
+    path("library/trims/", login_required(views.trims_list), name="trims_list"),
+    path("library/trims/add/", login_required(views.trim_add), name="trim_add"),
+    path("library/trims/<int:pk>/", login_required(views.trim_detail), name="trim_detail"),
+    path("library/trims/<int:pk>/edit/", login_required(views.trim_edit), name="trim_edit"),
+    path("library/trims/ai-suggest/", login_required(views.trim_ai_suggest), name="trim_ai_suggest"),
+
+    # Threads
+    path("library/threads/", login_required(views.threads_list), name="threads_list"),
+    path("library/threads/add/", login_required(views.thread_add), name="thread_add"),
+    path("library/threads/<int:pk>/", login_required(views.thread_detail), name="thread_detail"),
+    path("library/threads/<int:pk>/edit/", login_required(views.thread_edit), name="thread_edit"),
+
     path("world-dashboard/", login_required(views.world_dashboard), name="world_dashboard"),
     path("world-tools/", login_required(views.world_tools), name="world_tools"),
     path("world-tools/ai-fashion/", perm("can_ai", views.world_ai_fashion_news), name="world_ai_fashion_news"),

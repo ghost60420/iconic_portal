@@ -29,7 +29,17 @@ from django.shortcuts import render
 from .models import Product, Fabric, Accessory, Trim, ThreadOption
 
 
-from .forms import BDStaffMonthForm, EventForm, LeadForm, ShipmentForm
+from .forms import (
+    BDStaffMonthForm,
+    EventForm,
+    LeadForm,
+    ShipmentForm,
+    ProductForm,
+    FabricForm,
+    AccessoryForm,
+    TrimForm,
+    ThreadForm,
+)
 from .models import (
     AIAgent,
     BDStaff,
@@ -5403,33 +5413,6 @@ def add_opportunity(request):
 @login_required
 def library_home(request):
     return render(request, "crm/library_home.html")
-
-
-
-
-
-@login_required
-def fabrics_list(request):
-    items = Fabric.objects.all().order_by("-id")
-    return render(request, "crm/library_list.html", {"title": "Fabrics", "items": items})
-
-
-@login_required
-def accessories_list(request):
-    items = Accessory.objects.all().order_by("-id")
-    return render(request, "crm/library_list.html", {"title": "Accessories", "items": items})
-
-
-@login_required
-def trims_list(request):
-    items = Trim.objects.all().order_by("-id")
-    return render(request, "crm/library_list.html", {"title": "Trims", "items": items})
-
-
-@login_required
-def threads_list(request):
-    items = ThreadOption.objects.all().order_by("-id")
-    return render(request, "crm/library_list.html", {"title": "Threads", "items": items})
 
 
 from django.shortcuts import render

@@ -28,6 +28,11 @@ from .models import (
     Lead,
     Opportunity,
     Shipment,
+    Product,
+    Fabric,
+    Accessory,
+    Trim,
+    ThreadOption,
 )
 
 # --------------------------------------------------
@@ -78,6 +83,113 @@ class LeadForm(forms.ModelForm):
             "phone",
             "attachment",
             "notes",
+        ]
+
+
+# --------------------------------------------------
+# Library forms
+# --------------------------------------------------
+class ProductForm(forms.ModelForm):
+    class Meta:
+        model = Product
+        fields = [
+            "product_code",
+            "name",
+            "product_type",
+            "product_category",
+            "default_gsm",
+            "default_fabric",
+            "default_moq",
+            "default_price",
+            "image",
+            "notes",
+            "is_active",
+        ]
+
+
+class FabricForm(forms.ModelForm):
+    class Meta:
+        model = Fabric
+        fields = [
+            "fabric_code",
+            "name",
+            "fabric_group",
+            "fabric_type",
+            "weave",
+            "knit_structure",
+            "construction",
+            "composition",
+            "gsm",
+            "stretch_type",
+            "surface",
+            "handfeel",
+            "drape",
+            "warmth",
+            "weight_class",
+            "breathability",
+            "sheerness",
+            "shrinkage",
+            "durability",
+            "color_options",
+            "price_per_kg",
+            "price_per_meter",
+            "image",
+            "notes",
+            "is_active",
+        ]
+
+
+class AccessoryForm(forms.ModelForm):
+    class Meta:
+        model = Accessory
+        fields = [
+            "accessory_code",
+            "name",
+            "accessory_type",
+            "size",
+            "color",
+            "material",
+            "finish",
+            "supplier",
+            "price_per_unit",
+            "image",
+            "notes",
+            "is_active",
+        ]
+
+
+class TrimForm(forms.ModelForm):
+    class Meta:
+        model = Trim
+        fields = [
+            "trim_code",
+            "name",
+            "trim_type",
+            "width",
+            "color",
+            "material",
+            "price_per_meter",
+            "image",
+            "notes",
+            "is_active",
+        ]
+
+
+class ThreadForm(forms.ModelForm):
+    class Meta:
+        model = ThreadOption
+        fields = [
+            "thread_code",
+            "name",
+            "thread_type",
+            "count",
+            "color",
+            "brand",
+            "use_for",
+            "price_per_cone",
+            "image",
+            "notes",
+            "is_active",
         ]
         widgets = {
             "notes": forms.Textarea(attrs={"rows": 3, "class": "form-control"}),
