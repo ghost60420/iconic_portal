@@ -239,7 +239,7 @@
 
     <div class="top-links">
       <a href="{% url 'leads_list' %}">All leads</a>
-      <a href="{% url 'edit_lead' lead.pk %}">Edit</a>
+      <a href="{% url 'lead_edit' lead.pk %}">Edit</a>
       <a href="{% url 'calendar_add' %}?lead={{ lead.pk }}">Add follow up</a>
     </div>
   </div>
