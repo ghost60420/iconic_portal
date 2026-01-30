@@ -5108,7 +5108,15 @@ from django.db.models import Count, Sum, Q
 from django.shortcuts import render
 from django.utils import timezone
 
-from .models import Lead, Opportunity, AccountingEntry, BDStaffMonth
+from .models import (
+    Lead,
+    Opportunity,
+    AccountingEntry,
+    BDStaffMonth,
+    LEAD_STATUS_CHOICES,
+    SOURCE_CHOICES,
+    PRIORITY_CHOICES,
+)
 
 # Optional models. If they do not exist, dashboard will still work.
 try:
@@ -5134,16 +5142,43 @@ def _to_float(x):
 
 
 @login_required
+def _top_buckets(qs, key_name: str, limit: int = 6):
+    rows = list(qs)
+    labels = []
+    values = []
+    other_total = 0
+    for i, row in enumerate(rows):
+        label = (row.get(key_name) or "Unknown").strip() or "Unknown"
+        count = int(row.get("c") or 0)
+        if i < limit:
+            labels.append(label)
+            values.append(count)
+        else:
+            other_total += count
+    if other_total:
+        labels.append("Other")
+        values.append(other_total)
+    return labels, values
+
+
+@login_required
 def main_dashboard(request):
     today = timezone.localdate()
-    start_30 = today - timedelta(days=29)
+    try:
+        period_days = int((request.GET.get("days") or "30").strip())
+    except Exception:
+        period_days = 30
+    if period_days not in (7, 30, 60, 90, 180):
+        period_days = 30
+
+    start_period = today - timedelta(days=period_days - 1)
 
     # Leads
     leads_today = Lead.objects.filter(created_date=today).count()
-    leads_30 = Lead.objects.filter(created_date__gte=start_30).count()
+    leads_period = Lead.objects.filter(created_date__gte=start_period).count()
 
     leads_daily_qs = (
-        Lead.objects.filter(created_date__gte=start_30)
+        Lead.objects.filter(created_date__gte=start_period)
         .values("created_date")
         .annotate(c=Count("id"))
         .order_by("created_date")
@@ -5152,58 +5187,61 @@ def main_dashboard(request):
 
     leads_daily_labels = []
     leads_daily_values = []
-    for i in range(30):
-        d = start_30 + timedelta(days=i)
+    for i in range(period_days):
+        d = start_period + timedelta(days=i)
         leads_daily_labels.append(d.strftime("%Y-%m-%d"))
         leads_daily_values.append(int(lead_map.get(d, 0)))
 
     # Opportunities
-    opp_30 = Opportunity.objects.filter(created_date__gte=start_30).count()
+    opp_period = Opportunity.objects.filter(created_date__gte=start_period).count()
 
-    opp_by_stage_qs = (
-        Opportunity.objects.values("stage")
-        .annotate(c=Count("id"))
-        .order_by("-c")
-    )
+    opp_by_stage_qs = Opportunity.objects.values("stage").annotate(c=Count("id"))
+    opp_stage_map = {row.get("stage") or "Unknown": int(row.get("c") or 0) for row in opp_by_stage_qs}
     opp_stage_labels = []
     opp_stage_values = []
-    for row in opp_by_stage_qs:
-        stage = (row.get("stage") or "").strip() or "Unknown"
-        opp_stage_labels.append(stage)
-        opp_stage_values.append(int(row.get("c") or 0))
+    for st, _ in Opportunity.STAGE_CHOICES:
+        opp_stage_labels.append(st)
+        opp_stage_values.append(int(opp_stage_map.get(st, 0)))
+    # Include any unknown stages
+    for stage, count in opp_stage_map.items():
+        if stage not in opp_stage_labels:
+            opp_stage_labels.append(stage)
+            opp_stage_values.append(int(count))
 
     # Opp daily (for Leads vs Opportunities chart)
     opp_daily_qs = (
-        Opportunity.objects.filter(created_date__gte=start_30)
+        Opportunity.objects.filter(created_date__gte=start_period)
         .values("created_date")
         .annotate(c=Count("id"))
         .order_by("created_date")
     )
     opp_map = {row["created_date"]: int(row["c"]) for row in opp_daily_qs if row.get("created_date")}
     opp_daily_values = []
-    for i in range(30):
-        d = start_30 + timedelta(days=i)
+    for i in range(period_days):
+        d = start_period + timedelta(days=i)
         opp_daily_values.append(int(opp_map.get(d, 0)))
 
     # Win vs Loss (safe guess using stage text)
-    won_count = Opportunity.objects.filter(Q(stage__icontains="won") | Q(stage__icontains="closed won")).count()
-    lost_count = Opportunity.objects.filter(Q(stage__icontains="lost") | Q(stage__icontains="closed lost")).count()
+    won_count = Opportunity.objects.filter(stage__iexact="Closed Won").count()
+    lost_count = Opportunity.objects.filter(stage__iexact="Closed Lost").count()
     win_loss_labels = ["Won", "Lost"]
     win_loss_values = [int(won_count), int(lost_count)]
 
-    # Lead funnel (safe guess using common lead_status words)
-    total_leads = Lead.objects.count()
-    qualified_leads = Lead.objects.filter(
-        Q(lead_status__icontains="qualified") | Q(lead_status__icontains="contacted") | Q(lead_status__icontains="warm")
-    ).count()
-    samples_count = Opportunity.objects.filter(Q(stage__icontains="sample")).count()
-    closed_won_count = won_count
-
-    funnel_labels = ["Leads", "Qualified", "Opportunities", "Samples", "Closed won"]
-    funnel_values = [int(total_leads), int(qualified_leads), int(Opportunity.objects.count()), int(samples_count), int(closed_won_count)]
+    # Lead status funnel (show qualification stage)
+    lead_status_qs = Lead.objects.values("lead_status").annotate(c=Count("id"))
+    lead_status_map = {row.get("lead_status") or "Unknown": int(row.get("c") or 0) for row in lead_status_qs}
+    lead_status_labels = []
+    lead_status_values = []
+    for st, _ in LEAD_STATUS_CHOICES:
+        lead_status_labels.append(st)
+        lead_status_values.append(int(lead_status_map.get(st, 0)))
+    for st, cnt in lead_status_map.items():
+        if st not in lead_status_labels:
+            lead_status_labels.append(st)
+            lead_status_values.append(int(cnt))
 
     # Accounting net per day (real cash flow line)
-    acc_qs = AccountingEntry.objects.filter(date__gte=start_30).values("date").annotate(
+    acc_qs = AccountingEntry.objects.filter(date__gte=start_period).values("date").annotate(
         in_sum=Sum("amount_cad", filter=Q(direction="IN")),
         out_sum=Sum("amount_cad", filter=Q(direction="OUT")),
     )
@@ -5217,14 +5255,14 @@ def main_dashboard(request):
         acc_map[d] = inc - out
 
     cash_daily_values = []
-    for i in range(30):
-        d = start_30 + timedelta(days=i)
+    for i in range(period_days):
+        d = start_period + timedelta(days=i)
         cash_daily_values.append(_to_float(acc_map.get(d, 0)))
 
-    acc_30 = AccountingEntry.objects.filter(date__gte=start_30)
-    acc_income_cad_30 = _to_float(acc_30.filter(direction="IN").aggregate(s=Sum("amount_cad"))["s"])
-    acc_out_cad_30 = _to_float(acc_30.filter(direction="OUT").aggregate(s=Sum("amount_cad"))["s"])
-    acc_net_cad_30 = acc_income_cad_30 - acc_out_cad_30
+    acc_period = AccountingEntry.objects.filter(date__gte=start_period)
+    acc_income_cad = _to_float(acc_period.filter(direction="IN").aggregate(s=Sum("amount_cad"))["s"])
+    acc_out_cad = _to_float(acc_period.filter(direction="OUT").aggregate(s=Sum("amount_cad"))["s"])
+    acc_net_cad = acc_income_cad - acc_out_cad
 
     # Payroll
     pm = BDStaffMonth.objects.filter(year=today.year, month=today.month)
@@ -5263,15 +5301,83 @@ def main_dashboard(request):
         except Exception:
             pass
 
+    # Lead sources, market, priority
+    lead_source_qs = Lead.objects.values("source").annotate(c=Count("id")).order_by("-c")
+    lead_source_labels, lead_source_values = _top_buckets(lead_source_qs, "source", limit=6)
+
+    lead_priority_map = {row.get("priority") or "Unknown": int(row.get("c") or 0) for row in Lead.objects.values("priority").annotate(c=Count("id"))}
+    lead_priority_labels = []
+    lead_priority_values = []
+    for p, _ in PRIORITY_CHOICES:
+        lead_priority_labels.append(p)
+        lead_priority_values.append(int(lead_priority_map.get(p, 0)))
+    for p, cnt in lead_priority_map.items():
+        if p not in lead_priority_labels:
+            lead_priority_labels.append(p)
+            lead_priority_values.append(int(cnt))
+
+    lead_market_map = {row.get("market") or "Unknown": int(row.get("c") or 0) for row in Lead.objects.values("market").annotate(c=Count("id"))}
+    lead_market_labels = []
+    lead_market_values = []
+    for m, _ in Lead.MARKET_CHOICES:
+        lead_market_labels.append(m)
+        lead_market_values.append(int(lead_market_map.get(m, 0)))
+    for m, cnt in lead_market_map.items():
+        if m not in lead_market_labels:
+            lead_market_labels.append(m)
+            lead_market_values.append(int(cnt))
+
+    open_opps = Opportunity.objects.filter(is_open=True).count()
+    overdue_followups = Lead.objects.filter(next_followup__lt=today).count()
+    conversion_rate = 0.0
+    if leads_period > 0:
+        conversion_rate = round((opp_period / leads_period) * 100, 1)
+
+    ai_notes = [
+        f"Lead → Opportunity conversion: {conversion_rate}%",
+        f"Open opportunities: {open_opps}",
+        f"Overdue follow-ups: {overdue_followups}",
+        f"Top lead source: {lead_source_labels[0] if lead_source_labels else 'N/A'}",
+    ]
+
+    chart_data = {
+        "leads_labels": leads_daily_labels,
+        "leads_values": leads_daily_values,
+        "opp_daily_values": opp_daily_values,
+        "cash_daily_values": cash_daily_values,
+        "opp_stage_labels": opp_stage_labels,
+        "opp_stage_values": opp_stage_values,
+        "lead_status_labels": lead_status_labels,
+        "lead_status_values": lead_status_values,
+        "lead_source_labels": lead_source_labels,
+        "lead_source_values": lead_source_values,
+        "lead_priority_labels": lead_priority_labels,
+        "lead_priority_values": lead_priority_values,
+        "lead_market_labels": lead_market_labels,
+        "lead_market_values": lead_market_values,
+        "win_loss_labels": win_loss_labels,
+        "win_loss_values": win_loss_values,
+        "prod_labels": prod_labels,
+        "prod_counts": prod_counts,
+        "ship_labels": ship_labels,
+        "ship_shipped": ship_shipped,
+        "ship_pending": ship_pending,
+        "ship_delayed": ship_delayed,
+    }
+
     ctx = {
+        "today": today,
         "leads_today": leads_today,
-        "leads_30": leads_30,
+        "leads_period": leads_period,
 
-        "opp_30": opp_30,
+        "opp_period": opp_period,
+        "open_opps": open_opps,
+        "conversion_rate": conversion_rate,
+        "overdue_followups": overdue_followups,
 
-        "acc_income_cad_30": acc_income_cad_30,
-        "acc_out_cad_30": acc_out_cad_30,
-        "acc_net_cad_30": acc_net_cad_30,
+        "acc_income_cad_period": acc_income_cad,
+        "acc_out_cad_period": acc_out_cad,
+        "acc_net_cad_period": acc_net_cad,
 
         "payroll_total": payroll_total,
         "payroll_ot": payroll_ot,
@@ -5281,31 +5387,10 @@ def main_dashboard(request):
         "payroll_unpaid": payroll_unpaid,
         "payroll_year": today.year,
         "payroll_month": today.month,
-
-        # Charts
-        "leads_daily_labels": leads_daily_labels,
-        "leads_daily_values": leads_daily_values,
-
-        "opp_stage_labels": opp_stage_labels,
-        "opp_stage_values": opp_stage_values,
-
-        "opp_daily_values": opp_daily_values,
-
-        "win_loss_labels": win_loss_labels,
-        "win_loss_values": win_loss_values,
-
-        "funnel_labels": funnel_labels,
-        "funnel_values": funnel_values,
-
-        "cash_daily_values": cash_daily_values,
-
-        "prod_labels": prod_labels,
-        "prod_counts": prod_counts,
-
-        "ship_labels": ship_labels,
-        "ship_shipped": ship_shipped,
-        "ship_pending": ship_pending,
-        "ship_delayed": ship_delayed,
+        "period_days": period_days,
+        "period_label": f"Last {period_days} days",
+        "ai_notes": ai_notes,
+        "chart_data": chart_data,
     }
 
     return render(request, "crm/main_dashboard.html", ctx)

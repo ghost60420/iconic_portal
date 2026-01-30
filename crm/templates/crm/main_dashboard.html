@@ -3,552 +3,480 @@
 {% block content %}
 
 <style>
+  @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=Sora:wght@400;600;700&display=swap");
+
   :root{
-    --bg:#020617;
-    --bg2:#030712;
-    --line:#334155;
-    --text:#f9fafb;
-    --muted:#9ca3af;
-    --good:#4ade80;
-    --bad:#fb7185;
-    --warn:#fbbf24;
+    --bg: #05070c;
+    --bg-2: #0b1020;
+    --panel: #0f172a;
+    --panel-2: #0b1224;
+    --text: #f8fafc;
+    --muted: #94a3b8;
+    --line: rgba(148,163,184,0.18);
+    --teal: #22d3ee;
+    --amber: #fbbf24;
+    --green: #4ade80;
+    --red: #fb7185;
+    --blue: #60a5fa;
   }
 
-  .dash-wrap{
-    max-width:1500px;
-    margin:0 auto;
-    padding: 0 10px;
-    color:var(--text);
+  .dash{
+    position: relative;
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 8px 10px 40px 10px;
+    color: var(--text);
+    font-family: "Sora", sans-serif;
   }
 
-  .dash-head{
+  .dash::before{
+    content:"";
+    position: absolute;
+    inset: -40px -20px auto -20px;
+    height: 420px;
+    background:
+      radial-gradient(400px 220px at 20% 20%, rgba(34,211,238,0.18), transparent 70%),
+      radial-gradient(420px 260px at 80% 10%, rgba(251,191,36,0.14), transparent 70%),
+      linear-gradient(180deg, rgba(15,23,42,0.85), transparent 70%);
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .dash > *{ position: relative; z-index: 1; }
+
+  .dash-hero{
     display:flex;
-    align-items:flex-start;
-    justify-content:space-between;
-    gap:14px;
+    justify-content: space-between;
+    align-items:flex-end;
+    gap:16px;
     flex-wrap:wrap;
-    margin: 8px 0 14px 0;
+    margin: 6px 0 18px;
   }
 
-  .dash-title{ margin:0; font-weight:900; letter-spacing:0.2px; }
-  .dash-sub{ font-size:12px; color:var(--muted); font-weight:800; margin-top:4px; }
+  .dash-title{
+    margin:0;
+    font-size: 28px;
+    font-weight: 700;
+    font-family: "Space Grotesk", sans-serif;
+    letter-spacing: 0.2px;
+  }
 
-  .pillbar{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
-  .pill{
+  .dash-sub{
+    margin-top:6px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .dash-meta{
+    margin-top:8px;
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    align-items:center;
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  .meta-pill{
+    padding:6px 10px;
+    border-radius:999px;
+    border:1px solid var(--line);
+    background: rgba(255,255,255,0.04);
+  }
+
+  .dash-controls{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    flex-wrap:wrap;
+  }
+
+  .dash-select{
+    background: var(--panel);
+    border:1px solid var(--line);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 10px;
+    font-weight: 700;
+  }
+
+  .dash-btn{
     display:inline-flex;
     align-items:center;
     gap:8px;
-    padding:8px 14px;
-    border-radius:999px;
-    font-weight:900;
-    font-size:12px;
-    border:1px solid rgba(255,255,255,0.14);
-    background:linear-gradient(145deg,#0f172a,var(--bg));
-    color:var(--text);
+    padding: 8px 12px;
+    border-radius: 12px;
+    border:1px solid rgba(255,255,255,0.18);
+    background: rgba(255,255,255,0.06);
+    color: var(--text);
     text-decoration:none;
-    box-shadow:0 3px 0 #020617;
-    white-space:nowrap;
+    font-size: 12px;
+    font-weight: 800;
   }
-  .pill:hover{ filter:brightness(1.05); text-decoration:none; }
 
-  .cardx{
-    background:linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+  .dash-btn:hover{ filter: brightness(1.05); text-decoration:none; }
+
+  .kpi-grid{
+    display:grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap:12px;
+  }
+
+  @media (max-width: 1200px){
+    .kpi-grid{ grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+  @media (max-width: 760px){
+    .kpi-grid{ grid-template-columns: 1fr; }
+  }
+
+  .card{
+    background: linear-gradient(180deg, rgba(15,23,42,0.9), rgba(2,6,23,0.9));
     border:1px solid var(--line);
-    border-radius:18px;
-    box-shadow:0 16px 36px rgba(0,0,0,0.55);
+    border-radius: 18px;
+    padding: 14px;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.5);
     overflow:hidden;
+    animation: rise 0.5s ease both;
+    animation-delay: var(--d,0s);
   }
-  .card-pad{ padding:14px; }
 
-  .kpi-label{
-    font-size:11px;
-    text-transform:uppercase;
-    color:#e5e7eb;
-    letter-spacing:0.45px;
-    font-weight:900;
+  @keyframes rise{
+    from{ opacity:0; transform: translateY(12px); }
+    to{ opacity:1; transform: translateY(0); }
   }
-  .kpi-val{
-    font-size:22px;
-    font-weight:900;
-    line-height:1.15;
+
+  .kpi-title{
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    font-weight: 800;
+  }
+  .kpi-value{
+    font-size: 22px;
+    font-weight: 700;
+    margin-top: 6px;
+    font-family: "Space Grotesk", sans-serif;
   }
   .kpi-sub{
-    font-size:12px;
-    color:var(--muted);
-    font-weight:800;
-    margin-top:6px;
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 600;
   }
 
-  .grid-6{ display:grid; grid-template-columns:repeat(6, 1fr); gap:12px; }
-  .grid-4{ display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; }
-  .grid-3{ display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; }
-  .grid-2{ display:grid; grid-template-columns:repeat(2, 1fr); gap:12px; }
+  .grid-2{ display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:12px; }
+  .grid-3{ display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:12px; }
+  .grid-4{ display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap:12px; }
 
-  @media (max-width: 1300px){
-    .grid-6{ grid-template-columns:repeat(3, 1fr); }
+  @media (max-width: 1200px){
+    .grid-4{ grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .grid-3{ grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .grid-2{ grid-template-columns: 1fr; }
   }
-  @media (max-width: 1100px){
-    .grid-4{ grid-template-columns:repeat(2, 1fr); }
-    .grid-3{ grid-template-columns:repeat(2, 1fr); }
-  }
-  @media (max-width: 650px){
-    .grid-6,.grid-4,.grid-2,.grid-3{ grid-template-columns:1fr; }
+  @media (max-width: 760px){
+    .grid-4,.grid-3,.grid-2{ grid-template-columns: 1fr; }
   }
 
-  .box-head{
+  .card-head{
     display:flex;
-    justify-content:space-between;
     align-items:center;
-    gap:10px;
-    margin-bottom:10px;
+    justify-content:space-between;
+    gap:12px;
+    margin-bottom: 10px;
   }
-  .box-title{ margin:0; font-size:13px; font-weight:900; color:var(--text); }
-  .box-note{ font-size:11px; color:var(--muted); font-weight:800; }
 
-  .chartWrap{ height:260px; }
-  .chartWrap.sm{ height:200px; }
-  .chartWrap.xs{ height:160px; }
+  .card-title{
+    margin:0;
+    font-size: 13px;
+    font-weight: 800;
+  }
 
+  .card-note{
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  .chartWrap{ height: 260px; }
+  .chartWrap.sm{ height: 200px; }
+  .chartWrap.xs{ height: 160px; }
   canvas{ width:100% !important; height:100% !important; }
 
-  .aiBox{
-    font-size:12px;
-    font-weight:800;
-    color:#e5e7eb;
-    line-height:1.45;
+  .ai-notes{
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text);
+    margin: 0;
+    padding-left: 16px;
   }
-  .aiBox ul{ margin:8px 0 0 16px; padding:0; }
-  .aiBox li{ margin-bottom:6px; }
+  .ai-notes li{ margin-bottom: 6px; color: #e5e7eb; }
 
-  .tiny-badge{
-    display:inline-flex;
-    align-items:center;
-    gap:6px;
-    font-size:11px;
-    font-weight:900;
-    padding:6px 10px;
-    border-radius:999px;
-    border:1px solid rgba(255,255,255,0.14);
-    background:rgba(255,255,255,0.03);
-    color:#e5e7eb;
-    white-space:nowrap;
-  }
-
-  .section-title{
-    margin: 10px 0 10px 2px;
-    font-size:12px;
+  .section-label{
+    margin: 16px 0 8px 2px;
     color: var(--muted);
-    font-weight: 900;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.45px;
+    font-weight: 800;
   }
 </style>
 
 <div class="container-fluid">
-  <div class="dash-wrap">
+  <div class="dash">
 
-    <div class="dash-head">
+    <div class="dash-hero">
       <div>
-        <h2 class="dash-title">Main Dashboard</h2>
-        <div class="dash-sub">At a glance view of sales, work, and money.</div>
+        <h2 class="dash-title">CRM Command Center</h2>
+        <div class="dash-sub">Live snapshot of leads, production, and cash.</div>
+        <div class="dash-meta">
+          <span class="meta-pill">Updated: {{ today|date:"M d, Y" }}</span>
+          <span class="meta-pill">{{ period_label }}</span>
+        </div>
       </div>
 
-      <div class="pillbar">
-        <a class="pill" href="{% url 'accounting_bd_dashboard' %}">Bangladesh</a>
-        <a class="pill" href="{% url 'production_profit_report' %}">Production profit</a>
+      <form method="get" class="dash-controls">
+        <label class="dash-sub" for="days">Range</label>
+        <select id="days" name="days" class="dash-select" onchange="this.form.submit()">
+          <option value="7" {% if period_days == 7 %}selected{% endif %}>Last 7 days</option>
+          <option value="30" {% if period_days == 30 %}selected{% endif %}>Last 30 days</option>
+          <option value="60" {% if period_days == 60 %}selected{% endif %}>Last 60 days</option>
+          <option value="90" {% if period_days == 90 %}selected{% endif %}>Last 90 days</option>
+          <option value="180" {% if period_days == 180 %}selected{% endif %}>Last 180 days</option>
+        </select>
+        <a class="dash-btn" href="{% url 'accounting_bd_dashboard' %}">BD Accounting</a>
+        <a class="dash-btn" href="{% url 'production_profit_report' %}">Production Profit</a>
+      </form>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="card" style="--d:0.02s;">
+        <div class="kpi-title">Leads Today</div>
+        <div class="kpi-value" style="color:var(--green);">{{ leads_today|default:0 }}</div>
+        <div class="kpi-sub">New leads received today.</div>
+      </div>
+
+      <div class="card" style="--d:0.04s;">
+        <div class="kpi-title">Leads {{ period_label }}</div>
+        <div class="kpi-value">{{ leads_period|default:0 }}</div>
+        <div class="kpi-sub">Lead volume in selected range.</div>
+      </div>
+
+      <div class="card" style="--d:0.06s;">
+        <div class="kpi-title">Opportunities {{ period_label }}</div>
+        <div class="kpi-value">{{ opp_period|default:0 }}</div>
+        <div class="kpi-sub">Created from leads.</div>
+      </div>
+
+      <div class="card" style="--d:0.08s;">
+        <div class="kpi-title">Conversion Rate</div>
+        <div class="kpi-value" style="color:var(--teal);">{{ conversion_rate|default:0 }}%</div>
+        <div class="kpi-sub">Leads → opportunities.</div>
+      </div>
+
+      <div class="card" style="--d:0.1s;">
+        <div class="kpi-title">Open Opportunities</div>
+        <div class="kpi-value">{{ open_opps|default:0 }}</div>
+        <div class="kpi-sub">Active pipeline right now.</div>
+      </div>
+
+      <div class="card" style="--d:0.12s;">
+        <div class="kpi-title">Net Cash {{ period_label }}</div>
+        <div class="kpi-value" style="color:var(--amber);">{{ acc_net_cad_period|floatformat:2 }}</div>
+        <div class="kpi-sub">In {{ acc_income_cad_period|floatformat:2 }} | Out {{ acc_out_cad_period|floatformat:2 }}</div>
       </div>
     </div>
 
-    <div class="grid-4 mb-3">
-
-      <div class="cardx"><div class="card-pad">
-        <div class="kpi-label">Leads today</div>
-        <div class="kpi-val" style="color:var(--good);">{{ leads_today|default:0 }}</div>
-        <div class="kpi-sub">New leads today.</div>
-      </div></div>
-
-      <div class="cardx"><div class="card-pad">
-        <div class="kpi-label">Leads last 30 days</div>
-        <div class="kpi-val">{{ leads_30|default:0 }}</div>
-        <div class="kpi-sub">Daily trend below.</div>
-      </div></div>
-
-      <div class="cardx"><div class="card-pad">
-        <div class="kpi-label">Opportunities last 30 days</div>
-        <div class="kpi-val">{{ opp_30|default:0 }}</div>
-        <div class="kpi-sub">Converted from leads.</div>
-      </div></div>
-
-      <div class="cardx"><div class="card-pad">
-        <div class="kpi-label">Net cash last 30 days CAD</div>
-        <div class="kpi-val" style="color:var(--good);">
-          {{ acc_net_cad_30|default_if_none:0|floatformat:2 }}
+    <div class="section-label">Insights</div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <p class="card-title">Lead & Opportunity Trend</p>
+            <div class="card-note">Daily activity for {{ period_label|lower }}</div>
+          </div>
+          <span class="meta-pill">Live</span>
         </div>
-        <div class="kpi-sub">
-          In: {{ acc_income_cad_30|default_if_none:0|floatformat:2 }}
-          | Out: {{ acc_out_cad_30|default_if_none:0|floatformat:2 }}
+        <div class="chartWrap">
+          <canvas id="chartTrend"></canvas>
         </div>
-      </div></div>
+      </div>
 
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <p class="card-title">Cash Flow</p>
+            <div class="card-note">Net cash by day (CAD)</div>
+          </div>
+        </div>
+        <div class="chartWrap">
+          <canvas id="chartCash"></canvas>
+        </div>
+      </div>
     </div>
 
-    <div class="section-title">
-      BD payroll this month ({{ payroll_year|default:"" }} {{ payroll_month|default:"" }})
+    <div class="grid-3" style="margin-top:12px;">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <p class="card-title">Lead Qualification Funnel</p>
+            <div class="card-note">Each lead status in pipeline</div>
+          </div>
+        </div>
+        <div class="chartWrap sm">
+          <canvas id="chartLeadStatus"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <p class="card-title">Opportunity Stages</p>
+            <div class="card-note">Pipeline distribution</div>
+          </div>
+        </div>
+        <div class="chartWrap sm">
+          <canvas id="chartOppStages"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <p class="card-title">Win vs Lost</p>
+            <div class="card-note">Closed performance</div>
+          </div>
+        </div>
+        <div class="chartWrap sm">
+          <canvas id="chartWinLoss"></canvas>
+        </div>
+      </div>
     </div>
 
-    <div class="grid-6 mb-3">
+    <div class="grid-4" style="margin-top:12px;">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <p class="card-title">Lead Sources</p>
+            <div class="card-note">Top channels</div>
+          </div>
+        </div>
+        <div class="chartWrap sm">
+          <canvas id="chartLeadSource"></canvas>
+        </div>
+      </div>
 
-      <div class="cardx"><div class="card-pad">
-        <div class="kpi-label">Payroll total BDT</div>
-        <div class="kpi-val" style="color:var(--good);">{{ payroll_total|default_if_none:0|floatformat:2 }}</div>
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <p class="card-title">Market Split</p>
+            <div class="card-note">Lead geography</div>
+          </div>
+        </div>
+        <div class="chartWrap sm">
+          <canvas id="chartMarket"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <p class="card-title">Lead Priority Mix</p>
+            <div class="card-note">Urgency distribution</div>
+          </div>
+        </div>
+        <div class="chartWrap sm">
+          <canvas id="chartPriority"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <p class="card-title">AI Insights</p>
+            <div class="card-note">Quick signals</div>
+          </div>
+        </div>
+        <ul class="ai-notes">
+          {% for n in ai_notes %}
+            <li>{{ n }}</li>
+          {% endfor %}
+        </ul>
+        <div class="dash-sub" style="margin-top:8px;">Overdue follow-ups: <strong>{{ overdue_followups|default:0 }}</strong></div>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-top:12px;">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <p class="card-title">Production Status</p>
+            <div class="card-note">On time vs delayed</div>
+          </div>
+        </div>
+        <div class="chartWrap sm">
+          <canvas id="chartProduction"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <p class="card-title">Shipping Status</p>
+            <div class="card-note">Shipped, pending, delayed</div>
+          </div>
+        </div>
+        <div class="chartWrap sm">
+          <canvas id="chartShipping"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-label">Payroll Snapshot ({{ payroll_year }} {{ payroll_month }})</div>
+    <div class="grid-4">
+      <div class="card">
+        <div class="kpi-title">Payroll Total (BDT)</div>
+        <div class="kpi-value" style="color:var(--green);">{{ payroll_total|floatformat:2 }}</div>
         <div class="kpi-sub">Final pay total.</div>
-      </div></div>
-
-      <div class="cardx"><div class="card-pad">
-        <div class="kpi-label">Overtime BDT</div>
-        <div class="kpi-val">{{ payroll_ot|default_if_none:0|floatformat:2 }}</div>
+      </div>
+      <div class="card">
+        <div class="kpi-title">Overtime (BDT)</div>
+        <div class="kpi-value">{{ payroll_ot|floatformat:2 }}</div>
         <div class="kpi-sub">Overtime total.</div>
-      </div></div>
-
-      <div class="cardx"><div class="card-pad">
-        <div class="kpi-label">Bonus BDT</div>
-        <div class="kpi-val">{{ payroll_bonus|default_if_none:0|floatformat:2 }}</div>
+      </div>
+      <div class="card">
+        <div class="kpi-title">Bonus (BDT)</div>
+        <div class="kpi-value">{{ payroll_bonus|floatformat:2 }}</div>
         <div class="kpi-sub">Bonus total.</div>
-      </div></div>
-
-      <div class="cardx"><div class="card-pad">
-        <div class="kpi-label">Deduction BDT</div>
-        <div class="kpi-val" style="color:var(--bad);">{{ payroll_deduction|default_if_none:0|floatformat:2 }}</div>
+      </div>
+      <div class="card">
+        <div class="kpi-title">Deduction (BDT)</div>
+        <div class="kpi-value" style="color:var(--red);">{{ payroll_deduction|floatformat:2 }}</div>
         <div class="kpi-sub">Deduction total.</div>
-      </div></div>
-
-      <div class="cardx"><div class="card-pad">
-        <div class="kpi-label">Paid</div>
-        <div class="kpi-val">{{ payroll_paid|default:0 }}</div>
-        <div class="kpi-sub">Rows marked paid.</div>
-      </div></div>
-
-      <div class="cardx"><div class="card-pad">
-        <div class="kpi-label">Unpaid</div>
-        <div class="kpi-val">{{ payroll_unpaid|default:0 }}</div>
-        <div class="kpi-sub">Rows not paid yet.</div>
-      </div></div>
-
-    </div>
-
-    <div class="grid-2 mb-3">
-
-      <div class="cardx">
-        <div class="card-pad">
-          <div class="box-head">
-            <div>
-              <p class="box-title">Leads trend</p>
-              <div class="box-note">Last 30 days line</div>
-            </div>
-            <span class="tiny-badge">Live view</span>
-          </div>
-          <div class="chartWrap">
-            <canvas id="chartLeadsLine"></canvas>
-          </div>
-        </div>
       </div>
-
-      <div class="cardx">
-        <div class="card-pad">
-          <div class="box-head">
-            <div>
-              <p class="box-title">AI notes</p>
-              <div class="box-note">Auto summary from your data</div>
-            </div>
-          </div>
-
-          <div class="aiBox">
-            <ul>
-              {% if ai_notes %}
-                {% for n in ai_notes %}
-                  <li>{{ n }}</li>
-                {% endfor %}
-              {% else %}
-                <li>No notes yet.</li>
-              {% endif %}
-            </ul>
-          </div>
-
-          <hr style="border-color:#1f2937; margin:14px 0;">
-
-          <div class="grid-2">
-            <div>
-              <p class="box-title">Opportunity stages</p>
-              <div class="chartWrap xs">
-                <canvas id="chartOppPie"></canvas>
-              </div>
-            </div>
-            <div>
-              <p class="box-title">Win vs Loss</p>
-              <div class="chartWrap xs">
-                <canvas id="chartWinLossDonut"></canvas>
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-    </div>
-
-    <div class="grid-3 mb-3">
-
-      <div class="cardx">
-        <div class="card-pad">
-          <div class="box-head">
-            <div>
-              <p class="box-title">Lead funnel</p>
-              <div class="box-note">Live</div>
-            </div>
-          </div>
-          <div class="chartWrap sm">
-            <canvas id="chartFunnel"></canvas>
-          </div>
-        </div>
-      </div>
-
-      <div class="cardx">
-        <div class="card-pad">
-          <div class="box-head">
-            <div>
-              <p class="box-title">Leads vs Opportunities</p>
-              <div class="box-note">Live</div>
-            </div>
-          </div>
-          <div class="chartWrap sm">
-            <canvas id="chartLeadsBars"></canvas>
-          </div>
-        </div>
-      </div>
-
-      <div class="cardx">
-        <div class="card-pad">
-          <div class="box-head">
-            <div>
-              <p class="box-title">Cash flow</p>
-              <div class="box-note">Live</div>
-            </div>
-          </div>
-          <div class="chartWrap sm">
-            <canvas id="chartCashMini"></canvas>
-          </div>
-        </div>
-      </div>
-
-    </div>
-
-    <div class="grid-2 mb-3">
-
-      <div class="cardx">
-        <div class="card-pad">
-          <div class="box-head">
-            <div>
-              <p class="box-title">Production status</p>
-              <div class="box-note">On time, delayed, remake</div>
-            </div>
-          </div>
-          <div class="chartWrap sm">
-            <canvas id="chartProdHbar"></canvas>
-          </div>
-        </div>
-      </div>
-
-      <div class="cardx">
-        <div class="card-pad">
-          <div class="box-head">
-            <div>
-              <p class="box-title">Shipping status</p>
-              <div class="box-note">Shipped, pending, delayed</div>
-            </div>
-          </div>
-          <div class="chartWrap sm">
-            <canvas id="chartShipStack"></canvas>
-          </div>
-        </div>
-      </div>
-
-    </div>
-
-    <div class="dash-sub" style="margin-top:10px;">
-      Next: connect more items like top lead sources, conversion rate, and production timeline.
     </div>
 
   </div>
 </div>
 
+{{ chart_data|json_script:"dash-data" }}
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-
 <script>
-  (function () {
-    function getEl(id){ return document.getElementById(id); }
+  (function(){
+    const raw = document.getElementById("dash-data");
+    if (!raw || !window.Chart) return;
+    const data = JSON.parse(raw.textContent || "{}");
 
-    function safeNumberFromTemplate(strVal){
-      var s = (strVal || "").toString().replace(/,/g, "");
-      var n = parseFloat(s);
-      return isNaN(n) ? 0 : n;
+    function safeLabels(labels){
+      return labels && labels.length ? labels : ["No data"];
     }
-
-    function makeChart(elId, config){
-      var el = getEl(elId);
-      if (!el || !window.Chart) return;
-      try{
-        new Chart(el, config);
-      } catch(e){
-        console.log("Chart failed:", elId, e);
-      }
+    function safeValues(values, len){
+      if (values && values.length) return values;
+      return Array(len || 1).fill(0);
     }
-
-    const leadsLabels = [
-      {% if leads_daily_labels %}
-        {% for v in leads_daily_labels %}
-          "{{ v }}"{% if not forloop.last %},{% endif %}
-        {% endfor %}
-      {% else %}
-        {% for row in leads_daily %}
-          "{{ row.created_date|default:'' }}"{% if not forloop.last %},{% endif %}
-        {% endfor %}
-      {% endif %}
-    ];
-
-    const leadsCounts = [
-      {% if leads_daily_values %}
-        {% for v in leads_daily_values %}
-          {{ v|default:0 }}{% if not forloop.last %},{% endif %}
-        {% endfor %}
-      {% else %}
-        {% for row in leads_daily %}
-          {{ row.c|default:0 }}{% if not forloop.last %},{% endif %}
-        {% endfor %}
-      {% endif %}
-    ];
-
-    const oppStageLabels = [
-      {% if opp_stage_labels %}
-        {% for v in opp_stage_labels %}
-          "{{ v|default:'Unknown' }}"{% if not forloop.last %},{% endif %}
-        {% endfor %}
-      {% else %}
-        {% for row in opp_by_stage %}
-          "{{ row.stage|default:'Unknown' }}"{% if not forloop.last %},{% endif %}
-        {% endfor %}
-      {% endif %}
-    ];
-
-    const oppStageCounts = [
-      {% if opp_stage_values %}
-        {% for v in opp_stage_values %}
-          {{ v|default:0 }}{% if not forloop.last %},{% endif %}
-        {% endfor %}
-      {% else %}
-        {% for row in opp_by_stage %}
-          {{ row.c|default:0 }}{% if not forloop.last %},{% endif %}
-        {% endfor %}
-      {% endif %}
-    ];
-
-    const prodLabels = [
-      {% if prod_labels %}
-        {% for v in prod_labels %}
-          "{{ v }}"{% if not forloop.last %},{% endif %}
-        {% endfor %}
-      {% else %}
-        "On time","Delayed","Remake"
-      {% endif %}
-    ];
-    const prodCounts = [
-      {% if prod_counts %}
-        {% for v in prod_counts %}
-          {{ v|default:0 }}{% if not forloop.last %},{% endif %}
-        {% endfor %}
-      {% else %}
-        0,0,0
-      {% endif %}
-    ];
-
-    const shipLabels = [
-      {% if ship_labels %}
-        {% for v in ship_labels %}
-          "{{ v }}"{% if not forloop.last %},{% endif %}
-        {% endfor %}
-      {% else %}
-        "This month"
-      {% endif %}
-    ];
-    const shipShipped = [
-      {% if ship_shipped %}
-        {% for v in ship_shipped %}
-          {{ v|default:0 }}{% if not forloop.last %},{% endif %}
-        {% endfor %}
-      {% else %}
-        0
-      {% endif %}
-    ];
-    const shipPending = [
-      {% if ship_pending %}
-        {% for v in ship_pending %}
-          {{ v|default:0 }}{% if not forloop.last %},{% endif %}
-        {% endfor %}
-      {% else %}
-        0
-      {% endif %}
-    ];
-    const shipDelayed = [
-      {% if ship_delayed %}
-        {% for v in ship_delayed %}
-          {{ v|default:0 }}{% if not forloop.last %},{% endif %}
-        {% endfor %}
-      {% else %}
-        0
-      {% endif %}
-    ];
-
-    const winLoss = [
-      {% if win_loss %}
-        {{ win_loss.0|default:0 }}, {{ win_loss.1|default:0 }}
-      {% else %}
-        0, 0
-      {% endif %}
-    ];
-
-    const funnelLabels = ["Leads","Qualified","Opportunities","Samples","Closed won"];
-    const funnelCounts = [
-      {% if funnel_counts %}
-        {{ funnel_counts.0|default:0 }},
-        {{ funnel_counts.1|default:0 }},
-        {{ funnel_counts.2|default:0 }},
-        {{ funnel_counts.3|default:0 }},
-        {{ funnel_counts.4|default:0 }}
-      {% else %}
-        0,0,0,0,0
-      {% endif %}
-    ];
-
-    const leadsBarsLabels = leadsLabels.length ? leadsLabels : ["No data"];
-    const leadsBarsLeads = leadsCounts.length ? leadsCounts : [0];
-
-    const leadsBarsOpp = [
-      {% if opp_daily_values %}
-        {% for v in opp_daily_values %}
-          {{ v|default:0 }}{% if not forloop.last %},{% endif %}
-        {% endfor %}
-      {% else %}
-        0
-      {% endif %}
-    ];
-
-    const cashLabels = leadsBarsLabels;
-    const cashNet = [
-      {% if cash_daily_values %}
-        {% for v in cash_daily_values %}
-          {{ v|default:0 }}{% if not forloop.last %},{% endif %}
-        {% endfor %}
-      {% else %}
-        0
-      {% endif %}
-    ];
 
     const baseOpts = {
       responsive: true,
@@ -563,96 +491,87 @@
       }
     };
 
-    makeChart("chartLeadsLine", {
+    const trendLabels = safeLabels(data.leads_labels || []);
+    const leadsVals = safeValues(data.leads_values || [], trendLabels.length);
+    const oppVals = safeValues(data.opp_daily_values || [], trendLabels.length);
+
+    new Chart(document.getElementById("chartTrend"), {
       type: "line",
       data: {
-        labels: leadsLabels.length ? leadsLabels : ["No data"],
-        datasets: [{
-          label: "Leads",
-          data: leadsCounts.length ? leadsCounts : [0],
-          tension: 0.35,
-          fill: true,
-          borderWidth: 2,
-          pointRadius: 2
-        }]
-      },
-      options: baseOpts
-    });
-
-    makeChart("chartOppPie", {
-      type: "pie",
-      data: {
-        labels: oppStageLabels.length ? oppStageLabels : ["No data"],
-        datasets: [{ data: oppStageCounts.length ? oppStageCounts : [0] }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { position: "bottom", labels: { color:"#e5e7eb", font:{weight:"700"} } } }
-      }
-    });
-
-    makeChart("chartWinLossDonut", {
-      type: "doughnut",
-      data: { labels: ["Won", "Lost"], datasets: [{ data: winLoss }] },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { position: "bottom", labels: { color:"#e5e7eb", font:{weight:"700"} } } }
-      }
-    });
-
-    makeChart("chartFunnel", {
-      type: "bar",
-      data: { labels: funnelLabels, datasets: [{ label: "Count", data: funnelCounts, borderWidth: 1 }] },
-      options: Object.assign({}, baseOpts, { indexAxis: "y" })
-    });
-
-    makeChart("chartLeadsBars", {
-      type: "bar",
-      data: {
-        labels: leadsBarsLabels,
+        labels: trendLabels,
         datasets: [
-          { label: "Leads", data: leadsBarsLeads, borderWidth: 1 },
-          { label: "Opportunities", data: leadsBarsOpp, borderWidth: 1 }
+          { label: "Leads", data: leadsVals, borderWidth: 2, tension: 0.35, fill: true, pointRadius: 2 },
+          { label: "Opportunities", data: oppVals, borderWidth: 2, tension: 0.35, fill: false, pointRadius: 2 }
         ]
       },
       options: baseOpts
     });
 
-    makeChart("chartCashMini", {
+    const cashVals = safeValues(data.cash_daily_values || [], trendLabels.length);
+    new Chart(document.getElementById("chartCash"), {
       type: "line",
-      data: {
-        labels: cashLabels,
-        datasets: [{
-          label: "Net cash",
-          data: cashNet,
-          tension: 0.35,
-          fill: false,
-          borderWidth: 2,
-          pointRadius: 0
-        }]
-      },
+      data: { labels: trendLabels, datasets: [{ label: "Net cash", data: cashVals, borderWidth: 2, tension: 0.35, fill: false, pointRadius: 0 }] },
       options: baseOpts
     });
 
-    makeChart("chartProdHbar", {
+    const leadStatusLabels = safeLabels(data.lead_status_labels || []);
+    const leadStatusVals = safeValues(data.lead_status_values || [], leadStatusLabels.length);
+    new Chart(document.getElementById("chartLeadStatus"), {
       type: "bar",
-      data: {
-        labels: prodLabels.length ? prodLabels : ["No data"],
-        datasets: [{ label: "Count", data: prodCounts.length ? prodCounts : [0], borderWidth: 1 }]
-      },
+      data: { labels: leadStatusLabels, datasets: [{ label: "Leads", data: leadStatusVals, borderWidth: 1 }] },
       options: Object.assign({}, baseOpts, { indexAxis: "y" })
     });
 
-    makeChart("chartShipStack", {
+    const oppStageLabels = safeLabels(data.opp_stage_labels || []);
+    const oppStageVals = safeValues(data.opp_stage_values || [], oppStageLabels.length);
+    new Chart(document.getElementById("chartOppStages"), {
+      type: "bar",
+      data: { labels: oppStageLabels, datasets: [{ label: "Opportunities", data: oppStageVals, borderWidth: 1 }] },
+      options: Object.assign({}, baseOpts, { indexAxis: "y" })
+    });
+
+    new Chart(document.getElementById("chartWinLoss"), {
+      type: "doughnut",
+      data: { labels: data.win_loss_labels || ["Won","Lost"], datasets: [{ data: data.win_loss_values || [0,0] }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins:{ legend:{ position:"bottom", labels:{ color:"#e5e7eb", font:{weight:"700"} } } } }
+    });
+
+    const sourceLabels = safeLabels(data.lead_source_labels || []);
+    const sourceVals = safeValues(data.lead_source_values || [], sourceLabels.length);
+    new Chart(document.getElementById("chartLeadSource"), {
+      type: "bar",
+      data: { labels: sourceLabels, datasets: [{ label: "Leads", data: sourceVals, borderWidth: 1 }] },
+      options: baseOpts
+    });
+
+    new Chart(document.getElementById("chartMarket"), {
+      type: "doughnut",
+      data: { labels: data.lead_market_labels || ["Unknown"], datasets: [{ data: data.lead_market_values || [0] }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins:{ legend:{ position:"bottom", labels:{ color:"#e5e7eb", font:{weight:"700"} } } } }
+    });
+
+    const priorityLabels = safeLabels(data.lead_priority_labels || []);
+    const priorityVals = safeValues(data.lead_priority_values || [], priorityLabels.length);
+    new Chart(document.getElementById("chartPriority"), {
+      type: "bar",
+      data: { labels: priorityLabels, datasets: [{ label: "Leads", data: priorityVals, borderWidth: 1 }] },
+      options: baseOpts
+    });
+
+    new Chart(document.getElementById("chartProduction"), {
+      type: "bar",
+      data: { labels: data.prod_labels || ["On time","Delayed","Remake"], datasets: [{ label: "Orders", data: data.prod_counts || [0,0,0], borderWidth: 1 }] },
+      options: Object.assign({}, baseOpts, { indexAxis: "y" })
+    });
+
+    new Chart(document.getElementById("chartShipping"), {
       type: "bar",
       data: {
-        labels: shipLabels.length ? shipLabels : ["This month"],
+        labels: data.ship_labels || ["This month"],
         datasets: [
-          { label: "Shipped", data: shipShipped.length ? shipShipped : [0], stack: "s1" },
-          { label: "Pending", data: shipPending.length ? shipPending : [0], stack: "s1" },
-          { label: "Delayed", data: shipDelayed.length ? shipDelayed : [0], stack: "s1" }
+          { label: "Shipped", data: data.ship_shipped || [0], stack: "s1" },
+          { label: "Pending", data: data.ship_pending || [0], stack: "s1" },
+          { label: "Delayed", data: data.ship_delayed || [0], stack: "s1" }
         ]
       },
       options: Object.assign({}, baseOpts, {
@@ -662,7 +581,6 @@
         }
       })
     });
-
   })();
 </script>
 
