@@ -487,11 +487,30 @@ Keep the answer short.
 # LEAD AND OPPORTUNITY LISTS AND BASIC CRUD
 # ===================================================
 # crm/views.py (your leads list view)
+import re
+from decimal import Decimal
+
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.shortcuts import render
+from django.utils.dateparse import parse_date
 
-from .models import Lead
+from .models import Lead, LEAD_STATUS_CHOICES, MARKET_CHOICES
+
+def _parse_money_value(raw_value):
+    if raw_value is None:
+        return None
+    s = str(raw_value).strip()
+    if not s:
+        return None
+    s = s.replace(",", "")
+    match = re.search(r"-?\d+(\.\d+)?", s)
+    if not match:
+        return None
+    try:
+        return Decimal(match.group())
+    except Exception:
+        return None
 
 def leads_list(request):
     lead_id = (request.GET.get("lead_id") or "").strip()
@@ -499,6 +518,10 @@ def leads_list(request):
     status = (request.GET.get("status") or "").strip()
     market = (request.GET.get("market") or "").strip()
     owner = (request.GET.get("owner") or "").strip()
+    created_from_raw = (request.GET.get("created_from") or "").strip()
+    created_to_raw = (request.GET.get("created_to") or "").strip()
+    value_min_raw = (request.GET.get("value_min") or "").strip()
+    value_max_raw = (request.GET.get("value_max") or "").strip()
 
     sort = (request.GET.get("sort") or "new").strip().lower()
 
@@ -512,6 +535,19 @@ def leads_list(request):
 
     qs = Lead.objects.all()
 
+    if status:
+        if status.lower() == "converted":
+            qs = qs.filter(
+                Q(lead_status__iexact="Converted") | Q(opportunities__isnull=False)
+            ).distinct()
+        else:
+            qs = qs.filter(lead_status__iexact=status)
+            qs = qs.filter(opportunities__isnull=True).exclude(
+                lead_status__iexact="Converted"
+            )
+    else:
+        qs = qs.filter(opportunities__isnull=True).exclude(lead_status__iexact="Converted")
+
     if lead_id:
         qs = qs.filter(lead_id__icontains=lead_id)
 
@@ -522,25 +558,46 @@ def leads_list(request):
             | Q(email__icontains=q)
             | Q(phone__icontains=q)
             | Q(notes__icontains=q)
+            | Q(company_website__icontains=q)
+            | Q(product_interest__icontains=q)
+            | Q(order_quantity__icontains=q)
+            | Q(lead_id__icontains=q)
         )
 
-    if status:
-        qs = qs.filter(lead_status__icontains=status)
-
     if market:
-        qs = qs.filter(market__icontains=market)
+        qs = qs.filter(market__iexact=market)
 
     if owner:
         qs = qs.filter(
-            Q(owner__username__icontains=owner)
-            | Q(owner__first_name__icontains=owner)
-            | Q(owner__last_name__icontains=owner)
+            Q(owner__icontains=owner)
         )
 
+    created_from = parse_date(created_from_raw) if created_from_raw else None
+    created_to = parse_date(created_to_raw) if created_to_raw else None
+    if created_from:
+        qs = qs.filter(created_date__gte=created_from)
+    if created_to:
+        qs = qs.filter(created_date__lte=created_to)
+
     if sort == "old":
-        qs = qs.order_by("id")
+        qs = qs.order_by("created_date", "id")
     else:
-        qs = qs.order_by("-id")
+        qs = qs.order_by("-created_date", "-id")
+
+    value_min = _parse_money_value(value_min_raw) if value_min_raw else None
+    value_max = _parse_money_value(value_max_raw) if value_max_raw else None
+    if value_min is not None or value_max is not None:
+        filtered = []
+        for lead in qs:
+            budget_value = _parse_money_value(getattr(lead, "budget", None))
+            if budget_value is None:
+                continue
+            if value_min is not None and budget_value < value_min:
+                continue
+            if value_max is not None and budget_value > value_max:
+                continue
+            filtered.append(lead)
+        qs = filtered
 
     paginator = Paginator(qs, per_page)
     page_number = request.GET.get("page") or 1
@@ -549,6 +606,8 @@ def leads_list(request):
     context = {
         "page_obj": page_obj,
         "per_page": per_page,
+        "status_choices": LEAD_STATUS_CHOICES,
+        "market_choices": MARKET_CHOICES,
     }
     return render(request, "crm/leads_list.html", context)
 
@@ -666,6 +725,9 @@ def opportunity_create_manual(request):
             moq_units=moq_units,
             order_value=order_value,
         )
+        if lead:
+            lead.lead_status = "Converted"
+            lead.save(update_fields=["lead_status"])
 
         return redirect("opportunity_detail", pk=opp.pk)
 
@@ -736,7 +798,7 @@ def _get_latest_cad_to_bdt_rate() -> Decimal:
 def lead_detail(request, pk):
     lead = get_object_or_404(Lead, pk=pk)
 
-    opportunities = lead.opportunities.all()
+    opportunities = lead.opportunities.all().order_by("-created_date", "-id")
     comments = lead.comments.all()
     tasks = lead.tasks.all()
     activities = lead.activities.all()
@@ -5410,6 +5472,8 @@ def convert_lead_to_opportunity(request, pk):
             product_category="Other",
             product_type="Other",
         )
+        lead.lead_status = "Converted"
+        lead.save(update_fields=["lead_status"])
         messages.success(request, "Lead converted to opportunity.")
         return redirect("opportunity_detail", pk=opp.pk)
 
@@ -5431,6 +5495,8 @@ def convert_lead_to_opportunity(request, pk):
             product_category="Other",
             product_type="Other",
         )
+        lead.lead_status = "Converted"
+        lead.save(update_fields=["lead_status"])
         messages.success(request, "Lead converted to opportunity.")
         return redirect("opportunity_detail", pk=opp.pk)
 
@@ -5479,6 +5545,9 @@ def add_opportunity(request):
             product_category=product_category,
             customer=customer,
         )
+        if lead:
+            lead.lead_status = "Converted"
+            lead.save(update_fields=["lead_status"])
 
         messages.success(request, "Opportunity created.")
         return redirect("opportunity_detail", pk=opp.pk)

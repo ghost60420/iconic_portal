@@ -4,16 +4,26 @@
   <meta charset="utf-8">
   <title>Event detail - Iconic CRM</title>
   <style>
+    :root {
+      --bg: #020617;
+      --panel: #0b1220;
+      --line: #22304a;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #f5d580;
+      --accent-2: #60a5fa;
+    }
+
     body {
-      background: #050505;
-      color: #f5d580;
+      background: var(--bg);
+      color: var(--text);
       font-family: Arial, sans-serif;
       margin: 0;
       padding: 0;
     }
 
     a {
-      color: #f5d580;
+      color: var(--accent);
       text-decoration: none;
     }
     a:hover {
@@ -21,10 +31,11 @@
     }
 
     .top-nav {
-      background: #000;
-      padding: 10px 0 4px 0;
-      border-bottom: 1px solid #222;
+      background: #000812;
+      padding: 10px 0 6px 0;
+      border-bottom: 1px solid var(--line);
     }
+
     .nav-inner {
       max-width: 1200px;
       margin: 0 auto;
@@ -33,37 +44,32 @@
       flex-wrap: wrap;
       gap: 8px;
     }
+
     .nav-item {
       display: inline-block;
-      padding: 6px 10px;
-      font-size: 13px;
-      font-weight: bold;
-      border-radius: 6px;
-      border: 1px solid #e4c56a;
-      background: linear-gradient(145deg, #f5d580, #d4b35f);
-      color: #000;
-      box-shadow: 0 3px 0 #8a6b24;
-      cursor: pointer;
-      transition: all 0.1s ease;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 900;
+      border-radius: 999px;
+      border: 1px solid rgba(245, 213, 128, 0.5);
+      background: rgba(245, 213, 128, 0.12);
+      color: #fef9c3;
       white-space: nowrap;
     }
-    .nav-item:hover {
-      transform: translateY(1px);
-      box-shadow: 0 1px 0 #8a6b24;
-    }
+
     .nav-item-active {
-      background: linear-gradient(145deg, #ffe08a, #f5d580);
-      box-shadow: 0 4px 0 #b8860b;
+      background: linear-gradient(145deg, #f5d580, #d4b35f);
+      color: #111827;
     }
 
     .wrapper {
       max-width: 1100px;
-      margin: 20px auto;
-      background: #111;
+      margin: 20px auto 50px auto;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
       padding: 20px;
-      border-radius: 10px;
-      border: 1px solid #333;
-      box-shadow: 0 0 12px rgba(0, 0, 0, 0.6);
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35);
     }
 
     .top-bar {
@@ -72,51 +78,52 @@
       align-items: flex-start;
       gap: 16px;
       margin-bottom: 14px;
+      flex-wrap: wrap;
     }
 
     .event-title {
-      font-size: 22px;
+      font-size: 24px;
       margin: 0 0 6px 0;
+      color: #fef9c3;
+      font-weight: 900;
     }
 
     .badge {
       display: inline-block;
-      padding: 3px 8px;
-      border-radius: 12px;
-      font-size: 11px;
-      border: 1px solid #555;
-      margin-right: 5px;
-    }
-    .badge-type {
-      background: #262010;
-    }
-    .badge-priority {
-      background: #3a2210;
-    }
-    .badge-status {
-      background: #152015;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 900;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      margin-right: 6px;
+      color: #e5e7eb;
+      background: rgba(15, 23, 42, 0.6);
     }
 
     .tag {
       display: inline-block;
-      padding: 3px 7px;
-      border-radius: 10px;
-      background: #222;
-      border: 1px solid #444;
-      margin-right: 5px;
-      font-size: 12px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(2, 6, 23, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      margin-right: 6px;
+      font-size: 11px;
+      color: #e5e7eb;
     }
 
     .section {
       margin-top: 18px;
       padding: 14px;
-      border-radius: 8px;
-      border: 1px solid #333;
-      background: #151515;
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      background: rgba(2, 6, 23, 0.7);
     }
+
     .section-title {
       margin: 0 0 10px 0;
-      font-size: 16px;
+      font-size: 15px;
+      font-weight: 900;
+      color: #fefce8;
     }
 
     .two-col {
@@ -124,9 +131,11 @@
       gap: 18px;
       flex-wrap: wrap;
     }
+
     .col-half {
       width: 100%;
     }
+
     @media (min-width: 900px) {
       .col-half {
         width: 50%;
@@ -136,63 +145,87 @@
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 13px;
-    }
-    th, td {
-      padding: 5px 6px;
-      border: 1px solid #333;
-    }
-    th {
-      background: #222;
-      text-align: left;
-    }
-    .row-label {
-      width: 160px;
-      font-weight: bold;
-    }
-
-    button {
-      padding: 6px 12px;
-      background: #f5d580;
-      color: #000;
-      border: none;
-      cursor: pointer;
-      border-radius: 4px;
       font-size: 12px;
     }
-    button:hover {
-      opacity: 0.9;
+
+    th, td {
+      padding: 6px 8px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    th {
+      text-align: left;
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .row-label {
+      width: 160px;
+      font-weight: 900;
+      color: #e5e7eb;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      font-size: 11px;
+      font-weight: 900;
+      text-decoration: none;
+      color: #e5e7eb;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .btn.primary {
+      background: linear-gradient(145deg, #f5d580, #d4b35f);
+      color: #111827;
+      border-color: rgba(245, 213, 128, 0.5);
     }
 
     .pill-btn {
-      padding: 4px 9px;
+      padding: 5px 10px;
       border-radius: 999px;
       font-size: 11px;
-      border: 1px solid #e4c56a;
-      background: #151515;
-      color: #f5d580;
+      font-weight: 900;
+      border: 1px solid rgba(245, 213, 128, 0.4);
+      background: rgba(245, 213, 128, 0.12);
+      color: #fef9c3;
       cursor: pointer;
-    }
-    .pill-btn:hover {
-      background: #262010;
     }
 
     .ai-output-box {
       margin-top: 6px;
-      background: #050505;
-      border-radius: 6px;
-      border: 1px solid #333;
-      padding: 8px;
+      background: rgba(2, 6, 23, 0.85);
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      padding: 10px;
       font-size: 12px;
       white-space: pre-wrap;
       min-height: 70px;
+      color: #e5e7eb;
     }
 
     .small-muted {
       font-size: 11px;
-      color: #c0ae6c;
+      color: var(--muted);
     }
 
+    input[type="text"] {
+      width: 100%;
+      background: rgba(2, 6, 23, 0.85);
+      color: #e5e7eb;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      border-radius: 10px;
+      padding: 7px 9px;
+      font-size: 12px;
+      font-weight: 800;
+    }
   </style>
 </head>
 <body>
@@ -219,9 +252,9 @@
     <div>
       <h1 class="event-title">{{ event.title }}</h1>
       <div>
-        <span class="badge badge-type">{{ event.get_event_type_display }}</span>
-        <span class="badge badge-priority">Priority: {{ event.get_priority_display }}</span>
-        <span class="badge badge-status">Status: {{ event.get_status_display }}</span>
+        <span class="badge">{{ event.get_event_type_display }}</span>
+        <span class="badge">Priority: {{ event.get_priority_display }}</span>
+        <span class="badge">Status: {{ event.get_status_display }}</span>
       </div>
       <div style="margin-top:6px;">
         {% if event.lead %}
@@ -236,9 +269,9 @@
       </div>
     </div>
 
-    <div style="text-align:right;">
-      <a href="{% url 'calendar_list' %}" style="font-size:12px;">Back to calendar</a><br>
-      <a href="{% url 'calendar_edit' event.pk %}" style="font-size:12px;">Edit event</a>
+    <div style="text-align:right; display:flex; gap:8px; flex-wrap:wrap;">
+      <a href="{% url 'calendar_list' %}" class="btn">Back to calendar</a>
+      <a href="{% url 'calendar_edit' event.pk %}" class="btn primary">Edit event</a>
     </div>
   </div>
 
@@ -277,23 +310,11 @@
         <table>
           <tr>
             <td class="row-label">Assigned to</td>
-            <td>
-              {% if event.assigned_to_name %}
-                {{ event.assigned_to_name }}
-              {% else %}
-                Not set
-              {% endif %}
-            </td>
+            <td>{% if event.assigned_to_name %}{{ event.assigned_to_name }}{% else %}Not set{% endif %}</td>
           </tr>
           <tr>
             <td class="row-label">Reminder</td>
-            <td>
-              {% if event.reminder_minutes_before %}
-                {{ event.reminder_minutes_before }} minutes before
-              {% else %}
-                None
-              {% endif %}
-            </td>
+            <td>{% if event.reminder_minutes_before %}{{ event.reminder_minutes_before }} minutes before{% else %}None{% endif %}</td>
           </tr>
           <tr>
             <td class="row-label">Note</td>
@@ -318,19 +339,12 @@
     </div>
 
     <div style="margin-top:8px;">
-      <input id="event-ai-question"
-             type="text"
-             placeholder="Ask AI something about this event"
-             style="width:100%;background:#000;color:#f5d580;border:1px solid #333;border-radius:4px;padding:6px 7px;font-size:12px;">
-      <button type="button" id="event-ai-chat-btn" style="margin-top:4px;font-size:12px;">
-        Ask AI
-      </button>
+      <input id="event-ai-question" type="text" placeholder="Ask AI something about this event">
+      <button type="button" id="event-ai-chat-btn" class="btn" style="margin-top:6px;">Ask AI</button>
       <span id="event-ai-status" class="small-muted" style="margin-left:6px;"></span>
     </div>
 
-    <div id="event-ai-output" class="ai-output-box">
-      AI answer will appear here.
-    </div>
+    <div id="event-ai-output" class="ai-output-box">AI answer will appear here.</div>
 
     <form id="event-ai-csrf" style="display:none;">
       {% csrf_token %}
@@ -351,11 +365,7 @@
         <tbody>
           {% for e in upcoming_for_lead %}
             <tr>
-              <td>
-                <a href="{% url 'calendar_event_detail' e.pk %}">
-                  {{ e.title }}
-                </a>
-              </td>
+              <td><a href="{% url 'calendar_event_detail' e.pk %}">{{ e.title }}</a></td>
               <td>{{ e.start_datetime }}</td>
               <td>{{ e.get_event_type_display }}</td>
             </tr>
@@ -366,7 +376,6 @@
       <p class="small-muted">No other upcoming events for this lead.</p>
     {% endif %}
   </div>
-
 </div>
 
 <script>
@@ -410,8 +419,7 @@
           statusBox.textContent = "";
         }
       })
-      .catch(function (e) {
-        console.error(e);
+      .catch(function () {
         outBox.textContent = "Error talking to AI.";
         statusBox.textContent = "";
       });

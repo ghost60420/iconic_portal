@@ -320,6 +320,19 @@
     white-space:nowrap;
     font-weight:900;
   }
+  .badge[data-status="New"]{ border-color:#22c55e; color:#bbf7d0; background:rgba(34,197,94,0.12); }
+  .badge[data-status="Working"]{ border-color:#60a5fa; color:#dbeafe; background:rgba(59,130,246,0.12); }
+  .badge[data-status="Nurturing"]{ border-color:#a78bfa; color:#ede9fe; background:rgba(139,92,246,0.12); }
+  .badge[data-status="Qualified"]{ border-color:#facc15; color:#fef3c7; background:rgba(250,204,21,0.12); }
+  .badge[data-status="Unqualified"],
+  .badge[data-status="Lost"]{ border-color:#f87171; color:#fee2e2; background:rgba(248,113,113,0.12); }
+  .badge[data-status="On Hold"]{ border-color:#94a3b8; color:#e2e8f0; background:rgba(148,163,184,0.12); }
+  .badge[data-status="Converted"]{ border-color:#22d3ee; color:#cffafe; background:rgba(34,211,238,0.12); }
+
+  .table-wrap{
+    overflow-x:auto;
+    border-radius:12px;
+  }
 
   .pager{
     display:flex;
@@ -427,7 +440,9 @@
 
   <div class="card">
     <div class="card-title">Filters</div>
-    <div class="card-note">Use these to find leads fast.</div>
+    <div class="card-note">
+      Use these to find leads fast. Converted leads are hidden unless you pick Status = Converted.
+    </div>
 
     <form method="get" class="filters">
 
@@ -446,17 +461,47 @@
 
       <div class="field">
         <div class="label">Status</div>
-        <input class="input" name="status" value="{{ request.GET.status|default:'' }}" placeholder="New, Contacted, etc">
+        <select class="input" name="status">
+          <option value="">All (hide converted)</option>
+          {% for value,label in status_choices %}
+            <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
       </div>
 
       <div class="field">
         <div class="label">Market</div>
-        <input class="input" name="market" value="{{ request.GET.market|default:'' }}" placeholder="Canada, USA, etc">
+        <select class="input" name="market">
+          <option value="">All markets</option>
+          {% for value,label in market_choices %}
+            <option value="{{ value }}" {% if request.GET.market == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
       </div>
 
       <div class="field">
         <div class="label">Owner</div>
         <input class="input" name="owner" value="{{ request.GET.owner|default:'' }}" placeholder="Refat, etc">
+      </div>
+
+      <div class="field" style="min-width:170px;">
+        <div class="label">Created from</div>
+        <input class="input" type="date" name="created_from" value="{{ request.GET.created_from|default:'' }}">
+      </div>
+
+      <div class="field" style="min-width:170px;">
+        <div class="label">Created to</div>
+        <input class="input" type="date" name="created_to" value="{{ request.GET.created_to|default:'' }}">
+      </div>
+
+      <div class="field" style="min-width:150px;">
+        <div class="label">Value min (CAD)</div>
+        <input class="input" type="number" step="0.01" name="value_min" value="{{ request.GET.value_min|default:'' }}" placeholder="1000">
+      </div>
+
+      <div class="field" style="min-width:150px;">
+        <div class="label">Value max (CAD)</div>
+        <input class="input" type="number" step="0.01" name="value_max" value="{{ request.GET.value_max|default:'' }}" placeholder="25000">
       </div>
 
       <div class="field">
@@ -485,14 +530,14 @@
         <span class="sort-toggle">
           <a
             class="sort-btn {% if request.GET.sort == 'new' or not request.GET.sort %}active{% endif %}"
-            href="?{% if request.GET.lead_id %}lead_id={{ request.GET.lead_id|urlencode }}&{% endif %}{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.market %}market={{ request.GET.market|urlencode }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page=1&sort=new"
+            href="?{% if request.GET.lead_id %}lead_id={{ request.GET.lead_id|urlencode }}&{% endif %}{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.market %}market={{ request.GET.market|urlencode }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page=1&sort=new"
             title="Newest first"
             aria-label="Newest first"
           >↑</a>
 
           <a
             class="sort-btn {% if request.GET.sort == 'old' %}active{% endif %}"
-            href="?{% if request.GET.lead_id %}lead_id={{ request.GET.lead_id|urlencode }}&{% endif %}{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.market %}market={{ request.GET.market|urlencode }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page=1&sort=old"
+            href="?{% if request.GET.lead_id %}lead_id={{ request.GET.lead_id|urlencode }}&{% endif %}{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.market %}market={{ request.GET.market|urlencode }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page=1&sort=old"
             title="Oldest first"
             aria-label="Oldest first"
           >↓</a>
@@ -501,6 +546,7 @@
       <div class="card-note">Click Lead id to open the lead detail page.</div>
     </div>
 
+    <div class="table-wrap">
     <table>
       <thead>
         <tr>
@@ -510,6 +556,8 @@
           <th>Sales rep</th>
           <th>Market</th>
           <th>Status</th>
+          <th>Value</th>
+          <th>Next follow up</th>
           <th>Created</th>
         </tr>
       </thead>
@@ -540,16 +588,19 @@
             </td>
 
             <td>{{ lead.get_market_display }}</td>
-            <td>{{ lead.lead_status }}</td>
+            <td><span class="badge" data-status="{{ lead.lead_status }}">{{ lead.lead_status }}</span></td>
+            <td>{% if lead.budget %}{{ lead.budget }}{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td>{% if lead.next_followup %}{{ lead.next_followup }}{% else %}<span class="muted">—</span>{% endif %}</td>
             <td class="muted">{{ lead.created_date }}</td>
           </tr>
         {% empty %}
           <tr>
-            <td colspan="7" class="muted">No leads yet.</td>
+            <td colspan="9" class="muted">No leads yet.</td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
+    </div>
 
     <div class="pager">
       <div class="pager-left">
@@ -562,7 +613,7 @@
 
       <div class="pager-right">
         {% if page_obj.has_previous %}
-          <a class="btn-ghost" href="?{% if request.GET.lead_id %}lead_id={{ request.GET.lead_id|urlencode }}&{% endif %}{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.market %}market={{ request.GET.market|urlencode }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner|urlencode }}&{% endif %}{% if request.GET.sort %}sort={{ request.GET.sort|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page={{ page_obj.previous_page_number }}">Prev</a>
+          <a class="btn-ghost" href="?{% if request.GET.lead_id %}lead_id={{ request.GET.lead_id|urlencode }}&{% endif %}{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.market %}market={{ request.GET.market|urlencode }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}{% if request.GET.sort %}sort={{ request.GET.sort|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page={{ page_obj.previous_page_number }}">Prev</a>
         {% endif %}
 
         <span class="page-chip active">
@@ -570,7 +621,7 @@
         </span>
 
         {% if page_obj.has_next %}
-          <a class="btn-ghost" href="?{% if request.GET.lead_id %}lead_id={{ request.GET.lead_id|urlencode }}&{% endif %}{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.market %}market={{ request.GET.market|urlencode }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner|urlencode }}&{% endif %}{% if request.GET.sort %}sort={{ request.GET.sort|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page={{ page_obj.next_page_number }}">Next</a>
+          <a class="btn-ghost" href="?{% if request.GET.lead_id %}lead_id={{ request.GET.lead_id|urlencode }}&{% endif %}{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.market %}market={{ request.GET.market|urlencode }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}{% if request.GET.sort %}sort={{ request.GET.sort|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page={{ page_obj.next_page_number }}">Next</a>
         {% endif %}
       </div>
     </div>

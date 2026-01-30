@@ -53,6 +53,56 @@
   }
 
   .top-links a { margin-left: 10px; font-size: 13px; }
+  .action-btn{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:7px 12px;
+    border-radius:999px;
+    border:1px solid rgba(255,255,255,0.18);
+    background: rgba(255,255,255,0.04);
+    color:#e5e7eb;
+    font-size:12px;
+    font-weight:800;
+  }
+  .action-btn.primary{
+    background: linear-gradient(135deg, #facc15, #f97316);
+    color:#111827;
+    border-color:#fbbf24;
+  }
+
+  .summary-grid{
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap:12px;
+    margin-top:12px;
+  }
+  .summary-card{
+    background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+    border:1px solid #1f2937;
+    border-radius:14px;
+    padding:12px;
+    box-shadow: 0 12px 28px rgba(0,0,0,0.35);
+  }
+  .summary-title{
+    font-size:11px;
+    letter-spacing:0.3px;
+    text-transform:uppercase;
+    color:#9ca3af;
+    font-weight:900;
+  }
+  .summary-line{
+    margin-top:6px;
+    font-size:13px;
+    font-weight:800;
+    color:#e5e7eb;
+  }
+  .summary-sub{
+    margin-top:4px;
+    font-size:12px;
+    color:#9ca3af;
+    font-weight:700;
+  }
 
   .section {
     margin-top: 14px;
@@ -238,9 +288,58 @@
     </div>
 
     <div class="top-links">
-      <a href="{% url 'leads_list' %}">All leads</a>
-      <a href="{% url 'lead_edit' lead.pk %}">Edit</a>
-      <a href="{% url 'calendar_add' %}?lead={{ lead.pk }}">Add follow up</a>
+      <a class="action-btn" href="{% url 'leads_list' %}">All leads</a>
+      <a class="action-btn primary" href="{% url 'lead_edit' lead.pk %}">Edit</a>
+      <a class="action-btn" href="{% url 'calendar_add' %}?lead={{ lead.pk }}">Add follow up</a>
+    </div>
+  </div>
+
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="summary-title">Contact</div>
+      <div class="summary-line">{{ lead.contact_name|default:"—" }}</div>
+      <div class="summary-sub">
+        {% if lead.email %}
+          <a href="mailto:{{ lead.email }}">{{ lead.email }}</a>
+        {% else %}
+          —
+        {% endif %}
+      </div>
+      <div class="summary-sub">
+        {% if lead.phone %}
+          <a href="tel:{{ lead.phone|cut:' '|cut:'-'|cut:'('|cut:')' }}">{{ lead.phone }}</a>
+        {% else %}
+          —
+        {% endif %}
+      </div>
+      {% if lead.company_website %}
+        <div class="summary-sub">{{ lead.company_website }}</div>
+      {% endif %}
+    </div>
+
+    <div class="summary-card">
+      <div class="summary-title">Pipeline</div>
+      <div class="summary-line">Status: {{ lead.lead_status }}</div>
+      <div class="summary-line">Priority: {{ lead.priority }}</div>
+      <div class="summary-sub">Opportunities: {{ opportunities|length }}</div>
+      <div class="summary-sub">Created: {{ lead.created_date }}</div>
+    </div>
+
+    <div class="summary-card">
+      <div class="summary-title">Value</div>
+      <div class="summary-line">Budget: CAD {{ budget_cad }}</div>
+      {% if budget_bdt and budget_bdt > 0 %}
+        <div class="summary-sub">BDT {{ budget_bdt }}</div>
+      {% endif %}
+      <div class="summary-sub">Quantity: {{ lead.order_quantity|default:"—" }}</div>
+      <div class="summary-sub">{{ lead.product_interest|default:"—" }}</div>
+    </div>
+
+    <div class="summary-card">
+      <div class="summary-title">Next steps</div>
+      <div class="summary-line">Next follow up: {{ lead.next_followup|default:"—" }}</div>
+      <div class="summary-sub">Tasks: {{ tasks|length }}</div>
+      <div class="summary-sub">Notes: {{ comments|length }}</div>
     </div>
   </div>
 
@@ -308,10 +407,17 @@
   <div class="section">
     <h2 class="section-title">Client profile and convert</h2>
     <p class="small">This will create an opportunity and customer record from this lead.</p>
-    <form method="post" action="{% url 'convert_lead_to_opportunity' lead.pk %}">
-      {% csrf_token %}
-      <button type="submit">Convert to opportunity ✅</button>
-    </form>
+    {% if opportunities %}
+      <div class="small">This lead is already converted.</div>
+      <div style="margin-top:8px;">
+        <a class="action-btn" href="{% url 'opportunity_detail' opportunities.0.pk %}">View opportunity</a>
+      </div>
+    {% else %}
+      <form method="post" action="{% url 'convert_lead_to_opportunity' lead.pk %}">
+        {% csrf_token %}
+        <button type="submit">Convert to opportunity ✅</button>
+      </form>
+    {% endif %}
   </div>
 
   <div class="section">

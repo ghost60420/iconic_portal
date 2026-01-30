@@ -2,185 +2,171 @@
 
 {% block content %}
 <style>
+  :root {
+    --bg: #020617;
+    --panel: #0b1220;
+    --line: #22304a;
+    --text: #f8fafc;
+    --muted: #94a3b8;
+    --accent: #f5d580;
+  }
+
   .calendar-add-wrap {
-    max-width: 900px;
-    margin: 20px auto;
+    max-width: 980px;
+    margin: 20px auto 50px auto;
+    padding: 0 14px;
+    color: var(--text);
   }
 
-  .calendar-add-card {
-    background: #111;
-    border-radius: 10px;
-    border: 1px solid #333;
-    padding: 18px 20px;
-    box-shadow: 0 0 12px rgba(0, 0, 0, 0.6);
-  }
-
-  .calendar-add-title {
-    font-size: 22px;
-    font-weight: 700;
-    color: #f5d580;
-    margin-bottom: 4px;
-  }
-
-  .calendar-add-sub {
-    font-size: 13px;
-    color: #d0c08a;
+  .calendar-add-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 12px;
+    flex-wrap: wrap;
     margin-bottom: 14px;
   }
 
+  .calendar-add-title {
+    font-size: 24px;
+    font-weight: 900;
+    color: #fef9c3;
+  }
+
+  .calendar-add-sub {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  .calendar-add-card {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    padding: 16px;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35);
+  }
+
   .calendar-add-row {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
     gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   }
 
-  .calendar-add-col {
-    flex: 1;
-    min-width: 260px;
+  .section-title {
+    font-size: 14px;
+    font-weight: 900;
+    color: #fefce8;
+    margin-bottom: 8px;
   }
 
-  .calendar-add-label {
-    font-size: 13px;
-    color: #f5d580;
-    margin-bottom: 3px;
-  }
-
-  .calendar-add-help {
+  .field-label {
     font-size: 11px;
-    color: #a89b64;
+    font-weight: 900;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .field-help {
+    font-size: 11px;
+    color: #8792a8;
     margin-bottom: 6px;
   }
 
-  .calendar-add-textarea {
+  .form-control,
+  .form-select {
+    background: rgba(2, 6, 23, 0.8);
+    color: #e5e7eb;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  textarea.form-control {
     min-height: 90px;
     resize: vertical;
   }
 
-  .calendar-add-chip {
-    display: inline-block;
-    font-size: 11px;
-    padding: 2px 8px;
-    border-radius: 999px;
-    border: 1px solid #444;
-    background: #181818;
-    color: #e0d29a;
-    margin-right: 6px;
-    margin-bottom: 4px;
-  }
-
-  .calendar-add-footer {
-    margin-top: 14px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-
   .btn-main {
-    padding: 7px 16px;
-    border-radius: 6px;
-    border: 1px solid #e4c56a;
+    padding: 8px 18px;
+    border-radius: 999px;
+    border: 1px solid rgba(245, 213, 128, 0.5);
     background: linear-gradient(145deg, #f5d580, #d4b35f);
-    color: #000;
-    font-weight: 600;
-    font-size: 13px;
+    color: #111827;
+    font-weight: 900;
+    font-size: 12px;
     cursor: pointer;
-    box-shadow: 0 3px 0 #8a6b24;
-  }
-
-  .btn-main:hover {
-    transform: translateY(1px);
-    box-shadow: 0 1px 0 #8a6b24;
+    box-shadow: 0 4px 0 rgba(30, 41, 59, 0.8);
   }
 
   .btn-ghost {
-    padding: 6px 12px;
-    border-radius: 6px;
-    border: 1px solid #444;
-    background: #181818;
-    color: #f5d580;
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.04);
+    color: #e5e7eb;
     font-size: 12px;
+    font-weight: 900;
     text-decoration: none;
   }
 
-  .btn-ghost:hover {
-    background: #222;
-    text-decoration: none;
+  .calendar-add-footer {
+    margin-top: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
   }
 
-  .calendar-add-links {
+  .calendar-add-note {
     font-size: 11px;
-    color: #aaa;
+    color: var(--muted);
   }
 
-  .calendar-add-links a {
-    color: #f5d580;
-    text-decoration: none;
-  }
-
-  .calendar-add-links a:hover {
-    text-decoration: underline;
-  }
-
-  .calendar-add-section-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: #f5d580;
-    margin-bottom: 6px;
-    border-bottom: 1px solid #333;
-    padding-bottom: 4px;
+  .repeat-select {
+    margin-top: 8px;
   }
 </style>
 
 <div class="calendar-add-wrap">
-
-  <!-- page title bar -->
-  <div class="d-flex justify-content-between align-items-center mb-3">
+  <div class="calendar-add-header">
     <div>
-      <div class="calendar-add-title">Add calendar event</div>
-      <div class="calendar-add-sub">
-        Plan calls, follow up, sampling, production and shipping in one place.
-      </div>
+      <div class="calendar-add-title">Schedule follow-up</div>
+      <div class="calendar-add-sub">Create a calendar event for calls, follow ups, sampling, production or shipping.</div>
     </div>
-    <div>
-      <a href="{% url 'calendar_list' %}" class="btn-ghost">Back to calendar</a>
-    </div>
+    <a href="{% url 'calendar_list' %}" class="btn-ghost">Back to calendar</a>
   </div>
 
   <div class="calendar-add-card">
-
-    <!-- form start -->
     <form method="post">
       {% csrf_token %}
 
       <div class="calendar-add-row">
-
-        <!-- left side basic info -->
-        <div class="calendar-add-col">
-          <div class="calendar-add-section-title">Event details</div>
+        <div>
+          <div class="section-title">Event details</div>
 
           <div class="mb-2">
-            <div class="calendar-add-label">Title</div>
+            <div class="field-label">Title</div>
             {{ form.title }}
           </div>
 
           <div class="mb-2">
-            <div class="calendar-add-label">Type</div>
-            <div class="calendar-add-help">
-              Choose call, follow up, sample, production, shipping, payment or other.
-            </div>
+            <div class="field-label">Type</div>
+            <div class="field-help">Call, follow up, sample, production, shipping, payment, or other.</div>
             {{ form.event_type }}
           </div>
 
           <div class="mb-2">
-            <div class="calendar-add-label">Priority and status</div>
+            <div class="field-label">Priority and status</div>
             <div class="calendar-add-row">
-              <div style="flex:1;min-width:120px;">
+              <div>
                 {{ form.priority.label_tag }}
                 {{ form.priority }}
               </div>
-              <div style="flex:1;min-width:120px;">
+              <div>
                 {{ form.status.label_tag }}
                 {{ form.status }}
               </div>
@@ -188,44 +174,48 @@
           </div>
 
           <div class="mb-2">
-            <div class="calendar-add-label">Note</div>
-            <div class="calendar-add-help">
-              Short internal note about the event. AI will add a smart note later.
-            </div>
+            <div class="field-label">Note</div>
+            <div class="field-help">Short internal note. AI adds a smart summary after save.</div>
             {{ form.note }}
           </div>
         </div>
 
-        <!-- right side time and links -->
-        <div class="calendar-add-col">
-          <div class="calendar-add-section-title">Time and links</div>
+        <div>
+          <div class="section-title">Time and ownership</div>
 
           <div class="mb-2">
-            <div class="calendar-add-label">Start</div>
+            <div class="field-label">Start</div>
             {{ form.start_datetime }}
           </div>
 
           <div class="mb-2">
-            <div class="calendar-add-label">End</div>
+            <div class="field-label">End</div>
             {{ form.end_datetime }}
           </div>
 
+          <div class="mb-2 repeat-select">
+            <div class="field-label">Repeat</div>
+            <select name="repeat" class="form-select">
+              <option value="none" selected>Do not repeat</option>
+              <option value="every_day_5">Every day for 5 days</option>
+              <option value="every_week_4">Every week for 4 weeks</option>
+            </select>
+          </div>
+
           <div class="mb-2">
-            <div class="calendar-add-label">Reminder</div>
-            <div class="calendar-add-help">
-              Set minutes before to get a reminder.
-            </div>
+            <div class="field-label">Reminder</div>
+            <div class="field-help">Minutes before to remind the assignee.</div>
             {{ form.reminder_minutes_before }}
           </div>
 
           <div class="mb-2">
-            <div class="calendar-add-label">Assign to</div>
+            <div class="field-label">Assign to</div>
             <div class="calendar-add-row">
-              <div style="flex:1;min-width:140px;">
+              <div>
                 {{ form.assigned_to_name.label_tag }}
                 {{ form.assigned_to_name }}
               </div>
-              <div style="flex:1;min-width:140px;">
+              <div>
                 {{ form.assigned_to_email.label_tag }}
                 {{ form.assigned_to_email }}
               </div>
@@ -233,44 +223,25 @@
           </div>
 
           <div class="mb-2">
-            <div class="calendar-add-label">Linked records</div>
-            <div class="calendar-add-help">
-              Connect this event to lead, opportunity or customer.
-            </div>
+            <div class="field-label">Linked records</div>
+            <div class="field-help">Connect to a lead, opportunity, or customer.</div>
             {{ form.lead }}
             {{ form.opportunity }}
             {{ form.customer }}
           </div>
 
           <div class="mb-2">
-            <div class="calendar-add-label">Production stage</div>
+            <div class="field-label">Production stage</div>
             {{ form.production_stage }}
           </div>
-
-          {% if linked_lead %}
-            <div class="mt-2">
-              <span class="calendar-add-chip">
-                Linked to lead {{ linked_lead.lead_id }} – {{ linked_lead.account_brand }}
-              </span>
-            </div>
-          {% endif %}
         </div>
       </div>
 
-      <!-- footer buttons -->
       <div class="calendar-add-footer">
-        <div>
-          <button type="submit" class="btn-main">
-            Save event
-          </button>
-        </div>
-        <div class="calendar-add-links">
-          After save you can drag the event in the calendar to change the date.
-        </div>
+        <button type="submit" class="btn-main">Save event</button>
+        <div class="calendar-add-note">After save, drag events on the calendar to adjust dates.</div>
       </div>
     </form>
-    <!-- form end -->
-
   </div>
 </div>
 {% endblock %}

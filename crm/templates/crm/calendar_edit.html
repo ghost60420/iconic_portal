@@ -2,228 +2,166 @@
 
 {% block content %}
 <style>
-  .event-page-wrap {
-    max-width: 900px;
-    margin: 20px auto;
+  :root {
+    --bg: #020617;
+    --panel: #0b1220;
+    --line: #22304a;
+    --text: #f8fafc;
+    --muted: #94a3b8;
+    --accent: #f5d580;
   }
 
-  .event-header-card,
-  .event-card {
-    background: #111111;
-    border-radius: 10px;
-    border: 1px solid #333333;
-    padding: 16px 18px;
+  .event-page-wrap {
+    max-width: 980px;
+    margin: 20px auto 50px auto;
+    padding: 0 14px;
+    color: var(--text);
+  }
+
+  .event-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    flex-wrap: wrap;
     margin-bottom: 14px;
   }
 
-  .event-header-top {
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
-    flex-wrap: wrap;
-    align-items: center;
-  }
-
   .event-title {
-    font-size: 22px;
-    font-weight: 700;
-    color: #ffffff;
+    font-size: 24px;
+    font-weight: 900;
+    color: #fef9c3;
   }
 
   .event-sub {
-    font-size: 13px;
-    color: #bbbbbb;
+    font-size: 12px;
+    color: var(--muted);
     margin-top: 4px;
   }
 
   .event-badges {
     display: flex;
-    flex-wrap: wrap;
     gap: 6px;
-    margin-top: 6px;
+    flex-wrap: wrap;
+    margin-top: 8px;
   }
 
   .badge-pill {
     display: inline-block;
-    font-size: 11px;
+    font-size: 10px;
+    font-weight: 900;
     padding: 3px 8px;
     border-radius: 999px;
-    border: 1px solid #444444;
-    background: #1b1b1b;
-    color: #f5f5f5;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    color: #e5e7eb;
+    background: rgba(15, 23, 42, 0.6);
   }
 
-  .event-header-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .btn-slim {
-    font-size: 13px;
-    padding: 5px 12px;
-    border-radius: 6px;
-    border: 1px solid #444444;
-    background: #1f1f1f;
-    color: #f5f5f5;
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    font-size: 12px;
+    font-weight: 900;
     text-decoration: none;
-    display: inline-block;
+    color: #e5e7eb;
+    background: rgba(255, 255, 255, 0.04);
   }
 
-  .btn-slim-primary {
-    background: #0d6efd;
-    border-color: #0d6efd;
-    color: #ffffff;
+  .btn.primary {
+    background: linear-gradient(145deg, #f5d580, #d4b35f);
+    color: #111827;
+    border-color: rgba(245, 213, 128, 0.5);
   }
 
-  .btn-slim:hover {
-    filter: brightness(1.1);
-    text-decoration: none;
+  .event-card {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    padding: 16px;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35);
   }
 
   .event-card-title {
-    font-size: 15px;
-    font-weight: 600;
-    color: #ffffff;
-    margin-bottom: 10px;
-  }
-
-  /* form styling */
-  .event-form p {
-    margin-bottom: 10px;
+    font-size: 14px;
+    font-weight: 900;
+    color: #fefce8;
+    margin-bottom: 8px;
   }
 
   .event-form label {
+    font-size: 11px;
+    font-weight: 900;
+    color: var(--muted);
+    margin-bottom: 4px;
     display: block;
-    font-size: 13px;
-    margin-bottom: 3px;
-    color: #dddddd;
   }
 
   .event-form input,
   .event-form select,
   .event-form textarea {
     width: 100%;
-    background: #000000;
-    color: #f5f5f5;
-    border: 1px solid #444444;
-    border-radius: 5px;
-    padding: 6px 8px;
-    font-size: 13px;
+    background: rgba(2, 6, 23, 0.8);
+    color: #e5e7eb;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 800;
   }
 
   .event-form textarea {
-    min-height: 80px;
+    min-height: 90px;
   }
 
   .event-form .helptext {
     font-size: 11px;
-    color: #aaaaaa;
-  }
-
-  .event-form ul.errorlist {
-    margin: 3px 0 0 0;
-    padding-left: 14px;
-    font-size: 11px;
-    color: #ffb3b3;
+    color: var(--muted);
   }
 
   .event-form-actions {
-    margin-top: 12px;
+    margin-top: 14px;
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
   }
-
-  .btn-main {
-    display: inline-block;
-    padding: 7px 16px;
-    font-size: 13px;
-    border-radius: 6px;
-    border: none;
-    background: #0d6efd;
-    color: #ffffff;
-    cursor: pointer;
-  }
-
-  .btn-main:hover {
-    filter: brightness(1.08);
-  }
-
-  .btn-ghost {
-    display: inline-block;
-    padding: 7px 16px;
-    font-size: 13px;
-    border-radius: 6px;
-    border: 1px solid #555555;
-    background: #181818;
-    color: #f5f5f5;
-    text-decoration: none;
-  }
-
-  .btn-ghost:hover {
-    filter: brightness(1.08);
-    text-decoration: none;
-  }
 </style>
 
 <div class="event-page-wrap">
-
-  <!-- header card -->
-  <div class="event-header-card">
-    <div class="event-header-top">
-      <div>
-        <div class="event-title">Edit event</div>
-        <div class="event-sub">
-          {{ event.title }}  
-        </div>
-        <div class="event-badges">
-          <span class="badge-pill">
-            {{ event.get_event_type_display }}
-          </span>
-          <span class="badge-pill">
-            Status: {{ event.get_status_display }}
-          </span>
-          <span class="badge-pill">
-            Priority: {{ event.get_priority_display }}
-          </span>
-        </div>
+  <div class="event-header">
+    <div>
+      <div class="event-title">Edit event</div>
+      <div class="event-sub">{{ event.title }}</div>
+      <div class="event-badges">
+        <span class="badge-pill">{{ event.get_event_type_display }}</span>
+        <span class="badge-pill">Status: {{ event.get_status_display }}</span>
+        <span class="badge-pill">Priority: {{ event.get_priority_display }}</span>
       </div>
-
-      <div class="event-header-actions">
-        <a href="{% url 'calendar_event_detail' event.pk %}" class="btn-slim">
-          View event
-        </a>
-        <a href="{% url 'calendar_list' %}" class="btn-slim">
-          Back to calendar
-        </a>
-      </div>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <a href="{% url 'calendar_event_detail' event.pk %}" class="btn">View event</a>
+      <a href="{% url 'calendar_list' %}" class="btn">Back to calendar</a>
     </div>
   </div>
 
-  <!-- form card -->
   <div class="event-card">
-    <div class="event-card-title">Event form</div>
-    <p style="font-size:12px;color:#bbbbbb;margin-bottom:10px;">
-      Change any field and save.  
-      AI will update the summary if needed.
-    </p>
+    <div class="event-card-title">Event details</div>
+    <div class="event-sub" style="margin-bottom:10px;">Update the details and save. AI will refresh the summary if needed.</div>
 
     <form method="post" class="event-form">
       {% csrf_token %}
-
       {{ form.non_field_errors }}
-
       {{ form.as_p }}
 
       <div class="event-form-actions">
-        <button type="submit" class="btn-main">Save changes</button>
-        <a href="{% url 'calendar_event_detail' event.pk %}" class="btn-ghost">
-          Cancel
-        </a>
+        <button type="submit" class="btn primary">Save changes</button>
+        <a href="{% url 'calendar_event_detail' event.pk %}" class="btn">Cancel</a>
       </div>
     </form>
   </div>
-
 </div>
 {% endblock %}
