@@ -154,6 +154,12 @@ urlpatterns = [
     path("whatsapp/webhook/", whatsapp_webhook, name="wa_webhook"),
     path("api/whatsapp/webhook/", whatsapp_webhook, name="api_wa_webhook"),
 
+    # WhatsApp inbox UI
+    path("whatsapp/", perm("can_leads", wa.wa_inbox), name="wa_inbox"),
+    path("whatsapp/<int:pk>/", perm("can_leads", wa.wa_thread), name="wa_thread"),
+    path("whatsapp/<int:pk>/send/", perm("can_leads", wa.wa_send), name="wa_send"),
+    path("whatsapp/<int:pk>/send-ai/", perm("can_leads", wa.wa_send_ai_draft), name="wa_send_ai_draft"),
+
     # Email sync
     path("email-sync/", login_required(views_email.email_sync_dashboard), name="email_sync_dashboard"),
     path("email-sync/run/", login_required(views_email.email_sync_run), name="email_sync_run"),
