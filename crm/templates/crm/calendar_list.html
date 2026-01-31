@@ -280,6 +280,7 @@
     border: 1px solid rgba(148, 163, 184, 0.15);
     margin-bottom: 6px;
     cursor: grab;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
   }
 
   .calendar-event-row.is-overdue {
@@ -288,8 +289,22 @@
   }
 
   .calendar-event-row.is-done {
-    opacity: 0.65;
+    opacity: 0.75;
     text-decoration: line-through;
+    background: rgba(34, 197, 94, 0.12);
+    border-color: rgba(34, 197, 94, 0.55);
+  }
+
+  .calendar-event-row.dragging {
+    cursor: grabbing;
+    transform: scale(1.01);
+    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.45);
+  }
+
+  .calendar-day-cell.drop-target {
+    outline: 2px dashed rgba(96, 165, 250, 0.6);
+    outline-offset: 2px;
+    background: rgba(30, 64, 175, 0.12);
   }
 
   .calendar-event-link {
@@ -717,18 +732,33 @@
     var draggedId = null;
 
     document.querySelectorAll(".calendar-event-row").forEach(function (item) {
-      item.addEventListener("dragstart", function () {
+      item.addEventListener("dragstart", function (ev) {
         draggedId = this.dataset.eventId;
+        this.classList.add("dragging");
+        if (ev && ev.dataTransfer) {
+          ev.dataTransfer.setData("text/plain", draggedId || "");
+          ev.dataTransfer.effectAllowed = "move";
+        }
+      });
+
+      item.addEventListener("dragend", function () {
+        this.classList.remove("dragging");
       });
     });
 
     document.querySelectorAll(".calendar-day-cell").forEach(function (cell) {
       cell.addEventListener("dragover", function (e) {
         e.preventDefault();
+        this.classList.add("drop-target");
+      });
+
+      cell.addEventListener("dragleave", function () {
+        this.classList.remove("drop-target");
       });
 
       cell.addEventListener("drop", function (e) {
         e.preventDefault();
+        this.classList.remove("drop-target");
         var targetDate = this.dataset.date;
         if (!draggedId || !targetDate) {
           return;
@@ -790,7 +820,12 @@
           }
         }).then(function (res) {
           if (res.ok) {
-            window.location.reload();
+            var row = cb.closest(".calendar-event-row");
+            if (row) {
+              row.classList.add("is-done");
+            }
+            cb.checked = true;
+            cb.disabled = true;
           }
         });
       });

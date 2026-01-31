@@ -1,370 +1,382 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Event detail - Iconic CRM</title>
-  <style>
-    :root {
-      --bg: #020617;
-      --panel: #0b1220;
-      --line: #22304a;
-      --text: #f8fafc;
-      --muted: #94a3b8;
-      --accent: #f5d580;
-      --accent-2: #60a5fa;
-    }
+{% extends "crm/base.html" %}
+{% block content %}
 
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-    }
+<style>
+  :root {
+    --bg: #020617;
+    --panel: #0b1220;
+    --line: #22304a;
+    --text: #f8fafc;
+    --muted: #94a3b8;
+    --accent: #f5d580;
+    --accent-2: #60a5fa;
+    --success: #22c55e;
+  }
 
-    a {
-      color: var(--accent);
-      text-decoration: none;
-    }
-    a:hover {
-      text-decoration: underline;
-    }
+  .event-shell {
+    max-width: 1200px;
+    margin: 20px auto 50px auto;
+    padding: 0 14px 20px 14px;
+    color: var(--text);
+  }
 
-    .top-nav {
-      background: #000812;
-      padding: 10px 0 6px 0;
-      border-bottom: 1px solid var(--line);
+  .event-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 16px;
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+  }
+
+  .event-title {
+    font-size: 26px;
+    font-weight: 900;
+    color: #fef9c3;
+    margin-bottom: 6px;
+  }
+
+  .event-sub {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 900;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    margin-right: 6px;
+    color: #e5e7eb;
+    background: rgba(15, 23, 42, 0.6);
+  }
+
+  .status-pill {
+    border-color: rgba(96, 165, 250, 0.4);
+    color: #dbeafe;
+  }
+
+  .status-pill.done {
+    border-color: rgba(34, 197, 94, 0.6);
+    color: #bbf7d0;
+    background: rgba(34, 197, 94, 0.18);
+  }
+
+  .status-pill.in_work {
+    border-color: rgba(59, 130, 246, 0.5);
+    color: #dbeafe;
+    background: rgba(59, 130, 246, 0.18);
+  }
+
+  .status-pill.planned {
+    border-color: rgba(148, 163, 184, 0.35);
+    color: #e2e8f0;
+  }
+
+  .event-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    font-size: 12px;
+    font-weight: 900;
+    text-decoration: none;
+    color: #e5e7eb;
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .btn.primary {
+    background: linear-gradient(145deg, #f5d580, #d4b35f);
+    color: #111827;
+    border-color: rgba(245, 213, 128, 0.5);
+  }
+
+  .btn.success {
+    background: rgba(34, 197, 94, 0.2);
+    border-color: rgba(34, 197, 94, 0.6);
+    color: #bbf7d0;
+  }
+
+  .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .event-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.9fr);
+    gap: 14px;
+    margin-top: 14px;
+  }
+
+  .card {
+    background: rgba(2, 6, 23, 0.7);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 14px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+
+  .card-title {
+    font-size: 14px;
+    font-weight: 900;
+    color: #fefce8;
+    margin-bottom: 8px;
+  }
+
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 16px;
+  }
+
+  .info-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--muted);
+  }
+
+  .info-value {
+    font-size: 12px;
+    color: #f8fafc;
+  }
+
+  .tag-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    background: rgba(2, 6, 23, 0.8);
+    color: #e5e7eb;
+    font-size: 11px;
+    text-decoration: none;
+  }
+
+  .tag-link:hover {
+    text-decoration: none;
+    border-color: rgba(245, 213, 128, 0.6);
+  }
+
+  .ai-output-box {
+    margin-top: 8px;
+    background: rgba(2, 6, 23, 0.85);
+    border-radius: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    padding: 10px;
+    font-size: 12px;
+    white-space: pre-wrap;
+    min-height: 80px;
+    color: #e5e7eb;
+  }
+
+  .small-muted {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .pill-btn {
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 900;
+    border: 1px solid rgba(245, 213, 128, 0.4);
+    background: rgba(245, 213, 128, 0.12);
+    color: #fef9c3;
+    cursor: pointer;
+  }
+
+  .done-banner {
+    margin-top: 10px;
+    padding: 8px 12px;
+    border-radius: 12px;
+    background: rgba(34, 197, 94, 0.18);
+    border: 1px solid rgba(34, 197, 94, 0.5);
+    color: #bbf7d0;
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  input[type="text"] {
+    width: 100%;
+    background: rgba(2, 6, 23, 0.85);
+    color: #e5e7eb;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    border-radius: 10px;
+    padding: 7px 9px;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  @media (max-width: 980px) {
+    .event-grid {
+      grid-template-columns: 1fr;
     }
+  }
+</style>
 
-    .nav-inner {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 0 10px;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .nav-item {
-      display: inline-block;
-      padding: 6px 12px;
-      font-size: 12px;
-      font-weight: 900;
-      border-radius: 999px;
-      border: 1px solid rgba(245, 213, 128, 0.5);
-      background: rgba(245, 213, 128, 0.12);
-      color: #fef9c3;
-      white-space: nowrap;
-    }
-
-    .nav-item-active {
-      background: linear-gradient(145deg, #f5d580, #d4b35f);
-      color: #111827;
-    }
-
-    .wrapper {
-      max-width: 1100px;
-      margin: 20px auto 50px auto;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
-      padding: 20px;
-      border-radius: 16px;
-      border: 1px solid var(--line);
-      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35);
-    }
-
-    .top-bar {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 16px;
-      margin-bottom: 14px;
-      flex-wrap: wrap;
-    }
-
-    .event-title {
-      font-size: 24px;
-      margin: 0 0 6px 0;
-      color: #fef9c3;
-      font-weight: 900;
-    }
-
-    .badge {
-      display: inline-block;
-      padding: 3px 9px;
-      border-radius: 999px;
-      font-size: 10px;
-      font-weight: 900;
-      border: 1px solid rgba(148, 163, 184, 0.35);
-      margin-right: 6px;
-      color: #e5e7eb;
-      background: rgba(15, 23, 42, 0.6);
-    }
-
-    .tag {
-      display: inline-block;
-      padding: 3px 8px;
-      border-radius: 999px;
-      background: rgba(2, 6, 23, 0.8);
-      border: 1px solid rgba(148, 163, 184, 0.3);
-      margin-right: 6px;
-      font-size: 11px;
-      color: #e5e7eb;
-    }
-
-    .section {
-      margin-top: 18px;
-      padding: 14px;
-      border-radius: 14px;
-      border: 1px solid rgba(148, 163, 184, 0.2);
-      background: rgba(2, 6, 23, 0.7);
-    }
-
-    .section-title {
-      margin: 0 0 10px 0;
-      font-size: 15px;
-      font-weight: 900;
-      color: #fefce8;
-    }
-
-    .two-col {
-      display: flex;
-      gap: 18px;
-      flex-wrap: wrap;
-    }
-
-    .col-half {
-      width: 100%;
-    }
-
-    @media (min-width: 900px) {
-      .col-half {
-        width: 50%;
-      }
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 12px;
-    }
-
-    th, td {
-      padding: 6px 8px;
-      border-bottom: 1px solid rgba(148, 163, 184, 0.2);
-    }
-
-    th {
-      text-align: left;
-      color: var(--muted);
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.3px;
-    }
-
-    .row-label {
-      width: 160px;
-      font-weight: 900;
-      color: #e5e7eb;
-    }
-
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      padding: 6px 12px;
-      border-radius: 999px;
-      border: 1px solid rgba(255, 255, 255, 0.18);
-      font-size: 11px;
-      font-weight: 900;
-      text-decoration: none;
-      color: #e5e7eb;
-      background: rgba(255, 255, 255, 0.04);
-    }
-
-    .btn.primary {
-      background: linear-gradient(145deg, #f5d580, #d4b35f);
-      color: #111827;
-      border-color: rgba(245, 213, 128, 0.5);
-    }
-
-    .pill-btn {
-      padding: 5px 10px;
-      border-radius: 999px;
-      font-size: 11px;
-      font-weight: 900;
-      border: 1px solid rgba(245, 213, 128, 0.4);
-      background: rgba(245, 213, 128, 0.12);
-      color: #fef9c3;
-      cursor: pointer;
-    }
-
-    .ai-output-box {
-      margin-top: 6px;
-      background: rgba(2, 6, 23, 0.85);
-      border-radius: 10px;
-      border: 1px solid rgba(148, 163, 184, 0.2);
-      padding: 10px;
-      font-size: 12px;
-      white-space: pre-wrap;
-      min-height: 70px;
-      color: #e5e7eb;
-    }
-
-    .small-muted {
-      font-size: 11px;
-      color: var(--muted);
-    }
-
-    input[type="text"] {
-      width: 100%;
-      background: rgba(2, 6, 23, 0.85);
-      color: #e5e7eb;
-      border: 1px solid rgba(148, 163, 184, 0.35);
-      border-radius: 10px;
-      padding: 7px 9px;
-      font-size: 12px;
-      font-weight: 800;
-    }
-  </style>
-</head>
-<body>
-
-{% include "crm/navbar.html" %}
-
-<div class="wrapper">
-  <div class="top-bar">
+<div class="event-shell" id="event-shell" data-status="{{ event.status }}">
+  <div class="event-header">
     <div>
-      <h1 class="event-title">{{ event.title }}</h1>
-      <div>
+      <div class="event-title">{{ event.title }}</div>
+      <div class="event-sub">
+        {{ event.start_datetime }}{% if event.end_datetime %} - {{ event.end_datetime }}{% endif %}
+      </div>
+      <div style="margin-top:8px;">
         <span class="badge">{{ event.get_event_type_display }}</span>
         <span class="badge">Priority: {{ event.get_priority_display }}</span>
-        <span class="badge">Status: {{ event.get_status_display }}</span>
+        <span class="badge status-pill {{ event.status }}" id="status-pill">Status: {{ event.get_status_display }}</span>
       </div>
-      <div style="margin-top:6px;">
-        {% if event.lead %}
-          <span class="tag">Lead: {{ event.lead.account_brand }} ({{ event.lead.lead_id }})</span>
-        {% endif %}
-        {% if event.customer %}
-          <span class="tag">Customer: {{ event.customer.account_brand }}</span>
-        {% endif %}
-        {% if event.opportunity %}
-          <span class="tag">Opportunity linked</span>
-        {% endif %}
-      </div>
+      {% if event.status == "done" %}
+        <div class="done-banner" id="done-banner">Completed</div>
+      {% endif %}
     </div>
-
-    <div style="text-align:right; display:flex; gap:8px; flex-wrap:wrap;">
+    <div class="event-actions">
       <a href="{% url 'calendar_list' %}" class="btn">Back to calendar</a>
       <a href="{% url 'calendar_edit' event.pk %}" class="btn primary">Edit event</a>
+      <button type="button" class="btn success" id="complete-btn" {% if event.status == "done" %}disabled{% endif %}>Complete</button>
     </div>
   </div>
 
-  <div class="section">
-    <h2 class="section-title">Event details</h2>
-    <div class="two-col">
-      <div class="col-half">
-        <table>
-          <tr>
-            <td class="row-label">Start</td>
-            <td>{{ event.start_datetime }}</td>
-          </tr>
-          <tr>
-            <td class="row-label">End</td>
-            <td>
-              {% if event.end_datetime %}
-                {{ event.end_datetime }}
-              {% else %}
-                Not set
-              {% endif %}
-            </td>
-          </tr>
-          <tr>
-            <td class="row-label">Production stage</td>
-            <td>
-              {% if event.production_stage %}
-                {{ event.get_production_stage_display }}
-              {% else %}
-                None
-              {% endif %}
-            </td>
-          </tr>
-        </table>
+  <div class="event-grid">
+    <div>
+      <div class="card">
+        <div class="card-title">Event details</div>
+        <div class="info-grid">
+          <div>
+            <div class="info-label">Start</div>
+            <div class="info-value">{{ event.start_datetime }}</div>
+          </div>
+          <div>
+            <div class="info-label">End</div>
+            <div class="info-value">{% if event.end_datetime %}{{ event.end_datetime }}{% else %}Not set{% endif %}</div>
+          </div>
+          <div>
+            <div class="info-label">Assigned to</div>
+            <div class="info-value">{% if event.assigned_to_name %}{{ event.assigned_to_name }}{% else %}Not set{% endif %}</div>
+          </div>
+          <div>
+            <div class="info-label">Reminder</div>
+            <div class="info-value">{% if event.reminder_minutes_before %}{{ event.reminder_minutes_before }} minutes before{% else %}None{% endif %}</div>
+          </div>
+          <div>
+            <div class="info-label">Production stage</div>
+            <div class="info-value">{% if event.production_stage %}{{ event.get_production_stage_display }}{% else %}None{% endif %}</div>
+          </div>
+          <div>
+            <div class="info-label">Note</div>
+            <div class="info-value">{{ event.note|default:"-" }}</div>
+          </div>
+        </div>
       </div>
-      <div class="col-half">
-        <table>
-          <tr>
-            <td class="row-label">Assigned to</td>
-            <td>{% if event.assigned_to_name %}{{ event.assigned_to_name }}{% else %}Not set{% endif %}</td>
-          </tr>
-          <tr>
-            <td class="row-label">Reminder</td>
-            <td>{% if event.reminder_minutes_before %}{{ event.reminder_minutes_before }} minutes before{% else %}None{% endif %}</td>
-          </tr>
-          <tr>
-            <td class="row-label">Note</td>
-            <td>{{ event.note|default:"-" }}</td>
-          </tr>
-        </table>
+
+      <div class="card">
+        <div class="card-title">Linked records</div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px;">
+          {% if event.lead %}
+            <a class="tag-link" href="{% url 'lead_detail' event.lead.pk %}">Lead: {{ event.lead.account_brand }} ({{ event.lead.lead_id }})</a>
+          {% endif %}
+          {% if event.customer %}
+            <a class="tag-link" href="{% url 'customer_detail' event.customer.pk %}">Customer: {{ event.customer.account_brand }}</a>
+          {% endif %}
+          {% if event.opportunity %}
+            <a class="tag-link" href="{% url 'opportunity_detail' event.opportunity.pk %}">Opportunity</a>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Upcoming events for same lead</div>
+        {% if upcoming_for_lead %}
+          <table style="width:100%; font-size:12px;">
+            <thead>
+              <tr>
+                <th style="text-align:left; color: var(--muted); font-size:11px;">Title</th>
+                <th style="text-align:left; color: var(--muted); font-size:11px;">Time</th>
+                <th style="text-align:left; color: var(--muted); font-size:11px;">Type</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for e in upcoming_for_lead %}
+                <tr>
+                  <td><a href="{% url 'calendar_event_detail' e.pk %}">{{ e.title }}</a></td>
+                  <td>{{ e.start_datetime }}</td>
+                  <td>{{ e.get_event_type_display }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <div class="small-muted">No other upcoming events for this lead.</div>
+        {% endif %}
       </div>
     </div>
-  </div>
 
-  <div class="section">
-    <h2 class="section-title">AI helper for this event</h2>
-    <div class="small-muted">
-      AI reads this event and gives summary, follow up and next step ideas.
+    <div>
+      <div class="card">
+        <div class="card-title">AI helper for this event</div>
+        <div class="small-muted">AI reads this event and gives summary, follow up and next step ideas.</div>
+
+        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">
+          <button type="button" class="pill-btn" data-mode="summary">Summary</button>
+          <button type="button" class="pill-btn" data-mode="follow_up">Follow up text</button>
+          <button type="button" class="pill-btn" data-mode="next_steps">Next steps</button>
+          <button type="button" class="pill-btn" data-mode="reminder">Reminder note</button>
+        </div>
+
+        <div style="margin-top:8px;">
+          <input id="event-ai-question" type="text" placeholder="Ask AI something about this event">
+          <button type="button" id="event-ai-chat-btn" class="btn" style="margin-top:6px;">Ask AI</button>
+          <span id="event-ai-status" class="small-muted" style="margin-left:6px;"></span>
+        </div>
+
+        <div id="event-ai-output" class="ai-output-box">AI answer will appear here.</div>
+
+        <form id="event-ai-csrf" style="display:none;">
+          {% csrf_token %}
+        </form>
+      </div>
     </div>
-
-    <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">
-      <button type="button" class="pill-btn" data-mode="summary">Summary</button>
-      <button type="button" class="pill-btn" data-mode="follow_up">Follow up text</button>
-      <button type="button" class="pill-btn" data-mode="next_steps">Next steps</button>
-      <button type="button" class="pill-btn" data-mode="reminder">Reminder note</button>
-    </div>
-
-    <div style="margin-top:8px;">
-      <input id="event-ai-question" type="text" placeholder="Ask AI something about this event">
-      <button type="button" id="event-ai-chat-btn" class="btn" style="margin-top:6px;">Ask AI</button>
-      <span id="event-ai-status" class="small-muted" style="margin-left:6px;"></span>
-    </div>
-
-    <div id="event-ai-output" class="ai-output-box">AI answer will appear here.</div>
-
-    <form id="event-ai-csrf" style="display:none;">
-      {% csrf_token %}
-    </form>
-  </div>
-
-  <div class="section">
-    <h2 class="section-title">Upcoming events for same lead</h2>
-    {% if upcoming_for_lead %}
-      <table>
-        <thead>
-          <tr>
-            <th style="width:40%;">Title</th>
-            <th style="width:30%;">Time</th>
-            <th style="width:30%;">Type</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for e in upcoming_for_lead %}
-            <tr>
-              <td><a href="{% url 'calendar_event_detail' e.pk %}">{{ e.title }}</a></td>
-              <td>{{ e.start_datetime }}</td>
-              <td>{{ e.get_event_type_display }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <p class="small-muted">No other upcoming events for this lead.</p>
-    {% endif %}
   </div>
 </div>
 
 <script>
   (function () {
+    function getCookie(name) {
+      var cookieValue = null;
+      if (document.cookie && document.cookie !== "") {
+        var cookies = document.cookie.split(";");
+        for (var i = 0; i < cookies.length; i++) {
+          var cookie = cookies[i].trim();
+          if (cookie.substring(0, name.length + 1) === (name + "=")) {
+            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+            break;
+          }
+        }
+      }
+      return cookieValue;
+    }
+
     const outBox = document.getElementById("event-ai-output");
     const statusBox = document.getElementById("event-ai-status");
     const qInput = document.getElementById("event-ai-question");
@@ -425,8 +437,39 @@
         qInput.value = "";
       });
     }
+
+    const completeBtn = document.getElementById("complete-btn");
+    const statusPill = document.getElementById("status-pill");
+    const shell = document.getElementById("event-shell");
+
+    if (completeBtn) {
+      completeBtn.addEventListener("click", function () {
+        if (completeBtn.disabled) return;
+
+        fetch("{% url 'calendar_toggle_done' event.pk %}", {
+          method: "POST",
+          headers: {
+            "X-CSRFToken": getCookie("csrftoken")
+          }
+        }).then(function (res) {
+          if (res.ok) {
+            completeBtn.disabled = true;
+            if (statusPill) {
+              statusPill.textContent = "Status: Done";
+              statusPill.classList.add("done");
+            }
+            if (shell && !document.getElementById("done-banner")) {
+              const banner = document.createElement("div");
+              banner.className = "done-banner";
+              banner.id = "done-banner";
+              banner.textContent = "Completed";
+              shell.querySelector(".event-header").appendChild(banner);
+            }
+          }
+        });
+      });
+    }
   })();
 </script>
 
-</body>
-</html>
+{% endblock %}
