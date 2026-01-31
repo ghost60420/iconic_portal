@@ -19,8 +19,9 @@
       --text:#f8f9fa;
       --muted:#a8b0bd;
 
-      --gold1:#ffe39b;
-      --gold2:#e4c067;
+      --brand-1:#ffe39b;
+      --brand-2:#f59e0b;
+      --brand-3:#60a5fa;
     }
 
     body{
@@ -33,7 +34,7 @@
     a:hover{ color:#ffe9a8; }
 
     .crm-topbar{
-      background: linear-gradient(180deg, rgba(20,24,32,0.95), rgba(10,12,16,0.92));
+      background: linear-gradient(180deg, rgba(12,17,26,0.98), rgba(5,8,14,0.92));
       border-bottom: 1px solid var(--border);
       padding: 10px 14px;
       display:flex;
@@ -64,10 +65,10 @@
       border-radius:12px;
       font-size:13px;
       font-weight:800;
-      border: 1px solid rgba(255,255,255,0.10);
-      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(148,163,184,0.20);
+      background: rgba(15,23,42,0.65);
       color: #f3f4f6;
-      box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+      box-shadow: 0 8px 18px rgba(0,0,0,0.35);
       transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
       white-space: nowrap;
       cursor:pointer;
@@ -79,28 +80,56 @@
 
     .crm-nav-item:hover{
       transform: translateY(-1px);
-      background: rgba(255,255,255,0.06);
-      border-color: rgba(245, 213, 128, 0.32);
-      color:#ffe9a8;
+      background: rgba(30,41,59,0.7);
+      border-color: rgba(96,165,250,0.35);
+      color:#e0f2fe;
       text-decoration:none;
     }
 
     .crm-nav-item:active{ transform: translateY(0px); }
 
     .crm-nav-item.hot{
-      border-color: rgba(255, 227, 155, 0.35);
-      box-shadow: 0 10px 22px rgba(255, 209, 120, 0.10);
+      border-color: rgba(96,165,250,0.35);
+      background: rgba(59,130,246,0.12);
+      color:#dbeafe;
+    }
+
+    .crm-nav-item.primary{
+      border-color: rgba(245, 213, 128, 0.55);
+      background: linear-gradient(140deg, var(--brand-1), var(--brand-2));
+      color:#111827;
+      box-shadow: 0 10px 24px rgba(245, 213, 128, 0.25);
+    }
+
+    .crm-nav-item.primary:hover{
+      background: linear-gradient(140deg, #ffe8a8, #f59e0b);
+      color:#111827;
+      border-color: rgba(245, 213, 128, 0.75);
     }
 
     .crm-nav-item:focus{
       outline: none;
-      box-shadow: 0 0 0 3px rgba(245,213,128,0.18), 0 10px 20px rgba(0,0,0,0.35);
+      box-shadow: 0 0 0 3px rgba(96,165,250,0.22), 0 10px 20px rgba(0,0,0,0.35);
+    }
+
+    .crm-nav-item:focus-visible{
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(96,165,250,0.25), 0 10px 20px rgba(0,0,0,0.35);
     }
 
     .crm-nav-item.is-disabled{
       opacity: 0.55;
       cursor: default;
       pointer-events: none;
+    }
+
+    @media (prefers-reduced-motion: reduce){
+      .crm-nav-item{
+        transition: none;
+      }
+      .crm-nav-item:hover{
+        transform: none;
+      }
     }
 
     .crm-spacer{ flex: 1 1 auto; }
@@ -266,6 +295,12 @@
     <div class="crm-topbar">
 
       <div class="crm-nav-group">
+
+        {% if request.user.is_superuser and main_dash_url %}
+          <a href="{{ main_dash_url }}" class="crm-nav-item primary"><span>🏠</span><strong>CRM</strong></a>
+        {% elif leads_url %}
+          <a href="{{ leads_url }}" class="crm-nav-item primary"><span>🏠</span><strong>CRM</strong></a>
+        {% endif %}
 
         {% if leads_url %}
           <a href="{{ leads_url }}" class="crm-nav-item hot"><span>🧲</span><strong>Leads</strong></a>

@@ -4,69 +4,85 @@
   <div class="topnav-inner">
 
     <div class="nav-left nav-scroll">
+      {% url 'main_dashboard' as u_dash %}
       {% url 'leads_list' as u_leads %}
-      {% if u_leads %}<a class="navitem" href="{{ u_leads }}">Leads</a>{% endif %}
+      {% if u_dash and request.user.is_superuser %}
+        <a class="navitem primary" href="{{ u_dash }}">🏠 CRM</a>
+      {% elif u_leads %}
+        <a class="navitem primary" href="{{ u_leads }}">🏠 CRM</a>
+      {% endif %}
+
+      {% if u_leads %}<a class="navitem" href="{{ u_leads }}">🧲 Leads</a>{% endif %}
 
       {% url 'opportunities_list' as u_opps %}
-      {% if u_opps %}<a class="navitem" href="{{ u_opps }}">Opportunities</a>{% endif %}
+      {% if u_opps %}<a class="navitem" href="{{ u_opps }}">📈 Opportunities</a>{% endif %}
 
       {% url 'customers_list' as u_customers %}
-      {% if u_customers %}<a class="navitem" href="{{ u_customers }}">Customers</a>{% endif %}
+      {% if u_customers %}<a class="navitem" href="{{ u_customers }}">👥 Customers</a>{% endif %}
 
       {% url 'inventory_list' as u_inventory %}
-      {% if u_inventory %}<a class="navitem" href="{{ u_inventory }}">Inventory</a>{% endif %}
+      {% if u_inventory %}<a class="navitem" href="{{ u_inventory }}">📦 Inventory</a>{% endif %}
 
       {% url 'world_tools' as u_world %}
-      {% if u_world %}<a class="navitem" href="{{ u_world }}">World tools</a>{% endif %}
+      {% if u_world %}<a class="navitem" href="{{ u_world }}">🌍 World tools</a>{% endif %}
     </div>
 
     <div class="nav-right nav-scroll">
       {% url 'calendar_list' as u_calendar %}
-      {% if u_calendar %}<a class="navitem" href="{{ u_calendar }}">Calendar</a>{% endif %}
+      {% if u_calendar %}<a class="navitem" href="{{ u_calendar }}">📅 Calendar</a>{% endif %}
 
       {% url 'production_list' as u_production %}
-      {% if u_production %}<a class="navitem" href="{{ u_production }}">Production</a>{% endif %}
+      {% if u_production %}<a class="navitem" href="{{ u_production }}">🏭 Production</a>{% endif %}
 
       {% url 'shipment_list' as u_shipping %}
-      {% if u_shipping %}<a class="navitem" href="{{ u_shipping }}">Shipping</a>{% endif %}
+      {% if u_shipping %}<a class="navitem" href="{{ u_shipping }}">📦 Shipping</a>{% endif %}
 
       {% url 'wa_inbox' as u_wa %}
-      {% if u_wa %}<a class="navitem navitem-warm" href="{{ u_wa }}">WhatsApp</a>{% endif %}
+      {% if u_wa %}<a class="navitem navitem-warm" href="{{ u_wa }}">💬 WhatsApp</a>{% endif %}
 
       {% url 'email_sync_dashboard' as u_email %}
-      {% if u_email %}<a class="navitem" href="{{ u_email }}">Email Sync</a>{% endif %}
+      {% if u_email %}<a class="navitem" href="{{ u_email }}">📨 Email Sync</a>{% endif %}
 
       {% url 'accounting_home' as u_acc %}
-      {% if u_acc %}<a class="navitem navitem-warm" href="{{ u_acc }}">Accounting</a>{% endif %}
+      {% if u_acc %}<a class="navitem navitem-warm" href="{{ u_acc }}">💰 Accounting</a>{% endif %}
 
-      {% url 'main_dashboard' as u_dash %}
-      {% if u_dash %}<a class="navitem navitem-warm" href="{{ u_dash }}">Main Dashboard</a>{% endif %}
+      {% if u_dash %}<a class="navitem navitem-warm" href="{{ u_dash }}">🧠 Main Dashboard</a>{% endif %}
 
       {% url 'ai_hub' as u_ai %}
       {% if u_ai and request.user.is_authenticated %}
         {% if request.user.is_superuser or request.user.access.can_ai %}
-          <a class="navitem navitem-warm" href="{{ u_ai }}">AI</a>
+          <a class="navitem navitem-warm" href="{{ u_ai }}">🤖 AI</a>
         {% endif %}
       {% endif %}
 
       <span class="navuser">{{ request.user.username|default:"User" }}</span>
 
       {% url 'logout' as u_logout %}
-      {% if u_logout %}<a class="navitem navitem-logout" href="{{ u_logout }}">Logout</a>{% endif %}
+      {% if u_logout %}<a class="navitem navitem-logout" href="{{ u_logout }}">🚪 Logout</a>{% endif %}
     </div>
 
   </div>
 </div>
 
 <style>
+  :root{
+    --nav-bg: rgba(12,17,26,0.98);
+    --nav-border: rgba(148,163,184,0.2);
+    --nav-text: #e5e7eb;
+    --nav-muted: #9ca3af;
+    --nav-accent-1: #ffe39b;
+    --nav-accent-2: #f59e0b;
+    --nav-accent-3: #60a5fa;
+  }
+
   .topnav{
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     z-index: 9999;
-    background: rgba(6,10,18,0.90);
-    border-bottom: 1px solid rgba(255,255,255,0.08);
+    background: var(--nav-bg);
+    border-bottom: 1px solid var(--nav-border);
     backdrop-filter: blur(14px);
   }
 
@@ -110,30 +126,46 @@
     padding: 9px 12px;
     font-size: 13px;
     line-height: 1;
-    color: #e5e7eb;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.10);
+    color: var(--nav-text);
+    background: rgba(15,23,42,0.65);
+    border: 1px solid rgba(148,163,184,0.2);
     border-radius: 999px;
     text-decoration: none;
-    transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+    transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
   }
 
   .navitem:hover{
-    background: rgba(255,255,255,0.09);
-    border-color: rgba(255,255,255,0.16);
+    background: rgba(30,41,59,0.7);
+    border-color: rgba(96,165,250,0.35);
+    color:#e0f2fe;
     transform: translateY(-1px);
     text-decoration: none;
   }
 
+  .navitem.primary{
+    background: linear-gradient(140deg, var(--nav-accent-1), var(--nav-accent-2));
+    border-color: rgba(245, 213, 128, 0.6);
+    color: #111827;
+    font-weight: 800;
+    box-shadow: 0 10px 22px rgba(245, 213, 128, 0.25);
+  }
+
+  .navitem.primary:hover{
+    background: linear-gradient(140deg, #ffe8a8, #f59e0b);
+    border-color: rgba(245, 213, 128, 0.8);
+    color:#111827;
+  }
+
   .navitem-warm{
-    background: rgba(250,204,21,0.10);
-    border-color: rgba(250,204,21,0.28);
-    color: #facc15;
+    background: rgba(59,130,246,0.12);
+    border-color: rgba(96,165,250,0.35);
+    color: #dbeafe;
   }
 
   .navitem-warm:hover{
-    background: rgba(250,204,21,0.16);
-    border-color: rgba(250,204,21,0.36);
+    background: rgba(59,130,246,0.18);
+    border-color: rgba(96,165,250,0.45);
+    color:#e0f2fe;
   }
 
   .navitem-logout{
@@ -152,10 +184,10 @@
     align-items: center;
     padding: 9px 10px;
     font-size: 13px;
-    color: #9ca3af;
-    border: 1px solid rgba(255,255,255,0.10);
+    color: var(--nav-muted);
+    border: 1px solid rgba(148,163,184,0.2);
     border-radius: 999px;
-    background: rgba(255,255,255,0.03);
+    background: rgba(15,23,42,0.4);
   }
 
   body{
@@ -168,6 +200,15 @@
     }
     body{
       padding-top: 72px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .navitem{
+      transition: none;
+    }
+    .navitem:hover{
+      transform: none;
     }
   }
 </style>

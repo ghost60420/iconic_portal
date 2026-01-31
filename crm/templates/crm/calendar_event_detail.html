@@ -230,22 +230,7 @@
 </head>
 <body>
 
-<div class="top-nav">
-  <div class="nav-inner">
-    <a href="{% url 'leads_list' %}" class="nav-item">Leads</a>
-    <a href="{% url 'opportunities_list' %}" class="nav-item">Opportunities</a>
-    <a href="{% url 'products_list' %}" class="nav-item">Products</a>
-    <a href="{% url 'customers_list' %}" class="nav-item">Customers</a>
-    <a href="#" class="nav-item">Dashboard</a>
-    <a href="{% url 'calendar_list' %}" class="nav-item nav-item-active">Calendar</a>
-    <a href="#" class="nav-item">Marketing</a>
-    <a href="#" class="nav-item">Production</a>
-    <a href="#" class="nav-item">Accounting</a>
-    <a href="#" class="nav-item">Shipping</a>
-    <a href="#" class="nav-item">Factory</a>
-    <a href="#" class="nav-item">Inventory</a>
-  </div>
-</div>
+{% include "crm/navbar.html" %}
 
 <div class="wrapper">
   <div class="top-bar">
