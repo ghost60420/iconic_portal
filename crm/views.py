@@ -495,7 +495,7 @@ from django.db.models import Q
 from django.shortcuts import render
 from django.utils.dateparse import parse_date
 
-from .models import Lead, LEAD_STATUS_CHOICES, MARKET_CHOICES
+from .models import Lead, LEAD_STATUS_CHOICES
 
 def _parse_money_value(raw_value):
     if raw_value is None:
@@ -607,7 +607,7 @@ def leads_list(request):
         "page_obj": page_obj,
         "per_page": per_page,
         "status_choices": LEAD_STATUS_CHOICES,
-        "market_choices": MARKET_CHOICES,
+        "market_choices": Lead.MARKET_CHOICES,
     }
     return render(request, "crm/leads_list.html", context)
 
