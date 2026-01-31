@@ -594,6 +594,25 @@ class Opportunity(models.Model):
     notes = models.TextField(blank=True)
     is_open = models.BooleanField(default=True)
 
+    @property
+    def status_key(self):
+        if self.stage == "Closed Won":
+            return "closed_won"
+        if self.stage == "Closed Lost":
+            return "closed_lost"
+        if self.is_open is False:
+            return "closed_lost"
+        return "open"
+
+    @property
+    def status_label(self):
+        mapping = {
+            "open": "Open",
+            "closed_won": "Closed Won",
+            "closed_lost": "Closed Lost",
+        }
+        return mapping.get(self.status_key, "Open")
+
     def save(self, *args, **kwargs):
         is_new = self.pk is None
 

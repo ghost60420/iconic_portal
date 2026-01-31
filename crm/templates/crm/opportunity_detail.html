@@ -482,7 +482,7 @@
         <div class="summary-card">
             <div class="summary-title">Pipeline</div>
             <div class="summary-line">Stage: {{ opportunity.get_stage_display }}</div>
-            <div class="summary-sub">Status: {% if opportunity.is_open %}Open{% else %}Closed{% endif %}</div>
+            <div class="summary-sub">Status: {{ opportunity.status_label }}</div>
             <div class="summary-sub">Next follow up: {% if opportunity.next_followup %}{{ opportunity.next_followup }}{% else %}—{% endif %}</div>
             <div class="summary-sub">Created: {{ opportunity.created_date }}</div>
         </div>

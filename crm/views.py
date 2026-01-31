@@ -5621,9 +5621,14 @@ def opportunities_list(request):
 
     if status:
         if status == "open":
-            qs = qs.filter(is_open=True)
-        elif status == "closed":
-            qs = qs.filter(is_open=False)
+            qs = qs.filter(is_open=True).exclude(stage__in=["Closed Won", "Closed Lost"])
+        elif status == "closed_won":
+            qs = qs.filter(stage="Closed Won")
+        elif status == "closed_lost":
+            qs = qs.filter(
+                Q(stage="Closed Lost")
+                | (Q(is_open=False) & ~Q(stage="Closed Won"))
+            )
 
     created_from = parse_date(created_from_raw) if created_from_raw else None
     created_to = parse_date(created_to_raw) if created_to_raw else None
