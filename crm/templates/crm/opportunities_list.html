@@ -3,338 +3,539 @@
 {% block content %}
 
 <style>
-  .opp-page {
-    max-width: 1200px;
-    margin: 18px auto 32px auto;
-    padding: 0 10px;
-    color: #f9fafb;
-    font-family: Arial, sans-serif;
+  :root{
+    --bg:#020617;
+    --panel:#0b1220;
+    --panel2:#0f172a;
+    --line:#334155;
+    --text:#f9fafb;
+    --muted:#9ca3af;
+    --gold:#facc15;
   }
 
-  .opp-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-bottom: 12px;
+  .page{
+    max-width:1200px;
+    margin:18px auto 50px auto;
+    padding:0 12px;
+    color:var(--text);
   }
 
-  .opp-title-block {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    min-width: 240px;
+  a{ color:var(--gold); text-decoration:none; }
+  a:hover{ text-decoration:underline; }
+
+  .page-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:12px;
   }
 
-  .opp-title {
-    font-size: 22px;
-    font-weight: 700;
-    color: #f9fafb;
+  .page-title{
+    margin:0;
+    font-size:24px;
+    font-weight:900;
+    color:#fef9c3;
+    letter-spacing:0.2px;
   }
 
-  .opp-subtitle {
-    font-size: 12px;
-    color: #9ca3af;
+  .page-subtitle{
+    margin-top:4px;
+    font-size:12px;
+    color:var(--muted);
   }
 
-  .opp-subtitle strong {
-    color: #e5e7eb;
+  .page-actions{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    align-items:center;
   }
 
-  .opp-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
+  .btn-main{
+    padding:7px 14px;
+    border-radius:999px;
+    border:1px solid rgba(255,255,255,0.14);
+    background: linear-gradient(145deg, #f5d580, #d4b35f);
+    color:#111827;
+    font-size:12px;
+    font-weight:900;
+    cursor:pointer;
+    display:inline-block;
+    white-space:nowrap;
+    box-shadow:0 3px 0 #020617;
+    transition: all 0.12s ease;
+  }
+  .btn-main:hover{
+    filter:brightness(1.05);
+    text-decoration:none;
   }
 
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 8px 12px;
-    border-radius: 10px;
-    border: 1px solid #1f2937;
-    background: #0b1220;
-    color: #e5e7eb;
-    font-size: 12px;
-    font-weight: 700;
-    cursor: pointer;
-    text-decoration: none;
-    white-space: nowrap;
-    height: 34px;
-    line-height: 1;
+  .btn-ghost{
+    padding:7px 14px;
+    border-radius:999px;
+    border:1px solid rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.04);
+    color:#e5e7eb;
+    font-size:12px;
+    font-weight:900;
+    cursor:pointer;
+    display:inline-block;
+    white-space:nowrap;
+    transition: all 0.12s ease;
   }
-  .btn:hover { filter: brightness(1.06); }
-  .btn:active { transform: translateY(1px); }
-
-  .btn-primary {
-    border-color: #2b3647;
-    background: #101a2c;
-    color: #f9fafb;
+  .btn-ghost:hover{
+    filter:brightness(1.05);
+    text-decoration:none;
   }
 
-  .card-shell {
-    margin-top: 10px;
-    background: #0b1220;
-    border-radius: 14px;
-    border: 1px solid #1f2937;
-    padding: 12px;
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  .card{
+    background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:12px;
+    box-shadow:0 16px 36px rgba(0,0,0,0.35);
+    margin-bottom:14px;
   }
 
-  .card-header-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 10px;
-    flex-wrap: wrap;
+  .card-title{
+    font-size:14px;
+    font-weight:900;
+    color:#fefce8;
+    margin:0;
   }
 
-  .card-title {
-    font-size: 14px;
-    font-weight: 800;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: #f9fafb;
+  .card-note{
+    font-size:11px;
+    color:var(--muted);
+    margin-top:4px;
+    line-height:1.3;
+    font-weight:800;
   }
 
-  .card-note {
-    font-size: 12px;
-    color: #9ca3af;
+  .filters{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    align-items:flex-end;
+    margin-top:10px;
   }
 
-  .filter-bar {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    align-items: end;
-    margin-bottom: 10px;
-    padding: 10px;
-    border-radius: 12px;
-    border: 1px solid #1f2937;
-    background: #070d18;
+  .field{
+    display:flex;
+    flex-direction:column;
+    gap:5px;
+    min-width:160px;
   }
 
-  .field {
-    min-width: 180px;
-    flex: 1;
+  .label{
+    font-size:11px;
+    color:var(--muted);
+    font-weight:900;
   }
 
-  .label {
-    display: block;
-    font-size: 11px;
-    color: #9ca3af;
-    margin-bottom: 6px;
+  .input{
+    background:var(--bg);
+    color:var(--text);
+    border:1px solid rgba(148,163,184,0.35);
+    border-radius:12px;
+    padding:8px 10px;
+    font-size:12px;
+    font-weight:900;
   }
 
-  .input, .select {
-    width: 100%;
-    height: 34px;
-    border-radius: 10px;
-    border: 1px solid #263245;
-    background: #0b1220;
-    color: #f9fafb;
-    padding: 6px 10px;
-    font-size: 12px;
-    outline: none;
-  }
-  .input:focus, .select:focus {
-    border-color: #3b4a63;
-    box-shadow: 0 0 0 2px rgba(59, 74, 99, 0.35);
+  .table-shell{
+    background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+    border-radius:16px;
+    border:1px solid var(--line);
+    padding:12px;
+    box-shadow:0 16px 36px rgba(0,0,0,0.35);
   }
 
-  .filter-actions {
-    display: flex;
-    gap: 8px;
-    align-items: center;
+  .table-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:10px;
   }
 
-  table.opp-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 12px;
-    margin-top: 6px;
-    overflow: hidden;
-    border-radius: 12px;
+  .table-title{
+    font-size:14px;
+    font-weight:900;
+    color:#fefce8;
+    display:flex;
+    align-items:center;
+    gap:8px;
   }
 
-  table.opp-table th,
-  table.opp-table td {
-    padding: 10px 10px;
-    border-bottom: 1px solid #162033;
-    text-align: left;
-    vertical-align: middle;
+  .sort-toggle{
+    display:inline-flex;
+    gap:6px;
+    margin-left:6px;
   }
 
-  table.opp-table th {
-    background: #070d18;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-    color: #9ca3af;
+  .sort-btn{
+    width:28px;
+    height:28px;
+    border-radius:10px;
+    border:1px solid rgba(148,163,184,0.28);
+    background: rgba(255,255,255,0.04);
+    color:#e5e7eb;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    font-weight:900;
+    line-height:1;
+    transition: all 0.12s ease;
   }
 
-  table.opp-table tbody tr:hover {
-    background: rgba(255, 255, 255, 0.04);
+  .sort-btn:hover{
+    filter:brightness(1.07);
+    border-color: rgba(245, 213, 128, 0.35);
+    text-decoration:none;
   }
 
-  .opp-id-link {
-    color: #f9fafb;
-    font-weight: 800;
-    text-decoration: none;
-  }
-  .opp-id-link:hover { text-decoration: underline; }
-
-  .text-muted-row { color: #9ca3af; }
-  .text-right { text-align: right; }
-
-  .pill-stage {
-    display: inline-flex;
-    align-items: center;
-    padding: 3px 10px;
-    border-radius: 999px;
-    border: 1px solid #263245;
-    font-size: 11px;
-    background: #070d18;
-    color: #e5e7eb;
-    font-weight: 700;
+  .sort-btn.active{
+    background: rgba(245, 213, 128, 0.14);
+    border-color: rgba(245, 213, 128, 0.45);
+    color:#fefce8;
   }
 
-  @media (max-width: 768px) {
-    .opp-title { font-size: 20px; }
-    .card-shell { padding: 10px; }
-    table.opp-table th, table.opp-table td { padding: 9px 8px; }
-    .filter-bar { padding: 10px; }
+  table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:12px;
+  }
+
+  th, td{
+    padding:8px 8px;
+    border-bottom:1px solid rgba(148,163,184,0.18);
+    text-align:left;
+    vertical-align:top;
+    font-weight:800;
+  }
+
+  th{
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.35px;
+    color:var(--muted);
+  }
+
+  tbody tr:nth-child(even){
+    background: rgba(15, 23, 42, 0.35);
+  }
+
+  tbody tr:hover{
+    background: rgba(245, 213, 128, 0.10);
+  }
+
+  .opp-link{
+    color:var(--gold);
+    font-weight:900;
+  }
+
+  .muted{ color:var(--muted); }
+
+  .badge{
+    display:inline-block;
+    padding:3px 8px;
+    border-radius:999px;
+    border:1px solid rgba(148,163,184,0.35);
+    font-size:11px;
+    color:#e5e7eb;
+    background: rgba(255,255,255,0.03);
+    white-space:nowrap;
+    font-weight:900;
+  }
+
+  .badge[data-stage="Prospecting"]{ border-color:#60a5fa; color:#dbeafe; background:rgba(59,130,246,0.12); }
+  .badge[data-stage="Qualification"]{ border-color:#38bdf8; color:#e0f2fe; background:rgba(56,189,248,0.12); }
+  .badge[data-stage="Needs Analysis"]{ border-color:#22d3ee; color:#cffafe; background:rgba(34,211,238,0.12); }
+  .badge[data-stage="Proposal"]{ border-color:#facc15; color:#fef3c7; background:rgba(250,204,21,0.12); }
+  .badge[data-stage="Negotiation"]{ border-color:#fb923c; color:#ffedd5; background:rgba(251,146,60,0.12); }
+  .badge[data-stage="Sampling"]{ border-color:#a78bfa; color:#ede9fe; background:rgba(139,92,246,0.12); }
+  .badge[data-stage="Production"]{ border-color:#2dd4bf; color:#ccfbf1; background:rgba(45,212,191,0.12); }
+  .badge[data-stage="Shipment Complete"]{ border-color:#22c55e; color:#bbf7d0; background:rgba(34,197,94,0.12); }
+  .badge[data-stage="Closed Won"]{ border-color:#22c55e; color:#bbf7d0; background:rgba(34,197,94,0.12); }
+  .badge[data-stage="Closed Lost"]{ border-color:#f87171; color:#fee2e2; background:rgba(248,113,113,0.12); }
+
+  .pill{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:3px 9px;
+    border-radius:999px;
+    border:1px solid rgba(148,163,184,0.35);
+    font-size:11px;
+    font-weight:900;
+  }
+
+  .pill.open{ border-color:#22c55e; color:#bbf7d0; background:rgba(34,197,94,0.12); }
+  .pill.closed{ border-color:#f87171; color:#fee2e2; background:rgba(248,113,113,0.12); }
+
+  .pager{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-top:12px;
+  }
+
+  .pager-left{
+    display:flex;
+    gap:8px;
+    align-items:center;
+    flex-wrap:wrap;
+  }
+
+  .pager-right{
+    display:flex;
+    gap:6px;
+    align-items:center;
+    flex-wrap:wrap;
+  }
+
+  .page-chip{
+    padding:6px 10px;
+    border-radius:999px;
+    border:1px solid rgba(148,163,184,0.22);
+    background: rgba(255,255,255,0.03);
+    color:#e5e7eb;
+    font-size:12px;
+    font-weight:900;
+    display:inline-block;
+  }
+
+  .page-chip.active{
+    background: rgba(245, 213, 128, 0.14);
+    border-color: rgba(245, 213, 128, 0.35);
+    color:#fefce8;
+  }
+
+  .table-wrap{ overflow-x:auto; border-radius:12px; }
+
+  @media (max-width:768px){
+    th, td{ padding:7px 6px; }
   }
 </style>
 
-<div class="opp-page">
+<div class="page">
 
-  <div class="opp-header">
-    <div class="opp-title-block">
-      <div class="opp-title">Opportunities</div>
-      <div class="opp-subtitle">
-        Total <strong>{{ opportunities|length }}</strong> deals in this view.
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Opportunities</h1>
+      <div class="page-subtitle">
+        Total <strong>{{ page_obj.paginator.count }}</strong> opportunities in this view.
+        <span class="muted">
+          {% if request.GET.sort == "old" %}
+            Sorted oldest first.
+          {% else %}
+            Sorted newest first.
+          {% endif %}
+        </span>
       </div>
     </div>
 
-    <div class="opp-actions">
-      <a href="{% url 'leads_list' %}" class="btn">View leads</a>
-      <a href="{% url 'add_opportunity' %}" class="btn btn-primary">Add opportunity</a>
+    <div class="page-actions">
+      <a href="{% url 'production_list' %}" class="btn-ghost">Production list</a>
+      <a href="{% url 'leads_list' %}" class="btn-ghost">View leads</a>
+      <a href="{% url 'add_opportunity' %}" class="btn-main">Add opportunity</a>
     </div>
   </div>
 
-  <div class="card-shell">
-    <div class="card-header-row">
-      <div class="card-title">All opportunities</div>
-      <div class="card-note">Click on the opportunity id to open the full detail page.</div>
+  <div class="card">
+    <div class="card-title">Filters</div>
+    <div class="card-note">
+      Production-stage opportunities are moved to the Production list and hidden here.
     </div>
 
-    <form method="get" class="filter-bar">
-      <div class="field">
-        <label class="label">Search</label>
-        <input
-          class="input"
-          type="text"
-          name="q"
-          value="{{ request.GET.q|default:'' }}"
-          placeholder="Opportunity, brand, lead id"
-        >
+    <form method="get" class="filters">
+      <input type="hidden" name="sort" value="{{ request.GET.sort|default:'new' }}">
+
+      <div class="field" style="min-width:220px;">
+        <div class="label">Search</div>
+        <input class="input" name="q" value="{{ request.GET.q|default:'' }}" placeholder="Opportunity, brand, lead id, product">
       </div>
 
-      <div class="field" style="min-width:160px;max-width:220px;">
-        <label class="label">Stage</label>
-        <select class="select" name="stage">
-          <option value="" {% if not request.GET.stage %}selected{% endif %}>All</option>
-          <option value="Prospecting" {% if request.GET.stage == "Prospecting" %}selected{% endif %}>Prospecting</option>
-          <option value="Sampling" {% if request.GET.stage == "Sampling" %}selected{% endif %}>Sampling</option>
-          <option value="Quoted" {% if request.GET.stage == "Quoted" %}selected{% endif %}>Quoted</option>
-          <option value="Negotiation" {% if request.GET.stage == "Negotiation" %}selected{% endif %}>Negotiation</option>
-          <option value="Won" {% if request.GET.stage == "Won" %}selected{% endif %}>Won</option>
-          <option value="Lost" {% if request.GET.stage == "Lost" %}selected{% endif %}>Lost</option>
+      <div class="field" style="min-width:200px;">
+        <div class="label">Stage</div>
+        <select class="input" name="stage">
+          <option value="" {% if not request.GET.stage %}selected{% endif %}>All stages</option>
+          {% for value,label in stage_choices %}
+            <option value="{{ value }}" {% if request.GET.stage == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
         </select>
       </div>
 
-      <div class="filter-actions">
-        <button class="btn btn-primary" type="submit">Apply</button>
-        <a class="btn" href="{% url 'opportunities_list' %}">Reset</a>
+      <div class="field" style="min-width:160px;">
+        <div class="label">Status</div>
+        <select class="input" name="status">
+          <option value="" {% if not request.GET.status %}selected{% endif %}>All</option>
+          <option value="open" {% if request.GET.status == "open" %}selected{% endif %}>Open</option>
+          <option value="closed" {% if request.GET.status == "closed" %}selected{% endif %}>Closed</option>
+        </select>
+      </div>
+
+      <div class="field" style="min-width:170px;">
+        <div class="label">Created from</div>
+        <input class="input" type="date" name="created_from" value="{{ request.GET.created_from|default:'' }}">
+      </div>
+
+      <div class="field" style="min-width:170px;">
+        <div class="label">Created to</div>
+        <input class="input" type="date" name="created_to" value="{{ request.GET.created_to|default:'' }}">
+      </div>
+
+      <div class="field" style="min-width:150px;">
+        <div class="label">Value min</div>
+        <input class="input" type="number" step="0.01" name="value_min" value="{{ request.GET.value_min|default:'' }}" placeholder="1000">
+      </div>
+
+      <div class="field" style="min-width:150px;">
+        <div class="label">Value max</div>
+        <input class="input" type="number" step="0.01" name="value_max" value="{{ request.GET.value_max|default:'' }}" placeholder="25000">
+      </div>
+
+      <div class="field">
+        <div class="label">Per page</div>
+        <select class="input" name="per_page">
+          <option value="20" {% if per_page|stringformat:"s" == "20" %}selected{% endif %}>20</option>
+          <option value="50" {% if per_page|stringformat:"s" == "50" %}selected{% endif %}>50</option>
+          <option value="100" {% if per_page|stringformat:"s" == "100" %}selected{% endif %}>100</option>
+        </select>
+      </div>
+
+      <div class="field" style="min-width:120px;">
+        <button class="btn-main" type="submit">Apply</button>
+      </div>
+
+      <div class="field" style="min-width:120px;">
+        <a class="btn-ghost" href="{% url 'opportunities_list' %}">Clear</a>
       </div>
     </form>
+  </div>
 
-    <table class="opp-table">
-      <thead>
-        <tr>
-          <th>Opportunity</th>
-          <th>Lead</th>
-          <th>Brand</th>
-          <th>Stage</th>
-          <th>Product</th>
-          <th class="text-right">Order value</th>
-          <th>Created</th>
-        </tr>
-      </thead>
+  <div class="table-shell">
+    <div class="table-head">
+      <div class="table-title">
+        Active opportunities
+        <span class="sort-toggle">
+          <a
+            class="sort-btn {% if request.GET.sort == 'new' or not request.GET.sort %}active{% endif %}"
+            href="?{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.stage %}stage={{ request.GET.stage|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page=1&sort=new"
+            title="Newest first"
+            aria-label="Newest first"
+          >↑</a>
 
-      <tbody>
-        {% with selected_stage=request.GET.stage|default:"" %}
-          {% for opp in opportunities|dictsortreversed:"created_date" %}
-            {% if selected_stage == "" or opp.stage == selected_stage %}
-              <tr>
-                <td>
-                  <a href="{% url 'opportunity_detail' opp.pk %}" class="opp-id-link">
-                    {{ opp.opportunity_id }}
-                  </a>
-                </td>
+          <a
+            class="sort-btn {% if request.GET.sort == 'old' %}active{% endif %}"
+            href="?{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.stage %}stage={{ request.GET.stage|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page=1&sort=old"
+            title="Oldest first"
+            aria-label="Oldest first"
+          >↓</a>
+        </span>
+      </div>
+      <div class="card-note">Click opportunity id to open the detail page.</div>
+    </div>
 
-                <td>
-                  {% if opp.lead %}
-                    {{ opp.lead.lead_id }}
-                  {% else %}
-                    <span class="text-muted-row">no lead</span>
-                  {% endif %}
-                </td>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Opportunity</th>
+            <th>Lead</th>
+            <th>Brand</th>
+            <th>Stage</th>
+            <th>Product</th>
+            <th>Value</th>
+            <th>Next follow up</th>
+            <th>Status</th>
+            <th>Created</th>
+          </tr>
+        </thead>
 
-                <td>
-                  {% if opp.lead %}
-                    {{ opp.lead.account_brand }}
-                  {% else %}
-                    <span class="text-muted-row">not set</span>
-                  {% endif %}
-                </td>
-
-                <td><span class="pill-stage">{{ opp.stage }}</span></td>
-
-                <td>{{ opp.product_category }} / {{ opp.product_type }}</td>
-
-                <td class="text-right">
-                  {% if opp.order_value %}
-                    {{ opp.order_value }}
-                  {% else %}
-                    <span class="text-muted-row">not set</span>
-                  {% endif %}
-                </td>
-
-                <td>{{ opp.created_date }}</td>
-              </tr>
-            {% endif %}
+        <tbody>
+          {% for opp in page_obj %}
+            <tr>
+              <td>
+                <a href="{% url 'opportunity_detail' opp.pk %}" class="opp-link">
+                  {{ opp.opportunity_id }}
+                </a>
+              </td>
+              <td>
+                {% if opp.lead %}
+                  {{ opp.lead.lead_id }}
+                {% else %}
+                  <span class="muted">no lead</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if opp.lead %}
+                  {{ opp.lead.account_brand }}
+                {% else %}
+                  <span class="muted">not set</span>
+                {% endif %}
+              </td>
+              <td><span class="badge" data-stage="{{ opp.stage }}">{{ opp.stage }}</span></td>
+              <td>{{ opp.product_category }} / {{ opp.product_type }}</td>
+              <td>
+                {% if opp.order_value %}
+                  {{ opp.order_value }}
+                {% else %}
+                  <span class="muted">not set</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if opp.next_followup %}
+                  {{ opp.next_followup }}
+                {% else %}
+                  <span class="muted">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if opp.is_open %}
+                  <span class="pill open">Open</span>
+                {% else %}
+                  <span class="pill closed">Closed</span>
+                {% endif %}
+              </td>
+              <td class="muted">{{ opp.created_date }}</td>
+            </tr>
           {% empty %}
             <tr>
-              <td colspan="7" class="text-muted-row">No opportunities yet.</td>
+              <td colspan="9" class="muted">No opportunities yet.</td>
             </tr>
           {% endfor %}
-        {% endwith %}
-      </tbody>
-    </table>
+        </tbody>
+      </table>
+    </div>
 
-    {% if request.GET.q %}
-      <div class="text-muted-row" style="margin-top:10px;font-size:12px;">
-        Search is ready in the UI. To make it work, we need to filter in the view using the q value.
+    <div class="pager">
+      <div class="pager-left">
+        <span class="muted">
+          Showing {{ page_obj.start_index }} to {{ page_obj.end_index }}
+          of {{ page_obj.paginator.count }}
+        </span>
       </div>
-    {% endif %}
+
+      <div class="pager-right">
+        {% if page_obj.has_previous %}
+          <a class="btn-ghost" href="?{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.stage %}stage={{ request.GET.stage|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}{% if request.GET.sort %}sort={{ request.GET.sort|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page={{ page_obj.previous_page_number }}">Prev</a>
+        {% endif %}
+
+        <span class="page-chip active">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+
+        {% if page_obj.has_next %}
+          <a class="btn-ghost" href="?{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.stage %}stage={{ request.GET.stage|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}{% if request.GET.sort %}sort={{ request.GET.sort|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page={{ page_obj.next_page_number }}">Next</a>
+        {% endif %}
+      </div>
+    </div>
 
   </div>
 

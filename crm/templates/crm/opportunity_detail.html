@@ -28,6 +28,42 @@
         flex-wrap: wrap;
     }
 
+    .summary-grid{
+        display:grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap:10px;
+        margin: 10px 0 12px 0;
+    }
+
+    .summary-card{
+        background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+        border:1px solid #1f2937;
+        border-radius:12px;
+        padding:10px 12px;
+        box-shadow: 0 10px 24px rgba(0,0,0,0.35);
+    }
+
+    .summary-title{
+        font-size:11px;
+        text-transform:uppercase;
+        letter-spacing:0.3px;
+        color:#9ca3af;
+        font-weight:800;
+    }
+
+    .summary-line{
+        margin-top:6px;
+        font-size:13px;
+        font-weight:700;
+        color:#e5e7eb;
+    }
+
+    .summary-sub{
+        margin-top:4px;
+        font-size:12px;
+        color:#9ca3af;
+    }
+
     .opp-header-left {
         display: flex;
         flex-direction: column;
@@ -399,9 +435,48 @@
                 View lead
             </a>
             {% endif %}
-            <a href="{% url 'production_from_opportunity' opportunity.pk %}" class="btn btn-gold btn-small">
-                Open production order
-            </a>
+            {% if prod_orders %}
+                <a href="{% url 'production_detail' prod_orders.0.pk %}" class="btn btn-gold btn-small">
+                    View production
+                </a>
+            {% else %}
+                <a href="{% url 'production_from_opportunity' opportunity.pk %}" class="btn btn-gold btn-small">
+                    Open production order
+                </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="summary-grid">
+        <div class="summary-card">
+            <div class="summary-title">Pipeline</div>
+            <div class="summary-line">Stage: {{ opportunity.get_stage_display }}</div>
+            <div class="summary-sub">Status: {% if opportunity.is_open %}Open{% else %}Closed{% endif %}</div>
+            <div class="summary-sub">Next follow up: {% if opportunity.next_followup %}{{ opportunity.next_followup }}{% else %}—{% endif %}</div>
+            <div class="summary-sub">Created: {{ opportunity.created_date }}</div>
+        </div>
+
+        <div class="summary-card">
+            <div class="summary-title">Value</div>
+            <div class="summary-line">Order value: {% if opportunity.order_value %}{{ opportunity.order_value }}{% else %}—{% endif %}</div>
+            <div class="summary-sub">MOQ units: {% if opportunity.moq_units %}{{ opportunity.moq_units }}{% else %}—{% endif %}</div>
+            <div class="summary-sub">{{ opportunity.product_category }} / {{ opportunity.product_type }}</div>
+        </div>
+
+        <div class="summary-card">
+            <div class="summary-title">Production</div>
+            <div class="summary-line">Orders: {{ prod_orders|length }}</div>
+            <div class="summary-sub">Total pieces: {{ prod_total_qty }}</div>
+            <div class="summary-sub">
+                <a href="{% url 'production_list' %}">Open production list</a>
+            </div>
+        </div>
+
+        <div class="summary-card">
+            <div class="summary-title">Activity</div>
+            <div class="summary-line">Tasks: {{ opp_tasks|length }}</div>
+            <div class="summary-sub">Shipments: {{ shipments|length }}</div>
+            <div class="summary-sub">Files: {{ opp_files|length }}</div>
         </div>
     </div>
 

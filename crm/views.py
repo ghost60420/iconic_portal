@@ -4559,6 +4559,10 @@ def production_from_opportunity(request, pk):
             qty_total=qty_guess,
         )
 
+    if opportunity.stage != "Production":
+        opportunity.stage = "Production"
+        opportunity.save(update_fields=["stage"])
+
     return redirect("production_detail", pk=po.pk)
 
 
@@ -5569,11 +5573,84 @@ def library_home(request):
 
 
 from django.shortcuts import render
+from django.core.paginator import Paginator
+from django.db.models import Q
+from django.utils.dateparse import parse_date
 from .models import Opportunity
 
 def opportunities_list(request):
-    opportunities = Opportunity.objects.select_related("lead").order_by(
-        "-created_date",
-        "-id",
+    q = (request.GET.get("q") or "").strip()
+    stage = (request.GET.get("stage") or "").strip()
+    status = (request.GET.get("status") or "").strip()
+    created_from_raw = (request.GET.get("created_from") or "").strip()
+    created_to_raw = (request.GET.get("created_to") or "").strip()
+    value_min_raw = (request.GET.get("value_min") or "").strip()
+    value_max_raw = (request.GET.get("value_max") or "").strip()
+
+    sort = (request.GET.get("sort") or "new").strip().lower()
+
+    try:
+        per_page = int(request.GET.get("per_page") or 50)
+    except ValueError:
+        per_page = 50
+
+    if per_page not in (20, 50, 100):
+        per_page = 50
+
+    qs = (
+        Opportunity.objects
+        .select_related("lead")
+        .exclude(stage="Production")
+        .exclude(productionorder__isnull=False)
     )
-    return render(request, "crm/opportunities_list.html", {"opportunities": opportunities})
+
+    if q:
+        qs = qs.filter(
+            Q(opportunity_id__icontains=q)
+            | Q(stage__icontains=q)
+            | Q(product_type__icontains=q)
+            | Q(product_category__icontains=q)
+            | Q(lead__lead_id__icontains=q)
+            | Q(lead__account_brand__icontains=q)
+            | Q(lead__contact_name__icontains=q)
+            | Q(lead__email__icontains=q)
+        )
+
+    if stage:
+        qs = qs.filter(stage__iexact=stage)
+
+    if status:
+        if status == "open":
+            qs = qs.filter(is_open=True)
+        elif status == "closed":
+            qs = qs.filter(is_open=False)
+
+    created_from = parse_date(created_from_raw) if created_from_raw else None
+    created_to = parse_date(created_to_raw) if created_to_raw else None
+    if created_from:
+        qs = qs.filter(created_date__gte=created_from)
+    if created_to:
+        qs = qs.filter(created_date__lte=created_to)
+
+    value_min = _parse_money_value(value_min_raw) if value_min_raw else None
+    value_max = _parse_money_value(value_max_raw) if value_max_raw else None
+    if value_min is not None:
+        qs = qs.filter(order_value__gte=value_min)
+    if value_max is not None:
+        qs = qs.filter(order_value__lte=value_max)
+
+    if sort == "old":
+        qs = qs.order_by("created_date", "id")
+    else:
+        qs = qs.order_by("-created_date", "-id")
+
+    paginator = Paginator(qs, per_page)
+    page_number = request.GET.get("page") or 1
+    page_obj = paginator.get_page(page_number)
+
+    context = {
+        "page_obj": page_obj,
+        "per_page": per_page,
+        "stage_choices": Opportunity.STAGE_CHOICES,
+    }
+    return render(request, "crm/opportunities_list.html", context)
