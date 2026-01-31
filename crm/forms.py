@@ -95,7 +95,7 @@ class LeadForm(forms.ModelForm):
         if "product_category" in self.fields:
             self.fields["product_category"].choices = category_choices
             self.fields["product_category"].required = True
-            self.fields["product_category"].widget = forms.Select()
+            self.fields["product_category"].widget.attrs.update({"class": "form-control"})
 
             current_value = getattr(self.instance, "product_category", "") or ""
             if current_value and current_value not in dict(Opportunity.PRODUCT_CATEGORY_CHOICES):
@@ -104,7 +104,7 @@ class LeadForm(forms.ModelForm):
         if "product_interest" in self.fields:
             self.fields["product_interest"].choices = interest_choices
             self.fields["product_interest"].required = True
-            self.fields["product_interest"].widget = forms.Select()
+            self.fields["product_interest"].widget.attrs.update({"class": "form-control"})
 
             current_value = getattr(self.instance, "product_interest", "") or ""
             if current_value and current_value not in dict(Opportunity.PRODUCT_TYPE_CHOICES):
