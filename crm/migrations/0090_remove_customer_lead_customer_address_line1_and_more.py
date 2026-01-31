@@ -39,15 +39,18 @@ def forwards(apps, schema_editor):
             code = f"CUST-L{lead.pk}"
             if Customer.objects.filter(customer_code=code).exists():
                 code = f"CUST-{lead.lead_id or lead.pk}"
-            customer = Customer.objects.create(
-                customer_code=code,
-                account_brand=display,
-                contact_name=lead.contact_name or "",
-                email=lead.email or "",
-                phone=lead.phone or "",
-                market=getattr(lead, "market", "") or "",
-                notes=lead.notes or "",
-            )
+            create_kwargs = {
+                "customer_code": code,
+                "account_brand": display,
+                "contact_name": lead.contact_name or "",
+                "email": lead.email or "",
+                "phone": lead.phone or "",
+                "market": getattr(lead, "market", "") or "",
+                "notes": lead.notes or "",
+            }
+            if hasattr(Customer, "lead_id"):
+                create_kwargs["lead_id"] = lead.pk
+            customer = Customer.objects.create(**create_kwargs)
 
         Lead.objects.filter(pk=lead.pk).update(customer_id=customer.id)
 
