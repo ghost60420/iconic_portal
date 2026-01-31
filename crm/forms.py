@@ -89,8 +89,8 @@ class LeadForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        category_choices = [("", "Select a category")] + list(Lead.PRODUCT_CATEGORY_CHOICES)
-        interest_choices = [("", "Select an interest")] + list(Lead.PRODUCT_INTEREST_CHOICES)
+        category_choices = [("", "Select a category")] + list(Opportunity.PRODUCT_CATEGORY_CHOICES)
+        interest_choices = [("", "Select an interest")] + list(Opportunity.PRODUCT_TYPE_CHOICES)
 
         if "product_category" in self.fields:
             self.fields["product_category"].choices = category_choices
@@ -98,7 +98,7 @@ class LeadForm(forms.ModelForm):
             self.fields["product_category"].widget = forms.Select()
 
             current_value = getattr(self.instance, "product_category", "") or ""
-            if current_value and current_value not in dict(Lead.PRODUCT_CATEGORY_CHOICES):
+            if current_value and current_value not in dict(Opportunity.PRODUCT_CATEGORY_CHOICES):
                 self.fields["product_category"].choices.append((current_value, current_value))
 
         if "product_interest" in self.fields:
@@ -107,7 +107,7 @@ class LeadForm(forms.ModelForm):
             self.fields["product_interest"].widget = forms.Select()
 
             current_value = getattr(self.instance, "product_interest", "") or ""
-            if current_value and current_value not in dict(Lead.PRODUCT_INTEREST_CHOICES):
+            if current_value and current_value not in dict(Opportunity.PRODUCT_TYPE_CHOICES):
                 self.fields["product_interest"].choices.append((current_value, current_value))
 
 
