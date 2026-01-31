@@ -377,7 +377,8 @@
       <div class="field" style="min-width:170px;">
         <div class="label">Status</div>
         <select class="input" name="status">
-          <option value="" {% if not request.GET.status %}selected{% endif %}>All</option>
+          <option value="" {% if not request.GET.status %}selected{% endif %}>Active (default)</option>
+          <option value="all" {% if request.GET.status == "all" %}selected{% endif %}>All</option>
           <option value="open" {% if request.GET.status == "open" %}selected{% endif %}>Open</option>
           <option value="closed_won" {% if request.GET.status == "closed_won" %}selected{% endif %}>Closed Won</option>
           <option value="closed_lost" {% if request.GET.status == "closed_lost" %}selected{% endif %}>Closed Lost</option>

@@ -45,7 +45,7 @@
         <select name="customer" id="customerSelect">
             <option value="">Select Customer</option>
             {% for c in customers %}
-                <option value="{{ c.id }}">{{ c.account_brand }} ({{ c.email }})</option>
+                <option value="{{ c.id }}" {% if selected_customer_id|stringformat:"s" == c.id|stringformat:"s" %}selected{% endif %}>{{ c.account_brand }} ({{ c.email }})</option>
             {% endfor %}
         </select>
 
@@ -55,7 +55,7 @@
         <select name="lead" id="leadSelect">
             <option value="">Select Lead</option>
             {% for l in leads %}
-                <option value="{{ l.id }}">{{ l.contact_name }} — {{ l.email }}</option>
+                <option value="{{ l.id }}" {% if selected_lead_id|stringformat:"s" == l.id|stringformat:"s" %}selected{% endif %}>{{ l.contact_name }} — {{ l.email }}</option>
             {% endfor %}
         </select>
 

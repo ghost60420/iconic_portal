@@ -28,6 +28,29 @@
     color: #9ca3af;
   }
 
+  .prod-filters {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+  }
+
+  .prod-filter-btn {
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid #374151;
+    background: #020617;
+    color: #e5e7eb;
+    font-size: 12px;
+    text-decoration: none;
+  }
+
+  .prod-filter-btn.active {
+    border-color: #facc15;
+    color: #fef9c3;
+    box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.35);
+  }
+
   .prod-stats {
     display: flex;
     gap: 12px;
@@ -107,6 +130,8 @@
   .prod-list-badge-status.in_progress { background:#0ea5e9; color:#020617; }
   .prod-list-badge-status.hold { background:#78350f; color:#fef3c7; }
   .prod-list-badge-status.planning { background:#4b5563; color:#f9fafb; }
+  .prod-list-badge-status.closed_won { background:#16a34a; color:#ffffff; }
+  .prod-list-badge-status.closed_lost { background:#b91c1c; color:#ffffff; }
 
   .prod-list-progress-text {
     font-size: 11px;
@@ -200,6 +225,11 @@
       <div class="prod-list-title">Production orders</div>
       <div class="prod-list-sub">
         Track all bulk orders with live stage flow
+      </div>
+      <div class="prod-filters">
+        <a class="prod-filter-btn {% if status_filter != 'completed' and status_filter != 'all' %}active{% endif %}" href="?status=active">Active</a>
+        <a class="prod-filter-btn {% if status_filter == 'completed' %}active{% endif %}" href="?status=completed">Completed</a>
+        <a class="prod-filter-btn {% if status_filter == 'all' %}active{% endif %}" href="?status=all">All</a>
       </div>
     </div>
 

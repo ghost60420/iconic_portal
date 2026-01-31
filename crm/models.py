@@ -210,6 +210,14 @@ def generate_lead_id():
             return lead_id
 
 
+def generate_customer_code():
+    chars = string.ascii_uppercase + string.digits
+    while True:
+        code = "C" + "".join(secrets.choice(chars) for _ in range(9))
+        if not Customer.objects.filter(customer_code=code).exists():
+            return code
+
+
 # ----------------------------
 # Dropdown choices
 # ----------------------------
@@ -280,6 +288,14 @@ class Lead(models.Model):
     ]
 
     market = models.CharField(max_length=10, choices=MARKET_CHOICES, default="CA")
+
+    customer = models.ForeignKey(
+        "Customer",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="leads",
+    )
 
     lead_id = models.CharField(
         max_length=20,
@@ -361,13 +377,22 @@ class Lead(models.Model):
 
 class Customer(models.Model):
     customer_code = models.CharField(max_length=50, unique=True, blank=True)
-    lead = models.OneToOneField(Lead, on_delete=models.CASCADE, related_name="customer")
 
-    account_brand = models.CharField(max_length=200)
-    contact_name = models.CharField(max_length=200)
+    account_brand = models.CharField(max_length=200, blank=True, default="")
+    contact_name = models.CharField(max_length=200, blank=True, default="")
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=50, blank=True)
+    website = models.CharField(max_length=255, blank=True)
+    industry = models.CharField(max_length=120, blank=True)
     market = models.CharField(max_length=10, blank=True)
+
+    address_line1 = models.CharField(max_length=255, blank=True)
+    address_line2 = models.CharField(max_length=255, blank=True)
+    city = models.CharField(max_length=100, blank=True)
+    state = models.CharField(max_length=100, blank=True)
+    province = models.CharField(max_length=100, blank=True)
+    postal_code = models.CharField(max_length=20, blank=True)
+    country = models.CharField(max_length=100, blank=True)
 
     shipping_name = models.CharField(max_length=200, blank=True)
     shipping_address1 = models.CharField(max_length=255, blank=True)
@@ -379,17 +404,83 @@ class Customer(models.Model):
 
     is_active = models.BooleanField(default=True)
     created_date = models.DateField(default=timezone.localdate)
+    updated_at = models.DateTimeField(auto_now=True)
     notes = models.TextField(blank=True)
 
     def save(self, *args, **kwargs):
-        # never overwrite lead_id if it already exists
-        if not self.lead_id:
-            self.lead_id = generate_lead_id()
+        if not self.customer_code:
+            self.customer_code = generate_customer_code()
+
+        if not self.created_date:
+            self.created_date = timezone.localdate()
 
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.account_brand} [{self.customer_code}]"
+        display = self.account_brand or self.contact_name or "Customer"
+        return f"{display} [{self.customer_code}]"
+
+
+class CustomerNote(models.Model):
+    customer = models.ForeignKey(
+        "Customer",
+        related_name="notes_list",
+        on_delete=models.CASCADE,
+    )
+    author = models.CharField(max_length=100, blank=True, default="")
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.customer_id} note {self.created_at:%Y-%m-%d}"
+
+
+class CustomerEvent(models.Model):
+    EVENT_TYPE_CHOICES = [
+        ("lead_created", "Lead created"),
+        ("opportunity_created", "Opportunity created"),
+        ("moved_to_production", "Moved to production"),
+        ("production_status", "Production status changed"),
+        ("production_completed", "Production completed"),
+        ("production_closed_won", "Production closed won"),
+        ("production_closed_lost", "Production closed lost"),
+    ]
+
+    customer = models.ForeignKey(
+        "Customer",
+        related_name="customer_events",
+        on_delete=models.CASCADE,
+    )
+    event_type = models.CharField(
+        max_length=40,
+        choices=EVENT_TYPE_CHOICES,
+    )
+    title = models.CharField(max_length=200)
+    details = models.TextField(blank=True, default="")
+    opportunity = models.ForeignKey(
+        "Opportunity",
+        related_name="customer_events",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
+    production = models.ForeignKey(
+        "ProductionOrder",
+        related_name="customer_events",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.customer_id} {self.event_type} {self.created_at:%Y-%m-%d}"
 
 class LeadComment(models.Model):
     lead = models.ForeignKey(
@@ -607,6 +698,7 @@ class Opportunity(models.Model):
     )
 
     created_date = models.DateField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     next_followup = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
     is_open = models.BooleanField(default=True)
@@ -631,28 +723,14 @@ class Opportunity(models.Model):
         return mapping.get(self.status_key, "Open")
 
     def save(self, *args, **kwargs):
-        is_new = self.pk is None
+        if not self.customer and self.lead and self.lead.customer_id:
+            self.customer = self.lead.customer
 
         if not self.opportunity_id and self.lead and self.lead.lead_id:
             count_for_lead = Opportunity.objects.filter(lead=self.lead).count() + 1
             self.opportunity_id = f"OPP-{self.lead.lead_id}-{count_for_lead:03}"
 
         super().save(*args, **kwargs)
-
-        if is_new:
-            from .models import Customer
-
-            Customer.objects.update_or_create(
-                lead=self.lead,
-                defaults={
-                    "account_brand": self.lead.account_brand,
-                    "contact_name": self.lead.contact_name,
-                    "email": self.lead.email,
-                    "phone": self.lead.phone,
-                    "market": self.lead.market,
-                    "notes": self.lead.notes,
-                },
-            )
 
     def __str__(self):
         return f"{self.opportunity_id} for {self.lead.account_brand}"
@@ -1381,6 +1459,8 @@ class ProductionOrder(models.Model):
         ("in_progress", "In progress"),
         ("hold", "On hold"),
         ("done", "Done"),
+        ("closed_won", "Closed Won"),
+        ("closed_lost", "Closed Lost"),
     ]
 
     # basic order info
@@ -1392,7 +1472,11 @@ class ProductionOrder(models.Model):
         "Opportunity", on_delete=models.SET_NULL, null=True, blank=True
     )
     customer = models.ForeignKey(
-        "Customer", on_delete=models.SET_NULL, null=True, blank=True
+        "Customer",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="production_orders",
     )
     product = models.ForeignKey(
         "Product", on_delete=models.SET_NULL, null=True, blank=True

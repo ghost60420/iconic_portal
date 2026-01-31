@@ -3,9 +3,9 @@
 import json
 import logging
 from collections import defaultdict
-from datetime import timedelta
+from datetime import timedelta, date
 from decimal import Decimal
-from django.db.models import Count, Sum, Q
+from django.db.models import Count, Sum, Q, Max
 from django.db.models.functions import TruncDate
 from django.db import models
 from django.conf import settings
@@ -19,7 +19,7 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Case, Count, IntegerField, Q, When
 from django.db.models.functions import TruncDate, TruncMonth, TruncYear
-from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
+from django.http import HttpResponse, HttpResponseForbidden, JsonResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -45,6 +45,8 @@ from .models import (
     BDStaff,
     BDStaffMonth,
     Customer,
+    CustomerEvent,
+    CustomerNote,
     Lead,
     LeadActivity,
     LeadComment,
@@ -629,12 +631,21 @@ def add_lead(request):
             if not lead.created_date:
                 lead.created_date = timezone.now().date()
 
+            customer = _find_or_create_customer_for_lead(lead)
+            lead.customer = customer
             lead.save()
 
             LeadActivity.objects.create(
                 lead=lead,
                 activity_type="lead_created",
                 description="Lead created from form.",
+            )
+
+            _record_customer_event(
+                customer=customer,
+                event_type="lead_created",
+                title="Lead created",
+                details=f"Lead {lead.lead_id} created.",
             )
 
             if getattr(lead, "attachment", None):
@@ -698,9 +709,17 @@ def opportunity_create_manual(request):
 
         lead = get_object_or_404(Lead, pk=lead_id)
 
-        customer = None
+        selected_customer = None
         if customer_id:
-            customer = get_object_or_404(Customer, pk=customer_id)
+            selected_customer = get_object_or_404(Customer, pk=customer_id)
+
+        customer = lead.customer if lead.customer_id else selected_customer
+        if not customer:
+            customer = _find_or_create_customer_for_lead(lead)
+
+        if not lead.customer_id and customer:
+            lead.customer = customer
+            lead.save(update_fields=["customer"])
 
         moq_units = None
         if moq_units_raw:
@@ -728,6 +747,14 @@ def opportunity_create_manual(request):
         if lead:
             lead.lead_status = "Converted"
             lead.save(update_fields=["lead_status"])
+
+        _record_customer_event(
+            customer=customer,
+            event_type="opportunity_created",
+            title="Opportunity created",
+            details=f"Opportunity {opp.opportunity_id} created.",
+            opportunity=opp,
+        )
 
         return redirect("opportunity_detail", pk=opp.pk)
 
@@ -795,6 +822,87 @@ def _get_latest_cad_to_bdt_rate() -> Decimal:
         return Decimal("0")
 
 
+def _active_opportunity_stages():
+    inactive = {"Production", "Closed Won", "Closed Lost", "Shipment Complete"}
+    return [value for value, _ in Opportunity.STAGE_CHOICES if value not in inactive]
+
+
+def _production_completed_statuses():
+    return {"done", "completed", "closed_won"}
+
+
+def _production_active_statuses():
+    return {"planning", "in_progress", "hold"}
+
+
+def _find_or_create_customer_for_lead(lead):
+    if lead.customer_id:
+        return lead.customer
+
+    email = (lead.email or "").strip()
+    if email:
+        customer = Customer.objects.filter(email__iexact=email).first()
+        if customer:
+            return customer
+
+    if lead.account_brand:
+        customer = Customer.objects.filter(
+            account_brand__iexact=lead.account_brand,
+            phone=lead.phone or "",
+        ).first()
+        if customer:
+            return customer
+
+    display_name = lead.account_brand or lead.contact_name or "Customer"
+
+    customer = Customer.objects.create(
+        account_brand=display_name,
+        contact_name=lead.contact_name or "",
+        email=lead.email or "",
+        phone=lead.phone or "",
+        market=getattr(lead, "market", "") or "",
+        website=getattr(lead, "company_website", "") or "",
+        city=getattr(lead, "city", "") or "",
+        country=getattr(lead, "country", "") or "",
+        notes=lead.notes or "",
+    )
+    return customer
+
+
+def _ensure_customer_for_opportunity(opportunity):
+    if opportunity.customer_id:
+        return opportunity.customer
+
+    lead = opportunity.lead
+    if lead and lead.customer_id:
+        opportunity.customer = lead.customer
+        opportunity.save(update_fields=["customer"])
+        return opportunity.customer
+
+    if lead:
+        customer = _find_or_create_customer_for_lead(lead)
+        lead.customer = customer
+        lead.save(update_fields=["customer"])
+        opportunity.customer = customer
+        opportunity.save(update_fields=["customer"])
+        return customer
+
+    return None
+
+
+def _record_customer_event(*, customer, event_type, title, details="", opportunity=None, production=None):
+    if not customer:
+        return
+    CustomerEvent.objects.create(
+        customer=customer,
+        event_type=event_type,
+        title=title,
+        details=details or "",
+        opportunity=opportunity,
+        production=production,
+    )
+
+
 def lead_detail(request, pk):
     lead = get_object_or_404(Lead, pk=pk)
 
@@ -803,10 +911,7 @@ def lead_detail(request, pk):
     tasks = lead.tasks.all()
     activities = lead.activities.all()
 
-    try:
-        customer = lead.customer
-    except Customer.DoesNotExist:
-        customer = None
+    customer = lead.customer if lead.customer_id else None
 
     agents = AIAgent.objects.all()
     selected_agent = None
@@ -1144,10 +1249,12 @@ def opportunity_detail(request, pk):
     opportunity = get_object_or_404(Opportunity, pk=pk)
     lead = opportunity.lead
 
-    # Customer for this lead
-    customer = None
-    if lead:
-        customer = Customer.objects.filter(lead=lead).first()
+    customer_param = (request.GET.get("customer") or "").strip()
+    if customer_param and opportunity.customer_id and str(opportunity.customer_id) != customer_param:
+        raise Http404("Opportunity does not belong to this customer.")
+
+    # Customer for this opportunity
+    customer = opportunity.customer or (lead.customer if lead and lead.customer_id else None)
 
     # Tasks
     opp_tasks = OpportunityTask.objects.filter(opportunity=opportunity).order_by(
@@ -1505,7 +1612,8 @@ def customer_ai_detail(request, pk):
     Also appends answer into customer.notes.
     """
     customer = get_object_or_404(Customer, pk=pk)
-    lead = customer.lead
+    leads = customer.leads.all().order_by("created_date", "id")
+    lead = leads.last() if leads.exists() else None
 
     mode = request.POST.get("mode", "overview")
     user_question = request.POST.get("question", "").strip()
@@ -1528,10 +1636,10 @@ def customer_ai_detail(request, pk):
     )
     base_info.append(f"Active: {'yes' if customer.is_active else 'no'}")
 
-    opps = lead.opportunities.all().order_by("created_date", "id")
+    opps = customer.opportunities.all().order_by("created_date", "id")
     total_value = opps.aggregate(s=Sum("order_value"))["s"] or 0
     order_count = opps.count()
-    open_count = opps.filter(is_open=True).count()
+    open_count = opps.exclude(stage__in=["Closed Won", "Closed Lost", "Production", "Shipment Complete"]).count()
     won_count = opps.filter(stage="Closed Won").count()
 
     base_info.append(f"Total opportunities: {order_count}")
@@ -1548,7 +1656,7 @@ def customer_ai_detail(request, pk):
             f"category {last_opp.product_category}"
         )
 
-    activities = lead.activities.all().order_by("-created_at")[:10]
+    activities = LeadActivity.objects.filter(lead__in=leads).order_by("-created_at")[:10] if lead else []
     if activities:
         base_info.append("Recent activities:")
         for a in activities:
@@ -1557,7 +1665,7 @@ def customer_ai_detail(request, pk):
                 f"{(a.description or '')[:100]}"
             )
 
-    comments = lead.comments.all().order_by("-created_at")[:5]
+    comments = LeadComment.objects.filter(lead__in=leads).order_by("-created_at")[:5] if lead else []
     if comments:
         base_info.append("Recent notes:")
         for c in comments:
@@ -1665,8 +1773,88 @@ def customer_ai_detail(request, pk):
 
 
 def customers_list(request):
-    customers = Customer.objects.all().order_by("-created_date", "-id")
-    return render(request, "crm/customers_list.html", {"customers": customers})
+    q = (request.GET.get("q") or "").strip()
+    has_active = (request.GET.get("has_active") or "").strip() == "1"
+    has_production = (request.GET.get("has_production") or "").strip() == "1"
+    has_completed = (request.GET.get("has_completed") or "").strip() == "1"
+    sort = (request.GET.get("sort") or "recent").strip().lower()
+
+    active_stages = _active_opportunity_stages()
+    completed_statuses = _production_completed_statuses()
+    active_prod_statuses = _production_active_statuses()
+
+    qs = Customer.objects.all()
+
+    if q:
+        qs = qs.filter(
+            Q(account_brand__icontains=q)
+            | Q(contact_name__icontains=q)
+            | Q(email__icontains=q)
+            | Q(phone__icontains=q)
+        )
+
+    qs = qs.annotate(
+        active_opps=Count(
+            "opportunities",
+            filter=Q(opportunities__stage__in=active_stages),
+            distinct=True,
+        ),
+        production_active=Count(
+            "production_orders",
+            filter=Q(production_orders__status__in=active_prod_statuses),
+            distinct=True,
+        ),
+        production_completed=Count(
+            "production_orders",
+            filter=Q(production_orders__status__in=completed_statuses),
+            distinct=True,
+        ),
+        last_opp_date=Max("opportunities__updated_at"),
+        last_prod_date=Max("production_orders__updated_at"),
+        last_lead_date=Max("leads__created_date"),
+    )
+
+    if has_active:
+        qs = qs.filter(active_opps__gt=0)
+    if has_production:
+        qs = qs.filter(production_active__gt=0)
+    if has_completed:
+        qs = qs.filter(production_completed__gt=0)
+
+    customers = list(qs)
+
+    def _to_date(value):
+        if not value:
+            return None
+        if isinstance(value, timezone.datetime):
+            return value.date()
+        return value
+
+    for c in customers:
+        dates = [
+            _to_date(c.updated_at),
+            _to_date(c.created_date),
+            _to_date(getattr(c, "last_opp_date", None)),
+            _to_date(getattr(c, "last_prod_date", None)),
+            _to_date(getattr(c, "last_lead_date", None)),
+        ]
+        dates = [d for d in dates if d]
+        c.last_activity = max(dates) if dates else None
+
+    if sort == "name":
+        customers.sort(key=lambda c: ((c.account_brand or "").lower(), (c.contact_name or "").lower()))
+    else:
+        customers.sort(key=lambda c: c.last_activity or date.min, reverse=True)
+
+    context = {
+        "customers": customers,
+        "q": q,
+        "has_active": has_active,
+        "has_production": has_production,
+        "has_completed": has_completed,
+        "sort": sort,
+    }
+    return render(request, "crm/customers_list.html", context)
 
 
 @require_POST
@@ -1685,8 +1873,8 @@ def customer_ai_focus(request):
     except Customer.DoesNotExist:
         return JsonResponse({"ok": False, "error": "Customer not found."})
 
-    lead = customer.lead if hasattr(customer, "lead") else None
-    opps = customer.lead.opportunities.all().order_by("-created_date") if lead else []
+    lead = customer.leads.order_by("-created_date", "-id").first()
+    opps = customer.opportunities.all().order_by("-created_date")
 
     total_orders = opps.count()
     total_value = (
@@ -1761,103 +1949,104 @@ def customer_ai_focus(request):
 
 def customer_detail(request, pk):
     customer = get_object_or_404(Customer, pk=pk)
-    lead = customer.lead
+    leads = customer.leads.all().order_by("-created_date", "-id")
 
-    base_opps = lead.opportunities.all().order_by("-created_date", "-id")
+    opportunities = (
+        customer.opportunities
+        .select_related("lead")
+        .order_by("-updated_at", "-id")
+    )
 
-    year_filter = request.GET.get("year") or ""
-    stage_filter = request.GET.get("stage") or ""
+    if request.method == "POST":
+        action = (request.POST.get("action") or "").strip()
+        if action == "add_note":
+            content = (request.POST.get("note_content") or "").strip()
+            if content:
+                author = request.user.username if request.user.is_authenticated else "User"
+                CustomerNote.objects.create(
+                    customer=customer,
+                    author=author,
+                    content=content,
+                )
+                messages.success(request, "Note added.")
+            return redirect("customer_detail", pk=pk)
 
-    opportunities = base_opps
-    if year_filter:
-        opportunities = opportunities.filter(created_date__year=year_filter)
-    if stage_filter:
-        opportunities = opportunities.filter(stage=stage_filter)
-
-    activities = lead.activities.all()
-
-    year_qs = base_opps.dates("created_date", "year", order="ASC")
-    available_years = [d.year for d in year_qs]
-    stage_choices = Opportunity.STAGE_CHOICES
+    active_stages = _active_opportunity_stages()
+    active_opps = opportunities.filter(stage__in=active_stages)
 
     paid_opps = opportunities.filter(order_value__isnull=False)
-
     totals = paid_opps.aggregate(
         total_revenue=Sum("order_value"),
         total_orders=Count("id"),
     )
-
     total_revenue = totals.get("total_revenue") or Decimal("0.00")
     total_orders = totals.get("total_orders") or 0
 
-    yearly_stats = (
-        paid_opps
-        .annotate(year=TruncYear("created_date"))
-        .values("year")
-        .annotate(
-            revenue=Sum("order_value"),
-            orders=Count("id"),
-        )
-        .order_by("year")
+    prod_orders = (
+        customer.production_orders
+        .select_related("opportunity", "lead")
+        .order_by("-created_at", "-id")
     )
 
-    monthly_stats = (
-        paid_opps
-        .annotate(month=TruncMonth("created_date"))
-        .values("month")
-        .annotate(
-            revenue=Sum("order_value"),
-            orders=Count("id"),
-        )
-        .order_by("month")
+    completed_statuses = _production_completed_statuses()
+    active_prod_statuses = _production_active_statuses()
+
+    production_active = prod_orders.filter(status__in=active_prod_statuses)
+    production_completed = prod_orders.filter(status__in=completed_statuses)
+
+    prod_costs = (
+        ProductionOrder.objects
+        .filter(opportunity__in=opportunities)
+        .values("opportunity_id")
+        .annotate(total_cost=Sum("actual_total_cost_bdt"))
+    )
+    prod_cost_map = {row["opportunity_id"]: (row["total_cost"] or Decimal("0")) for row in prod_costs}
+
+    total_cost_bdt = (
+        ProductionOrder.objects
+        .filter(customer=customer)
+        .aggregate(total_cost=Sum("actual_total_cost_bdt"))
+        .get("total_cost") or Decimal("0.00")
     )
 
-    quarter_dict = defaultdict(lambda: {"revenue": Decimal("0.00"), "orders": 0})
-    for opp in paid_opps:
-        if not opp.order_value:
-            continue
-        year = opp.created_date.year
-        month = opp.created_date.month
-        quarter = (month - 1) // 3 + 1
-        key = (year, quarter)
-        quarter_dict[key]["revenue"] += opp.order_value
-        quarter_dict[key]["orders"] += 1
+    profit_estimate = None
+    profit_margin = None
+    if total_revenue is not None and total_cost_bdt is not None:
+        profit_estimate = total_revenue - total_cost_bdt
+        if total_revenue:
+            try:
+                profit_margin = (profit_estimate / total_revenue) * 100
+            except Exception:
+                profit_margin = None
 
-    quarter_stats = []
-    for (year, quarter), data in sorted(quarter_dict.items()):
-        quarter_stats.append(
-            {
-                "label": f"{year} Q{quarter}",
-                "revenue": data["revenue"],
-                "orders": data["orders"],
-            }
-        )
+    for opp in opportunities:
+        cost = prod_cost_map.get(opp.id)
+        if opp.order_value and cost is not None:
+            try:
+                opp.profit_margin_pct = ((opp.order_value - cost) / opp.order_value) * 100
+            except Exception:
+                opp.profit_margin_pct = None
+        else:
+            opp.profit_margin_pct = None
 
-    product_stats = (
-        paid_opps
-        .values("product_type")
-        .annotate(
-            revenue=Sum("order_value"),
-            orders=Count("id"),
-        )
-        .order_by("-revenue")
-    )
+    notes_list = customer.notes_list.all().order_by("-created_at")
+    events = customer.customer_events.all().order_by("-created_at")[:50]
 
     context = {
         "customer": customer,
-        "lead": lead,
+        "leads": leads,
         "opportunities": opportunities,
-        "activities": activities,
+        "active_opps": active_opps,
+        "production_active": production_active,
+        "production_completed": production_completed,
         "total_revenue": total_revenue,
         "total_orders": total_orders,
-        "yearly_stats": yearly_stats,
-        "monthly_stats": monthly_stats,
-        "quarter_stats": quarter_stats,
-        "product_stats": product_stats,
-        "available_years": available_years,
-        "stage_choices": stage_choices,
-        "current_year": year_filter,
-        "current_stage": stage_filter,
+        "total_cost_bdt": total_cost_bdt,
+        "profit_estimate": profit_estimate,
+        "profit_margin": profit_margin,
+        "notes_list": notes_list,
+        "events": events,
+        "prod_orders": prod_orders,
     }
     return render(request, "crm/customer_detail.html", context)
 
@@ -1918,10 +2107,10 @@ def customer_ai_insight(request, pk):
     Gives account summary and next steps.
     """
     customer = get_object_or_404(Customer, pk=pk)
-    lead = customer.lead
+    lead = customer.leads.order_by("-created_date", "-id").first()
 
     try:
-        paid_opps = lead.opportunities.filter(order_value__isnull=False).order_by(
+        paid_opps = customer.opportunities.filter(order_value__isnull=False).order_by(
             "-created_date"
         )
 
@@ -4149,11 +4338,7 @@ def opportunity_ai_detail(request, pk):
     opportunity = get_object_or_404(Opportunity, pk=pk)
     lead = opportunity.lead
 
-    # try to get customer through lead if you use that link
-    try:
-        customer = lead.customer
-    except Customer.DoesNotExist:
-        customer = None
+    customer = opportunity.customer or (lead.customer if lead and lead.customer_id else None)
 
     mode = request.POST.get("mode", "summary")
     user_text = request.POST.get("user_text", "")
@@ -4377,11 +4562,22 @@ def production_list(request):
     """
     List of all production orders with small dashboard numbers.
     """
+    status_filter = (request.GET.get("status") or "active").strip().lower()
+    completed_statuses = _production_completed_statuses()
+    active_statuses = _production_active_statuses()
+
     orders = (
         ProductionOrder.objects
-        .select_related("customer", "product")
+        .select_related("customer", "product", "opportunity")
         .order_by("-created_at")
     )
+
+    if status_filter == "completed":
+        orders = orders.filter(status__in=completed_statuses)
+    elif status_filter == "all":
+        pass
+    else:
+        orders = orders.exclude(status__in=completed_statuses)
 
     orders_data = []
 
@@ -4404,7 +4600,7 @@ def production_list(request):
         )
 
     total_orders = orders.count()
-    active_orders = orders.exclude(status="done").count()
+    active_orders = orders.filter(status__in=active_statuses).count()
     delayed_orders = len([row for row in orders_data if row["has_delay"]])
     total_pieces = sum(o.qty_total for o in orders)
     total_reject = sum(o.qty_reject for o in orders)
@@ -4421,6 +4617,7 @@ def production_list(request):
             "total_pieces": total_pieces,
             "total_reject": total_reject,
             "reject_percent": reject_percent,
+            "status_filter": status_filter,
         },
     )
 
@@ -4454,11 +4651,62 @@ def production_edit(request, pk):
     Edit existing production order.
     """
     order = get_object_or_404(ProductionOrder, pk=pk)
+    old_status = order.status
 
     if request.method == "POST":
         form = ProductionOrderForm(request.POST, request.FILES, instance=order)
         if form.is_valid():
-            form.save()
+            obj = form.save()
+
+            if not obj.customer_id and obj.opportunity and obj.opportunity.customer_id:
+                obj.customer = obj.opportunity.customer
+                obj.save(update_fields=["customer"])
+
+            if obj.status != old_status:
+                customer = obj.customer or (obj.opportunity.customer if obj.opportunity else None)
+                _record_customer_event(
+                    customer=customer,
+                    event_type="production_status",
+                    title="Production status updated",
+                    details=f"Production {obj.order_code or obj.pk} is now {obj.get_status_display()}.",
+                    opportunity=obj.opportunity,
+                    production=obj,
+                )
+
+                if obj.status in {"done", "completed"} and obj.opportunity:
+                    obj.opportunity.stage = "Closed Won"
+                    obj.opportunity.save(update_fields=["stage"])
+                    _record_customer_event(
+                        customer=customer,
+                        event_type="production_completed",
+                        title="Production completed",
+                        details=f"Production {obj.order_code or obj.pk} marked completed.",
+                        opportunity=obj.opportunity,
+                        production=obj,
+                    )
+                elif obj.status == "closed_won" and obj.opportunity:
+                    obj.opportunity.stage = "Closed Won"
+                    obj.opportunity.save(update_fields=["stage"])
+                    _record_customer_event(
+                        customer=customer,
+                        event_type="production_closed_won",
+                        title="Production closed won",
+                        details=f"Production {obj.order_code or obj.pk} closed won.",
+                        opportunity=obj.opportunity,
+                        production=obj,
+                    )
+                elif obj.status == "closed_lost" and obj.opportunity:
+                    obj.opportunity.stage = "Closed Lost"
+                    obj.opportunity.save(update_fields=["stage"])
+                    _record_customer_event(
+                        customer=customer,
+                        event_type="production_closed_lost",
+                        title="Production closed lost",
+                        details=f"Production {obj.order_code or obj.pk} closed lost.",
+                        opportunity=obj.opportunity,
+                        production=obj,
+                    )
+
             messages.success(request, "Production order updated.")
             return redirect("production_detail", pk=pk)
     else:
@@ -4546,8 +4794,10 @@ def production_from_opportunity(request, pk):
     Open or create production order from an opportunity.
     """
     opportunity = get_object_or_404(Opportunity, pk=pk)
+    customer = _ensure_customer_for_opportunity(opportunity)
 
     po = ProductionOrder.objects.filter(opportunity=opportunity).first()
+    created = False
 
     if not po:
         title = f"{opportunity.lead.account_brand} order for {opportunity.opportunity_id}"
@@ -4555,13 +4805,31 @@ def production_from_opportunity(request, pk):
 
         po = ProductionOrder.objects.create(
             opportunity=opportunity,
+            lead=opportunity.lead,
+            customer=customer,
             title=title,
             qty_total=qty_guess,
         )
+        created = True
+    elif customer and not po.customer_id:
+        po.customer = customer
+        po.save(update_fields=["customer"])
 
+    stage_changed = False
     if opportunity.stage != "Production":
         opportunity.stage = "Production"
         opportunity.save(update_fields=["stage"])
+        stage_changed = True
+
+    if created or stage_changed:
+        _record_customer_event(
+            customer=customer,
+            event_type="moved_to_production",
+            title="Moved to production",
+            details=f"Opportunity {opportunity.opportunity_id} moved to production.",
+            opportunity=opportunity,
+            production=po,
+        )
 
     return redirect("production_detail", pk=po.pk)
 
@@ -5470,8 +5738,14 @@ def convert_lead_to_opportunity(request, pk):
     lead = get_object_or_404(Lead, pk=pk)
 
     if request.method == "POST":
+        customer = lead.customer if lead.customer_id else _find_or_create_customer_for_lead(lead)
+        if not lead.customer_id and customer:
+            lead.customer = customer
+            lead.save(update_fields=["customer"])
+
         opp = Opportunity.objects.create(
             lead=lead,
+            customer=customer,
             stage="Prospecting",
             product_category="Other",
             product_type="Other",
@@ -5479,6 +5753,15 @@ def convert_lead_to_opportunity(request, pk):
         lead.lead_status = "Converted"
         lead.save(update_fields=["lead_status"])
         messages.success(request, "Lead converted to opportunity.")
+
+        _record_customer_event(
+            customer=customer,
+            event_type="opportunity_created",
+            title="Opportunity created",
+            details=f"Opportunity {opp.opportunity_id} created from lead.",
+            opportunity=opp,
+        )
+
         return redirect("opportunity_detail", pk=opp.pk)
 
     return redirect("lead_detail", pk=pk)
@@ -5493,8 +5776,14 @@ def convert_lead_to_opportunity(request, pk):
     lead = get_object_or_404(Lead, pk=pk)
 
     if request.method == "POST":
+        customer = lead.customer if lead.customer_id else _find_or_create_customer_for_lead(lead)
+        if not lead.customer_id and customer:
+            lead.customer = customer
+            lead.save(update_fields=["customer"])
+
         opp = Opportunity.objects.create(
             lead=lead,
+            customer=customer,
             stage="Prospecting",
             product_category="Other",
             product_type="Other",
@@ -5502,6 +5791,15 @@ def convert_lead_to_opportunity(request, pk):
         lead.lead_status = "Converted"
         lead.save(update_fields=["lead_status"])
         messages.success(request, "Lead converted to opportunity.")
+
+        _record_customer_event(
+            customer=customer,
+            event_type="opportunity_created",
+            title="Opportunity created",
+            details=f"Opportunity {opp.opportunity_id} created from lead.",
+            opportunity=opp,
+        )
+
         return redirect("opportunity_detail", pk=opp.pk)
 
     return redirect("lead_detail", pk=pk)
@@ -5531,12 +5829,24 @@ def add_opportunity(request):
                 email=customer.email,
                 phone=customer.phone,
                 market=customer.market,
-                lead_source="Repeat order",
+                source="Returning Client",
             )
+            lead.customer = customer
+            lead.save(update_fields=["customer"])
 
         if not lead:
             messages.error(request, "Please select a lead or a customer.")
             return redirect("add_opportunity")
+
+        if lead.customer_id:
+            customer = lead.customer
+        elif customer:
+            lead.customer = customer
+            lead.save(update_fields=["customer"])
+        else:
+            customer = _find_or_create_customer_for_lead(lead)
+            lead.customer = customer
+            lead.save(update_fields=["customer"])
 
         stage = request.POST.get("stage") or "Prospecting"
         product_type = request.POST.get("product_type") or "Other"
@@ -5554,6 +5864,15 @@ def add_opportunity(request):
             lead.save(update_fields=["lead_status"])
 
         messages.success(request, "Opportunity created.")
+
+        _record_customer_event(
+            customer=customer,
+            event_type="opportunity_created",
+            title="Opportunity created",
+            details=f"Opportunity {opp.opportunity_id} created.",
+            opportunity=opp,
+        )
+
         return redirect("opportunity_detail", pk=opp.pk)
 
     context = {
@@ -5562,6 +5881,8 @@ def add_opportunity(request):
         "stage_choices": Opportunity.STAGE_CHOICES,
         "type_choices": Opportunity.PRODUCT_TYPE_CHOICES,
         "category_choices": Opportunity.PRODUCT_CATEGORY_CHOICES,
+        "selected_customer_id": request.GET.get("customer") or "",
+        "selected_lead_id": request.GET.get("lead") or "",
     }
     return render(request, "crm/add_opportunity.html", context)
 
@@ -5597,6 +5918,7 @@ def opportunities_list(request):
     if per_page not in (20, 50, 100):
         per_page = 50
 
+    active_stages = _active_opportunity_stages()
     qs = (
         Opportunity.objects
         .select_related("lead")
@@ -5621,14 +5943,15 @@ def opportunities_list(request):
 
     if status:
         if status == "open":
-            qs = qs.filter(is_open=True).exclude(stage__in=["Closed Won", "Closed Lost"])
+            qs = qs.filter(stage__in=active_stages)
         elif status == "closed_won":
             qs = qs.filter(stage="Closed Won")
         elif status == "closed_lost":
-            qs = qs.filter(
-                Q(stage="Closed Lost")
-                | (Q(is_open=False) & ~Q(stage="Closed Won"))
-            )
+            qs = qs.filter(stage="Closed Lost")
+        elif status == "all":
+            pass
+    else:
+        qs = qs.filter(stage__in=active_stages)
 
     created_from = parse_date(created_from_raw) if created_from_raw else None
     created_to = parse_date(created_to_raw) if created_to_raw else None

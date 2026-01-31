@@ -1,26 +1,27 @@
-Lunch{% extends "crm/base.html" %}
+{% extends "crm/base.html" %}
 {% block content %}
 
 <style>
-  .page-customer {
-    max-width: 1100px;
-    margin: 16px auto;
-    padding: 0 8px;
+  .cust-page {
+    max-width: 1200px;
+    margin: 24px auto 40px auto;
+    padding: 0 12px;
     color: #f9fafb;
   }
 
   .cust-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 12px;
+    align-items: flex-end;
+    gap: 12px;
     flex-wrap: wrap;
+    margin-bottom: 14px;
   }
 
   .cust-title {
-    font-size: 18px;
-    font-weight: 600;
+    font-size: 22px;
+    font-weight: 700;
+    color: #fef9c3;
   }
 
   .cust-sub {
@@ -28,26 +29,22 @@ Lunch{% extends "crm/base.html" %}
     color: #9ca3af;
   }
 
-  .cust-actions .btn {
-    margin-left: 4px;
-    margin-bottom: 4px;
+  .cust-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-end;
   }
 
   .btn {
     display: inline-block;
-    padding: 4px 10px;
+    padding: 6px 12px;
     border-radius: 999px;
     border: 1px solid transparent;
     font-size: 12px;
-    cursor: pointer;
     text-decoration: none;
     white-space: nowrap;
-  }
-
-  .btn-slate {
-    background: #020617;
-    color: #e5e7eb;
-    border-color: #374151;
   }
 
   .btn-gold {
@@ -57,12 +54,69 @@ Lunch{% extends "crm/base.html" %}
     font-weight: 600;
   }
 
+  .btn-slate {
+    background: #020617;
+    color: #e5e7eb;
+    border-color: #374151;
+  }
+
+  .cust-filters {
+    background: radial-gradient(circle at top left, #111827, #020617);
+    border: 1px solid #1f2937;
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    display: grid;
+    grid-template-columns: 2fr 1fr auto;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .cust-filters input[type="text"] {
+    width: 100%;
+    background: #020617;
+    color: #f9fafb;
+    border: 1px solid #374151;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .cust-filters select {
+    width: 100%;
+    background: #020617;
+    color: #f9fafb;
+    border: 1px solid #374151;
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .cust-filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 11px;
+    color: #e5e7eb;
+  }
+
+  .cust-filter-row label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+
+  .cust-filter-row input[type="checkbox"] {
+    accent-color: #facc15;
+  }
+
   .table-wrap {
     background: radial-gradient(circle at top left, #111827, #020617);
-    border-radius: 10px;
+    border-radius: 12px;
     border: 1px solid #1f2937;
-    padding: 8px 10px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.7);
+    padding: 10px 12px;
+    box-shadow: 0 0 16px rgba(0, 0, 0, 0.7);
   }
 
   .table {
@@ -80,134 +134,113 @@ Lunch{% extends "crm/base.html" %}
     background: rgba(15, 23, 42, 0.9);
   }
 
-  .pill-small {
-    display: inline-block;
-    padding: 1px 7px;
+  .cust-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
     border-radius: 999px;
     border: 1px solid #4b5563;
     font-size: 11px;
-    color: #e5e7eb;
     background: #020617;
-  }
-
-  .pill-country {
-    border-color: #0ea5e9;
-    color: #7dd3fc;
+    color: #e5e7eb;
   }
 
   .muted {
-    font-size: 11px;
     color: #9ca3af;
   }
 
-  .search-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 6px;
-    align-items: center;
-  }
-
-  .search-row input {
-    flex: 1;
-    min-width: 180px;
-    background: #020617;
-    color: #f9fafb;
-    border: 1px solid #374151;
-    border-radius: 999px;
-    padding: 4px 10px;
-    font-size: 12px;
-  }
-
-  .search-row input:focus {
-    outline: none;
-    border-color: #facc15;
-    box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.35);
+  @media (max-width: 900px) {
+    .cust-filters {
+      grid-template-columns: 1fr;
+    }
   }
 </style>
 
-<div class="page-customer">
-
+<div class="cust-page">
   <div class="cust-header">
     <div>
-      <div class="cust-title">
-        👥 Customers
-      </div>
-      <div class="cust-sub">
-        Simple view of all customer records for sales and production follow up.
-      </div>
+      <div class="cust-title">👥 Customers</div>
+      <div class="cust-sub">All customer records with activity, production, and history in one view.</div>
     </div>
     <div class="cust-actions">
-      <!-- keep this if you already have add customer url in your project -->
-      {# <a href="{% url 'customer_add' %}" class="btn btn-gold btn-sm">Add customer</a> #}
-      <a href="/opportunities/" class="btn btn-slate btn-sm">Back to opportunities</a>
+      <a href="{% url 'opportunities_list' %}" class="btn btn-slate">Back to opportunities</a>
     </div>
   </div>
 
-  <div class="table-wrap">
-
-    <!-- simple local search (front end only) -->
-    <div class="search-row">
-      <input
-        type="text"
-        id="customer-search"
-        placeholder="Quick filter by name, brand, email or city"
-      >
-      <span class="muted">
-        Live filter only on this page
-      </span>
+  <form class="cust-filters" method="get">
+    <input type="text" name="q" placeholder="Search name, company, email, or phone" value="{{ q|default:'' }}">
+    <div class="cust-filter-row">
+      <label>
+        <input type="checkbox" name="has_active" value="1" {% if has_active %}checked{% endif %}>
+        Active opportunities
+      </label>
+      <label>
+        <input type="checkbox" name="has_production" value="1" {% if has_production %}checked{% endif %}>
+        In production
+      </label>
+      <label>
+        <input type="checkbox" name="has_completed" value="1" {% if has_completed %}checked{% endif %}>
+        Completed orders
+      </label>
     </div>
+    <div style="display:flex; gap:6px; align-items:center; justify-content:flex-end; flex-wrap:wrap;">
+      <select name="sort">
+        <option value="recent" {% if sort == 'recent' %}selected{% endif %}>Recently updated</option>
+        <option value="name" {% if sort == 'name' %}selected{% endif %}>Name A to Z</option>
+      </select>
+      <button type="submit" class="btn btn-gold">Apply</button>
+      <a href="{% url 'customers_list' %}" class="btn btn-slate">Reset</a>
+    </div>
+  </form>
 
+  <div class="table-wrap">
     {% if customers %}
       <div class="table-responsive">
-        <table class="table table-dark table-striped table-sm align-middle" id="customer-table">
+        <table class="table table-dark table-striped table-sm align-middle">
           <thead>
             <tr>
               <th>Customer</th>
-              <th>Brand</th>
               <th>Email</th>
               <th>Phone</th>
-              <th>Market</th>
-              <th>City</th>
-              <th>Country</th>
-              <th>Created</th>
-              <th style="text-align:right;">View</th>
+              <th>Active opps</th>
+              <th>In production</th>
+              <th>Completed</th>
+              <th>Last activity</th>
+              <th style="text-align:right;">Open</th>
             </tr>
           </thead>
           <tbody>
             {% for c in customers %}
               <tr>
                 <td>
-                  <strong>{{ c.name|default:c.contact_name|default:"No name" }}</strong>
+                  <div style="font-weight:600;">
+                    <a href="{% url 'customer_detail' c.pk %}">{{ c.contact_name|default:"No name" }}</a>
+                  </div>
+                  <div class="muted">
+                    {{ c.account_brand|default:"" }}
+                  </div>
                 </td>
-                <td>{{ c.account_brand|default:"" }}</td>
                 <td>{{ c.email|default:"" }}</td>
                 <td>{{ c.phone|default:"" }}</td>
                 <td>
-                  {% if c.market %}
-                    <span class="pill-small">
-                      {{ c.get_market_display|default:c.market }}
-                    </span>
-                  {% endif %}
+                  <span class="cust-pill">{{ c.active_opps|default:0 }}</span>
                 </td>
-                <td>{{ c.city|default:c.shipping_city|default:"" }}</td>
                 <td>
-                  {% if c.country or c.shipping_country %}
-                    <span class="pill-small pill-country">
-                      {{ c.country|default:c.shipping_country }}
-                    </span>
-                  {% endif %}
+                  <span class="cust-pill">{{ c.production_active|default:0 }}</span>
+                </td>
+                <td>
+                  <span class="cust-pill">{{ c.production_completed|default:0 }}</span>
                 </td>
                 <td class="muted">
-                  {{ c.created_date|date:"Y-m-d" }}
+                  {% if c.last_activity %}
+                    {{ c.last_activity|date:"Y-m-d" }}
+                  {% else %}
+                    —
+                  {% endif %}
                 </td>
                 <td style="text-align:right;">
-                  <a
-                    href="{% url 'customer_detail' c.pk %}"
-                    class="btn btn-slate btn-small"
-                  >
-                    Open
-                  </a>
+                  <a href="{% url 'customer_detail' c.pk %}" class="btn btn-slate">View</a>
                 </td>
               </tr>
             {% endfor %}
@@ -215,31 +248,9 @@ Lunch{% extends "crm/base.html" %}
         </table>
       </div>
     {% else %}
-      <p class="muted mb-0">
-        No customers found.
-      </p>
+      <div class="muted">No customers found.</div>
     {% endif %}
   </div>
 </div>
 
-<script>
-  (function () {
-    const input = document.getElementById("customer-search");
-    const table = document.getElementById("customer-table");
-    if (!input || !table) {
-      return;
-    }
-
-    input.addEventListener("input", function () {
-      const value = input.value.toLowerCase();
-      const rows = table.querySelectorAll("tbody tr");
-
-      rows.forEach(function (row) {
-        const text = row.textContent.toLowerCase();
-        row.style.display = text.indexOf(value) !== -1 ? "" : "none";
-      });
-    });
-  })();
-</script>
-
-{% endblock %} the truck wait
+{% endblock %}
