@@ -72,6 +72,7 @@ class LeadForm(forms.ModelForm):
             "lead_type",
             "lead_status",
             "priority",
+            "product_category",
             "product_interest",
             "order_quantity",
             "budget",
@@ -84,6 +85,30 @@ class LeadForm(forms.ModelForm):
             "attachment",
             "notes",
         ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        category_choices = [("", "Select a category")] + list(Lead.PRODUCT_CATEGORY_CHOICES)
+        interest_choices = [("", "Select an interest")] + list(Lead.PRODUCT_INTEREST_CHOICES)
+
+        if "product_category" in self.fields:
+            self.fields["product_category"].choices = category_choices
+            self.fields["product_category"].required = True
+            self.fields["product_category"].widget = forms.Select()
+
+            current_value = getattr(self.instance, "product_category", "") or ""
+            if current_value and current_value not in dict(Lead.PRODUCT_CATEGORY_CHOICES):
+                self.fields["product_category"].choices.append((current_value, current_value))
+
+        if "product_interest" in self.fields:
+            self.fields["product_interest"].choices = interest_choices
+            self.fields["product_interest"].required = True
+            self.fields["product_interest"].widget = forms.Select()
+
+            current_value = getattr(self.instance, "product_interest", "") or ""
+            if current_value and current_value not in dict(Lead.PRODUCT_INTEREST_CHOICES):
+                self.fields["product_interest"].choices.append((current_value, current_value))
 
 
 # --------------------------------------------------

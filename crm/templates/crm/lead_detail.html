@@ -360,7 +360,8 @@
 
       <div class="section-half">
         <table>
-          <tr><td class="row-label">Product interest</td><td>{{ lead.product_interest }}</td></tr>
+          <tr><td class="row-label">Product category</td><td>{{ lead.get_product_category_display|default:lead.product_category }}</td></tr>
+          <tr><td class="row-label">Product interest</td><td>{{ lead.get_product_interest_display|default:lead.product_interest }}</td></tr>
           <tr><td class="row-label">Order quantity</td><td>{{ lead.order_quantity }}</td></tr>
 
           <!-- CHANGE 1: Budget shows CAD and BDT -->

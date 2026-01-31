@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,18 +7,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <style>
+    :root{
+      --bg:#020617;
+      --panel:#0b1220;
+      --panel2:#0f172a;
+      --line:#334155;
+      --text:#f9fafb;
+      --muted:#9ca3af;
+      --gold:#facc15;
+    }
+
     body {
-      background: #020617;
-      color: #f9fafb;
+      background: var(--bg);
+      color: var(--text);
       font-family: Arial, sans-serif;
       margin: 0;
       padding: 0;
     }
-    a { color: #facc15; text-decoration: none; }
+    a { color: var(--gold); text-decoration: none; }
     a:hover { text-decoration: underline; }
 
     .wrapper {
-      max-width: 1100px;
+      max-width: 1200px;
       margin: 18px auto 40px auto;
       padding: 18px;
     }
@@ -46,7 +57,7 @@
     .sub {
       margin-top: 6px;
       font-size: 12px;
-      color: #9ca3af;
+      color: var(--muted);
     }
 
     .links a { margin-left: 10px; font-size: 13px; }
@@ -78,11 +89,20 @@
       border-bottom: 1px solid #111827;
     }
 
+    .form-row { margin-top: 10px; }
+
     label {
       display: block;
       margin-top: 10px;
       font-size: 12px;
       color: #e5e7eb;
+      font-weight: 700;
+    }
+
+    .req {
+      margin-left: 4px;
+      color: #facc15;
+      font-weight: 800;
     }
 
     input, select, textarea {
@@ -107,7 +127,7 @@
 
     .help {
       font-size: 11px;
-      color: #9ca3af;
+      color: var(--muted);
       margin-top: 4px;
     }
 
@@ -131,6 +151,18 @@
     }
     .btn:hover { filter: brightness(1.05); }
     .btn:disabled { opacity: 0.7; cursor: not-allowed; }
+
+    .btn-ghost{
+      padding: 9px 16px;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.35);
+      background: rgba(255,255,255,0.04);
+      color: #e5e7eb;
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .btn-ghost:hover{ text-decoration: none; filter: brightness(1.05); }
 
     .errorlist {
       margin: 6px 0 0 0;
@@ -186,12 +218,14 @@
 </head>
 
 <body>
+  {% include "crm/navbar.html" %}
+
   <div class="wrapper">
 
     <div class="top-bar">
       <div>
         <div class="title">{% if lead %}Edit lead{% else %}Add lead{% endif %}</div>
-        <div class="sub">Main details, contacts, and follow up.</div>
+        <div class="sub">Main details, contacts, product needs, and follow up.</div>
       </div>
       <div class="links">
         <a href="{% url 'leads_list' %}">All leads</a>
@@ -219,109 +253,112 @@
       <div class="grid">
 
         <div class="card">
-          <div class="card-title">Basic information</div>
+          <div class="card-title">Lead info</div>
 
-          <label for="{{ form.account_brand.id_for_label }}">{{ form.account_brand.label }}</label>
+          <label for="{{ form.account_brand.id_for_label }}">{{ form.account_brand.label }}{% if form.account_brand.field.required %}<span class="req">*</span>{% endif %}</label>
           {{ form.account_brand }}
           {{ form.account_brand.errors }}
 
-          <label for="{{ form.company_website.id_for_label }}">{{ form.company_website.label }}</label>
-          {{ form.company_website }}
-          {{ form.company_website.errors }}
-
-          <label for="{{ form.market.id_for_label }}">{{ form.market.label }}</label>
-          {{ form.market }}
-          {{ form.market.errors }}
-
-          <label for="{{ form.country.id_for_label }}">{{ form.country.label }}</label>
-          {{ form.country }}
-          {{ form.country.errors }}
-
-          <label for="{{ form.city.id_for_label }}">{{ form.city.label }}</label>
-          {{ form.city }}
-          {{ form.city.errors }}
-
-          <label for="{{ form.source.id_for_label }}">{{ form.source.label }}</label>
-          {{ form.source }}
-          {{ form.source.errors }}
-
-          <label for="{{ form.lead_type.id_for_label }}">{{ form.lead_type.label }}</label>
-          {{ form.lead_type }}
-          {{ form.lead_type.errors }}
-
-          <label for="{{ form.lead_status.id_for_label }}">{{ form.lead_status.label }}</label>
-          {{ form.lead_status }}
-          {{ form.lead_status.errors }}
-
-          <label for="{{ form.priority.id_for_label }}">{{ form.priority.label }}</label>
-          {{ form.priority }}
-          {{ form.priority.errors }}
-        </div>
-
-        <div class="card">
-          <div class="card-title">Order info</div>
-
-          <label for="{{ form.product_interest.id_for_label }}">{{ form.product_interest.label }}</label>
-          {{ form.product_interest }}
-          {{ form.product_interest.errors }}
-
-          <label for="{{ form.order_quantity.id_for_label }}">{{ form.order_quantity.label }}</label>
-          {{ form.order_quantity }}
-          {{ form.order_quantity.errors }}
-
-          <label for="{{ form.budget.id_for_label }}">{{ form.budget.label }}</label>
-          {{ form.budget }}
-          {{ form.budget.errors }}
-
-          <label for="{{ form.preferred_contact_time.id_for_label }}">{{ form.preferred_contact_time.label }}</label>
-          {{ form.preferred_contact_time }}
-          {{ form.preferred_contact_time.errors }}
-
-          <label for="{{ form.owner.id_for_label }}">{{ form.owner.label }}</label>
-          {{ form.owner }}
-          {{ form.owner.errors }}
-
-          <label for="{{ form.next_followup.id_for_label }}">{{ form.next_followup.label }}</label>
-          {{ form.next_followup }}
-          {{ form.next_followup.errors }}
-        </div>
-
-        <div class="card">
-          <div class="card-title">Contact info</div>
-
-          <label for="{{ form.contact_name.id_for_label }}">{{ form.contact_name.label }}</label>
+          <label for="{{ form.contact_name.id_for_label }}">{{ form.contact_name.label }}{% if form.contact_name.field.required %}<span class="req">*</span>{% endif %}</label>
           {{ form.contact_name }}
           {{ form.contact_name.errors }}
 
-          <label for="{{ form.email.id_for_label }}">{{ form.email.label }}</label>
+          <label for="{{ form.email.id_for_label }}">{{ form.email.label }}{% if form.email.field.required %}<span class="req">*</span>{% endif %}</label>
           {{ form.email }}
           {{ form.email.errors }}
 
-          <label for="{{ form.phone.id_for_label }}">{{ form.phone.label }}</label>
+          <label for="{{ form.phone.id_for_label }}">{{ form.phone.label }}{% if form.phone.field.required %}<span class="req">*</span>{% endif %}</label>
           {{ form.phone }}
           {{ form.phone.errors }}
 
-          <div class="help">If there is a second contact, add it in Notes for now.</div>
+          <label for="{{ form.company_website.id_for_label }}">{{ form.company_website.label }}{% if form.company_website.field.required %}<span class="req">*</span>{% endif %}</label>
+          {{ form.company_website }}
+          {{ form.company_website.errors }}
+
+          <label for="{{ form.market.id_for_label }}">{{ form.market.label }}{% if form.market.field.required %}<span class="req">*</span>{% endif %}</label>
+          {{ form.market }}
+          {{ form.market.errors }}
+
+          <label for="{{ form.country.id_for_label }}">{{ form.country.label }}{% if form.country.field.required %}<span class="req">*</span>{% endif %}</label>
+          {{ form.country }}
+          {{ form.country.errors }}
+
+          <label for="{{ form.city.id_for_label }}">{{ form.city.label }}{% if form.city.field.required %}<span class="req">*</span>{% endif %}</label>
+          {{ form.city }}
+          {{ form.city.errors }}
         </div>
 
-      </div>
+        <div class="card">
+          <div class="card-title">Product</div>
 
-      <div class="card" style="margin-top:14px;">
-        <div class="card-title">Attachment and notes</div>
+          <label for="{{ form.product_category.id_for_label }}">{{ form.product_category.label }}{% if form.product_category.field.required %}<span class="req">*</span>{% endif %}</label>
+          {{ form.product_category }}
+          {{ form.product_category.errors }}
 
-        <label for="{{ form.attachment.id_for_label }}">{{ form.attachment.label }}</label>
-        {{ form.attachment }}
-        {{ form.attachment.errors }}
+          <label for="{{ form.product_interest.id_for_label }}">{{ form.product_interest.label }}{% if form.product_interest.field.required %}<span class="req">*</span>{% endif %}</label>
+          {{ form.product_interest }}
+          {{ form.product_interest.errors }}
 
-        <label for="{{ form.notes.id_for_label }}" style="margin-top:12px;">{{ form.notes.label }}</label>
-        {{ form.notes }}
-        {{ form.notes.errors }}
+          <label for="{{ form.order_quantity.id_for_label }}">{{ form.order_quantity.label }}{% if form.order_quantity.field.required %}<span class="req">*</span>{% endif %}</label>
+          {{ form.order_quantity }}
+          {{ form.order_quantity.errors }}
+
+          <label for="{{ form.budget.id_for_label }}">{{ form.budget.label }}{% if form.budget.field.required %}<span class="req">*</span>{% endif %}</label>
+          {{ form.budget }}
+          {{ form.budget.errors }}
+
+          <label for="{{ form.preferred_contact_time.id_for_label }}">{{ form.preferred_contact_time.label }}{% if form.preferred_contact_time.field.required %}<span class="req">*</span>{% endif %}</label>
+          {{ form.preferred_contact_time }}
+          {{ form.preferred_contact_time.errors }}
+
+          <label for="{{ form.notes.id_for_label }}">{{ form.notes.label }}{% if form.notes.field.required %}<span class="req">*</span>{% endif %}</label>
+          {{ form.notes }}
+          {{ form.notes.errors }}
+        </div>
+
+        <div class="card">
+          <div class="card-title">Source and status</div>
+
+          <label for="{{ form.source.id_for_label }}">{{ form.source.label }}{% if form.source.field.required %}<span class="req">*</span>{% endif %}</label>
+          {{ form.source }}
+          {{ form.source.errors }}
+
+          <label for="{{ form.lead_type.id_for_label }}">{{ form.lead_type.label }}{% if form.lead_type.field.required %}<span class="req">*</span>{% endif %}</label>
+          {{ form.lead_type }}
+          {{ form.lead_type.errors }}
+
+          <label for="{{ form.lead_status.id_for_label }}">{{ form.lead_status.label }}{% if form.lead_status.field.required %}<span class="req">*</span>{% endif %}</label>
+          {{ form.lead_status }}
+          {{ form.lead_status.errors }}
+
+          <label for="{{ form.priority.id_for_label }}">{{ form.priority.label }}{% if form.priority.field.required %}<span class="req">*</span>{% endif %}</label>
+          {{ form.priority }}
+          {{ form.priority.errors }}
+
+          <label for="{{ form.owner.id_for_label }}">{{ form.owner.label }}{% if form.owner.field.required %}<span class="req">*</span>{% endif %}</label>
+          {{ form.owner }}
+          {{ form.owner.errors }}
+
+          <label for="{{ form.next_followup.id_for_label }}">{{ form.next_followup.label }}{% if form.next_followup.field.required %}<span class="req">*</span>{% endif %}</label>
+          {{ form.next_followup }}
+          {{ form.next_followup.errors }}
+
+          <label for="{{ form.attachment.id_for_label }}">{{ form.attachment.label }}{% if form.attachment.field.required %}<span class="req">*</span>{% endif %}</label>
+          {{ form.attachment }}
+          {{ form.attachment.errors }}
+        </div>
+
       </div>
 
       <div class="actions">
         <button class="btn" type="submit" id="save-btn">
           {% if lead %}Update lead{% else %}Save lead{% endif %}
         </button>
+        {% if lead %}
+          <a class="btn-ghost" href="{% url 'lead_detail' lead.pk %}">Cancel</a>
+        {% else %}
+          <a class="btn-ghost" href="{% url 'leads_list' %}">Cancel</a>
+        {% endif %}
 
         <span class="saving-indicator" id="saving-indicator">Saving</span>
         <span class="save-indicator" id="saved-indicator">Saved</span>
@@ -350,7 +387,6 @@
         saveBtn.textContent = "Saving";
       });
 
-      // show Saved only when url has ?saved=1 AND the page has no errors
       const params = new URLSearchParams(window.location.search || "");
       if (params.get("saved") === "1" && !hasErrors()) {
         if (saving) saving.style.display = "none";
@@ -359,7 +395,6 @@
         if (saving) saving.style.display = "none";
       }
 
-      // if form reloads with errors, enable button again
       if (hasErrors()) {
         saveBtn.disabled = false;
         saveBtn.textContent = "{% if lead %}Update lead{% else %}Save lead{% endif %}";

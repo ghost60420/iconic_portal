@@ -258,6 +258,31 @@ PRIORITY_CHOICES = [
     ("Hot", "Hot"),
 ]
 
+PRODUCT_CATEGORY_CHOICES = [
+    ("Swimwear", "Swimwear"),
+    ("Athleticwear", "Athleticwear"),
+    ("Activewear", "Activewear"),
+    ("Streetwear", "Streetwear"),
+    ("Undergarments", "Undergarments"),
+    ("T Shirts", "T Shirts"),
+    ("Hoodies", "Hoodies"),
+    ("Padded Jackets", "Padded Jackets"),
+    ("Kids Wear", "Kids Wear"),
+    ("Other", "Other"),
+]
+
+PRODUCT_INTEREST_CHOICES = [
+    ("Sampling", "Sampling"),
+    ("Bulk Order", "Bulk Order"),
+    ("Pricing Quote", "Pricing Quote"),
+    ("Fabric Sourcing", "Fabric Sourcing"),
+    ("Print and Embroidery", "Print and Embroidery"),
+    ("Branding and Labels", "Branding and Labels"),
+    ("Shipping and DDP", "Shipping and DDP"),
+    ("Not Sure Yet", "Not Sure Yet"),
+    ("Other", "Other"),
+]
+
 
 # ----------------------------
 # Lead model
@@ -270,6 +295,8 @@ class Lead(models.Model):
         ("USA", "USA"),
         ("OTHER", "Other"),
     ]
+    PRODUCT_CATEGORY_CHOICES = PRODUCT_CATEGORY_CHOICES
+    PRODUCT_INTEREST_CHOICES = PRODUCT_INTEREST_CHOICES
 
     market = models.CharField(max_length=10, choices=MARKET_CHOICES, default="CA")
 
@@ -288,7 +315,16 @@ class Lead(models.Model):
     company_website = models.CharField(max_length=255, blank=True)
     country = models.CharField(max_length=100, blank=True)
     city = models.CharField(max_length=100, blank=True)
-    product_interest = models.CharField(max_length=200, blank=True)
+    product_category = models.CharField(
+        max_length=100,
+        choices=PRODUCT_CATEGORY_CHOICES,
+        blank=True,
+    )
+    product_interest = models.CharField(
+        max_length=200,
+        choices=PRODUCT_INTEREST_CHOICES,
+        blank=True,
+    )
     order_quantity = models.CharField(max_length=100, blank=True)
     budget = models.CharField(max_length=100, blank=True)
     preferred_contact_time = models.CharField(max_length=100, blank=True)
