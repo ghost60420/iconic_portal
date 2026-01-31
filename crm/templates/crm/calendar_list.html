@@ -226,6 +226,46 @@
     padding: 6px;
   }
 
+  .time-grid {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+
+  .time-grid th,
+  .time-grid td {
+    border: 1px solid rgba(148, 163, 184, 0.12);
+    padding: 6px;
+    vertical-align: top;
+  }
+
+  .time-grid th {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    background: rgba(2, 6, 23, 0.6);
+  }
+
+  .time-label {
+    width: 70px;
+    font-size: 11px;
+    font-weight: 900;
+    color: var(--muted);
+    text-align: right;
+    padding-right: 8px;
+  }
+
+  .time-slot {
+    min-height: 68px;
+    background: rgba(2, 6, 23, 0.65);
+    border-radius: 10px;
+  }
+
+  .time-slot-inner {
+    min-height: 56px;
+  }
+
   .calendar-day-cell {
     background: rgba(2, 6, 23, 0.7);
     border-radius: 10px;
@@ -302,6 +342,12 @@
   }
 
   .calendar-day-cell.drop-target {
+    outline: 2px dashed rgba(96, 165, 250, 0.6);
+    outline-offset: 2px;
+    background: rgba(30, 64, 175, 0.12);
+  }
+
+  .time-slot.drop-target {
     outline: 2px dashed rgba(96, 165, 250, 0.6);
     outline-offset: 2px;
     background: rgba(30, 64, 175, 0.12);
@@ -494,36 +540,93 @@
   <div class="calendar-body">
     <div class="calendar-panel">
       {% if current_view == "day" %}
-        <div class="panel-title">Events on {{ selected_day|date:"D, M d Y" }}</div>
-        <div class="panel-sub">Plan, review and finish follow-ups for the day.</div>
+        <div class="panel-title">Day schedule — {{ selected_day|date:"D, M d Y" }}</div>
+        <div class="panel-sub">Drag events into a specific time slot.</div>
 
-        {% if selected_day_events %}
-          {% for e in selected_day_events %}
+        <table class="time-grid">
+          <tbody>
+            {% for row in day_hour_rows %}
+              <tr>
+                <td class="time-label">{{ row.hour|stringformat:"02d" }}:00</td>
+                <td>
+                  <div class="time-slot" data-date="{{ selected_day|date:'Y-m-d' }}" data-hour="{{ row.hour }}">
+                    <div class="time-slot-inner">
+                      {% for e in row.events %}
+                        <div class="calendar-event-row {% if e.is_overdue %}is-overdue{% endif %} {% if e.status == 'done' %}is-done{% endif %}" draggable="true" data-event-id="{{ e.pk }}">
+                          <a href="{% url 'calendar_event_detail' e.pk %}" class="calendar-event-link">
+                            <div class="event-pills">
+                              <span class="event-pill type-{{ e.event_type }}">{{ e.get_event_type_display }}</span>
+                              <span class="event-pill status-{{ e.status }}">{{ e.get_status_display }}</span>
+                            </div>
+                            <div class="event-title">{{ e.title }}</div>
+                            <div class="event-time">{{ e.start_datetime|time:"h:i A" }}</div>
+                          </a>
+                        </div>
+                      {% endfor %}
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        {% if day_overflow_events %}
+          <div class="panel-sub" style="margin-top:10px;">Outside time grid</div>
+          {% for e in day_overflow_events %}
             <div class="day-view-card">
               <a href="{% url 'calendar_event_detail' e.pk %}" class="calendar-event-link">
                 <div class="event-pills">
                   <span class="event-pill type-{{ e.event_type }}">{{ e.get_event_type_display }}</span>
-                  <span class="event-pill priority-{{ e.priority }}">{{ e.get_priority_display }}</span>
                   <span class="event-pill status-{{ e.status }}">{{ e.get_status_display }}</span>
                 </div>
-                <div class="day-view-title">
-                  {{ e.title }}
-                  {% if e.is_overdue %}
-                    <span style="color: var(--danger); font-size: 11px;"> late</span>
-                  {% endif %}
-                </div>
-                <div class="day-view-meta">
-                  {{ e.start_datetime|time:"h:i A" }}{% if e.end_datetime %} - {{ e.end_datetime|time:"h:i A" }}{% endif %}
-                </div>
-                {% if e.ai_note %}
-                  <div class="day-view-meta" style="margin-top:4px;">{{ e.ai_note|truncatechars:110 }}</div>
-                {% endif %}
+                <div class="day-view-title">{{ e.title }}</div>
+                <div class="day-view-meta">{{ e.start_datetime|time:"h:i A" }}</div>
               </a>
             </div>
           {% endfor %}
-        {% else %}
-          <div class="panel-sub">No events on this day yet.</div>
         {% endif %}
+      {% elif current_view == "week" %}
+        <div class="panel-title">Week schedule</div>
+        <div class="panel-sub">Drag events to any day/time cell.</div>
+
+        <table class="time-grid">
+          <thead>
+            <tr>
+              <th style="width:70px;">Time</th>
+              {% for d in week_dates %}
+                <th>{{ d|date:"D M d" }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in week_hour_rows %}
+              <tr>
+                <td class="time-label">{{ row.hour|stringformat:"02d" }}:00</td>
+                {% for cell in row.cells %}
+                  <td>
+                    <div class="time-slot" data-date="{{ cell.date|date:'Y-m-d' }}" data-hour="{{ row.hour }}">
+                      <div class="time-slot-inner">
+                        {% for e in cell.events %}
+                          <div class="calendar-event-row {% if e.is_overdue %}is-overdue{% endif %} {% if e.status == 'done' %}is-done{% endif %}" draggable="true" data-event-id="{{ e.pk }}">
+                            <a href="{% url 'calendar_event_detail' e.pk %}" class="calendar-event-link">
+                              <div class="event-pills">
+                                <span class="event-pill type-{{ e.event_type }}">{{ e.get_event_type_display }}</span>
+                                <span class="event-pill status-{{ e.status }}">{{ e.get_status_display }}</span>
+                              </div>
+                              <div class="event-title">{{ e.title }}</div>
+                              <div class="event-time">{{ e.start_datetime|time:"h:i A" }}</div>
+                            </a>
+                          </div>
+                        {% endfor %}
+                      </div>
+                    </div>
+                  </td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       {% else %}
         <table class="calendar-grid">
           <thead>
@@ -746,41 +849,53 @@
       });
     });
 
-    document.querySelectorAll(".calendar-day-cell").forEach(function (cell) {
-      cell.addEventListener("dragover", function (e) {
-        e.preventDefault();
-        this.classList.add("drop-target");
-      });
+    function wireDropTargets(selector) {
+      document.querySelectorAll(selector).forEach(function (cell) {
+        cell.addEventListener("dragover", function (e) {
+          e.preventDefault();
+          this.classList.add("drop-target");
+        });
 
-      cell.addEventListener("dragleave", function () {
-        this.classList.remove("drop-target");
-      });
+        cell.addEventListener("dragleave", function () {
+          this.classList.remove("drop-target");
+        });
 
-      cell.addEventListener("drop", function (e) {
-        e.preventDefault();
-        this.classList.remove("drop-target");
-        var targetDate = this.dataset.date;
-        if (!draggedId || !targetDate) {
-          return;
-        }
-
-        fetch("{% url 'calendar_drag_update' %}", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-CSRFToken": getCookie("csrftoken"),
-          },
-          body: JSON.stringify({
-            event_id: draggedId,
-            new_date: targetDate,
-          }),
-        }).then(function (res) {
-          if (res.ok) {
-            window.location.reload();
+        cell.addEventListener("drop", function (e) {
+          e.preventDefault();
+          this.classList.remove("drop-target");
+          var targetDate = this.dataset.date;
+          var targetHour = this.dataset.hour;
+          if (!draggedId || !targetDate) {
+            return;
           }
+
+          var payload = {
+            event_id: draggedId,
+            new_date: targetDate
+          };
+
+          if (targetHour !== undefined && targetHour !== null && targetHour !== "") {
+            payload.new_time = String(targetHour).padStart(2, "0") + ":00";
+          }
+
+          fetch("{% url 'calendar_drag_update' %}", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRFToken": getCookie("csrftoken"),
+            },
+            body: JSON.stringify(payload),
+          }).then(function (res) {
+            if (res.ok) {
+              window.location.reload();
+            }
+          });
         });
       });
-    });
+    }
+
+    wireDropTargets(".calendar-day-cell");
+    wireDropTargets(".time-slot");
 
     var jumpInput = document.getElementById("jump-date");
     if (jumpInput) {

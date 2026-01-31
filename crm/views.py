@@ -3841,12 +3841,29 @@ def calendar_list(request):
             week.append(last_day)
         weeks.append(week)
 
+    display_week_dates = None
+    for w in weeks:
+        if selected_day in w:
+            display_week_dates = w
+            break
+    if display_week_dates is None and weeks:
+        display_week_dates = weeks[0]
+
     start_month = weeks[0][0]
     end_month = weeks[-1][-1] + timedelta(days=1)
 
+    range_start = start_month
+    range_end = end_month
+    if current_view == "day":
+        range_start = selected_day
+        range_end = selected_day + timedelta(days=1)
+    elif current_view == "week" and display_week_dates:
+        range_start = display_week_dates[0]
+        range_end = display_week_dates[-1] + timedelta(days=1)
+
     events_qs = Event.objects.filter(
-        start_datetime__date__gte=start_month,
-        start_datetime__date__lt=end_month,
+        start_datetime__date__gte=range_start,
+        start_datetime__date__lt=range_end,
     ).order_by("start_datetime")
 
     status_filter = request.GET.get("status", "all")
@@ -3896,6 +3913,52 @@ def calendar_list(request):
                 break
 
     selected_day_events = events_by_day.get(selected_day, [])
+    selected_day_events = sorted(
+        selected_day_events,
+        key=lambda e: timezone.localtime(e.start_datetime),
+    )
+
+    # time grid helpers for day/week views
+    start_hour = 6
+    end_hour = 22
+    hour_slots = list(range(start_hour, end_hour + 1))
+
+    day_hour_events = {h: [] for h in hour_slots}
+    day_overflow_events = []
+    for ev in selected_day_events:
+        local_dt = timezone.localtime(ev.start_datetime)
+        if local_dt.hour in day_hour_events:
+            day_hour_events[local_dt.hour].append(ev)
+        else:
+            day_overflow_events.append(ev)
+
+    day_hour_rows = [
+        {"hour": h, "events": day_hour_events.get(h, [])} for h in hour_slots
+    ]
+
+    week_dates = display_week_dates or []
+
+    week_hour_rows = []
+    if current_view == "week" and week_dates:
+        week_hour_map = {
+            d: {h: [] for h in hour_slots}
+            for d in week_dates
+        }
+        for d in week_dates:
+            for ev in events_by_day.get(d, []):
+                local_dt = timezone.localtime(ev.start_datetime)
+                if local_dt.hour in hour_slots:
+                    week_hour_map[d][local_dt.hour].append(ev)
+        for h in hour_slots:
+            cells = []
+            for d in week_dates:
+                cells.append(
+                    {
+                        "date": d,
+                        "events": week_hour_map[d].get(h, []),
+                    }
+                )
+            week_hour_rows.append({"hour": h, "cells": cells})
 
     now = timezone.now()
     today_events_count = Event.objects.filter(start_datetime__date=today).count()
@@ -3941,6 +4004,11 @@ def calendar_list(request):
         "today_events_count": today_events_count,
         "week_events_count": week_events_count,
         "overdue_events_count": overdue_events_count,
+        "hour_slots": hour_slots,
+        "day_hour_rows": day_hour_rows,
+        "day_overflow_events": day_overflow_events,
+        "week_dates": week_dates,
+        "week_hour_rows": week_hour_rows,
     }
 
     return render(request, "crm/calendar_list.html", context)
@@ -3969,6 +4037,7 @@ def calendar_drag_update(request):
 
     event_id = data.get("event_id")
     new_date_str = data.get("new_date")
+    new_time_str = data.get("new_time")
 
     if not event_id or not new_date_str:
         return JsonResponse({"ok": False, "error": "Missing data"}, status=400)
@@ -3984,7 +4053,14 @@ def calendar_drag_update(request):
     if not old_start:
         return JsonResponse({"ok": False, "error": "Event has no start time"}, status=400)
 
-    naive_new_start = datetime.combine(new_date, old_start.time())
+    new_time = old_start.time()
+    if new_time_str:
+        try:
+            new_time = datetime.strptime(new_time_str, "%H:%M").time()
+        except ValueError:
+            return JsonResponse({"ok": False, "error": "Bad time"}, status=400)
+
+    naive_new_start = datetime.combine(new_date, new_time)
 
     if timezone.is_naive(naive_new_start):
         new_start = timezone.make_aware(naive_new_start, timezone.get_current_timezone())
