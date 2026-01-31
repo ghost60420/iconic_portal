@@ -396,6 +396,37 @@
         margin-right: auto;
     }
 
+    .profit-card{
+        background: linear-gradient(180deg, rgba(34,197,94,0.12), rgba(2,6,23,0.9));
+        border: 1px solid rgba(34,197,94,0.35);
+    }
+
+    .profit-title{
+        font-size:13px;
+        font-weight:700;
+        color:#bbf7d0;
+        margin-bottom:6px;
+    }
+
+    .profit-value{
+        font-size:20px;
+        font-weight:800;
+        color:#f0fdf4;
+    }
+
+    .profit-negative{
+        color:#fecaca;
+    }
+
+    .profit-row{
+        display:flex;
+        justify-content:space-between;
+        gap:8px;
+        font-size:12px;
+        color:#e5e7eb;
+        margin-top:4px;
+    }
+
     @media (max-width: 992px) {
         .grid-3 {
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -477,6 +508,39 @@
             <div class="summary-line">Tasks: {{ opp_tasks|length }}</div>
             <div class="summary-sub">Shipments: {{ shipments|length }}</div>
             <div class="summary-sub">Files: {{ opp_files|length }}</div>
+        </div>
+    </div>
+
+    <div class="card profit-card" style="margin-bottom:12px;">
+        <div class="profit-title">Profit snapshot</div>
+        <div class="profit-value {% if profit_after_shipping and profit_after_shipping < 0 %}profit-negative{% endif %}">
+            {% if profit_after_shipping or profit_after_shipping == 0 %}
+                {{ profit_after_shipping|floatformat:2 }} BDT
+            {% else %}
+                — 
+            {% endif %}
+        </div>
+        <div class="profit-row">
+            <span>Order value</span>
+            <span>{% if opportunity.order_value %}{{ opportunity.order_value }}{% else %}—{% endif %}</span>
+        </div>
+        <div class="profit-row">
+            <span>Total cost</span>
+            <span>{% if total_cost_bdt or total_cost_bdt == 0 %}{{ total_cost_bdt }}{% else %}—{% endif %}</span>
+        </div>
+        <div class="profit-row">
+            <span>Margin %</span>
+            <span>
+                {% if profit_after_shipping_percent or profit_after_shipping_percent == 0 %}
+                    {{ profit_after_shipping_percent|floatformat:1 }}%
+                {% else %}
+                    —
+                {% endif %}
+            </span>
+        </div>
+        <div class="profit-row">
+            <span>Shipping cost</span>
+            <span>{% if shipping_cost_bdt %}{{ shipping_cost_bdt }} BDT{% else %}—{% endif %}</span>
         </div>
     </div>
 
@@ -694,8 +758,8 @@
                 <tr>
                     <td class="label">Shipping cost BDT</td>
                     <td class="value-main">
-                        {% if shipping_cost_bdt_total %}
-                            {{ shipping_cost_bdt_total }}
+                        {% if shipping_cost_bdt %}
+                            {{ shipping_cost_bdt }}
                         {% else %}
                             <span class="muted">No shipping cost yet</span>
                         {% endif %}
@@ -704,8 +768,8 @@
                 <tr>
                     <td class="label">Shipping cost CAD</td>
                     <td class="value-main">
-                        {% if shipping_cost_cad_total %}
-                            {{ shipping_cost_cad_total }}
+                        {% if shipping_cost_cad %}
+                            {{ shipping_cost_cad }}
                         {% else %}
                             <span class="muted">No shipping cost yet</span>
                         {% endif %}
@@ -762,6 +826,11 @@
         <div class="card">
             <div class="card-title">
                 <span class="emoji">📦</span> Shipping info
+                {% if ship_locked %}
+                    <span class="pill pill-green" style="margin-left:auto;">Locked</span>
+                {% else %}
+                    <span class="pill" style="margin-left:auto;">Editable</span>
+                {% endif %}
             </div>
 
             <form method="post" id="shipping-form">
@@ -772,43 +841,43 @@
                     <tr>
                         <td class="label">Name</td>
                         <td>
-                            <input class="ship-input" type="text" name="ship_name" value="{{ opportunity.ship_name|default:'' }}">
+                            <input class="ship-input" type="text" name="shipping_name" value="{{ ship.name|default:'' }}">
                         </td>
                     </tr>
                     <tr>
                         <td class="label">Address 1</td>
                         <td>
-                            <input class="ship-input" type="text" name="ship_address1" value="{{ opportunity.ship_address1|default:'' }}">
+                            <input class="ship-input" type="text" name="shipping_address1" value="{{ ship.address1|default:'' }}">
                         </td>
                     </tr>
                     <tr>
                         <td class="label">Address 2</td>
                         <td>
-                            <input class="ship-input" type="text" name="ship_address2" value="{{ opportunity.ship_address2|default:'' }}">
+                            <input class="ship-input" type="text" name="shipping_address2" value="{{ ship.address2|default:'' }}">
                         </td>
                     </tr>
                     <tr>
                         <td class="label">City</td>
                         <td>
-                            <input class="ship-input" type="text" name="ship_city" value="{{ opportunity.ship_city|default:'' }}">
+                            <input class="ship-input" type="text" name="shipping_city" value="{{ ship.city|default:'' }}">
                         </td>
                     </tr>
                     <tr>
                         <td class="label">State</td>
                         <td>
-                            <input class="ship-input" type="text" name="ship_state" value="{{ opportunity.ship_state|default:'' }}">
+                            <input class="ship-input" type="text" name="shipping_state" value="{{ ship.state|default:'' }}">
                         </td>
                     </tr>
                     <tr>
                         <td class="label">Post code</td>
                         <td>
-                            <input class="ship-input" type="text" name="ship_post_code" value="{{ opportunity.ship_post_code|default:'' }}">
+                            <input class="ship-input" type="text" name="shipping_postcode" value="{{ ship.post_code|default:'' }}">
                         </td>
                     </tr>
                     <tr>
                         <td class="label">Country</td>
                         <td>
-                            <input class="ship-input" type="text" name="ship_country" value="{{ opportunity.ship_country|default:'' }}">
+                            <input class="ship-input" type="text" name="shipping_country" value="{{ ship.country|default:'' }}">
                         </td>
                     </tr>
                 </table>
@@ -826,7 +895,7 @@
                 </div>
 
                 <div class="muted" style="margin-top:6px;">
-                    Shipping locks after save. Click Edit to change it.
+                    Shipping locks after save and is stored on the customer profile. Click Edit to change it.
                 </div>
             </form>
         </div>
