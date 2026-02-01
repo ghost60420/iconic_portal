@@ -219,6 +219,35 @@
     white-space: nowrap;
   }
 
+  .prod-lib-selected {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+  }
+
+  .prod-lib-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid #374151;
+    background: rgba(15,23,42,0.85);
+    color: #e5e7eb;
+  }
+
+  .prod-lib-chip button {
+    border: none;
+    background: transparent;
+    color: #fca5a5;
+    font-weight: 800;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+  }
+
   .prod-ai-link {
     font-size: 11px;
     margin-top: 4px;
@@ -604,9 +633,19 @@
                         class="btn btn-sm btn-outline-light lib-add-btn"
                         data-select="lib-fabric-picker"
                         data-target="id_extra_order_note"
+                        data-store="fabric"
                         data-template="Fabric: {code} {name} {gsm}">
                   Add
                 </button>
+              </div>
+              <input type="hidden" name="fabric_ids" id="fabric-ids" value="{{ selected_fabric_ids|join:',' }}">
+              <div class="prod-lib-selected" id="fabric-selected">
+                {% for f in selected_fabrics %}
+                  <span class="prod-lib-chip" data-id="{{ f.pk }}" data-store="fabric">
+                    {{ f.fabric_code }} - {{ f.name }}
+                    <button type="button" class="chip-remove" aria-label="Remove">×</button>
+                  </span>
+                {% endfor %}
               </div>
             </div>
 
@@ -627,9 +666,19 @@
                         class="btn btn-sm btn-outline-light lib-add-btn"
                         data-select="lib-accessory-picker"
                         data-target="id_accessories_note"
+                        data-store="accessory"
                         data-template="Accessory: {code} {name}">
                   Add
                 </button>
+              </div>
+              <input type="hidden" name="accessory_ids" id="accessory-ids" value="{{ selected_accessory_ids|join:',' }}">
+              <div class="prod-lib-selected" id="accessory-selected">
+                {% for a in selected_accessories %}
+                  <span class="prod-lib-chip" data-id="{{ a.pk }}" data-store="accessory">
+                    {{ a.accessory_code }} - {{ a.name }}
+                    <button type="button" class="chip-remove" aria-label="Remove">×</button>
+                  </span>
+                {% endfor %}
               </div>
             </div>
 
@@ -650,9 +699,19 @@
                         class="btn btn-sm btn-outline-light lib-add-btn"
                         data-select="lib-trim-picker"
                         data-target="id_accessories_note"
+                        data-store="trim"
                         data-template="Trim: {code} {name}">
                   Add
                 </button>
+              </div>
+              <input type="hidden" name="trim_ids" id="trim-ids" value="{{ selected_trim_ids|join:',' }}">
+              <div class="prod-lib-selected" id="trim-selected">
+                {% for t in selected_trims %}
+                  <span class="prod-lib-chip" data-id="{{ t.pk }}" data-store="trim">
+                    {{ t.trim_code }} - {{ t.name }}
+                    <button type="button" class="chip-remove" aria-label="Remove">×</button>
+                  </span>
+                {% endfor %}
               </div>
             </div>
 
@@ -673,9 +732,19 @@
                         class="btn btn-sm btn-outline-light lib-add-btn"
                         data-select="lib-thread-picker"
                         data-target="id_accessories_note"
+                        data-store="thread"
                         data-template="Thread: {code} {name}">
                   Add
                 </button>
+              </div>
+              <input type="hidden" name="thread_ids" id="thread-ids" value="{{ selected_thread_ids|join:',' }}">
+              <div class="prod-lib-selected" id="thread-selected">
+                {% for t in selected_threads %}
+                  <span class="prod-lib-chip" data-id="{{ t.pk }}" data-store="thread">
+                    {{ t.thread_code }} - {{ t.name }}
+                    <button type="button" class="chip-remove" aria-label="Remove">×</button>
+                  </span>
+                {% endfor %}
               </div>
             </div>
           </div>
@@ -982,6 +1051,51 @@
     }
 
     document.addEventListener("DOMContentLoaded", function () {
+      var storeMap = {
+        fabric: { input: "fabric-ids", list: "fabric-selected" },
+        accessory: { input: "accessory-ids", list: "accessory-selected" },
+        trim: { input: "trim-ids", list: "trim-selected" },
+        thread: { input: "thread-ids", list: "thread-selected" }
+      };
+
+      function getIds(storeKey) {
+        var cfg = storeMap[storeKey];
+        if (!cfg) return [];
+        var input = document.getElementById(cfg.input);
+        if (!input || !input.value) return [];
+        return input.value.split(",").map(function (v) { return v.trim(); }).filter(Boolean);
+      }
+
+      function setIds(storeKey, ids) {
+        var cfg = storeMap[storeKey];
+        if (!cfg) return;
+        var input = document.getElementById(cfg.input);
+        if (input) {
+          input.value = ids.join(",");
+        }
+      }
+
+      function addChip(storeKey, id, label) {
+        var cfg = storeMap[storeKey];
+        if (!cfg) return;
+        var list = document.getElementById(cfg.list);
+        if (!list) return;
+        var chip = document.createElement("span");
+        chip.className = "prod-lib-chip";
+        chip.setAttribute("data-id", id);
+        chip.setAttribute("data-store", storeKey);
+        chip.innerHTML = label + ' <button type="button" class="chip-remove" aria-label="Remove">×</button>';
+        list.appendChild(chip);
+      }
+
+      function addSelection(storeKey, id, label) {
+        var ids = getIds(storeKey);
+        if (ids.indexOf(String(id)) !== -1) return;
+        ids.push(String(id));
+        setIds(storeKey, ids);
+        addChip(storeKey, id, label);
+      }
+
       var applyBtn = document.getElementById("lib-product-apply");
       var productPicker = document.getElementById("lib-product-picker");
       var productField = document.getElementById("id_product");
@@ -1024,6 +1138,7 @@
           var selectId = btn.getAttribute("data-select");
           var targetId = btn.getAttribute("data-target");
           var template = btn.getAttribute("data-template") || "{name}";
+          var storeKey = btn.getAttribute("data-store");
 
           var selectEl = document.getElementById(selectId);
           if (!selectEl) return;
@@ -1038,7 +1153,25 @@
 
           var text = fillTemplate(template, data);
           appendLine(targetId, text);
+
+          if (storeKey) {
+            var label = (opt.textContent || "").trim();
+            addSelection(storeKey, opt.value, label);
+          }
         });
+      });
+
+      document.addEventListener("click", function (ev) {
+        var btn = ev.target;
+        if (!btn.classList.contains("chip-remove")) return;
+        var chip = btn.closest(".prod-lib-chip");
+        if (!chip) return;
+        var storeKey = chip.getAttribute("data-store");
+        var id = chip.getAttribute("data-id");
+        if (!storeKey || !id) return;
+        var ids = getIds(storeKey).filter(function (x) { return x !== String(id); });
+        setIds(storeKey, ids);
+        chip.remove();
       });
     });
   })();

@@ -105,6 +105,7 @@ def production_add(request):
         form = ProductionOrderForm(request.POST, request.FILES)
         if form.is_valid():
             order = form.save()
+            _apply_production_library_links(order, request)
             messages.success(request, "Production order created.")
             return redirect("production_detail", pk=order.pk)
     else:
@@ -145,7 +146,15 @@ def production_edit(request, pk):
 
 
 def production_detail(request, pk):
-    order = get_object_or_404(ProductionOrder, pk=pk)
+    order = get_object_or_404(
+        ProductionOrder.objects.prefetch_related(
+            "fabrics",
+            "accessories",
+            "trims",
+            "threads",
+        ),
+        pk=pk,
+    )
 
     # Correct stage order
     stages = _ordered_stages_qs(order.pk)
@@ -4683,6 +4692,65 @@ def build_size_grid(order):
     return result, total
 
 
+# library helpers for production edit/add
+def _parse_id_list(raw):
+    if raw is None:
+        return None
+    raw = (raw or "").strip()
+    if raw == "":
+        return []
+    ids = []
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if part.isdigit():
+            ids.append(int(part))
+    return ids
+
+
+def _apply_production_library_links(order, request):
+    """
+    Update production order m2m links based on hidden id lists in the form.
+    """
+    mapping = [
+        ("fabrics", Fabric, "fabric_ids"),
+        ("accessories", Accessory, "accessory_ids"),
+        ("trims", Trim, "trim_ids"),
+        ("threads", ThreadOption, "thread_ids"),
+    ]
+
+    for field_name, model_cls, param in mapping:
+        raw_ids = _parse_id_list(request.POST.get(param))
+        if raw_ids is None:
+            continue
+        qs = model_cls.objects.filter(pk__in=raw_ids)
+        getattr(order, field_name).set(qs)
+
+
+def _production_library_context(order=None):
+    selected_fabrics = list(order.fabrics.all()) if order else []
+    selected_accessories = list(order.accessories.all()) if order else []
+    selected_trims = list(order.trims.all()) if order else []
+    selected_threads = list(order.threads.all()) if order else []
+
+    return {
+        "library_products": Product.objects.filter(is_active=True).order_by("name"),
+        "library_fabrics": Fabric.objects.filter(is_active=True).order_by("name")[:200],
+        "library_accessories": Accessory.objects.filter(is_active=True).order_by("name")[:200],
+        "library_trims": Trim.objects.filter(is_active=True).order_by("name")[:200],
+        "library_threads": ThreadOption.objects.filter(is_active=True).order_by("name")[:200],
+        "selected_fabrics": selected_fabrics,
+        "selected_accessories": selected_accessories,
+        "selected_trims": selected_trims,
+        "selected_threads": selected_threads,
+        "selected_fabric_ids": [str(f.pk) for f in selected_fabrics],
+        "selected_accessory_ids": [str(a.pk) for a in selected_accessories],
+        "selected_trim_ids": [str(t.pk) for t in selected_trims],
+        "selected_thread_ids": [str(t.pk) for t in selected_threads],
+    }
+
+
 def production_list(request):
     """
     List of all production orders with small dashboard numbers.
@@ -4719,7 +4787,7 @@ def production_list(request):
             Q(title__icontains=search_query)
             | Q(order_code__icontains=search_query)
             | Q(customer__account_brand__icontains=search_query)
-            | Q(customer__company_name__icontains=search_query)
+            | Q(customer__contact_name__icontains=search_query)
             | Q(product__name__icontains=search_query)
             | Q(lead__account_brand__icontains=search_query)
         )
@@ -4796,11 +4864,7 @@ def production_add(request):
             "form": form,
             "is_edit": False,
             "order": None,
-            "library_products": Product.objects.filter(is_active=True).order_by("name"),
-            "library_fabrics": Fabric.objects.filter(is_active=True).order_by("name")[:200],
-            "library_accessories": Accessory.objects.filter(is_active=True).order_by("name")[:200],
-            "library_trims": Trim.objects.filter(is_active=True).order_by("name")[:200],
-            "library_threads": ThreadOption.objects.filter(is_active=True).order_by("name")[:200],
+            **_production_library_context(),
         },
     )
 
@@ -4816,6 +4880,7 @@ def production_edit(request, pk):
         form = ProductionOrderForm(request.POST, request.FILES, instance=order)
         if form.is_valid():
             obj = form.save()
+            _apply_production_library_links(obj, request)
 
             if not obj.customer_id and obj.opportunity and obj.opportunity.customer_id:
                 obj.customer = obj.opportunity.customer
@@ -4835,11 +4900,7 @@ def production_edit(request, pk):
             "form": form,
             "is_edit": True,
             "order": order,
-            "library_products": Product.objects.filter(is_active=True).order_by("name"),
-            "library_fabrics": Fabric.objects.filter(is_active=True).order_by("name")[:200],
-            "library_accessories": Accessory.objects.filter(is_active=True).order_by("name")[:200],
-            "library_trims": Trim.objects.filter(is_active=True).order_by("name")[:200],
-            "library_threads": ThreadOption.objects.filter(is_active=True).order_by("name")[:200],
+            **_production_library_context(order),
         },
     )
 

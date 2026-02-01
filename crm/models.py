@@ -1481,6 +1481,26 @@ class ProductionOrder(models.Model):
     product = models.ForeignKey(
         "Product", on_delete=models.SET_NULL, null=True, blank=True
     )
+    fabrics = models.ManyToManyField(
+        "Fabric",
+        blank=True,
+        related_name="production_orders",
+    )
+    accessories = models.ManyToManyField(
+        "Accessory",
+        blank=True,
+        related_name="production_orders",
+    )
+    trims = models.ManyToManyField(
+        "Trim",
+        blank=True,
+        related_name="production_orders",
+    )
+    threads = models.ManyToManyField(
+        "ThreadOption",
+        blank=True,
+        related_name="production_orders",
+    )
 
     factory_location = models.CharField(
         max_length=10, choices=FACTORY_CHOICES, default="bd"

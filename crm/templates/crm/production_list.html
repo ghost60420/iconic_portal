@@ -313,7 +313,7 @@
                   {{ order.title }}
                 </div>
                 <div class="prod-list-order-meta">
-                  Code {{ order.order_code }}{% if order.customer %} · {{ order.customer.name|default:order.customer }}{% endif %}
+                  Code {{ order.order_code }}{% if order.customer %} · {{ order.customer.account_brand|default:order.customer.contact_name|default:order.customer }}{% endif %}
                 </div>
               </div>
             </div>

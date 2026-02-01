@@ -401,6 +401,21 @@
   .size-summary.ok { color: #22c55e; }
   .size-summary.warn { color: #f97316; }
 
+  .lib-tag-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .lib-tag {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid #374151;
+    background: rgba(15, 23, 42, 0.8);
+    color: #e5e7eb;
+  }
+
   .attach-list {
     margin-top: 8px;
     font-size: 12px;
@@ -512,7 +527,7 @@
       <div class="meta-item">
         <div class="meta-label">Customer</div>
         <div class="meta-value {% if not order.customer %}muted{% endif %}">
-          {% if order.customer %}{{ order.customer.name|default:order.customer }}{% else %}Not set{% endif %}
+          {% if order.customer %}{{ order.customer.account_brand|default:order.customer.contact_name|default:order.customer }}{% else %}Not set{% endif %}
         </div>
       </div>
       <div class="meta-item">
@@ -783,6 +798,62 @@
       <div class="sheet-label">Extra order notes</div>
       <div class="prewrap {% if not order.extra_order_note %}muted{% endif %}">
         {{ order.extra_order_note|default:"not set" }}
+      </div>
+    </div>
+
+    <div style="margin-top:14px;">
+      <div class="sheet-label">Library selections</div>
+
+      <div style="margin-top:6px;">
+        <div class="small-label">Fabrics</div>
+        {% if order.fabrics.all %}
+          <div class="lib-tag-group">
+            {% for f in order.fabrics.all %}
+              <span class="lib-tag">{{ f.fabric_code }} {{ f.name }}</span>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="sheet-value muted">No fabrics linked.</div>
+        {% endif %}
+      </div>
+
+      <div style="margin-top:8px;">
+        <div class="small-label">Accessories</div>
+        {% if order.accessories.all %}
+          <div class="lib-tag-group">
+            {% for a in order.accessories.all %}
+              <span class="lib-tag">{{ a.accessory_code }} {{ a.name }}</span>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="sheet-value muted">No accessories linked.</div>
+        {% endif %}
+      </div>
+
+      <div style="margin-top:8px;">
+        <div class="small-label">Trims</div>
+        {% if order.trims.all %}
+          <div class="lib-tag-group">
+            {% for t in order.trims.all %}
+              <span class="lib-tag">{{ t.trim_code }} {{ t.name }}</span>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="sheet-value muted">No trims linked.</div>
+        {% endif %}
+      </div>
+
+      <div style="margin-top:8px;">
+        <div class="small-label">Threads</div>
+        {% if order.threads.all %}
+          <div class="lib-tag-group">
+            {% for t in order.threads.all %}
+              <span class="lib-tag">{{ t.thread_code }} {{ t.name }}</span>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="sheet-value muted">No threads linked.</div>
+        {% endif %}
       </div>
     </div>
 
