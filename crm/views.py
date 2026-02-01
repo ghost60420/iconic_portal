@@ -5512,13 +5512,20 @@ def production_dpr(request, pk):
 def production_order_sheet_pdf(request, pk):
     order = get_object_or_404(
         ProductionOrder.objects.select_related("customer", "lead", "opportunity")
-        .prefetch_related("materials__inventory_item"),
+        .prefetch_related(
+            "materials__inventory_item",
+            "fabrics",
+            "accessories",
+            "trims",
+            "threads",
+        ),
         pk=pk,
     )
 
     try:
         from reportlab.lib.pagesizes import letter
         from reportlab.pdfgen import canvas
+        from reportlab.pdfbase import pdfmetrics
     except ImportError:
         return HttpResponse(
             "ReportLab is not installed yet. Ask your dev to install 'reportlab' to enable PDF.",
@@ -5533,32 +5540,123 @@ def production_order_sheet_pdf(request, pk):
     width, height = letter
     y = height - 50
 
+    def draw_wrapped(text, x_pos, y_pos, max_width, font_name="Helvetica", font_size=10, line_height=12):
+        p.setFont(font_name, font_size)
+        words = str(text).split()
+        if not words:
+            return y_pos
+        line = ""
+        for word in words:
+            test = (line + " " + word).strip()
+            if pdfmetrics.stringWidth(test, font_name, font_size) <= max_width:
+                line = test
+            else:
+                p.drawString(x_pos, y_pos, line)
+                y_pos -= line_height
+                line = word
+        if line:
+            p.drawString(x_pos, y_pos, line)
+            y_pos -= line_height
+        return y_pos
+
+    def draw_label_value(label, value, x_pos, y_pos):
+        p.setFont("Helvetica-Bold", 10)
+        p.drawString(x_pos, y_pos, f"{label}:")
+        p.setFont("Helvetica", 10)
+        p.drawString(x_pos + 70, y_pos, str(value))
+        return y_pos - 12
+
     p.setFont("Helvetica-Bold", 16)
-    p.drawString(50, y, "Production Order Sheet")
+    p.drawString(50, y, "Water Sheet")
     y -= 24
+
+    # product image (if any)
+    image_path = None
+    if order.product and order.product.image:
+        image_path = order.product.image.path
+    elif order.style_image:
+        image_path = order.style_image.path
+
+    if image_path:
+        try:
+            p.drawImage(image_path, width - 170, height - 140, width=110, height=110, preserveAspectRatio=True, mask="auto")
+        except Exception:
+            pass
 
     p.setFont("Helvetica", 11)
     header_lines = [
-        f"Order: {order.order_code or order.pk}  |  Title: {order.title}",
+        f"Order: {order.order_code or order.pk}",
+        f"Title: {order.title}",
         f"Customer: {(order.customer.account_brand if order.customer else '') or 'Not set'}",
+        f"Product ID: {(order.product.product_code if order.product else '-')}",
+        f"Style name: {order.style_name or '-'}",
+        f"Color info: {order.color_info or '-'}",
         f"Total pieces: {order.qty_total}  |  Reject: {order.qty_reject}",
         f"Sample date: {order.sample_deadline or '-'}  |  Bulk date: {order.bulk_deadline or '-'}",
         f"Factory: {order.get_factory_location_display()}  |  Order type: {order.get_order_type_display()}",
+        f"Status: {order.get_status_display()}",
     ]
     for line in header_lines:
         p.drawString(50, y, line)
-        y -= 16
+        y -= 14
 
     y -= 6
+    # work order notes
     p.setFont("Helvetica-Bold", 12)
-    p.drawString(50, y, "Materials")
+    p.drawString(50, y, "Work order details")
+    y -= 16
+    y = draw_wrapped(f"Accessories & trims: {order.accessories_note or '-'}", 50, y, 500)
+    y = draw_wrapped(f"Packaging: {order.packaging_note or '-'}", 50, y, 500)
+    y = draw_wrapped(f"Extra notes: {order.extra_order_note or '-'}", 50, y, 500)
+    y -= 6
+
+    # size ratio
+    size_grid, size_total = build_size_grid(order)
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(50, y, "Size ratio")
+    y -= 14
+    if size_grid and size_total:
+        labels = [item["label"] for item in size_grid]
+        qtys = [str(item["qty"] or 0) for item in size_grid]
+        p.setFont("Helvetica", 9)
+        p.drawString(50, y, "  ".join(labels))
+        y -= 12
+        p.drawString(50, y, "  ".join(qtys))
+        y -= 12
+        p.setFont("Helvetica", 10)
+        p.drawString(50, y, f"Total: {size_total}")
+        y -= 16
+    else:
+        p.setFont("Helvetica", 10)
+        p.drawString(50, y, "No size ratio set.")
+        y -= 14
+
+    # library selections
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(50, y, "Library selections")
+    y -= 16
+    p.setFont("Helvetica", 10)
+    fabrics_line = ", ".join([f"{f.fabric_code} {f.name}" for f in order.fabrics.all()]) or "None"
+    accessories_line = ", ".join([f"{a.accessory_code} {a.name}" for a in order.accessories.all()]) or "None"
+    trims_line = ", ".join([f"{t.trim_code} {t.name}" for t in order.trims.all()]) or "None"
+    threads_line = ", ".join([f"{t.thread_code} {t.name}" for t in order.threads.all()]) or "None"
+    y = draw_wrapped(f"Fabrics: {fabrics_line}", 50, y, 500)
+    y = draw_wrapped(f"Accessories: {accessories_line}", 50, y, 500)
+    y = draw_wrapped(f"Trims: {trims_line}", 50, y, 500)
+    y = draw_wrapped(f"Threads: {threads_line}", 50, y, 500)
+    y -= 6
+
+    # materials + inventory
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(50, y, "Materials and inventory")
     y -= 18
 
     p.setFont("Helvetica", 10)
-    p.drawString(50, y, "Name")
-    p.drawString(260, y, "Category")
-    p.drawString(360, y, "Qty")
-    p.drawString(430, y, "Unit")
+    p.drawString(50, y, "Material")
+    p.drawString(230, y, "Category")
+    p.drawString(320, y, "Qty")
+    p.drawString(370, y, "Unit")
+    p.drawString(420, y, "In stock")
     p.drawString(490, y, "Code/SKU")
     y -= 12
     p.line(50, y, width - 50, y)
@@ -5576,11 +5674,21 @@ def production_order_sheet_pdf(request, pk):
             qty = line.quantity if line.quantity is not None else "-"
             unit = line.unit_type or item.unit_type or "-"
             code = item.code or item.sku or "-"
+            stock = item.quantity if item.quantity is not None else "-"
 
-            p.drawString(50, y, str(name)[:32])
-            p.drawString(260, y, str(category)[:14])
-            p.drawString(360, y, str(qty))
-            p.drawString(430, y, str(unit))
+            img_x = 50
+            text_x = 70
+            if item.image:
+                try:
+                    p.drawImage(item.image.path, img_x, y - 8, width=14, height=14, preserveAspectRatio=True, mask="auto")
+                except Exception:
+                    text_x = 50
+
+            p.drawString(text_x, y, str(name)[:24])
+            p.drawString(230, y, str(category)[:14])
+            p.drawString(320, y, str(qty))
+            p.drawString(370, y, str(unit))
+            p.drawString(420, y, str(stock))
             p.drawString(490, y, str(code)[:18])
             y -= 14
 
