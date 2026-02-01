@@ -967,11 +967,53 @@ def _send_chatter_mentions(request, text, *, lead=None, opportunity=None, produc
     )
 
 
+def _chatter_for_lead(lead):
+    return (
+        LeadComment.objects.select_related("lead", "opportunity", "production")
+        .filter(
+            Q(lead=lead)
+            | Q(opportunity__lead=lead)
+            | Q(production__lead=lead)
+        )
+        .order_by("-pinned", "-created_at")
+        .distinct()
+    )
+
+
+def _chatter_for_opportunity(opportunity):
+    lead = opportunity.lead
+    return (
+        LeadComment.objects.select_related("lead", "opportunity", "production")
+        .filter(
+            Q(opportunity=opportunity)
+            | Q(production__opportunity=opportunity)
+            | Q(lead=lead, opportunity__isnull=True, production__isnull=True)
+        )
+        .order_by("-pinned", "-created_at")
+        .distinct()
+    )
+
+
+def _chatter_for_production(order):
+    lead = order.lead
+    opportunity = order.opportunity
+    return (
+        LeadComment.objects.select_related("lead", "opportunity", "production")
+        .filter(
+            Q(production=order)
+            | (Q(opportunity=opportunity) if opportunity else Q())
+            | (Q(lead=lead, opportunity__isnull=True, production__isnull=True) if lead else Q())
+        )
+        .order_by("-pinned", "-created_at")
+        .distinct()
+    )
+
+
 def lead_detail(request, pk):
     lead = get_object_or_404(Lead, pk=pk)
 
     opportunities = lead.opportunities.all().order_by("-created_date", "-id")
-    comments = lead.comments.all()
+    comments = _chatter_for_lead(lead)
     tasks = lead.tasks.all()
     activities = lead.activities.all()
 
@@ -1019,18 +1061,20 @@ def lead_detail(request, pk):
                     activity_type="note_added",
                     description=comment_text[:200],
                 )
-            comments = lead.comments.all()
+            comments = _chatter_for_lead(lead)
 
         elif action == "toggle_pin_comment":
             comment_id = (request.POST.get("comment_id") or "").strip()
             if comment_id:
-                try:
-                    c = LeadComment.objects.get(id=comment_id, lead=lead)
+                c = LeadComment.objects.filter(
+                    Q(id=comment_id, lead=lead)
+                    | Q(id=comment_id, opportunity__lead=lead)
+                    | Q(id=comment_id, production__lead=lead)
+                ).first()
+                if c:
                     c.pinned = not c.pinned
                     c.save(update_fields=["pinned"])
-                except LeadComment.DoesNotExist:
-                    pass
-            comments = lead.comments.all()
+            comments = _chatter_for_lead(lead)
 
         # tasks
         elif action == "add_task":
@@ -1335,10 +1379,7 @@ def opportunity_detail(request, pk):
     opp_files = OpportunityFile.objects.filter(opportunity=opportunity).order_by("-uploaded_at")
 
     # Comments and activity
-    comments = LeadComment.objects.filter(
-        lead=lead,
-        opportunity=opportunity,
-    ).order_by("-pinned", "-created_at")
+    comments = _chatter_for_opportunity(opportunity)
 
     activities = LeadActivity.objects.filter(lead=lead).order_by("-created_at")
 
@@ -1494,9 +1535,9 @@ def opportunity_detail(request, pk):
             comment_id = (request.POST.get("comment_id") or "").strip()
             if comment_id and lead:
                 c = LeadComment.objects.filter(
-                    id=comment_id,
-                    lead=lead,
-                    opportunity=opportunity,
+                    Q(id=comment_id, opportunity=opportunity)
+                    | Q(id=comment_id, production__opportunity=opportunity)
+                    | Q(id=comment_id, lead=lead, opportunity__isnull=True, production__isnull=True)
                 ).first()
                 if c:
                     c.pinned = not c.pinned
@@ -5002,7 +5043,7 @@ def production_detail(request, pk):
     order_delayed = order.is_delayed
     reject_percent = int((order.qty_reject / order.qty_total) * 100) if order.qty_total else 0
 
-    comments = LeadComment.objects.filter(production=order).order_by("-pinned", "-created_at")
+    comments = _chatter_for_production(order)
 
     if request.method == "POST":
         action = (request.POST.get("action") or "").strip()
@@ -5032,7 +5073,11 @@ def production_detail(request, pk):
         if action == "toggle_pin_comment":
             comment_id = (request.POST.get("comment_id") or "").strip()
             if comment_id:
-                comment = LeadComment.objects.filter(id=comment_id, production=order).first()
+                comment = LeadComment.objects.filter(
+                    Q(id=comment_id, production=order)
+                    | (Q(id=comment_id, opportunity=order.opportunity) if order.opportunity else Q())
+                    | (Q(id=comment_id, lead=order.lead, opportunity__isnull=True, production__isnull=True) if order.lead else Q())
+                ).first()
                 if comment:
                     comment.pinned = not comment.pinned
                     comment.save(update_fields=["pinned"])

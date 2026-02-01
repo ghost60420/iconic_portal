@@ -733,7 +733,7 @@
     </div>
 
     <div class="note-box" style="margin-top:12px;">
-      <div class="note-title">Chatter notes</div>
+      <div class="note-title">Chatter feed (Lead + Opportunity + Production)</div>
       <form method="post" style="margin-bottom:8px;">
         {% csrf_token %}
         <input type="hidden" name="action" value="add_comment">
@@ -749,10 +749,20 @@
             <strong class="value-main">{{ c.author }}</strong>
             <span class="muted">
               {{ c.created_at }}
+              {% if c.production %} • Production{% elif c.opportunity %} • Opportunity{% else %} • Lead{% endif %}
               {% if c.pinned %} pinned{% endif %}
               {% if c.is_ai %} AI{% endif %}
             </span>
             <p class="value-soft">{{ c.content|linebreaksbr }}</p>
+            <div class="muted" style="font-size:11px;">
+              {% if c.production %}
+                <a href="{% url 'production_detail' c.production.pk %}">Open production</a>
+              {% elif c.opportunity %}
+                <a href="{% url 'opportunity_detail' c.opportunity.pk %}">Open opportunity</a>
+              {% elif c.lead %}
+                <a href="{% url 'lead_detail' c.lead.pk %}">Open lead</a>
+              {% endif %}
+            </div>
 
             <form method="post" style="display:inline;">
               {% csrf_token %}

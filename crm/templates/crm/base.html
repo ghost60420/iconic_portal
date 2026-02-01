@@ -273,7 +273,6 @@
     {% url 'shipment_list' as ship_url %}
     {% url 'wa_inbox' as wa_url %}
     {% url 'main_dashboard' as main_dash_url %}
-    {% url 'chatter_feed' as chatter_feed_url %}
     {% url 'ai_hub' as ai_hub_url %}
     {% url 'inventory_list' as inv_url %}
     {% url 'world_tools' as world_tools_url %}
@@ -381,10 +380,6 @@
 
         {% if access_url %}
           <a href="{{ access_url }}" class="crm-nav-item"><span>🔐</span><strong>Access</strong></a>
-        {% endif %}
-
-        {% if chatter_feed_url %}
-          <a href="{{ chatter_feed_url }}" class="crm-nav-item"><span>🗂️</span><strong>Chatter</strong></a>
         {% endif %}
 
         {% if request.user.is_superuser and admin_url %}

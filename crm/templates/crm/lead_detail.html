@@ -496,7 +496,7 @@
   </div>
 
   <div class="section">
-    <h2 class="section-title">Chatter feed</h2>
+    <h2 class="section-title">Chatter feed (Lead + Opportunities + Production)</h2>
 
     <form method="post" style="margin-bottom: 10px;">
       {% csrf_token %}
@@ -512,9 +512,19 @@
           <div class="comment-meta">
             {{ c.created_at|date:"Y-m-d H:i" }}
             {% if c.author %} — {{ c.author }}{% endif %}
+            {% if c.production %} • Production{% elif c.opportunity %} • Opportunity{% else %} • Lead{% endif %}
             {% if c.is_ai %} (AI){% endif %}
           </div>
           <div>{{ c.content|linebreaksbr }}</div>
+          <div class="small" style="margin-top:4px;">
+            {% if c.production %}
+              <a href="{% url 'production_detail' c.production.pk %}">Open production</a>
+            {% elif c.opportunity %}
+              <a href="{% url 'opportunity_detail' c.opportunity.pk %}">Open opportunity</a>
+            {% elif c.lead %}
+              <a href="{% url 'lead_detail' c.lead.pk %}">Open lead</a>
+            {% endif %}
+          </div>
 
           <form method="post" style="margin-top: 4px;">
             {% csrf_token %}
