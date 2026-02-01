@@ -66,6 +66,8 @@ urlpatterns = [
     path("opportunities/<int:pk>/ai/", perm("can_ai", views.opportunity_ai_detail), name="opportunity_ai_detail"),
     path("opportunities/<int:pk>/ai/suggest/", perm("can_ai", ai.ai_opportunity_suggest), name="ai_opportunity_suggest"),
 
+    path("chatter/", login_required(views.chatter_feed), name="chatter_feed"),
+
     path("customers/", perm("can_customers", views.customers_list), name="customers_list"),
     path("customers/<int:pk>/", perm("can_customers", views.customer_detail), name="customer_detail"),
     path("customers/<int:pk>/ai/", perm("can_ai", views.customer_ai_detail), name="customer_ai_detail"),

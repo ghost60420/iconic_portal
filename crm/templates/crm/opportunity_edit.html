@@ -119,15 +119,23 @@
             <div class="row">
                 <div class="col">
                     <label>Product type</label>
-                    <input type="text"
-                           name="product_type"
-                           value="{{ opportunity.product_type }}">
+                    <select name="product_type">
+                        {% for key, label in product_type_choices %}
+                            <option value="{{ key }}" {% if opportunity.product_type == key %}selected{% endif %}>
+                                {{ label }}
+                            </option>
+                        {% endfor %}
+                    </select>
                 </div>
                 <div class="col">
                     <label>Product category</label>
-                    <input type="text"
-                           name="product_category"
-                           value="{{ opportunity.product_category }}">
+                    <select name="product_category">
+                        {% for key, label in product_category_choices %}
+                            <option value="{{ key }}" {% if opportunity.product_category == key %}selected{% endif %}>
+                                {{ label }}
+                            </option>
+                        {% endfor %}
+                    </select>
                 </div>
             </div>
 

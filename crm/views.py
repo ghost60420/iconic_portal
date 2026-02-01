@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from collections import defaultdict
 from datetime import timedelta, date
 from decimal import Decimal
@@ -22,6 +23,7 @@ from django.db.models.functions import TruncDate, TruncMonth, TruncYear
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
@@ -912,6 +914,59 @@ def _record_customer_event(*, customer, event_type, title, details="", opportuni
     )
 
 
+MENTION_RE = re.compile(r"@([A-Za-z0-9._-]+)")
+
+
+def _send_chatter_mentions(request, text, *, lead=None, opportunity=None, production=None, author=""):
+    if not text:
+        return
+    handles = {h.strip() for h in MENTION_RE.findall(text or "") if h.strip()}
+    if not handles:
+        return
+
+    User = get_user_model()
+    recipients = set()
+    for handle in handles:
+        qs = User.objects.filter(
+            Q(username__iexact=handle)
+            | Q(first_name__iexact=handle)
+            | Q(last_name__iexact=handle)
+            | Q(email__istartswith=f"{handle}@")
+        )
+        for u in qs:
+            if u.email:
+                recipients.add(u.email)
+
+    if not recipients:
+        return
+
+    link = ""
+    if production:
+        link = request.build_absolute_uri(reverse("production_detail", args=[production.pk]))
+    elif opportunity:
+        link = request.build_absolute_uri(reverse("opportunity_detail", args=[opportunity.pk]))
+    elif lead:
+        link = request.build_absolute_uri(reverse("lead_detail", args=[lead.pk]))
+
+    subject = f"CRM mention from {author or 'Team member'}"
+    body_lines = [
+        f"You were mentioned in CRM chatter by {author or 'a team member'}.",
+        "",
+        text,
+    ]
+    if link:
+        body_lines += ["", f"Open: {link}"]
+    body = "\n".join(body_lines)
+
+    send_mail(
+        subject=subject,
+        message=body,
+        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@iconiccrm.local"),
+        recipient_list=list(recipients),
+        fail_silently=True,
+    )
+
+
 def lead_detail(request, pk):
     lead = get_object_or_404(Lead, pk=pk)
 
@@ -952,6 +1007,12 @@ def lead_detail(request, pk):
                     lead=lead,
                     author=author_name,
                     content=comment_text,
+                )
+                _send_chatter_mentions(
+                    request,
+                    comment_text,
+                    lead=lead,
+                    author=author_name,
                 )
                 LeadActivity.objects.create(
                     lead=lead,
@@ -1382,18 +1443,9 @@ def opportunity_detail(request, pk):
             shipping_postcode = (request.POST.get("shipping_postcode") or "").strip()
             shipping_country = (request.POST.get("shipping_country") or "").strip()
 
-            if lead:
-                customer, created = Customer.objects.get_or_create(
-                    lead=lead,
-                    defaults={
-                        "account_brand": lead.account_brand,
-                        "contact_name": lead.contact_name,
-                        "email": lead.email,
-                        "phone": lead.phone,
-                        "market": lead.market,
-                    },
-                )
+            customer = _ensure_customer_for_opportunity(opportunity)
 
+            if customer:
                 customer.shipping_name = shipping_name
                 customer.shipping_address1 = shipping_address1
                 customer.shipping_address2 = shipping_address2
@@ -1421,6 +1473,13 @@ def opportunity_detail(request, pk):
                     opportunity=opportunity,
                     author=author_name,
                     content=comment_text,
+                )
+                _send_chatter_mentions(
+                    request,
+                    comment_text,
+                    lead=lead,
+                    opportunity=opportunity,
+                    author=author_name,
                 )
                 LeadActivity.objects.create(
                     lead=lead,
@@ -4540,10 +4599,20 @@ def opportunity_edit(request, pk):
     """
     opportunity = get_object_or_404(Opportunity, pk=pk)
 
+    product_type_choices = Opportunity.PRODUCT_TYPE_CHOICES
+    product_category_choices = Opportunity.PRODUCT_CATEGORY_CHOICES
+    product_type_keys = {k for k, _ in product_type_choices}
+    product_category_keys = {k for k, _ in product_category_choices}
+
     if request.method == "POST":
         # very basic safe update
-        opportunity.product_type = request.POST.get("product_type") or opportunity.product_type
-        opportunity.product_category = request.POST.get("product_category") or opportunity.product_category
+        product_type = request.POST.get("product_type") or opportunity.product_type
+        product_category = request.POST.get("product_category") or opportunity.product_category
+
+        if product_type in product_type_keys:
+            opportunity.product_type = product_type
+        if product_category in product_category_keys:
+            opportunity.product_category = product_category
 
         moq_raw = request.POST.get("moq_units")
         if moq_raw:
@@ -4565,7 +4634,15 @@ def opportunity_edit(request, pk):
         messages.success(request, "Opportunity updated.")
         return redirect("opportunity_detail", pk=pk)
 
-    return render(request, "crm/opportunity_edit.html", {"opportunity": opportunity})
+    return render(
+        request,
+        "crm/opportunity_edit.html",
+        {
+            "opportunity": opportunity,
+            "product_type_choices": product_type_choices,
+            "product_category_choices": product_category_choices,
+        },
+    )
 # ==============================
 # PRODUCTION VIEWS
 # ==============================
@@ -4925,6 +5002,42 @@ def production_detail(request, pk):
     order_delayed = order.is_delayed
     reject_percent = int((order.qty_reject / order.qty_total) * 100) if order.qty_total else 0
 
+    comments = LeadComment.objects.filter(production=order).order_by("-pinned", "-created_at")
+
+    if request.method == "POST":
+        action = (request.POST.get("action") or "").strip()
+
+        if action == "add_comment":
+            comment_text = (request.POST.get("comment_text") or "").strip()
+            if comment_text:
+                author_name = request.user.username if request.user.is_authenticated else "User"
+                LeadComment.objects.create(
+                    lead=order.lead,
+                    opportunity=order.opportunity,
+                    production=order,
+                    author=author_name,
+                    content=comment_text,
+                )
+                _send_chatter_mentions(
+                    request,
+                    comment_text,
+                    lead=order.lead,
+                    opportunity=order.opportunity,
+                    production=order,
+                    author=author_name,
+                )
+                messages.success(request, "Chatter note added.")
+            return redirect("production_detail", pk=pk)
+
+        if action == "toggle_pin_comment":
+            comment_id = (request.POST.get("comment_id") or "").strip()
+            if comment_id:
+                comment = LeadComment.objects.filter(id=comment_id, production=order).first()
+                if comment:
+                    comment.pinned = not comment.pinned
+                    comment.save(update_fields=["pinned"])
+            return redirect("production_detail", pk=pk)
+
     context = {
         "order": order,
         "stages": stages,
@@ -4938,6 +5051,7 @@ def production_detail(request, pk):
         "opportunity": order.opportunity,
         "lead": order.lead,
         "customer": order.customer,
+        "comments": comments,
     }
 
     return render(request, "crm/production_detail.html", context)
@@ -5286,6 +5400,90 @@ def production_dpr(request, pk):
         return redirect("production_detail", pk=pk)
 
     return redirect("production_detail", pk=pk)
+
+
+def chatter_feed(request):
+    """
+    Consolidated chatter feed for leads, opportunities, and production.
+    """
+    source = (request.GET.get("source") or "all").strip().lower()
+
+    comments_qs = LeadComment.objects.select_related(
+        "lead",
+        "opportunity",
+        "production",
+    ).order_by("-created_at")
+
+    if source == "lead":
+        comments_qs = comments_qs.filter(opportunity__isnull=True, production__isnull=True)
+    elif source == "opportunity":
+        comments_qs = comments_qs.filter(opportunity__isnull=False)
+    elif source == "production":
+        comments_qs = comments_qs.filter(production__isnull=False)
+
+    if request.method == "POST":
+        action = (request.POST.get("action") or "").strip()
+        if action == "add_chatter":
+            note_text = (request.POST.get("comment_text") or "").strip()
+            link_type = (request.POST.get("link_type") or "").strip().lower()
+            link_id = (request.POST.get("link_id") or "").strip()
+
+            if not note_text:
+                messages.error(request, "Please write a note first.")
+                return redirect("chatter_feed")
+
+            author_name = request.user.username if request.user.is_authenticated else "User"
+            lead = None
+            opportunity = None
+            production = None
+
+            if link_type == "lead" and link_id.isdigit():
+                lead = Lead.objects.filter(pk=int(link_id)).first()
+            elif link_type == "opportunity" and link_id.isdigit():
+                opportunity = Opportunity.objects.filter(pk=int(link_id)).first()
+                if opportunity:
+                    lead = opportunity.lead
+            elif link_type == "production" and link_id.isdigit():
+                production = ProductionOrder.objects.filter(pk=int(link_id)).first()
+                if production:
+                    lead = production.lead
+                    opportunity = production.opportunity
+
+            if link_type and not (lead or opportunity or production):
+                messages.error(request, "Could not find the record you selected.")
+                return redirect("chatter_feed")
+
+            LeadComment.objects.create(
+                lead=lead,
+                opportunity=opportunity,
+                production=production,
+                author=author_name,
+                content=note_text,
+            )
+            _send_chatter_mentions(
+                request,
+                note_text,
+                lead=lead,
+                opportunity=opportunity,
+                production=production,
+                author=author_name,
+            )
+
+            messages.success(request, "Chatter note saved.")
+            return redirect("chatter_feed")
+
+    User = get_user_model()
+    team_members = User.objects.filter(is_active=True).order_by("username")
+
+    return render(
+        request,
+        "crm/chatter_feed.html",
+        {
+            "comments": comments_qs,
+            "source": source,
+            "team_members": team_members,
+        },
+    )
 
 # ==============================
 # SHIPPING VIEWS

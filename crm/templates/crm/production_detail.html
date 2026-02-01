@@ -733,6 +733,43 @@
     </div>
 
     <div class="note-box" style="margin-top:12px;">
+      <div class="note-title">Chatter notes</div>
+      <form method="post" style="margin-bottom:8px;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add_comment">
+        <textarea name="comment_text" rows="3" class="inputx" placeholder="Write a note about this production order"></textarea>
+        <div style="text-align:right; margin-top:8px;">
+          <button type="submit" class="btn btn-warning btn-sm">Save note</button>
+        </div>
+      </form>
+
+      {% if comments %}
+        {% for c in comments %}
+          <div style="margin-bottom: 8px;">
+            <strong class="value-main">{{ c.author }}</strong>
+            <span class="muted">
+              {{ c.created_at }}
+              {% if c.pinned %} pinned{% endif %}
+              {% if c.is_ai %} AI{% endif %}
+            </span>
+            <p class="value-soft">{{ c.content|linebreaksbr }}</p>
+
+            <form method="post" style="display:inline;">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="toggle_pin_comment">
+              <input type="hidden" name="comment_id" value="{{ c.id }}">
+              <button type="submit" class="btn btn-slate btn-small">
+                {% if c.pinned %}Unpin{% else %}Pin{% endif %}
+              </button>
+            </form>
+          </div>
+        {% endfor %}
+      {% else %}
+        <p class="muted">No chatter notes yet.</p>
+      {% endif %}
+    </div>
+
+    <div class="note-box" style="margin-top:12px;">
       <div class="note-title">Daily production report</div>
       <form method="post" action="{% url 'production_dpr' order.pk %}">
         {% csrf_token %}

@@ -486,12 +486,21 @@ class LeadComment(models.Model):
     lead = models.ForeignKey(
         Lead,
         related_name="comments",
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
     )
     opportunity = models.ForeignKey(
         "Opportunity",
         related_name="comments",
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+    )
+    production = models.ForeignKey(
+        "ProductionOrder",
+        related_name="comments",
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
     )
