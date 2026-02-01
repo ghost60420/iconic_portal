@@ -4602,6 +4602,55 @@ def get_sorted_stages(order):
     return stages
 
 
+# production status change helper
+def _apply_production_status_change(order, old_status):
+    if order.status == old_status:
+        return
+
+    customer = order.customer or (order.opportunity.customer if order.opportunity else None)
+    _record_customer_event(
+        customer=customer,
+        event_type="production_status",
+        title="Production status updated",
+        details=f"Production {order.order_code or order.pk} is now {order.get_status_display()}.",
+        opportunity=order.opportunity,
+        production=order,
+    )
+
+    if order.status in {"done", "completed"} and order.opportunity:
+        order.opportunity.stage = "Closed Won"
+        order.opportunity.save(update_fields=["stage"])
+        _record_customer_event(
+            customer=customer,
+            event_type="production_completed",
+            title="Production completed",
+            details=f"Production {order.order_code or order.pk} marked completed.",
+            opportunity=order.opportunity,
+            production=order,
+        )
+    elif order.status == "closed_won" and order.opportunity:
+        order.opportunity.stage = "Closed Won"
+        order.opportunity.save(update_fields=["stage"])
+        _record_customer_event(
+            customer=customer,
+            event_type="production_closed_won",
+            title="Production closed won",
+            details=f"Production {order.order_code or order.pk} closed won.",
+            opportunity=order.opportunity,
+            production=order,
+        )
+    elif order.status == "closed_lost" and order.opportunity:
+        order.opportunity.stage = "Closed Lost"
+        order.opportunity.save(update_fields=["stage"])
+        _record_customer_event(
+            customer=customer,
+            event_type="production_closed_lost",
+            title="Production closed lost",
+            details=f"Production {order.order_code or order.pk} closed lost.",
+            opportunity=order.opportunity,
+            production=order,
+        )
+
 # size grid helpers
 
 SIZE_LABELS = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"]
@@ -4638,15 +4687,42 @@ def production_list(request):
     """
     List of all production orders with small dashboard numbers.
     """
+    if request.method == "POST":
+        order_id = request.POST.get("order_id")
+        new_status = request.POST.get("status")
+        valid_statuses = {key for key, _ in ProductionOrder.STATUS_CHOICES}
+
+        if order_id and new_status in valid_statuses:
+            order = get_object_or_404(ProductionOrder, pk=order_id)
+            old_status = order.status
+            if new_status != old_status:
+                order.status = new_status
+                order.save(update_fields=["status"])
+                _apply_production_status_change(order, old_status)
+                messages.success(request, f"Status updated to {order.get_status_display()}.")
+
+        return redirect(request.POST.get("next") or "production_list")
+
     status_filter = (request.GET.get("status") or "active").strip().lower()
     completed_statuses = _production_completed_statuses()
     active_statuses = _production_active_statuses()
+    search_query = (request.GET.get("q") or "").strip()
 
     orders = (
         ProductionOrder.objects
         .select_related("customer", "product", "opportunity")
         .order_by("-created_at")
     )
+
+    if search_query:
+        orders = orders.filter(
+            Q(title__icontains=search_query)
+            | Q(order_code__icontains=search_query)
+            | Q(customer__account_brand__icontains=search_query)
+            | Q(customer__company_name__icontains=search_query)
+            | Q(product__name__icontains=search_query)
+            | Q(lead__account_brand__icontains=search_query)
+        )
 
     if status_filter == "completed":
         orders = orders.filter(status__in=completed_statuses)
@@ -4694,6 +4770,8 @@ def production_list(request):
             "total_reject": total_reject,
             "reject_percent": reject_percent,
             "status_filter": status_filter,
+            "search_query": search_query,
+            "status_choices": ProductionOrder.STATUS_CHOICES,
         },
     )
 
@@ -4718,6 +4796,11 @@ def production_add(request):
             "form": form,
             "is_edit": False,
             "order": None,
+            "library_products": Product.objects.filter(is_active=True).order_by("name"),
+            "library_fabrics": Fabric.objects.filter(is_active=True).order_by("name")[:200],
+            "library_accessories": Accessory.objects.filter(is_active=True).order_by("name")[:200],
+            "library_trims": Trim.objects.filter(is_active=True).order_by("name")[:200],
+            "library_threads": ThreadOption.objects.filter(is_active=True).order_by("name")[:200],
         },
     )
 
@@ -4738,50 +4821,7 @@ def production_edit(request, pk):
                 obj.customer = obj.opportunity.customer
                 obj.save(update_fields=["customer"])
 
-            if obj.status != old_status:
-                customer = obj.customer or (obj.opportunity.customer if obj.opportunity else None)
-                _record_customer_event(
-                    customer=customer,
-                    event_type="production_status",
-                    title="Production status updated",
-                    details=f"Production {obj.order_code or obj.pk} is now {obj.get_status_display()}.",
-                    opportunity=obj.opportunity,
-                    production=obj,
-                )
-
-                if obj.status in {"done", "completed"} and obj.opportunity:
-                    obj.opportunity.stage = "Closed Won"
-                    obj.opportunity.save(update_fields=["stage"])
-                    _record_customer_event(
-                        customer=customer,
-                        event_type="production_completed",
-                        title="Production completed",
-                        details=f"Production {obj.order_code or obj.pk} marked completed.",
-                        opportunity=obj.opportunity,
-                        production=obj,
-                    )
-                elif obj.status == "closed_won" and obj.opportunity:
-                    obj.opportunity.stage = "Closed Won"
-                    obj.opportunity.save(update_fields=["stage"])
-                    _record_customer_event(
-                        customer=customer,
-                        event_type="production_closed_won",
-                        title="Production closed won",
-                        details=f"Production {obj.order_code or obj.pk} closed won.",
-                        opportunity=obj.opportunity,
-                        production=obj,
-                    )
-                elif obj.status == "closed_lost" and obj.opportunity:
-                    obj.opportunity.stage = "Closed Lost"
-                    obj.opportunity.save(update_fields=["stage"])
-                    _record_customer_event(
-                        customer=customer,
-                        event_type="production_closed_lost",
-                        title="Production closed lost",
-                        details=f"Production {obj.order_code or obj.pk} closed lost.",
-                        opportunity=obj.opportunity,
-                        production=obj,
-                    )
+            _apply_production_status_change(obj, old_status)
 
             messages.success(request, "Production order updated.")
             return redirect("production_detail", pk=pk)
@@ -4795,6 +4835,11 @@ def production_edit(request, pk):
             "form": form,
             "is_edit": True,
             "order": order,
+            "library_products": Product.objects.filter(is_active=True).order_by("name"),
+            "library_fabrics": Fabric.objects.filter(is_active=True).order_by("name")[:200],
+            "library_accessories": Accessory.objects.filter(is_active=True).order_by("name")[:200],
+            "library_trims": Trim.objects.filter(is_active=True).order_by("name")[:200],
+            "library_threads": ThreadOption.objects.filter(is_active=True).order_by("name")[:200],
         },
     )
 
@@ -4817,6 +4862,7 @@ def production_detail(request, pk):
     # progress and delay
     percent_done = order.percent_done
     order_delayed = order.is_delayed
+    reject_percent = int((order.qty_reject / order.qty_total) * 100) if order.qty_total else 0
 
     context = {
         "order": order,
@@ -4827,6 +4873,10 @@ def production_detail(request, pk):
         "size_total": size_total,
         "attachments": attachments,
         "shipments": shipments,
+        "reject_percent": reject_percent,
+        "opportunity": order.opportunity,
+        "lead": order.lead,
+        "customer": order.customer,
     }
 
     return render(request, "crm/production_detail.html", context)

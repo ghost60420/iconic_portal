@@ -451,6 +451,9 @@
         </div>
         <div class="sub">
           Total pieces: {{ order.qty_total }}
+          {% if order.qty_reject %}
+            <span> • Reject pieces: {{ order.qty_reject }} ({{ reject_percent }}%)</span>
+          {% endif %}
           {% if opportunity %}
             <span> • Opportunity: {{ opportunity.opportunity_id }}</span>
           {% endif %}
@@ -525,6 +528,12 @@
       <div class="meta-item">
         <div class="meta-label">Total pieces</div>
         <div class="meta-value">{{ order.qty_total }}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Reject pieces</div>
+        <div class="meta-value {% if not order.qty_reject %}muted{% endif %}">
+          {% if order.qty_reject %}{{ order.qty_reject }} ({{ reject_percent }}%){% else %}0{% endif %}
+        </div>
       </div>
 
       <div class="meta-item">

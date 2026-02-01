@@ -84,6 +84,40 @@
     margin-bottom: 6px;
   }
 
+  .prod-list-search {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+
+  .prod-list-search input {
+    background: #020617;
+    border: 1px solid #374151;
+    color: #e5e7eb;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 12px;
+    min-width: 220px;
+  }
+
+  .prod-status-form {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    justify-content: flex-end;
+  }
+
+  .prod-status-select {
+    background: #0b1222;
+    border: 1px solid #374151;
+    color: #e5e7eb;
+    border-radius: 8px;
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
   .prod-list-main {
     display: flex;
     align-items: center;
@@ -231,6 +265,11 @@
         <a class="prod-filter-btn {% if status_filter == 'completed' %}active{% endif %}" href="?status=completed">Completed</a>
         <a class="prod-filter-btn {% if status_filter == 'all' %}active{% endif %}" href="?status=all">All</a>
       </div>
+      <form class="prod-list-search" method="get">
+        <input type="hidden" name="status" value="{{ status_filter }}">
+        <input type="text" name="q" placeholder="Search orders, customer, product..." value="{{ search_query }}">
+        <button type="submit" class="btn btn-sm btn-outline-light">Search</button>
+      </form>
     </div>
 
     <div class="prod-stats">
@@ -288,6 +327,16 @@
               <div class="prod-list-progress-text mt-1">
                 {{ percent }} percent complete
               </div>
+              <form method="post" class="prod-status-form">
+                {% csrf_token %}
+                <input type="hidden" name="order_id" value="{{ order.pk }}">
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <select name="status" class="prod-status-select" onchange="this.form.submit()">
+                  {% for key, label in status_choices %}
+                    <option value="{{ key }}" {% if order.status == key %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </form>
             </div>
           </div>
 
@@ -328,6 +377,9 @@
             <div class="prod-list-info-row">
               <div>
                 <strong>{{ order.qty_total }}</strong> pcs
+              </div>
+              <div>
+                Reject {{ order.qty_reject }}
               </div>
               <div>
                 Sample {{ order.sample_deadline|date:"Y-m-d"|default:"-" }}

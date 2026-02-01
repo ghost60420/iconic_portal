@@ -189,6 +189,36 @@
     white-space: nowrap;
   }
 
+  .prod-lib-field {
+    margin-top: 8px;
+  }
+
+  .prod-lib-label {
+    font-size: 11px;
+    color: #9ca3af;
+    margin-bottom: 4px;
+  }
+
+  .prod-lib-control {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .prod-lib-control select {
+    flex: 1;
+    background: #0b1222;
+    border: 1px solid #374151;
+    color: #e5e7eb;
+    border-radius: 8px;
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+
+  .prod-lib-control .btn {
+    white-space: nowrap;
+  }
+
   .prod-ai-link {
     font-size: 11px;
     margin-top: 4px;
@@ -352,6 +382,14 @@
         </div>
 
         <div class="prod-add-field">
+          <div class="prod-add-label">Reject pieces</div>
+          {{ form.qty_reject }}
+          {% if form.qty_reject.errors %}
+            <div class="prod-add-errors">{{ form.qty_reject.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
           <div class="prod-add-label">Sample date</div>
           {{ form.sample_deadline }}
           {% if form.sample_deadline.errors %}
@@ -372,6 +410,14 @@
           {{ form.style_image }}
           {% if form.style_image.errors %}
             <div class="prod-add-errors">{{ form.style_image.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Status</div>
+          {{ form.status }}
+          {% if form.status.errors %}
+            <div class="prod-add-errors">{{ form.status.errors|striptags }}</div>
           {% endif %}
         </div>
 
@@ -515,24 +561,122 @@
           </div>
 
           <div class="prod-lib-box">
-            <div class="prod-lib-title">Library quick view</div>
+            <div class="prod-lib-title">Library pickers</div>
             <div class="prod-lib-text">
-              Use this as a guide when you fill the sheet. Later we will link it to the full library.
+              Pick items from the library and add them to the water sheet / order sheet fields.
             </div>
-            <div class="prod-lib-text">Common fabrics</div>
-            <div class="prod-lib-tags">
-              <span class="prod-lib-tag">300 GSM fleece</span>
-              <span class="prod-lib-tag">220 GSM jersey</span>
-              <span class="prod-lib-tag">Nylon spandex</span>
-              <span class="prod-lib-tag">Bamboo lycra</span>
+
+            <div class="prod-lib-field">
+              <div class="prod-lib-label">Product defaults</div>
+              <div class="prod-lib-control">
+                <select id="lib-product-picker">
+                  <option value="">Select product</option>
+                  {% for p in library_products %}
+                    <option value="{{ p.pk }}"
+                            data-name="{{ p.name }}"
+                            data-code="{{ p.product_code }}"
+                            data-fabric="{{ p.default_fabric }}"
+                            data-gsm="{{ p.default_gsm }}"
+                            data-moq="{{ p.default_moq }}">
+                      {{ p.product_code }} - {{ p.name }}
+                    </option>
+                  {% endfor %}
+                </select>
+                <button type="button" class="btn btn-sm btn-outline-light" id="lib-product-apply">Apply</button>
+              </div>
             </div>
-            <div class="prod-lib-text" style="margin-top:6px;">Common trims</div>
-            <div class="prod-lib-tags">
-              <span class="prod-lib-tag">Metal zipper</span>
-              <span class="prod-lib-tag">Nylon zipper</span>
-              <span class="prod-lib-tag">Woven label</span>
-              <span class="prod-lib-tag">Heat seal tag</span>
-              <span class="prod-lib-tag">Swing tag</span>
+
+            <div class="prod-lib-field">
+              <div class="prod-lib-label">Fabric</div>
+              <div class="prod-lib-control">
+                <select id="lib-fabric-picker">
+                  <option value="">Select fabric</option>
+                  {% for f in library_fabrics %}
+                    <option value="{{ f.pk }}"
+                            data-name="{{ f.name }}"
+                            data-code="{{ f.fabric_code }}"
+                            data-gsm="{{ f.gsm }}">
+                      {{ f.fabric_code }} - {{ f.name }}{% if f.gsm %} ({{ f.gsm }}){% endif %}
+                    </option>
+                  {% endfor %}
+                </select>
+                <button type="button"
+                        class="btn btn-sm btn-outline-light lib-add-btn"
+                        data-select="lib-fabric-picker"
+                        data-target="id_extra_order_note"
+                        data-template="Fabric: {code} {name} {gsm}">
+                  Add
+                </button>
+              </div>
+            </div>
+
+            <div class="prod-lib-field">
+              <div class="prod-lib-label">Accessory</div>
+              <div class="prod-lib-control">
+                <select id="lib-accessory-picker">
+                  <option value="">Select accessory</option>
+                  {% for a in library_accessories %}
+                    <option value="{{ a.pk }}"
+                            data-name="{{ a.name }}"
+                            data-code="{{ a.accessory_code }}">
+                      {{ a.accessory_code }} - {{ a.name }}
+                    </option>
+                  {% endfor %}
+                </select>
+                <button type="button"
+                        class="btn btn-sm btn-outline-light lib-add-btn"
+                        data-select="lib-accessory-picker"
+                        data-target="id_accessories_note"
+                        data-template="Accessory: {code} {name}">
+                  Add
+                </button>
+              </div>
+            </div>
+
+            <div class="prod-lib-field">
+              <div class="prod-lib-label">Trim</div>
+              <div class="prod-lib-control">
+                <select id="lib-trim-picker">
+                  <option value="">Select trim</option>
+                  {% for t in library_trims %}
+                    <option value="{{ t.pk }}"
+                            data-name="{{ t.name }}"
+                            data-code="{{ t.trim_code }}">
+                      {{ t.trim_code }} - {{ t.name }}
+                    </option>
+                  {% endfor %}
+                </select>
+                <button type="button"
+                        class="btn btn-sm btn-outline-light lib-add-btn"
+                        data-select="lib-trim-picker"
+                        data-target="id_accessories_note"
+                        data-template="Trim: {code} {name}">
+                  Add
+                </button>
+              </div>
+            </div>
+
+            <div class="prod-lib-field">
+              <div class="prod-lib-label">Thread</div>
+              <div class="prod-lib-control">
+                <select id="lib-thread-picker">
+                  <option value="">Select thread</option>
+                  {% for t in library_threads %}
+                    <option value="{{ t.pk }}"
+                            data-name="{{ t.name }}"
+                            data-code="{{ t.thread_code }}">
+                      {{ t.thread_code }} - {{ t.name }}
+                    </option>
+                  {% endfor %}
+                </select>
+                <button type="button"
+                        class="btn btn-sm btn-outline-light lib-add-btn"
+                        data-select="lib-thread-picker"
+                        data-target="id_accessories_note"
+                        data-template="Thread: {code} {name}">
+                  Add
+                </button>
+              </div>
             </div>
           </div>
 
@@ -812,6 +956,89 @@
       // final write before submit
       form.addEventListener("submit", function () {
         sizeField.value = buildSizeRatio(sizeKeys, inputs);
+      });
+    });
+  })();
+</script>
+
+<script>
+  (function () {
+    function appendLine(targetId, text) {
+      var field = document.getElementById(targetId);
+      if (!field || !text) return;
+      var current = (field.value || "").trim();
+      if (!current) {
+        field.value = text;
+        return;
+      }
+      if (current.indexOf(text) !== -1) return;
+      field.value = current + "\n" + text;
+    }
+
+    function fillTemplate(template, data) {
+      return template.replace(/\{(\w+)\}/g, function (_, key) {
+        return (data[key] || "").toString().trim();
+      }).replace(/\s+/g, " ").trim();
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+      var applyBtn = document.getElementById("lib-product-apply");
+      var productPicker = document.getElementById("lib-product-picker");
+      var productField = document.getElementById("id_product");
+      var styleField = document.getElementById("id_style_name");
+      var qtyField = document.getElementById("id_qty_total");
+      var extraField = document.getElementById("id_extra_order_note");
+
+      if (applyBtn && productPicker) {
+        applyBtn.addEventListener("click", function () {
+          var opt = productPicker.options[productPicker.selectedIndex];
+          if (!opt || !opt.value) return;
+
+          if (productField) {
+            productField.value = opt.value;
+          }
+
+          if (styleField && !(styleField.value || "").trim()) {
+            styleField.value = opt.dataset.name || "";
+          }
+
+          if (qtyField && !(qtyField.value || "").trim() && opt.dataset.moq) {
+            qtyField.value = opt.dataset.moq;
+          }
+
+          var fabricLine = "";
+          if (opt.dataset.fabric) {
+            fabricLine = "Fabric: " + opt.dataset.fabric;
+            if (opt.dataset.gsm) {
+              fabricLine += " " + opt.dataset.gsm;
+            }
+          }
+          if (fabricLine && extraField) {
+            appendLine(extraField.id, fabricLine);
+          }
+        });
+      }
+
+      document.querySelectorAll(".lib-add-btn").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var selectId = btn.getAttribute("data-select");
+          var targetId = btn.getAttribute("data-target");
+          var template = btn.getAttribute("data-template") || "{name}";
+
+          var selectEl = document.getElementById(selectId);
+          if (!selectEl) return;
+          var opt = selectEl.options[selectEl.selectedIndex];
+          if (!opt || !opt.value) return;
+
+          var data = {
+            name: opt.dataset.name || opt.textContent || "",
+            code: opt.dataset.code || "",
+            gsm: opt.dataset.gsm || "",
+          };
+
+          var text = fillTemplate(template, data);
+          appendLine(targetId, text);
+        });
       });
     });
   })();
