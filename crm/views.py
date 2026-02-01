@@ -4909,7 +4909,7 @@ def production_detail(request, pk):
     order = get_object_or_404(ProductionOrder, pk=pk)
 
     # sorted stages
-    stages = order.stages.all().order_by("planned_start", "stage_key")
+    stages = get_sorted_stages(order)
 
     # size grid
     size_grid, size_total = build_size_grid(order)

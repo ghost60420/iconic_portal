@@ -152,14 +152,14 @@
 
   .stage-wrap { margin-top: 6px; }
 
-  /* Clean stage flow */
+  /* Stage flow - modern pill strip */
   .stage-strip{
     display:flex;
-    gap:10px;
-    padding:10px;
-    border-radius:14px;
-    border:1px solid #27272a;
-    background:#020617;
+    gap:12px;
+    padding:12px;
+    border-radius:18px;
+    border:1px solid #1f2937;
+    background:linear-gradient(180deg, rgba(2,6,23,0.9), rgba(2,6,23,0.6));
     overflow-x:auto;
     -webkit-overflow-scrolling:touch;
   }
@@ -179,42 +179,65 @@
   .stage-item{
     display:flex;
     align-items:center;
-    gap:8px;
-    padding:9px 12px;
+    gap:10px;
+    padding:10px 16px;
     border-radius:999px;
-    border:1px solid rgba(255,255,255,0.12);
-    font-size:12px;
+    border:1px solid rgba(148,163,184,0.18);
+    font-size:13px;
     font-weight:800;
     color:#e5e7eb;
     white-space:nowrap;
     user-select:none;
     cursor:pointer;
-    min-height:38px;
-    transition:filter 0.08s ease, transform 0.08s ease;
+    min-height:42px;
+    background:rgba(15,23,42,0.75);
+    box-shadow:0 8px 18px rgba(0,0,0,0.35);
+    transition:filter 0.12s ease, transform 0.12s ease, border-color 0.12s ease;
   }
 
-  .stage-item:hover{ filter:brightness(1.08); transform:translateY(-1px); }
+  .stage-item:hover{
+    filter:brightness(1.08);
+    transform:translateY(-1px);
+    border-color:rgba(245,204,21,0.35);
+  }
 
-  .stage-item.planned{ background:#0b1222; }
-  .stage-item.current{ background:#1d4ed8; color:#ffffff; }
-  .stage-item.done{ background:#16a34a; color:#ffffff; }
-  .stage-item.delay{ background:#b91c1c; color:#ffffff; }
-  .stage-item.hold{ background:#78350f; color:#fef3c7; }
+  .stage-item.planned{ background:rgba(15,23,42,0.75); }
+  .stage-item.current{
+    background:linear-gradient(145deg, rgba(30,64,175,0.9), rgba(30,64,175,0.55));
+    color:#ffffff;
+    border-color:rgba(96,165,250,0.6);
+  }
+  .stage-item.done{
+    background:linear-gradient(145deg, rgba(22,163,74,0.9), rgba(22,163,74,0.55));
+    color:#ffffff;
+    border-color:rgba(34,197,94,0.65);
+  }
+  .stage-item.delay{
+    background:linear-gradient(145deg, rgba(185,28,28,0.9), rgba(185,28,28,0.55));
+    color:#ffffff;
+    border-color:rgba(248,113,113,0.65);
+  }
+  .stage-item.hold{
+    background:linear-gradient(145deg, rgba(120,53,15,0.95), rgba(120,53,15,0.6));
+    color:#fef3c7;
+    border-color:rgba(251,191,36,0.45);
+  }
 
   .stage-emoji{ font-size:14px; line-height:1; }
 
   .stage-chip-dot{
-    width:8px;
-    height:8px;
+    width:10px;
+    height:10px;
     border-radius:999px;
-    background:rgba(255,255,255,0.35);
+    background:rgba(148,163,184,0.6);
+    box-shadow:0 0 0 2px rgba(2,6,23,0.65) inset;
   }
 
   .stage-item.current .stage-chip-dot,
   .stage-item.done .stage-chip-dot,
   .stage-item.delay .stage-chip-dot,
   .stage-item.hold .stage-chip-dot{
-    background:rgba(255,255,255,0.85);
+    background:rgba(255,255,255,0.9);
   }
 
   .progress-row { margin-top: 10px; }
