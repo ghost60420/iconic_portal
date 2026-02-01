@@ -1780,6 +1780,34 @@ class ProductionOrder(models.Model):
         super().save(*args, **kwargs)
 
 
+class ProductionOrderMaterial(models.Model):
+    order = models.ForeignKey(
+        "ProductionOrder",
+        on_delete=models.CASCADE,
+        related_name="materials",
+    )
+    inventory_item = models.ForeignKey(
+        "InventoryItem",
+        on_delete=models.CASCADE,
+        related_name="production_materials",
+    )
+    quantity = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    unit_type = models.CharField(max_length=50, blank=True, default="")
+    notes = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def save(self, *args, **kwargs):
+        if not self.unit_type and self.inventory_item:
+            self.unit_type = self.inventory_item.unit_type or ""
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.order.order_code} - {self.inventory_item.name}"
+
+
 from decimal import Decimal
 from django.db import models
 from django.utils import timezone

@@ -28,7 +28,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
-from .models import Product, Fabric, Accessory, Trim, ThreadOption
+from .models import Product, Fabric, Accessory, Trim, ThreadOption, InventoryItem, ProductionOrderMaterial
 
 
 from .forms import (
@@ -997,13 +997,14 @@ def _chatter_for_opportunity(opportunity):
 def _chatter_for_production(order):
     lead = order.lead
     opportunity = order.opportunity
+    filters = Q(production=order)
+    if opportunity:
+        filters |= Q(opportunity=opportunity)
+    if lead:
+        filters |= Q(lead=lead, opportunity__isnull=True, production__isnull=True)
     return (
         LeadComment.objects.select_related("lead", "opportunity", "production")
-        .filter(
-            Q(production=order)
-            | (Q(opportunity=opportunity) if opportunity else Q())
-            | (Q(lead=lead, opportunity__isnull=True, production__isnull=True) if lead else Q())
-        )
+        .filter(filters)
         .order_by("-pinned", "-created_at")
         .distinct()
     )
@@ -3412,11 +3413,13 @@ def inventory_detail(request, pk):
             messages.warning(request, "Please enter a reorder quantity bigger than zero.")
 
     reorders = item.reorders.all()[:20]
+    production_lines = item.production_materials.select_related("order").order_by("-created_at")[:20]
 
     context = {
         "item": item,
         "total_value": total_value,
         "reorders": reorders,
+        "production_lines": production_lines,
     }
     return render(request, "crm/inventory_detail.html", context)
 
@@ -5043,10 +5046,52 @@ def production_detail(request, pk):
     order_delayed = order.is_delayed
     reject_percent = int((order.qty_reject / order.qty_total) * 100) if order.qty_total else 0
 
+    materials = order.materials.select_related("inventory_item")
     comments = _chatter_for_production(order)
 
     if request.method == "POST":
         action = (request.POST.get("action") or "").strip()
+
+        if action == "add_material":
+            item_id = (request.POST.get("inventory_item") or "").strip()
+            qty_raw = (request.POST.get("quantity") or "").strip()
+            note = (request.POST.get("note") or "").strip()
+
+            item = InventoryItem.objects.filter(pk=item_id).first() if item_id else None
+            if item:
+                qty_val = None
+                if qty_raw:
+                    try:
+                        qty_val = Decimal(qty_raw)
+                    except Exception:
+                        qty_val = None
+
+                line = ProductionOrderMaterial.objects.filter(order=order, inventory_item=item).first()
+                if line:
+                    if qty_val is not None:
+                        line.quantity = qty_val
+                    if note:
+                        line.notes = note
+                    line.save()
+                else:
+                    ProductionOrderMaterial.objects.create(
+                        order=order,
+                        inventory_item=item,
+                        quantity=qty_val,
+                        unit_type=item.unit_type,
+                        notes=note,
+                    )
+                messages.success(request, "Material added to order sheet.")
+            else:
+                messages.error(request, "Please select a material.")
+
+            return redirect("production_detail", pk=pk)
+
+        if action == "remove_material":
+            line_id = (request.POST.get("line_id") or "").strip()
+            if line_id:
+                ProductionOrderMaterial.objects.filter(pk=line_id, order=order).delete()
+            return redirect("production_detail", pk=pk)
 
         if action == "add_comment":
             comment_text = (request.POST.get("comment_text") or "").strip()
@@ -5073,15 +5118,28 @@ def production_detail(request, pk):
         if action == "toggle_pin_comment":
             comment_id = (request.POST.get("comment_id") or "").strip()
             if comment_id:
-                comment = LeadComment.objects.filter(
-                    Q(id=comment_id, production=order)
-                    | (Q(id=comment_id, opportunity=order.opportunity) if order.opportunity else Q())
-                    | (Q(id=comment_id, lead=order.lead, opportunity__isnull=True, production__isnull=True) if order.lead else Q())
-                ).first()
+                filters = Q(id=comment_id, production=order)
+                if order.opportunity:
+                    filters |= Q(id=comment_id, opportunity=order.opportunity)
+                if order.lead:
+                    filters |= Q(id=comment_id, lead=order.lead, opportunity__isnull=True, production__isnull=True)
+                comment = LeadComment.objects.filter(filters).first()
                 if comment:
                     comment.pinned = not comment.pinned
                     comment.save(update_fields=["pinned"])
             return redirect("production_detail", pk=pk)
+
+    recommended_items = InventoryItem.objects.none()
+    if order.fabrics.exists() or order.accessories.exists() or order.trims.exists() or order.threads.exists():
+        recommended_items = InventoryItem.objects.filter(
+            Q(fabric__in=order.fabrics.all())
+            | Q(accessory__in=order.accessories.all())
+            | Q(trim__in=order.trims.all())
+            | Q(thread_option__in=order.threads.all())
+        ).distinct()
+    recommended_ids = [str(i.pk) for i in recommended_items]
+
+    inventory_items = InventoryItem.objects.filter(is_active=True).order_by("category", "name")
 
     context = {
         "order": order,
@@ -5097,6 +5155,10 @@ def production_detail(request, pk):
         "lead": order.lead,
         "customer": order.customer,
         "comments": comments,
+        "materials": materials,
+        "inventory_items": inventory_items,
+        "recommended_items": recommended_items,
+        "recommended_ids": recommended_ids,
     }
 
     return render(request, "crm/production_detail.html", context)
@@ -5445,6 +5507,182 @@ def production_dpr(request, pk):
         return redirect("production_detail", pk=pk)
 
     return redirect("production_detail", pk=pk)
+
+
+def production_order_sheet_pdf(request, pk):
+    order = get_object_or_404(
+        ProductionOrder.objects.select_related("customer", "lead", "opportunity")
+        .prefetch_related("materials__inventory_item"),
+        pk=pk,
+    )
+
+    try:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+    except ImportError:
+        return HttpResponse(
+            "ReportLab is not installed yet. Ask your dev to install 'reportlab' to enable PDF.",
+            content_type="text/plain",
+        )
+
+    response = HttpResponse(content_type="application/pdf")
+    filename = f"production_order_sheet_{order.order_code or order.pk}.pdf"
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+
+    p = canvas.Canvas(response, pagesize=letter)
+    width, height = letter
+    y = height - 50
+
+    p.setFont("Helvetica-Bold", 16)
+    p.drawString(50, y, "Production Order Sheet")
+    y -= 24
+
+    p.setFont("Helvetica", 11)
+    header_lines = [
+        f"Order: {order.order_code or order.pk}  |  Title: {order.title}",
+        f"Customer: {(order.customer.account_brand if order.customer else '') or 'Not set'}",
+        f"Total pieces: {order.qty_total}  |  Reject: {order.qty_reject}",
+        f"Sample date: {order.sample_deadline or '-'}  |  Bulk date: {order.bulk_deadline or '-'}",
+        f"Factory: {order.get_factory_location_display()}  |  Order type: {order.get_order_type_display()}",
+    ]
+    for line in header_lines:
+        p.drawString(50, y, line)
+        y -= 16
+
+    y -= 6
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(50, y, "Materials")
+    y -= 18
+
+    p.setFont("Helvetica", 10)
+    p.drawString(50, y, "Name")
+    p.drawString(260, y, "Category")
+    p.drawString(360, y, "Qty")
+    p.drawString(430, y, "Unit")
+    p.drawString(490, y, "Code/SKU")
+    y -= 12
+    p.line(50, y, width - 50, y)
+    y -= 12
+
+    materials = order.materials.select_related("inventory_item")
+    if not materials:
+        p.drawString(50, y, "No materials selected yet.")
+        y -= 16
+    else:
+        for line in materials:
+            item = line.inventory_item
+            name = item.name
+            category = item.get_category_display()
+            qty = line.quantity if line.quantity is not None else "-"
+            unit = line.unit_type or item.unit_type or "-"
+            code = item.code or item.sku or "-"
+
+            p.drawString(50, y, str(name)[:32])
+            p.drawString(260, y, str(category)[:14])
+            p.drawString(360, y, str(qty))
+            p.drawString(430, y, str(unit))
+            p.drawString(490, y, str(code)[:18])
+            y -= 14
+
+            if y < 80:
+                p.showPage()
+                y = height - 50
+                p.setFont("Helvetica", 10)
+
+    p.showPage()
+    p.save()
+    return response
+
+
+def production_packing_list_pdf(request, pk):
+    order = get_object_or_404(
+        ProductionOrder.objects.select_related("customer", "lead", "opportunity"),
+        pk=pk,
+    )
+
+    try:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+    except ImportError:
+        return HttpResponse(
+            "ReportLab is not installed yet. Ask your dev to install 'reportlab' to enable PDF.",
+            content_type="text/plain",
+        )
+
+    response = HttpResponse(content_type="application/pdf")
+    filename = f"packing_list_{order.order_code or order.pk}.pdf"
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+
+    p = canvas.Canvas(response, pagesize=letter)
+    width, height = letter
+    y = height - 50
+
+    p.setFont("Helvetica-Bold", 16)
+    p.drawString(50, y, "Packing List")
+    y -= 24
+
+    p.setFont("Helvetica", 11)
+    customer_name = (order.customer.account_brand if order.customer else "") or "Not set"
+    p.drawString(50, y, f"Order: {order.order_code or order.pk}  |  Customer: {customer_name}")
+    y -= 16
+    p.drawString(50, y, f"Total pieces: {order.qty_total}  |  Reject: {order.qty_reject}")
+    y -= 16
+
+    if order.customer:
+        ship = order.customer
+        address_lines = [
+            "Ship to:",
+            ship.shipping_name or customer_name,
+            ship.shipping_address1 or "",
+            ship.shipping_address2 or "",
+            f"{ship.shipping_city or ''} {ship.shipping_state or ''} {ship.shipping_postcode or ''}".strip(),
+            ship.shipping_country or "",
+        ]
+        for line in address_lines:
+            if line:
+                p.drawString(50, y, line)
+                y -= 14
+        y -= 6
+
+    size_grid, size_total = build_size_grid(order)
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(50, y, "Size breakdown")
+    y -= 16
+    p.setFont("Helvetica", 10)
+
+    if size_grid and size_total:
+        row = "  ".join([f"{item['label']}: {item['qty'] or 0}" for item in size_grid])
+        p.drawString(50, y, row[:110])
+        y -= 14
+        p.drawString(50, y, f"Size total: {size_total}")
+        y -= 14
+    else:
+        p.drawString(50, y, "No size ratio set.")
+        y -= 14
+
+    y -= 6
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(50, y, "Packaging notes")
+    y -= 16
+    p.setFont("Helvetica", 10)
+    packaging_text = order.packaging_note or "Not set"
+    for line in str(packaging_text).splitlines():
+        p.drawString(50, y, line[:110])
+        y -= 12
+
+    y -= 6
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(50, y, "Accessories / trims")
+    y -= 16
+    p.setFont("Helvetica", 10)
+    accessories_text = order.accessories_note or "Not set"
+    for line in str(accessories_text).splitlines():
+        p.drawString(50, y, line[:110])
+        y -= 12
+
+    p.showPage()
+    p.save()
+    return response
 
 
 def chatter_feed(request):

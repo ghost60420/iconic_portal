@@ -390,6 +390,33 @@
         {% endif %}
       </div>
 
+      <div class="reorder-history-box" style="margin-top:12px;">
+        <div class="d-flex justify-content-between mb-1">
+          <span class="inv-small-label">Used in production orders</span>
+        </div>
+
+        {% if production_lines %}
+          {% for line in production_lines %}
+            <div class="reorder-row d-flex justify-content-between">
+              <div>
+                <div style="color:#f5f5f5;">
+                  {{ line.order.order_code }} — {{ line.order.title }}
+                </div>
+                <div class="inv-muted">
+                  Qty {{ line.quantity|default:"-" }} {{ line.unit_type|default:item.unit_type }}
+                  {% if line.notes %} · {{ line.notes }}{% endif %}
+                </div>
+              </div>
+              <div class="inv-muted text-end">
+                <a href="{% url 'production_detail' line.order.pk %}">Open</a>
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="inv-muted">No production orders linked yet.</div>
+        {% endif %}
+      </div>
+
     </div>
   </div>
 

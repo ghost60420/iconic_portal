@@ -965,6 +965,100 @@
 
   <div class="cardx">
     <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+      <div class="section-title" style="margin:0;">Order sheet (materials)</div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a href="{% url 'production_order_sheet_pdf' order.pk %}" class="btn btn-outline-light btn-sm">Download order sheet PDF</a>
+        <a href="{% url 'production_packing_list_pdf' order.pk %}" class="btn btn-outline-light btn-sm">Download packing list PDF</a>
+      </div>
+    </div>
+
+    <div style="margin-top:10px;">
+      <form method="post" style="display:grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 0.4fr) minmax(0, 0.8fr) minmax(0, 0.4fr); gap:8px; align-items:end;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add_material">
+        <div>
+          <div class="small-label">Material</div>
+          <select name="inventory_item" class="inputx">
+            <option value="">Select material</option>
+            {% if recommended_items %}
+              <optgroup label="Recommended from library">
+                {% for item in recommended_items %}
+                  <option value="{{ item.pk }}">
+                    {{ item.name }} ({{ item.get_category_display }})
+                  </option>
+                {% endfor %}
+              </optgroup>
+            {% endif %}
+            <optgroup label="All inventory">
+              {% for item in inventory_items %}
+                {% if item.pk|stringformat:"s" not in recommended_ids %}
+                  <option value="{{ item.pk }}">
+                    {{ item.name }} ({{ item.get_category_display }})
+                  </option>
+                {% endif %}
+              {% endfor %}
+            </optgroup>
+          </select>
+        </div>
+        <div>
+          <div class="small-label">Quantity</div>
+          <input type="number" step="0.01" name="quantity" class="inputx" placeholder="0">
+        </div>
+        <div>
+          <div class="small-label">Note</div>
+          <input type="text" name="note" class="inputx" placeholder="Optional note">
+        </div>
+        <div style="text-align:right;">
+          <button type="submit" class="btn btn-warning btn-sm">Add</button>
+        </div>
+      </form>
+    </div>
+
+    <div style="margin-top:12px;">
+      {% if materials %}
+        <div class="table-responsive">
+          <table class="table table-dark table-sm align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Material</th>
+                <th>Category</th>
+                <th>Qty</th>
+                <th>Unit</th>
+                <th>Code/SKU</th>
+                <th>Note</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for line in materials %}
+                <tr>
+                  <td>{{ line.inventory_item.name }}</td>
+                  <td>{{ line.inventory_item.get_category_display }}</td>
+                  <td>{{ line.quantity|default:"-" }}</td>
+                  <td>{{ line.unit_type|default:line.inventory_item.unit_type }}</td>
+                  <td>{{ line.inventory_item.code|default:line.inventory_item.sku|default:"-" }}</td>
+                  <td>{{ line.notes|default:"-" }}</td>
+                  <td>
+                    <form method="post" style="display:inline;">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="remove_material">
+                      <input type="hidden" name="line_id" value="{{ line.pk }}">
+                      <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Remove this material?');">Remove</button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="muted" style="font-size:13px;">No materials added yet. Use the form above to build the order sheet.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="cardx">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
       <div class="section-title" style="margin:0;">Shipping for this order</div>
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
         <a href="{% url 'shipping_add_for_order' order.pk %}" class="btn btn-warning btn-sm">Add shipment</a>
