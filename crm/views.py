@@ -5926,11 +5926,112 @@ def _select_related_fields():
     return fields
 
 
+SHIPMENT_NOTIFY_STATUSES = {
+    "shipped": "Dispatched",
+    "out_for_delivery": "Out for delivery",
+    "delivered": "Delivered",
+}
+
+
+def _shipment_email_target(shipment):
+    if getattr(shipment, "customer", None) and shipment.customer and getattr(shipment.customer, "email", None):
+        name = shipment.customer.contact_name or shipment.customer.account_brand or "Customer"
+        return shipment.customer.email, name
+    if getattr(shipment, "opportunity", None) and shipment.opportunity and getattr(shipment.opportunity, "lead", None):
+        lead = shipment.opportunity.lead
+        if lead and getattr(lead, "email", None):
+            name = lead.contact_name or lead.account_brand or "Customer"
+            return lead.email, name
+    return None, None
+
+
+def _send_shipment_status_email(request, shipment, status_key):
+    email_to, name = _shipment_email_target(shipment)
+    if not email_to:
+        return False
+
+    status_label = SHIPMENT_NOTIFY_STATUSES.get(status_key, "Shipment update")
+    carrier_name = shipment.get_carrier_display() if hasattr(shipment, "get_carrier_display") else "Carrier"
+    ship_date = shipment.ship_date or timezone.localdate()
+    tracking_line = shipment.tracking_number or "Tracking will be shared soon."
+
+    subject = f"Shipment update: {status_label}"
+    lines = [
+        f"Hello {name},",
+        "",
+        f"Your shipment is now: {status_label}.",
+        "",
+        f"Carrier: {carrier_name}",
+        f"Tracking: {tracking_line}",
+        f"Ship date: {ship_date}",
+    ]
+    if getattr(shipment, "tracking_url", None):
+        lines.append(f"Tracking link: {shipment.tracking_url}")
+    lines += ["", "Thank you,", "Iconic Apparel House"]
+    body = "\n".join(lines)
+
+    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "info@iconicapparelhouse.com")
+    try:
+        send_mail(subject, body, from_email, [email_to], fail_silently=False)
+        return True
+    except Exception:
+        return False
+
+
+def _handle_shipment_status_change(request, shipment, old_status):
+    new_status = shipment.status
+    if new_status == old_status:
+        return
+    if new_status not in SHIPMENT_NOTIFY_STATUSES:
+        return
+    if shipment.last_notified_status == new_status:
+        return
+
+    sent = _send_shipment_status_email(request, shipment, new_status)
+    if sent:
+        shipment.last_notified_status = new_status
+        if new_status == "delivered" and not shipment.delivered_at:
+            shipment.delivered_at = timezone.now()
+        shipment.save(update_fields=["last_notified_status", "delivered_at"])
+
+
 def shipment_list(request):
+    if request.method == "POST":
+        ship_id = (request.POST.get("shipment_id") or "").strip()
+        new_status = (request.POST.get("status") or "").strip()
+        if ship_id and new_status:
+            shipment = Shipment.objects.filter(pk=ship_id).first()
+            if shipment:
+                old_status = shipment.status
+                shipment.status = new_status
+                if new_status in {"shipped", "out_for_delivery", "delivered"} and not shipment.ship_date:
+                    shipment.ship_date = timezone.localdate()
+                if new_status == "delivered" and not shipment.delivered_at:
+                    shipment.delivered_at = timezone.now()
+                shipment.save()
+                _handle_shipment_status_change(request, shipment, old_status)
+                messages.success(request, f"Shipment status updated to {shipment.get_status_display()}.")
+        return redirect("shipment_list")
+
     qs = Shipment.objects.all()
     sr = _select_related_fields()
     if sr:
         qs = qs.select_related(*sr)
+
+    status_filter = (request.GET.get("status") or "all").strip().lower()
+    search_query = (request.GET.get("q") or "").strip()
+
+    if status_filter != "all":
+        qs = qs.filter(status=status_filter)
+
+    if search_query:
+        qs = qs.filter(
+            Q(tracking_number__icontains=search_query)
+            | Q(customer__account_brand__icontains=search_query)
+            | Q(customer__contact_name__icontains=search_query)
+            | Q(order__order_code__icontains=search_query)
+            | Q(order__title__icontains=search_query)
+        )
 
     shipments = qs.order_by("-ship_date", "-created_at")
 
@@ -5950,6 +6051,9 @@ def shipment_list(request):
             "total_weight": total_weight,
             "total_cost_bdt": total_cost_bdt,
             "total_cost_cad": total_cost_cad,
+            "status_filter": status_filter,
+            "search_query": search_query,
+            "status_choices": Shipment.STATUS_CHOICES,
         },
     )
 
@@ -5963,6 +6067,7 @@ def shipment_add(request):
         form = ShipmentForm(request.POST)
         if form.is_valid():
             shipment = form.save()
+            _handle_shipment_status_change(request, shipment, None)
             messages.success(request, "Shipment created.")
             return redirect("shipment_detail", pk=shipment.pk)
 
@@ -5988,6 +6093,21 @@ def shipment_detail(request, pk):
         qs = qs.select_related(*sr)
 
     shipment = get_object_or_404(qs, pk=pk)
+    if request.method == "POST":
+        action = (request.POST.get("action") or "").strip()
+        if action == "update_status":
+            new_status = (request.POST.get("status") or "").strip()
+            if new_status:
+                old_status = shipment.status
+                shipment.status = new_status
+                if new_status in {"shipped", "out_for_delivery", "delivered"} and not shipment.ship_date:
+                    shipment.ship_date = timezone.localdate()
+                if new_status == "delivered" and not shipment.delivered_at:
+                    shipment.delivered_at = timezone.now()
+                shipment.save()
+                _handle_shipment_status_change(request, shipment, old_status)
+                messages.success(request, f"Shipment status updated to {shipment.get_status_display()}.")
+            return redirect("shipment_detail", pk=pk)
     return render(request, "crm/shipment_detail.html", {"shipment": shipment})
 
 
@@ -5997,7 +6117,9 @@ def shipment_edit(request, pk):
     if request.method == "POST":
         form = ShipmentForm(request.POST, instance=shipment)
         if form.is_valid():
-            form.save()
+            old_status = shipment.status
+            shipment = form.save()
+            _handle_shipment_status_change(request, shipment, old_status)
             messages.success(request, "Shipment updated.")
             return redirect("shipment_detail", pk=pk)
 
@@ -6049,6 +6171,7 @@ def shipping_add_for_opportunity(request, pk):
                 shipment.ship_date = timezone.localdate()
 
             shipment.save()
+            _handle_shipment_status_change(request, shipment, None)
             messages.success(request, "Shipment created for this opportunity.")
             return redirect("opportunity_detail", pk=opportunity.pk)
 
@@ -6118,6 +6241,7 @@ def shipping_add_for_order(request, pk):
                 shipment.cost_cad = Decimal("0")
 
             shipment.save()
+            _handle_shipment_status_change(request, shipment, None)
             messages.success(request, "Shipment created for this order.")
             return redirect("production_detail", pk=order.pk)
 

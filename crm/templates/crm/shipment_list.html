@@ -28,6 +28,47 @@
     margin-bottom: 4px;
   }
 
+  .ship-filter-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+  }
+
+  .ship-filter-btn {
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid #374151;
+    background: #020617;
+    color: #e5e7eb;
+    font-size: 11px;
+    text-decoration: none;
+  }
+
+  .ship-filter-btn.active {
+    border-color: #facc15;
+    color: #fef9c3;
+    box-shadow: 0 0 0 1px rgba(250,204,21,0.35);
+  }
+
+  .ship-search {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+
+  .ship-search input {
+    background: #020617;
+    border: 1px solid #374151;
+    color: #e5e7eb;
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-size: 12px;
+    min-width: 220px;
+  }
+
   .btn {
     display: inline-block;
     padding: 4px 10px;
@@ -133,9 +174,23 @@
     color: #bbf7d0;
   }
 
+  .status-out_for_delivery {
+    background: rgba(56, 189, 248, 0.2);
+    color: #bae6fd;
+  }
+
   .status-cancelled {
     background: rgba(248, 113, 113, 0.25);
     color: #fecaca;
+  }
+
+  .status-select {
+    background: #0b1222;
+    border: 1px solid #374151;
+    color: #e5e7eb;
+    border-radius: 8px;
+    padding: 4px 6px;
+    font-size: 11px;
   }
 </style>
 
@@ -188,6 +243,24 @@
     </div>
   </div>
 
+  <div class="card-box" style="margin-bottom:10px;">
+    <div class="ship-filter-row">
+      <a class="ship-filter-btn {% if status_filter == 'all' %}active{% endif %}" href="?status=all">All</a>
+      <a class="ship-filter-btn {% if status_filter == 'planned' %}active{% endif %}" href="?status=planned">Planned</a>
+      <a class="ship-filter-btn {% if status_filter == 'booked' %}active{% endif %}" href="?status=booked">Booked</a>
+      <a class="ship-filter-btn {% if status_filter == 'shipped' %}active{% endif %}" href="?status=shipped">Shipped</a>
+      <a class="ship-filter-btn {% if status_filter == 'out_for_delivery' %}active{% endif %}" href="?status=out_for_delivery">Out for delivery</a>
+      <a class="ship-filter-btn {% if status_filter == 'delivered' %}active{% endif %}" href="?status=delivered">Delivered</a>
+      <a class="ship-filter-btn {% if status_filter == 'cancelled' %}active{% endif %}" href="?status=cancelled">Cancelled</a>
+    </div>
+
+    <form method="get" class="ship-search">
+      <input type="hidden" name="status" value="{{ status_filter }}">
+      <input type="text" name="q" placeholder="Search tracking, customer, order..." value="{{ search_query }}">
+      <button type="submit" class="btn btn-gold-soft btn-small">Search</button>
+    </form>
+  </div>
+
   <!-- table -->
   <div class="card-box">
     {% if shipments %}
@@ -237,7 +310,7 @@
                 </td>
                 <td>
                   {% if s.customer %}
-                    {{ s.customer.name|default:s.customer }}
+                    {{ s.customer.account_brand|default:s.customer.contact_name|default:s.customer }}
                   {% else %}
                     -
                   {% endif %}
@@ -251,6 +324,7 @@
                     {% if s.status == 'planned' %}status-planned{% endif %}
                     {% if s.status == 'booked' %}status-booked{% endif %}
                     {% if s.status == 'shipped' %}status-shipped{% endif %}
+                    {% if s.status == 'out_for_delivery' %}status-out_for_delivery{% endif %}
                     {% if s.status == 'delivered' %}status-delivered{% endif %}
                     {% if s.status == 'cancelled' %}status-cancelled{% endif %}
                   ">
@@ -258,9 +332,16 @@
                   </span>
                 </td>
                 <td>
-                  <a href="{% url 'shipment_detail' s.pk %}" class="btn btn-slate btn-small">
-                    View
-                  </a>
+                  <a href="{% url 'shipment_detail' s.pk %}" class="btn btn-slate btn-small">View</a>
+                  <form method="post" style="margin-top:4px;">
+                    {% csrf_token %}
+                    <input type="hidden" name="shipment_id" value="{{ s.pk }}">
+                    <select name="status" class="status-select" onchange="this.form.submit()">
+                      {% for key, label in status_choices %}
+                        <option value="{{ key }}" {% if s.status == key %}selected{% endif %}>{{ label }}</option>
+                      {% endfor %}
+                    </select>
+                  </form>
                 </td>
               </tr>
             {% endfor %}

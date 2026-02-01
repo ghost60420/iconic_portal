@@ -97,6 +97,12 @@
     background: rgba(8, 47, 73, 0.7);
   }
 
+  .pill-blue {
+    border-color: #38bdf8;
+    color: #bae6fd;
+    background: rgba(56, 189, 248, 0.18);
+  }
+
   .card-shell {
     background: radial-gradient(circle at top left, #111827, #020617);
     border: 1px solid #1f2937;
@@ -153,6 +159,28 @@
     font-size: 12px;
   }
 
+  .status-timeline {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+
+  .status-chip {
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid #374151;
+    font-size: 11px;
+    color: #e5e7eb;
+    background: #020617;
+  }
+
+  .status-chip.active {
+    border-color: #facc15;
+    color: #fef9c3;
+    box-shadow: 0 0 0 1px rgba(250,204,21,0.35);
+  }
+
   @media (max-width: 768px) {
     .ship-grid {
       grid-template-columns: minmax(0, 1fr);
@@ -192,6 +220,30 @@
     </div>
   </div>
 
+  <div class="card-shell" style="margin-bottom:10px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+      <div class="muted">Quick status update</div>
+      <form method="post" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="update_status">
+        <select name="status" class="btn btn-soft btn-small" style="padding:4px 8px;">
+          {% for key, label in shipment.STATUS_CHOICES %}
+            <option value="{{ key }}" {% if shipment.status == key %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-gold btn-small">Update</button>
+      </form>
+    </div>
+    <div class="status-timeline">
+      <span class="status-chip {% if shipment.status == 'planned' %}active{% endif %}">Planned</span>
+      <span class="status-chip {% if shipment.status == 'booked' %}active{% endif %}">Booked</span>
+      <span class="status-chip {% if shipment.status == 'shipped' %}active{% endif %}">Shipped</span>
+      <span class="status-chip {% if shipment.status == 'out_for_delivery' %}active{% endif %}">Out for delivery</span>
+      <span class="status-chip {% if shipment.status == 'delivered' %}active{% endif %}">Delivered</span>
+      <span class="status-chip {% if shipment.status == 'cancelled' %}active{% endif %}">Cancelled</span>
+    </div>
+  </div>
+
   <!-- summary strip -->
   <div class="card-shell" style="margin-bottom:10px;">
     <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
@@ -205,7 +257,12 @@
         </span>
       {% endif %}
 
-      <span class="pill {% if shipment.status == 'delivered' %}pill-green{% else %}pill-orange{% endif %}">
+      <span class="pill
+        {% if shipment.status == 'delivered' %}pill-green
+        {% elif shipment.status == 'out_for_delivery' %}pill-blue
+        {% elif shipment.status == 'shipped' %}pill-orange
+        {% else %}pill{% endif %}
+      ">
         Status {{ shipment.get_status_display }}
       </span>
 
@@ -251,6 +308,20 @@
             {% endif %}
           {% else %}
             <span class="muted">Not set</span>
+          {% endif %}
+        </div>
+      </div>
+      
+      <div class="ship-row">
+        <div class="ship-label">Last tracking</div>
+        <div class="ship-value">
+          {% if shipment.last_tracking_status %}
+            {{ shipment.last_tracking_status }}
+            {% if shipment.last_tracking_check %}
+              <span class="muted"> ({{ shipment.last_tracking_check }})</span>
+            {% endif %}
+          {% else %}
+            <span class="muted">No tracking update yet</span>
           {% endif %}
         </div>
       </div>
@@ -361,7 +432,7 @@
       <div class="ship-label">Customer</div>
       <div class="ship-value">
         {% if shipment.customer %}
-          {{ shipment.customer.name|default:shipment.customer }}
+          {{ shipment.customer.account_brand|default:shipment.customer.contact_name|default:shipment.customer }}
         {% else %}
           <span class="muted">None</span>
         {% endif %}

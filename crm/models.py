@@ -1825,6 +1825,7 @@ class Shipment(models.Model):
         ("planned", "Planned"),
         ("booked", "Booked"),
         ("shipped", "Shipped"),
+        ("out_for_delivery", "Out for delivery"),
         ("delivered", "Delivered"),
         ("cancelled", "Cancelled"),
     ]
@@ -1910,6 +1911,7 @@ class Shipment(models.Model):
     last_tracking_status = models.CharField(max_length=200, blank=True)
     last_tracking_check = models.DateTimeField(null=True, blank=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
+    last_notified_status = models.CharField(max_length=30, blank=True, default="")
 
     notes = models.TextField(blank=True)
 
