@@ -68,12 +68,12 @@ urlpatterns = [
     path("opportunities/<int:pk>/ai/suggest/", perm("can_ai", ai.ai_opportunity_suggest), name="ai_opportunity_suggest"),
 
     # Costing
-    path("costing/", perm("can_costing", costing.cost_sheet_list), name="cost_sheet_list"),
-    path("costing/add/", perm("can_costing", costing.cost_sheet_create), name="cost_sheet_create"),
-    path("costing/add/opportunity/<int:opportunity_id>/", perm("can_costing", costing.cost_sheet_create), name="cost_sheet_create_for_opportunity"),
-    path("costing/<int:pk>/", perm("can_costing", costing.cost_sheet_detail), name="cost_sheet_detail"),
-    path("costing/<int:pk>/export/pdf/", perm("can_costing", costing.cost_sheet_export_pdf), name="cost_sheet_export_pdf"),
-    path("costing/<int:pk>/export/excel/", perm("can_costing", costing.cost_sheet_export_excel), name="cost_sheet_export_excel"),
+    path("costing/", login_required(costing.cost_sheet_list), name="cost_sheet_list"),
+    path("costing/add/", login_required(costing.cost_sheet_create), name="cost_sheet_create"),
+    path("costing/add/opportunity/<int:opportunity_id>/", login_required(costing.cost_sheet_create), name="cost_sheet_create_for_opportunity"),
+    path("costing/<int:pk>/", login_required(costing.cost_sheet_detail), name="cost_sheet_detail"),
+    path("costing/<int:pk>/export/pdf/", login_required(costing.cost_sheet_export_pdf), name="cost_sheet_export_pdf"),
+    path("costing/<int:pk>/export/excel/", login_required(costing.cost_sheet_export_excel), name="cost_sheet_export_excel"),
 
     path("chatter/", login_required(views.chatter_feed), name="chatter_feed"),
 

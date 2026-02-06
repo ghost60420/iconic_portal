@@ -19,9 +19,7 @@
 
       {% url 'cost_sheet_list' as u_costing %}
       {% if u_costing and request.user.is_authenticated %}
-        {% if request.user.is_superuser or request.user.access.can_costing %}
-          <a class="navitem" href="{{ u_costing }}">🧮 Costing</a>
-        {% endif %}
+        <a class="navitem" href="{{ u_costing }}">🧮 Costing</a>
       {% endif %}
 
       {% url 'customers_list' as u_customers %}

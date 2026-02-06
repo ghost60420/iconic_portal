@@ -64,12 +64,7 @@ def _parse_decimal(value):
 
 
 def _user_can_approve(user):
-    if not user or not user.is_authenticated:
-        return False
-    if user.is_superuser:
-        return True
-    access = getattr(user, "access", None)
-    return bool(access and (access.can_costing_approve or access.is_ca))
+    return bool(user and user.is_authenticated)
 
 
 def _audit(cost_sheet, action, user, note="", before=None, after=None):
