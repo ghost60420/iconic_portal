@@ -203,15 +203,19 @@ urlpatterns = [
     path("bd-staff/months/generate/", perm("can_accounting_bd", acc.bd_staff_month_generate), name="bd_staff_month_generate"),
     path("bd-staff/months/<int:pk>/edit/", perm("can_accounting_bd", acc.bd_staff_month_edit), name="bd_staff_month_edit"),
 
-    # WhatsApp webhook
-    path("whatsapp/webhook/", whatsapp_webhook, name="wa_webhook"),
-    path("api/whatsapp/webhook/", whatsapp_webhook, name="api_wa_webhook"),
+    # WhatsApp webhook (Meta Cloud API legacy)
+    path("whatsapp-api/webhook/", wa.wa_webhook, name="wa_api_webhook"),
+    path("api/whatsapp/webhook/", wa.wa_webhook, name="api_wa_webhook"),
 
-    # WhatsApp inbox UI
-    path("whatsapp/", perm("can_leads", wa.wa_inbox), name="wa_inbox"),
-    path("whatsapp/<int:pk>/", perm("can_leads", wa.wa_thread), name="wa_thread"),
-    path("whatsapp/<int:pk>/send/", perm("can_leads", wa.wa_send), name="wa_send"),
-    path("whatsapp/<int:pk>/send-ai/", perm("can_leads", wa.wa_send_ai_draft), name="wa_send_ai_draft"),
+    # WhatsApp inbox UI (Meta Cloud API legacy)
+    path("whatsapp-api/", perm("can_leads", wa.wa_inbox), name="wa_api_inbox"),
+    path("whatsapp-api/<int:pk>/", perm("can_leads", wa.wa_thread), name="wa_api_thread"),
+    path("whatsapp-api/<int:pk>/messages/", perm("can_leads", wa.wa_thread_messages_json), name="wa_api_thread_messages"),
+    path("whatsapp-api/media/<int:msg_id>/", perm("can_leads", wa.wa_media), name="wa_api_media"),
+    path("whatsapp-api/<int:pk>/send/", perm("can_leads", wa.wa_send), name="wa_api_send"),
+    path("whatsapp-api/<int:pk>/send-ai/", perm("can_leads", wa.wa_send_ai_draft), name="wa_api_send_ai_draft"),
+    path("whatsapp-api/<int:pk>/toggle-ai/", perm("can_leads", wa.wa_toggle_ai), name="wa_api_toggle_ai"),
+    path("whatsapp-api/start/", perm("can_leads", wa.wa_start), name="wa_api_start"),
 
     # Email sync
     path("email-sync/", login_required(views_email.email_sync_dashboard), name="email_sync_dashboard"),

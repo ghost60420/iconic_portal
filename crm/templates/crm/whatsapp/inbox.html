@@ -1,244 +1,605 @@
 {% extends "crm/base.html" %}
 {% block content %}
-
 <style>
-  .wrap{ max-width:1100px; margin:0 auto; color:#f9fafb; }
-  .cardx{
-    background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
-    border:1px solid #334155;
-    border-radius:18px;
-    box-shadow: 0 18px 40px rgba(0,0,0,0.55);
-    overflow:hidden;
+  .wa-wrap{
+    max-width:1400px;
+    margin:0 auto;
+    color:var(--wa-text);
+    --wa-bg:#0b141a;
+    --wa-panel:#111b21;
+    --wa-panel-2:#202c33;
+    --wa-border:#1f2a30;
+    --wa-muted:#8696a0;
+    --wa-accent:#25d366;
+    --wa-accent-2:#128c7e;
+    --wa-msg-in:#202c33;
+    --wa-msg-out:#005c4b;
   }
-  .pad{ padding:14px; }
-  .title{ margin:0; font-weight:900; }
-  .sub{ margin-top:4px; font-size:12px; font-weight:800; color:#9ca3af; }
-  .rowx{ display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
-
-  .toolbar{
-    display:flex;
-    gap:10px;
-    flex-wrap:wrap;
-    align-items:center;
-    margin-top:10px;
+  .wa-layout{ display:grid; grid-template-columns: 320px 1fr; gap:16px; }
+  .wa-card{ background: var(--wa-panel); border:1px solid var(--wa-border); border-radius:18px; box-shadow: 0 18px 40px rgba(0,0,0,0.35); overflow:hidden; }
+  .wa-pad{ padding:14px; }
+  .wa-title{ margin:0; font-weight:900; }
+  .wa-sub{ margin-top:4px; font-size:12px; font-weight:800; color:var(--wa-muted); }
+  .wa-input{ width:100%; background:#0b141a; border:1px solid var(--wa-border); color:var(--wa-text); border-radius:12px; padding:10px; font-size:13px; font-weight:700; }
+  .wa-list{ max-height:70vh; overflow:auto; padding:8px; background: var(--wa-panel); }
+  .wa-item{ display:block; padding:10px 12px; border-radius:12px; border:1px solid transparent; margin-bottom:6px; text-decoration:none; color:var(--wa-text); background: transparent; }
+  .wa-item:hover{ background: rgba(255,255,255,0.04); }
+  .wa-item.active{ background: rgba(37,211,102,0.16); border-color: rgba(37,211,102,0.35); }
+  .wa-name{ font-weight:900; font-size:13px; }
+  .wa-meta{ font-size:11px; color:var(--wa-muted); font-weight:800; margin-top:2px; }
+  .wa-badge{ display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:999px; font-size:11px; font-weight:900; border:1px solid var(--wa-border); background: rgba(255,255,255,0.04); color:var(--wa-text); }
+  .wa-badge.ok{ background: var(--wa-accent); border-color: var(--wa-accent); color:#0b0f1a; }
+  .wa-badge.warn{ background:#f59e0b; border-color:#f59e0b; color:#0b0f1a; }
+  .wa-badge.off{ background:#64748b; border-color:#64748b; color:#0b0f1a; }
+  .wa-attach{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .wa-file{ width:100%; max-width:260px; background:#0b141a; border:1px dashed #2a3942; color:var(--wa-text); border-radius:12px; padding:8px; font-size:12px; }
+  .wa-file-meta{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:11px; color:#9ca3af; }
+  .wa-file-preview{ margin-top:6px; display:none; }
+  .wa-file-preview img{ max-width:160px; border-radius:10px; border:1px solid var(--wa-border); display:block; }
+  .wa-media{ margin-top:8px; display:flex; gap:10px; align-items:flex-start; flex-wrap:wrap; }
+  .wa-media-img{ max-width:240px; border-radius:10px; border:1px solid var(--wa-border); display:block; }
+  .wa-media-info{ display:flex; flex-direction:column; gap:4px; }
+  .wa-media-name{ font-size:12px; font-weight:800; color:#e5e7eb; }
+  .wa-media-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  .wa-link{ color:#9ad0ff; font-weight:800; text-decoration:none; }
+  .wa-link:hover{ text-decoration:underline; }
+  .wa-drop{ border:1px dashed #2a3942; border-radius:12px; padding:10px; background: rgba(17,27,33,0.6); }
+  .wa-drop.is-dragover{ border-color: var(--wa-accent); background: rgba(37,211,102,0.08); }
+  .wa-chat{ display:flex; flex-direction:column; height:70vh; }
+  .wa-messages{
+    flex:1;
+    overflow:auto;
+    padding:14px;
+    background-color: var(--wa-bg);
+    background-image:
+      radial-gradient(circle at 20% 10%, rgba(255,255,255,0.04), transparent 45%),
+      radial-gradient(circle at 80% 20%, rgba(255,255,255,0.03), transparent 40%),
+      radial-gradient(circle at 50% 80%, rgba(255,255,255,0.02), transparent 50%);
   }
-
-  .input{
-    background:#020617;
-    border:1px solid #334155;
-    color:#f9fafb;
-    border-radius:999px;
-    padding:10px 12px;
-    font-size:13px;
-    font-weight:800;
-    min-width:260px;
-  }
-
-  .chip{
+  .wa-msg-row{ display:flex; margin-bottom:10px; }
+  .wa-msg-row.in{ justify-content:flex-start; }
+  .wa-msg-row.out{ justify-content:flex-end; }
+  .wa-msg{ max-width:72%; padding:10px 12px; border-radius:14px; border:1px solid transparent; }
+  .wa-msg.in{ background: var(--wa-msg-in); }
+  .wa-msg.out{ background: var(--wa-msg-out); }
+  .wa-msg-meta{ font-size:11px; font-weight:800; color:var(--wa-muted); margin-bottom:4px; }
+  .wa-compose{ border-top:1px solid var(--wa-border); padding:12px; background: var(--wa-panel-2); }
+  .wa-btn{ display:inline-flex; align-items:center; gap:8px; padding:9px 14px; border-radius:999px; font-weight:900; font-size:12px; text-decoration:none; border:1px solid rgba(255,255,255,0.18); background: linear-gradient(145deg, #0f172a, #020617); color:var(--wa-text); cursor:pointer; }
+  .wa-btn.primary{ background: linear-gradient(145deg, var(--wa-accent), var(--wa-accent-2)); color:#0b0f1a; border-color: transparent; }
+  .wa-row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .wa-empty{ padding:32px; text-align:center; color:#9ca3af; font-weight:800; }
+  .wa-avatar{
+    width:34px; height:34px;
+    border-radius:50%;
+    background: #1f2a30;
     display:inline-flex;
     align-items:center;
-    gap:8px;
-    padding:9px 12px;
-    border-radius:999px;
-    border:1px solid rgba(255,255,255,0.18);
-    background: rgba(255,255,255,0.03);
-    color:#f9fafb;
-    font-size:12px;
+    justify-content:center;
     font-weight:900;
-    cursor:pointer;
-    user-select:none;
-    text-decoration:none;
+    color:#b9c1c7;
+    flex-shrink:0;
   }
-  .chip:hover{ filter:brightness(1.05); }
-  .chip.active{
-    border-color:#facc15;
-    box-shadow: 0 0 0 1px rgba(250,204,21,0.25);
+  .wa-item-line{ display:flex; gap:10px; align-items:center; }
+  .wa-chip{ cursor:pointer; }
+
+  @media (max-width: 1024px){
+    .wa-layout{ grid-template-columns: 1fr; }
+    .wa-chat{ height:auto; }
   }
-
-  .item{
-    padding:12px;
-    border-radius:14px;
-    border:1px solid rgba(148,163,184,0.22);
-    background: rgba(255,255,255,0.03);
-    margin-bottom:10px;
-    display:flex;
-    justify-content:space-between;
-    gap:10px;
-    flex-wrap:wrap;
-  }
-  .name{ font-weight:900; margin:0; }
-  .meta{ font-size:12px; color:#cbd5e1; font-weight:800; margin-top:4px; }
-
-  .badge{
-    display:inline-flex; align-items:center; gap:6px;
-    padding:6px 10px; border-radius:999px;
-    font-size:11px; font-weight:900;
-    border:1px solid #334155; background: rgba(255,255,255,0.03);
-    color:#e5e7eb;
-    white-space:nowrap;
-  }
-  .bad{ background:#ef4444; border-color:#ef4444; color:#fff; }
-  .ok{ background:#16a34a; border-color:#16a34a; color:#0b0f1a; }
-  .off{ background:#64748b; border-color:#64748b; color:#0b0f1a; }
-
-  .btn{
-    display:inline-flex; align-items:center; gap:8px;
-    padding:9px 14px; border-radius:999px;
-    font-weight:900; font-size:12px; text-decoration:none;
-    border:1px solid rgba(255,255,255,0.18);
-    background: linear-gradient(145deg, #0f172a, #020617);
-    color:#f9fafb;
-  }
-  .btn:hover{ filter:brightness(1.05); }
-
-  .leadlink a{ color:#facc15; text-decoration:none; }
-  .leadlink a:hover{ text-decoration:underline; }
-
-  .muted{ color:#9ca3af; font-weight:800; font-size:12px; }
-
 </style>
 
 <div class="container-fluid">
-  <div class="wrap">
-
-    <div class="rowx">
+  <div class="wa-wrap">
+    <form id="wa-csrf" style="display:none;">{% csrf_token %}</form>
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
       <div>
-        <h2 class="title">WhatsApp Inbox 📲</h2>
-        <div class="sub">Incoming chats. Search and filter, then open a thread to reply.</div>
-
-        <div class="toolbar">
-          <input id="q" class="input" type="text" placeholder="Search name, phone, or lead brand">
-
-          <a href="#" class="chip active" data-filter="all">All</a>
-          <a href="#" class="chip" data-filter="human">Needs human</a>
-          <a href="#" class="chip" data-filter="aioff">AI off</a>
+        <h2 class="wa-title">WhatsApp Inbox</h2>
+        <div class="wa-sub">Cloud API conversations. Search, filter, respond fast.</div>
+        <div class="wa-row" style="margin-top:8px;">
+          {% if wa_ready %}
+            <span class="wa-badge ok">API Ready</span>
+          {% else %}
+            <span class="wa-badge warn">Missing WA_TOKEN or WA_PHONE_NUMBER_ID</span>
+          {% endif %}
+          {% if wa_verify_token_set %}
+            <span class="wa-badge ok">Verify Token set</span>
+          {% else %}
+            <span class="wa-badge warn">Verify Token missing</span>
+          {% endif %}
+          {% if wa_app_secret_set %}
+            <span class="wa-badge ok">App Secret set</span>
+          {% else %}
+            <span class="wa-badge off">App Secret missing</span>
+          {% endif %}
+          {% if wa_auto_reply_enabled %}
+            <span class="wa-badge ok">Auto-reply on</span>
+          {% else %}
+            <span class="wa-badge off">Auto-reply off</span>
+          {% endif %}
         </div>
+        <div class="wa-sub" style="margin-top:6px;">Webhook: <span style="color:#9ad0ff; font-weight:900;">{{ wa_webhook_url }}</span></div>
       </div>
-
-      <div class="muted">
-        Total: {{ threads|length }}
+      <div class="wa-row">
+        <span class="wa-badge">Threads: {{ threads|length }}</span>
       </div>
     </div>
 
-    <div class="cardx">
-      <div class="pad">
-
-        {% if threads %}
-          <div id="list">
-            {% for t in threads %}
-              <div
-                class="item"
-                data-name="{{ t.wa_name|default:''|lower }}"
-                data-phone="{{ t.wa_phone|default:'' }}"
-                data-lead="{% if t.lead %}{{ t.lead.account_brand|default:''|lower }}{% else %}{% endif %}"
-                data-needs-human="{% if t.needs_human %}1{% else %}0{% endif %}"
-                data-ai-enabled="{% if t.ai_enabled %}1{% else %}0{% endif %}"
-              >
-                <div>
-                  <p class="name">{{ t.wa_name|default:"Unknown" }} ({{ t.wa_phone }})</p>
-
-                  <div class="meta">
-                    Last:
-                    {% if t.last_message_at %}
-                      {{ t.last_message_at|date:"Y-m-d H:i" }}
-                    {% else %}
-                      No messages
-                    {% endif %}
-
+    <div class="wa-layout" style="margin-top:14px;">
+      <div class="wa-card">
+        <div class="wa-pad">
+          <div class="wa-row" style="justify-content:space-between;">
+            <input id="waSearch" class="wa-input" placeholder="Search name or phone">
+          </div>
+          <div class="wa-row" style="margin-top:8px;">
+            <span class="wa-badge wa-chip ok" data-filter="all">All</span>
+            <span class="wa-badge wa-chip" data-filter="human">Needs human</span>
+            <span class="wa-badge wa-chip" data-filter="aioff">AI off</span>
+          </div>
+          <details style="margin-top:10px;">
+            <summary class="wa-sub" style="cursor:pointer;">Start new chat</summary>
+            <div class="wa-row" style="margin-top:8px;">
+              <input id="newPhone" class="wa-input" placeholder="Phone with country code">
+              <input id="newText" class="wa-input" placeholder="Message (24h window)">
+              <button class="wa-btn" id="btnStart" type="button">Send</button>
+              <span class="wa-sub" id="startStatus"></span>
+            </div>
+          </details>
+        </div>
+        <div class="wa-list" id="waList">
+          {% for t in threads %}
+            <a class="wa-item {% if selected_thread and selected_thread.pk == t.pk %}active{% endif %}"
+               href="{% url 'wa_api_inbox' %}?thread={{ t.pk }}"
+               data-thread="{{ t.pk }}"
+               data-name="{{ t.wa_name|default:''|lower }}"
+               data-phone="{{ t.wa_phone|default:'' }}"
+               data-needs-human="{% if t.needs_human %}1{% else %}0{% endif %}"
+               data-ai-enabled="{% if t.ai_enabled %}1{% else %}0{% endif %}">
+              <div class="wa-row" style="justify-content:space-between;">
+                <div class="wa-item-line">
+                  <div class="wa-avatar">{{ t.wa_name|default:"?"|slice:":1"|upper }}</div>
+                  <div>
+                    <div class="wa-name">{{ t.wa_name|default:"Unknown" }} · {{ t.display_phone }}</div>
+                    <div class="wa-meta">Last: {% if t.last_message_at %}{{ t.last_message_at|date:"Y-m-d H:i" }}{% else %}—{% endif %}</div>
                     {% if t.lead %}
-                      · <span class="leadlink">Lead: <a href="{% url 'lead_detail' t.lead.pk %}">{{ t.lead.account_brand }}</a></span>
+                      <div class="wa-meta">Lead: {{ t.lead.account_brand|default:"Lead" }}</div>
+                    {% else %}
+                      <div class="wa-meta">No lead linked</div>
                     {% endif %}
                   </div>
                 </div>
-
-                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <div class="wa-row">
                   {% if t.needs_human %}
-                    <span class="badge bad">Needs human</span>
-                  {% else %}
-                    <span class="badge ok">OK</span>
+                    <span class="wa-badge warn">Needs human</span>
                   {% endif %}
-
                   {% if t.ai_enabled %}
-                    <span class="badge ok">AI on</span>
+                    <span class="wa-badge ok">AI on</span>
                   {% else %}
-                    <span class="badge off">AI off</span>
+                    <span class="wa-badge off">AI off</span>
                   {% endif %}
-
-                  <a class="btn" href="{% url 'wa_thread' t.pk %}">Open</a>
                 </div>
               </div>
-            {% endfor %}
+            </a>
+          {% endfor %}
+          {% if not threads %}
+            <div class="wa-empty">No WhatsApp threads yet.</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="wa-card">
+        {% if selected_thread %}
+          <div class="wa-pad" style="border-bottom:1px solid var(--wa-border);">
+            <div class="wa-row" style="justify-content:space-between;">
+              <div class="wa-item-line">
+                <div class="wa-avatar" style="width:40px;height:40px;">{{ selected_thread.wa_name|default:"?"|slice:":1"|upper }}</div>
+                <div>
+                  <div class="wa-name" style="font-size:16px;">{{ selected_thread.wa_name|default:"Unknown" }} · {{ selected_thread.display_phone }}</div>
+                  <div class="wa-meta">AI: {{ selected_thread.ai_enabled|yesno:"on,off" }} · Needs human: {{ selected_thread.needs_human|yesno:"yes,no" }}</div>
+                </div>
+              </div>
+              <div class="wa-row">
+                {% if selected_thread.lead %}
+                  <a class="wa-btn" href="{% url 'lead_detail' selected_thread.lead.pk %}">Open Lead</a>
+                {% endif %}
+                <button class="wa-btn" id="btnJump" type="button">Jump to latest</button>
+              </div>
+            </div>
           </div>
 
-          <div id="empty" class="sub" style="display:none;">No threads match your filters.</div>
+          <div class="wa-chat">
+            <div class="wa-messages" id="waMessages">
+              {% if selected_messages %}
+                {% for m in selected_messages %}
+                  <div class="wa-msg-row {% if m.direction == 'in' %}in{% else %}out{% endif %}" data-msg-id="{{ m.id }}">
+                    <div class="wa-msg {% if m.direction == 'in' %}in{% else %}out{% endif %}">
+                    <div class="wa-msg-meta">{% if m.direction == "in" %}client{% else %}team{% endif %} · {{ m.created_at|date:"Y-m-d H:i" }}</div>
+                    <div style="white-space:pre-wrap;">{{ m.body }}</div>
+                    {% if m.media_path or m.media_url %}
+                      <div class="wa-media">
+                        {% if m.media_type|slice:":5" == "image" %}
+                          <a href="{% if m.media_path %}{% url 'wa_api_media' m.id %}{% else %}{{ m.media_url }}{% endif %}" target="_blank" rel="noopener">
+                            <img class="wa-media-img" src="{% if m.media_path %}{% url 'wa_api_media' m.id %}{% else %}{{ m.media_url }}{% endif %}" alt="attachment" loading="lazy">
+                          </a>
+                        {% endif %}
+                        <div class="wa-media-info">
+                          <div class="wa-media-name">{{ m.media_filename|default:"Attachment" }}</div>
+                          <div class="wa-msg-meta">{{ m.media_type|default:"attachment" }}</div>
+                          <div class="wa-media-actions">
+                            <a class="wa-link" href="{% if m.media_path %}{% url 'wa_api_media' m.id %}{% else %}{{ m.media_url }}{% endif %}" target="_blank" rel="noopener">Open</a>
+                            <a class="wa-link" href="{% if m.media_path %}{% url 'wa_api_media' m.id %}?download=1{% else %}{{ m.media_url }}{% endif %}" {% if not m.media_path %}download{% endif %}>Download</a>
+                          </div>
+                        </div>
+                      </div>
+                    {% endif %}
+                    </div>
+                  </div>
+                {% endfor %}
+              {% else %}
+                <div class="wa-empty">No messages yet.</div>
+              {% endif %}
+            </div>
 
+            <div class="wa-compose">
+              <div class="wa-drop" id="waComposeDrop">
+                <textarea id="msgBox" class="wa-input" rows="3" placeholder="Type message..."></textarea>
+                <div class="wa-attach" style="margin-top:8px;">
+                  <input id="fileInput" type="file" class="wa-file">
+                  <span class="wa-sub">Attach any file (images, PDFs, etc.).</span>
+                </div>
+                <div class="wa-file-meta" id="fileMeta" style="display:none; margin-top:6px;">
+                  <span id="fileName"></span>
+                  <button class="wa-link" type="button" id="fileClear">Clear</button>
+                </div>
+                <div class="wa-file-preview" id="filePreview"></div>
+              </div>
+              <div class="wa-row" style="margin-top:8px;">
+                <button class="wa-btn primary" id="btnSend" type="button">Send</button>
+                <button class="wa-btn" id="btnToggle" type="button">Toggle AI</button>
+              </div>
+              <div class="wa-sub" id="status" style="margin-top:6px;"></div>
+            </div>
+          </div>
         {% else %}
-          <div class="sub">No WhatsApp threads yet.</div>
+          <div class="wa-empty">Select a chat to view messages.</div>
         {% endif %}
-
       </div>
     </div>
-
   </div>
 </div>
 
 <script>
-(function () {
-  const q = document.getElementById("q");
-  const chips = document.querySelectorAll(".chip[data-filter]");
-  const items = document.querySelectorAll("#list .item");
-  const empty = document.getElementById("empty");
-
+(function(){
+  const list = document.getElementById("waList");
+  const search = document.getElementById("waSearch");
+  const chips = document.querySelectorAll(".wa-chip[data-filter]");
   let currentFilter = "all";
 
-  function norm(s) {
-    return (s || "").toString().toLowerCase().trim();
-  }
-
-  function matchFilter(el) {
-    const needsHuman = el.getAttribute("data-needs-human") === "1";
-    const aiEnabled = el.getAttribute("data-ai-enabled") === "1";
-
-    if (currentFilter === "human") return needsHuman;
-    if (currentFilter === "aioff") return !aiEnabled;
-    return true;
-  }
-
-  function matchSearch(el, term) {
-    if (!term) return true;
-    const name = norm(el.getAttribute("data-name"));
-    const phone = norm(el.getAttribute("data-phone"));
-    const lead = norm(el.getAttribute("data-lead"));
-    return name.includes(term) || phone.includes(term) || lead.includes(term);
-  }
-
-  function apply() {
-    const term = norm(q ? q.value : "");
-    let shown = 0;
-
-    items.forEach(function (el) {
-      const ok = matchFilter(el) && matchSearch(el, term);
-      el.style.display = ok ? "flex" : "none";
-      if (ok) shown += 1;
+  function applyFilters(){
+    const q = (search && search.value || "").toLowerCase();
+    if (!list){ return; }
+    list.querySelectorAll(".wa-item").forEach(item => {
+      const name = item.dataset.name || "";
+      const phone = item.dataset.phone || "";
+      const needsHuman = item.dataset.needsHuman === "1";
+      const aiEnabled = item.dataset.aiEnabled === "1";
+      let ok = (name.includes(q) || phone.includes(q));
+      if (currentFilter === "human") ok = ok && needsHuman;
+      if (currentFilter === "aioff") ok = ok && !aiEnabled;
+      item.style.display = ok ? "block" : "none";
     });
-
-    if (empty) empty.style.display = shown === 0 ? "block" : "none";
   }
 
-  chips.forEach(function (c) {
-    c.addEventListener("click", function (e) {
-      e.preventDefault();
-      currentFilter = c.getAttribute("data-filter") || "all";
-      chips.forEach(x => x.classList.remove("active"));
-      c.classList.add("active");
-      apply();
+  if (search && list){
+    search.addEventListener("input", applyFilters);
+  }
+  chips.forEach(chip => {
+    chip.addEventListener("click", () => {
+      chips.forEach(c => c.classList.remove("ok"));
+      currentFilter = chip.dataset.filter || "all";
+      chip.classList.add("ok");
+      applyFilters();
     });
   });
 
-  if (q) q.addEventListener("input", apply);
+  const msgBox = document.getElementById("msgBox");
+  const status = document.getElementById("status");
+  const csrf = document.querySelector("#wa-csrf input[name='csrfmiddlewaretoken']");
+  const threadId = {% if selected_thread %}{{ selected_thread.pk }}{% else %}null{% endif %};
+  const messagesEl = document.getElementById("waMessages");
+  const btnJump = document.getElementById("btnJump");
+  const composeDrop = document.getElementById("waComposeDrop");
+  let lastMessageId = 0;
 
-  apply();
+  function post(url, data, file){
+    const fd = new FormData();
+    Object.entries(data || {}).forEach(([k, v]) => fd.append(k, v));
+    if (file){
+      fd.append("file", file);
+    }
+    return fetch(url, {
+      method: "POST",
+      headers: {"X-CSRFToken": csrf ? csrf.value : ""},
+      body: fd
+    }).then(async (r) => {
+      let payload = {};
+      try {
+        payload = await r.json();
+      } catch (e) {
+        payload = {ok: false, error: "Server error"};
+      }
+      if (!r.ok && payload.ok === undefined){
+        payload.ok = false;
+      }
+      return payload;
+    });
+  }
+
+  const btnSend = document.getElementById("btnSend");
+  const btnToggle = document.getElementById("btnToggle");
+  const fileInput = document.getElementById("fileInput");
+  const fileMeta = document.getElementById("fileMeta");
+  const fileName = document.getElementById("fileName");
+  const filePreview = document.getElementById("filePreview");
+  const fileClear = document.getElementById("fileClear");
+  const btnStart = document.getElementById("btnStart");
+  const newPhone = document.getElementById("newPhone");
+  const newText = document.getElementById("newText");
+  const startStatus = document.getElementById("startStatus");
+  let previewUrl = null;
+
+  function formatSize(bytes){
+    if (!bytes && bytes !== 0) return "";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 102.4) / 10} KB`;
+    return `${Math.round(bytes / (1024 * 1024) * 10) / 10} MB`;
+  }
+
+  function syncFileUi(){
+    const file = fileInput && fileInput.files ? fileInput.files[0] : null;
+    if (!file){
+      if (fileMeta) fileMeta.style.display = "none";
+      if (filePreview){
+        filePreview.style.display = "none";
+        filePreview.innerHTML = "";
+      }
+      if (previewUrl){
+        URL.revokeObjectURL(previewUrl);
+        previewUrl = null;
+      }
+      return;
+    }
+    if (fileMeta && fileName){
+      fileMeta.style.display = "flex";
+      fileName.textContent = `${file.name} (${formatSize(file.size)})`;
+    }
+    if (filePreview){
+      if (previewUrl){
+        URL.revokeObjectURL(previewUrl);
+        previewUrl = null;
+      }
+      if (file.type && file.type.startsWith("image/")){
+        previewUrl = URL.createObjectURL(file);
+        filePreview.style.display = "block";
+        filePreview.innerHTML = `<img src="${previewUrl}" alt="preview">`;
+      } else {
+        filePreview.style.display = "none";
+        filePreview.innerHTML = "";
+      }
+    }
+  }
+
+  if (fileInput){
+    fileInput.addEventListener("change", syncFileUi);
+  }
+  if (fileClear){
+    fileClear.addEventListener("click", () => {
+      if (fileInput){ fileInput.value = ""; }
+      syncFileUi();
+    });
+  }
+
+  if (composeDrop && fileInput){
+    composeDrop.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      composeDrop.classList.add("is-dragover");
+    });
+    composeDrop.addEventListener("dragleave", () => {
+      composeDrop.classList.remove("is-dragover");
+    });
+    composeDrop.addEventListener("drop", (e) => {
+      e.preventDefault();
+      composeDrop.classList.remove("is-dragover");
+      const files = e.dataTransfer && e.dataTransfer.files;
+      if (files && files.length){
+        const dt = new DataTransfer();
+        dt.items.add(files[0]);
+        fileInput.files = dt.files;
+        syncFileUi();
+      }
+    });
+  }
+
+  if (btnSend && threadId){
+    btnSend.addEventListener("click", () => {
+      const file = fileInput && fileInput.files ? fileInput.files[0] : null;
+      post(`/whatsapp-api/${threadId}/send/`, {text: msgBox.value}, file).then(d => {
+        status.textContent = d.ok ? "Sent" : (d.error || "Failed");
+        if (d.ok){
+          msgBox.value = "";
+          if (fileInput){ fileInput.value = ""; }
+          syncFileUi();
+        }
+      });
+    });
+  }
+
+  if (btnStart){
+    btnStart.addEventListener("click", () => {
+      const phone = newPhone ? newPhone.value : \"\";
+      const text = newText ? newText.value : \"\";
+      post(\"/whatsapp-api/start/\", {phone: phone, text: text}).then(d => {
+        if (startStatus){
+          startStatus.textContent = d.ok ? \"Sent\" : (d.error || \"Failed\");
+        }
+        if (d.ok && d.thread_id){
+          window.location.href = `/whatsapp-api/?thread=${d.thread_id}`;
+        }
+      });
+    });
+  }
+
+  if (btnToggle && threadId){
+    btnToggle.addEventListener("click", () => {
+      post(`/whatsapp-api/${threadId}/toggle-ai/`, {}).then(d => {
+        status.textContent = d.ok ? "AI toggled" : (d.error || "Failed");
+        if (d.ok){
+          window.location.reload();
+        }
+      });
+    });
+  }
+
+  if (msgBox && btnSend){
+    msgBox.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter"){
+        e.preventDefault();
+        btnSend.click();
+      }
+    });
+  }
+
+  function scrollToBottom(){
+    if (messagesEl){
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+  }
+
+  function setLastMessageId(){
+    if (!messagesEl){ return; }
+    const items = messagesEl.querySelectorAll("[data-msg-id]");
+    if (!items.length){ return; }
+    const last = items[items.length - 1];
+    lastMessageId = parseInt(last.getAttribute("data-msg-id") || "0", 10) || lastMessageId;
+  }
+
+  function buildMessage(msg){
+    const row = document.createElement("div");
+    row.className = `wa-msg-row ${msg.direction === "in" ? "in" : "out"}`;
+    row.setAttribute("data-msg-id", msg.id);
+
+    const bubble = document.createElement("div");
+    bubble.className = `wa-msg ${msg.direction === "in" ? "in" : "out"}`;
+
+    const meta = document.createElement("div");
+    meta.className = "wa-msg-meta";
+    const who = msg.direction === "in" ? "client" : "team";
+    meta.textContent = `${who} · ${msg.created_at || ""}`;
+
+    const body = document.createElement("div");
+    body.style.whiteSpace = "pre-wrap";
+    body.textContent = msg.body || "";
+
+    bubble.appendChild(meta);
+    bubble.appendChild(body);
+
+    if (msg.media_url){
+      const mediaWrap = document.createElement("div");
+      mediaWrap.className = "wa-media";
+
+      if (msg.is_image){
+        const link = document.createElement("a");
+        link.href = msg.media_url;
+        link.target = "_blank";
+        link.rel = "noopener";
+        const img = document.createElement("img");
+        img.className = "wa-media-img";
+        img.loading = "lazy";
+        img.src = msg.media_url;
+        img.alt = "attachment";
+        link.appendChild(img);
+        mediaWrap.appendChild(link);
+      }
+
+      const info = document.createElement("div");
+      info.className = "wa-media-info";
+
+      const name = document.createElement("div");
+      name.className = "wa-media-name";
+      name.textContent = msg.media_filename || "Attachment";
+
+      const type = document.createElement("div");
+      type.className = "wa-msg-meta";
+      type.textContent = msg.media_type || "attachment";
+
+      const actions = document.createElement("div");
+      actions.className = "wa-media-actions";
+
+      const openLink = document.createElement("a");
+      openLink.className = "wa-link";
+      openLink.href = msg.media_url;
+      openLink.target = "_blank";
+      openLink.rel = "noopener";
+      openLink.textContent = "Open";
+
+      const downloadLink = document.createElement("a");
+      downloadLink.className = "wa-link";
+      downloadLink.href = msg.download_url || msg.media_url;
+      downloadLink.textContent = "Download";
+      if (!(downloadLink.href || "").includes("?download=1")){
+        downloadLink.setAttribute("download", "");
+      }
+
+      actions.appendChild(openLink);
+      actions.appendChild(downloadLink);
+      info.appendChild(name);
+      info.appendChild(type);
+      info.appendChild(actions);
+      mediaWrap.appendChild(info);
+      bubble.appendChild(mediaWrap);
+    }
+
+    row.appendChild(bubble);
+    return row;
+  }
+
+  function fetchNewMessages(){
+    if (!threadId || !messagesEl){ return; }
+    const url = `/whatsapp-api/${threadId}/messages/?after=${lastMessageId || 0}`;
+    fetch(url)
+      .then(r => r.json())
+      .then(d => {
+        if (!d.ok){ return; }
+        const items = d.messages || [];
+        if (!items.length){ return; }
+        const atBottom = messagesEl.scrollTop + messagesEl.clientHeight >= messagesEl.scrollHeight - 40;
+        items.forEach(msg => {
+          messagesEl.appendChild(buildMessage(msg));
+          lastMessageId = Math.max(lastMessageId, msg.id || 0);
+        });
+        if (atBottom){
+          scrollToBottom();
+        } else if (btnJump){
+          btnJump.style.display = "inline-flex";
+        }
+      })
+      .catch(() => {});
+  }
+
+  if (messagesEl && btnJump){
+    const toggleJump = () => {
+      const atBottom = messagesEl.scrollTop + messagesEl.clientHeight >= messagesEl.scrollHeight - 40;
+      btnJump.style.display = atBottom ? "none" : "inline-flex";
+    };
+    btnJump.addEventListener("click", scrollToBottom);
+    messagesEl.addEventListener("scroll", toggleJump);
+    scrollToBottom();
+    toggleJump();
+  }
+
+  setLastMessageId();
+  if (messagesEl && threadId){
+    setInterval(fetchNewMessages, 4000);
+  }
 })();
 </script>
-
 {% endblock %}

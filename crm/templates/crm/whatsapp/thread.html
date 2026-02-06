@@ -62,7 +62,7 @@
       <div>
         <h2 class="title">WhatsApp Thread 💬</h2>
         <div class="sub">
-          {{ thread.wa_name|default:"Unknown" }} · {{ thread.wa_phone }}
+          {{ thread.wa_name|default:"Unknown" }} · {{ thread.display_phone }}
           {% if thread.lead %}
             · Lead:
             <a href="{% url 'lead_detail' thread.lead.pk %}">{{ thread.lead.account_brand }}</a>
@@ -165,7 +165,7 @@
   if (btnDraft) {
     btnDraft.addEventListener("click", function () {
       setStatus(statusBox, "Thinking...");
-      postForm("{% url 'wa_send_ai_draft' thread.pk %}", {})
+      postForm("{% url 'wa_api_send_ai_draft' thread.pk %}", {})
         .then(function (data) {
           if (data.ok) {
             draftBox.value = data.draft || "";
@@ -188,7 +188,7 @@
     }
 
     setStatus(statusEl, "Sending...");
-    postForm("{% url 'wa_send' thread.pk %}", { text: msg })
+    postForm("{% url 'wa_api_send' thread.pk %}", { text: msg })
       .then(function (data) {
         if (data.ok) {
           setStatus(statusEl, "Sent ✅");
