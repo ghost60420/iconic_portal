@@ -1,0 +1,218 @@
+{% extends "crm/base.html" %}
+{% block content %}
+
+<style>
+  .costing-page {
+    max-width: 1200px;
+    margin: 18px auto 40px auto;
+    padding: 0 10px;
+    color: #e5e7eb;
+  }
+
+  .costing-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+
+  .costing-title {
+    font-size: 20px;
+    font-weight: 800;
+  }
+
+  .btnx {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid #374151;
+    text-decoration: none;
+    font-size: 12px;
+    color: #e5e7eb;
+    background: rgba(15,23,42,0.7);
+  }
+
+  .btnx-primary {
+    background: linear-gradient(135deg, #facc15, #f97316);
+    color: #111827;
+    border-color: #fbbf24;
+    font-weight: 700;
+  }
+
+  .filter-card {
+    background: #0b1020;
+    border: 1px solid #1f2937;
+    border-radius: 12px;
+    padding: 10px;
+    margin-bottom: 12px;
+  }
+
+  .filter-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  select, input[type="checkbox"] {
+    background: #020617;
+    color: #e5e7eb;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+
+  .table-wrap {
+    background: #050816;
+    border: 1px solid #1f2937;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  th, td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #111827;
+  }
+
+  th {
+    text-align: left;
+    color: #fef3c7;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .pill {
+    display: inline-flex;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid #374151;
+    font-size: 11px;
+  }
+
+  .pill-active {
+    border-color: #22c55e;
+    color: #bbf7d0;
+    background: rgba(34,197,94,0.12);
+  }
+
+  .pill-draft {
+    border-color: #38bdf8;
+    color: #bae6fd;
+  }
+
+  .pill-approved {
+    border-color: #facc15;
+    color: #fde68a;
+  }
+
+  .pill-locked {
+    border-color: #f97316;
+    color: #fed7aa;
+  }
+</style>
+
+<div class="costing-page">
+  <div class="costing-header">
+    <div class="costing-title">Costing sheets</div>
+    <a href="{% url 'cost_sheet_create' %}" class="btnx btnx-primary">Create costing</a>
+  </div>
+
+  <div class="filter-card">
+    <form method="get" class="filter-row">
+      <select name="customer">
+        <option value="">All customers</option>
+        {% for c in customers %}
+          <option value="{{ c.customer_id }}" {% if selected_customer == c.customer_id|stringformat:"s" %}selected{% endif %}>
+            {{ c.customer__account_brand }}
+          </option>
+        {% endfor %}
+      </select>
+
+      <select name="product_type">
+        <option value="">All product types</option>
+        {% for key,label in product_types %}
+          <option value="{{ key }}" {% if selected_product_type == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+
+      <select name="status">
+        <option value="">All statuses</option>
+        {% for key,label in status_choices %}
+          <option value="{{ key }}" {% if selected_status == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+
+      <label style="display:flex; align-items:center; gap:6px; font-size:12px;">
+        <input type="checkbox" name="show" value="all" {% if show_all %}checked{% endif %}>
+        Show all versions
+      </label>
+
+      <button type="submit" class="btnx">Apply</button>
+    </form>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Opportunity</th>
+          <th>Customer</th>
+          <th>Style</th>
+          <th>Version</th>
+          <th>Status</th>
+          <th>Active</th>
+          <th>Total cost</th>
+          <th>Quote price</th>
+          <th>Margin %</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          {% with sheet=row.sheet calc=row.calc %}
+          <tr>
+            <td>{{ sheet.opportunity.opportunity_id }}</td>
+            <td>{{ sheet.customer.account_brand|default:"-" }}</td>
+            <td>{{ sheet.style_name|default:sheet.style_code|default:"-" }}</td>
+            <td>v{{ sheet.version_number }}</td>
+            <td>
+              <span class="pill pill-{{ sheet.status }}">{{ sheet.get_status_display }}</span>
+            </td>
+            <td>
+              {% if sheet.is_active %}
+                <span class="pill pill-active">Active</span>
+              {% else %}
+                <span class="pill">—</span>
+              {% endif %}
+            </td>
+            <td>{{ calc.display.total_cost_per_piece }}</td>
+            <td>{{ calc.display.quote_price_per_piece }}</td>
+            <td>{{ calc.display.margin_percent }}%</td>
+            <td>
+              <a class="btnx" href="{% url 'cost_sheet_detail' sheet.pk %}">Open</a>
+            </td>
+          </tr>
+          {% endwith %}
+        {% empty %}
+          <tr>
+            <td colspan="10" style="color:#94a3b8;">No cost sheets found.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

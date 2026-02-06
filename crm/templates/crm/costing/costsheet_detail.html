@@ -1,0 +1,607 @@
+{% extends "crm/base.html" %}
+{% block content %}
+
+<style>
+  .costing-detail {
+    max-width: 1300px;
+    margin: 18px auto 40px auto;
+    padding: 0 10px;
+    color: #e5e7eb;
+  }
+
+  .top-card {
+    background: #0b1020;
+    border: 1px solid #1f2937;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+
+  .top-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .title {
+    font-size: 20px;
+    font-weight: 800;
+  }
+
+  .sub {
+    font-size: 12px;
+    color: #9ca3af;
+    margin-top: 2px;
+  }
+
+  .pill {
+    display: inline-flex;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid #374151;
+    font-size: 11px;
+  }
+
+  .pill-active {
+    border-color: #22c55e;
+    color: #bbf7d0;
+    background: rgba(34,197,94,0.12);
+  }
+
+  .pill-locked {
+    border-color: #f97316;
+    color: #fed7aa;
+  }
+
+  .pill-approved {
+    border-color: #facc15;
+    color: #fde68a;
+  }
+
+  .btnx {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid #374151;
+    text-decoration: none;
+    font-size: 12px;
+    color: #e5e7eb;
+    background: rgba(15,23,42,0.7);
+  }
+
+  .btnx-primary {
+    background: linear-gradient(135deg, #facc15, #f97316);
+    color: #111827;
+    border-color: #fbbf24;
+    font-weight: 700;
+  }
+
+  .btnx-soft {
+    background: rgba(59,130,246,0.15);
+    border-color: rgba(59,130,246,0.35);
+    color: #bfdbfe;
+  }
+
+  .tab-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+
+  .tab-btn {
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid #374151;
+    background: rgba(15,23,42,0.7);
+    color: #e5e7eb;
+    cursor: pointer;
+    font-size: 12px;
+  }
+
+  .tab-btn.active {
+    border-color: #facc15;
+    color: #fef3c7;
+    background: rgba(250,204,21,0.15);
+  }
+
+  .tab-panel {
+    display: none;
+  }
+
+  .tab-panel.active {
+    display: block;
+  }
+
+  input, select, textarea {
+    background: #020617;
+    color: #e5e7eb;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  th, td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #111827;
+  }
+
+  th {
+    text-align: left;
+    color: #fef3c7;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .section-title {
+    margin: 12px 0 6px 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fde68a;
+  }
+
+  .muted {
+    color: #9ca3af;
+    font-size: 12px;
+  }
+
+  .row-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 8px;
+  }
+
+  .bar {
+    height: 8px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #facc15, #f97316);
+  }
+
+  .line-grid {
+    display: grid;
+    grid-template-columns: 2fr 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 1fr;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .line-grid.head {
+    font-size: 11px;
+    color: #fef3c7;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 6px;
+  }
+
+  .line-row {
+    display: grid;
+    grid-template-columns: 2fr 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 1fr;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+
+  .compare-changed {
+    background: rgba(250, 204, 21, 0.08);
+  }
+</style>
+
+<div class="costing-detail">
+  <div class="top-card">
+    <div class="top-row">
+      <div>
+        <div class="title">
+          {{ cost_sheet.opportunity.opportunity_id }} · v{{ cost_sheet.version_number }}
+        </div>
+        <div class="sub">
+          {{ cost_sheet.customer.account_brand|default:"-" }} · {{ cost_sheet.style_name|default:cost_sheet.style_code|default:"-" }}
+        </div>
+        <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">
+          <span class="pill">{{ cost_sheet.get_status_display }}</span>
+          {% if cost_sheet.is_active %}
+            <span class="pill pill-active">Active</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div style="display:flex; gap:6px; flex-wrap:wrap;">
+        <a href="{% url 'cost_sheet_export_pdf' cost_sheet.pk %}" class="btnx">Export PDF</a>
+        <a href="{% url 'cost_sheet_export_excel' cost_sheet.pk %}" class="btnx">Export Excel</a>
+        {% if not cost_sheet.is_active %}
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="set_active">
+            <button type="submit" class="btnx btnx-soft">Set active</button>
+          </form>
+        {% endif %}
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="duplicate_version">
+          <button type="submit" class="btnx">Duplicate version</button>
+        </form>
+        {% if cost_sheet.status == "draft" %}
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="approve">
+            <button type="submit" class="btnx btnx-primary">Approve</button>
+          </form>
+        {% elif cost_sheet.status == "approved" %}
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="lock">
+            <button type="submit" class="btnx btnx-primary">Lock</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="row-grid" style="margin-top:12px;">
+      <div>
+        <div class="muted">Total cost per piece</div>
+        <div style="font-size:16px; font-weight:700;">{{ calc.display.total_cost_per_piece }}</div>
+      </div>
+      <div>
+        <div class="muted">Quote price per piece</div>
+        <div style="font-size:16px; font-weight:700;">{{ calc.display.quote_price_per_piece }}</div>
+      </div>
+      <div>
+        <div class="muted">Margin %</div>
+        <div style="font-size:16px; font-weight:700;">{{ calc.display.margin_percent }}%</div>
+      </div>
+      <div>
+        <div class="muted">Target quantity</div>
+        <div style="font-size:16px; font-weight:700;">{{ cost_sheet.target_quantity }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-row">
+    <button class="tab-btn active" data-tab="inputs">Inputs</button>
+    <button class="tab-btn" data-tab="breakdown">Breakdown</button>
+    <button class="tab-btn" data-tab="quote">Quote</button>
+    <button class="tab-btn" data-tab="versions">Versions</button>
+    <button class="tab-btn" data-tab="documents">Documents</button>
+  </div>
+
+  <div class="tab-panel active" id="tab-inputs">
+    <div class="top-card">
+      <div class="section-title">Cost sheet details</div>
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="save_header">
+        <div class="row-grid">
+          {% for field in header_form %}
+            <div>
+              <label>{{ field.label }}</label>
+              {{ field }}
+            </div>
+          {% endfor %}
+        </div>
+        {% if locked %}
+          <div class="muted" style="margin-top:8px;">This version is approved or locked. Create a new version to edit.</div>
+        {% else %}
+          <button type="submit" class="btnx btnx-primary" style="margin-top:10px;">Save header</button>
+        {% endif %}
+      </form>
+    </div>
+
+    <div class="top-card">
+      <div class="section-title">Quick templates</div>
+      <form method="post" style="display:flex; gap:6px; flex-wrap:wrap;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="apply_template">
+        {% for key in template_keys %}
+          <button type="submit" name="template_key" value="{{ key }}" class="btnx">{{ key|capfirst }}</button>
+        {% endfor %}
+      </form>
+    </div>
+
+    <div class="top-card">
+      <div class="section-title">Add line item</div>
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add_line">
+        <div class="row-grid">
+          <div>
+            <label>Section</label>
+            {{ line_form.section }}
+          </div>
+          <div>
+            <label>Item</label>
+            {{ line_form.item_name }}
+          </div>
+          <div>
+            <label>UOM</label>
+            {{ line_form.uom }}
+          </div>
+          <div>
+            <label>Consumption per piece</label>
+            {{ line_form.consumption_per_piece }}
+          </div>
+          <div>
+            <label>Waste %</label>
+            {{ line_form.waste_percent }}
+          </div>
+          <div>
+            <label>Rate</label>
+            {{ line_form.rate }}
+          </div>
+          <div>
+            <label>Setup cost</label>
+            {{ line_form.setup_cost }}
+          </div>
+          <div>
+            <label>Notes</label>
+            {{ line_form.notes }}
+          </div>
+        </div>
+        {% if not locked %}
+          <button type="submit" class="btnx btnx-primary" style="margin-top:10px;">Add line</button>
+        {% endif %}
+      </form>
+    </div>
+
+    <div class="top-card">
+      <div class="section-title">Line items</div>
+      {% for section_key, section_label in sections %}
+        <div style="margin-top:10px;">
+          <div class="section-title">{{ section_label }}</div>
+          <div class="line-grid head">
+            <div>Item</div>
+            <div>UOM</div>
+            <div>Cons / piece</div>
+            <div>Waste %</div>
+            <div>Rate</div>
+            <div>Setup</div>
+            <div>Total / piece</div>
+            <div>Actions</div>
+          </div>
+          {% for line in line_items %}
+            {% if line.section == section_key %}
+              <form method="post" class="line-row">
+                {% csrf_token %}
+                <input type="hidden" name="line_id" value="{{ line.id }}">
+                <input type="text" name="item_name" value="{{ line.item_name }}" {% if locked %}disabled{% endif %}>
+                <input type="text" name="uom" value="{{ line.uom }}" {% if locked %}disabled{% endif %}>
+                <input type="number" step="0.0001" name="consumption_per_piece" value="{{ line.consumption_per_piece }}" {% if locked %}disabled{% endif %}>
+                <input type="number" step="0.01" name="waste_percent" value="{{ line.waste_percent }}" {% if locked %}disabled{% endif %}>
+                <input type="number" step="0.0001" name="rate" value="{{ line.rate }}" {% if locked %}disabled{% endif %}>
+                <input type="number" step="0.01" name="setup_cost" value="{{ line.setup_cost }}" {% if locked %}disabled{% endif %}>
+                <div>{{ line.total_cost_per_piece }}</div>
+                <div style="display:flex; gap:4px; flex-wrap:wrap;">
+                  {% if not locked %}
+                    <button type="submit" name="action" value="update_line" class="btnx">Save</button>
+                    <button type="submit" name="action" value="duplicate_line" class="btnx">Duplicate</button>
+                    <button type="submit" name="action" value="delete_line" class="btnx">Delete</button>
+                  {% endif %}
+                </div>
+              </form>
+            {% endif %}
+          {% empty %}
+            <div class="muted">No line items yet.</div>
+          {% endfor %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="tab-panel" id="tab-breakdown">
+    <div class="top-card">
+      <div class="section-title">Section totals</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Section</th>
+            <th>Total / piece</th>
+            <th>Share</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in calc.chart_data %}
+            <tr>
+              <td>{{ section_labels[row.section] }}</td>
+              <td>{{ row.display_total }}</td>
+              <td style="width:220px;">
+                <div class="bar" style="width:{{ row.display_percent }}%;"></div>
+                <div class="muted">{{ row.display_percent }}%</div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="tab-panel" id="tab-quote">
+    <div class="top-card">
+      <div class="section-title">Quantity scenarios</div>
+      <div class="row-grid">
+        {% for s in scenarios %}
+          <div class="top-card" style="margin:0;">
+            <div class="muted">Qty {{ s.qty }}</div>
+            <div style="font-weight:700;">Cost: {{ s.total_cost_per_piece }}</div>
+            <div style="font-weight:700;">Quote: {{ s.quote_price_per_piece }}</div>
+            <div class="muted">Total: {{ s.total_quote_value }}</div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-panel" id="tab-versions">
+    <div class="top-card">
+      <div class="section-title">Versions for this opportunity</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Version</th>
+            <th>Status</th>
+            <th>Active</th>
+            <th>Updated</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for v in versions %}
+            <tr>
+              <td>v{{ v.version_number }}</td>
+              <td>{{ v.get_status_display }}</td>
+              <td>{% if v.is_active %}Yes{% else %}—{% endif %}</td>
+              <td>{{ v.updated_at|date:"Y-m-d" }}</td>
+              <td><a class="btnx" href="{% url 'cost_sheet_detail' v.pk %}">Open</a></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="top-card">
+      <div class="section-title">Compare versions</div>
+      <form method="get" class="row-grid">
+        <div>
+          <label>Version A</label>
+          <select name="compare_a">
+            {% for v in versions %}
+              <option value="{{ v.id }}" {% if compare_a == v.id|stringformat:"s" %}selected{% endif %}>
+                v{{ v.version_number }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Version B</label>
+          <select name="compare_b">
+            {% for v in versions %}
+              <option value="{{ v.id }}" {% if compare_b == v.id|stringformat:"s" %}selected{% endif %}>
+                v{{ v.version_number }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="align-self:end;">
+          <button type="submit" class="btnx">Compare</button>
+        </div>
+      </form>
+
+      {% if compare_rows %}
+        <table style="margin-top:10px;">
+          <thead>
+            <tr>
+              <th>Section</th>
+              <th>Item</th>
+              <th>Version A</th>
+              <th>Version B</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in compare_rows %}
+              <tr class="{% if row.changed %}compare-changed{% endif %}">
+                <td>{{ section_labels[row.section] }}</td>
+                <td>{{ row.item_name }}</td>
+                <td>
+                  {% if row.a %}
+                    {{ row.a.consumption_per_piece }} / {{ row.a.rate }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+                <td>
+                  {% if row.b %}
+                    {{ row.b.consumption_per_piece }} / {{ row.b.rate }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="tab-panel" id="tab-documents">
+    <div class="top-card">
+      <div class="section-title">Upload document</div>
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="upload_document">
+        <div class="row-grid">
+          <div>
+            <label>File</label>
+            {{ document_form.file }}
+          </div>
+          <div>
+            <label>Type</label>
+            {{ document_form.doc_type }}
+          </div>
+        </div>
+        <button type="submit" class="btnx btnx-primary" style="margin-top:10px;">Upload</button>
+      </form>
+    </div>
+
+    <div class="top-card">
+      <div class="section-title">Documents</div>
+      {% if documents %}
+        <table>
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>Type</th>
+              <th>Uploaded</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for doc in documents %}
+              <tr>
+                <td><a class="btnx" href="{{ doc.file.url }}" target="_blank">{{ doc.original_name|default:doc.file.name }}</a></td>
+                <td>{{ doc.get_doc_type_display }}</td>
+                <td>{{ doc.uploaded_at|date:"Y-m-d H:i" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="muted">No documents yet.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const buttons = document.querySelectorAll(".tab-btn");
+    const panels = {
+      inputs: document.getElementById("tab-inputs"),
+      breakdown: document.getElementById("tab-breakdown"),
+      quote: document.getElementById("tab-quote"),
+      versions: document.getElementById("tab-versions"),
+      documents: document.getElementById("tab-documents"),
+    };
+
+    function activateTab(key) {
+      buttons.forEach(btn => btn.classList.toggle("active", btn.dataset.tab === key));
+      Object.keys(panels).forEach(name => {
+        panels[name].classList.toggle("active", name === key);
+      });
+    }
+
+    buttons.forEach(btn => {
+      btn.addEventListener("click", function () {
+        activateTab(btn.dataset.tab);
+      });
+    });
+  })();
+</script>
+
+{% endblock %}

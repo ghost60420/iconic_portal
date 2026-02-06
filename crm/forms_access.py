@@ -17,6 +17,10 @@ class UserAccessForm(forms.ModelForm):
             "can_shipping",
             "can_ai",
             "can_calendar",
+            "can_marketing",
+            "can_whatsapp",
+            "can_costing",
+            "can_costing_approve",
             "can_accounting_bd",
             "can_accounting_ca",
         ]
@@ -33,6 +37,10 @@ class UserAccessForm(forms.ModelForm):
             "can_shipping": "Shipping",
             "can_ai": "AI",
             "can_calendar": "Calendar",
+            "can_marketing": "Marketing",
+            "can_whatsapp": "WhatsApp",
+            "can_costing": "Costing",
+            "can_costing_approve": "Costing approve/lock",
             "can_accounting_bd": "Accounting BD",
             "can_accounting_ca": "Accounting CA",
         }

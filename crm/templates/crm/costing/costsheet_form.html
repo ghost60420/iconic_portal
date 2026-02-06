@@ -1,0 +1,82 @@
+{% extends "crm/base.html" %}
+{% block content %}
+
+<style>
+  .costing-form-page {
+    max-width: 800px;
+    margin: 18px auto 40px auto;
+    padding: 0 10px;
+    color: #e5e7eb;
+  }
+
+  .card {
+    background: #0b1020;
+    border: 1px solid #1f2937;
+    border-radius: 12px;
+    padding: 12px;
+  }
+
+  label {
+    font-size: 12px;
+    color: #fef3c7;
+    font-weight: 600;
+  }
+
+  input, select {
+    width: 100%;
+    background: #020617;
+    color: #e5e7eb;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+
+  .btnx {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid #374151;
+    text-decoration: none;
+    font-size: 12px;
+    color: #e5e7eb;
+    background: rgba(15,23,42,0.7);
+  }
+
+  .btnx-primary {
+    background: linear-gradient(135deg, #facc15, #f97316);
+    color: #111827;
+    border-color: #fbbf24;
+    font-weight: 700;
+  }
+</style>
+
+<div class="costing-form-page">
+  <div style="font-size:20px; font-weight:800; margin-bottom:10px;">Create cost sheet</div>
+
+  <div class="card">
+    <form method="post">
+      {% csrf_token %}
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:10px;">
+        {% for field in form %}
+          <div>
+            <label>{{ field.label }}</label>
+            {{ field }}
+            {% for error in field.errors %}
+              <div style="color:#fca5a5; font-size:11px;">{{ error }}</div>
+            {% endfor %}
+          </div>
+        {% endfor %}
+      </div>
+
+      <div style="margin-top:12px; display:flex; gap:8px;">
+        <button type="submit" class="btnx btnx-primary">Create</button>
+        <a href="{% url 'cost_sheet_list' %}" class="btnx">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

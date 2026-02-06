@@ -511,6 +511,137 @@
         </div>
     </div>
 
+    <div class="card card-strong" style="margin-bottom:12px;">
+        <div class="card-title-row">
+            <div class="card-title" style="margin:0; border-bottom:none; padding-bottom:0;">
+                <span class="emoji">📊</span> Costing
+            </div>
+            <div>
+                <a href="{% url 'cost_sheet_create_for_opportunity' opportunity.pk %}" class="btn btn-gold btn-small">
+                    Create costing
+                </a>
+                {% if active_cost_sheet %}
+                    <a href="{% url 'cost_sheet_detail' active_cost_sheet.pk %}" class="btn btn-blue btn-small">
+                        View costing
+                    </a>
+                    <a href="{% url 'cost_sheet_export_pdf' active_cost_sheet.pk %}" class="btn btn-slate btn-small">
+                        Export PDF
+                    </a>
+                    <a href="{% url 'cost_sheet_export_excel' active_cost_sheet.pk %}" class="btn btn-slate btn-small">
+                        Export Excel
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if active_cost_sheet %}
+            <table class="info-table" style="margin-top:6px;">
+                <tr>
+                    <td class="label">Active version</td>
+                    <td class="value-main">v{{ active_cost_sheet.version_number }} • {{ active_cost_sheet.get_status_display }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Total cost / piece</td>
+                    <td class="value-main">{{ costing_calc.display.total_cost_per_piece }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Quote price / piece</td>
+                    <td class="value-main">{{ costing_calc.display.quote_price_per_piece }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Margin %</td>
+                    <td class="value-main">{{ costing_calc.display.margin_percent }}%</td>
+                </tr>
+                <tr>
+                    <td class="label">Last updated</td>
+                    <td class="value-main">{{ active_cost_sheet.updated_at|date:"Y-m-d H:i" }}</td>
+                </tr>
+            </table>
+
+            <div style="margin-top:8px;">
+                <div class="summary-title" style="margin-bottom:4px;">Standard vs actual</div>
+                {% if variance_report %}
+                    <table class="info-table">
+                        <tr>
+                            <td class="label">Quoted price / piece</td>
+                            <td class="value-main">{{ variance_report.display.quoted_price_per_piece }}</td>
+                        </tr>
+                        <tr>
+                            <td class="label">Standard cost / piece</td>
+                            <td class="value-main">{{ variance_report.display.standard_cost_per_piece }}</td>
+                        </tr>
+                        <tr>
+                            <td class="label">Actual cost / piece</td>
+                            <td class="value-main">{{ variance_report.display.actual_cost_per_piece }}</td>
+                        </tr>
+                        <tr>
+                            <td class="label">Variance / piece</td>
+                            <td class="value-main">{{ variance_report.display.variance_per_piece }}</td>
+                        </tr>
+                        <tr>
+                            <td class="label">Total variance</td>
+                            <td class="value-main">{{ variance_report.display.total_variance }}</td>
+                        </tr>
+                        <tr>
+                            <td class="label">Margin change</td>
+                            <td class="value-main">
+                                {{ variance_report.display.margin_before }}% → {{ variance_report.display.margin_after }}%
+                            </td>
+                        </tr>
+                    </table>
+                {% else %}
+                    <div class="muted">Variance will appear once production and actual costs exist.</div>
+                {% endif %}
+            </div>
+        {% else %}
+            <div class="muted" style="margin-top:6px;">No cost sheet yet for this opportunity.</div>
+        {% endif %}
+
+        <div style="margin-top:10px;">
+            <div class="summary-title" style="margin-bottom:4px;">Upload costing files</div>
+            <form method="post" enctype="multipart/form-data" style="display:flex; gap:6px; flex-wrap:wrap; align-items:end;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="upload_document">
+                <div style="flex:1; min-width:200px;">
+                    <label class="muted" style="display:block; margin-bottom:4px;">File</label>
+                    <input type="file" name="doc_file">
+                </div>
+                <div>
+                    <label class="muted" style="display:block; margin-bottom:4px;">Type</label>
+                    <select name="doc_type">
+                        <option value="costing_pdf">Costing PDF</option>
+                        <option value="costing_excel">Costing Excel</option>
+                        <option value="costing_other">Costing Other</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="muted" style="display:block; margin-bottom:4px;">Link to version</label>
+                    <select name="cost_sheet_id">
+                        <option value="">None</option>
+                        {% for v in cost_sheet_versions %}
+                            <option value="{{ v.id }}">v{{ v.version_number }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-blue btn-small">Upload</button>
+            </form>
+
+            {% if opportunity_documents %}
+                <ul class="simple-list" style="margin-top:6px;">
+                    {% for doc in opportunity_documents %}
+                        <li>
+                            📎 <a href="{{ doc.file.url }}" target="_blank">{{ doc.original_name|default:doc.file.name }}</a>
+                            <span class="muted"> • {{ doc.get_doc_type_display }} • {{ doc.uploaded_at|date:"Y-m-d" }}</span>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <div class="muted" style="margin-top:6px;">No costing documents uploaded yet.</div>
+            {% endif %}
+        </div>
+    </div>
+
     <div class="card profit-card" style="margin-bottom:12px;">
         <div class="profit-title">Profit snapshot</div>
         <div class="profit-value {% if profit_after_shipping and profit_after_shipping < 0 %}profit-negative{% endif %}">
@@ -1137,11 +1268,15 @@
     <div class="section">
         <div class="section-title">Chatter feed (Lead + Opportunity + Production)</div>
         <div class="card">
-            <form method="post" style="margin-bottom: 8px;">
+            <form method="post" style="margin-bottom: 8px;" enctype="multipart/form-data">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="add_comment">
                 <textarea name="comment_text" rows="3"
                           placeholder="Write a note about this opportunity"></textarea>
+                <div style="margin-top:6px;">
+                    <label style="font-size:11px; color:#e5e7eb;">Attachment (optional)</label>
+                    <input type="file" name="attachment">
+                </div>
                 <br>
                 <button class="btn btn-gold btn-small" type="submit" style="margin-top:4px;">
                     Save note
@@ -1159,6 +1294,15 @@
                             {% if c.is_ai %} AI{% endif %}
                         </span>
                         <p class="value-soft">{{ c.content|linebreaksbr }}</p>
+                        {% if c.attachment %}
+                            <div class="muted" style="font-size:11px; margin-top:4px;">
+                                {% with c.attachment.name|cut:"chatter_attachments/" as attachment_name %}
+                                    <a href="{{ c.attachment.url }}" target="_blank" rel="noopener">
+                                        {{ attachment_name|default:"Attachment" }}
+                                    </a>
+                                {% endwith %}
+                            </div>
+                        {% endif %}
                         <div class="muted" style="font-size:11px;">
                             {% if c.production %}
                                 <a href="{% url 'production_detail' c.production.pk %}">Open production</a>

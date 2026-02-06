@@ -30,6 +30,13 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from .models import Product, Fabric, Accessory, Trim, ThreadOption, InventoryItem, ProductionOrderMaterial
 
+from .services.costing import build_variance_report, calculate_cost_sheet
+
+def _parse_decimal(value):
+    try:
+        return Decimal(str(value).strip())
+    except Exception:
+        return Decimal("0")
 
 from .forms import (
     BDStaffMonthForm,
@@ -42,17 +49,22 @@ from .forms import (
     TrimForm,
     ThreadForm,
 )
+from .forms_costing import ActualCostEntryForm
 from .models import (
     AIAgent,
+    ActualCostEntry,
     BDStaff,
     BDStaffMonth,
+    CostSheetAudit,
     Customer,
     CustomerEvent,
     CustomerNote,
     Lead,
     LeadActivity,
     LeadComment,
+    CostSheet,
     Opportunity,
+    OpportunityDocument,
     OpportunityFile,
     OpportunityTask,
     Product,
@@ -633,11 +645,31 @@ from .models import Lead, LeadActivity
 from .forms import LeadForm
 
 
+def _apply_utm_fields(request, lead):
+    fields = [
+        "utm_source",
+        "utm_medium",
+        "utm_campaign",
+        "utm_content",
+        "utm_term",
+    ]
+    for f in fields:
+        val = (request.POST.get(f) or request.GET.get(f) or "").strip()
+        if val:
+            setattr(lead, f, val)
+
+    if getattr(lead, "utm_source", "") and not getattr(lead, "first_touch_channel", ""):
+        lead.first_touch_channel = lead.utm_source
+    if getattr(lead, "utm_source", ""):
+        lead.last_touch_channel = lead.utm_source
+
+
 def add_lead(request):
     if request.method == "POST":
         form = LeadForm(request.POST, request.FILES)
         if form.is_valid():
             lead = form.save(commit=False)
+            _apply_utm_fields(request, lead)
 
             if not lead.created_date:
                 lead.created_date = timezone.now().date()
@@ -1044,12 +1076,17 @@ def lead_detail(request, pk):
         # comments
         if action == "add_comment":
             comment_text = (request.POST.get("comment_text") or "").strip()
-            if comment_text:
+            attachment = request.FILES.get("attachment")
+            if not comment_text and not attachment:
+                messages.error(request, "Please write a note or attach a file first.")
+            else:
                 author_name = request.user.username if request.user.is_authenticated else "User"
+                content = comment_text or f"Attachment: {attachment.name}"
                 LeadComment.objects.create(
                     lead=lead,
                     author=author_name,
-                    content=comment_text,
+                    content=content,
+                    attachment=attachment,
                 )
                 _send_chatter_mentions(
                     request,
@@ -1060,7 +1097,7 @@ def lead_detail(request, pk):
                 LeadActivity.objects.create(
                     lead=lead,
                     activity_type="note_added",
-                    description=comment_text[:200],
+                    description=content[:200],
                 )
             comments = _chatter_for_lead(lead)
 
@@ -1378,6 +1415,9 @@ def opportunity_detail(request, pk):
 
     # Files
     opp_files = OpportunityFile.objects.filter(opportunity=opportunity).order_by("-uploaded_at")
+    opportunity_documents = OpportunityDocument.objects.filter(opportunity=opportunity).order_by("-uploaded_at")
+    cost_sheet_versions = CostSheet.objects.filter(opportunity=opportunity).order_by("-version_number")
+    active_cost_sheet = cost_sheet_versions.filter(is_active=True).first()
 
     # Comments and activity
     comments = _chatter_for_opportunity(opportunity)
@@ -1508,13 +1548,18 @@ def opportunity_detail(request, pk):
         # Add comment
         if action == "add_comment":
             comment_text = (request.POST.get("comment_text") or "").strip()
-            if comment_text and lead:
+            attachment = request.FILES.get("attachment")
+            if not comment_text and not attachment:
+                messages.error(request, "Please write a note or attach a file first.")
+            elif lead:
                 author_name = request.user.username if request.user.is_authenticated else "User"
+                content = comment_text or f"Attachment: {attachment.name}"
                 LeadComment.objects.create(
                     lead=lead,
                     opportunity=opportunity,
                     author=author_name,
-                    content=comment_text,
+                    content=content,
+                    attachment=attachment,
                 )
                 _send_chatter_mentions(
                     request,
@@ -1526,7 +1571,7 @@ def opportunity_detail(request, pk):
                 LeadActivity.objects.create(
                     lead=lead,
                     activity_type="note_added",
-                    description=f"Opportunity note: {comment_text[:200]}",
+                    description=f"Opportunity note: {content[:200]}",
                 )
 
             return redirect("opportunity_detail", pk=opportunity.pk)
@@ -1582,6 +1627,7 @@ def opportunity_detail(request, pk):
                             opportunity=opportunity,
                             title=po_title,
                             qty_total=qty_guess or 0,
+                            cost_sheet_active=active_cost_sheet,
                         )
                         LeadActivity.objects.create(
                             lead=lead,
@@ -1613,6 +1659,36 @@ def opportunity_detail(request, pk):
                     activity_type="file_uploaded",
                     description=f"File uploaded for opportunity: {file_obj.name}",
                 )
+
+            return redirect("opportunity_detail", pk=opportunity.pk)
+
+        # Upload document (costing)
+        if action == "upload_document":
+            file_obj = request.FILES.get("doc_file")
+            doc_type = (request.POST.get("doc_type") or "other").strip()
+            cost_sheet_id = (request.POST.get("cost_sheet_id") or "").strip()
+            cost_sheet = None
+
+            if cost_sheet_id:
+                cost_sheet = CostSheet.objects.filter(id=cost_sheet_id, opportunity=opportunity).first()
+
+            if file_obj and lead:
+                doc = OpportunityDocument.objects.create(
+                    opportunity=opportunity,
+                    file=file_obj,
+                    original_name=file_obj.name,
+                    doc_type=doc_type,
+                    cost_sheet=cost_sheet,
+                    uploaded_by=request.user if request.user.is_authenticated else None,
+                )
+                LeadActivity.objects.create(
+                    lead=lead,
+                    activity_type="file_uploaded",
+                    description=f"Document uploaded for opportunity: {doc.original_name}",
+                )
+                messages.success(request, "Document uploaded.")
+            else:
+                messages.error(request, "Please select a file to upload.")
 
             return redirect("opportunity_detail", pk=opportunity.pk)
 
@@ -1666,6 +1742,12 @@ def opportunity_detail(request, pk):
     prod_total_reject = prod_totals.get("total_reject") or 0
     prod_total_actual_cost = prod_totals.get("total_actual_cost") or 0
 
+    costing_calc = calculate_cost_sheet(active_cost_sheet) if active_cost_sheet else None
+    variance_report = None
+    if active_cost_sheet and prod_orders.exists():
+        latest_po = prod_orders.order_by("-created_at").first()
+        variance_report = build_variance_report(active_cost_sheet, latest_po)
+
     order_value = opportunity.order_value or 0
     total_cost_bdt = (prod_total_actual_cost or 0) + (shipping_cost_bdt or 0)
 
@@ -1690,6 +1772,11 @@ def opportunity_detail(request, pk):
         "messages": ai_messages_qs,
 
         "opp_files": opp_files,
+        "opportunity_documents": opportunity_documents,
+        "cost_sheet_versions": cost_sheet_versions,
+        "active_cost_sheet": active_cost_sheet,
+        "costing_calc": costing_calc,
+        "variance_report": variance_report,
 
         "prod_orders": prod_orders,
         "prod_total_qty": prod_total_qty,
@@ -5048,6 +5135,11 @@ def production_detail(request, pk):
 
     materials = order.materials.select_related("inventory_item")
     comments = _chatter_for_production(order)
+    actual_entries = order.actual_cost_entries.all().order_by("section", "id")
+    variance_report = None
+    if order.cost_sheet_active:
+        variance_report = build_variance_report(order.cost_sheet_active, order)
+    actual_entry_form = ActualCostEntryForm()
 
     if request.method == "POST":
         action = (request.POST.get("action") or "").strip()
@@ -5095,14 +5187,19 @@ def production_detail(request, pk):
 
         if action == "add_comment":
             comment_text = (request.POST.get("comment_text") or "").strip()
-            if comment_text:
+            attachment = request.FILES.get("attachment")
+            if not comment_text and not attachment:
+                messages.error(request, "Please write a note or attach a file first.")
+            else:
                 author_name = request.user.username if request.user.is_authenticated else "User"
+                content = comment_text or f"Attachment: {attachment.name}"
                 LeadComment.objects.create(
                     lead=order.lead,
                     opportunity=order.opportunity,
                     production=order,
                     author=author_name,
-                    content=comment_text,
+                    content=content,
+                    attachment=attachment,
                 )
                 _send_chatter_mentions(
                     request,
@@ -5113,6 +5210,67 @@ def production_detail(request, pk):
                     author=author_name,
                 )
                 messages.success(request, "Chatter note added.")
+            return redirect("production_detail", pk=pk)
+
+        if action == "add_actual":
+            if not order.opportunity_id:
+                messages.error(request, "Link an opportunity to record actual costs.")
+                return redirect("production_detail", pk=pk)
+            form = ActualCostEntryForm(request.POST)
+            if form.is_valid():
+                entry = form.save(commit=False)
+                entry.production_order = order
+                entry.opportunity = order.opportunity
+                entry.cost_sheet = order.cost_sheet_active
+                entry.save()
+                if order.cost_sheet_active:
+                    CostSheetAudit.objects.create(
+                        cost_sheet=order.cost_sheet_active,
+                        action="edited_actual",
+                        changed_by=request.user if request.user.is_authenticated else None,
+                        note=f"Actual cost added: {entry.item_name}",
+                    )
+                messages.success(request, "Actual cost entry added.")
+            else:
+                messages.error(request, "Please fill the actual cost form.")
+            return redirect("production_detail", pk=pk)
+
+        if action == "update_actual":
+            entry_id = (request.POST.get("entry_id") or "").strip()
+            entry = ActualCostEntry.objects.filter(id=entry_id, production_order=order).first()
+            if entry:
+                entry.section = request.POST.get("section", entry.section)
+                entry.item_name = (request.POST.get("item_name") or "").strip()
+                entry.uom = (request.POST.get("uom") or "").strip()
+                entry.actual_qty_total = _parse_decimal(request.POST.get("actual_qty_total"))
+                entry.actual_rate = _parse_decimal(request.POST.get("actual_rate"))
+                entry.actual_total_cost = _parse_decimal(request.POST.get("actual_total_cost"))
+                entry.notes = (request.POST.get("notes") or "").strip()
+                entry.save()
+                if order.cost_sheet_active:
+                    CostSheetAudit.objects.create(
+                        cost_sheet=order.cost_sheet_active,
+                        action="edited_actual",
+                        changed_by=request.user if request.user.is_authenticated else None,
+                        note=f"Actual cost updated: {entry.item_name}",
+                    )
+                messages.success(request, "Actual cost entry updated.")
+            return redirect("production_detail", pk=pk)
+
+        if action == "delete_actual":
+            entry_id = (request.POST.get("entry_id") or "").strip()
+            entry = ActualCostEntry.objects.filter(id=entry_id, production_order=order).first()
+            if entry:
+                entry_name = entry.item_name
+                entry.delete()
+                if order.cost_sheet_active:
+                    CostSheetAudit.objects.create(
+                        cost_sheet=order.cost_sheet_active,
+                        action="edited_actual",
+                        changed_by=request.user if request.user.is_authenticated else None,
+                        note=f"Actual cost deleted: {entry_name}",
+                    )
+                messages.success(request, "Actual cost entry deleted.")
             return redirect("production_detail", pk=pk)
 
         if action == "toggle_pin_comment":
@@ -5159,6 +5317,10 @@ def production_detail(request, pk):
         "inventory_items": inventory_items,
         "recommended_items": recommended_items,
         "recommended_ids": recommended_ids,
+        "cost_sheet_active": order.cost_sheet_active,
+        "actual_entries": actual_entries,
+        "actual_entry_form": actual_entry_form,
+        "variance_report": variance_report,
     }
 
     return render(request, "crm/production_detail.html", context)
@@ -5203,6 +5365,7 @@ def production_from_opportunity(request, pk):
     """
     opportunity = get_object_or_404(Opportunity, pk=pk)
     customer = _ensure_customer_for_opportunity(opportunity)
+    active_cost_sheet = CostSheet.objects.filter(opportunity=opportunity, is_active=True).first()
 
     po = ProductionOrder.objects.filter(opportunity=opportunity).first()
     created = False
@@ -5217,11 +5380,15 @@ def production_from_opportunity(request, pk):
             customer=customer,
             title=title,
             qty_total=qty_guess,
+            cost_sheet_active=active_cost_sheet,
         )
         created = True
     elif customer and not po.customer_id:
         po.customer = customer
         po.save(update_fields=["customer"])
+    elif active_cost_sheet and not po.cost_sheet_active_id:
+        po.cost_sheet_active = active_cost_sheet
+        po.save(update_fields=["cost_sheet_active"])
 
     stage_changed = False
     if opportunity.stage != "Production":
@@ -5816,11 +5983,12 @@ def chatter_feed(request):
         action = (request.POST.get("action") or "").strip()
         if action == "add_chatter":
             note_text = (request.POST.get("comment_text") or "").strip()
+            attachment = request.FILES.get("attachment")
             link_type = (request.POST.get("link_type") or "").strip().lower()
             link_id = (request.POST.get("link_id") or "").strip()
 
-            if not note_text:
-                messages.error(request, "Please write a note first.")
+            if not note_text and not attachment:
+                messages.error(request, "Please write a note or attach a file first.")
                 return redirect("chatter_feed")
 
             author_name = request.user.username if request.user.is_authenticated else "User"
@@ -5844,12 +6012,18 @@ def chatter_feed(request):
                 messages.error(request, "Could not find the record you selected.")
                 return redirect("chatter_feed")
 
+            if note_text:
+                content = note_text
+            else:
+                content = f"Attachment: {attachment.name}"
+
             LeadComment.objects.create(
                 lead=lead,
                 opportunity=opportunity,
                 production=production,
                 author=author_name,
-                content=note_text,
+                content=content,
+                attachment=attachment,
             )
             _send_chatter_mentions(
                 request,

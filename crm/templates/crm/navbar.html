@@ -17,6 +17,13 @@
       {% url 'opportunities_list' as u_opps %}
       {% if u_opps %}<a class="navitem" href="{{ u_opps }}">📈 Opportunities</a>{% endif %}
 
+      {% url 'cost_sheet_list' as u_costing %}
+      {% if u_costing and request.user.is_authenticated %}
+        {% if request.user.is_superuser or request.user.access.can_costing %}
+          <a class="navitem" href="{{ u_costing }}">🧮 Costing</a>
+        {% endif %}
+      {% endif %}
+
       {% url 'customers_list' as u_customers %}
       {% if u_customers %}<a class="navitem" href="{{ u_customers }}">👥 Customers</a>{% endif %}
 
@@ -37,8 +44,12 @@
       {% url 'shipment_list' as u_shipping %}
       {% if u_shipping %}<a class="navitem" href="{{ u_shipping }}">📦 Shipping</a>{% endif %}
 
-      {% url 'wa_inbox' as u_wa %}
-      {% if u_wa %}<a class="navitem navitem-warm" href="{{ u_wa }}">💬 WhatsApp</a>{% endif %}
+      {% if WHATSAPP_ENABLED %}
+        {% if request.user.is_superuser or request.user.access.can_whatsapp %}
+          {% url 'wa_inbox' as u_wa %}
+          {% if u_wa %}<a class="navitem navitem-warm" href="{{ u_wa }}">💬 WhatsApp</a>{% endif %}
+        {% endif %}
+      {% endif %}
 
       {% url 'email_sync_dashboard' as u_email %}
       {% if u_email %}<a class="navitem" href="{{ u_email }}">📨 Email Sync</a>{% endif %}

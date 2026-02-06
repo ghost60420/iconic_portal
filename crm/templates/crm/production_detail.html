@@ -201,6 +201,22 @@
     border-color:rgba(245,204,21,0.35);
   }
 
+  .actual-grid{
+    display:grid;
+    grid-template-columns: 1fr 1.4fr 0.6fr 0.8fr 0.8fr 0.9fr 1.2fr;
+    gap:6px;
+    align-items:center;
+    font-size:12px;
+  }
+
+  .actual-head{
+    color:#fef3c7;
+    text-transform:uppercase;
+    font-size:11px;
+    letter-spacing:0.04em;
+    margin-bottom:6px;
+  }
+
   .stage-item.planned{ background:rgba(15,23,42,0.75); }
   .stage-item.current{
     background:linear-gradient(145deg, rgba(30,64,175,0.9), rgba(30,64,175,0.55));
@@ -734,10 +750,14 @@
 
     <div class="note-box" style="margin-top:12px;">
       <div class="note-title">Chatter feed (Lead + Opportunity + Production)</div>
-      <form method="post" style="margin-bottom:8px;">
+      <form method="post" style="margin-bottom:8px;" enctype="multipart/form-data">
         {% csrf_token %}
         <input type="hidden" name="action" value="add_comment">
         <textarea name="comment_text" rows="3" class="inputx" placeholder="Write a note about this production order"></textarea>
+        <div style="margin-top:6px;">
+          <label class="small-label">Attachment (optional)</label>
+          <input type="file" name="attachment" class="inputx">
+        </div>
         <div style="text-align:right; margin-top:8px;">
           <button type="submit" class="btn btn-warning btn-sm">Save note</button>
         </div>
@@ -754,6 +774,15 @@
               {% if c.is_ai %} AI{% endif %}
             </span>
             <p class="value-soft">{{ c.content|linebreaksbr }}</p>
+            {% if c.attachment %}
+              <div class="muted" style="font-size:11px; margin-top:4px;">
+                {% with c.attachment.name|cut:"chatter_attachments/" as attachment_name %}
+                  <a href="{{ c.attachment.url }}" target="_blank" rel="noopener">
+                    {{ attachment_name|default:"Attachment" }}
+                  </a>
+                {% endwith %}
+              </div>
+            {% endif %}
             <div class="muted" style="font-size:11px;">
               {% if c.production %}
                 <a href="{% url 'production_detail' c.production.pk %}">Open production</a>
@@ -961,6 +990,127 @@
         {% endif %}
       </div>
     </div>
+  </div>
+
+  <div class="cardx">
+    <div class="section-title" style="margin-bottom:8px;">
+      Actual cost tracking
+    </div>
+
+    {% if cost_sheet_active %}
+      <div class="muted" style="margin-bottom:8px;">
+        Linked cost sheet: v{{ cost_sheet_active.version_number }}
+      </div>
+    {% else %}
+      <div class="muted" style="margin-bottom:8px;">
+        No active cost sheet linked yet.
+      </div>
+    {% endif %}
+
+    <div style="margin-bottom:12px;">
+      <form method="post" class="actual-grid">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add_actual">
+        <div>
+          <div class="small-label">Section</div>
+          {{ actual_entry_form.section }}
+        </div>
+        <div>
+          <div class="small-label">Item</div>
+          {{ actual_entry_form.item_name }}
+        </div>
+        <div>
+          <div class="small-label">UOM</div>
+          {{ actual_entry_form.uom }}
+        </div>
+        <div>
+          <div class="small-label">Qty total</div>
+          {{ actual_entry_form.actual_qty_total }}
+        </div>
+        <div>
+          <div class="small-label">Rate</div>
+          {{ actual_entry_form.actual_rate }}
+        </div>
+        <div>
+          <div class="small-label">Total cost</div>
+          {{ actual_entry_form.actual_total_cost }}
+        </div>
+        <div style="grid-column:1 / -1;">
+          <div class="small-label">Notes</div>
+          {{ actual_entry_form.notes }}
+        </div>
+        <div style="grid-column:1 / -1; text-align:right;">
+          <button type="submit" class="btn btn-warning btn-sm">Add actual</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="actual-head actual-grid">
+      <div>Section</div>
+      <div>Item</div>
+      <div>UOM</div>
+      <div>Qty</div>
+      <div>Rate</div>
+      <div>Total</div>
+      <div>Actions</div>
+    </div>
+
+    {% if actual_entries %}
+      {% for entry in actual_entries %}
+        <form method="post" class="actual-grid" style="margin-bottom:6px;">
+          {% csrf_token %}
+          <input type="hidden" name="entry_id" value="{{ entry.id }}">
+          <input type="hidden" name="section" value="{{ entry.section }}">
+          <div>{{ entry.get_section_display }}</div>
+          <input type="text" name="item_name" value="{{ entry.item_name }}">
+          <input type="text" name="uom" value="{{ entry.uom }}">
+          <input type="number" step="0.0001" name="actual_qty_total" value="{{ entry.actual_qty_total }}">
+          <input type="number" step="0.0001" name="actual_rate" value="{{ entry.actual_rate }}">
+          <input type="number" step="0.0001" name="actual_total_cost" value="{{ entry.actual_total_cost }}">
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <button type="submit" name="action" value="update_actual" class="btn btn-outline-light btn-sm">Save</button>
+            <button type="submit" name="action" value="delete_actual" class="btn btn-outline-danger btn-sm">Delete</button>
+          </div>
+        </form>
+      {% endfor %}
+    {% else %}
+      <div class="muted">No actual costs yet.</div>
+    {% endif %}
+
+    {% if variance_report %}
+      <div style="margin-top:14px;">
+        <div class="section-title">Variance summary</div>
+        <div class="muted" style="margin-bottom:6px;">
+          Quoted {{ variance_report.display.quoted_price_per_piece }} · Standard {{ variance_report.display.standard_cost_per_piece }} · Actual {{ variance_report.display.actual_cost_per_piece }}
+        </div>
+        <div class="muted">
+          Variance per piece: {{ variance_report.display.variance_per_piece }} · Total variance: {{ variance_report.display.total_variance }}
+        </div>
+
+        <div class="table-responsive" style="margin-top:8px;">
+          <table class="table table-dark table-sm align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Section</th>
+                <th>Standard total</th>
+                <th>Actual total</th>
+                <th>Difference</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in variance_report.variance_rows %}
+                <tr>
+                  <td>{{ row.section_label }}</td>
+                  <td>{{ row.display_standard_total }}</td>
+                  <td>{{ row.display_actual_total }}</td>
+                  <td>{{ row.display_difference }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {% endif %}
   </div>
 
   <div class="cardx">

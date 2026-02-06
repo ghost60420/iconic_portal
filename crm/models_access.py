@@ -32,6 +32,10 @@ class UserAccess(models.Model):
     can_shipping = models.BooleanField(default=True)
     can_ai = models.BooleanField(default=True)
     can_calendar = models.BooleanField(default=True)
+    can_marketing = models.BooleanField(default=True)
+    can_whatsapp = models.BooleanField(default=True)
+    can_costing = models.BooleanField(default=True)
+    can_costing_approve = models.BooleanField(default=False)
 
     # Accounting checkmarks
     can_accounting_bd = models.BooleanField(default=True)

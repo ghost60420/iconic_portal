@@ -11,6 +11,7 @@ from . import views_email
 from . import views_whatsapp as wa
 from . import views_accounting as acc
 from . import views_access as access
+from . import views_costing as costing
 
 from .whatsapp_webhook import whatsapp_webhook
 from .permissions import bd_blocked, require_access, require_any_access
@@ -65,6 +66,14 @@ urlpatterns = [
     path("opportunities/<int:pk>/edit/", perm("can_opportunities", views.opportunity_edit), name="opportunity_edit"),
     path("opportunities/<int:pk>/ai/", perm("can_ai", views.opportunity_ai_detail), name="opportunity_ai_detail"),
     path("opportunities/<int:pk>/ai/suggest/", perm("can_ai", ai.ai_opportunity_suggest), name="ai_opportunity_suggest"),
+
+    # Costing
+    path("costing/", perm("can_costing", costing.cost_sheet_list), name="cost_sheet_list"),
+    path("costing/add/", perm("can_costing", costing.cost_sheet_create), name="cost_sheet_create"),
+    path("costing/add/opportunity/<int:opportunity_id>/", perm("can_costing", costing.cost_sheet_create), name="cost_sheet_create_for_opportunity"),
+    path("costing/<int:pk>/", perm("can_costing", costing.cost_sheet_detail), name="cost_sheet_detail"),
+    path("costing/<int:pk>/export/pdf/", perm("can_costing", costing.cost_sheet_export_pdf), name="cost_sheet_export_pdf"),
+    path("costing/<int:pk>/export/excel/", perm("can_costing", costing.cost_sheet_export_excel), name="cost_sheet_export_excel"),
 
     path("chatter/", login_required(views.chatter_feed), name="chatter_feed"),
 
