@@ -272,6 +272,7 @@
     {% url 'calendar_list' as cal_url %}
     {% url 'production_list' as prod_url %}
     {% url 'shipment_list' as ship_url %}
+    {% url 'main_dashboard' as main_dash_url %}
     {% url 'ai_hub' as ai_hub_url %}
     {% url 'inventory_list' as inv_url %}
     {% url 'marketing_dashboard' as marketing_url %}
@@ -302,7 +303,9 @@
 
       <div class="crm-nav-group">
 
-        {% if leads_url %}
+        {% if main_dash_url %}
+          <a href="{{ main_dash_url }}" class="crm-nav-item primary"><span>🏠</span><strong>CRM</strong></a>
+        {% elif leads_url %}
           <a href="{{ leads_url }}" class="crm-nav-item primary"><span>🏠</span><strong>CRM</strong></a>
         {% endif %}
 

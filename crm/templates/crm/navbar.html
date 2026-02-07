@@ -4,8 +4,11 @@
   <div class="topnav-inner">
 
     <div class="nav-left nav-scroll">
+      {% url 'main_dashboard' as u_dash %}
       {% url 'leads_list' as u_leads %}
-      {% if u_leads %}
+      {% if u_dash %}
+        <a class="navitem primary" href="{{ u_dash }}">🏠 CRM</a>
+      {% elif u_leads %}
         <a class="navitem primary" href="{{ u_leads }}">🏠 CRM</a>
       {% endif %}
 
