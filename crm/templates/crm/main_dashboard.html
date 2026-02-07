@@ -225,6 +225,55 @@
     letter-spacing: 0.45px;
     font-weight: 800;
   }
+
+  .finance-grid{
+    display:grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap:12px;
+  }
+
+  @media (max-width: 900px){
+    .finance-grid{ grid-template-columns: 1fr; }
+  }
+
+  .finance-card{
+    position: relative;
+    border-left: 3px solid rgba(251,191,36,0.8);
+  }
+
+  .finance-card.bd{
+    border-left-color: rgba(34,211,238,0.8);
+  }
+
+  .finance-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-top: 8px;
+  }
+
+  .finance-label{
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+
+  .finance-value{
+    font-size: 20px;
+    font-weight: 700;
+    font-family: "Space Grotesk", sans-serif;
+  }
+
+  .finance-value.pos{ color: var(--green); }
+  .finance-value.neg{ color: var(--red); }
+
+  .finance-note{
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--muted);
+  }
 </style>
 
 <div class="container-fluid">
@@ -232,8 +281,8 @@
 
     <div class="dash-hero">
       <div>
-        <h2 class="dash-title">CRM Command Center</h2>
-        <div class="dash-sub">Live snapshot of leads, production, and cash.</div>
+        <h2 class="dash-title">CRM Home</h2>
+        <div class="dash-sub">Live snapshot of leads, production, and revenue vs expenses.</div>
         <div class="dash-meta">
           <span class="meta-pill">Updated: {{ today|date:"M d, Y" }}</span>
           <span class="meta-pill">{{ period_label }}</span>
@@ -286,9 +335,59 @@
       </div>
 
       <div class="card" style="--d:0.12s;">
-        <div class="kpi-title">Net Cash {{ period_label }}</div>
-        <div class="kpi-value" style="color:var(--amber);">{{ acc_net_cad_period|floatformat:2 }}</div>
-        <div class="kpi-sub">In {{ acc_income_cad_period|floatformat:2 }} | Out {{ acc_out_cad_period|floatformat:2 }}</div>
+        <div class="kpi-title">Net Cash (CAD) {{ period_label }}</div>
+        <div class="kpi-value" style="color:var(--amber);">$ {{ acc_net_cad_period|floatformat:2 }}</div>
+        <div class="kpi-sub">In $ {{ acc_income_cad_period|floatformat:2 }} | Out $ {{ acc_out_cad_period|floatformat:2 }} (all sides)</div>
+      </div>
+    </div>
+
+    <div class="section-label">Revenue and expenses</div>
+    <div class="dash-sub" style="margin: -4px 0 10px;">Total accounting entries in range: {{ acc_entries_period }}</div>
+    <div class="finance-grid">
+      <div class="card finance-card">
+        <div class="card-head">
+          <div>
+            <p class="card-title">Canada accounting (CAD)</p>
+            <div class="card-note">Entries: {{ acc_entries_ca_period }} for {{ period_label|lower }}</div>
+          </div>
+          <span class="meta-pill">CAD</span>
+        </div>
+        <div class="finance-row">
+          <span class="finance-label">Money in</span>
+          <span class="finance-value pos">$ {{ acc_ca_income_cad_period|floatformat:2 }}</span>
+        </div>
+        <div class="finance-row">
+          <span class="finance-label">Money out</span>
+          <span class="finance-value neg">$ {{ acc_ca_out_cad_period|floatformat:2 }}</span>
+        </div>
+        <div class="finance-row">
+          <span class="finance-label">Net</span>
+          <span class="finance-value {% if acc_ca_net_cad_period < 0 %}neg{% else %}pos{% endif %}">$ {{ acc_ca_net_cad_period|floatformat:2 }}</span>
+        </div>
+        <div class="finance-note">Totals use posted accounting entries in CAD.</div>
+      </div>
+
+      <div class="card finance-card bd">
+        <div class="card-head">
+          <div>
+            <p class="card-title">Bangladesh accounting (BDT)</p>
+            <div class="card-note">Entries: {{ acc_entries_bd_period }} for {{ period_label|lower }}</div>
+          </div>
+          <span class="meta-pill">BDT</span>
+        </div>
+        <div class="finance-row">
+          <span class="finance-label">Money in</span>
+          <span class="finance-value pos">BDT {{ acc_bd_income_bdt_period|floatformat:2 }}</span>
+        </div>
+        <div class="finance-row">
+          <span class="finance-label">Money out</span>
+          <span class="finance-value neg">BDT {{ acc_bd_out_bdt_period|floatformat:2 }}</span>
+        </div>
+        <div class="finance-row">
+          <span class="finance-label">Net</span>
+          <span class="finance-value {% if acc_bd_net_bdt_period < 0 %}neg{% else %}pos{% endif %}">BDT {{ acc_bd_net_bdt_period|floatformat:2 }}</span>
+        </div>
+        <div class="finance-note">BDT totals use the stored BDT conversions.</div>
       </div>
     </div>
 
@@ -311,7 +410,7 @@
         <div class="card-head">
           <div>
             <p class="card-title">Cash Flow</p>
-            <div class="card-note">Net cash by day (CAD)</div>
+            <div class="card-note">Net cash by day (CAD, all sides)</div>
           </div>
         </div>
         <div class="chartWrap">

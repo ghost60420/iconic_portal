@@ -31,6 +31,7 @@ from django.shortcuts import render
 from .models import Product, Fabric, Accessory, Trim, ThreadOption, InventoryItem, ProductionOrderMaterial
 
 from .services.costing import build_variance_report, calculate_cost_sheet
+from .services.costing_simple import calculate_cost_sheet_simple
 
 def _parse_decimal(value):
     try:
@@ -63,6 +64,7 @@ from .models import (
     LeadActivity,
     LeadComment,
     CostSheet,
+    CostSheetSimple,
     Opportunity,
     OpportunityDocument,
     OpportunityFile,
@@ -1415,9 +1417,16 @@ def opportunity_detail(request, pk):
 
     # Files
     opp_files = OpportunityFile.objects.filter(opportunity=opportunity).order_by("-uploaded_at")
-    opportunity_documents = OpportunityDocument.objects.filter(opportunity=opportunity).order_by("-uploaded_at")
-    cost_sheet_versions = CostSheet.objects.filter(opportunity=opportunity).order_by("-version_number")
-    active_cost_sheet = cost_sheet_versions.filter(is_active=True).first()
+    opportunity_documents = OpportunityDocument.objects.filter(
+        opportunity=opportunity,
+        doc_type__in=["costing_pdf", "costing_excel", "costing_other"],
+    ).order_by("-uploaded_at")
+    active_cost_sheet = CostSheet.objects.filter(opportunity=opportunity, is_active=True).order_by(
+        "-updated_at", "-id"
+    ).first()
+    simple_cost_sheet = CostSheetSimple.objects.filter(opportunity=opportunity).order_by(
+        "-updated_at", "-id"
+    ).first()
 
     # Comments and activity
     comments = _chatter_for_opportunity(opportunity)
@@ -1666,11 +1675,6 @@ def opportunity_detail(request, pk):
         if action == "upload_document":
             file_obj = request.FILES.get("doc_file")
             doc_type = (request.POST.get("doc_type") or "other").strip()
-            cost_sheet_id = (request.POST.get("cost_sheet_id") or "").strip()
-            cost_sheet = None
-
-            if cost_sheet_id:
-                cost_sheet = CostSheet.objects.filter(id=cost_sheet_id, opportunity=opportunity).first()
 
             if file_obj and lead:
                 doc = OpportunityDocument.objects.create(
@@ -1678,7 +1682,7 @@ def opportunity_detail(request, pk):
                     file=file_obj,
                     original_name=file_obj.name,
                     doc_type=doc_type,
-                    cost_sheet=cost_sheet,
+                    cost_sheet_simple=simple_cost_sheet,
                     uploaded_by=request.user if request.user.is_authenticated else None,
                 )
                 LeadActivity.objects.create(
@@ -1742,11 +1746,43 @@ def opportunity_detail(request, pk):
     prod_total_reject = prod_totals.get("total_reject") or 0
     prod_total_actual_cost = prod_totals.get("total_actual_cost") or 0
 
-    costing_calc = calculate_cost_sheet(active_cost_sheet) if active_cost_sheet else None
-    variance_report = None
-    if active_cost_sheet and prod_orders.exists():
+    simple_calc = calculate_cost_sheet_simple(simple_cost_sheet) if simple_cost_sheet else None
+    variance_placeholder = None
+    variance_display = None
+    if simple_cost_sheet:
         latest_po = prod_orders.order_by("-created_at").first()
-        variance_report = build_variance_report(active_cost_sheet, latest_po)
+        actual_cost_per_piece = None
+        produced_qty = 0
+        if latest_po and latest_po.actual_cost_per_piece_bdt is not None:
+            actual_cost_per_piece = latest_po.actual_cost_per_piece_bdt
+            produced_qty = latest_po.qty_total or 0
+
+        standard_cost = simple_calc["total_cost_per_piece"] if simple_calc else Decimal("0")
+        variance_per_piece = None
+        total_variance = None
+        if actual_cost_per_piece is not None:
+            variance_per_piece = actual_cost_per_piece - standard_cost
+            if produced_qty:
+                total_variance = variance_per_piece * Decimal(produced_qty)
+
+        variance_placeholder = {
+            "standard_cost_per_piece": standard_cost,
+            "actual_cost_per_piece": actual_cost_per_piece,
+            "variance_per_piece": variance_per_piece,
+            "total_variance": total_variance,
+        }
+        if variance_placeholder:
+            def _fmt(value):
+                if value is None:
+                    return None
+                return Decimal(value).quantize(Decimal("0.01"))
+
+            variance_display = {
+                "standard_cost_per_piece": _fmt(standard_cost),
+                "actual_cost_per_piece": _fmt(actual_cost_per_piece),
+                "variance_per_piece": _fmt(variance_per_piece),
+                "total_variance": _fmt(total_variance),
+            }
 
     order_value = opportunity.order_value or 0
     total_cost_bdt = (prod_total_actual_cost or 0) + (shipping_cost_bdt or 0)
@@ -1773,10 +1809,10 @@ def opportunity_detail(request, pk):
 
         "opp_files": opp_files,
         "opportunity_documents": opportunity_documents,
-        "cost_sheet_versions": cost_sheet_versions,
-        "active_cost_sheet": active_cost_sheet,
-        "costing_calc": costing_calc,
-        "variance_report": variance_report,
+        "simple_cost_sheet": simple_cost_sheet,
+        "simple_calc": simple_calc,
+        "variance_placeholder": variance_placeholder,
+        "variance_display": variance_display,
 
         "prod_orders": prod_orders,
         "prod_total_qty": prod_total_qty,
@@ -3664,10 +3700,10 @@ def world_dashboard(request):
     ]
 
     currencies = [
-        {"pair": "CAD → BDT"},
-        {"pair": "USD → BDT"},
-        {"pair": "EUR → BDT"},
-        {"pair": "GBP → BDT"},
+        {"pair": "CAD -> BDT"},
+        {"pair": "USD -> BDT"},
+        {"pair": "EUR -> BDT"},
+        {"pair": "GBP -> BDT"},
     ]
 
     ai_fashion_update = "AI Trend Update unavailable right now."
@@ -6582,10 +6618,10 @@ def main_dashboard(request):
 
     # Leads
     leads_today = Lead.objects.filter(created_date=today).count()
-    leads_period = Lead.objects.filter(created_date__gte=start_period).count()
+    leads_period = Lead.objects.filter(created_date__range=(start_period, today)).count()
 
     leads_daily_qs = (
-        Lead.objects.filter(created_date__gte=start_period)
+        Lead.objects.filter(created_date__range=(start_period, today))
         .values("created_date")
         .annotate(c=Count("id"))
         .order_by("created_date")
@@ -6600,7 +6636,7 @@ def main_dashboard(request):
         leads_daily_values.append(int(lead_map.get(d, 0)))
 
     # Opportunities
-    opp_period = Opportunity.objects.filter(created_date__gte=start_period).count()
+    opp_period = Opportunity.objects.filter(created_date__range=(start_period, today)).count()
 
     opp_by_stage_qs = Opportunity.objects.values("stage").annotate(c=Count("id"))
     opp_stage_map = {row.get("stage") or "Unknown": int(row.get("c") or 0) for row in opp_by_stage_qs}
@@ -6617,7 +6653,7 @@ def main_dashboard(request):
 
     # Opp daily (for Leads vs Opportunities chart)
     opp_daily_qs = (
-        Opportunity.objects.filter(created_date__gte=start_period)
+        Opportunity.objects.filter(created_date__range=(start_period, today))
         .values("created_date")
         .annotate(c=Count("id"))
         .order_by("created_date")
@@ -6648,7 +6684,7 @@ def main_dashboard(request):
             lead_status_values.append(int(cnt))
 
     # Accounting net per day (real cash flow line)
-    acc_qs = AccountingEntry.objects.filter(date__gte=start_period).values("date").annotate(
+    acc_qs = AccountingEntry.objects.filter(date__range=(start_period, today)).values("date").annotate(
         in_sum=Sum("amount_cad", filter=Q(direction="IN")),
         out_sum=Sum("amount_cad", filter=Q(direction="OUT")),
     )
@@ -6666,10 +6702,33 @@ def main_dashboard(request):
         d = start_period + timedelta(days=i)
         cash_daily_values.append(_to_float(acc_map.get(d, 0)))
 
-    acc_period = AccountingEntry.objects.filter(date__gte=start_period)
+    acc_period = AccountingEntry.objects.filter(date__range=(start_period, today))
+    acc_entries_period = acc_period.count()
+    acc_entries_ca_period = acc_period.filter(side="CA").count()
+    acc_entries_bd_period = acc_period.filter(side="BD").count()
     acc_income_cad = _to_float(acc_period.filter(direction="IN").aggregate(s=Sum("amount_cad"))["s"])
     acc_out_cad = _to_float(acc_period.filter(direction="OUT").aggregate(s=Sum("amount_cad"))["s"])
     acc_net_cad = acc_income_cad - acc_out_cad
+
+    acc_income_bdt = _to_float(acc_period.filter(direction="IN").aggregate(s=Sum("amount_bdt"))["s"])
+    acc_out_bdt = _to_float(acc_period.filter(direction="OUT").aggregate(s=Sum("amount_bdt"))["s"])
+    acc_net_bdt = acc_income_bdt - acc_out_bdt
+
+    acc_ca_income_cad = _to_float(
+        acc_period.filter(side="CA", direction="IN").aggregate(s=Sum("amount_cad"))["s"]
+    )
+    acc_ca_out_cad = _to_float(
+        acc_period.filter(side="CA", direction="OUT").aggregate(s=Sum("amount_cad"))["s"]
+    )
+    acc_ca_net_cad = acc_ca_income_cad - acc_ca_out_cad
+
+    acc_bd_income_bdt = _to_float(
+        acc_period.filter(side="BD", direction="IN").aggregate(s=Sum("amount_bdt"))["s"]
+    )
+    acc_bd_out_bdt = _to_float(
+        acc_period.filter(side="BD", direction="OUT").aggregate(s=Sum("amount_bdt"))["s"]
+    )
+    acc_bd_net_bdt = acc_bd_income_bdt - acc_bd_out_bdt
 
     # Payroll
     pm = BDStaffMonth.objects.filter(year=today.year, month=today.month)
@@ -6741,7 +6800,7 @@ def main_dashboard(request):
         conversion_rate = round((opp_period / leads_period) * 100, 1)
 
     ai_notes = [
-        f"Lead → Opportunity conversion: {conversion_rate}%",
+        f"Lead -> Opportunity conversion: {conversion_rate}%",
         f"Open opportunities: {open_opps}",
         f"Overdue follow-ups: {overdue_followups}",
         f"Top lead source: {lead_source_labels[0] if lead_source_labels else 'N/A'}",
@@ -6785,6 +6844,18 @@ def main_dashboard(request):
         "acc_income_cad_period": acc_income_cad,
         "acc_out_cad_period": acc_out_cad,
         "acc_net_cad_period": acc_net_cad,
+        "acc_income_bdt_period": acc_income_bdt,
+        "acc_out_bdt_period": acc_out_bdt,
+        "acc_net_bdt_period": acc_net_bdt,
+        "acc_ca_income_cad_period": acc_ca_income_cad,
+        "acc_ca_out_cad_period": acc_ca_out_cad,
+        "acc_ca_net_cad_period": acc_ca_net_cad,
+        "acc_bd_income_bdt_period": acc_bd_income_bdt,
+        "acc_bd_out_bdt_period": acc_bd_out_bdt,
+        "acc_bd_net_bdt_period": acc_bd_net_bdt,
+        "acc_entries_period": acc_entries_period,
+        "acc_entries_ca_period": acc_entries_ca_period,
+        "acc_entries_bd_period": acc_entries_bd_period,
 
         "payroll_total": payroll_total,
         "payroll_ot": payroll_ot,

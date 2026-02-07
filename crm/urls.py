@@ -19,7 +19,15 @@ from .permissions import bd_blocked, require_access, require_any_access
 
 def home_redirect(request):
     if request.user.is_authenticated:
-        return redirect("main_dashboard")
+        access = getattr(request.user, "access", None)
+        if access:
+            if access.can_leads:
+                return redirect("leads_list")
+            if access.can_opportunities:
+                return redirect("opportunities_list")
+            if access.can_customers:
+                return redirect("customers_list")
+        return redirect("leads_list")
     return redirect("login")
 
 
