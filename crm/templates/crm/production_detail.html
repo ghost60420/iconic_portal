@@ -376,60 +376,6 @@
     box-shadow: 0 0 0 1px rgba(250,204,21,0.3);
   }
 
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(2,6,23,0.75);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    padding: 16px;
-    z-index: 80;
-  }
-
-  .modal-backdrop.open {
-    display: flex;
-  }
-
-  .modal-card {
-    width: min(760px, 100%);
-    background: #0b1020;
-    border: 1px solid #1f2937;
-    border-radius: 14px;
-    padding: 16px;
-    box-shadow: 0 0 30px rgba(0,0,0,0.6);
-  }
-
-  .modal-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 12px;
-  }
-
-  .modal-title {
-    font-size: 16px;
-    font-weight: 800;
-    color: #f9fafb;
-  }
-
-  .modal-sub {
-    font-size: 12px;
-    color: #9ca3af;
-    margin-top: 2px;
-  }
-
-  .modal-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
-  }
-
-  @media (max-width: 720px) {
-    .modal-grid { grid-template-columns: 1fr; }
-  }
-
   .sheet-top {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -924,9 +870,6 @@
   <div class="cardx">
     <div class="section-title">
       <span>Order sheet details</span>
-      {% if can_add_lines %}
-        <button type="button" class="btn btn-sm btn-outline-light" id="add-line-btn">Add Line</button>
-      {% endif %}
     </div>
 
     {% if order_lines %}
@@ -1021,66 +964,6 @@
       {% endfor %}
     {% else %}
       <div class="sheet-value muted">No order sheet details set.</div>
-    {% endif %}
-
-    {% if can_add_lines %}
-      <div id="line-modal" class="modal-backdrop" aria-hidden="true">
-        <div class="modal-card">
-          <div class="modal-head">
-            <div>
-              <div class="modal-title">Add product line</div>
-              <div class="modal-sub">
-                Client:
-                {% if order.customer %}
-                  {{ order.customer.account_brand|default:order.customer.contact_name|default:order.customer }}
-                {% else %}
-                  Not set
-                {% endif %}
-                | Order: {{ order.order_code|default:"Not set" }}
-              </div>
-            </div>
-            <button type="button" class="btn btn-sm btn-outline-light" id="line-modal-close">Close</button>
-          </div>
-          <form method="post">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="add_line">
-            <div class="modal-grid">
-              <div>
-                <div class="small-label">Style name</div>
-                <input type="text" name="line_style_name" class="inputx" placeholder="Style name">
-              </div>
-              <div>
-                <div class="small-label">Color info</div>
-                <input type="text" name="line_color_info" class="inputx" placeholder="Colorways">
-              </div>
-            </div>
-
-            <div style="margin-top:12px;">
-              <div class="small-label">Size ratio note</div>
-              <textarea name="line_size_ratio_note" rows="4" class="inputx" placeholder="Example: XS:20 S:40 M:60 L:40 XL:20"></textarea>
-            </div>
-
-            <div style="margin-top:12px;">
-              <div class="small-label">Accessories and trims</div>
-              <textarea name="line_accessories_note" rows="3" class="inputx" placeholder="List trims, labels, zips, etc."></textarea>
-            </div>
-
-            <div style="margin-top:12px;">
-              <div class="small-label">Packaging details</div>
-              <textarea name="line_packaging_note" rows="3" class="inputx" placeholder="Packaging notes for this product line"></textarea>
-            </div>
-
-            <div style="margin-top:12px;">
-              <div class="small-label">Extra order notes</div>
-              <textarea name="line_extra_order_note" rows="3" class="inputx" placeholder="Any additional notes"></textarea>
-            </div>
-
-            <div style="text-align:right; margin-top:12px;">
-              <button type="submit" class="btn btn-warning btn-sm">Save line</button>
-            </div>
-          </form>
-        </div>
-      </div>
     {% endif %}
 
     <div style="margin-top:14px;">
@@ -1189,6 +1072,9 @@
         No active cost sheet linked yet.
       </div>
     {% endif %}
+    <div class="muted" style="margin-bottom:8px;">
+      All values are in BDT (৳) and total cost auto-calculates from qty × rate.
+    </div>
 
     <div style="margin-bottom:12px;">
       <form method="post" class="actual-grid">
@@ -1211,11 +1097,11 @@
           {{ actual_entry_form.actual_qty_total }}
         </div>
         <div>
-          <div class="small-label">Rate</div>
+          <div class="small-label">Rate (BDT)</div>
           {{ actual_entry_form.actual_rate }}
         </div>
         <div>
-          <div class="small-label">Total cost</div>
+          <div class="small-label">Total cost (BDT)</div>
           {{ actual_entry_form.actual_total_cost }}
         </div>
         <div style="grid-column:1 / -1;">
@@ -1233,8 +1119,8 @@
       <div>Item</div>
       <div>UOM</div>
       <div>Qty</div>
-      <div>Rate</div>
-      <div>Total</div>
+      <div>Rate (BDT)</div>
+      <div>Total (BDT)</div>
       <div>Actions</div>
     </div>
 
@@ -1294,100 +1180,6 @@
         </div>
       </div>
     {% endif %}
-  </div>
-
-  <div class="cardx">
-    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
-      <div class="section-title" style="margin:0;">Order sheet (materials)</div>
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <a href="{% url 'production_order_sheet_pdf' order.pk %}" class="btn btn-outline-light btn-sm">Download order sheet PDF</a>
-        <a href="{% url 'production_packing_list_pdf' order.pk %}" class="btn btn-outline-light btn-sm">Download packing list PDF</a>
-      </div>
-    </div>
-
-    <div style="margin-top:10px;">
-      <form method="post" style="display:grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 0.4fr) minmax(0, 0.8fr) minmax(0, 0.4fr); gap:8px; align-items:end;">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="add_material">
-        <div>
-          <div class="small-label">Material</div>
-          <select name="inventory_item" class="inputx">
-            <option value="">Select material</option>
-            {% if recommended_items %}
-              <optgroup label="Recommended from library">
-                {% for item in recommended_items %}
-                  <option value="{{ item.pk }}">
-                    {{ item.name }} ({{ item.get_category_display }})
-                  </option>
-                {% endfor %}
-              </optgroup>
-            {% endif %}
-            <optgroup label="All inventory">
-              {% for item in inventory_items %}
-                {% if item.pk|stringformat:"s" not in recommended_ids %}
-                  <option value="{{ item.pk }}">
-                    {{ item.name }} ({{ item.get_category_display }})
-                  </option>
-                {% endif %}
-              {% endfor %}
-            </optgroup>
-          </select>
-        </div>
-        <div>
-          <div class="small-label">Quantity</div>
-          <input type="number" step="0.01" name="quantity" class="inputx" placeholder="0">
-        </div>
-        <div>
-          <div class="small-label">Note</div>
-          <input type="text" name="note" class="inputx" placeholder="Optional note">
-        </div>
-        <div style="text-align:right;">
-          <button type="submit" class="btn btn-warning btn-sm">Add</button>
-        </div>
-      </form>
-    </div>
-
-    <div style="margin-top:12px;">
-      {% if materials %}
-        <div class="table-responsive">
-          <table class="table table-dark table-sm align-middle mb-0">
-            <thead>
-              <tr>
-                <th>Material</th>
-                <th>Category</th>
-                <th>Qty</th>
-                <th>Unit</th>
-                <th>Code/SKU</th>
-                <th>Note</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for line in materials %}
-                <tr>
-                  <td>{{ line.inventory_item.name }}</td>
-                  <td>{{ line.inventory_item.get_category_display }}</td>
-                  <td>{{ line.quantity|default:"-" }}</td>
-                  <td>{{ line.unit_type|default:line.inventory_item.unit_type }}</td>
-                  <td>{{ line.inventory_item.code|default:line.inventory_item.sku|default:"-" }}</td>
-                  <td>{{ line.notes|default:"-" }}</td>
-                  <td>
-                    <form method="post" style="display:inline;">
-                      {% csrf_token %}
-                      <input type="hidden" name="action" value="remove_material">
-                      <input type="hidden" name="line_id" value="{{ line.pk }}">
-                      <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Remove this material?');">Remove</button>
-                    </form>
-                  </td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% else %}
-        <div class="muted" style="font-size:13px;">No materials added yet. Use the form above to build the order sheet.</div>
-      {% endif %}
-    </div>
   </div>
 
   <div class="cardx">
@@ -1549,28 +1341,44 @@
       });
     }
 
-    var lineBtn = document.getElementById("add-line-btn");
-    var lineModal = document.getElementById("line-modal");
-    var lineClose = document.getElementById("line-modal-close");
-    if (lineBtn && lineModal && lineClose) {
-      var closeModal = function () {
-        lineModal.classList.remove("open");
-      };
-      lineBtn.addEventListener("click", function () {
-        lineModal.classList.add("open");
-      });
-      lineClose.addEventListener("click", closeModal);
-      lineModal.addEventListener("click", function (event) {
-        if (event.target === lineModal) {
-          closeModal();
-        }
-      });
-      document.addEventListener("keydown", function (event) {
-        if (event.key === "Escape") {
-          closeModal();
-        }
-      });
+    function parseNum(value) {
+      var v = parseFloat(value);
+      return Number.isFinite(v) ? v : null;
     }
+
+    function updateActualTotal(form) {
+      var qty = form.querySelector('input[name="actual_qty_total"]');
+      var rate = form.querySelector('input[name="actual_rate"]');
+      var total = form.querySelector('input[name="actual_total_cost"]');
+      if (!qty || !rate || !total) return;
+      total.readOnly = true;
+
+      var qtyVal = (qty.value || "").trim();
+      var rateVal = (rate.value || "").trim();
+      if (!qtyVal && !rateVal) {
+        total.value = "";
+        return;
+      }
+      var qtyNum = parseNum(qtyVal);
+      var rateNum = parseNum(rateVal);
+      if (qtyNum === null || rateNum === null) {
+        total.value = "";
+        return;
+      }
+      total.value = (qtyNum * rateNum).toFixed(4);
+    }
+
+    document.querySelectorAll("form.actual-grid").forEach(function (form) {
+      var qty = form.querySelector('input[name="actual_qty_total"]');
+      var rate = form.querySelector('input[name="actual_rate"]');
+      if (!qty || !rate) return;
+      var recalc = function () {
+        updateActualTotal(form);
+      };
+      qty.addEventListener("input", recalc);
+      rate.addEventListener("input", recalc);
+      recalc();
+    });
   });
 </script>
 

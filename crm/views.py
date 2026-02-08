@@ -5287,6 +5287,48 @@ def production_edit(request, pk):
     order_lines = None
 
     if request.method == "POST":
+        action = (request.POST.get("action") or "").strip()
+        if action == "add_material":
+            item_id = (request.POST.get("inventory_item") or "").strip()
+            qty_raw = (request.POST.get("quantity") or "").strip()
+            note = (request.POST.get("note") or "").strip()
+
+            item = InventoryItem.objects.filter(pk=item_id).first() if item_id else None
+            if item:
+                qty_val = None
+                if qty_raw:
+                    try:
+                        qty_val = Decimal(qty_raw)
+                    except Exception:
+                        qty_val = None
+
+                line = ProductionOrderMaterial.objects.filter(order=order, inventory_item=item).first()
+                if line:
+                    if qty_val is not None:
+                        line.quantity = qty_val
+                    if note:
+                        line.notes = note
+                    line.save()
+                else:
+                    ProductionOrderMaterial.objects.create(
+                        order=order,
+                        inventory_item=item,
+                        quantity=qty_val,
+                        unit_type=item.unit_type,
+                        notes=note,
+                    )
+                messages.success(request, "Material added to order sheet.")
+            else:
+                messages.error(request, "Please select a material.")
+
+            return redirect("production_edit", pk=pk)
+
+        if action == "remove_material":
+            line_id = (request.POST.get("line_id") or "").strip()
+            if line_id:
+                ProductionOrderMaterial.objects.filter(pk=line_id, order=order).delete()
+            return redirect("production_edit", pk=pk)
+
         form = ProductionOrderForm(request.POST, request.FILES, instance=order)
         if form.is_valid():
             obj = form.save()
@@ -5305,6 +5347,28 @@ def production_edit(request, pk):
     else:
         form = ProductionOrderForm(instance=order)
 
+    try:
+        materials = list(order.materials.select_related("inventory_item"))
+    except (OperationalError, ProgrammingError):
+        materials = []
+
+    recommended_items = InventoryItem.objects.none()
+    recommended_ids = []
+    try:
+        if order.fabrics.exists() or order.accessories.exists() or order.trims.exists() or order.threads.exists():
+            recommended_items = InventoryItem.objects.filter(
+                Q(fabric__in=order.fabrics.all())
+                | Q(accessory__in=order.accessories.all())
+                | Q(trim__in=order.trims.all())
+                | Q(thread_option__in=order.threads.all())
+            ).distinct()
+        recommended_ids = [str(i.pk) for i in recommended_items]
+    except (OperationalError, ProgrammingError):
+        recommended_items = []
+        recommended_ids = []
+
+    inventory_items = InventoryItem.objects.filter(is_active=True).order_by("category", "name")
+
     return render(
         request,
         "crm/production_add.html",
@@ -5313,6 +5377,10 @@ def production_edit(request, pk):
             "is_edit": True,
             "order": order,
             "order_lines": order_lines or _production_order_lines_for_form(order),
+            "materials": materials,
+            "inventory_items": inventory_items,
+            "recommended_items": recommended_items,
+            "recommended_ids": recommended_ids,
             **_production_library_context(order),
         },
     )
@@ -5481,6 +5549,12 @@ def production_detail(request, pk):
             form = ActualCostEntryForm(request.POST)
             if form.is_valid():
                 entry = form.save(commit=False)
+                qty_val = form.cleaned_data.get("actual_qty_total") or Decimal("0")
+                rate_val = form.cleaned_data.get("actual_rate") or Decimal("0")
+                try:
+                    entry.actual_total_cost = (qty_val * rate_val).quantize(Decimal("0.0001"))
+                except Exception:
+                    entry.actual_total_cost = Decimal("0")
                 entry.production_order = order
                 entry.opportunity = order.opportunity
                 entry.cost_sheet = order.cost_sheet_active
@@ -5506,7 +5580,10 @@ def production_detail(request, pk):
                 entry.uom = (request.POST.get("uom") or "").strip()
                 entry.actual_qty_total = _parse_decimal(request.POST.get("actual_qty_total"))
                 entry.actual_rate = _parse_decimal(request.POST.get("actual_rate"))
-                entry.actual_total_cost = _parse_decimal(request.POST.get("actual_total_cost"))
+                try:
+                    entry.actual_total_cost = (entry.actual_qty_total * entry.actual_rate).quantize(Decimal("0.0001"))
+                except Exception:
+                    entry.actual_total_cost = Decimal("0")
                 entry.notes = (request.POST.get("notes") or "").strip()
                 entry.save()
                 if order.cost_sheet_active:
