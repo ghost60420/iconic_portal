@@ -49,6 +49,7 @@ from .forms import (
     AccessoryForm,
     TrimForm,
     ThreadForm,
+    LibraryAttachmentForm,
 )
 from .forms_costing import ActualCostEntryForm
 from .models import (
@@ -70,6 +71,7 @@ from .models import (
     OpportunityFile,
     OpportunityTask,
     Product,
+    LibraryAttachment,
     ProductionOrder,
     ProductionStage,
     Shipment,
@@ -7788,7 +7790,39 @@ def add_opportunity(request):
 
 @login_required
 def library_home(request):
-    return render(request, "crm/library_home.html")
+    if request.method == "POST":
+        action = (request.POST.get("action") or "").strip()
+
+        if action == "upload_attachment":
+            form = LibraryAttachmentForm(request.POST, request.FILES)
+            if form.is_valid():
+                attachment = form.save(commit=False)
+                attachment.uploaded_by = request.user if request.user.is_authenticated else None
+                attachment.save()
+                messages.success(request, "Library document uploaded.")
+            else:
+                messages.error(request, "Please fill the required fields and choose a file.")
+            return redirect("library_home")
+
+        if action == "delete_attachment":
+            attach_id = (request.POST.get("attachment_id") or "").strip()
+            if attach_id:
+                LibraryAttachment.objects.filter(pk=attach_id).delete()
+                messages.success(request, "Library document removed.")
+            return redirect("library_home")
+
+    attachments = LibraryAttachment.objects.all().order_by("-uploaded_at", "-id")
+
+    context = {
+        "product_count": Product.objects.count(),
+        "fabric_count": Fabric.objects.count(),
+        "accessory_count": Accessory.objects.count(),
+        "trim_count": Trim.objects.count(),
+        "thread_count": ThreadOption.objects.count(),
+        "attachments": attachments[:50],
+        "attachment_form": LibraryAttachmentForm(),
+    }
+    return render(request, "crm/library_home.html", context)
 
 
 from django.shortcuts import render

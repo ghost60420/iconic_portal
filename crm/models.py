@@ -2825,6 +2825,44 @@ class AccountingAttachment(models.Model):
             self.original_name = (getattr(self.file, "name", "") or "")[:255]
         super().save(*args, **kwargs)
 
+
+class LibraryAttachment(models.Model):
+    CATEGORY_CHOICES = [
+        ("general", "General"),
+        ("catalog", "Catalog"),
+        ("product", "Product"),
+        ("fabric", "Fabric"),
+        ("accessory", "Accessory"),
+        ("trim", "Trim"),
+        ("thread", "Thread"),
+        ("factory", "Factory"),
+    ]
+
+    title = models.CharField(max_length=200, blank=True, default="")
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default="general")
+    file = models.FileField(upload_to="library/")
+    original_name = models.CharField(max_length=255, blank=True, default="")
+    note = models.TextField(blank=True, default="")
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-uploaded_at", "-id"]
+
+    def __str__(self):
+        label = self.title or self.original_name
+        return label or f"Library attachment {self.id}"
+
+    def save(self, *args, **kwargs):
+        if not self.original_name and self.file:
+            self.original_name = (getattr(self.file, "name", "") or "")[:255]
+        super().save(*args, **kwargs)
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone

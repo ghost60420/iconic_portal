@@ -1,7 +1,330 @@
 {% extends "crm/base.html" %}
 {% block content %}
-  <div class="p-3">
-    <h3 class="mb-2">Library</h3>
-    <div class="text-muted">Choose a list from the Library menu in the top bar.</div>
+<style>
+  :root{
+    --bg:#060606;
+    --panel:#0b0d10;
+    --panel2:#0f172a;
+    --border:#2a2f38;
+    --text:#f8f9fa;
+    --muted:#a8b0bd;
+    --gold1:#ffe39b;
+    --gold2:#e4c067;
+  }
+
+  .lib-wrap{
+    max-width: 1200px;
+    margin: 18px auto 40px auto;
+    padding: 0 10px;
+    color: var(--text);
+  }
+
+  .lib-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:12px;
+    flex-wrap:wrap;
+    margin-bottom: 16px;
+  }
+
+  .lib-title{
+    font-size: 24px;
+    font-weight: 900;
+    color: #fff;
+    margin: 0;
+    letter-spacing: 0.2px;
+  }
+
+  .lib-sub{
+    margin-top: 4px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .lib-grid{
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+  }
+
+  .lib-card{
+    background: linear-gradient(180deg, rgba(15,23,42,0.55), rgba(2,6,23,0.65));
+    border: 1px solid rgba(148,163,184,0.22);
+    border-radius: 16px;
+    padding: 14px;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.45);
+  }
+
+  .lib-card-title{
+    font-size: 14px;
+    font-weight: 900;
+    color: var(--gold1);
+    margin-bottom: 6px;
+  }
+
+  .lib-card-count{
+    font-size: 22px;
+    font-weight: 900;
+    color: #fff;
+  }
+
+  .lib-card-sub{
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  .lib-actions{
+    margin-top: 10px;
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+
+  .btn{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding: 9px 12px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 900;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.04);
+    color: #f3f4f6;
+    cursor:pointer;
+    user-select:none;
+    line-height: 1;
+    transition: transform 120ms ease, background 120ms ease, border-color 120ms ease, color 120ms ease;
+    text-decoration:none;
+    white-space:nowrap;
+  }
+
+  .btn:hover{
+    transform: translateY(-1px);
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(245, 213, 128, 0.32);
+    color: var(--gold1);
+  }
+
+  .btn-gold{
+    border-color: rgba(255, 227, 155, 0.30);
+    background: rgba(245, 213, 128, 0.16);
+    color: var(--gold1);
+    box-shadow: 0 10px 22px rgba(255, 209, 120, 0.10);
+  }
+
+  .lib-section{
+    margin-top: 16px;
+  }
+
+  .lib-section-title{
+    font-size: 16px;
+    font-weight: 900;
+    color: #fff;
+    margin-bottom: 8px;
+  }
+
+  .lib-form-grid{
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+  }
+
+  .lib-field label{
+    font-size: 11px;
+    color: rgba(248,249,250,0.60);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.2px;
+  }
+
+  .lib-field input,
+  .lib-field select,
+  .lib-field textarea{
+    width: 100%;
+    background: rgba(255,255,255,0.04);
+    color: var(--text);
+    border: 1px solid rgba(255,255,255,0.12);
+    padding: 9px 10px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 700;
+    outline: none;
+  }
+
+  .lib-table{
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  .lib-table th,
+  .lib-table td{
+    border-bottom: 1px solid rgba(255,255,255,0.10);
+    padding: 8px 6px;
+    text-align: left;
+  }
+
+  .lib-table th{
+    color: var(--gold1);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 11px;
+  }
+
+  .muted{
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .lib-badge{
+    display:inline-flex;
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.12);
+    font-size: 11px;
+    font-weight: 900;
+    color: #fff;
+  }
+</style>
+
+<div class="lib-wrap">
+  <div class="lib-header">
+    <div>
+      <h1 class="lib-title">Library hub</h1>
+      <div class="lib-sub">Manage product references, material libraries, and factory catalogs in one place.</div>
+    </div>
   </div>
+
+  <div class="lib-grid">
+    <div class="lib-card">
+      <div class="lib-card-title">Products</div>
+      <div class="lib-card-count">{{ product_count }}</div>
+      <div class="lib-card-sub">Styles, categories, and default specs.</div>
+      <div class="lib-actions">
+        <a class="btn" href="{% url 'products_list' %}">Open list</a>
+        <a class="btn btn-gold" href="{% url 'product_add' %}">Add product</a>
+      </div>
+    </div>
+
+    <div class="lib-card">
+      <div class="lib-card-title">Fabrics</div>
+      <div class="lib-card-count">{{ fabric_count }}</div>
+      <div class="lib-card-sub">GSM, composition, and finishes.</div>
+      <div class="lib-actions">
+        <a class="btn" href="{% url 'fabrics_list' %}">Open list</a>
+        <a class="btn btn-gold" href="{% url 'fabric_add' %}">Add fabric</a>
+      </div>
+    </div>
+
+    <div class="lib-card">
+      <div class="lib-card-title">Accessories</div>
+      <div class="lib-card-count">{{ accessory_count }}</div>
+      <div class="lib-card-sub">Zippers, buttons, labels.</div>
+      <div class="lib-actions">
+        <a class="btn" href="{% url 'accessories_list' %}">Open list</a>
+        <a class="btn btn-gold" href="{% url 'accessory_add' %}">Add accessory</a>
+      </div>
+    </div>
+
+    <div class="lib-card">
+      <div class="lib-card-title">Trims</div>
+      <div class="lib-card-count">{{ trim_count }}</div>
+      <div class="lib-card-sub">Neck tape, elastics, drawcord.</div>
+      <div class="lib-actions">
+        <a class="btn" href="{% url 'trims_list' %}">Open list</a>
+        <a class="btn btn-gold" href="{% url 'trim_add' %}">Add trim</a>
+      </div>
+    </div>
+
+    <div class="lib-card">
+      <div class="lib-card-title">Threads</div>
+      <div class="lib-card-count">{{ thread_count }}</div>
+      <div class="lib-card-sub">Thread types, colors, and counts.</div>
+      <div class="lib-actions">
+        <a class="btn" href="{% url 'threads_list' %}">Open list</a>
+        <a class="btn btn-gold" href="{% url 'thread_add' %}">Add thread</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="lib-section">
+    <div class="lib-card">
+      <div class="lib-card-title">Factory catalogs and documents</div>
+      <div class="lib-sub">Upload catalogs, spec sheets, compliance docs, and pricing references.</div>
+
+      <form method="post" enctype="multipart/form-data" style="margin-top:10px;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="upload_attachment">
+
+        <div class="lib-form-grid">
+          <div class="lib-field">
+            <label>Title</label>
+            {{ attachment_form.title }}
+          </div>
+          <div class="lib-field">
+            <label>Category</label>
+            {{ attachment_form.category }}
+          </div>
+          <div class="lib-field">
+            <label>File</label>
+            {{ attachment_form.file }}
+          </div>
+          <div class="lib-field" style="grid-column:1 / -1;">
+            <label>Note</label>
+            {{ attachment_form.note }}
+          </div>
+        </div>
+
+        <div style="margin-top:10px; display:flex; gap:8px; align-items:center;">
+          <button type="submit" class="btn btn-gold">Upload document</button>
+          <span class="muted">Accepted: PDF, XLSX, DOCX, images, and ZIP archives.</span>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="lib-section">
+    <div class="lib-card">
+      <div class="lib-card-title">Recent library documents</div>
+      {% if attachments %}
+        <table class="lib-table">
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Category</th>
+              <th>File</th>
+              <th>Uploaded</th>
+              <th>Note</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for doc in attachments %}
+              <tr>
+                <td>{{ doc.title|default:doc.original_name }}</td>
+                <td><span class="lib-badge">{{ doc.get_category_display }}</span></td>
+                <td><a href="{{ doc.file.url }}" target="_blank">Download</a></td>
+                <td>{{ doc.uploaded_at|date:"Y-m-d H:i" }}</td>
+                <td class="muted">{{ doc.note|default:"-" }}</td>
+                <td>
+                  <form method="post" style="display:inline;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="delete_attachment">
+                    <input type="hidden" name="attachment_id" value="{{ doc.id }}">
+                    <button type="submit" class="btn" onclick="return confirm('Remove this document?');">Delete</button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="muted" style="margin-top:10px;">No library documents uploaded yet.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
 {% endblock %}

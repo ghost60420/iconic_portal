@@ -374,6 +374,7 @@
           <div class="crm-dropdown-menu" id="libraryMenu" role="menu">
             <div class="crm-dd-title">Library</div>
 
+            {% if library_home_url %}<a class="crm-dd-item" href="{{ library_home_url }}">Library home</a>{% endif %}
             {% if products_url %}<a class="crm-dd-item" href="{{ products_url }}">👕 Products</a>{% endif %}
             {% if fabrics_url %}<a class="crm-dd-item" href="{{ fabrics_url }}">🧵 Fabrics</a>{% endif %}
             {% if accessories_url %}<a class="crm-dd-item" href="{{ accessories_url }}">🧷 Accessories</a>{% endif %}

@@ -33,6 +33,7 @@ from .models import (
     Accessory,
     Trim,
     ThreadOption,
+    LibraryAttachment,
 )
 
 # --------------------------------------------------
@@ -228,6 +229,16 @@ class ThreadForm(forms.ModelForm):
 
 
 # --------------------------------------------------
+
+
+class LibraryAttachmentForm(forms.ModelForm):
+    class Meta:
+        model = LibraryAttachment
+        fields = ["title", "category", "file", "note"]
+        widgets = {
+            "title": forms.TextInput(attrs={"placeholder": "Catalog or document title"}),
+            "note": forms.Textarea(attrs={"rows": 2, "placeholder": "Optional note"}),
+        }
 # Accounting entry form (supports multi attachments)
 # --------------------------------------------------
 STATUS_CHOICES = [
