@@ -868,8 +868,12 @@
   </div>
 
   <div class="cardx">
-    <div class="section-title">
+    <div class="section-title" style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
       <span>Order sheet details</span>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a href="{% url 'production_order_sheet_pdf' order.pk %}" class="btn btn-outline-light btn-sm">Download order sheet PDF</a>
+        <a href="{% url 'production_packing_list_pdf' order.pk %}" class="btn btn-outline-light btn-sm">Download packing list PDF</a>
+      </div>
     </div>
 
     {% if order_lines %}
