@@ -5320,6 +5320,7 @@ def production_edit(request, pk):
 
 def production_detail(request, pk):
     order = get_object_or_404(ProductionOrder, pk=pk)
+    can_add_lines = ProductionOrderLine is not None and hasattr(order, "lines")
 
     # sorted stages
     stages = get_sorted_stages(order)
@@ -5370,6 +5371,40 @@ def production_detail(request, pk):
 
     if request.method == "POST":
         action = (request.POST.get("action") or "").strip()
+
+        if action == "add_line":
+            if not can_add_lines:
+                messages.error(request, "Line items are not enabled for this order.")
+                return redirect("production_detail", pk=pk)
+
+            style_name = (request.POST.get("line_style_name") or "").strip()
+            color_info = (request.POST.get("line_color_info") or "").strip()
+            size_ratio_note = (request.POST.get("line_size_ratio_note") or "").strip()
+            accessories_note = (request.POST.get("line_accessories_note") or "").strip()
+            packaging_note = (request.POST.get("line_packaging_note") or "").strip()
+            extra_order_note = (request.POST.get("line_extra_order_note") or "").strip()
+
+            if not any([style_name, color_info, size_ratio_note, accessories_note, packaging_note, extra_order_note]):
+                messages.error(request, "Please add at least one detail before saving a new line.")
+                return redirect("production_detail", pk=pk)
+
+            try:
+                max_no = order.lines.aggregate(m=Max("line_no")).get("m") or 0
+            except Exception:
+                max_no = 0
+
+            ProductionOrderLine.objects.create(
+                order=order,
+                line_no=max_no + 1,
+                style_name=style_name,
+                color_info=color_info,
+                size_ratio_note=size_ratio_note,
+                accessories_note=accessories_note,
+                packaging_note=packaging_note,
+                extra_order_note=extra_order_note,
+            )
+            messages.success(request, "Product line added to this order.")
+            return redirect("production_detail", pk=pk)
 
         if action == "add_material":
             item_id = (request.POST.get("inventory_item") or "").strip()
@@ -5552,6 +5587,7 @@ def production_detail(request, pk):
         "actual_entries": actual_entries,
         "actual_entry_form": actual_entry_form,
         "variance_report": variance_report,
+        "can_add_lines": can_add_lines,
     }
 
     return render(request, "crm/production_detail.html", context)

@@ -376,6 +376,60 @@
     box-shadow: 0 0 0 1px rgba(250,204,21,0.3);
   }
 
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(2,6,23,0.75);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    z-index: 80;
+  }
+
+  .modal-backdrop.open {
+    display: flex;
+  }
+
+  .modal-card {
+    width: min(760px, 100%);
+    background: #0b1020;
+    border: 1px solid #1f2937;
+    border-radius: 14px;
+    padding: 16px;
+    box-shadow: 0 0 30px rgba(0,0,0,0.6);
+  }
+
+  .modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .modal-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: #f9fafb;
+  }
+
+  .modal-sub {
+    font-size: 12px;
+    color: #9ca3af;
+    margin-top: 2px;
+  }
+
+  .modal-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  @media (max-width: 720px) {
+    .modal-grid { grid-template-columns: 1fr; }
+  }
+
   .sheet-top {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -868,7 +922,12 @@
   </div>
 
   <div class="cardx">
-    <div class="section-title">Order sheet details</div>
+    <div class="section-title">
+      <span>Order sheet details</span>
+      {% if can_add_lines %}
+        <button type="button" class="btn btn-sm btn-outline-light" id="add-line-btn">Add Line</button>
+      {% endif %}
+    </div>
 
     {% if order_lines %}
       {% for line in order_lines %}
@@ -962,6 +1021,66 @@
       {% endfor %}
     {% else %}
       <div class="sheet-value muted">No order sheet details set.</div>
+    {% endif %}
+
+    {% if can_add_lines %}
+      <div id="line-modal" class="modal-backdrop" aria-hidden="true">
+        <div class="modal-card">
+          <div class="modal-head">
+            <div>
+              <div class="modal-title">Add product line</div>
+              <div class="modal-sub">
+                Client:
+                {% if order.customer %}
+                  {{ order.customer.account_brand|default:order.customer.contact_name|default:order.customer }}
+                {% else %}
+                  Not set
+                {% endif %}
+                | Order: {{ order.order_code|default:"Not set" }}
+              </div>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-light" id="line-modal-close">Close</button>
+          </div>
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add_line">
+            <div class="modal-grid">
+              <div>
+                <div class="small-label">Style name</div>
+                <input type="text" name="line_style_name" class="inputx" placeholder="Style name">
+              </div>
+              <div>
+                <div class="small-label">Color info</div>
+                <input type="text" name="line_color_info" class="inputx" placeholder="Colorways">
+              </div>
+            </div>
+
+            <div style="margin-top:12px;">
+              <div class="small-label">Size ratio note</div>
+              <textarea name="line_size_ratio_note" rows="4" class="inputx" placeholder="Example: XS:20 S:40 M:60 L:40 XL:20"></textarea>
+            </div>
+
+            <div style="margin-top:12px;">
+              <div class="small-label">Accessories and trims</div>
+              <textarea name="line_accessories_note" rows="3" class="inputx" placeholder="List trims, labels, zips, etc."></textarea>
+            </div>
+
+            <div style="margin-top:12px;">
+              <div class="small-label">Packaging details</div>
+              <textarea name="line_packaging_note" rows="3" class="inputx" placeholder="Packaging notes for this product line"></textarea>
+            </div>
+
+            <div style="margin-top:12px;">
+              <div class="small-label">Extra order notes</div>
+              <textarea name="line_extra_order_note" rows="3" class="inputx" placeholder="Any additional notes"></textarea>
+            </div>
+
+            <div style="text-align:right; margin-top:12px;">
+              <button type="submit" class="btn btn-warning btn-sm">Save line</button>
+            </div>
+          </form>
+        </div>
+      </div>
     {% endif %}
 
     <div style="margin-top:14px;">
@@ -1417,18 +1536,41 @@
   document.addEventListener("DOMContentLoaded", function () {
     var toggle = document.getElementById("stage-dates-toggle");
     var body = document.getElementById("stage-dates-body");
-    if (!toggle || !body) return;
+    if (toggle && body) {
+      toggle.addEventListener("click", function () {
+        var hidden = body.style.display === "none";
+        if (hidden) {
+          body.style.display = "";
+          toggle.textContent = "Hide";
+        } else {
+          body.style.display = "none";
+          toggle.textContent = "Show";
+        }
+      });
+    }
 
-    toggle.addEventListener("click", function () {
-      var hidden = body.style.display === "none";
-      if (hidden) {
-        body.style.display = "";
-        toggle.textContent = "Hide";
-      } else {
-        body.style.display = "none";
-        toggle.textContent = "Show";
-      }
-    });
+    var lineBtn = document.getElementById("add-line-btn");
+    var lineModal = document.getElementById("line-modal");
+    var lineClose = document.getElementById("line-modal-close");
+    if (lineBtn && lineModal && lineClose) {
+      var closeModal = function () {
+        lineModal.classList.remove("open");
+      };
+      lineBtn.addEventListener("click", function () {
+        lineModal.classList.add("open");
+      });
+      lineClose.addEventListener("click", closeModal);
+      lineModal.addEventListener("click", function (event) {
+        if (event.target === lineModal) {
+          closeModal();
+        }
+      });
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") {
+          closeModal();
+        }
+      });
+    }
   });
 </script>
 
