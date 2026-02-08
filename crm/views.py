@@ -17,6 +17,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.mail import send_mail
 from django.db import transaction
+from django.db.utils import OperationalError, ProgrammingError
 from django.db.models import Case, Count, IntegerField, Q, When
 from django.db.models.functions import TruncDate, TruncMonth, TruncYear
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse, Http404
@@ -4974,7 +4975,13 @@ def _build_order_line_dict(
 
 
 def _production_order_lines(order):
-    lines = list(order.lines.all().order_by("line_no", "id"))
+    if ProductionOrderLine is None or not hasattr(order, "lines"):
+        lines = []
+    else:
+        try:
+            lines = list(order.lines.all().order_by("line_no", "id"))
+        except (OperationalError, ProgrammingError, AttributeError):
+            lines = []
     if lines:
         return [
             _build_order_line_dict(
@@ -5097,7 +5104,7 @@ def _parse_production_lines_payload(raw):
 
 
 def _save_production_lines(order, request):
-    if ProductionOrderLine is None:
+    if ProductionOrderLine is None or not hasattr(order, "lines"):
         return
     raw = request.POST.get("line_payload")
     lines = _parse_production_lines_payload(raw)
@@ -5321,22 +5328,44 @@ def production_detail(request, pk):
     order_lines = _production_order_lines(order)
 
     # files
-    attachments = order.attachments.all().order_by("-created_at")
+    try:
+        attachments = list(order.attachments.all().order_by("-created_at"))
+    except (OperationalError, ProgrammingError):
+        attachments = []
 
     # shipments for this order
-    shipments = order.shipments.all().order_by("-ship_date", "-created_at")
+    try:
+        shipments = list(order.shipments.all().order_by("-ship_date", "-created_at"))
+    except (OperationalError, ProgrammingError):
+        shipments = []
 
     # progress and delay
     percent_done = order.percent_done
     order_delayed = order.is_delayed
     reject_percent = int((order.qty_reject / order.qty_total) * 100) if order.qty_total else 0
 
-    materials = order.materials.select_related("inventory_item")
-    comments = _chatter_for_production(order)
-    actual_entries = order.actual_cost_entries.all().order_by("section", "id")
+    try:
+        materials = list(order.materials.select_related("inventory_item"))
+    except (OperationalError, ProgrammingError):
+        materials = []
+    try:
+        comments = _chatter_for_production(order)
+    except (OperationalError, ProgrammingError):
+        comments = []
+    try:
+        actual_entries = list(order.actual_cost_entries.all().order_by("section", "id"))
+    except (OperationalError, ProgrammingError):
+        actual_entries = []
     variance_report = None
-    if order.cost_sheet_active:
-        variance_report = build_variance_report(order.cost_sheet_active, order)
+    try:
+        cost_sheet_active = order.cost_sheet_active
+    except (OperationalError, ProgrammingError):
+        cost_sheet_active = None
+    if cost_sheet_active:
+        try:
+            variance_report = build_variance_report(cost_sheet_active, order)
+        except (OperationalError, ProgrammingError):
+            variance_report = None
     actual_entry_form = ActualCostEntryForm()
 
     if request.method == "POST":
@@ -5486,14 +5515,19 @@ def production_detail(request, pk):
             return redirect("production_detail", pk=pk)
 
     recommended_items = InventoryItem.objects.none()
-    if order.fabrics.exists() or order.accessories.exists() or order.trims.exists() or order.threads.exists():
-        recommended_items = InventoryItem.objects.filter(
-            Q(fabric__in=order.fabrics.all())
-            | Q(accessory__in=order.accessories.all())
-            | Q(trim__in=order.trims.all())
-            | Q(thread_option__in=order.threads.all())
-        ).distinct()
-    recommended_ids = [str(i.pk) for i in recommended_items]
+    recommended_ids = []
+    try:
+        if order.fabrics.exists() or order.accessories.exists() or order.trims.exists() or order.threads.exists():
+            recommended_items = InventoryItem.objects.filter(
+                Q(fabric__in=order.fabrics.all())
+                | Q(accessory__in=order.accessories.all())
+                | Q(trim__in=order.trims.all())
+                | Q(thread_option__in=order.threads.all())
+            ).distinct()
+        recommended_ids = [str(i.pk) for i in recommended_items]
+    except (OperationalError, ProgrammingError):
+        recommended_items = []
+        recommended_ids = []
 
     inventory_items = InventoryItem.objects.filter(is_active=True).order_by("category", "name")
 
@@ -5514,7 +5548,7 @@ def production_detail(request, pk):
         "inventory_items": inventory_items,
         "recommended_items": recommended_items,
         "recommended_ids": recommended_ids,
-        "cost_sheet_active": order.cost_sheet_active,
+        "cost_sheet_active": cost_sheet_active,
         "actual_entries": actual_entries,
         "actual_entry_form": actual_entry_form,
         "variance_report": variance_report,
