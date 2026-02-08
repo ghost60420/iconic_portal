@@ -255,17 +255,17 @@
             </div>
 
             <div class="access-groups">
-              {% for group in field_groups %}
+              {% for group in row.grouped_fields %}
                 <div class="access-group">
                   <div class="access-group-title">{{ group.0 }}</div>
                   <div class="access-group-grid">
-                    {% for field_name in group.1 %}
+                    {% for field in group.1 %}
                       <label class="access-toggle">
-                        {{ row.form[field_name] }}
-                        <span>{{ row.form[field_name].label }}</span>
+                        {{ field }}
+                        <span>{{ field.label }}</span>
                       </label>
-                      {% if row.form[field_name].help_text %}
-                        <div class="access-help">{{ row.form[field_name].help_text }}</div>
+                      {% if field.help_text %}
+                        <div class="access-help">{{ field.help_text }}</div>
                       {% endif %}
                     {% endfor %}
                   </div>

@@ -50,6 +50,13 @@ def access_list(request):
         users_qs = users_qs.filter(Q(username__icontains=q) | Q(email__icontains=q))
     users = users_qs.select_related("access")
 
+    field_groups = [
+        ("Core", ["can_leads", "can_opportunities", "can_customers", "can_inventory", "can_library"]),
+        ("Operations", ["can_production", "can_shipping", "can_accounting_bd", "can_accounting_ca"]),
+        ("Engagement", ["can_ai", "can_calendar", "can_marketing", "can_whatsapp"]),
+        ("Costing", ["can_costing", "can_costing_approve"]),
+    ]
+
     rows = []
     for u in users:
         access, _ = UserAccess.objects.get_or_create(user=u)
@@ -63,21 +70,29 @@ def access_list(request):
             for field in form.fields.values():
                 field.disabled = True
 
-        rows.append({"user": u, "access": access, "form": form, "can_edit": can_edit})
+        grouped_fields = []
+        for group_label, field_names in field_groups:
+            items = []
+            for field_name in field_names:
+                if field_name in form.fields:
+                    items.append(form[field_name])
+            grouped_fields.append((group_label, items))
 
-    field_groups = [
-        ("Core", ["can_leads", "can_opportunities", "can_customers", "can_inventory", "can_library"]),
-        ("Operations", ["can_production", "can_shipping", "can_accounting_bd", "can_accounting_ca"]),
-        ("Engagement", ["can_ai", "can_calendar", "can_marketing", "can_whatsapp"]),
-        ("Costing", ["can_costing", "can_costing_approve"]),
-    ]
+        rows.append(
+            {
+                "user": u,
+                "access": access,
+                "form": form,
+                "grouped_fields": grouped_fields,
+                "can_edit": can_edit,
+            }
+        )
 
     return render(
         request,
         "crm/access_list.html",
         {
             "rows": rows,
-            "field_groups": field_groups,
             "search_query": q,
         },
     )
