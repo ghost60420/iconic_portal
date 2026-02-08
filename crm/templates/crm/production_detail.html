@@ -402,6 +402,44 @@
     font-weight: 400;
   }
 
+  .sheet-line {
+    border-radius: 12px;
+    border: 1px solid #111827;
+    background: rgba(2,6,23,0.6);
+    padding: 12px;
+    margin-top: 12px;
+  }
+
+  .sheet-line-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .sheet-line-title {
+    font-size: 13px;
+    font-weight: 800;
+    color: #f9fafb;
+  }
+
+  .sheet-line-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .sheet-line-chip {
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: rgba(15,23,42,0.8);
+    border: 1px solid #1f2937;
+    color: #cbd5f5;
+  }
+
   .size-grid {
     border-radius: 12px;
     border: 1px solid #111827;
@@ -830,75 +868,107 @@
   </div>
 
   <div class="cardx">
-    <div class="section-title">Order sheet details</div>
-
-    <div class="sheet-top">
-      <div>
-        <div class="sheet-label">Style name</div>
-        <div class="sheet-value {% if not order.style_name %}muted{% endif %}">
-          {{ order.style_name|default:"not set" }}
-        </div>
-      </div>
-      <div>
-        <div class="sheet-label">Color info</div>
-        <div class="sheet-value {% if not order.color_info %}muted{% endif %}">
-          {{ order.color_info|default:"not set" }}
-        </div>
+    <div class="section-title" style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+      <span>Order sheet details</span>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a href="{% url 'production_order_sheet_pdf' order.pk %}" class="btn btn-outline-light btn-sm">Download order sheet PDF</a>
+        <a href="{% url 'production_packing_list_pdf' order.pk %}" class="btn btn-outline-light btn-sm">Download packing list PDF</a>
       </div>
     </div>
 
-    <div style="margin-top:12px;">
-      <div class="sheet-label">Size grid up to 5XL</div>
-
-      {% if size_grid %}
-        <div class="size-grid">
-          <div class="size-grid-row size-head">
-            {% for item in size_grid %}
-              <div class="size-cell">{{ item.label }}</div>
-            {% endfor %}
+    {% if order_lines %}
+      {% for line in order_lines %}
+        <div class="sheet-line">
+          <div class="sheet-line-head">
+            <div class="sheet-line-title">
+              Product line {{ forloop.counter }}
+              {% if line.style_name %} - {{ line.style_name }}{% endif %}
+              {% if line.color_info %} ({{ line.color_info }}){% endif %}
+            </div>
           </div>
-          <div class="size-grid-row">
-            {% for item in size_grid %}
-              <div class="size-cell">{% if item.qty %}{{ item.qty }}{% else %}-{% endif %}</div>
-            {% endfor %}
+
+          <div class="sheet-line-meta">
+            <span class="sheet-line-chip">
+              Client: {% if order.customer %}{{ order.customer.account_brand|default:order.customer.contact_name|default:order.customer }}{% else %}Not set{% endif %}
+            </span>
+            <span class="sheet-line-chip">
+              Order: {{ order.order_code|default:"Not set" }}
+            </span>
+            <span class="sheet-line-chip">
+              Opportunity:
+              {% if order.opportunity %}
+                <a href="{% url 'opportunity_detail' order.opportunity.id %}" style="color:#93c5fd;">{{ order.opportunity.opportunity_id|default:order.opportunity.id }}</a>
+              {% else %}
+                Not set
+              {% endif %}
+            </span>
+          </div>
+
+          <div class="sheet-top">
+            <div>
+              <div class="sheet-label">Style name</div>
+              <div class="sheet-value {% if not line.style_name %}muted{% endif %}">
+                {{ line.style_name|default:"not set" }}
+              </div>
+            </div>
+            <div>
+              <div class="sheet-label">Color info</div>
+              <div class="sheet-value {% if not line.color_info %}muted{% endif %}">
+                {{ line.color_info|default:"not set" }}
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:12px;">
+            <div class="sheet-label">Size grid up to 5XL</div>
+
+            {% if line.size_total %}
+              <div class="size-grid">
+                <div class="size-grid-row size-head">
+                  {% for item in line.size_grid %}
+                    <div class="size-cell">{{ item.label }}</div>
+                  {% endfor %}
+                </div>
+                <div class="size-grid-row">
+                  {% for item in line.size_grid %}
+                    <div class="size-cell">{% if item.qty %}{{ item.qty }}{% else %}-{% endif %}</div>
+                  {% endfor %}
+                </div>
+              </div>
+
+              <div class="size-summary ok">
+                Line total {{ line.size_total }}
+              </div>
+            {% else %}
+              <div class="sheet-value muted">No size ratio set for this line.</div>
+            {% endif %}
+          </div>
+
+          <div style="margin-top:12px;">
+            <div class="sheet-label">Accessories and trims</div>
+            <div class="prewrap {% if not line.accessories_note %}muted{% endif %}">
+              {{ line.accessories_note|default:"not set" }}
+            </div>
+          </div>
+
+          <div style="margin-top:12px;">
+            <div class="sheet-label">Packaging details</div>
+            <div class="prewrap {% if not line.packaging_note %}muted{% endif %}">
+              {{ line.packaging_note|default:"not set" }}
+            </div>
+          </div>
+
+          <div style="margin-top:12px;">
+            <div class="sheet-label">Extra order notes</div>
+            <div class="prewrap {% if not line.extra_order_note %}muted{% endif %}">
+              {{ line.extra_order_note|default:"not set" }}
+            </div>
           </div>
         </div>
-
-        <div class="size-summary
-          {% if size_total and order.qty_total and size_total == order.qty_total %}ok
-          {% elif size_total %}warn{% endif %}">
-          {% if size_total %}
-            Size total {{ size_total }}
-            {% if order.qty_total %} of order total {{ order.qty_total }}{% endif %}
-          {% else %}
-            No size ratio set for this order.
-          {% endif %}
-        </div>
-      {% else %}
-        <div class="sheet-value muted">No size ratio set.</div>
-      {% endif %}
-    </div>
-
-    <div style="margin-top:12px;">
-      <div class="sheet-label">Accessories and trims</div>
-      <div class="prewrap {% if not order.accessories_note %}muted{% endif %}">
-        {{ order.accessories_note|default:"not set" }}
-      </div>
-    </div>
-
-    <div style="margin-top:12px;">
-      <div class="sheet-label">Packaging details</div>
-      <div class="prewrap {% if not order.packaging_note %}muted{% endif %}">
-        {{ order.packaging_note|default:"not set" }}
-      </div>
-    </div>
-
-    <div style="margin-top:12px;">
-      <div class="sheet-label">Extra order notes</div>
-      <div class="prewrap {% if not order.extra_order_note %}muted{% endif %}">
-        {{ order.extra_order_note|default:"not set" }}
-      </div>
-    </div>
+      {% endfor %}
+    {% else %}
+      <div class="sheet-value muted">No order sheet details set.</div>
+    {% endif %}
 
     <div style="margin-top:14px;">
       <div class="sheet-label">Library selections</div>
@@ -1006,6 +1076,9 @@
         No active cost sheet linked yet.
       </div>
     {% endif %}
+    <div class="muted" style="margin-bottom:8px;">
+      All values are in BDT (৳) and total cost auto-calculates from qty × rate.
+    </div>
 
     <div style="margin-bottom:12px;">
       <form method="post" class="actual-grid">
@@ -1028,11 +1101,11 @@
           {{ actual_entry_form.actual_qty_total }}
         </div>
         <div>
-          <div class="small-label">Rate</div>
+          <div class="small-label">Rate (BDT)</div>
           {{ actual_entry_form.actual_rate }}
         </div>
         <div>
-          <div class="small-label">Total cost</div>
+          <div class="small-label">Total cost (BDT)</div>
           {{ actual_entry_form.actual_total_cost }}
         </div>
         <div style="grid-column:1 / -1;">
@@ -1050,8 +1123,8 @@
       <div>Item</div>
       <div>UOM</div>
       <div>Qty</div>
-      <div>Rate</div>
-      <div>Total</div>
+      <div>Rate (BDT)</div>
+      <div>Total (BDT)</div>
       <div>Actions</div>
     </div>
 
@@ -1111,100 +1184,6 @@
         </div>
       </div>
     {% endif %}
-  </div>
-
-  <div class="cardx">
-    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
-      <div class="section-title" style="margin:0;">Order sheet (materials)</div>
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <a href="{% url 'production_order_sheet_pdf' order.pk %}" class="btn btn-outline-light btn-sm">Download water sheet PDF</a>
-        <a href="{% url 'production_packing_list_pdf' order.pk %}" class="btn btn-outline-light btn-sm">Download packing list PDF</a>
-      </div>
-    </div>
-
-    <div style="margin-top:10px;">
-      <form method="post" style="display:grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 0.4fr) minmax(0, 0.8fr) minmax(0, 0.4fr); gap:8px; align-items:end;">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="add_material">
-        <div>
-          <div class="small-label">Material</div>
-          <select name="inventory_item" class="inputx">
-            <option value="">Select material</option>
-            {% if recommended_items %}
-              <optgroup label="Recommended from library">
-                {% for item in recommended_items %}
-                  <option value="{{ item.pk }}">
-                    {{ item.name }} ({{ item.get_category_display }})
-                  </option>
-                {% endfor %}
-              </optgroup>
-            {% endif %}
-            <optgroup label="All inventory">
-              {% for item in inventory_items %}
-                {% if item.pk|stringformat:"s" not in recommended_ids %}
-                  <option value="{{ item.pk }}">
-                    {{ item.name }} ({{ item.get_category_display }})
-                  </option>
-                {% endif %}
-              {% endfor %}
-            </optgroup>
-          </select>
-        </div>
-        <div>
-          <div class="small-label">Quantity</div>
-          <input type="number" step="0.01" name="quantity" class="inputx" placeholder="0">
-        </div>
-        <div>
-          <div class="small-label">Note</div>
-          <input type="text" name="note" class="inputx" placeholder="Optional note">
-        </div>
-        <div style="text-align:right;">
-          <button type="submit" class="btn btn-warning btn-sm">Add</button>
-        </div>
-      </form>
-    </div>
-
-    <div style="margin-top:12px;">
-      {% if materials %}
-        <div class="table-responsive">
-          <table class="table table-dark table-sm align-middle mb-0">
-            <thead>
-              <tr>
-                <th>Material</th>
-                <th>Category</th>
-                <th>Qty</th>
-                <th>Unit</th>
-                <th>Code/SKU</th>
-                <th>Note</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for line in materials %}
-                <tr>
-                  <td>{{ line.inventory_item.name }}</td>
-                  <td>{{ line.inventory_item.get_category_display }}</td>
-                  <td>{{ line.quantity|default:"-" }}</td>
-                  <td>{{ line.unit_type|default:line.inventory_item.unit_type }}</td>
-                  <td>{{ line.inventory_item.code|default:line.inventory_item.sku|default:"-" }}</td>
-                  <td>{{ line.notes|default:"-" }}</td>
-                  <td>
-                    <form method="post" style="display:inline;">
-                      {% csrf_token %}
-                      <input type="hidden" name="action" value="remove_material">
-                      <input type="hidden" name="line_id" value="{{ line.pk }}">
-                      <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Remove this material?');">Remove</button>
-                    </form>
-                  </td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% else %}
-        <div class="muted" style="font-size:13px;">No materials added yet. Use the form above to build the order sheet.</div>
-      {% endif %}
-    </div>
   </div>
 
   <div class="cardx">
@@ -1353,17 +1332,56 @@
   document.addEventListener("DOMContentLoaded", function () {
     var toggle = document.getElementById("stage-dates-toggle");
     var body = document.getElementById("stage-dates-body");
-    if (!toggle || !body) return;
+    if (toggle && body) {
+      toggle.addEventListener("click", function () {
+        var hidden = body.style.display === "none";
+        if (hidden) {
+          body.style.display = "";
+          toggle.textContent = "Hide";
+        } else {
+          body.style.display = "none";
+          toggle.textContent = "Show";
+        }
+      });
+    }
 
-    toggle.addEventListener("click", function () {
-      var hidden = body.style.display === "none";
-      if (hidden) {
-        body.style.display = "";
-        toggle.textContent = "Hide";
-      } else {
-        body.style.display = "none";
-        toggle.textContent = "Show";
+    function parseNum(value) {
+      var v = parseFloat(value);
+      return Number.isFinite(v) ? v : null;
+    }
+
+    function updateActualTotal(form) {
+      var qty = form.querySelector('input[name="actual_qty_total"]');
+      var rate = form.querySelector('input[name="actual_rate"]');
+      var total = form.querySelector('input[name="actual_total_cost"]');
+      if (!qty || !rate || !total) return;
+      total.readOnly = true;
+
+      var qtyVal = (qty.value || "").trim();
+      var rateVal = (rate.value || "").trim();
+      if (!qtyVal && !rateVal) {
+        total.value = "";
+        return;
       }
+      var qtyNum = parseNum(qtyVal);
+      var rateNum = parseNum(rateVal);
+      if (qtyNum === null || rateNum === null) {
+        total.value = "";
+        return;
+      }
+      total.value = (qtyNum * rateNum).toFixed(4);
+    }
+
+    document.querySelectorAll("form.actual-grid").forEach(function (form) {
+      var qty = form.querySelector('input[name="actual_qty_total"]');
+      var rate = form.querySelector('input[name="actual_rate"]');
+      if (!qty || !rate) return;
+      var recalc = function () {
+        updateActualTotal(form);
+      };
+      qty.addEventListener("input", recalc);
+      rate.addEventListener("input", recalc);
+      recalc();
     });
   });
 </script>

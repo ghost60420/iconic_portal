@@ -303,7 +303,7 @@
 
       <div class="crm-nav-group">
 
-        {% if request.user.is_superuser and main_dash_url %}
+        {% if main_dash_url %}
           <a href="{{ main_dash_url }}" class="crm-nav-item primary"><span>🏠</span><strong>CRM</strong></a>
         {% elif leads_url %}
           <a href="{{ leads_url }}" class="crm-nav-item primary"><span>🏠</span><strong>CRM</strong></a>
@@ -339,7 +339,7 @@
 
         {% if MARKETING_ENABLED and marketing_url %}
           {% if request.user.is_authenticated %}
-            {% if request.user.is_superuser or request.user.access.can_marketing %}
+            {% if request.user.is_superuser or request.user|in_group:Marketing Manager or request.user.access.can_marketing %}
               <a href="{{ marketing_url }}" class="crm-nav-item"><span>📣</span><strong>Marketing</strong></a>
             {% endif %}
           {% endif %}
@@ -349,11 +349,6 @@
           <a href="{{ wa_url }}" class="crm-nav-item"><span>💬</span><strong>WhatsApp</strong></a>
         {% endif %}
 
-        {% if request.user.is_superuser %}
-          {% if main_dash_url %}
-            <a href="{{ main_dash_url }}" class="crm-nav-item"><span>🧠</span><strong>Main Dashboard</strong></a>
-          {% endif %}
-        {% endif %}
         {% if ai_hub_url and request.user.is_authenticated %}
           {% if request.user.is_superuser or request.user.access.can_ai %}
             <a href="{{ ai_hub_url }}" class="crm-nav-item"><span>🤖</span><strong>AI</strong></a>
@@ -379,6 +374,7 @@
           <div class="crm-dropdown-menu" id="libraryMenu" role="menu">
             <div class="crm-dd-title">Library</div>
 
+            {% if library_home_url %}<a class="crm-dd-item" href="{{ library_home_url }}">Library home</a>{% endif %}
             {% if products_url %}<a class="crm-dd-item" href="{{ products_url }}">👕 Products</a>{% endif %}
             {% if fabrics_url %}<a class="crm-dd-item" href="{{ fabrics_url }}">🧵 Fabrics</a>{% endif %}
             {% if accessories_url %}<a class="crm-dd-item" href="{{ accessories_url }}">🧷 Accessories</a>{% endif %}

@@ -1,0 +1,38 @@
+{% extends "crm/base.html" %}
+{% block content %}
+<div class="container" style="max-width:1100px;">
+  <div class="card" style="background:#0b0d10; border:1px solid #2a2f38; border-radius:16px;">
+    <div class="card-body" style="padding:20px;">
+      <h3 style="color:#f8fafc; font-weight:900;">Automation rules</h3>
+      <p style="color:#a8b0bd; font-weight:700;">Manage safe inbound automation rules.</p>
+
+      {% if rules %}
+        <div class="table-responsive">
+          <table class="table table-dark table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Trigger</th>
+                <th>Active</th>
+                <th>Max/day</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in rules %}
+                <tr>
+                  <td>{{ r.name }}</td>
+                  <td>{{ r.get_trigger_display }}</td>
+                  <td>{% if r.is_active %}Yes{% else %}No{% endif %}</td>
+                  <td>{{ r.max_per_contact_per_day }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p style="color:#a8b0bd; font-weight:700;">No rules yet.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

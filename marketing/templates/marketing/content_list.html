@@ -1,0 +1,80 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+{% include "marketing/_style.html" %}
+
+<div class="mk-container">
+  <div class="mk-header">
+    <div>
+      <div class="mk-title">Content library</div>
+      <div class="mk-sub">All posts, videos, reels, and ads across platforms.</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_dashboard' %}">Dashboard</a>
+    </div>
+  </div>
+
+  <div class="mk-card">
+    <form method="get" class="mk-toolbar mk-form" style="margin-bottom:12px;">
+      <select class="mk-input" name="platform">
+        <option value="">All platforms</option>
+        {% for key, label in platform_choices %}
+          <option value="{{ key }}" {% if platform == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <select class="mk-input" name="content_type">
+        <option value="">All types</option>
+        {% for key, label in content_type_choices %}
+          <option value="{{ key }}" {% if content_type == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <input class="mk-input" type="date" name="start" value="{{ start_date|date:'Y-m-d' }}">
+      <input class="mk-input" type="date" name="end" value="{{ end_date|date:'Y-m-d' }}">
+      <button class="btn btn-outline-light mk-btn" type="submit">Filter</button>
+    </form>
+
+    <div class="mk-table">
+      <table class="table table-dark table-sm mb-0">
+        <thead>
+          <tr>
+            <th>Content</th>
+            <th>Platform</th>
+            <th>Type</th>
+            <th>Engagement</th>
+            <th>Views</th>
+            <th>Clicks</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              <td>
+                <a href="{% url 'marketing_content_detail' row.content.id %}" style="color:#f8fafc; font-weight:700;">
+                  {{ row.content.title|default:row.content.external_content_id }}
+                </a>
+              </td>
+              <td>{{ row.content.platform }}</td>
+              <td>{{ row.content.content_type }}</td>
+              <td>{{ row.engagement_rate|floatformat:2 }}%</td>
+              <td>{{ row.views|default:0 }}</td>
+              <td>{{ row.clicks|default:0 }}</td>
+              <td>
+                {% if row.is_winner %}
+                  <span class="mk-pill mk-pill-good">Winner</span>
+                {% elif row.is_weak %}
+                  <span class="mk-pill mk-pill-warn">Weak</span>
+                {% else %}
+                  <span class="mk-pill">Normal</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="7" class="mk-muted">No content data yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

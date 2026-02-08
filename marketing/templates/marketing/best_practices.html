@@ -1,0 +1,136 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+{% include "marketing/_style.html" %}
+
+<div class="mk-container">
+  <div class="mk-header">
+    <div>
+      <div class="mk-title">Best practices</div>
+      <div class="mk-sub">Playbooks and proven learnings by platform.</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_dashboard' %}">Dashboard</a>
+    </div>
+  </div>
+
+  <div class="mk-card" style="margin-bottom:16px;">
+    <form method="get" class="mk-toolbar mk-form">
+      <select class="mk-input" name="platform">
+        <option value="">All platforms</option>
+        {% for key, label in platform_choices %}
+          <option value="{{ key }}" {% if platform == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn btn-outline-light mk-btn" type="submit">Filter</button>
+    </form>
+  </div>
+
+  {% if can_edit %}
+  <div class="mk-card" style="margin-bottom:16px;">
+    <div class="mk-section-title">Add new practice</div>
+    <form method="post" class="mk-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create" />
+      <div class="mk-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+        <div>
+          <label>Platform</label>
+          <select class="form-select" name="platform" required>
+            {% for key, label in platform_choices %}
+              <option value="{{ key }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Category</label>
+          <select class="form-select" name="category">
+            {% for key, label in category_choices %}
+              <option value="{{ key }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Title</label>
+          <input class="form-control" name="title" required />
+        </div>
+        <div style="grid-column: span 2;">
+          <label>Details</label>
+          <textarea class="form-control" name="body" rows="3"></textarea>
+        </div>
+        <div style="grid-column: span 2;">
+          <label>Examples (one per line)</label>
+          <textarea class="form-control" name="examples" rows="3"></textarea>
+        </div>
+      </div>
+      <div style="margin-top:10px;">
+        <button class="btn btn-warning mk-btn" type="submit">Save practice</button>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+
+  <div class="mk-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">
+    {% for p in practices %}
+      <div class="mk-card">
+        <div class="mk-label">{{ p.get_platform_display }} • {{ p.get_category_display }}</div>
+        <div class="mk-section-title" style="margin-top:6px;">{{ p.title }}</div>
+        <div class="mk-sub">{{ p.body|default:"No details yet." }}</div>
+        {% if p.examples_json %}
+          <ul style="margin-top:8px; padding-left:18px; color:#e2e8f0;">
+            {% for ex in p.examples_json %}
+              <li>{{ ex }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+
+        {% if can_edit %}
+          <details style="margin-top:8px;">
+            <summary class="mk-muted">Edit</summary>
+            <form method="post" class="mk-form" style="margin-top:8px;">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="update" />
+              <input type="hidden" name="practice_id" value="{{ p.id }}" />
+              <div class="mk-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+                <div>
+                  <label>Platform</label>
+                  <select class="form-select" name="platform">
+                    {% for key, label in platform_choices %}
+                      <option value="{{ key }}" {% if p.platform == key %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div>
+                  <label>Category</label>
+                  <select class="form-select" name="category">
+                    {% for key, label in category_choices %}
+                      <option value="{{ key }}" {% if p.category == key %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div>
+                  <label>Title</label>
+                  <input class="form-control" name="title" value="{{ p.title }}" />
+                </div>
+                <div style="grid-column: span 2;">
+                  <label>Details</label>
+                  <textarea class="form-control" name="body" rows="3">{{ p.body }}</textarea>
+                </div>
+                <div style="grid-column: span 2;">
+                  <label>Examples (one per line)</label>
+                  <textarea class="form-control" name="examples" rows="3">{% for ex in p.examples_json %}{{ ex }}{% if not forloop.last %}
+{% endif %}{% endfor %}</textarea>
+                </div>
+              </div>
+              <div style="margin-top:8px;">
+                <button class="btn btn-outline-light mk-btn" type="submit">Update</button>
+              </div>
+            </form>
+          </details>
+        {% endif %}
+      </div>
+    {% empty %}
+      <div class="mk-muted">No best practices yet.</div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

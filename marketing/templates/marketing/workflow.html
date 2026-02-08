@@ -1,0 +1,47 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+{% include "marketing/_style.html" %}
+
+<div class="mk-container">
+  <div class="mk-header">
+    <div>
+      <div class="mk-title">Weekly workflow</div>
+      <div class="mk-sub">Suggested operating rhythm for the marketing team.</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_dashboard' %}">Dashboard</a>
+      <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_insights' %}">Insights</a>
+    </div>
+  </div>
+
+  <div class="mk-grid">
+    <div class="mk-card" style="grid-column: span 4;">
+      <div class="mk-section-title">Monday</div>
+      <ul class="mk-muted">
+        <li>Review dashboard KPIs and insights</li>
+        <li>Select 3 actions for content or SEO</li>
+        <li>Assign owners for the week</li>
+      </ul>
+    </div>
+
+    <div class="mk-card" style="grid-column: span 4;">
+      <div class="mk-section-title">Wednesday</div>
+      <ul class="mk-muted">
+        <li>Create 2 new content pieces based on winners</li>
+        <li>Update best practices with learnings</li>
+        <li>Check audience shifts and adjust targeting</li>
+      </ul>
+    </div>
+
+    <div class="mk-card" style="grid-column: span 4;">
+      <div class="mk-section-title">Friday</div>
+      <ul class="mk-muted">
+        <li>Review performance improvements</li>
+        <li>Mark insights done or snooze</li>
+        <li>Plan next week’s experiments</li>
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}

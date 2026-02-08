@@ -7,7 +7,6 @@ from collections import defaultdict
 from datetime import timedelta, date
 from decimal import Decimal
 from django.db.models import Count, Sum, Q, Max
-from django.db.models.functions import TruncDate
 from django.db import models
 from django.conf import settings
 try:
@@ -18,6 +17,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.mail import send_mail
 from django.db import transaction
+from django.db.utils import OperationalError, ProgrammingError
 from django.db.models import Case, Count, IntegerField, Q, When
 from django.db.models.functions import TruncDate, TruncMonth, TruncYear
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse, Http404
@@ -31,6 +31,7 @@ from django.shortcuts import render
 from .models import Product, Fabric, Accessory, Trim, ThreadOption, InventoryItem, ProductionOrderMaterial
 
 from .services.costing import build_variance_report, calculate_cost_sheet
+from .services.costing_simple import calculate_cost_sheet_simple
 
 def _parse_decimal(value):
     try:
@@ -48,6 +49,7 @@ from .forms import (
     AccessoryForm,
     TrimForm,
     ThreadForm,
+    LibraryAttachmentForm,
 )
 from .forms_costing import ActualCostEntryForm
 from .models import (
@@ -63,15 +65,21 @@ from .models import (
     LeadActivity,
     LeadComment,
     CostSheet,
+    CostSheetSimple,
     Opportunity,
     OpportunityDocument,
     OpportunityFile,
     OpportunityTask,
     Product,
+    LibraryAttachment,
     ProductionOrder,
     ProductionStage,
     Shipment,
 )
+try:
+    from .models import ProductionOrderLine
+except Exception:
+    ProductionOrderLine = None
 from .production_forms import ProductionOrderForm, ProductionStageForm
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
@@ -1415,9 +1423,16 @@ def opportunity_detail(request, pk):
 
     # Files
     opp_files = OpportunityFile.objects.filter(opportunity=opportunity).order_by("-uploaded_at")
-    opportunity_documents = OpportunityDocument.objects.filter(opportunity=opportunity).order_by("-uploaded_at")
-    cost_sheet_versions = CostSheet.objects.filter(opportunity=opportunity).order_by("-version_number")
-    active_cost_sheet = cost_sheet_versions.filter(is_active=True).first()
+    opportunity_documents = OpportunityDocument.objects.filter(
+        opportunity=opportunity,
+        doc_type__in=["costing_pdf", "costing_excel", "costing_other"],
+    ).order_by("-uploaded_at")
+    active_cost_sheet = CostSheet.objects.filter(opportunity=opportunity, is_active=True).order_by(
+        "-updated_at", "-id"
+    ).first()
+    simple_cost_sheet = CostSheetSimple.objects.filter(opportunity=opportunity).order_by(
+        "-updated_at", "-id"
+    ).first()
 
     # Comments and activity
     comments = _chatter_for_opportunity(opportunity)
@@ -1666,11 +1681,6 @@ def opportunity_detail(request, pk):
         if action == "upload_document":
             file_obj = request.FILES.get("doc_file")
             doc_type = (request.POST.get("doc_type") or "other").strip()
-            cost_sheet_id = (request.POST.get("cost_sheet_id") or "").strip()
-            cost_sheet = None
-
-            if cost_sheet_id:
-                cost_sheet = CostSheet.objects.filter(id=cost_sheet_id, opportunity=opportunity).first()
 
             if file_obj and lead:
                 doc = OpportunityDocument.objects.create(
@@ -1678,7 +1688,7 @@ def opportunity_detail(request, pk):
                     file=file_obj,
                     original_name=file_obj.name,
                     doc_type=doc_type,
-                    cost_sheet=cost_sheet,
+                    cost_sheet_simple=simple_cost_sheet,
                     uploaded_by=request.user if request.user.is_authenticated else None,
                 )
                 LeadActivity.objects.create(
@@ -1742,11 +1752,43 @@ def opportunity_detail(request, pk):
     prod_total_reject = prod_totals.get("total_reject") or 0
     prod_total_actual_cost = prod_totals.get("total_actual_cost") or 0
 
-    costing_calc = calculate_cost_sheet(active_cost_sheet) if active_cost_sheet else None
-    variance_report = None
-    if active_cost_sheet and prod_orders.exists():
+    simple_calc = calculate_cost_sheet_simple(simple_cost_sheet) if simple_cost_sheet else None
+    variance_placeholder = None
+    variance_display = None
+    if simple_cost_sheet:
         latest_po = prod_orders.order_by("-created_at").first()
-        variance_report = build_variance_report(active_cost_sheet, latest_po)
+        actual_cost_per_piece = None
+        produced_qty = 0
+        if latest_po and latest_po.actual_cost_per_piece_bdt is not None:
+            actual_cost_per_piece = latest_po.actual_cost_per_piece_bdt
+            produced_qty = latest_po.qty_total or 0
+
+        standard_cost = simple_calc["total_cost_per_piece"] if simple_calc else Decimal("0")
+        variance_per_piece = None
+        total_variance = None
+        if actual_cost_per_piece is not None:
+            variance_per_piece = actual_cost_per_piece - standard_cost
+            if produced_qty:
+                total_variance = variance_per_piece * Decimal(produced_qty)
+
+        variance_placeholder = {
+            "standard_cost_per_piece": standard_cost,
+            "actual_cost_per_piece": actual_cost_per_piece,
+            "variance_per_piece": variance_per_piece,
+            "total_variance": total_variance,
+        }
+        if variance_placeholder:
+            def _fmt(value):
+                if value is None:
+                    return None
+                return Decimal(value).quantize(Decimal("0.01"))
+
+            variance_display = {
+                "standard_cost_per_piece": _fmt(standard_cost),
+                "actual_cost_per_piece": _fmt(actual_cost_per_piece),
+                "variance_per_piece": _fmt(variance_per_piece),
+                "total_variance": _fmt(total_variance),
+            }
 
     order_value = opportunity.order_value or 0
     total_cost_bdt = (prod_total_actual_cost or 0) + (shipping_cost_bdt or 0)
@@ -1773,10 +1815,10 @@ def opportunity_detail(request, pk):
 
         "opp_files": opp_files,
         "opportunity_documents": opportunity_documents,
-        "cost_sheet_versions": cost_sheet_versions,
-        "active_cost_sheet": active_cost_sheet,
-        "costing_calc": costing_calc,
-        "variance_report": variance_report,
+        "simple_cost_sheet": simple_cost_sheet,
+        "simple_calc": simple_calc,
+        "variance_placeholder": variance_placeholder,
+        "variance_display": variance_display,
 
         "prod_orders": prod_orders,
         "prod_total_qty": prod_total_qty,
@@ -3532,6 +3574,12 @@ def inventory_detail_pdf(request, pk):
     width, height = letter
     y = height - 50
 
+    def ensure_space(y_pos, needed):
+        if y_pos - needed < 50:
+            p.showPage()
+            y_pos = height - 50
+        return y_pos
+
     p.setFont("Helvetica-Bold", 16)
     p.drawString(50, y, f"Inventory item: {item.name}")
     y -= 30
@@ -3664,11 +3712,55 @@ def world_dashboard(request):
     ]
 
     currencies = [
-        {"pair": "CAD → BDT"},
-        {"pair": "USD → BDT"},
-        {"pair": "EUR → BDT"},
-        {"pair": "GBP → BDT"},
+        {"pair": "CAD -> BDT"},
+        {"pair": "USD -> BDT"},
+        {"pair": "EUR -> BDT"},
+        {"pair": "GBP -> BDT"},
     ]
+
+    trend_cards = [
+        {"label": "Demand pulse", "value": "62", "delta": "+4%", "note": "last 30 days", "tone": "up"},
+        {"label": "Price pressure", "value": "47", "delta": "-2%", "note": "yarn index", "tone": "down"},
+        {"label": "Lead time risk", "value": "31", "delta": "+1%", "note": "port congestion", "tone": "flat"},
+        {"label": "Eco share", "value": "28%", "delta": "+6%", "note": "buyer asks", "tone": "up"},
+    ]
+
+    category_mix = [
+        {"label": "Activewear", "value": 28},
+        {"label": "Lounge sets", "value": 22},
+        {"label": "Denim", "value": 16},
+        {"label": "Outerwear", "value": 14},
+        {"label": "Basics", "value": 20},
+    ]
+
+    region_signals = [
+        {"region": "North America", "demand": 68, "lead_time": "42 days", "note": "Stable buys"},
+        {"region": "Europe", "demand": 54, "lead_time": "45 days", "note": "Careful pricing"},
+        {"region": "Middle East", "demand": 61, "lead_time": "35 days", "note": "Modest wear up"},
+        {"region": "Asia", "demand": 49, "lead_time": "32 days", "note": "Competitive"},
+    ]
+
+    events = [
+        {"date": "Feb 12", "name": "New York Fashion Week", "city": "New York", "region": "North America", "etype": "Runway", "impact": "Retail buys"},
+        {"date": "Feb 20", "name": "London Fashion Week", "city": "London", "region": "Europe", "etype": "Runway", "impact": "Trend signal"},
+        {"date": "Mar 03", "name": "Toronto Apparel Textile Show", "city": "Toronto", "region": "North America", "etype": "Trade", "impact": "Supplier leads"},
+        {"date": "Mar 22", "name": "Dubai Modest Wear Expo", "city": "Dubai", "region": "Middle East", "etype": "Expo", "impact": "Modest demand"},
+        {"date": "Apr 01", "name": "Shanghai Fashion Week", "city": "Shanghai", "region": "Asia", "etype": "Runway", "impact": "Fabric shifts"},
+        {"date": "Apr 10", "name": "Dhaka Textile Summit", "city": "Dhaka", "region": "Asia", "etype": "Summit", "impact": "Sourcing"},
+    ]
+
+    experts = [
+        {"name": "Lena Roy", "role": "Merch Lead, Atlas Sports", "topic": "Performance fabrics", "quote": "Buyers want smoother hand-feel and longer colorfast life."},
+        {"name": "Arif Hasan", "role": "Sourcing Director, Meadow & Co.", "topic": "Lead-time planning", "quote": "Pre-booking trims is now a win for 45-day programs."},
+        {"name": "Nina Park", "role": "Designer, Northline Studio", "topic": "Color direction", "quote": "Dusty pastels and deep navy are strong for FW."},
+    ]
+
+    trend_labels = ["Week 1", "Week 2", "Week 3", "Week 4", "Week 5", "Week 6"]
+    trend_series = {
+        "demand": [58, 60, 61, 63, 62, 64],
+        "price": [52, 51, 50, 49, 48, 47],
+        "lead": [30, 31, 33, 32, 31, 31],
+    }
 
     ai_fashion_update = "AI Trend Update unavailable right now."
     if "_ai_client" in globals() and _ai_client:
@@ -3693,21 +3785,77 @@ def world_dashboard(request):
         "cities": cities,
         "currencies": currencies,
         "ai_fashion_update": ai_fashion_update,
+        "trend_cards": trend_cards,
+        "category_mix": category_mix,
+        "region_signals": region_signals,
+        "events": events,
+        "experts": experts,
+        "trend_labels_json": json.dumps(trend_labels),
+        "trend_series_json": json.dumps(trend_series),
     }
     return render(request, "crm/world_dashboard.html", context)
 
 
-@require_POST
 def world_ai_fashion_news(request):
-    if not ("_ai_client" in globals() and _ai_client):
+    ai_enabled = bool("_ai_client" in globals() and _ai_client)
+    if request.method != "POST":
+        context = {
+            "ai_enabled": ai_enabled,
+            "sample_notes": [
+                "Green factories and safety audits remain strong selling points for Bangladesh.",
+                "Activewear and lounge sets stay steady; buyers want softer hand-feel.",
+                "Offer one standard fabric and one eco option when possible.",
+                "For small orders, reduce color count to control costs.",
+                "Repeat buyers expect faster sampling and clear QC checkpoints.",
+            ],
+            "signal_cards": [
+                {"label": "Category heat", "value": "Activewear +6%"},
+                {"label": "Price signals", "value": "Yarn softening"},
+                {"label": "Lead time", "value": "Stable 40-45d"},
+            ],
+        }
+        return render(request, "crm/world_ai_fashion_news.html", context)
+
+    if not ai_enabled:
         return JsonResponse({"ok": False, "error": "AI is not configured on server."})
 
     try:
+        payload = {}
+        try:
+            payload = json.loads(request.body.decode("utf-8") or "{}")
+        except Exception:
+            payload = {}
+
+        mode = (payload.get("mode") or "custom").strip().lower()
+        region = (payload.get("region") or "Global").strip()
+        category = (payload.get("category") or "All categories").strip()
+        buyer = (payload.get("buyer") or "Mid-market").strip()
+        price = (payload.get("price") or "Mid").strip()
+        sustainability = (payload.get("sustainability") or "Balanced").strip()
+        lead_time = (payload.get("lead_time") or "Standard").strip()
+        intent = (payload.get("intent") or "sales").strip()
+
+        if mode == "dashboard":
+            prompt = (
+                "Give a short daily update about global fashion and apparel trends. "
+                "Only key changes, risks, or chances for a clothing manufacturer in Bangladesh and Canada. "
+                "Max 5 bullets. Simple English."
+            )
+        else:
+            prompt = (
+                "Create a short fashion insight note for a garment manufacturer. "
+                f"Region focus: {region}. Category focus: {category}. "
+                f"Buyer type: {buyer}. Price tier: {price}. "
+                f"Sustainability: {sustainability}. Lead time: {lead_time}. "
+                f"Intent: {intent}. "
+                "Return 5 bullet points plus 2 quick actions. Simple English."
+            )
+
         response = _ai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are an assistant for Iconic Apparel House. Keep it short and useful."},
-                {"role": "user", "content": "Give 4 to 6 bullet points about fashion and apparel news. Simple English."},
+                {"role": "user", "content": prompt},
             ],
         )
         text = response.choices[0].message.content
@@ -4873,12 +5021,12 @@ def _apply_production_status_change(order, old_status):
 SIZE_LABELS = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"]
 
 
-def build_size_grid(order):
+def build_size_grid_from_text(text):
     """
-    Read size_ratio_note and build a small size grid.
-    Example text: 'XS 10 S 20 M 40 L 30'
+    Build a size grid from a size ratio string.
+    Example text: 'XS 10, S 20, M 40, L 30'
     """
-    text = (order.size_ratio_note or "").upper()
+    text = (text or "").upper()
     result = []
     total = 0
 
@@ -4898,6 +5046,90 @@ def build_size_grid(order):
         total = None
 
     return result, total
+
+
+def build_size_grid(order):
+    """
+    Read size_ratio_note and build a small size grid.
+    """
+    return build_size_grid_from_text(order.size_ratio_note)
+
+
+def _build_order_line_dict(
+    style_name="",
+    color_info="",
+    size_ratio_note="",
+    accessories_note="",
+    packaging_note="",
+    extra_order_note="",
+):
+    size_grid, size_total = build_size_grid_from_text(size_ratio_note)
+    return {
+        "style_name": style_name,
+        "color_info": color_info,
+        "size_ratio_note": size_ratio_note,
+        "size_grid": size_grid,
+        "size_total": size_total,
+        "accessories_note": accessories_note,
+        "packaging_note": packaging_note,
+        "extra_order_note": extra_order_note,
+    }
+
+
+def _production_order_lines(order):
+    if ProductionOrderLine is None or not hasattr(order, "lines"):
+        lines = []
+    else:
+        try:
+            lines = list(order.lines.all().order_by("line_no", "id"))
+        except (OperationalError, ProgrammingError, AttributeError):
+            lines = []
+    if lines:
+        return [
+            _build_order_line_dict(
+                style_name=line.style_name,
+                color_info=line.color_info,
+                size_ratio_note=line.size_ratio_note,
+                accessories_note=line.accessories_note,
+                packaging_note=line.packaging_note,
+                extra_order_note=line.extra_order_note,
+            )
+            for line in lines
+        ]
+
+    return [
+        _build_order_line_dict(
+            style_name=order.style_name,
+            color_info=order.color_info,
+            size_ratio_note=order.size_ratio_note,
+            accessories_note=order.accessories_note,
+            packaging_note=order.packaging_note,
+            extra_order_note=order.extra_order_note,
+        )
+    ]
+
+
+def _production_order_lines_for_form(order=None):
+    if not order:
+        return [_build_order_line_dict()]
+    return _production_order_lines(order)
+
+
+def _production_order_lines_from_payload(raw):
+    lines = _parse_production_lines_payload(raw)
+    if not lines:
+        return None
+    return [
+        _build_order_line_dict(
+            style_name=line.get("style_name", ""),
+            color_info=line.get("color_info", ""),
+            size_ratio_note=line.get("size_ratio_note", ""),
+            accessories_note=line.get("accessories_note", ""),
+            packaging_note=line.get("packaging_note", ""),
+            extra_order_note=line.get("extra_order_note", ""),
+        )
+        for line in lines
+    ]
 
 
 # library helpers for production edit/add
@@ -4934,6 +5166,72 @@ def _apply_production_library_links(order, request):
             continue
         qs = model_cls.objects.filter(pk__in=raw_ids)
         getattr(order, field_name).set(qs)
+
+
+def _parse_production_lines_payload(raw):
+    if raw is None:
+        return None
+    raw = raw.strip()
+    if not raw:
+        return None
+    try:
+        payload = json.loads(raw)
+    except Exception:
+        return None
+    if not isinstance(payload, list):
+        return None
+    cleaned = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        style_name = (item.get("style_name") or "").strip()
+        color_info = (item.get("color_info") or "").strip()
+        size_ratio_note = (item.get("size_ratio_note") or "").strip()
+        accessories_note = (item.get("accessories_note") or "").strip()
+        packaging_note = (item.get("packaging_note") or "").strip()
+        extra_order_note = (item.get("extra_order_note") or "").strip()
+        if not any([style_name, color_info, size_ratio_note, accessories_note, packaging_note, extra_order_note]):
+            continue
+        cleaned.append(
+            {
+                "style_name": style_name,
+                "color_info": color_info,
+                "size_ratio_note": size_ratio_note,
+                "accessories_note": accessories_note,
+                "packaging_note": packaging_note,
+                "extra_order_note": extra_order_note,
+            }
+        )
+    return cleaned
+
+
+def _save_production_lines(order, request):
+    if ProductionOrderLine is None or not hasattr(order, "lines"):
+        return
+    raw = request.POST.get("line_payload")
+    lines = _parse_production_lines_payload(raw)
+    if lines is None:
+        return
+    order.lines.all().delete()
+    for idx, data in enumerate(lines, start=1):
+        ProductionOrderLine.objects.create(order=order, line_no=idx, **data)
+    if lines:
+        first = lines[0]
+        updates = {}
+        for field in [
+            "style_name",
+            "color_info",
+            "size_ratio_note",
+            "accessories_note",
+            "packaging_note",
+            "extra_order_note",
+        ]:
+            if getattr(order, field) != first.get(field, ""):
+                updates[field] = first.get(field, "")
+        if updates:
+            for key, val in updates.items():
+                setattr(order, key, val)
+            order.save(update_fields=list(updates.keys()))
 
 
 def _production_library_context(order=None):
@@ -5056,12 +5354,16 @@ def production_add(request):
     """
     Create new production order.
     """
+    order_lines = None
     if request.method == "POST":
         form = ProductionOrderForm(request.POST, request.FILES)
         if form.is_valid():
             order = form.save()
+            _save_production_lines(order, request)
+            _apply_production_library_links(order, request)
             messages.success(request, "Production order created.")
             return redirect("production_detail", pk=order.pk)
+        order_lines = _production_order_lines_from_payload(request.POST.get("line_payload"))
     else:
         form = ProductionOrderForm()
 
@@ -5072,6 +5374,7 @@ def production_add(request):
             "form": form,
             "is_edit": False,
             "order": None,
+            "order_lines": order_lines or _production_order_lines_for_form(),
             **_production_library_context(),
         },
     )
@@ -5083,12 +5386,56 @@ def production_edit(request, pk):
     """
     order = get_object_or_404(ProductionOrder, pk=pk)
     old_status = order.status
+    order_lines = None
 
     if request.method == "POST":
+        action = (request.POST.get("action") or "").strip()
+        if action == "add_material":
+            item_id = (request.POST.get("inventory_item") or "").strip()
+            qty_raw = (request.POST.get("quantity") or "").strip()
+            note = (request.POST.get("note") or "").strip()
+
+            item = InventoryItem.objects.filter(pk=item_id).first() if item_id else None
+            if item:
+                qty_val = None
+                if qty_raw:
+                    try:
+                        qty_val = Decimal(qty_raw)
+                    except Exception:
+                        qty_val = None
+
+                line = ProductionOrderMaterial.objects.filter(order=order, inventory_item=item).first()
+                if line:
+                    if qty_val is not None:
+                        line.quantity = qty_val
+                    if note:
+                        line.notes = note
+                    line.save()
+                else:
+                    ProductionOrderMaterial.objects.create(
+                        order=order,
+                        inventory_item=item,
+                        quantity=qty_val,
+                        unit_type=item.unit_type,
+                        notes=note,
+                    )
+                messages.success(request, "Material added to order sheet.")
+            else:
+                messages.error(request, "Please select a material.")
+
+            return redirect("production_edit", pk=pk)
+
+        if action == "remove_material":
+            line_id = (request.POST.get("line_id") or "").strip()
+            if line_id:
+                ProductionOrderMaterial.objects.filter(pk=line_id, order=order).delete()
+            return redirect("production_edit", pk=pk)
+
         form = ProductionOrderForm(request.POST, request.FILES, instance=order)
         if form.is_valid():
             obj = form.save()
             _apply_production_library_links(obj, request)
+            _save_production_lines(obj, request)
 
             if not obj.customer_id and obj.opportunity and obj.opportunity.customer_id:
                 obj.customer = obj.opportunity.customer
@@ -5098,8 +5445,31 @@ def production_edit(request, pk):
 
             messages.success(request, "Production order updated.")
             return redirect("production_detail", pk=pk)
+        order_lines = _production_order_lines_from_payload(request.POST.get("line_payload"))
     else:
         form = ProductionOrderForm(instance=order)
+
+    try:
+        materials = list(order.materials.select_related("inventory_item"))
+    except (OperationalError, ProgrammingError):
+        materials = []
+
+    recommended_items = InventoryItem.objects.none()
+    recommended_ids = []
+    try:
+        if order.fabrics.exists() or order.accessories.exists() or order.trims.exists() or order.threads.exists():
+            recommended_items = InventoryItem.objects.filter(
+                Q(fabric__in=order.fabrics.all())
+                | Q(accessory__in=order.accessories.all())
+                | Q(trim__in=order.trims.all())
+                | Q(thread_option__in=order.threads.all())
+            ).distinct()
+        recommended_ids = [str(i.pk) for i in recommended_items]
+    except (OperationalError, ProgrammingError):
+        recommended_items = []
+        recommended_ids = []
+
+    inventory_items = InventoryItem.objects.filter(is_active=True).order_by("category", "name")
 
     return render(
         request,
@@ -5108,6 +5478,11 @@ def production_edit(request, pk):
             "form": form,
             "is_edit": True,
             "order": order,
+            "order_lines": order_lines or _production_order_lines_for_form(order),
+            "materials": materials,
+            "inventory_items": inventory_items,
+            "recommended_items": recommended_items,
+            "recommended_ids": recommended_ids,
             **_production_library_context(order),
         },
     )
@@ -5115,34 +5490,91 @@ def production_edit(request, pk):
 
 def production_detail(request, pk):
     order = get_object_or_404(ProductionOrder, pk=pk)
+    can_add_lines = ProductionOrderLine is not None and hasattr(order, "lines")
 
     # sorted stages
     stages = get_sorted_stages(order)
 
-    # size grid
-    size_grid, size_total = build_size_grid(order)
+    # order lines for sheet details
+    order_lines = _production_order_lines(order)
 
     # files
-    attachments = order.attachments.all().order_by("-created_at")
+    try:
+        attachments = list(order.attachments.all().order_by("-created_at"))
+    except (OperationalError, ProgrammingError):
+        attachments = []
 
     # shipments for this order
-    shipments = order.shipments.all().order_by("-ship_date", "-created_at")
+    try:
+        shipments = list(order.shipments.all().order_by("-ship_date", "-created_at"))
+    except (OperationalError, ProgrammingError):
+        shipments = []
 
     # progress and delay
     percent_done = order.percent_done
     order_delayed = order.is_delayed
     reject_percent = int((order.qty_reject / order.qty_total) * 100) if order.qty_total else 0
 
-    materials = order.materials.select_related("inventory_item")
-    comments = _chatter_for_production(order)
-    actual_entries = order.actual_cost_entries.all().order_by("section", "id")
+    try:
+        materials = list(order.materials.select_related("inventory_item"))
+    except (OperationalError, ProgrammingError):
+        materials = []
+    try:
+        comments = _chatter_for_production(order)
+    except (OperationalError, ProgrammingError):
+        comments = []
+    try:
+        actual_entries = list(order.actual_cost_entries.all().order_by("section", "id"))
+    except (OperationalError, ProgrammingError):
+        actual_entries = []
     variance_report = None
-    if order.cost_sheet_active:
-        variance_report = build_variance_report(order.cost_sheet_active, order)
+    try:
+        cost_sheet_active = order.cost_sheet_active
+    except (OperationalError, ProgrammingError):
+        cost_sheet_active = None
+    if cost_sheet_active:
+        try:
+            variance_report = build_variance_report(cost_sheet_active, order)
+        except (OperationalError, ProgrammingError):
+            variance_report = None
     actual_entry_form = ActualCostEntryForm()
 
     if request.method == "POST":
         action = (request.POST.get("action") or "").strip()
+
+        if action == "add_line":
+            if not can_add_lines:
+                messages.error(request, "Line items are not enabled for this order.")
+                return redirect("production_detail", pk=pk)
+
+            style_name = (request.POST.get("line_style_name") or "").strip()
+            color_info = (request.POST.get("line_color_info") or "").strip()
+            size_ratio_note = (request.POST.get("line_size_ratio_note") or "").strip()
+            accessories_note = (request.POST.get("line_accessories_note") or "").strip()
+            packaging_note = (request.POST.get("line_packaging_note") or "").strip()
+            extra_order_note = (request.POST.get("line_extra_order_note") or "").strip()
+
+            if not any([style_name, color_info, size_ratio_note, accessories_note, packaging_note, extra_order_note]):
+                messages.error(request, "Please add at least one detail before saving a new line.")
+                return redirect("production_detail", pk=pk)
+
+            try:
+                max_no = order.lines.aggregate(m=Max("line_no")).get("m") or 0
+            except Exception:
+                max_no = 0
+
+            ProductionOrderLine.objects.create(
+                order=order,
+                line_no=max_no + 1,
+                style_name=style_name,
+                color_info=color_info,
+                size_ratio_note=size_ratio_note,
+                accessories_note=accessories_note,
+                packaging_note=packaging_note,
+                extra_order_note=extra_order_note,
+            )
+            messages.success(request, "Product line added to this order.")
+            return redirect("production_detail", pk=pk)
 
         if action == "add_material":
             item_id = (request.POST.get("inventory_item") or "").strip()
@@ -5219,6 +5651,12 @@ def production_detail(request, pk):
             form = ActualCostEntryForm(request.POST)
             if form.is_valid():
                 entry = form.save(commit=False)
+                qty_val = form.cleaned_data.get("actual_qty_total") or Decimal("0")
+                rate_val = form.cleaned_data.get("actual_rate") or Decimal("0")
+                try:
+                    entry.actual_total_cost = (qty_val * rate_val).quantize(Decimal("0.0001"))
+                except Exception:
+                    entry.actual_total_cost = Decimal("0")
                 entry.production_order = order
                 entry.opportunity = order.opportunity
                 entry.cost_sheet = order.cost_sheet_active
@@ -5244,7 +5682,10 @@ def production_detail(request, pk):
                 entry.uom = (request.POST.get("uom") or "").strip()
                 entry.actual_qty_total = _parse_decimal(request.POST.get("actual_qty_total"))
                 entry.actual_rate = _parse_decimal(request.POST.get("actual_rate"))
-                entry.actual_total_cost = _parse_decimal(request.POST.get("actual_total_cost"))
+                try:
+                    entry.actual_total_cost = (entry.actual_qty_total * entry.actual_rate).quantize(Decimal("0.0001"))
+                except Exception:
+                    entry.actual_total_cost = Decimal("0")
                 entry.notes = (request.POST.get("notes") or "").strip()
                 entry.save()
                 if order.cost_sheet_active:
@@ -5288,14 +5729,19 @@ def production_detail(request, pk):
             return redirect("production_detail", pk=pk)
 
     recommended_items = InventoryItem.objects.none()
-    if order.fabrics.exists() or order.accessories.exists() or order.trims.exists() or order.threads.exists():
-        recommended_items = InventoryItem.objects.filter(
-            Q(fabric__in=order.fabrics.all())
-            | Q(accessory__in=order.accessories.all())
-            | Q(trim__in=order.trims.all())
-            | Q(thread_option__in=order.threads.all())
-        ).distinct()
-    recommended_ids = [str(i.pk) for i in recommended_items]
+    recommended_ids = []
+    try:
+        if order.fabrics.exists() or order.accessories.exists() or order.trims.exists() or order.threads.exists():
+            recommended_items = InventoryItem.objects.filter(
+                Q(fabric__in=order.fabrics.all())
+                | Q(accessory__in=order.accessories.all())
+                | Q(trim__in=order.trims.all())
+                | Q(thread_option__in=order.threads.all())
+            ).distinct()
+        recommended_ids = [str(i.pk) for i in recommended_items]
+    except (OperationalError, ProgrammingError):
+        recommended_items = []
+        recommended_ids = []
 
     inventory_items = InventoryItem.objects.filter(is_active=True).order_by("category", "name")
 
@@ -5304,8 +5750,7 @@ def production_detail(request, pk):
         "stages": stages,
         "percent_done": percent_done,
         "order_delayed": order_delayed,
-        "size_grid": size_grid,
-        "size_total": size_total,
+        "order_lines": order_lines,
         "attachments": attachments,
         "shipments": shipments,
         "reject_percent": reject_percent,
@@ -5317,10 +5762,11 @@ def production_detail(request, pk):
         "inventory_items": inventory_items,
         "recommended_items": recommended_items,
         "recommended_ids": recommended_ids,
-        "cost_sheet_active": order.cost_sheet_active,
+        "cost_sheet_active": cost_sheet_active,
         "actual_entries": actual_entries,
         "actual_entry_form": actual_entry_form,
         "variance_report": variance_report,
+        "can_add_lines": can_add_lines,
     }
 
     return render(request, "crm/production_detail.html", context)
@@ -5681,6 +6127,7 @@ def production_order_sheet_pdf(request, pk):
         ProductionOrder.objects.select_related("customer", "lead", "opportunity")
         .prefetch_related(
             "materials__inventory_item",
+            "lines",
             "fabrics",
             "accessories",
             "trims",
@@ -5707,6 +6154,13 @@ def production_order_sheet_pdf(request, pk):
     width, height = letter
     y = height - 50
 
+    def ensure_space(y_pos, needed, font_name="Helvetica", font_size=10):
+        if y_pos - needed < 50:
+            p.showPage()
+            y_pos = height - 50
+            p.setFont(font_name, font_size)
+        return y_pos
+
     def draw_wrapped(text, x_pos, y_pos, max_width, font_name="Helvetica", font_size=10, line_height=12):
         p.setFont(font_name, font_size)
         words = str(text).split()
@@ -5718,10 +6172,12 @@ def production_order_sheet_pdf(request, pk):
             if pdfmetrics.stringWidth(test, font_name, font_size) <= max_width:
                 line = test
             else:
+                y_pos = ensure_space(y_pos, line_height, font_name, font_size)
                 p.drawString(x_pos, y_pos, line)
                 y_pos -= line_height
                 line = word
         if line:
+            y_pos = ensure_space(y_pos, line_height, font_name, font_size)
             p.drawString(x_pos, y_pos, line)
             y_pos -= line_height
         return y_pos
@@ -5733,8 +6189,42 @@ def production_order_sheet_pdf(request, pk):
         p.drawString(x_pos + 70, y_pos, str(value))
         return y_pos - 12
 
+    def draw_size_table(size_grid, x_pos, y_pos):
+        if not size_grid:
+            return y_pos
+        col_w = 55
+        row_h = 12
+        table_width = col_w * len(size_grid)
+        p.setFont("Helvetica-Bold", 9)
+        y_pos = ensure_space(y_pos, row_h, "Helvetica-Bold", 9)
+        for idx, item in enumerate(size_grid):
+            p.drawString(x_pos + (idx * col_w) + 2, y_pos, str(item.get("label", "")))
+        y_pos -= row_h
+        p.setFont("Helvetica", 9)
+        y_pos = ensure_space(y_pos, row_h, "Helvetica", 9)
+        for idx, item in enumerate(size_grid):
+            qty = item.get("qty") or 0
+            p.drawString(x_pos + (idx * col_w) + 2, y_pos, str(qty))
+        y_pos -= row_h
+        p.line(x_pos, y_pos + (row_h * 2) + 2, x_pos + table_width, y_pos + (row_h * 2) + 2)
+        p.line(x_pos, y_pos + 2, x_pos + table_width, y_pos + 2)
+        return y_pos
+
+    def draw_materials_header(y_pos):
+        p.setFont("Helvetica", 10)
+        p.drawString(50, y_pos, "Material")
+        p.drawString(230, y_pos, "Category")
+        p.drawString(320, y_pos, "Qty")
+        p.drawString(370, y_pos, "Unit")
+        p.drawString(420, y_pos, "In stock")
+        p.drawString(490, y_pos, "Code/SKU")
+        y_pos -= 12
+        p.line(50, y_pos, width - 50, y_pos)
+        y_pos -= 12
+        return y_pos
+
     p.setFont("Helvetica-Bold", 16)
-    p.drawString(50, y, "Water Sheet")
+    p.drawString(50, y, "Order Sheet")
     y -= 24
 
     # product image (if any)
@@ -5750,55 +6240,63 @@ def production_order_sheet_pdf(request, pk):
         except Exception:
             pass
 
+    order_lines = _production_order_lines(order)
+
     p.setFont("Helvetica", 11)
     header_lines = [
         f"Order: {order.order_code or order.pk}",
         f"Title: {order.title}",
         f"Customer: {(order.customer.account_brand if order.customer else '') or 'Not set'}",
         f"Product ID: {(order.product.product_code if order.product else '-')}",
-        f"Style name: {order.style_name or '-'}",
-        f"Color info: {order.color_info or '-'}",
         f"Total pieces: {order.qty_total}  |  Reject: {order.qty_reject}",
         f"Sample date: {order.sample_deadline or '-'}  |  Bulk date: {order.bulk_deadline or '-'}",
         f"Factory: {order.get_factory_location_display()}  |  Order type: {order.get_order_type_display()}",
         f"Status: {order.get_status_display()}",
+        f"Product lines: {len(order_lines)}",
     ]
     for line in header_lines:
         p.drawString(50, y, line)
         y -= 14
 
     y -= 6
-    # work order notes
+    y = ensure_space(y, 20, "Helvetica-Bold", 12)
     p.setFont("Helvetica-Bold", 12)
-    p.drawString(50, y, "Work order details")
+    p.drawString(50, y, "Product lines")
     y -= 16
-    y = draw_wrapped(f"Accessories & trims: {order.accessories_note or '-'}", 50, y, 500)
-    y = draw_wrapped(f"Packaging: {order.packaging_note or '-'}", 50, y, 500)
-    y = draw_wrapped(f"Extra notes: {order.extra_order_note or '-'}", 50, y, 500)
-    y -= 6
 
-    # size ratio
-    size_grid, size_total = build_size_grid(order)
-    p.setFont("Helvetica-Bold", 12)
-    p.drawString(50, y, "Size ratio")
-    y -= 14
-    if size_grid and size_total:
-        labels = [item["label"] for item in size_grid]
-        qtys = [str(item["qty"] or 0) for item in size_grid]
-        p.setFont("Helvetica", 9)
-        p.drawString(50, y, "  ".join(labels))
-        y -= 12
-        p.drawString(50, y, "  ".join(qtys))
-        y -= 12
-        p.setFont("Helvetica", 10)
-        p.drawString(50, y, f"Total: {size_total}")
-        y -= 16
-    else:
-        p.setFont("Helvetica", 10)
-        p.drawString(50, y, "No size ratio set.")
+    for idx, line in enumerate(order_lines, start=1):
+        y = ensure_space(y, 16, "Helvetica-Bold", 11)
+        p.setFont("Helvetica-Bold", 11)
+        p.drawString(50, y, f"Line {idx}")
         y -= 14
 
+        p.setFont("Helvetica", 10)
+        y = draw_wrapped(f"Style name: {line.get('style_name') or '-'}", 50, y, 500)
+        y = draw_wrapped(f"Color info: {line.get('color_info') or '-'}", 50, y, 500)
+
+        if line.get("size_total"):
+            y = ensure_space(y, 12, "Helvetica-Bold", 10)
+            p.setFont("Helvetica-Bold", 10)
+            p.drawString(50, y, "Size ratio")
+            y -= 12
+            y = draw_size_table(line.get("size_grid"), 50, y)
+            y = ensure_space(y, 12, "Helvetica", 10)
+            p.setFont("Helvetica", 10)
+            p.drawString(50, y, f"Line total: {line.get('size_total')}")
+            y -= 12
+        else:
+            y = ensure_space(y, 12, "Helvetica", 10)
+            p.setFont("Helvetica", 10)
+            p.drawString(50, y, "No size ratio set.")
+            y -= 12
+
+        y = draw_wrapped(f"Accessories & trims: {line.get('accessories_note') or '-'}", 50, y, 500)
+        y = draw_wrapped(f"Packaging: {line.get('packaging_note') or '-'}", 50, y, 500)
+        y = draw_wrapped(f"Extra notes: {line.get('extra_order_note') or '-'}", 50, y, 500)
+        y -= 6
+
     # library selections
+    y = ensure_space(y, 20, "Helvetica-Bold", 12)
     p.setFont("Helvetica-Bold", 12)
     p.drawString(50, y, "Library selections")
     y -= 16
@@ -5814,20 +6312,12 @@ def production_order_sheet_pdf(request, pk):
     y -= 6
 
     # materials + inventory
+    y = ensure_space(y, 24, "Helvetica-Bold", 12)
     p.setFont("Helvetica-Bold", 12)
     p.drawString(50, y, "Materials and inventory")
     y -= 18
 
-    p.setFont("Helvetica", 10)
-    p.drawString(50, y, "Material")
-    p.drawString(230, y, "Category")
-    p.drawString(320, y, "Qty")
-    p.drawString(370, y, "Unit")
-    p.drawString(420, y, "In stock")
-    p.drawString(490, y, "Code/SKU")
-    y -= 12
-    p.line(50, y, width - 50, y)
-    y -= 12
+    y = draw_materials_header(y)
 
     materials = order.materials.select_related("inventory_item")
     if not materials:
@@ -5862,7 +6352,7 @@ def production_order_sheet_pdf(request, pk):
             if y < 80:
                 p.showPage()
                 y = height - 50
-                p.setFont("Helvetica", 10)
+                y = draw_materials_header(y)
 
     p.showPage()
     p.save()
@@ -5919,41 +6409,63 @@ def production_packing_list_pdf(request, pk):
                 y -= 14
         y -= 6
 
-    size_grid, size_total = build_size_grid(order)
+    order_lines = _production_order_lines(order)
     p.setFont("Helvetica-Bold", 12)
     p.drawString(50, y, "Size breakdown")
     y -= 16
     p.setFont("Helvetica", 10)
 
-    if size_grid and size_total:
-        row = "  ".join([f"{item['label']}: {item['qty'] or 0}" for item in size_grid])
-        p.drawString(50, y, row[:110])
-        y -= 14
-        p.drawString(50, y, f"Size total: {size_total}")
-        y -= 14
-    else:
-        p.drawString(50, y, "No size ratio set.")
-        y -= 14
+    for idx, line in enumerate(order_lines, start=1):
+        y = ensure_space(y, 20)
+        p.setFont("Helvetica-Bold", 10)
+        label = line.get("style_name") or "Product"
+        p.drawString(50, y, f"Line {idx}: {label}")
+        y -= 12
+        p.setFont("Helvetica", 10)
+        if line.get("size_total"):
+            row = "  ".join([f"{item['label']}: {item['qty'] or 0}" for item in line.get("size_grid") or []])
+            p.drawString(50, y, row[:110])
+            y -= 14
+            p.drawString(50, y, f"Line total: {line.get('size_total')}")
+            y -= 14
+        else:
+            p.drawString(50, y, "No size ratio set.")
+            y -= 14
+        y -= 4
 
     y -= 6
     p.setFont("Helvetica-Bold", 12)
     p.drawString(50, y, "Packaging notes")
     y -= 16
-    p.setFont("Helvetica", 10)
-    packaging_text = order.packaging_note or "Not set"
-    for line in str(packaging_text).splitlines():
-        p.drawString(50, y, line[:110])
+    for idx, line in enumerate(order_lines, start=1):
+        y = ensure_space(y, 20)
+        p.setFont("Helvetica-Bold", 10)
+        p.drawString(50, y, f"Line {idx}")
         y -= 12
+        p.setFont("Helvetica", 10)
+        packaging_text = line.get("packaging_note") or "Not set"
+        for text_line in str(packaging_text).splitlines() or ["Not set"]:
+            y = ensure_space(y, 12)
+            p.drawString(50, y, text_line[:110])
+            y -= 12
+        y -= 4
 
     y -= 6
     p.setFont("Helvetica-Bold", 12)
     p.drawString(50, y, "Accessories / trims")
     y -= 16
-    p.setFont("Helvetica", 10)
-    accessories_text = order.accessories_note or "Not set"
-    for line in str(accessories_text).splitlines():
-        p.drawString(50, y, line[:110])
+    for idx, line in enumerate(order_lines, start=1):
+        y = ensure_space(y, 20)
+        p.setFont("Helvetica-Bold", 10)
+        p.drawString(50, y, f"Line {idx}")
         y -= 12
+        p.setFont("Helvetica", 10)
+        accessories_text = line.get("accessories_note") or "Not set"
+        for text_line in str(accessories_text).splitlines() or ["Not set"]:
+            y = ensure_space(y, 12)
+            p.drawString(50, y, text_line[:110])
+            y -= 12
+        y -= 4
 
     p.showPage()
     p.save()
@@ -6582,10 +7094,10 @@ def main_dashboard(request):
 
     # Leads
     leads_today = Lead.objects.filter(created_date=today).count()
-    leads_period = Lead.objects.filter(created_date__gte=start_period).count()
+    leads_period = Lead.objects.filter(created_date__range=(start_period, today)).count()
 
     leads_daily_qs = (
-        Lead.objects.filter(created_date__gte=start_period)
+        Lead.objects.filter(created_date__range=(start_period, today))
         .values("created_date")
         .annotate(c=Count("id"))
         .order_by("created_date")
@@ -6600,9 +7112,12 @@ def main_dashboard(request):
         leads_daily_values.append(int(lead_map.get(d, 0)))
 
     # Opportunities
-    opp_period = Opportunity.objects.filter(created_date__gte=start_period).count()
+    opp_period = Opportunity.objects.filter(created_date__range=(start_period, today)).count()
 
-    opp_by_stage_qs = Opportunity.objects.values("stage").annotate(c=Count("id"))
+    opp_stage_base = Opportunity.objects.filter(created_date__range=(start_period, today))
+    if not opp_stage_base.exists():
+        opp_stage_base = Opportunity.objects.all()
+    opp_by_stage_qs = opp_stage_base.values("stage").annotate(c=Count("id"))
     opp_stage_map = {row.get("stage") or "Unknown": int(row.get("c") or 0) for row in opp_by_stage_qs}
     opp_stage_labels = []
     opp_stage_values = []
@@ -6617,7 +7132,7 @@ def main_dashboard(request):
 
     # Opp daily (for Leads vs Opportunities chart)
     opp_daily_qs = (
-        Opportunity.objects.filter(created_date__gte=start_period)
+        Opportunity.objects.filter(created_date__range=(start_period, today))
         .values("created_date")
         .annotate(c=Count("id"))
         .order_by("created_date")
@@ -6629,13 +7144,22 @@ def main_dashboard(request):
         opp_daily_values.append(int(opp_map.get(d, 0)))
 
     # Win vs Loss (safe guess using stage text)
-    won_count = Opportunity.objects.filter(stage__iexact="Closed Won").count()
-    lost_count = Opportunity.objects.filter(stage__iexact="Closed Lost").count()
+    won_count = Opportunity.objects.filter(
+        stage__iexact="Closed Won",
+        updated_at__date__range=(start_period, today),
+    ).count()
+    lost_count = Opportunity.objects.filter(
+        stage__iexact="Closed Lost",
+        updated_at__date__range=(start_period, today),
+    ).count()
     win_loss_labels = ["Won", "Lost"]
     win_loss_values = [int(won_count), int(lost_count)]
 
     # Lead status funnel (show qualification stage)
-    lead_status_qs = Lead.objects.values("lead_status").annotate(c=Count("id"))
+    lead_status_base = Lead.objects.filter(created_date__range=(start_period, today))
+    if not lead_status_base.exists():
+        lead_status_base = Lead.objects.all()
+    lead_status_qs = lead_status_base.values("lead_status").annotate(c=Count("id"))
     lead_status_map = {row.get("lead_status") or "Unknown": int(row.get("c") or 0) for row in lead_status_qs}
     lead_status_labels = []
     lead_status_values = []
@@ -6648,31 +7172,287 @@ def main_dashboard(request):
             lead_status_values.append(int(cnt))
 
     # Accounting net per day (real cash flow line)
-    acc_qs = AccountingEntry.objects.filter(date__gte=start_period).values("date").annotate(
-        in_sum=Sum("amount_cad", filter=Q(direction="IN")),
-        out_sum=Sum("amount_cad", filter=Q(direction="OUT")),
+    cad_to_bdt = _get_latest_cad_to_bdt_rate()
+    if not cad_to_bdt or cad_to_bdt <= 0:
+        cad_to_bdt = None
+
+    def _entry_amount_cad(entry):
+        amt_cad = entry.amount_cad or Decimal("0")
+        if amt_cad != 0:
+            return amt_cad
+        currency = (entry.currency or "").upper().strip()
+        amt_orig = entry.amount_original or Decimal("0")
+        rate_to_cad = getattr(entry, "rate_to_cad", None) or Decimal("0")
+        if currency == "CAD":
+            return amt_orig
+        if rate_to_cad and rate_to_cad > 0:
+            return (amt_orig * rate_to_cad).quantize(Decimal("0.01"))
+        if currency == "BDT" and cad_to_bdt:
+            return (amt_orig / cad_to_bdt).quantize(Decimal("0.01"))
+        return Decimal("0")
+
+    def _entry_amount_bdt(entry):
+        amt_bdt = entry.amount_bdt or Decimal("0")
+        if amt_bdt != 0:
+            return amt_bdt
+        currency = (entry.currency or "").upper().strip()
+        amt_orig = entry.amount_original or Decimal("0")
+        rate_to_bdt = getattr(entry, "rate_to_bdt", None) or Decimal("0")
+        if currency == "BDT":
+            return amt_orig
+        if rate_to_bdt and rate_to_bdt > 0:
+            return (amt_orig * rate_to_bdt).quantize(Decimal("0.01"))
+        if currency == "CAD" and cad_to_bdt:
+            return (amt_orig * cad_to_bdt).quantize(Decimal("0.01"))
+        return Decimal("0")
+
+    def _sum_side(qs, side_code):
+        totals = {
+            "entries": 0,
+            "income": Decimal("0"),
+            "out": Decimal("0"),
+        }
+        for entry in qs.iterator():
+            totals["entries"] += 1
+            direction = (entry.direction or "").upper().strip()
+            if side_code == "CA":
+                amt = _entry_amount_cad(entry)
+            else:
+                amt = _entry_amount_bdt(entry)
+            if direction == "IN":
+                totals["income"] += amt
+            elif direction == "OUT":
+                totals["out"] += amt
+        totals["net"] = totals["income"] - totals["out"]
+        return totals
+
+    acc_only_fields = [
+        "date",
+        "direction",
+        "side",
+        "currency",
+        "main_type",
+        "sub_type",
+        "amount_original",
+        "amount_cad",
+        "amount_bdt",
+        "rate_to_cad",
+        "rate_to_bdt",
+    ]
+
+    acc_map = defaultdict(lambda: Decimal("0"))
+    revenue_map = defaultdict(lambda: Decimal("0"))
+    expense_map = defaultdict(lambda: Decimal("0"))
+    acc_entries_period = 0
+    acc_entries_ca_period = 0
+    acc_entries_bd_period = 0
+
+    acc_income_cad = Decimal("0")
+    acc_out_cad = Decimal("0")
+    acc_income_bdt = Decimal("0")
+    acc_out_bdt = Decimal("0")
+    acc_ca_income_cad = Decimal("0")
+    acc_ca_out_cad = Decimal("0")
+    acc_bd_income_bdt = Decimal("0")
+    acc_bd_out_bdt = Decimal("0")
+    revenue_cad_period = Decimal("0")
+    expense_cad_period = Decimal("0")
+    swing_cad_period = Decimal("0")
+    swing_bdt_period = Decimal("0")
+
+    acc_period = AccountingEntry.objects.filter(date__range=(start_period, today)).only(
+        *acc_only_fields
     )
-    acc_map = {}
-    for row in acc_qs:
-        d = row.get("date")
-        if not d:
-            continue
-        inc = _to_float(row.get("in_sum"))
-        out = _to_float(row.get("out_sum"))
-        acc_map[d] = inc - out
+    for entry in acc_period.iterator():
+        acc_entries_period += 1
+        side = (entry.side or "").upper().strip()
+        direction = (entry.direction or "").upper().strip()
+        main_type = (entry.main_type or "").upper().strip()
+        sub_type = (entry.sub_type or "").strip()
+        is_transfer = main_type == "TRANSFER"
+        is_swing = sub_type.lower() == "swing"
+
+        if side == "CA":
+            acc_entries_ca_period += 1
+        elif side == "BD":
+            acc_entries_bd_period += 1
+
+        amt_cad = _entry_amount_cad(entry)
+        amt_bdt = _entry_amount_bdt(entry)
+
+        if entry.date and not is_transfer:
+            if direction == "IN":
+                acc_map[entry.date] += amt_cad
+                revenue_map[entry.date] += amt_cad
+            elif direction == "OUT":
+                acc_map[entry.date] -= amt_cad
+                expense_map[entry.date] += amt_cad
+
+        if direction == "IN":
+            acc_income_cad += amt_cad
+            acc_income_bdt += amt_bdt
+            if not is_transfer:
+                revenue_cad_period += amt_cad
+            if side == "CA":
+                acc_ca_income_cad += amt_cad
+            elif side == "BD":
+                acc_bd_income_bdt += amt_bdt
+            if is_swing and side == "CA":
+                swing_cad_period += amt_cad
+        elif direction == "OUT":
+            acc_out_cad += amt_cad
+            acc_out_bdt += amt_bdt
+            if not is_transfer:
+                expense_cad_period += amt_cad
+            if side == "CA":
+                acc_ca_out_cad += amt_cad
+            elif side == "BD":
+                acc_bd_out_bdt += amt_bdt
+            if is_swing and side == "BD":
+                swing_bdt_period += amt_bdt
+
+    acc_net_cad = acc_income_cad - acc_out_cad
+    acc_net_bdt = acc_income_bdt - acc_out_bdt
+    acc_ca_net_cad = acc_ca_income_cad - acc_ca_out_cad
+    acc_bd_net_bdt = acc_bd_income_bdt - acc_bd_out_bdt
+    gross_margin_pct_period = Decimal("0")
+    if revenue_cad_period > 0:
+        gross_margin_pct_period = (revenue_cad_period - expense_cad_period) / revenue_cad_period * Decimal("100")
+    net_cash_cad_period = revenue_cad_period - expense_cad_period
+
+    prod_revenue_cad_period = Decimal("0")
+    prod_cost_cad_period = Decimal("0")
+    prod_profit_cad_period = Decimal("0")
+    prod_margin_pct_period = Decimal("0")
+    prod_entries = AccountingEntry.objects.filter(
+        production_order_id__isnull=False,
+        date__range=(start_period, today),
+    ).only(
+        *acc_only_fields
+    )
+    for entry in prod_entries.iterator():
+        side = (entry.side or "").upper().strip()
+        direction = (entry.direction or "").upper().strip()
+        main_type = (entry.main_type or "").upper().strip()
+        amt_cad = _entry_amount_cad(entry)
+        if side == "CA" and direction == "IN":
+            prod_revenue_cad_period += amt_cad
+        if side == "BD" and direction == "OUT" and main_type in ["COGS", "EXPENSE"]:
+            prod_cost_cad_period += amt_cad
 
     cash_daily_values = []
     for i in range(period_days):
         d = start_period + timedelta(days=i)
-        cash_daily_values.append(_to_float(acc_map.get(d, 0)))
+        cash_daily_values.append(_to_float(acc_map.get(d, Decimal("0"))))
+    revenue_daily_values = []
+    expense_daily_values = []
+    for i in range(period_days):
+        d = start_period + timedelta(days=i)
+        revenue_daily_values.append(_to_float(revenue_map.get(d, Decimal("0"))))
+        expense_daily_values.append(_to_float(expense_map.get(d, Decimal("0"))))
 
-    acc_period = AccountingEntry.objects.filter(date__gte=start_period)
-    acc_income_cad = _to_float(acc_period.filter(direction="IN").aggregate(s=Sum("amount_cad"))["s"])
-    acc_out_cad = _to_float(acc_period.filter(direction="OUT").aggregate(s=Sum("amount_cad"))["s"])
-    acc_net_cad = acc_income_cad - acc_out_cad
+    orders_created_period = 0
+    orders_processed_period = 0
+    production_cost_bdt_period = Decimal("0")
+    orders_created_map = {}
+    orders_processed_map = {}
+    if ProductionOrder is not None:
+        try:
+            orders_created_period = ProductionOrder.objects.filter(
+                created_at__date__range=(start_period, today)
+            ).count()
+            orders_created_qs = (
+                ProductionOrder.objects.filter(created_at__date__range=(start_period, today))
+                .annotate(d=TruncDate("created_at"))
+                .values("d")
+                .annotate(c=Count("id"))
+                .order_by("d")
+            )
+            orders_created_map = {
+                row["d"]: int(row["c"]) for row in orders_created_qs if row.get("d")
+            }
+            orders_processed_period = ProductionOrder.objects.filter(
+                status__in=["done", "closed_won"],
+                updated_at__date__range=(start_period, today),
+            ).count()
+            orders_processed_qs = (
+                ProductionOrder.objects.filter(
+                    status__in=["done", "closed_won"],
+                    updated_at__date__range=(start_period, today),
+                )
+                .annotate(d=TruncDate("updated_at"))
+                .values("d")
+                .annotate(c=Count("id"))
+                .order_by("d")
+            )
+            orders_processed_map = {
+                row["d"]: int(row["c"]) for row in orders_processed_qs if row.get("d")
+            }
+            cost_qs = ProductionOrder.objects.filter(
+                status__in=["done", "closed_won"],
+                updated_at__date__range=(start_period, today),
+            ).values(
+                "actual_total_cost_bdt",
+                "production_total_cost_bdt",
+                "production_sewing_cost_bdt",
+            )
+            for row in cost_qs.iterator():
+                cost = (
+                    row.get("actual_total_cost_bdt")
+                    or row.get("production_total_cost_bdt")
+                    or row.get("production_sewing_cost_bdt")
+                    or Decimal("0")
+                )
+                if cost:
+                    production_cost_bdt_period += cost
+        except Exception:
+            pass
+
+    orders_created_daily_values = []
+    orders_processed_daily_values = []
+    for i in range(period_days):
+        d = start_period + timedelta(days=i)
+        orders_created_daily_values.append(int(orders_created_map.get(d, 0)))
+        orders_processed_daily_values.append(int(orders_processed_map.get(d, 0)))
+
+    if prod_cost_cad_period == 0 and production_cost_bdt_period and cad_to_bdt:
+        prod_cost_cad_period = (production_cost_bdt_period / cad_to_bdt).quantize(Decimal("0.01"))
+    prod_profit_cad_period = prod_revenue_cad_period - prod_cost_cad_period
+    if prod_revenue_cad_period > 0:
+        prod_margin_pct_period = (prod_profit_cad_period / prod_revenue_cad_period) * Decimal("100")
+
+    month_start = today.replace(day=1)
+    acc_ca_month = _sum_side(
+        AccountingEntry.objects.filter(side="CA", date__range=(month_start, today)).only(
+            *acc_only_fields
+        ),
+        "CA",
+    )
+    acc_ca_all = _sum_side(
+        AccountingEntry.objects.filter(side="CA").only(*acc_only_fields),
+        "CA",
+    )
+    acc_bd_month = _sum_side(
+        AccountingEntry.objects.filter(side="BD", date__range=(month_start, today)).only(
+            *acc_only_fields
+        ),
+        "BD",
+    )
+    acc_bd_all = _sum_side(
+        AccountingEntry.objects.filter(side="BD").only(*acc_only_fields),
+        "BD",
+    )
 
     # Payroll
-    pm = BDStaffMonth.objects.filter(year=today.year, month=today.month)
+    payroll_year = today.year
+    payroll_month = today.month
+    pm = BDStaffMonth.objects.filter(year=payroll_year, month=payroll_month)
+    if not pm.exists():
+        latest_pm = BDStaffMonth.objects.order_by("-year", "-month").first()
+        if latest_pm:
+            payroll_year = latest_pm.year
+            payroll_month = latest_pm.month
+            pm = BDStaffMonth.objects.filter(year=payroll_year, month=payroll_month)
     payroll_total = _to_float(pm.aggregate(s=Sum("final_pay_bdt"))["s"])
     payroll_ot = _to_float(pm.aggregate(s=Sum("overtime_total_bdt"))["s"])
     payroll_bonus = _to_float(pm.aggregate(s=Sum("bonus_bdt"))["s"])
@@ -6681,14 +7461,15 @@ def main_dashboard(request):
     payroll_unpaid = pm.filter(is_paid=False).count()
 
     # Production status (optional)
-    prod_labels = ["On time", "Delayed", "Remake"]
-    prod_counts = [0, 0, 0]
+    prod_labels = ["Planning", "In progress", "On hold", "Done"]
+    prod_counts = [0, 0, 0, 0]
     if ProductionOrder is not None:
         try:
-            on_time = ProductionOrder.objects.filter(Q(status__icontains="on time") | Q(status__icontains="ontime")).count()
-            delayed = ProductionOrder.objects.filter(Q(status__icontains="delay")).count()
-            remake = ProductionOrder.objects.filter(Q(status__icontains="remake") | Q(status__icontains="redo")).count()
-            prod_counts = [int(on_time), int(delayed), int(remake)]
+            planning = ProductionOrder.objects.filter(status="planning").count()
+            in_progress = ProductionOrder.objects.filter(status="in_progress").count()
+            hold = ProductionOrder.objects.filter(status="hold").count()
+            done = ProductionOrder.objects.filter(status__in=["done", "closed_won"]).count()
+            prod_counts = [int(planning), int(in_progress), int(hold), int(done)]
         except Exception:
             pass
 
@@ -6741,7 +7522,7 @@ def main_dashboard(request):
         conversion_rate = round((opp_period / leads_period) * 100, 1)
 
     ai_notes = [
-        f"Lead → Opportunity conversion: {conversion_rate}%",
+        f"Lead -> Opportunity conversion: {conversion_rate}%",
         f"Open opportunities: {open_opps}",
         f"Overdue follow-ups: {overdue_followups}",
         f"Top lead source: {lead_source_labels[0] if lead_source_labels else 'N/A'}",
@@ -6752,6 +7533,10 @@ def main_dashboard(request):
         "leads_values": leads_daily_values,
         "opp_daily_values": opp_daily_values,
         "cash_daily_values": cash_daily_values,
+        "revenue_daily_values": revenue_daily_values,
+        "expense_daily_values": expense_daily_values,
+        "orders_created_values": orders_created_daily_values,
+        "orders_processed_values": orders_processed_daily_values,
         "opp_stage_labels": opp_stage_labels,
         "opp_stage_values": opp_stage_values,
         "lead_status_labels": lead_status_labels,
@@ -6785,6 +7570,47 @@ def main_dashboard(request):
         "acc_income_cad_period": acc_income_cad,
         "acc_out_cad_period": acc_out_cad,
         "acc_net_cad_period": acc_net_cad,
+        "acc_income_bdt_period": acc_income_bdt,
+        "acc_out_bdt_period": acc_out_bdt,
+        "acc_net_bdt_period": acc_net_bdt,
+        "acc_ca_income_cad_period": acc_ca_income_cad,
+        "acc_ca_out_cad_period": acc_ca_out_cad,
+        "acc_ca_net_cad_period": acc_ca_net_cad,
+        "acc_bd_income_bdt_period": acc_bd_income_bdt,
+        "acc_bd_out_bdt_period": acc_bd_out_bdt,
+        "acc_bd_net_bdt_period": acc_bd_net_bdt,
+        "acc_entries_period": acc_entries_period,
+        "acc_entries_ca_period": acc_entries_ca_period,
+        "acc_entries_bd_period": acc_entries_bd_period,
+        "acc_ca_entries_month": acc_ca_month["entries"],
+        "acc_ca_entries_all": acc_ca_all["entries"],
+        "acc_ca_income_cad_month": acc_ca_month["income"],
+        "acc_ca_out_cad_month": acc_ca_month["out"],
+        "acc_ca_net_cad_month": acc_ca_month["net"],
+        "acc_ca_income_cad_all": acc_ca_all["income"],
+        "acc_ca_out_cad_all": acc_ca_all["out"],
+        "acc_ca_net_cad_all": acc_ca_all["net"],
+        "acc_bd_entries_month": acc_bd_month["entries"],
+        "acc_bd_entries_all": acc_bd_all["entries"],
+        "acc_bd_income_bdt_month": acc_bd_month["income"],
+        "acc_bd_out_bdt_month": acc_bd_month["out"],
+        "acc_bd_net_bdt_month": acc_bd_month["net"],
+        "acc_bd_income_bdt_all": acc_bd_all["income"],
+        "acc_bd_out_bdt_all": acc_bd_all["out"],
+        "acc_bd_net_bdt_all": acc_bd_all["net"],
+        "revenue_cad_period": revenue_cad_period,
+        "expense_cad_period": expense_cad_period,
+        "net_cash_cad_period": net_cash_cad_period,
+        "swing_cad_period": swing_cad_period,
+        "swing_bdt_period": swing_bdt_period,
+        "gross_margin_pct_period": gross_margin_pct_period,
+        "orders_created_period": orders_created_period,
+        "orders_processed_period": orders_processed_period,
+        "production_cost_bdt_period": production_cost_bdt_period,
+        "prod_revenue_cad_period": prod_revenue_cad_period,
+        "prod_cost_cad_period": prod_cost_cad_period,
+        "prod_profit_cad_period": prod_profit_cad_period,
+        "prod_margin_pct_period": prod_margin_pct_period,
 
         "payroll_total": payroll_total,
         "payroll_ot": payroll_ot,
@@ -6792,8 +7618,8 @@ def main_dashboard(request):
         "payroll_deduction": payroll_deduction,
         "payroll_paid": payroll_paid,
         "payroll_unpaid": payroll_unpaid,
-        "payroll_year": today.year,
-        "payroll_month": today.month,
+        "payroll_year": payroll_year,
+        "payroll_month": payroll_month,
         "period_days": period_days,
         "period_label": f"Last {period_days} days",
         "ai_notes": ai_notes,
@@ -6964,7 +7790,39 @@ def add_opportunity(request):
 
 @login_required
 def library_home(request):
-    return render(request, "crm/library_home.html")
+    if request.method == "POST":
+        action = (request.POST.get("action") or "").strip()
+
+        if action == "upload_attachment":
+            form = LibraryAttachmentForm(request.POST, request.FILES)
+            if form.is_valid():
+                attachment = form.save(commit=False)
+                attachment.uploaded_by = request.user if request.user.is_authenticated else None
+                attachment.save()
+                messages.success(request, "Library document uploaded.")
+            else:
+                messages.error(request, "Please fill the required fields and choose a file.")
+            return redirect("library_home")
+
+        if action == "delete_attachment":
+            attach_id = (request.POST.get("attachment_id") or "").strip()
+            if attach_id:
+                LibraryAttachment.objects.filter(pk=attach_id).delete()
+                messages.success(request, "Library document removed.")
+            return redirect("library_home")
+
+    attachments = LibraryAttachment.objects.all().order_by("-uploaded_at", "-id")
+
+    context = {
+        "product_count": Product.objects.count(),
+        "fabric_count": Fabric.objects.count(),
+        "accessory_count": Accessory.objects.count(),
+        "trim_count": Trim.objects.count(),
+        "thread_count": ThreadOption.objects.count(),
+        "attachments": attachments[:50],
+        "attachment_form": LibraryAttachmentForm(),
+    }
+    return render(request, "crm/library_home.html", context)
 
 
 from django.shortcuts import render

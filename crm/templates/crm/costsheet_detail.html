@@ -1,0 +1,555 @@
+{% extends "crm/base.html" %}
+{% block content %}
+
+<style>
+  .costing-detail {
+    max-width: 1300px;
+    margin: 18px auto 40px auto;
+    padding: 0 10px;
+    color: #e5e7eb;
+  }
+
+  .top-card {
+    background: #0b1020;
+    border: 1px solid #1f2937;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+
+  .top-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .title {
+    font-size: 20px;
+    font-weight: 800;
+  }
+
+  .sub {
+    font-size: 12px;
+    color: #9ca3af;
+    margin-top: 2px;
+  }
+
+  .breadcrumb {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    font-size: 12px;
+    color: #9ca3af;
+    margin-bottom: 6px;
+  }
+
+  .breadcrumb a {
+    color: #fde68a;
+    text-decoration: none;
+  }
+
+  .breadcrumb-sep {
+    color: #475569;
+  }
+
+  .pill {
+    display: inline-flex;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid #374151;
+    font-size: 11px;
+  }
+
+  .pill-draft {
+    border-color: #38bdf8;
+    color: #bae6fd;
+  }
+
+  .pill-approved {
+    border-color: #facc15;
+    color: #fde68a;
+  }
+
+  .btnx {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid #374151;
+    text-decoration: none;
+    font-size: 12px;
+    color: #e5e7eb;
+    background: rgba(15,23,42,0.7);
+  }
+
+  .btnx-primary {
+    background: linear-gradient(135deg, #facc15, #f97316);
+    color: #111827;
+    border-color: #fbbf24;
+    font-weight: 700;
+  }
+
+  .btnx-soft {
+    background: rgba(59,130,246,0.15);
+    border-color: rgba(59,130,246,0.35);
+    color: #bfdbfe;
+  }
+
+  .section-title {
+    margin: 12px 0 6px 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fde68a;
+  }
+
+  .muted {
+    color: #9ca3af;
+    font-size: 12px;
+  }
+
+  .header-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .meta-card {
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid #1f2937;
+    border-radius: 10px;
+    padding: 8px;
+  }
+
+  .meta-label {
+    font-size: 11px;
+    color: #94a3b8;
+  }
+
+  .meta-value {
+    font-size: 13px;
+    font-weight: 700;
+    color: #e5e7eb;
+    margin-top: 2px;
+  }
+
+  .summary-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 8px;
+  }
+
+  .summary-cell {
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid #1f2937;
+    border-radius: 10px;
+    padding: 8px;
+  }
+
+  .summary-label {
+    font-size: 11px;
+    color: #94a3b8;
+  }
+
+  .summary-value {
+    font-size: 13px;
+    font-weight: 700;
+    margin-top: 4px;
+  }
+
+  .summary-output {
+    background: rgba(250, 204, 21, 0.08);
+    border-color: rgba(250, 204, 21, 0.25);
+  }
+
+  .input-wrap label {
+    font-size: 11px;
+    color: #fef3c7;
+    font-weight: 600;
+  }
+
+  input, select, textarea {
+    width: 100%;
+    background: #020617;
+    color: #e5e7eb;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+
+  .help-card {
+    border-style: dashed;
+  }
+
+  .help-card summary {
+    cursor: pointer;
+    font-weight: 700;
+    color: #fde68a;
+    margin-bottom: 6px;
+  }
+
+  .help-list {
+    margin: 0;
+    padding-left: 16px;
+    font-size: 12px;
+    color: #e5e7eb;
+  }
+
+  .tips {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #9ca3af;
+  }
+
+  .quote-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 8px;
+  }
+</style>
+
+<div class="costing-detail">
+  <div class="top-card">
+    <div class="top-row">
+      <div>
+        <div class="breadcrumb">
+          <a href="{% url 'opportunities_list' %}">Opportunities</a>
+          <span class="breadcrumb-sep">/</span>
+          <a href="{% url 'opportunity_detail' cost_sheet.opportunity.pk %}">{{ cost_sheet.opportunity.opportunity_id }}</a>
+          <span class="breadcrumb-sep">/</span>
+          <span>Costing</span>
+        </div>
+        <div class="title">Simplified Costing Sheet</div>
+        <div class="sub">
+          {{ cost_sheet.customer.account_brand|default:"-" }} · {{ cost_sheet.style_name|default:cost_sheet.style_code|default:"-" }}
+        </div>
+        <div class="sub">
+          Updated {{ cost_sheet.updated_at|date:"Y-m-d H:i" }} · Currency BDT
+        </div>
+        <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">
+          <span class="pill pill-{{ cost_sheet.status }}">{{ cost_sheet.get_status_display }}</span>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:6px; flex-wrap:wrap;">
+        <a href="{% url 'opportunity_detail' cost_sheet.opportunity.pk %}" class="btnx btnx-soft">Open opportunity</a>
+        <a href="{% url 'cost_sheet_list' %}" class="btnx">All cost sheets</a>
+        <a href="{% url 'cost_sheet_export_pdf' cost_sheet.pk %}" class="btnx">Export PDF</a>
+        <a href="{% url 'cost_sheet_export_excel' cost_sheet.pk %}" class="btnx">Export Excel</a>
+        {% if cost_sheet.status == "draft" %}
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="approve">
+            <button type="submit" class="btnx btnx-primary">Approve</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="header-grid">
+      <div class="meta-card">
+        <div class="meta-label">Opportunity</div>
+        <div class="meta-value">{{ cost_sheet.opportunity.opportunity_id }}</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">Customer</div>
+        <div class="meta-value">{{ cost_sheet.customer.account_brand|default:"-" }}</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">Style</div>
+        <div class="meta-value">{{ cost_sheet.style_name|default:"-" }} {{ cost_sheet.style_code|default:"" }}</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">Product type</div>
+        <div class="meta-value">{{ cost_sheet.get_product_type_display }}</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">Order quantity</div>
+        <div class="meta-value">{{ cost_sheet.quantity }}</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">Factory location</div>
+        <div class="meta-value">{{ cost_sheet.get_factory_location_display }}</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">Date</div>
+        <div class="meta-value">{{ cost_sheet.created_at|date:"Y-m-d" }}</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">Status</div>
+        <div class="meta-value">{{ cost_sheet.get_status_display }}</div>
+      </div>
+    </div>
+  </div>
+
+  <details class="top-card help-card" open>
+    <summary>How to use this costing sheet</summary>
+    <ol class="help-list">
+      <li>Enter order quantity.</li>
+      <li>Enter fabric cost per piece and wastage percent.</li>
+      <li>Enter trims, labor, overhead, process, packaging, freight, testing, other.</li>
+      <li>Check total cost per piece and total order cost.</li>
+      <li>Enter quote price per piece to see margin.</li>
+      <li>Export PDF or Excel.</li>
+      <li>Files will appear inside the Opportunity.</li>
+    </ol>
+    <div class="tips">
+      Tips: Always include fabric wastage · Do not forget packaging and freight · Use actual production data later to compare.
+    </div>
+  </details>
+
+  <form method="post" id="costing-form" class="top-card">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="save_sheet">
+
+    <div class="section-title">Header info</div>
+    <div class="summary-row">
+      <div class="summary-cell input-wrap">
+        <label>Opportunity</label>
+        {{ form.opportunity }}
+      </div>
+      <div class="summary-cell input-wrap">
+        <label>Customer</label>
+        {{ form.customer }}
+      </div>
+      <div class="summary-cell input-wrap">
+        <label>Style name</label>
+        {{ form.style_name }}
+      </div>
+      <div class="summary-cell input-wrap">
+        <label>Style code</label>
+        {{ form.style_code }}
+      </div>
+      <div class="summary-cell input-wrap">
+        <label>Product type</label>
+        {{ form.product_type }}
+      </div>
+      <div class="summary-cell input-wrap">
+        <label>Order quantity</label>
+        {{ form.quantity }}
+      </div>
+      <div class="summary-cell input-wrap">
+        <label>Factory location</label>
+        {{ form.factory_location }}
+      </div>
+    </div>
+
+    <div class="section-title">Summary line (BDT per piece)</div>
+    <div class="summary-row">
+      <div class="summary-cell input-wrap">
+        <label>Fabric</label>
+        {{ form.fabric_cost_per_piece }}
+      </div>
+      <div class="summary-cell input-wrap">
+        <label>Wastage %</label>
+        {{ form.fabric_wastage_percent }}
+      </div>
+      <div class="summary-cell input-wrap">
+        <label>Trims</label>
+        {{ form.trim_cost_per_piece }}
+      </div>
+      <div class="summary-cell input-wrap">
+        <label>Labor</label>
+        {{ form.labor_cost_per_piece }}
+      </div>
+      <div class="summary-cell input-wrap">
+        <label>Overhead</label>
+        {{ form.overhead_cost_per_piece }}
+      </div>
+      <div class="summary-cell input-wrap">
+        <label>Process & wash</label>
+        {{ form.process_cost_per_piece }}
+      </div>
+      <div class="summary-cell input-wrap">
+        <label>Packaging</label>
+        {{ form.packaging_cost_per_piece }}
+      </div>
+      <div class="summary-cell input-wrap">
+        <label>Freight & export</label>
+        {{ form.freight_cost_per_piece }}
+      </div>
+      <div class="summary-cell input-wrap">
+        <label>Testing & compliance</label>
+        {{ form.testing_cost_per_piece }}
+      </div>
+      <div class="summary-cell input-wrap">
+        <label>Other</label>
+        {{ form.other_cost_per_piece }}
+      </div>
+      <div class="summary-cell summary-output">
+        <div class="summary-label">Total cost / pc (BDT)</div>
+        <div class="summary-value" id="js-total-cost">{{ calc.display.total_cost_per_piece }}</div>
+      </div>
+      <div class="summary-cell summary-output">
+        <div class="summary-label">Total order cost (BDT)</div>
+        <div class="summary-value" id="js-total-order">{{ calc.display.total_order_cost }}</div>
+      </div>
+      <div class="summary-cell summary-output">
+        <div class="summary-label">Fabric effective (BDT)</div>
+        <div class="summary-value" id="js-fabric-effective">{{ calc.display.fabric_effective_cost_per_piece }}</div>
+      </div>
+    </div>
+
+    <div class="section-title">Quote and margin</div>
+    <div class="quote-grid">
+      <div class="summary-cell input-wrap">
+        <label>Quote price per piece (BDT)</label>
+        {{ form.quote_price_per_piece }}
+      </div>
+      <div class="summary-cell summary-output">
+        <div class="summary-label">Profit per piece (BDT)</div>
+        <div class="summary-value" id="js-profit">{{ calc.display.profit_per_piece }}</div>
+      </div>
+      <div class="summary-cell summary-output">
+        <div class="summary-label">Margin %</div>
+        <div class="summary-value" id="js-margin">{{ calc.display.margin_percent }}</div>
+      </div>
+    </div>
+
+    <div class="section-title">Notes</div>
+    <div>
+      {{ form.notes }}
+    </div>
+
+    <div style="margin-top:12px; display:flex; gap:8px;">
+      <button type="submit" class="btnx btnx-primary">Save costing</button>
+      <span class="muted">Currency is fixed to BDT.</span>
+    </div>
+  </form>
+
+  <div class="top-card">
+    <div class="section-title">Documents</div>
+    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;">
+      <a href="{% url 'cost_sheet_export_pdf' cost_sheet.pk %}" class="btnx">Export PDF</a>
+      <a href="{% url 'cost_sheet_export_excel' cost_sheet.pk %}" class="btnx">Export Excel</a>
+    </div>
+
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="upload_document">
+      <div class="summary-row">
+        <div class="summary-cell input-wrap">
+          <label>File</label>
+          {{ document_form.file }}
+        </div>
+        <div class="summary-cell input-wrap">
+          <label>Type</label>
+          {{ document_form.doc_type }}
+        </div>
+      </div>
+      <button type="submit" class="btnx btnx-primary" style="margin-top:10px;">Upload</button>
+    </form>
+
+    {% if documents %}
+      <table style="width:100%; margin-top:10px; font-size:12px;">
+        <thead>
+          <tr>
+            <th style="text-align:left; color:#fef3c7; font-size:11px; text-transform:uppercase;">File</th>
+            <th style="text-align:left; color:#fef3c7; font-size:11px; text-transform:uppercase;">Type</th>
+            <th style="text-align:left; color:#fef3c7; font-size:11px; text-transform:uppercase;">Uploaded</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for doc in documents %}
+            <tr>
+              <td><a class="btnx" href="{{ doc.file.url }}" target="_blank">{{ doc.original_name|default:doc.file.name }}</a></td>
+              <td>{{ doc.get_doc_type_display }}</td>
+              <td>{{ doc.uploaded_at|date:"Y-m-d H:i" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="muted" style="margin-top:8px;">No documents yet.</div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  (function () {
+    const fields = [
+      "id_fabric_cost_per_piece",
+      "id_fabric_wastage_percent",
+      "id_trim_cost_per_piece",
+      "id_labor_cost_per_piece",
+      "id_overhead_cost_per_piece",
+      "id_process_cost_per_piece",
+      "id_packaging_cost_per_piece",
+      "id_freight_cost_per_piece",
+      "id_testing_cost_per_piece",
+      "id_other_cost_per_piece",
+      "id_quantity",
+      "id_quote_price_per_piece",
+    ];
+
+    function num(id) {
+      const el = document.getElementById(id);
+      if (!el) {
+        return 0;
+      }
+      const val = parseFloat(el.value);
+      return Number.isFinite(val) ? val : 0;
+    }
+
+    function round2(value) {
+      return (Math.round(value * 100) / 100).toFixed(2);
+    }
+
+    function recalc() {
+      const fabric = num("id_fabric_cost_per_piece");
+      const wastage = num("id_fabric_wastage_percent");
+      const trim = num("id_trim_cost_per_piece");
+      const labor = num("id_labor_cost_per_piece");
+      const overhead = num("id_overhead_cost_per_piece");
+      const process = num("id_process_cost_per_piece");
+      const packaging = num("id_packaging_cost_per_piece");
+      const freight = num("id_freight_cost_per_piece");
+      const testing = num("id_testing_cost_per_piece");
+      const other = num("id_other_cost_per_piece");
+      const qty = num("id_quantity");
+      const quote = num("id_quote_price_per_piece");
+
+      const fabricEffective = fabric * (1 + (wastage / 100));
+      const totalCost = fabricEffective + trim + labor + overhead + process + packaging + freight + testing + other;
+      const totalOrder = totalCost * qty;
+      const profit = quote - totalCost;
+      const margin = quote ? (profit / quote) * 100 : 0;
+
+      const totalEl = document.getElementById("js-total-cost");
+      const orderEl = document.getElementById("js-total-order");
+      const profitEl = document.getElementById("js-profit");
+      const marginEl = document.getElementById("js-margin");
+      const fabricEl = document.getElementById("js-fabric-effective");
+
+      if (totalEl) {
+        totalEl.textContent = round2(totalCost);
+      }
+      if (orderEl) {
+        orderEl.textContent = round2(totalOrder);
+      }
+      if (profitEl) {
+        profitEl.textContent = round2(profit);
+      }
+      if (marginEl) {
+        marginEl.textContent = round2(margin);
+      }
+      if (fabricEl) {
+        fabricEl.textContent = round2(fabricEffective);
+      }
+    }
+
+    fields.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener("input", recalc);
+      }
+    });
+
+    recalc();
+  })();
+</script>
+
+{% endblock %}

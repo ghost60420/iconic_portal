@@ -1,0 +1,141 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+{% include "marketing/_style.html" %}
+
+<div class="mk-container">
+  <div class="mk-header">
+    <div>
+      <div class="mk-title">{{ platform_label }} overview</div>
+      <div class="mk-sub">Accounts, audience, and performance summary.</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_dashboard' %}">Dashboard</a>
+      <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_content' %}?platform={{ platform }}">Content library</a>
+    </div>
+  </div>
+
+  <div class="mk-grid">
+    <div class="mk-card" style="grid-column: span 6;">
+      <div class="mk-section-title">Account summary (30d)</div>
+      <div class="d-flex flex-wrap gap-3">
+        <div>
+          <div class="mk-label">Followers total</div>
+          <div class="mk-stat">{{ account_totals.followers_total|default:0 }}</div>
+        </div>
+        <div>
+          <div class="mk-label">Followers change</div>
+          <div class="mk-stat">{{ account_totals.followers_change|default:0 }}</div>
+        </div>
+        <div>
+          <div class="mk-label">Impressions</div>
+          <div class="mk-stat">{{ account_totals.impressions|default:0 }}</div>
+        </div>
+        <div>
+          <div class="mk-label">Reach</div>
+          <div class="mk-stat">{{ account_totals.reach|default:0 }}</div>
+        </div>
+        <div>
+          <div class="mk-label">Views</div>
+          <div class="mk-stat">{{ account_totals.views|default:0 }}</div>
+        </div>
+        <div>
+          <div class="mk-label">Clicks</div>
+          <div class="mk-stat">{{ account_totals.clicks|default:0 }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mk-card" style="grid-column: span 6;">
+      <div class="mk-section-title">Best posting windows</div>
+      <div class="mk-label">Top days</div>
+      <div class="d-flex gap-2 flex-wrap" style="margin-bottom:10px;">
+        {% for day, score in best_days %}
+          <span class="mk-pill">{{ day }}</span>
+        {% empty %}
+          <span class="mk-muted">No data yet.</span>
+        {% endfor %}
+      </div>
+      <div class="mk-label">Top hours</div>
+      <div class="d-flex gap-2 flex-wrap">
+        {% for hour, score in best_hours %}
+          <span class="mk-pill">{{ hour }}</span>
+        {% empty %}
+          <span class="mk-muted">No data yet.</span>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="mk-card" style="grid-column: span 12;">
+      <div class="mk-section-title">Audience snapshot</div>
+      <div class="mk-grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
+        {% for row in audience_rows %}
+          <div class="mk-card" style="padding:12px;">
+            <div class="mk-label">{{ row.account.display_name|default:row.account.external_account_id }}</div>
+            {% if row.snapshot %}
+              <div class="mk-sub">Latest: {{ row.snapshot.date }}</div>
+              <div class="mk-muted" style="font-size:12px; margin-top:8px;">Countries: {{ row.snapshot.country_json }}</div>
+              <div class="mk-muted" style="font-size:12px;">Gender/Age: {{ row.snapshot.gender_age_json }}</div>
+            {% else %}
+              <div class="mk-muted">No audience data yet.</div>
+            {% endif %}
+          </div>
+        {% empty %}
+          <div class="mk-muted">No accounts found.</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="mk-card" style="grid-column: span 12;">
+      <div class="mk-section-title">Top content</div>
+      <form method="get" class="mk-toolbar mk-form" style="margin-bottom:12px;">
+        <select class="mk-input" name="content_type">
+          <option value="">All types</option>
+          {% for key, label in content_type_choices %}
+            <option value="{{ key }}" {% if content_type == key %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <input class="mk-input" type="date" name="start" value="{{ start_date|date:'Y-m-d' }}">
+        <input class="mk-input" type="date" name="end" value="{{ end_date|date:'Y-m-d' }}">
+        <select class="mk-input" name="sort">
+          <option value="engagement" {% if sort_by == 'engagement' %}selected{% endif %}>Engagement rate</option>
+          <option value="views" {% if sort_by == 'views' %}selected{% endif %}>Views</option>
+          <option value="clicks" {% if sort_by == 'clicks' %}selected{% endif %}>Clicks</option>
+          <option value="impressions" {% if sort_by == 'impressions' %}selected{% endif %}>Impressions</option>
+        </select>
+        <button class="btn btn-outline-light mk-btn" type="submit">Filter</button>
+      </form>
+      <div class="mk-table">
+        <table class="table table-dark table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Content</th>
+              <th>Type</th>
+              <th>Engagement</th>
+              <th>Views</th>
+              <th>Clicks</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+              <tr>
+                <td>
+                  <a href="{% url 'marketing_content_detail' row.content.id %}" style="color:#f8fafc; font-weight:700;">
+                    {{ row.content.title|default:row.content.external_content_id }}
+                  </a>
+                </td>
+                <td>{{ row.content.content_type }}</td>
+                <td>{{ row.engagement_rate|floatformat:2 }}%</td>
+                <td>{{ row.views|default:0 }}</td>
+                <td>{{ row.clicks|default:0 }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="5" class="mk-muted">No content yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

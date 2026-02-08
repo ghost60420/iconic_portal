@@ -10,6 +10,9 @@ urlpatterns = [
     # login logout
     path("accounts/", include("django.contrib.auth.urls")),
 
+    path("marketing/", include("marketing.urls")),
+    path("whatsapp/", include("whatsapp.urls")),
+
     # your crm app
     path("", include("crm.urls")),
 ]

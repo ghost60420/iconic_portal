@@ -1,0 +1,54 @@
+{% extends "crm/base.html" %}
+{% block content %}
+{% include "marketing/_style.html" %}
+
+<div class="mk-container">
+  <div class="mk-header">
+    <div>
+      <div class="mk-title">Campaigns & UTM Tracking</div>
+      <div class="mk-sub">Create campaigns and track leads.</div>
+    </div>
+  </div>
+
+  <div class="mk-grid">
+    <div class="mk-card" style="grid-column: span 4;">
+      <div class="mk-section-title">Create Campaign</div>
+      <form method="post" class="mk-form">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button class="btn btn-warning mk-btn" type="submit">Save Campaign</button>
+      </form>
+    </div>
+
+    <div class="mk-card" style="grid-column: span 8;">
+      <div class="mk-section-title">Campaign List</div>
+      <div class="mk-table table-responsive">
+        <table class="table table-dark table-hover align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Goal</th>
+              <th>Dates</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in campaigns %}
+              <tr>
+                <td><a href="{% url 'marketing_campaign_detail' c.id %}">{{ c.name }}</a></td>
+                <td>{{ c.get_goal_display }}</td>
+                <td>{{ c.start_date }} -> {{ c.end_date }}</td>
+                <td>{% if c.is_active %}<span class="mk-badge">Active</span>{% else %}<span class="mk-badge">Paused</span>{% endif %}</td>
+                <td class="text-end"><a class="btn btn-sm btn-outline-light" href="{% url 'marketing_campaign_detail' c.id %}">Open</a></td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="5" class="text-muted">No campaigns yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

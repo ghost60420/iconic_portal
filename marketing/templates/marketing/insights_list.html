@@ -1,0 +1,92 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+{% include "marketing/_style.html" %}
+
+<div class="mk-container">
+  <div class="mk-header">
+    <div>
+      <div class="mk-title">Insights</div>
+      <div class="mk-sub">Action list from performance and audience signals.</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_dashboard' %}">Dashboard</a>
+      <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_workflow' %}">Weekly workflow</a>
+    </div>
+  </div>
+
+  <div class="mk-card" style="margin-bottom:16px;">
+    <form method="get" class="mk-toolbar mk-form">
+      <select class="mk-input" name="platform">
+        <option value="">All platforms</option>
+        {% for key, label in platform_choices %}
+          <option value="{{ key }}" {% if platform == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <select class="mk-input" name="status">
+        <option value="">Any status</option>
+        <option value="open" {% if status == "open" %}selected{% endif %}>Open</option>
+        <option value="done" {% if status == "done" %}selected{% endif %}>Done</option>
+        <option value="snoozed" {% if status == "snoozed" %}selected{% endif %}>Snoozed</option>
+      </select>
+      <input class="mk-input" name="priority" value="{{ priority }}" placeholder="Min priority">
+      <button class="btn btn-outline-light mk-btn" type="submit">Filter</button>
+    </form>
+  </div>
+
+  <div class="mk-grid">
+    {% for i in insights %}
+      <div class="mk-card" style="grid-column: span 6;">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <div class="d-flex gap-2 flex-wrap" style="margin-bottom:6px;">
+              <span class="mk-pill">{{ i.source }}</span>
+              {% if i.platform %}<span class="mk-pill">{{ i.platform }}</span>{% endif %}
+            </div>
+            <div class="mk-section-title">{{ i.title }}</div>
+            <div class="mk-muted">{{ i.reason }}</div>
+            <div style="margin-top:6px; color:#e2e8f0;">{{ i.recommended_action }}</div>
+            {% if i.note %}
+              <div class="mk-muted" style="margin-top:6px;">Note: {{ i.note }}</div>
+            {% endif %}
+          </div>
+          <span class="mk-pill">{{ i.status }}</span>
+        </div>
+
+        {% if can_edit %}
+          <div class="d-flex gap-2 flex-wrap" style="margin-top:10px;">
+            <form method="post">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="done" />
+              <input type="hidden" name="insight_id" value="{{ i.id }}" />
+              <button class="btn btn-sm btn-outline-light" type="submit">Done</button>
+            </form>
+            <form method="post">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="snoozed" />
+              <input type="hidden" name="insight_id" value="{{ i.id }}" />
+              <button class="btn btn-sm btn-outline-light" type="submit">Snooze</button>
+            </form>
+            <form method="post">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="open" />
+              <input type="hidden" name="insight_id" value="{{ i.id }}" />
+              <button class="btn btn-sm btn-outline-light" type="submit">Reopen</button>
+            </form>
+          </div>
+
+          <form method="post" style="margin-top:10px;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="note" />
+            <input type="hidden" name="insight_id" value="{{ i.id }}" />
+            <textarea class="form-control" name="note" rows="2" placeholder="Add note..."></textarea>
+            <button class="btn btn-sm btn-outline-light" type="submit" style="margin-top:6px;">Save note</button>
+          </form>
+        {% endif %}
+      </div>
+    {% empty %}
+      <div class="mk-muted">No insights found.</div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

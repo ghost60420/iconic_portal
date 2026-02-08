@@ -1,0 +1,125 @@
+{% extends "crm/base.html" %}
+{% block content %}
+<style>
+  .wrap{ max-width:1100px; margin:0 auto; color:#f9fafb; }
+  .cardx{ background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)); border:1px solid #334155; border-radius:18px; box-shadow: 0 18px 40px rgba(0,0,0,0.55); overflow:hidden; margin-top:12px; }
+  .pad{ padding:14px; }
+  .msg{ padding:10px 12px; border-radius:14px; border:1px solid rgba(148,163,184,0.22); margin-bottom:10px; }
+  .in{ background: rgba(255,255,255,0.03); }
+  .out{ background: rgba(250,204,21,0.08); border-color:#facc15; }
+  .input, textarea{ width:100%; background:#020617; border:1px solid #334155; color:#f9fafb; border-radius:12px; padding:10px; font-size:13px; font-weight:700; }
+  .btn{ display:inline-flex; align-items:center; gap:8px; padding:9px 14px; border-radius:999px; font-weight:900; font-size:12px; text-decoration:none; border:1px solid rgba(255,255,255,0.18); background: linear-gradient(145deg, #0f172a, #020617); color:#f9fafb; cursor:pointer; }
+  .sub{ font-size:12px; font-weight:800; color:#9ca3af; }
+</style>
+<div class="container-fluid">
+  <div class="wrap">
+    <h2 style="font-weight:900;">{{ thread.contact_name|default:"Unknown" }} · {{ thread.contact_phone }}</h2>
+    <div class="sub">
+      Automation: {{ thread.automation_enabled|yesno:"on,off" }}
+      {% if thread.linked_lead %}
+        · Lead:
+        <a href="{% url 'lead_detail' thread.linked_lead.pk %}" style="color:#facc15; font-weight:900;">
+          {{ thread.linked_lead.account_brand|default:"Lead" }}
+        </a>
+      {% endif %}
+    </div>
+
+    <div class="cardx">
+      <div class="pad">
+        {% if messages %}
+          {% for m in messages %}
+            <div class="msg {% if m.direction == 'inbound' %}in{% else %}out{% endif %}">
+              <div class="sub">{{ m.direction }} · {{ m.created_at|date:"Y-m-d H:i" }}</div>
+              <div style="white-space:pre-wrap;">{{ m.body }}</div>
+              {% if m.media_url %}
+                <div style="margin-top:8px;">
+                  {% if m.media_type|slice:":5" == "image" %}
+                    <img src="{{ m.media_url }}" alt="attachment" style="max-width:240px; border-radius:10px; border:1px solid #334155;">
+                  {% else %}
+                    <a href="{{ m.media_url }}" target="_blank" style="color:#93c5fd; font-weight:800;">Download attachment</a>
+                  {% endif %}
+                  <div class="sub" style="margin-top:4px;">{{ m.media_type }}</div>
+                </div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="sub">No messages yet.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="cardx">
+      <div class="pad">
+        {% if WHATSAPP_OUTBOUND_ENABLED %}
+          <div class="sub">Compose message (queued)</div>
+          <form id="csrf" style="display:none;">{% csrf_token %}</form>
+          <textarea id="msgBox" class="input" placeholder="Type message..."></textarea>
+          <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn" id="btnSend" type="button">Queue send</button>
+            <button class="btn" id="btnFollow1" type="button">Follow up tomorrow</button>
+            <button class="btn" id="btnFollow3" type="button">Follow up in 3 days</button>
+            <button class="btn" id="btnToggle" type="button">Toggle automation</button>
+          </div>
+          <div class="sub" id="status" style="margin-top:6px;"></div>
+        {% else %}
+          <div class="sub">Outbound messaging is disabled in settings.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const msgBox = document.getElementById("msgBox");
+  const status = document.getElementById("status");
+  const csrf = document.querySelector("#csrf input[name='csrfmiddlewaretoken']");
+
+  function post(url, data){
+    return fetch(url, {
+      method: "POST",
+      headers: {"Content-Type": "application/x-www-form-urlencoded", "X-CSRFToken": csrf ? csrf.value : ""},
+      body: new URLSearchParams(data || {})
+    }).then(r => r.json());
+  }
+
+  const btnSend = document.getElementById("btnSend");
+  const btnFollow1 = document.getElementById("btnFollow1");
+  const btnFollow3 = document.getElementById("btnFollow3");
+  const btnToggle = document.getElementById("btnToggle");
+
+  if (btnSend) {
+    btnSend.addEventListener("click", () => {
+      post("{% url 'wa_send' thread.pk %}", {text: msgBox.value}).then(d => {
+        status.textContent = d.ok ? "Queued" : (d.error || "Failed");
+      });
+    });
+  }
+
+  if (btnFollow1) {
+    btnFollow1.addEventListener("click", () => {
+      post("{% url 'wa_followup' thread.pk %}", {text: msgBox.value, delay_days: 1}).then(d => {
+        status.textContent = d.ok ? "Follow-up queued" : (d.error || "Failed");
+      });
+    });
+  }
+
+  if (btnFollow3) {
+    btnFollow3.addEventListener("click", () => {
+      post("{% url 'wa_followup' thread.pk %}", {text: msgBox.value, delay_days: 3}).then(d => {
+        status.textContent = d.ok ? "Follow-up queued" : (d.error || "Failed");
+      });
+    });
+  }
+
+  if (btnToggle) {
+    btnToggle.addEventListener("click", () => {
+      post("{% url 'wa_toggle_automation' thread.pk %}", {}).then(d => {
+        status.textContent = d.ok ? "Automation toggled" : "Failed";
+      });
+    });
+  }
+})();
+</script>
+{% endblock %}

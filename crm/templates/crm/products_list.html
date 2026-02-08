@@ -332,8 +332,10 @@
         <h1 class="header-title">Product library</h1>
         <div class="subtle">Search and manage products. Use AI to get quick specs ideas.</div>
       </div>
-       <a href="/products/" class="btn">Clear</a>
-     
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a href="{% url 'product_add' %}" class="btn btn-primary">Add product</a>
+        <a href="{% url 'products_list' %}" class="btn">Clear</a>
+      </div>
     </div>
 
     <div class="card">

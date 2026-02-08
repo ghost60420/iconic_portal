@@ -1,0 +1,67 @@
+{% extends "crm/base.html" %}
+{% block content %}
+{% include "marketing/_style.html" %}
+
+<div class="mk-container">
+  <div class="mk-header">
+    <div>
+      <div class="mk-title">SEO Intelligence</div>
+      <div class="mk-sub">Top queries and pages from Google Search Console.</div>
+    </div>
+  </div>
+
+  <div class="mk-grid">
+    <div class="mk-card" style="grid-column: span 6;">
+      <div class="mk-section-title">Top Queries (30d)</div>
+      <div class="mk-table table-responsive">
+        <table class="table table-dark table-hover align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Query</th>
+              <th>Clicks</th>
+              <th>Impressions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in query_rows %}
+              <tr>
+                <td>{{ row.query }}</td>
+                <td>{{ row.clicks }}</td>
+                <td>{{ row.impressions }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="3" class="text-muted">No data yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="mk-card" style="grid-column: span 6;">
+      <div class="mk-section-title">Top Pages (30d)</div>
+      <div class="mk-table table-responsive">
+        <table class="table table-dark table-hover align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Page</th>
+              <th>Clicks</th>
+              <th>Impressions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in page_rows %}
+              <tr>
+                <td>{{ row.page }}</td>
+                <td>{{ row.clicks }}</td>
+                <td>{{ row.impressions }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="3" class="text-muted">No data yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

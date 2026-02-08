@@ -1,0 +1,229 @@
+{% extends "crm/base.html" %}
+{% block content %}
+<style>
+  .wa-wrap{ max-width:1400px; margin:0 auto; color:#f9fafb; }
+  .wa-layout{ display:grid; grid-template-columns: 320px 1fr; gap:16px; }
+  .wa-card{ background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)); border:1px solid #334155; border-radius:18px; box-shadow: 0 18px 40px rgba(0,0,0,0.45); overflow:hidden; }
+  .wa-pad{ padding:14px; }
+  .wa-title{ margin:0; font-weight:900; }
+  .wa-sub{ margin-top:4px; font-size:12px; font-weight:800; color:#9ca3af; }
+  .wa-input{ width:100%; background:#020617; border:1px solid #334155; color:#f9fafb; border-radius:12px; padding:10px; font-size:13px; font-weight:700; }
+  .wa-list{ max-height:70vh; overflow:auto; padding:8px; }
+  .wa-item{ display:block; padding:10px 12px; border-radius:12px; border:1px solid rgba(148,163,184,0.2); margin-bottom:8px; text-decoration:none; color:#e5e7eb; background: rgba(255,255,255,0.03); }
+  .wa-item:hover{ border-color:#60a5fa; background: rgba(59,130,246,0.08); }
+  .wa-item.active{ border-color:#facc15; background: rgba(250,204,21,0.12); }
+  .wa-name{ font-weight:900; font-size:13px; }
+  .wa-meta{ font-size:11px; color:#9ca3af; font-weight:800; margin-top:2px; }
+  .wa-badge{ display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:999px; font-size:11px; font-weight:900; border:1px solid #334155; background: rgba(255,255,255,0.03); color:#e5e7eb; }
+  .wa-badge.ok{ background:#16a34a; border-color:#16a34a; color:#0b0f1a; }
+  .wa-badge.warn{ background:#f59e0b; border-color:#f59e0b; color:#0b0f1a; }
+  .wa-chat{ display:flex; flex-direction:column; height:70vh; }
+  .wa-messages{ flex:1; overflow:auto; padding:14px; background: radial-gradient(circle at top, rgba(15,23,42,0.65), rgba(2,6,23,0.85)); }
+  .wa-msg-row{ display:flex; margin-bottom:10px; }
+  .wa-msg-row.in{ justify-content:flex-start; }
+  .wa-msg-row.out{ justify-content:flex-end; }
+  .wa-msg{ max-width:72%; padding:10px 12px; border-radius:14px; border:1px solid rgba(148,163,184,0.22); }
+  .wa-msg.in{ background: rgba(255,255,255,0.05); }
+  .wa-msg.out{ background: rgba(34,197,94,0.16); border-color:rgba(34,197,94,0.45); }
+  .wa-msg-meta{ font-size:11px; font-weight:800; color:#9ca3af; margin-bottom:4px; }
+  .wa-compose{ border-top:1px solid #334155; padding:12px; background: rgba(2,6,23,0.7); }
+  .wa-btn{ display:inline-flex; align-items:center; gap:8px; padding:9px 14px; border-radius:999px; font-weight:900; font-size:12px; text-decoration:none; border:1px solid rgba(255,255,255,0.18); background: linear-gradient(145deg, #0f172a, #020617); color:#f9fafb; cursor:pointer; }
+  .wa-row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .wa-empty{ padding:32px; text-align:center; color:#9ca3af; font-weight:800; }
+
+  @media (max-width: 1024px){
+    .wa-layout{ grid-template-columns: 1fr; }
+    .wa-chat{ height:auto; }
+  }
+</style>
+
+<div class="container-fluid">
+  <div class="wa-wrap">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+      <div>
+        <h2 class="wa-title">WhatsApp Inbox</h2>
+        <div class="wa-sub">Chat list on the left, conversation on the right.</div>
+      </div>
+      <div class="wa-row">
+        <a class="wa-btn" href="{% url 'wa_settings' %}">Settings</a>
+        <a class="wa-btn" href="{% url 'wa_automation' %}">Automation</a>
+      </div>
+    </div>
+
+    <div class="wa-layout" style="margin-top:14px;">
+      <div class="wa-card">
+        <div class="wa-pad">
+          <div class="wa-row" style="justify-content:space-between;">
+            <span class="wa-badge">Account: {{ account.phone_number }}</span>
+            <span class="wa-badge">Threads: {{ threads|length }}</span>
+          </div>
+          <div style="margin-top:10px;">
+            <input id="waSearch" class="wa-input" placeholder="Search name or phone">
+          </div>
+        </div>
+        <div class="wa-list" id="waList">
+          {% for t in threads %}
+            <a class="wa-item {% if selected_thread and selected_thread.pk == t.pk %}active{% endif %}" href="{% url 'wa_inbox' %}?thread={{ t.pk }}" data-name="{{ t.contact_name|default:''|lower }}" data-phone="{{ t.contact_phone|default:'' }}">
+              <div class="wa-name">{{ t.contact_name|default:"Unknown" }} · {{ t.contact_phone }}</div>
+              <div class="wa-meta">Last: {% if t.last_message_at %}{{ t.last_message_at|date:"Y-m-d H:i" }}{% else %}—{% endif %}</div>
+              {% if t.linked_lead %}
+                <div class="wa-meta">Lead: {{ t.linked_lead.account_brand|default:"Lead" }}</div>
+              {% else %}
+                <div class="wa-meta">No lead linked</div>
+              {% endif %}
+            </a>
+          {% endfor %}
+          {% if not threads %}
+            <div class="wa-empty">No WhatsApp threads yet.</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="wa-card">
+        {% if selected_thread %}
+          <div class="wa-pad" style="border-bottom:1px solid #334155;">
+            <div class="wa-row" style="justify-content:space-between;">
+              <div>
+                <div class="wa-name" style="font-size:16px;">{{ selected_thread.contact_name|default:"Unknown" }} · {{ selected_thread.contact_phone }}</div>
+                <div class="wa-meta">Automation: {{ selected_thread.automation_enabled|yesno:"on,off" }}</div>
+              </div>
+              <div class="wa-row">
+                {% if selected_thread.linked_lead %}
+                  <a class="wa-btn" href="{% url 'lead_detail' selected_thread.linked_lead.pk %}">Open Lead</a>
+                {% else %}
+                  <button class="wa-btn" id="btnCreateLead" type="button">Create Lead</button>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+
+          <div class="wa-chat">
+            <div class="wa-messages">
+              {% if selected_messages %}
+                {% for m in selected_messages %}
+                  <div class="wa-msg-row {% if m.direction == 'inbound' %}in{% else %}out{% endif %}">
+                    <div class="wa-msg {% if m.direction == 'inbound' %}in{% else %}out{% endif %}">
+                    <div class="wa-msg-meta">{{ m.direction }} · {{ m.created_at|date:"Y-m-d H:i" }}</div>
+                    <div style="white-space:pre-wrap;">{{ m.body }}</div>
+                    {% if m.media_url %}
+                      <div style="margin-top:8px;">
+                        {% if m.media_type|slice:":5" == "image" %}
+                          <img src="{{ m.media_url }}" alt="attachment" style="max-width:240px; border-radius:10px; border:1px solid #334155;">
+                        {% else %}
+                          <a href="{{ m.media_url }}" target="_blank" style="color:#93c5fd; font-weight:800;">Download attachment</a>
+                        {% endif %}
+                        <div class="wa-msg-meta" style="margin-top:4px;">{{ m.media_type }}</div>
+                      </div>
+                    {% endif %}
+                    </div>
+                  </div>
+                {% endfor %}
+              {% else %}
+                <div class="wa-empty">No messages yet.</div>
+              {% endif %}
+            </div>
+
+            <div class="wa-compose">
+              {% if WHATSAPP_OUTBOUND_ENABLED %}
+                <form id="csrf" style="display:none;">{% csrf_token %}</form>
+                <textarea id="msgBox" class="wa-input" rows="3" placeholder="Type message..."></textarea>
+                <div class="wa-row" style="margin-top:8px;">
+                  <button class="wa-btn" id="btnSend" type="button">Queue send</button>
+                  <button class="wa-btn" id="btnFollow1" type="button">Follow up tomorrow</button>
+                  <button class="wa-btn" id="btnFollow3" type="button">Follow up in 3 days</button>
+                  <button class="wa-btn" id="btnToggle" type="button">Toggle automation</button>
+                </div>
+                <div class="wa-sub" id="status" style="margin-top:6px;"></div>
+              {% else %}
+                <div class="wa-sub">Outbound messaging is disabled in settings.</div>
+              {% endif %}
+            </div>
+          </div>
+        {% else %}
+          <div class="wa-empty">Select a chat to view messages.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const list = document.getElementById("waList");
+  const search = document.getElementById("waSearch");
+  if (search && list){
+    search.addEventListener("input", () => {
+      const q = search.value.toLowerCase();
+      list.querySelectorAll(".wa-item").forEach(item => {
+        const name = item.dataset.name || "";
+        const phone = item.dataset.phone || "";
+        item.style.display = (name.includes(q) || phone.includes(q)) ? "block" : "none";
+      });
+    });
+  }
+
+  const msgBox = document.getElementById("msgBox");
+  const status = document.getElementById("status");
+  const csrf = document.querySelector("#csrf input[name='csrfmiddlewaretoken']");
+  const threadId = {% if selected_thread %}{{ selected_thread.pk }}{% else %}null{% endif %};
+
+  function post(url, data){
+    return fetch(url, {
+      method: "POST",
+      headers: {"Content-Type": "application/x-www-form-urlencoded", "X-CSRFToken": csrf ? csrf.value : ""},
+      body: new URLSearchParams(data || {})
+    }).then(r => r.json());
+  }
+
+  const btnSend = document.getElementById("btnSend");
+  const btnFollow1 = document.getElementById("btnFollow1");
+  const btnFollow3 = document.getElementById("btnFollow3");
+  const btnToggle = document.getElementById("btnToggle");
+  const btnCreateLead = document.getElementById("btnCreateLead");
+
+  if (btnSend && threadId){
+    btnSend.addEventListener("click", () => {
+      post(`/whatsapp/thread/${threadId}/send/`, {text: msgBox.value}).then(d => {
+        status.textContent = d.ok ? "Queued" : (d.error || "Failed");
+      });
+    });
+  }
+
+  if (btnFollow1 && threadId){
+    btnFollow1.addEventListener("click", () => {
+      post(`/whatsapp/thread/${threadId}/followup/`, {text: msgBox.value, delay_days: 1}).then(d => {
+        status.textContent = d.ok ? "Follow-up queued" : (d.error || "Failed");
+      });
+    });
+  }
+
+  if (btnFollow3 && threadId){
+    btnFollow3.addEventListener("click", () => {
+      post(`/whatsapp/thread/${threadId}/followup/`, {text: msgBox.value, delay_days: 3}).then(d => {
+        status.textContent = d.ok ? "Follow-up queued" : (d.error || "Failed");
+      });
+    });
+  }
+
+  if (btnToggle && threadId){
+    btnToggle.addEventListener("click", () => {
+      post(`/whatsapp/thread/${threadId}/toggle-automation/`, {}).then(d => {
+        status.textContent = d.ok ? "Automation toggled" : "Failed";
+      });
+    });
+  }
+
+  if (btnCreateLead && threadId){
+    btnCreateLead.addEventListener("click", () => {
+      post(`/whatsapp/thread/${threadId}/create-lead/`, {}).then(d => {
+        if (d.ok && d.lead_id){
+          window.location.href = `/leads/${d.lead_id}/`;
+        } else {
+          alert(d.error || "Failed to create lead");
+        }
+      });
+    });
+  }
+})();
+</script>
+{% endblock %}
