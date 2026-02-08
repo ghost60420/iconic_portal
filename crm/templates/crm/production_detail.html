@@ -402,6 +402,44 @@
     font-weight: 400;
   }
 
+  .sheet-line {
+    border-radius: 12px;
+    border: 1px solid #111827;
+    background: rgba(2,6,23,0.6);
+    padding: 12px;
+    margin-top: 12px;
+  }
+
+  .sheet-line-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .sheet-line-title {
+    font-size: 13px;
+    font-weight: 800;
+    color: #f9fafb;
+  }
+
+  .sheet-line-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .sheet-line-chip {
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: rgba(15,23,42,0.8);
+    border: 1px solid #1f2937;
+    color: #cbd5f5;
+  }
+
   .size-grid {
     border-radius: 12px;
     border: 1px solid #111827;
@@ -832,73 +870,99 @@
   <div class="cardx">
     <div class="section-title">Order sheet details</div>
 
-    <div class="sheet-top">
-      <div>
-        <div class="sheet-label">Style name</div>
-        <div class="sheet-value {% if not order.style_name %}muted{% endif %}">
-          {{ order.style_name|default:"not set" }}
-        </div>
-      </div>
-      <div>
-        <div class="sheet-label">Color info</div>
-        <div class="sheet-value {% if not order.color_info %}muted{% endif %}">
-          {{ order.color_info|default:"not set" }}
-        </div>
-      </div>
-    </div>
-
-    <div style="margin-top:12px;">
-      <div class="sheet-label">Size grid up to 5XL</div>
-
-      {% if size_grid %}
-        <div class="size-grid">
-          <div class="size-grid-row size-head">
-            {% for item in size_grid %}
-              <div class="size-cell">{{ item.label }}</div>
-            {% endfor %}
+    {% if order_lines %}
+      {% for line in order_lines %}
+        <div class="sheet-line">
+          <div class="sheet-line-head">
+            <div class="sheet-line-title">
+              Product line {{ forloop.counter }}
+              {% if line.style_name %} - {{ line.style_name }}{% endif %}
+              {% if line.color_info %} ({{ line.color_info }}){% endif %}
+            </div>
           </div>
-          <div class="size-grid-row">
-            {% for item in size_grid %}
-              <div class="size-cell">{% if item.qty %}{{ item.qty }}{% else %}-{% endif %}</div>
-            {% endfor %}
+
+          <div class="sheet-line-meta">
+            <span class="sheet-line-chip">
+              Client: {% if order.customer %}{{ order.customer.account_brand|default:order.customer.contact_name|default:order.customer }}{% else %}Not set{% endif %}
+            </span>
+            <span class="sheet-line-chip">
+              Order: {{ order.order_code|default:"Not set" }}
+            </span>
+            <span class="sheet-line-chip">
+              Opportunity:
+              {% if order.opportunity %}
+                <a href="{% url 'opportunity_detail' order.opportunity.id %}" style="color:#93c5fd;">{{ order.opportunity.opportunity_id|default:order.opportunity.id }}</a>
+              {% else %}
+                Not set
+              {% endif %}
+            </span>
+          </div>
+
+          <div class="sheet-top">
+            <div>
+              <div class="sheet-label">Style name</div>
+              <div class="sheet-value {% if not line.style_name %}muted{% endif %}">
+                {{ line.style_name|default:"not set" }}
+              </div>
+            </div>
+            <div>
+              <div class="sheet-label">Color info</div>
+              <div class="sheet-value {% if not line.color_info %}muted{% endif %}">
+                {{ line.color_info|default:"not set" }}
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:12px;">
+            <div class="sheet-label">Size grid up to 5XL</div>
+
+            {% if line.size_total %}
+              <div class="size-grid">
+                <div class="size-grid-row size-head">
+                  {% for item in line.size_grid %}
+                    <div class="size-cell">{{ item.label }}</div>
+                  {% endfor %}
+                </div>
+                <div class="size-grid-row">
+                  {% for item in line.size_grid %}
+                    <div class="size-cell">{% if item.qty %}{{ item.qty }}{% else %}-{% endif %}</div>
+                  {% endfor %}
+                </div>
+              </div>
+
+              <div class="size-summary ok">
+                Line total {{ line.size_total }}
+              </div>
+            {% else %}
+              <div class="sheet-value muted">No size ratio set for this line.</div>
+            {% endif %}
+          </div>
+
+          <div style="margin-top:12px;">
+            <div class="sheet-label">Accessories and trims</div>
+            <div class="prewrap {% if not line.accessories_note %}muted{% endif %}">
+              {{ line.accessories_note|default:"not set" }}
+            </div>
+          </div>
+
+          <div style="margin-top:12px;">
+            <div class="sheet-label">Packaging details</div>
+            <div class="prewrap {% if not line.packaging_note %}muted{% endif %}">
+              {{ line.packaging_note|default:"not set" }}
+            </div>
+          </div>
+
+          <div style="margin-top:12px;">
+            <div class="sheet-label">Extra order notes</div>
+            <div class="prewrap {% if not line.extra_order_note %}muted{% endif %}">
+              {{ line.extra_order_note|default:"not set" }}
+            </div>
           </div>
         </div>
-
-        <div class="size-summary
-          {% if size_total and order.qty_total and size_total == order.qty_total %}ok
-          {% elif size_total %}warn{% endif %}">
-          {% if size_total %}
-            Size total {{ size_total }}
-            {% if order.qty_total %} of order total {{ order.qty_total }}{% endif %}
-          {% else %}
-            No size ratio set for this order.
-          {% endif %}
-        </div>
-      {% else %}
-        <div class="sheet-value muted">No size ratio set.</div>
-      {% endif %}
-    </div>
-
-    <div style="margin-top:12px;">
-      <div class="sheet-label">Accessories and trims</div>
-      <div class="prewrap {% if not order.accessories_note %}muted{% endif %}">
-        {{ order.accessories_note|default:"not set" }}
-      </div>
-    </div>
-
-    <div style="margin-top:12px;">
-      <div class="sheet-label">Packaging details</div>
-      <div class="prewrap {% if not order.packaging_note %}muted{% endif %}">
-        {{ order.packaging_note|default:"not set" }}
-      </div>
-    </div>
-
-    <div style="margin-top:12px;">
-      <div class="sheet-label">Extra order notes</div>
-      <div class="prewrap {% if not order.extra_order_note %}muted{% endif %}">
-        {{ order.extra_order_note|default:"not set" }}
-      </div>
-    </div>
+      {% endfor %}
+    {% else %}
+      <div class="sheet-value muted">No order sheet details set.</div>
+    {% endif %}
 
     <div style="margin-top:14px;">
       <div class="sheet-label">Library selections</div>
@@ -1117,7 +1181,7 @@
     <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
       <div class="section-title" style="margin:0;">Order sheet (materials)</div>
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <a href="{% url 'production_order_sheet_pdf' order.pk %}" class="btn btn-outline-light btn-sm">Download water sheet PDF</a>
+        <a href="{% url 'production_order_sheet_pdf' order.pk %}" class="btn btn-outline-light btn-sm">Download order sheet PDF</a>
         <a href="{% url 'production_packing_list_pdf' order.pk %}" class="btn btn-outline-light btn-sm">Download packing list PDF</a>
       </div>
     </div>

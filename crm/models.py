@@ -2160,6 +2160,34 @@ class ProductionOrder(models.Model):
 
         return late_stage
 
+
+class ProductionOrderLine(models.Model):
+    """
+    Line items within a production order.
+    Each line stores the product-specific work order details.
+    """
+
+    order = models.ForeignKey(
+        ProductionOrder,
+        on_delete=models.CASCADE,
+        related_name="lines",
+    )
+    line_no = models.PositiveIntegerField(default=1)
+
+    style_name = models.CharField(max_length=200, blank=True)
+    color_info = models.CharField(max_length=200, blank=True)
+    size_ratio_note = models.TextField(blank=True)
+    accessories_note = models.TextField(blank=True)
+    packaging_note = models.TextField(blank=True)
+    extra_order_note = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["line_no", "id"]
+
+    def __str__(self):
+        label = self.style_name or "Line"
+        return f"{self.order.order_code or self.order_id} - {label}"
+
     def update_cost_numbers(self):
         """
         Recalculate fabric, material, production, remake and final cost.
