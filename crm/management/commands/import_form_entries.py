@@ -66,6 +66,11 @@ class Command(BaseCommand):
             phone = extract_field(em.body_text, "Phone")
             company = extract_field(em.body_text, "Company Name")
             notes = extract_field(em.body_text, "Additional Notes")
+            utm_source = extract_field(em.body_text, "UTM Source")
+            utm_medium = extract_field(em.body_text, "UTM Medium")
+            utm_campaign = extract_field(em.body_text, "UTM Campaign")
+            utm_content = extract_field(em.body_text, "UTM Content")
+            utm_term = extract_field(em.body_text, "UTM Term")
 
             lead = Lead.objects.create(
                 lead_id=str(entry_no),
@@ -75,6 +80,13 @@ class Command(BaseCommand):
                 phone=phone or "",
                 notes=(notes or em.body_text or "")[:5000],
                 source="Website Form",
+                utm_source=utm_source or "",
+                utm_medium=utm_medium or "",
+                utm_campaign=utm_campaign or "",
+                utm_content=utm_content or "",
+                utm_term=utm_term or "",
+                first_touch_channel=utm_source or "",
+                last_touch_channel=utm_source or "",
                 created_date=timezone.now().date(),
             )
 

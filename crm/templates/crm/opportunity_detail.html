@@ -517,81 +517,68 @@
                 <span class="emoji">📊</span> Costing
             </div>
             <div>
-                <a href="{% url 'cost_sheet_create_for_opportunity' opportunity.pk %}" class="btn btn-gold btn-small">
-                    Create costing
-                </a>
-                {% if active_cost_sheet %}
-                    <a href="{% url 'cost_sheet_detail' active_cost_sheet.pk %}" class="btn btn-blue btn-small">
-                        View costing
+                {% if simple_cost_sheet %}
+                    <a href="{% url 'cost_sheet_detail' simple_cost_sheet.pk %}" class="btn btn-blue btn-small">
+                        Open costing
                     </a>
-                    <a href="{% url 'cost_sheet_export_pdf' active_cost_sheet.pk %}" class="btn btn-slate btn-small">
+                    <a href="{% url 'cost_sheet_export_pdf' simple_cost_sheet.pk %}" class="btn btn-slate btn-small">
                         Export PDF
                     </a>
-                    <a href="{% url 'cost_sheet_export_excel' active_cost_sheet.pk %}" class="btn btn-slate btn-small">
+                    <a href="{% url 'cost_sheet_export_excel' simple_cost_sheet.pk %}" class="btn btn-slate btn-small">
                         Export Excel
+                    </a>
+                {% else %}
+                    <a href="{% url 'cost_sheet_create_for_opportunity' opportunity.pk %}" class="btn btn-gold btn-small">
+                        Create costing
                     </a>
                 {% endif %}
             </div>
         </div>
 
-        {% if active_cost_sheet %}
+        {% if simple_cost_sheet %}
             <table class="info-table" style="margin-top:6px;">
                 <tr>
-                    <td class="label">Active version</td>
-                    <td class="value-main">v{{ active_cost_sheet.version_number }} • {{ active_cost_sheet.get_status_display }}</td>
+                    <td class="label">Status</td>
+                    <td class="value-main">{{ simple_cost_sheet.get_status_display }}</td>
                 </tr>
                 <tr>
-                    <td class="label">Total cost / piece</td>
-                    <td class="value-main">{{ costing_calc.display.total_cost_per_piece }}</td>
+                    <td class="label">Total cost / piece (BDT)</td>
+                    <td class="value-main">{{ simple_calc.display.total_cost_per_piece }}</td>
                 </tr>
                 <tr>
-                    <td class="label">Quote price / piece</td>
-                    <td class="value-main">{{ costing_calc.display.quote_price_per_piece }}</td>
+                    <td class="label">Quote price / piece (BDT)</td>
+                    <td class="value-main">{{ simple_calc.display.quote_price_per_piece }}</td>
                 </tr>
                 <tr>
                     <td class="label">Margin %</td>
-                    <td class="value-main">{{ costing_calc.display.margin_percent }}%</td>
+                    <td class="value-main">{{ simple_calc.display.margin_percent }}%</td>
                 </tr>
                 <tr>
                     <td class="label">Last updated</td>
-                    <td class="value-main">{{ active_cost_sheet.updated_at|date:"Y-m-d H:i" }}</td>
+                    <td class="value-main">{{ simple_cost_sheet.updated_at|date:"Y-m-d H:i" }}</td>
                 </tr>
             </table>
 
             <div style="margin-top:8px;">
-                <div class="summary-title" style="margin-bottom:4px;">Standard vs actual</div>
-                {% if variance_report %}
-                    <table class="info-table">
-                        <tr>
-                            <td class="label">Quoted price / piece</td>
-                            <td class="value-main">{{ variance_report.display.quoted_price_per_piece }}</td>
-                        </tr>
-                        <tr>
-                            <td class="label">Standard cost / piece</td>
-                            <td class="value-main">{{ variance_report.display.standard_cost_per_piece }}</td>
-                        </tr>
-                        <tr>
-                            <td class="label">Actual cost / piece</td>
-                            <td class="value-main">{{ variance_report.display.actual_cost_per_piece }}</td>
-                        </tr>
-                        <tr>
-                            <td class="label">Variance / piece</td>
-                            <td class="value-main">{{ variance_report.display.variance_per_piece }}</td>
-                        </tr>
-                        <tr>
-                            <td class="label">Total variance</td>
-                            <td class="value-main">{{ variance_report.display.total_variance }}</td>
-                        </tr>
-                        <tr>
-                            <td class="label">Margin change</td>
-                            <td class="value-main">
-                                {{ variance_report.display.margin_before }}% → {{ variance_report.display.margin_after }}%
-                            </td>
-                        </tr>
-                    </table>
-                {% else %}
-                    <div class="muted">Variance will appear once production and actual costs exist.</div>
-                {% endif %}
+                <div class="summary-title" style="margin-bottom:4px;">Standard vs actual (placeholder)</div>
+                <table class="info-table">
+                    <tr>
+                        <td class="label">Standard cost / piece (BDT)</td>
+                        <td class="value-main">{{ variance_display.standard_cost_per_piece|default:"—" }}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">Actual cost / piece (BDT)</td>
+                        <td class="value-main">{{ variance_display.actual_cost_per_piece|default:"—" }}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">Variance / piece (BDT)</td>
+                        <td class="value-main">{{ variance_display.variance_per_piece|default:"—" }}</td>
+                    </tr>
+                    <tr>
+                        <td class="label">Total variance (BDT)</td>
+                        <td class="value-main">{{ variance_display.total_variance|default:"—" }}</td>
+                    </tr>
+                </table>
             </div>
         {% else %}
             <div class="muted" style="margin-top:6px;">No cost sheet yet for this opportunity.</div>
@@ -613,15 +600,6 @@
                         <option value="costing_excel">Costing Excel</option>
                         <option value="costing_other">Costing Other</option>
                         <option value="other">Other</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="muted" style="display:block; margin-bottom:4px;">Link to version</label>
-                    <select name="cost_sheet_id">
-                        <option value="">None</option>
-                        {% for v in cost_sheet_versions %}
-                            <option value="{{ v.id }}">v{{ v.version_number }}</option>
-                        {% endfor %}
                     </select>
                 </div>
                 <button type="submit" class="btn btn-blue btn-small">Upload</button>
