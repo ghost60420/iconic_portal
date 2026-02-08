@@ -1016,6 +1016,91 @@ class CostSheetSimple(models.Model):
         decimal_places=2,
         default=Decimal("0"),
     )
+    rib_cost_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    woven_fabric_cost_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    zipper_cost_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    zipper_puller_cost_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    button_cost_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    thread_cost_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    lining_cost_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    velcro_cost_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    neck_tape_cost_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    elastic_cost_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    collar_cuff_cost_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    ring_cost_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    buckle_clip_cost_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    main_label_cost_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    care_label_cost_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    hang_tag_cost_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    conveyance_cost_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
     trim_cost_per_piece = models.DecimalField(
         max_digits=12,
         decimal_places=4,
