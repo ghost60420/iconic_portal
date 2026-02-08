@@ -851,6 +851,21 @@ COSTING_CURRENCY_CHOICES = [
     ("BDT", "BDT"),
 ]
 
+COSTING_SIMPLE_CURRENCY_CHOICES = [
+    ("BDT", "BDT"),
+]
+
+FACTORY_LOCATION_CHOICES = [
+    ("bd", "Bangladesh"),
+    ("ca", "Canada"),
+    ("other", "Other"),
+]
+
+COST_SHEET_SIMPLE_STATUS_CHOICES = [
+    ("draft", "Draft"),
+    ("approved", "Approved"),
+]
+
 OPPORTUNITY_DOC_TYPES = [
     ("costing_pdf", "Costing PDF"),
     ("costing_excel", "Costing Excel"),
@@ -952,6 +967,120 @@ class CostSheet(models.Model):
             CostSheet.objects.filter(opportunity=self.opportunity).exclude(id=self.id).update(
                 is_active=False
             )
+
+
+class CostSheetSimple(models.Model):
+    opportunity = models.ForeignKey(
+        Opportunity,
+        on_delete=models.CASCADE,
+        related_name="simple_cost_sheets",
+    )
+    customer = models.ForeignKey(
+        "Customer",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="simple_cost_sheets",
+    )
+    style_name = models.CharField(max_length=200, blank=True)
+    style_code = models.CharField(max_length=50, blank=True)
+    product_type = models.CharField(
+        max_length=50,
+        choices=Opportunity.PRODUCT_TYPE_CHOICES,
+        default="Other",
+    )
+    quantity = models.PositiveIntegerField(default=0)
+    currency = models.CharField(
+        max_length=10,
+        choices=COSTING_SIMPLE_CURRENCY_CHOICES,
+        default="BDT",
+    )
+    exchange_rate_bdt_per_cad = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        null=True,
+        blank=True,
+    )
+    factory_location = models.CharField(
+        max_length=20,
+        choices=FACTORY_LOCATION_CHOICES,
+        default="bd",
+    )
+    fabric_cost_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    fabric_wastage_percent = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=Decimal("0"),
+    )
+    trim_cost_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    labor_cost_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    overhead_cost_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    process_cost_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    packaging_cost_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    freight_cost_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    testing_cost_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    other_cost_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    quote_price_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    notes = models.TextField(blank=True, default="")
+    status = models.CharField(
+        max_length=20,
+        choices=COST_SHEET_SIMPLE_STATUS_CHOICES,
+        default="draft",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-id"]
+
+    def __str__(self):
+        label = self.opportunity.opportunity_id if self.opportunity_id else f"Costing {self.pk}"
+        return f"{label} (Simple)"
+
+    def save(self, *args, **kwargs):
+        if not self.customer and self.opportunity and self.opportunity.customer_id:
+            self.customer = self.opportunity.customer
+        super().save(*args, **kwargs)
 
 
 class CostLineItem(models.Model):
@@ -1085,6 +1214,13 @@ class OpportunityDocument(models.Model):
     )
     cost_sheet = models.ForeignKey(
         CostSheet,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="documents",
+    )
+    cost_sheet_simple = models.ForeignKey(
+        CostSheetSimple,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -2523,7 +2659,7 @@ from django.db import models
 from django.conf import settings
 from django.utils import timezone
 
-# other models above …
+# other models above ...
 
 class ExchangeRate(models.Model):
     cad_to_bdt = models.DecimalField(
@@ -2562,6 +2698,7 @@ class AccountingAttachment(models.Model):
         on_delete=models.SET_NULL,
     )
     uploaded_at = models.DateTimeField(auto_now_add=True)
+    note = models.TextField(blank=True, default="")
 
 
     class Meta:
@@ -2845,7 +2982,7 @@ class MoneyTransfer(models.Model):
     )
 
     def __str__(self):
-        return f"Transfer {self.amount_cad} CAD → {self.amount_bdt} BDT"
+        return f"Transfer {self.amount_cad} CAD -> {self.amount_bdt} BDT"
 
 
 from django.db import models
@@ -2986,6 +3123,12 @@ class AccountingEntry(models.Model):
 
     def save(self, *args, **kwargs):
         amt = self.amount_original or Decimal("0")
+        currency = (self.currency or "").upper().strip()
+        if currency == "CAD":
+            self.rate_to_cad = Decimal("1")
+        if currency == "BDT":
+            self.rate_to_bdt = Decimal("1")
+
         r_cad = self.rate_to_cad or Decimal("0")
         r_bdt = self.rate_to_bdt or Decimal("0")
 

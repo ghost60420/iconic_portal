@@ -342,6 +342,12 @@ def accounting_entry_add_ca(request):
             obj.side = LOCK_SIDE
             obj.direction = LOCK_DIRECTION
             obj.currency = LOCK_CURRENCY
+            rate_row = _get_rate_row()
+            cad_to_bdt = rate_row.cad_to_bdt if rate_row else Decimal("0")
+            if not obj.rate_to_cad or obj.rate_to_cad <= 0:
+                obj.rate_to_cad = Decimal("1")
+            if cad_to_bdt and cad_to_bdt > 0 and (not obj.rate_to_bdt or obj.rate_to_bdt <= 0):
+                obj.rate_to_bdt = cad_to_bdt
             obj.created_by = request.user
             obj.save()
             form.save_m2m()
@@ -391,6 +397,12 @@ def accounting_entry_add_bd(request):
             if not obj.direction:
                 obj.direction = (request.POST.get("direction") or "").strip()
 
+            rate_row = _get_rate_row()
+            cad_to_bdt = rate_row.cad_to_bdt if rate_row else Decimal("0")
+            if not obj.rate_to_bdt or obj.rate_to_bdt <= 0:
+                obj.rate_to_bdt = Decimal("1")
+            if cad_to_bdt and cad_to_bdt > 0 and (not obj.rate_to_cad or obj.rate_to_cad <= 0):
+                obj.rate_to_cad = (Decimal("1") / cad_to_bdt).quantize(Decimal("0.000001"))
             obj.created_by = request.user
             obj.save()
             form.save_m2m()
@@ -525,6 +537,7 @@ def accounting_ca_master(request):
                     transfer_ref=ref,
                     currency="CAD",
                     amount_original=cad_amount,
+                    rate_to_cad=Decimal("1"),
                     rate_to_bdt=cad_to_bdt,
                     description=desc_ca,
                     created_by=request.user,
@@ -877,27 +890,54 @@ def accounting_entry_list(request):
 
     entries = list(qs[:500])
 
-    ca_qs = qs.filter(side="CA")
-    bd_qs = qs.filter(side="BD")
+    total_ca_in = Decimal("0")
+    total_ca_out = Decimal("0")
+    total_bd_in = Decimal("0")
+    total_bd_out = Decimal("0")
+    cogs_cad = Decimal("0")
 
-    total_ca_in = ca_qs.filter(direction="IN").aggregate(x=Coalesce(Sum("amount_cad"), Decimal("0")))["x"]
-    total_ca_out = ca_qs.filter(direction="OUT").aggregate(x=Coalesce(Sum("amount_cad"), Decimal("0")))["x"]
+    totals_qs = qs.values(
+        "side",
+        "direction",
+        "main_type",
+        "amount_cad",
+        "amount_bdt",
+        "amount_original",
+    )
+    for row in totals_qs.iterator():
+        side = (row.get("side") or "").upper().strip()
+        direction = (row.get("direction") or "").upper().strip()
+        main_type = (row.get("main_type") or "").upper().strip()
+        amount_original = row.get("amount_original") or Decimal("0")
+
+        if side == "CA":
+            amount = row.get("amount_cad") or Decimal("0")
+            if amount == 0:
+                amount = amount_original
+            if direction == "IN":
+                total_ca_in += amount
+            elif direction == "OUT":
+                total_ca_out += amount
+                if main_type == "COGS":
+                    cogs_cad += amount
+        elif side == "BD":
+            amount = row.get("amount_bdt") or Decimal("0")
+            if amount == 0:
+                amount = amount_original
+            if direction == "IN":
+                total_bd_in += amount
+            elif direction == "OUT":
+                total_bd_out += amount
+
     total_ca_net_cad = total_ca_in - total_ca_out
-
-    total_bd_in = bd_qs.filter(direction="IN").aggregate(x=Coalesce(Sum("amount_bdt"), Decimal("0")))["x"]
-    total_bd_out = bd_qs.filter(direction="OUT").aggregate(x=Coalesce(Sum("amount_bdt"), Decimal("0")))["x"]
     total_bd_net_bdt = total_bd_in - total_bd_out
-
     net_cad = total_ca_net_cad
     net_bdt = total_bd_net_bdt
-
-    revenue_cad = ca_qs.filter(direction="IN").aggregate(x=Coalesce(Sum("amount_cad"), Decimal("0")))["x"]
-    cogs_cad = ca_qs.filter(main_type="COGS", direction="OUT").aggregate(x=Coalesce(Sum("amount_cad"), Decimal("0")))["x"]
+    revenue_cad = total_ca_in
     gross_profit_cad = revenue_cad - cogs_cad
     gross_margin_pct = (gross_profit_cad / revenue_cad * Decimal("100")) if revenue_cad else Decimal("0")
-
     total_income_cad = revenue_cad
-    total_expense_cad = ca_qs.filter(direction="OUT").aggregate(x=Coalesce(Sum("amount_cad"), Decimal("0")))["x"]
+    total_expense_cad = total_ca_out
 
     return render(
         request,

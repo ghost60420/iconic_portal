@@ -336,6 +336,23 @@ class AccountingEntryForm(forms.ModelForm):
         if "direction" in self.fields and self.fields["direction"].disabled:
             cleaned["direction"] = self.fields["direction"].initial
 
+        currency = (cleaned.get("currency") or "").upper().strip()
+        rate_to_cad = cleaned.get("rate_to_cad")
+        rate_to_bdt = cleaned.get("rate_to_bdt")
+
+        if currency == "CAD":
+            cleaned["rate_to_cad"] = Decimal("1")
+            if not rate_to_bdt or rate_to_bdt <= 0:
+                cad_to_bdt = _latest_rate_bdt_per_cad()
+                if cad_to_bdt and cad_to_bdt > 0:
+                    cleaned["rate_to_bdt"] = cad_to_bdt
+        elif currency == "BDT":
+            cleaned["rate_to_bdt"] = Decimal("1")
+            if not rate_to_cad or rate_to_cad <= 0:
+                cad_to_bdt = _latest_rate_bdt_per_cad()
+                if cad_to_bdt and cad_to_bdt > 0:
+                    cleaned["rate_to_cad"] = (Decimal("1") / cad_to_bdt).quantize(Decimal("0.000001"))
+
         return cleaned
 
     def clean_attachments(self):
@@ -413,7 +430,11 @@ class BDDailyEntryForm(ModelForm):
         cleaned["direction"] = "OUT"
         cleaned["currency"] = "BDT"
         cleaned["rate_to_bdt"] = Decimal("1")
-        cleaned["rate_to_cad"] = Decimal("0")
+        cad_to_bdt = _latest_rate_bdt_per_cad()
+        if cad_to_bdt and cad_to_bdt > 0:
+            cleaned["rate_to_cad"] = (Decimal("1") / cad_to_bdt).quantize(Decimal("0.000001"))
+        else:
+            cleaned["rate_to_cad"] = Decimal("0")
 
         # If user typed sub_type, use it
         # If not, use quick_category

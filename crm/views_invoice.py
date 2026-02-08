@@ -194,4 +194,4 @@ def invoice_edit(request, pk):
 @user_passes_test(superuser_only)
 def invoice_view(request, pk):
     inv = get_object_or_404(Invoice.objects.select_related("order", "customer"), pk=pk)
-    return render(request, "crm/invoice_list.html", ctx)
+    return render(request, "crm/invoice/invoice_view.html", {"invoice": inv})

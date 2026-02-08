@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
@@ -5,7 +6,14 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 
 from .forms import AccountingDocsUploadForm
-from .models import AccountingEntry, AccountingAttachment
+from .models import AccountingEntry, AccountingAttachment, ExchangeRate
+
+
+def _latest_cad_to_bdt():
+    row = ExchangeRate.objects.order_by("-updated_at").first()
+    if row and row.cad_to_bdt and row.cad_to_bdt > 0:
+        return Decimal(str(row.cad_to_bdt))
+    return Decimal("0")
 
 
 def is_ca_user(user) -> bool:
@@ -20,12 +28,13 @@ def is_bd_user(user) -> bool:
     )
 
 
-def _save_files(entry, files):
+def _save_files(entry, files, uploaded_by=None):
     for f in files:
         AccountingAttachment.objects.create(
             entry=entry,
             file=f,
             original_name=getattr(f, "name", "File"),
+            uploaded_by=uploaded_by,
         )
 
 
@@ -38,6 +47,7 @@ def accounting_docs_upload_ca(request):
         form = AccountingDocsUploadForm(request.POST, request.FILES)
         if form.is_valid():
             date_val = form.cleaned_data.get("date") or timezone.localdate()
+            cad_to_bdt = _latest_cad_to_bdt()
 
             amount = form.cleaned_data.get("amount") or 0
             invoice_number = (form.cleaned_data.get("invoice_number") or "").strip()
@@ -61,11 +71,12 @@ def accounting_docs_upload_ca(request):
                     sub_type=sub_type,
                     description=description,
                     amount_original=amount,
-                    amount_cad=amount,
-                    amount_bdt=0,
+                    rate_to_cad=Decimal("1"),
+                    rate_to_bdt=cad_to_bdt if cad_to_bdt > 0 else Decimal("0"),
+                    created_by=request.user,
                 )
 
-                _save_files(entry, request.FILES.getlist("files"))
+                _save_files(entry, request.FILES.getlist("files"), uploaded_by=request.user)
 
             messages.success(request, "Uploaded. Saved to the accounting grid.")
             return redirect("accounting_entry_list")
@@ -90,6 +101,7 @@ def accounting_docs_upload_bd(request):
         form = AccountingDocsUploadForm(request.POST, request.FILES)
         if form.is_valid():
             date_val = form.cleaned_data.get("date") or timezone.localdate()
+            cad_to_bdt = _latest_cad_to_bdt()
 
             amount = form.cleaned_data.get("amount") or 0
             invoice_number = (form.cleaned_data.get("invoice_number") or "").strip()
@@ -113,11 +125,14 @@ def accounting_docs_upload_bd(request):
                     sub_type=sub_type,
                     description=description,
                     amount_original=amount,
-                    amount_cad=0,
-                    amount_bdt=amount,
+                    rate_to_bdt=Decimal("1"),
+                    rate_to_cad=(Decimal("1") / cad_to_bdt).quantize(Decimal("0.000001"))
+                    if cad_to_bdt > 0
+                    else Decimal("0"),
+                    created_by=request.user,
                 )
 
-                _save_files(entry, request.FILES.getlist("files"))
+                _save_files(entry, request.FILES.getlist("files"), uploaded_by=request.user)
 
             messages.success(request, "Uploaded. Saved to the accounting grid.")
             return redirect("accounting_entry_list")
