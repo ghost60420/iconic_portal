@@ -274,6 +274,21 @@
     font-size: 11px;
     color: var(--muted);
   }
+
+  .finance-section{
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed rgba(148,163,184,0.2);
+  }
+
+  .finance-subtitle{
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.35px;
+    margin-bottom: 6px;
+  }
 </style>
 
 <div class="container-fluid">
@@ -336,8 +351,8 @@
 
       <div class="card" style="--d:0.12s;">
         <div class="kpi-title">Net Cash (CAD) {{ period_label }}</div>
-        <div class="kpi-value" style="color:var(--amber);">$ {{ acc_net_cad_period|floatformat:2 }}</div>
-        <div class="kpi-sub">In $ {{ acc_income_cad_period|floatformat:2 }} | Out $ {{ acc_out_cad_period|floatformat:2 }} (all sides)</div>
+        <div class="kpi-value" style="color:var(--amber);">$ {{ net_cash_cad_period|default:0|floatformat:2 }}</div>
+        <div class="kpi-sub">Excludes transfers; all sides in CAD.</div>
       </div>
     </div>
 
@@ -348,21 +363,39 @@
         <div class="card-head">
           <div>
             <p class="card-title">Canada accounting (CAD)</p>
-            <div class="card-note">Entries: {{ acc_entries_ca_period }} for {{ period_label|lower }}</div>
+            <div class="card-note">MTD entries: {{ acc_ca_entries_month|default:0 }} | All-time entries: {{ acc_ca_entries_all|default:0 }}</div>
           </div>
           <span class="meta-pill">CAD</span>
         </div>
-        <div class="finance-row">
-          <span class="finance-label">Money in</span>
-          <span class="finance-value pos">$ {{ acc_ca_income_cad_period|floatformat:2 }}</span>
+        <div class="finance-section">
+          <div class="finance-subtitle">Month-to-date</div>
+          <div class="finance-row">
+            <span class="finance-label">Money in</span>
+            <span class="finance-value pos">$ {{ acc_ca_income_cad_month|default:0|floatformat:2 }}</span>
+          </div>
+          <div class="finance-row">
+            <span class="finance-label">Money out</span>
+            <span class="finance-value neg">$ {{ acc_ca_out_cad_month|default:0|floatformat:2 }}</span>
+          </div>
+          <div class="finance-row">
+            <span class="finance-label">Net</span>
+            <span class="finance-value {% if acc_ca_net_cad_month < 0 %}neg{% else %}pos{% endif %}">$ {{ acc_ca_net_cad_month|default:0|floatformat:2 }}</span>
+          </div>
         </div>
-        <div class="finance-row">
-          <span class="finance-label">Money out</span>
-          <span class="finance-value neg">$ {{ acc_ca_out_cad_period|floatformat:2 }}</span>
-        </div>
-        <div class="finance-row">
-          <span class="finance-label">Net</span>
-          <span class="finance-value {% if acc_ca_net_cad_period < 0 %}neg{% else %}pos{% endif %}">$ {{ acc_ca_net_cad_period|floatformat:2 }}</span>
+        <div class="finance-section">
+          <div class="finance-subtitle">All time</div>
+          <div class="finance-row">
+            <span class="finance-label">Money in</span>
+            <span class="finance-value pos">$ {{ acc_ca_income_cad_all|default:0|floatformat:2 }}</span>
+          </div>
+          <div class="finance-row">
+            <span class="finance-label">Money out</span>
+            <span class="finance-value neg">$ {{ acc_ca_out_cad_all|default:0|floatformat:2 }}</span>
+          </div>
+          <div class="finance-row">
+            <span class="finance-label">Net</span>
+            <span class="finance-value {% if acc_ca_net_cad_all < 0 %}neg{% else %}pos{% endif %}">$ {{ acc_ca_net_cad_all|default:0|floatformat:2 }}</span>
+          </div>
         </div>
         <div class="finance-note">Totals use posted accounting entries in CAD.</div>
       </div>
@@ -371,23 +404,128 @@
         <div class="card-head">
           <div>
             <p class="card-title">Bangladesh accounting (BDT)</p>
-            <div class="card-note">Entries: {{ acc_entries_bd_period }} for {{ period_label|lower }}</div>
+            <div class="card-note">MTD entries: {{ acc_bd_entries_month|default:0 }} | All-time entries: {{ acc_bd_entries_all|default:0 }}</div>
           </div>
           <span class="meta-pill">BDT</span>
         </div>
-        <div class="finance-row">
-          <span class="finance-label">Money in</span>
-          <span class="finance-value pos">BDT {{ acc_bd_income_bdt_period|floatformat:2 }}</span>
+        <div class="finance-section">
+          <div class="finance-subtitle">Month-to-date</div>
+          <div class="finance-row">
+            <span class="finance-label">Money in</span>
+            <span class="finance-value pos">BDT {{ acc_bd_income_bdt_month|default:0|floatformat:2 }}</span>
+          </div>
+          <div class="finance-row">
+            <span class="finance-label">Money out</span>
+            <span class="finance-value neg">BDT {{ acc_bd_out_bdt_month|default:0|floatformat:2 }}</span>
+          </div>
+          <div class="finance-row">
+            <span class="finance-label">Net</span>
+            <span class="finance-value {% if acc_bd_net_bdt_month < 0 %}neg{% else %}pos{% endif %}">BDT {{ acc_bd_net_bdt_month|default:0|floatformat:2 }}</span>
+          </div>
         </div>
-        <div class="finance-row">
-          <span class="finance-label">Money out</span>
-          <span class="finance-value neg">BDT {{ acc_bd_out_bdt_period|floatformat:2 }}</span>
-        </div>
-        <div class="finance-row">
-          <span class="finance-label">Net</span>
-          <span class="finance-value {% if acc_bd_net_bdt_period < 0 %}neg{% else %}pos{% endif %}">BDT {{ acc_bd_net_bdt_period|floatformat:2 }}</span>
+        <div class="finance-section">
+          <div class="finance-subtitle">All time</div>
+          <div class="finance-row">
+            <span class="finance-label">Money in</span>
+            <span class="finance-value pos">BDT {{ acc_bd_income_bdt_all|default:0|floatformat:2 }}</span>
+          </div>
+          <div class="finance-row">
+            <span class="finance-label">Money out</span>
+            <span class="finance-value neg">BDT {{ acc_bd_out_bdt_all|default:0|floatformat:2 }}</span>
+          </div>
+          <div class="finance-row">
+            <span class="finance-label">Net</span>
+            <span class="finance-value {% if acc_bd_net_bdt_all < 0 %}neg{% else %}pos{% endif %}">BDT {{ acc_bd_net_bdt_all|default:0|floatformat:2 }}</span>
+          </div>
         </div>
         <div class="finance-note">BDT totals use the stored BDT conversions.</div>
+      </div>
+    </div>
+
+    <div class="section-label">Finance pulse</div>
+    <div class="grid-4">
+      <div class="card">
+        <div class="kpi-title">Total Revenue (CAD)</div>
+        <div class="kpi-value">$ {{ revenue_cad_period|default:0|floatformat:2 }}</div>
+        <div class="kpi-sub">All incoming entries excluding transfers.</div>
+      </div>
+
+      <div class="card">
+        <div class="kpi-title">Incoming Cash Flow (CAD)</div>
+        <div class="kpi-value" style="color:var(--green);">$ {{ acc_ca_income_cad_period|default:0|floatformat:2 }}</div>
+        <div class="kpi-sub">Canada-side money in for {{ period_label|lower }}.</div>
+      </div>
+
+      <div class="card">
+        <div class="kpi-title">Total Expenses (CAD)</div>
+        <div class="kpi-value" style="color:var(--red);">$ {{ expense_cad_period|default:0|floatformat:2 }}</div>
+        <div class="kpi-sub">All outgoing entries excluding transfers.</div>
+      </div>
+
+      <div class="card">
+        <div class="kpi-title">Net Cash (CAD)</div>
+        <div class="kpi-value" style="color:{% if net_cash_cad_period < 0 %}var(--red){% else %}var(--green){% endif %};">$ {{ net_cash_cad_period|default:0|floatformat:2 }}</div>
+        <div class="kpi-sub">Revenue minus expenses (excl transfers).</div>
+      </div>
+
+      <div class="card">
+        <div class="kpi-title">Swing Charge (CAD)</div>
+        <div class="kpi-value">$ {{ swing_cad_period|default:0|floatformat:2 }}</div>
+        <div class="kpi-sub">Entries tagged “Swing” on CA side.</div>
+      </div>
+
+      <div class="card">
+        <div class="kpi-title">Gross Margin</div>
+        <div class="kpi-value" style="color:{% if gross_margin_pct_period < 0 %}var(--red){% else %}var(--green){% endif %};">{{ gross_margin_pct_period|default:0|floatformat:1 }}%</div>
+        <div class="kpi-sub">Revenue vs expenses in this range.</div>
+      </div>
+    </div>
+
+    <div class="section-label">Operations snapshot</div>
+    <div class="grid-3">
+      <div class="card">
+        <div class="kpi-title">Orders Created</div>
+        <div class="kpi-value">{{ orders_created_period|default:0 }}</div>
+        <div class="kpi-sub">Production orders created {{ period_label|lower }}.</div>
+      </div>
+
+      <div class="card">
+        <div class="kpi-title">Orders Processed</div>
+        <div class="kpi-value" style="color:var(--teal);">{{ orders_processed_period|default:0 }}</div>
+        <div class="kpi-sub">Done / closed-won in this range.</div>
+      </div>
+
+      <div class="card">
+        <div class="kpi-title">Production Cost (BDT)</div>
+        <div class="kpi-value">BDT {{ production_cost_bdt_period|default:0|floatformat:2 }}</div>
+        <div class="kpi-sub">Total for completed orders.</div>
+      </div>
+    </div>
+
+    <div class="section-label">Production profit (CAD)</div>
+    <div class="grid-4">
+      <div class="card">
+        <div class="kpi-title">Production Revenue</div>
+        <div class="kpi-value">$ {{ prod_revenue_cad_period|default:0|floatformat:2 }}</div>
+        <div class="kpi-sub">Accounting entries linked to production.</div>
+      </div>
+
+      <div class="card">
+        <div class="kpi-title">Production Cost</div>
+        <div class="kpi-value" style="color:var(--red);">$ {{ prod_cost_cad_period|default:0|floatformat:2 }}</div>
+        <div class="kpi-sub">BD costs converted to CAD.</div>
+      </div>
+
+      <div class="card">
+        <div class="kpi-title">Production Profit</div>
+        <div class="kpi-value" style="color:{% if prod_profit_cad_period < 0 %}var(--red){% else %}var(--green){% endif %};">$ {{ prod_profit_cad_period|default:0|floatformat:2 }}</div>
+        <div class="kpi-sub">Revenue minus cost.</div>
+      </div>
+
+      <div class="card">
+        <div class="kpi-title">Production Margin</div>
+        <div class="kpi-value" style="color:{% if prod_margin_pct_period < 0 %}var(--red){% else %}var(--green){% endif %};">{{ prod_margin_pct_period|default:0|floatformat:1 }}%</div>
+        <div class="kpi-sub">Margin over the same period.</div>
       </div>
     </div>
 
@@ -410,11 +548,37 @@
         <div class="card-head">
           <div>
             <p class="card-title">Cash Flow</p>
-            <div class="card-note">Net cash by day (CAD, all sides)</div>
+            <div class="card-note">Net cash by day (CAD, excluding transfers)</div>
           </div>
         </div>
         <div class="chartWrap">
           <canvas id="chartCash"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-top:12px;">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <p class="card-title">Revenue vs Expenses</p>
+            <div class="card-note">Daily totals in CAD (excluding transfers)</div>
+          </div>
+        </div>
+        <div class="chartWrap">
+          <canvas id="chartRevenue"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <p class="card-title">Orders Created vs Processed</p>
+            <div class="card-note">Production throughput over {{ period_label|lower }}</div>
+          </div>
+        </div>
+        <div class="chartWrap">
+          <canvas id="chartOrders"></canvas>
         </div>
       </div>
     </div>
@@ -540,22 +704,22 @@
     <div class="grid-4">
       <div class="card">
         <div class="kpi-title">Payroll Total (BDT)</div>
-        <div class="kpi-value" style="color:var(--green);">{{ payroll_total|floatformat:2 }}</div>
+        <div class="kpi-value" style="color:var(--green);">{{ payroll_total|default:0|floatformat:2 }}</div>
         <div class="kpi-sub">Final pay total.</div>
       </div>
       <div class="card">
         <div class="kpi-title">Overtime (BDT)</div>
-        <div class="kpi-value">{{ payroll_ot|floatformat:2 }}</div>
+        <div class="kpi-value">{{ payroll_ot|default:0|floatformat:2 }}</div>
         <div class="kpi-sub">Overtime total.</div>
       </div>
       <div class="card">
         <div class="kpi-title">Bonus (BDT)</div>
-        <div class="kpi-value">{{ payroll_bonus|floatformat:2 }}</div>
+        <div class="kpi-value">{{ payroll_bonus|default:0|floatformat:2 }}</div>
         <div class="kpi-sub">Bonus total.</div>
       </div>
       <div class="card">
         <div class="kpi-title">Deduction (BDT)</div>
-        <div class="kpi-value" style="color:var(--red);">{{ payroll_deduction|floatformat:2 }}</div>
+        <div class="kpi-value" style="color:var(--red);">{{ payroll_deduction|default:0|floatformat:2 }}</div>
         <div class="kpi-sub">Deduction total.</div>
       </div>
     </div>
@@ -613,6 +777,34 @@
     new Chart(document.getElementById("chartCash"), {
       type: "line",
       data: { labels: trendLabels, datasets: [{ label: "Net cash", data: cashVals, borderWidth: 2, tension: 0.35, fill: false, pointRadius: 0 }] },
+      options: baseOpts
+    });
+
+    const revenueVals = safeValues(data.revenue_daily_values || [], trendLabels.length);
+    const expenseVals = safeValues(data.expense_daily_values || [], trendLabels.length);
+    new Chart(document.getElementById("chartRevenue"), {
+      type: "line",
+      data: {
+        labels: trendLabels,
+        datasets: [
+          { label: "Revenue", data: revenueVals, borderWidth: 2, tension: 0.35, fill: false, pointRadius: 0 },
+          { label: "Expenses", data: expenseVals, borderWidth: 2, tension: 0.35, fill: false, pointRadius: 0 }
+        ]
+      },
+      options: baseOpts
+    });
+
+    const ordersCreatedVals = safeValues(data.orders_created_values || [], trendLabels.length);
+    const ordersProcessedVals = safeValues(data.orders_processed_values || [], trendLabels.length);
+    new Chart(document.getElementById("chartOrders"), {
+      type: "line",
+      data: {
+        labels: trendLabels,
+        datasets: [
+          { label: "Created", data: ordersCreatedVals, borderWidth: 2, tension: 0.35, fill: false, pointRadius: 0 },
+          { label: "Processed", data: ordersProcessedVals, borderWidth: 2, tension: 0.35, fill: false, pointRadius: 0 }
+        ]
+      },
       options: baseOpts
     });
 
