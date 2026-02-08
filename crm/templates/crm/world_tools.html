@@ -258,6 +258,153 @@
     margin-top: 8px;
   }
 
+  .wt-event-grid{
+    display:grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .wt-map{
+    position: relative;
+    height: 260px;
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background:
+      radial-gradient(circle at 20% 55%, rgba(255,255,255,0.12), transparent 50%),
+      radial-gradient(circle at 55% 35%, rgba(255,255,255,0.10), transparent 45%),
+      radial-gradient(circle at 80% 60%, rgba(255,255,255,0.10), transparent 45%),
+      linear-gradient(180deg, rgba(15,23,42,0.9), rgba(2,6,23,0.9));
+    overflow: hidden;
+  }
+
+  .wt-map::after{
+    content: \"\";
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px),
+      linear-gradient(0deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.4;
+    pointer-events: none;
+  }
+
+  .wt-pin{
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--gold1);
+    box-shadow: 0 0 0 4px rgba(255,227,155,0.15);
+    transform: translate(-50%, -50%);
+    cursor: pointer;
+  }
+
+  .wt-pin::after{
+    content: \"\";
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,227,155,0.35);
+    animation: wtPulse 1.8s ease-out infinite;
+  }
+
+  .wt-pin.is-active{
+    background: #fff;
+    box-shadow: 0 0 0 6px rgba(34,197,94,0.25);
+  }
+
+  @keyframes wtPulse{
+    0%{ transform: scale(0.6); opacity: 0.8; }
+    100%{ transform: scale(1.4); opacity: 0; }
+  }
+
+  .wt-event-panel{
+    display:flex;
+    flex-direction:column;
+    gap: 10px;
+  }
+
+  .wt-event-filters{
+    display:flex;
+    flex-wrap:wrap;
+    gap: 8px;
+  }
+
+  .wt-event-list{
+    display:flex;
+    flex-direction:column;
+    gap: 8px;
+    max-height: 260px;
+    overflow:auto;
+    padding-right: 4px;
+  }
+
+  .wt-event-card{
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.10);
+    background: rgba(0,0,0,0.28);
+    display:flex;
+    justify-content:space-between;
+    gap: 8px;
+  }
+
+  .wt-event-title{
+    font-weight: 900;
+    font-size: 13px;
+    color: #fff;
+  }
+
+  .wt-event-meta{
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .wt-event-tag{
+    font-size: 11px;
+    font-weight: 900;
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.18);
+    color: #fff;
+    white-space: nowrap;
+    height: fit-content;
+  }
+
+  .wt-focus{
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 8px;
+  }
+
+  .wt-calendar{
+    margin-top: 12px;
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 8px;
+  }
+
+  .wt-month-card{
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.10);
+    background: rgba(0,0,0,0.28);
+  }
+
+  .wt-month-title{
+    font-size: 12px;
+    font-weight: 900;
+    margin-bottom: 6px;
+    color: #fff;
+  }
+
+  .wt-month-event{
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
   /* grid spans */
   .span-4{ grid-column: span 4; }
   .span-6{ grid-column: span 6; }
@@ -357,6 +504,7 @@
     .wt-row-4{ grid-template-columns: 1fr; }
     .wt-item-right{ justify-content:flex-start; }
     .wt-dd-menu{ left:0; right:auto; }
+    .wt-event-grid{ grid-template-columns: 1fr; }
   }
 </style>
 
@@ -399,6 +547,49 @@
   </div>
 
   <div class="wt-grid">
+
+    <!-- GLOBAL EVENTS -->
+    <div class="wt-card span-12">
+      <div class="wt-card-inner">
+        <div class="wt-card-title">🗺 Global events map & calendar</div>
+        <div class="wt-note" style="margin-bottom:10px;">
+          Track fashion weeks, trade shows, and regional festivals. Filter to plan outreach and sampling.
+        </div>
+
+        <div class="wt-event-grid">
+          <div>
+            <div id="wt-map" class="wt-map"></div>
+            <div id="wt-event-focus" class="wt-focus">Select an event to see a quick highlight.</div>
+          </div>
+
+          <div class="wt-event-panel">
+            <div class="wt-event-filters">
+              <select id="wt-event-region" class="wt-select">
+                <option value="all">All regions</option>
+                <option value="North America">North America</option>
+                <option value="Europe">Europe</option>
+                <option value="Middle East">Middle East</option>
+                <option value="Asia">Asia</option>
+                <option value="LATAM">LATAM</option>
+              </select>
+              <select id="wt-event-type" class="wt-select">
+                <option value="all">All types</option>
+                <option value="Runway">Runway</option>
+                <option value="Trade">Trade</option>
+                <option value="Expo">Expo</option>
+                <option value="Festival">Festival</option>
+                <option value="Summit">Summit</option>
+              </select>
+              <input id="wt-event-search" class="wt-input" placeholder="Search events">
+            </div>
+
+            <div id="wt-event-list" class="wt-event-list"></div>
+          </div>
+        </div>
+
+        <div id="wt-calendar" class="wt-calendar"></div>
+      </div>
+    </div>
 
     <!-- CLOCK -->
     <div class="wt-card span-4">
@@ -654,6 +845,153 @@
     try {
       localStorage.setItem(key, JSON.stringify(value));
     } catch (e) {}
+  }
+
+  // GLOBAL EVENTS
+  const worldEvents = [
+    { id: "nyfw", name: "New York Fashion Week", date: "2026-02-12", city: "New York", country: "USA", region: "North America", type: "Runway", focus: "Retail buy-in", x: 28, y: 38 },
+    { id: "toronto-textile", name: "Toronto Apparel Textile Show", date: "2026-03-03", city: "Toronto", country: "Canada", region: "North America", type: "Trade", focus: "Supplier leads", x: 26, y: 33 },
+    { id: "lfw", name: "London Fashion Week", date: "2026-02-20", city: "London", country: "UK", region: "Europe", type: "Runway", focus: "Trend signal", x: 45, y: 30 },
+    { id: "paris-fabric", name: "Paris Fabric Expo", date: "2026-03-15", city: "Paris", country: "France", region: "Europe", type: "Expo", focus: "Fabric sourcing", x: 47, y: 34 },
+    { id: "dubai-modest", name: "Dubai Modest Wear Expo", date: "2026-03-22", city: "Dubai", country: "UAE", region: "Middle East", type: "Expo", focus: "Modest demand", x: 60, y: 46 },
+    { id: "shanghai", name: "Shanghai Fashion Week", date: "2026-04-01", city: "Shanghai", country: "China", region: "Asia", type: "Runway", focus: "Color direction", x: 78, y: 40 },
+    { id: "dhaka-summit", name: "Dhaka Textile Summit", date: "2026-04-10", city: "Dhaka", country: "Bangladesh", region: "Asia", type: "Summit", focus: "Sourcing plan", x: 70, y: 52 },
+    { id: "tokyo-sustain", name: "Tokyo Sustainability Forum", date: "2026-05-05", city: "Tokyo", country: "Japan", region: "Asia", type: "Festival", focus: "Eco programs", x: 84, y: 36 },
+    { id: "sao-street", name: "Sao Paulo Streetwear Week", date: "2026-03-28", city: "Sao Paulo", country: "Brazil", region: "LATAM", type: "Festival", focus: "Streetwear", x: 33, y: 66 }
+  ];
+
+  function formatEventDate(dateStr) {
+    const date = new Date(dateStr + "T00:00:00");
+    if (Number.isNaN(date.getTime())) return dateStr;
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  }
+
+  function getMonthLabel(dateStr) {
+    const date = new Date(dateStr + "T00:00:00");
+    if (Number.isNaN(date.getTime())) return "Upcoming";
+    return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  }
+
+  function getFilteredEvents() {
+    const region = (document.getElementById("wt-event-region") || {}).value || "all";
+    const type = (document.getElementById("wt-event-type") || {}).value || "all";
+    const query = ((document.getElementById("wt-event-search") || {}).value || "").trim().toLowerCase();
+
+    return worldEvents.filter((ev) => {
+      const matchRegion = region === "all" || ev.region === region;
+      const matchType = type === "all" || ev.type === type;
+      const text = (ev.name + " " + ev.city + " " + ev.country + " " + ev.focus).toLowerCase();
+      const matchQuery = !query || text.includes(query);
+      return matchRegion && matchType && matchQuery;
+    });
+  }
+
+  function renderEventMap(events) {
+    const map = document.getElementById("wt-map");
+    if (!map) return;
+    map.innerHTML = events.map((ev) => (
+      `<div class="wt-pin" data-id="${ev.id}" title="${ev.name}" style="left:${ev.x}%; top:${ev.y}%;"></div>`
+    )).join("");
+  }
+
+  function renderEventList(events) {
+    const list = document.getElementById("wt-event-list");
+    if (!list) return;
+    if (!events.length) {
+      list.innerHTML = "<div class=\"wt-note\">No events match your filter.</div>";
+      return;
+    }
+    list.innerHTML = events.map((ev) => (
+      `<div class="wt-event-card" data-id="${ev.id}">
+        <div>
+          <div class="wt-event-title">${ev.name}</div>
+          <div class="wt-event-meta">${formatEventDate(ev.date)} · ${ev.city}, ${ev.country}</div>
+          <div class="wt-event-meta">${ev.focus}</div>
+        </div>
+        <div class="wt-event-tag">${ev.type}</div>
+      </div>`
+    )).join("");
+  }
+
+  function renderEventCalendar(events) {
+    const calendar = document.getElementById("wt-calendar");
+    if (!calendar) return;
+    const grouped = {};
+    events.forEach((ev) => {
+      const key = getMonthLabel(ev.date);
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(ev);
+    });
+
+    const months = Object.keys(grouped);
+    if (!months.length) {
+      calendar.innerHTML = "";
+      return;
+    }
+    calendar.innerHTML = months.map((month) => (
+      `<div class="wt-month-card">
+        <div class="wt-month-title">${month}</div>
+        ${grouped[month].map((ev) => (
+          `<div class="wt-month-event">${formatEventDate(ev.date)} - ${ev.name}</div>`
+        )).join("")}
+      </div>`
+    )).join("");
+  }
+
+  function initWorldEvents() {
+    const regionSelect = document.getElementById("wt-event-region");
+    const typeSelect = document.getElementById("wt-event-type");
+    const searchInput = document.getElementById("wt-event-search");
+    const focus = document.getElementById("wt-event-focus");
+
+    function updateFocus(ev) {
+      if (!focus || !ev) return;
+      focus.textContent = ev.name + " - " + ev.city + ", " + ev.country + " (" + formatEventDate(ev.date) + ") · " + ev.focus;
+    }
+
+    function refresh() {
+      const filtered = getFilteredEvents();
+      renderEventMap(filtered);
+      renderEventList(filtered);
+      renderEventCalendar(filtered);
+
+      const first = filtered[0];
+      if (first) updateFocus(first);
+
+      const map = document.getElementById("wt-map");
+      if (map) {
+        map.querySelectorAll(".wt-pin").forEach((pin) => {
+          pin.addEventListener("click", function () {
+            map.querySelectorAll(".wt-pin").forEach((p) => p.classList.remove("is-active"));
+            this.classList.add("is-active");
+            const item = filtered.find((ev) => ev.id === this.getAttribute("data-id"));
+            if (item) updateFocus(item);
+          });
+        });
+      }
+
+      const list = document.getElementById("wt-event-list");
+      if (list) {
+        list.querySelectorAll(".wt-event-card").forEach((card) => {
+          card.addEventListener("click", function () {
+            const id = this.getAttribute("data-id");
+            const item = filtered.find((ev) => ev.id === id);
+            if (item) updateFocus(item);
+            if (map) {
+              map.querySelectorAll(".wt-pin").forEach((p) => {
+                p.classList.toggle("is-active", p.getAttribute("data-id") === id);
+              });
+            }
+          });
+        });
+      }
+    }
+
+    if (regionSelect) regionSelect.addEventListener("change", refresh);
+    if (typeSelect) typeSelect.addEventListener("change", refresh);
+    if (searchInput) searchInput.addEventListener("input", refresh);
+
+    refresh();
   }
 
   // CLOCK
@@ -931,6 +1269,7 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
+    initWorldEvents();
     initClockForm();
     updateClock();
     setInterval(updateClock, 1000);

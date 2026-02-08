@@ -3716,6 +3716,50 @@ def world_dashboard(request):
         {"pair": "GBP -> BDT"},
     ]
 
+    trend_cards = [
+        {"label": "Demand pulse", "value": "62", "delta": "+4%", "note": "last 30 days", "tone": "up"},
+        {"label": "Price pressure", "value": "47", "delta": "-2%", "note": "yarn index", "tone": "down"},
+        {"label": "Lead time risk", "value": "31", "delta": "+1%", "note": "port congestion", "tone": "flat"},
+        {"label": "Eco share", "value": "28%", "delta": "+6%", "note": "buyer asks", "tone": "up"},
+    ]
+
+    category_mix = [
+        {"label": "Activewear", "value": 28},
+        {"label": "Lounge sets", "value": 22},
+        {"label": "Denim", "value": 16},
+        {"label": "Outerwear", "value": 14},
+        {"label": "Basics", "value": 20},
+    ]
+
+    region_signals = [
+        {"region": "North America", "demand": 68, "lead_time": "42 days", "note": "Stable buys"},
+        {"region": "Europe", "demand": 54, "lead_time": "45 days", "note": "Careful pricing"},
+        {"region": "Middle East", "demand": 61, "lead_time": "35 days", "note": "Modest wear up"},
+        {"region": "Asia", "demand": 49, "lead_time": "32 days", "note": "Competitive"},
+    ]
+
+    events = [
+        {"date": "Feb 12", "name": "New York Fashion Week", "city": "New York", "region": "North America", "etype": "Runway", "impact": "Retail buys"},
+        {"date": "Feb 20", "name": "London Fashion Week", "city": "London", "region": "Europe", "etype": "Runway", "impact": "Trend signal"},
+        {"date": "Mar 03", "name": "Toronto Apparel Textile Show", "city": "Toronto", "region": "North America", "etype": "Trade", "impact": "Supplier leads"},
+        {"date": "Mar 22", "name": "Dubai Modest Wear Expo", "city": "Dubai", "region": "Middle East", "etype": "Expo", "impact": "Modest demand"},
+        {"date": "Apr 01", "name": "Shanghai Fashion Week", "city": "Shanghai", "region": "Asia", "etype": "Runway", "impact": "Fabric shifts"},
+        {"date": "Apr 10", "name": "Dhaka Textile Summit", "city": "Dhaka", "region": "Asia", "etype": "Summit", "impact": "Sourcing"},
+    ]
+
+    experts = [
+        {"name": "Lena Roy", "role": "Merch Lead, Atlas Sports", "topic": "Performance fabrics", "quote": "Buyers want smoother hand-feel and longer colorfast life."},
+        {"name": "Arif Hasan", "role": "Sourcing Director, Meadow & Co.", "topic": "Lead-time planning", "quote": "Pre-booking trims is now a win for 45-day programs."},
+        {"name": "Nina Park", "role": "Designer, Northline Studio", "topic": "Color direction", "quote": "Dusty pastels and deep navy are strong for FW."},
+    ]
+
+    trend_labels = ["Week 1", "Week 2", "Week 3", "Week 4", "Week 5", "Week 6"]
+    trend_series = {
+        "demand": [58, 60, 61, 63, 62, 64],
+        "price": [52, 51, 50, 49, 48, 47],
+        "lead": [30, 31, 33, 32, 31, 31],
+    }
+
     ai_fashion_update = "AI Trend Update unavailable right now."
     if "_ai_client" in globals() and _ai_client:
         try:
@@ -3739,21 +3783,77 @@ def world_dashboard(request):
         "cities": cities,
         "currencies": currencies,
         "ai_fashion_update": ai_fashion_update,
+        "trend_cards": trend_cards,
+        "category_mix": category_mix,
+        "region_signals": region_signals,
+        "events": events,
+        "experts": experts,
+        "trend_labels_json": json.dumps(trend_labels),
+        "trend_series_json": json.dumps(trend_series),
     }
     return render(request, "crm/world_dashboard.html", context)
 
 
-@require_POST
 def world_ai_fashion_news(request):
-    if not ("_ai_client" in globals() and _ai_client):
+    ai_enabled = bool("_ai_client" in globals() and _ai_client)
+    if request.method != "POST":
+        context = {
+            "ai_enabled": ai_enabled,
+            "sample_notes": [
+                "Green factories and safety audits remain strong selling points for Bangladesh.",
+                "Activewear and lounge sets stay steady; buyers want softer hand-feel.",
+                "Offer one standard fabric and one eco option when possible.",
+                "For small orders, reduce color count to control costs.",
+                "Repeat buyers expect faster sampling and clear QC checkpoints.",
+            ],
+            "signal_cards": [
+                {"label": "Category heat", "value": "Activewear +6%"},
+                {"label": "Price signals", "value": "Yarn softening"},
+                {"label": "Lead time", "value": "Stable 40-45d"},
+            ],
+        }
+        return render(request, "crm/world_ai_fashion_news.html", context)
+
+    if not ai_enabled:
         return JsonResponse({"ok": False, "error": "AI is not configured on server."})
 
     try:
+        payload = {}
+        try:
+            payload = json.loads(request.body.decode("utf-8") or "{}")
+        except Exception:
+            payload = {}
+
+        mode = (payload.get("mode") or "custom").strip().lower()
+        region = (payload.get("region") or "Global").strip()
+        category = (payload.get("category") or "All categories").strip()
+        buyer = (payload.get("buyer") or "Mid-market").strip()
+        price = (payload.get("price") or "Mid").strip()
+        sustainability = (payload.get("sustainability") or "Balanced").strip()
+        lead_time = (payload.get("lead_time") or "Standard").strip()
+        intent = (payload.get("intent") or "sales").strip()
+
+        if mode == "dashboard":
+            prompt = (
+                "Give a short daily update about global fashion and apparel trends. "
+                "Only key changes, risks, or chances for a clothing manufacturer in Bangladesh and Canada. "
+                "Max 5 bullets. Simple English."
+            )
+        else:
+            prompt = (
+                "Create a short fashion insight note for a garment manufacturer. "
+                f"Region focus: {region}. Category focus: {category}. "
+                f"Buyer type: {buyer}. Price tier: {price}. "
+                f"Sustainability: {sustainability}. Lead time: {lead_time}. "
+                f"Intent: {intent}. "
+                "Return 5 bullet points plus 2 quick actions. Simple English."
+            )
+
         response = _ai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are an assistant for Iconic Apparel House. Keep it short and useful."},
-                {"role": "user", "content": "Give 4 to 6 bullet points about fashion and apparel news. Simple English."},
+                {"role": "user", "content": prompt},
             ],
         )
         text = response.choices[0].message.content

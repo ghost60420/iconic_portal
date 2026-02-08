@@ -11,13 +11,27 @@
     --muted:#a8b0bd;
     --gold1:#ffe39b;
     --gold2:#e4c067;
+    --green:#22c55e;
+    --red:#f97316;
   }
 
   .wd-wrap{
-    max-width: 1200px;
+    max-width: 1250px;
     margin: 16px auto 28px auto;
     padding: 0 10px;
     color: var(--text);
+    position: relative;
+  }
+
+  .wd-wrap::before{
+    content: "";
+    position: absolute;
+    inset: -60px 0 auto 0;
+    height: 240px;
+    background: radial-gradient(circle at 20% 10%, rgba(255,227,155,0.12), transparent 55%),
+                radial-gradient(circle at 80% 20%, rgba(34,197,94,0.12), transparent 60%);
+    z-index: 0;
+    pointer-events: none;
   }
 
   .wd-header{
@@ -27,10 +41,12 @@
     gap:12px;
     flex-wrap:wrap;
     margin-bottom: 14px;
+    position: relative;
+    z-index: 1;
   }
 
   .wd-title{
-    font-size: 22px;
+    font-size: 24px;
     font-weight: 900;
     color: #fff;
     margin: 0;
@@ -78,10 +94,57 @@
     border-color: rgba(255,227,155,0.25);
   }
 
+  .wd-metrics{
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .wd-metric-card{
+    background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 16px;
+    padding: 12px 14px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+  }
+
+  .wd-metric-label{
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .wd-metric-value{
+    font-size: 22px;
+    font-weight: 900;
+    margin: 6px 0 4px 0;
+  }
+
+  .wd-metric-foot{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .wd-metric-delta{
+    font-weight: 900;
+  }
+
+  .wd-metric-up .wd-metric-delta{ color: var(--green); }
+  .wd-metric-down .wd-metric-delta{ color: var(--red); }
+
   .wd-grid{
     display:grid;
     grid-template-columns: repeat(12, 1fr);
     gap: 12px;
+    position: relative;
+    z-index: 1;
   }
 
   .wd-card{
@@ -107,6 +170,80 @@
   }
 
   .wd-note{
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .wd-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,227,155,0.25);
+    background: rgba(255,227,155,0.10);
+    font-size: 12px;
+    font-weight: 900;
+    color: var(--gold1);
+    white-space: nowrap;
+  }
+
+  .wd-split{
+    display:grid;
+    grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .wd-chart-wrap{
+    background: rgba(0,0,0,0.28);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    padding: 12px;
+    min-height: 240px;
+  }
+
+  .wd-progress{
+    display:grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items:center;
+    margin-bottom: 8px;
+  }
+
+  .wd-progress-bar{
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+    overflow:hidden;
+  }
+
+  .wd-progress-bar span{
+    display:block;
+    height: 100%;
+    background: linear-gradient(90deg, rgba(255,227,155,0.7), rgba(255,255,255,0.1));
+  }
+
+  .wd-region-list{
+    display:flex;
+    flex-direction:column;
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .wd-region{
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(0,0,0,0.28);
+  }
+
+  .wd-region-title{
+    font-weight: 900;
+    font-size: 13px;
+    color:#fff;
+  }
+
+  .wd-region-sub{
     font-size: 12px;
     color: var(--muted);
   }
@@ -148,18 +285,77 @@
     line-height: 1.2;
   }
 
-  .wd-pill{
+  .wd-event-row{
+    display:flex;
+    justify-content:space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.10);
+    background: rgba(0,0,0,0.30);
+  }
+
+  .wd-event-meta{
+    display:flex;
+    flex-direction:column;
+    gap: 4px;
+  }
+
+  .wd-event-tag{
     display:inline-flex;
-    align-items:center;
-    gap:6px;
-    padding: 6px 10px;
+    padding: 4px 8px;
     border-radius: 999px;
-    border: 1px solid rgba(255,227,155,0.25);
-    background: rgba(255,227,155,0.10);
+    font-size: 11px;
+    font-weight: 800;
+    border: 1px solid rgba(255,255,255,0.16);
+    color: #fff;
+  }
+
+  .wd-event-filter{
+    display:flex;
+    gap: 8px;
+    flex-wrap:wrap;
+    margin-bottom: 10px;
+  }
+
+  .wd-select{
+    background: rgba(0,0,0,0.35);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    color: #fff;
+    padding: 6px 8px;
     font-size: 12px;
+  }
+
+  .wd-expert-grid{
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+  }
+
+  .wd-expert{
+    padding: 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.10);
+    background: rgba(0,0,0,0.28);
+  }
+
+  .wd-expert-title{
     font-weight: 900;
-    color: var(--gold1);
-    white-space: nowrap;
+    font-size: 13px;
+  }
+
+  .wd-expert-sub{
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 4px;
+  }
+
+  .wd-expert-quote{
+    margin-top: 8px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #e7e7e7;
   }
 
   .wd-ai-box{
@@ -197,12 +393,15 @@
   }
 
   .span-4{ grid-column: span 4; }
+  .span-5{ grid-column: span 5; }
   .span-6{ grid-column: span 6; }
+  .span-7{ grid-column: span 7; }
+  .span-8{ grid-column: span 8; }
   .span-12{ grid-column: span 12; }
 
   @media (max-width: 992px){
-    .span-4{ grid-column: span 12; }
-    .span-6{ grid-column: span 12; }
+    .span-4, .span-5, .span-6, .span-7, .span-8{ grid-column: span 12; }
+    .wd-split{ grid-template-columns: 1fr; }
   }
 </style>
 
@@ -211,30 +410,78 @@
   <div class="wd-header">
     <div>
       <h1 class="wd-title">World dashboard</h1>
-      <div class="wd-sub">Quick view of time, money and fashion news for Iconic.</div>
+      <div class="wd-sub">Live-looking trend signals, events, and AI insights for the fashion team.</div>
     </div>
 
     <div class="wd-actions">
       <a class="wd-btn wd-btn-gold" href="{% url 'world_tools' %}">🧰 World tools</a>
+      <a class="wd-btn" href="{% url 'world_ai_fashion_news' %}">🧠 AI fashion notes</a>
       <a class="wd-btn" href="{% url 'main_dashboard' %}">CRM Home</a>
     </div>
   </div>
 
+  <div class="wd-metrics">
+    {% for card in trend_cards %}
+      <div class="wd-metric-card wd-metric-{{ card.tone }}">
+        <div class="wd-metric-label">{{ card.label }}</div>
+        <div class="wd-metric-value">{{ card.value }}</div>
+        <div class="wd-metric-foot">
+          <span class="wd-metric-delta">{{ card.delta }}</span>
+          <span>{{ card.note }}</span>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
   <div class="wd-grid">
 
-    <!-- CLOCK -->
+    <div class="wd-card span-12">
+      <div class="wd-card-inner">
+        <div class="wd-card-title">📊 Global trend pulse <span class="wd-pill">Sample data</span></div>
+        <div class="wd-note" style="margin-bottom:10px;">Use this as a visual brief until live feeds are connected.</div>
+
+        <div class="wd-split">
+          <div class="wd-chart-wrap">
+            <canvas id="wdTrendChart" height="190"></canvas>
+          </div>
+          <div>
+            <div class="wd-note" style="margin-bottom:6px; font-weight:900;">Category heat</div>
+            {% for item in category_mix %}
+              <div class="wd-progress">
+                <div>
+                  <div class="wd-item-title">{{ item.label }}</div>
+                  <div class="wd-progress-bar"><span style="width: {{ item.value }}%;"></span></div>
+                </div>
+                <div class="wd-item-sub">{{ item.value }}%</div>
+              </div>
+            {% endfor %}
+
+            <div class="wd-region-list">
+              {% for region in region_signals %}
+                <div class="wd-region">
+                  <div class="wd-region-title">{{ region.region }}</div>
+                  <div class="wd-region-sub">Demand {{ region.demand }} · Lead {{ region.lead_time }}</div>
+                  <div class="wd-region-sub">{{ region.note }}</div>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="wd-card span-8">
       <div class="wd-card-inner">
         <div class="wd-card-title">🕒 World clock</div>
         <div class="wd-note" style="margin-bottom:10px;">
-          Time uses your browser time. Later we can show more cities live.
+          Time uses your browser time. Add more cities in World tools.
         </div>
 
         <div class="wd-list">
           <div class="wd-item">
             <div class="wd-item-left">
               <div class="wd-item-title">Live on your browser</div>
-              <div class="wd-item-sub">This section is a quick reminder for calls</div>
+              <div class="wd-item-sub">Quick reminder for call windows</div>
             </div>
             <span class="wd-pill">Live</span>
           </div>
@@ -254,12 +501,11 @@
       </div>
     </div>
 
-    <!-- CURRENCY -->
     <div class="wd-card span-4">
       <div class="wd-card-inner">
         <div class="wd-card-title">💱 Currency watch</div>
         <div class="wd-note" style="margin-bottom:10px;">
-          Later this can use live rates. For now it shows sample pairs.
+          Sample pairs until live rates are connected.
         </div>
 
         <div class="wd-list">
@@ -285,20 +531,74 @@
       </div>
     </div>
 
-    <!-- AI FASHION NEWS -->
+    <div class="wd-card span-7">
+      <div class="wd-card-inner">
+        <div class="wd-card-title">🗓 Global events calendar</div>
+        <div class="wd-note" style="margin-bottom:10px;">Filter by region or event type.</div>
+
+        <div class="wd-event-filter">
+          <select id="wd-event-region" class="wd-select">
+            <option value="all">All regions</option>
+            <option value="North America">North America</option>
+            <option value="Europe">Europe</option>
+            <option value="Middle East">Middle East</option>
+            <option value="Asia">Asia</option>
+          </select>
+          <select id="wd-event-type" class="wd-select">
+            <option value="all">All types</option>
+            <option value="Runway">Runway</option>
+            <option value="Trade">Trade</option>
+            <option value="Expo">Expo</option>
+            <option value="Summit">Summit</option>
+          </select>
+        </div>
+
+        <div id="wd-event-list" class="wd-list">
+          {% for ev in events %}
+            <div class="wd-event-row" data-region="{{ ev.region }}" data-type="{{ ev.etype }}">
+              <div class="wd-event-meta">
+                <div class="wd-item-title">{{ ev.name }}</div>
+                <div class="wd-item-sub">{{ ev.city }} · {{ ev.region }}</div>
+                <div class="wd-item-sub">Impact: {{ ev.impact }}</div>
+              </div>
+              <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+                <div class="wd-event-tag">{{ ev.etype }}</div>
+                <div class="wd-item-sub">{{ ev.date }}</div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="wd-card span-5">
+      <div class="wd-card-inner">
+        <div class="wd-card-title">🎙 Industry expert interviews</div>
+        <div class="wd-expert-grid">
+          {% for ex in experts %}
+            <div class="wd-expert">
+              <div class="wd-expert-title">{{ ex.name }}</div>
+              <div class="wd-expert-sub">{{ ex.role }} · {{ ex.topic }}</div>
+              <div class="wd-expert-quote">&quot;{{ ex.quote }}&quot;</div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
     <div class="wd-card span-12">
       <div class="wd-card-inner">
-        <div class="wd-card-title">📰 Fashion and apparel news <span class="wd-pill">AI SmartBrain</span></div>
+        <div class="wd-card-title">🧠 AI fashion pulse <span class="wd-pill">SmartBrain</span></div>
         <div class="wd-note" style="margin-bottom:10px;">
-          Short daily ideas about trends that may help Iconic.
+          Short daily ideas about trends that may help Iconic. Use AI notes for deeper insights.
         </div>
 
         <button id="ai-fashion-btn" type="button" class="wd-ai-btn" onclick="loadFashionNews()">
-          Ask AI for todays fashion update
+          Ask AI for today's fashion update
         </button>
 
         <div id="ai-fashion-text" class="wd-ai-box" style="margin-top:10px;">
-          Click the button to get a short update for today.
+          {{ ai_fashion_update|default:"Click the button to get a short update for today." }}
         </div>
       </div>
     </div>
@@ -306,7 +606,11 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+  const trendLabels = {{ trend_labels_json|safe }};
+  const trendSeries = {{ trend_series_json|safe }};
+
   function getCookie(name) {
     let cookieValue = null;
     if (document.cookie && document.cookie !== "") {
@@ -328,7 +632,7 @@
 
     btn.disabled = true;
     btn.textContent = "Thinking...";
-    box.textContent = "Please wait, AI is preparing todays note...";
+    box.textContent = "Please wait, AI is preparing today's note...";
 
     fetch("{% url 'world_ai_fashion_news' %}", {
       method: "POST",
@@ -336,7 +640,7 @@
         "Content-Type": "application/json",
         "X-CSRFToken": getCookie("csrftoken")
       },
-      body: "{}"
+      body: JSON.stringify({ mode: "dashboard" })
     })
     .then(resp => resp.json())
     .then(data => {
@@ -351,8 +655,79 @@
     })
     .finally(() => {
       btn.disabled = false;
-      btn.textContent = "Ask AI for todays fashion update";
+      btn.textContent = "Ask AI for today's fashion update";
     });
   }
+
+  function initTrendChart() {
+    const canvas = document.getElementById("wdTrendChart");
+    if (!canvas || !window.Chart) return;
+    new Chart(canvas, {
+      type: "line",
+      data: {
+        labels: trendLabels,
+        datasets: [
+          {
+            label: "Demand",
+            data: trendSeries.demand || [],
+            borderColor: "rgba(255,227,155,0.9)",
+            backgroundColor: "rgba(255,227,155,0.2)",
+            tension: 0.35,
+            fill: true,
+          },
+          {
+            label: "Price",
+            data: trendSeries.price || [],
+            borderColor: "rgba(248,113,113,0.9)",
+            backgroundColor: "rgba(248,113,113,0.15)",
+            tension: 0.35,
+            fill: true,
+          },
+          {
+            label: "Lead time",
+            data: trendSeries.lead || [],
+            borderColor: "rgba(59,130,246,0.9)",
+            backgroundColor: "rgba(59,130,246,0.15)",
+            tension: 0.35,
+            fill: true,
+          }
+        ]
+      },
+      options: {
+        plugins: { legend: { display: true, labels: { color: "#cbd5f5" } } },
+        scales: {
+          x: { ticks: { color: "#94a3b8" } },
+          y: { ticks: { color: "#94a3b8" } }
+        }
+      }
+    });
+  }
+
+  function initEventFilters() {
+    const regionSelect = document.getElementById("wd-event-region");
+    const typeSelect = document.getElementById("wd-event-type");
+    const list = document.getElementById("wd-event-list");
+    if (!regionSelect || !typeSelect || !list) return;
+
+    function applyFilter() {
+      const region = regionSelect.value;
+      const etype = typeSelect.value;
+      list.querySelectorAll(".wd-event-row").forEach((row) => {
+        const rowRegion = row.getAttribute("data-region");
+        const rowType = row.getAttribute("data-type");
+        const showRegion = region === "all" || region === rowRegion;
+        const showType = etype === "all" || etype === rowType;
+        row.style.display = (showRegion && showType) ? "flex" : "none";
+      });
+    }
+
+    regionSelect.addEventListener("change", applyFilter);
+    typeSelect.addEventListener("change", applyFilter);
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    initTrendChart();
+    initEventFilters();
+  });
 </script>
 {% endblock %}
