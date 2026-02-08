@@ -294,6 +294,117 @@
   .prod-add-hidden {
     display: none;
   }
+
+  .prod-line-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+
+  .prod-line {
+    border: 1px dashed #1f2937;
+    border-radius: 12px;
+    padding: 12px;
+    background: rgba(2, 6, 23, 0.55);
+    margin-bottom: 12px;
+  }
+
+  .prod-line.active {
+    border-color: #facc15;
+    box-shadow: 0 0 0 1px rgba(250,204,21,0.2);
+  }
+
+  .prod-line-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .prod-line-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #f9fafb;
+  }
+
+  .prod-line-meta {
+    font-size: 11px;
+    color: #9ca3af;
+  }
+
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(2,6,23,0.75);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    z-index: 80;
+  }
+
+  .modal-backdrop.open {
+    display: flex;
+  }
+
+  .modal-card {
+    width: min(760px, 100%);
+    background: #0b1020;
+    border: 1px solid #1f2937;
+    border-radius: 14px;
+    padding: 16px;
+    box-shadow: 0 0 30px rgba(0,0,0,0.6);
+  }
+
+  .modal-card .inputx {
+    background: #020617;
+    border: 1px solid #374151;
+    border-radius: 6px;
+    color: #e5e7eb;
+    font-size: 13px;
+    padding: 8px 10px;
+    width: 100%;
+  }
+
+  .modal-card .inputx:focus {
+    border-color: #facc15;
+    outline: none;
+    box-shadow: 0 0 0 1px rgba(250,204,21,0.3);
+  }
+
+  .modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .modal-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: #f9fafb;
+  }
+
+  .modal-sub {
+    font-size: 12px;
+    color: #9ca3af;
+    margin-top: 2px;
+  }
+
+  .modal-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  @media (max-width: 720px) {
+    .modal-grid { grid-template-columns: 1fr; }
+  }
 </style>
 
 <div class="prod-add-page">
@@ -468,100 +579,107 @@
 
         <div class="prod-style-left">
 
-          <div class="prod-add-field">
-            <div class="prod-add-label">Style name</div>
-            {{ form.style_name }}
-            <div class="prod-add-help">
-              Main style name or code. You can list more than one if needed.
-            </div>
-            {% if form.style_name.errors %}
-              <div class="prod-add-errors">{{ form.style_name.errors|striptags }}</div>
-            {% endif %}
-          </div>
-
-          <div class="prod-add-field">
-            <div class="prod-add-label">Color info</div>
-            {{ form.color_info }}
-            <div class="prod-add-help">
-              Example black, cocoa, sand. You can write one line for every color.
-            </div>
-            {% if form.color_info.errors %}
-              <div class="prod-add-errors">{{ form.color_info.errors|striptags }}</div>
-            {% endif %}
-          </div>
-
-          <div class="prod-add-field size-grid-block" style="grid-column:1 / -1;">
-            <div class="prod-add-label">Sizes and ratio up to 5XL</div>
-
-            <div class="size-grid-wrapper">
-              <div class="size-grid-label-row">
-                <div class="size-grid-label">XS</div>
-                <div class="size-grid-label">S</div>
-                <div class="size-grid-label">M</div>
-                <div class="size-grid-label">L</div>
-                <div class="size-grid-label">XL</div>
-                <div class="size-grid-label">2XL</div>
-                <div class="size-grid-label">3XL</div>
-                <div class="size-grid-label">4XL</div>
-                <div class="size-grid-label">5XL</div>
-              </div>
-              <div class="size-grid-input-row">
-                <input type="number" min="0" class="size-grid-input" data-size-field="XS" placeholder="0">
-                <input type="number" min="0" class="size-grid-input" data-size-field="S" placeholder="0">
-                <input type="number" min="0" class="size-grid-input" data-size-field="M" placeholder="0">
-                <input type="number" min="0" class="size-grid-input" data-size-field="L" placeholder="0">
-                <input type="number" min="0" class="size-grid-input" data-size-field="XL" placeholder="0">
-                <input type="number" min="0" class="size-grid-input" data-size-field="2XL" placeholder="0">
-                <input type="number" min="0" class="size-grid-input" data-size-field="3XL" placeholder="0">
-                <input type="number" min="0" class="size-grid-input" data-size-field="4XL" placeholder="0">
-                <input type="number" min="0" class="size-grid-input" data-size-field="5XL" placeholder="0">
+          <div class="prod-line-actions">
+            <div>
+              <div class="prod-add-label">Product lines</div>
+              <div class="prod-add-help">
+                Keep multiple items in one work order. Add a new line to duplicate sizes and water details.
               </div>
             </div>
-
-            <div class="prod-add-help">
-              Fill how many pieces for every size. System will store this inside the size ratio note field.
-            </div>
-
-            <div class="prod-add-hidden">
-              {{ form.size_ratio_note }}
-            </div>
-
-            {% if form.size_ratio_note.errors %}
-              <div class="prod-add-errors">{{ form.size_ratio_note.errors|striptags }}</div>
-            {% endif %}
+            <button type="button" class="btn btn-sm btn-outline-light" id="prod-line-add">Add Line</button>
           </div>
 
-          <div class="prod-add-field">
-            <div class="prod-add-label">Accessories and trims</div>
-            {{ form.accessories_note }}
-            <div class="prod-add-help">
-              List drawcord, zipper type, buttons, labels, patches, tags and other trims.
-            </div>
-            {% if form.accessories_note.errors %}
-              <div class="prod-add-errors">{{ form.accessories_note.errors|striptags }}</div>
-            {% endif %}
-          </div>
+          <input type="hidden" name="line_payload" id="line-payload">
 
-          <div class="prod-add-field">
-            <div class="prod-add-label">Packaging details</div>
-            {{ form.packaging_note }}
-            <div class="prod-add-help">
-              Polybag, bundle, carton mark, size sticker and any special pack.
-            </div>
-            {% if form.packaging_note.errors %}
-              <div class="prod-add-errors">{{ form.packaging_note.errors|striptags }}</div>
-            {% endif %}
-          </div>
+          <div id="prod-line-list">
+            {% for line in order_lines %}
+              <div class="prod-line" data-line-index="{{ forloop.counter }}">
+                <div class="prod-line-head">
+                  <div>
+                    <div class="prod-line-title">Product line {{ forloop.counter }}</div>
+                    <div class="prod-line-meta">Style, color, sizes, and water details</div>
+                  </div>
+                  <button type="button" class="btn btn-sm btn-outline-danger prod-line-remove">Remove</button>
+                </div>
 
-          <div class="prod-add-field">
-            <div class="prod-add-label">Extra order notes</div>
-            {{ form.extra_order_note }}
-            <div class="prod-add-help">
-              Use this for print position, measurement file name, shipping note and anything special.
-            </div>
-            {% if form.extra_order_note.errors %}
-              <div class="prod-add-errors">{{ form.extra_order_note.errors|striptags }}</div>
-            {% endif %}
+                <div class="prod-add-field">
+                  <div class="prod-add-label">Style name</div>
+                  <input type="text" data-field="style_name" value="{{ line.style_name|default_if_none:'' }}">
+                  <div class="prod-add-help">
+                    Main style name or code. You can list more than one if needed.
+                  </div>
+                </div>
+
+                <div class="prod-add-field">
+                  <div class="prod-add-label">Color info</div>
+                  <input type="text" data-field="color_info" value="{{ line.color_info|default_if_none:'' }}">
+                  <div class="prod-add-help">
+                    Example black, cocoa, sand. You can write one line for every color.
+                  </div>
+                </div>
+
+                <div class="prod-add-field size-grid-block" style="grid-column:1 / -1;">
+                  <div class="prod-add-label">Sizes and ratio up to 5XL</div>
+
+                  <div class="size-grid-wrapper">
+                    <div class="size-grid-label-row">
+                      <div class="size-grid-label">XS</div>
+                      <div class="size-grid-label">S</div>
+                      <div class="size-grid-label">M</div>
+                      <div class="size-grid-label">L</div>
+                      <div class="size-grid-label">XL</div>
+                      <div class="size-grid-label">2XL</div>
+                      <div class="size-grid-label">3XL</div>
+                      <div class="size-grid-label">4XL</div>
+                      <div class="size-grid-label">5XL</div>
+                    </div>
+                    <div class="size-grid-input-row">
+                      <input type="number" min="0" class="size-grid-input" data-size-field="XS" placeholder="0">
+                      <input type="number" min="0" class="size-grid-input" data-size-field="S" placeholder="0">
+                      <input type="number" min="0" class="size-grid-input" data-size-field="M" placeholder="0">
+                      <input type="number" min="0" class="size-grid-input" data-size-field="L" placeholder="0">
+                      <input type="number" min="0" class="size-grid-input" data-size-field="XL" placeholder="0">
+                      <input type="number" min="0" class="size-grid-input" data-size-field="2XL" placeholder="0">
+                      <input type="number" min="0" class="size-grid-input" data-size-field="3XL" placeholder="0">
+                      <input type="number" min="0" class="size-grid-input" data-size-field="4XL" placeholder="0">
+                      <input type="number" min="0" class="size-grid-input" data-size-field="5XL" placeholder="0">
+                    </div>
+                  </div>
+
+                  <div class="prod-add-help">
+                    Fill how many pieces for every size. System will store this inside the size ratio note field.
+                  </div>
+
+                  <div class="prod-add-hidden">
+                    <textarea data-field="size_ratio_note">{{ line.size_ratio_note|default_if_none:'' }}</textarea>
+                  </div>
+                </div>
+
+                <div class="prod-add-field">
+                  <div class="prod-add-label">Accessories and trims</div>
+                  <textarea data-field="accessories_note">{{ line.accessories_note|default_if_none:'' }}</textarea>
+                  <div class="prod-add-help">
+                    List drawcord, zipper type, buttons, labels, patches, tags and other trims.
+                  </div>
+                </div>
+
+                <div class="prod-add-field">
+                  <div class="prod-add-label">Packaging details</div>
+                  <textarea data-field="packaging_note">{{ line.packaging_note|default_if_none:'' }}</textarea>
+                  <div class="prod-add-help">
+                    Polybag, bundle, carton mark, size sticker and any special pack.
+                  </div>
+                </div>
+
+                <div class="prod-add-field">
+                  <div class="prod-add-label">Extra order notes</div>
+                  <textarea data-field="extra_order_note">{{ line.extra_order_note|default_if_none:'' }}</textarea>
+                  <div class="prod-add-help">
+                    Use this for print position, measurement file name, shipping note and anything special.
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
           </div>
 
         </div>
@@ -592,7 +710,7 @@
           <div class="prod-lib-box">
             <div class="prod-lib-title">Library pickers</div>
             <div class="prod-lib-text">
-              Pick items from the library and add them to the water sheet / order sheet fields.
+              Pick items from the library and add them to the active line in the order sheet fields.
             </div>
 
             <div class="prod-lib-field">
@@ -632,7 +750,7 @@
                 <button type="button"
                         class="btn btn-sm btn-outline-light lib-add-btn"
                         data-select="lib-fabric-picker"
-                        data-target="id_extra_order_note"
+                        data-target-field="extra_order_note"
                         data-store="fabric"
                         data-template="Fabric: {code} {name} {gsm}">
                   Add
@@ -665,7 +783,7 @@
                 <button type="button"
                         class="btn btn-sm btn-outline-light lib-add-btn"
                         data-select="lib-accessory-picker"
-                        data-target="id_accessories_note"
+                        data-target-field="accessories_note"
                         data-store="accessory"
                         data-template="Accessory: {code} {name}">
                   Add
@@ -698,7 +816,7 @@
                 <button type="button"
                         class="btn btn-sm btn-outline-light lib-add-btn"
                         data-select="lib-trim-picker"
-                        data-target="id_accessories_note"
+                        data-target-field="accessories_note"
                         data-store="trim"
                         data-template="Trim: {code} {name}">
                   Add
@@ -731,7 +849,7 @@
                 <button type="button"
                         class="btn btn-sm btn-outline-light lib-add-btn"
                         data-select="lib-thread-picker"
-                        data-target="id_accessories_note"
+                        data-target-field="accessories_note"
                         data-store="thread"
                         data-template="Thread: {code} {name}">
                   Add
@@ -945,6 +1063,60 @@
 
   </form>
 
+  <div id="line-modal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div>
+          <div class="modal-title">Add product line</div>
+          <div class="modal-sub">
+            {% if order and order.customer %}
+              Client: {{ order.customer.account_brand|default:order.customer.contact_name|default:order.customer }}
+            {% endif %}
+          </div>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-light" id="line-modal-close">Close</button>
+      </div>
+      <div id="line-modal-note" class="modal-sub" style="color:#fca5a5; display:none;">
+        Please add at least one detail before saving.
+      </div>
+
+      <div class="modal-grid">
+        <div>
+          <div class="prod-add-label">Style name</div>
+          <input type="text" id="line-modal-style" class="inputx" placeholder="Style name">
+        </div>
+        <div>
+          <div class="prod-add-label">Color info</div>
+          <input type="text" id="line-modal-color" class="inputx" placeholder="Colorways">
+        </div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <div class="prod-add-label">Size ratio note</div>
+        <textarea id="line-modal-size" rows="4" class="inputx" placeholder="Example: XS 20, S 40, M 60, L 40"></textarea>
+      </div>
+
+      <div style="margin-top:12px;">
+        <div class="prod-add-label">Accessories and trims</div>
+        <textarea id="line-modal-accessories" rows="3" class="inputx" placeholder="Trims, labels, zips, etc."></textarea>
+      </div>
+
+      <div style="margin-top:12px;">
+        <div class="prod-add-label">Packaging details</div>
+        <textarea id="line-modal-packaging" rows="3" class="inputx" placeholder="Packaging notes"></textarea>
+      </div>
+
+      <div style="margin-top:12px;">
+        <div class="prod-add-label">Extra order notes</div>
+        <textarea id="line-modal-extra" rows="3" class="inputx" placeholder="Any additional notes"></textarea>
+      </div>
+
+      <div style="text-align:right; margin-top:12px;">
+        <button type="button" class="btn btn-warning btn-sm" id="line-modal-save">Add Line</button>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -992,48 +1164,268 @@
 
     document.addEventListener("DOMContentLoaded", function () {
       var form = document.getElementById("prod-form");
-      if (!form) return;
-
-      // always target the real Django field by name
-      var sizeField = form.querySelector('[name="size_ratio_note"]');
-      if (!sizeField) return;
+      var lineList = document.getElementById("prod-line-list");
+      var linePayload = document.getElementById("line-payload");
+      var addBtn = document.getElementById("prod-line-add");
+      var lineModal = document.getElementById("line-modal");
+      var lineModalClose = document.getElementById("line-modal-close");
+      var lineModalSave = document.getElementById("line-modal-save");
+      var lineModalStyle = document.getElementById("line-modal-style");
+      var lineModalColor = document.getElementById("line-modal-color");
+      var lineModalSize = document.getElementById("line-modal-size");
+      var lineModalAccessories = document.getElementById("line-modal-accessories");
+      var lineModalPackaging = document.getElementById("line-modal-packaging");
+      var lineModalExtra = document.getElementById("line-modal-extra");
+      var lineModalNote = document.getElementById("line-modal-note");
+      if (!form || !lineList || !linePayload) return;
 
       var sizeKeys = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"];
-      var inputs = {};
 
-      sizeKeys.forEach(function (key) {
-        inputs[key] = form.querySelector('[data-size-field="' + key + '"]');
+      function getLineField(line, name) {
+        if (!line) return null;
+        return line.querySelector('[data-field="' + name + '"]');
+      }
+
+      function getActiveLine() {
+        return lineList.querySelector(".prod-line.active") || lineList.querySelector(".prod-line");
+      }
+
+      function setActiveLine(line) {
+        if (!line) return;
+        lineList.querySelectorAll(".prod-line").forEach(function (item) {
+          item.classList.remove("active");
+        });
+        line.classList.add("active");
+      }
+
+      function openLineModal() {
+        if (!lineModal) return;
+        lineModal.classList.add("open");
+      }
+
+      function closeLineModal() {
+        if (!lineModal) return;
+        lineModal.classList.remove("open");
+      }
+
+      function resetLineModal() {
+        if (lineModalStyle) lineModalStyle.value = "";
+        if (lineModalColor) lineModalColor.value = "";
+        if (lineModalSize) lineModalSize.value = "";
+        if (lineModalAccessories) lineModalAccessories.value = "";
+        if (lineModalPackaging) lineModalPackaging.value = "";
+        if (lineModalExtra) lineModalExtra.value = "";
+        if (lineModalNote) lineModalNote.style.display = "none";
+      }
+
+      function readLineModalValues() {
+        return {
+          style_name: lineModalStyle ? lineModalStyle.value.trim() : "",
+          color_info: lineModalColor ? lineModalColor.value.trim() : "",
+          size_ratio_note: lineModalSize ? lineModalSize.value.trim() : "",
+          accessories_note: lineModalAccessories ? lineModalAccessories.value.trim() : "",
+          packaging_note: lineModalPackaging ? lineModalPackaging.value.trim() : "",
+          extra_order_note: lineModalExtra ? lineModalExtra.value.trim() : ""
+        };
+      }
+
+      function setLineField(line, name, value) {
+        var el = getLineField(line, name);
+        if (el) el.value = value || "";
+      }
+
+      function clearLineFields(line) {
+        line.querySelectorAll("[data-size-field]").forEach(function (el) {
+          el.value = "";
+        });
+        line.querySelectorAll("[data-field]").forEach(function (el) {
+          el.value = "";
+        });
+      }
+
+      function addLineFromModal(values) {
+        var lines = lineList.querySelectorAll(".prod-line");
+        var base = lines[lines.length - 1];
+        if (!base) return;
+        syncLineSize(base);
+        var clone = base.cloneNode(true);
+        clearLineFields(clone);
+        setLineField(clone, "style_name", values.style_name);
+        setLineField(clone, "color_info", values.color_info);
+        setLineField(clone, "size_ratio_note", values.size_ratio_note);
+        setLineField(clone, "accessories_note", values.accessories_note);
+        setLineField(clone, "packaging_note", values.packaging_note);
+        setLineField(clone, "extra_order_note", values.extra_order_note);
+        lineList.appendChild(clone);
+        initLine(clone);
+        refreshLineIndexes();
+        setActiveLine(clone);
+      }
+
+      function syncLineSize(line) {
+        var sizeField = getLineField(line, "size_ratio_note");
+        if (!sizeField) return;
+        var inputs = {};
+        sizeKeys.forEach(function (key) {
+          inputs[key] = line.querySelector('[data-size-field="' + key + '"]');
+        });
+        sizeField.value = buildSizeRatio(sizeKeys, inputs);
+      }
+
+      function initLine(line) {
+        var sizeField = getLineField(line, "size_ratio_note");
+        if (!sizeField) return;
+        var inputs = {};
+        sizeKeys.forEach(function (key) {
+          inputs[key] = line.querySelector('[data-size-field="' + key + '"]');
+        });
+        var parsed = parseSizeRatio(sizeField.value);
+        sizeKeys.forEach(function (key) {
+          if (inputs[key] && parsed[key]) {
+            inputs[key].value = parsed[key];
+          }
+        });
+        sizeKeys.forEach(function (key) {
+          var el = inputs[key];
+          if (!el) return;
+          el.addEventListener("input", function () {
+            sizeField.value = buildSizeRatio(sizeKeys, inputs);
+          });
+        });
+      }
+
+      function refreshLineIndexes() {
+        var lines = lineList.querySelectorAll(".prod-line");
+        lines.forEach(function (line, idx) {
+          line.setAttribute("data-line-index", idx + 1);
+          var title = line.querySelector(".prod-line-title");
+          if (title) {
+            title.textContent = "Product line " + (idx + 1);
+          }
+          var removeBtn = line.querySelector(".prod-line-remove");
+          if (removeBtn) {
+            removeBtn.disabled = lines.length === 1;
+          }
+        });
+      }
+
+      lineList.querySelectorAll(".prod-line").forEach(function (line) {
+        initLine(line);
+      });
+      refreshLineIndexes();
+      setActiveLine(getActiveLine());
+
+      lineList.addEventListener("focusin", function (ev) {
+        var line = ev.target.closest(".prod-line");
+        if (line) setActiveLine(line);
       });
 
-      // fill grid on page load if edit
-      var parsed = parseSizeRatio(sizeField.value);
-      sizeKeys.forEach(function (key) {
-        if (inputs[key] && parsed[key]) {
-          inputs[key].value = parsed[key];
+      lineList.addEventListener("click", function (ev) {
+        if (!ev.target.classList.contains("prod-line-remove")) return;
+        var line = ev.target.closest(".prod-line");
+        if (!line) return;
+        var lines = lineList.querySelectorAll(".prod-line");
+        if (lines.length === 1) {
+          line.querySelectorAll("input, textarea").forEach(function (el) {
+            if (el.hasAttribute("data-size-field")) {
+              el.value = "";
+            } else if (el.hasAttribute("data-field")) {
+              el.value = "";
+            }
+          });
+          return;
+        }
+        line.remove();
+        refreshLineIndexes();
+        setActiveLine(getActiveLine());
+      });
+
+      if (addBtn) {
+        addBtn.addEventListener("click", function () {
+          if (lineModal) {
+            resetLineModal();
+            openLineModal();
+            return;
+          }
+          var lines = lineList.querySelectorAll(".prod-line");
+          var last = lines[lines.length - 1];
+          if (!last) return;
+          syncLineSize(last);
+          var clone = last.cloneNode(true);
+          lineList.appendChild(clone);
+          initLine(clone);
+          refreshLineIndexes();
+          setActiveLine(clone);
+        });
+      }
+
+      if (lineModalSave) {
+        lineModalSave.addEventListener("click", function () {
+          var values = readLineModalValues();
+          if (!values.style_name && !values.color_info && !values.size_ratio_note && !values.accessories_note && !values.packaging_note && !values.extra_order_note) {
+            if (lineModalNote) lineModalNote.style.display = "block";
+            return;
+          }
+          if (lineModalNote) lineModalNote.style.display = "none";
+          addLineFromModal(values);
+          closeLineModal();
+          resetLineModal();
+        });
+      }
+
+      if (lineModalClose) {
+        lineModalClose.addEventListener("click", closeLineModal);
+      }
+
+      if (lineModal) {
+        lineModal.addEventListener("click", function (event) {
+          if (event.target === lineModal) {
+            closeLineModal();
+          }
+        });
+      }
+
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") {
+          closeLineModal();
         }
       });
 
-      // keep hidden field in sync while typing
-      sizeKeys.forEach(function (key) {
-        var el = inputs[key];
-        if (!el) return;
-        el.addEventListener("input", function () {
-          sizeField.value = buildSizeRatio(sizeKeys, inputs);
+      form.addEventListener("submit", function () {
+        var payload = [];
+        lineList.querySelectorAll(".prod-line").forEach(function (line, idx) {
+          syncLineSize(line);
+          payload.push({
+            line_no: idx + 1,
+            style_name: (getLineField(line, "style_name") || {}).value || "",
+            color_info: (getLineField(line, "color_info") || {}).value || "",
+            size_ratio_note: (getLineField(line, "size_ratio_note") || {}).value || "",
+            accessories_note: (getLineField(line, "accessories_note") || {}).value || "",
+            packaging_note: (getLineField(line, "packaging_note") || {}).value || "",
+            extra_order_note: (getLineField(line, "extra_order_note") || {}).value || ""
+          });
         });
+        linePayload.value = JSON.stringify(payload);
       });
 
-      // final write before submit
-      form.addEventListener("submit", function () {
-        sizeField.value = buildSizeRatio(sizeKeys, inputs);
-      });
+      window.prodLineHelpers = {
+        getActiveLine: getActiveLine,
+        getActiveLineField: function (name) {
+          var line = getActiveLine();
+          return getLineField(line, name);
+        }
+      };
     });
   })();
 </script>
 
 <script>
   (function () {
-    function appendLine(targetId, text) {
-      var field = document.getElementById(targetId);
+    function appendLine(target, text) {
+      var field = target;
+      if (typeof target === "string") {
+        field = document.getElementById(target);
+      }
       if (!field || !text) return;
       var current = (field.value || "").trim();
       if (!current) {
@@ -1096,12 +1488,17 @@
         addChip(storeKey, id, label);
       }
 
+      function getActiveLineField(name) {
+        if (window.prodLineHelpers && window.prodLineHelpers.getActiveLineField) {
+          return window.prodLineHelpers.getActiveLineField(name);
+        }
+        return document.querySelector('[data-field="' + name + '"]');
+      }
+
       var applyBtn = document.getElementById("lib-product-apply");
       var productPicker = document.getElementById("lib-product-picker");
       var productField = document.getElementById("id_product");
-      var styleField = document.getElementById("id_style_name");
       var qtyField = document.getElementById("id_qty_total");
-      var extraField = document.getElementById("id_extra_order_note");
 
       if (applyBtn && productPicker) {
         applyBtn.addEventListener("click", function () {
@@ -1112,6 +1509,7 @@
             productField.value = opt.value;
           }
 
+          var styleField = getActiveLineField("style_name");
           if (styleField && !(styleField.value || "").trim()) {
             styleField.value = opt.dataset.name || "";
           }
@@ -1127,8 +1525,9 @@
               fabricLine += " " + opt.dataset.gsm;
             }
           }
+          var extraField = getActiveLineField("extra_order_note");
           if (fabricLine && extraField) {
-            appendLine(extraField.id, fabricLine);
+            appendLine(extraField, fabricLine);
           }
         });
       }
@@ -1136,7 +1535,7 @@
       document.querySelectorAll(".lib-add-btn").forEach(function (btn) {
         btn.addEventListener("click", function () {
           var selectId = btn.getAttribute("data-select");
-          var targetId = btn.getAttribute("data-target");
+          var targetField = btn.getAttribute("data-target-field");
           var template = btn.getAttribute("data-template") || "{name}";
           var storeKey = btn.getAttribute("data-store");
 
@@ -1152,7 +1551,8 @@
           };
 
           var text = fillTemplate(template, data);
-          appendLine(targetId, text);
+          var fieldEl = getActiveLineField(targetField);
+          appendLine(fieldEl, text);
 
           if (storeKey) {
             var label = (opt.textContent || "").trim();
