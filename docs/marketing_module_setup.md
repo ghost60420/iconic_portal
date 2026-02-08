@@ -14,7 +14,7 @@ SITE_BASE_URL=https://femline.ca
 ```
 
 ## OAuth / integrations
-Store OAuth tokens in the admin for `OAuthCredential`.
+Store OAuth tokens in the admin for `OAuthCredential` or use the connect page.
 Tokens are encrypted at rest using `MARKETING_ENCRYPTION_KEY` or fallback to `DJANGO_SECRET_KEY`.
 
 Example env:
@@ -66,6 +66,7 @@ Supported columns:
 
 ## New intelligence module pages
 - /marketing/dashboard/ for the main intelligence dashboard
+- /marketing/connect/ to connect social accounts and paste tokens
 - /marketing/platform/<platform>/ for per-platform detail
 - /marketing/content/ for the unified content library
 - /marketing/ads/ for ads rollup (requires MARKETING_ADS_ENABLED)

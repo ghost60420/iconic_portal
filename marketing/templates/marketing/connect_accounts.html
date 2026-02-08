@@ -1,0 +1,129 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+{% include "marketing/_style.html" %}
+
+<div class="mk-container">
+  <div class="mk-header">
+    <div>
+      <div class="mk-title">Connect Social Accounts</div>
+      <div class="mk-sub">Add your business profiles so the dashboard can sync stats in one place.</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_dashboard' %}">Back to dashboard</a>
+    </div>
+  </div>
+
+  <div class="mk-grid">
+    <div class="mk-card" style="grid-column: span 7;">
+      <div class="mk-section-title">Add account</div>
+      <form method="post" class="mk-form">
+        {% csrf_token %}
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="mk-label">Platform</label>
+            {{ form.platform }}
+          </div>
+          <div class="col-md-6">
+            <label class="mk-label">Display name</label>
+            {{ form.display_name }}
+          </div>
+          <div class="col-md-6">
+            <label class="mk-label">External account ID</label>
+            {{ form.external_account_id }}
+          </div>
+          <div class="col-md-6">
+            <label class="mk-label">Timezone</label>
+            {{ form.timezone }}
+          </div>
+          <div class="col-md-6">
+            <label class="mk-label">Access token</label>
+            {{ form.access_token }}
+          </div>
+          <div class="col-md-6">
+            <label class="mk-label">Refresh token (optional)</label>
+            {{ form.refresh_token }}
+          </div>
+          <div class="col-md-6">
+            <label class="mk-label">Token expiry (optional)</label>
+            {{ form.expires_at }}
+          </div>
+          <div class="col-md-6">
+            <label class="mk-label">Scopes (optional)</label>
+            {{ form.scopes }}
+          </div>
+        </div>
+        <div class="mk-hint" style="margin-top: 12px;">
+          Tokens are stored securely. If you leave tokens empty, the account will save but syncing will not run.
+        </div>
+        <div style="margin-top: 16px;">
+          <button class="btn btn-warning mk-btn" type="submit">Connect account</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="mk-card" style="grid-column: span 5;">
+      <div class="mk-section-title">Connected accounts</div>
+      {% if connected_rows %}
+        <div class="mk-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Platform</th>
+                <th>Account</th>
+                <th>Status</th>
+                <th>Last sync</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in connected_rows %}
+                <tr>
+                  <td>{{ row.account.get_platform_display }}</td>
+                  <td>
+                    {{ row.account.display_name|default:"-" }}
+                    <div class="mk-hint">{{ row.account.external_account_id|default:"" }}</div>
+                  </td>
+                  <td>
+                    {% if row.has_token %}
+                      Connected
+                    {% else %}
+                      No token
+                    {% endif %}
+                  </td>
+                  <td>{{ row.account.last_successful_sync|date:"Y-m-d H:i"|default:"-" }}</td>
+                  <td>
+                    <form method="post">
+                      {% csrf_token %}
+                      <button class="btn btn-outline-light mk-btn" name="disconnect" value="{{ row.account.id }}" type="submit">
+                        Disconnect
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="mk-hint">No accounts connected yet.</div>
+      {% endif %}
+      <div class="mk-hint" style="margin-top: 12px;">
+        After connecting, schedule the daily sync jobs or run them manually to pull metrics.
+      </div>
+    </div>
+
+    <div class="mk-card" style="grid-column: span 12;">
+      <div class="mk-section-title">Quick guide</div>
+      <div class="mk-hint">
+        1. Create an app in each platform's developer portal and generate access tokens.<br>
+        2. Paste the account ID and token above to connect the profile.<br>
+        3. Run the sync jobs or wait for the nightly schedule to populate the dashboard.
+      </div>
+      <div class="mk-hint" style="margin-top: 8px;">
+        Need more details? See <code>docs/marketing_module_setup.md</code>.
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -22,16 +22,21 @@ from marketing.services.errors import MarketingServiceError
 class Command(BaseCommand):
     help = "Sync TikTok daily data."
 
+    def _token_for_account(self, account):
+        cred = OAuthCredential.objects.filter(platform_account=account).first()
+        if cred and cred.get_access_token():
+            return cred.get_access_token()
+        cred = OAuthCredential.objects.filter(platform="tiktok").first()
+        return cred.get_access_token() if cred else ""
+
     def handle(self, *args, **options):
         if not getattr(settings, "MARKETING_SOCIAL_ENABLED", False):
             self.stdout.write("MARKETING_SOCIAL_ENABLED is off. Skipping.")
             return
 
-        creds = OAuthCredential.objects.filter(platform="tiktok").first()
-        token = creds.get_access_token() if creds else ""
-
         for acct in SocialAccount.objects.filter(is_active=True, platform="tiktok"):
             try:
+                token = self._token_for_account(acct)
                 today = timezone.localdate()
                 if acct.last_successful_sync:
                     start = today - timedelta(days=1)

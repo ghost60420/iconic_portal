@@ -6,6 +6,7 @@ from .models import (
     ContactList,
     OutreachCampaign,
     OutreachMessageTemplate,
+    SocialAccount,
 )
 
 
@@ -99,3 +100,39 @@ class CSVUploadForm(forms.Form):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["contact_list"].empty_label = "Select list (optional)"
+
+
+class SocialAccountConnectForm(forms.Form):
+    platform = forms.ChoiceField(
+        choices=SocialAccount.PLATFORM_CHOICES,
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    display_name = forms.CharField(
+        max_length=200,
+        widget=forms.TextInput(attrs={"class": "form-control"}),
+    )
+    external_account_id = forms.CharField(
+        max_length=120,
+        widget=forms.TextInput(attrs={"class": "form-control"}),
+    )
+    timezone = forms.CharField(
+        max_length=50,
+        required=False,
+        widget=forms.TextInput(attrs={"class": "form-control"}),
+    )
+    access_token = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"class": "form-control", "rows": 2}),
+    )
+    refresh_token = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"class": "form-control", "rows": 2}),
+    )
+    expires_at = forms.DateTimeField(
+        required=False,
+        widget=forms.DateTimeInput(attrs={"class": "form-control", "type": "datetime-local"}),
+    )
+    scopes = forms.CharField(
+        required=False,
+        widget=forms.TextInput(attrs={"class": "form-control"}),
+    )

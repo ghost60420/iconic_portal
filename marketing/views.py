@@ -18,6 +18,7 @@ from marketing.forms import (
     OutreachCampaignForm,
     OutreachMessageTemplateForm,
     TrackedLinkForm,
+    SocialAccountConnectForm,
 )
 from marketing.models import (
     SocialAccount,
@@ -37,6 +38,7 @@ from marketing.models import (
     SocialMetricDaily,
     UnsubscribeEvent,
     Contact,
+    OAuthCredential,
 )
 from marketing.services.metrics import calc_engagement_total, calc_engagement_rate
 from marketing.utils.importer import import_contacts_from_csv
@@ -49,6 +51,83 @@ def _require_enabled(flag_name: str | None = None):
         raise Http404("Marketing disabled")
     if flag_name and not getattr(settings, flag_name, False):
         raise Http404("Marketing feature disabled")
+
+
+def connect_accounts(request):
+    _require_enabled()
+    accounts = SocialAccount.objects.all().prefetch_related("platform_credentials").order_by("platform", "display_name")
+    connected_rows = []
+    for account in accounts:
+        cred = account.platform_credentials.first()
+        connected_rows.append(
+            {
+                "account": account,
+                "has_token": bool(cred and cred.get_access_token()),
+                "has_refresh": bool(cred and cred.get_refresh_token()),
+            }
+        )
+
+    if request.method == "POST" and request.POST.get("disconnect"):
+        account = get_object_or_404(SocialAccount, pk=request.POST.get("disconnect"))
+        OAuthCredential.objects.filter(platform_account=account).update(
+            encrypted_access_token="",
+            encrypted_refresh_token="",
+            expires_at=None,
+            scopes="",
+        )
+        account.is_active = False
+        account.save(update_fields=["is_active", "updated_at"])
+        log_marketing_activity(
+            user=request.user,
+            action="account_disconnect",
+            model_label="marketing.SocialAccount",
+            object_id=account.pk,
+            message=f"Disconnected {account.get_platform_display()} account",
+        )
+        messages.success(request, "Account disconnected.")
+        return redirect("marketing_connect")
+
+    form = SocialAccountConnectForm(request.POST or None)
+    if request.method == "POST" and not request.POST.get("disconnect"):
+        if form.is_valid():
+            data = form.cleaned_data
+            account, _ = SocialAccount.objects.update_or_create(
+                platform=data["platform"],
+                external_account_id=data["external_account_id"],
+                defaults={
+                    "display_name": data["display_name"],
+                    "timezone": data.get("timezone") or "",
+                    "is_active": True,
+                },
+            )
+            cred = OAuthCredential.objects.filter(platform_account=account).first()
+            if not cred:
+                cred = OAuthCredential(platform=data["platform"], platform_account=account)
+            cred.set_tokens(
+                access_token=data.get("access_token") or "",
+                refresh_token=data.get("refresh_token") or "",
+                expires_at=data.get("expires_at"),
+            )
+            cred.scopes = data.get("scopes") or ""
+            cred.save()
+            log_marketing_activity(
+                user=request.user,
+                action="account_connect",
+                model_label="marketing.SocialAccount",
+                object_id=account.pk,
+                message=f"Connected {account.get_platform_display()} account",
+            )
+            if data.get("access_token"):
+                messages.success(request, "Account connected.")
+            else:
+                messages.warning(request, "Account saved without access token. Add a token to sync data.")
+            return redirect("marketing_connect")
+
+    return render(
+        request,
+        "marketing/connect_accounts.html",
+        {"form": form, "connected_rows": connected_rows},
+    )
 
 
 def _metric_totals(days: int):

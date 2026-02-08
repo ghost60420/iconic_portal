@@ -624,6 +624,7 @@ class OAuthCredential(models.Model):
         ("meta", "Meta"),
         ("facebook", "Facebook"),
         ("meta_business", "Meta Business Suite"),
+        ("instagram", "Instagram"),
         ("linkedin", "LinkedIn"),
         ("tiktok", "TikTok"),
         ("youtube", "YouTube"),

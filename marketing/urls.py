@@ -18,6 +18,7 @@ def perm(view_func):
 urlpatterns = [
     path("", perm(views.marketing_home), name="marketing_home"),
     path("dashboard/", perm(views.dashboard), name="marketing_dashboard"),
+    path("connect/", perm(views.connect_accounts), name="marketing_connect"),
     path("platform/<str:platform>/", perm(views.platform_detail), name="marketing_platform"),
     path("content/", perm(views.content_library), name="marketing_content"),
     path("content/<int:pk>/", perm(views.content_detail), name="marketing_content_detail"),
