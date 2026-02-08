@@ -70,10 +70,13 @@ from .models import (
     OpportunityTask,
     Product,
     ProductionOrder,
-    ProductionOrderLine,
     ProductionStage,
     Shipment,
 )
+try:
+    from .models import ProductionOrderLine
+except Exception:
+    ProductionOrderLine = None
 from .production_forms import ProductionOrderForm, ProductionStageForm
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
@@ -5094,6 +5097,8 @@ def _parse_production_lines_payload(raw):
 
 
 def _save_production_lines(order, request):
+    if ProductionOrderLine is None:
+        return
     raw = request.POST.get("line_payload")
     lines = _parse_production_lines_payload(raw)
     if lines is None:
