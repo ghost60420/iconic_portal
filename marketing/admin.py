@@ -25,6 +25,7 @@ from .models import (
     InsightItem,
     BestPracticeLibrary,
     OAuthCredential,
+    OAuthConnectionRequest,
 )
 
 
@@ -164,3 +165,9 @@ class BestPracticeLibraryAdmin(admin.ModelAdmin):
 @admin.register(OAuthCredential)
 class OAuthCredentialAdmin(admin.ModelAdmin):
     list_display = ("platform", "social_account", "platform_account", "expires_at")
+
+
+@admin.register(OAuthConnectionRequest)
+class OAuthConnectionRequestAdmin(admin.ModelAdmin):
+    list_display = ("platform", "user", "status", "created_at")
+    list_filter = ("platform", "status")

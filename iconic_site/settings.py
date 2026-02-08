@@ -184,6 +184,22 @@ MARKETING_AI_ENABLED = _flag("MARKETING_AI_ENABLED", default=False)
 SITE_BASE_URL = os.getenv("SITE_BASE_URL", "https://femline.ca")
 
 # ======================
+# Meta (Facebook/Instagram) OAuth
+# ======================
+
+MARKETING_META_APP_ID = os.getenv("MARKETING_META_APP_ID", "")
+MARKETING_META_APP_SECRET = os.getenv("MARKETING_META_APP_SECRET", "")
+MARKETING_META_REDIRECT_URI = os.getenv(
+    "MARKETING_META_REDIRECT_URI",
+    f"{SITE_BASE_URL}/marketing/oauth/meta/callback/",
+)
+_meta_scopes_raw = os.getenv(
+    "MARKETING_META_SCOPES",
+    "pages_show_list,pages_read_engagement,read_insights,instagram_basic,instagram_manage_insights,business_management",
+)
+MARKETING_META_SCOPES = [scope.strip() for scope in _meta_scopes_raw.split(",") if scope.strip()]
+
+# ======================
 # Email settings (SMTP)
 # ======================
 

@@ -15,6 +15,48 @@
   </div>
 
   <div class="mk-grid">
+    <div class="mk-card" style="grid-column: span 12;">
+      <div class="mk-section-title">Meta login (Facebook + Instagram)</div>
+      {% if meta_configured %}
+        <div class="mk-hint">
+          Approved redirect URL: <code>{{ meta_redirect_uri }}</code>
+        </div>
+        <div style="margin-top: 12px;">
+          <a class="btn btn-warning mk-btn" href="{% url 'marketing_meta_oauth_start' %}">Connect with Meta</a>
+        </div>
+        {% if oauth_requests %}
+          <div class="mk-table" style="margin-top: 16px;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th>Message</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for req in oauth_requests %}
+                  <tr>
+                    <td>{{ req.get_status_display }}</td>
+                    <td>{{ req.created_at|date:"Y-m-d H:i" }}</td>
+                    <td>{{ req.error_message|default:"-" }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% endif %}
+        <div class="mk-hint" style="margin-top: 10px;">
+          After authorization, run <code>python manage.py marketing_oauth_process</code> to finish and create accounts.
+        </div>
+      {% else %}
+        <div class="mk-hint">
+          Meta app credentials are missing. Add <code>MARKETING_META_APP_ID</code>,
+          <code>MARKETING_META_APP_SECRET</code>, and <code>MARKETING_META_REDIRECT_URI</code> in the environment.
+        </div>
+      {% endif %}
+    </div>
+
     <div class="mk-card" style="grid-column: span 7;">
       <div class="mk-section-title">Add account</div>
       <form method="post" class="mk-form">

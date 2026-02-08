@@ -1,4 +1,5 @@
 from datetime import timedelta
+import uuid
 import json
 
 from django.conf import settings
@@ -39,8 +40,10 @@ from marketing.models import (
     UnsubscribeEvent,
     Contact,
     OAuthCredential,
+    OAuthConnectionRequest,
 )
 from marketing.services.metrics import calc_engagement_total, calc_engagement_rate
+from marketing.services.oauth_meta import build_meta_oauth_url
 from marketing.utils.importer import import_contacts_from_csv
 from marketing.utils.activity import log_marketing_activity
 from marketing.utils.templates import seed_default_templates
@@ -55,6 +58,9 @@ def _require_enabled(flag_name: str | None = None):
 
 def connect_accounts(request):
     _require_enabled()
+    meta_redirect_uri = getattr(settings, "MARKETING_META_REDIRECT_URI", "")
+    meta_app_id = getattr(settings, "MARKETING_META_APP_ID", "")
+    meta_app_secret = getattr(settings, "MARKETING_META_APP_SECRET", "")
     accounts = SocialAccount.objects.all().prefetch_related("platform_credentials").order_by("platform", "display_name")
     connected_rows = []
     for account in accounts:
@@ -123,11 +129,94 @@ def connect_accounts(request):
                 messages.warning(request, "Account saved without access token. Add a token to sync data.")
             return redirect("marketing_connect")
 
+    oauth_requests = OAuthConnectionRequest.objects.filter(platform="meta").order_by("-created_at")[:10]
+
     return render(
         request,
         "marketing/connect_accounts.html",
-        {"form": form, "connected_rows": connected_rows},
+        {
+            "form": form,
+            "connected_rows": connected_rows,
+            "oauth_requests": oauth_requests,
+            "meta_redirect_uri": meta_redirect_uri,
+            "meta_configured": bool(meta_app_id and meta_app_secret),
+        },
     )
+
+
+def meta_oauth_start(request):
+    _require_enabled("MARKETING_SOCIAL_ENABLED")
+    app_id = getattr(settings, "MARKETING_META_APP_ID", "")
+    app_secret = getattr(settings, "MARKETING_META_APP_SECRET", "")
+    redirect_uri = getattr(settings, "MARKETING_META_REDIRECT_URI", "")
+    if not app_id or not app_secret or not redirect_uri:
+        messages.error(request, "Meta app is not configured. Add app ID, secret, and redirect URL.")
+        return redirect("marketing_connect")
+
+    scopes = getattr(
+        settings,
+        "MARKETING_META_SCOPES",
+        [
+            "pages_show_list",
+            "pages_read_engagement",
+            "read_insights",
+            "instagram_basic",
+            "instagram_manage_insights",
+            "business_management",
+        ],
+    )
+    state = uuid.uuid4().hex
+    OAuthConnectionRequest.objects.create(
+        platform="meta",
+        user=request.user,
+        state=state,
+        status="initiated",
+    )
+    url = build_meta_oauth_url(app_id=app_id, redirect_uri=redirect_uri, state=state, scopes=scopes)
+    return redirect(url)
+
+
+def meta_oauth_callback(request):
+    _require_enabled("MARKETING_SOCIAL_ENABLED")
+    state = request.GET.get("state", "")
+    code = request.GET.get("code", "")
+    error = request.GET.get("error_description") or request.GET.get("error")
+
+    if not state:
+        messages.error(request, "Missing OAuth state.")
+        return redirect("marketing_connect")
+
+    conn = OAuthConnectionRequest.objects.filter(platform="meta", state=state).first()
+    if not conn:
+        messages.error(request, "OAuth request not found.")
+        return redirect("marketing_connect")
+    if conn.user and conn.user != request.user:
+        conn.status = "error"
+        conn.error_message = "User mismatch during OAuth callback."
+        conn.save(update_fields=["status", "error_message", "updated_at"])
+        messages.error(request, "OAuth user mismatch. Please try again.")
+        return redirect("marketing_connect")
+
+    if error:
+        conn.status = "error"
+        conn.error_message = error
+        conn.save(update_fields=["status", "error_message", "updated_at"])
+        messages.error(request, f"Meta authorization failed: {error}")
+        return redirect("marketing_connect")
+
+    if not code:
+        conn.status = "error"
+        conn.error_message = "Missing code."
+        conn.save(update_fields=["status", "error_message", "updated_at"])
+        messages.error(request, "Meta authorization failed: missing code.")
+        return redirect("marketing_connect")
+
+    conn.code = code
+    conn.status = "received"
+    conn.error_message = ""
+    conn.save(update_fields=["code", "status", "error_message", "updated_at"])
+    messages.success(request, "Meta authorization received. Run the OAuth processor to finish connection.")
+    return redirect("marketing_connect")
 
 
 def _metric_totals(days: int):

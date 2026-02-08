@@ -22,6 +22,20 @@ Example env:
 MARKETING_ENCRYPTION_KEY=your_random_key
 ```
 
+## Meta OAuth (Facebook + Instagram)
+Set:
+```
+MARKETING_META_APP_ID=your_app_id
+MARKETING_META_APP_SECRET=your_app_secret
+MARKETING_META_REDIRECT_URI=https://femline.ca/marketing/oauth/meta/callback/
+MARKETING_META_SCOPES=pages_show_list,pages_read_engagement,read_insights,instagram_basic,instagram_manage_insights,business_management
+```
+
+After authorizing in the UI, run:
+```
+python manage.py marketing_oauth_process
+```
+
 ## Background jobs (no Celery in this project)
 Use management commands via cron:
 

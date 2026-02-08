@@ -665,3 +665,31 @@ class OAuthCredential(models.Model):
 
     def get_refresh_token(self) -> str:
         return decrypt_value(self.encrypted_refresh_token)
+
+
+class OAuthConnectionRequest(models.Model):
+    STATUS_CHOICES = [
+        ("initiated", "Initiated"),
+        ("received", "Received"),
+        ("completed", "Completed"),
+        ("error", "Error"),
+    ]
+
+    platform = models.CharField(max_length=20, choices=OAuthCredential.PLATFORM_CHOICES)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    state = models.CharField(max_length=120, unique=True)
+    code = models.TextField(blank=True, default="")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="initiated")
+    error_message = models.TextField(blank=True, default="")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=["platform", "status"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.platform} {self.status}"
