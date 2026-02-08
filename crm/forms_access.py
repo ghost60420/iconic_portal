@@ -23,6 +23,7 @@ class UserAccessForm(forms.ModelForm):
             "can_costing_approve",
             "can_accounting_bd",
             "can_accounting_ca",
+            "can_library",
         ]
         widgets = {
             "role": forms.Select(attrs={"class": "form-select"}),
@@ -43,6 +44,7 @@ class UserAccessForm(forms.ModelForm):
             "can_costing_approve": "Costing approve/lock",
             "can_accounting_bd": "Accounting BD",
             "can_accounting_ca": "Accounting CA",
+            "can_library": "Library",
         }
         help_texts = {
             "can_accounting_ca": "CA accounting is never allowed for BD users.",
@@ -58,9 +60,15 @@ class UserAccessForm(forms.ModelForm):
             existing = field.widget.attrs.get("class", "")
             field.widget.attrs["class"] = (existing + " form-check-input").strip()
 
+        if "role" in self.fields:
+            self.fields["role"].widget.attrs["data-role-select"] = "1"
+
+        if "can_accounting_ca" in self.fields:
+            self.fields["can_accounting_ca"].widget.attrs["data-ca-checkbox"] = "1"
+
         # Pick role from posted data first (so it updates on submit),
         # otherwise use instance role
-        role_val = self.data.get("role") or getattr(self.instance, "role", None)
+        role_val = self.data.get(self.add_prefix("role")) or getattr(self.instance, "role", None)
 
         # If BD, do not allow CA accounting checkbox interaction
         if role_val == UserAccess.ROLE_BD:

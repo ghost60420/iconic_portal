@@ -2,94 +2,320 @@
 {% load crm_groups %}
 
 {% block content %}
-<div class="container-fluid" style="max-width:1200px;">
+<style>
+  .access-wrap{
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .access-head{
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    gap:12px;
+    flex-wrap:wrap;
+    margin-bottom: 14px;
+  }
+  .access-title{
+    margin:0;
+    color:#f8f9fa;
+    font-weight:900;
+  }
+  .access-sub{
+    color:#a8b0bd;
+    font-weight:700;
+    font-size:13px;
+    margin-top:4px;
+  }
+  .access-search{
+    display:flex;
+    gap:8px;
+    align-items:center;
+    flex-wrap:wrap;
+  }
+  .access-search input{
+    height:38px;
+    min-width:240px;
+    background:#0b0d10;
+    border:1px solid #2a2f38;
+    border-radius:10px;
+    color:#e5e7eb;
+    font-weight:800;
+    padding:0 12px;
+  }
+  .access-search .btn{
+    height:38px;
+    font-weight:800;
+  }
+  .access-grid{
+    display:grid;
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    gap:14px;
+  }
+  @media (max-width: 1100px){
+    .access-grid{ grid-template-columns: 1fr; }
+  }
+  .access-card{
+    background:#0b0d10;
+    border:1px solid #2a2f38;
+    border-radius:14px;
+    padding:14px;
+  }
+  .access-card form{ margin:0; }
+  .access-user{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:10px;
+  }
+  .access-user-info{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+  }
+  .access-name{
+    color:#f8fafc;
+    font-weight:900;
+    font-size:16px;
+  }
+  .access-email{
+    color:#cbd5e1;
+    font-weight:700;
+    font-size:12px;
+  }
+  .access-badges{
+    display:flex;
+    gap:6px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+  .access-badge{
+    font-size:11px;
+    font-weight:800;
+    padding:4px 8px;
+    border-radius:999px;
+    background:#111827;
+    border:1px solid #243040;
+    color:#e5e7eb;
+  }
+  .access-role{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-wrap:wrap;
+    margin-top:8px;
+  }
+  .access-role label{
+    color:#cbd5e1;
+    font-weight:800;
+    font-size:12px;
+  }
+  .access-role select{
+    min-width:160px;
+    background:#0b0d10 !important;
+    border:1px solid #2a2f38 !important;
+    color:#e5e7eb !important;
+    font-weight:800 !important;
+    border-radius:10px !important;
+  }
+  .access-groups{
+    display:grid;
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    gap:12px;
+    margin-top:12px;
+  }
+  @media (max-width: 900px){
+    .access-groups{ grid-template-columns: 1fr; }
+  }
+  .access-group{
+    border:1px solid #202532;
+    border-radius:12px;
+    padding:10px;
+    background:#0f1218;
+  }
+  .access-group-title{
+    color:#e5e7eb;
+    font-weight:900;
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:0.4px;
+    margin-bottom:8px;
+  }
+  .access-group-grid{
+    display:grid;
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    gap:8px;
+  }
+  @media (max-width: 700px){
+    .access-group-grid{ grid-template-columns: 1fr; }
+  }
+  .access-toggle{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-weight:800;
+    font-size:12px;
+    color:#e5e7eb;
+  }
+  .access-toggle input{ transform: translateY(-1px); }
+  .access-actions{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    align-items:center;
+    margin-top:12px;
+  }
+  .access-actions .btn{ font-weight:800; }
+  .access-locked{
+    color:#fca5a5;
+    font-size:12px;
+    font-weight:800;
+  }
+  .access-help{
+    color:#94a3b8;
+    font-size:11px;
+    font-weight:700;
+    margin-top:6px;
+  }
+  .access-note{
+    color:#94a3b8;
+    font-size:12px;
+    font-weight:700;
+    margin-top:6px;
+  }
+</style>
 
-  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+<div class="container-fluid access-wrap">
+  <div class="access-head">
     <div>
-      <h3 class="mb-1" style="color:#f8f9fa; font-weight:900;">User Access</h3>
-      <div style="color:#a8b0bd; font-weight:700; font-size:13px;">
-        Manage who can access what inside the CRM.
+      <h3 class="access-title">User Access</h3>
+      <div class="access-sub">
+        Click to grant or revoke access. Changes save per user.
       </div>
     </div>
 
-    <div class="d-flex flex-wrap gap-2">
-      {% url 'access_add' as add_url %}
-      {% if add_url %}
-        <a href="{{ add_url }}" class="btn btn-warning" style="font-weight:900;">
-          Add New
-        </a>
+    <form method="get" class="access-search">
+      <input
+        type="text"
+        name="q"
+        value="{{ search_query|default:'' }}"
+        placeholder="Search user or email"
+      >
+      <button class="btn btn-outline-light" type="submit">Search</button>
+      {% if search_query %}
+        <a class="btn btn-outline-secondary" href="{% url 'access_list' %}">Clear</a>
       {% endif %}
-
       {% if request.user.is_superuser %}
         {% url 'admin:index' as admin_url %}
         {% if admin_url %}
-          <a href="{{ admin_url }}" class="btn btn-outline-light" style="font-weight:900;">
-            Admin
-          </a>
+          <a href="{{ admin_url }}" class="btn btn-outline-warning">Admin</a>
         {% endif %}
       {% endif %}
-    </div>
+    </form>
   </div>
 
-  <div class="card" style="background:#0b0d10; border:1px solid #2a2f38; border-radius:14px;">
-    <div class="card-body" style="padding:14px;">
+  {% if rows %}
+    <div class="access-grid">
+      {% for row in rows %}
+        <div class="access-card">
+          <form method="post" class="access-form">
+            {% csrf_token %}
+            <input type="hidden" name="user_id" value="{{ row.user.id }}">
 
-      {% if access_list %}
-        <div class="table-responsive">
-          <table class="table table-dark table-hover align-middle mb-0" style="border-color:#2a2f38;">
-            <thead>
-              <tr style="color:#e5e7eb;">
-                <th style="min-width:220px;">User</th>
-                <th style="min-width:220px;">Email</th>
-                <th style="min-width:120px;">Role</th>
-                <th style="min-width:160px;">Country</th>
-                <th style="min-width:120px;">Active</th>
-                <th style="min-width:120px;" class="text-end">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for a in access_list %}
-                <tr>
-                  <td style="font-weight:800;">{{ a.name|default:"" }}</td>
-                  <td style="color:#cbd5e1; font-weight:700;">{{ a.email|default:"" }}</td>
-                  <td style="font-weight:800;">{{ a.role|default:"" }}</td>
-                  <td style="font-weight:800;">
-                    {% if a.country %}
-                      {{ a.country }}
-                    {% else %}
-                      -
-                    {% endif %}
-                  </td>
-                  <td style="font-weight:900;">
-                    {% if a.is_active %}
-                      <span class="badge text-bg-success">Yes</span>
-                    {% else %}
-                      <span class="badge text-bg-secondary">No</span>
-                    {% endif %}
-                  </td>
-                  <td class="text-end">
-                    {% url 'access_edit' a.id as edit_url %}
-                    {% if edit_url %}
-                      <a href="{{ edit_url }}" class="btn btn-sm btn-outline-warning" style="font-weight:900;">
-                        Edit
-                      </a>
-                    {% else %}
-                      <span class="text-muted" style="font-size:12px;">Missing edit url</span>
-                    {% endif %}
-                  </td>
-                </tr>
+            <div class="access-user">
+              <div class="access-user-info">
+                <div class="access-name">{{ row.user.username }}</div>
+                <div class="access-email">{{ row.user.email|default:"-" }}</div>
+                <div class="access-badges">
+                  {% if row.user.is_superuser %}
+                    <span class="access-badge">Superuser</span>
+                  {% endif %}
+                  {% if row.user.is_staff %}
+                    <span class="access-badge">Staff</span>
+                  {% endif %}
+                  {% if row.user.is_active %}
+                    <span class="access-badge">Active</span>
+                  {% else %}
+                    <span class="access-badge">Inactive</span>
+                  {% endif %}
+                </div>
+              </div>
+
+              <div class="text-end">
+                {% if not row.can_edit %}
+                  <div class="access-locked">Locked (superuser only)</div>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="access-role">
+              <label for="{{ row.form.role.id_for_label }}">Team</label>
+              {{ row.form.role }}
+            </div>
+
+            <div class="access-groups">
+              {% for group in field_groups %}
+                <div class="access-group">
+                  <div class="access-group-title">{{ group.0 }}</div>
+                  <div class="access-group-grid">
+                    {% for field_name in group.1 %}
+                      <label class="access-toggle">
+                        {{ row.form[field_name] }}
+                        <span>{{ row.form[field_name].label }}</span>
+                      </label>
+                      {% if row.form[field_name].help_text %}
+                        <div class="access-help">{{ row.form[field_name].help_text }}</div>
+                      {% endif %}
+                    {% endfor %}
+                  </div>
+                </div>
               {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% else %}
-        <div class="p-3" style="color:#cbd5e1; font-weight:800;">
-          No access records found.
-        </div>
-      {% endif %}
+            </div>
 
+            {% if row.form.errors %}
+              <div class="access-note" style="color:#fca5a5;">
+                Please fix the highlighted fields and save again.
+              </div>
+            {% endif %}
+
+            <div class="access-actions">
+              <button type="submit" class="btn btn-warning">Save</button>
+              {% url 'access_edit' row.user.id as edit_url %}
+              {% if edit_url %}
+                <a href="{{ edit_url }}" class="btn btn-outline-light">Full edit</a>
+              {% endif %}
+            </div>
+          </form>
+        </div>
+      {% endfor %}
     </div>
-  </div>
-
+  {% else %}
+    <div class="card" style="background:#0b0d10; border:1px solid #2a2f38; border-radius:14px;">
+      <div class="card-body" style="color:#cbd5e1; font-weight:800;">
+        No users found.
+      </div>
+    </div>
+  {% endif %}
 </div>
+
+<script>
+  (function(){
+    const forms = document.querySelectorAll(".access-form");
+    forms.forEach((form) => {
+      const role = form.querySelector("[data-role-select]");
+      const ca = form.querySelector("[data-ca-checkbox]");
+      if (!role || !ca) return;
+      const toggle = () => {
+        const isBd = role.value === "BD";
+        ca.disabled = isBd;
+        if (isBd) {
+          ca.checked = false;
+        }
+      };
+      role.addEventListener("change", toggle);
+      toggle();
+    });
+  })();
+</script>
 {% endblock %}
