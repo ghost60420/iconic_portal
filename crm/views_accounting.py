@@ -904,7 +904,7 @@ def accounting_entry_list(request):
         "amount_bdt",
         "amount_original",
     )
-    for row in totals_qs.iterator():
+    for row in totals_qs.iterator(chunk_size=2000):
         side = (row.get("side") or "").upper().strip()
         direction = (row.get("direction") or "").upper().strip()
         main_type = (row.get("main_type") or "").upper().strip()
