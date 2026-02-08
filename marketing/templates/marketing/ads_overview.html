@@ -1,0 +1,84 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+{% include "marketing/_style.html" %}
+
+<div class="mk-container">
+  <div class="mk-header">
+    <div>
+      <div class="mk-title">Ads performance</div>
+      <div class="mk-sub">Spend, conversions, and campaign efficiency.</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_dashboard' %}">Dashboard</a>
+    </div>
+  </div>
+
+  <div class="mk-grid">
+    <div class="mk-card" style="grid-column: span 7;">
+      <div class="mk-section-title">Spend vs conversions (30d)</div>
+      <div class="mk-chart"><canvas id="adsTrend"></canvas></div>
+    </div>
+
+    <div class="mk-card" style="grid-column: span 5;">
+      <div class="mk-section-title">Campaign efficiency</div>
+      <div class="mk-table">
+        <table class="table table-dark table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Campaign</th>
+              <th>Spend</th>
+              <th>Conversions</th>
+              <th>Cost/Conv</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in campaigns %}
+              <tr>
+                <td>{{ row.campaign.name|default:row.campaign.external_campaign_id }}</td>
+                <td>{{ row.spend|floatformat:2 }}</td>
+                <td>{{ row.conversions }}</td>
+                <td>{{ row.cost_per_conversion|floatformat:2 }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="4" class="mk-muted">No ads data yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+  const labels = {{ chart_labels_json|safe }};
+  const spend = {{ chart_spend_json|safe }};
+  const conversions = {{ chart_conversions_json|safe }};
+
+  const ctx = document.getElementById("adsTrend");
+  if (ctx) {
+    new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: [
+          { label: "Spend", data: spend, borderColor: "#f59e0b", backgroundColor: "transparent", tension: 0.25 },
+          { label: "Conversions", data: conversions, borderColor: "#22c55e", backgroundColor: "transparent", tension: 0.25 },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { ticks: { color: "#94a3b8" } },
+          y: { ticks: { color: "#94a3b8" } },
+        },
+        plugins: {
+          legend: { labels: { color: "#e2e8f0" } },
+        },
+      },
+    });
+  }
+</script>
+{% endblock %}

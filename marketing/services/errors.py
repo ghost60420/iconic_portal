@@ -1,0 +1,2 @@
+class MarketingServiceError(RuntimeError):
+    pass

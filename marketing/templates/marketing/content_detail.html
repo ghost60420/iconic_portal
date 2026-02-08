@@ -1,0 +1,105 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+{% include "marketing/_style.html" %}
+
+<div class="mk-container">
+  <div class="mk-header">
+    <div>
+      <div class="mk-title">Content detail</div>
+      <div class="mk-sub">{{ content.title|default:content.external_content_id }} • {{ content.platform }}</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_content' %}">Back to content</a>
+    </div>
+  </div>
+
+  <div class="mk-grid">
+    <div class="mk-card" style="grid-column: span 7;">
+      <div class="mk-section-title">Daily trend</div>
+      <div class="mk-chart"><canvas id="contentTrend"></canvas></div>
+    </div>
+    <div class="mk-card" style="grid-column: span 5;">
+      <div class="mk-section-title">Summary</div>
+      <div class="mk-label">Type</div>
+      <div class="mk-stat">{{ content.content_type }}</div>
+      <div class="mk-label" style="margin-top:10px;">Published</div>
+      <div class="mk-stat">{{ content.published_at|date:"Y-m-d" }}</div>
+      {% if content.permalink %}
+        <div class="mk-label" style="margin-top:10px;">Link</div>
+        <a href="{{ content.permalink }}" target="_blank" class="mk-sub">Open content</a>
+      {% endif %}
+    </div>
+
+    <div class="mk-card" style="grid-column: span 12;">
+      <div class="mk-section-title">Daily metrics</div>
+      <div class="mk-table">
+        <table class="table table-dark table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Impressions</th>
+              <th>Views</th>
+              <th>Clicks</th>
+              <th>Likes</th>
+              <th>Comments</th>
+              <th>Shares</th>
+              <th>Saves</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in metrics %}
+              <tr>
+                <td>{{ m.date }}</td>
+                <td>{{ m.impressions }}</td>
+                <td>{{ m.views }}</td>
+                <td>{{ m.clicks }}</td>
+                <td>{{ m.likes }}</td>
+                <td>{{ m.comments }}</td>
+                <td>{{ m.shares }}</td>
+                <td>{{ m.saves }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="8" class="mk-muted">No daily metrics yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+  const labels = {{ labels_json|safe }};
+  const views = {{ views_json|safe }};
+  const clicks = {{ clicks_json|safe }};
+  const engagement = {{ engagement_json|safe }};
+
+  const ctx = document.getElementById("contentTrend");
+  if (ctx) {
+    new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: [
+          { label: "Views", data: views, borderColor: "#60a5fa", backgroundColor: "transparent", tension: 0.25 },
+          { label: "Clicks", data: clicks, borderColor: "#f59e0b", backgroundColor: "transparent", tension: 0.25 },
+          { label: "Engagement", data: engagement, borderColor: "#22c55e", backgroundColor: "transparent", tension: 0.25 },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { ticks: { color: "#94a3b8" } },
+          y: { ticks: { color: "#94a3b8" } },
+        },
+        plugins: {
+          legend: { labels: { color: "#e2e8f0" } },
+        },
+      },
+    });
+  }
+</script>
+{% endblock %}

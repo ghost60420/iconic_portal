@@ -1,0 +1,250 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+{% include "marketing/_style.html" %}
+
+<div class="mk-container">
+  <div class="mk-header">
+    <div>
+      <div class="mk-title">Marketing Intelligence</div>
+      <div class="mk-sub">Unified performance across Meta, LinkedIn, TikTok, YouTube, and Google Business.</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_content' %}">Content library</a>
+      <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_insights' %}">Insights</a>
+      <a class="btn btn-warning mk-btn" href="{% url 'marketing_best_practices' %}">Best practices</a>
+      {% if MARKETING_ADS_ENABLED %}
+        <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_ads' %}">Ads</a>
+      {% endif %}
+      <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_workflow' %}">Workflow</a>
+    </div>
+  </div>
+
+  <div class="mk-grid">
+    <div class="mk-card" style="grid-column: span 6;">
+      <div class="mk-section-title">Last 7 days</div>
+      <div class="d-flex flex-wrap gap-3">
+        <div>
+          <div class="mk-label">Impressions</div>
+          <div class="mk-stat">{{ kpi_7.impressions|default:0 }}</div>
+        </div>
+        <div>
+          <div class="mk-label">Reach</div>
+          <div class="mk-stat">{{ kpi_7.reach|default:0 }}</div>
+        </div>
+        <div>
+          <div class="mk-label">Views</div>
+          <div class="mk-stat">{{ kpi_7.views|default:0 }}</div>
+        </div>
+        <div>
+          <div class="mk-label">Clicks</div>
+          <div class="mk-stat">{{ kpi_7.clicks|default:0 }}</div>
+        </div>
+        <div>
+          <div class="mk-label">Engagement rate</div>
+          <div class="mk-stat">{{ kpi_7.engagement_rate|floatformat:2 }}%</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mk-card" style="grid-column: span 6;">
+      <div class="mk-section-title">Last 30 days</div>
+      <div class="d-flex flex-wrap gap-3">
+        <div>
+          <div class="mk-label">Impressions</div>
+          <div class="mk-stat">{{ kpi_30.impressions|default:0 }}</div>
+        </div>
+        <div>
+          <div class="mk-label">Reach</div>
+          <div class="mk-stat">{{ kpi_30.reach|default:0 }}</div>
+        </div>
+        <div>
+          <div class="mk-label">Views</div>
+          <div class="mk-stat">{{ kpi_30.views|default:0 }}</div>
+        </div>
+        <div>
+          <div class="mk-label">Clicks</div>
+          <div class="mk-stat">{{ kpi_30.clicks|default:0 }}</div>
+        </div>
+        <div>
+          <div class="mk-label">Engagement rate</div>
+          <div class="mk-stat">{{ kpi_30.engagement_rate|floatformat:2 }}%</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mk-card" style="grid-column: span 8;">
+      <div class="mk-section-title">Followers change by platform</div>
+      <div class="mk-chart">
+        <canvas id="followersChart"></canvas>
+      </div>
+    </div>
+
+    <div class="mk-card" style="grid-column: span 4;">
+      <div class="mk-section-title">Marketing pipeline</div>
+      <div class="mk-label">Leads with UTM</div>
+      <div class="mk-stat">{{ marketing_leads|default:0 }}</div>
+      <div class="mk-label" style="margin-top:10px;">Opportunities with UTM</div>
+      <div class="mk-stat">{{ marketing_opps|default:0 }}</div>
+      <div class="mk-sub" style="margin-top:8px;">Tracking helps validate campaign ROI.</div>
+    </div>
+
+    <div class="mk-card" style="grid-column: span 4;">
+      <div class="mk-section-title">Top by engagement</div>
+      <div class="mk-table">
+        <table class="table table-dark table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Content</th>
+              <th>Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in top_by_engagement %}
+              <tr>
+                <td>
+                  <a href="{% url 'marketing_content_detail' row.content.id %}" style="color:#f8fafc; font-weight:700;">
+                    {{ row.content.title|default:row.content.external_content_id }}
+                  </a>
+                  <div class="mk-muted" style="font-size:11px;">{{ row.content.platform }}</div>
+                </td>
+                <td>{{ row.engagement_rate|floatformat:2 }}%</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="2" class="mk-muted">No data yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="mk-card" style="grid-column: span 4;">
+      <div class="mk-section-title">Top by views</div>
+      <div class="mk-table">
+        <table class="table table-dark table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Content</th>
+              <th>Views</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in top_by_views %}
+              <tr>
+                <td>
+                  <a href="{% url 'marketing_content_detail' row.content.id %}" style="color:#f8fafc; font-weight:700;">
+                    {{ row.content.title|default:row.content.external_content_id }}
+                  </a>
+                  <div class="mk-muted" style="font-size:11px;">{{ row.content.platform }}</div>
+                </td>
+                <td>{{ row.views|default:0 }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="2" class="mk-muted">No data yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="mk-card" style="grid-column: span 4;">
+      <div class="mk-section-title">Top by clicks</div>
+      <div class="mk-table">
+        <table class="table table-dark table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Content</th>
+              <th>Clicks</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in top_by_clicks %}
+              <tr>
+                <td>
+                  <a href="{% url 'marketing_content_detail' row.content.id %}" style="color:#f8fafc; font-weight:700;">
+                    {{ row.content.title|default:row.content.external_content_id }}
+                  </a>
+                  <div class="mk-muted" style="font-size:11px;">{{ row.content.platform }}</div>
+                </td>
+                <td>{{ row.clicks|default:0 }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="2" class="mk-muted">No data yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="mk-card" style="grid-column: span 12;">
+      <div class="mk-section-title">AI weekly action list</div>
+      {% if insights %}
+        <div class="d-flex flex-column gap-2">
+          {% for i in insights %}
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+              <div style="color:#e2e8f0; font-weight:700;">
+                {{ i.title }}
+                <span class="mk-muted">{{ i.recommended_action }}</span>
+              </div>
+              <div class="d-flex gap-2">
+                <form method="post" action="{% url 'marketing_insight_update' i.id %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="status" value="done" />
+                  <button class="btn btn-sm btn-outline-light" type="submit">Done</button>
+                </form>
+                <form method="post" action="{% url 'marketing_insight_update' i.id %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="status" value="snoozed" />
+                  <button class="btn btn-sm btn-outline-light" type="submit">Snooze</button>
+                </form>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="mk-sub">No insights yet. Run marketing_generate_insights.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+  const labels = {{ growth_labels_json|safe }};
+  const series = {{ growth_series_json|safe }};
+  const platformLabels = {{ platform_labels_json|safe }};
+
+  const datasets = Object.keys(series).map((key, idx) => {
+    const color = ["#f59e0b", "#60a5fa", "#22c55e", "#f472b6", "#a78bfa", "#38bdf8", "#e879f9"][idx % 7];
+    return {
+      label: platformLabels[key] || key,
+      data: series[key],
+      borderColor: color,
+      backgroundColor: "transparent",
+      tension: 0.25,
+    };
+  });
+
+  const ctx = document.getElementById("followersChart");
+  if (ctx) {
+    new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: datasets,
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { ticks: { color: "#94a3b8" } },
+          y: { ticks: { color: "#94a3b8" } },
+        },
+        plugins: {
+          legend: { labels: { color: "#e2e8f0" } },
+        },
+      },
+    });
+  }
+</script>
+{% endblock %}

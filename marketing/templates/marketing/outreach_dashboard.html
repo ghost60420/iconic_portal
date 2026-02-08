@@ -1,0 +1,142 @@
+{% extends "crm/base.html" %}
+{% block content %}
+{% include "marketing/_style.html" %}
+
+<div class="mk-container">
+  <div class="mk-header">
+    <div>
+      <div class="mk-title">Outreach Center</div>
+      <div class="mk-sub">Upload contacts, create campaigns, and send safely.</div>
+    </div>
+  </div>
+
+  <div class="mk-grid">
+    <div class="mk-card" style="grid-column: span 4;">
+      <div class="mk-section-title">Create Contact List</div>
+      <form method="post" class="mk-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="create_list" />
+        {{ list_form.as_p }}
+        <button class="btn btn-warning mk-btn" type="submit">Save List</button>
+      </form>
+    </div>
+
+    <div class="mk-card" style="grid-column: span 4;">
+      <div class="mk-section-title">Import CSV</div>
+      <form method="post" enctype="multipart/form-data" class="mk-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="import_csv" />
+        {{ upload_form.as_p }}
+        <button class="btn btn-outline-light mk-btn" type="submit">Upload</button>
+      </form>
+    </div>
+
+    <div class="mk-card" style="grid-column: span 4;">
+      <div class="mk-section-title">Create Outreach Campaign</div>
+      <form method="post" class="mk-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="create_campaign" />
+        {{ campaign_form.as_p }}
+        <button class="btn btn-warning mk-btn" type="submit">Save Campaign</button>
+      </form>
+    </div>
+
+    <div class="mk-card" style="grid-column: span 12;">
+      <div class="mk-section-title">Campaign Templates</div>
+      <form method="post" class="mk-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="create_template" />
+        <div class="row g-2">
+          <div class="col-md-4">
+            <label>Campaign</label>
+            <select name="campaign_id" class="form-select">
+              {% for c in campaigns %}
+                <option value="{{ c.id }}">{{ c.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-8">
+            {{ template_form.subject_template.label_tag }}
+            {{ template_form.subject_template }}
+          </div>
+          <div class="col-12">
+            {{ template_form.body_template.label_tag }}
+            {{ template_form.body_template }}
+          </div>
+        </div>
+        <button class="btn btn-outline-light mk-btn mt-2" type="submit">Save Template</button>
+      </form>
+    </div>
+
+    <div class="mk-card" style="grid-column: span 6;">
+      <div class="mk-section-title">Lists</div>
+      <div class="mk-table table-responsive">
+        <table class="table table-dark table-hover align-middle mb-0">
+          <thead><tr><th>Name</th><th>Contacts</th></tr></thead>
+          <tbody>
+            {% for l in lists %}
+              <tr>
+                <td>{{ l.name }}</td>
+                <td>{{ l.memberships.count }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="2" class="text-muted">No lists yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="mk-card" style="grid-column: span 6;">
+      <div class="mk-section-title">Campaign Status</div>
+      <div class="mk-table table-responsive">
+        <table class="table table-dark table-hover align-middle mb-0">
+          <thead><tr><th>Name</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            {% for c in campaigns %}
+              <tr>
+                <form method="post">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="update_campaign_status" />
+                  <input type="hidden" name="campaign_id" value="{{ c.id }}" />
+                  <td>{{ c.name }}</td>
+                  <td>
+                    <select name="status" class="form-select form-select-sm">
+                      {% for val,label in c.STATUS_CHOICES %}
+                        <option value="{{ val }}" {% if c.status == val %}selected{% endif %}>{{ label }}</option>
+                      {% endfor %}
+                    </select>
+                  </td>
+                  <td><button class="btn btn-sm btn-outline-light" type="submit">Update</button></td>
+                </form>
+              </tr>
+            {% empty %}
+              <tr><td colspan="3" class="text-muted">No campaigns yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="mk-card" style="grid-column: span 6;">
+      <div class="mk-section-title">Recent Sends</div>
+      <div class="mk-table table-responsive">
+        <table class="table table-dark table-hover align-middle mb-0">
+          <thead><tr><th>Contact</th><th>Campaign</th><th>Status</th></tr></thead>
+          <tbody>
+            {% for s in recent_sends %}
+              <tr>
+                <td>{{ s.contact.email }}</td>
+                <td>{{ s.campaign.name }}</td>
+                <td>{{ s.get_status_display }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="3" class="text-muted">No sends yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

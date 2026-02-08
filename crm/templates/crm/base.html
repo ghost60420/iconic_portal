@@ -339,7 +339,7 @@
 
         {% if MARKETING_ENABLED and marketing_url %}
           {% if request.user.is_authenticated %}
-            {% if request.user.is_superuser or request.user.access.can_marketing %}
+            {% if request.user.is_superuser or request.user|in_group:"Marketing Manager" or request.user.access.can_marketing %}
               <a href="{{ marketing_url }}" class="crm-nav-item"><span>📣</span><strong>Marketing</strong></a>
             {% endif %}
           {% endif %}

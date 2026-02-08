@@ -1,0 +1,58 @@
+{% extends "crm/base.html" %}
+{% block content %}
+{% include "marketing/_style.html" %}
+
+<div class="mk-container">
+  <div class="mk-header">
+    <div>
+      <div class="mk-title">{{ campaign.name }}</div>
+      <div class="mk-sub">Track links and attribution.</div>
+    </div>
+    <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_campaigns' %}">Back to campaigns</a>
+  </div>
+
+  <div class="mk-grid">
+    <div class="mk-card" style="grid-column: span 4;">
+      <div class="mk-label">Leads from UTMs</div>
+      <div class="mk-stat">{{ leads_count }}</div>
+      <div class="mk-label mt-3">Opportunities</div>
+      <div class="mk-stat">{{ opps_count }}</div>
+    </div>
+
+    <div class="mk-card" style="grid-column: span 8;">
+      <div class="mk-section-title">Add Tracked Link</div>
+      <form method="post" class="mk-form">
+        {% csrf_token %}
+        {{ link_form.as_p }}
+        <button class="btn btn-warning mk-btn" type="submit">Save Link</button>
+      </form>
+    </div>
+
+    <div class="mk-card" style="grid-column: span 12;">
+      <div class="mk-section-title">Tracked Links</div>
+      <div class="mk-table table-responsive">
+        <table class="table table-dark table-hover align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Final URL</th>
+              <th>UTM Campaign</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for l in links %}
+              <tr>
+                <td>{{ l.name }}</td>
+                <td>{{ l.final_url }}</td>
+                <td>{{ l.utm_campaign }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="3" class="text-muted">No links yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,5 +1,6 @@
 # iconic_site/settings.py
 import os
+import json
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -55,6 +56,8 @@ INSTALLED_APPS = [
     "django.contrib.humanize",
     "crm.apps.CrmConfig",
     "aihub",
+    "marketing.apps.MarketingConfig",
+    "whatsapp.apps.WhatsAppConfig",
 ]
 
 MIDDLEWARE = [
@@ -79,6 +82,8 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "marketing.context_processors.marketing_flags",
+                "whatsapp.context_processors.whatsapp_flags",
             ],
         },
     },
@@ -159,6 +164,26 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
 
 # ======================
+# Marketing feature flags
+# ======================
+
+def _flag(name: str, default: bool = False) -> bool:
+    val = os.getenv(name)
+    if val is None:
+        return default
+    return val.strip().lower() in {"1", "true", "yes", "on"}
+
+
+MARKETING_ENABLED = _flag("MARKETING_ENABLED", default=DEBUG)
+MARKETING_SEO_ENABLED = _flag("MARKETING_SEO_ENABLED", default=False)
+MARKETING_SOCIAL_ENABLED = _flag("MARKETING_SOCIAL_ENABLED", default=False)
+MARKETING_OUTREACH_ENABLED = _flag("MARKETING_OUTREACH_ENABLED", default=False)
+MARKETING_ADS_ENABLED = _flag("MARKETING_ADS_ENABLED", default=False)
+MARKETING_AI_ENABLED = _flag("MARKETING_AI_ENABLED", default=False)
+
+SITE_BASE_URL = os.getenv("SITE_BASE_URL", "https://femline.ca")
+
+# ======================
 # Email settings (SMTP)
 # ======================
 
@@ -237,6 +262,30 @@ WA_PHONE_NUMBER_ID = os.getenv("WA_PHONE_NUMBER_ID", "")
 WA_VERIFY_TOKEN = os.getenv("WA_VERIFY_TOKEN", "")
 WA_APP_SECRET = os.getenv("WA_APP_SECRET", "")
 WA_AUTO_REPLY_ENABLED = os.getenv("WA_AUTO_REPLY_ENABLED", "1") == "1"
+
+# ======================
+# WhatsApp Web settings (QR login)
+# ======================
+
+WHATSAPP_ENABLED = os.getenv("WHATSAPP_ENABLED", "0") == "1"
+WHATSAPP_AUTOMATION_ENABLED = os.getenv("WHATSAPP_AUTOMATION_ENABLED", "0") == "1"
+WHATSAPP_OUTBOUND_ENABLED = os.getenv("WHATSAPP_OUTBOUND_ENABLED", "0") == "1"
+
+WHATSAPP_PHONE_NUMBER = os.getenv("WHATSAPP_PHONE_NUMBER", "6045006009")
+WHATSAPP_SERVICE_URL = os.getenv("WHATSAPP_SERVICE_URL", "http://127.0.0.1:3127")
+WHATSAPP_SERVICE_SECRET = os.getenv("WHATSAPP_SERVICE_SECRET", "")
+WHATSAPP_WEBHOOK_SECRET = os.getenv("WHATSAPP_WEBHOOK_SECRET", "")
+WHATSAPP_SESSION_PATH = os.getenv("WHATSAPP_SESSION_PATH", "/var/lib/iconic_whatsapp")
+
+WHATSAPP_DAILY_LIMIT = int(os.getenv("WHATSAPP_DAILY_LIMIT", "120"))
+WHATSAPP_HOURLY_LIMIT = int(os.getenv("WHATSAPP_HOURLY_LIMIT", "20"))
+WHATSAPP_CONTACT_DAILY_LIMIT = int(os.getenv("WHATSAPP_CONTACT_DAILY_LIMIT", "3"))
+
+_wa_hours_raw = os.getenv("WHATSAPP_BUSINESS_HOURS_JSON", '{"start":"09:00","end":"17:00"}')
+try:
+    WHATSAPP_BUSINESS_HOURS_JSON = json.loads(_wa_hours_raw)
+except Exception:
+    WHATSAPP_BUSINESS_HOURS_JSON = {"start": "09:00", "end": "17:00"}
 
 # ======================
 # Jazzmin
