@@ -167,6 +167,7 @@ urlpatterns = [
     path("shipments/add/opportunity/<int:pk>/", perm("can_shipping", views.shipping_add_for_opportunity), name="shipping_add_for_opportunity"),
     path("shipments/<int:pk>/", perm("can_shipping", views.shipment_detail), name="shipment_detail"),
     path("shipments/<int:pk>/edit/", perm("can_shipping", views.shipment_edit), name="shipment_edit"),
+    path("shipments/<int:pk>/delete/", perm("can_shipping", views.shipment_delete), name="shipment_delete"),
     path("shipments/<int:pk>/refresh-tracking/", perm("can_shipping", views.shipment_refresh_tracking), name="shipment_refresh_tracking"),
     path("shipments/<int:pk>/notify/", perm("can_shipping", views.shipment_notify_customer), name="shipment_notify_customer"),
 

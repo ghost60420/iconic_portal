@@ -6842,6 +6842,18 @@ def shipment_edit(request, pk):
     )
 
 
+def shipment_delete(request, pk):
+    shipment = get_object_or_404(Shipment, pk=pk)
+
+    if request.method != "POST":
+        messages.error(request, "Delete must be submitted from the shipment list.")
+        return redirect("shipment_list")
+
+    shipment.delete()
+    messages.success(request, "Shipment deleted.")
+    return redirect("shipment_list")
+
+
 def shipping_add_for_opportunity(request, pk):
     """
     Create a shipment from an opportunity.

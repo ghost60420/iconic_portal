@@ -99,6 +99,12 @@
     border-color: #facc15;
   }
 
+  .btn-danger {
+    background: rgba(248, 113, 113, 0.12);
+    color: #fca5a5;
+    border-color: #f87171;
+  }
+
   .btn-small {
     padding: 3px 8px;
     font-size: 11px;
@@ -341,6 +347,10 @@
                         <option value="{{ key }}" {% if s.status == key %}selected{% endif %}>{{ label }}</option>
                       {% endfor %}
                     </select>
+                  </form>
+                  <form method="post" action="{% url 'shipment_delete' s.pk %}" style="margin-top:4px;" onsubmit="return confirm('Delete this shipment?');">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger btn-small">Delete</button>
                   </form>
                 </td>
               </tr>
