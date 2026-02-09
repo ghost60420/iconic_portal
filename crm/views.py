@@ -15,7 +15,7 @@ except Exception:
     OpenAI = None
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.core.mail import send_mail
+from django.core.mail import EmailMessage, get_connection, send_mail
 from django.db import transaction
 from django.db.utils import OperationalError, ProgrammingError
 from django.db.models import Case, Count, IntegerField, Q, When
@@ -6631,6 +6631,16 @@ def _shipment_email_target(shipment):
     return None, None
 
 
+def _send_email_safe(subject, body, from_email, to_list):
+    timeout = getattr(settings, "EMAIL_TIMEOUT", 5)
+    try:
+        connection = get_connection(timeout=timeout)
+        message = EmailMessage(subject, body, from_email, to_list, connection=connection)
+        return message.send(fail_silently=True) > 0
+    except Exception:
+        return False
+
+
 def _send_shipment_status_email(request, shipment, status_key):
     email_to, name = _shipment_email_target(shipment)
     if not email_to:
@@ -6657,11 +6667,7 @@ def _send_shipment_status_email(request, shipment, status_key):
     body = "\n".join(lines)
 
     from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "info@iconicapparelhouse.com")
-    try:
-        send_mail(subject, body, from_email, [email_to], fail_silently=False)
-        return True
-    except Exception:
-        return False
+    return _send_email_safe(subject, body, from_email, [email_to])
 
 
 def _handle_shipment_status_change(request, shipment, old_status):
@@ -7012,11 +7018,10 @@ def shipment_notify_customer(request, pk):
     body = "\n".join(lines)
     from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "info@iconicapparelhouse.com")
 
-    try:
-        send_mail(subject, body, from_email, [email_to], fail_silently=False)
+    if _send_email_safe(subject, body, from_email, [email_to]):
         messages.success(request, "Email sent.")
-    except Exception as e:
-        messages.error(request, f"Could not send email. {e}")
+    else:
+        messages.error(request, "Could not send email right now. Please try again later.")
 
     return redirect("shipment_detail", pk=pk)
 
