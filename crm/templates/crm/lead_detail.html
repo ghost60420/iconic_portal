@@ -498,11 +498,15 @@
   <div class="section">
     <h2 class="section-title">Chatter feed (Lead + Opportunities + Production)</h2>
 
-    <form method="post" style="margin-bottom: 10px;">
+    <form method="post" style="margin-bottom: 10px;" enctype="multipart/form-data">
       {% csrf_token %}
       <input type="hidden" name="action" value="add_comment">
       <label>Add internal note</label>
       <textarea name="comment_text"></textarea>
+      <div style="margin-top:6px;">
+        <label style="font-size:11px; color:#9ca3af;">Attachment (optional)</label>
+        <input type="file" name="attachment">
+      </div>
       <button type="submit" style="margin-top:6px;">Add note</button>
     </form>
 
@@ -516,6 +520,15 @@
             {% if c.is_ai %} (AI){% endif %}
           </div>
           <div>{{ c.content|linebreaksbr }}</div>
+          {% if c.attachment %}
+            <div class="small" style="margin-top:6px;">
+              {% with c.attachment.name|cut:"chatter_attachments/" as attachment_name %}
+                <a href="{{ c.attachment.url }}" target="_blank" rel="noopener">
+                  {{ attachment_name|default:"Attachment" }}
+                </a>
+              {% endwith %}
+            </div>
+          {% endif %}
           <div class="small" style="margin-top:4px;">
             {% if c.production %}
               <a href="{% url 'production_detail' c.production.pk %}">Open production</a>

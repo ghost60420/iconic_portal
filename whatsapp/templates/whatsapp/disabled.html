@@ -1,10 +1,27 @@
 {% extends "crm/base.html" %}
 {% block content %}
-<div class="container" style="max-width:900px;">
-  <div class="card" style="background:#0b0d10; border:1px solid #2a2f38; border-radius:16px;">
-    <div class="card-body" style="padding:20px;">
-      <h3 style="color:#f8fafc; font-weight:900;">WhatsApp Web is disabled</h3>
-      <p style="color:#a8b0bd; font-weight:700;">Enable WHATSAPP_ENABLED in .env to use this module.</p>
+<style>
+  .wa-wrap{
+    max-width:900px;
+    margin:0 auto;
+    color:#e5e7eb;
+  }
+  .wa-card{
+    margin-top:16px;
+    background:#111b21;
+    border:1px solid #1f2a30;
+    border-radius:18px;
+    padding:18px;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.45);
+  }
+  .wa-title{ margin:0; font-weight:900; font-size:20px; }
+  .wa-sub{ margin-top:6px; font-size:12px; font-weight:800; color:#94a3b8; }
+</style>
+<div class="container-fluid">
+  <div class="wa-wrap">
+    <div class="wa-card">
+      <div class="wa-title">WhatsApp Web is disabled</div>
+      <div class="wa-sub">Enable `WHATSAPP_ENABLED` in `.env` to use this module.</div>
     </div>
   </div>
 </div>

@@ -1,45 +1,235 @@
 {% extends "crm/base.html" %}
 {% block content %}
 <style>
-  .wa-wrap{ max-width:1400px; margin:0 auto; color:#f9fafb; }
-  .wa-layout{ display:grid; grid-template-columns: 320px 1fr; gap:16px; }
-  .wa-card{ background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)); border:1px solid #334155; border-radius:18px; box-shadow: 0 18px 40px rgba(0,0,0,0.45); overflow:hidden; }
+  .wa-wrap{
+    max-width:1400px;
+    margin:0 auto;
+    --wa-text:#e5e7eb;
+    --wa-bg:#0b141a;
+    --wa-panel:#111b21;
+    --wa-panel-2:#202c33;
+    --wa-border:#1f2a30;
+    --wa-muted:#8696a0;
+    --wa-accent:#25d366;
+    --wa-accent-2:#128c7e;
+    --wa-msg-in:#202c33;
+    --wa-msg-out:#005c4b;
+    color:var(--wa-text);
+    line-height:1.4;
+  }
+  .wa-wrap, .wa-wrap *{ box-sizing:border-box; }
+  .wa-page-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .wa-layout{
+    display:grid;
+    grid-template-columns: 70px 360px minmax(0, 1fr);
+    gap:0;
+    border:1px solid var(--wa-border);
+    border-radius:22px;
+    overflow:hidden;
+    background: var(--wa-panel);
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+    align-items: stretch;
+    min-height: 72vh;
+    height: 76vh;
+    width:100%;
+  }
+  .wa-card{ background: var(--wa-panel); border:0; border-radius:0; box-shadow:none; overflow:hidden; min-width:0; }
+  .wa-pane{ display:flex; flex-direction:column; height:100%; min-height:0; }
+  .wa-list-pane{ border-right:1px solid var(--wa-border); background:#0f171d; }
+  .wa-chat-pane{ background: var(--wa-bg); }
+  .wa-rail{
+    background: #0f161d;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:10px 0;
+    gap:10px;
+    height:100%;
+    min-height:72vh;
+    border-right:1px solid var(--wa-border);
+  }
+  .wa-rail-top{ display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .wa-rail-logo{
+    width:36px; height:36px;
+    border-radius:12px;
+    background: linear-gradient(145deg, var(--wa-accent), var(--wa-accent-2));
+    color:#0b0f1a;
+    font-weight:900;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .wa-rail-dot{ color: var(--wa-accent); font-size:10px; }
+  .wa-rail-btn{
+    width:38px; height:38px;
+    border-radius:12px;
+    border:1px solid transparent;
+    background: transparent;
+    color:#cdd5db;
+    font-weight:900;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    text-decoration:none;
+  }
+  .wa-rail-btn.active,
+  .wa-rail-btn:hover{
+    background: #1f2a30;
+    border-color: #22323a;
+    color:#fff;
+  }
+  .wa-rail-icon{ font-size:12px; }
+  .wa-rail-spacer{ flex:1; }
   .wa-pad{ padding:14px; }
   .wa-title{ margin:0; font-weight:900; }
-  .wa-sub{ margin-top:4px; font-size:12px; font-weight:800; color:#9ca3af; }
-  .wa-input{ width:100%; background:#020617; border:1px solid #334155; color:#f9fafb; border-radius:12px; padding:10px; font-size:13px; font-weight:700; }
-  .wa-list{ max-height:70vh; overflow:auto; padding:8px; }
-  .wa-item{ display:block; padding:10px 12px; border-radius:12px; border:1px solid rgba(148,163,184,0.2); margin-bottom:8px; text-decoration:none; color:#e5e7eb; background: rgba(255,255,255,0.03); }
-  .wa-item:hover{ border-color:#60a5fa; background: rgba(59,130,246,0.08); }
-  .wa-item.active{ border-color:#facc15; background: rgba(250,204,21,0.12); }
+  .wa-sub{ margin-top:4px; font-size:12px; font-weight:800; color:var(--wa-muted); }
+  .wa-input{ width:100%; background:#0b141a; border:1px solid var(--wa-border); color:var(--wa-text); border-radius:12px; padding:8px 10px; font-size:13px; font-weight:700; }
+  .wa-search{ background:#101a20; }
+  .wa-list-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .wa-list-title{ font-weight:900; font-size:16px; }
+  .wa-list{ flex:1; overflow:auto; padding:8px 10px 12px; min-height:0; }
+  .wa-item{ display:block; padding:10px 12px; border-radius:14px; border:1px solid transparent; margin-bottom:6px; text-decoration:none; color:var(--wa-text); background: transparent; transition:background 0.15s ease; }
+  .wa-item:hover{ background: rgba(255,255,255,0.04); }
+  .wa-item.active{ background: rgba(37,211,102,0.16); border-color: rgba(37,211,102,0.35); }
   .wa-name{ font-weight:900; font-size:13px; }
-  .wa-meta{ font-size:11px; color:#9ca3af; font-weight:800; margin-top:2px; }
-  .wa-badge{ display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:999px; font-size:11px; font-weight:900; border:1px solid #334155; background: rgba(255,255,255,0.03); color:#e5e7eb; }
-  .wa-badge.ok{ background:#16a34a; border-color:#16a34a; color:#0b0f1a; }
+  .wa-meta{ font-size:11px; color:var(--wa-muted); font-weight:800; margin-top:2px; }
+  .wa-item-text{ flex:1; min-width:0; }
+  .wa-item-top{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .wa-time{ font-size:11px; color:#a3b1ba; font-weight:800; }
+  .wa-preview{ font-size:11px; color:#7d8a92; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .wa-item-badges{ display:flex; flex-direction:column; gap:4px; align-items:flex-end; }
+  .wa-badge{ display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:999px; font-size:11px; font-weight:900; border:1px solid var(--wa-border); background: rgba(255,255,255,0.04); color:var(--wa-text); }
+  .wa-badge.ok{ background: var(--wa-accent); border-color: var(--wa-accent); color:#0b0f1a; }
   .wa-badge.warn{ background:#f59e0b; border-color:#f59e0b; color:#0b0f1a; }
-  .wa-chat{ display:flex; flex-direction:column; height:70vh; }
-  .wa-messages{ flex:1; overflow:auto; padding:14px; background: radial-gradient(circle at top, rgba(15,23,42,0.65), rgba(2,6,23,0.85)); }
+  .wa-chat{ display:flex; flex-direction:column; height:100%; min-height:0; }
+  .wa-chat-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    padding:14px;
+    background: var(--wa-panel-2);
+    border-bottom:1px solid var(--wa-border);
+  }
+  .wa-chat-title{ font-weight:900; font-size:15px; }
+  .wa-chat-actions{ display:flex; gap:8px; align-items:center; }
+  .wa-icon-btn{
+    min-width:32px; height:32px;
+    padding:0 10px;
+    border-radius:10px;
+    border:1px solid #22323a;
+    background:#1b242b;
+    color:#e2e8f0;
+    font-size:12px;
+    font-weight:900;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    text-decoration:none;
+  }
+  .wa-icon-btn.primary{
+    background: var(--wa-accent);
+    border-color: transparent;
+    color:#0b0f1a;
+  }
+  .wa-messages{
+    flex:1;
+    overflow:auto;
+    padding:14px;
+    background-color: var(--wa-bg);
+    background-image:
+      linear-gradient(135deg, rgba(255,255,255,0.02), transparent 40%),
+      radial-gradient(circle at 20% 10%, rgba(255,255,255,0.04), transparent 45%),
+      radial-gradient(circle at 80% 20%, rgba(255,255,255,0.03), transparent 40%);
+    min-height:0;
+  }
   .wa-msg-row{ display:flex; margin-bottom:10px; }
   .wa-msg-row.in{ justify-content:flex-start; }
   .wa-msg-row.out{ justify-content:flex-end; }
-  .wa-msg{ max-width:72%; padding:10px 12px; border-radius:14px; border:1px solid rgba(148,163,184,0.22); }
-  .wa-msg.in{ background: rgba(255,255,255,0.05); }
-  .wa-msg.out{ background: rgba(34,197,94,0.16); border-color:rgba(34,197,94,0.45); }
-  .wa-msg-meta{ font-size:11px; font-weight:800; color:#9ca3af; margin-bottom:4px; }
-  .wa-compose{ border-top:1px solid #334155; padding:12px; background: rgba(2,6,23,0.7); }
-  .wa-btn{ display:inline-flex; align-items:center; gap:8px; padding:9px 14px; border-radius:999px; font-weight:900; font-size:12px; text-decoration:none; border:1px solid rgba(255,255,255,0.18); background: linear-gradient(145deg, #0f172a, #020617); color:#f9fafb; cursor:pointer; }
+  .wa-msg{ max-width:72%; padding:10px 12px; border-radius:12px; border:1px solid transparent; box-shadow: 0 8px 16px rgba(0,0,0,0.2); }
+  .wa-msg.in{ background: var(--wa-msg-in); border-top-left-radius:6px; }
+  .wa-msg.out{ background: var(--wa-msg-out); border-top-right-radius:6px; }
+  .wa-msg-meta{ font-size:10px; font-weight:800; color:var(--wa-muted); margin-bottom:4px; }
+  .wa-compose{ border-top:1px solid var(--wa-border); padding:10px; background: var(--wa-panel-2); }
+  .wa-compose-row{ display:flex; gap:8px; align-items:center; }
+  .wa-compose-input{
+    flex:1;
+    min-height:34px;
+    background:#1f2a30;
+    border:1px solid #25343c;
+    color:var(--wa-text);
+    border-radius:18px;
+    padding:8px 12px;
+    font-size:13px;
+    resize:vertical;
+  }
+  .wa-compose-tools{ display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  .wa-pill{
+    padding:6px 10px;
+    border-radius:999px;
+    font-size:11px;
+    font-weight:800;
+    border:1px solid #22323a;
+    background:#151f26;
+    color:#e2e8f0;
+    cursor:pointer;
+  }
+  .wa-pill.primary{ background: var(--wa-accent); color:#0b0f1a; border-color: transparent; }
+  .wa-btn{ display:inline-flex; align-items:center; gap:8px; padding:9px 14px; border-radius:999px; font-weight:900; font-size:12px; text-decoration:none; border:1px solid rgba(255,255,255,0.18); background: linear-gradient(145deg, #0f172a, #020617); color:var(--wa-text); cursor:pointer; }
   .wa-row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-  .wa-empty{ padding:32px; text-align:center; color:#9ca3af; font-weight:800; }
+  .wa-empty{ padding:32px; text-align:center; color:var(--wa-muted); font-weight:800; }
+  .wa-avatar{
+    width:34px; height:34px;
+    border-radius:50%;
+    background: #1f2a30;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    font-weight:900;
+    color:#b9c1c7;
+    flex-shrink:0;
+  }
+  .wa-item-line{ display:flex; gap:10px; align-items:center; }
+  .wa-status-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:4px 8px;
+    border-radius:999px;
+    font-size:10px;
+    font-weight:900;
+    border:1px solid rgba(148,163,184,0.35);
+    background: rgba(255,255,255,0.03);
+  }
+  .wa-status-pill.connected{ background: rgba(34,197,94,0.18); border-color: rgba(34,197,94,0.5); color:#bbf7d0; }
+  .wa-status-pill.qr_required{ background: rgba(250,204,21,0.18); border-color: rgba(250,204,21,0.5); color:#fef3c7; }
+  .wa-status-pill.disconnected{ background: rgba(148,163,184,0.18); border-color: rgba(148,163,184,0.5); color:#e2e8f0; }
+  .wa-status-pill.error{ background: rgba(248,113,113,0.18); border-color: rgba(248,113,113,0.5); color:#fee2e2; }
+  .wa-details{
+    margin-top:10px;
+    border:1px dashed #22323a;
+    border-radius:14px;
+    padding:8px 10px;
+    background:#0d151b;
+  }
+  .wa-details summary{ cursor:pointer; list-style:none; }
+  .wa-details summary::-webkit-details-marker{ display:none; }
 
   @media (max-width: 1024px){
     .wa-layout{ grid-template-columns: 1fr; }
+    .wa-rail{ display:none; }
+    .wa-layout{ height:auto; min-height:0; }
+    .wa-pane{ height:auto; }
     .wa-chat{ height:auto; }
   }
 </style>
 
 <div class="container-fluid">
   <div class="wa-wrap">
-    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+    <form id="csrf" style="display:none;">{% csrf_token %}</form>
+    <div class="wa-page-head">
       <div>
         <h2 class="wa-title">WhatsApp Inbox</h2>
         <div class="wa-sub">Chat list on the left, conversation on the right.</div>
@@ -47,30 +237,72 @@
       <div class="wa-row">
         <a class="wa-btn" href="{% url 'wa_settings' %}">Settings</a>
         <a class="wa-btn" href="{% url 'wa_automation' %}">Automation</a>
+        <a class="wa-btn" href="https://web.whatsapp.com/" target="_blank" rel="noopener">Open WhatsApp Web</a>
       </div>
     </div>
 
     <div class="wa-layout" style="margin-top:14px;">
-      <div class="wa-card">
+      <aside class="wa-rail">
+        <div class="wa-rail-top">
+          <div class="wa-rail-logo">W</div>
+          <span class="wa-rail-dot">●</span>
+        </div>
+        <a class="wa-rail-btn active" href="{% url 'wa_inbox' %}" aria-label="Chats">
+          <span class="wa-rail-icon">C</span>
+        </a>
+        <a class="wa-rail-btn" href="{% url 'wa_automation' %}" aria-label="Automation">
+          <span class="wa-rail-icon">A</span>
+        </a>
+        <div class="wa-rail-spacer"></div>
+        <a class="wa-rail-btn" href="{% url 'wa_settings' %}" aria-label="Settings">
+          <span class="wa-rail-icon">⚙</span>
+        </a>
+      </aside>
+
+      <div class="wa-card wa-pane wa-list-pane">
         <div class="wa-pad">
-          <div class="wa-row" style="justify-content:space-between;">
-            <span class="wa-badge">Account: {{ account.phone_number }}</span>
-            <span class="wa-badge">Threads: {{ threads|length }}</span>
+          <div class="wa-list-head">
+            <div>
+              <div class="wa-list-title">Chats</div>
+              <div class="wa-sub">{{ threads|length }} conversations</div>
+            </div>
+            <div class="wa-row">
+              <span class="wa-badge">Account: {{ account.phone_number }}</span>
+              <span class="wa-status-pill {{ account.status }}">Status: {{ account.get_status_display }}</span>
+            </div>
           </div>
-          <div style="margin-top:10px;">
-            <input id="waSearch" class="wa-input" placeholder="Search name or phone">
+          <div class="wa-row" style="margin-top:10px;">
+            <input id="waSearch" class="wa-input wa-search" placeholder="Search chats">
           </div>
+          <details class="wa-details">
+            <summary class="wa-sub">Start new chat</summary>
+            <div class="wa-row" style="margin-top:8px;">
+              <input id="newPhone" class="wa-input" placeholder="Phone with country code">
+              <input id="newName" class="wa-input" placeholder="Name (optional)">
+              <input id="newText" class="wa-input" placeholder="Message (optional)">
+              <button class="wa-btn" id="btnStart" type="button">Create</button>
+              <span class="wa-sub" id="startStatus"></span>
+            </div>
+          </details>
         </div>
         <div class="wa-list" id="waList">
           {% for t in threads %}
             <a class="wa-item {% if selected_thread and selected_thread.pk == t.pk %}active{% endif %}" href="{% url 'wa_inbox' %}?thread={{ t.pk }}" data-name="{{ t.contact_name|default:''|lower }}" data-phone="{{ t.contact_phone|default:'' }}">
-              <div class="wa-name">{{ t.contact_name|default:"Unknown" }} · {{ t.contact_phone }}</div>
-              <div class="wa-meta">Last: {% if t.last_message_at %}{{ t.last_message_at|date:"Y-m-d H:i" }}{% else %}—{% endif %}</div>
-              {% if t.linked_lead %}
-                <div class="wa-meta">Lead: {{ t.linked_lead.account_brand|default:"Lead" }}</div>
-              {% else %}
-                <div class="wa-meta">No lead linked</div>
-              {% endif %}
+              <div class="wa-item-line">
+                <div class="wa-avatar">{{ t.contact_name|default:"?"|slice:":1"|upper }}</div>
+                <div class="wa-item-text">
+                  <div class="wa-item-top">
+                    <div class="wa-name">{{ t.contact_name|default:"Unknown" }}</div>
+                    <div class="wa-time">{% if t.last_message_at %}{{ t.last_message_at|date:"g:i A" }}{% else %}—{% endif %}</div>
+                  </div>
+                  <div class="wa-preview">Last: {% if t.last_message_at %}{{ t.last_message_at|date:"Y-m-d H:i" }}{% else %}—{% endif %}</div>
+                  {% if t.linked_lead %}
+                    <div class="wa-meta">Lead: {{ t.linked_lead.account_brand|default:"Lead" }}</div>
+                  {% else %}
+                    <div class="wa-meta">No lead linked</div>
+                  {% endif %}
+                </div>
+              </div>
             </a>
           {% endfor %}
           {% if not threads %}
@@ -79,21 +311,22 @@
         </div>
       </div>
 
-      <div class="wa-card">
+      <div class="wa-card wa-pane wa-chat-pane">
         {% if selected_thread %}
-          <div class="wa-pad" style="border-bottom:1px solid #334155;">
-            <div class="wa-row" style="justify-content:space-between;">
+          <div class="wa-chat-header">
+            <div class="wa-item-line">
+              <div class="wa-avatar" style="width:40px;height:40px;">{{ selected_thread.contact_name|default:"?"|slice:":1"|upper }}</div>
               <div>
-                <div class="wa-name" style="font-size:16px;">{{ selected_thread.contact_name|default:"Unknown" }} · {{ selected_thread.contact_phone }}</div>
-                <div class="wa-meta">Automation: {{ selected_thread.automation_enabled|yesno:"on,off" }}</div>
-              </div>
-              <div class="wa-row">
-                {% if selected_thread.linked_lead %}
-                  <a class="wa-btn" href="{% url 'lead_detail' selected_thread.linked_lead.pk %}">Open Lead</a>
-                {% else %}
-                  <button class="wa-btn" id="btnCreateLead" type="button">Create Lead</button>
-                {% endif %}
-              </div>
+              <div class="wa-chat-title">{{ selected_thread.contact_name|default:"Unknown" }} · {{ selected_thread.contact_phone }}</div>
+              <div class="wa-meta">Automation: {{ selected_thread.automation_enabled|yesno:"on,off" }}</div>
+            </div>
+          </div>
+            <div class="wa-chat-actions">
+              {% if selected_thread.linked_lead %}
+                <a class="wa-icon-btn" href="{% url 'lead_detail' selected_thread.linked_lead.pk %}">Lead</a>
+              {% else %}
+                <button class="wa-icon-btn" id="btnCreateLead" type="button">Create</button>
+              {% endif %}
             </div>
           </div>
 
@@ -103,7 +336,12 @@
                 {% for m in selected_messages %}
                   <div class="wa-msg-row {% if m.direction == 'inbound' %}in{% else %}out{% endif %}">
                     <div class="wa-msg {% if m.direction == 'inbound' %}in{% else %}out{% endif %}">
-                    <div class="wa-msg-meta">{{ m.direction }} · {{ m.created_at|date:"Y-m-d H:i" }}</div>
+                    <div class="wa-msg-meta">
+                      {{ m.created_at|date:"g:i A" }}
+                      {% if m.direction == "outbound" %}
+                        · {{ m.get_status_display }}
+                      {% endif %}
+                    </div>
                     <div style="white-space:pre-wrap;">{{ m.body }}</div>
                     {% if m.media_url %}
                       <div style="margin-top:8px;">
@@ -125,13 +363,14 @@
 
             <div class="wa-compose">
               {% if WHATSAPP_OUTBOUND_ENABLED %}
-                <form id="csrf" style="display:none;">{% csrf_token %}</form>
-                <textarea id="msgBox" class="wa-input" rows="3" placeholder="Type message..."></textarea>
-                <div class="wa-row" style="margin-top:8px;">
-                  <button class="wa-btn" id="btnSend" type="button">Queue send</button>
-                  <button class="wa-btn" id="btnFollow1" type="button">Follow up tomorrow</button>
-                  <button class="wa-btn" id="btnFollow3" type="button">Follow up in 3 days</button>
-                  <button class="wa-btn" id="btnToggle" type="button">Toggle automation</button>
+                <div class="wa-compose-row">
+                  <textarea id="msgBox" class="wa-compose-input" rows="1" placeholder="Type a message"></textarea>
+                  <button class="wa-icon-btn primary" id="btnSend" type="button">Send</button>
+                </div>
+                <div class="wa-compose-tools">
+                  <button class="wa-pill" id="btnFollow1" type="button">Follow up tomorrow</button>
+                  <button class="wa-pill" id="btnFollow3" type="button">Follow up in 3 days</button>
+                  <button class="wa-pill" id="btnToggle" type="button">Toggle automation</button>
                 </div>
                 <div class="wa-sub" id="status" style="margin-top:6px;"></div>
               {% else %}
@@ -166,6 +405,10 @@
   const status = document.getElementById("status");
   const csrf = document.querySelector("#csrf input[name='csrfmiddlewaretoken']");
   const threadId = {% if selected_thread %}{{ selected_thread.pk }}{% else %}null{% endif %};
+  const messagesPane = document.querySelector(".wa-messages");
+  if (messagesPane){
+    messagesPane.scrollTop = messagesPane.scrollHeight;
+  }
 
   function post(url, data){
     return fetch(url, {
@@ -180,11 +423,17 @@
   const btnFollow3 = document.getElementById("btnFollow3");
   const btnToggle = document.getElementById("btnToggle");
   const btnCreateLead = document.getElementById("btnCreateLead");
+  const btnStart = document.getElementById("btnStart");
+  const newPhone = document.getElementById("newPhone");
+  const newName = document.getElementById("newName");
+  const newText = document.getElementById("newText");
+  const startStatus = document.getElementById("startStatus");
 
   if (btnSend && threadId){
     btnSend.addEventListener("click", () => {
       post(`/whatsapp/thread/${threadId}/send/`, {text: msgBox.value}).then(d => {
         status.textContent = d.ok ? "Queued" : (d.error || "Failed");
+        if (d.ok && msgBox){ msgBox.value = ""; }
       });
     });
   }
@@ -220,6 +469,27 @@
           window.location.href = `/leads/${d.lead_id}/`;
         } else {
           alert(d.error || "Failed to create lead");
+        }
+      });
+    });
+  }
+
+  if (btnStart){
+    btnStart.addEventListener("click", () => {
+      const phone = newPhone ? newPhone.value : "";
+      const name = newName ? newName.value : "";
+      const text = newText ? newText.value : "";
+      post("{% url 'wa_start' %}", {phone: phone, name: name, text: text}).then(d => {
+        if (startStatus){
+          startStatus.textContent = d.ok ? "Created" : (d.error || "Failed");
+        }
+        if (d.ok){
+          if (newPhone) newPhone.value = "";
+          if (newName) newName.value = "";
+          if (newText) newText.value = "";
+        }
+        if (d.ok && d.thread_id){
+          window.location.href = `{% url 'wa_inbox' %}?thread=${d.thread_id}`;
         }
       });
     });

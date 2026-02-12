@@ -1,176 +1,260 @@
+{% include "crm/navbar.html" %}
+
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Thread library Iconic CRM</title>
+    <title>Thread library - Iconic CRM</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        body {
-            background: #050505;
-            color: #f5d580;
+        :root{
+            --bg:#060606;
+            --panel:#0b0d10;
+            --panel2:#0f172a;
+            --border:#2a2f38;
+            --text:#f8f9fa;
+            --muted:#a8b0bd;
+            --gold1:#ffe39b;
+            --gold2:#e4c067;
+        }
+
+        body{
+            background:var(--bg);
+            color:var(--text);
             font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-        }
-        a {
-            color: #f5d580;
-            text-decoration: none;
-        }
-        a:hover {
-            text-decoration: underline;
+            margin:0;
         }
 
-        .page {
-            max-width: 1100px;
-            margin: 20px auto 40px auto;
-            padding: 0 15px;
+        a{ color:#f5d580; text-decoration:none; }
+        a:hover{ color:#ffe9a8; }
+
+        .page{
+            max-width: 1200px;
+            margin: 18px auto 40px auto;
+            padding: 0 14px;
         }
 
-        .header-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 14px;
+        .header-row{
+            display:flex;
+            align-items:flex-start;
+            justify-content:space-between;
+            gap:12px;
+            flex-wrap:wrap;
+            margin-bottom: 12px;
         }
-        .header-title {
+
+        .header-title{
             font-size: 22px;
-            font-weight: bold;
+            font-weight: 900;
+            margin: 0;
+            color: var(--gold1);
+            letter-spacing: 0.2px;
         }
-        .header-sub {
+
+        .header-sub{
             font-size: 12px;
-            color: #aaa;
+            color: var(--muted);
             margin-top: 4px;
+            font-weight: 700;
         }
 
-        .btn {
-            display: inline-block;
-            padding: 6px 12px;
-            border-radius: 4px;
-            font-size: 13px;
-            font-weight: bold;
-            border: none;
-            cursor: pointer;
-        }
-        .btn-main {
-            background: #f5d580;
-            color: #000;
-        }
-        .btn-secondary {
-            background: #222;
-            color: #f5d580;
-            border: 1px solid #444;
+        .header-actions{
+            display:flex;
+            gap:8px;
+            flex-wrap:wrap;
         }
 
-        .toolbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 16px;
-            flex-wrap: wrap;
+        .card{
+            background: linear-gradient(180deg, rgba(15,23,42,0.55), rgba(2,6,23,0.65));
+            border: 1px solid rgba(148,163,184,0.22);
+            border-radius: 14px;
+            box-shadow: 0 18px 40px rgba(0,0,0,0.45);
         }
-        .search-form {
-            display: flex;
+
+        .toolbar{
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            gap: 10px;
             flex-wrap: wrap;
+            margin-bottom: 12px;
+            padding: 12px;
+        }
+
+        .search-form{
+            display:flex;
             gap: 8px;
-            align-items: center;
-        }
-        .search-form input,
-        .search-form select {
-            background: #000;
-            color: #f5d580;
-            border: 1px solid #444;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 13px;
+            flex-wrap: wrap;
+            align-items:center;
+            margin:0;
         }
 
-        table {
+        .field{
+            display:flex;
+            align-items:center;
+            gap:8px;
+            padding: 8px 10px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.10);
+            background: rgba(255,255,255,0.04);
+        }
+
+        .field input,
+        .field select{
+            background: transparent;
+            color: var(--text);
+            border: none;
+            outline: none;
+            font-size: 13px;
+            min-width: 160px;
+        }
+
+        .field input::placeholder{
+            color: rgba(248,249,250,0.55);
+        }
+
+        .btn{
+            display:inline-flex;
+            align-items:center;
+            gap:8px;
+            padding: 9px 12px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 900;
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(255,255,255,0.04);
+            color: #f3f4f6;
+            cursor:pointer;
+            user-select:none;
+            line-height: 1;
+            transition: transform 120ms ease, background 120ms ease, border-color 120ms ease, color 120ms ease;
+            text-decoration:none;
+            white-space:nowrap;
+        }
+
+        .btn:hover{
+            transform: translateY(-1px);
+            background: rgba(255,255,255,0.06);
+            border-color: rgba(245, 213, 128, 0.32);
+            color: var(--gold1);
+        }
+
+        .btn:active{ transform: translateY(0px); }
+
+        .btn-gold{
+            border-color: rgba(255, 227, 155, 0.30);
+            background: rgba(245, 213, 128, 0.16);
+            color: var(--gold1);
+            box-shadow: 0 10px 22px rgba(255, 209, 120, 0.10);
+        }
+
+        .btn-gold:hover{
+            background: rgba(245, 213, 128, 0.22);
+            color: #fff;
+        }
+
+        .btn-ghost{
+            background: rgba(2,6,23,0.55);
+            border-color: rgba(148,163,184,0.22);
+        }
+
+        .table-card{
+            padding: 8px 12px 12px 12px;
+        }
+
+        .table-wrap{
+            overflow-x: auto;
+        }
+
+        table{
             width: 100%;
             border-collapse: collapse;
             font-size: 13px;
         }
-        th, td {
-            border: 1px solid #262626;
-            padding: 6px 8px;
+
+        th, td{
+            padding: 10px 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
             text-align: left;
         }
-        th {
-            background: #101010;
-            font-weight: bold;
-            font-size: 12px;
-        }
-        tr:nth-child(even) {
-            background: #090909;
-        }
-        tr:nth-child(odd) {
-            background: #050505;
+
+        th{
+            color: var(--gold1);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
         }
 
-        .pill {
+        tbody tr:hover{
+            background: rgba(255,255,255,0.03);
+        }
+
+        .pill{
             display: inline-block;
-            padding: 2px 6px;
-            border-radius: 10px;
+            padding: 3px 8px;
+            border-radius: 999px;
             font-size: 11px;
         }
-        .pill-type {
-            background: #222;
-            border: 1px solid #444;
-            color: #f5d580;
-        }
-        .pill-active {
-            background: #1f3d1f;
-            border: 1px solid #3c7a3c;
-            color: #c5f5c5;
-        }
-        .pill-inactive {
-            background: #3d1f1f;
-            border: 1px solid #7a3c3c;
-            color: #f5c5c5;
+
+        .pill-type{
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: var(--gold1);
         }
 
-        .thumb-box {
-            width: 40px;
-            height: 40px;
-            border-radius: 4px;
-            background: #111;
-            border: 1px solid #333;
+        .pill-active{
+            background: rgba(34,197,94,0.15);
+            border: 1px solid rgba(34,197,94,0.35);
+            color: #c4f5c4;
+        }
+
+        .pill-inactive{
+            background: rgba(239,68,68,0.15);
+            border: 1px solid rgba(239,68,68,0.35);
+            color: #f5c4c4;
+        }
+
+        .thumb-box{
+            width: 46px;
+            height: 46px;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.12);
             overflow: hidden;
         }
-        .thumb-box img {
+
+        .thumb-box img{
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
-        .thumb-placeholder {
+
+        .thumb-placeholder{
             font-size: 9px;
-            color: #777;
+            color: var(--muted);
             text-align: center;
-            padding-top: 10px;
+            padding-top: 12px;
         }
 
-        .muted {
-            color: #888;
+        .muted{
+            color: var(--muted);
             font-size: 12px;
         }
 
-        @media (max-width: 800px) {
-            .toolbar {
+        @media (max-width: 900px){
+            .toolbar{
                 flex-direction: column;
                 align-items: stretch;
             }
-            table {
-                font-size: 12px;
-            }
-            th, td {
-                padding: 5px 6px;
+            .field input,
+            .field select{
+                min-width: 0;
+                width: 100%;
             }
         }
     </style>
 </head>
 <body>
-
-{% include "crm/navbar.html" %}
 
 <div class="page">
 
@@ -181,110 +265,142 @@
                 Store common thread options for sampling and bulk work
             </div>
         </div>
-        <div>
-            <a href="{% url 'thread_add' %}" class="btn btn-main">Add thread</a>
+        <div class="header-actions">
+            <a href="{% url 'library_home' %}" class="btn btn-ghost">Library home</a>
+            <a href="{% url 'thread_add' %}" class="btn btn-gold">Add thread</a>
         </div>
     </div>
 
-    <div class="toolbar">
+    <div class="card toolbar">
         <form method="get" class="search-form">
-            <input
-                type="text"
-                name="q"
-                value="{{ q }}"
-                placeholder="Search by name or code"
-            >
-            <select name="thread_type">
-                <option value="">Any type</option>
-                <option value="Polyester" {% if thread_type == "Polyester" %}selected{% endif %}>Polyester</option>
-                <option value="Cotton" {% if thread_type == "Cotton" %}selected{% endif %}>Cotton</option>
-                <option value="Core spun" {% if thread_type == "Core spun" %}selected{% endif %}>Core spun</option>
-            </select>
+            <div class="field">
+                <input
+                    type="text"
+                    name="q"
+                    value="{{ q }}"
+                    placeholder="Search by name or code"
+                >
+            </div>
+            <div class="field">
+                <select name="thread_type">
+                    <option value="">Any type</option>
+                    <option value="Polyester" {% if thread_type == "Polyester" %}selected{% endif %}>Polyester</option>
+                    <option value="Cotton" {% if thread_type == "Cotton" %}selected{% endif %}>Cotton</option>
+                    <option value="Core spun" {% if thread_type == "Core spun" %}selected{% endif %}>Core spun</option>
+                </select>
+            </div>
+            <div class="field">
+                <input
+                    type="text"
+                    name="color"
+                    value="{{ color }}"
+                    placeholder="Color filter"
+                >
+            </div>
 
-            <input
-                type="text"
-                name="color"
-                value="{{ color }}"
-                placeholder="Color filter"
-            >
-
-            <button type="submit" class="btn btn-main">Filter</button>
-            <a href="{% url 'threads_list' %}" class="btn btn-secondary">Clear</a>
+            <button type="submit" class="btn">Filter</button>
+            <a href="{% url 'threads_list' %}" class="btn btn-ghost">Clear</a>
         </form>
     </div>
 
-    {% if threads %}
-        <table>
-            <thead>
-                <tr>
-                    <th>Image</th>
-                    <th>Code</th>
-                    <th>Name</th>
-                    <th>Type</th>
-                    <th>Color</th>
-                    <th>Count</th>
-                    <th>Brand</th>
-                    <th>Use for</th>
-                    <th>Price cone</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for t in threads %}
-                <tr>
-                    <td>
-                        <div class="thumb-box">
-                            {% if t.image %}
-                                <img src="{{ t.image.url }}" alt="{{ t.name }}">
-                            {% else %}
-                                <div class="thumb-placeholder">No image</div>
-                            {% endif %}
-                        </div>
-                    </td>
-                    <td>{{ t.thread_code }}</td>
-                    <td>
-                        <a href="{% url 'thread_detail' t.pk %}">
-                            {{ t.name }}
-                        </a>
-                    </td>
-                    <td>
-                        {% if t.thread_type %}
-                            <span class="pill pill-type">{{ t.thread_type }}</span>
-                        {% else %}
-                            <span class="muted">Not set</span>
-                        {% endif %}
-                    </td>
-                    <td>{{ t.color|default:"" }}</td>
-                    <td>{{ t.count|default:"" }}</td>
-                    <td>{{ t.brand|default:"" }}</td>
-                    <td>
-                        {% if t.use_for %}
-                            {{ t.use_for|truncatechars:40 }}
-                        {% else %}
-                            <span class="muted">Not set</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if t.price_per_cone %}
-                            {{ t.price_per_cone }}
-                        {% else %}
-                            <span class="muted">Not set</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if t.is_active %}
-                            <span class="pill pill-active">Active</span>
-                        {% else %}
-                            <span class="pill pill-inactive">Inactive</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    {% else %}
-        <p class="muted">No thread records yet. Add common sewing cones here.</p>
-    {% endif %}
+    <div class="card table-card">
+        {% if threads %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Image</th>
+                            <th>Code</th>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Color</th>
+                            <th>Count</th>
+                            <th>Brand</th>
+                            <th>Use for</th>
+                            <th>Price cone</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for t in threads %}
+                        <tr>
+                            <td>
+                                <div class="thumb-box">
+                                    {% if t.image %}
+                                        <img src="{{ t.image.url }}" alt="{{ t.name }}">
+                                    {% else %}
+                                        <div class="thumb-placeholder">No image</div>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                {% if t.code %}
+                                    <span class="pill pill-type">{{ t.code }}</span>
+                                {% else %}
+                                    <span class="muted">Not set</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'thread_detail' t.pk %}">{{ t.name }}</a>
+                            </td>
+                            <td>
+                                {% if t.thread_type %}
+                                    <span class="pill pill-type">{{ t.thread_type }}</span>
+                                {% else %}
+                                    <span class="muted">Not set</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if t.color %}
+                                    {{ t.color }}
+                                {% else %}
+                                    <span class="muted">Not set</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if t.count %}
+                                    {{ t.count }}
+                                {% else %}
+                                    <span class="muted">Not set</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if t.brand %}
+                                    {{ t.brand }}
+                                {% else %}
+                                    <span class="muted">Not set</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if t.use_for %}
+                                    {{ t.use_for }}
+                                {% else %}
+                                    <span class="muted">Not set</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if t.price_per_cone %}
+                                    {{ t.price_per_cone }}
+                                {% else %}
+                                    <span class="muted">Not set</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if t.is_active %}
+                                    <span class="pill pill-active">Active</span>
+                                {% else %}
+                                    <span class="pill pill-inactive">Inactive</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="muted">No threads found yet.</p>
+        {% endif %}
+    </div>
 
 </div>
 </body>

@@ -5,6 +5,7 @@ from crm.models import ActualCostEntry, COST_SECTION_CHOICES
 
 INTERNAL_QUANT = Decimal("0.0001")
 DISPLAY_QUANT = Decimal("0.01")
+SECTION_KEYS = {key for key, _ in COST_SECTION_CHOICES}
 
 
 def _to_decimal(value):
@@ -28,6 +29,14 @@ def _round_display(value):
 
 def _section_order():
     return [k for k, _ in COST_SECTION_CHOICES]
+
+
+def _normalize_section(section):
+    if not section:
+        return "other"
+    if section in SECTION_KEYS:
+        return section
+    return "other"
 
 
 def _line_cost_per_piece(line, target_qty, overhead_method, labor_total):
@@ -67,13 +76,14 @@ def calculate_cost_sheet(cost_sheet, target_qty_override=None):
     labor_total = _round_internal(labor_total)
 
     for line in cost_sheet.line_items.all():
+        section_key = _normalize_section(line.section)
         line_total = _line_cost_per_piece(line, target_qty, overhead_method, labor_total)
-        section_totals[line.section] = _round_internal(section_totals[line.section] + line_total)
+        section_totals[section_key] = _round_internal(section_totals[section_key] + line_total)
 
         line_rows.append(
             {
                 "id": line.id,
-                "section": line.section,
+                "section": section_key,
                 "item_name": line.item_name,
                 "uom": line.uom,
                 "consumption_per_piece": _round_internal(line.consumption_per_piece),
@@ -152,8 +162,9 @@ def calculate_actuals(cost_sheet, production_order):
 
     section_totals = {k: Decimal("0") for k in _section_order()}
     for entry in entries:
-        section_totals[entry.section] = _round_internal(
-            section_totals[entry.section] + _to_decimal(entry.actual_total_cost)
+        section_key = _normalize_section(entry.section)
+        section_totals[section_key] = _round_internal(
+            section_totals[section_key] + _to_decimal(entry.actual_total_cost)
         )
 
     actual_total_cost = _round_internal(sum(section_totals.values()))

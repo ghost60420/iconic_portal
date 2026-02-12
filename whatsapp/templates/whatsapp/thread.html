@@ -1,69 +1,129 @@
 {% extends "crm/base.html" %}
 {% block content %}
 <style>
-  .wrap{ max-width:1100px; margin:0 auto; color:#f9fafb; }
-  .cardx{ background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)); border:1px solid #334155; border-radius:18px; box-shadow: 0 18px 40px rgba(0,0,0,0.55); overflow:hidden; margin-top:12px; }
-  .pad{ padding:14px; }
-  .msg{ padding:10px 12px; border-radius:14px; border:1px solid rgba(148,163,184,0.22); margin-bottom:10px; }
-  .in{ background: rgba(255,255,255,0.03); }
-  .out{ background: rgba(250,204,21,0.08); border-color:#facc15; }
-  .input, textarea{ width:100%; background:#020617; border:1px solid #334155; color:#f9fafb; border-radius:12px; padding:10px; font-size:13px; font-weight:700; }
-  .btn{ display:inline-flex; align-items:center; gap:8px; padding:9px 14px; border-radius:999px; font-weight:900; font-size:12px; text-decoration:none; border:1px solid rgba(255,255,255,0.18); background: linear-gradient(145deg, #0f172a, #020617); color:#f9fafb; cursor:pointer; }
-  .sub{ font-size:12px; font-weight:800; color:#9ca3af; }
+  .wa-wrap{
+    max-width:1100px;
+    margin:0 auto;
+    color:var(--wa-text);
+    --wa-text:#e5e7eb;
+    --wa-bg:#0b141a;
+    --wa-panel:#111b21;
+    --wa-panel-2:#202c33;
+    --wa-border:#1f2a30;
+    --wa-muted:#94a3b8;
+    --wa-accent:#25d366;
+    --wa-accent-2:#128c7e;
+    --wa-msg-in:#202c33;
+    --wa-msg-out:#005c4b;
+  }
+  .wa-wrap, .wa-wrap *{ box-sizing:border-box; }
+  .wa-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    flex-wrap:wrap;
+    margin-bottom:12px;
+  }
+  .wa-title{ margin:0; font-weight:900; font-size:20px; }
+  .wa-sub{ font-size:12px; font-weight:800; color:var(--wa-muted); }
+  .wa-btn{ display:inline-flex; align-items:center; gap:8px; padding:9px 14px; border-radius:999px; font-weight:900; font-size:12px; text-decoration:none; border:1px solid rgba(255,255,255,0.18); background: linear-gradient(145deg, #0f172a, #020617); color:var(--wa-text); cursor:pointer; }
+  .wa-card{
+    background: var(--wa-panel);
+    border:1px solid var(--wa-border);
+    border-radius:18px;
+    padding:14px;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.45);
+    margin-bottom:12px;
+  }
+  .wa-messages{
+    max-height:70vh;
+    overflow:auto;
+    padding:10px;
+    background: var(--wa-bg);
+    border-radius:14px;
+  }
+  .wa-msg-row{ display:flex; margin-bottom:10px; }
+  .wa-msg-row.in{ justify-content:flex-start; }
+  .wa-msg-row.out{ justify-content:flex-end; }
+  .wa-msg{ max-width:72%; padding:10px 12px; border-radius:12px; border:1px solid transparent; }
+  .wa-msg.in{ background: var(--wa-msg-in); border-top-left-radius:6px; }
+  .wa-msg.out{ background: var(--wa-msg-out); border-top-right-radius:6px; }
+  .wa-compose{ border-top:1px solid var(--wa-border); padding-top:10px; margin-top:10px; }
+  .wa-input{
+    width:100%;
+    background:#1f2a30;
+    border:1px solid #25343c;
+    color:var(--wa-text);
+    border-radius:14px;
+    padding:10px 12px;
+    font-size:13px;
+    font-weight:700;
+  }
+  .wa-row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
 </style>
 <div class="container-fluid">
-  <div class="wrap">
-    <h2 style="font-weight:900;">{{ thread.contact_name|default:"Unknown" }} · {{ thread.contact_phone }}</h2>
-    <div class="sub">
-      Automation: {{ thread.automation_enabled|yesno:"on,off" }}
-      {% if thread.linked_lead %}
-        · Lead:
-        <a href="{% url 'lead_detail' thread.linked_lead.pk %}" style="color:#facc15; font-weight:900;">
-          {{ thread.linked_lead.account_brand|default:"Lead" }}
-        </a>
-      {% endif %}
+  <div class="wa-wrap">
+    <div class="wa-head">
+      <div>
+        <h2 class="wa-title">{{ thread.contact_name|default:"Unknown" }} · {{ thread.contact_phone }}</h2>
+        <div class="wa-sub">
+          Automation: {{ thread.automation_enabled|yesno:"on,off" }}
+          {% if thread.linked_lead %}
+            · Lead:
+            <a href="{% url 'lead_detail' thread.linked_lead.pk %}" style="color:#93c5fd; font-weight:900;">
+              {{ thread.linked_lead.account_brand|default:"Lead" }}
+            </a>
+          {% endif %}
+        </div>
+      </div>
+      <a class="wa-btn" href="{% url 'wa_inbox' %}">Back to inbox</a>
     </div>
 
-    <div class="cardx">
-      <div class="pad">
+    <div class="wa-card">
+      <div class="wa-messages">
         {% if messages %}
           {% for m in messages %}
-            <div class="msg {% if m.direction == 'inbound' %}in{% else %}out{% endif %}">
-              <div class="sub">{{ m.direction }} · {{ m.created_at|date:"Y-m-d H:i" }}</div>
-              <div style="white-space:pre-wrap;">{{ m.body }}</div>
-              {% if m.media_url %}
-                <div style="margin-top:8px;">
-                  {% if m.media_type|slice:":5" == "image" %}
-                    <img src="{{ m.media_url }}" alt="attachment" style="max-width:240px; border-radius:10px; border:1px solid #334155;">
-                  {% else %}
-                    <a href="{{ m.media_url }}" target="_blank" style="color:#93c5fd; font-weight:800;">Download attachment</a>
+            <div class="wa-msg-row {% if m.direction == 'inbound' %}in{% else %}out{% endif %}">
+              <div class="wa-msg {% if m.direction == 'inbound' %}in{% else %}out{% endif %}">
+                <div class="wa-sub">
+                  {{ m.created_at|date:"g:i A" }}
+                  {% if m.direction == "outbound" %}
+                    · {{ m.get_status_display }}
                   {% endif %}
-                  <div class="sub" style="margin-top:4px;">{{ m.media_type }}</div>
                 </div>
-              {% endif %}
+                <div style="white-space:pre-wrap;">{{ m.body }}</div>
+                {% if m.media_url %}
+                  <div style="margin-top:8px;">
+                    {% if m.media_type|slice:":5" == "image" %}
+                      <img src="{{ m.media_url }}" alt="attachment" style="max-width:240px; border-radius:10px; border:1px solid var(--wa-border);">
+                    {% else %}
+                      <a href="{{ m.media_url }}" target="_blank" style="color:#93c5fd; font-weight:800;">Download attachment</a>
+                    {% endif %}
+                    <div class="wa-sub" style="margin-top:4px;">{{ m.media_type }}</div>
+                  </div>
+                {% endif %}
+              </div>
             </div>
           {% endfor %}
         {% else %}
-          <div class="sub">No messages yet.</div>
+          <div class="wa-sub">No messages yet.</div>
         {% endif %}
       </div>
-    </div>
 
-    <div class="cardx">
-      <div class="pad">
+      <div class="wa-compose">
         {% if WHATSAPP_OUTBOUND_ENABLED %}
-          <div class="sub">Compose message (queued)</div>
           <form id="csrf" style="display:none;">{% csrf_token %}</form>
-          <textarea id="msgBox" class="input" placeholder="Type message..."></textarea>
-          <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
-            <button class="btn" id="btnSend" type="button">Queue send</button>
-            <button class="btn" id="btnFollow1" type="button">Follow up tomorrow</button>
-            <button class="btn" id="btnFollow3" type="button">Follow up in 3 days</button>
-            <button class="btn" id="btnToggle" type="button">Toggle automation</button>
+          <textarea id="msgBox" class="wa-input" placeholder="Type message..."></textarea>
+          <div class="wa-row" style="margin-top:8px;">
+            <button class="wa-btn" id="btnSend" type="button">Queue send</button>
+            <button class="wa-btn" id="btnFollow1" type="button">Follow up tomorrow</button>
+            <button class="wa-btn" id="btnFollow3" type="button">Follow up in 3 days</button>
+            <button class="wa-btn" id="btnToggle" type="button">Toggle automation</button>
           </div>
-          <div class="sub" id="status" style="margin-top:6px;"></div>
+          <div class="wa-sub" id="status" style="margin-top:6px;"></div>
         {% else %}
-          <div class="sub">Outbound messaging is disabled in settings.</div>
+          <div class="wa-sub">Outbound messaging is disabled in settings.</div>
         {% endif %}
       </div>
     </div>
@@ -75,6 +135,10 @@
   const msgBox = document.getElementById("msgBox");
   const status = document.getElementById("status");
   const csrf = document.querySelector("#csrf input[name='csrfmiddlewaretoken']");
+  const messagesPane = document.querySelector(".wa-messages");
+  if (messagesPane){
+    messagesPane.scrollTop = messagesPane.scrollHeight;
+  }
 
   function post(url, data){
     return fetch(url, {
