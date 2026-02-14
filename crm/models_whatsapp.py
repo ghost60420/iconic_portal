@@ -52,15 +52,6 @@ class WhatsAppThread(models.Model):
 
 
 class WhatsAppMessage(models.Model):
-    STATUS_CHOICES = [
-        ("pending", "Pending"),
-        ("sent", "Sent"),
-        ("delivered", "Delivered"),
-        ("read", "Read"),
-        ("failed", "Failed"),
-        ("received", "Received"),
-    ]
-
     thread = models.ForeignKey(
         WhatsAppThread,
         on_delete=models.CASCADE,
@@ -70,11 +61,6 @@ class WhatsAppMessage(models.Model):
     direction = models.CharField(max_length=10, choices=(("in", "in"), ("out", "out")))
     body = models.TextField(blank=True, default="")
     meta_id = models.CharField(max_length=120, blank=True, default="", db_index=True)
-    status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default="received",
-    )
     media_url = models.TextField(blank=True, default="")
     media_type = models.CharField(max_length=50, blank=True, default="")
     media_path = models.TextField(blank=True, default="")
@@ -96,35 +82,3 @@ class WhatsAppMessage(models.Model):
 
     def __str__(self):
         return f"{self.direction} {self.thread.wa_phone}"
-
-
-class WhatsAppWebhookEvent(models.Model):
-    STATUS_CHOICES = [
-        ("new", "New"),
-        ("processing", "Processing"),
-        ("processed", "Processed"),
-        ("failed", "Failed"),
-    ]
-
-    PROVIDER_CHOICES = [
-        ("infobip", "Infobip"),
-        ("meta", "Meta"),
-        ("web", "Web"),
-    ]
-
-    provider = models.CharField(max_length=20, choices=PROVIDER_CHOICES, default="infobip")
-    received_at = models.DateTimeField(auto_now_add=True)
-    raw_payload = models.JSONField(default=dict, blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="new")
-    processed_at = models.DateTimeField(null=True, blank=True)
-    error_message = models.TextField(blank=True, default="")
-
-    class Meta:
-        ordering = ("-received_at", "-id")
-        indexes = [
-            models.Index(fields=["provider", "status"]),
-            models.Index(fields=["received_at"]),
-        ]
-
-    def __str__(self) -> str:
-        return f"{self.provider} webhook {self.pk}"

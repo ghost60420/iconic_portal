@@ -15,7 +15,7 @@ except Exception:
     OpenAI = None
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.core.mail import send_mail
+from django.core.mail import EmailMessage, get_connection, send_mail
 from django.db import transaction
 from django.db.utils import OperationalError, ProgrammingError
 from django.db.models import Case, Count, IntegerField, Q, When
@@ -5235,56 +5235,17 @@ def _save_production_lines(order, request):
 
 
 def _production_library_context(order=None):
-    selected_fabrics = []
-    selected_accessories = []
-    selected_trims = []
-    selected_threads = []
-
-    if order:
-        try:
-            selected_fabrics = list(order.fabrics.all())
-        except (OperationalError, ProgrammingError, AttributeError):
-            selected_fabrics = []
-        try:
-            selected_accessories = list(order.accessories.all())
-        except (OperationalError, ProgrammingError, AttributeError):
-            selected_accessories = []
-        try:
-            selected_trims = list(order.trims.all())
-        except (OperationalError, ProgrammingError, AttributeError):
-            selected_trims = []
-        try:
-            selected_threads = list(order.threads.all())
-        except (OperationalError, ProgrammingError, AttributeError):
-            selected_threads = []
-
-    try:
-        library_products = Product.objects.filter(is_active=True).order_by("name")
-    except (OperationalError, ProgrammingError):
-        library_products = Product.objects.none()
-    try:
-        library_fabrics = Fabric.objects.filter(is_active=True).order_by("name")[:200]
-    except (OperationalError, ProgrammingError):
-        library_fabrics = Fabric.objects.none()
-    try:
-        library_accessories = Accessory.objects.filter(is_active=True).order_by("name")[:200]
-    except (OperationalError, ProgrammingError):
-        library_accessories = Accessory.objects.none()
-    try:
-        library_trims = Trim.objects.filter(is_active=True).order_by("name")[:200]
-    except (OperationalError, ProgrammingError):
-        library_trims = Trim.objects.none()
-    try:
-        library_threads = ThreadOption.objects.filter(is_active=True).order_by("name")[:200]
-    except (OperationalError, ProgrammingError):
-        library_threads = ThreadOption.objects.none()
+    selected_fabrics = list(order.fabrics.all()) if order else []
+    selected_accessories = list(order.accessories.all()) if order else []
+    selected_trims = list(order.trims.all()) if order else []
+    selected_threads = list(order.threads.all()) if order else []
 
     return {
-        "library_products": library_products,
-        "library_fabrics": library_fabrics,
-        "library_accessories": library_accessories,
-        "library_trims": library_trims,
-        "library_threads": library_threads,
+        "library_products": Product.objects.filter(is_active=True).order_by("name"),
+        "library_fabrics": Fabric.objects.filter(is_active=True).order_by("name")[:200],
+        "library_accessories": Accessory.objects.filter(is_active=True).order_by("name")[:200],
+        "library_trims": Trim.objects.filter(is_active=True).order_by("name")[:200],
+        "library_threads": ThreadOption.objects.filter(is_active=True).order_by("name")[:200],
         "selected_fabrics": selected_fabrics,
         "selected_accessories": selected_accessories,
         "selected_trims": selected_trims,
@@ -5493,18 +5454,6 @@ def production_edit(request, pk):
     except (OperationalError, ProgrammingError):
         materials = []
 
-    try:
-        attachments = list(order.attachments.select_related("line").order_by("line__line_no", "-created_at"))
-    except (OperationalError, ProgrammingError):
-        attachments = []
-
-    line_models = []
-    if ProductionOrderLine is not None and hasattr(order, "lines"):
-        try:
-            line_models = list(order.lines.all().order_by("line_no", "id"))
-        except (OperationalError, ProgrammingError, AttributeError):
-            line_models = []
-
     recommended_items = InventoryItem.objects.none()
     recommended_ids = []
     try:
@@ -5520,10 +5469,7 @@ def production_edit(request, pk):
         recommended_items = []
         recommended_ids = []
 
-    try:
-        inventory_items = InventoryItem.objects.filter(is_active=True).order_by("category", "name")
-    except (OperationalError, ProgrammingError):
-        inventory_items = InventoryItem.objects.none()
+    inventory_items = InventoryItem.objects.filter(is_active=True).order_by("category", "name")
 
     return render(
         request,
@@ -5534,8 +5480,6 @@ def production_edit(request, pk):
             "order": order,
             "order_lines": order_lines or _production_order_lines_for_form(order),
             "materials": materials,
-            "attachments": attachments,
-            "line_models": line_models,
             "inventory_items": inventory_items,
             "recommended_items": recommended_items,
             "recommended_ids": recommended_ids,
@@ -5553,16 +5497,10 @@ def production_detail(request, pk):
 
     # order lines for sheet details
     order_lines = _production_order_lines(order)
-    line_models = []
-    if can_add_lines:
-        try:
-            line_models = list(order.lines.all().order_by("line_no", "id"))
-        except (OperationalError, ProgrammingError, AttributeError):
-            line_models = []
 
     # files
     try:
-        attachments = list(order.attachments.select_related("line").order_by("line__line_no", "-created_at"))
+        attachments = list(order.attachments.all().order_by("-created_at"))
     except (OperationalError, ProgrammingError):
         attachments = []
 
@@ -5814,7 +5752,6 @@ def production_detail(request, pk):
         "order_delayed": order_delayed,
         "order_lines": order_lines,
         "attachments": attachments,
-        "line_models": line_models,
         "shipments": shipments,
         "reject_percent": reject_percent,
         "opportunity": order.opportunity,
@@ -5840,36 +5777,19 @@ def production_attachment_add(request, pk):
     Add one attachment to a production order.
     """
     order = get_object_or_404(ProductionOrder, pk=pk)
-    name = (request.POST.get("name") or "").strip()
-    next_url = request.POST.get("next") or ""
+    file = request.FILES.get("file")
+    name = request.POST.get("name", "")
 
-    line = None
-    line_id = (request.POST.get("line_id") or "").strip()
-    if line_id:
-        line = ProductionOrderLine.objects.filter(pk=line_id, order=order).first()
-
-    files = request.FILES.getlist("files")
-    single = request.FILES.get("file")
-    if single and not files:
-        files = [single]
-
-    if files:
-        for idx, file in enumerate(files, start=1):
-            file_name = name or file.name
-            if name and len(files) > 1:
-                file_name = f"{name} ({idx})"
-            ProductionOrderAttachment.objects.create(
-                order=order,
-                line=line,
-                file=file,
-                name=file_name,
-            )
+    if file:
+        ProductionOrderAttachment.objects.create(
+            order=order,
+            file=file,
+            name=name or file.name,
+        )
         messages.success(request, "Attachment added.")
     else:
         messages.error(request, "No file selected.")
 
-    if next_url:
-        return redirect(next_url)
     return redirect("production_detail", pk=order.pk)
 
 
@@ -5882,9 +5802,6 @@ def production_attachment_delete(request, pk, att_pk):
     att = get_object_or_404(ProductionOrderAttachment, pk=att_pk, order=order)
     att.delete()
     messages.success(request, "Attachment deleted.")
-    next_url = request.POST.get("next") or ""
-    if next_url:
-        return redirect(next_url)
     return redirect("production_detail", pk=order.pk)
 
 
@@ -6714,6 +6631,16 @@ def _shipment_email_target(shipment):
     return None, None
 
 
+def _send_email_safe(subject, body, from_email, to_list):
+    timeout = getattr(settings, "EMAIL_TIMEOUT", 5)
+    try:
+        connection = get_connection(timeout=timeout)
+        message = EmailMessage(subject, body, from_email, to_list, connection=connection)
+        return message.send(fail_silently=True) > 0
+    except Exception:
+        return False
+
+
 def _send_shipment_status_email(request, shipment, status_key):
     email_to, name = _shipment_email_target(shipment)
     if not email_to:
@@ -6740,11 +6667,7 @@ def _send_shipment_status_email(request, shipment, status_key):
     body = "\n".join(lines)
 
     from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "info@iconicapparelhouse.com")
-    try:
-        send_mail(subject, body, from_email, [email_to], fail_silently=False)
-        return True
-    except Exception:
-        return False
+    return _send_email_safe(subject, body, from_email, [email_to])
 
 
 def _handle_shipment_status_change(request, shipment, old_status):
@@ -6919,14 +6842,15 @@ def shipment_edit(request, pk):
     )
 
 
-@require_POST
 def shipment_delete(request, pk):
     shipment = get_object_or_404(Shipment, pk=pk)
+
+    if request.method != "POST":
+        messages.error(request, "Delete must be submitted from the shipment list.")
+        return redirect("shipment_list")
+
     shipment.delete()
     messages.success(request, "Shipment deleted.")
-    next_url = request.POST.get("next") or ""
-    if next_url:
-        return redirect(next_url)
     return redirect("shipment_list")
 
 
@@ -7106,11 +7030,10 @@ def shipment_notify_customer(request, pk):
     body = "\n".join(lines)
     from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "info@iconicapparelhouse.com")
 
-    try:
-        send_mail(subject, body, from_email, [email_to], fail_silently=False)
+    if _send_email_safe(subject, body, from_email, [email_to]):
         messages.success(request, "Email sent.")
-    except Exception as e:
-        messages.error(request, f"Could not send email. {e}")
+    else:
+        messages.error(request, "Could not send email right now. Please try again later.")
 
     return redirect("shipment_detail", pk=pk)
 
@@ -7208,8 +7131,9 @@ def main_dashboard(request):
     # Opportunities
     opp_period = Opportunity.objects.filter(created_date__range=(start_period, today)).count()
 
-    # Use current pipeline distribution (do not restrict by created date).
-    opp_stage_base = Opportunity.objects.all()
+    opp_stage_base = Opportunity.objects.filter(created_date__range=(start_period, today))
+    if not opp_stage_base.exists():
+        opp_stage_base = Opportunity.objects.all()
     opp_by_stage_qs = opp_stage_base.values("stage").annotate(c=Count("id"))
     opp_stage_map = {row.get("stage") or "Unknown": int(row.get("c") or 0) for row in opp_by_stage_qs}
     opp_stage_labels = []
@@ -7248,34 +7172,21 @@ def main_dashboard(request):
     win_loss_labels = ["Won", "Lost"]
     win_loss_values = [int(won_count), int(lost_count)]
 
-    # Lead status funnel (show current pipeline across all leads)
-    lead_status_qs = Lead.objects.values("lead_status").annotate(c=Count("id"))
-    lead_status_map = {}
-    canonical_statuses = {k.lower(): k for k, _ in LEAD_STATUS_CHOICES}
-    # Map legacy labels to current canonical choices.
-    canonical_statuses.update({
-        "work": "Working",
-        "neutral": "Nurturing",
-    })
-    for row in lead_status_qs:
-        raw = (row.get("lead_status") or "Unknown").strip()
-        key = canonical_statuses.get(raw.lower(), raw or "Unknown")
-        lead_status_map[key] = lead_status_map.get(key, 0) + int(row.get("c") or 0)
-    funnel_order = ["New", "Working", "Nurturing", "Qualified"]
-    funnel_label_map = {
-        "Working": "Work",
-        "Nurturing": "Neutral",
-    }
-    lead_status_labels = [funnel_label_map.get(st, st) for st in funnel_order]
-    lead_status_values = [int(lead_status_map.get(st, 0)) for st in funnel_order]
-    other_total = sum(
-        int(cnt)
-        for st, cnt in lead_status_map.items()
-        if st not in funnel_order
-    )
-    if other_total:
-        lead_status_labels.append("Other")
-        lead_status_values.append(int(other_total))
+    # Lead status funnel (show qualification stage)
+    lead_status_base = Lead.objects.filter(created_date__range=(start_period, today))
+    if not lead_status_base.exists():
+        lead_status_base = Lead.objects.all()
+    lead_status_qs = lead_status_base.values("lead_status").annotate(c=Count("id"))
+    lead_status_map = {row.get("lead_status") or "Unknown": int(row.get("c") or 0) for row in lead_status_qs}
+    lead_status_labels = []
+    lead_status_values = []
+    for st, _ in LEAD_STATUS_CHOICES:
+        lead_status_labels.append(st)
+        lead_status_values.append(int(lead_status_map.get(st, 0)))
+    for st, cnt in lead_status_map.items():
+        if st not in lead_status_labels:
+            lead_status_labels.append(st)
+            lead_status_values.append(int(cnt))
 
     # Accounting net per day (real cash flow line)
     cad_to_bdt = _get_latest_cad_to_bdt_rate()
@@ -7645,9 +7556,6 @@ def main_dashboard(request):
         "orders_processed_values": orders_processed_daily_values,
         "opp_stage_labels": opp_stage_labels,
         "opp_stage_values": opp_stage_values,
-        "opp_sample_count": int(opp_stage_map.get("Sampling", 0)),
-        "opp_production_count": int(opp_stage_map.get("Production", 0)),
-        "opp_shipping_complete_count": int(opp_stage_map.get("Shipment Complete", 0)),
         "lead_status_labels": lead_status_labels,
         "lead_status_values": lead_status_values,
         "lead_source_labels": lead_source_labels,
@@ -7720,9 +7628,6 @@ def main_dashboard(request):
         "prod_cost_cad_period": prod_cost_cad_period,
         "prod_profit_cad_period": prod_profit_cad_period,
         "prod_margin_pct_period": prod_margin_pct_period,
-        "opp_sample_count": int(opp_stage_map.get("Sampling", 0)),
-        "opp_production_count": int(opp_stage_map.get("Production", 0)),
-        "opp_shipping_complete_count": int(opp_stage_map.get("Shipment Complete", 0)),
 
         "payroll_total": payroll_total,
         "payroll_ot": payroll_ot,

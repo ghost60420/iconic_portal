@@ -1163,60 +1163,6 @@
     {% endif %}
   </div>
 
-  <div class="prod-add-card">
-    <div class="prod-add-card-title">Product images</div>
-
-    {% if is_edit and order %}
-      <form action="{% url 'production_attachment_add' order.pk %}"
-            method="post"
-            enctype="multipart/form-data"
-            style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
-        {% csrf_token %}
-        <input type="hidden" name="next" value="{{ request.path }}">
-        <select name="line_id" class="inputx" style="max-width:220px; padding:6px 8px;">
-          <option value="">General (no line)</option>
-          {% for line in line_models %}
-            <option value="{{ line.pk }}">Line {{ line.line_no }}{% if line.style_name %} - {{ line.style_name }}{% endif %}</option>
-          {% endfor %}
-        </select>
-        <input type="file" name="files" multiple class="inputx" style="max-width:260px; padding:6px 8px;">
-        <input type="text" name="name" placeholder="Label optional" class="inputx" style="max-width:220px;">
-        <button type="submit" class="btn btn-warning btn-sm">Upload</button>
-      </form>
-
-      <div class="attach-list" style="margin-top:10px;">
-        {% if attachments %}
-          <ul>
-            {% for att in attachments %}
-              <li>
-                <a href="{{ att.file.url }}" target="_blank">{{ att.name|default:att.file.name }}</a>
-                <span class="muted" style="margin-left:6px;">
-                  {% if att.line %}
-                    Line {{ att.line.line_no }}{% if att.line.style_name %} - {{ att.line.style_name }}{% endif %}
-                  {% else %}
-                    General
-                  {% endif %}
-                </span>
-                <form action="{% url 'production_attachment_delete' order.pk att.pk %}" method="post" style="display:inline;">
-                  {% csrf_token %}
-                  <input type="hidden" name="next" value="{{ request.path }}">
-                  <button type="submit" class="btn btn-outline-danger btn-sm"
-                          onclick="return confirm('Delete this file?');">
-                    Delete
-                  </button>
-                </form>
-              </li>
-            {% endfor %}
-          </ul>
-        {% else %}
-          <div class="muted">No files added yet.</div>
-        {% endif %}
-      </div>
-    {% else %}
-      <div class="muted">Save the order first to upload images.</div>
-    {% endif %}
-  </div>
-
   <div id="line-modal" class="modal-backdrop" aria-hidden="true">
     <div class="modal-card">
       <div class="modal-head">

@@ -5,162 +5,8 @@
 <style>
   .prod-page {
     max-width: 1100px;
-    margin: 12px auto 24px auto;
+    margin: 20px auto 44px auto;
     padding: 0 10px;
-    line-height: 1.25;
-  }
-
-  .prod-layout {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 280px;
-    gap: 10px;
-    align-items: start;
-  }
-
-  .prod-main {
-    min-width: 0;
-  }
-
-  .prod-aside {
-    min-width: 0;
-  }
-
-  .summary-card {
-    position: sticky;
-    top: 10px;
-    background: #050816;
-    border: 1px solid #1f2937;
-    border-radius: 14px;
-    box-shadow: 0 0 18px rgba(0,0,0,0.7);
-    padding: 10px;
-  }
-
-  .summary-title {
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: #9ca3af;
-    margin-bottom: 6px;
-  }
-
-  .summary-grid {
-    display: grid;
-    gap: 6px;
-  }
-
-  .summary-item {
-    background: rgba(2,6,23,0.6);
-    border: 1px solid #111827;
-    border-radius: 10px;
-    padding: 6px 8px;
-  }
-
-  .summary-label {
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: #9ca3af;
-    margin-bottom: 2px;
-  }
-
-  .summary-value {
-    font-size: 12px;
-    color: #f9fafb;
-    font-weight: 700;
-  }
-
-  .summary-actions {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px;
-    margin-top: 8px;
-  }
-
-  .page-tools {
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
-    align-items: center;
-    margin: 4px 0 8px 0;
-    flex-wrap: wrap;
-  }
-
-  .page-tools .tool-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    align-items: center;
-  }
-
-  .density-toggle button {
-    font-size: 11px;
-    padding: 4px 10px;
-    border-radius: 999px;
-    border: 1px solid #4b5563;
-    background: #020617;
-    color: #e5e7eb;
-    cursor: pointer;
-  }
-
-  .density-toggle button.active {
-    border-color: #facc15;
-    color: #facc15;
-  }
-
-  .collapsible {
-    position: relative;
-  }
-
-  .collapsible-head {
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
-    align-items: center;
-    flex-wrap: wrap;
-    margin-bottom: 4px;
-  }
-
-  .collapsible-body {
-    display: block;
-  }
-
-  .collapsible.collapsed .collapsible-body {
-    display: none;
-  }
-
-  .collapsible-toggle {
-    font-size: 11px;
-    padding: 3px 10px;
-    border-radius: 999px;
-    border: 1px solid #4b5563;
-    background: #020617;
-    color: #e5e7eb;
-    cursor: pointer;
-  }
-
-  .collapsible-toggle:hover {
-    border-color: #facc15;
-    color: #facc15;
-  }
-
-  @media (max-width: 1100px) {
-    .prod-layout {
-      grid-template-columns: minmax(0, 1fr);
-    }
-
-    .summary-card {
-      position: static;
-    }
-
-    .summary-actions {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-  }
-
-  @media (max-width: 720px) {
-    .summary-actions {
-      grid-template-columns: minmax(0, 1fr);
-    }
   }
 
   .cardx {
@@ -168,8 +14,8 @@
     border: 1px solid #1f2937;
     border-radius: 14px;
     box-shadow: 0 0 18px rgba(0,0,0,0.7);
-    padding: 10px;
-    margin-bottom: 6px;
+    padding: 14px;
+    margin-bottom: 12px;
   }
 
   .headerx {
@@ -177,8 +23,8 @@
     border: 1px solid #1f2937;
     border-radius: 14px;
     box-shadow: 0 0 22px rgba(0,0,0,0.7);
-    padding: 10px;
-    margin-bottom: 6px;
+    padding: 14px;
+    margin-bottom: 12px;
   }
 
   .header-top {
@@ -254,10 +100,10 @@
   }
 
   .meta-grid {
-    margin-top: 6px;
+    margin-top: 10px;
     display: grid;
     grid-template-columns: repeat(12, minmax(0, 1fr));
-    gap: 6px;
+    gap: 10px;
   }
 
   .meta-item {
@@ -265,7 +111,7 @@
     background: rgba(2,6,23,0.6);
     border: 1px solid #111827;
     border-radius: 12px;
-    padding: 6px;
+    padding: 10px;
   }
 
   .meta-label {
@@ -273,7 +119,7 @@
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: #9ca3af;
-    margin-bottom: 1px;
+    margin-bottom: 2px;
   }
 
   .meta-value {
@@ -291,26 +137,26 @@
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    margin: 4px 0 6px 0;
+    margin: 8px 0 12px 0;
   }
 
   .section-title {
     font-size: 14px;
     font-weight: 700;
     color: #f9fafb;
-    margin-bottom: 4px;
+    margin-bottom: 8px;
     display: flex;
     align-items: center;
     gap: 8px;
   }
 
-  .stage-wrap { margin-top: 2px; }
+  .stage-wrap { margin-top: 6px; }
 
   /* Stage flow - modern pill strip */
   .stage-strip{
     display:flex;
-    gap:8px;
-    padding:8px;
+    gap:12px;
+    padding:12px;
     border-radius:18px;
     border:1px solid #1f2937;
     background:linear-gradient(180deg, rgba(2,6,23,0.9), rgba(2,6,23,0.6));
@@ -334,7 +180,7 @@
     display:flex;
     align-items:center;
     gap:10px;
-    padding:6px 12px;
+    padding:10px 16px;
     border-radius:999px;
     border:1px solid rgba(148,163,184,0.18);
     font-size:13px;
@@ -343,7 +189,7 @@
     white-space:nowrap;
     user-select:none;
     cursor:pointer;
-    min-height:36px;
+    min-height:42px;
     background:rgba(15,23,42,0.75);
     box-shadow:0 8px 18px rgba(0,0,0,0.35);
     transition:filter 0.12s ease, transform 0.12s ease, border-color 0.12s ease;
@@ -358,9 +204,9 @@
   .actual-grid{
     display:grid;
     grid-template-columns: 1fr 1.4fr 0.6fr 0.8fr 0.8fr 0.9fr 1.2fr;
-    gap:4px;
+    gap:6px;
     align-items:center;
-    font-size:11px;
+    font-size:12px;
   }
 
   .actual-head{
@@ -369,79 +215,6 @@
     font-size:11px;
     letter-spacing:0.04em;
     margin-bottom:6px;
-  }
-
-  .actual-grid input,
-  .actual-grid select,
-  .actual-grid textarea {
-    background: #020617;
-    border: 1px solid #374151;
-    color: #e5e7eb;
-    border-radius: 6px;
-    font-size: 11px;
-    padding: 4px 6px;
-  }
-
-  .prod-page .table {
-    font-size: 12px;
-  }
-
-  .prod-page .table > :not(caption) > * > * {
-    padding: 0.25rem 0.4rem;
-  }
-
-  .prod-page .table thead th {
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    background: #0b1222;
-  }
-
-  .prod-page.density-comfy {
-    line-height: 1.4;
-  }
-
-  .prod-page.density-comfy .cardx,
-  .prod-page.density-comfy .summary-card {
-    padding: 12px;
-    margin-bottom: 8px;
-  }
-
-  .prod-page.density-comfy .headerx {
-    padding: 12px;
-    margin-bottom: 8px;
-  }
-
-  .prod-page.density-comfy .meta-grid {
-    margin-top: 8px;
-    gap: 8px;
-  }
-
-  .prod-page.density-comfy .meta-item {
-    padding: 8px;
-  }
-
-  .prod-page.density-comfy .section-title {
-    margin-bottom: 6px;
-  }
-
-  .prod-page.density-comfy .sheet-line {
-    padding: 10px;
-    margin-top: 8px;
-  }
-
-  .prod-page.density-comfy .inputx {
-    font-size: 13px;
-    padding: 7px 9px;
-  }
-
-  .prod-page.density-comfy .stage-strip {
-    padding: 10px;
-  }
-
-  .prod-page.density-comfy .stage-item {
-    padding: 8px 14px;
-    min-height: 40px;
   }
 
   .stage-item.planned{ background:rgba(15,23,42,0.75); }
@@ -483,7 +256,7 @@
     background:rgba(255,255,255,0.9);
   }
 
-  .progress-row { margin-top: 4px; }
+  .progress-row { margin-top: 10px; }
 
   .stage-dates-head {
     display: flex;
@@ -491,7 +264,7 @@
     gap: 10px;
     align-items: center;
     flex-wrap: wrap;
-    margin-top: 6px;
+    margin-top: 12px;
   }
 
   .toggle-btn {
@@ -510,7 +283,7 @@
   }
 
   .stage-table {
-    margin-top: 4px;
+    margin-top: 8px;
     border-radius: 12px;
     border: 1px solid #111827;
     background: #020617;
@@ -520,8 +293,8 @@
   .stage-row {
     display: grid;
     grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr) minmax(0, 1.1fr);
-    gap: 6px;
-    padding: 6px 8px;
+    gap: 10px;
+    padding: 10px 12px;
     border-bottom: 1px solid #111827;
     font-size: 12px;
   }
@@ -537,9 +310,9 @@
   }
 
   .small-label {
-    font-size: 10px;
+    font-size: 11px;
     color: #9ca3af;
-    margin-bottom: 1px;
+    margin-bottom: 2px;
     text-transform: uppercase;
     letter-spacing: 0.03em;
   }
@@ -552,44 +325,30 @@
 
   .grid-two {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-    gap: 6px;
-  }
-
-  .sheet-line-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-    gap: 6px;
-  }
-
-  .sheet-bottom-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-    gap: 8px;
-    align-items: start;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px;
   }
 
   .note-box {
     background: rgba(2,6,23,0.6);
     border: 1px solid #111827;
     border-radius: 12px;
-    padding: 8px;
+    padding: 12px;
   }
 
   .note-title {
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 800;
     color: #f9fafb;
-    margin-bottom: 3px;
+    margin-bottom: 6px;
     border-bottom: 1px solid #111827;
-    padding-bottom: 3px;
+    padding-bottom: 6px;
   }
 
   .prewrap {
     white-space: pre-wrap;
     font-size: 12px;
     color: #e5e7eb;
-    line-height: 1.3;
   }
 
   .muted { color: #6b7280; }
@@ -597,8 +356,8 @@
   .dpr-grid {
     display: grid;
     grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
-    gap: 6px;
-    margin-top: 4px;
+    gap: 10px;
+    margin-top: 10px;
   }
 
   .inputx {
@@ -606,8 +365,8 @@
     border: 1px solid #374151;
     border-radius: 8px;
     color: #e5e7eb;
-    font-size: 12px;
-    padding: 5px 7px;
+    font-size: 13px;
+    padding: 8px 10px;
     width: 100%;
   }
 
@@ -620,8 +379,8 @@
   .sheet-top {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 6px 12px;
-    margin-top: 6px;
+    gap: 10px 18px;
+    margin-top: 8px;
   }
 
   .sheet-label {
@@ -629,7 +388,7 @@
     color: #9ca3af;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    margin-bottom: 1px;
+    margin-bottom: 2px;
   }
 
   .sheet-value {
@@ -647,8 +406,8 @@
     border-radius: 12px;
     border: 1px solid #111827;
     background: rgba(2,6,23,0.6);
-    padding: 8px;
-    margin-top: 6px;
+    padding: 12px;
+    margin-top: 12px;
   }
 
   .sheet-line-head {
@@ -656,7 +415,7 @@
     justify-content: space-between;
     align-items: center;
     gap: 10px;
-    margin-bottom: 4px;
+    margin-bottom: 8px;
   }
 
   .sheet-line-title {
@@ -669,12 +428,12 @@
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    margin-bottom: 4px;
+    margin-bottom: 8px;
   }
 
   .sheet-line-chip {
     font-size: 11px;
-    padding: 2px 5px;
+    padding: 4px 8px;
     border-radius: 999px;
     background: rgba(15,23,42,0.8);
     border: 1px solid #1f2937;
@@ -686,7 +445,7 @@
     border: 1px solid #111827;
     background: #020617;
     overflow: hidden;
-    margin-top: 2px;
+    margin-top: 6px;
   }
 
   .size-grid-row {
@@ -711,7 +470,7 @@
   }
 
   .size-summary {
-    margin-top: 2px;
+    margin-top: 6px;
     font-size: 11px;
     font-weight: 700;
   }
@@ -722,12 +481,12 @@
   .lib-tag-group {
     display: flex;
     flex-wrap: wrap;
-    gap: 3px;
+    gap: 6px;
   }
 
   .lib-tag {
     font-size: 11px;
-    padding: 2px 5px;
+    padding: 3px 8px;
     border-radius: 999px;
     border: 1px solid #374151;
     background: rgba(15, 23, 42, 0.8);
@@ -735,7 +494,7 @@
   }
 
   .attach-list {
-    margin-top: 4px;
+    margin-top: 8px;
     font-size: 12px;
   }
 
@@ -746,7 +505,7 @@
   }
 
   .attach-list li {
-    margin-bottom: 3px;
+    margin-bottom: 6px;
     display: flex;
     gap: 8px;
     align-items: center;
@@ -774,7 +533,7 @@
   }
 </style>
 
-<div class="prod-page density-compact" id="prod-page">
+<div class="prod-page">
 
   <div class="cardx">
     <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
@@ -903,27 +662,8 @@
     <a href="{% url 'production_ai_help' order.pk %}" class="btn btn-outline-light btn-sm">AI help</a>
   </div>
 
-  <div class="page-tools">
-    <div class="tool-group">
-      <button type="button" class="btn btn-outline-light btn-sm" id="expand-all">Expand all</button>
-      <button type="button" class="btn btn-outline-light btn-sm" id="collapse-all">Collapse all</button>
-    </div>
-    <div class="tool-group density-toggle">
-      <button type="button" class="density-btn" data-density="compact">Compact</button>
-      <button type="button" class="density-btn" data-density="comfy">Comfortable</button>
-    </div>
-  </div>
-
-  <div class="prod-layout">
-    <div class="prod-main">
-
-  <div class="cardx collapsible" data-default="open">
-    <div class="collapsible-head">
-      <div class="section-title" style="margin:0;">Stage flow</div>
-      <button type="button" class="collapsible-toggle">Hide</button>
-    </div>
-
-    <div class="collapsible-body">
+  <div class="cardx">
+    <div class="section-title">Stage flow</div>
 
     <div class="stage-wrap">
       <div class="stage-strip">
@@ -976,12 +716,12 @@
     <div class="stage-dates-head">
       <div class="section-title" style="margin:0;">Stage dates</div>
       <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-        <button type="button" id="stage-dates-toggle" class="toggle-btn">Show</button>
+        <button type="button" id="stage-dates-toggle" class="toggle-btn">Hide</button>
         <div class="muted" style="font-size:12px;">Click stage name below to edit dates</div>
       </div>
     </div>
 
-    <div class="stage-table" id="stage-dates-body" style="display:none;">
+    <div class="stage-table" id="stage-dates-body">
       {% for stage in stages %}
         <div class="stage-row">
           <div class="stage-name">
@@ -1019,363 +759,328 @@
           </div>
         </div>
       {% empty %}
-        <div style="padding:10px;" class="muted">No stages created yet for this order.</div>
+        <div style="padding:12px;" class="muted">No stages created yet for this order.</div>
       {% endfor %}
     </div>
-    </div>
   </div>
 
-  <div class="cardx collapsible" data-default="closed">
-    <div class="collapsible-head">
-      <div class="section-title" style="margin:0;">Notes and activity</div>
-      <button type="button" class="collapsible-toggle">Show</button>
-    </div>
-
-    <div class="collapsible-body">
-      <div class="grid-two">
-        <div class="note-box">
-          <div class="note-title">Notes</div>
-          <div class="prewrap">
-            {% if order.notes %}{{ order.notes }}{% else %}<span class="muted">No notes yet.</span>{% endif %}
-          </div>
-        </div>
-
-        <div class="note-box">
-          <div class="note-title">AI advice</div>
-          <div class="prewrap">
-            {% if order.ai_note %}{{ order.ai_note }}{% else %}<span class="muted">No AI note yet. Use AI help.</span>{% endif %}
-          </div>
-          <div style="text-align:right; margin-top:6px;">
-            <a href="{% url 'production_ai_help' order.pk %}" class="btn btn-outline-warning btn-sm">
-              Update AI summary
-            </a>
-          </div>
+  <div class="cardx">
+    <div class="grid-two">
+      <div class="note-box">
+        <div class="note-title">Notes</div>
+        <div class="prewrap">
+          {% if order.notes %}{{ order.notes }}{% else %}<span class="muted">No notes yet.</span>{% endif %}
         </div>
       </div>
 
-      <div class="grid-two" style="margin-top:6px;">
-        <div class="note-box">
-          <div class="note-title">Chatter feed</div>
-          <form method="post" style="margin-bottom:6px;" enctype="multipart/form-data">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="add_comment">
-            <textarea name="comment_text" rows="3" class="inputx" placeholder="Write a note about this production order"></textarea>
-            <div style="margin-top:4px;">
-              <label class="small-label">Attachment (optional)</label>
-              <input type="file" name="attachment" class="inputx">
-            </div>
-            <div style="text-align:right; margin-top:6px;">
-              <button type="submit" class="btn btn-warning btn-sm">Save note</button>
-            </div>
-          </form>
+      <div class="note-box">
+        <div class="note-title">AI advice</div>
+        <div class="prewrap">
+          {% if order.ai_note %}{{ order.ai_note }}{% else %}<span class="muted">No AI note yet. Use AI help.</span>{% endif %}
+        </div>
+        <div style="text-align:right; margin-top:10px;">
+          <a href="{% url 'production_ai_help' order.pk %}" class="btn btn-outline-warning btn-sm">
+            Update AI summary
+          </a>
+        </div>
+      </div>
+    </div>
 
-          {% if comments %}
-            {% for c in comments %}
-              <div style="margin-bottom: 6px;">
-                <strong class="value-main">{{ c.author }}</strong>
-                <span class="muted">
-                  {{ c.created_at }}
-                  {% if c.production %} • Production{% elif c.opportunity %} • Opportunity{% else %} • Lead{% endif %}
-                  {% if c.pinned %} pinned{% endif %}
-                  {% if c.is_ai %} AI{% endif %}
-                </span>
-                <p class="value-soft">{{ c.content|linebreaksbr }}</p>
-                {% if c.attachment %}
-                  <div class="muted" style="font-size:11px; margin-top:4px;">
-                    {% with c.attachment.name|cut:"chatter_attachments/" as attachment_name %}
-                      <a href="{{ c.attachment.url }}" target="_blank" rel="noopener">
-                        {{ attachment_name|default:"Attachment" }}
-                      </a>
-                    {% endwith %}
-                  </div>
-                {% endif %}
-                <div class="muted" style="font-size:11px;">
-                  {% if c.production %}
-                    <a href="{% url 'production_detail' c.production.pk %}">Open production</a>
-                  {% elif c.opportunity %}
-                    <a href="{% url 'opportunity_detail' c.opportunity.pk %}">Open opportunity</a>
-                  {% elif c.lead %}
-                    <a href="{% url 'lead_detail' c.lead.pk %}">Open lead</a>
-                  {% endif %}
+    <div class="note-box" style="margin-top:12px;">
+      <div class="note-title">Chatter feed (Lead + Opportunity + Production)</div>
+      <form method="post" style="margin-bottom:8px;" enctype="multipart/form-data">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add_comment">
+        <textarea name="comment_text" rows="3" class="inputx" placeholder="Write a note about this production order"></textarea>
+        <div style="margin-top:6px;">
+          <label class="small-label">Attachment (optional)</label>
+          <input type="file" name="attachment" class="inputx">
+        </div>
+        <div style="text-align:right; margin-top:8px;">
+          <button type="submit" class="btn btn-warning btn-sm">Save note</button>
+        </div>
+      </form>
+
+      {% if comments %}
+        {% for c in comments %}
+          <div style="margin-bottom: 8px;">
+            <strong class="value-main">{{ c.author }}</strong>
+            <span class="muted">
+              {{ c.created_at }}
+              {% if c.production %} • Production{% elif c.opportunity %} • Opportunity{% else %} • Lead{% endif %}
+              {% if c.pinned %} pinned{% endif %}
+              {% if c.is_ai %} AI{% endif %}
+            </span>
+            <p class="value-soft">{{ c.content|linebreaksbr }}</p>
+            {% if c.attachment %}
+              <div class="muted" style="font-size:11px; margin-top:4px;">
+                {% with c.attachment.name|cut:"chatter_attachments/" as attachment_name %}
+                  <a href="{{ c.attachment.url }}" target="_blank" rel="noopener">
+                    {{ attachment_name|default:"Attachment" }}
+                  </a>
+                {% endwith %}
+              </div>
+            {% endif %}
+            <div class="muted" style="font-size:11px;">
+              {% if c.production %}
+                <a href="{% url 'production_detail' c.production.pk %}">Open production</a>
+              {% elif c.opportunity %}
+                <a href="{% url 'opportunity_detail' c.opportunity.pk %}">Open opportunity</a>
+              {% elif c.lead %}
+                <a href="{% url 'lead_detail' c.lead.pk %}">Open lead</a>
+              {% endif %}
+            </div>
+
+            <form method="post" style="display:inline;">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="toggle_pin_comment">
+              <input type="hidden" name="comment_id" value="{{ c.id }}">
+              <button type="submit" class="btn btn-slate btn-small">
+                {% if c.pinned %}Unpin{% else %}Pin{% endif %}
+              </button>
+            </form>
+          </div>
+        {% endfor %}
+      {% else %}
+        <p class="muted">No chatter notes yet.</p>
+      {% endif %}
+    </div>
+
+    <div class="note-box" style="margin-top:12px;">
+      <div class="note-title">Daily production report</div>
+      <form method="post" action="{% url 'production_dpr' order.pk %}">
+        {% csrf_token %}
+        <div class="dpr-grid">
+          <div>
+            <div class="small-label">Today pieces</div>
+            <input type="number" name="dpr_qty" min="0" required class="inputx">
+          </div>
+          <div>
+            <div class="small-label">Note</div>
+            <input type="text" name="dpr_note" class="inputx">
+          </div>
+        </div>
+        <div style="text-align:right; margin-top:10px;">
+          <button type="submit" class="btn btn-warning btn-sm">Add daily report</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="cardx">
+    <div class="section-title" style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+      <span>Order sheet details</span>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a href="{% url 'production_order_sheet_pdf' order.pk %}" class="btn btn-outline-light btn-sm">Download order sheet PDF</a>
+        <a href="{% url 'production_packing_list_pdf' order.pk %}" class="btn btn-outline-light btn-sm">Download packing list PDF</a>
+      </div>
+    </div>
+
+    {% if order_lines %}
+      {% for line in order_lines %}
+        <div class="sheet-line">
+          <div class="sheet-line-head">
+            <div class="sheet-line-title">
+              Product line {{ forloop.counter }}
+              {% if line.style_name %} - {{ line.style_name }}{% endif %}
+              {% if line.color_info %} ({{ line.color_info }}){% endif %}
+            </div>
+          </div>
+
+          <div class="sheet-line-meta">
+            <span class="sheet-line-chip">
+              Client: {% if order.customer %}{{ order.customer.account_brand|default:order.customer.contact_name|default:order.customer }}{% else %}Not set{% endif %}
+            </span>
+            <span class="sheet-line-chip">
+              Order: {{ order.order_code|default:"Not set" }}
+            </span>
+            <span class="sheet-line-chip">
+              Opportunity:
+              {% if order.opportunity %}
+                <a href="{% url 'opportunity_detail' order.opportunity.id %}" style="color:#93c5fd;">{{ order.opportunity.opportunity_id|default:order.opportunity.id }}</a>
+              {% else %}
+                Not set
+              {% endif %}
+            </span>
+          </div>
+
+          <div class="sheet-top">
+            <div>
+              <div class="sheet-label">Style name</div>
+              <div class="sheet-value {% if not line.style_name %}muted{% endif %}">
+                {{ line.style_name|default:"not set" }}
+              </div>
+            </div>
+            <div>
+              <div class="sheet-label">Color info</div>
+              <div class="sheet-value {% if not line.color_info %}muted{% endif %}">
+                {{ line.color_info|default:"not set" }}
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:12px;">
+            <div class="sheet-label">Size grid up to 5XL</div>
+
+            {% if line.size_total %}
+              <div class="size-grid">
+                <div class="size-grid-row size-head">
+                  {% for item in line.size_grid %}
+                    <div class="size-cell">{{ item.label }}</div>
+                  {% endfor %}
                 </div>
+                <div class="size-grid-row">
+                  {% for item in line.size_grid %}
+                    <div class="size-cell">{% if item.qty %}{{ item.qty }}{% else %}-{% endif %}</div>
+                  {% endfor %}
+                </div>
+              </div>
 
-                <form method="post" style="display:inline;">
+              <div class="size-summary ok">
+                Line total {{ line.size_total }}
+              </div>
+            {% else %}
+              <div class="sheet-value muted">No size ratio set for this line.</div>
+            {% endif %}
+          </div>
+
+          <div style="margin-top:12px;">
+            <div class="sheet-label">Accessories and trims</div>
+            <div class="prewrap {% if not line.accessories_note %}muted{% endif %}">
+              {{ line.accessories_note|default:"not set" }}
+            </div>
+          </div>
+
+          <div style="margin-top:12px;">
+            <div class="sheet-label">Packaging details</div>
+            <div class="prewrap {% if not line.packaging_note %}muted{% endif %}">
+              {{ line.packaging_note|default:"not set" }}
+            </div>
+          </div>
+
+          <div style="margin-top:12px;">
+            <div class="sheet-label">Extra order notes</div>
+            <div class="prewrap {% if not line.extra_order_note %}muted{% endif %}">
+              {{ line.extra_order_note|default:"not set" }}
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <div class="sheet-value muted">No order sheet details set.</div>
+    {% endif %}
+
+    <div style="margin-top:14px;">
+      <div class="sheet-label">Library selections</div>
+
+      <div style="margin-top:6px;">
+        <div class="small-label">Fabrics</div>
+        {% if order.fabrics.all %}
+          <div class="lib-tag-group">
+            {% for f in order.fabrics.all %}
+              <span class="lib-tag">{{ f.fabric_code }} {{ f.name }}</span>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="sheet-value muted">No fabrics linked.</div>
+        {% endif %}
+      </div>
+
+      <div style="margin-top:8px;">
+        <div class="small-label">Accessories</div>
+        {% if order.accessories.all %}
+          <div class="lib-tag-group">
+            {% for a in order.accessories.all %}
+              <span class="lib-tag">{{ a.accessory_code }} {{ a.name }}</span>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="sheet-value muted">No accessories linked.</div>
+        {% endif %}
+      </div>
+
+      <div style="margin-top:8px;">
+        <div class="small-label">Trims</div>
+        {% if order.trims.all %}
+          <div class="lib-tag-group">
+            {% for t in order.trims.all %}
+              <span class="lib-tag">{{ t.trim_code }} {{ t.name }}</span>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="sheet-value muted">No trims linked.</div>
+        {% endif %}
+      </div>
+
+      <div style="margin-top:8px;">
+        <div class="small-label">Threads</div>
+        {% if order.threads.all %}
+          <div class="lib-tag-group">
+            {% for t in order.threads.all %}
+              <span class="lib-tag">{{ t.thread_code }} {{ t.name }}</span>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="sheet-value muted">No threads linked.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div style="margin-top:14px;">
+      <div class="sheet-label">Attachments</div>
+
+      <form action="{% url 'production_attachment_add' order.pk %}"
+            method="post"
+            enctype="multipart/form-data"
+            style="margin-top:8px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+        {% csrf_token %}
+        <input type="file" name="file" class="inputx" style="max-width:260px; padding:6px 8px;">
+        <input type="text" name="name" placeholder="File name optional" class="inputx" style="max-width:260px;">
+        <button type="submit" class="btn btn-warning btn-sm">Upload</button>
+      </form>
+
+      <div class="attach-list">
+        {% if attachments %}
+          <ul>
+            {% for att in attachments %}
+              <li>
+                <a href="{{ att.file.url }}" target="_blank">{{ att.name|default:att.file.name }}</a>
+                <form action="{% url 'production_attachment_delete' order.pk att.pk %}" method="post" style="display:inline;">
                   {% csrf_token %}
-                  <input type="hidden" name="action" value="toggle_pin_comment">
-                  <input type="hidden" name="comment_id" value="{{ c.id }}">
-                  <button type="submit" class="btn btn-slate btn-small">
-                    {% if c.pinned %}Unpin{% else %}Pin{% endif %}
+                  <button type="submit" class="btn btn-outline-danger btn-sm"
+                          onclick="return confirm('Delete this file?');">
+                    Delete
                   </button>
                 </form>
-              </div>
+              </li>
             {% endfor %}
-          {% else %}
-            <p class="muted">No chatter notes yet.</p>
-          {% endif %}
-        </div>
-
-        <div class="note-box">
-          <div class="note-title">Daily production report</div>
-          <form method="post" action="{% url 'production_dpr' order.pk %}">
-            {% csrf_token %}
-            <div class="dpr-grid">
-              <div>
-                <div class="small-label">Today pieces</div>
-                <input type="number" name="dpr_qty" min="0" required class="inputx">
-              </div>
-              <div>
-                <div class="small-label">Note</div>
-                <input type="text" name="dpr_note" class="inputx">
-              </div>
-            </div>
-            <div style="text-align:right; margin-top:6px;">
-              <button type="submit" class="btn btn-warning btn-sm">Add daily report</button>
-            </div>
-          </form>
-        </div>
+          </ul>
+        {% else %}
+          <div class="muted">No files added yet.</div>
+        {% endif %}
       </div>
     </div>
   </div>
 
-  <div class="cardx collapsible" data-default="open">
-    <div class="collapsible-head">
-      <div class="section-title" style="margin:0;">Order sheet details</div>
-      <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
-        <a href="{% url 'production_order_sheet_pdf' order.pk %}" class="btn btn-outline-light btn-sm">Order PDF</a>
-        <a href="{% url 'production_packing_list_pdf' order.pk %}" class="btn btn-outline-light btn-sm">Packing PDF</a>
-        <button type="button" class="collapsible-toggle">Hide</button>
-      </div>
+  <div class="cardx">
+    <div class="section-title" style="margin-bottom:8px;">
+      Actual cost tracking
     </div>
-
-    <div class="collapsible-body">
-      {% if order_lines %}
-        <div class="sheet-line-grid">
-          {% for line in order_lines %}
-            <div class="sheet-line">
-              <div class="sheet-line-head">
-                <div class="sheet-line-title">
-                  Product line {{ forloop.counter }}
-                  {% if line.style_name %} - {{ line.style_name }}{% endif %}
-                  {% if line.color_info %} ({{ line.color_info }}){% endif %}
-                </div>
-              </div>
-
-              <div class="sheet-line-meta">
-                <span class="sheet-line-chip">
-                  Client: {% if order.customer %}{{ order.customer.account_brand|default:order.customer.contact_name|default:order.customer }}{% else %}Not set{% endif %}
-                </span>
-                <span class="sheet-line-chip">
-                  Order: {{ order.order_code|default:"Not set" }}
-                </span>
-                <span class="sheet-line-chip">
-                  Opportunity:
-                  {% if order.opportunity %}
-                    <a href="{% url 'opportunity_detail' order.opportunity.id %}" style="color:#93c5fd;">{{ order.opportunity.opportunity_id|default:order.opportunity.id }}</a>
-                  {% else %}
-                    Not set
-                  {% endif %}
-                </span>
-              </div>
-
-              <div class="sheet-top">
-                <div>
-                  <div class="sheet-label">Style name</div>
-                  <div class="sheet-value {% if not line.style_name %}muted{% endif %}">
-                    {{ line.style_name|default:"not set" }}
-                  </div>
-                </div>
-                <div>
-                  <div class="sheet-label">Color info</div>
-                  <div class="sheet-value {% if not line.color_info %}muted{% endif %}">
-                    {{ line.color_info|default:"not set" }}
-                  </div>
-                </div>
-              </div>
-
-              <div style="margin-top:6px;">
-                <div class="sheet-label">Size grid up to 5XL</div>
-
-                {% if line.size_total %}
-                  <div class="size-grid">
-                    <div class="size-grid-row size-head">
-                      {% for item in line.size_grid %}
-                        <div class="size-cell">{{ item.label }}</div>
-                      {% endfor %}
-                    </div>
-                    <div class="size-grid-row">
-                      {% for item in line.size_grid %}
-                        <div class="size-cell">{% if item.qty %}{{ item.qty }}{% else %}-{% endif %}</div>
-                      {% endfor %}
-                    </div>
-                  </div>
-
-                  <div class="size-summary ok">
-                    Line total {{ line.size_total }}
-                  </div>
-                {% else %}
-                  <div class="sheet-value muted">No size ratio set for this line.</div>
-                {% endif %}
-              </div>
-
-              <div style="margin-top:6px;">
-                <div class="sheet-label">Accessories and trims</div>
-                <div class="prewrap {% if not line.accessories_note %}muted{% endif %}">
-                  {{ line.accessories_note|default:"not set" }}
-                </div>
-              </div>
-
-              <div style="margin-top:6px;">
-                <div class="sheet-label">Packaging details</div>
-                <div class="prewrap {% if not line.packaging_note %}muted{% endif %}">
-                  {{ line.packaging_note|default:"not set" }}
-                </div>
-              </div>
-
-              <div style="margin-top:6px;">
-                <div class="sheet-label">Extra order notes</div>
-                <div class="prewrap {% if not line.extra_order_note %}muted{% endif %}">
-                  {{ line.extra_order_note|default:"not set" }}
-                </div>
-              </div>
-            </div>
-          {% endfor %}
-        </div>
-      {% else %}
-        <div class="sheet-value muted">No order sheet details set.</div>
-      {% endif %}
-
-      <div class="sheet-bottom-grid" style="margin-top:10px;">
-        <div>
-          <div class="sheet-label">Library selections</div>
-
-          <div style="margin-top:4px;">
-            <div class="small-label">Fabrics</div>
-            {% if order.fabrics.all %}
-              <div class="lib-tag-group">
-                {% for f in order.fabrics.all %}
-                  <span class="lib-tag">{{ f.fabric_code }} {{ f.name }}</span>
-                {% endfor %}
-              </div>
-            {% else %}
-              <div class="sheet-value muted">No fabrics linked.</div>
-            {% endif %}
-          </div>
-
-          <div style="margin-top:6px;">
-            <div class="small-label">Accessories</div>
-            {% if order.accessories.all %}
-              <div class="lib-tag-group">
-                {% for a in order.accessories.all %}
-                  <span class="lib-tag">{{ a.accessory_code }} {{ a.name }}</span>
-                {% endfor %}
-              </div>
-            {% else %}
-              <div class="sheet-value muted">No accessories linked.</div>
-            {% endif %}
-          </div>
-
-          <div style="margin-top:6px;">
-            <div class="small-label">Trims</div>
-            {% if order.trims.all %}
-              <div class="lib-tag-group">
-                {% for t in order.trims.all %}
-                  <span class="lib-tag">{{ t.trim_code }} {{ t.name }}</span>
-                {% endfor %}
-              </div>
-            {% else %}
-              <div class="sheet-value muted">No trims linked.</div>
-            {% endif %}
-          </div>
-
-          <div style="margin-top:6px;">
-            <div class="small-label">Threads</div>
-            {% if order.threads.all %}
-              <div class="lib-tag-group">
-                {% for t in order.threads.all %}
-                  <span class="lib-tag">{{ t.thread_code }} {{ t.name }}</span>
-                {% endfor %}
-              </div>
-            {% else %}
-              <div class="sheet-value muted">No threads linked.</div>
-            {% endif %}
-          </div>
-        </div>
-
-        <div>
-          <div class="sheet-label">Attachments</div>
-
-          <form action="{% url 'production_attachment_add' order.pk %}"
-                method="post"
-                enctype="multipart/form-data"
-                style="margin-top:6px; display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
-            {% csrf_token %}
-            <input type="hidden" name="next" value="{{ request.path }}">
-            <select name="line_id" class="inputx" style="max-width:200px;">
-              <option value="">General (no line)</option>
-              {% for line in line_models %}
-                <option value="{{ line.pk }}">Line {{ line.line_no }}{% if line.style_name %} - {{ line.style_name }}{% endif %}</option>
-              {% endfor %}
-            </select>
-            <input type="file" name="files" multiple class="inputx" style="max-width:220px;">
-            <input type="text" name="name" placeholder="Label optional" class="inputx" style="max-width:200px;">
-            <button type="submit" class="btn btn-warning btn-sm">Upload</button>
-          </form>
-
-          <div class="attach-list">
-            {% if attachments %}
-              <ul>
-                {% for att in attachments %}
-                  <li>
-                    <a href="{{ att.file.url }}" target="_blank">{{ att.name|default:att.file.name }}</a>
-                    <span class="muted" style="margin-left:6px;">
-                      {% if att.line %}
-                        Line {{ att.line.line_no }}{% if att.line.style_name %} - {{ att.line.style_name }}{% endif %}
-                      {% else %}
-                        General
-                      {% endif %}
-                    </span>
-                    <form action="{% url 'production_attachment_delete' order.pk att.pk %}" method="post" style="display:inline;">
-                      {% csrf_token %}
-                      <input type="hidden" name="next" value="{{ request.path }}">
-                      <button type="submit" class="btn btn-outline-danger btn-sm"
-                              onclick="return confirm('Delete this file?');">
-                        Delete
-                      </button>
-                    </form>
-                  </li>
-                {% endfor %}
-              </ul>
-            {% else %}
-              <div class="muted">No files added yet.</div>
-            {% endif %}
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="cardx collapsible" data-default="open">
-    <div class="collapsible-head">
-      <div class="section-title" style="margin:0;">Actual cost tracking</div>
-      <button type="button" class="collapsible-toggle">Hide</button>
-    </div>
-
-    <div class="collapsible-body">
 
     {% if cost_sheet_active %}
-      <div class="muted" style="margin-bottom:6px;">
+      <div class="muted" style="margin-bottom:8px;">
         Linked cost sheet: v{{ cost_sheet_active.version_number }}
       </div>
     {% else %}
-      <div class="muted" style="margin-bottom:6px;">
+      <div class="muted" style="margin-bottom:8px;">
         No active cost sheet linked yet.
       </div>
     {% endif %}
-    <div class="muted" style="margin-bottom:6px;">
+    <div class="muted" style="margin-bottom:8px;">
       All values are in BDT (৳) and total cost auto-calculates from qty × rate.
     </div>
 
-    <div style="margin-bottom:8px;">
+    <div style="margin-bottom:12px;">
       <form method="post" class="actual-grid">
         {% csrf_token %}
         <input type="hidden" name="action" value="add_actual">
@@ -1446,7 +1151,7 @@
     {% endif %}
 
     {% if variance_report %}
-      <div style="margin-top:10px;">
+      <div style="margin-top:14px;">
         <div class="section-title">Variance summary</div>
         <div class="muted" style="margin-bottom:6px;">
           Quoted {{ variance_report.display.quoted_price_per_piece }} · Standard {{ variance_report.display.standard_cost_per_piece }} · Actual {{ variance_report.display.actual_cost_per_piece }}
@@ -1455,7 +1160,7 @@
           Variance per piece: {{ variance_report.display.variance_per_piece }} · Total variance: {{ variance_report.display.total_variance }}
         </div>
 
-        <div class="table-responsive" style="margin-top:6px;">
+        <div class="table-responsive" style="margin-top:8px;">
           <table class="table table-dark table-sm align-middle mb-0">
             <thead>
               <tr>
@@ -1479,77 +1184,69 @@
         </div>
       </div>
     {% endif %}
-    </div>
   </div>
 
-  <div class="cardx collapsible" data-default="open">
-    <div class="collapsible-head">
+  <div class="cardx">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
       <div class="section-title" style="margin:0;">Shipping for this order</div>
-      <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
         <a href="{% url 'shipping_add_for_order' order.pk %}" class="btn btn-warning btn-sm">Add shipment</a>
         <a href="{% url 'shipment_list' %}" class="btn btn-outline-light btn-sm">Open shipping list</a>
-        <button type="button" class="collapsible-toggle">Hide</button>
       </div>
     </div>
 
-    <div class="collapsible-body">
-      <div style="margin-top:6px;">
-        {% if shipments %}
-          <div class="table-responsive">
-            <table class="table table-dark table-sm align-middle mb-0">
-              <thead>
+    <div style="margin-top:10px;">
+      {% if shipments %}
+        <div class="table-responsive">
+          <table class="table table-dark table-sm align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Carrier</th>
+                <th>Tracking</th>
+                <th>Boxes</th>
+                <th>Weight kg</th>
+                <th>Cost BDT</th>
+                <th>Cost CAD</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for s in shipments %}
                 <tr>
-                  <th>Date</th>
-                  <th>Carrier</th>
-                  <th>Tracking</th>
-                  <th>Boxes</th>
-                  <th>Weight kg</th>
-                  <th>Cost BDT</th>
-                  <th>Cost CAD</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for s in shipments %}
-                  <tr>
-                    <td>{{ s.ship_date|date:"Y-m-d"|default:"-" }}</td>
-                    <td>{{ s.get_carrier_display }}</td>
-                    <td>
-                      {% if s.tracking_number %}
-                        {% if s.tracking_url %}
-                          <a href="{{ s.tracking_url }}" target="_blank">{{ s.tracking_number }}</a>
-                        {% else %}
-                          {{ s.tracking_number }}
-                        {% endif %}
+                  <td>{{ s.ship_date|date:"Y-m-d"|default:"-" }}</td>
+                  <td>{{ s.get_carrier_display }}</td>
+                  <td>
+                    {% if s.tracking_number %}
+                      {% if s.tracking_url %}
+                        <a href="{{ s.tracking_url }}" target="_blank">{{ s.tracking_number }}</a>
                       {% else %}
-                        -
+                        {{ s.tracking_number }}
                       {% endif %}
-                    </td>
-                    <td>{{ s.box_count|default:"-" }}</td>
-                    <td>{{ s.total_weight_kg|default:"-" }}</td>
-                    <td>{{ s.cost_bdt|default:"-" }}</td>
-                    <td>{{ s.cost_cad|default:"-" }}</td>
-                    <td>{{ s.get_status_display }}</td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        {% else %}
-          <div class="muted" style="font-size:13px;">No shipments yet.</div>
-        {% endif %}
-      </div>
+                    {% else %}
+                      -
+                    {% endif %}
+                  </td>
+                  <td>{{ s.box_count|default:"-" }}</td>
+                  <td>{{ s.total_weight_kg|default:"-" }}</td>
+                  <td>{{ s.cost_bdt|default:"-" }}</td>
+                  <td>{{ s.cost_cad|default:"-" }}</td>
+                  <td>{{ s.get_status_display }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="muted" style="font-size:13px;">No shipments yet.</div>
+      {% endif %}
     </div>
   </div>
 
-  <div class="cardx collapsible" data-default="closed">
-    <div class="collapsible-head">
-      <div class="section-title" style="margin:0;">Costs in taka</div>
-      <button type="button" class="collapsible-toggle">Show</button>
-    </div>
+  <div class="cardx">
+    <div class="section-title">Costs in taka</div>
 
-    <div class="collapsible-body">
-    <div class="meta-grid" style="margin-top:6px;">
+    <div class="meta-grid" style="margin-top:10px;">
       <div class="meta-item">
         <div class="meta-label">Fabric required kg</div>
         <div class="meta-value">{{ order.fabric_required_kg|default:"not set" }}</div>
@@ -1627,140 +1324,12 @@
         <div class="meta-value">{{ order.actual_total_cost_bdt|default:"not set" }}</div>
       </div>
     </div>
-    </div>
-  </div>
-
-    </div>
-
-    <div class="prod-aside">
-      <div class="summary-card">
-        <div class="summary-title">Quick summary</div>
-        <div class="summary-grid">
-          <div class="summary-item">
-            <div class="summary-label">Status</div>
-            <div class="summary-value">
-              <span class="status-badge {{ order.status }}">{{ order.get_status_display }}</span>
-            </div>
-            <div class="muted" style="font-size:11px; margin-top:2px;">
-              {{ percent_done }}% complete{% if order_delayed %} • delay risk{% endif %}
-            </div>
-          </div>
-          <div class="summary-item">
-            <div class="summary-label">Order code</div>
-            <div class="summary-value">{{ order.order_code|default:"-" }}</div>
-          </div>
-          <div class="summary-item">
-            <div class="summary-label">Customer</div>
-            <div class="summary-value">
-              {% if order.customer %}{{ order.customer.account_brand|default:order.customer.contact_name|default:order.customer }}{% else %}-{% endif %}
-            </div>
-          </div>
-          <div class="summary-item">
-            <div class="summary-label">Total pieces</div>
-            <div class="summary-value">{{ order.qty_total|default:"-" }}</div>
-          </div>
-          <div class="summary-item">
-            <div class="summary-label">Reject</div>
-            <div class="summary-value">{{ reject_percent }}%</div>
-          </div>
-          <div class="summary-item">
-            <div class="summary-label">Sample date</div>
-            <div class="summary-value">{{ order.sample_deadline|date:"Y-m-d"|default:"-" }}</div>
-          </div>
-          <div class="summary-item">
-            <div class="summary-label">Bulk date</div>
-            <div class="summary-value">{{ order.bulk_deadline|date:"Y-m-d"|default:"-" }}</div>
-          </div>
-          <div class="summary-item">
-            <div class="summary-label">Factory</div>
-            <div class="summary-value">{{ order.get_factory_location_display|default:"-" }}</div>
-          </div>
-        </div>
-
-        <div class="summary-actions">
-          <a href="{% url 'production_edit' order.pk %}" class="btn btn-outline-light btn-sm">Edit</a>
-          <a href="{% url 'production_next_stage' order.pk %}" class="btn btn-warning btn-sm">Next</a>
-          <a href="{% url 'production_ai_help' order.pk %}" class="btn btn-outline-light btn-sm">AI help</a>
-          <a href="{% url 'shipping_add_for_order' order.pk %}" class="btn btn-outline-light btn-sm">Add ship</a>
-          <a href="{% url 'production_order_sheet_pdf' order.pk %}" class="btn btn-outline-light btn-sm">Order PDF</a>
-          <a href="{% url 'production_packing_list_pdf' order.pk %}" class="btn btn-outline-light btn-sm">Packing PDF</a>
-        </div>
-      </div>
-    </div>
   </div>
 
 </div>
 
 <script>
   document.addEventListener("DOMContentLoaded", function () {
-    var page = document.getElementById("prod-page");
-    var densityButtons = document.querySelectorAll(".density-btn");
-    function setDensity(mode) {
-      if (!page) return;
-      page.classList.remove("density-compact", "density-comfy");
-      page.classList.add(mode === "comfy" ? "density-comfy" : "density-compact");
-      try {
-        localStorage.setItem("prodDensity", mode);
-      } catch (err) {
-        // ignore storage failures
-      }
-      densityButtons.forEach(function (btn) {
-        btn.classList.toggle("active", btn.dataset.density === mode);
-      });
-    }
-    var storedDensity = null;
-    try {
-      storedDensity = localStorage.getItem("prodDensity");
-    } catch (err) {
-      storedDensity = null;
-    }
-    setDensity(storedDensity || "compact");
-
-    densityButtons.forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        setDensity(btn.dataset.density || "compact");
-      });
-    });
-
-    function setCollapsed(card, collapsed) {
-      if (!card) return;
-      card.classList.toggle("collapsed", collapsed);
-      var toggleBtn = card.querySelector(".collapsible-toggle");
-      if (toggleBtn) {
-        toggleBtn.textContent = collapsed ? "Show" : "Hide";
-      }
-    }
-
-    var collapsibles = document.querySelectorAll(".collapsible");
-    collapsibles.forEach(function (card) {
-      var defaultState = (card.dataset.default || "open").toLowerCase();
-      var collapsed = defaultState === "closed";
-      setCollapsed(card, collapsed);
-      var toggleBtn = card.querySelector(".collapsible-toggle");
-      if (toggleBtn) {
-        toggleBtn.addEventListener("click", function () {
-          setCollapsed(card, !card.classList.contains("collapsed"));
-        });
-      }
-    });
-
-    var expandAll = document.getElementById("expand-all");
-    var collapseAll = document.getElementById("collapse-all");
-    if (expandAll) {
-      expandAll.addEventListener("click", function () {
-        collapsibles.forEach(function (card) {
-          setCollapsed(card, false);
-        });
-      });
-    }
-    if (collapseAll) {
-      collapseAll.addEventListener("click", function () {
-        collapsibles.forEach(function (card) {
-          setCollapsed(card, true);
-        });
-      });
-    }
-
     var toggle = document.getElementById("stage-dates-toggle");
     var body = document.getElementById("stage-dates-body");
     if (toggle && body) {

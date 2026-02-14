@@ -2245,6 +2245,34 @@ class ProductionOrder(models.Model):
 
         return late_stage
 
+
+class ProductionOrderLine(models.Model):
+    """
+    Line items within a production order.
+    Each line stores the product-specific work order details.
+    """
+
+    order = models.ForeignKey(
+        ProductionOrder,
+        on_delete=models.CASCADE,
+        related_name="lines",
+    )
+    line_no = models.PositiveIntegerField(default=1)
+
+    style_name = models.CharField(max_length=200, blank=True)
+    color_info = models.CharField(max_length=200, blank=True)
+    size_ratio_note = models.TextField(blank=True)
+    accessories_note = models.TextField(blank=True)
+    packaging_note = models.TextField(blank=True)
+    extra_order_note = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["line_no", "id"]
+
+    def __str__(self):
+        label = self.style_name or "Line"
+        return f"{self.order.order_code or self.order_id} - {label}"
+
     def update_cost_numbers(self):
         """
         Recalculate fabric, material, production, remake and final cost.
@@ -2347,34 +2375,6 @@ class ProductionOrder(models.Model):
             self.order_code = code
 
         super().save(*args, **kwargs)
-
-
-class ProductionOrderLine(models.Model):
-    """
-    Line items within a production order.
-    Each line stores the product-specific work order details.
-    """
-
-    order = models.ForeignKey(
-        ProductionOrder,
-        on_delete=models.CASCADE,
-        related_name="lines",
-    )
-    line_no = models.PositiveIntegerField(default=1)
-
-    style_name = models.CharField(max_length=200, blank=True)
-    color_info = models.CharField(max_length=200, blank=True)
-    size_ratio_note = models.TextField(blank=True)
-    accessories_note = models.TextField(blank=True)
-    packaging_note = models.TextField(blank=True)
-    extra_order_note = models.TextField(blank=True)
-
-    class Meta:
-        ordering = ["line_no", "id"]
-
-    def __str__(self):
-        label = self.style_name or "Line"
-        return f"{self.order.order_code or self.order_id} - {label}"
 
 
 class ProductionOrderMaterial(models.Model):
@@ -2561,16 +2561,6 @@ class Shipment(models.Model):
 
 
 class Invoice(models.Model):
-    REGION_CHOICES = [
-        ("CA", "Canada"),
-        ("BD", "Bangladesh"),
-    ]
-
-    INVOICE_STATUS_CHOICES = [
-        ("DRAFT", "Draft"),
-        ("APPROVED", "Approved"),
-    ]
-
     STATUS_CHOICES = [
         ("draft", "Draft"),
         ("sent", "Sent to client"),
@@ -2596,34 +2586,6 @@ class Invoice(models.Model):
     invoice_number = models.CharField(max_length=50, unique=True)
     issue_date = models.DateField(default=timezone.now)
     due_date = models.DateField(null=True, blank=True)
-
-    invoice_region = models.CharField(
-        max_length=2,
-        choices=REGION_CHOICES,
-        blank=True,
-        default="",
-    )
-
-    invoice_status = models.CharField(
-        max_length=12,
-        choices=INVOICE_STATUS_CHOICES,
-        default="DRAFT",
-    )
-    approved_at = models.DateTimeField(null=True, blank=True)
-    approved_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="approved_invoices",
-    )
-
-    deposit_percent = models.DecimalField(
-        max_digits=5,
-        decimal_places=2,
-        default=Decimal("70.00"),
-    )
-    terms_override = models.TextField(blank=True, default="")
 
     currency = models.CharField(
         max_length=10,
@@ -2663,54 +2625,6 @@ class Invoice(models.Model):
     def balance(self):
         return (self.total_amount or Decimal("0")) - (self.paid_amount or Decimal("0"))
 
-    def infer_invoice_region(self):
-        customer = getattr(self, "customer", None)
-        if customer:
-            country = (customer.country or "").lower().strip()
-            if "canada" in country or country in {"ca", "canada"}:
-                return "CA"
-            if "bangladesh" in country or country in {"bd", "bangladesh"}:
-                return "BD"
-
-        cur = (self.currency or "").upper().strip()
-        if cur == "CAD":
-            return "CA"
-
-        return "CA"
-
-    def save(self, *args, **kwargs):
-        if not (self.invoice_region or "").strip():
-            self.invoice_region = self.infer_invoice_region()
-        super().save(*args, **kwargs)
-
-
-class InvoiceAudit(models.Model):
-    ACTION_CHOICES = [
-        ("approved", "Approved"),
-    ]
-
-    invoice = models.ForeignKey(
-        Invoice,
-        on_delete=models.CASCADE,
-        related_name="audits",
-    )
-    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
-    changed_at = models.DateTimeField(auto_now_add=True)
-    changed_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="invoice_audits",
-    )
-    note = models.CharField(max_length=255, blank=True, default="")
-
-    class Meta:
-        ordering = ["-changed_at", "-id"]
-
-    def __str__(self):
-        return f"{self.invoice_id} {self.action}"
-
 
 ## ==============================
 # PRODUCTION ATTACHMENT
@@ -2720,13 +2634,6 @@ class ProductionOrderAttachment(models.Model):
     order = models.ForeignKey(
         "ProductionOrder",
         on_delete=models.CASCADE,
-        related_name="attachments",
-    )
-    line = models.ForeignKey(
-        "ProductionOrderLine",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
         related_name="attachments",
     )
     file = models.FileField(upload_to="production_attachments/")

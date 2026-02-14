@@ -273,20 +273,11 @@ EMAIL_MONITOR = {
 # WhatsApp settings (Meta Cloud API)
 # ======================
 
-WHATSAPP_PROVIDER = os.getenv("WHATSAPP_PROVIDER", "meta").strip().lower()
-WHATSAPP_BASE_URL = os.getenv("WHATSAPP_BASE_URL", "")
-WHATSAPP_API_KEY = os.getenv("WHATSAPP_API_KEY", "")
-WHATSAPP_SENDER_NUMBER = os.getenv("WHATSAPP_SENDER_NUMBER", "")
-WHATSAPP_INFOBIP_WEBHOOK_TOKEN = os.getenv("WHATSAPP_INFOBIP_WEBHOOK_TOKEN", "")
-
 WA_TOKEN = os.getenv("WA_TOKEN", "")
 WA_PHONE_NUMBER_ID = os.getenv("WA_PHONE_NUMBER_ID", "")
 WA_VERIFY_TOKEN = os.getenv("WA_VERIFY_TOKEN", "")
 WA_APP_SECRET = os.getenv("WA_APP_SECRET", "")
 WA_AUTO_REPLY_ENABLED = os.getenv("WA_AUTO_REPLY_ENABLED", "1") == "1"
-WA_WEB_GATEWAY_URL = os.getenv("WA_WEB_GATEWAY_URL", "")
-WA_WEB_API_KEY = os.getenv("WA_WEB_API_KEY", "")
-WA_WEB_INGEST_TOKEN = os.getenv("WA_WEB_INGEST_TOKEN", "")
 
 # ======================
 # WhatsApp Web settings (QR login)
@@ -311,56 +302,6 @@ try:
     WHATSAPP_BUSINESS_HOURS_JSON = json.loads(_wa_hours_raw)
 except Exception:
     WHATSAPP_BUSINESS_HOURS_JSON = {"start": "09:00", "end": "17:00"}
-
-# ======================
-# Invoice settings
-# ======================
-
-INVOICE_COMPANY_NAME = os.getenv("INVOICE_COMPANY_NAME", "Iconic Apparel House")
-INVOICE_COMPANY_EMAIL = os.getenv("INVOICE_COMPANY_EMAIL", "info@iconicapparelhouse.com")
-INVOICE_COMPANY_PHONE = os.getenv("INVOICE_COMPANY_PHONE", "604-500-6009")
-INVOICE_COMPANY_WEBSITE = os.getenv("INVOICE_COMPANY_WEBSITE", "iconicapparelhouse.com")
-INVOICE_LOGO_PATH = os.getenv("INVOICE_LOGO_PATH", "img/image.png")
-
-INVOICE_ADDRESS_BD = os.getenv("INVOICE_ADDRESS_BD", "")
-INVOICE_TAX_LABEL_BD = os.getenv("INVOICE_TAX_LABEL_BD", "VAT / BIN")
-INVOICE_TAX_ID_BD = os.getenv("INVOICE_TAX_ID_BD", "")
-
-INVOICE_ADDRESS_CA = os.getenv("INVOICE_ADDRESS_CA", "")
-INVOICE_TAX_LABEL_CA = os.getenv("INVOICE_TAX_LABEL_CA", "GST / HST")
-INVOICE_TAX_ID_CA = os.getenv("INVOICE_TAX_ID_CA", "")
-
-INVOICE_POLICY_BD = os.getenv(
-    "INVOICE_POLICY_BD",
-    "Please refer to iconicapparelhouse.com for full terms and conditions.",
-)
-INVOICE_POLICY_CA = os.getenv(
-    "INVOICE_POLICY_CA",
-    "Please refer to iconicapparelhouse.com for full terms and conditions.",
-)
-
-INVOICE_PAYPAL_EMAIL = os.getenv("INVOICE_PAYPAL_EMAIL", "")
-
-INVOICE_BD_BANK_NAME = os.getenv("INVOICE_BD_BANK_NAME", "")
-INVOICE_BD_BANK_ACCOUNT_NAME = os.getenv("INVOICE_BD_BANK_ACCOUNT_NAME", "")
-INVOICE_BD_BANK_ACCOUNT_NUMBER = os.getenv("INVOICE_BD_BANK_ACCOUNT_NUMBER", "")
-INVOICE_BD_BANK_BRANCH = os.getenv("INVOICE_BD_BANK_BRANCH", "")
-INVOICE_BD_BANK_ROUTING = os.getenv("INVOICE_BD_BANK_ROUTING", "")
-INVOICE_BD_BANK_SWIFT = os.getenv("INVOICE_BD_BANK_SWIFT", "")
-INVOICE_BD_PAYMENT_NOTE = os.getenv("INVOICE_BD_PAYMENT_NOTE", "")
-INVOICE_BD_PAYPAL_EMAIL = os.getenv("INVOICE_BD_PAYPAL_EMAIL", "")
-
-INVOICE_CA_ETRANSFER_EMAIL = os.getenv("INVOICE_CA_ETRANSFER_EMAIL", "")
-INVOICE_CA_ETRANSFER_NAME = os.getenv("INVOICE_CA_ETRANSFER_NAME", "")
-INVOICE_CA_ETRANSFER_NOTE = os.getenv("INVOICE_CA_ETRANSFER_NOTE", "")
-INVOICE_CA_BANK_NAME = os.getenv("INVOICE_CA_BANK_NAME", "")
-INVOICE_CA_BANK_ACCOUNT_NAME = os.getenv("INVOICE_CA_BANK_ACCOUNT_NAME", "")
-INVOICE_CA_BANK_ACCOUNT_NUMBER = os.getenv("INVOICE_CA_BANK_ACCOUNT_NUMBER", "")
-INVOICE_CA_BANK_INSTITUTION = os.getenv("INVOICE_CA_BANK_INSTITUTION", "")
-INVOICE_CA_BANK_TRANSIT = os.getenv("INVOICE_CA_BANK_TRANSIT", "")
-INVOICE_CA_BANK_SWIFT = os.getenv("INVOICE_CA_BANK_SWIFT", "")
-INVOICE_CA_PAYMENT_NOTE = os.getenv("INVOICE_CA_PAYMENT_NOTE", "")
-INVOICE_CA_PAYPAL_EMAIL = os.getenv("INVOICE_CA_PAYPAL_EMAIL", "")
 
 # ======================
 # Jazzmin

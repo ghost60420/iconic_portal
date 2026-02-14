@@ -235,8 +235,7 @@
   }
 </style>
 
-<div class="event-shell{% if event.status == "done" %} is-done{% endif %}" id="event-shell" data-status="{{ event.status }}">
-  <form id="calendar-csrf" style="display:none;">{% csrf_token %}</form>
+<div class="event-shell" id="event-shell" data-status="{{ event.status }}">
   <div class="event-header">
     <div>
       <div class="event-title">{{ event.title }}</div>
@@ -255,7 +254,7 @@
     <div class="event-actions">
       <a href="{% url 'calendar_list' %}" class="btn">Back to calendar</a>
       <a href="{% url 'calendar_edit' event.pk %}" class="btn primary">Edit event</a>
-      <button type="button" class="btn success{% if event.status == "done" %} done{% endif %}" id="complete-btn" {% if event.status == "done" %}disabled{% endif %}>Complete</button>
+      <button type="button" class="btn success" id="complete-btn" {% if event.status == "done" %}disabled{% endif %}>Complete</button>
     </div>
   </div>
 
@@ -442,8 +441,6 @@
     const completeBtn = document.getElementById("complete-btn");
     const statusPill = document.getElementById("status-pill");
     const shell = document.getElementById("event-shell");
-    const csrfInput = document.querySelector("#calendar-csrf input[name='csrfmiddlewaretoken']");
-    const csrfToken = getCookie("csrftoken") || (csrfInput ? csrfInput.value : "");
 
     if (completeBtn) {
       completeBtn.addEventListener("click", function () {
@@ -452,18 +449,14 @@
         fetch("{% url 'calendar_toggle_done' event.pk %}", {
           method: "POST",
           headers: {
-            "X-CSRFToken": csrfToken
+            "X-CSRFToken": getCookie("csrftoken")
           }
         }).then(function (res) {
           if (res.ok) {
             completeBtn.disabled = true;
-            completeBtn.classList.add("done");
             if (statusPill) {
               statusPill.textContent = "Status: Done";
               statusPill.classList.add("done");
-            }
-            if (shell) {
-              shell.classList.add("is-done");
             }
             if (shell && !document.getElementById("done-banner")) {
               const banner = document.createElement("div");
@@ -480,17 +473,3 @@
 </script>
 
 {% endblock %}
-  .event-shell.is-done .event-header {
-    border-color: rgba(34, 197, 94, 0.5);
-    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.15) inset;
-  }
-
-  .event-shell.is-done .event-title {
-    color: #bbf7d0;
-  }
-
-  .btn.success.done {
-    background: rgba(34, 197, 94, 0.25);
-    border-color: rgba(34, 197, 94, 0.6);
-    color: #bbf7d0;
-  }

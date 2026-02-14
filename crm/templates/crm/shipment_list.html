@@ -339,14 +339,6 @@
                 </td>
                 <td>
                   <a href="{% url 'shipment_detail' s.pk %}" class="btn btn-slate btn-small">View</a>
-                  <form method="post"
-                        action="{% url 'shipment_delete' s.pk %}"
-                        style="margin-top:4px;"
-                        onsubmit="return confirm('Delete this shipment?');">
-                    {% csrf_token %}
-                    <input type="hidden" name="next" value="{{ request.path }}">
-                    <button type="submit" class="btn btn-gold-soft btn-small">Delete</button>
-                  </form>
                   <form method="post" style="margin-top:4px;">
                     {% csrf_token %}
                     <input type="hidden" name="shipment_id" value="{{ s.pk }}">

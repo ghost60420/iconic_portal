@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load humanize static %}
+{% load humanize %}
 {% block content %}
 
 <style>
@@ -207,68 +207,6 @@
   .chartWrap.sm{ height: 200px; }
   .chartWrap.xs{ height: 160px; }
   canvas{ width:100% !important; height:100% !important; }
-
-  .bar-fallback{
-    margin-top: 10px;
-    display: grid;
-    gap: 8px;
-    font-size: 12px;
-    color: var(--muted);
-  }
-
-  .bar-row{
-    display: grid;
-    grid-template-columns: 120px 1fr 48px;
-    gap: 8px;
-    align-items: center;
-  }
-
-  .bar-label{
-    color: #e2e8f0;
-    font-weight: 700;
-  }
-
-  .bar-track{
-    position: relative;
-    height: 8px;
-    border-radius: 999px;
-    background: rgba(148,163,184,0.18);
-    overflow: hidden;
-  }
-
-  .bar-fill{
-    height: 100%;
-    border-radius: 999px;
-    background: var(--teal);
-    width: 0;
-  }
-
-  .bar-value{
-    text-align: right;
-    color: #e2e8f0;
-    font-weight: 700;
-  }
-
-  .mini-status{
-    margin-top: 8px;
-    display: grid;
-    gap: 6px;
-    font-size: 12px;
-    color: var(--muted);
-  }
-
-  .mini-status strong{
-    color: #e2e8f0;
-    font-weight: 700;
-  }
-
-  .mini-dot{
-    width: 8px;
-    height: 8px;
-    border-radius: 999px;
-    display: inline-block;
-    margin-right: 6px;
-  }
 
   .ai-notes{
     font-size: 12px;
@@ -656,7 +594,6 @@
         <div class="chartWrap sm">
           <canvas id="chartLeadStatus"></canvas>
         </div>
-        <div class="bar-fallback" data-fallback="lead-status"></div>
       </div>
 
       <div class="card">
@@ -669,12 +606,6 @@
         <div class="chartWrap sm">
           <canvas id="chartOppStages"></canvas>
         </div>
-        <div class="mini-status">
-          <div><span class="mini-dot" style="background: var(--teal);"></span>Samples: <strong>{{ opp_sample_count|default:0 }}</strong></div>
-          <div><span class="mini-dot" style="background: var(--blue);"></span>In production: <strong>{{ opp_production_count|default:0 }}</strong></div>
-          <div><span class="mini-dot" style="background: var(--amber);"></span>Shipping complete: <strong>{{ opp_shipping_complete_count|default:0 }}</strong></div>
-        </div>
-        <div class="bar-fallback" data-fallback="opp-stages"></div>
       </div>
 
       <div class="card">
@@ -754,7 +685,6 @@
         <div class="chartWrap sm">
           <canvas id="chartProduction"></canvas>
         </div>
-        <div class="bar-fallback" data-fallback="production-status"></div>
       </div>
 
       <div class="card">
@@ -799,81 +729,19 @@
 
 {{ chart_data|json_script:"dash-data" }}
 
-<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
   (function(){
     const raw = document.getElementById("dash-data");
-    if (!raw) return;
+    if (!raw || !window.Chart) return;
     const data = JSON.parse(raw.textContent || "{}");
-    const ChartCtor = window.Chart;
-    function makeChart(target, config) {
-      if (!ChartCtor || !target) return;
-      new ChartCtor(target, config);
-    }
 
     function safeLabels(labels){
-      if (Array.isArray(labels) && labels.length) return labels;
-      return ["No data"];
-    }
-    function toNumber(val){
-      if (val === null || val === undefined) return 0;
-      if (typeof val === "number") return val;
-      const cleaned = String(val).replace(/[^0-9.-]/g, "");
-      const parsed = parseFloat(cleaned);
-      return Number.isFinite(parsed) ? parsed : 0;
+      return labels && labels.length ? labels : ["No data"];
     }
     function safeValues(values, len){
-      if (Array.isArray(values) && values.length) {
-        return values.map(toNumber);
-      }
-      if (values && typeof values === "object") {
-        const objVals = Object.values(values);
-        if (objVals.length) return objVals.map(toNumber);
-      }
+      if (values && values.length) return values;
       return Array(len || 1).fill(0);
-    }
-
-    function renderFallback(container, labels, values, color, canvasId) {
-      if (!container || !labels || !labels.length) return;
-      const vals = (values || []).map(toNumber);
-      const maxVal = Math.max.apply(null, vals.concat([0]));
-      const scale = maxVal > 0 ? maxVal : 1;
-
-      container.innerHTML = "";
-      labels.forEach(function(label, idx){
-        const row = document.createElement("div");
-        row.className = "bar-row";
-
-        const name = document.createElement("div");
-        name.className = "bar-label";
-        name.textContent = label;
-
-        const track = document.createElement("div");
-        track.className = "bar-track";
-
-        const fill = document.createElement("div");
-        fill.className = "bar-fill";
-        fill.style.background = color;
-        const val = vals[idx] || 0;
-        fill.style.width = Math.max(2, Math.round((val / scale) * 100)) + "%";
-        track.appendChild(fill);
-
-        const value = document.createElement("div");
-        value.className = "bar-value";
-        value.textContent = val;
-
-        row.appendChild(name);
-        row.appendChild(track);
-        row.appendChild(value);
-        container.appendChild(row);
-      });
-
-      if (maxVal > 0 && canvasId) {
-        const canvas = document.getElementById(canvasId);
-        if (canvas) {
-          canvas.style.display = "none";
-        }
-      }
     }
 
     const baseOpts = {
@@ -893,7 +761,7 @@
     const leadsVals = safeValues(data.leads_values || [], trendLabels.length);
     const oppVals = safeValues(data.opp_daily_values || [], trendLabels.length);
 
-    makeChart(document.getElementById("chartTrend"), {
+    new Chart(document.getElementById("chartTrend"), {
       type: "line",
       data: {
         labels: trendLabels,
@@ -906,7 +774,7 @@
     });
 
     const cashVals = safeValues(data.cash_daily_values || [], trendLabels.length);
-    makeChart(document.getElementById("chartCash"), {
+    new Chart(document.getElementById("chartCash"), {
       type: "line",
       data: { labels: trendLabels, datasets: [{ label: "Net cash", data: cashVals, borderWidth: 2, tension: 0.35, fill: false, pointRadius: 0 }] },
       options: baseOpts
@@ -914,7 +782,7 @@
 
     const revenueVals = safeValues(data.revenue_daily_values || [], trendLabels.length);
     const expenseVals = safeValues(data.expense_daily_values || [], trendLabels.length);
-    makeChart(document.getElementById("chartRevenue"), {
+    new Chart(document.getElementById("chartRevenue"), {
       type: "line",
       data: {
         labels: trendLabels,
@@ -928,7 +796,7 @@
 
     const ordersCreatedVals = safeValues(data.orders_created_values || [], trendLabels.length);
     const ordersProcessedVals = safeValues(data.orders_processed_values || [], trendLabels.length);
-    makeChart(document.getElementById("chartOrders"), {
+    new Chart(document.getElementById("chartOrders"), {
       type: "line",
       data: {
         labels: trendLabels,
@@ -942,61 +810,21 @@
 
     const leadStatusLabels = safeLabels(data.lead_status_labels || []);
     const leadStatusVals = safeValues(data.lead_status_values || [], leadStatusLabels.length);
-    makeChart(document.getElementById("chartLeadStatus"), {
+    new Chart(document.getElementById("chartLeadStatus"), {
       type: "bar",
-      data: {
-        labels: leadStatusLabels,
-        datasets: [{
-          label: "Leads",
-          data: leadStatusVals,
-          borderWidth: 1,
-          backgroundColor: "rgba(34,211,238,0.6)",
-          borderColor: "rgba(34,211,238,1)",
-          minBarLength: 4
-        }]
-      },
-      options: Object.assign({}, baseOpts, {
-        indexAxis: "y",
-        scales: Object.assign({}, baseOpts.scales, { x: Object.assign({}, baseOpts.scales.x, { beginAtZero: true }) })
-      })
+      data: { labels: leadStatusLabels, datasets: [{ label: "Leads", data: leadStatusVals, borderWidth: 1 }] },
+      options: Object.assign({}, baseOpts, { indexAxis: "y" })
     });
-    renderFallback(
-      document.querySelector('[data-fallback="lead-status"]'),
-      leadStatusLabels,
-      leadStatusVals,
-      "rgba(34,211,238,0.7)",
-      "chartLeadStatus"
-    );
 
     const oppStageLabels = safeLabels(data.opp_stage_labels || []);
     const oppStageVals = safeValues(data.opp_stage_values || [], oppStageLabels.length);
-    makeChart(document.getElementById("chartOppStages"), {
+    new Chart(document.getElementById("chartOppStages"), {
       type: "bar",
-      data: {
-        labels: oppStageLabels,
-        datasets: [{
-          label: "Opportunities",
-          data: oppStageVals,
-          borderWidth: 1,
-          backgroundColor: "rgba(96,165,250,0.6)",
-          borderColor: "rgba(96,165,250,1)",
-          minBarLength: 4
-        }]
-      },
-      options: Object.assign({}, baseOpts, {
-        indexAxis: "y",
-        scales: Object.assign({}, baseOpts.scales, { x: Object.assign({}, baseOpts.scales.x, { beginAtZero: true }) })
-      })
+      data: { labels: oppStageLabels, datasets: [{ label: "Opportunities", data: oppStageVals, borderWidth: 1 }] },
+      options: Object.assign({}, baseOpts, { indexAxis: "y" })
     });
-    renderFallback(
-      document.querySelector('[data-fallback="opp-stages"]'),
-      oppStageLabels,
-      oppStageVals,
-      "rgba(96,165,250,0.7)",
-      "chartOppStages"
-    );
 
-    makeChart(document.getElementById("chartWinLoss"), {
+    new Chart(document.getElementById("chartWinLoss"), {
       type: "doughnut",
       data: { labels: data.win_loss_labels || ["Won","Lost"], datasets: [{ data: data.win_loss_values || [0,0] }] },
       options: { responsive: true, maintainAspectRatio: false, plugins:{ legend:{ position:"bottom", labels:{ color:"#e5e7eb", font:{weight:"700", size: 12} } } } }
@@ -1004,13 +832,13 @@
 
     const sourceLabels = safeLabels(data.lead_source_labels || []);
     const sourceVals = safeValues(data.lead_source_values || [], sourceLabels.length);
-    makeChart(document.getElementById("chartLeadSource"), {
+    new Chart(document.getElementById("chartLeadSource"), {
       type: "bar",
       data: { labels: sourceLabels, datasets: [{ label: "Leads", data: sourceVals, borderWidth: 1 }] },
       options: baseOpts
     });
 
-    makeChart(document.getElementById("chartMarket"), {
+    new Chart(document.getElementById("chartMarket"), {
       type: "doughnut",
       data: { labels: data.lead_market_labels || ["Unknown"], datasets: [{ data: data.lead_market_values || [0] }] },
       options: { responsive: true, maintainAspectRatio: false, plugins:{ legend:{ position:"bottom", labels:{ color:"#e5e7eb", font:{weight:"700", size: 12} } } } }
@@ -1018,29 +846,19 @@
 
     const priorityLabels = safeLabels(data.lead_priority_labels || []);
     const priorityVals = safeValues(data.lead_priority_values || [], priorityLabels.length);
-    makeChart(document.getElementById("chartPriority"), {
+    new Chart(document.getElementById("chartPriority"), {
       type: "bar",
       data: { labels: priorityLabels, datasets: [{ label: "Leads", data: priorityVals, borderWidth: 1 }] },
       options: baseOpts
     });
 
-    makeChart(document.getElementById("chartProduction"), {
+    new Chart(document.getElementById("chartProduction"), {
       type: "bar",
       data: { labels: data.prod_labels || ["On time","Delayed","Remake"], datasets: [{ label: "Orders", data: data.prod_counts || [0,0,0], borderWidth: 1 }] },
-      options: Object.assign({}, baseOpts, {
-        indexAxis: "y",
-        scales: Object.assign({}, baseOpts.scales, { x: Object.assign({}, baseOpts.scales.x, { beginAtZero: true }) })
-      })
+      options: Object.assign({}, baseOpts, { indexAxis: "y" })
     });
-    renderFallback(
-      document.querySelector('[data-fallback="production-status"]'),
-      data.prod_labels || ["Planning","In progress","On hold","Done"],
-      data.prod_counts || [0,0,0,0],
-      "rgba(74,222,128,0.7)",
-      "chartProduction"
-    );
 
-    makeChart(document.getElementById("chartShipping"), {
+    new Chart(document.getElementById("chartShipping"), {
       type: "bar",
       data: {
         labels: data.ship_labels || ["This month"],
@@ -1053,7 +871,7 @@
       options: Object.assign({}, baseOpts, {
         scales: {
           x: { stacked: true, ticks: { color:"#cbd5e1" }, grid:{ color:"rgba(148,163,184,0.15)" } },
-          y: { stacked: true, ticks: { color:"#cbd5e1" }, grid:{ color:"rgba(148,163,184,0.15)" }, beginAtZero: true }
+          y: { stacked: true, ticks: { color:"#cbd5e1" }, grid:{ color:"rgba(148,163,184,0.15)" } }
         }
       })
     });
