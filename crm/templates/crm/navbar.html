@@ -42,13 +42,6 @@
       {% url 'shipment_list' as u_shipping %}
       {% if u_shipping %}<a class="navitem" href="{{ u_shipping }}">📦 Shipping</a>{% endif %}
 
-      {% if WHATSAPP_ENABLED %}
-        {% if request.user.is_superuser or request.user.access.can_whatsapp %}
-          {% url 'wa_inbox' as u_wa %}
-          {% if u_wa %}<a class="navitem navitem-warm" href="{{ u_wa }}">💬 WhatsApp</a>{% endif %}
-        {% endif %}
-      {% endif %}
-
       {% url 'email_sync_dashboard' as u_email %}
       {% if u_email %}<a class="navitem" href="{{ u_email }}">📨 Email Sync</a>{% endif %}
 

@@ -286,12 +286,6 @@
     {% url 'access_list' as access_url %}
     {% url 'admin:index' as admin_url %}
 
-    {% if WHATSAPP_ENABLED %}
-      {% if request.user.is_superuser or request.user.access.can_whatsapp %}
-        {% url 'wa_inbox' as wa_url %}
-      {% endif %}
-    {% endif %}
-
     {% url 'library_home' as library_home_url %}
     {% url 'products_list' as products_url %}
     {% url 'fabrics_list' as fabrics_url %}
@@ -343,10 +337,6 @@
               <a href="{{ marketing_url }}" class="crm-nav-item"><span>📣</span><strong>Marketing</strong></a>
             {% endif %}
           {% endif %}
-        {% endif %}
-
-        {% if wa_url %}
-          <a href="{{ wa_url }}" class="crm-nav-item"><span>💬</span><strong>WhatsApp</strong></a>
         {% endif %}
 
         {% if ai_hub_url and request.user.is_authenticated %}
