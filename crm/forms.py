@@ -837,6 +837,7 @@ class InvoiceForm(forms.ModelForm):
             "invoice_number",
             "issue_date",
             "due_date",
+            "invoice_region",
             "currency",
             "subtotal",
             "shipping_amount",
@@ -844,23 +845,29 @@ class InvoiceForm(forms.ModelForm):
             "tax_amount",
             "total_amount",
             "paid_amount",
+            "deposit_percent",
             "status",
             "notes",
+            "terms_override",
         ]
         widgets = {
             "invoice_number": forms.TextInput(attrs={"class": "form-control", "placeholder": "Auto if blank"}),
             "issue_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
             "due_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "invoice_region": forms.Select(attrs={"class": "form-select"}),
             "subtotal": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0"}),
             "shipping_amount": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0"}),
             "discount_amount": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0"}),
             "tax_amount": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0"}),
             "total_amount": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0", "readonly": "readonly"}),
             "paid_amount": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0"}),
+            "deposit_percent": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0", "max": "100"}),
             "notes": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
+            "terms_override": forms.Textarea(attrs={"class": "form-control", "rows": 5}),
         }
 
     def __init__(self, *args, **kwargs):
+        user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
 
         if "invoice_number" in self.fields:
@@ -872,6 +879,13 @@ class InvoiceForm(forms.ModelForm):
 
         if "status" in self.fields:
             self.fields["status"].required = False
+
+        if "invoice_region" in self.fields:
+            self.fields["invoice_region"].required = False
+
+        if user is not None and not (getattr(user, "is_superuser", False) or getattr(user, "is_staff", False)):
+            if "invoice_region" in self.fields:
+                self.fields.pop("invoice_region")
 
     def _clean_money(self, field_name):
         v = self.cleaned_data.get(field_name)

@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django import forms
 
 from .models import (
@@ -24,6 +25,51 @@ class CostSheetSimpleForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if "opportunity" in self.fields:
             self.fields["opportunity"].label_from_instance = _safe_opportunity_label
+        # Cost inputs default to zero; make them optional for create form.
+        for name in self._cost_defaults().keys():
+            if name in self.fields:
+                self.fields[name].required = False
+
+    @staticmethod
+    def _cost_defaults():
+        return {
+            "fabric_cost_per_piece": Decimal("0"),
+            "fabric_wastage_percent": Decimal("0"),
+            "rib_cost_per_piece": Decimal("0"),
+            "woven_fabric_cost_per_piece": Decimal("0"),
+            "zipper_cost_per_piece": Decimal("0"),
+            "zipper_puller_cost_per_piece": Decimal("0"),
+            "button_cost_per_piece": Decimal("0"),
+            "thread_cost_per_piece": Decimal("0"),
+            "lining_cost_per_piece": Decimal("0"),
+            "velcro_cost_per_piece": Decimal("0"),
+            "neck_tape_cost_per_piece": Decimal("0"),
+            "elastic_cost_per_piece": Decimal("0"),
+            "collar_cuff_cost_per_piece": Decimal("0"),
+            "ring_cost_per_piece": Decimal("0"),
+            "buckle_clip_cost_per_piece": Decimal("0"),
+            "main_label_cost_per_piece": Decimal("0"),
+            "care_label_cost_per_piece": Decimal("0"),
+            "hang_tag_cost_per_piece": Decimal("0"),
+            "conveyance_cost_per_piece": Decimal("0"),
+            "trim_cost_per_piece": Decimal("0"),
+            "labor_cost_per_piece": Decimal("0"),
+            "overhead_cost_per_piece": Decimal("0"),
+            "process_cost_per_piece": Decimal("0"),
+            "packaging_cost_per_piece": Decimal("0"),
+            "freight_cost_per_piece": Decimal("0"),
+            "testing_cost_per_piece": Decimal("0"),
+            "other_cost_per_piece": Decimal("0"),
+            "quote_price_per_piece": Decimal("0"),
+        }
+
+    def clean(self):
+        cleaned = super().clean()
+        defaults = self._cost_defaults()
+        for name, default in defaults.items():
+            if cleaned.get(name) in [None, ""]:
+                cleaned[name] = default
+        return cleaned
 
     class Meta:
         model = CostSheetSimple

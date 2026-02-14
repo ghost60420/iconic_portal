@@ -6,6 +6,7 @@ from django.contrib import messages
 from django.core.files.base import ContentFile
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.db.models import Q
 from django.utils import timezone
 
 from .forms_costing import CostSheetSimpleForm, OpportunityDocumentForm
@@ -37,10 +38,18 @@ def _can_edit_exchange_rate(user):
 
 
 def cost_sheet_list(request):
-    sheets = (
-        CostSheetSimple.objects.select_related("opportunity", "customer")
-        .order_by("-updated_at")
-    )
+    sheets = CostSheetSimple.objects.select_related("opportunity", "customer")
+    search_query = (request.GET.get("q") or "").strip()
+    if search_query:
+        sheets = sheets.filter(
+            Q(opportunity__opportunity_id__icontains=search_query)
+            | Q(opportunity__lead__account_brand__icontains=search_query)
+            | Q(customer__account_brand__icontains=search_query)
+            | Q(customer__contact_name__icontains=search_query)
+            | Q(style_name__icontains=search_query)
+            | Q(style_code__icontains=search_query)
+        )
+    sheets = sheets.order_by("-updated_at")
 
     rows = []
     for sheet in sheets:
@@ -49,6 +58,7 @@ def cost_sheet_list(request):
     context = {
         "rows": rows,
         "status_choices": COST_SHEET_SIMPLE_STATUS_CHOICES,
+        "search_query": search_query,
     }
     return render(request, "crm/costing/costsheet_list.html", context)
 
@@ -75,7 +85,7 @@ def cost_sheet_create(request, opportunity_id=None):
             if opportunity.customer_id:
                 data["customer"] = opportunity.customer_id
         if not can_edit_exchange_rate:
-            data["exchange_rate_bdt_per_cad"] = None
+            data["exchange_rate_bdt_per_cad"] = ""
 
         form = CostSheetSimpleForm(data)
         if form.is_valid():
@@ -139,7 +149,7 @@ def cost_sheet_detail(request, pk):
             if cost_sheet.customer_id:
                 data["customer"] = cost_sheet.customer_id
             if not can_edit_exchange_rate or exchange_rate_locked:
-                data["exchange_rate_bdt_per_cad"] = cost_sheet.exchange_rate_bdt_per_cad
+                data["exchange_rate_bdt_per_cad"] = cost_sheet.exchange_rate_bdt_per_cad or ""
 
             form = CostSheetSimpleForm(data, instance=cost_sheet)
             if form.is_valid():

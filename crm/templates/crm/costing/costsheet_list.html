@@ -67,6 +67,10 @@
     font-size: 12px;
   }
 
+  .search-input {
+    min-width: 240px;
+  }
+
   .table-wrap {
     background: #050816;
     border: 1px solid #1f2937;
@@ -127,6 +131,23 @@
   <div class="costing-header">
     <div class="costing-title">Costing sheets</div>
     <a href="{% url 'cost_sheet_create' %}" class="btnx btnx-primary">Create costing</a>
+  </div>
+
+  <div class="filter-card">
+    <form method="get" class="filter-row">
+      <input
+        type="text"
+        name="q"
+        class="search-input"
+        placeholder="Search customer or opportunity"
+        value="{{ search_query|default:'' }}"
+      >
+      <button type="submit" class="btnx">Search</button>
+      {% if search_query %}
+        <a href="{% url 'cost_sheet_list' %}" class="btnx">Clear</a>
+      {% endif %}
+    </form>
+    <div class="muted" style="margin-top:6px;">Search by opportunity ID, customer name, or style.</div>
   </div>
 
   <div class="table-wrap">

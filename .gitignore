@@ -27,3 +27,6 @@ media/
 
 # collected static
 staticfiles/
+
+# whatsapp web gateway session data
+services/whatsapp_web_gateway/.wwebjs_auth/

@@ -316,6 +316,15 @@
                   {% if form.status.errors %}<div class="err">{{ form.status.errors }}</div>{% endif %}
                 </div>
               </div>
+
+              {% if form.invoice_region %}
+                <div class="mb-3">
+                  <label for="{{ form.invoice_region.id_for_label }}">Invoice region</label>
+                  {{ form.invoice_region }}
+                  {% if form.invoice_region.errors %}<div class="err">{{ form.invoice_region.errors }}</div>{% endif %}
+                  <div class="help">Admin-only override for template selection.</div>
+                </div>
+              {% endif %}
             </div>
 
             <div>
@@ -365,6 +374,15 @@
                 {% if form.paid_amount.errors %}<div class="err">{{ form.paid_amount.errors }}</div>{% endif %}
               </div>
 
+              {% if form.deposit_percent %}
+                <div class="mb-3">
+                  <label for="{{ form.deposit_percent.id_for_label }}">Deposit percent (Canada)</label>
+                  {{ form.deposit_percent }}
+                  {% if form.deposit_percent.errors %}<div class="err">{{ form.deposit_percent.errors }}</div>{% endif %}
+                  <div class="help">Used in Canada invoice policy when no custom terms are provided.</div>
+                </div>
+              {% endif %}
+
               <div class="previewBox" id="previewBox">
                 <div><span>Balance preview</span></div>
                 <div class="previewRight">
@@ -378,6 +396,15 @@
                 {{ form.notes }}
                 {% if form.notes.errors %}<div class="err">{{ form.notes.errors }}</div>{% endif %}
               </div>
+
+              {% if form.terms_override %}
+                <div class="mb-3">
+                  <label for="{{ form.terms_override.id_for_label }}">Terms override (Canada)</label>
+                  {{ form.terms_override }}
+                  {% if form.terms_override.errors %}<div class="err">{{ form.terms_override.errors }}</div>{% endif %}
+                  <div class="help">Leave blank to use the default Canada policy text.</div>
+                </div>
+              {% endif %}
 
             </div>
 

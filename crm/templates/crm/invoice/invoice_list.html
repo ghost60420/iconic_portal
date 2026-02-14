@@ -176,14 +176,14 @@
 
     <div class="head">
       <div>
-        <h2 class="title">Invoices</h2>
+        <h2 class="title">{{ module_title|default:"Invoices" }}</h2>
         <div class="sub">
-          All invoices in the system. Use search and filter to find invoices fast.
+          {{ module_sub|default:"All invoices in the system. Use search and filter to find invoices fast." }}
         </div>
       </div>
 
       <div class="topbar">
-        <a href="{% url 'invoice_add' %}" class="pill gold">Add invoice</a>
+        <a href="{% url add_url|default:'invoice_add' %}" class="pill gold">Add invoice</a>
       </div>
     </div>
 

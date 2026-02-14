@@ -114,11 +114,29 @@
   </div>
 
   <div class="card">
-    <form method="post">
+    <form method="post" novalidate>
       {% csrf_token %}
+      {% if form.errors %}
+        <div style="margin-bottom:8px; color:#fecaca; font-size:12px;">
+          Please fix the highlighted fields below.
+        </div>
+        <ul style="margin:0 0 8px 16px; color:#fca5a5; font-size:11px;">
+          {% for field in form %}
+            {% for error in field.errors %}
+              <li>{{ field.label|default:field.name }}: {{ error }}</li>
+            {% endfor %}
+          {% endfor %}
+        </ul>
+      {% endif %}
       <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:10px;">
         <div>
           <label>Opportunity</label>
+          {% if not opportunity %}
+            <input type="text"
+                   id="opportunity-search"
+                   placeholder="Search opportunity or customer"
+                   style="margin-bottom:6px;">
+          {% endif %}
           {{ form.opportunity }}
           {% for error in form.opportunity.errors %}
             <div style="color:#fca5a5; font-size:11px;">{{ error }}</div>
@@ -179,5 +197,27 @@
     </form>
   </div>
 </div>
+
+<script>
+  (function () {
+    var searchInput = document.getElementById("opportunity-search");
+    var select = document.getElementById("id_opportunity");
+    if (!searchInput || !select) return;
+
+    function filterOptions() {
+      var query = (searchInput.value || "").toLowerCase().trim();
+      Array.prototype.forEach.call(select.options, function (opt) {
+        if (!opt.value) {
+          opt.hidden = false;
+          return;
+        }
+        var text = (opt.text || "").toLowerCase();
+        opt.hidden = query && text.indexOf(query) === -1;
+      });
+    }
+
+    searchInput.addEventListener("input", filterOptions);
+  })();
+</script>
 
 {% endblock %}

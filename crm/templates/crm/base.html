@@ -282,15 +282,13 @@
     {% url 'email_sync_dashboard' as email_sync_url %}
     {% url 'accounting_home' as acc_home_url %}
     {% url 'invoice_list' as invoice_list_url %}
+    {% url 'invoice_list_ca' as invoice_list_ca_url %}
+    {% url 'invoice_list_bd' as invoice_list_bd_url %}
     {% url 'logout' as logout_url %}
     {% url 'access_list' as access_url %}
     {% url 'admin:index' as admin_url %}
 
-    {% if WHATSAPP_ENABLED %}
-      {% if request.user.is_superuser or request.user.access.can_whatsapp %}
-        {% url 'wa_inbox' as wa_url %}
-      {% endif %}
-    {% endif %}
+
 
     {% url 'library_home' as library_home_url %}
     {% url 'products_list' as products_url %}
@@ -345,9 +343,7 @@
           {% endif %}
         {% endif %}
 
-        {% if wa_url %}
-          <a href="{{ wa_url }}" class="crm-nav-item"><span>💬</span><strong>WhatsApp</strong></a>
-        {% endif %}
+
 
         {% if ai_hub_url and request.user.is_authenticated %}
           {% if request.user.is_superuser or request.user.access.can_ai %}
@@ -441,7 +437,9 @@
           <div class="crm-dropdown-menu" id="accountingMenu" role="menu">
             <div class="crm-dd-title">Accounting shortcuts</div>
 
-            {% if invoice_list_url %}<a class="crm-dd-item" href="{{ invoice_list_url }}">🧾 Invoices</a>{% endif %}
+            {% if invoice_list_ca_url %}<a class="crm-dd-item" href="{{ invoice_list_ca_url }}">🇨🇦 Canada invoices</a>{% endif %}
+            {% if invoice_list_bd_url %}<a class="crm-dd-item" href="{{ invoice_list_bd_url }}">🇧🇩 Bangladesh invoices</a>{% endif %}
+            {% if invoice_list_url %}<a class="crm-dd-item" href="{{ invoice_list_url }}">🧾 All invoices</a>{% endif %}
 
             {% if user|is_ca %}
               {% url 'accounting_entry_list' as acc_all_entries_url %}
