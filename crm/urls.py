@@ -34,6 +34,9 @@ def ca_only(view_func):
 def acc_any(view_func):
     return login_required(require_any_access("can_accounting_ca", "can_accounting_bd")(view_func))
 
+def wa_perm(view_func):
+    return login_required(require_any_access("can_whatsapp", "can_leads")(view_func))
+
 
 urlpatterns = [
     path("", home_redirect, name="home"),
@@ -64,6 +67,7 @@ urlpatterns = [
     path("opportunities/add/", perm("can_opportunities", views.add_opportunity), name="add_opportunity"),
     path("opportunities/<int:pk>/", perm("can_opportunities", views.opportunity_detail), name="opportunity_detail"),
     path("opportunities/<int:pk>/edit/", perm("can_opportunities", views.opportunity_edit), name="opportunity_edit"),
+    path("opportunities/<int:pk>/delete/", perm("can_opportunities", views.opportunity_delete), name="opportunity_delete"),
     path("opportunities/<int:pk>/ai/", perm("can_ai", views.opportunity_ai_detail), name="opportunity_ai_detail"),
     path("opportunities/<int:pk>/ai/suggest/", perm("can_ai", ai.ai_opportunity_suggest), name="ai_opportunity_suggest"),
 
@@ -216,26 +220,39 @@ urlpatterns = [
     # WhatsApp webhook (Meta Cloud API legacy)
     path("whatsapp-api/webhook/", wa.wa_webhook, name="wa_api_webhook"),
     path("api/whatsapp/webhook/", wa.wa_webhook, name="api_wa_webhook"),
+    path("webhooks/whatsapp/infobip/", wa.wa_infobip_webhook, name="wa_infobip_webhook"),
 
     # WhatsApp inbox UI (Meta Cloud API legacy)
-    path("whatsapp-api/", perm("can_leads", wa.wa_inbox), name="wa_api_inbox"),
-    path("whatsapp-api/<int:pk>/", perm("can_leads", wa.wa_thread), name="wa_api_thread"),
-    path("whatsapp-api/<int:pk>/messages/", perm("can_leads", wa.wa_thread_messages_json), name="wa_api_thread_messages"),
-    path("whatsapp-api/media/<int:msg_id>/", perm("can_leads", wa.wa_media), name="wa_api_media"),
-    path("whatsapp-api/<int:pk>/send/", perm("can_leads", wa.wa_send), name="wa_api_send"),
-    path("whatsapp-api/<int:pk>/send-ai/", perm("can_leads", wa.wa_send_ai_draft), name="wa_api_send_ai_draft"),
-    path("whatsapp-api/<int:pk>/toggle-ai/", perm("can_leads", wa.wa_toggle_ai), name="wa_api_toggle_ai"),
-    path("whatsapp-api/start/", perm("can_leads", wa.wa_start), name="wa_api_start"),
+    path("whatsapp-api/", wa_perm(wa.wa_inbox), name="wa_api_inbox"),
+    path("whatsapp-api/<int:pk>/", wa_perm(wa.wa_thread), name="wa_api_thread"),
+    path("whatsapp-api/<int:pk>/messages/", wa_perm(wa.wa_thread_messages_json), name="wa_api_thread_messages"),
+    path("whatsapp-api/threads/", wa_perm(wa.wa_threads_json), name="wa_api_threads"),
+    path("whatsapp-api/media/<int:msg_id>/", wa_perm(wa.wa_media), name="wa_api_media"),
+    path("whatsapp-api/<int:pk>/send/", wa_perm(wa.wa_send), name="wa_api_send"),
+    path("whatsapp-api/<int:pk>/send-ai/", wa_perm(wa.wa_send_ai_draft), name="wa_api_send_ai_draft"),
+    path("whatsapp-api/<int:pk>/toggle-ai/", wa_perm(wa.wa_toggle_ai), name="wa_api_toggle_ai"),
+    path("whatsapp-api/<int:pk>/follow-up/", wa_perm(wa.wa_follow_up), name="wa_api_follow_up"),
+    path("whatsapp-api/start/", wa_perm(wa.wa_start), name="wa_api_start"),
+    path("whatsapp-api/test-send/", wa_perm(wa.wa_send_test), name="wa_api_test_send"),
+    path("whatsapp-api/web/status/", wa_perm(wa.wa_web_status), name="wa_web_status"),
+    path("whatsapp-api/web/qr/", wa_perm(wa.wa_web_qr), name="wa_web_qr"),
+    path("whatsapp-api/web/ingest/", wa.wa_web_ingest, name="wa_web_ingest"),
+    path("whatsapp-api/infobip/events/", wa_perm(wa.wa_infobip_events), name="wa_infobip_events"),
 
     # Email sync
     path("email-sync/", login_required(views_email.email_sync_dashboard), name="email_sync_dashboard"),
     path("email-sync/run/", login_required(views_email.email_sync_run), name="email_sync_run"),
 
     # Invoices
-    path("invoices/", login_required(inv.invoice_list), name="invoice_list"),
-    path("invoices/add/", login_required(inv.invoice_add), name="invoice_add"),
-    path("invoices/<int:pk>/", login_required(inv.invoice_view), name="invoice_view"),
-    path("invoices/<int:pk>/edit/", login_required(inv.invoice_edit), name="invoice_edit"),
+    path("invoices/", acc_any(inv.invoice_list), name="invoice_list"),
+    path("invoices/ca/", acc_any(inv.invoice_list_ca), name="invoice_list_ca"),
+    path("invoices/bd/", acc_any(inv.invoice_list_bd), name="invoice_list_bd"),
+    path("invoices/add/", acc_any(inv.invoice_add), name="invoice_add"),
+    path("invoices/ca/add/", acc_any(inv.invoice_add_ca), name="invoice_add_ca"),
+    path("invoices/bd/add/", acc_any(inv.invoice_add_bd), name="invoice_add_bd"),
+    path("invoices/<int:pk>/", acc_any(inv.invoice_view), name="invoice_view"),
+    path("invoices/<int:pk>/edit/", acc_any(inv.invoice_edit), name="invoice_edit"),
+    path("invoices/<int:pk>/approve/", acc_any(inv.invoice_approve), name="invoice_approve"),
 
     # Access
     path("access/", login_required(access.access_list), name="access_list"),

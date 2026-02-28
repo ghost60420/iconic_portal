@@ -3,6 +3,8 @@
 import json
 import logging
 import re
+import os
+import uuid
 from collections import defaultdict
 from datetime import timedelta, date
 from decimal import Decimal
@@ -16,7 +18,7 @@ except Exception:
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.mail import EmailMessage, get_connection, send_mail
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.db.utils import OperationalError, ProgrammingError
 from django.db.models import Case, Count, IntegerField, Q, When
 from django.db.models.functions import TruncDate, TruncMonth, TruncYear
@@ -38,6 +40,22 @@ def _parse_decimal(value):
         return Decimal(str(value).strip())
     except Exception:
         return Decimal("0")
+
+def _safe_decimal_or_none(value):
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return Decimal(text)
+    except Exception:
+        return None
+
+def _calc_order_value_bdt(order_value_usd, fx_rate):
+    if order_value_usd is None or fx_rate is None:
+        return None
+    return (order_value_usd * fx_rate).quantize(Decimal("0.01"))
 
 from .forms import (
     BDStaffMonthForm,
@@ -71,6 +89,16 @@ from .models import (
     OpportunityFile,
     OpportunityTask,
     Product,
+    ProductTypeMaster,
+    ProductCategoryMaster,
+    FabricNameMaster,
+    GSMRangeMaster,
+    FabricGroupMaster,
+    FabricTypeMaster,
+    KnitStructureMaster,
+    WeaveMaster,
+    SurfaceMaster,
+    HandfeelMaster,
     LibraryAttachment,
     ProductionOrder,
     ProductionStage,
@@ -757,6 +785,8 @@ def opportunity_create_manual(request):
         product_category = request.POST.get("product_category") or "Other"
         moq_units_raw = request.POST.get("moq_units")
         order_value_raw = request.POST.get("order_value")
+        order_value_usd_raw = request.POST.get("order_value_usd")
+        fx_rate_raw = request.POST.get("fx_rate_bdt_per_usd")
 
         lead = get_object_or_404(Lead, pk=lead_id)
 
@@ -779,12 +809,12 @@ def opportunity_create_manual(request):
             except ValueError:
                 moq_units = None
 
-        order_value = None
-        if order_value_raw:
-            try:
-                order_value = float(order_value_raw)
-            except ValueError:
-                order_value = None
+        order_value = _safe_decimal_or_none(order_value_raw)
+        order_value_usd = _safe_decimal_or_none(order_value_usd_raw)
+        fx_rate = _safe_decimal_or_none(fx_rate_raw)
+
+        if order_value_usd is not None and fx_rate is not None:
+            order_value = _calc_order_value_bdt(order_value_usd, fx_rate)
 
         opp = Opportunity.objects.create(
             lead=lead,
@@ -794,6 +824,8 @@ def opportunity_create_manual(request):
             product_category=product_category,
             moq_units=moq_units,
             order_value=order_value,
+            order_value_usd=order_value_usd,
+            fx_rate_bdt_per_usd=fx_rate,
         )
         if lead:
             lead.lead_status = "Converted"
@@ -1799,6 +1831,16 @@ def opportunity_detail(request, pk):
         profit_after_shipping = order_value - total_cost_bdt
         profit_after_shipping_percent = (profit_after_shipping / order_value) * 100
 
+    order_value_usd = opportunity.order_value_usd
+    fx_rate = opportunity.fx_rate_bdt_per_usd
+    order_value_bdt = opportunity.order_value
+    bdt_per_piece = None
+    if order_value_bdt and opportunity.moq_units:
+        try:
+            bdt_per_piece = (Decimal(order_value_bdt) / Decimal(opportunity.moq_units)).quantize(Decimal("0.01"))
+        except Exception:
+            bdt_per_piece = None
+
     context = {
         "opportunity": opportunity,
         "lead": lead,
@@ -1832,6 +1874,11 @@ def opportunity_detail(request, pk):
 
         "profit_after_shipping": profit_after_shipping,
         "profit_after_shipping_percent": profit_after_shipping_percent,
+
+        "order_value_usd": order_value_usd,
+        "fx_rate_bdt_per_usd": fx_rate,
+        "order_value_bdt": order_value_bdt,
+        "bdt_per_piece": bdt_per_piece,
 
         # Shipping for the template
         "ship": ship,
@@ -2191,9 +2238,11 @@ def customer_detail(request, pk):
     leads = customer.leads.all().order_by("-created_date", "-id")
 
     opportunities = (
-        customer.opportunities
+        Opportunity.objects
+        .filter(Q(customer=customer) | Q(lead__customer=customer))
         .select_related("lead")
         .order_by("-updated_at", "-id")
+        .distinct()
     )
 
     if request.method == "POST":
@@ -4901,11 +4950,23 @@ def opportunity_edit(request, pk):
                 pass
 
         order_value_raw = request.POST.get("order_value")
-        if order_value_raw:
-            try:
-                opportunity.order_value = float(order_value_raw)
-            except ValueError:
-                pass
+        order_value_usd_raw = request.POST.get("order_value_usd")
+        fx_rate_raw = request.POST.get("fx_rate_bdt_per_usd")
+
+        order_value = _safe_decimal_or_none(order_value_raw)
+        order_value_usd = _safe_decimal_or_none(order_value_usd_raw)
+        fx_rate = _safe_decimal_or_none(fx_rate_raw)
+
+        if order_value_usd is not None:
+            opportunity.order_value_usd = order_value_usd
+        if fx_rate is not None:
+            opportunity.fx_rate_bdt_per_usd = fx_rate
+
+        if order_value_usd is not None and fx_rate is not None:
+            order_value = _calc_order_value_bdt(order_value_usd, fx_rate)
+
+        if order_value is not None:
+            opportunity.order_value = order_value
 
         opportunity.notes = request.POST.get("notes") or opportunity.notes
 
@@ -4920,8 +4981,26 @@ def opportunity_edit(request, pk):
             "opportunity": opportunity,
             "product_type_choices": product_type_choices,
             "product_category_choices": product_category_choices,
+            "bdt_per_piece": (
+                (Decimal(opportunity.order_value) / Decimal(opportunity.moq_units)).quantize(Decimal("0.01"))
+                if opportunity.order_value and opportunity.moq_units
+                else None
+            ),
         },
     )
+
+
+@require_POST
+def opportunity_delete(request, pk):
+    opportunity = get_object_or_404(Opportunity, pk=pk)
+    if ProductionOrder.objects.filter(opportunity=opportunity).exists():
+        messages.error(request, "Cannot delete this opportunity because a production order exists.")
+        return redirect("opportunity_detail", pk=pk)
+
+    opp_id = opportunity.opportunity_id
+    opportunity.delete()
+    messages.success(request, f"Opportunity {opp_id} deleted.")
+    return redirect("opportunities_list")
 # ==============================
 # PRODUCTION VIEWS
 # ==============================
@@ -4962,9 +5041,12 @@ def get_sorted_stages(order):
     """
     Return stages for this order in a fixed order.
     """
-    stages = list(order.stages.all())
-    stages.sort(key=lambda s: STAGE_ORDER.get(s.stage_key, 99))
-    return stages
+    try:
+        stages = list(order.stages.all())
+        stages.sort(key=lambda s: STAGE_ORDER.get(s.stage_key, 99))
+        return stages
+    except (OperationalError, ProgrammingError, AttributeError):
+        return []
 
 
 # production status change helper
@@ -5810,8 +5892,16 @@ def production_from_opportunity(request, pk):
     Open or create production order from an opportunity.
     """
     opportunity = get_object_or_404(Opportunity, pk=pk)
-    customer = _ensure_customer_for_opportunity(opportunity)
-    active_cost_sheet = CostSheet.objects.filter(opportunity=opportunity, is_active=True).first()
+    try:
+        customer = _ensure_customer_for_opportunity(opportunity)
+    except Exception:
+        logger.exception("Failed to ensure customer for opportunity %s", opportunity.pk)
+        customer = None
+
+    try:
+        active_cost_sheet = CostSheet.objects.filter(opportunity=opportunity, is_active=True).first()
+    except (OperationalError, ProgrammingError):
+        active_cost_sheet = None
 
     po = ProductionOrder.objects.filter(opportunity=opportunity).first()
     created = False
@@ -5819,16 +5909,64 @@ def production_from_opportunity(request, pk):
     if not po:
         title = f"{opportunity.lead.account_brand} order for {opportunity.opportunity_id}"
         qty_guess = opportunity.moq_units or 0
+        def _next_order_code():
+            prefix = "PO"
+            last = (
+                ProductionOrder.objects
+                .filter(order_code__startswith=prefix)
+                .order_by("-order_code")
+                .first()
+            )
+            if last and last.order_code and last.order_code.startswith(prefix):
+                try:
+                    last_num = int(last.order_code.replace(prefix, ""))
+                except ValueError:
+                    last_num = 0
+            else:
+                last_num = 0
 
-        po = ProductionOrder.objects.create(
-            opportunity=opportunity,
-            lead=opportunity.lead,
-            customer=customer,
-            title=title,
-            qty_total=qty_guess,
-            cost_sheet_active=active_cost_sheet,
-        )
-        created = True
+            for i in range(1, 1000):
+                code = f"{prefix}{last_num + i:04}"
+                if not ProductionOrder.objects.filter(order_code=code).exists():
+                    return code
+
+            return f"{prefix}{timezone.now().strftime('%y%m%d%H%M%S')}"
+
+        def _fallback_order_code():
+            prefix = "PO"
+            return f"{prefix}{timezone.now().strftime('%y%m%d%H%M%S')}{uuid.uuid4().hex[:4].upper()}"
+
+        created = False
+        for attempt in range(5):
+            try:
+                order_code = _next_order_code()
+                if ProductionOrder.objects.filter(order_code=order_code).exists():
+                    order_code = _fallback_order_code()
+                po = ProductionOrder.objects.create(
+                    opportunity=opportunity,
+                    lead=opportunity.lead,
+                    customer=customer,
+                    title=title,
+                    qty_total=qty_guess,
+                    cost_sheet_active=active_cost_sheet,
+                    order_code=order_code,
+                )
+                created = True
+                break
+            except IntegrityError:
+                logger.exception(
+                    "Order code collision while creating production order for opportunity %s",
+                    opportunity.pk,
+                )
+                continue
+            except Exception:
+                logger.exception("Failed to create production order for opportunity %s", opportunity.pk)
+                messages.error(request, "Unable to create production order right now.")
+                return redirect("opportunity_detail", pk=opportunity.pk)
+
+        if not created:
+            messages.error(request, "Unable to create production order right now.")
+            return redirect("opportunity_detail", pk=opportunity.pk)
     elif customer and not po.customer_id:
         po.customer = customer
         po.save(update_fields=["customer"])
@@ -6368,6 +6506,9 @@ def production_packing_list_pdf(request, pk):
     try:
         from reportlab.lib.pagesizes import letter
         from reportlab.pdfgen import canvas
+        from reportlab.lib import colors
+        from reportlab.platypus import Table, TableStyle
+        from reportlab.lib.utils import ImageReader
     except ImportError:
         return HttpResponse(
             "ReportLab is not installed yet. Ask your dev to install 'reportlab' to enable PDF.",
@@ -6380,92 +6521,97 @@ def production_packing_list_pdf(request, pk):
 
     p = canvas.Canvas(response, pagesize=letter)
     width, height = letter
-    y = height - 50
 
-    p.setFont("Helvetica-Bold", 16)
-    p.drawString(50, y, "Packing List")
-    y -= 24
+    def draw_header():
+        y = height - 48
+        p.setFont("Helvetica-Bold", 16)
+        p.drawString(40, y, "FINAL PACKING LIST")
+        y -= 18
 
-    p.setFont("Helvetica", 11)
-    customer_name = (order.customer.account_brand if order.customer else "") or "Not set"
-    p.drawString(50, y, f"Order: {order.order_code or order.pk}  |  Customer: {customer_name}")
-    y -= 16
-    p.drawString(50, y, f"Total pieces: {order.qty_total}  |  Reject: {order.qty_reject}")
-    y -= 16
+        brand = (order.customer.account_brand if order.customer else "") or (order.lead.account_brand if order.lead else "") or (order.title or "")
+        color = order.color_info or "Not set"
+        p.setFont("Helvetica", 10)
+        p.drawString(40, y, f"Brand: {brand or 'Not set'}")
+        y -= 14
+        p.drawString(40, y, f"Color: {color}")
+        y -= 10
 
-    if order.customer:
-        ship = order.customer
-        address_lines = [
-            "Ship to:",
-            ship.shipping_name or customer_name,
-            ship.shipping_address1 or "",
-            ship.shipping_address2 or "",
-            f"{ship.shipping_city or ''} {ship.shipping_state or ''} {ship.shipping_postcode or ''}".strip(),
-            ship.shipping_country or "",
-        ]
-        for line in address_lines:
-            if line:
-                p.drawString(50, y, line)
-                y -= 14
-        y -= 6
+        # image on the right
+        img_path = None
+        if getattr(order, "style_image", None) and getattr(order.style_image, "path", ""):
+            img_path = order.style_image.path
+        elif getattr(order, "product", None) and getattr(order.product, "image", None) and getattr(order.product.image, "path", ""):
+            img_path = order.product.image.path
 
-    order_lines = _production_order_lines(order)
-    p.setFont("Helvetica-Bold", 12)
-    p.drawString(50, y, "Size breakdown")
-    y -= 16
+        if img_path and os.path.exists(img_path):
+            try:
+                img = ImageReader(img_path)
+                img_w, img_h = 110, 110
+                p.drawImage(img, width - 40 - img_w, height - 58 - img_h, width=img_w, height=img_h, preserveAspectRatio=True, mask="auto")
+            except Exception:
+                pass
+        return y
+
+    y = draw_header()
+
+    # summary line
     p.setFont("Helvetica", 10)
+    p.drawString(40, y, f"Order: {order.order_code or order.pk}")
+    p.drawString(220, y, f"Total PCS: {order.qty_total or 0}")
+    p.drawString(360, y, f"Reject: {order.qty_reject or 0}")
+    y -= 18
 
-    for idx, line in enumerate(order_lines, start=1):
-        y = ensure_space(y, 20)
-        p.setFont("Helvetica-Bold", 10)
-        label = line.get("style_name") or "Product"
-        p.drawString(50, y, f"Line {idx}: {label}")
-        y -= 12
-        p.setFont("Helvetica", 10)
-        if line.get("size_total"):
-            row = "  ".join([f"{item['label']}: {item['qty'] or 0}" for item in line.get("size_grid") or []])
-            p.drawString(50, y, row[:110])
-            y -= 14
-            p.drawString(50, y, f"Line total: {line.get('size_total')}")
-            y -= 14
-        else:
-            p.drawString(50, y, "No size ratio set.")
-            y -= 14
-        y -= 4
+    # table
+    size_labels = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"]
+    label_map = {"2XL": "XXL", "3XL": "XXXL"}
 
-    y -= 6
-    p.setFont("Helvetica-Bold", 12)
-    p.drawString(50, y, "Packaging notes")
-    y -= 16
+    table_data = [["Box / Style"] + size_labels + ["Total PCS"]]
+    order_lines = _production_order_lines(order)
     for idx, line in enumerate(order_lines, start=1):
-        y = ensure_space(y, 20)
-        p.setFont("Helvetica-Bold", 10)
-        p.drawString(50, y, f"Line {idx}")
-        y -= 12
-        p.setFont("Helvetica", 10)
-        packaging_text = line.get("packaging_note") or "Not set"
-        for text_line in str(packaging_text).splitlines() or ["Not set"]:
-            y = ensure_space(y, 12)
-            p.drawString(50, y, text_line[:110])
-            y -= 12
-        y -= 4
+        name = line.get("style_name") or f"Style {idx}"
+        row = [f"Box {idx} - {name}"]
 
-    y -= 6
-    p.setFont("Helvetica-Bold", 12)
-    p.drawString(50, y, "Accessories / trims")
-    y -= 16
-    for idx, line in enumerate(order_lines, start=1):
-        y = ensure_space(y, 20)
-        p.setFont("Helvetica-Bold", 10)
-        p.drawString(50, y, f"Line {idx}")
-        y -= 12
-        p.setFont("Helvetica", 10)
-        accessories_text = line.get("accessories_note") or "Not set"
-        for text_line in str(accessories_text).splitlines() or ["Not set"]:
-            y = ensure_space(y, 12)
-            p.drawString(50, y, text_line[:110])
-            y -= 12
-        y -= 4
+        grid = line.get("size_grid") or []
+        grid_map = {}
+        for item in grid:
+            lbl = item.get("label")
+            qty = item.get("qty") or 0
+            if lbl in label_map:
+                lbl = label_map[lbl]
+            if lbl:
+                grid_map[lbl] = qty
+
+        total = 0
+        for lbl in size_labels:
+            qty = grid_map.get(lbl, 0)
+            total += qty
+            row.append(str(qty or ""))
+        row.append(str(total or line.get("size_total") or ""))
+        table_data.append(row)
+
+    col_widths = [150, 35, 35, 35, 35, 35, 40, 45, 55]
+    tbl = Table(table_data, colWidths=col_widths, hAlign="LEFT")
+    tbl.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.black),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("ALIGN", (1, 1), (-1, -1), "CENTER"),
+                ("ALIGN", (0, 0), (0, -1), "LEFT"),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.whitesmoke, colors.lightgrey]),
+            ]
+        )
+    )
+
+    table_y = y - 10
+    _, table_height = tbl.wrapOn(p, width - 80, height - 200)
+    if table_y - table_height < 80:
+        p.showPage()
+        table_y = draw_header() - 40
+    tbl.drawOn(p, 40, table_y - table_height)
 
     p.showPage()
     p.save()
@@ -6758,7 +6904,11 @@ def shipment_add(request):
     if request.method == "POST":
         form = ShipmentForm(request.POST)
         if form.is_valid():
-            shipment = form.save()
+            shipment = form.save(commit=False)
+            rate = form.cleaned_data.get("rate_bdt_per_cad")
+            if rate not in [None, ""]:
+                shipment.rate_bdt_per_cad = rate
+            shipment.save()
             _handle_shipment_status_change(request, shipment, None)
             messages.success(request, "Shipment created.")
             return redirect("shipment_detail", pk=shipment.pk)
@@ -6810,7 +6960,11 @@ def shipment_edit(request, pk):
         form = ShipmentForm(request.POST, instance=shipment)
         if form.is_valid():
             old_status = shipment.status
-            shipment = form.save()
+            shipment = form.save(commit=False)
+            rate = form.cleaned_data.get("rate_bdt_per_cad")
+            if rate not in [None, ""]:
+                shipment.rate_bdt_per_cad = rate
+            shipment.save()
             _handle_shipment_status_change(request, shipment, old_status)
             messages.success(request, "Shipment updated.")
             return redirect("shipment_detail", pk=pk)
@@ -6865,6 +7019,9 @@ def shipping_add_for_opportunity(request, pk):
         form = ShipmentForm(request.POST)
         if form.is_valid():
             shipment = form.save(commit=False)
+            rate = form.cleaned_data.get("rate_bdt_per_cad")
+            if rate not in [None, ""]:
+                shipment.rate_bdt_per_cad = rate
 
             if hasattr(shipment, "opportunity"):
                 shipment.opportunity = opportunity
@@ -7768,6 +7925,23 @@ def add_opportunity(request):
         stage = request.POST.get("stage") or "Prospecting"
         product_type = request.POST.get("product_type") or "Other"
         product_category = request.POST.get("product_category") or "Other"
+        moq_units_raw = request.POST.get("moq_units")
+        order_value_raw = request.POST.get("order_value")
+        order_value_usd_raw = request.POST.get("order_value_usd")
+        fx_rate_raw = request.POST.get("fx_rate_bdt_per_usd")
+
+        moq_units = None
+        if moq_units_raw:
+            try:
+                moq_units = int(moq_units_raw)
+            except ValueError:
+                moq_units = None
+
+        order_value = _safe_decimal_or_none(order_value_raw)
+        order_value_usd = _safe_decimal_or_none(order_value_usd_raw)
+        fx_rate = _safe_decimal_or_none(fx_rate_raw)
+        if order_value_usd is not None and fx_rate is not None:
+            order_value = _calc_order_value_bdt(order_value_usd, fx_rate)
 
         opp = Opportunity.objects.create(
             lead=lead,
@@ -7775,6 +7949,10 @@ def add_opportunity(request):
             product_type=product_type,
             product_category=product_category,
             customer=customer,
+            moq_units=moq_units,
+            order_value=order_value,
+            order_value_usd=order_value_usd,
+            fx_rate_bdt_per_usd=fx_rate,
         )
         if lead:
             lead.lead_status = "Converted"

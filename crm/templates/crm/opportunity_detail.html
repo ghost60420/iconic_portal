@@ -55,13 +55,13 @@
         margin-top:6px;
         font-size:13px;
         font-weight:700;
-        color:#e5e7eb;
+        color:#f9fafb;
     }
 
     .summary-sub{
         margin-top:4px;
         font-size:12px;
-        color:#9ca3af;
+        color:#d1d5db;
     }
 
     .opp-header-left {
@@ -78,7 +78,7 @@
 
     .opp-sub {
         font-size: 12px;
-        color: #e5e7eb;
+        color: #f3f4f6;
     }
 
     .opp-stage-pill {
@@ -158,6 +158,17 @@
         background: rgba(250, 204, 21, 0.18);
         color: #ffe9a8;
         text-decoration: none;
+    }
+
+    .btn-danger{
+        background: rgba(239, 68, 68, 0.16);
+        color: #fecaca;
+        border-color: #ef4444;
+    }
+
+    .btn-danger:hover{
+        background: rgba(239, 68, 68, 0.22);
+        color: #fff;
     }
 
     .card {
@@ -466,6 +477,7 @@
                 View lead
             </a>
             {% endif %}
+            <a href="{% url 'opportunity_edit' opportunity.pk %}" class="btn btn-gold-soft btn-small">Edit</a>
             {% if prod_orders %}
                 <a href="{% url 'production_detail' prod_orders.0.pk %}" class="btn btn-gold btn-small">
                     View production
@@ -475,6 +487,12 @@
                     Open production order
                 </a>
             {% endif %}
+            <form method="post" action="{% url 'opportunity_delete' opportunity.pk %}" style="display:inline-block;">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger btn-small" onclick="return confirm('Delete this opportunity? This cannot be undone.');">
+                    Delete
+                </button>
+            </form>
         </div>
     </div>
 
@@ -489,7 +507,10 @@
 
         <div class="summary-card">
             <div class="summary-title">Value</div>
-            <div class="summary-line">Order value: {% if opportunity.order_value %}{{ opportunity.order_value }}{% else %}—{% endif %}</div>
+            <div class="summary-line">Order value (USD): {% if order_value_usd %}{{ order_value_usd }}{% else %}—{% endif %}</div>
+            <div class="summary-sub">FX rate (BDT/USD): {% if fx_rate_bdt_per_usd %}{{ fx_rate_bdt_per_usd }}{% else %}—{% endif %}</div>
+            <div class="summary-sub">Total value (BDT): {% if order_value_bdt %}{{ order_value_bdt }}{% else %}—{% endif %}</div>
+            <div class="summary-sub">BDT per piece: {% if bdt_per_piece %}{{ bdt_per_piece }}{% else %}—{% endif %}</div>
             <div class="summary-sub">MOQ units: {% if opportunity.moq_units %}{{ opportunity.moq_units }}{% else %}—{% endif %}</div>
             <div class="summary-sub">{{ opportunity.product_category }} / {{ opportunity.product_type }}</div>
         </div>

@@ -81,7 +81,19 @@
         </select>
 
         <label>MOQ Units</label>
-        <input type="number" name="moq_units">
+        <input type="number" name="moq_units" id="moq_units">
+
+        <label>Order value (USD)</label>
+        <input type="number" step="0.01" name="order_value_usd" id="order_value_usd">
+
+        <label>Exchange rate (BDT per 1 USD)</label>
+        <input type="number" step="0.0001" name="fx_rate_bdt_per_usd" id="fx_rate_bdt_per_usd">
+
+        <label>Total order value (BDT)</label>
+        <input type="text" id="order_value_bdt" readonly>
+
+        <label>BDT per piece</label>
+        <input type="text" id="bdt_per_piece" readonly>
 
         <button type="submit" class="btn-gold">Save Opportunity</button>
     </form>
@@ -98,6 +110,43 @@ function filterDropdown(inputId, dropdownId) {
         dropdown.options[i].style.display = txt.includes(filter) ? "" : "none";
     }
 }
+
+(function () {
+    function parseNum(v) {
+        const n = parseFloat(v);
+        return Number.isFinite(n) ? n : 0;
+    }
+
+    const moq = document.getElementById("moq_units");
+    const usd = document.getElementById("order_value_usd");
+    const fx = document.getElementById("fx_rate_bdt_per_usd");
+    const bdt = document.getElementById("order_value_bdt");
+    const perPiece = document.getElementById("bdt_per_piece");
+
+    function recalc() {
+        const usdVal = parseNum(usd && usd.value);
+        const fxVal = parseNum(fx && fx.value);
+        const moqVal = parseNum(moq && moq.value);
+
+        if (usdVal > 0 && fxVal > 0) {
+            const totalBdt = usdVal * fxVal;
+            bdt.value = totalBdt.toFixed(2);
+            if (moqVal > 0) {
+                perPiece.value = (totalBdt / moqVal).toFixed(2);
+            } else {
+                perPiece.value = "";
+            }
+        } else {
+            bdt.value = "";
+            perPiece.value = "";
+        }
+    }
+
+    [moq, usd, fx].forEach((el) => {
+        if (!el) return;
+        el.addEventListener("input", recalc);
+    });
+})();
 </script>
 
 {% endblock %}

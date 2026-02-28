@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.utils import OperationalError, ProgrammingError
 from django.conf import settings
 from decimal import Decimal
 from .models_access import UserAccess
@@ -715,6 +716,18 @@ class Opportunity(models.Model):
     order_value = models.DecimalField(
         max_digits=12,
         decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    order_value_usd = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    fx_rate_bdt_per_usd = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
         null=True,
         blank=True,
     )
@@ -2216,12 +2229,15 @@ class ProductionOrder(models.Model):
         """
         Percent of stages marked as done.
         """
-        stages = self.stages.all()
-        total = stages.count()
-        if total == 0:
+        try:
+            stages = self.stages.all()
+            total = stages.count()
+            if total == 0:
+                return 0
+            done = stages.filter(status="done").count()
+            return int((done / total) * 100)
+        except (OperationalError, ProgrammingError):
             return 0
-        done = stages.filter(status="done").count()
-        return int((done / total) * 100)
 
     @property
     def is_delayed(self):
@@ -2231,19 +2247,22 @@ class ProductionOrder(models.Model):
         - bulk deadline passed and status not done, or
         - any stage planned_end is in past and not done.
         """
-        today = timezone.now().date()
+        try:
+            today = timezone.now().date()
 
-        if self.status == "done":
+            if self.status == "done":
+                return False
+
+            if self.bulk_deadline and today > self.bulk_deadline:
+                return True
+
+            late_stage = self.stages.filter(
+                planned_end__lt=today
+            ).exclude(status="done").exists()
+
+            return late_stage
+        except (OperationalError, ProgrammingError):
             return False
-
-        if self.bulk_deadline and today > self.bulk_deadline:
-            return True
-
-        late_stage = self.stages.filter(
-            planned_end__lt=today
-        ).exclude(status="done").exists()
-
-        return late_stage
 
 
 class ProductionOrderLine(models.Model):
@@ -2528,10 +2547,23 @@ class Shipment(models.Model):
         """
         Use taka and rate to get Canadian dollar amount.
         """
-        if self.cost_bdt and self.rate_bdt_per_cad:
+        if self.cost_bdt is None:
+            self.cost_cad = None
+            return
+
+        try:
+            rate = Decimal(str(self.rate_bdt_per_cad)) if self.rate_bdt_per_cad is not None else None
+        except Exception:
+            rate = None
+
+        if not rate or rate <= 0:
+            self.cost_cad = None
+            return
+
+        try:
             step = Decimal("0.01")
-            self.cost_cad = (self.cost_bdt / self.rate_bdt_per_cad).quantize(step)
-        else:
+            self.cost_cad = (Decimal(str(self.cost_bdt)) / rate).quantize(step)
+        except Exception:
             self.cost_cad = None
 
     @property
