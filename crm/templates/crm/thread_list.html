@@ -1,11 +1,5 @@
-{% include "crm/navbar.html" %}
-
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <title>Thread library - Iconic CRM</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+{% extends "crm/base.html" %}
+{% block content %}
     <style>
         :root{
             --bg:#060606;
@@ -253,8 +247,6 @@
             }
         }
     </style>
-</head>
-<body>
 
 <div class="page">
 
@@ -403,5 +395,4 @@
     </div>
 
 </div>
-</body>
-</html>
+{% endblock %}

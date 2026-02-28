@@ -1,13 +1,6 @@
-{% include "crm/navbar.html" %}
+{% extends "crm/base.html" %}
 {% load static %}
-
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Product library - Iconic CRM</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-
+{% block content %}
   <style>
     :root{
       --bg:#060606;
@@ -322,9 +315,6 @@
       .field select{ min-width: 160px; }
     }
   </style>
-</head>
-
-<body>
   <div class="page">
 
     <div class="title-row">
@@ -548,5 +538,4 @@
       });
     })();
   </script>
-</body>
-</html>
+{% endblock %}
