@@ -3,7 +3,7 @@
 
 <style>
   .costing-form-page {
-    max-width: 800px;
+    max-width: 900px;
     margin: 18px auto 40px auto;
     padding: 0 10px;
     color: #e5e7eb;
@@ -16,39 +16,13 @@
     padding: 12px;
   }
 
-  .guide-card {
-    border-style: dashed;
-  }
-
-  .guide-title {
-    font-size: 14px;
-    font-weight: 700;
-    color: #fde68a;
-    margin-bottom: 6px;
-  }
-
-  .guide-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 8px;
-  }
-
-  .guide-step {
-    background: rgba(15, 23, 42, 0.8);
-    border: 1px solid #1f2937;
-    border-radius: 10px;
-    padding: 8px;
-    font-size: 12px;
-    color: #e5e7eb;
-  }
-
   label {
     font-size: 12px;
     color: #fef3c7;
     font-weight: 600;
   }
 
-  input, select {
+  input, select, textarea {
     width: 100%;
     background: #020617;
     color: #e5e7eb;
@@ -85,33 +59,7 @@
 </style>
 
 <div class="costing-form-page">
-  <div style="font-size:20px; font-weight:800; margin-bottom:10px;">Create cost sheet</div>
-
-  <div class="card guide-card" style="margin-bottom:12px;">
-    <div class="guide-title">Quick setup</div>
-    <div class="guide-grid">
-      <div class="guide-step">
-        <strong>1. Link the opportunity</strong>
-        <div class="muted">Choose the deal this costing belongs to.</div>
-      </div>
-      <div class="guide-step">
-        <strong>2. Set targets</strong>
-        <div class="muted">Enter quantity, margin, and production details.</div>
-      </div>
-      <div class="guide-step">
-        <strong>3. Create & add line items</strong>
-        <div class="muted">After creation, add fabric, trims, labor, and overhead.</div>
-      </div>
-    </div>
-    {% if opportunity %}
-      <div class="muted" style="margin-top:8px;">
-        Linked opportunity: {{ opportunity.opportunity_id }} - {{ opportunity.lead.account_brand|default:"-" }}
-      </div>
-      <a href="{% url 'opportunity_detail' opportunity.pk %}" class="btnx" style="margin-top:6px;">
-        Open opportunity
-      </a>
-    {% endif %}
-  </div>
+  <div style="font-size:20px; font-weight:800; margin-bottom:10px;">Create costing header</div>
 
   <div class="card">
     <form method="post">
@@ -134,42 +82,56 @@
         <div>
           <label>Style name</label>
           {{ form.style_name }}
-          {% for error in form.style_name.errors %}
-            <div style="color:#fca5a5; font-size:11px;">{{ error }}</div>
-          {% endfor %}
         </div>
         <div>
           <label>Style code</label>
           {{ form.style_code }}
-          {% for error in form.style_code.errors %}
-            <div style="color:#fca5a5; font-size:11px;">{{ error }}</div>
-          {% endfor %}
         </div>
         <div>
           <label>Product type</label>
           {{ form.product_type }}
-          {% for error in form.product_type.errors %}
-            <div style="color:#fca5a5; font-size:11px;">{{ error }}</div>
-          {% endfor %}
-        </div>
-        <div>
-          <label>Order quantity</label>
-          {{ form.quantity }}
-          {% for error in form.quantity.errors %}
-            <div style="color:#fca5a5; font-size:11px;">{{ error }}</div>
-          {% endfor %}
         </div>
         <div>
           <label>Factory location</label>
           {{ form.factory_location }}
-          {% for error in form.factory_location.errors %}
-            <div style="color:#fca5a5; font-size:11px;">{{ error }}</div>
-          {% endfor %}
         </div>
-      </div>
-
-      <div class="muted" style="margin-top:8px;">
-        Currency is fixed to BDT for all costing.
+        <div>
+          <label>Order quantity</label>
+          {{ form.order_quantity }}
+        </div>
+        <div>
+          <label>Currency</label>
+          {{ form.currency }}
+        </div>
+        <div>
+          <label>Exchange rate</label>
+          {{ form.exchange_rate }}
+          <div class="muted">Store the exchange rate used for this costing.</div>
+        </div>
+        <div>
+          <label>Fabric finance %</label>
+          {{ form.finance_percent_fabric }}
+        </div>
+        <div>
+          <label>Trim finance %</label>
+          {{ form.finance_percent_trims }}
+        </div>
+        <div>
+          <label>Commission %</label>
+          {{ form.commission_percent }}
+        </div>
+        <div>
+          <label>Target margin %</label>
+          {{ form.target_margin_percent }}
+        </div>
+        <div>
+          <label>Manual FOB per piece</label>
+          {{ form.manual_fob_per_piece }}
+        </div>
+        <div style="grid-column: 1 / -1;">
+          <label>Notes</label>
+          {{ form.notes }}
+        </div>
       </div>
 
       <div style="margin-top:12px; display:flex; gap:8px;">

@@ -5,6 +5,8 @@ from .models import (
     CostLineItem,
     CostSheet,
     CostSheetSimple,
+    CostingHeader,
+    CostingSMV,
     Opportunity,
     OpportunityDocument,
 )
@@ -17,6 +19,64 @@ def _safe_opportunity_label(opportunity):
     except Exception:
         brand = ""
     return f"{label} - {brand}" if brand else label
+
+
+class CostingHeaderForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if "opportunity" in self.fields:
+            self.fields["opportunity"].label_from_instance = _safe_opportunity_label
+
+    class Meta:
+        model = CostingHeader
+        fields = [
+            "opportunity",
+            "customer",
+            "style_name",
+            "style_code",
+            "product_type",
+            "factory_location",
+            "order_quantity",
+            "currency",
+            "exchange_rate",
+            "finance_percent_fabric",
+            "finance_percent_trims",
+            "commission_percent",
+            "target_margin_percent",
+            "manual_fob_per_piece",
+            "notes",
+        ]
+        widgets = {
+            "style_name": forms.TextInput(attrs={"placeholder": "Style name"}),
+            "style_code": forms.TextInput(attrs={"placeholder": "Style code"}),
+            "order_quantity": forms.NumberInput(attrs={"min": 0, "step": "1", "placeholder": "1000"}),
+            "exchange_rate": forms.NumberInput(attrs={"step": "0.01", "placeholder": "140.00"}),
+            "finance_percent_fabric": forms.NumberInput(attrs={"step": "0.01", "placeholder": "2"}),
+            "finance_percent_trims": forms.NumberInput(attrs={"step": "0.01", "placeholder": "2"}),
+            "commission_percent": forms.NumberInput(attrs={"step": "0.01", "placeholder": "3"}),
+            "target_margin_percent": forms.NumberInput(attrs={"step": "0.01", "placeholder": "35"}),
+            "manual_fob_per_piece": forms.NumberInput(attrs={"step": "0.01", "placeholder": "0.00"}),
+            "notes": forms.Textarea(attrs={"rows": 3, "placeholder": "Assumptions and remarks"}),
+        }
+
+
+class CostingSMVForm(forms.ModelForm):
+    class Meta:
+        model = CostingSMV
+        fields = [
+            "machine_smv",
+            "finishing_smv",
+            "cpm",
+            "efficiency_costing",
+            "efficiency_planned",
+        ]
+        widgets = {
+            "machine_smv": forms.NumberInput(attrs={"step": "0.01", "placeholder": "10.5"}),
+            "finishing_smv": forms.NumberInput(attrs={"step": "0.01", "placeholder": "2.5"}),
+            "cpm": forms.NumberInput(attrs={"step": "0.01", "placeholder": "0.25"}),
+            "efficiency_costing": forms.NumberInput(attrs={"step": "0.1", "placeholder": "70"}),
+            "efficiency_planned": forms.NumberInput(attrs={"step": "0.1", "placeholder": "75"}),
+        }
 
 
 class CostSheetSimpleForm(forms.ModelForm):

@@ -1,16 +1,15 @@
 {% extends "crm/base.html" %}
-{% load crm_extras %}
 {% block content %}
 
 <style>
   .costing-detail {
-    max-width: 1300px;
+    max-width: 1400px;
     margin: 18px auto 40px auto;
     padding: 0 10px;
     color: #e5e7eb;
   }
 
-  .top-card {
+  .card {
     background: #0b1020;
     border: 1px solid #1f2937;
     border-radius: 12px;
@@ -18,58 +17,16 @@
     margin-bottom: 12px;
   }
 
-  .top-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-
-  .title {
-    font-size: 20px;
-    font-weight: 800;
-  }
-
-  .sub {
-    font-size: 12px;
-    color: #9ca3af;
-    margin-top: 2px;
-  }
-
-  .breadcrumb {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    font-size: 12px;
-    color: #9ca3af;
-    margin-bottom: 6px;
-  }
-
-  .breadcrumb a {
+  .card-title {
+    font-size: 14px;
+    font-weight: 700;
     color: #fde68a;
-    text-decoration: none;
+    margin-bottom: 8px;
   }
 
-  .breadcrumb-sep {
-    color: #475569;
-  }
-
-  .pill {
-    display: inline-flex;
-    padding: 2px 8px;
-    border-radius: 999px;
-    border: 1px solid #374151;
-    font-size: 11px;
-  }
-
-  .pill-draft {
-    border-color: #38bdf8;
-    color: #bae6fd;
-  }
-
-  .pill-approved {
-    border-color: #facc15;
-    color: #fde68a;
+  .muted {
+    color: #9ca3af;
+    font-size: 12px;
   }
 
   .btnx {
@@ -98,94 +55,28 @@
     color: #bfdbfe;
   }
 
-  .section-title {
-    margin: 12px 0 6px 0;
-    font-size: 13px;
-    font-weight: 700;
+  .btnx-danger {
+    background: rgba(239,68,68,0.18);
+    border-color: rgba(239,68,68,0.4);
+    color: #fecaca;
+  }
+
+  .pill {
+    display: inline-flex;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid #374151;
+    font-size: 11px;
+  }
+
+  .pill-draft {
+    border-color: #38bdf8;
+    color: #bae6fd;
+  }
+
+  .pill-approved {
+    border-color: #facc15;
     color: #fde68a;
-  }
-
-  .muted {
-    color: #9ca3af;
-    font-size: 12px;
-  }
-
-  .header-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 8px;
-    margin-top: 12px;
-  }
-
-  .meta-card {
-    background: rgba(15, 23, 42, 0.8);
-    border: 1px solid #1f2937;
-    border-radius: 10px;
-    padding: 8px;
-  }
-
-  .meta-label {
-    font-size: 11px;
-    color: #94a3b8;
-  }
-
-  .meta-value {
-    font-size: 13px;
-    font-weight: 700;
-    color: #e5e7eb;
-    margin-top: 2px;
-  }
-
-  .summary-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 8px;
-  }
-
-  .summary-cell {
-    background: rgba(15, 23, 42, 0.8);
-    border: 1px solid #1f2937;
-    border-radius: 10px;
-    padding: 8px;
-  }
-
-  .summary-label {
-    font-size: 11px;
-    color: #94a3b8;
-  }
-
-  .summary-value {
-    font-size: 13px;
-    font-weight: 700;
-    margin-top: 4px;
-  }
-
-  .money-stack {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    align-items: baseline;
-  }
-
-  .cad-value {
-    font-size: 11px;
-    color: #94a3b8;
-    font-weight: 500;
-  }
-
-  .cad-hidden {
-    display: none;
-  }
-
-  .summary-output {
-    background: rgba(250, 204, 21, 0.08);
-    border-color: rgba(250, 204, 21, 0.25);
-  }
-
-  .input-wrap label {
-    font-size: 11px;
-    color: #fef3c7;
-    font-weight: 600;
   }
 
   input, select, textarea {
@@ -198,587 +89,663 @@
     font-size: 12px;
   }
 
-  .help-card {
-    border-style: dashed;
+  .header-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
   }
 
-  .help-card summary {
-    cursor: pointer;
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+  }
+
+  .summary-card {
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid #1f2937;
+    border-radius: 10px;
+    padding: 8px;
+  }
+
+  .summary-label {
+    font-size: 11px;
+    color: #94a3b8;
+  }
+
+  .summary-value {
+    font-size: 14px;
+    font-weight: 700;
+    margin-top: 4px;
+  }
+
+  .unit-badge {
+    font-size: 10px;
+    color: #94a3b8;
+    margin-left: 4px;
+  }
+
+  .line-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  .line-table th,
+  .line-table td {
+    border-bottom: 1px solid #111827;
+    padding: 6px;
+    vertical-align: top;
+  }
+
+  .line-table th {
+    color: #fef3c7;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: rgba(15,23,42,0.6);
+    position: sticky;
+    top: 0;
+  }
+
+  .line-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .detail-stack {
+    display: grid;
+    gap: 4px;
+  }
+
+  .detail-stack label {
+    font-size: 10px;
+    color: #9ca3af;
+  }
+
+  .help-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    border: 1px solid #334155;
+    font-size: 11px;
+    color: #94a3b8;
+    cursor: help;
+    flex-shrink: 0;
+  }
+
+  .guide-title {
+    font-size: 14px;
     font-weight: 700;
     color: #fde68a;
-    margin-bottom: 6px;
   }
 
-  .help-list {
-    margin: 0;
-    padding-left: 16px;
+  .guide-body {
+    margin-top: 8px;
     font-size: 12px;
     color: #e5e7eb;
   }
 
-  .tips {
-    margin-top: 8px;
-    font-size: 12px;
-    color: #9ca3af;
+  .guide-section-title {
+    font-weight: 700;
+    margin: 8px 0 4px 0;
+    color: #fef3c7;
   }
 
-  .quote-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 8px;
+  .guide-body ol {
+    margin: 0;
+    padding-left: 18px;
+  }
+
+  .guide-body li {
+    margin-bottom: 4px;
   }
 </style>
 
 <div class="costing-detail">
-  <div class="top-card">
-    <div class="top-row">
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
       <div>
-        <div class="breadcrumb">
-          <a href="{% url 'opportunities_list' %}">Opportunities</a>
-          <span class="breadcrumb-sep">/</span>
-          <a href="{% url 'opportunity_detail' cost_sheet.opportunity.pk %}">{{ cost_sheet.opportunity.opportunity_id }}</a>
-          <span class="breadcrumb-sep">/</span>
-          <span>Costing</span>
-        </div>
-        <div class="title">Simplified Costing Sheet</div>
-        <div class="sub">
-          {{ cost_sheet.customer.account_brand|default:"-" }} - {{ cost_sheet.style_name|default:cost_sheet.style_code|default:"-" }}
-        </div>
-        <div class="sub">
-          Updated {{ cost_sheet.updated_at|date:"Y-m-d H:i" }} - Currency BDT
-        </div>
-        <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">
-          <span class="pill pill-{{ cost_sheet.status }}">{{ cost_sheet.get_status_display }}</span>
-        </div>
-      </div>
-
-      <div style="display:flex; gap:6px; flex-wrap:wrap;">
-        <a href="{% url 'opportunity_detail' cost_sheet.opportunity.pk %}" class="btnx btnx-soft">Open opportunity</a>
-        <a href="{% url 'cost_sheet_list' %}" class="btnx">All cost sheets</a>
-        <a href="{% url 'cost_sheet_export_pdf' cost_sheet.pk %}" class="btnx">Export PDF</a>
-        <a href="{% url 'cost_sheet_export_excel' cost_sheet.pk %}" class="btnx">Export Excel</a>
-        {% if cost_sheet.status == "draft" %}
-          <form method="post">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="approve">
-            <button type="submit" class="btnx btnx-primary">Approve</button>
-          </form>
+        <div style="font-size:18px; font-weight:800;">Costing: {{ costing.opportunity.opportunity_id }}</div>
+        <div class="muted">{{ costing.style_name|default:costing.style_code|default:"-" }} - {{ costing.get_product_type_display }}</div>
+        {% if costing.approved_at %}
+          <div class="muted" style="margin-top:4px;">Approved {{ costing.approved_at|date:"Y-m-d H:i" }}{% if costing.approved_by %} by {{ costing.approved_by.username }}{% endif %}</div>
         {% endif %}
       </div>
-    </div>
-
-    <div class="header-grid">
-      <div class="meta-card">
-        <div class="meta-label">Opportunity</div>
-        <div class="meta-value">{{ cost_sheet.opportunity.opportunity_id }}</div>
-      </div>
-      <div class="meta-card">
-        <div class="meta-label">Customer</div>
-        <div class="meta-value">{{ cost_sheet.customer.account_brand|default:"-" }}</div>
-      </div>
-      <div class="meta-card">
-        <div class="meta-label">Style</div>
-        <div class="meta-value">{{ cost_sheet.style_name|default:"-" }} {{ cost_sheet.style_code|default:"" }}</div>
-      </div>
-      <div class="meta-card">
-        <div class="meta-label">Product type</div>
-        <div class="meta-value">{{ cost_sheet.get_product_type_display }}</div>
-      </div>
-      <div class="meta-card">
-        <div class="meta-label">Order quantity</div>
-        <div class="meta-value">{{ cost_sheet.quantity }}</div>
-      </div>
-      <div class="meta-card">
-        <div class="meta-label">Factory location</div>
-        <div class="meta-value">{{ cost_sheet.get_factory_location_display }}</div>
-      </div>
-      <div class="meta-card">
-        <div class="meta-label">Date</div>
-        <div class="meta-value">{{ cost_sheet.created_at|date:"Y-m-d" }}</div>
-      </div>
-      <div class="meta-card">
-        <div class="meta-label">Status</div>
-        <div class="meta-value">{{ cost_sheet.get_status_display }}</div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <span class="pill pill-{{ costing.status }}">{{ costing.get_status_display }}</span>
+        <a class="btnx" href="{% url 'cost_sheet_list' %}">Back to list</a>
+        <a class="btnx" href="{% url 'cost_sheet_guide' %}">Guide</a>
+        {% if not is_locked %}
+          <button form="costing-form" type="submit" class="btnx btnx-primary">Save</button>
+        {% endif %}
+        {% if can_approve and not is_locked %}
+          <button form="approve-form" type="submit" class="btnx btnx-soft">Approve</button>
+        {% endif %}
       </div>
     </div>
   </div>
 
-  <details class="top-card help-card" open>
-    <summary>How to use this costing sheet</summary>
-    <ol class="help-list">
-      <li>Enter order quantity.</li>
-      <li>Enter fabric cost per piece and wastage percent.</li>
-      <li>Enter materials and trims (rib, zipper, labels, accessories, etc.).</li>
-      <li>Enter sewing, overhead, process, packaging, freight, testing, and other costs.</li>
-      <li>Check total cost per piece and total order cost.</li>
-      <li>Enter quote price per piece to see margin.</li>
-      <li>Export PDF or Excel.</li>
-      <li>Files will appear inside the Opportunity.</li>
-    </ol>
-    <div class="tips">
-      Tips: Always include fabric wastage - Do not forget packaging and freight - Use actual production data later to compare.
+  <div class="card" id="costing-guide-panel">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <div class="guide-title">Costing Input Guide</div>
+        <span class="help-icon" title="This guide explains what each input means so the costing stays accurate.">i</span>
+      </div>
+      <button type="button" class="btnx" id="guide-toggle">Collapse</button>
     </div>
-  </details>
+    <div class="guide-body" id="guide-body">
+      <div class="guide-section-title">Rules to follow</div>
+      <ol>
+        <li>Most fields are COST PER PIECE. Enter the cost for one garment only.</li>
+        <li>If a supplier gives price per kg or per meter, convert to per piece before entering. Example: price 5 per kg, consumption 0.30 kg, enter 1.50 per piece.</li>
+        <li>Wastage is PERCENT only. Example: 3 means 3 percent.</li>
+        <li>Some costs are PER ORDER only: freight, testing, compliance, courier. Enter the total order cost. The system will divide by order quantity.</li>
+        <li>Sewing charge is always PER PIECE. Enter labor cost for one garment.</li>
+        <li>Before quoting a customer, confirm: Total cost per piece, quote price per piece, profit per piece, margin percent.</li>
+        <li>Never enter supplier unit price directly like 5 per kg. Always convert to per piece.</li>
+      </ol>
+      <div class="guide-section-title">Quick check</div>
+      <div>Total cost per piece must be lower than quote price per piece. If not, it is a loss.</div>
+    </div>
+  </div>
 
-  <form method="post" id="costing-form" class="top-card">
+  <form method="post" id="costing-form">
     {% csrf_token %}
-    <input type="hidden" name="action" value="save_sheet">
+    <input type="hidden" name="action" value="save_costing">
+    <input type="hidden" name="line_payload" id="line-payload">
 
-    <div class="section-title">Header info</div>
-    <div class="summary-row">
-      <div class="summary-cell input-wrap">
-        <label>Opportunity</label>
-        {{ form.opportunity }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Customer</label>
-        {{ form.customer }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Style name</label>
-        {{ form.style_name }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Style code</label>
-        {{ form.style_code }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Product type</label>
-        {{ form.product_type }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Order quantity</label>
-        {{ form.quantity }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Factory location</label>
-        {{ form.factory_location }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Exchange rate (&#2547; per 1 CAD)</label>
-        {{ form.exchange_rate_bdt_per_cad }}
-        {% if exchange_rate_locked %}
-          <div class="muted" style="margin-top:4px;">Exchange rate locked on approved sheets. Create a new costing to change it.</div>
-        {% elif not can_edit_exchange_rate %}
-          <div class="muted" style="margin-top:4px;">Only Admin or Manager can edit this.</div>
-        {% endif %}
-      </div>
-    </div>
-
-    <div class="section-title">Summary line (BDT per piece)</div>
-    <div class="summary-row">
-      <div class="summary-cell input-wrap">
-        <label>Fabrics</label>
-        {{ form.fabric_cost_per_piece }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Wastage %</label>
-        {{ form.fabric_wastage_percent }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Rib</label>
-        {{ form.rib_cost_per_piece }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Woven fabrics</label>
-        {{ form.woven_fabric_cost_per_piece }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Zipper</label>
-        {{ form.zipper_cost_per_piece }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Zipper puller</label>
-        {{ form.zipper_puller_cost_per_piece }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Button</label>
-        {{ form.button_cost_per_piece }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Thread</label>
-        {{ form.thread_cost_per_piece }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Lining</label>
-        {{ form.lining_cost_per_piece }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Velcro</label>
-        {{ form.velcro_cost_per_piece }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Neck tape</label>
-        {{ form.neck_tape_cost_per_piece }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Elastic</label>
-        {{ form.elastic_cost_per_piece }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Collar & cuff</label>
-        {{ form.collar_cuff_cost_per_piece }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Ring</label>
-        {{ form.ring_cost_per_piece }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Buckle / clip</label>
-        {{ form.buckle_clip_cost_per_piece }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Main label</label>
-        {{ form.main_label_cost_per_piece }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Care label</label>
-        {{ form.care_label_cost_per_piece }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Hang tag</label>
-        {{ form.hang_tag_cost_per_piece }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Accessories</label>
-        {{ form.trim_cost_per_piece }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Conveyance</label>
-        {{ form.conveyance_cost_per_piece }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Sewing charge</label>
-        {{ form.labor_cost_per_piece }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Overhead</label>
-        {{ form.overhead_cost_per_piece }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Process & wash</label>
-        {{ form.process_cost_per_piece }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Packaging</label>
-        {{ form.packaging_cost_per_piece }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Freight & export</label>
-        {{ form.freight_cost_per_piece }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Testing & compliance</label>
-        {{ form.testing_cost_per_piece }}
-      </div>
-      <div class="summary-cell input-wrap">
-        <label>Others</label>
-        {{ form.other_cost_per_piece }}
-      </div>
-      <div class="summary-cell summary-output">
-        <div class="summary-label">Total cost / pc</div>
-        <div class="summary-value money-stack">
-          <span id="js-total-cost-bdt">{{ calc.display.total_cost_per_piece|format_bdt }}</span>
-          <span class="cad-value{% if not calc.cad_available %} cad-hidden{% endif %}" id="js-total-cost-cad">
-            {% if calc.cad_available %}CAD {{ calc.cad.total_cost_per_piece|format_cad }}{% endif %}
-          </span>
+    <div class="card">
+      <div class="card-title">Header</div>
+      <div class="header-grid">
+        <div>
+          <label>Opportunity</label>
+          {{ form.opportunity }}
         </div>
-      </div>
-      <div class="summary-cell summary-output">
-        <div class="summary-label">Total order cost</div>
-        <div class="summary-value money-stack">
-          <span id="js-total-order-bdt">{{ calc.display.total_order_cost|format_bdt }}</span>
-          <span class="cad-value{% if not calc.cad_available %} cad-hidden{% endif %}" id="js-total-order-cad">
-            {% if calc.cad_available %}CAD {{ calc.cad.total_order_cost|format_cad }}{% endif %}
-          </span>
+        <div>
+          <label>Customer</label>
+          {{ form.customer }}
         </div>
-      </div>
-      <div class="summary-cell summary-output">
-        <div class="summary-label">Fabric effective</div>
-        <div class="summary-value" id="js-fabric-effective">{{ calc.display.fabric_effective_cost_per_piece|format_bdt }}</div>
-      </div>
-    </div>
-
-    <div class="section-title">Quote and margin</div>
-    <div class="quote-grid">
-      <div class="summary-cell input-wrap">
-        <label>Quote price per piece (BDT)</label>
-        {{ form.quote_price_per_piece }}
-      </div>
-      <div class="summary-cell summary-output">
-        <div class="summary-label">Quote price / piece</div>
-        <div class="summary-value money-stack">
-          <span id="js-quote-bdt">{{ calc.display.quote_price_per_piece|format_bdt }}</span>
-          <span class="cad-value{% if not calc.cad_available %} cad-hidden{% endif %}" id="js-quote-cad">
-            {% if calc.cad_available %}CAD {{ calc.cad.quote_price_per_piece|format_cad }}{% endif %}
-          </span>
+        <div>
+          <label>Style name</label>
+          {{ form.style_name }}
         </div>
-      </div>
-      <div class="summary-cell summary-output">
-        <div class="summary-label">Profit per piece</div>
-        <div class="summary-value money-stack">
-          <span id="js-profit-bdt">{{ calc.display.profit_per_piece|format_bdt }}</span>
-          <span class="cad-value{% if not calc.cad_available %} cad-hidden{% endif %}" id="js-profit-cad">
-            {% if calc.cad_available %}CAD {{ calc.cad.profit_per_piece|format_cad }}{% endif %}
-          </span>
+        <div>
+          <label>Style code</label>
+          {{ form.style_code }}
         </div>
-      </div>
-      <div class="summary-cell summary-output">
-        <div class="summary-label">Margin %</div>
-        <div class="summary-value" id="js-margin">{{ calc.display.margin_percent }}</div>
-      </div>
-      <div class="summary-cell summary-output">
-        <div class="summary-label">Total profit</div>
-        <div class="summary-value money-stack">
-          <span id="js-total-profit-bdt">{{ calc.display.total_profit|format_bdt }}</span>
-          <span class="cad-value{% if not calc.cad_available %} cad-hidden{% endif %}" id="js-total-profit-cad">
-            {% if calc.cad_available %}CAD {{ calc.cad.total_profit|format_cad }}{% endif %}
-          </span>
+        <div>
+          <label>Product type</label>
+          {{ form.product_type }}
+        </div>
+        <div>
+          <label>Factory location</label>
+          {{ form.factory_location }}
+        </div>
+        <div>
+          <label>Order quantity</label>
+          {{ form.order_quantity }}
+        </div>
+        <div>
+          <label>Currency</label>
+          {{ form.currency }}
+        </div>
+        <div>
+          <label>Exchange rate</label>
+          {{ form.exchange_rate }}
+          <div class="muted">Store the exchange rate used for this costing.</div>
+        </div>
+        <div>
+          <label>Fabric finance %</label>
+          {{ form.finance_percent_fabric }}
+        </div>
+        <div>
+          <label>Trim finance %</label>
+          {{ form.finance_percent_trims }}
+        </div>
+        <div>
+          <label>Commission %</label>
+          {{ form.commission_percent }}
+        </div>
+        <div>
+          <label>Target margin %</label>
+          {{ form.target_margin_percent }}
+        </div>
+        <div>
+          <label>Manual FOB per piece</label>
+          {{ form.manual_fob_per_piece }}
+        </div>
+        <div style="grid-column: 1 / -1;">
+          <label>Notes</label>
+          {{ form.notes }}
         </div>
       </div>
     </div>
 
-    <div class="section-title">Notes</div>
-    <div>
-      {{ form.notes }}
+    <div class="card">
+      <div class="card-title">SMV & Labor</div>
+      <div class="header-grid">
+        <div>
+          <label>Machine SMV</label>
+          {{ smv_form.machine_smv }}
+        </div>
+        <div>
+          <label>Finishing SMV</label>
+          {{ smv_form.finishing_smv }}
+        </div>
+        <div>
+          <label>CPM</label>
+          {{ smv_form.cpm }}
+        </div>
+        <div>
+          <label>Efficiency (costing %)</label>
+          {{ smv_form.efficiency_costing }}
+        </div>
+        <div>
+          <label>Efficiency (planned %)</label>
+          {{ smv_form.efficiency_planned }}
+        </div>
+      </div>
     </div>
 
-    <div style="margin-top:12px; display:flex; gap:8px;">
-      <button type="submit" class="btnx btnx-primary">Save costing</button>
-      <span class="muted">Currency is fixed to BDT.</span>
-    </div>
+    {% for category,label in category_choices %}
+      <div class="card">
+        <div class="card-title">{{ label }}</div>
+        <div class="muted" style="margin-bottom:6px;">Unit prices are BDT per selected UOM. Consumption is per piece.</div>
+        <div style="overflow:auto;">
+          <table class="line-table" data-category="{{ category }}">
+            <thead>
+              <tr>
+                <th style="min-width:160px;">Item</th>
+                <th style="min-width:110px;">UOM</th>
+                <th style="min-width:120px;">Unit price <span class="unit-badge">BDT</span></th>
+                <th style="min-width:110px;">Freight <span class="unit-badge">BDT</span></th>
+                <th style="min-width:120px;">Consumption</th>
+                <th style="min-width:110px;">Wastage %</th>
+                <th style="min-width:120px;">Denominator</th>
+                <th style="min-width:220px;">Details</th>
+                <th style="min-width:160px;">Remarks</th>
+                <th style="width:60px;"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in grouped_lines[category] %}
+              <tr class="line-row" data-category="{{ category }}" data-id="{{ row.id|default:"" }}">
+                <td>
+                  <div style="display:flex; align-items:center; gap:6px;">
+                    <input type="text" data-field="item_name" value="{{ row.item_name }}" placeholder="Item name">
+                    <span class="help-icon" title="">?</span>
+                  </div>
+                </td>
+                <td>
+                  <select data-field="uom" class="uom-select">
+                    {% for uom_key,uom_label in uom_choices %}
+                      <option value="{{ uom_key }}" {% if row.uom == uom_key %}selected{% endif %}>{{ uom_label }}</option>
+                    {% endfor %}
+                  </select>
+                  <div class="muted unit-label">BDT per {{ row.uom }}</div>
+                </td>
+                <td><input type="number" step="0.0001" data-field="unit_price" value="{{ row.unit_price }}" placeholder="0.00"></td>
+                <td><input type="number" step="0.0001" data-field="freight" value="{{ row.freight }}" placeholder="0.00"></td>
+                <td><input type="number" step="0.0001" data-field="consumption_value" value="{{ row.consumption_value }}" placeholder="0.00"></td>
+                <td><input type="number" step="0.01" data-field="wastage_percent" value="{{ row.wastage_percent }}" placeholder="0"></td>
+                <td><input type="number" step="0.0001" data-field="denominator_value" value="{{ row.denominator_value }}" placeholder="0"></td>
+                <td>
+                  <div class="detail-stack">
+                    <div>
+                      <label>Reference</label>
+                      <input type="text" data-field="item_reference" value="{{ row.item_reference }}" placeholder="Ref">
+                    </div>
+                    <div>
+                      <label>Supplier</label>
+                      <input type="text" data-field="supplier" value="{{ row.supplier }}" placeholder="Supplier">
+                    </div>
+                    <div>
+                      <label>Placement</label>
+                      <input type="text" data-field="placement" value="{{ row.placement }}" placeholder="Placement">
+                    </div>
+                    <div>
+                      <label>Color</label>
+                      <input type="text" data-field="color" value="{{ row.color }}" placeholder="Color">
+                    </div>
+                    <div>
+                      <label>GSM</label>
+                      <input type="text" data-field="gsm" value="{{ row.gsm }}" placeholder="GSM">
+                    </div>
+                    <div>
+                      <label>Cut width</label>
+                      <input type="text" data-field="cut_width" value="{{ row.cut_width }}" placeholder="Cut width">
+                    </div>
+                  </div>
+                </td>
+                <td><textarea rows="4" data-field="remarks" placeholder="Remarks">{{ row.remarks }}</textarea></td>
+                <td>
+                  <button type="button" class="btnx btnx-danger remove-row">Remove</button>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="line-actions">
+          <button type="button" class="btnx add-row" data-category="{{ category }}">Add row</button>
+        </div>
+      </div>
+    {% endfor %}
   </form>
 
-  <div class="top-card">
-    <div class="section-title">Documents</div>
-    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;">
-      <a href="{% url 'cost_sheet_export_pdf' cost_sheet.pk %}" class="btnx">Export PDF</a>
-      <a href="{% url 'cost_sheet_export_excel' cost_sheet.pk %}" class="btnx">Export Excel</a>
-    </div>
-
-    <form method="post" enctype="multipart/form-data">
-      {% csrf_token %}
-      <input type="hidden" name="action" value="upload_document">
-      <div class="summary-row">
-        <div class="summary-cell input-wrap">
-          <label>File</label>
-          {{ document_form.file }}
+  <div class="card">
+    <div class="card-title">Summary & Pricing</div>
+    {% if calc %}
+      <div class="summary-grid">
+        <div class="summary-card">
+          <div class="summary-label">Total cost per piece</div>
+          <div class="summary-value">{{ calc.display.total_cost_per_piece }} <span class="unit-badge">BDT per piece</span></div>
         </div>
-        <div class="summary-cell input-wrap">
-          <label>Type</label>
-          {{ document_form.doc_type }}
+        <div class="summary-card">
+          <div class="summary-label">FOB per piece</div>
+          <div class="summary-value">{{ calc.display.fob_per_piece }} <span class="unit-badge">BDT per piece</span></div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Profit per piece</div>
+          <div class="summary-value">{{ calc.display.profit_per_piece }} <span class="unit-badge">BDT per piece</span></div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Margin %</div>
+          <div class="summary-value">{{ calc.display.margin_percent }}%</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Total cost order</div>
+          <div class="summary-value">{{ calc.display.total_cost_order }} <span class="unit-badge">BDT total order</span></div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Total sales order</div>
+          <div class="summary-value">{{ calc.display.total_sales_order }} <span class="unit-badge">BDT total order</span></div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Total profit order</div>
+          <div class="summary-value">{{ calc.display.total_profit_order }} <span class="unit-badge">BDT total order</span></div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Final offer FOB per piece</div>
+          <div class="summary-value">{{ calc.display.final_offer_fob_per_piece }} <span class="unit-badge">BDT per piece</span></div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Final offer total</div>
+          <div class="summary-value">{{ calc.display.total_final_offer_order }} <span class="unit-badge">BDT total order</span></div>
         </div>
       </div>
-      <button type="submit" class="btnx btnx-primary" style="margin-top:10px;">Upload</button>
+      <div style="margin-top:12px; overflow:auto;">
+        <table class="line-table">
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>BDT per piece</th>
+              <th>BDT total order</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Fabric</td>
+              <td>{{ calc.display.breakdown.fabric }} <span class="unit-badge">per piece</span></td>
+              <td>{{ calc.display.breakdown_order.fabric }} <span class="unit-badge">total order</span></td>
+            </tr>
+            <tr>
+              <td>Trims (sewing + packaging)</td>
+              <td>{{ calc.display.breakdown.trims }} <span class="unit-badge">per piece</span></td>
+              <td>{{ calc.display.breakdown_order.trims }} <span class="unit-badge">total order</span></td>
+            </tr>
+            <tr>
+              <td>Labor (SMV)</td>
+              <td>{{ calc.display.breakdown.labor }} <span class="unit-badge">per piece</span></td>
+              <td>{{ calc.display.breakdown_order.labor }} <span class="unit-badge">total order</span></td>
+            </tr>
+            <tr>
+              <td>Other</td>
+              <td>{{ calc.display.breakdown.other }} <span class="unit-badge">per piece</span></td>
+              <td>{{ calc.display.breakdown_order.other }} <span class="unit-badge">total order</span></td>
+            </tr>
+            <tr>
+              <td>Finance (fabric)</td>
+              <td>{{ calc.display.breakdown.fabric_finance }} <span class="unit-badge">per piece</span></td>
+              <td>{{ calc.display.breakdown_order.fabric_finance }} <span class="unit-badge">total order</span></td>
+            </tr>
+            <tr>
+              <td>Finance (trims)</td>
+              <td>{{ calc.display.breakdown.trims_finance }} <span class="unit-badge">per piece</span></td>
+              <td>{{ calc.display.breakdown_order.trims_finance }} <span class="unit-badge">total order</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="muted">No totals yet. Add line items and save.</div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-title">Documents</div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <a class="btnx" href="{% url 'cost_sheet_export_pdf' costing.pk %}">Export PDF</a>
+      <a class="btnx" href="{% url 'cost_sheet_export_excel' costing.pk %}">Export Excel</a>
+    </div>
+    <form method="post" enctype="multipart/form-data" style="margin-top:10px; display:flex; gap:6px; flex-wrap:wrap; align-items:end;">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="upload_document">
+      <div style="flex:1; min-width:200px;">
+        <label class="muted" style="display:block; margin-bottom:4px;">File</label>
+        <input type="file" name="file">
+      </div>
+      <div>
+        <label class="muted" style="display:block; margin-bottom:4px;">Type</label>
+        <select name="doc_type">
+          <option value="costing_pdf">Costing PDF</option>
+          <option value="costing_excel">Costing Excel</option>
+          <option value="costing_other">Costing Other</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <button type="submit" class="btnx btnx-soft">Upload</button>
     </form>
 
     {% if documents %}
-      <table style="width:100%; margin-top:10px; font-size:12px;">
-        <thead>
-          <tr>
-            <th style="text-align:left; color:#fef3c7; font-size:11px; text-transform:uppercase;">File</th>
-            <th style="text-align:left; color:#fef3c7; font-size:11px; text-transform:uppercase;">Type</th>
-            <th style="text-align:left; color:#fef3c7; font-size:11px; text-transform:uppercase;">Uploaded</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for doc in documents %}
-            <tr>
-              <td><a class="btnx" href="{{ doc.file.url }}" target="_blank">{{ doc.original_name|default:doc.file.name }}</a></td>
-              <td>{{ doc.get_doc_type_display }}</td>
-              <td>{{ doc.uploaded_at|date:"Y-m-d H:i" }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      <ul class="simple-list" style="margin-top:6px;">
+        {% for doc in documents %}
+          <li>
+            📎 <a href="{{ doc.file.url }}" target="_blank">{{ doc.original_name|default:doc.file.name }}</a>
+            <span class="muted"> • {{ doc.get_doc_type_display }} • {{ doc.uploaded_at|date:"Y-m-d" }}</span>
+          </li>
+        {% endfor %}
+      </ul>
     {% else %}
-      <div class="muted" style="margin-top:8px;">No documents yet.</div>
+      <div class="muted" style="margin-top:6px;">No costing documents uploaded yet.</div>
     {% endif %}
   </div>
+
+  {% if can_approve and is_locked %}
+    <div class="card">
+      <div class="card-title">Unlock costing</div>
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="unlock">
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <input type="text" name="unlock_reason" placeholder="Reason for unlock" style="flex:1;">
+          <button type="submit" class="btnx btnx-danger">Unlock</button>
+        </div>
+      </form>
+    </div>
+  {% endif %}
+
+  {% if can_approve and not is_locked %}
+    <form method="post" id="approve-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="approve">
+    </form>
+  {% endif %}
 </div>
 
+<template id="line-row-template">
+  <tr class="line-row" data-category="" data-id="">
+    <td>
+      <div style="display:flex; align-items:center; gap:6px;">
+        <input type="text" data-field="item_name" value="" placeholder="Item name">
+        <span class="help-icon" title="">?</span>
+      </div>
+    </td>
+    <td>
+      <select data-field="uom" class="uom-select">
+        {% for uom_key,uom_label in uom_choices %}
+          <option value="{{ uom_key }}">{{ uom_label }}</option>
+        {% endfor %}
+      </select>
+      <div class="muted unit-label">BDT per piece</div>
+    </td>
+    <td><input type="number" step="0.0001" data-field="unit_price" value="" placeholder="0.00"></td>
+    <td><input type="number" step="0.0001" data-field="freight" value="" placeholder="0.00"></td>
+    <td><input type="number" step="0.0001" data-field="consumption_value" value="" placeholder="0.00"></td>
+    <td><input type="number" step="0.01" data-field="wastage_percent" value="" placeholder="0"></td>
+    <td><input type="number" step="0.0001" data-field="denominator_value" value="" placeholder="0"></td>
+    <td>
+      <div class="detail-stack">
+        <div>
+          <label>Reference</label>
+          <input type="text" data-field="item_reference" value="" placeholder="Ref">
+        </div>
+        <div>
+          <label>Supplier</label>
+          <input type="text" data-field="supplier" value="" placeholder="Supplier">
+        </div>
+        <div>
+          <label>Placement</label>
+          <input type="text" data-field="placement" value="" placeholder="Placement">
+        </div>
+        <div>
+          <label>Color</label>
+          <input type="text" data-field="color" value="" placeholder="Color">
+        </div>
+        <div>
+          <label>GSM</label>
+          <input type="text" data-field="gsm" value="" placeholder="GSM">
+        </div>
+        <div>
+          <label>Cut width</label>
+          <input type="text" data-field="cut_width" value="" placeholder="Cut width">
+        </div>
+      </div>
+    </td>
+    <td><textarea rows="4" data-field="remarks" placeholder="Remarks"></textarea></td>
+    <td><button type="button" class="btnx btnx-danger remove-row">Remove</button></td>
+  </tr>
+</template>
+
 <script>
-  (function () {
-    const fields = [
-      "id_exchange_rate_bdt_per_cad",
-      "id_fabric_cost_per_piece",
-      "id_fabric_wastage_percent",
-      "id_rib_cost_per_piece",
-      "id_woven_fabric_cost_per_piece",
-      "id_zipper_cost_per_piece",
-      "id_zipper_puller_cost_per_piece",
-      "id_button_cost_per_piece",
-      "id_thread_cost_per_piece",
-      "id_lining_cost_per_piece",
-      "id_velcro_cost_per_piece",
-      "id_neck_tape_cost_per_piece",
-      "id_elastic_cost_per_piece",
-      "id_collar_cuff_cost_per_piece",
-      "id_ring_cost_per_piece",
-      "id_buckle_clip_cost_per_piece",
-      "id_main_label_cost_per_piece",
-      "id_care_label_cost_per_piece",
-      "id_hang_tag_cost_per_piece",
-      "id_conveyance_cost_per_piece",
-      "id_trim_cost_per_piece",
-      "id_labor_cost_per_piece",
-      "id_overhead_cost_per_piece",
-      "id_process_cost_per_piece",
-      "id_packaging_cost_per_piece",
-      "id_freight_cost_per_piece",
-      "id_testing_cost_per_piece",
-      "id_other_cost_per_piece",
-      "id_quantity",
-      "id_quote_price_per_piece",
-    ];
+  const helpTextByCategory = {
+    fabric: \"Enter cost per garment piece. If supplier gives price per kg/meter, use consumption per piece.\",
+    sewing_trim: \"Enter cost per garment piece. If price is per cone/roll/pack, use denominator and consumption.\",
+    packaging_trim: \"Enter cost per garment piece. Use per order only when total order cost is known.\",
+    other: \"Enter cost per garment piece or per order. Use consumption for per piece conversion.\"
+  };
 
-    function num(id) {
-      const el = document.getElementById(id);
-      if (!el) {
-        return 0;
-      }
-      const val = parseFloat(el.value);
-      return Number.isFinite(val) ? val : 0;
+  function updateUnitLabel(row) {
+    const uom = row.querySelector('[data-field="uom"]').value;
+    const label = row.querySelector('.unit-label');
+    if (label) {
+      label.textContent = uom === 'order' ? 'BDT per order' : `BDT per ${uom}`;
     }
+  }
 
-    function round2(value) {
-      return (Math.round(value * 100) / 100).toFixed(2);
+  function bindRow(row) {
+    const select = row.querySelector('.uom-select');
+    if (select) {
+      select.addEventListener('change', () => updateUnitLabel(row));
+      updateUnitLabel(row);
     }
-
-    function formatMoney(value, symbol) {
-      return symbol + " " + round2(value);
+    const helpIcon = row.querySelector('.help-icon');
+    if (helpIcon) {
+      helpIcon.title = helpTextByCategory[row.dataset.category] || \"Enter cost per garment piece.\";
     }
-
-    function setCadValue(el, bdtValue, rate) {
-      if (!el) {
-        return;
-      }
-      if (!rate || rate <= 0) {
-        el.classList.add("cad-hidden");
-        el.textContent = "";
-        return;
-      }
-      el.classList.remove("cad-hidden");
-      el.textContent = "CAD $ " + round2(bdtValue / rate);
+    const remove = row.querySelector('.remove-row');
+    if (remove) {
+      remove.addEventListener('click', () => {
+        row.remove();
+      });
     }
+  }
 
-    function recalc() {
-      const rate = num("id_exchange_rate_bdt_per_cad");
-      const fabric = num("id_fabric_cost_per_piece");
-      const wastage = num("id_fabric_wastage_percent");
-      const rib = num("id_rib_cost_per_piece");
-      const woven = num("id_woven_fabric_cost_per_piece");
-      const zipper = num("id_zipper_cost_per_piece");
-      const zipperPuller = num("id_zipper_puller_cost_per_piece");
-      const button = num("id_button_cost_per_piece");
-      const thread = num("id_thread_cost_per_piece");
-      const lining = num("id_lining_cost_per_piece");
-      const velcro = num("id_velcro_cost_per_piece");
-      const neckTape = num("id_neck_tape_cost_per_piece");
-      const elastic = num("id_elastic_cost_per_piece");
-      const collarCuff = num("id_collar_cuff_cost_per_piece");
-      const ring = num("id_ring_cost_per_piece");
-      const buckleClip = num("id_buckle_clip_cost_per_piece");
-      const mainLabel = num("id_main_label_cost_per_piece");
-      const careLabel = num("id_care_label_cost_per_piece");
-      const hangTag = num("id_hang_tag_cost_per_piece");
-      const conveyance = num("id_conveyance_cost_per_piece");
-      const trim = num("id_trim_cost_per_piece");
-      const labor = num("id_labor_cost_per_piece");
-      const overhead = num("id_overhead_cost_per_piece");
-      const process = num("id_process_cost_per_piece");
-      const packaging = num("id_packaging_cost_per_piece");
-      const freight = num("id_freight_cost_per_piece");
-      const testing = num("id_testing_cost_per_piece");
-      const other = num("id_other_cost_per_piece");
-      const qty = num("id_quantity");
-      const quote = num("id_quote_price_per_piece");
+  document.querySelectorAll('.line-row').forEach(bindRow);
 
-      const fabricEffective = fabric * (1 + (wastage / 100));
-      const totalCost = (
-        fabricEffective
-        + rib
-        + woven
-        + zipper
-        + zipperPuller
-        + button
-        + thread
-        + lining
-        + velcro
-        + neckTape
-        + elastic
-        + collarCuff
-        + ring
-        + buckleClip
-        + mainLabel
-        + careLabel
-        + hangTag
-        + conveyance
-        + trim
-        + labor
-        + overhead
-        + process
-        + packaging
-        + freight
-        + testing
-        + other
-      );
-      const totalOrder = totalCost * qty;
-      const profit = quote - totalCost;
-      const totalProfit = profit * qty;
-      const margin = quote ? (profit / quote) * 100 : 0;
-
-      const totalEl = document.getElementById("js-total-cost-bdt");
-      const totalCadEl = document.getElementById("js-total-cost-cad");
-      const orderEl = document.getElementById("js-total-order-bdt");
-      const orderCadEl = document.getElementById("js-total-order-cad");
-      const quoteEl = document.getElementById("js-quote-bdt");
-      const quoteCadEl = document.getElementById("js-quote-cad");
-      const profitEl = document.getElementById("js-profit-bdt");
-      const profitCadEl = document.getElementById("js-profit-cad");
-      const totalProfitEl = document.getElementById("js-total-profit-bdt");
-      const totalProfitCadEl = document.getElementById("js-total-profit-cad");
-      const marginEl = document.getElementById("js-margin");
-      const fabricEl = document.getElementById("js-fabric-effective");
-
-      if (totalEl) {
-        totalEl.textContent = formatMoney(totalCost, "\u09F3");
-      }
-      if (orderEl) {
-        orderEl.textContent = formatMoney(totalOrder, "\u09F3");
-      }
-      if (quoteEl) {
-        quoteEl.textContent = formatMoney(quote, "\u09F3");
-      }
-      if (profitEl) {
-        profitEl.textContent = formatMoney(profit, "\u09F3");
-      }
-      if (totalProfitEl) {
-        totalProfitEl.textContent = formatMoney(totalProfit, "\u09F3");
-      }
-      if (marginEl) {
-        marginEl.textContent = round2(margin);
-      }
-      if (fabricEl) {
-        fabricEl.textContent = formatMoney(fabricEffective, "\u09F3");
-      }
-
-      setCadValue(totalCadEl, totalCost, rate);
-      setCadValue(orderCadEl, totalOrder, rate);
-      setCadValue(quoteCadEl, quote, rate);
-      setCadValue(profitCadEl, profit, rate);
-      setCadValue(totalProfitCadEl, totalProfit, rate);
-    }
-
-    fields.forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) {
-        el.addEventListener("input", recalc);
-      }
+  document.querySelectorAll('.add-row').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const category = btn.getAttribute('data-category');
+      const table = document.querySelector(`table[data-category="${category}"] tbody`);
+      const tpl = document.getElementById('line-row-template');
+      const clone = tpl.content.cloneNode(true);
+      const row = clone.querySelector('.line-row');
+      row.dataset.category = category;
+      table.appendChild(clone);
+      bindRow(table.lastElementChild);
     });
+  });
 
-    recalc();
-  })();
+  const form = document.getElementById('costing-form');
+  if (form) {
+    form.addEventListener('submit', (event) => {
+      const rows = [];
+      document.querySelectorAll('.line-row').forEach((row, idx) => {
+        const data = { category: row.dataset.category, sort_order: idx + 1 };
+        if (row.dataset.id) {
+          data.id = row.dataset.id;
+        }
+        row.querySelectorAll('[data-field]').forEach((input) => {
+          data[input.dataset.field] = input.value;
+        });
+        rows.push(data);
+      });
+      document.getElementById('line-payload').value = JSON.stringify(rows);
+    });
+  }
+
+  const guideKey = "costingInputGuideOpen";
+  const guideBody = document.getElementById("guide-body");
+  const guideToggle = document.getElementById("guide-toggle");
+  function setGuideState(open) {
+    if (!guideBody || !guideToggle) return;
+    guideBody.style.display = open ? "block" : "none";
+    guideToggle.textContent = open ? "Collapse" : "Expand";
+    try {
+      localStorage.setItem(guideKey, open ? "1" : "0");
+    } catch (e) {}
+  }
+  if (guideToggle && guideBody) {
+    const saved = (() => {
+      try {
+        return localStorage.getItem(guideKey);
+      } catch (e) {
+        return null;
+      }
+    })();
+    if (saved === "0") {
+      setGuideState(false);
+    } else {
+      setGuideState(true);
+    }
+    guideToggle.addEventListener("click", () => {
+      const isOpen = guideBody.style.display !== "none";
+      setGuideState(!isOpen);
+    });
+  }
+
+  {% if is_locked %}
+  document.querySelectorAll('#costing-form input, #costing-form select, #costing-form textarea, #costing-form button.add-row, #costing-form button.remove-row').forEach((el) => {
+    if (el.type !== 'hidden') {
+      el.disabled = true;
+    }
+  });
+  {% endif %}
 </script>
 
 {% endblock %}

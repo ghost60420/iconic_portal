@@ -538,14 +538,14 @@
                 <span class="emoji">📊</span> Costing
             </div>
             <div>
-                {% if simple_cost_sheet %}
-                    <a href="{% url 'cost_sheet_detail' simple_cost_sheet.pk %}" class="btn btn-blue btn-small">
+                {% if costing_header %}
+                    <a href="{% url 'cost_sheet_detail' costing_header.pk %}" class="btn btn-blue btn-small">
                         Open costing
                     </a>
-                    <a href="{% url 'cost_sheet_export_pdf' simple_cost_sheet.pk %}" class="btn btn-slate btn-small">
+                    <a href="{% url 'cost_sheet_export_pdf' costing_header.pk %}" class="btn btn-slate btn-small">
                         Export PDF
                     </a>
-                    <a href="{% url 'cost_sheet_export_excel' simple_cost_sheet.pk %}" class="btn btn-slate btn-small">
+                    <a href="{% url 'cost_sheet_export_excel' costing_header.pk %}" class="btn btn-slate btn-small">
                         Export Excel
                     </a>
                 {% else %}
@@ -556,27 +556,27 @@
             </div>
         </div>
 
-        {% if simple_cost_sheet %}
+        {% if costing_header %}
             <table class="info-table" style="margin-top:6px;">
                 <tr>
                     <td class="label">Status</td>
-                    <td class="value-main">{{ simple_cost_sheet.get_status_display }}</td>
+                    <td class="value-main">{{ costing_header.get_status_display }}</td>
                 </tr>
                 <tr>
                     <td class="label">Total cost / piece (BDT)</td>
-                    <td class="value-main">{{ simple_calc.display.total_cost_per_piece }}</td>
+                    <td class="value-main">{{ costing_calc.display.total_cost_per_piece }}</td>
                 </tr>
                 <tr>
-                    <td class="label">Quote price / piece (BDT)</td>
-                    <td class="value-main">{{ simple_calc.display.quote_price_per_piece }}</td>
+                    <td class="label">FOB / piece (BDT)</td>
+                    <td class="value-main">{{ costing_calc.display.fob_per_piece }}</td>
                 </tr>
                 <tr>
                     <td class="label">Margin %</td>
-                    <td class="value-main">{{ simple_calc.display.margin_percent }}%</td>
+                    <td class="value-main">{{ costing_calc.display.margin_percent }}%</td>
                 </tr>
                 <tr>
                     <td class="label">Last updated</td>
-                    <td class="value-main">{{ simple_cost_sheet.updated_at|date:"Y-m-d H:i" }}</td>
+                    <td class="value-main">{{ costing_header.updated_at|date:"Y-m-d H:i" }}</td>
                 </tr>
             </table>
 

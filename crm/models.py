@@ -731,6 +731,29 @@ class Opportunity(models.Model):
         null=True,
         blank=True,
     )
+    costing_total_cost_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        null=True,
+        blank=True,
+    )
+    costing_fob_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        null=True,
+        blank=True,
+    )
+    costing_margin_percent = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    costing_status = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+    )
 
     created_date = models.DateField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -877,6 +900,35 @@ FACTORY_LOCATION_CHOICES = [
 COST_SHEET_SIMPLE_STATUS_CHOICES = [
     ("draft", "Draft"),
     ("approved", "Approved"),
+]
+
+NEW_COSTING_STATUS_CHOICES = [
+    ("draft", "Draft"),
+    ("approved", "Approved"),
+]
+
+NEW_COSTING_CATEGORY_CHOICES = [
+    ("fabric", "Fabric"),
+    ("sewing_trim", "Sewing trims"),
+    ("packaging_trim", "Packaging trims"),
+    ("other", "Other"),
+]
+
+NEW_COSTING_UOM_CHOICES = [
+    ("piece", "Per piece"),
+    ("kg", "Per kg"),
+    ("meter", "Per meter"),
+    ("yard", "Per yard"),
+    ("roll", "Per roll"),
+    ("cone", "Per cone"),
+    ("pack", "Per pack"),
+    ("order", "Per order"),
+]
+
+NEW_COSTING_CURRENCY_CHOICES = [
+    ("BDT", "BDT"),
+    ("CAD", "CAD"),
+    ("USD", "USD"),
 ]
 
 OPPORTUNITY_DOC_TYPES = [
@@ -1181,6 +1233,247 @@ class CostSheetSimple(models.Model):
         super().save(*args, **kwargs)
 
 
+class CostingHeader(models.Model):
+    opportunity = models.ForeignKey(
+        Opportunity,
+        on_delete=models.CASCADE,
+        related_name="costing_headers",
+    )
+    customer = models.ForeignKey(
+        "Customer",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="costing_headers",
+    )
+    style_name = models.CharField(max_length=200, blank=True)
+    style_code = models.CharField(max_length=50, blank=True)
+    product_type = models.CharField(
+        max_length=50,
+        choices=Opportunity.PRODUCT_TYPE_CHOICES,
+        default="Other",
+    )
+    factory_location = models.CharField(
+        max_length=20,
+        choices=FACTORY_LOCATION_CHOICES,
+        default="bd",
+    )
+    order_quantity = models.PositiveIntegerField(default=0)
+    currency = models.CharField(
+        max_length=10,
+        choices=NEW_COSTING_CURRENCY_CHOICES,
+        default="BDT",
+    )
+    exchange_rate = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        null=True,
+        blank=True,
+    )
+    finance_percent_fabric = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=Decimal("0"),
+    )
+    finance_percent_trims = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=Decimal("0"),
+    )
+    commission_percent = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=Decimal("0"),
+    )
+    target_margin_percent = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    manual_fob_per_piece = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        null=True,
+        blank=True,
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=NEW_COSTING_STATUS_CHOICES,
+        default="draft",
+    )
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="approved_costing_headers",
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-id"]
+
+    def __str__(self):
+        label = self.opportunity.opportunity_id if self.opportunity_id else f"Costing {self.pk}"
+        return f"{label} (Header)"
+
+    def save(self, *args, **kwargs):
+        if not self.customer and self.opportunity and self.opportunity.customer_id:
+            self.customer = self.opportunity.customer
+        super().save(*args, **kwargs)
+
+
+class CostingLineItem(models.Model):
+    costing = models.ForeignKey(
+        CostingHeader,
+        on_delete=models.CASCADE,
+        related_name="line_items",
+    )
+    category = models.CharField(
+        max_length=30,
+        choices=NEW_COSTING_CATEGORY_CHOICES,
+        default="other",
+    )
+    item_name = models.CharField(max_length=200)
+    item_reference = models.CharField(max_length=200, blank=True, default="")
+    supplier = models.CharField(max_length=200, blank=True, default="")
+    uom = models.CharField(
+        max_length=20,
+        choices=NEW_COSTING_UOM_CHOICES,
+        default="piece",
+    )
+    unit_price = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    freight = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    consumption_value = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    wastage_percent = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=Decimal("0"),
+    )
+    denominator_value = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        null=True,
+        blank=True,
+    )
+    placement = models.CharField(max_length=120, blank=True, default="")
+    color = models.CharField(max_length=120, blank=True, default="")
+    gsm = models.CharField(max_length=120, blank=True, default="")
+    cut_width = models.CharField(max_length=120, blank=True, default="")
+    sort_order = models.PositiveIntegerField(default=0)
+    remarks = models.TextField(blank=True, default="")
+
+    class Meta:
+        ordering = ["category", "sort_order", "id"]
+
+    def __str__(self):
+        return f"{self.category} - {self.item_name}"
+
+
+class CostingSMV(models.Model):
+    costing = models.OneToOneField(
+        CostingHeader,
+        on_delete=models.CASCADE,
+        related_name="smv",
+    )
+    machine_smv = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    finishing_smv = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    cpm = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0"),
+    )
+    efficiency_costing = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=Decimal("100"),
+    )
+    efficiency_planned = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=Decimal("100"),
+    )
+
+    def __str__(self):
+        return f"SMV {self.costing_id}"
+
+
+class CostingAuditLog(models.Model):
+    ACTION_CHOICES = [
+        ("created", "Created"),
+        ("updated", "Updated"),
+        ("approved", "Approved"),
+        ("unlocked", "Unlocked"),
+        ("exported", "Exported"),
+        ("uploaded_file", "Uploaded file"),
+    ]
+
+    costing = models.ForeignKey(
+        CostingHeader,
+        on_delete=models.CASCADE,
+        related_name="audits",
+    )
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="costing_audits",
+    )
+    changed_at = models.DateTimeField(auto_now_add=True)
+    note = models.CharField(max_length=255, blank=True, default="")
+    before_data = models.JSONField(null=True, blank=True)
+    after_data = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-changed_at", "-id"]
+
+    def __str__(self):
+        return f"{self.costing_id} {self.action}"
+
+
+class CostingSnapshot(models.Model):
+    costing = models.ForeignKey(
+        CostingHeader,
+        on_delete=models.CASCADE,
+        related_name="snapshots",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    source = models.CharField(max_length=50, default="approval")
+    data = models.JSONField()
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return f"{self.costing_id} snapshot"
+
+
 class CostLineItem(models.Model):
     cost_sheet = models.ForeignKey(
         CostSheet,
@@ -1319,6 +1612,13 @@ class OpportunityDocument(models.Model):
     )
     cost_sheet_simple = models.ForeignKey(
         CostSheetSimple,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="documents",
+    )
+    costing_header = models.ForeignKey(
+        "CostingHeader",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -2062,6 +2362,13 @@ class ProductionOrder(models.Model):
         blank=True,
         related_name="production_orders",
     )
+    costing_header = models.ForeignKey(
+        "CostingHeader",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="production_orders",
+    )
     customer = models.ForeignKey(
         "Customer",
         on_delete=models.SET_NULL,
@@ -2629,6 +2936,33 @@ class Invoice(models.Model):
         ],
     )
 
+    invoice_region = models.CharField(
+        max_length=2,
+        choices=[("CA", "Canada"), ("BD", "Bangladesh")],
+        default="",
+        blank=True,
+    )
+    invoice_status = models.CharField(
+        max_length=12,
+        choices=[("DRAFT", "Draft"), ("APPROVED", "Approved")],
+        default="DRAFT",
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="approved_invoices",
+    )
+
+    deposit_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("70.00"),
+    )
+    terms_override = models.TextField(blank=True, default="")
+
     subtotal = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
     shipping_amount = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
     discount_amount = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
@@ -2658,6 +2992,34 @@ class Invoice(models.Model):
         return (self.total_amount or Decimal("0")) - (self.paid_amount or Decimal("0"))
 
 
+class InvoiceAudit(models.Model):
+    ACTION_CHOICES = [
+        ("approved", "Approved"),
+    ]
+
+    invoice = models.ForeignKey(
+        "Invoice",
+        on_delete=models.CASCADE,
+        related_name="audits",
+    )
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    changed_at = models.DateTimeField(auto_now_add=True)
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="invoice_audits",
+    )
+    note = models.CharField(max_length=255, blank=True, default="")
+
+    class Meta:
+        ordering = ["-changed_at", "-id"]
+
+    def __str__(self):
+        return f"{self.invoice_id} {self.action}"
+
+
 ## ==============================
 # PRODUCTION ATTACHMENT
 ## ==============================
@@ -2666,6 +3028,13 @@ class ProductionOrderAttachment(models.Model):
     order = models.ForeignKey(
         "ProductionOrder",
         on_delete=models.CASCADE,
+        related_name="attachments",
+    )
+    line = models.ForeignKey(
+        "ProductionOrderLine",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name="attachments",
     )
     file = models.FileField(upload_to="production_attachments/")

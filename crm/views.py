@@ -33,7 +33,7 @@ from django.shortcuts import render
 from .models import Product, Fabric, Accessory, Trim, ThreadOption, InventoryItem, ProductionOrderMaterial
 
 from .services.costing import build_variance_report, calculate_cost_sheet
-from .services.costing_simple import calculate_cost_sheet_simple
+from .services.costing_engine import compute_costing
 
 def _parse_decimal(value):
     try:
@@ -82,6 +82,7 @@ from .models import (
     Lead,
     LeadActivity,
     LeadComment,
+    CostingHeader,
     CostSheet,
     CostSheetSimple,
     Opportunity,
@@ -1462,7 +1463,7 @@ def opportunity_detail(request, pk):
     active_cost_sheet = CostSheet.objects.filter(opportunity=opportunity, is_active=True).order_by(
         "-updated_at", "-id"
     ).first()
-    simple_cost_sheet = CostSheetSimple.objects.filter(opportunity=opportunity).order_by(
+    costing_header = CostingHeader.objects.filter(opportunity=opportunity).order_by(
         "-updated_at", "-id"
     ).first()
 
@@ -1675,6 +1676,7 @@ def opportunity_detail(request, pk):
                             title=po_title,
                             qty_total=qty_guess or 0,
                             cost_sheet_active=active_cost_sheet,
+                            costing_header=costing_header if costing_header and costing_header.status == "approved" else None,
                         )
                         LeadActivity.objects.create(
                             lead=lead,
@@ -1720,7 +1722,7 @@ def opportunity_detail(request, pk):
                     file=file_obj,
                     original_name=file_obj.name,
                     doc_type=doc_type,
-                    cost_sheet_simple=simple_cost_sheet,
+                    costing_header=costing_header,
                     uploaded_by=request.user if request.user.is_authenticated else None,
                 )
                 LeadActivity.objects.create(
@@ -1784,10 +1786,10 @@ def opportunity_detail(request, pk):
     prod_total_reject = prod_totals.get("total_reject") or 0
     prod_total_actual_cost = prod_totals.get("total_actual_cost") or 0
 
-    simple_calc = calculate_cost_sheet_simple(simple_cost_sheet) if simple_cost_sheet else None
+    costing_calc = compute_costing(costing_header.id) if costing_header else None
     variance_placeholder = None
     variance_display = None
-    if simple_cost_sheet:
+    if costing_calc:
         latest_po = prod_orders.order_by("-created_at").first()
         actual_cost_per_piece = None
         produced_qty = 0
@@ -1795,7 +1797,7 @@ def opportunity_detail(request, pk):
             actual_cost_per_piece = latest_po.actual_cost_per_piece_bdt
             produced_qty = latest_po.qty_total or 0
 
-        standard_cost = simple_calc["total_cost_per_piece"] if simple_calc else Decimal("0")
+        standard_cost = costing_calc["total_cost_per_piece"] if costing_calc else Decimal("0")
         variance_per_piece = None
         total_variance = None
         if actual_cost_per_piece is not None:
@@ -1857,8 +1859,8 @@ def opportunity_detail(request, pk):
 
         "opp_files": opp_files,
         "opportunity_documents": opportunity_documents,
-        "simple_cost_sheet": simple_cost_sheet,
-        "simple_calc": simple_calc,
+        "costing_header": costing_header,
+        "costing_calc": costing_calc,
         "variance_placeholder": variance_placeholder,
         "variance_display": variance_display,
 
@@ -5902,6 +5904,12 @@ def production_from_opportunity(request, pk):
         active_cost_sheet = CostSheet.objects.filter(opportunity=opportunity, is_active=True).first()
     except (OperationalError, ProgrammingError):
         active_cost_sheet = None
+    try:
+        approved_costing = CostingHeader.objects.filter(
+            opportunity=opportunity, status="approved"
+        ).order_by("-updated_at", "-id").first()
+    except (OperationalError, ProgrammingError):
+        approved_costing = None
 
     po = ProductionOrder.objects.filter(opportunity=opportunity).first()
     created = False
@@ -5949,6 +5957,7 @@ def production_from_opportunity(request, pk):
                     title=title,
                     qty_total=qty_guess,
                     cost_sheet_active=active_cost_sheet,
+                    costing_header=approved_costing,
                     order_code=order_code,
                 )
                 created = True
@@ -5973,6 +5982,9 @@ def production_from_opportunity(request, pk):
     elif active_cost_sheet and not po.cost_sheet_active_id:
         po.cost_sheet_active = active_cost_sheet
         po.save(update_fields=["cost_sheet_active"])
+    elif approved_costing and not po.costing_header_id:
+        po.costing_header = approved_costing
+        po.save(update_fields=["costing_header"])
 
     stage_changed = False
     if opportunity.stage != "Production":

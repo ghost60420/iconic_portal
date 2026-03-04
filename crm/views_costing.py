@@ -1,33 +1,36 @@
 import io
+import json
 import logging
+from collections import defaultdict
 from decimal import Decimal
 
 from django.contrib import messages
 from django.core.files.base import ContentFile
+from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from .forms_costing import CostSheetSimpleForm, OpportunityDocumentForm
+from .forms_costing import CostingHeaderForm, CostingSMVForm, OpportunityDocumentForm
 from .models import (
-    COST_SHEET_SIMPLE_STATUS_CHOICES,
-    CostSheetSimple,
+    CostingHeader,
+    CostingLineItem,
+    CostingSMV,
+    CostingAuditLog,
+    CostingSnapshot,
+    NEW_COSTING_CATEGORY_CHOICES,
+    NEW_COSTING_UOM_CHOICES,
     Opportunity,
     OpportunityDocument,
 )
-from .services.costing_currency import format_bdt, format_cad
-from .services.costing_simple import calculate_cost_sheet_simple
+from .services.costing_currency import format_bdt
+from .services.costing_engine import compute_costing, validate_costing
 
 
 logger = logging.getLogger(__name__)
 
 
-def _safe_pdf_text(value):
-    text = str(value or "")
-    return text.encode("ascii", "replace").decode("ascii")
-
-
-def _can_edit_exchange_rate(user):
+def _can_approve(user):
     if not user or not user.is_authenticated:
         return False
     if user.is_superuser:
@@ -36,37 +39,167 @@ def _can_edit_exchange_rate(user):
     return bool(access and access.can_costing_approve)
 
 
+def _build_line_dict(line=None, category=None):
+    if line:
+        return {
+            "id": line.id,
+            "category": line.category,
+            "item_name": line.item_name,
+            "item_reference": line.item_reference,
+            "supplier": line.supplier,
+            "uom": line.uom,
+            "unit_price": line.unit_price,
+            "freight": line.freight,
+            "consumption_value": line.consumption_value,
+            "wastage_percent": line.wastage_percent,
+            "denominator_value": line.denominator_value,
+            "placement": line.placement,
+            "color": line.color,
+            "gsm": line.gsm,
+            "cut_width": line.cut_width,
+            "remarks": line.remarks,
+            "sort_order": line.sort_order,
+        }
+    return {
+        "id": None,
+        "category": category or "other",
+        "item_name": "",
+        "item_reference": "",
+        "supplier": "",
+        "uom": "piece",
+        "unit_price": "",
+        "freight": "",
+        "consumption_value": "",
+        "wastage_percent": "",
+        "denominator_value": "",
+        "placement": "",
+        "color": "",
+        "gsm": "",
+        "cut_width": "",
+        "remarks": "",
+        "sort_order": 0,
+    }
+
+
+def _parse_line_payload(raw):
+    if raw is None:
+        return []
+    raw = raw.strip()
+    if not raw:
+        return []
+    try:
+        payload = json.loads(raw)
+    except Exception:
+        return []
+    if not isinstance(payload, list):
+        return []
+    return payload
+
+
+def _save_line_items(costing, payload):
+    seen_ids = []
+    for idx, row in enumerate(payload, start=1):
+        item_name = (row.get("item_name") or "").strip()
+        if not item_name:
+            continue
+        line_id = row.get("id")
+        line = None
+        if line_id:
+            line = CostingLineItem.objects.filter(pk=line_id, costing=costing).first()
+        if not line:
+            line = CostingLineItem(costing=costing)
+        line.category = (row.get("category") or "other").strip() or "other"
+        line.item_name = item_name
+        line.item_reference = (row.get("item_reference") or "").strip()
+        line.supplier = (row.get("supplier") or "").strip()
+        line.uom = (row.get("uom") or "piece").strip() or "piece"
+        line.unit_price = row.get("unit_price") or 0
+        line.freight = row.get("freight") or 0
+        line.consumption_value = row.get("consumption_value") or 0
+        line.wastage_percent = row.get("wastage_percent") or 0
+        line.denominator_value = row.get("denominator_value") or None
+        line.placement = (row.get("placement") or "").strip()
+        line.color = (row.get("color") or "").strip()
+        line.gsm = (row.get("gsm") or "").strip()
+        line.cut_width = (row.get("cut_width") or "").strip()
+        line.remarks = (row.get("remarks") or "").strip()
+        line.sort_order = int(row.get("sort_order") or idx)
+        line.save()
+        seen_ids.append(line.id)
+
+    CostingLineItem.objects.filter(costing=costing).exclude(id__in=seen_ids).delete()
+
+
+def _group_lines(costing):
+    grouped = {key: [] for key, _ in NEW_COSTING_CATEGORY_CHOICES}
+    for line in costing.line_items.all().order_by("category", "sort_order", "id"):
+        grouped[line.category].append(_build_line_dict(line))
+    for key in grouped:
+        if not grouped[key]:
+            grouped[key].append(_build_line_dict(category=key))
+    return grouped
+
+
+def _update_opportunity_summary(costing, calc):
+    opp = costing.opportunity
+    opp.costing_total_cost_per_piece = calc["total_cost_per_piece"]
+    opp.costing_fob_per_piece = calc["fob_per_piece"]
+    opp.costing_margin_percent = calc["margin_percent"]
+    opp.costing_status = costing.status
+    opp.save(update_fields=[
+        "costing_total_cost_per_piece",
+        "costing_fob_per_piece",
+        "costing_margin_percent",
+        "costing_status",
+    ])
+
+
 def cost_sheet_list(request):
-    sheets = (
-        CostSheetSimple.objects.select_related("opportunity", "customer")
-        .order_by("-updated_at")
-    )
+    qs = CostingHeader.objects.select_related("opportunity", "customer").order_by("-updated_at")
+
+    customer_id = (request.GET.get("customer") or "").strip()
+    product_type = (request.GET.get("product_type") or "").strip()
+    status = (request.GET.get("status") or "").strip()
+    search = (request.GET.get("q") or "").strip()
+    if customer_id:
+        qs = qs.filter(customer_id=customer_id)
+    if product_type:
+        qs = qs.filter(product_type=product_type)
+    if status:
+        qs = qs.filter(status=status)
+    if search:
+        qs = qs.filter(
+            Q(opportunity__opportunity_id__icontains=search)
+            | Q(customer__account_brand__icontains=search)
+            | Q(style_name__icontains=search)
+            | Q(style_code__icontains=search)
+        )
 
     rows = []
-    for sheet in sheets:
-        rows.append({"sheet": sheet, "calc": calculate_cost_sheet_simple(sheet)})
+    for sheet in qs:
+        calc = compute_costing(sheet.id)
+        if calc:
+            rows.append({"sheet": sheet, "calc": calc})
 
     context = {
         "rows": rows,
-        "status_choices": COST_SHEET_SIMPLE_STATUS_CHOICES,
+        "customers": list({row["sheet"].customer for row in rows if row["sheet"].customer}),
+        "status_choices": [("draft", "Draft"), ("approved", "Approved")],
+        "product_types": Opportunity.PRODUCT_TYPE_CHOICES,
+        "selected": {
+            "customer": customer_id,
+            "product_type": product_type,
+            "status": status,
+            "q": search,
+        },
     }
     return render(request, "crm/costing/costsheet_list.html", context)
 
 
 def cost_sheet_create(request, opportunity_id=None):
     opportunity = None
-    can_edit_exchange_rate = _can_edit_exchange_rate(request.user)
     if opportunity_id:
         opportunity = get_object_or_404(Opportunity, pk=opportunity_id)
-
-        existing = (
-            CostSheetSimple.objects.filter(opportunity=opportunity)
-            .order_by("-updated_at", "-id")
-            .first()
-        )
-        if existing:
-            messages.info(request, "Cost sheet already exists. Opened the latest one.")
-            return redirect("cost_sheet_detail", pk=existing.pk)
 
     if request.method == "POST":
         data = request.POST.copy()
@@ -74,24 +207,20 @@ def cost_sheet_create(request, opportunity_id=None):
             data["opportunity"] = opportunity.pk
             if opportunity.customer_id:
                 data["customer"] = opportunity.customer_id
-        if not can_edit_exchange_rate:
-            data["exchange_rate_bdt_per_cad"] = None
-
-        form = CostSheetSimpleForm(data)
+        form = CostingHeaderForm(data)
         if form.is_valid():
-            try:
-                sheet = form.save(commit=False)
-                if opportunity:
-                    sheet.opportunity = opportunity
-                sheet.currency = "BDT"
-                sheet.save()
-                messages.success(request, "Cost sheet created.")
-                return redirect("cost_sheet_detail", pk=sheet.pk)
-            except Exception:
-                logger.exception("Failed to create simple cost sheet")
-                messages.error(request, "Could not create the cost sheet. Please try again.")
-        else:
-            messages.error(request, "Please fix the errors below.")
+            costing = form.save(commit=False)
+            if opportunity:
+                costing.opportunity = opportunity
+            costing.save()
+            CostingAuditLog.objects.create(
+                costing=costing,
+                action="created",
+                changed_by=request.user if request.user.is_authenticated else None,
+            )
+            messages.success(request, "Costing header created. Add line items next.")
+            return redirect("cost_sheet_detail", pk=costing.pk)
+        messages.error(request, "Please fix the errors below.")
     else:
         initial = {}
         if opportunity:
@@ -99,125 +228,230 @@ def cost_sheet_create(request, opportunity_id=None):
                 "opportunity": opportunity,
                 "customer": opportunity.customer,
                 "product_type": opportunity.product_type,
-                "quantity": opportunity.moq_units or 0,
+                "order_quantity": opportunity.moq_units or 0,
                 "factory_location": "bd",
+                "currency": "BDT",
             }
-        form = CostSheetSimpleForm(initial=initial)
+        form = CostingHeaderForm(initial=initial)
 
     if opportunity:
         if "opportunity" in form.fields:
             form.fields["opportunity"].disabled = True
         if "customer" in form.fields:
             form.fields["customer"].disabled = True
-    if "exchange_rate_bdt_per_cad" in form.fields and not can_edit_exchange_rate:
-        form.fields["exchange_rate_bdt_per_cad"].disabled = True
 
     context = {
         "form": form,
         "opportunity": opportunity,
         "mode": "create",
-        "can_edit_exchange_rate": can_edit_exchange_rate,
-        "exchange_rate_locked": False,
     }
     return render(request, "crm/costing/costsheet_form.html", context)
 
 
 def cost_sheet_detail(request, pk):
-    cost_sheet = get_object_or_404(
-        CostSheetSimple.objects.select_related("opportunity", "customer"),
+    costing = get_object_or_404(
+        CostingHeader.objects.select_related("opportunity", "customer").prefetch_related("line_items"),
         pk=pk,
     )
-    can_edit_exchange_rate = _can_edit_exchange_rate(request.user)
-    exchange_rate_locked = cost_sheet.status != "draft"
+    can_approve = _can_approve(request.user)
+    is_locked = costing.status == "approved"
 
     if request.method == "POST":
         action = (request.POST.get("action") or "").strip()
 
-        if action == "save_sheet":
-            data = request.POST.copy()
-            data["opportunity"] = cost_sheet.opportunity_id
-            if cost_sheet.customer_id:
-                data["customer"] = cost_sheet.customer_id
-            if not can_edit_exchange_rate or exchange_rate_locked:
-                data["exchange_rate_bdt_per_cad"] = cost_sheet.exchange_rate_bdt_per_cad
+        if action == "save_costing":
+            if is_locked:
+                messages.error(request, "Costing is approved and locked.")
+                return redirect("cost_sheet_detail", pk=pk)
 
-            form = CostSheetSimpleForm(data, instance=cost_sheet)
-            if form.is_valid():
-                try:
-                    sheet = form.save(commit=False)
-                    sheet.currency = "BDT"
-                    sheet.save()
-                    messages.success(request, "Cost sheet updated.")
-                except Exception:
-                    logger.exception("Failed to update simple cost sheet", extra={"id": cost_sheet.pk})
-                    messages.error(request, "Could not save the cost sheet.")
+            data = request.POST.copy()
+            data["opportunity"] = costing.opportunity_id
+            if costing.customer_id:
+                data["customer"] = costing.customer_id
+
+            form = CostingHeaderForm(data, instance=costing)
+            smv_form = CostingSMVForm(data, instance=getattr(costing, "smv", None))
+            if form.is_valid() and smv_form.is_valid():
+                before = {
+                    "order_quantity": costing.order_quantity,
+                    "currency": costing.currency,
+                    "exchange_rate": str(costing.exchange_rate or ""),
+                    "finance_percent_fabric": str(costing.finance_percent_fabric),
+                    "finance_percent_trims": str(costing.finance_percent_trims),
+                    "commission_percent": str(costing.commission_percent),
+                    "target_margin_percent": str(costing.target_margin_percent or ""),
+                    "manual_fob_per_piece": str(costing.manual_fob_per_piece or ""),
+                }
+                header = form.save()
+                smv = smv_form.save(commit=False)
+                smv.costing = header
+                smv.save()
+
+                payload = _parse_line_payload(request.POST.get("line_payload"))
+                _save_line_items(header, payload)
+
+                calc = compute_costing(header.id)
+                if calc:
+                    _update_opportunity_summary(header, calc)
+
+                CostingAuditLog.objects.create(
+                    costing=header,
+                    action="updated",
+                    changed_by=request.user if request.user.is_authenticated else None,
+                    before_data=before,
+                    after_data={
+                        "order_quantity": header.order_quantity,
+                        "currency": header.currency,
+                        "exchange_rate": str(header.exchange_rate or ""),
+                        "finance_percent_fabric": str(header.finance_percent_fabric),
+                        "finance_percent_trims": str(header.finance_percent_trims),
+                        "commission_percent": str(header.commission_percent),
+                        "target_margin_percent": str(header.target_margin_percent or ""),
+                        "manual_fob_per_piece": str(header.manual_fob_per_piece or ""),
+                    },
+                )
+
+                messages.success(request, "Costing updated.")
             else:
                 messages.error(request, "Please fix the errors below.")
             return redirect("cost_sheet_detail", pk=pk)
 
         if action == "approve":
-            cost_sheet.status = "approved"
-            cost_sheet.save(update_fields=["status"])
-            messages.success(request, "Cost sheet approved.")
+            if not can_approve:
+                messages.error(request, "You do not have permission to approve.")
+                return redirect("cost_sheet_detail", pk=pk)
+
+            calc = compute_costing(costing.id)
+            errors, warnings = validate_costing(costing, calc)
+            if errors:
+                for err in errors:
+                    messages.error(request, err)
+                return redirect("cost_sheet_detail", pk=pk)
+            for warn in warnings:
+                messages.warning(request, warn)
+
+            costing.status = "approved"
+            costing.approved_by = request.user if request.user.is_authenticated else None
+            costing.approved_at = timezone.now()
+            costing.save(update_fields=["status", "approved_by", "approved_at"])
+
+            if calc:
+                _update_opportunity_summary(costing, calc)
+                CostingSnapshot.objects.create(
+                    costing=costing,
+                    data={
+                        "total_cost_per_piece": str(calc["total_cost_per_piece"]),
+                        "fob_per_piece": str(calc["fob_per_piece"]),
+                        "margin_percent": str(calc["margin_percent"]),
+                        "total_cost_order": str(calc["total_cost_order"]),
+                        "total_sales_order": str(calc["total_sales_order"]),
+                        "total_profit_order": str(calc["total_profit_order"]),
+                        "breakdown": {k: str(v) for k, v in calc["breakdown"].items()},
+                    },
+                )
+
+            CostingAuditLog.objects.create(
+                costing=costing,
+                action="approved",
+                changed_by=request.user if request.user.is_authenticated else None,
+            )
+            messages.success(request, "Costing approved and locked.")
+            return redirect("cost_sheet_detail", pk=pk)
+
+        if action == "unlock":
+            if not can_approve:
+                messages.error(request, "You do not have permission to unlock.")
+                return redirect("cost_sheet_detail", pk=pk)
+            reason = (request.POST.get("unlock_reason") or "").strip()
+            if not reason:
+                messages.error(request, "Unlock reason is required.")
+                return redirect("cost_sheet_detail", pk=pk)
+            costing.status = "draft"
+            costing.approved_by = None
+            costing.approved_at = None
+            costing.save(update_fields=["status", "approved_by", "approved_at"])
+            CostingAuditLog.objects.create(
+                costing=costing,
+                action="unlocked",
+                changed_by=request.user if request.user.is_authenticated else None,
+                note=reason,
+            )
+            messages.success(request, "Costing unlocked.")
             return redirect("cost_sheet_detail", pk=pk)
 
         if action == "upload_document":
             form = OpportunityDocumentForm(request.POST, request.FILES)
             if form.is_valid():
                 doc = form.save(commit=False)
-                doc.opportunity = cost_sheet.opportunity
-                doc.cost_sheet_simple = cost_sheet
+                doc.opportunity = costing.opportunity
+                doc.costing_header = costing
                 doc.uploaded_by = request.user if request.user.is_authenticated else None
                 doc.save()
+                CostingAuditLog.objects.create(
+                    costing=costing,
+                    action="uploaded_file",
+                    changed_by=request.user if request.user.is_authenticated else None,
+                    note=doc.original_name or doc.file.name,
+                )
                 messages.success(request, "Document uploaded.")
             else:
                 messages.error(request, "Please choose a file and type.")
             return redirect("cost_sheet_detail", pk=pk)
 
-    calc = calculate_cost_sheet_simple(cost_sheet)
+    calc = compute_costing(costing.id)
+    grouped_lines = _group_lines(costing)
 
     documents = OpportunityDocument.objects.filter(
-        opportunity=cost_sheet.opportunity,
+        opportunity=costing.opportunity,
         doc_type__in=["costing_pdf", "costing_excel", "costing_other"],
     ).order_by("-uploaded_at")
 
-    form = CostSheetSimpleForm(instance=cost_sheet)
+    form = CostingHeaderForm(instance=costing)
+    smv_form = CostingSMVForm(instance=getattr(costing, "smv", None))
     if "opportunity" in form.fields:
         form.fields["opportunity"].disabled = True
     if "customer" in form.fields:
         form.fields["customer"].disabled = True
-    if "exchange_rate_bdt_per_cad" in form.fields and (not can_edit_exchange_rate or exchange_rate_locked):
-        form.fields["exchange_rate_bdt_per_cad"].disabled = True
 
     context = {
-        "cost_sheet": cost_sheet,
+        "costing": costing,
         "calc": calc,
         "form": form,
+        "smv_form": smv_form,
         "documents": documents,
         "document_form": OpportunityDocumentForm(),
-        "can_edit_exchange_rate": can_edit_exchange_rate,
-        "exchange_rate_locked": exchange_rate_locked,
+        "grouped_lines": grouped_lines,
+        "category_choices": NEW_COSTING_CATEGORY_CHOICES,
+        "uom_choices": NEW_COSTING_UOM_CHOICES,
+        "can_approve": can_approve,
+        "is_locked": is_locked,
     }
     return render(request, "crm/costing/costsheet_detail.html", context)
 
 
-def _save_export_document(cost_sheet, filename, data, doc_type, user):
+def _save_export_document(costing, filename, data, doc_type, user):
     try:
         OpportunityDocument.objects.create(
-            opportunity=cost_sheet.opportunity,
-            cost_sheet_simple=cost_sheet,
+            opportunity=costing.opportunity,
+            costing_header=costing,
             file=ContentFile(data, name=filename),
             original_name=filename,
             doc_type=doc_type,
             uploaded_by=user if user and user.is_authenticated else None,
         )
+        CostingAuditLog.objects.create(
+            costing=costing,
+            action="exported",
+            changed_by=user if user and user.is_authenticated else None,
+            note=filename,
+        )
     except Exception:
-        logger.exception("Failed to save costing export document", extra={"cost_sheet_simple": cost_sheet.pk})
+        logger.exception("Failed to save costing export document", extra={"costing_header": costing.pk})
 
 
 def cost_sheet_export_pdf(request, pk):
-    cost_sheet = get_object_or_404(
-        CostSheetSimple.objects.select_related("opportunity", "customer"),
+    costing = get_object_or_404(
+        CostingHeader.objects.select_related("opportunity", "customer").prefetch_related("line_items"),
         pk=pk,
     )
 
@@ -229,35 +463,26 @@ def cost_sheet_export_pdf(request, pk):
         return redirect("cost_sheet_detail", pk=pk)
 
     try:
-        calc = calculate_cost_sheet_simple(cost_sheet)
-        exchange_rate = calc["exchange_rate"]
-        cad_available = calc["cad_available"]
-        cad_values = calc["cad"]
+        calc = compute_costing(costing.id)
         buffer = io.BytesIO()
         p = canvas.Canvas(buffer, pagesize=letter)
         width, height = letter
         y = height - 50
 
         p.setFont("Helvetica-Bold", 16)
-        p.drawString(50, y, "Costing Sheet (Simplified)")
+        p.drawString(50, y, "Costing Sheet")
         y -= 22
 
         p.setFont("Helvetica", 10)
         header_lines = [
-            f"Customer: {_safe_pdf_text((cost_sheet.customer.account_brand if cost_sheet.customer else '') or 'Not set')}",
-            f"Opportunity: {_safe_pdf_text(cost_sheet.opportunity.opportunity_id)}",
-            f"Style: {_safe_pdf_text(cost_sheet.style_name or cost_sheet.style_code or '-')} ({_safe_pdf_text(cost_sheet.style_code or '-')})",
-            f"Product type: {_safe_pdf_text(cost_sheet.get_product_type_display())}",
-            f"Quantity: {cost_sheet.quantity}",
-            f"Factory location: {_safe_pdf_text(cost_sheet.get_factory_location_display())}",
-            f"Status: {_safe_pdf_text(cost_sheet.get_status_display())}",
-            f"All costing is in \u09F3 Taka",
-            "CAD values are reference only",
-            (
-                f"Exchange rate used: {format_bdt(exchange_rate)} per 1 CAD"
-                if cad_available
-                else "Exchange rate used: Not set"
-            ),
+            f"Customer: {(costing.customer.account_brand if costing.customer else '') or 'Not set'}",
+            f"Opportunity: {costing.opportunity.opportunity_id}",
+            f"Style: {costing.style_name or costing.style_code or '-'}",
+            f"Product type: {costing.get_product_type_display()}",
+            f"Quantity: {costing.order_quantity}",
+            f"Factory location: {costing.get_factory_location_display()}",
+            f"Status: {costing.get_status_display()}",
+            f"Currency: {costing.currency}",
             f"Date: {timezone.now().date()}",
         ]
         for line in header_lines:
@@ -266,107 +491,62 @@ def cost_sheet_export_pdf(request, pk):
 
         y -= 6
         p.setFont("Helvetica-Bold", 11)
-        p.drawString(50, y, "Summary line (BDT per piece)")
+        p.drawString(50, y, "Summary")
         y -= 16
         p.setFont("Helvetica", 10)
         summary_lines = [
-            f"Fabric cost: {format_bdt(cost_sheet.fabric_cost_per_piece)}",
-            f"Fabric wastage %: {cost_sheet.fabric_wastage_percent}",
-            f"Fabric effective: {format_bdt(calc['display']['fabric_effective_cost_per_piece'])}",
-            f"Rib: {format_bdt(cost_sheet.rib_cost_per_piece)}",
-            f"Woven fabrics: {format_bdt(cost_sheet.woven_fabric_cost_per_piece)}",
-            f"Zipper: {format_bdt(cost_sheet.zipper_cost_per_piece)}",
-            f"Zipper puller: {format_bdt(cost_sheet.zipper_puller_cost_per_piece)}",
-            f"Button: {format_bdt(cost_sheet.button_cost_per_piece)}",
-            f"Thread: {format_bdt(cost_sheet.thread_cost_per_piece)}",
-            f"Lining: {format_bdt(cost_sheet.lining_cost_per_piece)}",
-            f"Velcro: {format_bdt(cost_sheet.velcro_cost_per_piece)}",
-            f"Neck tape: {format_bdt(cost_sheet.neck_tape_cost_per_piece)}",
-            f"Elastic: {format_bdt(cost_sheet.elastic_cost_per_piece)}",
-            f"Collar & cuff: {format_bdt(cost_sheet.collar_cuff_cost_per_piece)}",
-            f"Ring: {format_bdt(cost_sheet.ring_cost_per_piece)}",
-            f"Buckle/clip: {format_bdt(cost_sheet.buckle_clip_cost_per_piece)}",
-            f"Main label: {format_bdt(cost_sheet.main_label_cost_per_piece)}",
-            f"Care label: {format_bdt(cost_sheet.care_label_cost_per_piece)}",
-            f"Hang tag: {format_bdt(cost_sheet.hang_tag_cost_per_piece)}",
-            f"Accessories: {format_bdt(cost_sheet.trim_cost_per_piece)}",
-            f"Conveyance: {format_bdt(cost_sheet.conveyance_cost_per_piece)}",
-            f"Sewing charge: {format_bdt(cost_sheet.labor_cost_per_piece)}",
-            f"Overhead: {format_bdt(cost_sheet.overhead_cost_per_piece)}",
-            f"Process/wash: {format_bdt(cost_sheet.process_cost_per_piece)}",
-            f"Packaging: {format_bdt(cost_sheet.packaging_cost_per_piece)}",
-            f"Freight/export: {format_bdt(cost_sheet.freight_cost_per_piece)}",
-            f"Testing/compliance: {format_bdt(cost_sheet.testing_cost_per_piece)}",
-            f"Others: {format_bdt(cost_sheet.other_cost_per_piece)}",
-            (
-                f"Total cost per piece: {format_bdt(calc['display']['total_cost_per_piece'])} | "
-                f"CAD {format_cad(cad_values['total_cost_per_piece'])}"
-                if cad_available
-                else f"Total cost per piece: {format_bdt(calc['display']['total_cost_per_piece'])}"
-            ),
-            (
-                f"Total order cost: {format_bdt(calc['display']['total_order_cost'])} | "
-                f"CAD {format_cad(cad_values['total_order_cost'])}"
-                if cad_available
-                else f"Total order cost: {format_bdt(calc['display']['total_order_cost'])}"
-            ),
+            f"Total cost per piece: {format_bdt(calc['display']['total_cost_per_piece'])}",
+            f"FOB per piece: {format_bdt(calc['display']['fob_per_piece'])}",
+            f"Profit per piece: {format_bdt(calc['display']['profit_per_piece'])}",
+            f"Margin %: {calc['display']['margin_percent']}",
+            f"Total cost order: {format_bdt(calc['display']['total_cost_order'])}",
+            f"Total sales order: {format_bdt(calc['display']['total_sales_order'])}",
         ]
         for line in summary_lines:
             p.drawString(50, y, line)
             y -= 14
-            if y < 80:
-                p.showPage()
-                y = height - 50
-                p.setFont("Helvetica", 10)
 
         y -= 6
         p.setFont("Helvetica-Bold", 11)
-        p.drawString(50, y, "Quote & margin")
-        y -= 16
-        p.setFont("Helvetica", 10)
-        quote_lines = [
-            (
-                f"Quote price per piece: {format_bdt(calc['display']['quote_price_per_piece'])} | "
-                f"CAD {format_cad(cad_values['quote_price_per_piece'])}"
-                if cad_available
-                else f"Quote price per piece: {format_bdt(calc['display']['quote_price_per_piece'])}"
-            ),
-            (
-                f"Profit per piece: {format_bdt(calc['display']['profit_per_piece'])} | "
-                f"CAD {format_cad(cad_values['profit_per_piece'])}"
-                if cad_available
-                else f"Profit per piece: {format_bdt(calc['display']['profit_per_piece'])}"
-            ),
-            f"Margin %: {calc['display']['margin_percent']}",
-            (
-                f"Total profit: {format_bdt(calc['display']['total_profit'])} | "
-                f"CAD {format_cad(cad_values['total_profit'])}"
-                if cad_available
-                else f"Total profit: {format_bdt(calc['display']['total_profit'])}"
-            ),
-        ]
-        for line in quote_lines:
-            p.drawString(50, y, line)
-            y -= 14
+        p.drawString(50, y, "Line items")
+        y -= 14
+        p.setFont("Helvetica", 9)
+
+        for category, _ in NEW_COSTING_CATEGORY_CHOICES:
+            items = [row for row in calc["line_rows"] if row["category"] == category]
+            if not items:
+                continue
+            p.setFont("Helvetica-Bold", 10)
+            p.drawString(50, y, category.replace("_", " ").title())
+            y -= 12
+            p.setFont("Helvetica", 9)
+            for item in items:
+                line = f"{item['item_name']} | {item['uom']} | {format_bdt(item['cost_per_piece'])}"
+                p.drawString(60, y, line[:110])
+                y -= 12
+                if y < 80:
+                    p.showPage()
+                    y = height - 50
+                    p.setFont("Helvetica", 9)
+            y -= 6
 
         y -= 6
         p.setFont("Helvetica-Bold", 11)
         p.drawString(50, y, "Notes")
-        y -= 16
-        p.setFont("Helvetica", 10)
-        notes = _safe_pdf_text(cost_sheet.notes or "-")
-        p.drawString(50, y, notes[:120])
+        y -= 14
+        p.setFont("Helvetica", 9)
+        p.drawString(50, y, (costing.notes or "-")[:120])
 
         p.showPage()
         p.save()
         pdf_bytes = buffer.getvalue()
     except Exception:
-        logger.exception("Failed to generate costing PDF", extra={"cost_sheet_id": cost_sheet.pk})
+        logger.exception("Failed to generate costing PDF", extra={"costing_header": costing.pk})
         messages.error(request, "Could not generate the PDF. Please try again.")
         return redirect("cost_sheet_detail", pk=pk)
 
-    filename = f"costing_{cost_sheet.opportunity.opportunity_id}_simple.pdf"
-    _save_export_document(cost_sheet, filename, pdf_bytes, "costing_pdf", request.user)
+    filename = f"costing_{costing.opportunity.opportunity_id}.pdf"
+    _save_export_document(costing, filename, pdf_bytes, "costing_pdf", request.user)
 
     resp = HttpResponse(content_type="application/pdf")
     resp["Content-Disposition"] = f'attachment; filename="{filename}"'
@@ -375,8 +555,8 @@ def cost_sheet_export_pdf(request, pk):
 
 
 def cost_sheet_export_excel(request, pk):
-    cost_sheet = get_object_or_404(
-        CostSheetSimple.objects.select_related("opportunity", "customer"),
+    costing = get_object_or_404(
+        CostingHeader.objects.select_related("opportunity", "customer").prefetch_related("line_items"),
         pk=pk,
     )
 
@@ -387,130 +567,66 @@ def cost_sheet_export_excel(request, pk):
         return redirect("cost_sheet_detail", pk=pk)
 
     try:
-        calc = calculate_cost_sheet_simple(cost_sheet)
-        exchange_rate = calc["exchange_rate"]
-        cad_available = calc["cad_available"]
-        cad_values = calc["cad"]
+        calc = compute_costing(costing.id)
         wb = Workbook()
         ws_summary = wb.active
         ws_summary.title = "Summary"
 
-        ws_summary.append(["Customer", (cost_sheet.customer.account_brand if cost_sheet.customer else "") or "Not set"])
-        ws_summary.append(["Opportunity", cost_sheet.opportunity.opportunity_id])
-        ws_summary.append(["Style name", cost_sheet.style_name or "-"])
-        ws_summary.append(["Style code", cost_sheet.style_code or "-"])
-        ws_summary.append(["Product type", cost_sheet.get_product_type_display()])
-        ws_summary.append(["Quantity", cost_sheet.quantity])
-        ws_summary.append(["Factory location", cost_sheet.get_factory_location_display()])
-        ws_summary.append(["Status", cost_sheet.get_status_display()])
-        ws_summary.append(["Currency", "BDT"])
-        ws_summary.append(["All costing is in \u09F3 Taka", "CAD values are reference only"])
-        ws_summary.append([
-            "Exchange rate (\u09F3 per 1 CAD)",
-            format_bdt(exchange_rate) if cad_available else "Not set",
-        ])
+        ws_summary.append(["Customer", (costing.customer.account_brand if costing.customer else "") or "Not set"])
+        ws_summary.append(["Opportunity", costing.opportunity.opportunity_id])
+        ws_summary.append(["Style name", costing.style_name or "-"])
+        ws_summary.append(["Style code", costing.style_code or "-"])
+        ws_summary.append(["Product type", costing.get_product_type_display()])
+        ws_summary.append(["Quantity", costing.order_quantity])
+        ws_summary.append(["Factory location", costing.get_factory_location_display()])
+        ws_summary.append(["Status", costing.get_status_display()])
+        ws_summary.append(["Currency", costing.currency])
+        ws_summary.append(["Exchange rate", format_bdt(costing.exchange_rate) if costing.exchange_rate else ""])
 
         ws_summary.append([])
-        ws_summary.append(["Fabric cost per piece", format_bdt(cost_sheet.fabric_cost_per_piece)])
-        ws_summary.append(["Fabric wastage %", float(cost_sheet.fabric_wastage_percent)])
-        ws_summary.append(["Fabric effective cost", format_bdt(calc["display"]["fabric_effective_cost_per_piece"])])
-        ws_summary.append(["Rib cost per piece", format_bdt(cost_sheet.rib_cost_per_piece)])
-        ws_summary.append(["Woven fabrics cost per piece", format_bdt(cost_sheet.woven_fabric_cost_per_piece)])
-        ws_summary.append(["Zipper cost per piece", format_bdt(cost_sheet.zipper_cost_per_piece)])
-        ws_summary.append(["Zipper puller cost per piece", format_bdt(cost_sheet.zipper_puller_cost_per_piece)])
-        ws_summary.append(["Button cost per piece", format_bdt(cost_sheet.button_cost_per_piece)])
-        ws_summary.append(["Thread cost per piece", format_bdt(cost_sheet.thread_cost_per_piece)])
-        ws_summary.append(["Lining cost per piece", format_bdt(cost_sheet.lining_cost_per_piece)])
-        ws_summary.append(["Velcro cost per piece", format_bdt(cost_sheet.velcro_cost_per_piece)])
-        ws_summary.append(["Neck tape cost per piece", format_bdt(cost_sheet.neck_tape_cost_per_piece)])
-        ws_summary.append(["Elastic cost per piece", format_bdt(cost_sheet.elastic_cost_per_piece)])
-        ws_summary.append(["Collar & cuff cost per piece", format_bdt(cost_sheet.collar_cuff_cost_per_piece)])
-        ws_summary.append(["Ring cost per piece", format_bdt(cost_sheet.ring_cost_per_piece)])
-        ws_summary.append(["Buckle/clip cost per piece", format_bdt(cost_sheet.buckle_clip_cost_per_piece)])
-        ws_summary.append(["Main label cost per piece", format_bdt(cost_sheet.main_label_cost_per_piece)])
-        ws_summary.append(["Care label cost per piece", format_bdt(cost_sheet.care_label_cost_per_piece)])
-        ws_summary.append(["Hang tag cost per piece", format_bdt(cost_sheet.hang_tag_cost_per_piece)])
-        ws_summary.append(["Accessories cost per piece", format_bdt(cost_sheet.trim_cost_per_piece)])
-        ws_summary.append(["Conveyance cost per piece", format_bdt(cost_sheet.conveyance_cost_per_piece)])
-        ws_summary.append(["Sewing charge per piece", format_bdt(cost_sheet.labor_cost_per_piece)])
-        ws_summary.append(["Overhead cost per piece", format_bdt(cost_sheet.overhead_cost_per_piece)])
-        ws_summary.append(["Process cost per piece", format_bdt(cost_sheet.process_cost_per_piece)])
-        ws_summary.append(["Packaging cost per piece", format_bdt(cost_sheet.packaging_cost_per_piece)])
-        ws_summary.append(["Freight cost per piece", format_bdt(cost_sheet.freight_cost_per_piece)])
-        ws_summary.append(["Testing cost per piece", format_bdt(cost_sheet.testing_cost_per_piece)])
-        ws_summary.append(["Others cost per piece", format_bdt(cost_sheet.other_cost_per_piece)])
+        ws_summary.append(["Total cost per piece", format_bdt(calc["display"]["total_cost_per_piece"])])
+        ws_summary.append(["FOB per piece", format_bdt(calc["display"]["fob_per_piece"])])
+        ws_summary.append(["Profit per piece", format_bdt(calc["display"]["profit_per_piece"])])
+        ws_summary.append(["Margin %", float(calc["display"]["margin_percent"])])
+        ws_summary.append(["Total cost order", format_bdt(calc["display"]["total_cost_order"])])
+        ws_summary.append(["Total sales order", format_bdt(calc["display"]["total_sales_order"])])
+        ws_summary.append(["Total profit order", format_bdt(calc["display"]["total_profit_order"])])
 
-        ws_summary.append([])
-        ws_summary.append(["Totals", "BDT", "CAD"])
-        ws_summary.append([
-            "Total cost per piece",
-            format_bdt(calc["display"]["total_cost_per_piece"]),
-            format_cad(cad_values["total_cost_per_piece"]) if cad_available else "",
+        ws_lines = wb.create_sheet("Line items")
+        ws_lines.append([
+            "Category",
+            "Item",
+            "UOM",
+            "Unit price",
+            "Freight",
+            "Consumption",
+            "Wastage %",
+            "Denominator",
+            "Cost per piece",
         ])
-        ws_summary.append([
-            "Total order cost",
-            format_bdt(calc["display"]["total_order_cost"]),
-            format_cad(cad_values["total_order_cost"]) if cad_available else "",
-        ])
-        ws_summary.append([
-            "Quote price per piece",
-            format_bdt(calc["display"]["quote_price_per_piece"]),
-            format_cad(cad_values["quote_price_per_piece"]) if cad_available else "",
-        ])
-        ws_summary.append([
-            "Profit per piece",
-            format_bdt(calc["display"]["profit_per_piece"]),
-            format_cad(cad_values["profit_per_piece"]) if cad_available else "",
-        ])
-        ws_summary.append([
-            "Total profit",
-            format_bdt(calc["display"]["total_profit"]),
-            format_cad(cad_values["total_profit"]) if cad_available else "",
-        ])
-        ws_summary.append(["Margin percent", float(calc["display"]["margin_percent"]), ""])
-
-        ws_summary.append([])
-        ws_summary.append(["Notes", cost_sheet.notes or "-"])
-
-        ws_breakdown = wb.create_sheet("Breakdown")
-        ws_breakdown.append(["Component", "Cost per piece (BDT)"])
-        ws_breakdown.append(["Fabric (effective)", format_bdt(calc["display"]["fabric_effective_cost_per_piece"])])
-        ws_breakdown.append(["Rib", format_bdt(cost_sheet.rib_cost_per_piece)])
-        ws_breakdown.append(["Woven fabrics", format_bdt(cost_sheet.woven_fabric_cost_per_piece)])
-        ws_breakdown.append(["Zipper", format_bdt(cost_sheet.zipper_cost_per_piece)])
-        ws_breakdown.append(["Zipper puller", format_bdt(cost_sheet.zipper_puller_cost_per_piece)])
-        ws_breakdown.append(["Button", format_bdt(cost_sheet.button_cost_per_piece)])
-        ws_breakdown.append(["Thread", format_bdt(cost_sheet.thread_cost_per_piece)])
-        ws_breakdown.append(["Lining", format_bdt(cost_sheet.lining_cost_per_piece)])
-        ws_breakdown.append(["Velcro", format_bdt(cost_sheet.velcro_cost_per_piece)])
-        ws_breakdown.append(["Neck tape", format_bdt(cost_sheet.neck_tape_cost_per_piece)])
-        ws_breakdown.append(["Elastic", format_bdt(cost_sheet.elastic_cost_per_piece)])
-        ws_breakdown.append(["Collar & cuff", format_bdt(cost_sheet.collar_cuff_cost_per_piece)])
-        ws_breakdown.append(["Ring", format_bdt(cost_sheet.ring_cost_per_piece)])
-        ws_breakdown.append(["Buckle/clip", format_bdt(cost_sheet.buckle_clip_cost_per_piece)])
-        ws_breakdown.append(["Main label", format_bdt(cost_sheet.main_label_cost_per_piece)])
-        ws_breakdown.append(["Care label", format_bdt(cost_sheet.care_label_cost_per_piece)])
-        ws_breakdown.append(["Hang tag", format_bdt(cost_sheet.hang_tag_cost_per_piece)])
-        ws_breakdown.append(["Accessories", format_bdt(cost_sheet.trim_cost_per_piece)])
-        ws_breakdown.append(["Conveyance", format_bdt(cost_sheet.conveyance_cost_per_piece)])
-        ws_breakdown.append(["Sewing charge", format_bdt(cost_sheet.labor_cost_per_piece)])
-        ws_breakdown.append(["Overhead", format_bdt(cost_sheet.overhead_cost_per_piece)])
-        ws_breakdown.append(["Process/Wash", format_bdt(cost_sheet.process_cost_per_piece)])
-        ws_breakdown.append(["Packaging", format_bdt(cost_sheet.packaging_cost_per_piece)])
-        ws_breakdown.append(["Freight/Export", format_bdt(cost_sheet.freight_cost_per_piece)])
-        ws_breakdown.append(["Testing/Compliance", format_bdt(cost_sheet.testing_cost_per_piece)])
-        ws_breakdown.append(["Others", format_bdt(cost_sheet.other_cost_per_piece)])
+        for row in calc["line_rows"]:
+            ws_lines.append([
+                row["category"],
+                row["item_name"],
+                row["uom"],
+                float(row["unit_price"]),
+                float(row["freight"]),
+                float(row["consumption_value"]),
+                float(row["wastage_percent"]),
+                float(row["denominator_value"] or 0),
+                float(row["cost_per_piece"]),
+            ])
 
         output = io.BytesIO()
         wb.save(output)
         data = output.getvalue()
     except Exception:
-        logger.exception("Failed to generate costing Excel", extra={"cost_sheet_id": cost_sheet.pk})
+        logger.exception("Failed to generate costing Excel", extra={"costing_header": costing.pk})
         messages.error(request, "Could not generate the Excel file. Please try again.")
         return redirect("cost_sheet_detail", pk=pk)
 
-    filename = f"costing_{cost_sheet.opportunity.opportunity_id}_simple.xlsx"
-    _save_export_document(cost_sheet, filename, data, "costing_excel", request.user)
+    filename = f"costing_{costing.opportunity.opportunity_id}.xlsx"
+    _save_export_document(costing, filename, data, "costing_excel", request.user)
 
     resp = HttpResponse(
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -518,3 +634,158 @@ def cost_sheet_export_excel(request, pk):
     resp["Content-Disposition"] = f'attachment; filename="{filename}"'
     resp.write(data)
     return resp
+
+
+def cost_sheet_dashboard(request):
+    qs = CostingHeader.objects.select_related("customer", "opportunity").order_by("-updated_at")
+
+    approved_only = (request.GET.get("approved") or "").strip() == "1"
+    customer_id = (request.GET.get("customer") or "").strip()
+    product_type = (request.GET.get("product_type") or "").strip()
+    factory_location = (request.GET.get("factory_location") or "").strip()
+    start_date = (request.GET.get("start") or "").strip()
+    end_date = (request.GET.get("end") or "").strip()
+
+    if approved_only:
+        qs = qs.filter(status="approved")
+    if customer_id:
+        qs = qs.filter(customer_id=customer_id)
+    if product_type:
+        qs = qs.filter(product_type=product_type)
+    if factory_location:
+        qs = qs.filter(factory_location=factory_location)
+    if start_date:
+        qs = qs.filter(updated_at__date__gte=start_date)
+    if end_date:
+        qs = qs.filter(updated_at__date__lte=end_date)
+
+    rows = []
+    for cost in qs:
+        calc = compute_costing(cost.id)
+        if calc:
+            rows.append(calc)
+
+    top_profit = sorted(rows, key=lambda r: r["total_profit_order"], reverse=True)[:10]
+    lowest_margin = sorted(rows, key=lambda r: r["margin_percent"])[:10]
+
+    breakdown_totals = defaultdict(Decimal)
+    for row in rows:
+        breakdown_totals["fabric"] += row["fabric_base"]
+        breakdown_totals["trims"] += row["trims_base"]
+        breakdown_totals["labor"] += row["labor_cost_per_piece"]
+        breakdown_totals["other"] += row["other_base"]
+
+    trend = defaultdict(list)
+    for row in rows:
+        key = row["costing"].updated_at.strftime("%Y-%m")
+        trend[key].append(row["total_cost_per_piece"])
+
+    trend_labels = sorted(trend.keys())
+    trend_values = [float(sum(trend[k]) / len(trend[k])) for k in trend_labels]
+
+    customer_summary = defaultdict(list)
+    for row in rows:
+        customer = row["costing"].customer
+        if not customer:
+            continue
+        customer_summary[customer].append(row)
+
+    customer_rows = []
+    for customer, items in customer_summary.items():
+        total_qty = sum(r["order_quantity"] for r in items)
+        avg_margin = sum(r["margin_percent"] for r in items) / Decimal(len(items)) if items else Decimal("0")
+        customer_rows.append(
+            {
+                "customer": customer,
+                "total_qty": total_qty,
+                "avg_margin": avg_margin,
+            }
+        )
+
+    context = {
+        "top_profit": top_profit,
+        "lowest_margin": lowest_margin,
+        "breakdown_totals": breakdown_totals,
+        "trend_labels": trend_labels,
+        "trend_values": trend_values,
+        "customer_rows": customer_rows,
+        "filters": {
+            "approved": approved_only,
+            "customer": customer_id,
+            "product_type": product_type,
+            "factory_location": factory_location,
+            "start": start_date,
+            "end": end_date,
+        },
+        "product_types": Opportunity.PRODUCT_TYPE_CHOICES,
+        "factory_locations": [
+            ("bd", "Bangladesh"),
+            ("ca", "Canada"),
+            ("other", "Other"),
+        ],
+        "customers": list({row["costing"].customer for row in rows if row["costing"].customer}),
+    }
+    return render(request, "crm/costing/costing_dashboard.html", context)
+
+
+def cost_sheet_reports(request):
+    qs = CostingHeader.objects.select_related("customer", "opportunity").order_by("-updated_at")
+    export = (request.GET.get("export") or "").strip()
+
+    rows = []
+    for cost in qs:
+        calc = compute_costing(cost.id)
+        if calc:
+            rows.append(calc)
+
+    if export:
+        output = io.StringIO()
+        if export == "list":
+            output.write("Opportunity,Customer,Style,Qty,Cost per piece,FOB per piece,Margin %\n")
+            for row in rows:
+                cost = row["costing"]
+                output.write(
+                    f"{cost.opportunity.opportunity_id},{(cost.customer.account_brand if cost.customer else '')},{cost.style_name},{row['order_quantity']},{row['total_cost_per_piece']},{row['fob_per_piece']},{row['margin_percent']}\n"
+                )
+        elif export == "margin":
+            output.write("Opportunity,Style,Margin %,Total profit\n")
+            for row in rows:
+                cost = row["costing"]
+                output.write(
+                    f"{cost.opportunity.opportunity_id},{cost.style_name},{row['margin_percent']},{row['total_profit_order']}\n"
+                )
+        elif export == "finance":
+            output.write("Month,Fabric finance,Trim finance\n")
+            month_totals = defaultdict(lambda: {"fabric": Decimal("0"), "trims": Decimal("0")})
+            for row in rows:
+                key = row["costing"].updated_at.strftime("%Y-%m")
+                month_totals[key]["fabric"] += row["fabric_finance"] * Decimal(row["order_quantity"])
+                month_totals[key]["trims"] += row["trims_finance"] * Decimal(row["order_quantity"])
+            for key in sorted(month_totals.keys()):
+                output.write(f"{key},{month_totals[key]['fabric']},{month_totals[key]['trims']}\n")
+        else:
+            output.write("Style,Old cost per piece,New cost per piece,Delta\n")
+            by_style = defaultdict(list)
+            for row in rows:
+                by_style[row["costing"].style_code or row["costing"].style_name].append(row)
+            for style, items in by_style.items():
+                if len(items) < 2:
+                    continue
+                items_sorted = sorted(items, key=lambda r: r["costing"].updated_at)
+                old = items_sorted[0]["total_cost_per_piece"]
+                new = items_sorted[-1]["total_cost_per_piece"]
+                output.write(f"{style},{old},{new},{new - old}\n")
+
+        resp = HttpResponse(content_type="text/csv")
+        resp["Content-Disposition"] = f'attachment; filename="costing_{export}_report.csv"'
+        resp.write(output.getvalue())
+        return resp
+
+    context = {
+        "rows": rows,
+    }
+    return render(request, "crm/costing/costing_reports.html", context)
+
+
+def cost_sheet_guide(request):
+    return render(request, "crm/costing/costing_guide.html")

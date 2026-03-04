@@ -78,6 +78,9 @@ urlpatterns = [
     path("costing/<int:pk>/", login_required(costing.cost_sheet_detail), name="cost_sheet_detail"),
     path("costing/<int:pk>/export/pdf/", login_required(costing.cost_sheet_export_pdf), name="cost_sheet_export_pdf"),
     path("costing/<int:pk>/export/excel/", login_required(costing.cost_sheet_export_excel), name="cost_sheet_export_excel"),
+    path("costing/dashboard/", login_required(costing.cost_sheet_dashboard), name="cost_sheet_dashboard"),
+    path("costing/reports/", login_required(costing.cost_sheet_reports), name="cost_sheet_reports"),
+    path("costing/guide/", login_required(costing.cost_sheet_guide), name="cost_sheet_guide"),
 
     path("chatter/", login_required(views.chatter_feed), name="chatter_feed"),
 

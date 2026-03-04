@@ -1,0 +1,55 @@
+{% extends "crm/base.html" %}
+{% block content %}
+
+<style>
+  .guide {
+    max-width: 900px;
+    margin: 18px auto 40px auto;
+    padding: 0 10px;
+    color: #e5e7eb;
+  }
+  .card {
+    background: #0b1020;
+    border: 1px solid #1f2937;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  h2 {
+    font-size: 18px;
+    margin: 0 0 10px 0;
+  }
+  ul {
+    padding-left: 18px;
+  }
+  li {
+    margin-bottom: 6px;
+  }
+</style>
+
+<div class="guide">
+  <div class="card">
+    <h2>How to input costing without mistakes</h2>
+    <ol>
+      <li>Open an Opportunity and click Create costing.</li>
+      <li>Fill the Header section (quantity, factory, currency, exchange rate).</li>
+      <li>Add line items under Fabric, Sewing trims, Packaging trims, and Other.</li>
+      <li>If you have labor SMV, fill the SMV section.</li>
+      <li>Save, then review Summary & Pricing.</li>
+      <li>Approve when all values are correct.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2>Input rules</h2>
+    <ul>
+      <li>Most prices are BDT per piece.</li>
+      <li>If supplier price is per kg/meter/roll/cone, use consumption and denominator to convert.</li>
+      <li>Wastage is percent only, not money.</li>
+      <li>Per order costs are divided by order quantity automatically.</li>
+      <li>Confirm total cost per piece before quoting.</li>
+    </ul>
+  </div>
+</div>
+
+{% endblock %}

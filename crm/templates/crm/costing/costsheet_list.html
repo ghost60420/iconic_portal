@@ -58,7 +58,7 @@
     align-items: center;
   }
 
-  select, input[type="checkbox"] {
+  select, input {
     background: #020617;
     color: #e5e7eb;
     border: 1px solid #334155;
@@ -101,12 +101,6 @@
     font-size: 11px;
   }
 
-  .pill-active {
-    border-color: #22c55e;
-    color: #bbf7d0;
-    background: rgba(34,197,94,0.12);
-  }
-
   .pill-draft {
     border-color: #38bdf8;
     color: #bae6fd;
@@ -116,18 +110,44 @@
     border-color: #facc15;
     color: #fde68a;
   }
-
-  .pill-locked {
-    border-color: #f97316;
-    color: #fed7aa;
-  }
 </style>
 
 <div class="costing-page">
   <div class="costing-header">
     <div class="costing-title">Costing sheets</div>
-    <a href="{% url 'cost_sheet_create' %}" class="btnx btnx-primary">Create costing</a>
+    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+      <a href="{% url 'cost_sheet_create' %}" class="btnx btnx-primary">Create costing</a>
+      <a href="{% url 'cost_sheet_dashboard' %}" class="btnx">Dashboard</a>
+      <a href="{% url 'cost_sheet_reports' %}" class="btnx">Reports</a>
+      <a href="{% url 'cost_sheet_guide' %}" class="btnx">Guide</a>
+    </div>
   </div>
+
+  <form class="filter-card" method="get">
+    <div class="filter-row">
+      <input type="text" name="q" placeholder="Search opportunity or customer" value="{{ selected.q }}" />
+      <select name="customer">
+        <option value="">All customers</option>
+        {% for customer in customers %}
+          <option value="{{ customer.pk }}" {% if selected.customer == customer.pk|stringformat:"s" %}selected{% endif %}>{{ customer.account_brand|default:customer.contact_name }}</option>
+        {% endfor %}
+      </select>
+      <select name="product_type">
+        <option value="">All product types</option>
+        {% for key,label in product_types %}
+          <option value="{{ key }}" {% if selected.product_type == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <select name="status">
+        <option value="">All statuses</option>
+        {% for key,label in status_choices %}
+          <option value="{{ key }}" {% if selected.status == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <button class="btnx" type="submit">Filter</button>
+      <a class="btnx" href="{% url 'cost_sheet_list' %}">Reset</a>
+    </div>
+  </form>
 
   <div class="table-wrap">
     <table>
@@ -138,8 +158,8 @@
           <th>Style</th>
           <th>Qty</th>
           <th>Status</th>
-          <th>Total cost / pc (BDT)</th>
-          <th>Quote price / pc (BDT)</th>
+          <th>Total cost / pc</th>
+          <th>FOB / pc</th>
           <th>Margin %</th>
           <th>Updated</th>
           <th></th>
@@ -156,12 +176,12 @@
             </td>
             <td>{{ sheet.customer.account_brand|default:"-" }}</td>
             <td>{{ sheet.style_name|default:sheet.style_code|default:"-" }}</td>
-            <td>{{ sheet.quantity }}</td>
+            <td>{{ sheet.order_quantity }}</td>
             <td>
               <span class="pill pill-{{ sheet.status }}">{{ sheet.get_status_display }}</span>
             </td>
             <td>{{ calc.display.total_cost_per_piece }}</td>
-            <td>{{ calc.display.quote_price_per_piece }}</td>
+            <td>{{ calc.display.fob_per_piece }}</td>
             <td>{{ calc.display.margin_percent }}%</td>
             <td>{{ sheet.updated_at|date:"Y-m-d" }}</td>
             <td>
@@ -171,7 +191,7 @@
           {% endwith %}
         {% empty %}
           <tr>
-            <td colspan="9" style="color:#94a3b8;">No cost sheets found.</td>
+            <td colspan="10" style="color:#94a3b8;">No cost sheets found.</td>
           </tr>
         {% endfor %}
       </tbody>
