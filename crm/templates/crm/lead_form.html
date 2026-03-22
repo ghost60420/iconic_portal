@@ -116,6 +116,10 @@
       font-size: 13px;
       box-sizing: border-box;
     }
+    input[type="checkbox"]{
+      width:auto;
+      margin-top:8px;
+    }
 
     textarea { min-height: 110px; }
 
@@ -225,7 +229,7 @@
     <div class="top-bar">
       <div>
         <div class="title">{% if lead %}Edit lead{% else %}Add lead{% endif %}</div>
-        <div class="sub">Main details, contacts, product needs, and follow up.</div>
+        <div class="sub">Core details, product needs, and inbound or outbound tracking.</div>
       </div>
       <div class="links">
         <a href="{% url 'leads_list' %}">All leads</a>
@@ -250,6 +254,41 @@
     <form method="post" action="" enctype="multipart/form-data" id="lead-form" novalidate>
       {% csrf_token %}
 
+      {% if duplicate_leads %}
+        <div class="msg msg-error">
+          Possible duplicates found. Review the list below. Check "Save anyway" to proceed.
+        </div>
+        <div class="card" style="margin-bottom:12px;">
+          <div class="card-title">Possible duplicates</div>
+          <table style="width:100%; border-collapse:collapse; font-size:12px;">
+            <thead>
+              <tr>
+                <th style="text-align:left; padding:6px;">Lead</th>
+                <th style="text-align:left; padding:6px;">Company</th>
+                <th style="text-align:left; padding:6px;">Email</th>
+                <th style="text-align:left; padding:6px;">Phone</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for d in duplicate_leads %}
+                <tr>
+                  <td style="padding:6px;">
+                    <a href="{% url 'lead_detail' d.pk %}">{{ d.lead_id }}</a>
+                  </td>
+                  <td style="padding:6px;">{{ d.account_brand|default:"—" }}</td>
+                  <td style="padding:6px;">{{ d.email|default:"—" }}</td>
+                  <td style="padding:6px;">{{ d.phone|default:"—" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          <label style="margin-top:10px; display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" name="confirm_duplicate" value="1">
+            Save anyway
+          </label>
+        </div>
+      {% endif %}
+
       <div class="grid">
 
         <div class="card">
@@ -271,9 +310,17 @@
           {{ form.phone }}
           {{ form.phone.errors }}
 
-          <label for="{{ form.company_website.id_for_label }}">{{ form.company_website.label }}{% if form.company_website.field.required %}<span class="req">*</span>{% endif %}</label>
-          {{ form.company_website }}
-          {{ form.company_website.errors }}
+          <label for="{{ form.website.id_for_label }}">{{ form.website.label }}{% if form.website.field.required %}<span class="req">*</span>{% endif %}</label>
+          {{ form.website }}
+          {{ form.website.errors }}
+
+          <label for="{{ form.instagram_handle.id_for_label }}">{{ form.instagram_handle.label }}{% if form.instagram_handle.field.required %}<span class="req">*</span>{% endif %}</label>
+          {{ form.instagram_handle }}
+          {{ form.instagram_handle.errors }}
+
+          <label for="{{ form.linkedin_url.id_for_label }}">{{ form.linkedin_url.label }}{% if form.linkedin_url.field.required %}<span class="req">*</span>{% endif %}</label>
+          {{ form.linkedin_url }}
+          {{ form.linkedin_url.errors }}
 
           <label for="{{ form.market.id_for_label }}">{{ form.market.label }}{% if form.market.field.required %}<span class="req">*</span>{% endif %}</label>
           {{ form.market }}
@@ -282,6 +329,10 @@
           <label for="{{ form.country.id_for_label }}">{{ form.country.label }}{% if form.country.field.required %}<span class="req">*</span>{% endif %}</label>
           {{ form.country }}
           {{ form.country.errors }}
+
+          <label for="{{ form.region.id_for_label }}">{{ form.region.label }}{% if form.region.field.required %}<span class="req">*</span>{% endif %}</label>
+          {{ form.region }}
+          {{ form.region.errors }}
 
           <label for="{{ form.city.id_for_label }}">{{ form.city.label }}{% if form.city.field.required %}<span class="req">*</span>{% endif %}</label>
           {{ form.city }}
@@ -307,6 +358,14 @@
           {{ form.budget }}
           {{ form.budget.errors }}
 
+          <label for="{{ form.target_order_volume_min.id_for_label }}">{{ form.target_order_volume_min.label }}</label>
+          {{ form.target_order_volume_min }}
+          {{ form.target_order_volume_min.errors }}
+
+          <label for="{{ form.target_order_volume_max.id_for_label }}">{{ form.target_order_volume_max.label }}</label>
+          {{ form.target_order_volume_max }}
+          {{ form.target_order_volume_max.errors }}
+
           <label for="{{ form.preferred_contact_time.id_for_label }}">{{ form.preferred_contact_time.label }}{% if form.preferred_contact_time.field.required %}<span class="req">*</span>{% endif %}</label>
           {{ form.preferred_contact_time }}
           {{ form.preferred_contact_time.errors }}
@@ -323,9 +382,29 @@
           {{ form.source }}
           {{ form.source.errors }}
 
+          <label for="{{ form.source_channel.id_for_label }}">{{ form.source_channel.label }}</label>
+          {{ form.source_channel }}
+          {{ form.source_channel.errors }}
+
           <label for="{{ form.lead_type.id_for_label }}">{{ form.lead_type.label }}{% if form.lead_type.field.required %}<span class="req">*</span>{% endif %}</label>
           {{ form.lead_type }}
           {{ form.lead_type.errors }}
+
+          <label for="{{ form.brand_stage.id_for_label }}">{{ form.brand_stage.label }}</label>
+          {{ form.brand_stage }}
+          {{ form.brand_stage.errors }}
+
+          <div class="outbound-only">
+            <label for="{{ form.outbound_status.id_for_label }}">{{ form.outbound_status.label }}</label>
+            {{ form.outbound_status }}
+            {{ form.outbound_status.errors }}
+          </div>
+
+          <div class="outbound-only">
+            <label for="{{ form.outbound_method.id_for_label }}">{{ form.outbound_method.label }}</label>
+            {{ form.outbound_method }}
+            {{ form.outbound_method.errors }}
+          </div>
 
           <label for="{{ form.lead_status.id_for_label }}">{{ form.lead_status.label }}{% if form.lead_status.field.required %}<span class="req">*</span>{% endif %}</label>
           {{ form.lead_status }}
@@ -335,17 +414,81 @@
           {{ form.priority }}
           {{ form.priority.errors }}
 
+          <label for="{{ form.priority_level.id_for_label }}">{{ form.priority_level.label }}</label>
+          {{ form.priority_level }}
+          {{ form.priority_level.errors }}
+
           <label for="{{ form.owner.id_for_label }}">{{ form.owner.label }}{% if form.owner.field.required %}<span class="req">*</span>{% endif %}</label>
           {{ form.owner }}
           {{ form.owner.errors }}
 
-          <label for="{{ form.next_followup.id_for_label }}">{{ form.next_followup.label }}{% if form.next_followup.field.required %}<span class="req">*</span>{% endif %}</label>
-          {{ form.next_followup }}
-          {{ form.next_followup.errors }}
+          <label for="{{ form.assigned_to.id_for_label }}">{{ form.assigned_to.label }}</label>
+          {{ form.assigned_to }}
+          {{ form.assigned_to.errors }}
+
+          <div class="outbound-only">
+            <label for="{{ form.last_outreach_date.id_for_label }}">{{ form.last_outreach_date.label }}</label>
+            {{ form.last_outreach_date }}
+            {{ form.last_outreach_date.errors }}
+          </div>
+
+          <div class="outbound-only">
+            <label for="{{ form.last_reply_date.id_for_label }}">{{ form.last_reply_date.label }}</label>
+            {{ form.last_reply_date }}
+            {{ form.last_reply_date.errors }}
+          </div>
+
+          <label for="{{ form.next_follow_up_date.id_for_label }}">{{ form.next_follow_up_date.label }}</label>
+          {{ form.next_follow_up_date }}
+          {{ form.next_follow_up_date.errors }}
 
           <label for="{{ form.attachment.id_for_label }}">{{ form.attachment.label }}{% if form.attachment.field.required %}<span class="req">*</span>{% endif %}</label>
           {{ form.attachment }}
           {{ form.attachment.errors }}
+        </div>
+
+        <div class="card">
+          <div class="card-title">Fit and qualification</div>
+
+          <label for="{{ form.brand_fit_score.id_for_label }}">{{ form.brand_fit_score.label }}</label>
+          {{ form.brand_fit_score }}
+          {{ form.brand_fit_score.errors }}
+
+          <label for="{{ form.ideal_customer_profile_match.id_for_label }}">{{ form.ideal_customer_profile_match.label }}</label>
+          {{ form.ideal_customer_profile_match }}
+          {{ form.ideal_customer_profile_match.errors }}
+
+          <label for="{{ form.qualification_status.id_for_label }}">{{ form.qualification_status.label }}</label>
+          {{ form.qualification_status }}
+          {{ form.qualification_status.errors }}
+
+          <label for="{{ form.qualification_reason.id_for_label }}">{{ form.qualification_reason.label }}</label>
+          {{ form.qualification_reason }}
+          {{ form.qualification_reason.errors }}
+
+          <label for="{{ form.confidence_level.id_for_label }}">{{ form.confidence_level.label }}</label>
+          {{ form.confidence_level }}
+          {{ form.confidence_level.errors }}
+
+          <label for="{{ form.target_order_range_estimate.id_for_label }}">{{ form.target_order_range_estimate.label }}</label>
+          {{ form.target_order_range_estimate }}
+          {{ form.target_order_range_estimate.errors }}
+
+          <label for="{{ form.product_category_guess.id_for_label }}">{{ form.product_category_guess.label }}</label>
+          {{ form.product_category_guess }}
+          {{ form.product_category_guess.errors }}
+
+          <label for="{{ form.recommended_channel.id_for_label }}">{{ form.recommended_channel.label }}</label>
+          {{ form.recommended_channel }}
+          {{ form.recommended_channel.errors }}
+
+          <label for="{{ form.recommended_next_action.id_for_label }}">{{ form.recommended_next_action.label }}</label>
+          {{ form.recommended_next_action }}
+          {{ form.recommended_next_action.errors }}
+
+          <label for="{{ form.disqualification_reason.id_for_label }}">{{ form.disqualification_reason.label }}</label>
+          {{ form.disqualification_reason }}
+          {{ form.disqualification_reason.errors }}
         </div>
 
       </div>
@@ -376,8 +519,23 @@
       const saved = document.getElementById("saved-indicator");
       if (!form || !saveBtn) return;
 
+      function toggleOutboundFields() {
+        const leadType = document.getElementById("id_lead_type");
+        const outboundBlocks = document.querySelectorAll(".outbound-only");
+        const show = leadType && leadType.value === "outbound";
+        outboundBlocks.forEach((el) => {
+          el.style.display = show ? "block" : "none";
+        });
+      }
+
       function hasErrors() {
         return document.querySelectorAll(".errorlist li").length > 0;
+      }
+
+      const leadTypeEl = document.getElementById("id_lead_type");
+      if (leadTypeEl) {
+        leadTypeEl.addEventListener("change", toggleOutboundFields);
+        toggleOutboundFields();
       }
 
       form.addEventListener("submit", function () {

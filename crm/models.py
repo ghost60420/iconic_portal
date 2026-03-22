@@ -236,7 +236,12 @@ SOURCE_CHOICES = [
     ("Other", "Other"),
 ]
 
-LEAD_TYPE_CHOICES = [
+LEAD_DIRECTION_CHOICES = [
+    ("inbound", "Inbound"),
+    ("outbound", "Outbound"),
+]
+
+BRAND_STAGE_CHOICES = [
     ("Startup / New Brand", "Startup / New Brand"),
     ("Brand Owner / Designer", "Brand Owner / Designer"),
     ("Retail Store / Boutique", "Retail Store / Boutique"),
@@ -247,6 +252,37 @@ LEAD_TYPE_CHOICES = [
     ("Influencer / Content Creator", "Influencer / Content Creator"),
     ("Returning Customer", "Returning Customer"),
     ("Other", "Other"),
+]
+
+OUTBOUND_STATUS_CHOICES = [
+    ("Not Contacted", "Not Contacted"),
+    ("First Contact Sent", "First Contact Sent"),
+    ("Follow Up 1 Sent", "Follow Up 1 Sent"),
+    ("Follow Up 2 Sent", "Follow Up 2 Sent"),
+    ("Follow Up 3 Sent", "Follow Up 3 Sent"),
+    ("Replied", "Replied"),
+    ("Interested", "Interested"),
+    ("Meeting Booked", "Meeting Booked"),
+    ("Quote Requested", "Quote Requested"),
+    ("Sample Discussion", "Sample Discussion"),
+    ("Converted to Opportunity", "Converted to Opportunity"),
+    ("No Response", "No Response"),
+    ("Bad Fit", "Bad Fit"),
+    ("Archived", "Archived"),
+]
+
+LEAD_QUAL_STATUS_CHOICES = [
+    ("Raw Imported", "Raw Imported"),
+    ("Researching", "Researching"),
+    ("Enriched", "Enriched"),
+    ("Qualified", "Qualified"),
+    ("Strong Fit", "Strong Fit"),
+    ("Needs Review", "Needs Review"),
+    ("Outreach Ready", "Outreach Ready"),
+    ("Contact Missing", "Contact Missing"),
+    ("Duplicate", "Duplicate"),
+    ("Bad Fit", "Bad Fit"),
+    ("Archived", "Archived"),
 ]
 
 LEAD_STATUS_CHOICES = [
@@ -297,6 +333,13 @@ class Lead(models.Model):
         on_delete=models.SET_NULL,
         related_name="leads",
     )
+    import_job = models.ForeignKey(
+        "LeadImportJob",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="leads",
+    )
 
     lead_id = models.CharField(
         max_length=20,
@@ -336,9 +379,18 @@ class Lead(models.Model):
         db_index=True,
     )
     lead_type = models.CharField(
-        max_length=50,
-        choices=LEAD_TYPE_CHOICES,
-        default="Startup / New Brand",
+        max_length=20,
+        choices=LEAD_DIRECTION_CHOICES,
+        default="inbound",
+        db_index=True,
+    )
+    source_channel = models.CharField(max_length=100, blank=True, default="")
+    outbound_method = models.CharField(max_length=100, blank=True, default="")
+    outbound_status = models.CharField(
+        max_length=60,
+        choices=OUTBOUND_STATUS_CHOICES,
+        blank=True,
+        default="",
         db_index=True,
     )
     lead_status = models.CharField(
@@ -353,8 +405,53 @@ class Lead(models.Model):
         default="Medium",
         db_index=True,
     )
+    priority_level = models.CharField(
+        max_length=20,
+        choices=PRIORITY_CHOICES,
+        default="Medium",
+        db_index=True,
+    )
+    brand_stage = models.CharField(
+        max_length=50,
+        choices=BRAND_STAGE_CHOICES,
+        blank=True,
+        default="",
+    )
+    target_order_volume_min = models.PositiveIntegerField(null=True, blank=True)
+    target_order_volume_max = models.PositiveIntegerField(null=True, blank=True)
+    brand_fit_score = models.PositiveIntegerField(default=0)
+    fit_score_locked = models.BooleanField(default=False)
+    region = models.CharField(max_length=100, blank=True, default="")
+    website = models.CharField(max_length=255, blank=True, default="")
+    instagram_handle = models.CharField(max_length=200, blank=True, default="")
+    linkedin_url = models.CharField(max_length=255, blank=True, default="")
+    last_outreach_date = models.DateField(null=True, blank=True)
+    next_follow_up_date = models.DateField(null=True, blank=True)
+    last_reply_date = models.DateField(null=True, blank=True)
+    ideal_customer_profile_match = models.BooleanField(default=False)
+    disqualification_reason = models.TextField(blank=True, default="")
+    qualification_status = models.CharField(
+        max_length=40,
+        choices=LEAD_QUAL_STATUS_CHOICES,
+        default="Raw Imported",
+        db_index=True,
+    )
+    qualification_reason = models.TextField(blank=True, default="")
+    confidence_level = models.PositiveIntegerField(default=0)
+    target_order_range_estimate = models.CharField(max_length=120, blank=True, default="")
+    product_category_guess = models.CharField(max_length=120, blank=True, default="")
+    recommended_channel = models.CharField(max_length=120, blank=True, default="")
+    recommended_next_action = models.CharField(max_length=200, blank=True, default="")
+    last_enriched_at = models.DateTimeField(null=True, blank=True)
 
     owner = models.CharField(max_length=100, blank=True)
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="assigned_leads",
+    )
     created_date = models.DateField(default=timezone.localdate)
     next_followup = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
@@ -374,7 +471,69 @@ class Lead(models.Model):
         if not self.created_date:
             self.created_date = timezone.localdate()
 
+        if self.lead_type == "outbound" and not self.fit_score_locked:
+            score, _signals = self.compute_fit_score()
+            self.brand_fit_score = score
+            self.ideal_customer_profile_match = score >= 70
+
+        if self.website and not self.company_website:
+            self.company_website = self.website
+        if self.company_website and not self.website:
+            self.website = self.company_website
+
+        if self.next_follow_up_date and not self.next_followup:
+            self.next_followup = self.next_follow_up_date
+        if self.next_followup and not self.next_follow_up_date:
+            self.next_follow_up_date = self.next_followup
+
         super().save(*args, **kwargs)
+
+    def compute_fit_score(self):
+        strengths = []
+        score = 0
+
+        if self.website or self.company_website:
+            score += 10
+            strengths.append("Website")
+        if self.instagram_handle:
+            score += 8
+            strengths.append("Instagram")
+        if self.linkedin_url:
+            score += 6
+            strengths.append("LinkedIn")
+
+        min_vol = self.target_order_volume_min or 0
+        max_vol = self.target_order_volume_max or 0
+        volume_signal = max(min_vol, max_vol)
+
+        if volume_signal >= 500:
+            score += 15
+            strengths.append("500+ pcs")
+        if volume_signal >= 1000:
+            score += 25
+            strengths.append("1000+ pcs")
+        if volume_signal >= 2000:
+            score += 10
+            strengths.append("2000+ pcs")
+        if volume_signal >= 5000:
+            score += 10
+            strengths.append("5000+ pcs")
+
+        strong_products = {
+            "Hoodie", "T Shirt", "Activewear", "Athleticwear", "Swimwear",
+            "Undergarments", "Kidswear", "Outerwear", "Denim Jacket", "Joggers"
+        }
+        if self.product_interest in strong_products:
+            score += 12
+            strengths.append("Product fit")
+
+        if 0 < volume_signal < 100:
+            score -= 20
+        if not (self.website or self.company_website) and not self.instagram_handle:
+            score -= 10
+
+        score = max(0, min(score, 100))
+        return score, strengths
 
     def __str__(self):
         return f"{self.account_brand} ({self.lead_id})"
@@ -572,18 +731,170 @@ class LeadActivity(models.Model):
         ("task_completed", "Task completed"),
         ("shipping_updated", "Shipping updated"),
         ("stage_updated", "Stage updated"),
+        ("cold_email_sent", "Cold email sent"),
+        ("linkedin_message_sent", "LinkedIn message sent"),
+        ("instagram_dm_sent", "Instagram DM sent"),
+        ("call_made", "Call made"),
+        ("follow_up_sent", "Follow up sent"),
+        ("reply_received", "Reply received"),
+        ("meeting_booked", "Meeting booked"),
+        ("quote_shared", "Quote shared"),
+        ("sample_discussion", "Sample discussion"),
     ]
 
     lead = models.ForeignKey(Lead, related_name="activities", on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     activity_type = models.CharField(max_length=40, choices=ACTIVITY_TYPE_CHOICES)
     description = models.TextField(blank=True, default="")
+    channel = models.CharField(max_length=50, blank=True, default="")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="lead_activities",
+    )
+    note = models.TextField(blank=True, default="")
+    message_copy = models.TextField(blank=True, default="")
+    outcome = models.CharField(max_length=120, blank=True, default="")
+    follow_up_date = models.DateField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at"]
 
     def __str__(self):
         return f"{self.get_activity_type_display()} for {self.lead.lead_id}"
+
+
+class LeadContactPoint(models.Model):
+    CONTACT_TYPE_CHOICES = [
+        ("email", "Email"),
+        ("phone", "Phone"),
+        ("contact_form", "Contact form"),
+        ("instagram", "Instagram"),
+        ("linkedin", "LinkedIn"),
+        ("website", "Website"),
+        ("other", "Other"),
+    ]
+
+    lead = models.ForeignKey(
+        Lead,
+        related_name="contact_points",
+        on_delete=models.CASCADE,
+    )
+    contact_type = models.CharField(max_length=30, choices=CONTACT_TYPE_CHOICES)
+    value = models.CharField(max_length=255)
+    label = models.CharField(max_length=120, blank=True, default="")
+    source_url = models.URLField(blank=True, default="")
+    confidence = models.PositiveIntegerField(default=0)
+    is_primary = models.BooleanField(default=False)
+    last_verified_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-is_primary", "-confidence", "contact_type"]
+
+    def __str__(self):
+        return f"{self.lead.lead_id} {self.contact_type}: {self.value}"
+
+
+class LeadAIInsight(models.Model):
+    INSIGHT_SOURCE_CHOICES = [
+        ("auto", "Auto"),
+        ("manual", "Manual"),
+    ]
+
+    lead = models.ForeignKey(
+        Lead,
+        related_name="ai_insights",
+        on_delete=models.CASCADE,
+    )
+    source = models.CharField(max_length=20, choices=INSIGHT_SOURCE_CHOICES, default="auto")
+    summary_text = models.TextField(blank=True, default="")
+    data = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.lead.lead_id} insight {self.created_at:%Y-%m-%d}"
+
+
+class LeadImportJob(models.Model):
+    STATUS_CHOICES = [
+        ("queued", "Queued"),
+        ("processing", "Processing"),
+        ("done", "Done"),
+        ("failed", "Failed"),
+    ]
+
+    file = models.FileField(upload_to="lead_imports/")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="queued")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="lead_import_jobs",
+    )
+    total_rows = models.PositiveIntegerField(default=0)
+    created_count = models.PositiveIntegerField(default=0)
+    updated_count = models.PositiveIntegerField(default=0)
+    duplicate_count = models.PositiveIntegerField(default=0)
+    strong_fit_count = models.PositiveIntegerField(default=0)
+    moderate_fit_count = models.PositiveIntegerField(default=0)
+    weak_fit_count = models.PositiveIntegerField(default=0)
+    bad_fit_count = models.PositiveIntegerField(default=0)
+    missing_contact_count = models.PositiveIntegerField(default=0)
+    error_count = models.PositiveIntegerField(default=0)
+    stats = models.JSONField(default=dict, blank=True)
+    error_log = models.TextField(blank=True, default="")
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Lead import {self.pk} ({self.status})"
+
+
+class LeadResearchJob(models.Model):
+    STATUS_CHOICES = [
+        ("queued", "Queued"),
+        ("processing", "Processing"),
+        ("done", "Done"),
+        ("failed", "Failed"),
+    ]
+
+    lead = models.ForeignKey(
+        Lead,
+        related_name="research_jobs",
+        on_delete=models.CASCADE,
+    )
+    website = models.URLField(blank=True, default="")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="queued")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="lead_research_jobs",
+    )
+    data = models.JSONField(default=dict, blank=True)
+    error_message = models.TextField(blank=True, default="")
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Lead research {self.pk} ({self.status})"
 
 
 
@@ -678,6 +989,9 @@ class Opportunity(models.Model):
         on_delete=models.CASCADE,
         related_name="opportunities",
     )
+    converted_from_lead_type = models.CharField(max_length=20, blank=True, default="")
+    converted_from_source_channel = models.CharField(max_length=100, blank=True, default="")
+    converted_from_outbound_status = models.CharField(max_length=60, blank=True, default="")
 
     customer = models.ForeignKey(
         "Customer",
@@ -908,10 +1222,14 @@ NEW_COSTING_STATUS_CHOICES = [
 ]
 
 NEW_COSTING_CATEGORY_CHOICES = [
-    ("fabric", "Fabric"),
+    ("fabric", "Fabrics"),
     ("sewing_trim", "Sewing trims"),
     ("packaging_trim", "Packaging trims"),
-    ("other", "Other"),
+    ("labels_branding", "Labels and branding"),
+    ("wash_process", "Washing and process"),
+    ("cm_labor", "CM and labor"),
+    ("logistics_compliance", "Logistics and compliance"),
+    ("other", "Other costs"),
 ]
 
 NEW_COSTING_UOM_CHOICES = [
@@ -1248,17 +1566,24 @@ class CostingHeader(models.Model):
     )
     style_name = models.CharField(max_length=200, blank=True)
     style_code = models.CharField(max_length=50, blank=True)
+    buyer = models.CharField(max_length=200, blank=True, default="")
+    brand = models.CharField(max_length=200, blank=True, default="")
     product_type = models.CharField(
         max_length=50,
         choices=Opportunity.PRODUCT_TYPE_CHOICES,
         default="Other",
     )
+    gender = models.CharField(max_length=50, blank=True, default="")
+    size_range = models.CharField(max_length=100, blank=True, default="")
+    season = models.CharField(max_length=100, blank=True, default="")
     factory_location = models.CharField(
         max_length=20,
         choices=FACTORY_LOCATION_CHOICES,
         default="bd",
     )
     order_quantity = models.PositiveIntegerField(default=0)
+    moq = models.PositiveIntegerField(default=0)
+    costing_date = models.DateField(null=True, blank=True)
     currency = models.CharField(
         max_length=10,
         choices=NEW_COSTING_CURRENCY_CHOICES,
@@ -1297,6 +1622,18 @@ class CostingHeader(models.Model):
         null=True,
         blank=True,
     )
+    merchandiser = models.CharField(max_length=200, blank=True, default="")
+    # Product specification snapshot
+    fabric_type = models.CharField(max_length=200, blank=True, default="")
+    fabric_gsm = models.CharField(max_length=100, blank=True, default="")
+    fabric_composition = models.CharField(max_length=200, blank=True, default="")
+    wash_type = models.CharField(max_length=200, blank=True, default="")
+    print_type = models.CharField(max_length=200, blank=True, default="")
+    embroidery = models.CharField(max_length=200, blank=True, default="")
+    label_type = models.CharField(max_length=200, blank=True, default="")
+    packaging_type = models.CharField(max_length=200, blank=True, default="")
+    special_trims = models.CharField(max_length=300, blank=True, default="")
+    fit_remarks = models.TextField(blank=True, default="")
     status = models.CharField(
         max_length=20,
         choices=NEW_COSTING_STATUS_CHOICES,
@@ -1339,6 +1676,7 @@ class CostingLineItem(models.Model):
         default="other",
     )
     item_name = models.CharField(max_length=200)
+    description = models.CharField(max_length=300, blank=True, default="")
     item_reference = models.CharField(max_length=200, blank=True, default="")
     supplier = models.CharField(max_length=200, blank=True, default="")
     uom = models.CharField(
@@ -1376,6 +1714,8 @@ class CostingLineItem(models.Model):
     color = models.CharField(max_length=120, blank=True, default="")
     gsm = models.CharField(max_length=120, blank=True, default="")
     cut_width = models.CharField(max_length=120, blank=True, default="")
+    ship_mode = models.CharField(max_length=120, blank=True, default="")
+    pay_mode = models.CharField(max_length=120, blank=True, default="")
     sort_order = models.PositiveIntegerField(default=0)
     remarks = models.TextField(blank=True, default="")
 

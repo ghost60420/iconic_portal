@@ -1,0 +1,268 @@
+{% extends "crm/base.html" %}
+{% load static %}
+
+{% block content %}
+<style>
+  :root{
+    --bg:#020617;
+    --panel:#0b1220;
+    --line:#334155;
+    --text:#f9fafb;
+    --muted:#9ca3af;
+    --gold:#facc15;
+  }
+  .page{
+    max-width:1200px;
+    margin:18px auto 40px auto;
+    padding:0 12px;
+    color:var(--text);
+    font-family: Arial, sans-serif;
+  }
+  .header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:12px;
+  }
+  .title{
+    font-size:22px;
+    font-weight:900;
+    color:#fef9c3;
+    margin:0;
+  }
+  .muted{
+    color:var(--muted);
+    font-size:12px;
+  }
+  .btn{
+    padding:8px 14px;
+    border-radius:999px;
+    border:1px solid rgba(255,255,255,0.18);
+    background: rgba(255,255,255,0.04);
+    color:#e5e7eb;
+    font-size:12px;
+    font-weight:800;
+    text-decoration:none;
+  }
+  .btn.primary{
+    background: linear-gradient(145deg, #f5d580, #d4b35f);
+    color:#111827;
+    border-color:#fbbf24;
+  }
+  .grid{
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap:10px;
+  }
+  .card{
+    background: radial-gradient(circle at top left, #111827, #020617);
+    border:1px solid #1f2937;
+    border-radius:16px;
+    padding:12px;
+    box-shadow:0 14px 30px rgba(0,0,0,0.45);
+  }
+  .card-title{
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.3px;
+    color:#9ca3af;
+    font-weight:900;
+  }
+  .card-value{
+    margin-top:6px;
+    font-size:18px;
+    font-weight:900;
+    color:#fefce8;
+  }
+  .section{
+    margin-top:14px;
+    padding:14px;
+    border-radius:14px;
+    border:1px solid #1f2937;
+    background: radial-gradient(circle at top left, #111827, #020617);
+    box-shadow:0 12px 26px rgba(0,0,0,0.35);
+  }
+  table{ width:100%; border-collapse:collapse; font-size:12px; }
+  th, td{ padding:6px 8px; border-bottom:1px solid #1f2937; }
+  th{ color:#9ca3af; text-transform:uppercase; font-size:11px; letter-spacing:0.3px; }
+  .funnel-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin:8px 0;
+  }
+  .funnel-bar{
+    height:10px;
+    border-radius:999px;
+    background: linear-gradient(90deg, #facc15, #f97316);
+  }
+</style>
+
+<div class="page">
+  <div class="header">
+    <div>
+      <h1 class="title">Lead Dashboard</h1>
+      <div class="muted">Inbound and outbound performance overview.</div>
+    </div>
+    <div>
+      <a class="btn" href="{% url 'leads_list' %}">Back to leads</a>
+      <a class="btn primary" href="{% url 'lead_import_outbound' %}">Import outbound CSV</a>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card"><div class="card-title">Total outbound</div><div class="card-value">{{ kpis.total_outbound }}</div></div>
+    <div class="card"><div class="card-title">Active outbound</div><div class="card-value">{{ kpis.active_outbound }}</div></div>
+    <div class="card"><div class="card-title">High fit</div><div class="card-value">{{ kpis.high_fit }}</div></div>
+    <div class="card"><div class="card-title">First contacts sent</div><div class="card-value">{{ kpis.first_contact }}</div></div>
+    <div class="card"><div class="card-title">Follow ups due</div><div class="card-value">{{ kpis.followups_due }}</div></div>
+    <div class="card"><div class="card-title">Replies</div><div class="card-value">{{ kpis.replied }}</div></div>
+    <div class="card"><div class="card-title">Meetings booked</div><div class="card-value">{{ kpis.meeting }}</div></div>
+    <div class="card"><div class="card-title">Quotes requested</div><div class="card-value">{{ kpis.quote }}</div></div>
+    <div class="card"><div class="card-title">Sample discussions</div><div class="card-value">{{ kpis.sample }}</div></div>
+    <div class="card"><div class="card-title">Converted opportunities</div><div class="card-value">{{ kpis.converted }}</div></div>
+    <div class="card"><div class="card-title">No response</div><div class="card-value">{{ kpis.no_response }}</div></div>
+    <div class="card"><div class="card-title">Bad fit</div><div class="card-value">{{ kpis.bad_fit }}</div></div>
+    <div class="card"><div class="card-title">Total inbound</div><div class="card-value">{{ kpis.total_inbound }}</div></div>
+  </div>
+
+  <div class="section">
+    <div class="card-title">Outbound funnel</div>
+    <div style="margin-top:10px;">
+      <canvas id="funnelChart" height="180"></canvas>
+    </div>
+    {{ funnel|json_script:"funnel-data" }}
+  </div>
+
+  <div class="section">
+    <div class="card-title">Breakdowns</div>
+    <div class="grid" style="margin-top:10px;">
+      <div class="card">
+        <div class="card-title">Source channel</div>
+        <table>
+          <thead><tr><th>Channel</th><th>Count</th></tr></thead>
+          <tbody>
+            {% for row in by_source %}
+              <tr><td>{{ row.source_channel|default:"—" }}</td><td>{{ row.count }}</td></tr>
+            {% empty %}
+              <tr><td colspan="2">No data</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-title">Outbound method</div>
+        <table>
+          <thead><tr><th>Method</th><th>Count</th></tr></thead>
+          <tbody>
+            {% for row in by_method %}
+              <tr><td>{{ row.outbound_method|default:"—" }}</td><td>{{ row.count }}</td></tr>
+            {% empty %}
+              <tr><td colspan="2">No data</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-title">Assigned user</div>
+        <table>
+          <thead><tr><th>User</th><th>Count</th></tr></thead>
+          <tbody>
+            {% for row in by_assigned %}
+              <tr>
+                <td>
+                  {% if row.assigned_to__first_name or row.assigned_to__last_name %}
+                    {{ row.assigned_to__first_name }} {{ row.assigned_to__last_name }}
+                  {% else %}
+                    {{ row.assigned_to__username|default:"—" }}
+                  {% endif %}
+                </td>
+                <td>{{ row.count }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="2">No data</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-title">Country</div>
+        <table>
+          <thead><tr><th>Country</th><th>Count</th></tr></thead>
+          <tbody>
+            {% for row in by_country %}
+              <tr><td>{{ row.country|default:"—" }}</td><td>{{ row.count }}</td></tr>
+            {% empty %}
+              <tr><td colspan="2">No data</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-title">Product interest</div>
+        <table>
+          <thead><tr><th>Product</th><th>Count</th></tr></thead>
+          <tbody>
+            {% for row in by_product %}
+              <tr><td>{{ row.product_interest|default:"—" }}</td><td>{{ row.count }}</td></tr>
+            {% empty %}
+              <tr><td colspan="2">No data</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-title">Fit score ranges</div>
+        <table>
+          <thead><tr><th>Range</th><th>Count</th></tr></thead>
+          <tbody>
+            {% for row in fit_ranges %}
+              <tr><td>{{ row.label }}</td><td>{{ row.count }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script>
+<script>
+(function () {
+  const raw = document.getElementById("funnel-data");
+  const canvas = document.getElementById("funnelChart");
+  if (!raw || !canvas || !window.Chart) return;
+
+  const data = JSON.parse(raw.textContent || "[]");
+  const labels = data.map((d) => d.label);
+  const counts = data.map((d) => d.count);
+
+  new Chart(canvas, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        label: "Outbound funnel",
+        data: counts,
+        backgroundColor: "rgba(250, 204, 21, 0.6)",
+        borderColor: "rgba(250, 204, 21, 1)",
+        borderWidth: 1,
+      }]
+    },
+    options: {
+      indexAxis: "y",
+      responsive: true,
+      plugins: {
+        legend: { display: false }
+      },
+      scales: {
+        x: { grid: { color: "rgba(148,163,184,0.15)" }, ticks: { color: "#e5e7eb" } },
+        y: { grid: { color: "rgba(148,163,184,0.15)" }, ticks: { color: "#e5e7eb" } },
+      }
+    }
+  });
+})();
+</script>
+{% endblock %}

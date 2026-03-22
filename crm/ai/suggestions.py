@@ -44,6 +44,46 @@ Give:
     )
 
 
+def lead_outbound_insights(*, request, lead):
+    user = getattr(request, "user", None)
+
+    prompt = f"""
+You are Iconic CRM outbound lead assistant.
+Be clear and concise. Use short sections and bullets.
+
+Lead details:
+Company: {_val(lead, "account_brand")}
+Contact: {_val(lead, "contact_name")}
+Country: {_val(lead, "country")}
+Website: {_val(lead, "website", "company_website")}
+Instagram: {_val(lead, "instagram_handle")}
+LinkedIn: {_val(lead, "linkedin_url")}
+Product interest: {_val(lead, "product_interest")}
+Notes: {_val(lead, "notes")}
+
+Return:
+1) Brand summary (2 to 3 lines)
+2) Likely product category and order range guess
+3) Fit score 0 to 100 and fit label (weak, moderate, strong)
+4) Reply likelihood (low, medium, high)
+5) Recommended next action
+6) Outreach drafts:
+   - Intro email
+   - Follow up 1
+   - Follow up 2
+   - LinkedIn message
+   - Instagram DM
+Keep each draft short and professional.
+""".strip()
+
+    return ask_openai(
+        request=request,
+        user=user,
+        prompt_text=prompt,
+        meta={"feature": "lead_outbound_insights", "lead_id": getattr(lead, "id", None)},
+    )
+
+
 def opportunity_suggestion(*, request, opp):
     user = getattr(request, "user", None)
 

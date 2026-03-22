@@ -21,6 +21,7 @@ from crm.ai.health import build_health_checks, run_and_store
 from crm.ai.openai_client import ask_openai
 from crm.ai.suggestions import (
     lead_suggestion,
+    lead_outbound_insights,
     opportunity_suggestion,
     production_suggestion,
 )
@@ -28,6 +29,7 @@ from crm.ai.suggestions import (
 from crm.models import (
     AIHealthRun,
     Lead,
+    LeadAIMessage,
     Opportunity,
     Shipment,
     ProductionOrder,
@@ -362,6 +364,23 @@ def ai_system_status(request):
 def ai_lead_suggest(request, pk):
     lead = get_object_or_404(Lead, pk=pk)
     text = lead_suggestion(request=request, lead=lead)
+    return JsonResponse({"ok": True, "answer": text})
+
+
+@require_POST
+@login_required
+@user_passes_test(can_ai_user)
+def ai_lead_outbound(request, pk):
+    lead = get_object_or_404(Lead, pk=pk)
+    text = lead_outbound_insights(request=request, lead=lead)
+    try:
+        LeadAIMessage.objects.create(
+            lead=lead,
+            message_type="summary",
+            content=text or "",
+        )
+    except Exception:
+        pass
     return JsonResponse({"ok": True, "answer": text})
 
 

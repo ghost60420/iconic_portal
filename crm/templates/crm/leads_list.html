@@ -320,6 +320,16 @@
     white-space:nowrap;
     font-weight:900;
   }
+  .badge.lead-inbound{
+    border-color:#22d3ee;
+    color:#a5f3fc;
+    background:rgba(14,116,144,0.16);
+  }
+  .badge.lead-outbound{
+    border-color:#facc15;
+    color:#fde68a;
+    background:rgba(250,204,21,0.16);
+  }
   .badge[data-status="New"]{ border-color:#22c55e; color:#bbf7d0; background:rgba(34,197,94,0.12); }
   .badge[data-status="Working"]{ border-color:#60a5fa; color:#dbeafe; background:rgba(59,130,246,0.12); }
   .badge[data-status="Nurturing"]{ border-color:#a78bfa; color:#ede9fe; background:rgba(139,92,246,0.12); }
@@ -329,9 +339,66 @@
   .badge[data-status="On Hold"]{ border-color:#94a3b8; color:#e2e8f0; background:rgba(148,163,184,0.12); }
   .badge[data-status="Converted"]{ border-color:#22d3ee; color:#cffafe; background:rgba(34,211,238,0.12); }
 
+  .badge[data-outbound]{ border-color:#64748b; color:#e2e8f0; background:rgba(100,116,139,0.15); }
+  .badge[data-outbound="Not Contacted"]{ border-color:#94a3b8; color:#e2e8f0; }
+  .badge[data-outbound="First Contact Sent"]{ border-color:#38bdf8; color:#bae6fd; }
+  .badge[data-outbound="Follow Up 1 Sent"],
+  .badge[data-outbound="Follow Up 2 Sent"],
+  .badge[data-outbound="Follow Up 3 Sent"]{ border-color:#facc15; color:#fef3c7; }
+  .badge[data-outbound="Replied"]{ border-color:#22c55e; color:#bbf7d0; }
+  .badge[data-outbound="Interested"]{ border-color:#34d399; color:#d1fae5; }
+  .badge[data-outbound="Meeting Booked"]{ border-color:#60a5fa; color:#dbeafe; }
+  .badge[data-outbound="Quote Requested"]{ border-color:#f97316; color:#ffedd5; }
+  .badge[data-outbound="Sample Discussion"]{ border-color:#f472b6; color:#fce7f3; }
+  .badge[data-outbound="Converted to Opportunity"]{ border-color:#22d3ee; color:#cffafe; }
+  .badge[data-outbound="No Response"]{ border-color:#f87171; color:#fee2e2; }
+  .badge[data-outbound="Bad Fit"]{ border-color:#ef4444; color:#fee2e2; }
+  .badge[data-outbound="Archived"]{ border-color:#475569; color:#cbd5f5; }
+
+  .badge[data-qual]{ border-color:#64748b; color:#e2e8f0; background:rgba(100,116,139,0.15); }
+  .badge[data-qual="Strong Fit"],
+  .badge[data-qual="Outreach Ready"]{ border-color:#22c55e; color:#bbf7d0; }
+  .badge[data-qual="Qualified"]{ border-color:#facc15; color:#fef3c7; }
+  .badge[data-qual="Needs Review"],
+  .badge[data-qual="Contact Missing"]{ border-color:#94a3b8; color:#e2e8f0; }
+  .badge[data-qual="Bad Fit"]{ border-color:#f87171; color:#fee2e2; }
+
+  .tabs{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin:10px 0 12px 0;
+  }
+  .tab{
+    padding:6px 12px;
+    border-radius:999px;
+    border:1px solid rgba(148,163,184,0.28);
+    background: rgba(255,255,255,0.04);
+    color:#e5e7eb;
+    font-size:12px;
+    font-weight:900;
+  }
+  .tab.active{
+    background: rgba(245,213,128,0.16);
+    border-color: rgba(245,213,128,0.45);
+    color:#fefce8;
+  }
+
   .table-wrap{
     overflow-x:auto;
     border-radius:12px;
+  }
+
+  .bulk-bar{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    align-items:center;
+    margin-bottom:10px;
+  }
+  .bulk-bar .input,
+  .bulk-bar select{
+    min-width:160px;
   }
 
   .pager{
@@ -398,8 +465,25 @@
 
     <div class="page-actions">
       <a href="/leads/add/" class="btn-main">Add lead</a>
+      <a href="/leads/quick-add/" class="btn-ghost">Quick add outbound</a>
+      <a href="/leads/import/" class="btn-ghost">Import outbound CSV</a>
+      <a href="/leads/intake/" class="btn-ghost">Lead intake</a>
+      <a href="/leads/dashboard/" class="btn-ghost">Lead dashboard</a>
       <a href="/opportunities/" class="btn-ghost">View opportunities</a>
     </div>
+  </div>
+
+  <div class="tabs">
+    <a class="tab {% if active_view == 'all' %}active{% endif %}" href="?view=all">All Leads</a>
+    <a class="tab {% if active_view == 'inbound' %}active{% endif %}" href="?view=inbound">Inbound Leads</a>
+    <a class="tab {% if active_view == 'outbound' %}active{% endif %}" href="?view=outbound">Outbound Leads</a>
+    <a class="tab {% if active_view == 'followup' %}active{% endif %}" href="?view=followup">Follow Up Needed</a>
+    <a class="tab {% if active_view == 'replied' %}active{% endif %}" href="?view=replied">Replied</a>
+    <a class="tab {% if active_view == 'meeting' %}active{% endif %}" href="?view=meeting">Meeting Booked</a>
+    <a class="tab {% if active_view == 'high_fit' %}active{% endif %}" href="?view=high_fit">High Fit Brands</a>
+    <a class="tab {% if active_view == 'target_volume' %}active{% endif %}" href="?view=target_volume">1,000 to 5,000 pcs Target</a>
+    <a class="tab {% if active_view == 'no_response' %}active{% endif %}" href="?view=no_response">No Response</a>
+    <a class="tab {% if active_view == 'archived' %}active{% endif %}" href="?view=archived">Archived</a>
   </div>
 
   <div class="card">
@@ -441,13 +525,14 @@
   <div class="card">
     <div class="card-title">Filters</div>
     <div class="card-note">
-      Use these to find leads fast. Converted leads are hidden unless you pick Status = Converted.
+      Use these to find leads fast. Filters apply across inbound and outbound.
     </div>
 
     <form method="get" class="filters">
 
       {# keep current sort when you press Apply #}
       <input type="hidden" name="sort" value="{{ request.GET.sort|default:'new' }}">
+      <input type="hidden" name="view" value="{{ active_view|default:'all' }}">
 
       <div class="field" style="min-width:180px;">
         <div class="label">Lead ID</div>
@@ -462,7 +547,7 @@
       <div class="field">
         <div class="label">Status</div>
         <select class="input" name="status">
-          <option value="">All (hide converted)</option>
+          <option value="">All statuses</option>
           {% for value,label in status_choices %}
             <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>
           {% endfor %}
@@ -484,6 +569,11 @@
         <input class="input" name="owner" value="{{ request.GET.owner|default:'' }}" placeholder="Refat, etc">
       </div>
 
+      <div class="field">
+        <div class="label">Assigned to</div>
+        <input class="input" name="assigned_to" value="{{ request.GET.assigned_to|default:'' }}" placeholder="Username">
+      </div>
+
       <div class="field" style="min-width:170px;">
         <div class="label">Created from</div>
         <input class="input" type="date" name="created_from" value="{{ request.GET.created_from|default:'' }}">
@@ -502,6 +592,74 @@
       <div class="field" style="min-width:150px;">
         <div class="label">Value max (CAD)</div>
         <input class="input" type="number" step="0.01" name="value_max" value="{{ request.GET.value_max|default:'' }}" placeholder="25000">
+      </div>
+
+      <div class="field">
+        <div class="label">Qualification status</div>
+        <select class="input" name="qual_status">
+          <option value="">All</option>
+          {% for value,label in qual_status_choices %}
+            <option value="{{ value }}" {% if request.GET.qual_status == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field">
+        <div class="label">ICP match</div>
+        <select class="input" name="icp_match">
+          <option value="">Any</option>
+          <option value="yes" {% if request.GET.icp_match == "yes" %}selected{% endif %}>Yes</option>
+          <option value="no" {% if request.GET.icp_match == "no" %}selected{% endif %}>No</option>
+        </select>
+      </div>
+
+      <div class="field" style="min-width:140px;">
+        <div class="label">Fit score min</div>
+        <input class="input" type="number" name="fit_min" value="{{ request.GET.fit_min|default:'' }}" placeholder="40">
+      </div>
+
+      <div class="field">
+        <div class="label">Has website</div>
+        <select class="input" name="has_website">
+          <option value="">Any</option>
+          <option value="yes" {% if request.GET.has_website == "yes" %}selected{% endif %}>Yes</option>
+          <option value="no" {% if request.GET.has_website == "no" %}selected{% endif %}>No</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <div class="label">Has email</div>
+        <select class="input" name="has_email">
+          <option value="">Any</option>
+          <option value="yes" {% if request.GET.has_email == "yes" %}selected{% endif %}>Yes</option>
+          <option value="no" {% if request.GET.has_email == "no" %}selected{% endif %}>No</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <div class="label">Has phone</div>
+        <select class="input" name="has_phone">
+          <option value="">Any</option>
+          <option value="yes" {% if request.GET.has_phone == "yes" %}selected{% endif %}>Yes</option>
+          <option value="no" {% if request.GET.has_phone == "no" %}selected{% endif %}>No</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <div class="label">Has social</div>
+        <select class="input" name="has_social">
+          <option value="">Any</option>
+          <option value="yes" {% if request.GET.has_social == "yes" %}selected{% endif %}>Yes</option>
+          <option value="no" {% if request.GET.has_social == "no" %}selected{% endif %}>No</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <div class="label">Outreach ready</div>
+        <select class="input" name="outreach_ready">
+          <option value="">Any</option>
+          <option value="1" {% if request.GET.outreach_ready == "1" %}selected{% endif %}>Yes</option>
+        </select>
       </div>
 
       <div class="field">
@@ -526,18 +684,19 @@
   <div class="table-shell">
     <div class="table-head">
       <div class="table-title">
-        All leads
+        Lead list
+        <span class="muted">({{ active_view|default:"all" }})</span>
         <span class="sort-toggle">
           <a
             class="sort-btn {% if request.GET.sort == 'new' or not request.GET.sort %}active{% endif %}"
-            href="?{% if request.GET.lead_id %}lead_id={{ request.GET.lead_id|urlencode }}&{% endif %}{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.market %}market={{ request.GET.market|urlencode }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page=1&sort=new"
+            href="?view={{ active_view|urlencode }}&{% if request.GET.lead_id %}lead_id={{ request.GET.lead_id|urlencode }}&{% endif %}{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.market %}market={{ request.GET.market|urlencode }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner|urlencode }}&{% endif %}{% if request.GET.assigned_to %}assigned_to={{ request.GET.assigned_to|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}{% if request.GET.qual_status %}qual_status={{ request.GET.qual_status|urlencode }}&{% endif %}{% if request.GET.icp_match %}icp_match={{ request.GET.icp_match|urlencode }}&{% endif %}{% if request.GET.fit_min %}fit_min={{ request.GET.fit_min|urlencode }}&{% endif %}{% if request.GET.has_website %}has_website={{ request.GET.has_website|urlencode }}&{% endif %}{% if request.GET.has_email %}has_email={{ request.GET.has_email|urlencode }}&{% endif %}{% if request.GET.has_phone %}has_phone={{ request.GET.has_phone|urlencode }}&{% endif %}{% if request.GET.has_social %}has_social={{ request.GET.has_social|urlencode }}&{% endif %}{% if request.GET.outreach_ready %}outreach_ready={{ request.GET.outreach_ready|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page=1&sort=new"
             title="Newest first"
             aria-label="Newest first"
           >↑</a>
 
           <a
             class="sort-btn {% if request.GET.sort == 'old' %}active{% endif %}"
-            href="?{% if request.GET.lead_id %}lead_id={{ request.GET.lead_id|urlencode }}&{% endif %}{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.market %}market={{ request.GET.market|urlencode }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page=1&sort=old"
+            href="?view={{ active_view|urlencode }}&{% if request.GET.lead_id %}lead_id={{ request.GET.lead_id|urlencode }}&{% endif %}{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.market %}market={{ request.GET.market|urlencode }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner|urlencode }}&{% endif %}{% if request.GET.assigned_to %}assigned_to={{ request.GET.assigned_to|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}{% if request.GET.qual_status %}qual_status={{ request.GET.qual_status|urlencode }}&{% endif %}{% if request.GET.icp_match %}icp_match={{ request.GET.icp_match|urlencode }}&{% endif %}{% if request.GET.fit_min %}fit_min={{ request.GET.fit_min|urlencode }}&{% endif %}{% if request.GET.has_website %}has_website={{ request.GET.has_website|urlencode }}&{% endif %}{% if request.GET.has_email %}has_email={{ request.GET.has_email|urlencode }}&{% endif %}{% if request.GET.has_phone %}has_phone={{ request.GET.has_phone|urlencode }}&{% endif %}{% if request.GET.has_social %}has_social={{ request.GET.has_social|urlencode }}&{% endif %}{% if request.GET.outreach_ready %}outreach_ready={{ request.GET.outreach_ready|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page=1&sort=old"
             title="Oldest first"
             aria-label="Oldest first"
           >↓</a>
@@ -546,61 +705,156 @@
       <div class="card-note">Click Lead id to open the lead detail page.</div>
     </div>
 
-    <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>Lead id</th>
-          <th>Account or brand</th>
-          <th>Contact name</th>
-          <th>Sales rep</th>
-          <th>Market</th>
-          <th>Status</th>
-          <th>Value</th>
-          <th>Next follow up</th>
-          <th>Created</th>
-        </tr>
-      </thead>
+    <form method="post" action="{% url 'lead_bulk_update' %}">
+      {% csrf_token %}
+      <input type="hidden" name="return_url" value="{{ request.get_full_path }}">
 
-      <tbody>
-        {% for lead in page_obj %}
+      <div class="bulk-bar">
+        <select class="input" name="bulk_action">
+          <option value="">Bulk action</option>
+          <option value="assign">Assign to user</option>
+          <option value="outbound_status">Set outbound status</option>
+          <option value="followup">Set follow up date</option>
+          <option value="archive">Archive outbound leads</option>
+        </select>
+
+        <select class="input" name="assigned_to">
+          <option value="">Select user</option>
+          {% for u in users %}
+            <option value="{{ u.id }}">
+              {% if u.get_full_name %}{{ u.get_full_name }}{% else %}{{ u.username }}{% endif %}
+            </option>
+          {% endfor %}
+        </select>
+
+        <select class="input" name="outbound_status">
+          <option value="">Select outbound status</option>
+          {% for value,label in outbound_status_choices %}
+            <option value="{{ value }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+
+        <input class="input" type="date" name="next_follow_up_date">
+
+        <button class="btn-main" type="submit">Apply</button>
+      </div>
+
+      <div class="table-wrap">
+      <table>
+        <thead>
           <tr>
-            <td>
-              <a href="{% url 'lead_detail' lead.pk %}" class="lead-link">
-                {{ lead.lead_id }}
-              </a>
-            </td>
-            <td>{{ lead.account_brand }}</td>
-            <td>{{ lead.contact_name }}</td>
+            <th><input type="checkbox" id="select-all"></th>
+            <th>Lead id</th>
+            <th>Company</th>
+            <th>Lead name</th>
+            <th>Lead type</th>
+            <th>Lead status</th>
+            <th>Source channel</th>
+            <th>Outbound status</th>
+            <th>Assigned to</th>
+            <th>Country</th>
+            <th>Product interest</th>
+            <th>Target volume</th>
+            <th>Fit score</th>
+            <th>Qualification</th>
+            <th>Last outreach</th>
+            <th>Next follow up</th>
+            <th>Created</th>
+          </tr>
+        </thead>
 
-            <td>
-              {% if lead.owner %}
-                <span class="badge">
-                  {% if lead.owner.get_full_name %}
-                    {{ lead.owner.get_full_name }}
-                  {% else %}
-                    {{ lead.owner }}
-                  {% endif %}
+        <tbody>
+          {% for lead in page_obj %}
+            <tr>
+              <td><input type="checkbox" name="lead_ids" value="{{ lead.pk }}"></td>
+              <td>
+                <a href="{% url 'lead_detail' lead.pk %}" class="lead-link">
+                  {{ lead.lead_id }}
+                </a>
+              </td>
+              <td>{{ lead.account_brand|default:"—" }}</td>
+              <td>{{ lead.contact_name|default:"—" }}</td>
+              <td>
+                <span class="badge {% if lead.lead_type == 'outbound' %}lead-outbound{% else %}lead-inbound{% endif %}">
+                  {{ lead.get_lead_type_display }}
                 </span>
-              {% else %}
-                <span class="muted">Unassigned</span>
-              {% endif %}
-            </td>
+              </td>
+              <td><span class="badge" data-status="{{ lead.lead_status }}">{{ lead.lead_status }}</span></td>
+              <td>{% if lead.source_channel %}{{ lead.source_channel }}{% else %}<span class="muted">—</span>{% endif %}</td>
+              <td>
+                {% if lead.outbound_status %}
+                  <span class="badge" data-outbound="{{ lead.outbound_status }}">{{ lead.outbound_status }}</span>
+                {% else %}
+                  <span class="muted">—</span>
+                {% endif %}
+              </td>
 
-            <td>{{ lead.get_market_display }}</td>
-            <td><span class="badge" data-status="{{ lead.lead_status }}">{{ lead.lead_status }}</span></td>
-            <td>{% if lead.budget %}{{ lead.budget }}{% else %}<span class="muted">—</span>{% endif %}</td>
-            <td>{% if lead.next_followup %}{{ lead.next_followup }}{% else %}<span class="muted">—</span>{% endif %}</td>
-            <td class="muted">{{ lead.created_date }}</td>
-          </tr>
-        {% empty %}
-          <tr>
-            <td colspan="9" class="muted">No leads yet.</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    </div>
+              <td>
+                {% if lead.assigned_to %}
+                  <span class="badge">
+                    {% if lead.assigned_to.get_full_name %}
+                      {{ lead.assigned_to.get_full_name }}
+                    {% else %}
+                      {{ lead.assigned_to.username }}
+                    {% endif %}
+                  </span>
+                {% elif lead.owner %}
+                  <span class="badge">{{ lead.owner }}</span>
+                {% else %}
+                  <span class="muted">Unassigned</span>
+                {% endif %}
+              </td>
+
+              <td>{{ lead.country|default:"—" }}</td>
+              <td>{{ lead.get_product_interest_display|default:lead.product_interest|default:"—" }}</td>
+              <td>
+                {% if lead.target_order_volume_min or lead.target_order_volume_max %}
+                  {% if lead.target_order_volume_min and lead.target_order_volume_max %}
+                    {{ lead.target_order_volume_min }} - {{ lead.target_order_volume_max }}
+                  {% elif lead.target_order_volume_min %}
+                    {{ lead.target_order_volume_min }}+
+                  {% else %}
+                    Up to {{ lead.target_order_volume_max }}
+                  {% endif %}
+                {% else %}
+                  <span class="muted">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if lead.brand_fit_score or lead.brand_fit_score == 0 %}
+                  {{ lead.brand_fit_score }}
+                {% else %}
+                  <span class="muted">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if lead.qualification_status %}
+                  <span class="badge" data-qual="{{ lead.qualification_status }}">{{ lead.qualification_status }}</span>
+                {% else %}
+                  <span class="muted">—</span>
+                {% endif %}
+              </td>
+              <td>{% if lead.last_outreach_date %}{{ lead.last_outreach_date }}{% else %}<span class="muted">—</span>{% endif %}</td>
+              <td>
+                {% if lead.next_follow_up_date %}
+                  {{ lead.next_follow_up_date }}
+                {% elif lead.next_followup %}
+                  {{ lead.next_followup }}
+                {% else %}
+                  <span class="muted">—</span>
+                {% endif %}
+              </td>
+              <td class="muted">{{ lead.created_date }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="17" class="muted">No leads yet.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      </div>
+    </form>
 
     <div class="pager">
       <div class="pager-left">
@@ -613,7 +867,7 @@
 
       <div class="pager-right">
         {% if page_obj.has_previous %}
-          <a class="btn-ghost" href="?{% if request.GET.lead_id %}lead_id={{ request.GET.lead_id|urlencode }}&{% endif %}{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.market %}market={{ request.GET.market|urlencode }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}{% if request.GET.sort %}sort={{ request.GET.sort|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page={{ page_obj.previous_page_number }}">Prev</a>
+          <a class="btn-ghost" href="?view={{ active_view|urlencode }}&{% if request.GET.lead_id %}lead_id={{ request.GET.lead_id|urlencode }}&{% endif %}{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.market %}market={{ request.GET.market|urlencode }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner|urlencode }}&{% endif %}{% if request.GET.assigned_to %}assigned_to={{ request.GET.assigned_to|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}{% if request.GET.qual_status %}qual_status={{ request.GET.qual_status|urlencode }}&{% endif %}{% if request.GET.icp_match %}icp_match={{ request.GET.icp_match|urlencode }}&{% endif %}{% if request.GET.fit_min %}fit_min={{ request.GET.fit_min|urlencode }}&{% endif %}{% if request.GET.has_website %}has_website={{ request.GET.has_website|urlencode }}&{% endif %}{% if request.GET.has_email %}has_email={{ request.GET.has_email|urlencode }}&{% endif %}{% if request.GET.has_phone %}has_phone={{ request.GET.has_phone|urlencode }}&{% endif %}{% if request.GET.has_social %}has_social={{ request.GET.has_social|urlencode }}&{% endif %}{% if request.GET.outreach_ready %}outreach_ready={{ request.GET.outreach_ready|urlencode }}&{% endif %}{% if request.GET.sort %}sort={{ request.GET.sort|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page={{ page_obj.previous_page_number }}">Prev</a>
         {% endif %}
 
         <span class="page-chip active">
@@ -621,7 +875,7 @@
         </span>
 
         {% if page_obj.has_next %}
-          <a class="btn-ghost" href="?{% if request.GET.lead_id %}lead_id={{ request.GET.lead_id|urlencode }}&{% endif %}{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.market %}market={{ request.GET.market|urlencode }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}{% if request.GET.sort %}sort={{ request.GET.sort|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page={{ page_obj.next_page_number }}">Next</a>
+          <a class="btn-ghost" href="?view={{ active_view|urlencode }}&{% if request.GET.lead_id %}lead_id={{ request.GET.lead_id|urlencode }}&{% endif %}{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.market %}market={{ request.GET.market|urlencode }}&{% endif %}{% if request.GET.owner %}owner={{ request.GET.owner|urlencode }}&{% endif %}{% if request.GET.assigned_to %}assigned_to={{ request.GET.assigned_to|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}{% if request.GET.qual_status %}qual_status={{ request.GET.qual_status|urlencode }}&{% endif %}{% if request.GET.icp_match %}icp_match={{ request.GET.icp_match|urlencode }}&{% endif %}{% if request.GET.fit_min %}fit_min={{ request.GET.fit_min|urlencode }}&{% endif %}{% if request.GET.has_website %}has_website={{ request.GET.has_website|urlencode }}&{% endif %}{% if request.GET.has_email %}has_email={{ request.GET.has_email|urlencode }}&{% endif %}{% if request.GET.has_phone %}has_phone={{ request.GET.has_phone|urlencode }}&{% endif %}{% if request.GET.has_social %}has_social={{ request.GET.has_social|urlencode }}&{% endif %}{% if request.GET.outreach_ready %}outreach_ready={{ request.GET.outreach_ready|urlencode }}&{% endif %}{% if request.GET.sort %}sort={{ request.GET.sort|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page={{ page_obj.next_page_number }}">Next</a>
         {% endif %}
       </div>
     </div>
@@ -690,6 +944,17 @@
         statusBox.textContent = "Error";
         outBox.textContent = "AI request failed.";
       }
+    });
+  })();
+
+  (function () {
+    const selectAll = document.getElementById("select-all");
+    if (!selectAll) return;
+    selectAll.addEventListener("change", function () {
+      const checks = document.querySelectorAll("input[name='lead_ids']");
+      checks.forEach((c) => {
+        c.checked = selectAll.checked;
+      });
     });
   })();
 </script>

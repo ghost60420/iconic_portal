@@ -81,6 +81,11 @@ from .models import (
     CustomerNote,
     Lead,
     LeadActivity,
+    LeadContactPoint,
+    LeadAIInsight,
+    LeadImportJob,
+    LeadResearchJob,
+    LEAD_QUAL_STATUS_CHOICES,
     LeadComment,
     CostingHeader,
     CostSheet,
@@ -551,13 +556,15 @@ Keep the answer short.
 # crm/views.py (your leads list view)
 import re
 from decimal import Decimal
+from urllib.parse import urlparse
 
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.shortcuts import render
 from django.utils.dateparse import parse_date
+from django.contrib.auth import get_user_model
 
-from .models import Lead, LEAD_STATUS_CHOICES
+from .models import Lead, LEAD_STATUS_CHOICES, OUTBOUND_STATUS_CHOICES
 
 def _parse_money_value(raw_value):
     if raw_value is None:
@@ -574,16 +581,172 @@ def _parse_money_value(raw_value):
     except Exception:
         return None
 
+def _normalize_phone(value):
+    if not value:
+        return ""
+    digits = re.sub(r"\D", "", str(value))
+    return digits
+
+def _normalize_handle(value):
+    if not value:
+        return ""
+    val = str(value).strip().lower()
+    if val.startswith("@"):
+        val = val[1:]
+    return val
+
+def _normalize_domain(value):
+    if not value:
+        return ""
+    raw = str(value).strip()
+    if not raw:
+        return ""
+    if "://" not in raw:
+        raw = f"http://{raw}"
+    try:
+        parsed = urlparse(raw)
+        host = parsed.netloc or ""
+    except Exception:
+        host = ""
+    host = host.lower()
+    if host.startswith("www."):
+        host = host[4:]
+    return host
+
+def _possible_duplicate_leads(lead, exclude_id=None):
+    q = Q()
+    email = (lead.email or "").strip()
+    phone = _normalize_phone(lead.phone)
+    brand = (lead.account_brand or "").strip()
+    website = _normalize_domain(getattr(lead, "website", "") or getattr(lead, "company_website", ""))
+    instagram = _normalize_handle(getattr(lead, "instagram_handle", ""))
+    linkedin = (getattr(lead, "linkedin_url", "") or "").strip().lower()
+
+    if email:
+        q |= Q(email__iexact=email)
+    if phone:
+        q |= Q(phone__icontains=phone)
+    if brand:
+        q |= Q(account_brand__iexact=brand)
+    if website:
+        q |= Q(website__icontains=website) | Q(company_website__icontains=website)
+    if instagram:
+        q |= Q(instagram_handle__iexact=instagram) | Q(instagram_handle__iexact=f"@{instagram}")
+    if linkedin:
+        q |= Q(linkedin_url__icontains=linkedin)
+
+    if not q:
+        return Lead.objects.none()
+
+    qs = Lead.objects.filter(q)
+    if exclude_id:
+        qs = qs.exclude(id=exclude_id)
+    return qs
+
+def _merge_leads(primary, duplicate, user=None):
+    if primary.pk == duplicate.pk:
+        return
+
+    merge_fields = [
+        "account_brand",
+        "contact_name",
+        "email",
+        "phone",
+        "attachment",
+        "market",
+        "website",
+        "company_website",
+        "country",
+        "region",
+        "city",
+        "product_category",
+        "product_interest",
+        "order_quantity",
+        "budget",
+        "preferred_contact_time",
+        "source",
+        "source_channel",
+        "outbound_method",
+        "outbound_status",
+        "lead_status",
+        "priority",
+        "priority_level",
+        "brand_stage",
+        "target_order_volume_min",
+        "target_order_volume_max",
+        "brand_fit_score",
+        "instagram_handle",
+        "linkedin_url",
+        "last_outreach_date",
+        "next_follow_up_date",
+        "last_reply_date",
+        "ideal_customer_profile_match",
+        "disqualification_reason",
+        "owner",
+        "assigned_to",
+        "notes",
+    ]
+
+    updated = False
+    for field in merge_fields:
+        primary_val = getattr(primary, field, None)
+        duplicate_val = getattr(duplicate, field, None)
+        if (primary_val is None or primary_val == "" or primary_val == 0) and duplicate_val:
+            setattr(primary, field, duplicate_val)
+            updated = True
+
+    if updated:
+        primary.save()
+
+    # move related records
+    from crm.models import LeadComment, LeadTask, LeadActivity, LeadAIMessage, Event, Opportunity
+    from aihub.models import AIConversation
+
+    LeadComment.objects.filter(lead=duplicate).update(lead=primary)
+    LeadTask.objects.filter(lead=duplicate).update(lead=primary)
+    LeadActivity.objects.filter(lead=duplicate).update(lead=primary)
+    LeadAIMessage.objects.filter(lead=duplicate).update(lead=primary)
+    Event.objects.filter(lead=duplicate).update(lead=primary)
+    Opportunity.objects.filter(lead=duplicate).update(lead=primary)
+    AIConversation.objects.filter(lead=duplicate).update(lead=primary)
+
+    LeadActivity.objects.create(
+        lead=primary,
+        activity_type="note_added",
+        description=f"Merged lead {duplicate.lead_id} into this lead.",
+    )
+    LeadActivity.objects.create(
+        lead=duplicate,
+        activity_type="note_added",
+        description=f"Merged into lead {primary.lead_id}.",
+    )
+
+    if duplicate.lead_type == "outbound":
+        duplicate.outbound_status = "Archived"
+    if not duplicate.disqualification_reason:
+        duplicate.disqualification_reason = f"Merged into lead {primary.lead_id}."
+    duplicate.save(update_fields=["outbound_status", "disqualification_reason"])
+
 def leads_list(request):
     lead_id = (request.GET.get("lead_id") or "").strip()
     q = (request.GET.get("q") or "").strip()
     status = (request.GET.get("status") or "").strip()
     market = (request.GET.get("market") or "").strip()
     owner = (request.GET.get("owner") or "").strip()
+    assigned_to = (request.GET.get("assigned_to") or "").strip()
     created_from_raw = (request.GET.get("created_from") or "").strip()
     created_to_raw = (request.GET.get("created_to") or "").strip()
     value_min_raw = (request.GET.get("value_min") or "").strip()
     value_max_raw = (request.GET.get("value_max") or "").strip()
+    qual_status = (request.GET.get("qual_status") or "").strip()
+    icp_match = (request.GET.get("icp_match") or "").strip().lower()
+    fit_min_raw = (request.GET.get("fit_min") or "").strip()
+    has_website = (request.GET.get("has_website") or "").strip().lower()
+    has_email = (request.GET.get("has_email") or "").strip().lower()
+    has_phone = (request.GET.get("has_phone") or "").strip().lower()
+    has_social = (request.GET.get("has_social") or "").strip().lower()
+    outreach_ready = (request.GET.get("outreach_ready") or "").strip().lower()
+    view = (request.GET.get("view") or "all").strip().lower()
 
     sort = (request.GET.get("sort") or "new").strip().lower()
 
@@ -604,11 +767,35 @@ def leads_list(request):
             ).distinct()
         else:
             qs = qs.filter(lead_status__iexact=status)
-            qs = qs.filter(opportunities__isnull=True).exclude(
-                lead_status__iexact="Converted"
-            )
-    else:
-        qs = qs.filter(opportunities__isnull=True).exclude(lead_status__iexact="Converted")
+
+    if view == "inbound":
+        qs = qs.filter(lead_type="inbound")
+    elif view == "outbound":
+        qs = qs.filter(lead_type="outbound")
+    elif view == "followup":
+        today = timezone.localdate()
+        qs = qs.filter(
+            lead_type="outbound",
+        ).filter(
+            Q(next_follow_up_date__lte=today) | Q(next_followup__lte=today)
+        ).filter(Q(last_reply_date__isnull=True))
+        qs = qs.exclude(outbound_status__in=["Archived", "Bad Fit"])
+    elif view == "replied":
+        qs = qs.filter(lead_type="outbound", outbound_status="Replied")
+    elif view == "meeting":
+        qs = qs.filter(lead_type="outbound", outbound_status="Meeting Booked")
+    elif view == "high_fit":
+        qs = qs.filter(Q(brand_fit_score__gte=70) | Q(ideal_customer_profile_match=True))
+    elif view == "target_volume":
+        qs = qs.filter(
+            Q(target_order_volume_min__gte=1000, target_order_volume_min__lte=5000)
+            | Q(target_order_volume_max__gte=1000, target_order_volume_max__lte=5000)
+            | Q(target_order_volume_min__lte=1000, target_order_volume_max__gte=5000)
+        )
+    elif view == "no_response":
+        qs = qs.filter(lead_type="outbound", outbound_status="No Response")
+    elif view == "archived":
+        qs = qs.filter(lead_type="outbound", outbound_status="Archived")
 
     if lead_id:
         qs = qs.filter(lead_id__icontains=lead_id)
@@ -621,18 +808,25 @@ def leads_list(request):
             | Q(phone__icontains=q)
             | Q(notes__icontains=q)
             | Q(company_website__icontains=q)
+            | Q(website__icontains=q)
+            | Q(instagram_handle__icontains=q)
+            | Q(linkedin_url__icontains=q)
             | Q(product_interest__icontains=q)
+            | Q(product_category__icontains=q)
             | Q(order_quantity__icontains=q)
             | Q(lead_id__icontains=q)
+            | Q(source_channel__icontains=q)
+            | Q(outbound_status__icontains=q)
         )
 
     if market:
         qs = qs.filter(market__iexact=market)
 
     if owner:
-        qs = qs.filter(
-            Q(owner__icontains=owner)
-        )
+        qs = qs.filter(Q(owner__icontains=owner))
+
+    if assigned_to:
+        qs = qs.filter(assigned_to__username__icontains=assigned_to)
 
     created_from = parse_date(created_from_raw) if created_from_raw else None
     created_to = parse_date(created_to_raw) if created_to_raw else None
@@ -640,6 +834,64 @@ def leads_list(request):
         qs = qs.filter(created_date__gte=created_from)
     if created_to:
         qs = qs.filter(created_date__lte=created_to)
+
+    if qual_status:
+        qs = qs.filter(qualification_status=qual_status)
+
+    if icp_match == "yes":
+        qs = qs.filter(ideal_customer_profile_match=True)
+    elif icp_match == "no":
+        qs = qs.filter(ideal_customer_profile_match=False)
+
+    if fit_min_raw:
+        try:
+            fit_min = int(fit_min_raw)
+            qs = qs.filter(brand_fit_score__gte=fit_min)
+        except ValueError:
+            pass
+
+    if outreach_ready == "1":
+        qs = qs.filter(qualification_status__in=["Outreach Ready", "Strong Fit"])
+
+    contact_join = False
+    if has_website == "yes":
+        qs = qs.filter(Q(website__gt="") | Q(company_website__gt=""))
+    elif has_website == "no":
+        qs = qs.exclude(Q(website__gt="") | Q(company_website__gt=""))
+
+    if has_email == "yes":
+        qs = qs.filter(Q(email__gt="") | Q(contact_points__contact_type="email"))
+        contact_join = True
+    elif has_email == "no":
+        qs = qs.exclude(Q(email__gt="") | Q(contact_points__contact_type="email"))
+        contact_join = True
+
+    if has_phone == "yes":
+        qs = qs.filter(Q(phone__gt="") | Q(contact_points__contact_type="phone"))
+        contact_join = True
+    elif has_phone == "no":
+        qs = qs.exclude(Q(phone__gt="") | Q(contact_points__contact_type="phone"))
+        contact_join = True
+
+    if has_social == "yes":
+        qs = qs.filter(
+            Q(instagram_handle__gt="")
+            | Q(linkedin_url__gt="")
+            | Q(contact_points__contact_type="instagram")
+            | Q(contact_points__contact_type="linkedin")
+        )
+        contact_join = True
+    elif has_social == "no":
+        qs = qs.exclude(
+            Q(instagram_handle__gt="")
+            | Q(linkedin_url__gt="")
+            | Q(contact_points__contact_type="instagram")
+            | Q(contact_points__contact_type="linkedin")
+        )
+        contact_join = True
+
+    if contact_join:
+        qs = qs.distinct()
 
     if sort == "old":
         qs = qs.order_by("created_date", "id")
@@ -664,14 +916,294 @@ def leads_list(request):
     paginator = Paginator(qs, per_page)
     page_number = request.GET.get("page") or 1
     page_obj = paginator.get_page(page_number)
+    users = get_user_model().objects.all().order_by("first_name", "last_name", "username")
 
     context = {
         "page_obj": page_obj,
         "per_page": per_page,
         "status_choices": LEAD_STATUS_CHOICES,
         "market_choices": Lead.MARKET_CHOICES,
+        "outbound_status_choices": OUTBOUND_STATUS_CHOICES,
+        "qual_status_choices": LEAD_QUAL_STATUS_CHOICES,
+        "active_view": view,
+        "users": users,
     }
     return render(request, "crm/leads_list.html", context)
+
+
+@require_POST
+def lead_bulk_update(request):
+    lead_ids = request.POST.getlist("lead_ids")
+    action = (request.POST.get("bulk_action") or "").strip()
+    return_url = request.POST.get("return_url") or request.META.get("HTTP_REFERER") or "/leads/"
+
+    if not lead_ids:
+        messages.error(request, "Select at least one lead.")
+        return redirect(return_url)
+
+    qs = Lead.objects.filter(id__in=lead_ids)
+
+    if action == "assign":
+        assigned_to_id = request.POST.get("assigned_to") or ""
+        if assigned_to_id:
+            qs.update(assigned_to_id=assigned_to_id)
+            messages.success(request, "Assigned leads updated.")
+        else:
+            messages.error(request, "Choose a user to assign.")
+
+    elif action == "outbound_status":
+        status = request.POST.get("outbound_status") or ""
+        if status:
+            qs.filter(lead_type="outbound").update(outbound_status=status)
+            messages.success(request, "Outbound status updated.")
+        else:
+            messages.error(request, "Choose an outbound status.")
+
+    elif action == "followup":
+        date_raw = (request.POST.get("next_follow_up_date") or "").strip()
+        follow_up = parse_date(date_raw) if date_raw else None
+        if follow_up:
+            qs.update(next_follow_up_date=follow_up, next_followup=follow_up)
+            messages.success(request, "Follow up date updated.")
+        else:
+            messages.error(request, "Choose a follow up date.")
+
+    elif action == "archive":
+        qs.filter(lead_type="outbound").update(outbound_status="Archived")
+        messages.success(request, "Outbound leads archived.")
+
+    else:
+        messages.error(request, "Select a bulk action.")
+
+    return redirect(return_url)
+
+
+def leads_dashboard(request):
+    qs = Lead.objects.all()
+    outbound = qs.filter(lead_type="outbound")
+    inbound = qs.filter(lead_type="inbound")
+    today = timezone.localdate()
+
+    kpis = {
+        "total_outbound": outbound.count(),
+        "active_outbound": outbound.exclude(outbound_status__in=["Archived", "Bad Fit"]).count(),
+        "high_fit": outbound.filter(Q(brand_fit_score__gte=70) | Q(ideal_customer_profile_match=True)).count(),
+        "first_contact": outbound.filter(outbound_status="First Contact Sent").count(),
+        "followups_due": outbound.filter(
+            Q(next_follow_up_date__lte=today) | Q(next_followup__lte=today),
+            last_reply_date__isnull=True,
+        ).exclude(outbound_status__in=["Archived", "Bad Fit"]).count(),
+        "replied": outbound.filter(outbound_status="Replied").count(),
+        "meeting": outbound.filter(outbound_status="Meeting Booked").count(),
+        "quote": outbound.filter(outbound_status="Quote Requested").count(),
+        "sample": outbound.filter(outbound_status="Sample Discussion").count(),
+        "converted": outbound.filter(outbound_status="Converted to Opportunity").count(),
+        "no_response": outbound.filter(outbound_status="No Response").count(),
+        "bad_fit": outbound.filter(outbound_status="Bad Fit").count(),
+        "total_inbound": inbound.count(),
+    }
+
+    by_source = (
+        outbound.values("source_channel")
+        .annotate(count=Count("id"))
+        .order_by("-count")
+    )
+    by_method = (
+        outbound.values("outbound_method")
+        .annotate(count=Count("id"))
+        .order_by("-count")
+    )
+    by_assigned = (
+        outbound.values("assigned_to__username", "assigned_to__first_name", "assigned_to__last_name")
+        .annotate(count=Count("id"))
+        .order_by("-count")
+    )
+    by_country = (
+        outbound.values("country").annotate(count=Count("id")).order_by("-count")
+    )
+    by_product = (
+        outbound.values("product_interest").annotate(count=Count("id")).order_by("-count")
+    )
+
+    fit_ranges = [
+        {"label": "0 to 39", "count": outbound.filter(brand_fit_score__lte=39).count()},
+        {"label": "40 to 69", "count": outbound.filter(brand_fit_score__gte=40, brand_fit_score__lte=69).count()},
+        {"label": "70 to 100", "count": outbound.filter(brand_fit_score__gte=70).count()},
+    ]
+
+    funnel = [
+        {"label": "Leads added", "count": outbound.count()},
+        {"label": "Contacted", "count": outbound.exclude(outbound_status="Not Contacted").count()},
+        {"label": "Replied", "count": outbound.filter(outbound_status="Replied").count()},
+        {"label": "Meeting booked", "count": outbound.filter(outbound_status="Meeting Booked").count()},
+        {"label": "Quote requested", "count": outbound.filter(outbound_status="Quote Requested").count()},
+        {"label": "Converted", "count": outbound.filter(outbound_status="Converted to Opportunity").count()},
+    ]
+    funnel_max = max([f["count"] for f in funnel]) if funnel else 0
+    for f in funnel:
+        if funnel_max:
+            f["percent"] = round((f["count"] / funnel_max) * 100, 2)
+        else:
+            f["percent"] = 0
+
+    context = {
+        "kpis": kpis,
+        "by_source": by_source,
+        "by_method": by_method,
+        "by_assigned": by_assigned,
+        "by_country": by_country,
+        "by_product": by_product,
+        "fit_ranges": fit_ranges,
+        "funnel": funnel,
+        "funnel_max": funnel_max,
+    }
+    return render(request, "crm/leads_dashboard.html", context)
+
+
+def lead_intake_dashboard(request):
+    qs = Lead.objects.all()
+
+    total_leads = qs.count()
+    status_counts = []
+    for value, label in LEAD_QUAL_STATUS_CHOICES:
+        status_counts.append(
+            {"label": label, "count": qs.filter(qualification_status=value).count()}
+        )
+
+    missing_website = qs.exclude(Q(website__gt="") | Q(company_website__gt="")).count()
+
+    has_contact_ids = qs.filter(
+        Q(email__gt="")
+        | Q(phone__gt="")
+        | Q(instagram_handle__gt="")
+        | Q(linkedin_url__gt="")
+        | Q(contact_points__isnull=False)
+    ).values_list("id", flat=True).distinct()
+    missing_contact = qs.exclude(id__in=list(has_contact_ids)).count()
+
+    outreach_ready = qs.filter(qualification_status__in=["Outreach Ready", "Strong Fit"]).count()
+
+    recent_jobs = LeadImportJob.objects.all()[:10]
+
+    context = {
+        "total_leads": total_leads,
+        "status_counts": status_counts,
+        "missing_website": missing_website,
+        "missing_contact": missing_contact,
+        "outreach_ready": outreach_ready,
+        "recent_jobs": recent_jobs,
+    }
+    return render(request, "crm/lead_intake_dashboard.html", context)
+
+
+def lead_import_outbound(request):
+    if request.method == "POST":
+        file = request.FILES.get("csv_file")
+        if not file:
+            messages.error(request, "Please upload a CSV or Excel file.")
+            return redirect("lead_import_outbound")
+
+        job = LeadImportJob.objects.create(
+            file=file,
+            created_by=request.user if request.user.is_authenticated else None,
+            status="queued",
+        )
+        messages.success(request, "Import job queued. Processing can take a few minutes.")
+        return redirect("lead_import_job_detail", job_id=job.pk)
+
+    jobs = LeadImportJob.objects.all()[:20]
+    return render(request, "crm/lead_import.html", {"jobs": jobs})
+
+
+def lead_import_job_detail(request, job_id):
+    job = get_object_or_404(LeadImportJob, pk=job_id)
+    leads = job.leads.all().order_by("-id")[:100]
+    return render(
+        request,
+        "crm/lead_import_job_detail.html",
+        {"job": job, "leads": leads},
+    )
+
+
+def _resolve_user_for_import(value):
+    if not value:
+        return None
+    user_model = get_user_model()
+    value = value.strip()
+    if "@" in value:
+        return user_model.objects.filter(email__iexact=value).first()
+    return user_model.objects.filter(username__iexact=value).first()
+
+
+def lead_research_start(request):
+    if request.method == "POST":
+        website = (request.POST.get("website") or "").strip()
+        brand = (request.POST.get("brand") or "").strip()
+        country = (request.POST.get("country") or "").strip()
+        assigned_to = (request.POST.get("assigned_to") or "").strip()
+
+        if not website:
+            messages.error(request, "Please enter a website or domain.")
+            return redirect("lead_research_start")
+
+        lead = Lead.objects.create(
+            account_brand=brand,
+            website=website,
+            country=country,
+            lead_type="outbound",
+            outbound_status="Not Contacted",
+            qualification_status="Researching",
+            assigned_to=_resolve_user_for_import(assigned_to),
+        )
+
+        job = LeadResearchJob.objects.create(
+            lead=lead,
+            website=website,
+            created_by=request.user if request.user.is_authenticated else None,
+        )
+        messages.success(request, "Research job queued.")
+        return redirect("lead_research_job_detail", job_id=job.pk)
+
+    users = get_user_model().objects.all().order_by("first_name", "last_name", "username")
+    return render(request, "crm/lead_research.html", {"users": users})
+
+
+def lead_research_job_detail(request, job_id):
+    job = get_object_or_404(LeadResearchJob, pk=job_id)
+    lead = job.lead
+    contact_points = lead.contact_points.all()
+    insights = lead.ai_insights.all()[:5]
+    return render(
+        request,
+        "crm/lead_research_detail.html",
+        {
+            "job": job,
+            "lead": lead,
+            "contact_points": contact_points,
+            "insights": insights,
+        },
+    )
+
+
+@require_POST
+def lead_auto_score(request, pk):
+    lead = get_object_or_404(Lead, pk=pk)
+
+    score, strengths = lead.compute_fit_score()
+
+    lead.brand_fit_score = score
+    lead.ideal_customer_profile_match = score >= 70
+    lead.fit_score_locked = False
+    lead.save(update_fields=["brand_fit_score", "ideal_customer_profile_match", "fit_score_locked"])
+
+    LeadActivity.objects.create(
+        lead=lead,
+        activity_type="ai_summary",
+        description=f"Auto scored lead: {score}. Signals: {', '.join(strengths)}",
+        user=request.user if request.user.is_authenticated else None,
+    )
+
+    return JsonResponse({"ok": True, "score": score, "signals": strengths})
 
 
 from django.shortcuts import render, redirect, get_object_or_404
@@ -679,7 +1211,7 @@ from django.utils import timezone
 from django.contrib import messages
 
 from .models import Lead, LeadActivity
-from .forms import LeadForm
+from .forms import LeadForm, QuickOutboundLeadForm
 
 
 def _apply_utm_fields(request, lead):
@@ -708,8 +1240,23 @@ def add_lead(request):
             lead = form.save(commit=False)
             _apply_utm_fields(request, lead)
 
+            if "brand_fit_score" in form.changed_data and form.cleaned_data.get("brand_fit_score") is not None:
+                lead.fit_score_locked = True
+
+            if lead.lead_type == "outbound" and not lead.outbound_status:
+                lead.outbound_status = "Not Contacted"
+
             if not lead.created_date:
                 lead.created_date = timezone.now().date()
+
+            duplicates = _possible_duplicate_leads(lead)
+            if duplicates.exists() and request.POST.get("confirm_duplicate") != "1":
+                messages.warning(request, "Possible duplicates found. Review before saving.")
+                return render(
+                    request,
+                    "crm/lead_form.html",
+                    {"form": form, "duplicate_leads": duplicates, "confirm_required": True},
+                )
 
             customer = _find_or_create_customer_for_lead(lead)
             lead.customer = customer
@@ -746,13 +1293,72 @@ def add_lead(request):
     return render(request, "crm/lead_form.html", {"form": form})
 
 
+def quick_add_outbound_lead(request):
+    if request.method == "POST":
+        form = QuickOutboundLeadForm(request.POST)
+        if form.is_valid():
+            lead = form.save(commit=False)
+            lead.lead_type = "outbound"
+            if not lead.outbound_status:
+                lead.outbound_status = "Not Contacted"
+
+            if not lead.created_date:
+                lead.created_date = timezone.now().date()
+
+            duplicates = _possible_duplicate_leads(lead)
+            if duplicates.exists() and request.POST.get("confirm_duplicate") != "1":
+                messages.warning(request, "Possible duplicates found. Review before saving.")
+                return render(
+                    request,
+                    "crm/lead_quick_add.html",
+                    {"form": form, "duplicate_leads": duplicates, "confirm_required": True},
+                )
+
+            customer = _find_or_create_customer_for_lead(lead)
+            lead.customer = customer
+            lead.save()
+
+            LeadActivity.objects.create(
+                lead=lead,
+                activity_type="lead_created",
+                description="Outbound lead created (quick add).",
+            )
+
+            messages.success(request, "Outbound lead created.")
+            return redirect(f"{redirect('lead_detail', pk=lead.pk).url}?saved=1")
+        else:
+            messages.error(request, "Could not save. Please fix the errors below.")
+    else:
+        form = QuickOutboundLeadForm()
+
+    return render(request, "crm/lead_quick_add.html", {"form": form})
+
+
 def edit_lead(request, pk):
     lead = get_object_or_404(Lead, pk=pk)
 
     if request.method == "POST":
         form = LeadForm(request.POST, request.FILES, instance=lead)
         if form.is_valid():
-            lead = form.save()
+            updated = form.save(commit=False)
+
+            if "brand_fit_score" in form.changed_data and form.cleaned_data.get("brand_fit_score") is not None:
+                updated.fit_score_locked = True
+
+            duplicates = _possible_duplicate_leads(updated, exclude_id=lead.pk)
+            if duplicates.exists() and request.POST.get("confirm_duplicate") != "1":
+                messages.warning(request, "Possible duplicates found. Review before saving.")
+                return render(
+                    request,
+                    "crm/lead_form.html",
+                    {"form": form, "lead": lead, "duplicate_leads": duplicates, "confirm_required": True},
+                )
+
+            lead = updated
+            lead.save()
+            if lead.lead_type == "outbound" and not lead.outbound_status:
+                lead.outbound_status = "Not Contacted"
+                lead.save(update_fields=["outbound_status"])
 
             if getattr(lead, "attachment", None):
                 LeadActivity.objects.create(
@@ -770,6 +1376,23 @@ def edit_lead(request, pk):
         form = LeadForm(instance=lead)
 
     return render(request, "crm/lead_form.html", {"form": form, "lead": lead})
+
+
+@require_POST
+def lead_merge(request, pk):
+    primary = get_object_or_404(Lead, pk=pk)
+    duplicate_id = (request.POST.get("duplicate_id") or "").strip()
+    if not duplicate_id:
+        messages.error(request, "Select a duplicate lead to merge.")
+        return redirect("lead_detail", pk=primary.pk)
+    if str(primary.pk) == str(duplicate_id):
+        messages.error(request, "Cannot merge the same lead.")
+        return redirect("lead_detail", pk=primary.pk)
+
+    duplicate = get_object_or_404(Lead, pk=duplicate_id)
+    _merge_leads(primary, duplicate, request.user if request.user.is_authenticated else None)
+    messages.success(request, f"Merged lead {duplicate.lead_id} into {primary.lead_id}.")
+    return redirect("lead_detail", pk=primary.pk)
 
 from .models import Lead, Customer, Opportunity
 
@@ -945,7 +1568,7 @@ def _find_or_create_customer_for_lead(lead):
         email=lead.email or "",
         phone=lead.phone or "",
         market=getattr(lead, "market", "") or "",
-        website=getattr(lead, "company_website", "") or "",
+        website=getattr(lead, "website", "") or getattr(lead, "company_website", "") or "",
         city=getattr(lead, "city", "") or "",
         country=getattr(lead, "country", "") or "",
         notes=lead.notes or "",
@@ -1203,6 +1826,85 @@ def lead_detail(request, pk):
                     pass
             tasks = lead.tasks.all()
 
+        elif action == "add_activity":
+            activity_type = (request.POST.get("activity_type") or "").strip()
+            channel = (request.POST.get("activity_channel") or "").strip()
+            note = (request.POST.get("activity_note") or "").strip()
+            message_copy = (request.POST.get("activity_message_copy") or "").strip()
+            outcome = (request.POST.get("activity_outcome") or "").strip()
+            follow_up_date_raw = (request.POST.get("activity_follow_up_date") or "").strip()
+
+            follow_up_date = None
+            if follow_up_date_raw:
+                try:
+                    follow_up_date = datetime.fromisoformat(follow_up_date_raw).date()
+                except Exception:
+                    follow_up_date = None
+
+            if activity_type:
+                LeadActivity.objects.create(
+                    lead=lead,
+                    activity_type=activity_type,
+                    channel=channel,
+                    user=request.user if request.user.is_authenticated else None,
+                    note=note,
+                    message_copy=message_copy,
+                    outcome=outcome,
+                    follow_up_date=follow_up_date,
+                    description=note[:200] if note else "",
+                )
+                if activity_type in [
+                    "cold_email_sent",
+                    "linkedin_message_sent",
+                    "instagram_dm_sent",
+                    "call_made",
+                    "follow_up_sent",
+                    "meeting_booked",
+                    "quote_shared",
+                    "sample_discussion",
+                ]:
+                    lead.last_outreach_date = timezone.localdate()
+                    lead.save(update_fields=["last_outreach_date"])
+
+                if activity_type == "cold_email_sent" and lead.outbound_status in ["", "Not Contacted"]:
+                    lead.outbound_status = "First Contact Sent"
+                    lead.save(update_fields=["outbound_status"])
+
+                if activity_type == "follow_up_sent":
+                    if lead.outbound_status == "Follow Up 1 Sent":
+                        lead.outbound_status = "Follow Up 2 Sent"
+                    elif lead.outbound_status == "Follow Up 2 Sent":
+                        lead.outbound_status = "Follow Up 3 Sent"
+                    else:
+                        lead.outbound_status = "Follow Up 1 Sent"
+                    lead.save(update_fields=["outbound_status"])
+
+                if activity_type == "reply_received":
+                    lead.last_reply_date = timezone.localdate()
+                    lead.outbound_status = "Replied"
+                    lead.save(update_fields=["last_reply_date", "outbound_status"])
+
+                if activity_type == "meeting_booked":
+                    lead.outbound_status = "Meeting Booked"
+                    lead.save(update_fields=["outbound_status"])
+
+                if activity_type == "quote_shared":
+                    lead.outbound_status = "Quote Requested"
+                    lead.save(update_fields=["outbound_status"])
+
+                if activity_type == "sample_discussion":
+                    lead.outbound_status = "Sample Discussion"
+                    lead.save(update_fields=["outbound_status"])
+
+                if follow_up_date:
+                    lead.next_follow_up_date = follow_up_date
+                    lead.next_followup = follow_up_date
+                    lead.save(update_fields=["next_follow_up_date", "next_followup"])
+                activities = lead.activities.all()
+                messages.success(request, "Activity logged.")
+            else:
+                messages.error(request, "Please choose an activity type.")
+
         # shipping from lead page
         elif action == "save_shipping":
             shipping_name = (request.POST.get("shipping_name") or "").strip()
@@ -1389,6 +2091,7 @@ def lead_detail(request, pk):
         Event.objects.filter(lead=lead, start_datetime__gte=timezone.now())
         .order_by("start_datetime")[:5]
     )
+    potential_duplicates = _possible_duplicate_leads(lead, exclude_id=lead.pk)[:10]
 
     context = {
         "lead": lead,
@@ -1397,6 +2100,8 @@ def lead_detail(request, pk):
         "comments": comments,
         "tasks": tasks,
         "activities": activities,
+        "activity_choices": LeadActivity.ACTIVITY_TYPE_CHOICES,
+        "potential_duplicates": potential_duplicates,
         "upcoming_events": upcoming_events,
         "agents": agents,
         "selected_agent": selected_agent,
@@ -6791,6 +7496,10 @@ def _shipment_email_target(shipment):
 
 def _send_email_safe(subject, body, from_email, to_list):
     timeout = getattr(settings, "EMAIL_TIMEOUT", 5)
+    host_user = getattr(settings, "EMAIL_HOST_USER", "") or ""
+    host_password = getattr(settings, "EMAIL_HOST_PASSWORD", "") or ""
+    if not host_user or not host_password:
+        return False
     try:
         connection = get_connection(timeout=timeout)
         message = EmailMessage(subject, body, from_email, to_list, connection=connection)
@@ -7835,8 +8544,13 @@ def convert_lead_to_opportunity(request, pk):
             stage="Prospecting",
             product_category="Other",
             product_type="Other",
+            converted_from_lead_type=getattr(lead, "lead_type", ""),
+            converted_from_source_channel=getattr(lead, "source_channel", ""),
+            converted_from_outbound_status=getattr(lead, "outbound_status", ""),
         )
         lead.lead_status = "Converted"
+        if lead.lead_type == "outbound":
+            lead.outbound_status = "Converted to Opportunity"
         lead.save(update_fields=["lead_status"])
         messages.success(request, "Lead converted to opportunity.")
 
@@ -7873,9 +8587,16 @@ def convert_lead_to_opportunity(request, pk):
             stage="Prospecting",
             product_category="Other",
             product_type="Other",
+            converted_from_lead_type=getattr(lead, "lead_type", ""),
+            converted_from_source_channel=getattr(lead, "source_channel", ""),
+            converted_from_outbound_status=getattr(lead, "outbound_status", ""),
         )
         lead.lead_status = "Converted"
-        lead.save(update_fields=["lead_status"])
+        if lead.lead_type == "outbound":
+            lead.outbound_status = "Converted to Opportunity"
+            lead.save(update_fields=["lead_status", "outbound_status"])
+        else:
+            lead.save(update_fields=["lead_status"])
         messages.success(request, "Lead converted to opportunity.")
 
         _record_customer_event(

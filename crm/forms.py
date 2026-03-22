@@ -14,6 +14,7 @@
 from decimal import Decimal
 from django import forms
 from django.utils import timezone
+from django.contrib.auth import get_user_model
 
 from .models import (
     AccountingEntry,
@@ -65,27 +66,67 @@ class LeadForm(forms.ModelForm):
         model = Lead
         fields = [
             "account_brand",
-            "company_website",
+            "website",
             "market",
             "country",
+            "region",
             "city",
             "source",
+            "source_channel",
             "lead_type",
+            "brand_stage",
+            "outbound_method",
+            "outbound_status",
             "lead_status",
             "priority",
+            "priority_level",
             "product_category",
             "product_interest",
             "order_quantity",
             "budget",
             "preferred_contact_time",
             "owner",
-            "next_followup",
+            "assigned_to",
+            "next_follow_up_date",
+            "last_outreach_date",
+            "last_reply_date",
             "contact_name",
             "email",
             "phone",
+            "instagram_handle",
+            "linkedin_url",
             "attachment",
+            "target_order_volume_min",
+            "target_order_volume_max",
+            "brand_fit_score",
+            "ideal_customer_profile_match",
+            "qualification_status",
+            "qualification_reason",
+            "confidence_level",
+            "target_order_range_estimate",
+            "product_category_guess",
+            "recommended_channel",
+            "recommended_next_action",
+            "disqualification_reason",
             "notes",
         ]
+        widgets = {
+            "next_follow_up_date": forms.DateInput(attrs={"type": "date"}),
+            "last_outreach_date": forms.DateInput(attrs={"type": "date"}),
+            "last_reply_date": forms.DateInput(attrs={"type": "date"}),
+            "target_order_volume_min": forms.NumberInput(attrs={"min": 0, "step": 1}),
+            "target_order_volume_max": forms.NumberInput(attrs={"min": 0, "step": 1}),
+            "brand_fit_score": forms.NumberInput(attrs={"min": 0, "max": 100, "step": 1}),
+            "website": forms.TextInput(attrs={"placeholder": "https://"}),
+            "instagram_handle": forms.TextInput(attrs={"placeholder": "@brand"}),
+            "linkedin_url": forms.URLInput(attrs={"placeholder": "https://linkedin.com/company/..."}),
+            "qualification_reason": forms.Textarea(attrs={"rows": 3}),
+            "recommended_channel": forms.TextInput(attrs={"placeholder": "Email, Instagram"}),
+            "recommended_next_action": forms.TextInput(attrs={"placeholder": "Follow up, call, etc"}),
+            "target_order_range_estimate": forms.TextInput(attrs={"placeholder": "1000-5000 pcs"}),
+            "product_category_guess": forms.TextInput(attrs={"placeholder": "Activewear"}),
+            "confidence_level": forms.NumberInput(attrs={"min": 0, "max": 100, "step": 1}),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -111,6 +152,47 @@ class LeadForm(forms.ModelForm):
             if current_value and current_value not in dict(Opportunity.PRODUCT_TYPE_CHOICES):
                 self.fields["product_interest"].choices.append((current_value, current_value))
 
+        if "assigned_to" in self.fields:
+            self.fields["assigned_to"].queryset = get_user_model().objects.all().order_by("first_name", "last_name", "username")
+
+
+# --------------------------------------------------
+# Quick outbound lead form
+# --------------------------------------------------
+class QuickOutboundLeadForm(forms.ModelForm):
+    class Meta:
+        model = Lead
+        fields = [
+            "account_brand",
+            "contact_name",
+            "email",
+            "phone",
+            "website",
+            "instagram_handle",
+            "linkedin_url",
+            "country",
+            "product_interest",
+            "target_order_volume_min",
+            "target_order_volume_max",
+            "source_channel",
+            "outbound_method",
+            "assigned_to",
+            "notes",
+        ]
+        widgets = {
+            "website": forms.TextInput(attrs={"placeholder": "https://"}),
+            "instagram_handle": forms.TextInput(attrs={"placeholder": "@brand"}),
+            "linkedin_url": forms.URLInput(attrs={"placeholder": "https://linkedin.com/company/..."}),
+            "target_order_volume_min": forms.NumberInput(attrs={"min": 0, "step": 1}),
+            "target_order_volume_max": forms.NumberInput(attrs={"min": 0, "step": 1}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if "product_interest" in self.fields:
+            self.fields["product_interest"].choices = [("", "Select an interest")] + list(Opportunity.PRODUCT_TYPE_CHOICES)
+        if "assigned_to" in self.fields:
+            self.fields["assigned_to"].queryset = get_user_model().objects.all().order_by("first_name", "last_name", "username")
 
 # --------------------------------------------------
 # Library forms
@@ -672,6 +754,11 @@ class ShipmentForm(forms.ModelForm):
         rate = cleaned.get("rate_bdt_per_cad")
         cost_bdt = cleaned.get("cost_bdt")
         cost_cad = cleaned.get("cost_cad")
+        try:
+            if rate is not None and Decimal(str(rate)) <= 0:
+                cleaned["rate_bdt_per_cad"] = None
+        except Exception:
+            cleaned["rate_bdt_per_cad"] = None
 
         if (rate in [None, ""]) and cost_bdt and cost_cad and Decimal(str(cost_cad)) != 0:
             try:

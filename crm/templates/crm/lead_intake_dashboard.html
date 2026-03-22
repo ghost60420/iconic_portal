@@ -1,0 +1,93 @@
+{% extends "crm/base.html" %}
+{% block content %}
+<style>
+  .page{ max-width:1100px; margin:18px auto; padding:0 12px; color:#f9fafb; font-family:Arial,sans-serif; }
+  .grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+  .card{ background: radial-gradient(circle at top left,#111827,#020617); border:1px solid #1f2937; border-radius:16px; padding:14px; box-shadow:0 14px 30px rgba(0,0,0,0.45); }
+  .title{ margin:0 0 6px 0; font-size:20px; color:#fef9c3; font-weight:800; }
+  .label{ font-size:11px; color:#9ca3af; text-transform:uppercase; letter-spacing:0.3px; font-weight:800; }
+  .value{ font-size:20px; font-weight:900; margin-top:6px; }
+  table{ width:100%; border-collapse:collapse; font-size:12px; }
+  th, td{ padding:6px 8px; border-bottom:1px solid #1f2937; }
+  th{ color:#9ca3af; text-transform:uppercase; font-size:11px; letter-spacing:0.3px; }
+  .actions{ margin:10px 0; display:flex; gap:10px; flex-wrap:wrap; }
+  .btn{ padding:8px 14px; border-radius:999px; background:#facc15; color:#111827; font-weight:800; text-decoration:none; }
+  .btn-ghost{ padding:8px 14px; border-radius:999px; border:1px solid rgba(148,163,184,0.35); color:#e5e7eb; text-decoration:none; }
+</style>
+
+<div class="page">
+  <div class="card" style="margin-bottom:12px;">
+    <h1 class="title">Lead intake dashboard</h1>
+    <div class="actions">
+      <a class="btn" href="{% url 'lead_import_outbound' %}">Bulk intake</a>
+      <a class="btn-ghost" href="{% url 'lead_research_start' %}">Research website</a>
+      <a class="btn-ghost" href="{% url 'leads_list' %}">Lead list</a>
+    </div>
+  </div>
+
+  <div class="grid" style="margin-bottom:12px;">
+    <div class="card">
+      <div class="label">Total leads</div>
+      <div class="value">{{ total_leads }}</div>
+    </div>
+    <div class="card">
+      <div class="label">Outreach ready</div>
+      <div class="value">{{ outreach_ready }}</div>
+    </div>
+    <div class="card">
+      <div class="label">Missing website</div>
+      <div class="value">{{ missing_website }}</div>
+    </div>
+    <div class="card">
+      <div class="label">Missing contact</div>
+      <div class="value">{{ missing_contact }}</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:12px;">
+    <div class="label" style="margin-bottom:6px;">Qualification status breakdown</div>
+    <table>
+      <thead>
+        <tr><th>Status</th><th>Count</th></tr>
+      </thead>
+      <tbody>
+        {% for s in status_counts %}
+          <tr><td>{{ s.label }}</td><td>{{ s.count }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="label" style="margin-bottom:6px;">Recent import jobs</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Job</th>
+          <th>Status</th>
+          <th>Total</th>
+          <th>Created</th>
+          <th>Duplicates</th>
+          <th>Strong fit</th>
+          <th>Bad fit</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for job in recent_jobs %}
+          <tr>
+            <td><a href="{% url 'lead_import_job_detail' job.pk %}">#{{ job.pk }}</a></td>
+            <td>{{ job.status }}</td>
+            <td>{{ job.total_rows }}</td>
+            <td>{{ job.created_count }}</td>
+            <td>{{ job.duplicate_count }}</td>
+            <td>{{ job.strong_fit_count }}</td>
+            <td>{{ job.bad_fit_count }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7">No import jobs yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

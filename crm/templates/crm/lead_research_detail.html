@@ -1,0 +1,84 @@
+{% extends "crm/base.html" %}
+{% block content %}
+<style>
+  .page{ max-width:1100px; margin:18px auto; padding:0 12px; color:#f9fafb; font-family:Arial,sans-serif; }
+  .card{ background: radial-gradient(circle at top left,#111827,#020617); border:1px solid #1f2937; border-radius:16px; padding:16px; margin-bottom:12px; box-shadow:0 14px 30px rgba(0,0,0,0.45); }
+  .title{ margin:0 0 6px 0; font-size:20px; color:#fef9c3; font-weight:800; }
+  .subtitle{ font-size:12px; color:#9ca3af; margin-bottom:10px; }
+  table{ width:100%; border-collapse:collapse; font-size:12px; }
+  th, td{ padding:6px 8px; border-bottom:1px solid #1f2937; }
+  th{ color:#9ca3af; text-transform:uppercase; font-size:11px; letter-spacing:0.3px; }
+  .actions{ display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
+  .btn{ padding:8px 14px; border-radius:999px; background:#facc15; color:#111827; font-weight:800; text-decoration:none; }
+  .btn-ghost{ padding:8px 14px; border-radius:999px; border:1px solid rgba(148,163,184,0.35); color:#e5e7eb; text-decoration:none; }
+  code{ background:#020617; padding:2px 6px; border-radius:6px; border:1px solid #1f2937; }
+</style>
+
+<div class="page">
+  <div class="card">
+    <h1 class="title">Research job #{{ job.pk }}</h1>
+    <div class="subtitle">Status: {{ job.status }}</div>
+    <div class="subtitle">Lead: <a href="{% url 'lead_detail' lead.pk %}">{{ lead.lead_id }}</a></div>
+    <div class="subtitle">Website: {{ job.website|default:lead.website|default:"—" }}</div>
+    <div class="subtitle">Started: {{ job.started_at|default:"—" }} • Finished: {{ job.finished_at|default:"—" }}</div>
+    {% if job.error_message %}
+      <div class="subtitle" style="color:#fecaca;">{{ job.error_message }}</div>
+    {% endif %}
+    <div class="actions">
+      <a class="btn-ghost" href="{% url 'lead_research_start' %}">New research</a>
+      <a class="btn-ghost" href="{% url 'leads_list' %}">Lead list</a>
+    </div>
+    <div class="subtitle" style="margin-top:10px;">
+      To process queued jobs on the server:
+      <code>python manage.py process_lead_research_jobs --job {{ job.pk }}</code>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="title" style="font-size:16px;">Contact points found</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Value</th>
+          <th>Label</th>
+          <th>Source</th>
+          <th>Confidence</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cp in contact_points %}
+          <tr>
+            <td>{{ cp.get_contact_type_display }}</td>
+            <td>{{ cp.value }}</td>
+            <td>{{ cp.label|default:"—" }}</td>
+            <td>
+              {% if cp.source_url %}
+                <a href="{{ cp.source_url }}" target="_blank">{{ cp.source_url|truncatechars:40 }}</a>
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td>{{ cp.confidence }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5">No contact points found yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if insights %}
+    <div class="card">
+      <div class="title" style="font-size:16px;">AI insights</div>
+      {% for insight in insights %}
+        <div class="subtitle" style="margin-bottom:6px;">{{ insight.created_at }}</div>
+        <div style="white-space:pre-wrap;font-size:12px;">{{ insight.summary_text }}</div>
+        {% if insight.data %}
+          <pre style="white-space:pre-wrap;font-size:11px;background:#020617;border:1px solid #1f2937;border-radius:10px;padding:8px;margin-top:6px;">{{ insight.data|safe }}</pre>
+        {% endif %}
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

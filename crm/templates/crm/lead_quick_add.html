@@ -1,0 +1,227 @@
+{% extends "crm/base.html" %}
+{% load static %}
+
+{% block content %}
+<style>
+  :root{
+    --bg:#020617;
+    --panel:#0b1220;
+    --line:#334155;
+    --text:#f9fafb;
+    --muted:#9ca3af;
+    --gold:#facc15;
+  }
+  .page{
+    max-width:980px;
+    margin:18px auto 40px auto;
+    padding:0 12px;
+    color:var(--text);
+    font-family: Arial, sans-serif;
+  }
+  .card{
+    background: radial-gradient(circle at top left, #111827, #020617);
+    border:1px solid #1f2937;
+    border-radius:16px;
+    padding:16px;
+    box-shadow:0 14px 30px rgba(0,0,0,0.45);
+  }
+  .title{
+    margin:0 0 6px 0;
+    font-size:20px;
+    color:#fef9c3;
+    font-weight:800;
+  }
+  .subtitle{
+    font-size:12px;
+    color:var(--muted);
+    margin-bottom:12px;
+  }
+  .grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+  }
+  @media (max-width:900px){
+    .grid{ grid-template-columns:1fr; }
+  }
+  label{
+    display:block;
+    font-size:12px;
+    font-weight:800;
+    color:#e5e7eb;
+    margin-bottom:4px;
+  }
+  input, select, textarea{
+    width:100%;
+    padding:8px 10px;
+    background:#020617;
+    color:#f9fafb;
+    border:1px solid #374151;
+    border-radius:10px;
+    font-size:13px;
+    box-sizing:border-box;
+  }
+  textarea{ min-height:90px; }
+  .actions{
+    margin-top:12px;
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  .btn{
+    padding:9px 16px;
+    background:#facc15;
+    color:#111827;
+    border-radius:999px;
+    border:none;
+    font-size:13px;
+    font-weight:800;
+    cursor:pointer;
+  }
+  .btn-ghost{
+    padding:9px 16px;
+    border-radius:999px;
+    border:1px solid rgba(148,163,184,0.35);
+    background: rgba(255,255,255,0.04);
+    color:#e5e7eb;
+    font-size:13px;
+    font-weight:800;
+    text-decoration:none;
+  }
+  .errorlist{
+    margin:6px 0 0 0;
+    padding:0;
+    list-style:none;
+    font-size:11px;
+    color:#fecaca;
+  }
+</style>
+
+<div class="page">
+  <div class="card">
+    <h1 class="title">Quick Add Outbound Lead</h1>
+    <div class="subtitle">Fast entry for outbound prospecting. Lead type is set to outbound and status is Not Contacted.</div>
+
+    <form method="post">
+      {% csrf_token %}
+
+      {% if duplicate_leads %}
+        <div class="card" style="margin-bottom:12px;">
+          <div class="title" style="font-size:14px;">Possible duplicates found</div>
+          <div class="subtitle">Review the list and check Save anyway to continue.</div>
+          <table style="width:100%; border-collapse:collapse; font-size:12px;">
+            <thead>
+              <tr>
+                <th style="text-align:left; padding:6px;">Lead</th>
+                <th style="text-align:left; padding:6px;">Company</th>
+                <th style="text-align:left; padding:6px;">Email</th>
+                <th style="text-align:left; padding:6px;">Phone</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for d in duplicate_leads %}
+                <tr>
+                  <td style="padding:6px;">
+                    <a href="{% url 'lead_detail' d.pk %}">{{ d.lead_id }}</a>
+                  </td>
+                  <td style="padding:6px;">{{ d.account_brand|default:"—" }}</td>
+                  <td style="padding:6px;">{{ d.email|default:"—" }}</td>
+                  <td style="padding:6px;">{{ d.phone|default:"—" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          <label style="margin-top:10px; display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" name="confirm_duplicate" value="1">
+            Save anyway
+          </label>
+        </div>
+      {% endif %}
+
+      <div class="grid">
+        <div>
+          <label>Company name</label>
+          {{ form.account_brand }}
+          {{ form.account_brand.errors }}
+        </div>
+        <div>
+          <label>Contact name</label>
+          {{ form.contact_name }}
+          {{ form.contact_name.errors }}
+        </div>
+        <div>
+          <label>Email</label>
+          {{ form.email }}
+          {{ form.email.errors }}
+        </div>
+        <div>
+          <label>Phone</label>
+          {{ form.phone }}
+          {{ form.phone.errors }}
+        </div>
+        <div>
+          <label>Website</label>
+          {{ form.website }}
+          {{ form.website.errors }}
+        </div>
+        <div>
+          <label>Instagram handle</label>
+          {{ form.instagram_handle }}
+          {{ form.instagram_handle.errors }}
+        </div>
+        <div>
+          <label>LinkedIn URL</label>
+          {{ form.linkedin_url }}
+          {{ form.linkedin_url.errors }}
+        </div>
+        <div>
+          <label>Country</label>
+          {{ form.country }}
+          {{ form.country.errors }}
+        </div>
+        <div>
+          <label>Product interest</label>
+          {{ form.product_interest }}
+          {{ form.product_interest.errors }}
+        </div>
+        <div>
+          <label>Target volume min</label>
+          {{ form.target_order_volume_min }}
+          {{ form.target_order_volume_min.errors }}
+        </div>
+        <div>
+          <label>Target volume max</label>
+          {{ form.target_order_volume_max }}
+          {{ form.target_order_volume_max.errors }}
+        </div>
+        <div>
+          <label>Source channel</label>
+          {{ form.source_channel }}
+          {{ form.source_channel.errors }}
+        </div>
+        <div>
+          <label>Outbound method</label>
+          {{ form.outbound_method }}
+          {{ form.outbound_method.errors }}
+        </div>
+        <div>
+          <label>Assigned to</label>
+          {{ form.assigned_to }}
+          {{ form.assigned_to.errors }}
+        </div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <label>Notes</label>
+        {{ form.notes }}
+        {{ form.notes.errors }}
+      </div>
+
+      <div class="actions">
+        <button class="btn" type="submit">Create outbound lead</button>
+        <a class="btn-ghost" href="{% url 'leads_list' %}">Back to leads</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

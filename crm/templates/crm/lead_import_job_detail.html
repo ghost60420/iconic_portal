@@ -1,0 +1,69 @@
+{% extends "crm/base.html" %}
+{% block content %}
+<style>
+  .page{ max-width:1100px; margin:18px auto; padding:0 12px; color:#f9fafb; font-family:Arial,sans-serif; }
+  .card{ background: radial-gradient(circle at top left,#111827,#020617); border:1px solid #1f2937; border-radius:16px; padding:16px; margin-bottom:12px; box-shadow:0 14px 30px rgba(0,0,0,0.45); }
+  .title{ margin:0 0 6px 0; font-size:20px; color:#fef9c3; font-weight:800; }
+  .subtitle{ font-size:12px; color:#9ca3af; margin-bottom:10px; }
+  table{ width:100%; border-collapse:collapse; font-size:12px; }
+  th, td{ padding:6px 8px; border-bottom:1px solid #1f2937; }
+  th{ color:#9ca3af; text-transform:uppercase; font-size:11px; letter-spacing:0.3px; }
+  .pill{ display:inline-block; padding:4px 10px; border-radius:999px; border:1px solid #374151; font-size:12px; }
+  .actions{ display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
+  .btn{ padding:8px 14px; border-radius:999px; background:#facc15; color:#111827; font-weight:800; text-decoration:none; }
+  .btn-ghost{ padding:8px 14px; border-radius:999px; border:1px solid rgba(148,163,184,0.35); color:#e5e7eb; text-decoration:none; }
+  code{ background:#020617; padding:2px 6px; border-radius:6px; border:1px solid #1f2937; }
+</style>
+
+<div class="page">
+  <div class="card">
+    <h1 class="title">Import job #{{ job.pk }}</h1>
+    <div class="subtitle">Status: <span class="pill">{{ job.status }}</span></div>
+    <div class="subtitle">Total rows: {{ job.total_rows }} • Created: {{ job.created_count }} • Updated: {{ job.updated_count }} • Duplicates: {{ job.duplicate_count }}</div>
+    <div class="subtitle">Strong fit: {{ job.strong_fit_count }} • Moderate: {{ job.moderate_fit_count }} • Weak: {{ job.weak_fit_count }} • Bad fit: {{ job.bad_fit_count }}</div>
+    <div class="subtitle">Missing contact: {{ job.missing_contact_count }}</div>
+    <div class="subtitle">Started: {{ job.started_at|default:"—" }} • Finished: {{ job.finished_at|default:"—" }}</div>
+    {% if job.error_log %}
+      <div class="subtitle" style="color:#fecaca;">{{ job.error_log }}</div>
+    {% endif %}
+    <div class="actions">
+      <a class="btn-ghost" href="{% url 'lead_import_outbound' %}">Back to intake</a>
+      <a class="btn-ghost" href="{% url 'leads_list' %}">Lead list</a>
+    </div>
+    <div class="subtitle" style="margin-top:10px;">
+      To process queued jobs on the server:
+      <code>python manage.py process_lead_import_jobs --job {{ job.pk }}</code>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="title" style="font-size:16px;">Latest leads from this job</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Lead</th>
+          <th>Company</th>
+          <th>Email</th>
+          <th>Phone</th>
+          <th>Fit</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for lead in leads %}
+          <tr>
+            <td><a href="{% url 'lead_detail' lead.pk %}">{{ lead.lead_id }}</a></td>
+            <td>{{ lead.account_brand|default:"—" }}</td>
+            <td>{{ lead.email|default:"—" }}</td>
+            <td>{{ lead.phone|default:"—" }}</td>
+            <td>{{ lead.brand_fit_score }}</td>
+            <td>{{ lead.qualification_status }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6">No leads yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
