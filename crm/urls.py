@@ -247,7 +247,7 @@ urlpatterns = [
     path("invoices/bd/add/", acc_any(getattr(inv, "invoice_add_bd", inv.invoice_add)), name="invoice_add_bd"),
     path("invoices/<int:pk>/", acc_any(inv.invoice_view), name="invoice_view"),
     path("invoices/<int:pk>/edit/", acc_any(inv.invoice_edit), name="invoice_edit"),
-    path("invoices/<int:pk>/approve/", acc_any(inv.invoice_approve), name="invoice_approve"),
+    path("invoices/<int:pk>/approve/", acc_any(getattr(inv, "invoice_approve", inv.invoice_view)), name="invoice_approve"),
 
     # Access
     path("access/", login_required(access.access_list), name="access_list"),
