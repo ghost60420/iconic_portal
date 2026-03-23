@@ -429,6 +429,74 @@ def cost_sheet_detail(request, pk):
     return render(request, "crm/costing/costsheet_detail.html", context)
 
 
+def cost_sheet_duplicate(request, pk):
+    costing = get_object_or_404(
+        CostingHeader.objects.select_related("opportunity", "customer").prefetch_related("line_items"),
+        pk=pk,
+    )
+    new_costing = CostingHeader.objects.create(
+        opportunity=costing.opportunity,
+        customer=costing.customer,
+        buyer=costing.buyer,
+        brand=costing.brand,
+        style_name=costing.style_name,
+        style_code=costing.style_code,
+        product_type=costing.product_type,
+        gender=costing.gender,
+        size_range=costing.size_range,
+        season=costing.season,
+        factory_location=costing.factory_location,
+        order_quantity=costing.order_quantity,
+        moq=costing.moq,
+        costing_date=costing.costing_date,
+        currency=costing.currency,
+        exchange_rate=costing.exchange_rate,
+        finance_percent_fabric=costing.finance_percent_fabric,
+        finance_percent_trims=costing.finance_percent_trims,
+        commission_percent=costing.commission_percent,
+        target_margin_percent=costing.target_margin_percent,
+        manual_fob_per_piece=costing.manual_fob_per_piece,
+        merchandiser=costing.merchandiser,
+        fabric_type=costing.fabric_type,
+        fabric_gsm=costing.fabric_gsm,
+        fabric_composition=costing.fabric_composition,
+        wash_type=costing.wash_type,
+        print_type=costing.print_type,
+        embroidery=costing.embroidery,
+        label_type=costing.label_type,
+        packaging_type=costing.packaging_type,
+        special_trims=costing.special_trims,
+        fit_remarks=costing.fit_remarks,
+        notes=costing.notes,
+        status="draft",
+    )
+
+    for line in costing.line_items.all():
+        line.pk = None
+        line.costing = new_costing
+        line.save()
+
+    smv = getattr(costing, "smv", None)
+    if smv:
+        CostingSMV.objects.create(
+            costing=new_costing,
+            machine_smv=smv.machine_smv,
+            finishing_smv=smv.finishing_smv,
+            cpm=smv.cpm,
+            efficiency_costing=smv.efficiency_costing,
+            efficiency_planned=smv.efficiency_planned,
+        )
+
+    CostingAuditLog.objects.create(
+        costing=new_costing,
+        action="created",
+        changed_by=request.user if request.user.is_authenticated else None,
+        note=f"Duplicated from COST-{costing.pk}",
+    )
+    messages.success(request, "Costing duplicated. You are now editing the new version.")
+    return redirect("cost_sheet_detail", pk=new_costing.pk)
+
+
 def _save_export_document(costing, filename, data, doc_type, user):
     try:
         OpportunityDocument.objects.create(
