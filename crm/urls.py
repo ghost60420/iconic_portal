@@ -240,11 +240,11 @@ urlpatterns = [
 
     # Invoices
     path("invoices/", acc_any(inv.invoice_list), name="invoice_list"),
-    path("invoices/ca/", acc_any(inv.invoice_list_ca), name="invoice_list_ca"),
-    path("invoices/bd/", acc_any(inv.invoice_list_bd), name="invoice_list_bd"),
+    path("invoices/ca/", acc_any(getattr(inv, "invoice_list_ca", inv.invoice_list)), name="invoice_list_ca"),
+    path("invoices/bd/", acc_any(getattr(inv, "invoice_list_bd", inv.invoice_list)), name="invoice_list_bd"),
     path("invoices/add/", acc_any(inv.invoice_add), name="invoice_add"),
-    path("invoices/ca/add/", acc_any(inv.invoice_add_ca), name="invoice_add_ca"),
-    path("invoices/bd/add/", acc_any(inv.invoice_add_bd), name="invoice_add_bd"),
+    path("invoices/ca/add/", acc_any(getattr(inv, "invoice_add_ca", inv.invoice_add)), name="invoice_add_ca"),
+    path("invoices/bd/add/", acc_any(getattr(inv, "invoice_add_bd", inv.invoice_add)), name="invoice_add_bd"),
     path("invoices/<int:pk>/", acc_any(inv.invoice_view), name="invoice_view"),
     path("invoices/<int:pk>/edit/", acc_any(inv.invoice_edit), name="invoice_edit"),
     path("invoices/<int:pk>/approve/", acc_any(inv.invoice_approve), name="invoice_approve"),
