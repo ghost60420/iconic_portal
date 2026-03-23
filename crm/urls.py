@@ -8,12 +8,14 @@ from . import views
 from . import views_ai as ai
 from . import views_invoice as inv
 from . import views_email
-from . import views_whatsapp as wa
 from . import views_accounting as acc
 from . import views_access as access
 from . import views_costing as costing
 
-from .whatsapp_webhook import whatsapp_webhook
+try:
+    from . import views_whatsapp as wa
+except Exception:
+    wa = None
 from .permissions import bd_blocked, require_access, require_any_access
 
 
@@ -232,28 +234,6 @@ urlpatterns = [
     path("bd-staff/months/generate/", perm("can_accounting_bd", acc.bd_staff_month_generate), name="bd_staff_month_generate"),
     path("bd-staff/months/<int:pk>/edit/", perm("can_accounting_bd", acc.bd_staff_month_edit), name="bd_staff_month_edit"),
 
-    # WhatsApp webhook (Meta Cloud API legacy)
-    path("whatsapp-api/webhook/", wa.wa_webhook, name="wa_api_webhook"),
-    path("api/whatsapp/webhook/", wa.wa_webhook, name="api_wa_webhook"),
-    path("webhooks/whatsapp/infobip/", wa.wa_infobip_webhook, name="wa_infobip_webhook"),
-
-    # WhatsApp inbox UI (Meta Cloud API legacy)
-    path("whatsapp-api/", wa_perm(wa.wa_inbox), name="wa_api_inbox"),
-    path("whatsapp-api/<int:pk>/", wa_perm(wa.wa_thread), name="wa_api_thread"),
-    path("whatsapp-api/<int:pk>/messages/", wa_perm(wa.wa_thread_messages_json), name="wa_api_thread_messages"),
-    path("whatsapp-api/threads/", wa_perm(wa.wa_threads_json), name="wa_api_threads"),
-    path("whatsapp-api/media/<int:msg_id>/", wa_perm(wa.wa_media), name="wa_api_media"),
-    path("whatsapp-api/<int:pk>/send/", wa_perm(wa.wa_send), name="wa_api_send"),
-    path("whatsapp-api/<int:pk>/send-ai/", wa_perm(wa.wa_send_ai_draft), name="wa_api_send_ai_draft"),
-    path("whatsapp-api/<int:pk>/toggle-ai/", wa_perm(wa.wa_toggle_ai), name="wa_api_toggle_ai"),
-    path("whatsapp-api/<int:pk>/follow-up/", wa_perm(wa.wa_follow_up), name="wa_api_follow_up"),
-    path("whatsapp-api/start/", wa_perm(wa.wa_start), name="wa_api_start"),
-    path("whatsapp-api/test-send/", wa_perm(wa.wa_send_test), name="wa_api_test_send"),
-    path("whatsapp-api/web/status/", wa_perm(wa.wa_web_status), name="wa_web_status"),
-    path("whatsapp-api/web/qr/", wa_perm(wa.wa_web_qr), name="wa_web_qr"),
-    path("whatsapp-api/web/ingest/", wa.wa_web_ingest, name="wa_web_ingest"),
-    path("whatsapp-api/infobip/events/", wa_perm(wa.wa_infobip_events), name="wa_infobip_events"),
-
     # Email sync
     path("email-sync/", login_required(views_email.email_sync_dashboard), name="email_sync_dashboard"),
     path("email-sync/run/", login_required(views_email.email_sync_run), name="email_sync_run"),
@@ -273,3 +253,28 @@ urlpatterns = [
     path("access/", login_required(access.access_list), name="access_list"),
     path("access/<int:user_id>/", login_required(access.access_edit), name="access_edit"),
 ]
+
+if wa:
+    urlpatterns += [
+        # WhatsApp webhook (Meta Cloud API legacy)
+        path("whatsapp-api/webhook/", wa.wa_webhook, name="wa_api_webhook"),
+        path("api/whatsapp/webhook/", wa.wa_webhook, name="api_wa_webhook"),
+        path("webhooks/whatsapp/infobip/", wa.wa_infobip_webhook, name="wa_infobip_webhook"),
+
+        # WhatsApp inbox UI (Meta Cloud API legacy)
+        path("whatsapp-api/", wa_perm(wa.wa_inbox), name="wa_api_inbox"),
+        path("whatsapp-api/<int:pk>/", wa_perm(wa.wa_thread), name="wa_api_thread"),
+        path("whatsapp-api/<int:pk>/messages/", wa_perm(wa.wa_thread_messages_json), name="wa_api_thread_messages"),
+        path("whatsapp-api/threads/", wa_perm(wa.wa_threads_json), name="wa_api_threads"),
+        path("whatsapp-api/media/<int:msg_id>/", wa_perm(wa.wa_media), name="wa_api_media"),
+        path("whatsapp-api/<int:pk>/send/", wa_perm(wa.wa_send), name="wa_api_send"),
+        path("whatsapp-api/<int:pk>/send-ai/", wa_perm(wa.wa_send_ai_draft), name="wa_api_send_ai_draft"),
+        path("whatsapp-api/<int:pk>/toggle-ai/", wa_perm(wa.wa_toggle_ai), name="wa_api_toggle_ai"),
+        path("whatsapp-api/<int:pk>/follow-up/", wa_perm(wa.wa_follow_up), name="wa_api_follow_up"),
+        path("whatsapp-api/start/", wa_perm(wa.wa_start), name="wa_api_start"),
+        path("whatsapp-api/test-send/", wa_perm(wa.wa_send_test), name="wa_api_test_send"),
+        path("whatsapp-api/web/status/", wa_perm(wa.wa_web_status), name="wa_web_status"),
+        path("whatsapp-api/web/qr/", wa_perm(wa.wa_web_qr), name="wa_web_qr"),
+        path("whatsapp-api/web/ingest/", wa.wa_web_ingest, name="wa_web_ingest"),
+        path("whatsapp-api/infobip/events/", wa_perm(wa.wa_infobip_events), name="wa_infobip_events"),
+    ]
