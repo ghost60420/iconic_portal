@@ -333,14 +333,14 @@
 
         {% if MARKETING_ENABLED and marketing_url %}
           {% if request.user.is_authenticated %}
-            {% if request.user.is_superuser or request.user|in_group:"Marketing Manager" or request.user.access.can_marketing %}
+            {% if request.user.is_superuser or request.user|in_group:"Marketing Manager" or request.user|can_marketing %}
               <a href="{{ marketing_url }}" class="crm-nav-item"><span>📣</span><strong>Marketing</strong></a>
             {% endif %}
           {% endif %}
         {% endif %}
 
         {% if ai_hub_url and request.user.is_authenticated %}
-          {% if request.user.is_superuser or request.user.access.can_ai %}
+          {% if request.user.is_superuser or request.user|can_ai %}
             <a href="{{ ai_hub_url }}" class="crm-nav-item"><span>🤖</span><strong>AI</strong></a>
           {% endif %}
         {% endif %}

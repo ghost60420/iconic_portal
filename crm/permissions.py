@@ -2,6 +2,7 @@
 
 from functools import wraps
 from django.http import HttpResponseForbidden
+from django.db.utils import OperationalError, ProgrammingError
 
 from .models_access import UserAccess
 
@@ -30,7 +31,10 @@ def bd_blocked(view_func):
         if user.is_superuser:
             return view_func(request, *args, **kwargs)
 
-        access = get_access(user)
+        try:
+            access = get_access(user)
+        except (OperationalError, ProgrammingError):
+            return HttpResponseForbidden("Access data not ready. Please run migrations.")
 
         if access.is_bd:
             return HttpResponseForbidden("No access")
@@ -65,7 +69,10 @@ def require_access(flag_name):
             if user.is_superuser:
                 return view_func(request, *args, **kwargs)
 
-            access = get_access(user)
+            try:
+                access = get_access(user)
+            except (OperationalError, ProgrammingError):
+                return HttpResponseForbidden("Access data not ready. Please run migrations.")
 
             if flag_name == "can_accounting_ca" and access.is_bd:
                 return HttpResponseForbidden("No access")
@@ -97,7 +104,10 @@ def require_any_access(*flag_names):
             if user.is_superuser:
                 return view_func(request, *args, **kwargs)
 
-            access = get_access(user)
+            try:
+                access = get_access(user)
+            except (OperationalError, ProgrammingError):
+                return HttpResponseForbidden("Access data not ready. Please run migrations.")
 
             for f in flag_names:
                 if f == "can_accounting_ca" and access.is_bd:

@@ -1,4 +1,8 @@
 from django import template
+try:
+    from crm.models_access import UserAccess
+except Exception:
+    UserAccess = None
 
 register = template.Library()
 
@@ -63,6 +67,37 @@ def can_view_accounting_bd(user):
 def can_edit_bd_entries(user):
     # Change this later if you want BD not to edit
     return _in_any_group(user, "BD,Bangladesh,CA,Canada")
+
+
+def _safe_access(user):
+    if not user or not getattr(user, "is_authenticated", False):
+        return None
+    if UserAccess is None:
+        return None
+    try:
+        return UserAccess.objects.filter(user=user).first()
+    except Exception:
+        return None
+
+
+@register.filter
+def can_ai(user):
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    if getattr(user, "is_superuser", False):
+        return True
+    access = _safe_access(user)
+    return bool(getattr(access, "can_ai", False))
+
+
+@register.filter
+def can_marketing(user):
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    if getattr(user, "is_superuser", False):
+        return True
+    access = _safe_access(user)
+    return bool(getattr(access, "can_marketing", False))
 
 
 # -------------------------
