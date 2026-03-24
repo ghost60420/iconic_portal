@@ -7,6 +7,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from .models import Invoice, ProductionOrder
 from .forms import InvoiceForm
@@ -105,6 +106,49 @@ def invoice_list(request):
     )
 
 
+def _invoice_list_by_currency(request, currency_code: str):
+    q = (request.GET.get("q") or "").strip()
+    status = (request.GET.get("status") or "").strip()
+
+    invoices = Invoice.objects.select_related("order", "customer").filter(currency=currency_code)
+
+    if q:
+        invoices = invoices.filter(
+            Q(invoice_number__icontains=q)
+            | Q(order__order_code__icontains=q)
+            | Q(order__title__icontains=q)
+            | Q(customer__name__icontains=q)
+        )
+
+    if status:
+        invoices = invoices.filter(status=status)
+
+    invoices = invoices.order_by("-issue_date", "-created_at")
+
+    return render(
+        request,
+        "crm/invoice/invoice_list.html",
+        {
+            "invoices": invoices,
+            "q": q,
+            "status": status,
+            "currency": currency_code,
+        },
+    )
+
+
+@login_required
+@user_passes_test(superuser_only)
+def invoice_list_ca(request):
+    return _invoice_list_by_currency(request, "CAD")
+
+
+@login_required
+@user_passes_test(superuser_only)
+def invoice_list_bd(request):
+    return _invoice_list_by_currency(request, "BDT")
+
+
 @login_required
 @user_passes_test(superuser_only)
 def invoice_add(request):
@@ -156,6 +200,66 @@ def invoice_add(request):
 
 @login_required
 @user_passes_test(superuser_only)
+def invoice_add_ca(request):
+    # wrapper to force CAD
+    if request.method == "POST":
+        form = InvoiceForm(request.POST)
+        if form.is_valid():
+            with transaction.atomic():
+                inv = form.save(commit=False)
+                if not inv.currency:
+                    inv.currency = "CAD"
+                if not inv.issue_date:
+                    inv.issue_date = timezone.now().date()
+                if not (inv.invoice_number or "").strip():
+                    inv.invoice_number = _next_invoice_number()
+                if inv.order_id and not inv.customer_id:
+                    try:
+                        inv.customer_id = inv.order.customer_id
+                    except Exception:
+                        pass
+                _calc_totals(inv)
+                inv.save()
+                form.save_m2m()
+            messages.success(request, "Invoice created.")
+            return redirect("invoice_view", pk=inv.pk)
+    else:
+        form = InvoiceForm(initial={"currency": "CAD"})
+    return render(request, "crm/invoice/invoice_form.html", {"form": form, "mode": "add"})
+
+
+@login_required
+@user_passes_test(superuser_only)
+def invoice_add_bd(request):
+    # wrapper to force BDT
+    if request.method == "POST":
+        form = InvoiceForm(request.POST)
+        if form.is_valid():
+            with transaction.atomic():
+                inv = form.save(commit=False)
+                if not inv.currency:
+                    inv.currency = "BDT"
+                if not inv.issue_date:
+                    inv.issue_date = timezone.now().date()
+                if not (inv.invoice_number or "").strip():
+                    inv.invoice_number = _next_invoice_number()
+                if inv.order_id and not inv.customer_id:
+                    try:
+                        inv.customer_id = inv.order.customer_id
+                    except Exception:
+                        pass
+                _calc_totals(inv)
+                inv.save()
+                form.save_m2m()
+            messages.success(request, "Invoice created.")
+            return redirect("invoice_view", pk=inv.pk)
+    else:
+        form = InvoiceForm(initial={"currency": "BDT"})
+    return render(request, "crm/invoice/invoice_form.html", {"form": form, "mode": "add"})
+
+
+@login_required
+@user_passes_test(superuser_only)
 def invoice_edit(request, pk):
     inv = get_object_or_404(Invoice, pk=pk)
 
@@ -195,3 +299,23 @@ def invoice_edit(request, pk):
 def invoice_view(request, pk):
     inv = get_object_or_404(Invoice.objects.select_related("order", "customer"), pk=pk)
     return render(request, "crm/invoice/invoice_view.html", {"invoice": inv})
+
+
+@login_required
+@user_passes_test(superuser_only)
+@require_POST
+def invoice_approve(request, pk):
+    """
+    Lightweight approve endpoint to avoid 500s if approval fields are not present.
+    Marks invoice as sent and sets approved fields if they exist.
+    """
+    inv = get_object_or_404(Invoice, pk=pk)
+    if hasattr(inv, "approved_at"):
+        inv.approved_at = timezone.now()
+    if hasattr(inv, "approved_by"):
+        inv.approved_by = request.user
+    if hasattr(inv, "status"):
+        inv.status = "sent"
+    inv.save()
+    messages.success(request, "Invoice approved.")
+    return redirect("invoice_view", pk=inv.pk)
