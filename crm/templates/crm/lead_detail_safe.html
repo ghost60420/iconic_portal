@@ -1,0 +1,33 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+<div style="max-width: 900px; margin: 24px auto; padding: 0 12px;">
+  <div style="background:#0b1220; border:1px solid #334155; border-radius:14px; padding:16px;">
+    <h2 style="margin:0 0 10px; color:#fef3c7;">Lead Detail (Safe View)</h2>
+    <p style="margin:0 0 14px; color:#cbd5e1;">
+      We loaded a protected view to prevent a server error. Core lead data is shown below.
+    </p>
+
+    <div style="display:grid; grid-template-columns: 180px 1fr; gap:8px 12px; color:#e5e7eb;">
+      <div style="color:#94a3b8;">Lead ID</div><div>{{ lead.lead_id|default:lead.pk }}</div>
+      <div style="color:#94a3b8;">Brand</div><div>{{ lead.account_brand|default:"—" }}</div>
+      <div style="color:#94a3b8;">Contact</div><div>{{ lead.contact_name|default:"—" }}</div>
+      <div style="color:#94a3b8;">Email</div><div>{{ lead.email|default:"—" }}</div>
+      <div style="color:#94a3b8;">Phone</div><div>{{ lead.phone|default:"—" }}</div>
+      <div style="color:#94a3b8;">Status</div><div>{{ lead.lead_status|default:"—" }}</div>
+      <div style="color:#94a3b8;">Priority</div><div>{{ lead.priority|default:"—" }}</div>
+      <div style="color:#94a3b8;">Country</div><div>{{ lead.country|default:"—" }}</div>
+    </div>
+
+    <div style="margin-top:16px;">
+      <a href="/leads/" style="display:inline-block; padding:8px 12px; border:1px solid #475569; border-radius:999px; color:#f8fafc; text-decoration:none;">
+        Back to Leads
+      </a>
+    </div>
+
+    {% if error_text %}
+      <pre style="margin-top:16px; white-space:pre-wrap; background:#020617; border:1px solid #334155; border-radius:10px; padding:10px; color:#fda4af;">{{ error_text }}</pre>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

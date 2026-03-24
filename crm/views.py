@@ -8,6 +8,7 @@ import uuid
 from collections import defaultdict
 from datetime import timedelta, date
 from decimal import Decimal
+from types import SimpleNamespace
 from django.db.models import Count, Sum, Q, Max
 from django.db import models
 from django.conf import settings
@@ -1732,7 +1733,7 @@ def _chatter_for_production(order):
     )
 
 
-def lead_detail(request, pk):
+def _lead_detail_impl(request, pk):
     def _safe_fetch(fetcher, fallback, label: str):
         try:
             return fetcher()
@@ -2170,6 +2171,62 @@ def lead_detail(request, pk):
     }
 
     return render(request, "crm/lead_detail.html", context)
+
+
+def _render_lead_detail_failsafe(request, lead, error_text: str = ""):
+    safe_context = {
+        "lead": lead,
+        "error_text": error_text if getattr(settings, "DEBUG", False) else "",
+    }
+    return render(request, "crm/lead_detail_safe.html", safe_context, status=200)
+
+
+def lead_detail(request, pk):
+    try:
+        return _lead_detail_impl(request, pk)
+    except Exception as exc:
+        logger.exception("lead_detail hard-fail for lead %s", pk)
+        try:
+            lead = (
+                Lead.objects.only(
+                    "pk",
+                    "lead_id",
+                    "account_brand",
+                    "contact_name",
+                    "email",
+                    "phone",
+                    "lead_status",
+                    "priority",
+                    "country",
+                )
+                .filter(pk=pk)
+                .first()
+            )
+        except Exception:
+            lead = None
+
+        if lead is None:
+            lead = SimpleNamespace(
+                pk=pk,
+                lead_id=str(pk),
+                account_brand=f"Lead #{pk}",
+                contact_name="",
+                email="",
+                phone="",
+                lead_status="",
+                priority="",
+                country="",
+            )
+
+        try:
+            messages.error(
+                request,
+                "Part of this lead page failed to load. Showing safe view while we recover details.",
+            )
+        except Exception:
+            pass
+
+        return _render_lead_detail_failsafe(request, lead, str(exc))
 
 ## ===================================================
 # OPPORTUNITY DETAIL PAGE
