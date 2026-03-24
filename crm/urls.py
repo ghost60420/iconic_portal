@@ -196,6 +196,7 @@ urlpatterns = [
     path("accounting/", acc_any(acc.accounting_home), name="accounting_home"),
 
     path("accounting/ca-master/", ca_only(acc.accounting_ca_master), name="accounting_ca_master"),
+    path("accounting/ca-grid/", ca_only(acc.accounting_ca_grid), name="accounting_ca_grid"),
 
     path("accounting/entries/add/ca/", ca_only(acc.accounting_entry_add_ca), name="accounting_entry_add_ca"),
     path("accounting/docs/upload/ca/", ca_only(acc.accounting_doc_upload), name="accounting_docs_upload_ca"),
@@ -212,6 +213,8 @@ urlpatterns = [
     path("accounting/entries/<int:pk>/edit/", acc_any(acc.accounting_entry_edit), name="accounting_entry_edit"),
     path("accounting/entries/<int:pk>/delete/", acc_any(acc.accounting_entry_delete), name="accounting_entry_delete"),
     path("accounting/entries/<int:pk>/attach/", acc_any(acc.accounting_entry_attach), name="accounting_entry_attach"),
+    path("accounting/docs/", acc_any(acc.accounting_doc_list), name="accounting_doc_list"),
+    path("accounting/docs/upload/", acc_any(acc.accounting_doc_upload), name="accounting_doc_upload"),
     path("accounting/production-profit/", acc_any(acc.production_profit_report), name="production_profit_report"),
     path("accounting/export/csv/", acc_any(acc.accounting_list_export_csv), name="accounting_list_export_csv"),
     path("accounting/export/xlsx/", acc_any(acc.accounting_list_export_xlsx), name="accounting_list_export_xlsx"),

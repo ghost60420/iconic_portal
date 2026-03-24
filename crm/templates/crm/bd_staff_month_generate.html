@@ -1,0 +1,62 @@
+{% extends "crm/base.html" %}
+{% block content %}
+
+<style>
+  .wrap{max-width:560px;margin:16px auto 28px auto;padding:0 10px;color:#f9fafb;}
+  .btn{display:inline-block;padding:10px 14px;border-radius:999px;border:1px solid transparent;font-size:12px;font-weight:900;cursor:pointer;text-decoration:none;white-space:nowrap;}
+  .btn-slate{background:#020617;color:#e5e7eb;border-color:#374151;}
+  .btn-gold{background:linear-gradient(135deg,#facc15,#f97316);color:#111827;border-color:#fbbf24;}
+  .cardx{background:#020617;border:1px solid #374151;border-radius:14px;box-shadow:0 10px 26px rgba(0,0,0,0.45);}
+  label{font-size:11px;color:#e5e7eb;margin-bottom:4px;display:block;font-weight:800;}
+  input,select{background:#020617;color:#f9fafb;border:1px solid #374151;border-radius:10px;padding:10px 10px;font-size:12px;width:100%;}
+  input:focus,select:focus{outline:none;border-color:#facc15;box-shadow:0 0 0 2px rgba(250,204,21,0.20);}
+  .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+  .sub{font-size:12px;color:#9ca3af;margin-top:4px;}
+</style>
+
+<div class="wrap">
+  <a class="btn btn-slate" href="{% url 'bd_staff_month_list' %}">← Back</a>
+
+  <h2 style="margin:12px 0 0 0;font-size:18px;font-weight:900;">Generate monthly payroll rows</h2>
+  <div class="sub">This will create missing rows for all active BD staff for the selected month.</div>
+
+  <div class="cardx" style="margin-top:12px;">
+    <div style="padding:14px;">
+      <form method="post" novalidate>
+        {% csrf_token %}
+
+        <div class="grid">
+          <div>
+            <label>Year</label>
+            <input type="number" name="year" min="2000" max="2100" required>
+          </div>
+          <div>
+            <label>Month</label>
+            <select name="month" required>
+              <option value="">Select</option>
+              <option value="1">January</option>
+              <option value="2">February</option>
+              <option value="3">March</option>
+              <option value="4">April</option>
+              <option value="5">May</option>
+              <option value="6">June</option>
+              <option value="7">July</option>
+              <option value="8">August</option>
+              <option value="9">September</option>
+              <option value="10">October</option>
+              <option value="11">November</option>
+              <option value="12">December</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-gold" type="submit">Generate</button>
+          <a class="btn btn-slate" href="{% url 'bd_staff_month_list' %}">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
