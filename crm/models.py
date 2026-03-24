@@ -90,7 +90,7 @@ class AIHealthRunCheck(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = "crm_aihealthcheck"
+        db_table = "crm_aihealthruncheck"
         ordering = ("id",)
 
     def __str__(self):

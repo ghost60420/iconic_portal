@@ -18,13 +18,13 @@ except Exception:
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.mail import EmailMessage, get_connection, send_mail
-from django.db import transaction, IntegrityError
+from django.db import transaction, IntegrityError, connection
 from django.db.utils import OperationalError, ProgrammingError
 from django.db.models import Case, Count, IntegerField, Q, When
 from django.db.models.functions import TruncDate, TruncMonth, TruncYear
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
+from django.urls import NoReverseMatch, reverse
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -1514,6 +1514,32 @@ def _to_decimal(value) -> Decimal:
         return Decimal("0")
 
 
+def _repair_lead_schema_if_needed() -> None:
+    """
+    Repair drifted crm_lead columns used by lead detail.
+    Safe no-op when schema is already correct.
+    """
+    required_sql = {
+        "confidence_level": "ALTER TABLE crm_lead ADD COLUMN confidence_level INTEGER NOT NULL DEFAULT 0",
+        "last_enriched_at": "ALTER TABLE crm_lead ADD COLUMN last_enriched_at DATETIME NULL",
+        "product_category_guess": "ALTER TABLE crm_lead ADD COLUMN product_category_guess VARCHAR(120) NOT NULL DEFAULT ''",
+        "qualification_reason": "ALTER TABLE crm_lead ADD COLUMN qualification_reason TEXT NOT NULL DEFAULT ''",
+        "qualification_status": "ALTER TABLE crm_lead ADD COLUMN qualification_status VARCHAR(40) NOT NULL DEFAULT 'Raw Imported'",
+        "recommended_channel": "ALTER TABLE crm_lead ADD COLUMN recommended_channel VARCHAR(120) NOT NULL DEFAULT ''",
+        "recommended_next_action": "ALTER TABLE crm_lead ADD COLUMN recommended_next_action VARCHAR(200) NOT NULL DEFAULT ''",
+        "target_order_range_estimate": "ALTER TABLE crm_lead ADD COLUMN target_order_range_estimate VARCHAR(120) NOT NULL DEFAULT ''",
+        "import_job_id": "ALTER TABLE crm_lead ADD COLUMN import_job_id BIGINT NULL",
+    }
+    with connection.cursor() as cursor:
+        cursor.execute("PRAGMA table_info('crm_lead')")
+        existing = {row[1] for row in cursor.fetchall()}
+        for col, sql in required_sql.items():
+            if col not in existing:
+                cursor.execute(sql)
+        cursor.execute("CREATE INDEX IF NOT EXISTS crm_lead_qualification_status_idx ON crm_lead(qualification_status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS crm_lead_import_job_id_idx ON crm_lead(import_job_id)")
+
+
 def _get_latest_cad_to_bdt_rate() -> Decimal:
     """
     Returns latest 1 CAD -> BDT rate from ExchangeRate table.
@@ -1707,18 +1733,37 @@ def _chatter_for_production(order):
 
 
 def lead_detail(request, pk):
-    lead = get_object_or_404(Lead, pk=pk)
+    def _safe_fetch(fetcher, fallback, label: str):
+        try:
+            return fetcher()
+        except (OperationalError, ProgrammingError):
+            logger.exception("lead_detail: failed to load %s", label)
+            return fallback
 
-    opportunities = lead.opportunities.all().order_by("-created_date", "-id")
-    comments = _chatter_for_lead(lead)
-    tasks = lead.tasks.all()
-    activities = lead.activities.all()
+    try:
+        lead = get_object_or_404(Lead, pk=pk)
+    except OperationalError as exc:
+        # Self-heal known schema drift that causes lead detail 500 on stale DB files.
+        if "no such column: crm_lead." in str(exc):
+            _repair_lead_schema_if_needed()
+            lead = get_object_or_404(Lead, pk=pk)
+        else:
+            raise
+
+    opportunities = _safe_fetch(
+        lambda: lead.opportunities.all().order_by("-created_date", "-id"),
+        [],
+        "opportunities",
+    )
+    comments = _safe_fetch(lambda: _chatter_for_lead(lead), [], "comments")
+    tasks = _safe_fetch(lambda: lead.tasks.all(), [], "tasks")
+    activities = _safe_fetch(lambda: lead.activities.all(), [], "activities")
 
     customer = lead.customer if lead.customer_id else None
 
-    agents = AIAgent.objects.all()
+    agents = _safe_fetch(lambda: list(AIAgent.objects.all()), [], "agents")
     selected_agent = None
-    messages = []
+    chat_messages = []
 
     # -------------------------
     # Budget display helpers
@@ -1763,7 +1808,7 @@ def lead_detail(request, pk):
                     activity_type="note_added",
                     description=content[:200],
                 )
-            comments = _chatter_for_lead(lead)
+            comments = _safe_fetch(lambda: _chatter_for_lead(lead), [], "comments")
 
         elif action == "toggle_pin_comment":
             comment_id = (request.POST.get("comment_id") or "").strip()
@@ -1776,7 +1821,7 @@ def lead_detail(request, pk):
                 if c:
                     c.pinned = not c.pinned
                     c.save(update_fields=["pinned"])
-            comments = _chatter_for_lead(lead)
+            comments = _safe_fetch(lambda: _chatter_for_lead(lead), [], "comments")
 
         # tasks
         elif action == "add_task":
@@ -1807,7 +1852,7 @@ def lead_detail(request, pk):
                     activity_type="task_created",
                     description=f"Task created: {task.title}"[:200],
                 )
-            tasks = lead.tasks.all()
+            tasks = _safe_fetch(lambda: lead.tasks.all(), [], "tasks")
 
         elif action == "complete_task":
             task_id = (request.POST.get("task_id") or "").strip()
@@ -1824,7 +1869,7 @@ def lead_detail(request, pk):
                     )
                 except LeadTask.DoesNotExist:
                     pass
-            tasks = lead.tasks.all()
+            tasks = _safe_fetch(lambda: lead.tasks.all(), [], "tasks")
 
         elif action == "add_activity":
             activity_type = (request.POST.get("activity_type") or "").strip()
@@ -1900,7 +1945,7 @@ def lead_detail(request, pk):
                     lead.next_follow_up_date = follow_up_date
                     lead.next_followup = follow_up_date
                     lead.save(update_fields=["next_follow_up_date", "next_followup"])
-                activities = lead.activities.all()
+                activities = _safe_fetch(lambda: lead.activities.all(), [], "activities")
                 messages.success(request, "Activity logged.")
             else:
                 messages.error(request, "Please choose an activity type.")
@@ -1984,13 +2029,13 @@ def lead_detail(request, pk):
                     content=ai_text,
                 )
 
-                messages = conversation.messages.order_by("created_at")
+                chat_messages = conversation.messages.order_by("created_at")
 
         # quick AI templates
         elif action == "ai_quick":
             quick_action = (request.POST.get("quick_action") or "").strip()
 
-            selected_agent = agents.first() if agents.exists() else None
+            selected_agent = agents[0] if agents else None
             if selected_agent and quick_action:
                 current_user = request.user if request.user.is_authenticated else None
 
@@ -2070,28 +2115,39 @@ def lead_detail(request, pk):
                         description=f"AI quick action: {quick_action}"[:200],
                     )
 
-                messages = conversation.messages.order_by("created_at")
+                chat_messages = conversation.messages.order_by("created_at")
 
     # -------------------------
     # GET: load latest conversation messages
     # -------------------------
     if request.method != "POST":
-        if agents.exists():
-            selected_agent = agents.first()
+        if agents:
+            selected_agent = agents[0]
             conversation = (
                 AIConversation.objects.filter(agent=selected_agent, lead=lead)
                 .order_by("-created_at")
                 .first()
             )
             if conversation:
-                messages = conversation.messages.order_by("created_at")
+                chat_messages = conversation.messages.order_by("created_at")
 
     # upcoming events for this lead
-    upcoming_events = (
-        Event.objects.filter(lead=lead, start_datetime__gte=timezone.now())
-        .order_by("start_datetime")[:5]
+    upcoming_events = _safe_fetch(
+        lambda: Event.objects.filter(lead=lead, start_datetime__gte=timezone.now()).order_by("start_datetime")[:5],
+        [],
+        "upcoming_events",
     )
-    potential_duplicates = _possible_duplicate_leads(lead, exclude_id=lead.pk)[:10]
+    potential_duplicates = _safe_fetch(
+        lambda: _possible_duplicate_leads(lead, exclude_id=lead.pk)[:10],
+        [],
+        "potential_duplicates",
+    )
+    wa_inbox_url = ""
+    if getattr(settings, "WHATSAPP_ENABLED", False):
+        try:
+            wa_inbox_url = reverse("wa_api_inbox")
+        except NoReverseMatch:
+            wa_inbox_url = ""
 
     context = {
         "lead": lead,
@@ -2105,11 +2161,12 @@ def lead_detail(request, pk):
         "upcoming_events": upcoming_events,
         "agents": agents,
         "selected_agent": selected_agent,
-        "messages": messages,
+        "messages": chat_messages,
         # new
         "budget_cad": budget_cad,
         "budget_bdt": budget_bdt,
         "cad_to_bdt": cad_to_bdt,
+        "wa_inbox_url": wa_inbox_url,
     }
 
     return render(request, "crm/lead_detail.html", context)
