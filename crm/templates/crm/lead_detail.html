@@ -311,7 +311,10 @@
       {% if WHATSAPP_ENABLED %}
         <div class="wa-row">
           <a class="wa-btn wa-gold" target="_blank" href="https://wa.me/16045006009">📲 WhatsApp Iconic</a>
-          <a class="wa-btn wa-gold" href="{% url 'wa_api_inbox' %}">💬 WhatsApp Inbox</a>
+          {% url 'wa_api_inbox' as wa_inbox_url %}
+          {% if wa_inbox_url %}
+            <a class="wa-btn wa-gold" href="{{ wa_inbox_url }}">💬 WhatsApp Inbox</a>
+          {% endif %}
 
           {% if lead.phone %}
             <a class="wa-btn wa-green" target="_blank"
