@@ -39,6 +39,13 @@ def _can_approve(user):
     return bool(access and access.can_costing_approve)
 
 
+def _safe_costing_smv(costing):
+    try:
+        return costing.smv
+    except CostingSMV.DoesNotExist:
+        return None
+
+
 def _build_line_dict(line=None, category=None):
     if line:
         return {
@@ -154,6 +161,28 @@ def _update_opportunity_summary(costing, calc):
     ])
 
 
+def _costing_header_initial(opportunity=None):
+    initial = {
+        "factory_location": "bd",
+        "currency": "BDT",
+        "costing_date": timezone.now().date(),
+    }
+    if not opportunity:
+        return initial
+
+    initial.update(
+        {
+            "opportunity": opportunity,
+            "customer": opportunity.customer,
+            "product_type": opportunity.product_type,
+            "order_quantity": opportunity.moq_units or 0,
+            "moq": opportunity.moq_units or 0,
+            "brand": getattr(opportunity.lead, "account_brand", "") or "",
+        }
+    )
+    return initial
+
+
 def cost_sheet_list(request):
     qs = CostingHeader.objects.select_related("opportunity", "customer").order_by("-updated_at")
 
@@ -222,16 +251,7 @@ def cost_sheet_create(request, opportunity_id=None):
             return redirect("cost_sheet_detail", pk=costing.pk)
         messages.error(request, "Please fix the errors below.")
     else:
-        initial = {}
-        if opportunity:
-            initial = {
-                "opportunity": opportunity,
-                "customer": opportunity.customer,
-                "product_type": opportunity.product_type,
-                "order_quantity": opportunity.moq_units or 0,
-                "factory_location": "bd",
-                "currency": "BDT",
-            }
+        initial = _costing_header_initial(opportunity)
         form = CostingHeaderForm(initial=initial)
 
     if opportunity:
@@ -270,7 +290,7 @@ def cost_sheet_detail(request, pk):
                 data["customer"] = costing.customer_id
 
             form = CostingHeaderForm(data, instance=costing)
-            smv_form = CostingSMVForm(data, instance=getattr(costing, "smv", None))
+            smv_form = CostingSMVForm(data, instance=_safe_costing_smv(costing))
             if form.is_valid() and smv_form.is_valid():
                 before = {
                     "order_quantity": costing.order_quantity,
@@ -407,7 +427,7 @@ def cost_sheet_detail(request, pk):
     ).order_by("-uploaded_at")
 
     form = CostingHeaderForm(instance=costing)
-    smv_form = CostingSMVForm(instance=getattr(costing, "smv", None))
+    smv_form = CostingSMVForm(instance=_safe_costing_smv(costing))
     if "opportunity" in form.fields:
         form.fields["opportunity"].disabled = True
     if "customer" in form.fields:
@@ -476,7 +496,7 @@ def cost_sheet_duplicate(request, pk):
         line.costing = new_costing
         line.save()
 
-    smv = getattr(costing, "smv", None)
+    smv = _safe_costing_smv(costing)
     if smv:
         CostingSMV.objects.create(
             costing=new_costing,

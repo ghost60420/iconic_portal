@@ -62,3 +62,55 @@ class CostingEngineTests(TestCase):
         calc = compute_costing(costing.id)
         self.assertIsNotNone(calc)
         self.assertEqual(calc["total_cost_per_piece"], Decimal("1.0000"))
+
+    def test_new_categories_are_included_in_totals(self):
+        costing = CostingHeader.objects.create(
+            opportunity=self.opportunity,
+            customer=self.customer,
+            order_quantity=100,
+            currency="BDT",
+            target_margin_percent=Decimal("25"),
+        )
+        CostingLineItem.objects.create(
+            costing=costing,
+            category="labels_branding",
+            item_name="Main label set",
+            uom="piece",
+            unit_price=Decimal("0.30"),
+            consumption_value=Decimal("1"),
+        )
+        CostingLineItem.objects.create(
+            costing=costing,
+            category="wash_process",
+            item_name="Garment wash",
+            uom="piece",
+            unit_price=Decimal("0.50"),
+            consumption_value=Decimal("1"),
+        )
+        CostingLineItem.objects.create(
+            costing=costing,
+            category="cm_labor",
+            item_name="CM line",
+            uom="piece",
+            unit_price=Decimal("1.20"),
+            consumption_value=Decimal("1"),
+        )
+        CostingLineItem.objects.create(
+            costing=costing,
+            category="logistics_compliance",
+            item_name="Testing",
+            uom="order",
+            unit_price=Decimal("100"),
+            consumption_value=Decimal("1"),
+        )
+
+        calc = compute_costing(costing.id)
+
+        self.assertEqual(calc["breakdown"]["labels_branding"], Decimal("0.3000"))
+        self.assertEqual(calc["breakdown"]["wash_process"], Decimal("0.5000"))
+        self.assertEqual(calc["breakdown"]["cm_labor"], Decimal("1.2000"))
+        self.assertEqual(calc["breakdown"]["logistics_compliance"], Decimal("1.0000"))
+        self.assertEqual(calc["breakdown"]["trims"], Decimal("0.3000"))
+        self.assertEqual(calc["breakdown"]["other"], Decimal("1.5000"))
+        self.assertEqual(calc["breakdown"]["labor"], Decimal("1.2000"))
+        self.assertEqual(calc["total_cost_per_piece"], Decimal("3.0000"))

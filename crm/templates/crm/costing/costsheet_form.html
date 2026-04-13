@@ -3,7 +3,7 @@
 
 <style>
   .costing-form-page {
-    max-width: 900px;
+    max-width: 1280px;
     margin: 18px auto 40px auto;
     padding: 0 10px;
     color: #e5e7eb;
@@ -56,15 +56,57 @@
     color: #9ca3af;
     font-size: 12px;
   }
+
+  .section-title {
+    font-size: 14px;
+    font-weight: 800;
+    color: #fde68a;
+    margin: 0 0 10px 0;
+  }
+
+  .intro-card {
+    margin-bottom: 12px;
+    background: linear-gradient(135deg, rgba(250, 204, 21, 0.12), rgba(14, 165, 233, 0.08));
+  }
+
+  .intro-title {
+    font-size: 15px;
+    font-weight: 800;
+    color: #fde68a;
+    margin-bottom: 6px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+  }
+
+  .field-wide {
+    grid-column: 1 / -1;
+  }
+
+  .field-help {
+    margin-top: 4px;
+    color: #94a3b8;
+    font-size: 11px;
+    line-height: 1.35;
+  }
 </style>
 
 <div class="costing-form-page">
   <div style="font-size:20px; font-weight:800; margin-bottom:10px;">Create costing header</div>
 
+  <div class="card intro-card">
+    <div class="intro-title">How to use this sheet</div>
+    <div class="muted">Start with the commercial header, then add product details. Common values now open as dropdown suggestions, but you can still type a custom value when needed.</div>
+  </div>
+
   <div class="card">
     <form method="post">
       {% csrf_token %}
-      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:10px;">
+      <div class="section-title">Commercial header</div>
+      <div class="grid">
         <div>
           <label>Opportunity</label>
           {{ form.opportunity }}
@@ -82,55 +124,161 @@
         <div>
           <label>Style name</label>
           {{ form.style_name }}
+          {% if form.style_name.help_text %}<div class="field-help">{{ form.style_name.help_text }}</div>{% endif %}
         </div>
         <div>
           <label>Style code</label>
           {{ form.style_code }}
+          {% if form.style_code.help_text %}<div class="field-help">{{ form.style_code.help_text }}</div>{% endif %}
+        </div>
+        <div>
+          <label>Buyer</label>
+          {{ form.buyer }}
+          <div class="field-help">{{ form.buyer.help_text }}</div>
+        </div>
+        <div>
+          <label>Brand</label>
+          {{ form.brand }}
+          <div class="field-help">{{ form.brand.help_text }}</div>
         </div>
         <div>
           <label>Product type</label>
           {{ form.product_type }}
+          {% if form.product_type.help_text %}<div class="field-help">{{ form.product_type.help_text }}</div>{% endif %}
+        </div>
+        <div>
+          <label>Gender</label>
+          {{ form.gender }}
+          <div class="field-help">{{ form.gender.help_text }}</div>
+        </div>
+        <div>
+          <label>Size range</label>
+          {{ form.size_range }}
+          <div class="field-help">{{ form.size_range.help_text }}</div>
+        </div>
+        <div>
+          <label>Season</label>
+          {{ form.season }}
+          <div class="field-help">{{ form.season.help_text }}</div>
         </div>
         <div>
           <label>Factory location</label>
           {{ form.factory_location }}
+          <div class="field-help">{{ form.factory_location.help_text }}</div>
         </div>
         <div>
           <label>Order quantity</label>
           {{ form.order_quantity }}
+          <div class="field-help">{{ form.order_quantity.help_text }}</div>
+        </div>
+        <div>
+          <label>MOQ</label>
+          {{ form.moq }}
+          <div class="field-help">{{ form.moq.help_text }}</div>
+        </div>
+        <div>
+          <label>Costing date</label>
+          {{ form.costing_date }}
+          <div class="field-help">{{ form.costing_date.help_text }}</div>
+        </div>
+        <div>
+          <label>Merchandiser</label>
+          {{ form.merchandiser }}
+          <div class="field-help">{{ form.merchandiser.help_text }}</div>
         </div>
         <div>
           <label>Currency</label>
           {{ form.currency }}
+          <div class="field-help">{{ form.currency.help_text }}</div>
         </div>
         <div>
           <label>Exchange rate</label>
           {{ form.exchange_rate }}
-          <div class="muted">Store the exchange rate used for this costing.</div>
+          <div class="field-help">{{ form.exchange_rate.help_text }}</div>
         </div>
         <div>
           <label>Fabric finance %</label>
           {{ form.finance_percent_fabric }}
+          <div class="field-help">{{ form.finance_percent_fabric.help_text }}</div>
         </div>
         <div>
           <label>Trim finance %</label>
           {{ form.finance_percent_trims }}
+          <div class="field-help">{{ form.finance_percent_trims.help_text }}</div>
         </div>
         <div>
           <label>Commission %</label>
           {{ form.commission_percent }}
+          <div class="field-help">{{ form.commission_percent.help_text }}</div>
         </div>
         <div>
           <label>Target margin %</label>
           {{ form.target_margin_percent }}
+          <div class="field-help">{{ form.target_margin_percent.help_text }}</div>
         </div>
         <div>
           <label>Manual FOB per piece</label>
           {{ form.manual_fob_per_piece }}
+          <div class="field-help">{{ form.manual_fob_per_piece.help_text }}</div>
         </div>
-        <div style="grid-column: 1 / -1;">
+      </div>
+
+      <div class="section-title" style="margin-top:14px;">Product spec snapshot</div>
+      <div class="grid">
+        <div>
+          <label>Fabric type</label>
+          {{ form.fabric_type }}
+          <div class="field-help">{{ form.fabric_type.help_text }}</div>
+        </div>
+        <div>
+          <label>Fabric GSM</label>
+          {{ form.fabric_gsm }}
+          <div class="field-help">{{ form.fabric_gsm.help_text }}</div>
+        </div>
+        <div>
+          <label>Fabric composition</label>
+          {{ form.fabric_composition }}
+          <div class="field-help">{{ form.fabric_composition.help_text }}</div>
+        </div>
+        <div>
+          <label>Wash type</label>
+          {{ form.wash_type }}
+          <div class="field-help">{{ form.wash_type.help_text }}</div>
+        </div>
+        <div>
+          <label>Print type</label>
+          {{ form.print_type }}
+          <div class="field-help">{{ form.print_type.help_text }}</div>
+        </div>
+        <div>
+          <label>Embroidery</label>
+          {{ form.embroidery }}
+          <div class="field-help">{{ form.embroidery.help_text }}</div>
+        </div>
+        <div>
+          <label>Label type</label>
+          {{ form.label_type }}
+          <div class="field-help">{{ form.label_type.help_text }}</div>
+        </div>
+        <div>
+          <label>Packaging type</label>
+          {{ form.packaging_type }}
+          <div class="field-help">{{ form.packaging_type.help_text }}</div>
+        </div>
+        <div class="field-wide">
+          <label>Special trims</label>
+          {{ form.special_trims }}
+          <div class="field-help">{{ form.special_trims.help_text }}</div>
+        </div>
+        <div class="field-wide">
+          <label>Fit / construction remarks</label>
+          {{ form.fit_remarks }}
+          <div class="field-help">{{ form.fit_remarks.help_text }}</div>
+        </div>
+        <div class="field-wide">
           <label>Notes</label>
           {{ form.notes }}
+          <div class="field-help">{{ form.notes.help_text }}</div>
         </div>
       </div>
 
@@ -141,5 +289,129 @@
     </form>
   </div>
 </div>
+
+<datalist id="costing-buyer-options">
+  <option value="Menswear"></option>
+  <option value="Womenswear"></option>
+  <option value="Kids"></option>
+  <option value="Basics"></option>
+  <option value="Outerwear"></option>
+  <option value="Activewear"></option>
+</datalist>
+<datalist id="costing-brand-options">
+  <option value="Private label"></option>
+  <option value="House brand"></option>
+  <option value="Licensed brand"></option>
+  <option value="Retail program"></option>
+</datalist>
+<datalist id="costing-gender-options">
+  <option value="Women"></option>
+  <option value="Men"></option>
+  <option value="Unisex"></option>
+  <option value="Girls"></option>
+  <option value="Boys"></option>
+  <option value="Baby"></option>
+  <option value="Toddler"></option>
+  <option value="Kids"></option>
+</datalist>
+<datalist id="costing-size_range-options">
+  <option value="XS-XL"></option>
+  <option value="S-XXL"></option>
+  <option value="2-8Y"></option>
+  <option value="4-14Y"></option>
+  <option value="NB-24M"></option>
+  <option value="One size"></option>
+</datalist>
+<datalist id="costing-season-options">
+  <option value="Spring/Summer"></option>
+  <option value="Fall/Winter"></option>
+  <option value="Holiday"></option>
+  <option value="Core"></option>
+  <option value="Back to School"></option>
+  <option value="Resort"></option>
+</datalist>
+<datalist id="costing-merchandiser-options">
+  <option value="In-house"></option>
+  <option value="Customer merchandiser"></option>
+  <option value="Sales team"></option>
+</datalist>
+<datalist id="costing-fabric_type-options">
+  <option value="Single jersey"></option>
+  <option value="Interlock"></option>
+  <option value="Rib"></option>
+  <option value="Fleece"></option>
+  <option value="French terry"></option>
+  <option value="Pique"></option>
+  <option value="Woven poplin"></option>
+  <option value="Denim"></option>
+  <option value="Canvas"></option>
+  <option value="Polar fleece"></option>
+</datalist>
+<datalist id="costing-fabric_gsm-options">
+  <option value="160 GSM"></option>
+  <option value="180 GSM"></option>
+  <option value="200 GSM"></option>
+  <option value="220 GSM"></option>
+  <option value="240 GSM"></option>
+  <option value="280 GSM"></option>
+  <option value="320 GSM"></option>
+</datalist>
+<datalist id="costing-fabric_composition-options">
+  <option value="100% cotton"></option>
+  <option value="95% cotton / 5% spandex"></option>
+  <option value="60% cotton / 40% polyester"></option>
+  <option value="80% cotton / 20% polyester"></option>
+  <option value="100% polyester"></option>
+  <option value="CVC"></option>
+</datalist>
+<datalist id="costing-wash_type-options">
+  <option value="None"></option>
+  <option value="Soft wash"></option>
+  <option value="Enzyme wash"></option>
+  <option value="Garment wash"></option>
+  <option value="Silicone wash"></option>
+  <option value="Acid wash"></option>
+  <option value="Pigment wash"></option>
+</datalist>
+<datalist id="costing-print_type-options">
+  <option value="None"></option>
+  <option value="Screen print"></option>
+  <option value="Puff print"></option>
+  <option value="Heat transfer"></option>
+  <option value="DTG"></option>
+  <option value="Sublimation"></option>
+  <option value="Emboss print"></option>
+</datalist>
+<datalist id="costing-embroidery-options">
+  <option value="None"></option>
+  <option value="Flat embroidery"></option>
+  <option value="3D embroidery"></option>
+  <option value="Applique embroidery"></option>
+  <option value="Badge embroidery"></option>
+</datalist>
+<datalist id="costing-label_type-options">
+  <option value="Main label"></option>
+  <option value="Care label"></option>
+  <option value="Heat transfer label"></option>
+  <option value="Woven main and care label"></option>
+  <option value="Printed satin label"></option>
+</datalist>
+<datalist id="costing-packaging_type-options">
+  <option value="Polybag only"></option>
+  <option value="Polybag and carton"></option>
+  <option value="Polybag, sticker and carton"></option>
+  <option value="Hanger pack"></option>
+  <option value="Flat pack"></option>
+</datalist>
+<datalist id="costing-special_trims-options">
+  <option value="None"></option>
+  <option value="Zipper"></option>
+  <option value="Drawcord"></option>
+  <option value="Toggle"></option>
+  <option value="Patch"></option>
+  <option value="Snap button"></option>
+  <option value="Velcro"></option>
+  <option value="Badge"></option>
+</datalist>
 
 {% endblock %}

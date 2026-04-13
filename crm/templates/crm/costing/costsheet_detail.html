@@ -95,6 +95,25 @@
     gap: 10px;
   }
 
+  .header-section {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(51, 65, 85, 0.55);
+  }
+
+  .header-section:first-of-type {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+  }
+
+  .section-subtitle {
+    font-size: 12px;
+    font-weight: 800;
+    color: #fef3c7;
+    margin: 0 0 8px 0;
+  }
+
   .summary-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -204,6 +223,103 @@
   .guide-body li {
     margin-bottom: 4px;
   }
+
+  .field-help {
+    margin-top: 4px;
+    color: #94a3b8;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .section-lead {
+    margin-bottom: 8px;
+    color: #cbd5e1;
+    font-size: 12px;
+  }
+
+  .category-guide {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr);
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .category-guide-card {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid #1f2937;
+    border-radius: 10px;
+    padding: 10px;
+  }
+
+  .category-guide-title {
+    color: #fef3c7;
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 5px;
+  }
+
+  .category-guide-body {
+    color: #cbd5e1;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .guide-chip {
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid #334155;
+    background: rgba(30, 41, 59, 0.7);
+    color: #cbd5e1;
+    font-size: 11px;
+  }
+
+  .row-tip {
+    margin-top: 4px;
+    color: #94a3b8;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .advisory-list {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .advisory-card {
+    border-radius: 10px;
+    padding: 10px 12px;
+    border: 1px solid #334155;
+  }
+
+  .advisory-warning {
+    background: rgba(245, 158, 11, 0.10);
+    border-color: rgba(245, 158, 11, 0.35);
+  }
+
+  .advisory-danger {
+    background: rgba(239, 68, 68, 0.10);
+    border-color: rgba(239, 68, 68, 0.35);
+  }
+
+  .advisory-title {
+    font-size: 12px;
+    font-weight: 800;
+    color: #fef3c7;
+    margin-bottom: 3px;
+  }
+
+  .advisory-message {
+    font-size: 12px;
+    color: #e5e7eb;
+    line-height: 1.4;
+  }
 </style>
 
 <div class="costing-detail">
@@ -261,93 +377,210 @@
 
     <div class="card">
       <div class="card-title">Header</div>
-      <div class="header-grid">
-        <div>
-          <label>Opportunity</label>
-          {{ form.opportunity }}
+
+      <div class="header-section">
+        <div class="section-subtitle">Commercial & quote setup</div>
+        <div class="section-lead">Use common dropdown suggestions where they fit. You can still type a custom value when the program or buyer is different.</div>
+        <div class="header-grid">
+          <div>
+            <label>Opportunity</label>
+            {{ form.opportunity }}
+          </div>
+          <div>
+            <label>Customer</label>
+            {{ form.customer }}
+          </div>
+          <div>
+            <label>Buyer</label>
+            {{ form.buyer }}
+            <div class="field-help">{{ form.buyer.help_text }}</div>
+          </div>
+          <div>
+            <label>Brand</label>
+            {{ form.brand }}
+            <div class="field-help">{{ form.brand.help_text }}</div>
+          </div>
+          <div>
+            <label>Style name</label>
+            {{ form.style_name }}
+          </div>
+          <div>
+            <label>Style code</label>
+            {{ form.style_code }}
+          </div>
+          <div>
+            <label>Product type</label>
+            {{ form.product_type }}
+          </div>
+          <div>
+            <label>Factory location</label>
+            {{ form.factory_location }}
+            <div class="field-help">{{ form.factory_location.help_text }}</div>
+          </div>
+          <div>
+            <label>Order quantity</label>
+            {{ form.order_quantity }}
+            <div class="field-help">{{ form.order_quantity.help_text }}</div>
+          </div>
+          <div>
+            <label>MOQ</label>
+            {{ form.moq }}
+            <div class="field-help">{{ form.moq.help_text }}</div>
+          </div>
+          <div>
+            <label>Costing date</label>
+            {{ form.costing_date }}
+            <div class="field-help">{{ form.costing_date.help_text }}</div>
+          </div>
+          <div>
+            <label>Merchandiser</label>
+            {{ form.merchandiser }}
+            <div class="field-help">{{ form.merchandiser.help_text }}</div>
+          </div>
+          <div>
+            <label>Currency</label>
+            {{ form.currency }}
+            <div class="field-help">{{ form.currency.help_text }}</div>
+          </div>
+          <div>
+            <label>Exchange rate</label>
+            {{ form.exchange_rate }}
+            <div class="field-help">{{ form.exchange_rate.help_text }}</div>
+          </div>
+          <div>
+            <label>Fabric finance %</label>
+            {{ form.finance_percent_fabric }}
+            <div class="field-help">{{ form.finance_percent_fabric.help_text }}</div>
+          </div>
+          <div>
+            <label>Trim finance %</label>
+            {{ form.finance_percent_trims }}
+            <div class="field-help">{{ form.finance_percent_trims.help_text }}</div>
+          </div>
+          <div>
+            <label>Commission %</label>
+            {{ form.commission_percent }}
+            <div class="field-help">{{ form.commission_percent.help_text }}</div>
+          </div>
+          <div>
+            <label>Target margin %</label>
+            {{ form.target_margin_percent }}
+            <div class="field-help">{{ form.target_margin_percent.help_text }}</div>
+          </div>
+          <div>
+            <label>Manual FOB per piece</label>
+            {{ form.manual_fob_per_piece }}
+            <div class="field-help">{{ form.manual_fob_per_piece.help_text }}</div>
+          </div>
         </div>
-        <div>
-          <label>Customer</label>
-          {{ form.customer }}
-        </div>
-        <div>
-          <label>Style name</label>
-          {{ form.style_name }}
-        </div>
-        <div>
-          <label>Style code</label>
-          {{ form.style_code }}
-        </div>
-        <div>
-          <label>Product type</label>
-          {{ form.product_type }}
-        </div>
-        <div>
-          <label>Factory location</label>
-          {{ form.factory_location }}
-        </div>
-        <div>
-          <label>Order quantity</label>
-          {{ form.order_quantity }}
-        </div>
-        <div>
-          <label>Currency</label>
-          {{ form.currency }}
-        </div>
-        <div>
-          <label>Exchange rate</label>
-          {{ form.exchange_rate }}
-          <div class="muted">Store the exchange rate used for this costing.</div>
-        </div>
-        <div>
-          <label>Fabric finance %</label>
-          {{ form.finance_percent_fabric }}
-        </div>
-        <div>
-          <label>Trim finance %</label>
-          {{ form.finance_percent_trims }}
-        </div>
-        <div>
-          <label>Commission %</label>
-          {{ form.commission_percent }}
-        </div>
-        <div>
-          <label>Target margin %</label>
-          {{ form.target_margin_percent }}
-        </div>
-        <div>
-          <label>Manual FOB per piece</label>
-          {{ form.manual_fob_per_piece }}
-        </div>
-        <div style="grid-column: 1 / -1;">
-          <label>Notes</label>
-          {{ form.notes }}
+      </div>
+
+      <div class="header-section">
+        <div class="section-subtitle">Product specification snapshot</div>
+        <div class="section-lead">These fields help the team understand why a style costs what it does, even before reviewing the line items below.</div>
+        <div class="header-grid">
+          <div>
+            <label>Gender</label>
+            {{ form.gender }}
+            <div class="field-help">{{ form.gender.help_text }}</div>
+          </div>
+          <div>
+            <label>Size range</label>
+            {{ form.size_range }}
+            <div class="field-help">{{ form.size_range.help_text }}</div>
+          </div>
+          <div>
+            <label>Season</label>
+            {{ form.season }}
+            <div class="field-help">{{ form.season.help_text }}</div>
+          </div>
+          <div>
+            <label>Fabric type</label>
+            {{ form.fabric_type }}
+            <div class="field-help">{{ form.fabric_type.help_text }}</div>
+          </div>
+          <div>
+            <label>Fabric GSM</label>
+            {{ form.fabric_gsm }}
+            <div class="field-help">{{ form.fabric_gsm.help_text }}</div>
+          </div>
+          <div>
+            <label>Fabric composition</label>
+            {{ form.fabric_composition }}
+            <div class="field-help">{{ form.fabric_composition.help_text }}</div>
+          </div>
+          <div>
+            <label>Wash type</label>
+            {{ form.wash_type }}
+            <div class="field-help">{{ form.wash_type.help_text }}</div>
+          </div>
+          <div>
+            <label>Print type</label>
+            {{ form.print_type }}
+            <div class="field-help">{{ form.print_type.help_text }}</div>
+          </div>
+          <div>
+            <label>Embroidery</label>
+            {{ form.embroidery }}
+            <div class="field-help">{{ form.embroidery.help_text }}</div>
+          </div>
+          <div>
+            <label>Label type</label>
+            {{ form.label_type }}
+            <div class="field-help">{{ form.label_type.help_text }}</div>
+          </div>
+          <div>
+            <label>Packaging type</label>
+            {{ form.packaging_type }}
+            <div class="field-help">{{ form.packaging_type.help_text }}</div>
+          </div>
+          <div>
+            <label>Special trims</label>
+            {{ form.special_trims }}
+            <div class="field-help">{{ form.special_trims.help_text }}</div>
+          </div>
+          <div style="grid-column: 1 / -1;">
+            <label>Fit / construction remarks</label>
+            {{ form.fit_remarks }}
+            <div class="field-help">{{ form.fit_remarks.help_text }}</div>
+          </div>
+          <div style="grid-column: 1 / -1;">
+            <label>Notes</label>
+            {{ form.notes }}
+            <div class="field-help">{{ form.notes.help_text }}</div>
+          </div>
         </div>
       </div>
     </div>
 
     <div class="card">
       <div class="card-title">SMV & Labor</div>
+      <div class="section-lead">Enter minute values only. The system uses CPM and efficiency to calculate labor cost per piece.</div>
       <div class="header-grid">
         <div>
           <label>Machine SMV</label>
           {{ smv_form.machine_smv }}
+          <div class="field-help">{{ smv_form.machine_smv.help_text }}</div>
         </div>
         <div>
           <label>Finishing SMV</label>
           {{ smv_form.finishing_smv }}
+          <div class="field-help">{{ smv_form.finishing_smv.help_text }}</div>
         </div>
         <div>
           <label>CPM</label>
           {{ smv_form.cpm }}
+          <div class="field-help">{{ smv_form.cpm.help_text }}</div>
         </div>
         <div>
           <label>Efficiency (costing %)</label>
           {{ smv_form.efficiency_costing }}
+          <div class="field-help">{{ smv_form.efficiency_costing.help_text }}</div>
         </div>
         <div>
           <label>Efficiency (planned %)</label>
           {{ smv_form.efficiency_planned }}
+          <div class="field-help">{{ smv_form.efficiency_planned.help_text }}</div>
         </div>
       </div>
     </div>
@@ -355,7 +588,17 @@
     {% for category,label in category_choices %}
       <div class="card">
         <div class="card-title">{{ label }}</div>
-        <div class="muted" style="margin-bottom:6px;">Unit prices are BDT per selected UOM. Consumption is per piece.</div>
+        <div class="category-guide">
+          <div class="category-guide-card">
+            <div class="category-guide-title">How to enter {{ label|lower }}</div>
+            <div class="category-guide-body" data-category-help="{{ category }}"></div>
+          </div>
+          <div class="category-guide-card">
+            <div class="category-guide-title">Common items</div>
+            <div class="chip-row" data-category-chips="{{ category }}"></div>
+          </div>
+        </div>
+        <div class="muted" style="margin-bottom:6px;">Unit prices are BDT per selected UOM. Consumption is per piece unless the supplier quotes per order.</div>
         <div style="overflow:auto;">
           <table class="line-table" data-category="{{ category }}">
             <thead>
@@ -377,9 +620,10 @@
               <tr class="line-row" data-category="{{ category }}" data-id="{{ row.id|default:"" }}">
                 <td>
                   <div style="display:flex; align-items:center; gap:6px;">
-                    <input type="text" data-field="item_name" value="{{ row.item_name }}" placeholder="Item name">
+                    <input type="text" data-field="item_name" value="{{ row.item_name }}" placeholder="Item name" list="costing-item-options-{{ category }}">
                     <span class="help-icon" title="">?</span>
                   </div>
+                  <div class="row-tip" data-role="item-tip"></div>
                 </td>
                 <td>
                   <select data-field="uom" class="uom-select">
@@ -441,6 +685,16 @@
   <div class="card">
     <div class="card-title">Summary & Pricing</div>
     {% if calc %}
+      {% if calc.advisories %}
+        <div class="advisory-list">
+          {% for advisory in calc.advisories %}
+            <div class="advisory-card advisory-{{ advisory.level }}">
+              <div class="advisory-title">{{ advisory.title }}</div>
+              <div class="advisory-message">{{ advisory.message }}</div>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
       <div class="summary-grid">
         <div class="summary-card">
           <div class="summary-label">Total cost per piece</div>
@@ -495,14 +749,49 @@
               <td>{{ calc.display.breakdown_order.fabric }} <span class="unit-badge">total order</span></td>
             </tr>
             <tr>
-              <td>Trims (sewing + packaging)</td>
+              <td>Trims total</td>
               <td>{{ calc.display.breakdown.trims }} <span class="unit-badge">per piece</span></td>
               <td>{{ calc.display.breakdown_order.trims }} <span class="unit-badge">total order</span></td>
             </tr>
             <tr>
-              <td>Labor (SMV)</td>
+              <td>Sewing trims</td>
+              <td>{{ calc.display.breakdown.sewing_trim }} <span class="unit-badge">per piece</span></td>
+              <td>{{ calc.display.breakdown_order.sewing_trim }} <span class="unit-badge">total order</span></td>
+            </tr>
+            <tr>
+              <td>Packaging trims</td>
+              <td>{{ calc.display.breakdown.packaging_trim }} <span class="unit-badge">per piece</span></td>
+              <td>{{ calc.display.breakdown_order.packaging_trim }} <span class="unit-badge">total order</span></td>
+            </tr>
+            <tr>
+              <td>Labels and branding</td>
+              <td>{{ calc.display.breakdown.labels_branding }} <span class="unit-badge">per piece</span></td>
+              <td>{{ calc.display.breakdown_order.labels_branding }} <span class="unit-badge">total order</span></td>
+            </tr>
+            <tr>
+              <td>SMV labor</td>
+              <td>{{ calc.display.breakdown.smv_labor }} <span class="unit-badge">per piece</span></td>
+              <td>{{ calc.display.breakdown_order.smv_labor }} <span class="unit-badge">total order</span></td>
+            </tr>
+            <tr>
+              <td>CM and labor lines</td>
+              <td>{{ calc.display.breakdown.cm_labor }} <span class="unit-badge">per piece</span></td>
+              <td>{{ calc.display.breakdown_order.cm_labor }} <span class="unit-badge">total order</span></td>
+            </tr>
+            <tr>
+              <td>Labor total</td>
               <td>{{ calc.display.breakdown.labor }} <span class="unit-badge">per piece</span></td>
               <td>{{ calc.display.breakdown_order.labor }} <span class="unit-badge">total order</span></td>
+            </tr>
+            <tr>
+              <td>Wash and process</td>
+              <td>{{ calc.display.breakdown.wash_process }} <span class="unit-badge">per piece</span></td>
+              <td>{{ calc.display.breakdown_order.wash_process }} <span class="unit-badge">total order</span></td>
+            </tr>
+            <tr>
+              <td>Logistics and compliance</td>
+              <td>{{ calc.display.breakdown.logistics_compliance }} <span class="unit-badge">per piece</span></td>
+              <td>{{ calc.display.breakdown_order.logistics_compliance }} <span class="unit-badge">total order</span></td>
             </tr>
             <tr>
               <td>Other</td>
@@ -588,6 +877,130 @@
   {% endif %}
 </div>
 
+<datalist id="costing-buyer-options">
+  <option value="Menswear"></option>
+  <option value="Womenswear"></option>
+  <option value="Kids"></option>
+  <option value="Basics"></option>
+  <option value="Outerwear"></option>
+  <option value="Activewear"></option>
+</datalist>
+<datalist id="costing-brand-options">
+  <option value="Private label"></option>
+  <option value="House brand"></option>
+  <option value="Licensed brand"></option>
+  <option value="Retail program"></option>
+</datalist>
+<datalist id="costing-gender-options">
+  <option value="Women"></option>
+  <option value="Men"></option>
+  <option value="Unisex"></option>
+  <option value="Girls"></option>
+  <option value="Boys"></option>
+  <option value="Baby"></option>
+  <option value="Toddler"></option>
+  <option value="Kids"></option>
+</datalist>
+<datalist id="costing-size_range-options">
+  <option value="XS-XL"></option>
+  <option value="S-XXL"></option>
+  <option value="2-8Y"></option>
+  <option value="4-14Y"></option>
+  <option value="NB-24M"></option>
+  <option value="One size"></option>
+</datalist>
+<datalist id="costing-season-options">
+  <option value="Spring/Summer"></option>
+  <option value="Fall/Winter"></option>
+  <option value="Holiday"></option>
+  <option value="Core"></option>
+  <option value="Back to School"></option>
+  <option value="Resort"></option>
+</datalist>
+<datalist id="costing-merchandiser-options">
+  <option value="In-house"></option>
+  <option value="Customer merchandiser"></option>
+  <option value="Sales team"></option>
+</datalist>
+<datalist id="costing-fabric_type-options">
+  <option value="Single jersey"></option>
+  <option value="Interlock"></option>
+  <option value="Rib"></option>
+  <option value="Fleece"></option>
+  <option value="French terry"></option>
+  <option value="Pique"></option>
+  <option value="Woven poplin"></option>
+  <option value="Denim"></option>
+  <option value="Canvas"></option>
+  <option value="Polar fleece"></option>
+</datalist>
+<datalist id="costing-fabric_gsm-options">
+  <option value="160 GSM"></option>
+  <option value="180 GSM"></option>
+  <option value="200 GSM"></option>
+  <option value="220 GSM"></option>
+  <option value="240 GSM"></option>
+  <option value="280 GSM"></option>
+  <option value="320 GSM"></option>
+</datalist>
+<datalist id="costing-fabric_composition-options">
+  <option value="100% cotton"></option>
+  <option value="95% cotton / 5% spandex"></option>
+  <option value="60% cotton / 40% polyester"></option>
+  <option value="80% cotton / 20% polyester"></option>
+  <option value="100% polyester"></option>
+  <option value="CVC"></option>
+</datalist>
+<datalist id="costing-wash_type-options">
+  <option value="None"></option>
+  <option value="Soft wash"></option>
+  <option value="Enzyme wash"></option>
+  <option value="Garment wash"></option>
+  <option value="Silicone wash"></option>
+  <option value="Acid wash"></option>
+  <option value="Pigment wash"></option>
+</datalist>
+<datalist id="costing-print_type-options">
+  <option value="None"></option>
+  <option value="Screen print"></option>
+  <option value="Puff print"></option>
+  <option value="Heat transfer"></option>
+  <option value="DTG"></option>
+  <option value="Sublimation"></option>
+  <option value="Emboss print"></option>
+</datalist>
+<datalist id="costing-embroidery-options">
+  <option value="None"></option>
+  <option value="Flat embroidery"></option>
+  <option value="3D embroidery"></option>
+  <option value="Applique embroidery"></option>
+  <option value="Badge embroidery"></option>
+</datalist>
+<datalist id="costing-label_type-options">
+  <option value="Main label"></option>
+  <option value="Care label"></option>
+  <option value="Heat transfer label"></option>
+  <option value="Woven main and care label"></option>
+  <option value="Printed satin label"></option>
+</datalist>
+<datalist id="costing-packaging_type-options">
+  <option value="Polybag only"></option>
+  <option value="Polybag and carton"></option>
+  <option value="Polybag, sticker and carton"></option>
+  <option value="Hanger pack"></option>
+  <option value="Flat pack"></option>
+</datalist>
+<datalist id="costing-special_trims-options">
+  <option value="None"></option>
+  <option value="Zipper"></option>
+  <option value="Drawcord"></option>
+  <option value="Toggle"></option>
+  <option value="Patch"></option>
+  <option value="Snap button"></option>
+  <option value="Velcro"></option>
+  <option value="Badge"></option>
+</datalist>
+
 <template id="line-row-template">
   <tr class="line-row" data-category="" data-id="">
     <td>
@@ -595,6 +1008,7 @@
         <input type="text" data-field="item_name" value="" placeholder="Item name">
         <span class="help-icon" title="">?</span>
       </div>
+      <div class="row-tip" data-role="item-tip"></div>
     </td>
     <td>
       <select data-field="uom" class="uom-select">
@@ -644,11 +1058,92 @@
 
 <script>
   const helpTextByCategory = {
-    fabric: \"Enter cost per garment piece. If supplier gives price per kg/meter, use consumption per piece.\",
-    sewing_trim: \"Enter cost per garment piece. If price is per cone/roll/pack, use denominator and consumption.\",
-    packaging_trim: \"Enter cost per garment piece. Use per order only when total order cost is known.\",
-    other: \"Enter cost per garment piece or per order. Use consumption for per piece conversion.\"
+    fabric: \"Main shell fabric, pocketing, rib, contrast fabric. Use consumption per piece.\",
+    sewing_trim: \"Thread, zipper, elastic, tape, buttons and trims used in sewing. Use denominator for cone/roll/pack costs.\",
+    packaging_trim: \"Polybag, carton, barcode sticker, tissue, insert card and export packing items.\",
+    labels_branding: \"Main label, size label, care label, hangtag, patch, print branding or badge costs.\",
+    wash_process: \"Washing, dyeing, printing, embroidery, heat transfer, pleating or special process costs.\",
+    cm_labor: \"Cut-make, sewing, finishing or subcontract labor lines if you price them directly instead of SMV only.\",
+    logistics_compliance: \"Testing, inspection, freight, compliance, courier, banking or document costs.\",
+    other: \"Any other cost not covered above. Use per order only when the vendor quotes a total order amount.\"
   };
+
+  const categoryConfig = {
+    fabric: {
+      items: [\"Main fabric\", \"Rib\", \"Pocketing\", \"Contrast fabric\", \"Lining fabric\"],
+      defaults: { uom: \"kg\", denominator_value: \"1\", wastage_percent: \"3\" },
+      rowTip: \"Use supplier price per kg or meter, then add garment consumption per piece.\",
+    },
+    sewing_trim: {
+      items: [\"Sewing thread\", \"Zipper\", \"Drawcord\", \"Elastic\", \"Button\", \"Twill tape\"],
+      defaults: { uom: \"piece\", wastage_percent: \"2\" },
+      rowTip: \"Use denominator when one cone, roll or pack covers many garments.\",
+    },
+    packaging_trim: {
+      items: [\"Polybag\", \"Carton\", \"Barcode sticker\", \"Size sticker\", \"Tissue paper\", \"Insert card\"],
+      defaults: { uom: \"piece\", wastage_percent: \"1\" },
+      rowTip: \"Packaging is usually a small per-piece cost unless carton freight is quoted per order.\",
+    },
+    labels_branding: {
+      items: [\"Main label\", \"Care label\", \"Size label\", \"Hangtag\", \"Patch\", \"Heat transfer logo\"],
+      defaults: { uom: \"piece\", wastage_percent: \"1\" },
+      rowTip: \"Separate brand trims from sewing trims so branding cost stays visible in the summary.\",
+    },
+    wash_process: {
+      items: [\"Garment wash\", \"Screen print\", \"Embroidery\", \"Heat transfer\", \"Special finish\"],
+      defaults: { uom: \"piece\", wastage_percent: \"0\" },
+      rowTip: \"Enter the factory or subcontract process cost per garment piece.\",
+    },
+    cm_labor: {
+      items: [\"CM charge\", \"Subcontract sewing\", \"Handwork\", \"Finishing labor\", \"Packing labor\"],
+      defaults: { uom: \"piece\", wastage_percent: \"0\" },
+      rowTip: \"Use this when labor is quoted directly, in addition to or instead of SMV logic.\",
+    },
+    logistics_compliance: {
+      items: [\"Testing\", \"Inspection\", \"Courier\", \"Bank charge\", \"Freight\", \"Compliance audit\"],
+      defaults: { uom: \"order\", wastage_percent: \"0\" },
+      rowTip: \"If vendor gives a single total charge for the order, keep UOM as per order.\",
+    },
+    other: {
+      items: [\"Sample cost\", \"Allowance\", \"Wastage reserve\", \"Miscellaneous charge\"],
+      defaults: { uom: \"piece\", wastage_percent: \"0\" },
+      rowTip: \"Only use this bucket for genuine extras that do not fit another category.\",
+    }
+  };
+
+  function renderCategoryGuides() {
+    document.querySelectorAll('[data-category-help]').forEach((el) => {
+      const category = el.getAttribute('data-category-help');
+      el.textContent = helpTextByCategory[category] || 'Enter cost per garment piece.';
+    });
+    document.querySelectorAll('[data-category-chips]').forEach((el) => {
+      const category = el.getAttribute('data-category-chips');
+      const items = (categoryConfig[category] && categoryConfig[category].items) || [];
+      el.innerHTML = items.map((item) => `<span class="guide-chip">${item}</span>`).join('');
+    });
+  }
+
+  function applyCategoryDefaults(row) {
+    const config = categoryConfig[row.dataset.category] || {};
+    const defaults = config.defaults || {};
+    Object.entries(defaults).forEach(([field, value]) => {
+      const input = row.querySelector(`[data-field="${field}"]`);
+      if (input && !input.value) {
+        input.value = value;
+      }
+    });
+    const itemInput = row.querySelector('[data-field="item_name"]');
+    if (itemInput) {
+      itemInput.setAttribute('list', `costing-item-options-${row.dataset.category}`);
+      if (!itemInput.placeholder) {
+        itemInput.placeholder = 'Item name';
+      }
+    }
+    const itemTip = row.querySelector('[data-role="item-tip"]');
+    if (itemTip) {
+      itemTip.textContent = config.rowTip || 'Enter cost per garment piece.';
+    }
+  }
 
   function updateUnitLabel(row) {
     const uom = row.querySelector('[data-field="uom"]').value;
@@ -659,6 +1154,7 @@
   }
 
   function bindRow(row) {
+    applyCategoryDefaults(row);
     const select = row.querySelector('.uom-select');
     if (select) {
       select.addEventListener('change', () => updateUnitLabel(row));
@@ -677,6 +1173,7 @@
   }
 
   document.querySelectorAll('.line-row').forEach(bindRow);
+  renderCategoryGuides();
 
   document.querySelectorAll('.add-row').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -686,6 +1183,10 @@
       const clone = tpl.content.cloneNode(true);
       const row = clone.querySelector('.line-row');
       row.dataset.category = category;
+      const itemInput = row.querySelector('[data-field="item_name"]');
+      if (itemInput) {
+        itemInput.setAttribute('list', `costing-item-options-${category}`);
+      }
       table.appendChild(clone);
       bindRow(table.lastElementChild);
     });
@@ -747,5 +1248,65 @@
   });
   {% endif %}
 </script>
+
+<datalist id="costing-item-options-fabric">
+  <option value="Main fabric"></option>
+  <option value="Rib"></option>
+  <option value="Pocketing"></option>
+  <option value="Contrast fabric"></option>
+  <option value="Lining fabric"></option>
+</datalist>
+<datalist id="costing-item-options-sewing_trim">
+  <option value="Sewing thread"></option>
+  <option value="Zipper"></option>
+  <option value="Drawcord"></option>
+  <option value="Elastic"></option>
+  <option value="Button"></option>
+  <option value="Twill tape"></option>
+</datalist>
+<datalist id="costing-item-options-packaging_trim">
+  <option value="Polybag"></option>
+  <option value="Carton"></option>
+  <option value="Barcode sticker"></option>
+  <option value="Size sticker"></option>
+  <option value="Tissue paper"></option>
+  <option value="Insert card"></option>
+</datalist>
+<datalist id="costing-item-options-labels_branding">
+  <option value="Main label"></option>
+  <option value="Care label"></option>
+  <option value="Size label"></option>
+  <option value="Hangtag"></option>
+  <option value="Patch"></option>
+  <option value="Heat transfer logo"></option>
+</datalist>
+<datalist id="costing-item-options-wash_process">
+  <option value="Garment wash"></option>
+  <option value="Screen print"></option>
+  <option value="Embroidery"></option>
+  <option value="Heat transfer"></option>
+  <option value="Special finish"></option>
+</datalist>
+<datalist id="costing-item-options-cm_labor">
+  <option value="CM charge"></option>
+  <option value="Subcontract sewing"></option>
+  <option value="Handwork"></option>
+  <option value="Finishing labor"></option>
+  <option value="Packing labor"></option>
+</datalist>
+<datalist id="costing-item-options-logistics_compliance">
+  <option value="Testing"></option>
+  <option value="Inspection"></option>
+  <option value="Courier"></option>
+  <option value="Bank charge"></option>
+  <option value="Freight"></option>
+  <option value="Compliance audit"></option>
+</datalist>
+<datalist id="costing-item-options-other">
+  <option value="Sample cost"></option>
+  <option value="Allowance"></option>
+  <option value="Wastage reserve"></option>
+  <option value="Miscellaneous charge"></option>
+</datalist>
 
 {% endblock %}

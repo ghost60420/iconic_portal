@@ -3,6 +3,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from crm.models import (
     CostingHeader,
     CostingLineItem,
+    CostingSMV,
     NEW_COSTING_CATEGORY_CHOICES,
 )
 
@@ -10,6 +11,17 @@ from crm.models import (
 INTERNAL_QUANT = Decimal("0.0001")
 DISPLAY_QUANT = Decimal("0.01")
 CATEGORY_KEYS = [key for key, _ in NEW_COSTING_CATEGORY_CHOICES]
+
+CATEGORY_GROUPS = {
+    "fabric": "fabric",
+    "sewing_trim": "trims",
+    "packaging_trim": "trims",
+    "labels_branding": "trims",
+    "wash_process": "other",
+    "cm_labor": "labor_extra",
+    "logistics_compliance": "other",
+    "other": "other",
+}
 
 
 def _to_decimal(value):
@@ -70,6 +82,75 @@ def _labor_from_smv(smv):
     return _round_internal((smv_total * cpm) / (eff / Decimal("100")))
 
 
+def _safe_costing_smv(costing):
+    try:
+        return costing.smv
+    except CostingSMV.DoesNotExist:
+        return None
+
+
+def _build_advisories(costing, breakdown, line_rows, order_qty, total_cost_per_piece, fob_per_piece, margin_percent):
+    advisories = []
+
+    if order_qty <= 0:
+        advisories.append({
+            "level": "danger",
+            "title": "Order quantity is missing",
+            "message": "Enter order quantity before relying on total order value or any per-order charges.",
+        })
+
+    if breakdown.get("fabric", Decimal("0")) <= 0:
+        advisories.append({
+            "level": "warning",
+            "title": "No fabric cost entered",
+            "message": "The sheet has no fabric value yet. Add the main fabric before using this costing commercially.",
+        })
+
+    packaging_total = breakdown.get("packaging_trim", Decimal("0"))
+    if packaging_total <= 0:
+        advisories.append({
+            "level": "warning",
+            "title": "Packaging cost is missing",
+            "message": "Polybag, carton, sticker, or export packing is not entered. Confirm if packaging is intentionally excluded.",
+        })
+
+    if total_cost_per_piece > 0 and fob_per_piece <= 0:
+        advisories.append({
+            "level": "danger",
+            "title": "Selling price is not set",
+            "message": "Set a manual FOB or a target margin so the system can calculate a selling price.",
+        })
+    elif fob_per_piece > 0 and fob_per_piece <= total_cost_per_piece:
+        advisories.append({
+            "level": "danger",
+            "title": "Quote is at or below cost",
+            "message": "FOB is not covering the total cost per piece. This quote is currently loss-making.",
+        })
+    elif margin_percent < Decimal("5"):
+        advisories.append({
+            "level": "warning",
+            "title": "Margin is very low",
+            "message": "Margin is below 5 percent. Recheck fabric, labor, freight, and target selling price.",
+        })
+
+    order_uom_lines = [row for row in line_rows if row.get("uom") == "order"]
+    if order_uom_lines and order_qty <= 0:
+        advisories.append({
+            "level": "danger",
+            "title": "Per-order costs cannot be spread",
+            "message": "Some rows use per-order UOM, but order quantity is zero. Those costs cannot be allocated correctly.",
+        })
+
+    if not line_rows:
+        advisories.append({
+            "level": "warning",
+            "title": "No cost lines entered",
+            "message": "Add at least fabric, trims, labor, and packaging before quoting from this sheet.",
+        })
+
+    return advisories
+
+
 def compute_costing(costing_id):
     costing = CostingHeader.objects.select_related("opportunity", "customer").prefetch_related("line_items").filter(pk=costing_id).first()
     if not costing:
@@ -104,15 +185,25 @@ def compute_costing(costing_id):
             }
         )
 
-    fabric_base = category_totals.get("fabric", Decimal("0"))
+    grouped_totals = {
+        "fabric": Decimal("0"),
+        "trims": Decimal("0"),
+        "labor_extra": Decimal("0"),
+        "other": Decimal("0"),
+    }
+    for category, total in category_totals.items():
+        bucket = CATEGORY_GROUPS.get(category, "other")
+        grouped_totals[bucket] = _round_internal(grouped_totals[bucket] + total)
+
+    fabric_base = grouped_totals["fabric"]
     sewing_trim_base = category_totals.get("sewing_trim", Decimal("0"))
     packaging_trim_base = category_totals.get("packaging_trim", Decimal("0"))
-    other_base = category_totals.get("other", Decimal("0"))
+    trims_base = grouped_totals["trims"]
+    other_base = grouped_totals["other"]
 
-    trims_base = _round_internal(sewing_trim_base + packaging_trim_base)
-
-    smv = getattr(costing, "smv", None)
-    labor_cost_per_piece = _labor_from_smv(smv)
+    smv = _safe_costing_smv(costing)
+    smv_labor_cost_per_piece = _labor_from_smv(smv)
+    labor_cost_per_piece = _round_internal(smv_labor_cost_per_piece + grouped_totals["labor_extra"])
 
     fabric_finance = _round_internal(fabric_base * _pct(costing.finance_percent_fabric))
     trims_finance = _round_internal(trims_base * _pct(costing.finance_percent_trims))
@@ -157,10 +248,15 @@ def compute_costing(costing_id):
 
     breakdown = {
         "fabric": fabric_base,
-        "sewing_trim": sewing_trim_base,
-        "packaging_trim": packaging_trim_base,
+        "sewing_trim": category_totals.get("sewing_trim", Decimal("0")),
+        "packaging_trim": category_totals.get("packaging_trim", Decimal("0")),
+        "labels_branding": category_totals.get("labels_branding", Decimal("0")),
+        "wash_process": category_totals.get("wash_process", Decimal("0")),
+        "cm_labor": category_totals.get("cm_labor", Decimal("0")),
+        "logistics_compliance": category_totals.get("logistics_compliance", Decimal("0")),
         "trims": trims_base,
         "other": other_base,
+        "smv_labor": smv_labor_cost_per_piece,
         "labor": labor_cost_per_piece,
         "fabric_finance": fabric_finance,
         "trims_finance": trims_finance,
@@ -169,6 +265,15 @@ def compute_costing(costing_id):
     breakdown_order = {k: _round_internal(v * Decimal(order_qty)) for k, v in breakdown.items()}
     display_breakdown = {k: _round_display(v) for k, v in breakdown.items()}
     display_breakdown_order = {k: _round_display(v) for k, v in breakdown_order.items()}
+    advisories = _build_advisories(
+        costing=costing,
+        breakdown=breakdown,
+        line_rows=line_rows,
+        order_qty=order_qty,
+        total_cost_per_piece=total_cost_per_piece,
+        fob_per_piece=fob_per_piece,
+        margin_percent=margin_percent,
+    )
 
     return {
         "costing": costing,
@@ -194,6 +299,7 @@ def compute_costing(costing_id):
         "total_sales_order": total_sales_order,
         "total_profit_order": total_profit_order,
         "total_final_offer_order": total_final_offer_order,
+        "advisories": advisories,
         "display": {
             "fabric_base": _round_display(fabric_base),
             "sewing_trim_base": _round_display(sewing_trim_base),

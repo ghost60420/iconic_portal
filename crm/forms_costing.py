@@ -12,6 +12,165 @@ from .models import (
 )
 
 
+COMMON_COSTING_SUGGESTIONS = {
+    "buyer": [
+        "Menswear",
+        "Womenswear",
+        "Kids",
+        "Basics",
+        "Outerwear",
+        "Activewear",
+    ],
+    "brand": [
+        "Private label",
+        "House brand",
+        "Licensed brand",
+        "Retail program",
+    ],
+    "gender": [
+        "Women",
+        "Men",
+        "Unisex",
+        "Girls",
+        "Boys",
+        "Baby",
+        "Toddler",
+        "Kids",
+    ],
+    "size_range": [
+        "XS-XL",
+        "S-XXL",
+        "2-8Y",
+        "4-14Y",
+        "NB-24M",
+        "One size",
+    ],
+    "season": [
+        "Spring/Summer",
+        "Fall/Winter",
+        "Holiday",
+        "Core",
+        "Back to School",
+        "Resort",
+    ],
+    "merchandiser": [
+        "In-house",
+        "Customer merchandiser",
+        "Sales team",
+    ],
+    "fabric_type": [
+        "Single jersey",
+        "Interlock",
+        "Rib",
+        "Fleece",
+        "French terry",
+        "Pique",
+        "Woven poplin",
+        "Denim",
+        "Canvas",
+        "Polar fleece",
+    ],
+    "fabric_gsm": [
+        "160 GSM",
+        "180 GSM",
+        "200 GSM",
+        "220 GSM",
+        "240 GSM",
+        "280 GSM",
+        "320 GSM",
+    ],
+    "fabric_composition": [
+        "100% cotton",
+        "95% cotton / 5% spandex",
+        "60% cotton / 40% polyester",
+        "80% cotton / 20% polyester",
+        "100% polyester",
+        "CVC",
+    ],
+    "wash_type": [
+        "None",
+        "Soft wash",
+        "Enzyme wash",
+        "Garment wash",
+        "Silicone wash",
+        "Acid wash",
+        "Pigment wash",
+    ],
+    "print_type": [
+        "None",
+        "Screen print",
+        "Puff print",
+        "Heat transfer",
+        "DTG",
+        "Sublimation",
+        "Emboss print",
+    ],
+    "embroidery": [
+        "None",
+        "Flat embroidery",
+        "3D embroidery",
+        "Applique embroidery",
+        "Badge embroidery",
+    ],
+    "label_type": [
+        "Main label",
+        "Care label",
+        "Heat transfer label",
+        "Woven main and care label",
+        "Printed satin label",
+    ],
+    "packaging_type": [
+        "Polybag only",
+        "Polybag and carton",
+        "Polybag, sticker and carton",
+        "Hanger pack",
+        "Flat pack",
+    ],
+    "special_trims": [
+        "None",
+        "Zipper",
+        "Drawcord",
+        "Toggle",
+        "Patch",
+        "Snap button",
+        "Velcro",
+        "Badge",
+    ],
+}
+
+
+HEADER_HELP_TEXTS = {
+    "buyer": "Internal buyer division or customer buying team for this style.",
+    "brand": "Brand or label this product will be sold under.",
+    "gender": "Choose the target consumer group for the product.",
+    "size_range": "Enter the size set the quote covers, for example XS-XL or 2-8Y.",
+    "season": "Commercial season or program this style belongs to.",
+    "factory_location": "Use the production country that will build this costing.",
+    "order_quantity": "Planned order quantity for the quotation. Totals are based on this number.",
+    "moq": "Minimum order quantity expected or accepted for the style.",
+    "costing_date": "Date this costing was prepared or revised.",
+    "merchandiser": "Owner responsible for follow-up and commercial coordination.",
+    "currency": "Working currency for the sheet header and quote logic.",
+    "exchange_rate": "Only needed when the costing references a foreign quote or conversion.",
+    "finance_percent_fabric": "Finance/loading percentage applied on fabric cost.",
+    "finance_percent_trims": "Finance/loading percentage applied on trims cost.",
+    "commission_percent": "Sales or agent commission percentage added on top of FOB.",
+    "target_margin_percent": "If manual FOB is blank, system can back-calculate FOB from this margin target.",
+    "manual_fob_per_piece": "Optional manual selling FOB per piece. Leave blank to auto-calculate from margin target.",
+    "fabric_type": "Main body fabric construction used for the garment.",
+    "fabric_gsm": "Fabric weight reference from tech pack or supplier quote.",
+    "fabric_composition": "Fiber content used for costing and supplier matching.",
+    "wash_type": "Any garment wash or finishing process affecting cost.",
+    "print_type": "Print method used on the garment. Select none if not applicable.",
+    "embroidery": "Embroidery method or indicate none.",
+    "label_type": "Main branding and care label setup for the style.",
+    "packaging_type": "How the garment is packed for shipment.",
+    "special_trims": "List major trims that meaningfully change cost.",
+    "fit_remarks": "Construction, fit, or workmanship notes that affect labor or trim choices.",
+    "notes": "Assumptions, exclusions, or commercial remarks for the costing.",
+}
+
+
 def _safe_opportunity_label(opportunity):
     label = opportunity.opportunity_id or f"Opportunity {opportunity.pk}"
     try:
@@ -26,6 +185,19 @@ class CostingHeaderForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if "opportunity" in self.fields:
             self.fields["opportunity"].label_from_instance = _safe_opportunity_label
+        for field in self.fields.values():
+            css = field.widget.attrs.get("class", "")
+            field.widget.attrs["class"] = (css + " costing-input").strip()
+        for name, suggestions in COMMON_COSTING_SUGGESTIONS.items():
+            field = self.fields.get(name)
+            if not field:
+                continue
+            field.widget.attrs["list"] = f"costing-{name}-options"
+        for name, help_text in HEADER_HELP_TEXTS.items():
+            field = self.fields.get(name)
+            if not field:
+                continue
+            field.help_text = help_text
 
     class Meta:
         model = CostingHeader
@@ -34,9 +206,17 @@ class CostingHeaderForm(forms.ModelForm):
             "customer",
             "style_name",
             "style_code",
+            "buyer",
+            "brand",
             "product_type",
+            "gender",
+            "size_range",
+            "season",
             "factory_location",
             "order_quantity",
+            "moq",
+            "costing_date",
+            "merchandiser",
             "currency",
             "exchange_rate",
             "finance_percent_fabric",
@@ -44,23 +224,68 @@ class CostingHeaderForm(forms.ModelForm):
             "commission_percent",
             "target_margin_percent",
             "manual_fob_per_piece",
+            "fabric_type",
+            "fabric_gsm",
+            "fabric_composition",
+            "wash_type",
+            "print_type",
+            "embroidery",
+            "label_type",
+            "packaging_type",
+            "special_trims",
+            "fit_remarks",
             "notes",
         ]
         widgets = {
             "style_name": forms.TextInput(attrs={"placeholder": "Style name"}),
             "style_code": forms.TextInput(attrs={"placeholder": "Style code"}),
+            "buyer": forms.TextInput(attrs={"placeholder": "Buyer or division"}),
+            "brand": forms.TextInput(attrs={"placeholder": "Brand / label"}),
+            "gender": forms.TextInput(attrs={"placeholder": "Women, men, unisex, kids"}),
+            "size_range": forms.TextInput(attrs={"placeholder": "XS-XL, 2-8Y, etc."}),
+            "season": forms.TextInput(attrs={"placeholder": "Summer 2026, Holiday, core"}),
             "order_quantity": forms.NumberInput(attrs={"min": 0, "step": "1", "placeholder": "1000"}),
+            "moq": forms.NumberInput(attrs={"min": 0, "step": "1", "placeholder": "MOQ"}),
+            "costing_date": forms.DateInput(attrs={"type": "date"}),
+            "merchandiser": forms.TextInput(attrs={"placeholder": "Merchandiser / owner"}),
             "exchange_rate": forms.NumberInput(attrs={"step": "0.01", "placeholder": "140.00"}),
             "finance_percent_fabric": forms.NumberInput(attrs={"step": "0.01", "placeholder": "2"}),
             "finance_percent_trims": forms.NumberInput(attrs={"step": "0.01", "placeholder": "2"}),
             "commission_percent": forms.NumberInput(attrs={"step": "0.01", "placeholder": "3"}),
             "target_margin_percent": forms.NumberInput(attrs={"step": "0.01", "placeholder": "35"}),
             "manual_fob_per_piece": forms.NumberInput(attrs={"step": "0.01", "placeholder": "0.00"}),
+            "fabric_type": forms.TextInput(attrs={"placeholder": "Single jersey, fleece, rib"}),
+            "fabric_gsm": forms.TextInput(attrs={"placeholder": "220 GSM"}),
+            "fabric_composition": forms.TextInput(attrs={"placeholder": "95% cotton / 5% spandex"}),
+            "wash_type": forms.TextInput(attrs={"placeholder": "Garment wash, enzyme, none"}),
+            "print_type": forms.TextInput(attrs={"placeholder": "Screen print, sublimation, none"}),
+            "embroidery": forms.TextInput(attrs={"placeholder": "Embroidery details"}),
+            "label_type": forms.TextInput(attrs={"placeholder": "Main label, care label, heat transfer"}),
+            "packaging_type": forms.TextInput(attrs={"placeholder": "Polybag, carton, barcode, sticker"}),
+            "special_trims": forms.TextInput(attrs={"placeholder": "Zipper, toggle, patch, cord, etc."}),
+            "fit_remarks": forms.Textarea(attrs={"rows": 3, "placeholder": "Fit, construction, workmanship notes"}),
             "notes": forms.Textarea(attrs={"rows": 3, "placeholder": "Assumptions and remarks"}),
+        }
+        labels = {
+            "moq": "MOQ",
+            "costing_date": "Costing date",
+            "fabric_gsm": "Fabric GSM",
+            "fit_remarks": "Fit / construction remarks",
         }
 
 
 class CostingSMVForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            css = field.widget.attrs.get("class", "")
+            field.widget.attrs["class"] = (css + " costing-input").strip()
+        self.fields["machine_smv"].help_text = "Sewing SMV for machine operations only."
+        self.fields["finishing_smv"].help_text = "Extra SMV for finishing, pressing, packing, or handwork."
+        self.fields["cpm"].help_text = "Cost per minute used by your factory for labor recovery."
+        self.fields["efficiency_costing"].help_text = "Efficiency used in costing calculation, usually conservative."
+        self.fields["efficiency_planned"].help_text = "Planned production efficiency for operational comparison."
+
     class Meta:
         model = CostingSMV
         fields = [
