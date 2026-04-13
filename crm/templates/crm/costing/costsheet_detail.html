@@ -635,7 +635,7 @@
                 </td>
                 <td><input type="number" step="0.0001" data-field="unit_price" value="{{ row.unit_price }}" placeholder="0.00"></td>
                 <td><input type="number" step="0.0001" data-field="freight" value="{{ row.freight }}" placeholder="0.00"></td>
-                <td><input type="number" step="0.0001" data-field="consumption_value" value="{{ row.consumption_value }}" placeholder="0.00"></td>
+                <td><input type="number" step="0.0001" data-field="consumption_value" value="{{ row.consumption_value }}" placeholder="0.00" list="costing-consumption-options-{{ category }}"></td>
                 <td><input type="number" step="0.01" data-field="wastage_percent" value="{{ row.wastage_percent }}" placeholder="0"></td>
                 <td><input type="number" step="0.0001" data-field="denominator_value" value="{{ row.denominator_value }}" placeholder="0"></td>
                 <td>
@@ -1139,6 +1139,10 @@
         itemInput.placeholder = 'Item name';
       }
     }
+    const consumptionInput = row.querySelector('[data-field="consumption_value"]');
+    if (consumptionInput) {
+      consumptionInput.setAttribute('list', `costing-consumption-options-${row.dataset.category}`);
+    }
     const itemTip = row.querySelector('[data-role="item-tip"]');
     if (itemTip) {
       itemTip.textContent = config.rowTip || 'Enter cost per garment piece.';
@@ -1307,6 +1311,44 @@
   <option value="Allowance"></option>
   <option value="Wastage reserve"></option>
   <option value="Miscellaneous charge"></option>
+</datalist>
+<datalist id="costing-consumption-options-fabric">
+  <option value="0.12"></option>
+  <option value="0.18"></option>
+  <option value="0.22"></option>
+  <option value="0.28"></option>
+  <option value="0.35"></option>
+  <option value="0.45"></option>
+</datalist>
+<datalist id="costing-consumption-options-sewing_trim">
+  <option value="1"></option>
+  <option value="0.5"></option>
+  <option value="2"></option>
+  <option value="0.02"></option>
+</datalist>
+<datalist id="costing-consumption-options-packaging_trim">
+  <option value="1"></option>
+  <option value="0.25"></option>
+  <option value="0.5"></option>
+</datalist>
+<datalist id="costing-consumption-options-labels_branding">
+  <option value="1"></option>
+  <option value="2"></option>
+  <option value="0.5"></option>
+</datalist>
+<datalist id="costing-consumption-options-wash_process">
+  <option value="1"></option>
+  <option value="0.5"></option>
+</datalist>
+<datalist id="costing-consumption-options-cm_labor">
+  <option value="1"></option>
+</datalist>
+<datalist id="costing-consumption-options-logistics_compliance">
+  <option value="1"></option>
+</datalist>
+<datalist id="costing-consumption-options-other">
+  <option value="1"></option>
+  <option value="0.5"></option>
 </datalist>
 
 {% endblock %}

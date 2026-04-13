@@ -139,6 +139,100 @@ COMMON_COSTING_SUGGESTIONS = {
 }
 
 
+COMPREHENSIVE_COSTING_DROPDOWNS = {
+    "fabric_type": [
+        "Single jersey",
+        "Interlock",
+        "Rib",
+        "Fleece",
+        "French terry",
+        "Pique",
+        "Woven poplin",
+        "Oxford",
+        "Twill",
+        "Denim",
+        "Canvas",
+        "Polar fleece",
+        "Softshell",
+        "Sherpa",
+        "Mesh",
+    ],
+    "wash_type": [
+        "None",
+        "Soft wash",
+        "Enzyme wash",
+        "Garment wash",
+        "Silicone wash",
+        "Pigment wash",
+        "Acid wash",
+        "Stone wash",
+        "Snow wash",
+        "Bio polish",
+        "Peach finish",
+    ],
+    "print_type": [
+        "None",
+        "Screen print",
+        "Puff print",
+        "High-density print",
+        "Heat transfer",
+        "DTG",
+        "Sublimation",
+        "Foil print",
+        "Rubber print",
+        "Plastisol print",
+        "Emboss print",
+    ],
+    "embroidery": [
+        "None",
+        "Flat embroidery",
+        "3D embroidery",
+        "Applique embroidery",
+        "Badge embroidery",
+        "Chenille embroidery",
+        "Sequin embroidery",
+        "Placement logo embroidery",
+        "Multi-location embroidery",
+    ],
+    "label_type": [
+        "Main woven label",
+        "Care label",
+        "Size label",
+        "Heat transfer label",
+        "Printed satin label",
+        "Woven main and care label",
+        "Inside neck print",
+        "Brand patch label",
+    ],
+    "packaging_type": [
+        "Polybag only",
+        "Polybag and carton",
+        "Polybag, sticker and carton",
+        "Flat pack",
+        "Hanger pack",
+        "Folded with belly band",
+        "Gift box pack",
+        "Retail-ready barcode pack",
+        "Vacuum pack",
+    ],
+    "special_trims": [
+        "None",
+        "Zipper",
+        "Snap button",
+        "Button",
+        "Drawcord",
+        "Toggle",
+        "Elastic cord",
+        "Velcro",
+        "Patch",
+        "Badge",
+        "Reflective tape",
+        "Eyelet",
+        "Cord end",
+    ],
+}
+
+
 HEADER_HELP_TEXTS = {
     "buyer": "Internal buyer division or customer buying team for this style.",
     "brand": "Brand or label this product will be sold under.",
@@ -186,6 +280,17 @@ class CostingHeaderForm(forms.ModelForm):
         if "opportunity" in self.fields:
             self.fields["opportunity"].label_from_instance = _safe_opportunity_label
         for field in self.fields.values():
+            css = field.widget.attrs.get("class", "")
+            field.widget.attrs["class"] = (css + " costing-input").strip()
+        for name, choices in COMPREHENSIVE_COSTING_DROPDOWNS.items():
+            field = self.fields.get(name)
+            if not field:
+                continue
+            field.widget = forms.Select(
+                choices=[("", f"Select {field.label or name.replace('_', ' ')}")] + [(value, value) for value in choices]
+            )
+            field.required = False
+            field.choices = [("", f"Select {field.label or name.replace('_', ' ')}")] + [(value, value) for value in choices]
             css = field.widget.attrs.get("class", "")
             field.widget.attrs["class"] = (css + " costing-input").strip()
         for name, suggestions in COMMON_COSTING_SUGGESTIONS.items():
@@ -270,6 +375,7 @@ class CostingHeaderForm(forms.ModelForm):
             "moq": "MOQ",
             "costing_date": "Costing date",
             "fabric_gsm": "Fabric GSM",
+            "embroidery": "Embroidery detail",
             "fit_remarks": "Fit / construction remarks",
         }
 
