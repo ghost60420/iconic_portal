@@ -180,8 +180,6 @@ def build_iconic_ai_brain(
         missing_info.append("Product interest")
     if not quantity:
         missing_info.append("Order quantity")
-    if not budget:
-        missing_info.append("Budget")
     if not next_followup:
         missing_info.append("Next follow-up date")
     if not missing_info:
