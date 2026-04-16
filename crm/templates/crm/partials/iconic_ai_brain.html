@@ -1,0 +1,111 @@
+<style>
+  .iconic-ai-brain-panel {
+    margin-top: 14px;
+    border-color: rgba(34, 197, 94, 0.28);
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(2, 6, 23, 0.98));
+  }
+
+  .iconic-ai-brain-title {
+    margin: 0 0 10px 0;
+    font-size: 17px;
+    font-weight: 800;
+    color: #dcfce7;
+  }
+
+  .iconic-ai-brain-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 10px;
+  }
+
+  .iconic-ai-brain-block {
+    border: 1px solid #1f2937;
+    border-radius: 8px;
+    background: #020617;
+    padding: 10px;
+    min-height: 92px;
+  }
+
+  .iconic-ai-brain-heading {
+    margin-bottom: 8px;
+    color: #bbf7d0;
+    font-size: 12px;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+
+  .iconic-ai-brain-list {
+    margin: 0;
+    padding-left: 18px;
+    color: #e5e7eb;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .iconic-ai-brain-text {
+    color: #e5e7eb;
+    font-size: 12px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+  }
+</style>
+
+<section class="section iconic-ai-brain-panel" id="iconic-ai-brain-panel">
+  <h2 class="iconic-ai-brain-title">Iconic AI Brain</h2>
+
+  <div class="iconic-ai-brain-grid">
+    <div class="iconic-ai-brain-block">
+      <div class="iconic-ai-brain-heading">Lead Summary</div>
+      <ul class="iconic-ai-brain-list">
+        {% for item in brain.lead_summary %}
+          <li>{{ item }}</li>
+        {% empty %}
+          <li>No summary available.</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="iconic-ai-brain-block">
+      <div class="iconic-ai-brain-heading">Missing Info</div>
+      <ul class="iconic-ai-brain-list">
+        {% for item in brain.missing_info %}
+          <li>{{ item }}</li>
+        {% empty %}
+          <li>No major missing info detected.</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="iconic-ai-brain-block">
+      <div class="iconic-ai-brain-heading">Suggested Next Step</div>
+      <div class="iconic-ai-brain-text">{{ brain.suggested_next_step|default:"Review recent outreach, then set a clear next follow-up date." }}</div>
+    </div>
+
+    <div class="iconic-ai-brain-block">
+      <div class="iconic-ai-brain-heading">Risk Flags</div>
+      <ul class="iconic-ai-brain-list">
+        {% for item in brain.risk_flags %}
+          <li>{{ item }}</li>
+        {% empty %}
+          <li>No major risk flags detected from current CRM data.</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="iconic-ai-brain-block">
+      <div class="iconic-ai-brain-heading">Recent Outreach Facts</div>
+      <ul class="iconic-ai-brain-list">
+        {% for item in brain.recent_outreach_facts %}
+          <li>{{ item }}</li>
+        {% empty %}
+          <li>No outreach facts found.</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="iconic-ai-brain-block">
+      <div class="iconic-ai-brain-heading">Latest Existing Insight</div>
+      <div class="iconic-ai-brain-text">{{ brain.latest_existing_insight|default:"No existing AI insight is saved for this lead." }}</div>
+    </div>
+  </div>
+</section>

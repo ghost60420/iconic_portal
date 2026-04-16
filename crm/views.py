@@ -2150,6 +2150,29 @@ def _lead_detail_impl(request, pk):
         except NoReverseMatch:
             wa_inbox_url = ""
 
+    def _build_iconic_ai_brain_context():
+        from .ai.lead_brain import build_iconic_ai_brain
+
+        latest_insights = _safe_fetch(
+            lambda: list(lead.ai_insights.all()[:1]),
+            [],
+            "iconic_ai_brain_insights",
+        )
+        return build_iconic_ai_brain(
+            lead=lead,
+            opportunities=opportunities,
+            comments=comments,
+            tasks=tasks,
+            activities=activities,
+            insights=latest_insights,
+        )
+
+    try:
+        iconic_ai_brain = _build_iconic_ai_brain_context()
+    except Exception:
+        logger.exception("lead_detail: failed to load iconic_ai_brain")
+        iconic_ai_brain = {}
+
     context = {
         "lead": lead,
         "opportunities": opportunities,
@@ -2168,6 +2191,7 @@ def _lead_detail_impl(request, pk):
         "budget_bdt": budget_bdt,
         "cad_to_bdt": cad_to_bdt,
         "wa_inbox_url": wa_inbox_url,
+        "iconic_ai_brain": iconic_ai_brain,
     }
 
     return render(request, "crm/lead_detail.html", context)
