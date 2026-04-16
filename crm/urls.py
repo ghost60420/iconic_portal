@@ -11,6 +11,7 @@ from . import views_email
 from . import views_accounting as acc
 from . import views_access as access
 from . import views_costing as costing
+from . import views_iconic_ai_brain as iconic_ai_brain
 
 try:
     from . import views_whatsapp as wa
@@ -64,6 +65,11 @@ urlpatterns = [
     path("leads/research/<int:job_id>/", perm("can_leads", views.lead_research_job_detail), name="lead_research_job_detail"),
     path("leads/bulk-update/", perm("can_leads", views.lead_bulk_update), name="lead_bulk_update"),
     path("leads/<int:pk>/", perm("can_leads", views.lead_detail), name="lead_detail"),
+    path(
+        "leads/<int:pk>/iconic-ai-brain/",
+        perm("can_leads", iconic_ai_brain.iconic_ai_brain_refresh),
+        name="lead_iconic_ai_brain_refresh",
+    ),
     path("leads/<int:pk>/merge/", perm("can_leads", views.lead_merge), name="lead_merge"),
     path("leads/<int:pk>/auto-score/", perm("can_leads", views.lead_auto_score), name="lead_auto_score"),
     path("leads/<int:pk>/edit/", perm("can_leads", views.edit_lead), name="lead_edit"),

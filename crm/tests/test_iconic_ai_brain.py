@@ -3,10 +3,12 @@ import inspect
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from django.test import SimpleTestCase
+from django.test import RequestFactory, SimpleTestCase
+from django.urls import reverse
 
 import crm.ai.lead_brain as lead_brain_module
 from crm.ai.lead_brain import build_iconic_ai_brain
+from crm.views_iconic_ai_brain import iconic_ai_brain_refresh
 
 
 class WriteTrap(SimpleNamespace):
@@ -81,13 +83,13 @@ class IconicAIBrainTests(SimpleTestCase):
         )
         self.assertIn("Brand: Acme Apparel", result["lead_summary"])
         self.assertIn("Phone", result["missing_info"])
-        self.assertIn("Budget", result["missing_info"])
         self.assertEqual(
             result["suggested_next_step"],
             "Send a focused follow-up asking for tech pack and target date.",
         )
         self.assertIn("Outreach is recorded but no reply is recorded yet.", result["risk_flags"])
         self.assertIn("Existing insight: strong hoodie fit", result["latest_existing_insight"])
+        self.assertNotIn("Budget", result["missing_info"])
 
     def test_helper_does_not_save_send_or_reference_external_ai(self):
         lead = WriteTrap(
@@ -126,3 +128,73 @@ class IconicAIBrainTests(SimpleTestCase):
         self.assertNotIn("send_mail", source)
         self.assertNotIn(".save(", source)
         self.assertNotIn("objects.create", source)
+
+
+class _RelationList:
+    def __init__(self, items):
+        self.items = list(items)
+
+    def all(self):
+        return self
+
+    def order_by(self, *args, **kwargs):
+        return self
+
+    def __iter__(self):
+        return iter(self.items)
+
+    def __getitem__(self, value):
+        return self.items[value]
+
+    def __len__(self):
+        return len(self.items)
+
+
+class IconicAIBrainRefreshViewTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.lead = SimpleNamespace(
+            pk=7,
+            account_brand="Refresh Brand",
+            contact_name="Refresh Contact",
+            opportunities=_RelationList([]),
+            tasks=_RelationList([]),
+            activities=_RelationList([]),
+            ai_insights=_RelationList([]),
+        )
+
+    def test_refresh_url_pattern(self):
+        self.assertEqual(reverse("lead_iconic_ai_brain_refresh", args=[7]), "/leads/7/iconic-ai-brain/")
+
+    def test_refresh_renders_partial(self):
+        payload = {
+            "lead_summary": ["Brand: Refresh Brand"],
+            "missing_info": ["Website"],
+            "suggested_next_step": "Review recent outreach, then set a clear next follow-up date.",
+            "risk_flags": ["No major risk flags detected from current CRM data."],
+            "recent_outreach_facts": ["Last outreach: Not recorded"],
+            "latest_existing_insight": "No existing AI insight is saved for this lead.",
+        }
+        request = self.factory.get("/leads/7/iconic-ai-brain/", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+
+        with patch("crm.views_iconic_ai_brain.get_object_or_404", return_value=self.lead), \
+             patch("crm.views_iconic_ai_brain._chatter_for_lead", return_value=[]), \
+             patch("crm.views_iconic_ai_brain.build_iconic_ai_brain", return_value=payload) as build_brain:
+            response = iconic_ai_brain_refresh(request, self.lead.pk)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('id="iconic-ai-brain-panel"', response.content.decode())
+        self.assertIn("Generate Again", response.content.decode())
+        build_brain.assert_called_once()
+
+    def test_refresh_failure_returns_server_error(self):
+        request = self.factory.get("/leads/7/iconic-ai-brain/", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+
+        with patch("crm.views_iconic_ai_brain.get_object_or_404", return_value=self.lead), \
+             patch("crm.views_iconic_ai_brain._chatter_for_lead", return_value=[]), \
+             patch("crm.views_iconic_ai_brain.build_iconic_ai_brain", side_effect=RuntimeError("boom")), \
+             patch("crm.views_iconic_ai_brain.logger.exception"):
+            response = iconic_ai_brain_refresh(request, self.lead.pk)
+
+        self.assertEqual(response.status_code, 500)
+        self.assertIn("Iconic AI Brain refresh failed.", response.content.decode())

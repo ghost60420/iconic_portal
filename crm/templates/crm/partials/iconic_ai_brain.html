@@ -6,10 +6,36 @@
   }
 
   .iconic-ai-brain-title {
-    margin: 0 0 10px 0;
+    margin: 0;
     font-size: 17px;
     font-weight: 800;
     color: #dcfce7;
+  }
+
+  .iconic-ai-brain-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+
+  .iconic-ai-brain-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .iconic-ai-brain-action {
+    min-width: 128px;
+  }
+
+  .iconic-ai-brain-status {
+    color: #9ca3af;
+    font-size: 12px;
+    min-height: 18px;
   }
 
   .iconic-ai-brain-grid {
@@ -51,7 +77,19 @@
 </style>
 
 <section class="section iconic-ai-brain-panel" id="iconic-ai-brain-panel">
-  <h2 class="iconic-ai-brain-title">Iconic AI Brain</h2>
+  <div class="iconic-ai-brain-top">
+    <h2 class="iconic-ai-brain-title">Iconic AI Brain</h2>
+    <div class="iconic-ai-brain-actions">
+      <button
+        type="button"
+        class="button-ghost iconic-ai-brain-action"
+        data-iconic-ai-brain-refresh-url="{% url 'lead_iconic_ai_brain_refresh' lead.pk %}"
+      >
+        Generate Again
+      </button>
+      <span class="iconic-ai-brain-status" aria-live="polite"></span>
+    </div>
+  </div>
 
   <div class="iconic-ai-brain-grid">
     <div class="iconic-ai-brain-block">

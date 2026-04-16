@@ -406,7 +406,7 @@
     </div>
   </div>
 
-  {% include "crm/partials/iconic_ai_brain.html" with brain=iconic_ai_brain only %}
+  {% include "crm/partials/iconic_ai_brain.html" with brain=iconic_ai_brain lead=lead only %}
 
   <div class="section">
     <h2 class="section-title">Lead information</h2>
@@ -535,7 +535,7 @@
           <tr><td class="row-label">Disqualification</td><td>{{ lead.disqualification_reason|default:"—" }}</td></tr>
         </table>
       </div>
-    </div>
+  </div>
 
     <table style="margin-top: 10px;">
       <tr>
@@ -926,10 +926,70 @@
     <form id="lead-ai-csrf" style="display:none;">{% csrf_token %}</form>
   </div>
 
-</div>
+  </div>
 
-<script>
-(function () {
+  <script>
+  (function () {
+    function setIconicAIBrainStatus(panel, text, isError) {
+      const status = panel ? panel.querySelector(".iconic-ai-brain-status") : null;
+      if (!status) return;
+      status.textContent = text || "";
+      status.style.color = isError ? "#fca5a5" : "#9ca3af";
+    }
+
+    function parseIconicAIBrainPanel(html) {
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      return doc.getElementById("iconic-ai-brain-panel");
+    }
+
+    document.addEventListener("click", function (event) {
+      const btn = event.target.closest("[data-iconic-ai-brain-refresh-url]");
+      if (!btn) return;
+
+      const panel = document.getElementById("iconic-ai-brain-panel");
+      const url = btn.getAttribute("data-iconic-ai-brain-refresh-url");
+      if (!panel || !url || btn.disabled) return;
+
+      event.preventDefault();
+      btn.disabled = true;
+      setIconicAIBrainStatus(panel, "Refreshing...", false);
+
+      fetch(url, {
+        method: "GET",
+        headers: {
+          "X-Requested-With": "XMLHttpRequest",
+          "Accept": "text/html"
+        },
+        cache: "no-store"
+      })
+        .then(function (response) {
+          if (!response.ok) {
+            throw new Error("refresh failed");
+          }
+          return response.text();
+        })
+        .then(function (html) {
+          const nextPanel = parseIconicAIBrainPanel(html);
+          if (!nextPanel) {
+            throw new Error("panel missing");
+          }
+          panel.replaceWith(nextPanel);
+          setIconicAIBrainStatus(nextPanel, "Updated just now.", false);
+          const nextBtn = nextPanel.querySelector("[data-iconic-ai-brain-refresh-url]");
+          if (nextBtn) {
+            nextBtn.disabled = false;
+          }
+        })
+        .catch(function () {
+          btn.disabled = false;
+          setIconicAIBrainStatus(panel, "Refresh failed. Existing summary kept.", true);
+        });
+    });
+  })();
+  </script>
+
+  <script>
+  (function () {
   const outBox = document.getElementById("lead-ai-output");
   const statusBox = document.getElementById("lead-ai-status");
   const logBox = document.getElementById("lead-ai-log");
