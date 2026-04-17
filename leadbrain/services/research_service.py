@@ -7,6 +7,9 @@ from urllib.request import Request, urlopen
 
 
 USER_AGENT = "Mozilla/5.0 (compatible; LeadBrainLite/1.0; +https://femline.ca)"
+WEBSITE_TIMEOUT = 3
+SEARCH_TIMEOUT = 4
+MAX_RESPONSE_BYTES = 120000
 APPAREL_TERMS = [
     "apparel",
     "clothing",
@@ -46,7 +49,7 @@ def _normalize_url(url):
     return value[:200]
 
 
-def _http_get(url, timeout=8):
+def _http_get(url, timeout=WEBSITE_TIMEOUT):
     request = Request(
         url,
         headers={
@@ -55,7 +58,7 @@ def _http_get(url, timeout=8):
         },
     )
     with urlopen(request, timeout=timeout) as response:
-        raw = response.read(200000)
+        raw = response.read(MAX_RESPONSE_BYTES)
         content_type = response.headers.get("Content-Type", "")
         text = raw.decode("utf-8", errors="ignore")
         return {
@@ -66,7 +69,7 @@ def _http_get(url, timeout=8):
         }
 
 
-def _safe_http_get(url, timeout=8):
+def _safe_http_get(url, timeout=WEBSITE_TIMEOUT):
     try:
         return _http_get(url, timeout=timeout), ""
     except HTTPError as exc:
@@ -161,15 +164,17 @@ def check_website_status(url):
             "final_url": "",
             "status_code": 0,
             "error": "",
+            "text": "",
         }
 
-    response, error = _safe_http_get(normalized, timeout=6)
+    response, error = _safe_http_get(normalized, timeout=WEBSITE_TIMEOUT)
     if not response:
         return {
             "status": "failed",
             "final_url": normalized,
             "status_code": 0,
             "error": error,
+            "text": "",
         }
 
     final_url = response["url"]
@@ -179,6 +184,7 @@ def check_website_status(url):
         "final_url": final_url,
         "status_code": response["status_code"],
         "error": "",
+        "text": response["text"],
     }
 
 
@@ -239,7 +245,7 @@ def search_business_online(company_name, website=""):
         }
 
     search_url = f"https://html.duckduckgo.com/html/?q={quote(query)}"
-    response, error = _safe_http_get(search_url, timeout=8)
+    response, error = _safe_http_get(search_url, timeout=SEARCH_TIMEOUT)
     if not response:
         return {
             "official_website_found": "",
@@ -334,21 +340,20 @@ def research_company(company):
     research["official_website_found"] = website_status["final_url"] if website_status["status"] in {"live", "redirect"} else ""
 
     page_text = ""
-    if website_status["status"] in {"live", "redirect"} and website_status["final_url"]:
-        response, error = _safe_http_get(website_status["final_url"], timeout=8)
-        if response:
-            title = _extract_title(response["text"])
-            description = _extract_meta_description(response["text"])
-            page_text = " ".join([title, description, response["text"][:4000]])
-            research["business_description"] = description or title
-            research["linkedin_url_found"] = _extract_linkedin_url(response["text"])
-            research["public_email_found"] = _extract_email(response["text"])
-            research["public_phone_found"] = _extract_phone(response["text"])
-            research["possible_contact_name"] = _extract_contact_name(response["text"])
-            research["possible_contact_title"] = _extract_contact_title(response["text"])
-            research["confidence_notes"] = "A live public website was found."
-        else:
-            research["confidence_notes"] = f"Website lookup had partial failure: {error}"
+    website_html = website_status.get("text", "")
+    if website_status["status"] in {"live", "redirect"} and website_status["final_url"] and website_html:
+        title = _extract_title(website_html)
+        description = _extract_meta_description(website_html)
+        page_text = " ".join([title, description, website_html[:4000]])
+        research["business_description"] = description or title
+        research["linkedin_url_found"] = _extract_linkedin_url(website_html)
+        research["public_email_found"] = _extract_email(website_html)
+        research["public_phone_found"] = _extract_phone(website_html)
+        research["possible_contact_name"] = _extract_contact_name(website_html)
+        research["possible_contact_title"] = _extract_contact_title(website_html)
+        research["confidence_notes"] = "A live public website was found."
+    elif website_status["status"] == "failed" and website_status.get("error"):
+        research["confidence_notes"] = f"Website lookup had partial failure: {website_status['error']}"
 
     if not research["official_website_found"] or not research["business_description"]:
         search_data = search_business_online(getattr(company, "company_name", ""), website=website)

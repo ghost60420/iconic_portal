@@ -1,4 +1,5 @@
 import tempfile
+from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase
@@ -6,6 +7,7 @@ from django.test import SimpleTestCase
 from leadbrain.forms import LeadBrainUploadForm
 from leadbrain.services.classification_service import classify_company
 from leadbrain.services.file_parser import parse_uploaded_file
+from leadbrain.services.research_service import research_company
 
 
 class LeadBrainUploadFormTests(SimpleTestCase):
@@ -58,3 +60,34 @@ class LeadBrainClassificationTests(SimpleTestCase):
         self.assertEqual(result["fit_label"], "good_fit")
         self.assertGreaterEqual(result["fit_score"], 75)
         self.assertIn(result["suggested_action"], {"Good for Custom Pitch", "Email First"})
+
+
+class LeadBrainResearchTests(SimpleTestCase):
+    def test_research_company_reuses_initial_website_fetch(self):
+        company = type(
+            "Company",
+            (),
+            {
+                "company_name": "ABC Apparel",
+                "website": "https://abcapparel.com",
+            },
+        )()
+
+        with patch(
+            "leadbrain.services.research_service._safe_http_get",
+            return_value=(
+                {
+                    "url": "https://abcapparel.com",
+                    "status_code": 200,
+                    "content_type": "text/html",
+                    "text": "<title>ABC Apparel</title><meta name='description' content='Private label apparel brand'>",
+                },
+                "",
+            ),
+        ) as safe_get:
+            result = research_company(company)
+
+        self.assertEqual(safe_get.call_count, 1)
+        self.assertEqual(result["website_status"], "live")
+        self.assertEqual(result["official_website_found"], "https://abcapparel.com")
+        self.assertEqual(result["business_description"], "Private label apparel brand")
