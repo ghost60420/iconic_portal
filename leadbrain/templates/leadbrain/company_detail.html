@@ -17,6 +17,10 @@
   .lb-badge.good_fit { background:rgba(34,197,94,0.12); border-color:#22c55e; color:#bbf7d0; }
   .lb-badge.possible_fit { background:rgba(250,204,21,0.12); border-color:#facc15; color:#fde68a; }
   .lb-badge.weak_fit { background:rgba(248,113,113,0.12); border-color:#f87171; color:#fecaca; }
+  .lb-badge.pending { background:rgba(148,163,184,0.12); border-color:#94a3b8; color:#e2e8f0; }
+  .lb-badge.processing { background:rgba(59,130,246,0.12); border-color:#60a5fa; color:#bfdbfe; }
+  .lb-badge.complete { background:rgba(34,197,94,0.12); border-color:#22c55e; color:#bbf7d0; }
+  .lb-badge.failed { background:rgba(248,113,113,0.12); border-color:#f87171; color:#fecaca; }
   .lb-meta { display:grid; grid-template-columns:180px 1fr; gap:8px 12px; font-size:13px; }
   .lb-meta strong { color:#93c5fd; }
   pre {
@@ -47,13 +51,21 @@
       <strong>City</strong><div>{{ company.city|default:"—" }}</div>
       <strong>LinkedIn</strong><div>{% if company.linkedin_url %}<a href="{{ company.linkedin_url }}" target="_blank" rel="noopener">{{ company.linkedin_url }}</a>{% else %}—{% endif %}</div>
       <strong>Upload</strong><div>{{ company.upload.file_name|default:"—" }} • Row {{ company.row_number }}</div>
+      <strong>Upload Progress</strong><div>{{ company.upload.progress_percent }}% • {{ company.upload.completed_rows }}/{{ company.upload.total_rows }}</div>
+      <strong>Upload Note</strong><div>{{ company.upload.status_note|default:"—" }}</div>
+      <strong>Research Status</strong><div><span class="lb-badge {{ company.research_status }}">{{ company.get_research_status_display }}</span></div>
+      <strong>Research Error</strong><div>{{ company.research_error|default:"—" }}</div>
     </div>
   </div>
 
   <div class="lb-panel">
     <h2 class="h5 mb-3">Fit Result</h2>
     <div class="d-flex align-items-center gap-2 mb-3">
-      <span class="lb-badge {{ company.fit_label }}">{{ company.get_fit_label_display }}</span>
+      {% if company.fit_label %}
+        <span class="lb-badge {{ company.fit_label }}">{{ company.get_fit_label_display }}</span>
+      {% else %}
+        <span class="lb-badge pending">Pending</span>
+      {% endif %}
       <strong class="fs-4">{{ company.fit_score }}</strong>
     </div>
     <div class="lb-meta">
@@ -110,4 +122,3 @@
   </div>
 </div>
 {% endblock %}
-

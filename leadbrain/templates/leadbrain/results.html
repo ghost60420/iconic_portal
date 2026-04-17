@@ -21,11 +21,18 @@
   .lb-badge.good_fit { background:rgba(34,197,94,0.12); border-color:#22c55e; color:#bbf7d0; }
   .lb-badge.possible_fit { background:rgba(250,204,21,0.12); border-color:#facc15; color:#fde68a; }
   .lb-badge.weak_fit { background:rgba(248,113,113,0.12); border-color:#f87171; color:#fecaca; }
+  .lb-badge.pending { background:rgba(148,163,184,0.12); border-color:#94a3b8; color:#e2e8f0; }
+  .lb-badge.processing { background:rgba(59,130,246,0.12); border-color:#60a5fa; color:#bfdbfe; }
+  .lb-badge.complete { background:rgba(34,197,94,0.12); border-color:#22c55e; color:#bbf7d0; }
+  .lb-badge.failed { background:rgba(248,113,113,0.12); border-color:#f87171; color:#fecaca; }
+  .lb-badge.partial { background:rgba(249,115,22,0.12); border-color:#fb923c; color:#fed7aa; }
   .lb-muted { color:#9ca3af; font-size:12px; }
   .lb-summary-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:16px; }
   .lb-stat { background:#0f172a; border:1px solid #243041; border-radius:12px; padding:12px; }
   .lb-stat-label { color:#93c5fd; font-size:11px; text-transform:uppercase; font-weight:800; }
   .lb-stat-value { color:#f8fafc; font-size:24px; font-weight:900; margin-top:6px; }
+  .lb-progress-track { height:10px; border-radius:999px; background:#0f172a; border:1px solid #243041; overflow:hidden; }
+  .lb-progress-bar { height:100%; background:linear-gradient(135deg, #fde68a, #f59e0b); }
 </style>
 
 <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
@@ -34,6 +41,16 @@
     <div class="text-secondary">Work through scored companies in one outreach-ready list.</div>
   </div>
   <div class="d-flex gap-2">
+    {% if selected_upload %}
+      {% if selected_upload.status != 'processing' %}
+        {% if selected_upload.pending_rows or selected_upload.failed_rows %}
+          <form method="post" action="{% url 'leadbrain_start_analysis' selected_upload.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-warning fw-bold">Run Research</button>
+          </form>
+        {% endif %}
+      {% endif %}
+    {% endif %}
     <a href="{% url 'leadbrain_upload' %}" class="btn btn-warning fw-bold">Upload File</a>
     <a href="{% url 'leadbrain_uploads' %}" class="btn btn-outline-light">Upload History</a>
   </div>
@@ -44,7 +61,42 @@
   <div class="lb-stat"><div class="lb-stat-label">Good Fit</div><div class="lb-stat-value">{{ good_fit_count }}</div></div>
   <div class="lb-stat"><div class="lb-stat-label">Possible Fit</div><div class="lb-stat-value">{{ possible_fit_count }}</div></div>
   <div class="lb-stat"><div class="lb-stat-label">Weak Fit</div><div class="lb-stat-value">{{ weak_fit_count }}</div></div>
+  <div class="lb-stat"><div class="lb-stat-label">Pending</div><div class="lb-stat-value">{{ pending_count }}</div></div>
+  <div class="lb-stat"><div class="lb-stat-label">Processing</div><div class="lb-stat-value">{{ processing_count }}</div></div>
+  <div class="lb-stat"><div class="lb-stat-label">Complete</div><div class="lb-stat-value">{{ complete_count }}</div></div>
+  <div class="lb-stat"><div class="lb-stat-label">Failed</div><div class="lb-stat-value">{{ failed_count }}</div></div>
 </div>
+
+{% if selected_upload %}
+  <div class="alert {% if selected_upload.status == 'failed' %}alert-danger{% elif selected_upload.status == 'partial' %}alert-warning{% else %}alert-success{% endif %} mb-3">
+    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-2">
+      <div>
+        Upload <strong>{{ selected_upload.file_name|default:"Upload" }}</strong> is currently
+        <strong>{{ selected_upload.get_status_display }}</strong>.
+      </div>
+      <div class="fw-bold">{{ selected_upload.progress_percent }}%</div>
+    </div>
+    <div class="lb-progress-track mb-2">
+      <div class="lb-progress-bar" style="width:{{ selected_upload.progress_percent }}%;"></div>
+    </div>
+    <div class="lb-muted">
+      {{ selected_upload.completed_rows }} complete •
+      {{ selected_upload.processing_rows }} processing •
+      {{ selected_upload.pending_rows }} pending •
+      {{ selected_upload.failed_rows }} failed •
+      {{ selected_upload.total_rows }} total
+    </div>
+    {% if selected_upload.status_note %}
+      <div class="mt-2">{{ selected_upload.status_note }}</div>
+    {% endif %}
+    {% if selected_upload.status == 'pending' %}
+      <div class="mt-2">Rows are saved and queued for background batch analysis.</div>
+    {% endif %}
+    {% if auto_refresh %}
+      <div class="mt-2">This page refreshes automatically while rows are still being processed.</div>
+    {% endif %}
+  </div>
+{% endif %}
 
 <div class="lb-filter-panel mb-3">
   <form method="get">
@@ -69,6 +121,16 @@
           <option value="good_fit" {% if fit_label == "good_fit" %}selected{% endif %}>Good Fit</option>
           <option value="possible_fit" {% if fit_label == "possible_fit" %}selected{% endif %}>Possible Fit</option>
           <option value="weak_fit" {% if fit_label == "weak_fit" %}selected{% endif %}>Weak Fit</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-bold">Research Status</label>
+        <select name="research_status" class="form-select">
+          <option value="">All</option>
+          <option value="pending" {% if research_status == "pending" %}selected{% endif %}>Pending</option>
+          <option value="processing" {% if research_status == "processing" %}selected{% endif %}>Processing</option>
+          <option value="complete" {% if research_status == "complete" %}selected{% endif %}>Complete</option>
+          <option value="failed" {% if research_status == "failed" %}selected{% endif %}>Failed</option>
         </select>
       </div>
       <div class="col-md-2">
@@ -117,6 +179,7 @@
           <th>Phone</th>
           <th>Country</th>
           <th>City</th>
+          <th>Research Status</th>
           <th>Business Type</th>
           <th>Fit Label</th>
           <th>Fit Score</th>
@@ -140,8 +203,20 @@
             <td>{{ company.phone|default:"—" }}</td>
             <td>{{ company.country|default:"—" }}</td>
             <td>{{ company.city|default:"—" }}</td>
+            <td>
+              <span class="lb-badge {{ company.research_status }}">{{ company.get_research_status_display }}</span>
+              {% if company.research_error %}
+                <div class="lb-muted mt-1">{{ company.research_error|truncatechars:80 }}</div>
+              {% endif %}
+            </td>
             <td>{{ company.business_type|default:"—" }}</td>
-            <td><span class="lb-badge {{ company.fit_label }}">{{ company.get_fit_label_display }}</span></td>
+            <td>
+              {% if company.fit_label %}
+                <span class="lb-badge {{ company.fit_label }}">{{ company.get_fit_label_display }}</span>
+              {% else %}
+                <span class="lb-badge pending">Pending</span>
+              {% endif %}
+            </td>
             <td class="fw-bold">{{ company.fit_score }}</td>
             <td>{{ company.fit_reason|default:company.ai_summary|default:"—" }}</td>
             <td>{% if company.linkedin_url %}<a href="{{ company.linkedin_url }}" target="_blank" rel="noopener">Open</a>{% else %}<span class="lb-muted">—</span>{% endif %}</td>
@@ -151,7 +226,7 @@
             <td>{{ company.notes|default:"—"|truncatechars:80 }}</td>
           </tr>
         {% empty %}
-          <tr><td colspan="15">No companies match the current filters.</td></tr>
+          <tr><td colspan="16">No companies match the current filters.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -162,13 +237,20 @@
       <div class="lb-muted">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</div>
       <div class="d-flex gap-2">
         {% if page_obj.has_previous %}
-          <a class="btn btn-outline-light btn-sm" href="?page={{ page_obj.previous_page_number }}{% if query %}&q={{ query|urlencode }}{% endif %}{% if fit_label %}&fit_label={{ fit_label|urlencode }}{% endif %}{% if country %}&country={{ country|urlencode }}{% endif %}{% if upload_id %}&upload={{ upload_id|urlencode }}{% endif %}{% if has_website %}&has_website=1{% endif %}{% if has_email %}&has_email=1{% endif %}{% if has_phone %}&has_phone=1{% endif %}{% if has_linkedin %}&has_linkedin=1{% endif %}{% if reviewed %}&reviewed={{ reviewed|urlencode }}{% endif %}{% if sort %}&sort={{ sort|urlencode }}{% endif %}">Previous</a>
+          <a class="btn btn-outline-light btn-sm" href="?page={{ page_obj.previous_page_number }}{% if query %}&q={{ query|urlencode }}{% endif %}{% if fit_label %}&fit_label={{ fit_label|urlencode }}{% endif %}{% if research_status %}&research_status={{ research_status|urlencode }}{% endif %}{% if country %}&country={{ country|urlencode }}{% endif %}{% if upload_id %}&upload={{ upload_id|urlencode }}{% endif %}{% if has_website %}&has_website=1{% endif %}{% if has_email %}&has_email=1{% endif %}{% if has_phone %}&has_phone=1{% endif %}{% if has_linkedin %}&has_linkedin=1{% endif %}{% if reviewed %}&reviewed={{ reviewed|urlencode }}{% endif %}{% if sort %}&sort={{ sort|urlencode }}{% endif %}">Previous</a>
         {% endif %}
         {% if page_obj.has_next %}
-          <a class="btn btn-outline-light btn-sm" href="?page={{ page_obj.next_page_number }}{% if query %}&q={{ query|urlencode }}{% endif %}{% if fit_label %}&fit_label={{ fit_label|urlencode }}{% endif %}{% if country %}&country={{ country|urlencode }}{% endif %}{% if upload_id %}&upload={{ upload_id|urlencode }}{% endif %}{% if has_website %}&has_website=1{% endif %}{% if has_email %}&has_email=1{% endif %}{% if has_phone %}&has_phone=1{% endif %}{% if has_linkedin %}&has_linkedin=1{% endif %}{% if reviewed %}&reviewed={{ reviewed|urlencode }}{% endif %}{% if sort %}&sort={{ sort|urlencode }}{% endif %}">Next</a>
+          <a class="btn btn-outline-light btn-sm" href="?page={{ page_obj.next_page_number }}{% if query %}&q={{ query|urlencode }}{% endif %}{% if fit_label %}&fit_label={{ fit_label|urlencode }}{% endif %}{% if research_status %}&research_status={{ research_status|urlencode }}{% endif %}{% if country %}&country={{ country|urlencode }}{% endif %}{% if upload_id %}&upload={{ upload_id|urlencode }}{% endif %}{% if has_website %}&has_website=1{% endif %}{% if has_email %}&has_email=1{% endif %}{% if has_phone %}&has_phone=1{% endif %}{% if has_linkedin %}&has_linkedin=1{% endif %}{% if reviewed %}&reviewed={{ reviewed|urlencode }}{% endif %}{% if sort %}&sort={{ sort|urlencode }}{% endif %}">Next</a>
         {% endif %}
       </div>
     </div>
   {% endif %}
 </div>
+{% if auto_refresh %}
+  <script>
+    setTimeout(function () {
+      window.location.reload();
+    }, 8000);
+  </script>
+{% endif %}
 {% endblock %}

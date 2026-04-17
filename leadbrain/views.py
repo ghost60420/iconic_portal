@@ -1,20 +1,67 @@
+import logging
 import json
 import os
+from hashlib import sha256
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
+from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.views import View
 from django.views.generic import TemplateView
+from django.utils import timezone
 
 from .forms import LeadBrainCompanyNotesForm, LeadBrainUploadForm
 from .models import LeadBrainCompany, LeadBrainUpload
-from .services.classification_service import classify_company
+from .services.background_runner import launch_upload_processing
 from .services.file_parser import parse_uploaded_file
-from .services.research_service import research_company
+
+
+logger = logging.getLogger(__name__)
+BULK_CREATE_BATCH_SIZE = 500
+
+
+def _hash_uploaded_file(uploaded_file) -> str:
+    digest = sha256()
+    for chunk in uploaded_file.chunks():
+        digest.update(chunk)
+    if hasattr(uploaded_file, "seek"):
+        uploaded_file.seek(0)
+    return digest.hexdigest()
+
+
+def _active_duplicate_upload(user, file_hash: str):
+    if not file_hash or not getattr(user, "is_authenticated", False):
+        return None
+    return (
+        LeadBrainUpload.objects.filter(
+            uploaded_by=user,
+            file_hash=file_hash,
+            status__in=[LeadBrainUpload.STATUS_PENDING, LeadBrainUpload.STATUS_PROCESSING],
+        )
+        .order_by("-uploaded_at", "-id")
+        .first()
+    )
+
+
+def _launch_upload_after_commit(upload_id: int) -> None:
+    try:
+        launch_upload_processing(upload_id)
+        LeadBrainUpload.objects.filter(pk=upload_id, status=LeadBrainUpload.STATUS_PENDING).update(
+            status=LeadBrainUpload.STATUS_PROCESSING,
+            status_note="Background batch analysis is running.",
+            updated_at=timezone.now(),
+        )
+    except Exception:
+        logger.exception("leadbrain background launch failed for upload %s", upload_id)
+        LeadBrainUpload.objects.filter(pk=upload_id).update(
+            status=LeadBrainUpload.STATUS_FAILED,
+            status_note="Background batch analysis could not be started.",
+            updated_at=timezone.now(),
+        )
 
 
 class LeadBrainHomeView(LoginRequiredMixin, TemplateView):
@@ -48,30 +95,55 @@ class LeadBrainUploadView(LoginRequiredMixin, View):
         if not form.is_valid():
             return render(request, self.template_name, {"form": form})
 
-        upload = form.save(commit=False)
-        upload.uploaded_by = request.user
-        upload.file_name = os.path.basename(upload.file.name or "")
-        upload.status = LeadBrainUpload.STATUS_PROCESSING
-        upload.save()
+        upload_file = form.cleaned_data["file"]
+        file_hash = _hash_uploaded_file(upload_file)
+        existing_upload = _active_duplicate_upload(request.user, file_hash)
+        if existing_upload:
+            messages.info(
+                request,
+                f"{existing_upload.file_name or 'This file'} is already processing. "
+                "The existing upload job is still running.",
+            )
+            return redirect(f"{reverse_lazy('leadbrain_results')}?upload={existing_upload.pk}")
+
+        try:
+            upload = form.save(commit=False)
+            upload.uploaded_by = request.user
+            upload.file_name = os.path.basename(upload_file.name or "")
+            upload.file_hash = file_hash
+            upload.status = LeadBrainUpload.STATUS_PENDING
+            upload.status_note = ""
+            upload.save()
+        except IntegrityError:
+            existing_upload = _active_duplicate_upload(request.user, file_hash)
+            if existing_upload:
+                messages.info(
+                    request,
+                    f"{existing_upload.file_name or 'This file'} is already processing. "
+                    "The existing upload job is still running.",
+                )
+                return redirect(f"{reverse_lazy('leadbrain_results')}?upload={existing_upload.pk}")
+            logger.exception("leadbrain upload duplicate protection failed for file hash %s", file_hash)
+            messages.error(request, "This upload could not be started.")
+            return redirect("leadbrain_upload")
 
         try:
             rows = parse_uploaded_file(upload.file.path)
         except Exception as exc:
+            logger.exception("leadbrain upload parse failed for upload %s", upload.pk)
             upload.status = LeadBrainUpload.STATUS_FAILED
-            upload.save(update_fields=["status", "updated_at"])
+            upload.status_note = "The uploaded file could not be parsed."
+            upload.save(update_fields=["status", "status_note", "updated_at"])
             form.add_error("file", str(exc))
             messages.error(request, "The upload could not be processed.")
             return render(request, self.template_name, {"form": form})
 
-        upload.row_count = len(rows)
-        upload.save(update_fields=["row_count", "updated_at"])
-
         try:
-            created_count = 0
+            total_rows = len(rows)
+            companies = []
             for row in rows:
-                company = None
-                try:
-                    company = LeadBrainCompany.objects.create(
+                companies.append(
+                    LeadBrainCompany(
                         upload=upload,
                         row_number=row.get("row_number", 0),
                         company_name=row.get("company_name", ""),
@@ -81,59 +153,92 @@ class LeadBrainUploadView(LoginRequiredMixin, View):
                         country=row.get("country", ""),
                         city=row.get("city", ""),
                         raw_row_json=row.get("raw_row_json", {}),
-                        fit_label=LeadBrainCompany.FIT_WEAK,
+                        fit_label="",
+                        fit_score=0,
+                        suggested_action="Run Research",
+                        research_status=LeadBrainCompany.STATUS_PENDING,
                     )
-                    created_count += 1
+                )
 
-                    research_data = research_company(company)
-                    classification = classify_company(company, research_data)
+            with transaction.atomic():
+                if companies:
+                    LeadBrainCompany.objects.bulk_create(companies, batch_size=BULK_CREATE_BATCH_SIZE)
 
-                    company.website = (company.website or research_data.get("official_website_found", ""))[:200]
-                    company.email = company.email or research_data.get("public_email_found", "")
-                    company.phone = company.phone or research_data.get("public_phone_found", "")
-                    company.linkedin_url = research_data.get("linkedin_url_found", "")[:200]
-                    company.best_contact_name = research_data.get("possible_contact_name", "")
-                    company.best_contact_title = classification.get("best_contact_title", "")
-                    company.business_type = classification.get("business_type", "")
-                    company.fit_label = classification.get("fit_label", LeadBrainCompany.FIT_WEAK)
-                    company.fit_score = classification.get("fit_score", 0)
-                    company.ai_summary = classification.get("ai_summary", "")
-                    company.fit_reason = classification.get("fit_reason", "")
-                    company.suggested_action = classification.get("suggested_action", "")
-                    company.research_json = research_data
-                    company.save()
-                except Exception as exc:
-                    if company is None:
-                        continue
-                    company.fit_label = LeadBrainCompany.FIT_WEAK
-                    company.fit_score = 0
-                    company.ai_summary = "Research could not be completed for this row."
-                    company.fit_reason = "Partial data was saved, but the row needs manual review."
-                    company.suggested_action = "Review Manually"
-                    company.research_json = {
-                        "website_status": "failed",
-                        "official_website_found": "",
-                        "linkedin_url_found": "",
-                        "public_email_found": "",
-                        "public_phone_found": "",
-                        "business_description": "",
-                        "apparel_signals": [],
-                        "search_summary": "",
-                        "possible_contact_name": "",
-                        "possible_contact_title": "",
-                        "confidence_notes": f"Row processing error: {exc}",
-                    }
-                    company.save()
+                upload.row_count = total_rows
+                upload.total_rows = total_rows
+                upload.pending_rows = total_rows
+                upload.processing_rows = 0
+                upload.completed_rows = 0
+                upload.failed_rows = 0
+                upload.progress_percent = 0
+                upload.status = LeadBrainUpload.STATUS_PENDING if total_rows else LeadBrainUpload.STATUS_FAILED
+                upload.status_note = (
+                    "Rows are saved and queued for background batch analysis."
+                    if total_rows
+                    else "No usable rows were found in the uploaded file."
+                )
+                upload.save(
+                    update_fields=[
+                        "row_count",
+                        "total_rows",
+                        "pending_rows",
+                        "processing_rows",
+                        "completed_rows",
+                        "failed_rows",
+                        "progress_percent",
+                        "status",
+                        "status_note",
+                        "updated_at",
+                    ]
+                )
 
-            upload.status = LeadBrainUpload.STATUS_COMPLETE if created_count else LeadBrainUpload.STATUS_FAILED
-            upload.save(update_fields=["status", "updated_at"])
-            messages.success(request, f"Upload processed. {created_count} company row(s) were saved.")
-            return redirect(f"{reverse_lazy('leadbrain_results')}?upload={upload.pk}")
+                if total_rows:
+                    transaction.on_commit(lambda upload_id=upload.pk: _launch_upload_after_commit(upload_id))
         except Exception:
+            logger.exception("leadbrain upload row save failed for upload %s", upload.pk)
             upload.status = LeadBrainUpload.STATUS_FAILED
-            upload.save(update_fields=["status", "updated_at"])
+            upload.status_note = "The upload failed before company rows could be saved."
+            upload.save(update_fields=["status", "status_note", "updated_at"])
             messages.error(request, "The upload failed before the full process could complete.")
             return redirect("leadbrain_upload")
+
+        messages.success(
+            request,
+            f"Upload received. {upload.total_rows} company row(s) were saved and queued for background analysis.",
+        )
+        return redirect(f"{reverse_lazy('leadbrain_results')}?upload={upload.pk}")
+
+
+class LeadBrainStartAnalysisView(LoginRequiredMixin, View):
+    def post(self, request, pk):
+        upload = get_object_or_404(LeadBrainUpload, pk=pk)
+        upload.refresh_progress()
+
+        if upload.status == LeadBrainUpload.STATUS_PROCESSING:
+            messages.info(request, "Lead Brain analysis is already running for this upload.")
+            return redirect(f"{reverse_lazy('leadbrain_results')}?upload={upload.pk}")
+
+        pending_exists = upload.companies.filter(
+            research_status__in=[LeadBrainCompany.STATUS_PENDING, LeadBrainCompany.STATUS_FAILED]
+        ).exists()
+        if not pending_exists:
+            messages.info(request, "There are no pending Lead Brain rows left to analyze.")
+            return redirect(f"{reverse_lazy('leadbrain_results')}?upload={upload.pk}")
+
+        try:
+            launch_upload_processing(upload.pk)
+            upload.status = LeadBrainUpload.STATUS_PROCESSING
+            upload.status_note = "Background batch analysis is running."
+            upload.save(update_fields=["status", "status_note", "updated_at"])
+            messages.success(request, "Lead Brain analysis started in the background.")
+        except Exception:
+            logger.exception("leadbrain background launch failed for upload %s", upload.pk)
+            upload.status = LeadBrainUpload.STATUS_FAILED
+            upload.status_note = "Background batch analysis could not be started."
+            upload.save(update_fields=["status", "status_note", "updated_at"])
+            messages.error(request, "Lead Brain analysis could not be started.")
+
+        return redirect(f"{reverse_lazy('leadbrain_results')}?upload={upload.pk}")
 
 
 class LeadBrainUploadListView(LoginRequiredMixin, TemplateView):
@@ -154,6 +259,7 @@ class LeadBrainResultsView(LoginRequiredMixin, TemplateView):
 
         q = (self.request.GET.get("q") or "").strip()
         fit_label = (self.request.GET.get("fit_label") or "").strip()
+        research_status = (self.request.GET.get("research_status") or "").strip()
         country = (self.request.GET.get("country") or "").strip()
         upload_id = (self.request.GET.get("upload") or "").strip()
         sort = (self.request.GET.get("sort") or "-fit_score").strip()
@@ -169,6 +275,8 @@ class LeadBrainResultsView(LoginRequiredMixin, TemplateView):
 
         if fit_label:
             queryset = queryset.filter(fit_label=fit_label)
+        if research_status:
+            queryset = queryset.filter(research_status=research_status)
         if country:
             queryset = queryset.filter(country__iexact=country)
         if upload_id.isdigit():
@@ -197,11 +305,20 @@ class LeadBrainResultsView(LoginRequiredMixin, TemplateView):
         paginator = Paginator(queryset, 50)
         page_obj = paginator.get_page(self.request.GET.get("page"))
 
+        processing_count = queryset.filter(research_status=LeadBrainCompany.STATUS_PROCESSING).count()
+        pending_count = queryset.filter(research_status=LeadBrainCompany.STATUS_PENDING).count()
+        complete_count = queryset.filter(research_status=LeadBrainCompany.STATUS_COMPLETE).count()
+        failed_count = queryset.filter(research_status=LeadBrainCompany.STATUS_FAILED).count()
+        selected_upload = None
+        if upload_id.isdigit():
+            selected_upload = LeadBrainUpload.objects.filter(pk=int(upload_id)).first()
+
         context.update(
             {
                 "page_obj": page_obj,
                 "companies": page_obj.object_list,
                 "fit_label": fit_label,
+                "research_status": research_status,
                 "country": country,
                 "query": q,
                 "sort": sort,
@@ -217,6 +334,12 @@ class LeadBrainResultsView(LoginRequiredMixin, TemplateView):
                 "good_fit_count": queryset.filter(fit_label=LeadBrainCompany.FIT_GOOD).count(),
                 "possible_fit_count": queryset.filter(fit_label=LeadBrainCompany.FIT_POSSIBLE).count(),
                 "weak_fit_count": queryset.filter(fit_label=LeadBrainCompany.FIT_WEAK).count(),
+                "pending_count": pending_count,
+                "processing_count": processing_count,
+                "complete_count": complete_count,
+                "failed_count": failed_count,
+                "selected_upload": selected_upload,
+                "auto_refresh": bool(selected_upload and selected_upload.status == LeadBrainUpload.STATUS_PROCESSING),
             }
         )
         return context

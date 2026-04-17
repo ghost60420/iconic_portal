@@ -20,9 +20,9 @@
 
 <div class="lb-panel">
   <h1 class="h3 mb-2">Upload Company File</h1>
-  <p class="lb-help mb-4">Upload Excel or CSV with company data. Lead Brain Lite will parse the rows, research each business, and build an outreach-ready results list.</p>
+  <p class="lb-help mb-4">Upload Excel or CSV with company data. Lead Brain Lite saves the rows immediately, starts background batch research automatically, and updates the results page as rows finish.</p>
 
-  <form method="post" enctype="multipart/form-data">
+  <form method="post" enctype="multipart/form-data" id="leadbrain-upload-form">
     {% csrf_token %}
     <div class="mb-3">
       <label class="form-label fw-bold">Company File</label>
@@ -32,9 +32,21 @@
       {% endif %}
     </div>
     <div class="lb-help mb-3">Allowed file types: .csv, .xlsx, .xls</div>
-    <button type="submit" class="lb-btn">⬆️ Process Upload</button>
+    <button type="submit" class="lb-btn" id="leadbrain-upload-submit">⬆️ Process Upload</button>
     <a href="{% url 'leadbrain_uploads' %}" class="btn btn-outline-light ms-2">View Upload History</a>
   </form>
 </div>
-{% endblock %}
+<script>
+  (function () {
+    const form = document.getElementById("leadbrain-upload-form");
+    const submitBtn = document.getElementById("leadbrain-upload-submit");
+    if (!form || !submitBtn) return;
 
+    form.addEventListener("submit", function () {
+      if (submitBtn.disabled) return;
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Uploading...";
+    });
+  })();
+</script>
+{% endblock %}

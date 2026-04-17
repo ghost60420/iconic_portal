@@ -35,7 +35,7 @@
 <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
   <div>
     <h1 class="lb-title">Lead Brain Lite</h1>
-    <div class="lb-sub">Upload company lists, run light public research, score fit, and work from an outreach-ready list.</div>
+    <div class="lb-sub">Upload company lists, save rows safely, and let Lead Brain Lite process research in background batches.</div>
   </div>
 </div>
 
@@ -77,6 +77,8 @@
         <th>Uploaded By</th>
         <th>Status</th>
         <th>Rows</th>
+        <th>Progress</th>
+        <th>Updated</th>
         <th>Uploaded At</th>
       </tr>
     </thead>
@@ -86,18 +88,22 @@
           <td>{{ upload.file_name|default:"—" }}</td>
           <td>{{ upload.uploaded_by|default:"—" }}</td>
           <td>
-            <span class="lb-badge {% if upload.status == 'complete' %}good{% elif upload.status == 'processing' %}possible{% else %}weak{% endif %}">
+            <span class="lb-badge {% if upload.status == 'complete' %}good{% elif upload.status == 'processing' %}possible{% elif upload.status == 'partial' %}possible{% else %}weak{% endif %}">
               {{ upload.get_status_display }}
             </span>
+            {% if upload.status_note %}
+              <div class="lb-muted mt-1">{{ upload.status_note|truncatechars:70 }}</div>
+            {% endif %}
           </td>
-          <td>{{ upload.row_count }}</td>
+          <td>{{ upload.total_rows|default:upload.row_count }}</td>
+          <td>{{ upload.progress_percent }}%</td>
+          <td>{{ upload.updated_at|date:"Y-m-d H:i" }}</td>
           <td>{{ upload.uploaded_at|date:"Y-m-d H:i" }}</td>
         </tr>
       {% empty %}
-        <tr><td colspan="5">No uploads yet.</td></tr>
+        <tr><td colspan="7">No uploads yet.</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
 {% endblock %}
-

@@ -19,6 +19,8 @@
   .lb-badge.good { background:rgba(34,197,94,0.12); border-color:#22c55e; color:#bbf7d0; }
   .lb-badge.possible { background:rgba(250,204,21,0.12); border-color:#facc15; color:#fde68a; }
   .lb-badge.weak { background:rgba(248,113,113,0.12); border-color:#f87171; color:#fecaca; }
+  .lb-badge.partial { background:rgba(249,115,22,0.12); border-color:#fb923c; color:#fed7aa; }
+  .lb-muted { color:#9ca3af; font-size:12px; }
 </style>
 
 <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
@@ -39,8 +41,14 @@
         <th>File Name</th>
         <th>Uploaded By</th>
         <th>Uploaded At</th>
+        <th>Updated</th>
         <th>Status</th>
-        <th>Row Count</th>
+        <th>Rows</th>
+        <th>Complete</th>
+        <th>Failed</th>
+        <th>Progress</th>
+        <th>State</th>
+        <th>Action</th>
       </tr>
     </thead>
     <tbody>
@@ -51,18 +59,48 @@
           </td>
           <td>{{ upload.uploaded_by|default:"—" }}</td>
           <td>{{ upload.uploaded_at|date:"Y-m-d H:i" }}</td>
+          <td>{{ upload.updated_at|date:"Y-m-d H:i" }}</td>
           <td>
-            <span class="lb-badge {% if upload.status == 'complete' %}good{% elif upload.status == 'processing' %}possible{% else %}weak{% endif %}">
+            <span class="lb-badge {% if upload.status == 'complete' %}good{% elif upload.status == 'processing' %}possible{% elif upload.status == 'partial' %}partial{% else %}weak{% endif %}">
               {{ upload.get_status_display }}
             </span>
+            {% if upload.status_note %}
+              <div class="lb-muted mt-1">{{ upload.status_note|truncatechars:90 }}</div>
+            {% endif %}
           </td>
-          <td>{{ upload.row_count }}</td>
+          <td>{{ upload.total_rows|default:upload.row_count }}</td>
+          <td>{{ upload.completed_rows }}</td>
+          <td>{{ upload.failed_rows }}</td>
+          <td>
+            <div class="fw-bold">{{ upload.progress_percent }}%</div>
+            <div class="lb-muted">{{ upload.completed_rows }} complete • {{ upload.failed_rows }} failed</div>
+          </td>
+          <td>
+            {% if upload.status == 'pending' or upload.status == 'processing' %}
+              <span class="lb-muted">Active</span>
+            {% else %}
+              <span class="lb-muted">Finished</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if upload.status != 'processing' %}
+              {% if upload.pending_rows or upload.failed_rows %}
+                <form method="post" action="{% url 'leadbrain_start_analysis' upload.pk %}">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-warning fw-bold">Run Research</button>
+                </form>
+              {% else %}
+                <span class="text-secondary">—</span>
+              {% endif %}
+            {% else %}
+              <span class="text-secondary">—</span>
+            {% endif %}
+          </td>
         </tr>
       {% empty %}
-        <tr><td colspan="5">No uploads found.</td></tr>
+        <tr><td colspan="10">No uploads found.</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
 {% endblock %}
-
