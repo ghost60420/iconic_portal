@@ -255,52 +255,6 @@
   .comment.pinned { border-color: #facc15; background: rgba(250, 204, 21, 0.08); }
   .comment-meta { font-size: 11px; color: #e5e7eb; margin-bottom: 4px; }
 
-  .lead-ai-card {
-    background: radial-gradient(circle at top left, #111827, #020617);
-    border: 1px solid #1f2937;
-    border-radius: 12px;
-    padding: 12px;
-    margin-top: 14px;
-    box-shadow: 0 0 14px rgba(0, 0, 0, 0.6);
-    font-size: 13px;
-  }
-
-  .lead-ai-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-
-  .lead-ai-title { font-size: 14px; font-weight: 800; color: #fefce8; }
-  .lead-ai-note { font-size: 11px; color: #c0ae6c; margin-top: 2px; }
-
-  #lead-ai-question { width: 100%; }
-
-  #lead-ai-output {
-    margin-top: 10px;
-    background: #020617;
-    border-radius: 10px;
-    border: 1px solid #1f2937;
-    padding: 10px;
-    font-size: 12px;
-    white-space: pre-wrap;
-    min-height: 90px;
-    color: #e5e7eb;
-  }
-
-  #lead-ai-log {
-    margin-top: 8px;
-    max-height: 180px;
-    overflow-y: auto;
-    background: #020617;
-    border-radius: 10px;
-    border: 1px solid #1f2937;
-    padding: 8px;
-    font-size: 12px;
-  }
-
   .small { font-size: 12px; color: #e5e7eb; }
 
   .wa-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
@@ -319,17 +273,6 @@
   .wa-btn:hover { filter:brightness(1.05); text-decoration:none; }
   .wa-green { border-color:#22c55e; }
   .wa-gold { border-color:#facc15; }
-
-  .email-preview {
-    margin-top: 10px;
-    display: none;
-    border: 1px solid #1f2937;
-    border-radius: 10px;
-    background: #020617;
-    padding: 10px;
-    font-size: 12px;
-    white-space: pre-wrap;
-  }
 
   @media (max-width: 768px) {
     .top-bar { flex-direction: column; }
@@ -669,18 +612,6 @@
     {% endif %}
   </div>
 
-  {% if lead.ai_insights.exists %}
-    <div class="section">
-      <h2 class="section-title">AI insights</h2>
-      {% for insight in lead.ai_insights.all|slice:":3" %}
-        <div class="comment">
-          <div class="comment-meta">{{ insight.created_at|date:"Y-m-d H:i" }}</div>
-          <div>{{ insight.summary_text|linebreaksbr }}</div>
-        </div>
-      {% endfor %}
-    </div>
-  {% endif %}
-
   <div class="section">
     <h2 class="section-title">Outreach timeline</h2>
     <p class="small">Log outreach actions and track follow ups. This timeline stays after conversion.</p>
@@ -748,62 +679,6 @@
       </table>
     {% else %}
       <p class="small">No outreach activity logged yet.</p>
-    {% endif %}
-  </div>
-
-  {% if potential_duplicates %}
-    <div class="section">
-      <h2 class="section-title">Possible duplicates</h2>
-      <p class="small">Review possible duplicates and merge if needed.</p>
-
-      <table>
-        <thead>
-          <tr>
-            <th>Lead</th>
-            <th>Company</th>
-            <th>Email</th>
-            <th>Phone</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for d in potential_duplicates %}
-            <tr>
-              <td><a href="{% url 'lead_detail' d.pk %}">{{ d.lead_id }}</a></td>
-              <td>{{ d.account_brand|default:"—" }}</td>
-              <td>{{ d.email|default:"—" }}</td>
-              <td>{{ d.phone|default:"—" }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-
-      <form method="post" action="{% url 'lead_merge' lead.pk %}" style="margin-top:10px;">
-        {% csrf_token %}
-        <label>Merge this lead with:</label>
-        <select name="duplicate_id">
-          <option value="">Select duplicate lead</option>
-          {% for d in potential_duplicates %}
-            <option value="{{ d.pk }}">{{ d.lead_id }} — {{ d.account_brand|default:"Lead" }}</option>
-          {% endfor %}
-        </select>
-        <button type="submit" style="margin-left:6px;">Merge leads</button>
-      </form>
-    </div>
-  {% endif %}
-
-  <div class="section">
-    <h2 class="section-title">Client profile and convert</h2>
-    <p class="small">This will create an opportunity and customer record from this lead.</p>
-    {% if opportunities %}
-      <div class="small">This lead is already converted.</div>
-      <div style="margin-top:8px;">
-        <a class="action-btn" href="{% url 'opportunity_detail' opportunities.0.pk %}">View opportunity</a>
-      </div>
-    {% else %}
-      <form method="post" action="{% url 'convert_lead_to_opportunity' lead.pk %}">
-        {% csrf_token %}
-        <button type="submit">Convert to opportunity ✅</button>
-      </form>
     {% endif %}
   </div>
 
@@ -940,67 +815,60 @@
     {% endif %}
   </div>
 
-  <div class="lead-ai-card">
-    <div class="lead-ai-header">
-      <div>
-        <div class="lead-ai-title">Lead AI brain 🤖</div>
-        <div class="lead-ai-note">Fast summary, next step, and reply ideas.</div>
-      </div>
+  {% if potential_duplicates %}
+    <div class="section">
+      <h2 class="section-title">Possible duplicates</h2>
+      <p class="small">Review possible duplicates and merge if needed.</p>
 
-      <div style="display:flex;gap:6px;flex-wrap:wrap;">
-        <button type="button" id="btn-suggest">✨ Suggest</button>
-        <button type="button" class="button-ghost" id="btn-outbound">📈 Outbound AI</button>
-        <button type="button" class="button-ghost" id="btn-auto-score">⭐ Auto score</button>
-        <button type="button" class="button-ghost" id="btn-thanks">✉️ Thank you</button>
-        <button type="button" class="button-ghost" id="btn-meet">📅 Confirm meeting</button>
-      </div>
-    </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Lead</th>
+            <th>Company</th>
+            <th>Email</th>
+            <th>Phone</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in potential_duplicates %}
+            <tr>
+              <td><a href="{% url 'lead_detail' d.pk %}">{{ d.lead_id }}</a></td>
+              <td>{{ d.account_brand|default:"—" }}</td>
+              <td>{{ d.email|default:"—" }}</td>
+              <td>{{ d.phone|default:"—" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
 
-    <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
-      <div style="flex:1; min-width:260px;">
-        <input id="lead-ai-question" type="text" placeholder="Ask your own question about this lead">
-      </div>
-      <div>
-        <button type="button" id="lead-ai-chat-btn" class="button-ghost">Ask AI</button>
-      </div>
-      <div style="display:flex; align-items:center;">
-        <span id="lead-ai-status" style="font-size:11px;color:#9ca3af;"></span>
-      </div>
-    </div>
-
-    <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
-      <div style="min-width:200px;">
-        <div class="small" style="margin-bottom:6px;">Meeting date</div>
-        <input type="date" id="meeting-date">
-      </div>
-      <div style="min-width:200px;">
-        <div class="small" style="margin-bottom:6px;">Meeting time</div>
-        <input type="time" id="meeting-time">
-      </div>
-      <div style="min-width:140px;">
-        <div class="small" style="margin-bottom:6px;">Time zone</div>
-        <select id="meeting-tz">
-          <option value="PST" selected>PST</option>
-          <option value="EST">EST</option>
-          <option value="CST">CST</option>
-          <option value="MST">MST</option>
+      <form method="post" action="{% url 'lead_merge' lead.pk %}" style="margin-top:10px;">
+        {% csrf_token %}
+        <label>Merge this lead with:</label>
+        <select name="duplicate_id">
+          <option value="">Select duplicate lead</option>
+          {% for d in potential_duplicates %}
+            <option value="{{ d.pk }}">{{ d.lead_id }} — {{ d.account_brand|default:"Lead" }}</option>
+          {% endfor %}
         </select>
+        <button type="submit" style="margin-left:6px;">Merge leads</button>
+      </form>
+    </div>
+  {% endif %}
+
+  <div class="section">
+    <h2 class="section-title">Client profile and convert</h2>
+    <p class="small">This will create an opportunity and customer record from this lead.</p>
+    {% if opportunities %}
+      <div class="small">This lead is already converted.</div>
+      <div style="margin-top:8px;">
+        <a class="action-btn" href="{% url 'opportunity_detail' opportunities.0.pk %}">View opportunity</a>
       </div>
-    </div>
-
-    <div id="lead-ai-output">AI answer will appear here.</div>
-
-    <div class="email-preview" id="email-preview">
-      <div><strong>Subject:</strong> <span id="email-subject"></span></div>
-      <div style="margin-top:8px;"><strong>Body:</strong></div>
-      <div id="email-body"></div>
-    </div>
-
-    <div id="lead-ai-log">
-      <div style="color:#6b7280;font-size:11px;">AI history will show here.</div>
-    </div>
-
-    <form id="lead-ai-csrf" style="display:none;">{% csrf_token %}</form>
+    {% else %}
+      <form method="post" action="{% url 'convert_lead_to_opportunity' lead.pk %}">
+        {% csrf_token %}
+        <button type="submit">Convert to opportunity ✅</button>
+      </form>
+    {% endif %}
   </div>
 
   </div>
@@ -1252,229 +1120,5 @@
     });
   })();
   </script>
-
-  <script>
-  (function () {
-  const outBox = document.getElementById("lead-ai-output");
-  const statusBox = document.getElementById("lead-ai-status");
-  const logBox = document.getElementById("lead-ai-log");
-  const qInput = document.getElementById("lead-ai-question");
-  const chatBtn = document.getElementById("lead-ai-chat-btn");
-
-  const btnSuggest = document.getElementById("btn-suggest");
-  const btnOutbound = document.getElementById("btn-outbound");
-  const btnAutoScore = document.getElementById("btn-auto-score");
-  const btnThanks = document.getElementById("btn-thanks");
-  const btnMeet = document.getElementById("btn-meet");
-
-  const dateEl = document.getElementById("meeting-date");
-  const timeEl = document.getElementById("meeting-time");
-  const tzEl = document.getElementById("meeting-tz");
-
-  const emailPreview = document.getElementById("email-preview");
-  const emailSubject = document.getElementById("email-subject");
-  const emailBody = document.getElementById("email-body");
-
-  function getCsrf() {
-    const t = document.querySelector("#lead-ai-csrf input[name='csrfmiddlewaretoken']");
-    return t ? t.value : "";
-  }
-
-  function appendChat(senderLabel, text) {
-    const div = document.createElement("div");
-    div.style.marginBottom = "6px";
-    div.innerHTML = "<strong>" + senderLabel + "</strong>: " + (text || "");
-    logBox.appendChild(div);
-    logBox.scrollTop = logBox.scrollHeight;
-  }
-
-  function postForm(url, dataObj) {
-    return fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "X-CSRFToken": getCsrf()
-      },
-      body: new URLSearchParams(dataObj || {})
-    }).then(r => r.json());
-  }
-
-  function showEmail(subject, body) {
-    emailPreview.style.display = "block";
-    emailSubject.textContent = subject || "";
-    emailBody.textContent = body || "";
-  }
-
-  function clearEmail() {
-    emailPreview.style.display = "none";
-    emailSubject.textContent = "";
-    emailBody.textContent = "";
-  }
-
-  function callSuggest() {
-    statusBox.textContent = "Thinking...";
-    outBox.textContent = "";
-    clearEmail();
-
-    postForm("{% url 'ai_lead_suggest' lead.pk %}", {})
-      .then(function (data) {
-        if (data.ok) {
-          outBox.textContent = data.answer || "No answer.";
-          appendChat("AI", data.answer || "");
-          statusBox.textContent = "Ready ✅";
-        } else {
-          outBox.textContent = data.error || "AI error.";
-          statusBox.textContent = "";
-        }
-      })
-      .catch(function () {
-        outBox.textContent = "Error talking to AI.";
-        statusBox.textContent = "";
-      });
-  }
-
-  function callChat(userText) {
-    statusBox.textContent = "Thinking...";
-    outBox.textContent = "";
-    clearEmail();
-
-    postForm("{% url 'ai_lead_suggest' lead.pk %}", { q: userText })
-      .then(function (data) {
-        if (data.ok) {
-          outBox.textContent = data.answer || "No answer.";
-          appendChat("AI", data.answer || "");
-          statusBox.textContent = "Ready ✅";
-        } else {
-          outBox.textContent = data.error || "AI error.";
-          statusBox.textContent = "";
-        }
-      })
-      .catch(function () {
-        outBox.textContent = "Error talking to AI.";
-        statusBox.textContent = "";
-      });
-  }
-
-  function callThankYou() {
-    statusBox.textContent = "Sending...";
-    outBox.textContent = "";
-    clearEmail();
-
-    postForm("{% url 'ai_lead_send_thankyou' lead.pk %}", {})
-      .then(function (data) {
-        if (data.ok) {
-          outBox.textContent = "Thank you email sent ✅";
-          appendChat("AI", "Thank you email sent ✅");
-          showEmail(data.subject, data.body);
-          statusBox.textContent = "Done ✅";
-        } else {
-          outBox.textContent = data.error || "Could not send.";
-          statusBox.textContent = "";
-        }
-      })
-      .catch(function () {
-        outBox.textContent = "Error sending email.";
-        statusBox.textContent = "";
-      });
-  }
-
-  function callOutbound() {
-    statusBox.textContent = "Thinking...";
-    outBox.textContent = "";
-    clearEmail();
-
-    postForm("{% url 'ai_lead_outbound' lead.pk %}", {})
-      .then(function (data) {
-        if (data.ok) {
-          outBox.textContent = data.answer || "No answer.";
-          appendChat("AI", data.answer || "");
-          statusBox.textContent = "Ready ✅";
-        } else {
-          outBox.textContent = data.error || "AI error.";
-          statusBox.textContent = "";
-        }
-      })
-      .catch(function () {
-        outBox.textContent = "Error talking to AI.";
-        statusBox.textContent = "";
-      });
-  }
-
-  function callAutoScore() {
-    statusBox.textContent = "Scoring...";
-    outBox.textContent = "";
-    clearEmail();
-
-    postForm("{% url 'lead_auto_score' lead.pk %}", {})
-      .then(function (data) {
-        if (data.ok) {
-          outBox.textContent = "Auto score: " + data.score + ". Signals: " + (data.signals || []).join(", ");
-          appendChat("AI", outBox.textContent);
-          statusBox.textContent = "Ready ✅";
-        } else {
-          outBox.textContent = data.error || "Could not score.";
-          statusBox.textContent = "";
-        }
-      })
-      .catch(function () {
-        outBox.textContent = "Error scoring lead.";
-        statusBox.textContent = "";
-      });
-  }
-
-  function callMeetingConfirm() {
-    const d = (dateEl && dateEl.value) ? dateEl.value : "";
-    const t = (timeEl && timeEl.value) ? timeEl.value : "";
-    const z = (tzEl && tzEl.value) ? tzEl.value : "PST";
-
-    if (!d || !t) {
-      outBox.textContent = "Please set meeting date and time first.";
-      return;
-    }
-
-    statusBox.textContent = "Sending...";
-    outBox.textContent = "";
-    clearEmail();
-
-    postForm("{% url 'ai_lead_send_meeting_confirm' lead.pk %}", {
-      meeting_date: d,
-      meeting_time: t,
-      meeting_tz: z
-    })
-    .then(function (data) {
-      if (data.ok) {
-        outBox.textContent = "Meeting confirm email sent ✅";
-        appendChat("AI", "Meeting confirm email sent ✅");
-        showEmail(data.subject, data.body);
-        statusBox.textContent = "Done ✅";
-      } else {
-        outBox.textContent = data.error || "Could not send.";
-        statusBox.textContent = "";
-      }
-    })
-    .catch(function () {
-      outBox.textContent = "Error sending email.";
-      statusBox.textContent = "";
-    });
-  }
-
-  if (btnSuggest) btnSuggest.addEventListener("click", callSuggest);
-  if (btnOutbound) btnOutbound.addEventListener("click", callOutbound);
-  if (btnAutoScore) btnAutoScore.addEventListener("click", callAutoScore);
-
-  if (chatBtn && qInput) {
-    chatBtn.addEventListener("click", function () {
-      const q = (qInput.value || "").trim();
-      if (!q) return;
-      appendChat("You", q);
-      qInput.value = "";
-      callChat(q);
-    });
-  }
-
-  if (btnThanks) btnThanks.addEventListener("click", callThankYou);
-  if (btnMeet) btnMeet.addEventListener("click", callMeetingConfirm);
-})();
-</script>
 
 {% endblock %}
