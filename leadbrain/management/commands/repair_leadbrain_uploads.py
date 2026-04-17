@@ -97,7 +97,7 @@ class Command(BaseCommand):
             )
 
         if backfill_hashes:
-            missing_hashes = LeadBrainUpload.objects.filter(file_hash="").order_by("uploaded_at", "id")
+            missing_hashes = LeadBrainUpload.objects.filter(file_hash="").order_by("-uploaded_at", "-id")
             self.stdout.write(f"MISSING_HASHES {missing_hashes.count()}")
             for upload in missing_hashes:
                 try:
@@ -111,6 +111,25 @@ class Command(BaseCommand):
                     continue
                 self.stdout.write(f"HASH upload={upload.pk} hash={file_hash[:12]}")
                 if apply_changes:
+                    active_conflict = (
+                        LeadBrainUpload.objects.filter(
+                            uploaded_by_id=upload.uploaded_by_id,
+                            file_hash=file_hash,
+                            status__in=[LeadBrainUpload.STATUS_PENDING, LeadBrainUpload.STATUS_PROCESSING],
+                        )
+                        .exclude(pk=upload.pk)
+                        .order_by("-uploaded_at", "-id")
+                        .first()
+                    )
+                    if active_conflict and upload.status in [
+                        LeadBrainUpload.STATUS_PENDING,
+                        LeadBrainUpload.STATUS_PROCESSING,
+                    ]:
+                        upload.status = LeadBrainUpload.STATUS_FAILED
+                        upload.status_note = (
+                            f"Duplicate upload history for review. Newer active upload job is #{active_conflict.pk}."
+                        )
+                        upload.save(update_fields=["status", "status_note", "updated_at"])
                     upload.file_hash = file_hash
                     upload.save(update_fields=["file_hash", "updated_at"])
 
