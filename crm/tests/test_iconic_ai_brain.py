@@ -140,6 +140,7 @@ class IconicAIBrainTests(SimpleTestCase):
             phone="",
             product_interest="Hoodie",
             product_category="",
+            market="CA",
         )
         brain = {
             "missing_info": ["Website", "Order quantity"],
@@ -151,10 +152,19 @@ class IconicAIBrainTests(SimpleTestCase):
 
         send_mail.assert_not_called()
         self.assertEqual(set(result.keys()), {"subject", "body", "mailto_url"})
-        self.assertIn("Hoodie", result["subject"])
+        self.assertEqual(result["subject"], "Next steps for Hoodie")
         self.assertIn("Hello Sam Buyer,", result["body"])
-        self.assertIn("website or brand page", result["body"])
+        self.assertIn("your Hoodie inquiry for Acme Apparel", result["body"])
+        self.assertIn("Could you share your website or brand page and your target order quantity?", result["body"])
+        self.assertIn("If you send that over, I can guide you on the next steps.", result["body"])
+        self.assertLessEqual(len(result["body"].splitlines()), 7)
+        self.assertNotIn("\n\n", result["body"])
+        self.assertNotIn("<", result["body"])
+        self.assertNotIn(">", result["body"])
+        self.assertNotIn("*", result["body"])
         self.assertTrue(result["mailto_url"].startswith("mailto:sam@example.com?"))
+        self.assertIn("%20", result["mailto_url"])
+        self.assertNotIn("+", result["mailto_url"])
 
         source = inspect.getsource(lead_brain_email_draft_module)
         self.assertNotIn("send_mail", source)
@@ -162,6 +172,68 @@ class IconicAIBrainTests(SimpleTestCase):
         self.assertNotIn("objects.create", source)
         self.assertNotIn("OutboundEmailLog", source)
         self.assertNotIn("LeadAIMessage", source)
+
+    def test_email_draft_helper_uses_us_tone(self):
+        lead = WriteTrap(
+            account_brand="Hudson Supply",
+            contact_name="Alex",
+            email="alex@example.com",
+            product_interest="Caps",
+            product_category="",
+            market="US",
+        )
+
+        result = build_iconic_ai_brain_email_draft(
+            lead=lead,
+            brain={"missing_info": ["Order quantity"], "suggested_next_step": ""},
+        )
+
+        self.assertIn("your Caps inquiry for Hudson Supply", result["body"])
+        self.assertIn(
+            "Once I have that, I can give you a clearer idea of pricing and next steps.",
+            result["body"],
+        )
+
+    def test_email_draft_helper_uses_canada_tone(self):
+        lead = WriteTrap(
+            account_brand="Maple Works",
+            contact_name="Jordan",
+            email="jordan@example.com",
+            product_interest="Beanies",
+            product_category="",
+            market="CA",
+        )
+
+        result = build_iconic_ai_brain_email_draft(
+            lead=lead,
+            brain={"missing_info": ["Website"], "suggested_next_step": ""},
+        )
+
+        self.assertIn("your Beanies inquiry for Maple Works", result["body"])
+        self.assertIn("If you send that over, I can guide you on the next steps.", result["body"])
+
+    def test_email_draft_helper_uses_neutral_tone_when_market_is_unknown(self):
+        lead = WriteTrap(
+            account_brand="North Star",
+            contact_name="Taylor",
+            email="taylor@example.com",
+            product_interest="",
+            product_category="Outerwear",
+            market="",
+            country="Germany",
+        )
+
+        result = build_iconic_ai_brain_email_draft(
+            lead=lead,
+            brain={"missing_info": [], "suggested_next_step": "Confirm the product category or style the lead is asking about."},
+        )
+
+        self.assertIn("your Outerwear inquiry for North Star", result["body"])
+        self.assertIn(
+            "If easier, just reply with the details here and I will take it from there.",
+            result["body"],
+        )
+        self.assertIn("Could you share the product or style you have in mind?", result["body"])
 
 
 class _RelationList:

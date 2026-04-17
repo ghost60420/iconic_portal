@@ -14,6 +14,43 @@ def _truncate(value, limit):
     return text[: max(limit - 3, 0)].rstrip() + "..."
 
 
+def _brand_name(lead):
+    return (
+        _text(getattr(lead, "account_brand", ""))
+        or _text(getattr(lead, "company_name", ""))
+    )
+
+
+def _product_name(lead):
+    return _text(getattr(lead, "product_interest", "")) or _text(getattr(lead, "product_category", ""))
+
+
+def _website_name(lead):
+    return _text(getattr(lead, "website", "")) or _text(getattr(lead, "company_website", ""))
+
+
+def _market_bucket(lead):
+    values = []
+    market_display = getattr(lead, "get_market_display", None)
+    if callable(market_display):
+        try:
+            values.append(market_display())
+        except Exception:
+            pass
+
+    for field_name in ("market", "country", "shipping_country"):
+        values.append(getattr(lead, field_name, ""))
+
+    for value in values:
+        normalized = _text(value).lower().replace(".", "").replace("-", " ")
+        normalized = " ".join(normalized.split())
+        if normalized in {"ca", "canada", "canadian"}:
+            return "canada"
+        if normalized in {"us", "usa", "united states", "united states of america", "american"}:
+            return "us"
+    return "neutral"
+
+
 def _clean_missing_info(items):
     out = []
     for item in items or []:
@@ -26,68 +63,89 @@ def _clean_missing_info(items):
     return out
 
 
-def _request_line(items):
+def _request_items(items):
     labels = {
-        "Phone": "best phone number",
-        "Website": "website or brand page",
-        "Product interest": "product interest or style reference",
-        "Order quantity": "target order quantity",
+        "Phone": "your best phone number",
+        "Website": "your website or brand page",
+        "Product interest": "the product or style you need",
+        "Order quantity": "your target order quantity",
     }
     prompts = []
     for item in _clean_missing_info(items):
         prompts.append(labels.get(item, item.lower()))
         if len(prompts) >= 2:
             break
+    return prompts
 
-    if not prompts:
-        return ""
-    if len(prompts) == 1:
-        return f"Could you share your {prompts[0]}?"
-    return f"Could you share your {prompts[0]} and {prompts[1]}?"
+
+def _request_line(brain):
+    prompts = _request_items(brain.get("missing_info", []))
+    if prompts:
+        if len(prompts) == 1:
+            return f"Could you share {prompts[0]}?"
+        return f"Could you share {prompts[0]} and {prompts[1]}?"
+
+    suggested = _text(brain.get("suggested_next_step", "")).lower()
+    if any(token in suggested for token in ("tech pack", "reference", "photo", "image")):
+        return "Could you share any tech pack or reference images?"
+    if any(token in suggested for token in ("quantity", "volume", "moq")):
+        return "Could you share your target order quantity?"
+    if any(token in suggested for token in ("product", "style", "category")):
+        return "Could you share the product or style you have in mind?"
+    if any(token in suggested for token in ("timeline", "date", "delivery")):
+        return "Could you share your target timeline?"
+    if any(token in suggested for token in ("website", "brand page")):
+        return "Could you share your website or brand page?"
+    return "Could you share a bit more detail on what you need?"
 
 
 def _subject(lead):
-    brand = _text(getattr(lead, "account_brand", ""))
-    product = _text(getattr(lead, "product_interest", "")) or _text(getattr(lead, "product_category", ""))
+    brand = _brand_name(lead)
+    product = _product_name(lead)
+
+    if product:
+        return _truncate(f"Next steps for {product}", 70)
+    if brand:
+        return _truncate(f"Quick follow up for {brand}", 70)
+    return "Follow up on your inquiry"
+
+
+def _intro_line(lead):
+    brand = _brand_name(lead)
+    product = _product_name(lead)
+    website = _website_name(lead)
 
     if product and brand:
-        return _truncate(f"{product} follow up for {brand}", 78)
+        return f"I wanted to follow up on your {product} inquiry for {brand}."
     if product:
-        return _truncate(f"{product} follow up from Iconic Apparel House", 78)
+        return f"I wanted to follow up on your {product} inquiry."
     if brand:
-        return _truncate(f"Follow up for {brand}", 78)
-    return "Quick follow up from Iconic Apparel House"
+        return f"I wanted to follow up regarding {brand}."
+    if website:
+        return f"I wanted to follow up regarding your inquiry for {website}."
+    return "I wanted to follow up on your inquiry."
+
+
+def _cta_line(lead):
+    market = _market_bucket(lead)
+    if market == "canada":
+        return "If you send that over, I can guide you on the next steps."
+    if market == "us":
+        return "Once I have that, I can give you a clearer idea of pricing and next steps."
+    return "If easier, just reply with the details here and I will take it from there."
 
 
 def _body(lead, brain):
     contact = _text(getattr(lead, "contact_name", "")) or "there"
-    brand = _text(getattr(lead, "account_brand", ""))
-    product = _text(getattr(lead, "product_interest", "")) or _text(getattr(lead, "product_category", ""))
-    request_line = _request_line(brain.get("missing_info", []))
-
-    intro_target = product or brand or "your request"
-    intro_line = f"I wanted to quickly follow up regarding {intro_target}."
-    if product and brand:
-        intro_line = f"I wanted to quickly follow up regarding {product} for {brand}."
-
-    if request_line:
-        move_forward_line = "To move forward, " + request_line[0].lower() + request_line[1:]
-    else:
-        move_forward_line = "To move forward, could you share a few more details?"
+    ask_line = _request_line(brain or {})
+    cta_line = _cta_line(lead)
 
     body_lines = [
         f"Hello {contact},",
-        "",
         "Hope you're doing well.",
-        "",
-        intro_line,
-        "",
-        move_forward_line,
-        "",
-        "Once I have that, I can guide you with the next steps and pricing.",
-        "",
-        "Looking forward to your reply.",
-        "",
+        _intro_line(lead),
+        ask_line,
+        cta_line,
         "Thank you,",
         "Iconic Apparel House",
     ]
