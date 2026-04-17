@@ -44,6 +44,7 @@ def wa_perm(view_func):
 urlpatterns = [
     path("", home_redirect, name="home"),
     path("accounts/", include("django.contrib.auth.urls")),
+    path("lead-brain/", include("leadbrain.urls")),
 
     path("main-dashboard/", login_required(views.main_dashboard), name="main_dashboard"),
 

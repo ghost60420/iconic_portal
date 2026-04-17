@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     "django.contrib.humanize",
     "crm.apps.CrmConfig",
     "aihub",
+    "leadbrain.apps.LeadbrainConfig",
     "marketing.apps.MarketingConfig",
     "whatsapp.apps.WhatsAppConfig",
 ]

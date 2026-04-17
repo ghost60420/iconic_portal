@@ -1,0 +1,113 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+<style>
+  .lb-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:14px; }
+  .lb-panel {
+    background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+    border:1px solid #243041;
+    border-radius:14px;
+    padding:18px;
+    box-shadow:0 12px 28px rgba(0,0,0,0.35);
+  }
+  .lb-badge {
+    display:inline-flex; padding:4px 10px; border-radius:999px; font-size:11px; font-weight:800;
+    border:1px solid #334155; background:#0f172a; color:#e5e7eb;
+  }
+  .lb-badge.good_fit { background:rgba(34,197,94,0.12); border-color:#22c55e; color:#bbf7d0; }
+  .lb-badge.possible_fit { background:rgba(250,204,21,0.12); border-color:#facc15; color:#fde68a; }
+  .lb-badge.weak_fit { background:rgba(248,113,113,0.12); border-color:#f87171; color:#fecaca; }
+  .lb-meta { display:grid; grid-template-columns:180px 1fr; gap:8px 12px; font-size:13px; }
+  .lb-meta strong { color:#93c5fd; }
+  pre {
+    white-space:pre-wrap; word-break:break-word; background:#0b1220; border:1px solid #243041;
+    border-radius:12px; padding:14px; color:#e5e7eb; font-size:12px;
+  }
+</style>
+
+<div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+  <div>
+    <h1 class="h3 mb-1">{{ company.company_name|default:"Unnamed company" }}</h1>
+    <div class="text-secondary">Lead Brain Lite company detail</div>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'leadbrain_results' %}" class="btn btn-outline-light">← Back to Results</a>
+  </div>
+</div>
+
+<div class="lb-grid mb-3">
+  <div class="lb-panel">
+    <h2 class="h5 mb-3">Company Info</h2>
+    <div class="lb-meta">
+      <strong>Company</strong><div>{{ company.company_name|default:"—" }}</div>
+      <strong>Website</strong><div>{% if company.website %}<a href="{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>{% else %}—{% endif %}</div>
+      <strong>Email</strong><div>{{ company.email|default:"—" }}</div>
+      <strong>Phone</strong><div>{{ company.phone|default:"—" }}</div>
+      <strong>Country</strong><div>{{ company.country|default:"—" }}</div>
+      <strong>City</strong><div>{{ company.city|default:"—" }}</div>
+      <strong>LinkedIn</strong><div>{% if company.linkedin_url %}<a href="{{ company.linkedin_url }}" target="_blank" rel="noopener">{{ company.linkedin_url }}</a>{% else %}—{% endif %}</div>
+      <strong>Upload</strong><div>{{ company.upload.file_name|default:"—" }} • Row {{ company.row_number }}</div>
+    </div>
+  </div>
+
+  <div class="lb-panel">
+    <h2 class="h5 mb-3">Fit Result</h2>
+    <div class="d-flex align-items-center gap-2 mb-3">
+      <span class="lb-badge {{ company.fit_label }}">{{ company.get_fit_label_display }}</span>
+      <strong class="fs-4">{{ company.fit_score }}</strong>
+    </div>
+    <div class="lb-meta">
+      <strong>Business Type</strong><div>{{ company.business_type|default:"—" }}</div>
+      <strong>AI Summary</strong><div>{{ company.ai_summary|default:"—" }}</div>
+      <strong>Fit Reason</strong><div>{{ company.fit_reason|default:"—" }}</div>
+      <strong>Suggested Action</strong><div>{{ company.suggested_action|default:"—" }}</div>
+      <strong>Best Contact</strong><div>{{ company.best_contact_name|default:"—" }}</div>
+      <strong>Best Contact Title</strong><div>{{ company.best_contact_title|default:"—" }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="lb-grid mb-3">
+  <div class="lb-panel">
+    <h2 class="h5 mb-3">Research Summary</h2>
+    <div class="lb-meta">
+      <strong>Website Status</strong><div>{{ company.research_json.website_status|default:"—" }}</div>
+      <strong>Official Website</strong><div>{{ company.research_json.official_website_found|default:"—" }}</div>
+      <strong>Public Email</strong><div>{{ company.research_json.public_email_found|default:"—" }}</div>
+      <strong>Public Phone</strong><div>{{ company.research_json.public_phone_found|default:"—" }}</div>
+      <strong>Description</strong><div>{{ company.research_json.business_description|default:"—" }}</div>
+      <strong>Apparel Signals</strong><div>{{ company.research_json.apparel_signals|join:", "|default:"—" }}</div>
+      <strong>Search Summary</strong><div>{{ company.research_json.search_summary|default:"—" }}</div>
+      <strong>Confidence Notes</strong><div>{{ company.research_json.confidence_notes|default:"—" }}</div>
+    </div>
+  </div>
+
+  <div class="lb-panel">
+    <h2 class="h5 mb-3">Notes</h2>
+    <form method="post">
+      {% csrf_token %}
+      <div class="mb-3">
+        <label class="form-label fw-bold">Internal Notes</label>
+        {{ notes_form.notes }}
+      </div>
+      <div class="form-check mb-3">
+        {{ notes_form.reviewed }}
+        <label class="form-check-label" for="{{ notes_form.reviewed.id_for_label }}">Reviewed</label>
+      </div>
+      <button type="submit" class="btn btn-warning fw-bold">Save Notes</button>
+    </form>
+  </div>
+</div>
+
+<div class="lb-grid">
+  <div class="lb-panel">
+    <h2 class="h5 mb-3">Raw Imported Row</h2>
+    <pre>{{ raw_row_pretty }}</pre>
+  </div>
+  <div class="lb-panel">
+    <h2 class="h5 mb-3">Research JSON</h2>
+    <pre>{{ research_pretty }}</pre>
+  </div>
+</div>
+{% endblock %}
+

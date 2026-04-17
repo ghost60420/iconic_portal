@@ -1,0 +1,103 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+<style>
+  .lb-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; }
+  .lb-card, .lb-panel {
+    background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+    border:1px solid #243041;
+    border-radius:14px;
+    padding:16px;
+    box-shadow: 0 12px 28px rgba(0,0,0,0.35);
+  }
+  .lb-title { margin:0 0 6px 0; font-size:26px; color:#fef3c7; font-weight:900; }
+  .lb-sub { color:#9ca3af; font-size:13px; margin-bottom:18px; }
+  .lb-stat-label { font-size:12px; color:#93c5fd; font-weight:800; text-transform:uppercase; }
+  .lb-stat-value { font-size:28px; color:#f9fafb; font-weight:900; margin-top:6px; }
+  .lb-actions { display:flex; gap:10px; flex-wrap:wrap; margin:16px 0 18px; }
+  .lb-btn {
+    display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:12px;
+    border:1px solid rgba(245,213,128,0.35); background:#111827; color:#f8fafc; font-weight:800;
+  }
+  .lb-btn.primary { background:linear-gradient(135deg, #fde68a, #f59e0b); color:#111827; }
+  .lb-table { width:100%; border-collapse:collapse; }
+  .lb-table th, .lb-table td { padding:10px 12px; border-bottom:1px solid #243041; font-size:13px; vertical-align:top; }
+  .lb-table th { color:#93c5fd; font-size:11px; text-transform:uppercase; }
+  .lb-badge {
+    display:inline-flex; padding:4px 10px; border-radius:999px; font-size:11px; font-weight:800;
+    border:1px solid #334155; background:#0f172a; color:#e5e7eb;
+  }
+  .lb-badge.good { background:rgba(34,197,94,0.12); border-color:#22c55e; color:#bbf7d0; }
+  .lb-badge.possible { background:rgba(250,204,21,0.12); border-color:#facc15; color:#fde68a; }
+  .lb-badge.weak { background:rgba(248,113,113,0.12); border-color:#f87171; color:#fecaca; }
+</style>
+
+<div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+  <div>
+    <h1 class="lb-title">Lead Brain Lite</h1>
+    <div class="lb-sub">Upload company lists, run light public research, score fit, and work from an outreach-ready list.</div>
+  </div>
+</div>
+
+<div class="lb-actions">
+  <a href="{% url 'leadbrain_upload' %}" class="lb-btn primary">⬆️ Upload File</a>
+  <a href="{% url 'leadbrain_results' %}" class="lb-btn">📋 View Results</a>
+  <a href="{% url 'leadbrain_uploads' %}" class="lb-btn">🗂️ Upload History</a>
+</div>
+
+<div class="lb-grid mb-4">
+  <div class="lb-card">
+    <div class="lb-stat-label">Total Uploads</div>
+    <div class="lb-stat-value">{{ total_uploads }}</div>
+  </div>
+  <div class="lb-card">
+    <div class="lb-stat-label">Total Companies</div>
+    <div class="lb-stat-value">{{ total_companies }}</div>
+  </div>
+  <div class="lb-card">
+    <div class="lb-stat-label">Good Fit</div>
+    <div class="lb-stat-value">{{ good_fit_count }}</div>
+  </div>
+  <div class="lb-card">
+    <div class="lb-stat-label">Possible Fit</div>
+    <div class="lb-stat-value">{{ possible_fit_count }}</div>
+  </div>
+  <div class="lb-card">
+    <div class="lb-stat-label">Weak Fit</div>
+    <div class="lb-stat-value">{{ weak_fit_count }}</div>
+  </div>
+</div>
+
+<div class="lb-panel">
+  <h2 class="h5 mb-3">Recent Uploads</h2>
+  <table class="lb-table">
+    <thead>
+      <tr>
+        <th>File Name</th>
+        <th>Uploaded By</th>
+        <th>Status</th>
+        <th>Rows</th>
+        <th>Uploaded At</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for upload in recent_uploads %}
+        <tr>
+          <td>{{ upload.file_name|default:"—" }}</td>
+          <td>{{ upload.uploaded_by|default:"—" }}</td>
+          <td>
+            <span class="lb-badge {% if upload.status == 'complete' %}good{% elif upload.status == 'processing' %}possible{% else %}weak{% endif %}">
+              {{ upload.get_status_display }}
+            </span>
+          </td>
+          <td>{{ upload.row_count }}</td>
+          <td>{{ upload.uploaded_at|date:"Y-m-d H:i" }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5">No uploads yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+

@@ -1,0 +1,40 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+<style>
+  .lb-panel {
+    max-width: 760px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+    border:1px solid #243041;
+    border-radius:14px;
+    padding:18px;
+    box-shadow:0 12px 28px rgba(0,0,0,0.35);
+  }
+  .lb-help { color:#9ca3af; font-size:13px; }
+  .lb-btn {
+    display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:12px;
+    border:1px solid rgba(245,213,128,0.35); background:linear-gradient(135deg, #fde68a, #f59e0b);
+    color:#111827; font-weight:800;
+  }
+</style>
+
+<div class="lb-panel">
+  <h1 class="h3 mb-2">Upload Company File</h1>
+  <p class="lb-help mb-4">Upload Excel or CSV with company data. Lead Brain Lite will parse the rows, research each business, and build an outreach-ready results list.</p>
+
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div class="mb-3">
+      <label class="form-label fw-bold">Company File</label>
+      {{ form.file }}
+      {% if form.file.errors %}
+        <div class="text-danger mt-2">{{ form.file.errors|join:", " }}</div>
+      {% endif %}
+    </div>
+    <div class="lb-help mb-3">Allowed file types: .csv, .xlsx, .xls</div>
+    <button type="submit" class="lb-btn">⬆️ Process Upload</button>
+    <a href="{% url 'leadbrain_uploads' %}" class="btn btn-outline-light ms-2">View Upload History</a>
+  </form>
+</div>
+{% endblock %}
+

@@ -1,0 +1,174 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+<style>
+  .lb-panel, .lb-filter-panel {
+    background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+    border:1px solid #243041;
+    border-radius:14px;
+    padding:18px;
+    box-shadow:0 12px 28px rgba(0,0,0,0.35);
+  }
+  .lb-filter-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:12px; }
+  .lb-table-wrap { overflow:auto; }
+  .lb-table { width:100%; min-width:1550px; border-collapse:collapse; }
+  .lb-table th, .lb-table td { padding:10px 12px; border-bottom:1px solid #243041; font-size:13px; vertical-align:top; }
+  .lb-table th { color:#93c5fd; font-size:11px; text-transform:uppercase; position:sticky; top:0; background:#0b1220; }
+  .lb-badge {
+    display:inline-flex; padding:4px 10px; border-radius:999px; font-size:11px; font-weight:800;
+    border:1px solid #334155; background:#0f172a; color:#e5e7eb;
+  }
+  .lb-badge.good_fit { background:rgba(34,197,94,0.12); border-color:#22c55e; color:#bbf7d0; }
+  .lb-badge.possible_fit { background:rgba(250,204,21,0.12); border-color:#facc15; color:#fde68a; }
+  .lb-badge.weak_fit { background:rgba(248,113,113,0.12); border-color:#f87171; color:#fecaca; }
+  .lb-muted { color:#9ca3af; font-size:12px; }
+  .lb-summary-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:16px; }
+  .lb-stat { background:#0f172a; border:1px solid #243041; border-radius:12px; padding:12px; }
+  .lb-stat-label { color:#93c5fd; font-size:11px; text-transform:uppercase; font-weight:800; }
+  .lb-stat-value { color:#f8fafc; font-size:24px; font-weight:900; margin-top:6px; }
+</style>
+
+<div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+  <div>
+    <h1 class="h3 mb-1">Lead Brain Lite Results</h1>
+    <div class="text-secondary">Work through scored companies in one outreach-ready list.</div>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'leadbrain_upload' %}" class="btn btn-warning fw-bold">Upload File</a>
+    <a href="{% url 'leadbrain_uploads' %}" class="btn btn-outline-light">Upload History</a>
+  </div>
+</div>
+
+<div class="lb-summary-grid">
+  <div class="lb-stat"><div class="lb-stat-label">Filtered Companies</div><div class="lb-stat-value">{{ total_count }}</div></div>
+  <div class="lb-stat"><div class="lb-stat-label">Good Fit</div><div class="lb-stat-value">{{ good_fit_count }}</div></div>
+  <div class="lb-stat"><div class="lb-stat-label">Possible Fit</div><div class="lb-stat-value">{{ possible_fit_count }}</div></div>
+  <div class="lb-stat"><div class="lb-stat-label">Weak Fit</div><div class="lb-stat-value">{{ weak_fit_count }}</div></div>
+</div>
+
+<div class="lb-filter-panel mb-3">
+  <form method="get">
+    <div class="row g-3 mb-3">
+      <div class="col-md-5">
+        <label class="form-label fw-bold">Search</label>
+        <input type="text" name="q" value="{{ query }}" class="form-control" placeholder="Company name, email, website">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-bold">Upload</label>
+        <select name="upload" class="form-select">
+          <option value="">All uploads</option>
+          {% for upload in upload_options %}
+            <option value="{{ upload.pk }}" {% if upload_id == upload.pk|stringformat:"s" %}selected{% endif %}>{{ upload.file_name|default:"Upload" }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-bold">Fit Label</label>
+        <select name="fit_label" class="form-select">
+          <option value="">All</option>
+          <option value="good_fit" {% if fit_label == "good_fit" %}selected{% endif %}>Good Fit</option>
+          <option value="possible_fit" {% if fit_label == "possible_fit" %}selected{% endif %}>Possible Fit</option>
+          <option value="weak_fit" {% if fit_label == "weak_fit" %}selected{% endif %}>Weak Fit</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-bold">Country</label>
+        <select name="country" class="form-select">
+          <option value="">All</option>
+          {% for option in country_options %}
+            <option value="{{ option }}" {% if country == option %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="lb-filter-grid mb-3">
+      <label class="form-check"><input class="form-check-input" type="checkbox" name="has_website" value="1" {% if has_website %}checked{% endif %}> <span class="form-check-label">Has Website</span></label>
+      <label class="form-check"><input class="form-check-input" type="checkbox" name="has_email" value="1" {% if has_email %}checked{% endif %}> <span class="form-check-label">Has Email</span></label>
+      <label class="form-check"><input class="form-check-input" type="checkbox" name="has_phone" value="1" {% if has_phone %}checked{% endif %}> <span class="form-check-label">Has Phone</span></label>
+      <label class="form-check"><input class="form-check-input" type="checkbox" name="has_linkedin" value="1" {% if has_linkedin %}checked{% endif %}> <span class="form-check-label">Has LinkedIn</span></label>
+      <label class="form-check"><input class="form-check-input" type="checkbox" name="reviewed" value="true" {% if reviewed == "true" %}checked{% endif %}> <span class="form-check-label">Reviewed Only</span></label>
+      <div>
+        <label class="form-label fw-bold">Sort</label>
+        <select name="sort" class="form-select">
+          <option value="-fit_score" {% if sort == "-fit_score" %}selected{% endif %}>Fit Score Desc</option>
+          <option value="fit_score" {% if sort == "fit_score" %}selected{% endif %}>Fit Score Asc</option>
+          <option value="company_name" {% if sort == "company_name" %}selected{% endif %}>Company Name</option>
+          <option value="-created_at" {% if sort == "-created_at" %}selected{% endif %}>Newest</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="d-flex gap-2 flex-wrap">
+      <button type="submit" class="btn btn-warning fw-bold">Apply Filters</button>
+      <a href="{% url 'leadbrain_results' %}" class="btn btn-outline-light">Reset</a>
+    </div>
+  </form>
+</div>
+
+<div class="lb-panel">
+  <div class="lb-table-wrap">
+    <table class="lb-table">
+      <thead>
+        <tr>
+          <th>Company Name</th>
+          <th>Website</th>
+          <th>Email</th>
+          <th>Phone</th>
+          <th>Country</th>
+          <th>City</th>
+          <th>Business Type</th>
+          <th>Fit Label</th>
+          <th>Fit Score</th>
+          <th>Why It Looks Good</th>
+          <th>LinkedIn</th>
+          <th>Best Contact Name</th>
+          <th>Best Contact Title</th>
+          <th>Suggested Action</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for company in companies %}
+          <tr>
+            <td>
+              <a href="{% url 'leadbrain_company_detail' company.pk %}" class="fw-bold">{{ company.company_name|default:"Unnamed company" }}</a>
+              <div class="lb-muted">Upload #{{ company.upload_id }} • Row {{ company.row_number }}</div>
+            </td>
+            <td>{% if company.website %}<a href="{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>{% else %}<span class="lb-muted">—</span>{% endif %}</td>
+            <td>{{ company.email|default:"—" }}</td>
+            <td>{{ company.phone|default:"—" }}</td>
+            <td>{{ company.country|default:"—" }}</td>
+            <td>{{ company.city|default:"—" }}</td>
+            <td>{{ company.business_type|default:"—" }}</td>
+            <td><span class="lb-badge {{ company.fit_label }}">{{ company.get_fit_label_display }}</span></td>
+            <td class="fw-bold">{{ company.fit_score }}</td>
+            <td>{{ company.fit_reason|default:company.ai_summary|default:"—" }}</td>
+            <td>{% if company.linkedin_url %}<a href="{{ company.linkedin_url }}" target="_blank" rel="noopener">Open</a>{% else %}<span class="lb-muted">—</span>{% endif %}</td>
+            <td>{{ company.best_contact_name|default:"—" }}</td>
+            <td>{{ company.best_contact_title|default:"—" }}</td>
+            <td>{{ company.suggested_action|default:"—" }}</td>
+            <td>{{ company.notes|default:"—"|truncatechars:80 }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="15">No companies match the current filters.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if page_obj.paginator.num_pages > 1 %}
+    <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+      <div class="lb-muted">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</div>
+      <div class="d-flex gap-2">
+        {% if page_obj.has_previous %}
+          <a class="btn btn-outline-light btn-sm" href="?page={{ page_obj.previous_page_number }}{% if query %}&q={{ query|urlencode }}{% endif %}{% if fit_label %}&fit_label={{ fit_label|urlencode }}{% endif %}{% if country %}&country={{ country|urlencode }}{% endif %}{% if upload_id %}&upload={{ upload_id|urlencode }}{% endif %}{% if has_website %}&has_website=1{% endif %}{% if has_email %}&has_email=1{% endif %}{% if has_phone %}&has_phone=1{% endif %}{% if has_linkedin %}&has_linkedin=1{% endif %}{% if reviewed %}&reviewed={{ reviewed|urlencode }}{% endif %}{% if sort %}&sort={{ sort|urlencode }}{% endif %}">Previous</a>
+        {% endif %}
+        {% if page_obj.has_next %}
+          <a class="btn btn-outline-light btn-sm" href="?page={{ page_obj.next_page_number }}{% if query %}&q={{ query|urlencode }}{% endif %}{% if fit_label %}&fit_label={{ fit_label|urlencode }}{% endif %}{% if country %}&country={{ country|urlencode }}{% endif %}{% if upload_id %}&upload={{ upload_id|urlencode }}{% endif %}{% if has_website %}&has_website=1{% endif %}{% if has_email %}&has_email=1{% endif %}{% if has_phone %}&has_phone=1{% endif %}{% if has_linkedin %}&has_linkedin=1{% endif %}{% if reviewed %}&reviewed={{ reviewed|urlencode }}{% endif %}{% if sort %}&sort={{ sort|urlencode }}{% endif %}">Next</a>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
