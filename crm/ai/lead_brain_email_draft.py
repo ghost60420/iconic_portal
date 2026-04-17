@@ -1,4 +1,4 @@
-from urllib.parse import urlencode
+from urllib.parse import quote
 
 
 def _text(value):
@@ -101,10 +101,10 @@ def build_iconic_ai_brain_email_draft(*, lead, brain):
     """
     subject = _subject(lead)
     body = _body(lead, brain or {})
-    mailto_url = "mailto:{email}?{query}".format(
-        email=_text(getattr(lead, "email", "")),
-        query=urlencode({"subject": subject, "body": body}),
-    )
+    email = _text(getattr(lead, "email", ""))
+    subject_q = quote(subject, safe="")
+    body_q = quote(body, safe="")
+    mailto_url = f"mailto:{email}?subject={subject_q}&body={body_q}"
     return {
         "subject": subject,
         "body": body,
