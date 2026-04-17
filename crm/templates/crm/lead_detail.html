@@ -942,47 +942,98 @@
       return doc.getElementById("iconic-ai-brain-panel");
     }
 
+    function parseIconicAIBrainJson(response) {
+      return response
+        .json()
+        .catch(function () {
+          return {};
+        })
+        .then(function (data) {
+          if (!response.ok) {
+            throw new Error(data.error || "Email draft failed.");
+          }
+          return data;
+        });
+    }
+
     document.addEventListener("click", function (event) {
       const btn = event.target.closest("[data-iconic-ai-brain-refresh-url]");
-      if (!btn) return;
-
       const panel = document.getElementById("iconic-ai-brain-panel");
-      const url = btn.getAttribute("data-iconic-ai-brain-refresh-url");
-      if (!panel || !url || btn.disabled) return;
+      if (btn) {
+        const url = btn.getAttribute("data-iconic-ai-brain-refresh-url");
+        if (!panel || !url || btn.disabled) return;
+
+        event.preventDefault();
+        btn.disabled = true;
+        setIconicAIBrainStatus(panel, "Refreshing...", false);
+
+        fetch(url, {
+          method: "GET",
+          headers: {
+            "X-Requested-With": "XMLHttpRequest",
+            "Accept": "text/html"
+          },
+          cache: "no-store"
+        })
+          .then(function (response) {
+            if (!response.ok) {
+              throw new Error("refresh failed");
+            }
+            return response.text();
+          })
+          .then(function (html) {
+            const nextPanel = parseIconicAIBrainPanel(html);
+            if (!nextPanel) {
+              throw new Error("panel missing");
+            }
+            panel.replaceWith(nextPanel);
+            setIconicAIBrainStatus(nextPanel, "Updated just now.", false);
+            const nextBtn = nextPanel.querySelector("[data-iconic-ai-brain-refresh-url]");
+            if (nextBtn) {
+              nextBtn.disabled = false;
+            }
+          })
+          .catch(function () {
+            btn.disabled = false;
+            setIconicAIBrainStatus(panel, "Refresh failed. Existing summary kept.", true);
+          });
+        return;
+      }
+
+      const draftBtn = event.target.closest("[data-iconic-ai-brain-email-draft-url]");
+      if (!draftBtn) return;
+
+      const draftUrl = draftBtn.getAttribute("data-iconic-ai-brain-email-draft-url");
+      if (!panel || !draftUrl || draftBtn.disabled) return;
 
       event.preventDefault();
-      btn.disabled = true;
-      setIconicAIBrainStatus(panel, "Refreshing...", false);
+      draftBtn.disabled = true;
+      setIconicAIBrainStatus(panel, "Preparing email draft...", false);
 
-      fetch(url, {
+      fetch(draftUrl, {
         method: "GET",
         headers: {
           "X-Requested-With": "XMLHttpRequest",
-          "Accept": "text/html"
+          "Accept": "application/json"
         },
         cache: "no-store"
       })
-        .then(function (response) {
-          if (!response.ok) {
-            throw new Error("refresh failed");
+        .then(parseIconicAIBrainJson)
+        .then(function (data) {
+          if (!data.mailto_url) {
+            throw new Error("Draft link is missing.");
           }
-          return response.text();
+          setIconicAIBrainStatus(panel, "Opening draft...", false);
+          draftBtn.disabled = false;
+          window.location.href = data.mailto_url;
         })
-        .then(function (html) {
-          const nextPanel = parseIconicAIBrainPanel(html);
-          if (!nextPanel) {
-            throw new Error("panel missing");
-          }
-          panel.replaceWith(nextPanel);
-          setIconicAIBrainStatus(nextPanel, "Updated just now.", false);
-          const nextBtn = nextPanel.querySelector("[data-iconic-ai-brain-refresh-url]");
-          if (nextBtn) {
-            nextBtn.disabled = false;
-          }
-        })
-        .catch(function () {
-          btn.disabled = false;
-          setIconicAIBrainStatus(panel, "Refresh failed. Existing summary kept.", true);
+        .catch(function (error) {
+          draftBtn.disabled = false;
+          setIconicAIBrainStatus(
+            panel,
+            (error && error.message) || "Email draft failed. Existing summary kept.",
+            true
+          );
         });
     });
   })();

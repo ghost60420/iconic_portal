@@ -82,6 +82,14 @@
     <div class="iconic-ai-brain-actions">
       <button
         type="button"
+        class="button-ghost iconic-ai-brain-action iconic-ai-brain-email-draft-action"
+        data-iconic-ai-brain-email-draft-url="{% url 'lead_iconic_ai_brain_email_draft' lead.pk %}"
+        {% if not lead.email %}disabled title="Lead email is missing."{% endif %}
+      >
+        Use for Email Draft
+      </button>
+      <button
+        type="button"
         class="button-ghost iconic-ai-brain-action"
         data-iconic-ai-brain-refresh-url="{% url 'lead_iconic_ai_brain_refresh' lead.pk %}"
       >

@@ -1,5 +1,6 @@
 from datetime import date, datetime
 import inspect
+import json
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -7,8 +8,10 @@ from django.test import RequestFactory, SimpleTestCase
 from django.urls import reverse
 
 import crm.ai.lead_brain as lead_brain_module
+import crm.ai.lead_brain_email_draft as lead_brain_email_draft_module
 from crm.ai.lead_brain import build_iconic_ai_brain
-from crm.views_iconic_ai_brain import iconic_ai_brain_refresh
+from crm.ai.lead_brain_email_draft import build_iconic_ai_brain_email_draft
+from crm.views_iconic_ai_brain import iconic_ai_brain_email_draft, iconic_ai_brain_refresh
 
 
 class WriteTrap(SimpleNamespace):
@@ -129,6 +132,37 @@ class IconicAIBrainTests(SimpleTestCase):
         self.assertNotIn(".save(", source)
         self.assertNotIn("objects.create", source)
 
+    def test_email_draft_helper_returns_mailto_payload_without_writes(self):
+        lead = WriteTrap(
+            account_brand="Acme Apparel",
+            contact_name="Sam Buyer",
+            email="sam@example.com",
+            phone="",
+            product_interest="Hoodie",
+            product_category="",
+        )
+        brain = {
+            "missing_info": ["Website", "Order quantity"],
+            "suggested_next_step": "Ask for target order quantity or expected monthly volume.",
+        }
+
+        with patch("django.core.mail.send_mail") as send_mail:
+            result = build_iconic_ai_brain_email_draft(lead=lead, brain=brain)
+
+        send_mail.assert_not_called()
+        self.assertEqual(set(result.keys()), {"subject", "body", "mailto_url"})
+        self.assertIn("Hoodie", result["subject"])
+        self.assertIn("Hello Sam Buyer,", result["body"])
+        self.assertIn("website or brand page", result["body"])
+        self.assertTrue(result["mailto_url"].startswith("mailto:sam@example.com?"))
+
+        source = inspect.getsource(lead_brain_email_draft_module)
+        self.assertNotIn("send_mail", source)
+        self.assertNotIn(".save(", source)
+        self.assertNotIn("objects.create", source)
+        self.assertNotIn("OutboundEmailLog", source)
+        self.assertNotIn("LeadAIMessage", source)
+
 
 class _RelationList:
     def __init__(self, items):
@@ -157,6 +191,7 @@ class IconicAIBrainRefreshViewTests(SimpleTestCase):
             pk=7,
             account_brand="Refresh Brand",
             contact_name="Refresh Contact",
+            email="refresh@example.com",
             opportunities=_RelationList([]),
             tasks=_RelationList([]),
             activities=_RelationList([]),
@@ -185,6 +220,7 @@ class IconicAIBrainRefreshViewTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('id="iconic-ai-brain-panel"', response.content.decode())
         self.assertIn("Generate Again", response.content.decode())
+        self.assertIn("Use for Email Draft", response.content.decode())
         build_brain.assert_called_once()
 
     def test_refresh_failure_returns_server_error(self):
@@ -198,3 +234,54 @@ class IconicAIBrainRefreshViewTests(SimpleTestCase):
 
         self.assertEqual(response.status_code, 500)
         self.assertIn("Iconic AI Brain refresh failed.", response.content.decode())
+
+    def test_email_draft_url_pattern(self):
+        self.assertEqual(
+            reverse("lead_iconic_ai_brain_email_draft", args=[7]),
+            "/leads/7/iconic-ai-brain/email-draft/",
+        )
+
+    def test_email_draft_returns_json_payload(self):
+        payload = {
+            "subject": "Hoodie follow up for Refresh Brand",
+            "body": "Hello Refresh Contact,\n\nI wanted to follow up on Hoodie for Refresh Brand.",
+            "mailto_url": "mailto:refresh@example.com?subject=Hoodie",
+        }
+        request = self.factory.get("/leads/7/iconic-ai-brain/email-draft/", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+
+        with patch("crm.views_iconic_ai_brain.get_object_or_404", return_value=self.lead), \
+             patch("crm.views_iconic_ai_brain._chatter_for_lead", return_value=[]), \
+             patch("crm.views_iconic_ai_brain.build_iconic_ai_brain", return_value={"missing_info": []}) as build_brain, \
+             patch("crm.views_iconic_ai_brain.build_iconic_ai_brain_email_draft", return_value=payload) as build_draft:
+            response = iconic_ai_brain_email_draft(request, self.lead.pk)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/json")
+        self.assertEqual(json.loads(response.content), payload)
+        build_brain.assert_called_once()
+        build_draft.assert_called_once()
+
+    def test_email_draft_missing_email_returns_error(self):
+        request = self.factory.get("/leads/7/iconic-ai-brain/email-draft/", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        lead_without_email = SimpleNamespace(**{**self.lead.__dict__, "email": ""})
+
+        with patch("crm.views_iconic_ai_brain.get_object_or_404", return_value=lead_without_email):
+            response = iconic_ai_brain_email_draft(request, lead_without_email.pk)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(json.loads(response.content), {"error": "Lead email is missing."})
+
+    def test_email_draft_failure_returns_server_error(self):
+        request = self.factory.get("/leads/7/iconic-ai-brain/email-draft/", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+
+        with patch("crm.views_iconic_ai_brain.get_object_or_404", return_value=self.lead), \
+             patch("crm.views_iconic_ai_brain._chatter_for_lead", return_value=[]), \
+             patch("crm.views_iconic_ai_brain.build_iconic_ai_brain", side_effect=RuntimeError("boom")), \
+             patch("crm.views_iconic_ai_brain.logger.exception"):
+            response = iconic_ai_brain_email_draft(request, self.lead.pk)
+
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(
+            json.loads(response.content),
+            {"error": "Iconic AI Brain email draft failed."},
+        )

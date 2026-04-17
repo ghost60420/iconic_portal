@@ -70,6 +70,11 @@ urlpatterns = [
         perm("can_leads", iconic_ai_brain.iconic_ai_brain_refresh),
         name="lead_iconic_ai_brain_refresh",
     ),
+    path(
+        "leads/<int:pk>/iconic-ai-brain/email-draft/",
+        perm("can_leads", iconic_ai_brain.iconic_ai_brain_email_draft),
+        name="lead_iconic_ai_brain_email_draft",
+    ),
     path("leads/<int:pk>/merge/", perm("can_leads", views.lead_merge), name="lead_merge"),
     path("leads/<int:pk>/auto-score/", perm("can_leads", views.lead_auto_score), name="lead_auto_score"),
     path("leads/<int:pk>/edit/", perm("can_leads", views.edit_lead), name="lead_edit"),
