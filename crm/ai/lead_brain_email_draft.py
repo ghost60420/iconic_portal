@@ -63,32 +63,34 @@ def _body(lead, brain):
     contact = _text(getattr(lead, "contact_name", "")) or "there"
     brand = _text(getattr(lead, "account_brand", ""))
     product = _text(getattr(lead, "product_interest", "")) or _text(getattr(lead, "product_category", ""))
-    suggested_next_step = _truncate(brain.get("suggested_next_step", ""), 180)
     request_line = _request_line(brain.get("missing_info", []))
 
     intro_target = product or brand or "your request"
-    intro_line = f"I wanted to follow up on {intro_target}."
+    intro_line = f"I wanted to quickly follow up regarding {intro_target}."
     if product and brand:
-        intro_line = f"I wanted to follow up on {product} for {brand}."
+        intro_line = f"I wanted to quickly follow up regarding {product} for {brand}."
+
+    if request_line:
+        move_forward_line = "To move forward, " + request_line[0].lower() + request_line[1:]
+    else:
+        move_forward_line = "To move forward, could you share a few more details?"
 
     body_lines = [
         f"Hello {contact},",
         "",
+        "Hope you're doing well.",
+        "",
         intro_line,
+        "",
+        move_forward_line,
+        "",
+        "Once I have that, I can guide you with the next steps and pricing.",
+        "",
+        "Looking forward to your reply.",
+        "",
+        "Thank you,",
+        "Iconic Apparel House",
     ]
-
-    if request_line:
-        body_lines.extend(["", request_line])
-    elif suggested_next_step:
-        body_lines.extend(["", _truncate(suggested_next_step, 180)])
-
-    body_lines.extend(
-        [
-            "",
-            "Thank you,",
-            "Iconic Apparel House",
-        ]
-    )
     return "\n".join(body_lines)
 
 
@@ -102,8 +104,8 @@ def build_iconic_ai_brain_email_draft(*, lead, brain):
     subject = _subject(lead)
     body = _body(lead, brain or {})
     email = _text(getattr(lead, "email", ""))
-    subject_q = quote(subject, safe="")
-    body_q = quote(body, safe="")
+    subject_q = quote(subject, safe="").replace("+", "%20")
+    body_q = quote(body, safe="").replace("+", "%20")
     mailto_url = f"mailto:{email}?subject={subject_q}&body={body_q}"
     return {
         "subject": subject,
