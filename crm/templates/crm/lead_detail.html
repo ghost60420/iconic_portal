@@ -199,6 +199,50 @@
   }
   button:hover { filter: brightness(1.03); }
   .button-ghost { background: #020617; color: #e5e7eb; border-color: #4b5563; }
+  .iconic-ai-brain-draft-preview[hidden] { display: none !important; }
+  .iconic-ai-brain-draft-preview {
+    margin-top: 12px;
+  }
+  .iconic-ai-brain-draft-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .iconic-ai-brain-draft-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 800;
+    color: #fefce8;
+  }
+  .iconic-ai-brain-draft-note {
+    font-size: 12px;
+    color: #9ca3af;
+  }
+  .iconic-ai-brain-draft-field {
+    margin-top: 10px;
+  }
+  .iconic-ai-brain-draft-label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 12px;
+    font-weight: 800;
+    color: #d1fae5;
+  }
+  .iconic-ai-brain-draft-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+  .iconic-ai-brain-draft-status {
+    font-size: 12px;
+    color: #9ca3af;
+    min-height: 18px;
+  }
 
   .comment {
     padding: 8px 10px;
@@ -407,6 +451,39 @@
   </div>
 
   {% include "crm/partials/iconic_ai_brain.html" with brain=iconic_ai_brain lead=lead only %}
+
+  <div
+    class="section iconic-ai-brain-draft-preview"
+    id="iconic-ai-brain-draft-preview"
+    data-iconic-ai-brain-email="{{ lead.email|default:''|escape }}"
+    data-iconic-ai-brain-email-draft-url="{% url 'lead_iconic_ai_brain_email_draft' lead.pk %}"
+    hidden
+  >
+    <div class="iconic-ai-brain-draft-header">
+      <div>
+        <h2 class="iconic-ai-brain-draft-title">Email Draft Preview</h2>
+        <div class="iconic-ai-brain-draft-note">Review and edit this draft before opening your email app.</div>
+      </div>
+      <span class="iconic-ai-brain-draft-status" aria-live="polite"></span>
+    </div>
+
+    <div class="iconic-ai-brain-draft-field">
+      <label class="iconic-ai-brain-draft-label" for="iconic-ai-brain-draft-subject">Subject</label>
+      <input type="text" id="iconic-ai-brain-draft-subject" autocomplete="off">
+    </div>
+
+    <div class="iconic-ai-brain-draft-field">
+      <label class="iconic-ai-brain-draft-label" for="iconic-ai-brain-draft-body">Body</label>
+      <textarea id="iconic-ai-brain-draft-body" rows="9"></textarea>
+    </div>
+
+    <div class="iconic-ai-brain-draft-actions">
+      <button type="button" class="button-ghost" data-iconic-ai-brain-open-email-app>Open in Email App</button>
+      <button type="button" class="button-ghost" data-iconic-ai-brain-copy-subject>Copy Subject</button>
+      <button type="button" class="button-ghost" data-iconic-ai-brain-copy-body>Copy Body</button>
+      <button type="button" class="button-ghost" data-iconic-ai-brain-refresh-draft>Refresh Draft</button>
+    </div>
+  </div>
 
   <div class="section">
     <h2 class="section-title">Lead information</h2>
@@ -930,6 +1007,17 @@
 
   <script>
   (function () {
+    function getIconicAIDraftPreview() {
+      return document.getElementById("iconic-ai-brain-draft-preview");
+    }
+
+    function setIconicAIDraftStatus(preview, text, isError) {
+      const status = preview ? preview.querySelector(".iconic-ai-brain-draft-status") : null;
+      if (!status) return;
+      status.textContent = text || "";
+      status.style.color = isError ? "#fca5a5" : "#9ca3af";
+    }
+
     function setIconicAIBrainStatus(panel, text, isError) {
       const status = panel ? panel.querySelector(".iconic-ai-brain-status") : null;
       if (!status) return;
@@ -956,9 +1044,96 @@
         });
     }
 
+    function fillIconicAIDraftPreview(preview, data) {
+      const subjectInput = preview ? preview.querySelector("#iconic-ai-brain-draft-subject") : null;
+      const bodyInput = preview ? preview.querySelector("#iconic-ai-brain-draft-body") : null;
+      if (!preview || !subjectInput || !bodyInput) return;
+      subjectInput.value = data.subject || "";
+      bodyInput.value = data.body || "";
+      preview.hidden = false;
+    }
+
+    function buildIconicAIDraftMailto(email, subject, body) {
+      const cleanEmail = (email || "").trim();
+      const subjectQ = encodeURIComponent(subject || "").replace(/\+/g, "%20");
+      const bodyQ = encodeURIComponent(body || "").replace(/\+/g, "%20");
+      return "mailto:" + cleanEmail + "?subject=" + subjectQ + "&body=" + bodyQ;
+    }
+
+    function copyIconicAIDraftText(text, field) {
+      if (navigator.clipboard && window.isSecureContext) {
+        return navigator.clipboard.writeText(text);
+      }
+
+      if (field && typeof field.select === "function") {
+        field.focus();
+        field.select();
+        if (typeof field.setSelectionRange === "function") {
+          field.setSelectionRange(0, field.value.length);
+        }
+        document.execCommand("copy");
+        return Promise.resolve();
+      }
+
+      return Promise.reject(new Error("Copy is not available."));
+    }
+
+    function loadIconicAIDraft(panel, preview, triggerBtn) {
+      const draftUrl = triggerBtn
+        ? triggerBtn.getAttribute("data-iconic-ai-brain-email-draft-url")
+        : (preview ? preview.getAttribute("data-iconic-ai-brain-email-draft-url") : "");
+      if (!panel || !preview || !draftUrl) {
+        return Promise.reject(new Error("Email draft is not available."));
+      }
+
+      if (triggerBtn) {
+        triggerBtn.disabled = true;
+      }
+      setIconicAIBrainStatus(panel, "Preparing email draft...", false);
+      setIconicAIDraftStatus(preview, "Preparing draft...", false);
+
+      return fetch(draftUrl, {
+        method: "GET",
+        headers: {
+          "X-Requested-With": "XMLHttpRequest",
+          "Accept": "application/json"
+        },
+        cache: "no-store"
+      })
+        .then(parseIconicAIBrainJson)
+        .then(function (data) {
+          if (!data.subject && !data.body) {
+            throw new Error("Draft content is missing.");
+          }
+          fillIconicAIDraftPreview(preview, data);
+          setIconicAIBrainStatus(panel, "Draft loaded below.", false);
+          setIconicAIDraftStatus(preview, "Draft ready to review.", false);
+          return data;
+        })
+        .catch(function (error) {
+          setIconicAIBrainStatus(
+            panel,
+            (error && error.message) || "Email draft failed. Existing summary kept.",
+            true
+          );
+          setIconicAIDraftStatus(
+            preview,
+            (error && error.message) || "Email draft failed.",
+            true
+          );
+          throw error;
+        })
+        .finally(function () {
+          if (triggerBtn) {
+            triggerBtn.disabled = false;
+          }
+        });
+    }
+
     document.addEventListener("click", function (event) {
       const btn = event.target.closest("[data-iconic-ai-brain-refresh-url]");
       const panel = document.getElementById("iconic-ai-brain-panel");
+      const preview = getIconicAIDraftPreview();
       if (btn) {
         const url = btn.getAttribute("data-iconic-ai-brain-refresh-url");
         if (!panel || !url || btn.disabled) return;
@@ -1001,40 +1176,79 @@
       }
 
       const draftBtn = event.target.closest("[data-iconic-ai-brain-email-draft-url]");
-      if (!draftBtn) return;
+      if (draftBtn) {
+        if (!panel || !preview || draftBtn.disabled) return;
 
-      const draftUrl = draftBtn.getAttribute("data-iconic-ai-brain-email-draft-url");
-      if (!panel || !draftUrl || draftBtn.disabled) return;
-
-      event.preventDefault();
-      draftBtn.disabled = true;
-      setIconicAIBrainStatus(panel, "Preparing email draft...", false);
-
-      fetch(draftUrl, {
-        method: "GET",
-        headers: {
-          "X-Requested-With": "XMLHttpRequest",
-          "Accept": "application/json"
-        },
-        cache: "no-store"
-      })
-        .then(parseIconicAIBrainJson)
-        .then(function (data) {
-          if (!data.mailto_url) {
-            throw new Error("Draft link is missing.");
+        event.preventDefault();
+        loadIconicAIDraft(panel, preview, draftBtn).then(function () {
+          const subjectInput = preview.querySelector("#iconic-ai-brain-draft-subject");
+          if (subjectInput) {
+            subjectInput.focus();
           }
-          setIconicAIBrainStatus(panel, "Opening draft...", false);
-          draftBtn.disabled = false;
-          window.location.href = data.mailto_url;
-        })
-        .catch(function (error) {
-          draftBtn.disabled = false;
-          setIconicAIBrainStatus(
-            panel,
-            (error && error.message) || "Email draft failed. Existing summary kept.",
-            true
-          );
+        }).catch(function () {
         });
+        return;
+      }
+
+      const refreshDraftBtn = event.target.closest("[data-iconic-ai-brain-refresh-draft]");
+      if (refreshDraftBtn) {
+        if (!panel || !preview || refreshDraftBtn.disabled) return;
+
+        event.preventDefault();
+        refreshDraftBtn.disabled = true;
+        loadIconicAIDraft(panel, preview).finally(function () {
+          refreshDraftBtn.disabled = false;
+        });
+        return;
+      }
+
+      const openDraftBtn = event.target.closest("[data-iconic-ai-brain-open-email-app]");
+      if (openDraftBtn) {
+        const email = preview ? preview.getAttribute("data-iconic-ai-brain-email") : "";
+        const subjectInput = preview ? preview.querySelector("#iconic-ai-brain-draft-subject") : null;
+        const bodyInput = preview ? preview.querySelector("#iconic-ai-brain-draft-body") : null;
+        if (!preview || preview.hidden || !email || !subjectInput || !bodyInput) {
+          setIconicAIDraftStatus(preview, "Lead email is missing.", true);
+          return;
+        }
+
+        event.preventDefault();
+        setIconicAIDraftStatus(preview, "Opening email app...", false);
+        window.location.href = buildIconicAIDraftMailto(email, subjectInput.value, bodyInput.value);
+        return;
+      }
+
+      const copySubjectBtn = event.target.closest("[data-iconic-ai-brain-copy-subject]");
+      if (copySubjectBtn) {
+        const subjectInput = preview ? preview.querySelector("#iconic-ai-brain-draft-subject") : null;
+        if (!preview || preview.hidden || !subjectInput) return;
+
+        event.preventDefault();
+        copyIconicAIDraftText(subjectInput.value, subjectInput)
+          .then(function () {
+            setIconicAIDraftStatus(preview, "Subject copied.", false);
+          })
+          .catch(function () {
+            setIconicAIDraftStatus(preview, "Subject copy failed.", true);
+          });
+        return;
+      }
+
+      const copyBodyBtn = event.target.closest("[data-iconic-ai-brain-copy-body]");
+      if (copyBodyBtn) {
+        const bodyInput = preview ? preview.querySelector("#iconic-ai-brain-draft-body") : null;
+        if (!preview || preview.hidden || !bodyInput) return;
+
+        event.preventDefault();
+        copyIconicAIDraftText(bodyInput.value, bodyInput)
+          .then(function () {
+            setIconicAIDraftStatus(preview, "Body copied.", false);
+          })
+          .catch(function () {
+            setIconicAIDraftStatus(preview, "Body copy failed.", true);
+          });
+        return;
+      }
     });
   })();
   </script>
