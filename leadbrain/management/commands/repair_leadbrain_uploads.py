@@ -1,3 +1,4 @@
+import hashlib
 from datetime import timedelta
 
 from django.core.management.base import BaseCommand
@@ -8,6 +9,18 @@ from leadbrain.models import LeadBrainCompany, LeadBrainUpload
 
 
 STALE_MINUTES_DEFAULT = 60
+
+
+def _compute_file_hash(upload: LeadBrainUpload) -> str:
+    if not upload.file:
+        return ""
+    digest = hashlib.sha256()
+    with upload.file.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 class Command(BaseCommand):
@@ -26,11 +39,17 @@ class Command(BaseCommand):
             action="store_true",
             help="Flag older duplicate upload jobs for review without deleting them.",
         )
+        parser.add_argument(
+            "--backfill-hashes",
+            action="store_true",
+            help="Compute missing file hashes for older uploads before duplicate review.",
+        )
 
     def handle(self, *args, **options):
         apply_changes = options["apply"]
         stale_minutes = max(1, options["stale_minutes"])
         flag_duplicates = options["flag_duplicates"]
+        backfill_hashes = options["backfill_hashes"]
         stale_cutoff = timezone.now() - timedelta(minutes=stale_minutes)
 
         stale_uploads = LeadBrainUpload.objects.filter(
@@ -76,6 +95,24 @@ class Command(BaseCommand):
                     "updated_at",
                 ]
             )
+
+        if backfill_hashes:
+            missing_hashes = LeadBrainUpload.objects.filter(file_hash="").order_by("uploaded_at", "id")
+            self.stdout.write(f"MISSING_HASHES {missing_hashes.count()}")
+            for upload in missing_hashes:
+                try:
+                    file_hash = _compute_file_hash(upload)
+                except Exception as exc:
+                    self.stdout.write(
+                        f"HASH_ERROR upload={upload.pk} file={upload.file_name or '-'} error={exc}"
+                    )
+                    continue
+                if not file_hash:
+                    continue
+                self.stdout.write(f"HASH upload={upload.pk} hash={file_hash[:12]}")
+                if apply_changes:
+                    upload.file_hash = file_hash
+                    upload.save(update_fields=["file_hash", "updated_at"])
 
         duplicate_groups = list(
             LeadBrainUpload.objects.exclude(file_hash="")
