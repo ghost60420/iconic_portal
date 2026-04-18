@@ -31,7 +31,11 @@ class LeadBrainUpload(models.Model):
     uploaded_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
     row_count = models.PositiveIntegerField(default=0)
+    source_row_count = models.PositiveIntegerField(default=0)
     total_rows = models.PositiveIntegerField(default=0)
+    imported_rows = models.PositiveIntegerField(default=0)
+    skipped_duplicate_rows = models.PositiveIntegerField(default=0)
+    invalid_rows = models.PositiveIntegerField(default=0)
     pending_rows = models.PositiveIntegerField(default=0)
     processing_rows = models.PositiveIntegerField(default=0)
     completed_rows = models.PositiveIntegerField(default=0)
@@ -172,3 +176,44 @@ class LeadBrainCompany(models.Model):
 
     def __str__(self):
         return self.company_name or f"Company {self.id}"
+
+
+class LeadBrainWorker(models.Model):
+    STATUS_STARTING = "starting"
+    STATUS_IDLE = "idle"
+    STATUS_RUNNING = "running"
+    STATUS_STOPPED = "stopped"
+    STATUS_FAILED = "failed"
+
+    STATUS_CHOICES = [
+        (STATUS_STARTING, "Starting"),
+        (STATUS_IDLE, "Idle"),
+        (STATUS_RUNNING, "Running"),
+        (STATUS_STOPPED, "Stopped"),
+        (STATUS_FAILED, "Failed"),
+    ]
+
+    name = models.CharField(max_length=80, unique=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_STARTING)
+    hostname = models.CharField(max_length=255, blank=True)
+    pid = models.PositiveIntegerField(null=True, blank=True)
+    heartbeat_at = models.DateTimeField(blank=True, null=True)
+    started_at = models.DateTimeField(blank=True, null=True)
+    current_upload = models.ForeignKey(
+        LeadBrainUpload,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="worker_assignments",
+    )
+    last_error = models.TextField(blank=True)
+    processed_batches = models.PositiveIntegerField(default=0)
+    processed_rows = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name", "id"]
+
+    def __str__(self):
+        return self.name

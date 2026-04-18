@@ -1,0 +1,26 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+<div class="card shadow-sm border-0" style="max-width:760px;">
+  <div class="card-body p-4">
+    <h1 class="h4 mb-3">Delete Lead Brain Upload</h1>
+    <p class="text-secondary mb-3">
+      This will delete <strong>{{ upload.file_name|default:"this upload" }}</strong> and all related Lead Brain company rows.
+    </p>
+    <div class="mb-4">
+      <div><strong>Status:</strong> {{ upload.get_status_display }}</div>
+      <div><strong>Rows:</strong> {{ upload.total_rows }}</div>
+      <div><strong>Imported:</strong> {{ upload.imported_rows }}</div>
+      <div><strong>Failed:</strong> {{ upload.failed_rows }}</div>
+      {% if upload.status_note %}
+        <div class="mt-2 text-secondary">{{ upload.status_note }}</div>
+      {% endif %}
+    </div>
+    <form method="post" class="d-flex gap-2 flex-wrap">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-danger fw-bold">Delete Upload</button>
+      <a href="{% url 'leadbrain_uploads' %}" class="btn btn-outline-light">Cancel</a>
+    </form>
+  </div>
+</div>
+{% endblock %}

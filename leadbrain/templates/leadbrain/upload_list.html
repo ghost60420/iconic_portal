@@ -31,6 +31,9 @@
   <div class="d-flex gap-2">
     <a href="{% url 'leadbrain_upload' %}" class="btn btn-warning fw-bold">Upload File</a>
     <a href="{% url 'leadbrain_results' %}" class="btn btn-outline-light">View Results</a>
+    {% if request.user.is_staff or request.user.is_superuser %}
+      <a href="{% url 'leadbrain_ops' %}" class="btn btn-outline-light">Operations</a>
+    {% endif %}
   </div>
 </div>
 
@@ -43,7 +46,10 @@
         <th>Uploaded At</th>
         <th>Updated</th>
         <th>Status</th>
-        <th>Rows</th>
+        <th>File Rows</th>
+        <th>Imported</th>
+        <th>Duplicates</th>
+        <th>Invalid</th>
         <th>Complete</th>
         <th>Failed</th>
         <th>Progress</th>
@@ -68,7 +74,10 @@
               <div class="lb-muted mt-1">{{ upload.status_note|truncatechars:90 }}</div>
             {% endif %}
           </td>
-          <td>{{ upload.total_rows|default:upload.row_count }}</td>
+          <td>{{ upload.source_row_count|default:upload.total_rows|default:upload.row_count }}</td>
+          <td>{{ upload.imported_rows|default:upload.total_rows|default:upload.row_count }}</td>
+          <td>{{ upload.skipped_duplicate_rows }}</td>
+          <td>{{ upload.invalid_rows }}</td>
           <td>{{ upload.completed_rows }}</td>
           <td>{{ upload.failed_rows }}</td>
           <td>
@@ -83,24 +92,60 @@
             {% endif %}
           </td>
           <td>
-            {% if upload.status != 'processing' %}
-              {% if upload.pending_rows or upload.failed_rows %}
-                <form method="post" action="{% url 'leadbrain_start_analysis' upload.pk %}">
-                  {% csrf_token %}
-                  <button type="submit" class="btn btn-sm btn-outline-warning fw-bold">Run Research</button>
-                </form>
-              {% else %}
+            <div class="d-flex gap-2 flex-wrap">
+              {% if upload.status != 'processing' %}
+                {% if upload.pending_rows or upload.failed_rows %}
+                  <form method="post" action="{% url 'leadbrain_start_analysis' upload.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-warning fw-bold">Run Research</button>
+                  </form>
+                {% endif %}
+              {% endif %}
+              {% if request.user.is_staff or request.user.is_superuser %}
+                <a href="{% url 'leadbrain_upload_delete' upload.pk %}" class="btn btn-sm btn-outline-danger fw-bold">Delete</a>
+              {% endif %}
+              {% if not upload.pending_rows and not upload.failed_rows and not request.user.is_staff and not request.user.is_superuser %}
                 <span class="text-secondary">—</span>
               {% endif %}
-            {% else %}
-              <span class="text-secondary">—</span>
-            {% endif %}
+            </div>
           </td>
         </tr>
       {% empty %}
-        <tr><td colspan="10">No uploads found.</td></tr>
+        <tr><td colspan="14">No uploads found.</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
+
+{% if request.user.is_staff or request.user.is_superuser %}
+  <div class="lb-panel mt-3">
+    <h2 class="h5 mb-3">Worker Status</h2>
+    <table class="lb-table">
+      <thead>
+        <tr>
+          <th>Worker</th>
+          <th>Status</th>
+          <th>Current Upload</th>
+          <th>Heartbeat</th>
+          <th>Batches</th>
+          <th>Rows</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for worker in worker_statuses %}
+          <tr>
+            <td>{{ worker.name }}</td>
+            <td><span class="lb-badge">{{ worker.get_status_display }}</span></td>
+            <td>{% if worker.current_upload %}<a href="{% url 'leadbrain_results' %}?upload={{ worker.current_upload_id }}">#{{ worker.current_upload_id }}</a>{% else %}<span class="lb-muted">—</span>{% endif %}</td>
+            <td>{% if worker.heartbeat_at %}{{ worker.heartbeat_at|date:"Y-m-d H:i" }}{% else %}<span class="lb-muted">—</span>{% endif %}</td>
+            <td>{{ worker.processed_batches }}</td>
+            <td>{{ worker.processed_rows }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6">No worker records yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
 {% endblock %}

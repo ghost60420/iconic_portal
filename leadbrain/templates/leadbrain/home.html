@@ -43,6 +43,9 @@
   <a href="{% url 'leadbrain_upload' %}" class="lb-btn primary">⬆️ Upload File</a>
   <a href="{% url 'leadbrain_results' %}" class="lb-btn">📋 View Results</a>
   <a href="{% url 'leadbrain_uploads' %}" class="lb-btn">🗂️ Upload History</a>
+  {% if request.user.is_staff or request.user.is_superuser %}
+    <a href="{% url 'leadbrain_ops' %}" class="lb-btn">🛠️ Operations</a>
+  {% endif %}
 </div>
 
 <div class="lb-grid mb-4">
@@ -106,4 +109,36 @@
     </tbody>
   </table>
 </div>
+
+{% if request.user.is_staff or request.user.is_superuser %}
+  <div class="lb-panel mt-3">
+    <h2 class="h5 mb-3">Worker Status</h2>
+    <table class="lb-table">
+      <thead>
+        <tr>
+          <th>Worker</th>
+          <th>Status</th>
+          <th>Current Upload</th>
+          <th>Heartbeat</th>
+          <th>Batches</th>
+          <th>Rows</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for worker in worker_statuses %}
+          <tr>
+            <td>{{ worker.name }}</td>
+            <td><span class="lb-badge">{{ worker.get_status_display }}</span></td>
+            <td>{% if worker.current_upload %}<a href="{% url 'leadbrain_results' %}?upload={{ worker.current_upload_id }}">#{{ worker.current_upload_id }}</a>{% else %}<span class="lb-muted">—</span>{% endif %}</td>
+            <td>{% if worker.heartbeat_at %}{{ worker.heartbeat_at|date:"Y-m-d H:i" }}{% else %}<span class="lb-muted">—</span>{% endif %}</td>
+            <td>{{ worker.processed_batches }}</td>
+            <td>{{ worker.processed_rows }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6">No worker records yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
 {% endblock %}

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import LeadBrainCompany, LeadBrainUpload
+from .models import LeadBrainCompany, LeadBrainUpload, LeadBrainWorker
 
 
 @admin.register(LeadBrainUpload)
@@ -10,6 +10,10 @@ class LeadBrainUploadAdmin(admin.ModelAdmin):
         "file_name",
         "uploaded_by",
         "status",
+        "source_row_count",
+        "imported_rows",
+        "skipped_duplicate_rows",
+        "invalid_rows",
         "total_rows",
         "completed_rows",
         "failed_rows",
@@ -38,3 +42,20 @@ class LeadBrainCompanyAdmin(admin.ModelAdmin):
     list_filter = ["research_status", "fit_label", "reviewed", "country", "created_at"]
     search_fields = ["company_name", "email", "website", "best_contact_name", "best_contact_title"]
     ordering = ["-fit_score", "company_name"]
+
+
+@admin.register(LeadBrainWorker)
+class LeadBrainWorkerAdmin(admin.ModelAdmin):
+    list_display = [
+        "name",
+        "status",
+        "hostname",
+        "pid",
+        "current_upload",
+        "heartbeat_at",
+        "processed_batches",
+        "processed_rows",
+    ]
+    list_filter = ["status", "hostname", "heartbeat_at"]
+    search_fields = ["name", "hostname", "last_error"]
+    ordering = ["name"]

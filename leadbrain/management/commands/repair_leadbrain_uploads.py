@@ -5,7 +5,7 @@ from django.core.management.base import BaseCommand
 from django.db.models import Count
 from django.utils import timezone
 
-from leadbrain.models import LeadBrainCompany, LeadBrainUpload
+from leadbrain.models import LeadBrainCompany, LeadBrainUpload, LeadBrainWorker
 
 
 STALE_MINUTES_DEFAULT = 60
@@ -51,6 +51,28 @@ class Command(BaseCommand):
         flag_duplicates = options["flag_duplicates"]
         backfill_hashes = options["backfill_hashes"]
         stale_cutoff = timezone.now() - timedelta(minutes=stale_minutes)
+        active_worker_cutoff = timezone.now() - timedelta(seconds=45)
+
+        stale_workers = LeadBrainWorker.objects.filter(
+            status__in=[
+                LeadBrainWorker.STATUS_STARTING,
+                LeadBrainWorker.STATUS_IDLE,
+                LeadBrainWorker.STATUS_RUNNING,
+            ],
+            heartbeat_at__lt=active_worker_cutoff,
+        ).order_by("name", "id")
+        self.stdout.write(f"STALE_WORKERS {stale_workers.count()}")
+        for worker in stale_workers:
+            self.stdout.write(
+                f"WORKER_STALE name={worker.name} status={worker.status} "
+                f"heartbeat_at={worker.heartbeat_at:%Y-%m-%d %H:%M:%S}"
+            )
+            if not apply_changes:
+                continue
+            worker.status = LeadBrainWorker.STATUS_FAILED
+            worker.current_upload = None
+            worker.last_error = "Worker heartbeat expired and the worker was marked failed by repair."
+            worker.save(update_fields=["status", "current_upload", "last_error", "updated_at"])
 
         stale_uploads = LeadBrainUpload.objects.filter(
             status=LeadBrainUpload.STATUS_PROCESSING,
@@ -63,6 +85,18 @@ class Command(BaseCommand):
                 f"STALE upload={upload.pk} file={upload.file_name or '-'} "
                 f"updated_at={upload.updated_at:%Y-%m-%d %H:%M:%S}"
             )
+            fresh_worker_exists = LeadBrainWorker.objects.filter(
+                current_upload=upload,
+                status__in=[
+                    LeadBrainWorker.STATUS_STARTING,
+                    LeadBrainWorker.STATUS_IDLE,
+                    LeadBrainWorker.STATUS_RUNNING,
+                ],
+                heartbeat_at__gte=active_worker_cutoff,
+            ).exists()
+            if fresh_worker_exists:
+                self.stdout.write(f"SKIP_ACTIVE upload={upload.pk} reason=fresh_worker")
+                continue
             if not apply_changes:
                 continue
 

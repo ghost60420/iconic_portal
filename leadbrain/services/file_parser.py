@@ -84,6 +84,8 @@ def _build_rows_from_records(records):
 
     header_map = normalize_headers(records[0])
     parsed_rows = []
+    blank_rows = 0
+    source_row_count = max(len(records) - 1, 0)
 
     for row_number, values in enumerate(records[1:], start=1):
         row_dict = {}
@@ -95,6 +97,7 @@ def _build_rows_from_records(records):
             row_dict[canonical_key] = _normalize_text(value)
 
         if not any(_normalize_text(value) for value in row_dict.values()):
+            blank_rows += 1
             continue
 
         row_dict["raw_row_json"] = raw_row
@@ -102,7 +105,11 @@ def _build_rows_from_records(records):
 
     if not parsed_rows:
         raise ValueError("No usable rows were found in the uploaded file.")
-    return parsed_rows
+    return {
+        "rows": parsed_rows,
+        "source_row_count": source_row_count,
+        "blank_rows": blank_rows,
+    }
 
 
 def _parse_csv(file_path):
@@ -140,6 +147,10 @@ def _parse_xls(file_path):
 
 
 def parse_uploaded_file(file_path):
+    return parse_uploaded_file_report(file_path)["rows"]
+
+
+def parse_uploaded_file_report(file_path):
     ext = os.path.splitext(file_path or "")[1].lower()
     if ext == ".csv":
         return _parse_csv(file_path)
