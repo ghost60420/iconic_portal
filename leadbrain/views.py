@@ -1,11 +1,15 @@
 import logging
 import json
 import os
+import secrets
+import tempfile
+from urllib.parse import urlparse
 from datetime import timedelta
 from hashlib import sha256
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.core.files import File
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
@@ -25,6 +29,7 @@ from .services.import_service import prepare_import_rows
 logger = logging.getLogger(__name__)
 BULK_CREATE_BATCH_SIZE = 500
 ACTIVE_WORKER_HEARTBEAT_SECONDS = 45
+UPLOAD_PREVIEW_SESSION_KEY = "leadbrain_upload_preview"
 
 
 def _hash_uploaded_file(uploaded_file) -> str:
@@ -34,6 +39,52 @@ def _hash_uploaded_file(uploaded_file) -> str:
     if hasattr(uploaded_file, "seek"):
         uploaded_file.seek(0)
     return digest.hexdigest()
+
+
+def _cleanup_upload_preview(request):
+    preview = request.session.pop(UPLOAD_PREVIEW_SESSION_KEY, None)
+    temp_path = (preview or {}).get("temp_path")
+    if temp_path and os.path.exists(temp_path):
+        try:
+            os.remove(temp_path)
+        except OSError:
+            logger.warning("leadbrain preview temp cleanup failed for %s", temp_path)
+    request.session.modified = True
+
+
+def _store_preview_file(uploaded_file) -> str:
+    suffix = os.path.splitext(uploaded_file.name or "")[1].lower()
+    fd, temp_path = tempfile.mkstemp(prefix="leadbrain_preview_", suffix=suffix)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            for chunk in uploaded_file.chunks():
+                handle.write(chunk)
+    except Exception:
+        try:
+            os.remove(temp_path)
+        except OSError:
+            pass
+        raise
+
+    if hasattr(uploaded_file, "seek"):
+        uploaded_file.seek(0)
+    return temp_path
+
+
+def _preview_context(form, preview):
+    return {
+        "form": form,
+        "preview": preview,
+    }
+
+
+def _redirect_to_results_next(request):
+    next_url = (request.POST.get("next") or request.GET.get("next") or "").strip()
+    if next_url:
+        parsed = urlparse(next_url)
+        if not parsed.scheme and not parsed.netloc and next_url.startswith("/lead-brain/"):
+            return redirect(next_url)
+    return redirect("leadbrain_results")
 
 
 def _active_duplicate_upload(user, file_hash: str):
@@ -67,10 +118,16 @@ def _fresh_worker_for_upload(upload: LeadBrainUpload | None = None):
 
 def _launch_upload_after_commit(upload_id: int) -> None:
     try:
+        existing_note = (
+            LeadBrainUpload.objects.filter(pk=upload_id).values_list("status_note", flat=True).first() or ""
+        )
         launch_upload_processing(upload_id)
+        status_note = "Background batch analysis is running."
+        if existing_note:
+            status_note = f"{existing_note} {status_note}"
         LeadBrainUpload.objects.filter(pk=upload_id, status=LeadBrainUpload.STATUS_PENDING).update(
             status=LeadBrainUpload.STATUS_PROCESSING,
-            status_note="Background batch analysis is running.",
+            status_note=status_note,
             updated_at=timezone.now(),
         )
     except Exception:
@@ -107,9 +164,18 @@ class LeadBrainUploadView(LoginRequiredMixin, View):
     template_name = "leadbrain/upload.html"
 
     def get(self, request):
+        if request.GET.get("clear_preview") == "1":
+            _cleanup_upload_preview(request)
         return render(request, self.template_name, {"form": LeadBrainUploadForm()})
 
     def post(self, request):
+        preview_token = (request.POST.get("preview_token") or "").strip()
+        if preview_token:
+            return self._confirm_preview(request, preview_token)
+
+        return self._preview_upload(request)
+
+    def _preview_upload(self, request):
         form = LeadBrainUploadForm(request.POST, request.FILES)
         if not form.is_valid():
             return render(request, self.template_name, {"form": form})
@@ -126,44 +192,106 @@ class LeadBrainUploadView(LoginRequiredMixin, View):
             return redirect(f"{reverse_lazy('leadbrain_results')}?upload={existing_upload.pk}")
 
         try:
-            upload = form.save(commit=False)
-            upload.uploaded_by = request.user
-            upload.file_name = os.path.basename(upload_file.name or "")
-            upload.file_hash = file_hash
-            upload.status = LeadBrainUpload.STATUS_PENDING
-            upload.status_note = ""
-            upload.save()
+            temp_path = _store_preview_file(upload_file)
+            parse_report = parse_uploaded_file_report(temp_path)
+            import_report = prepare_import_rows(parse_report["rows"])
+        except Exception as exc:
+            logger.exception("leadbrain preview parse failed for %s", upload_file.name)
+            if "temp_path" in locals() and os.path.exists(temp_path):
+                os.remove(temp_path)
+            form.add_error("file", str(exc))
+            messages.error(request, "The upload could not be processed.")
+            return render(request, self.template_name, {"form": form})
+
+        _cleanup_upload_preview(request)
+        preview = {
+            "token": secrets.token_urlsafe(24),
+            "temp_path": temp_path,
+            "file_name": os.path.basename(upload_file.name or ""),
+            "file_hash": file_hash,
+            "detected_columns": parse_report.get("detected_columns", []),
+            "header_row_number": parse_report.get("header_row_number", 1),
+            "source_row_count": parse_report.get("source_row_count", 0),
+            "blank_rows": parse_report.get("blank_rows", 0),
+            "sample_rows": parse_report.get("sample_rows", []),
+            "imported_rows": import_report["imported_rows"],
+            "skipped_duplicate_rows": import_report["skipped_duplicate_rows"],
+            "invalid_rows": import_report["invalid_rows"],
+            "invalid_reasons": import_report["invalid_reasons"],
+        }
+        request.session[UPLOAD_PREVIEW_SESSION_KEY] = preview
+        request.session.modified = True
+
+        return render(
+            request,
+            self.template_name,
+            _preview_context(LeadBrainUploadForm(), preview),
+        )
+
+    def _confirm_preview(self, request, preview_token):
+        preview = request.session.get(UPLOAD_PREVIEW_SESSION_KEY) or {}
+        if preview.get("token") != preview_token:
+            _cleanup_upload_preview(request)
+            messages.error(request, "The upload preview expired. Please upload the file again.")
+            return redirect("leadbrain_upload")
+
+        temp_path = preview.get("temp_path") or ""
+        if not temp_path or not os.path.exists(temp_path):
+            _cleanup_upload_preview(request)
+            messages.error(request, "The preview file is no longer available. Please upload the file again.")
+            return redirect("leadbrain_upload")
+
+        existing_upload = _active_duplicate_upload(request.user, preview.get("file_hash", ""))
+        if existing_upload:
+            _cleanup_upload_preview(request)
+            messages.info(
+                request,
+                f"{existing_upload.file_name or 'This file'} is already processing. "
+                "The existing upload job is still running.",
+            )
+            return redirect(f"{reverse_lazy('leadbrain_results')}?upload={existing_upload.pk}")
+
+        try:
+            with open(temp_path, "rb") as handle:
+                upload = LeadBrainUpload(
+                    uploaded_by=request.user,
+                    file_name=preview.get("file_name", ""),
+                    file_hash=preview.get("file_hash", ""),
+                    status=LeadBrainUpload.STATUS_PENDING,
+                    status_note="",
+                )
+                upload.file.save(preview.get("file_name", "upload.csv"), File(handle), save=False)
+                upload.save()
         except IntegrityError:
-            existing_upload = _active_duplicate_upload(request.user, file_hash)
+            existing_upload = _active_duplicate_upload(request.user, preview.get("file_hash", ""))
             if existing_upload:
+                _cleanup_upload_preview(request)
                 messages.info(
                     request,
                     f"{existing_upload.file_name or 'This file'} is already processing. "
                     "The existing upload job is still running.",
                 )
                 return redirect(f"{reverse_lazy('leadbrain_results')}?upload={existing_upload.pk}")
-            logger.exception("leadbrain upload duplicate protection failed for file hash %s", file_hash)
+            logger.exception(
+                "leadbrain upload duplicate protection failed for file hash %s", preview.get("file_hash", "")
+            )
+            _cleanup_upload_preview(request)
+            messages.error(request, "This upload could not be started.")
+            return redirect("leadbrain_upload")
+        except Exception:
+            logger.exception("leadbrain upload create failed for preview %s", preview.get("file_name", ""))
+            _cleanup_upload_preview(request)
             messages.error(request, "This upload could not be started.")
             return redirect("leadbrain_upload")
 
         try:
-            parse_report = parse_uploaded_file_report(upload.file.path)
-        except Exception as exc:
-            logger.exception("leadbrain upload parse failed for upload %s", upload.pk)
-            upload.status = LeadBrainUpload.STATUS_FAILED
-            upload.status_note = "The uploaded file could not be parsed."
-            upload.save(update_fields=["status", "status_note", "updated_at"])
-            form.add_error("file", str(exc))
-            messages.error(request, "The upload could not be processed.")
-            return render(request, self.template_name, {"form": form})
-
-        try:
-            source_row_count = parse_report["source_row_count"]
+            parse_report = parse_uploaded_file_report(temp_path)
             import_report = prepare_import_rows(parse_report["rows"])
             import_rows = import_report["rows"]
             imported_rows = import_report["imported_rows"]
             skipped_duplicate_rows = import_report["skipped_duplicate_rows"]
-            invalid_rows = parse_report["blank_rows"] + import_report["invalid_rows"]
+            invalid_rows = import_report["invalid_rows"]
+            invalid_reasons = import_report["invalid_reasons"]
             companies = []
             for row in import_rows:
                 companies.append(
@@ -184,12 +312,24 @@ class LeadBrainUploadView(LoginRequiredMixin, View):
                     )
                 )
 
+            status_note = (
+                "Rows are saved and queued for background batch analysis. "
+                f"Imported {imported_rows} of {parse_report['source_row_count']} row(s), "
+                f"skipped {skipped_duplicate_rows} duplicate row(s), "
+                f"ignored {invalid_rows} invalid row(s)."
+                if imported_rows
+                else f"No rows were imported. Skipped {skipped_duplicate_rows} duplicate row(s) "
+                f"and ignored {invalid_rows} invalid row(s)."
+            )
+            if invalid_reasons:
+                status_note += " Invalid examples: " + "; ".join(invalid_reasons)
+
             with transaction.atomic():
                 if companies:
                     LeadBrainCompany.objects.bulk_create(companies, batch_size=BULK_CREATE_BATCH_SIZE)
 
                 upload.row_count = imported_rows
-                upload.source_row_count = source_row_count
+                upload.source_row_count = parse_report["source_row_count"]
                 upload.total_rows = imported_rows
                 upload.imported_rows = imported_rows
                 upload.skipped_duplicate_rows = skipped_duplicate_rows
@@ -200,15 +340,7 @@ class LeadBrainUploadView(LoginRequiredMixin, View):
                 upload.failed_rows = 0
                 upload.progress_percent = 0
                 upload.status = LeadBrainUpload.STATUS_PENDING if imported_rows else LeadBrainUpload.STATUS_FAILED
-                upload.status_note = (
-                    "Rows are saved and queued for background batch analysis. "
-                    f"Imported {imported_rows} of {source_row_count} row(s), "
-                    f"skipped {skipped_duplicate_rows} duplicate row(s), "
-                    f"ignored {invalid_rows} invalid row(s)."
-                    if imported_rows
-                    else f"No rows were imported. Skipped {skipped_duplicate_rows} duplicate row(s) "
-                    f"and ignored {invalid_rows} invalid row(s)."
-                )
+                upload.status_note = status_note
                 upload.save(
                     update_fields=[
                         "row_count",
@@ -237,6 +369,8 @@ class LeadBrainUploadView(LoginRequiredMixin, View):
             upload.save(update_fields=["status", "status_note", "updated_at"])
             messages.error(request, "The upload failed before the full process could complete.")
             return redirect("leadbrain_upload")
+        finally:
+            _cleanup_upload_preview(request)
 
         messages.success(
             request,
@@ -280,12 +414,72 @@ class LeadBrainStartAnalysisView(LoginRequiredMixin, View):
         return redirect(f"{reverse_lazy('leadbrain_results')}?upload={upload.pk}")
 
 
-class LeadBrainUploadDeleteView(LoginRequiredMixin, UserPassesTestMixin, View):
-    template_name = "leadbrain/upload_confirm_delete.html"
-
+class LeadBrainStaffOnlyMixin(UserPassesTestMixin):
     def test_func(self):
         user = self.request.user
         return bool(user and (user.is_staff or user.is_superuser))
+
+
+class LeadBrainCompanyDeleteView(LoginRequiredMixin, LeadBrainStaffOnlyMixin, View):
+    def post(self, request, pk):
+        company = get_object_or_404(LeadBrainCompany.objects.select_related("upload"), pk=pk)
+        upload = company.upload
+
+        if company.research_status in [LeadBrainCompany.STATUS_PENDING, LeadBrainCompany.STATUS_PROCESSING] and _fresh_worker_for_upload(upload):
+            messages.error(request, "This row is currently part of an active research job and cannot be deleted right now.")
+            return _redirect_to_results_next(request)
+
+        company_label = company.company_name or f"Company #{company.pk}"
+        company.delete()
+
+        if upload.companies.exists():
+            upload.refresh_progress()
+        else:
+            upload.row_count = 0
+            upload.total_rows = 0
+            upload.pending_rows = 0
+            upload.processing_rows = 0
+            upload.completed_rows = 0
+            upload.failed_rows = 0
+            upload.progress_percent = 100
+            upload.status = LeadBrainUpload.STATUS_COMPLETE
+            upload.status_note = "All company rows have been removed from this upload."
+            upload.save(
+                update_fields=[
+                    "row_count",
+                    "total_rows",
+                    "pending_rows",
+                    "processing_rows",
+                    "completed_rows",
+                    "failed_rows",
+                    "progress_percent",
+                    "status",
+                    "status_note",
+                    "updated_at",
+                ]
+            )
+
+        messages.success(request, f"{company_label} was deleted from Lead Brain Lite.")
+        return _redirect_to_results_next(request)
+
+
+class LeadBrainCompanyMarkNotRelevantView(LoginRequiredMixin, LeadBrainStaffOnlyMixin, View):
+    def post(self, request, pk):
+        company = get_object_or_404(LeadBrainCompany, pk=pk)
+        if company.research_status in [LeadBrainCompany.STATUS_PENDING, LeadBrainCompany.STATUS_PROCESSING] and _fresh_worker_for_upload(company.upload):
+            messages.error(request, "This row is currently part of an active research job and cannot be updated right now.")
+            return _redirect_to_results_next(request)
+        company.fit_label = LeadBrainCompany.FIT_WEAK
+        company.fit_score = 0
+        company.suggested_action = "Not Relevant"
+        company.reviewed = True
+        company.save(update_fields=["fit_label", "fit_score", "suggested_action", "reviewed", "updated_at"])
+        messages.success(request, f"{company.company_name or f'Company #{company.pk}'} was marked as not relevant.")
+        return _redirect_to_results_next(request)
+
+
+class LeadBrainUploadDeleteView(LoginRequiredMixin, LeadBrainStaffOnlyMixin, View):
+    template_name = "leadbrain/upload_confirm_delete.html"
 
     def get(self, request, pk):
         upload = get_object_or_404(LeadBrainUpload, pk=pk)

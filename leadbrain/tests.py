@@ -15,7 +15,9 @@ from leadbrain.models import LeadBrainCompany, LeadBrainUpload, LeadBrainWorker
 from leadbrain.services.background_runner import launch_upload_processing
 from leadbrain.services.classification_service import classify_company
 from leadbrain.services.file_parser import parse_uploaded_file, parse_uploaded_file_report
+from leadbrain.services.processing_service import claim_batch
 from leadbrain.services.research_service import research_company
+from leadbrain.views import UPLOAD_PREVIEW_SESSION_KEY
 
 
 class LeadBrainUploadFormTests(SimpleTestCase):
@@ -48,9 +50,29 @@ class LeadBrainFileParserTests(SimpleTestCase):
             file_path = handle.name
 
         report = parse_uploaded_file_report(file_path)
-        self.assertEqual(report["source_row_count"], 2)
+        self.assertEqual(report["source_row_count"], 1)
         self.assertEqual(report["blank_rows"], 1)
         self.assertEqual(len(report["rows"]), 1)
+
+    def test_parse_csv_auto_detects_header_row_and_aliases(self):
+        with tempfile.NamedTemporaryFile("w+", suffix=".csv", delete=False) as handle:
+            handle.write("Lead Brain Export\n")
+            handle.write("Generated 2026-04-17\n")
+            handle.write(",,,\n")
+            handle.write("Name,Site,Contact_Email,Phone\n")
+            handle.write("ABC Apparel,abcapparel.com,info@abcapparel.com,123456\n")
+            file_path = handle.name
+
+        report = parse_uploaded_file_report(file_path)
+
+        self.assertEqual(report["header_row_number"], 4)
+        self.assertEqual(report["source_row_count"], 1)
+        self.assertEqual(
+            [column["canonical"] for column in report["detected_columns"][:3]],
+            ["company_name", "website", "email"],
+        )
+        self.assertEqual(report["sample_rows"][0]["company_name"], "ABC Apparel")
+        self.assertEqual(report["sample_rows"][0]["website"], "https://abcapparel.com")
 
 
 class LeadBrainClassificationTests(SimpleTestCase):
@@ -104,13 +126,140 @@ class LeadBrainResearchTests(SimpleTestCase):
                 },
                 "",
             ),
-        ) as safe_get:
+        ) as safe_get, patch(
+            "leadbrain.services.research_service.search_business_online",
+            return_value={
+                "official_website_found": "",
+                "linkedin_url_found": "",
+                "public_email_found": "",
+                "public_phone_found": "",
+                "business_description": "",
+                "apparel_signals": [],
+                "search_summary": "",
+                "possible_contact_name": "",
+                "possible_contact_title": "",
+                "confidence_notes": "",
+                "search_results": [],
+                "business_type_detected": "",
+            },
+        ):
             result = research_company(company)
 
         self.assertEqual(safe_get.call_count, 1)
         self.assertEqual(result["website_status"], "live")
         self.assertEqual(result["official_website_found"], "https://abcapparel.com")
         self.assertEqual(result["business_description"], "Private label apparel brand")
+
+    def test_research_company_stops_after_level_1_for_weak_row(self):
+        company = type(
+            "Company",
+            (),
+            {
+                "company_name": "Northwest Holdings",
+                "website": "",
+                "email": "",
+                "phone": "",
+                "raw_row_json": {},
+            },
+        )()
+
+        with patch("leadbrain.services.research_service.search_business_online") as search_business_online:
+            result = research_company(company)
+
+        search_business_online.assert_not_called()
+        self.assertEqual(result["research_level_completed"], 1)
+        self.assertFalse(result["level_1_passed"])
+        self.assertEqual(result["research_path"], "level_1")
+
+    def test_research_company_runs_level_2_for_promising_row(self):
+        company = type(
+            "Company",
+            (),
+            {
+                "company_name": "ABC Apparel",
+                "website": "https://abcapparel.com",
+                "email": "",
+                "phone": "",
+                "raw_row_json": {},
+            },
+        )()
+        website_status = {
+            "status": "live",
+            "final_url": "https://abcapparel.com",
+            "status_code": 200,
+            "error": "",
+            "text": "<title>ABC Apparel</title><meta name='description' content='Private label apparel brand'>",
+        }
+        search_payload = {
+            "official_website_found": "https://abcapparel.com",
+            "linkedin_url_found": "https://linkedin.com/company/abc-apparel",
+            "public_email_found": "info@abcapparel.com",
+            "public_phone_found": "",
+            "business_description": "Private label apparel brand",
+            "apparel_signals": ["apparel", "private label"],
+            "search_summary": "Active private label apparel company",
+            "possible_contact_name": "",
+            "possible_contact_title": "Buyer",
+            "confidence_notes": "Public search results were used to confirm the business.",
+            "search_results": [],
+            "business_type_detected": "Manufacturer / Private Label",
+        }
+
+        with patch("leadbrain.services.research_service.check_website_status", return_value=website_status), patch(
+            "leadbrain.services.research_service.search_business_online",
+            return_value=search_payload,
+        ) as search_business_online:
+            result = research_company(company)
+
+        search_business_online.assert_called_once()
+        self.assertTrue(result["level_1_passed"])
+        self.assertTrue(result["level_2_passed"])
+        self.assertGreaterEqual(result["research_level_completed"], 2)
+
+    def test_research_company_runs_level_3_for_strong_row(self):
+        company = type(
+            "Company",
+            (),
+            {
+                "company_name": "ABC Apparel",
+                "website": "https://abcapparel.com",
+                "email": "",
+                "phone": "",
+                "raw_row_json": {},
+            },
+        )()
+        website_status = {
+            "status": "live",
+            "final_url": "https://abcapparel.com",
+            "status_code": 200,
+            "error": "",
+            "text": "<title>ABC Apparel</title><meta name='description' content='Private label apparel brand'>",
+        }
+        search_payload = {
+            "official_website_found": "https://abcapparel.com",
+            "linkedin_url_found": "https://linkedin.com/company/abc-apparel",
+            "public_email_found": "info@abcapparel.com",
+            "public_phone_found": "123456",
+            "business_description": "Private label apparel brand with sampling and production support.",
+            "apparel_signals": ["apparel", "private label", "clothing brand"],
+            "search_summary": "Strong custom apparel brand with active public presence.",
+            "possible_contact_name": "Sam",
+            "possible_contact_title": "Buyer",
+            "confidence_notes": "Public search results were used to confirm the business.",
+            "search_results": [],
+            "business_type_detected": "Manufacturer / Private Label",
+        }
+
+        with patch("leadbrain.services.research_service.check_website_status", return_value=website_status), patch(
+            "leadbrain.services.research_service.search_business_online",
+            return_value=search_payload,
+        ):
+            result = research_company(company)
+
+        self.assertEqual(result["research_level_completed"], 3)
+        self.assertEqual(result["research_path"], "level_3")
+        self.assertTrue(result["pitch_summary"])
+        self.assertTrue(result["outreach_highlights"])
 
 
 @override_settings(MEDIA_ROOT=tempfile.mkdtemp())
@@ -123,6 +272,9 @@ class LeadBrainUploadFlowTests(TestCase):
             is_staff=True,
         )
         self.client.force_login(self.user)
+
+    def _preview_token(self):
+        return self.client.session[UPLOAD_PREVIEW_SESSION_KEY]["token"]
 
     def test_upload_saves_rows_and_queues_background_processing(self):
         rows = [
@@ -139,11 +291,22 @@ class LeadBrainUploadFlowTests(TestCase):
         ]
         upload_file = SimpleUploadedFile("companies.csv", b"Company Name\nABC Apparel\n")
 
-        with patch("leadbrain.views.parse_uploaded_file", return_value=rows), patch(
+        parse_report = {
+            "rows": rows,
+            "source_row_count": 1,
+            "blank_rows": 0,
+            "header_row_number": 1,
+            "detected_columns": [{"source": "Company Name", "canonical": "company_name"}],
+            "sample_rows": rows,
+        }
+
+        with patch("leadbrain.views.parse_uploaded_file_report", return_value=parse_report), patch(
             "leadbrain.views.launch_upload_processing"
         ) as launch_processing, self.captureOnCommitCallbacks(execute=True):
-            response = self.client.post(reverse("leadbrain_upload"), {"file": upload_file})
+            preview_response = self.client.post(reverse("leadbrain_upload"), {"file": upload_file})
+            response = self.client.post(reverse("leadbrain_upload"), {"preview_token": self._preview_token()})
 
+        self.assertEqual(preview_response.status_code, 200)
         self.assertEqual(response.status_code, 302)
         upload = LeadBrainUpload.objects.get()
         company = LeadBrainCompany.objects.get()
@@ -159,7 +322,7 @@ class LeadBrainUploadFlowTests(TestCase):
         self.assertEqual(upload.completed_rows, 0)
         self.assertEqual(upload.failed_rows, 0)
         self.assertEqual(upload.progress_percent, 0)
-        self.assertEqual(upload.status_note, "Background batch analysis is running.")
+        self.assertIn("Background batch analysis is running.", upload.status_note)
         self.assertEqual(company.research_status, LeadBrainCompany.STATUS_PENDING)
         launch_processing.assert_called_once_with(upload.pk)
 
@@ -231,12 +394,21 @@ class LeadBrainUploadFlowTests(TestCase):
 
         with patch(
             "leadbrain.views.parse_uploaded_file_report",
-            return_value={"rows": rows, "source_row_count": 4, "blank_rows": 0},
+            return_value={
+                "rows": rows,
+                "source_row_count": 4,
+                "blank_rows": 0,
+                "header_row_number": 1,
+                "detected_columns": [{"source": "Company Name", "canonical": "company_name"}],
+                "sample_rows": rows[:4],
+            },
         ), patch("leadbrain.views.launch_upload_processing") as launch_processing, self.captureOnCommitCallbacks(
             execute=True
         ):
-            response = self.client.post(reverse("leadbrain_upload"), {"file": upload_file})
+            preview_response = self.client.post(reverse("leadbrain_upload"), {"file": upload_file})
+            response = self.client.post(reverse("leadbrain_upload"), {"preview_token": self._preview_token()})
 
+        self.assertEqual(preview_response.status_code, 200)
         self.assertEqual(response.status_code, 302)
         new_upload = LeadBrainUpload.objects.exclude(pk=existing_upload.pk).get()
         self.assertEqual(new_upload.source_row_count, 4)
@@ -245,6 +417,7 @@ class LeadBrainUploadFlowTests(TestCase):
         self.assertEqual(new_upload.invalid_rows, 1)
         self.assertEqual(new_upload.total_rows, 1)
         self.assertEqual(new_upload.companies.count(), 1)
+        self.assertIn("missing both company name and website", new_upload.status_note)
         launch_processing.assert_called_once_with(new_upload.pk)
 
     def test_upload_reuses_existing_active_job_for_duplicate_file(self):
@@ -261,7 +434,7 @@ class LeadBrainUploadFlowTests(TestCase):
             pending_rows=1,
         )
 
-        with patch("leadbrain.views.parse_uploaded_file") as parse_uploaded_file, patch(
+        with patch("leadbrain.views.parse_uploaded_file_report") as parse_uploaded_file_report, patch(
             "leadbrain.views.launch_upload_processing"
         ) as launch_processing:
             response = self.client.post(
@@ -272,8 +445,56 @@ class LeadBrainUploadFlowTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(LeadBrainUpload.objects.count(), 1)
         self.assertRedirects(response, f"{reverse('leadbrain_results')}?upload={upload.pk}")
-        parse_uploaded_file.assert_not_called()
+        parse_uploaded_file_report.assert_not_called()
         launch_processing.assert_not_called()
+
+    def test_upload_preview_shows_detected_columns_and_invalid_reasons(self):
+        rows = [
+            {
+                "row_number": 5,
+                "company_name": "ABC Apparel",
+                "website": "https://abc.example.com",
+                "email": "hello@abc.example.com",
+                "phone": "",
+                "country": "Canada",
+                "city": "Vancouver",
+                "raw_row_json": {"Name": "ABC Apparel"},
+            },
+            {
+                "row_number": 6,
+                "company_name": "",
+                "website": "",
+                "email": "",
+                "phone": "",
+                "country": "",
+                "city": "",
+                "raw_row_json": {},
+            },
+        ]
+        upload_file = SimpleUploadedFile("companies.csv", b"Name,Site,Contact_Email\nABC Apparel,abc.example.com,hello@abc.example.com\n")
+
+        with patch(
+            "leadbrain.views.parse_uploaded_file_report",
+            return_value={
+                "rows": rows,
+                "source_row_count": 2,
+                "blank_rows": 1,
+                "header_row_number": 4,
+                "detected_columns": [
+                    {"source": "Name", "canonical": "company_name"},
+                    {"source": "Site", "canonical": "website"},
+                    {"source": "Contact_Email", "canonical": "email"},
+                ],
+                "sample_rows": rows[:1],
+            },
+        ):
+            response = self.client.post(reverse("leadbrain_upload"), {"file": upload_file})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Header row detected on line")
+        self.assertContains(response, "Name")
+        self.assertContains(response, "Contact_Email")
+        self.assertContains(response, "missing both company name and website")
 
     def test_start_analysis_launches_background_processing(self):
         upload = LeadBrainUpload.objects.create(
@@ -354,6 +575,85 @@ class LeadBrainUploadFlowTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertTrue(LeadBrainUpload.objects.filter(pk=upload.pk).exists())
+
+    def test_company_delete_view_deletes_single_row_and_redirects_back(self):
+        upload = LeadBrainUpload.objects.create(
+            file="leadbrain/uploads/results.csv",
+            file_name="results.csv",
+            uploaded_by=self.user,
+            status=LeadBrainUpload.STATUS_COMPLETE,
+            row_count=2,
+            source_row_count=2,
+            total_rows=2,
+            imported_rows=2,
+            completed_rows=2,
+            progress_percent=100,
+        )
+        company_one = LeadBrainCompany.objects.create(
+            upload=upload,
+            row_number=1,
+            company_name="Delete Me",
+            website="https://delete.example.com",
+            raw_row_json={"Company Name": "Delete Me"},
+            research_status=LeadBrainCompany.STATUS_COMPLETE,
+        )
+        LeadBrainCompany.objects.create(
+            upload=upload,
+            row_number=2,
+            company_name="Keep Me",
+            website="https://keep.example.com",
+            raw_row_json={"Company Name": "Keep Me"},
+            research_status=LeadBrainCompany.STATUS_COMPLETE,
+        )
+
+        response = self.client.post(
+            reverse("leadbrain_company_delete", args=[company_one.pk]),
+            {"next": f"{reverse('leadbrain_results')}?upload={upload.pk}"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(response, f"{reverse('leadbrain_results')}?upload={upload.pk}")
+        self.assertFalse(LeadBrainCompany.objects.filter(pk=company_one.pk).exists())
+        upload.refresh_from_db()
+        self.assertEqual(upload.total_rows, 1)
+
+    def test_company_mark_not_relevant_sets_weak_fit_and_reviewed(self):
+        upload = LeadBrainUpload.objects.create(
+            file="leadbrain/uploads/results.csv",
+            file_name="results.csv",
+            uploaded_by=self.user,
+            status=LeadBrainUpload.STATUS_COMPLETE,
+            row_count=1,
+            source_row_count=1,
+            total_rows=1,
+            imported_rows=1,
+            completed_rows=1,
+            progress_percent=100,
+        )
+        company = LeadBrainCompany.objects.create(
+            upload=upload,
+            row_number=1,
+            company_name="Weak Candidate",
+            website="https://weak.example.com",
+            fit_label=LeadBrainCompany.FIT_GOOD,
+            fit_score=84,
+            suggested_action="Good for Custom Pitch",
+            raw_row_json={"Company Name": "Weak Candidate"},
+            research_status=LeadBrainCompany.STATUS_COMPLETE,
+        )
+
+        response = self.client.post(
+            reverse("leadbrain_company_mark_not_relevant", args=[company.pk]),
+            {"next": reverse("leadbrain_results")},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(response, reverse("leadbrain_results"))
+        company.refresh_from_db()
+        self.assertEqual(company.fit_label, LeadBrainCompany.FIT_WEAK)
+        self.assertEqual(company.fit_score, 0)
+        self.assertEqual(company.suggested_action, "Not Relevant")
+        self.assertTrue(company.reviewed)
 
     def test_background_command_processes_pending_rows_in_batches(self):
         upload = LeadBrainUpload.objects.create(
@@ -467,20 +767,24 @@ class LeadBrainUploadFlowTests(TestCase):
             file_name="test.csv",
             uploaded_by=self.user,
             status=LeadBrainUpload.STATUS_PENDING,
-            row_count=1,
-            total_rows=1,
-            pending_rows=1,
+            row_count=250,
+            total_rows=250,
+            pending_rows=250,
         )
 
         with patch("leadbrain.services.background_runner.subprocess.Popen") as popen:
             launch_upload_processing(upload.pk)
 
-        worker = LeadBrainWorker.objects.get(name="default")
-        self.assertEqual(worker.status, LeadBrainWorker.STATUS_STARTING)
-        self.assertEqual(worker.current_upload_id, upload.pk)
-        self.assertIsNone(worker.pid)
-        command = popen.call_args[0][0]
+        workers = list(LeadBrainWorker.objects.order_by("name"))
+        self.assertEqual(len(workers), 3)
+        self.assertEqual(popen.call_count, 3)
+        self.assertEqual(workers[0].name, "parallel-1")
+        self.assertEqual(workers[0].status, LeadBrainWorker.STATUS_STARTING)
+        self.assertEqual(workers[0].current_upload_id, upload.pk)
+        self.assertIsNone(workers[0].pid)
+        command = popen.call_args_list[0][0][0]
         self.assertIn("run_leadbrain_worker", command)
+        self.assertIn("parallel-1", command)
 
     def test_launch_upload_processing_reuses_fresh_worker(self):
         upload = LeadBrainUpload.objects.create(
@@ -493,7 +797,7 @@ class LeadBrainUploadFlowTests(TestCase):
             pending_rows=1,
         )
         LeadBrainWorker.objects.create(
-            name="default",
+            name="parallel-1",
             status=LeadBrainWorker.STATUS_RUNNING,
             heartbeat_at=timezone.now(),
             started_at=timezone.now(),
@@ -503,6 +807,42 @@ class LeadBrainUploadFlowTests(TestCase):
             launch_upload_processing(upload.pk)
 
         popen.assert_not_called()
+
+    def test_claim_batch_moves_second_worker_to_next_pending_rows(self):
+        upload = LeadBrainUpload.objects.create(
+            file="leadbrain/uploads/claim.csv",
+            file_name="claim.csv",
+            uploaded_by=self.user,
+            status=LeadBrainUpload.STATUS_PROCESSING,
+            row_count=3,
+            total_rows=3,
+            pending_rows=3,
+        )
+        companies = [
+            LeadBrainCompany.objects.create(
+                upload=upload,
+                row_number=index,
+                company_name=f"Company {index}",
+                website=f"https://company{index}.example.com",
+                raw_row_json={"Company Name": f"Company {index}"},
+                research_status=LeadBrainCompany.STATUS_PENDING,
+            )
+            for index in range(1, 4)
+        ]
+
+        first_claim = claim_batch(upload, batch_size=2)
+        second_claim = claim_batch(upload, batch_size=2)
+
+        self.assertEqual(len(first_claim), 2)
+        self.assertEqual(len(second_claim), 1)
+        self.assertEqual(set(first_claim).intersection(second_claim), set())
+        statuses = list(
+            LeadBrainCompany.objects.filter(pk__in=first_claim + second_claim).values_list(
+                "research_status", "research_claim_token"
+            )
+        )
+        self.assertTrue(all(status == LeadBrainCompany.STATUS_PROCESSING for status, _ in statuses))
+        self.assertTrue(all(token for _, token in statuses))
 
     def test_run_worker_command_processes_upload_and_tracks_worker(self):
         upload = LeadBrainUpload.objects.create(

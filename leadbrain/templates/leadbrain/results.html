@@ -11,7 +11,7 @@
   }
   .lb-filter-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:12px; }
   .lb-table-wrap { overflow:auto; }
-  .lb-table { width:100%; min-width:1550px; border-collapse:collapse; }
+  .lb-table { width:100%; min-width:1680px; border-collapse:collapse; }
   .lb-table th, .lb-table td { padding:10px 12px; border-bottom:1px solid #243041; font-size:13px; vertical-align:top; }
   .lb-table th { color:#93c5fd; font-size:11px; text-transform:uppercase; position:sticky; top:0; background:#0b1220; }
   .lb-badge {
@@ -33,6 +33,7 @@
   .lb-stat-value { color:#f8fafc; font-size:24px; font-weight:900; margin-top:6px; }
   .lb-progress-track { height:10px; border-radius:999px; background:#0f172a; border:1px solid #243041; overflow:hidden; }
   .lb-progress-bar { height:100%; background:linear-gradient(135deg, #fde68a, #f59e0b); }
+  .lb-actions { display:flex; flex-wrap:wrap; gap:6px; min-width:160px; }
 </style>
 
 <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
@@ -197,6 +198,7 @@
           <th>Best Contact Title</th>
           <th>Suggested Action</th>
           <th>Notes</th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -232,9 +234,26 @@
             <td>{{ company.best_contact_title|default:"—" }}</td>
             <td>{{ company.suggested_action|default:"—" }}</td>
             <td>{{ company.notes|default:"—"|truncatechars:80 }}</td>
+            <td>
+              <div class="lb-actions">
+                <a href="{% url 'leadbrain_company_detail' company.pk %}" class="btn btn-sm btn-outline-light">Open</a>
+                {% if request.user.is_staff or request.user.is_superuser %}
+                  <form method="post" action="{% url 'leadbrain_company_mark_not_relevant' company.pk %}" onsubmit="return confirm('Mark this row as not relevant?');">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button type="submit" class="btn btn-sm btn-outline-warning">Not Relevant</button>
+                  </form>
+                  <form method="post" action="{% url 'leadbrain_company_delete' company.pk %}" onsubmit="return confirm('Delete this Lead Brain row? This cannot be undone.');">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                  </form>
+                {% endif %}
+              </div>
+            </td>
           </tr>
         {% empty %}
-          <tr><td colspan="16">No companies match the current filters.</td></tr>
+          <tr><td colspan="17">No companies match the current filters.</td></tr>
         {% endfor %}
       </tbody>
     </table>

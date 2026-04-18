@@ -2,7 +2,8 @@
 
 {% block content %}
 <style>
-  .lb-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:14px; }
+  .lb-shell { display:grid; gap:16px; }
+  .lb-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:16px; }
   .lb-panel {
     background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
     border:1px solid #243041;
@@ -10,6 +11,7 @@
     padding:18px;
     box-shadow:0 12px 28px rgba(0,0,0,0.35);
   }
+  .lb-panel-title { margin:0 0 14px 0; font-size:18px; font-weight:800; color:#f8fafc; }
   .lb-badge {
     display:inline-flex; padding:4px 10px; border-radius:999px; font-size:11px; font-weight:800;
     border:1px solid #334155; background:#0f172a; color:#e5e7eb;
@@ -21,11 +23,37 @@
   .lb-badge.processing { background:rgba(59,130,246,0.12); border-color:#60a5fa; color:#bfdbfe; }
   .lb-badge.complete { background:rgba(34,197,94,0.12); border-color:#22c55e; color:#bbf7d0; }
   .lb-badge.failed { background:rgba(248,113,113,0.12); border-color:#f87171; color:#fecaca; }
-  .lb-meta { display:grid; grid-template-columns:180px 1fr; gap:8px 12px; font-size:13px; }
-  .lb-meta strong { color:#93c5fd; }
+  .lb-meta { display:grid; grid-template-columns:180px minmax(0, 1fr); gap:10px 14px; font-size:13px; }
+  .lb-meta-label { color:#93c5fd; font-weight:800; }
+  .lb-text { color:#e5e7eb; line-height:1.5; white-space:pre-wrap; }
+  .lb-muted { color:#9ca3af; font-size:12px; }
+  .lb-score { font-size:30px; font-weight:900; color:#f8fafc; }
+  .lb-stack { display:grid; gap:12px; }
+  .lb-surface { background:#0f172a; border:1px solid #243041; border-radius:12px; padding:12px; }
+  .lb-inline-list { display:flex; gap:8px; flex-wrap:wrap; }
+  .lb-tag {
+    display:inline-flex; padding:5px 10px; border-radius:999px; font-size:12px; font-weight:700;
+    background:rgba(96,165,250,0.12); border:1px solid rgba(96,165,250,0.35); color:#dbeafe;
+  }
+  .lb-details {
+    border:1px solid #243041;
+    border-radius:12px;
+    background:#0b1220;
+    padding:0;
+    overflow:hidden;
+  }
+  .lb-details summary {
+    cursor:pointer;
+    list-style:none;
+    padding:14px 16px;
+    font-weight:800;
+    color:#f8fafc;
+  }
+  .lb-details summary::-webkit-details-marker { display:none; }
+  .lb-details-body { padding:0 16px 16px 16px; }
   pre {
-    white-space:pre-wrap; word-break:break-word; background:#0b1220; border:1px solid #243041;
-    border-radius:12px; padding:14px; color:#e5e7eb; font-size:12px;
+    white-space:pre-wrap; word-break:break-word; background:#030712; border:1px solid #243041;
+    border-radius:12px; padding:14px; color:#e5e7eb; font-size:12px; margin:0;
   }
 </style>
 
@@ -33,92 +61,142 @@
   <div>
     <h1 class="h3 mb-1">{{ company.company_name|default:"Unnamed company" }}</h1>
     <div class="text-secondary">Lead Brain Lite company detail</div>
+    <div class="lb-muted mt-1">Upload {{ company.upload.file_name|default:"Upload" }} • Row {{ company.row_number }}</div>
   </div>
-  <div class="d-flex gap-2">
-    <a href="{% url 'leadbrain_results' %}" class="btn btn-outline-light">← Back to Results</a>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="{% url 'leadbrain_results' %}" class="btn btn-outline-light">Back to Results</a>
+    {% if request.user.is_staff or request.user.is_superuser %}
+      <form method="post" action="{% url 'leadbrain_company_mark_not_relevant' company.pk %}" onsubmit="return confirm('Mark this row as not relevant?');">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{% url 'leadbrain_company_detail' company.pk %}">
+        <button type="submit" class="btn btn-outline-warning">Mark Not Relevant</button>
+      </form>
+      <form method="post" action="{% url 'leadbrain_company_delete' company.pk %}" onsubmit="return confirm('Delete this Lead Brain row? This cannot be undone.');">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{% url 'leadbrain_results' %}?upload={{ company.upload_id }}">
+        <button type="submit" class="btn btn-outline-danger">Delete</button>
+      </form>
+    {% endif %}
   </div>
 </div>
 
-<div class="lb-grid mb-3">
-  <div class="lb-panel">
-    <h2 class="h5 mb-3">Company Info</h2>
-    <div class="lb-meta">
-      <strong>Company</strong><div>{{ company.company_name|default:"—" }}</div>
-      <strong>Website</strong><div>{% if company.website %}<a href="{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>{% else %}—{% endif %}</div>
-      <strong>Email</strong><div>{{ company.email|default:"—" }}</div>
-      <strong>Phone</strong><div>{{ company.phone|default:"—" }}</div>
-      <strong>Country</strong><div>{{ company.country|default:"—" }}</div>
-      <strong>City</strong><div>{{ company.city|default:"—" }}</div>
-      <strong>LinkedIn</strong><div>{% if company.linkedin_url %}<a href="{{ company.linkedin_url }}" target="_blank" rel="noopener">{{ company.linkedin_url }}</a>{% else %}—{% endif %}</div>
-      <strong>Upload</strong><div>{{ company.upload.file_name|default:"—" }} • Row {{ company.row_number }}</div>
-      <strong>Upload Progress</strong><div>{{ company.upload.progress_percent }}% • {{ company.upload.completed_rows }}/{{ company.upload.total_rows }}</div>
-      <strong>Upload Note</strong><div>{{ company.upload.status_note|default:"—" }}</div>
-      <strong>Research Status</strong><div><span class="lb-badge {{ company.research_status }}">{{ company.get_research_status_display }}</span></div>
-      <strong>Research Error</strong><div>{{ company.research_error|default:"—" }}</div>
-    </div>
+<div class="lb-shell">
+  <div class="lb-grid">
+    <section class="lb-panel">
+      <h2 class="lb-panel-title">Company Profile</h2>
+      <div class="lb-meta">
+        <div class="lb-meta-label">Company</div><div>{{ company.company_name|default:"—" }}</div>
+        <div class="lb-meta-label">Website</div><div>{% if company.website %}<a href="{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>{% else %}—{% endif %}</div>
+        <div class="lb-meta-label">LinkedIn</div><div>{% if company.linkedin_url %}<a href="{{ company.linkedin_url }}" target="_blank" rel="noopener">{{ company.linkedin_url }}</a>{% else %}—{% endif %}</div>
+        <div class="lb-meta-label">Country</div><div>{{ company.country|default:"—" }}</div>
+        <div class="lb-meta-label">City</div><div>{{ company.city|default:"—" }}</div>
+        <div class="lb-meta-label">Business Type</div><div>{{ company.business_type|default:"—" }}</div>
+        <div class="lb-meta-label">Best Contact Name</div><div>{{ company.best_contact_name|default:"—" }}</div>
+        <div class="lb-meta-label">Best Contact Title</div><div>{{ company.best_contact_title|default:"—" }}</div>
+        <div class="lb-meta-label">Email</div><div>{{ company.email|default:"—" }}</div>
+        <div class="lb-meta-label">Phone</div><div>{{ company.phone|default:"—" }}</div>
+      </div>
+    </section>
+
+    <section class="lb-panel">
+      <h2 class="lb-panel-title">Fit Summary</h2>
+      <div class="d-flex align-items-center gap-3 flex-wrap mb-3">
+        {% if company.fit_label %}
+          <span class="lb-badge {{ company.fit_label }}">{{ company.get_fit_label_display }}</span>
+        {% else %}
+          <span class="lb-badge pending">Pending</span>
+        {% endif %}
+        <div class="lb-score">{{ company.fit_score }}</div>
+        <span class="lb-badge {{ company.research_status }}">{{ company.get_research_status_display }}</span>
+      </div>
+      <div class="lb-stack">
+        <div class="lb-surface">
+          <div class="lb-meta-label mb-1">Suggested Action</div>
+          <div class="lb-text">{{ company.suggested_action|default:"—" }}</div>
+        </div>
+        <div class="lb-surface">
+          <div class="lb-meta-label mb-1">AI Summary</div>
+          <div class="lb-text">{{ company.ai_summary|default:"—" }}</div>
+        </div>
+        <div class="lb-surface">
+          <div class="lb-meta-label mb-1">Fit Reason</div>
+          <div class="lb-text">{{ company.fit_reason|default:"—" }}</div>
+        </div>
+      </div>
+    </section>
   </div>
 
-  <div class="lb-panel">
-    <h2 class="h5 mb-3">Fit Result</h2>
-    <div class="d-flex align-items-center gap-2 mb-3">
-      {% if company.fit_label %}
-        <span class="lb-badge {{ company.fit_label }}">{{ company.get_fit_label_display }}</span>
-      {% else %}
-        <span class="lb-badge pending">Pending</span>
+  <div class="lb-grid">
+    <section class="lb-panel">
+      <h2 class="lb-panel-title">Research Summary</h2>
+      <div class="lb-stack">
+        <div class="lb-surface">
+          <div class="lb-meta-label mb-2">Apparel Signals</div>
+          {% if company.research_json.apparel_signals %}
+            <div class="lb-inline-list">
+              {% for signal in company.research_json.apparel_signals %}
+                <span class="lb-tag">{{ signal }}</span>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="lb-text">—</div>
+          {% endif %}
+        </div>
+        <div class="lb-surface">
+          <div class="lb-meta-label mb-1">Business Description</div>
+          <div class="lb-text">{{ company.research_json.business_description|default:"—" }}</div>
+        </div>
+        <div class="lb-meta">
+          <div class="lb-meta-label">Official Website</div><div>{{ company.research_json.official_website_found|default:"—" }}</div>
+          <div class="lb-meta-label">Website Status</div><div>{{ company.research_json.website_status|default:"—" }}</div>
+          <div class="lb-meta-label">Confidence Notes</div><div>{{ company.research_json.confidence_notes|default:"—" }}</div>
+          <div class="lb-meta-label">Public Email</div><div>{{ company.research_json.public_email_found|default:"—" }}</div>
+          <div class="lb-meta-label">Public Phone</div><div>{{ company.research_json.public_phone_found|default:"—" }}</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="lb-panel">
+      <h2 class="lb-panel-title">Notes</h2>
+      <form method="post">
+        {% csrf_token %}
+        <div class="mb-3">
+          <label class="form-label fw-bold">Internal Notes</label>
+          {{ notes_form.notes }}
+        </div>
+        <div class="form-check mb-3">
+          {{ notes_form.reviewed }}
+          <label class="form-check-label" for="{{ notes_form.reviewed.id_for_label }}">Reviewed</label>
+        </div>
+        <button type="submit" class="btn btn-warning fw-bold">Save Notes</button>
+      </form>
+      {% if company.research_error %}
+        <div class="alert alert-warning mt-3 mb-0">
+          <div class="fw-bold mb-1">Research Error</div>
+          <div>{{ company.research_error }}</div>
+        </div>
       {% endif %}
-      <strong class="fs-4">{{ company.fit_score }}</strong>
-    </div>
-    <div class="lb-meta">
-      <strong>Business Type</strong><div>{{ company.business_type|default:"—" }}</div>
-      <strong>AI Summary</strong><div>{{ company.ai_summary|default:"—" }}</div>
-      <strong>Fit Reason</strong><div>{{ company.fit_reason|default:"—" }}</div>
-      <strong>Suggested Action</strong><div>{{ company.suggested_action|default:"—" }}</div>
-      <strong>Best Contact</strong><div>{{ company.best_contact_name|default:"—" }}</div>
-      <strong>Best Contact Title</strong><div>{{ company.best_contact_title|default:"—" }}</div>
-    </div>
-  </div>
-</div>
-
-<div class="lb-grid mb-3">
-  <div class="lb-panel">
-    <h2 class="h5 mb-3">Research Summary</h2>
-    <div class="lb-meta">
-      <strong>Website Status</strong><div>{{ company.research_json.website_status|default:"—" }}</div>
-      <strong>Official Website</strong><div>{{ company.research_json.official_website_found|default:"—" }}</div>
-      <strong>Public Email</strong><div>{{ company.research_json.public_email_found|default:"—" }}</div>
-      <strong>Public Phone</strong><div>{{ company.research_json.public_phone_found|default:"—" }}</div>
-      <strong>Description</strong><div>{{ company.research_json.business_description|default:"—" }}</div>
-      <strong>Apparel Signals</strong><div>{{ company.research_json.apparel_signals|join:", "|default:"—" }}</div>
-      <strong>Search Summary</strong><div>{{ company.research_json.search_summary|default:"—" }}</div>
-      <strong>Confidence Notes</strong><div>{{ company.research_json.confidence_notes|default:"—" }}</div>
-    </div>
+      {% if company.upload.status_note %}
+        <div class="lb-surface mt-3">
+          <div class="lb-meta-label mb-1">Upload Note</div>
+          <div class="lb-text">{{ company.upload.status_note }}</div>
+        </div>
+      {% endif %}
+    </section>
   </div>
 
-  <div class="lb-panel">
-    <h2 class="h5 mb-3">Notes</h2>
-    <form method="post">
-      {% csrf_token %}
-      <div class="mb-3">
-        <label class="form-label fw-bold">Internal Notes</label>
-        {{ notes_form.notes }}
-      </div>
-      <div class="form-check mb-3">
-        {{ notes_form.reviewed }}
-        <label class="form-check-label" for="{{ notes_form.reviewed.id_for_label }}">Reviewed</label>
-      </div>
-      <button type="submit" class="btn btn-warning fw-bold">Save Notes</button>
-    </form>
-  </div>
-</div>
+  <details class="lb-details">
+    <summary>Raw Data</summary>
+    <div class="lb-details-body">
+      <pre>{{ raw_row_pretty }}</pre>
+    </div>
+  </details>
 
-<div class="lb-grid">
-  <div class="lb-panel">
-    <h2 class="h5 mb-3">Raw Imported Row</h2>
-    <pre>{{ raw_row_pretty }}</pre>
-  </div>
-  <div class="lb-panel">
-    <h2 class="h5 mb-3">Research JSON</h2>
-    <pre>{{ research_pretty }}</pre>
-  </div>
+  <details class="lb-details">
+    <summary>Full Research JSON</summary>
+    <div class="lb-details-body">
+      <pre>{{ research_pretty }}</pre>
+    </div>
+  </details>
 </div>
 {% endblock %}

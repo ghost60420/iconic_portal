@@ -2,6 +2,8 @@ from django.urls import path
 
 from .views import (
     LeadBrainCompanyDetailView,
+    LeadBrainCompanyDeleteView,
+    LeadBrainCompanyMarkNotRelevantView,
     LeadBrainHomeView,
     LeadBrainOpsView,
     LeadBrainResultsView,
@@ -21,4 +23,10 @@ urlpatterns = [
     path("ops/", LeadBrainOpsView.as_view(), name="leadbrain_ops"),
     path("results/", LeadBrainResultsView.as_view(), name="leadbrain_results"),
     path("company/<int:pk>/", LeadBrainCompanyDetailView.as_view(), name="leadbrain_company_detail"),
+    path("company/<int:pk>/delete/", LeadBrainCompanyDeleteView.as_view(), name="leadbrain_company_delete"),
+    path(
+        "company/<int:pk>/mark-not-relevant/",
+        LeadBrainCompanyMarkNotRelevantView.as_view(),
+        name="leadbrain_company_mark_not_relevant",
+    ),
 ]

@@ -1,6 +1,8 @@
 import logging
+from uuid import uuid4
 from datetime import timedelta
 
+from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
@@ -11,6 +13,7 @@ from leadbrain.services.research_service import research_company
 
 logger = logging.getLogger(__name__)
 STALE_PROCESSING_MINUTES = 30
+CLAIM_ATTEMPTS = 3
 
 
 def truncate_url(value: str) -> str:
@@ -55,11 +58,12 @@ def mark_stale_batch_rows_pending(upload: LeadBrainUpload) -> None:
     stale_cutoff = timezone.now() - timedelta(minutes=STALE_PROCESSING_MINUTES)
     stale_rows = upload.companies.filter(
         research_status=LeadBrainCompany.STATUS_PROCESSING,
-        updated_at__lt=stale_cutoff,
-    )
+    ).filter(Q(research_claimed_at__lt=stale_cutoff) | Q(research_claimed_at__isnull=True, updated_at__lt=stale_cutoff))
     if stale_rows.exists():
         stale_rows.update(
             research_status=LeadBrainCompany.STATUS_PENDING,
+            research_claim_token="",
+            research_claimed_at=None,
             research_error="Research was restarted after an interrupted batch.",
         )
 
@@ -76,26 +80,47 @@ def select_batch_ids(upload: LeadBrainUpload, batch_size: int) -> list[int]:
 
 
 def claim_batch(upload: LeadBrainUpload, batch_size: int, worker: LeadBrainWorker | None = None) -> list[int]:
-    batch_ids = select_batch_ids(upload, batch_size)
-    if not batch_ids:
-        upload.refresh_progress()
-        update_upload_note(upload)
-        update_worker_heartbeat(worker, status=LeadBrainWorker.STATUS_IDLE, current_upload=None)
-        return []
+    for _attempt in range(CLAIM_ATTEMPTS):
+        batch_ids = select_batch_ids(upload, batch_size)
+        if not batch_ids:
+            upload.refresh_progress()
+            update_upload_note(upload)
+            update_worker_heartbeat(worker, status=LeadBrainWorker.STATUS_IDLE, current_upload=None)
+            return []
 
-    LeadBrainCompany.objects.filter(id__in=batch_ids).update(
-        research_status=LeadBrainCompany.STATUS_PROCESSING,
-        research_error="",
-    )
+        claim_token = uuid4().hex
+        claimed_at = timezone.now()
+        with transaction.atomic():
+            LeadBrainCompany.objects.filter(
+                id__in=batch_ids,
+                research_status__in=[LeadBrainCompany.STATUS_PENDING, LeadBrainCompany.STATUS_FAILED],
+            ).update(
+                research_status=LeadBrainCompany.STATUS_PROCESSING,
+                research_claim_token=claim_token,
+                research_claimed_at=claimed_at,
+                research_error="",
+            )
+
+        claimed_ids = list(
+            upload.companies.filter(research_claim_token=claim_token)
+            .order_by("row_number", "id")
+            .values_list("id", flat=True)
+        )
+        if claimed_ids:
+            upload.refresh_progress()
+            update_upload_note(upload)
+            update_worker_heartbeat(
+                worker,
+                status=LeadBrainWorker.STATUS_RUNNING,
+                current_upload=upload,
+                last_error="",
+            )
+            return claimed_ids
+
     upload.refresh_progress()
     update_upload_note(upload)
-    update_worker_heartbeat(
-        worker,
-        status=LeadBrainWorker.STATUS_RUNNING,
-        current_upload=upload,
-        last_error="",
-    )
-    return batch_ids
+    update_worker_heartbeat(worker, status=LeadBrainWorker.STATUS_IDLE, current_upload=None)
+    return []
 
 
 def process_company(company: LeadBrainCompany) -> bool:
@@ -117,6 +142,8 @@ def process_company(company: LeadBrainCompany) -> bool:
         company.suggested_action = classification.get("suggested_action", "")
         company.research_json = research_data
         company.research_status = LeadBrainCompany.STATUS_COMPLETE
+        company.research_claim_token = ""
+        company.research_claimed_at = None
         company.research_error = ""
         company.processed_at = timezone.now()
         company.save()
@@ -124,6 +151,8 @@ def process_company(company: LeadBrainCompany) -> bool:
     except Exception as exc:
         logger.exception("leadbrain research failed for company %s", company.pk)
         company.research_status = LeadBrainCompany.STATUS_FAILED
+        company.research_claim_token = ""
+        company.research_claimed_at = None
         company.research_error = str(exc)[:2000]
         company.processed_at = timezone.now()
         company.fit_label = ""
@@ -185,4 +214,3 @@ def select_next_upload(upload_id: int | None = None) -> LeadBrainUpload | None:
         | Q(companies__research_status=LeadBrainCompany.STATUS_PROCESSING)
     ).distinct()
     return uploads.first()
-

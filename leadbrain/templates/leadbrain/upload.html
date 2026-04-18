@@ -16,36 +16,137 @@
     border:1px solid rgba(245,213,128,0.35); background:linear-gradient(135deg, #fde68a, #f59e0b);
     color:#111827; font-weight:800;
   }
+  .lb-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px; }
+  .lb-stat { background:#0f172a; border:1px solid #243041; border-radius:12px; padding:12px; }
+  .lb-stat-label { color:#93c5fd; font-size:11px; font-weight:800; text-transform:uppercase; }
+  .lb-stat-value { color:#f8fafc; font-size:22px; font-weight:900; margin-top:6px; }
+  .lb-table { width:100%; border-collapse:collapse; }
+  .lb-table th, .lb-table td { padding:10px 12px; border-bottom:1px solid #243041; font-size:13px; vertical-align:top; }
+  .lb-table th { color:#93c5fd; font-size:11px; text-transform:uppercase; }
+  .lb-muted { color:#9ca3af; font-size:12px; }
+  .lb-list { margin:0; padding-left:18px; }
 </style>
 
 <div class="lb-panel">
   <h1 class="h3 mb-2">Upload Company File</h1>
-  <p class="lb-help mb-4">Upload Excel or CSV with company data. Lead Brain Lite saves the rows immediately, starts background batch research automatically, and updates the results page as rows finish.</p>
+  <p class="lb-help mb-4">Upload Excel or CSV with company data. Lead Brain Lite previews the detected columns first, then imports the rows and starts background batch research after you confirm.</p>
 
-  <form method="post" enctype="multipart/form-data" id="leadbrain-upload-form">
-    {% csrf_token %}
-    <div class="mb-3">
-      <label class="form-label fw-bold">Company File</label>
-      {{ form.file }}
-      {% if form.file.errors %}
-        <div class="text-danger mt-2">{{ form.file.errors|join:", " }}</div>
+  {% if preview %}
+    <div class="alert alert-info">
+      Header row detected on line <strong>{{ preview.header_row_number }}</strong>.
+      {% if preview.blank_rows %}
+        {{ preview.blank_rows }} empty row(s) were ignored.
       {% endif %}
     </div>
-    <div class="lb-help mb-3">Allowed file types: .csv, .xlsx, .xls</div>
-    <button type="submit" class="lb-btn" id="leadbrain-upload-submit">⬆️ Process Upload</button>
-    <a href="{% url 'leadbrain_uploads' %}" class="btn btn-outline-light ms-2">View Upload History</a>
-  </form>
+
+    <div class="lb-grid mb-4">
+      <div class="lb-stat"><div class="lb-stat-label">Total Rows</div><div class="lb-stat-value">{{ preview.source_row_count }}</div></div>
+      <div class="lb-stat"><div class="lb-stat-label">Will Import</div><div class="lb-stat-value">{{ preview.imported_rows }}</div></div>
+      <div class="lb-stat"><div class="lb-stat-label">Duplicates</div><div class="lb-stat-value">{{ preview.skipped_duplicate_rows }}</div></div>
+      <div class="lb-stat"><div class="lb-stat-label">Invalid</div><div class="lb-stat-value">{{ preview.invalid_rows }}</div></div>
+    </div>
+
+    <div class="mb-4">
+      <h2 class="h5 mb-2">Detected Columns</h2>
+      <table class="lb-table">
+        <thead>
+          <tr>
+            <th>Source Column</th>
+            <th>Detected Field</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for column in preview.detected_columns %}
+            <tr>
+              <td>{{ column.source }}</td>
+              <td>{{ column.canonical }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="2">No columns detected.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="mb-4">
+      <h2 class="h5 mb-2">Sample Rows</h2>
+      <table class="lb-table">
+        <thead>
+          <tr>
+            <th>Row</th>
+            <th>Company</th>
+            <th>Website</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Country</th>
+            <th>City</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in preview.sample_rows %}
+            <tr>
+              <td>{{ row.row_number }}</td>
+              <td>{{ row.company_name|default:"—" }}</td>
+              <td>{{ row.website|default:"—" }}</td>
+              <td>{{ row.email|default:"—" }}</td>
+              <td>{{ row.phone|default:"—" }}</td>
+              <td>{{ row.country|default:"—" }}</td>
+              <td>{{ row.city|default:"—" }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="7">No sample rows available.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if preview.invalid_reasons %}
+      <div class="alert alert-warning mb-4">
+        <div class="fw-bold mb-2">Invalid rows</div>
+        <ul class="lb-list">
+          {% for reason in preview.invalid_reasons %}
+            <li>{{ reason }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <form method="post" id="leadbrain-confirm-form">
+      {% csrf_token %}
+      <input type="hidden" name="preview_token" value="{{ preview.token }}">
+      <button type="submit" class="lb-btn" id="leadbrain-confirm-submit">Confirm and Import</button>
+      <a href="{% url 'leadbrain_upload' %}?clear_preview=1" class="btn btn-outline-light ms-2">Choose Another File</a>
+    </form>
+  {% else %}
+    <form method="post" enctype="multipart/form-data" id="leadbrain-upload-form">
+      {% csrf_token %}
+      <div class="mb-3">
+        <label class="form-label fw-bold">Company File</label>
+        {{ form.file }}
+        {% if form.file.errors %}
+          <div class="text-danger mt-2">{{ form.file.errors|join:", " }}</div>
+        {% endif %}
+      </div>
+      <div class="lb-help mb-3">Allowed file types: .csv, .xlsx, .xls</div>
+      <button type="submit" class="lb-btn" id="leadbrain-upload-submit">Preview Import</button>
+      <a href="{% url 'leadbrain_uploads' %}" class="btn btn-outline-light ms-2">View Upload History</a>
+    </form>
+  {% endif %}
 </div>
 <script>
   (function () {
-    const form = document.getElementById("leadbrain-upload-form");
-    const submitBtn = document.getElementById("leadbrain-upload-submit");
-    if (!form || !submitBtn) return;
+    const forms = [
+      {form: document.getElementById("leadbrain-upload-form"), button: document.getElementById("leadbrain-upload-submit"), busy: "Previewing..."},
+      {form: document.getElementById("leadbrain-confirm-form"), button: document.getElementById("leadbrain-confirm-submit"), busy: "Importing..."}
+    ];
 
-    form.addEventListener("submit", function () {
-      if (submitBtn.disabled) return;
-      submitBtn.disabled = true;
-      submitBtn.textContent = "Uploading...";
+    forms.forEach(function (entry) {
+      if (!entry.form || !entry.button) return;
+      entry.form.addEventListener("submit", function () {
+        if (entry.button.disabled) return;
+        entry.button.disabled = true;
+        entry.button.textContent = entry.busy;
+      });
     });
   })();
 </script>

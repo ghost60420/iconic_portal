@@ -49,23 +49,35 @@ def _existing_identity_keys(rows) -> set[str]:
     return keys
 
 
+def _invalid_row_reason(row) -> str:
+    company_name = _key_text(row.get("company_name", ""))
+    website = _key_text(row.get("website", ""))
+    if not company_name and not website:
+        row_number = row.get("row_number", "?")
+        return f"Row {row_number}: missing both company name and website."
+    return ""
+
+
 def prepare_import_rows(rows):
     existing_keys = _existing_identity_keys(rows)
     seen_keys = set()
     imported_rows = []
     skipped_duplicate_rows = 0
     invalid_rows = 0
+    invalid_reasons = []
 
     for row in rows:
+        invalid_reason = _invalid_row_reason(row)
+        if invalid_reason:
+            invalid_rows += 1
+            if len(invalid_reasons) < 5:
+                invalid_reasons.append(invalid_reason)
+            continue
+
         company_name = _key_text(row.get("company_name", ""))
         website = _key_text(row.get("website", ""))
         email = _key_text(row.get("email", ""))
-        phone = _key_text(row.get("phone", ""))
         identity_keys = _row_identity(company_name, website, email)
-
-        if not (identity_keys or phone):
-            invalid_rows += 1
-            continue
 
         if identity_keys and ((identity_keys & existing_keys) or (identity_keys & seen_keys)):
             skipped_duplicate_rows += 1
@@ -79,4 +91,5 @@ def prepare_import_rows(rows):
         "imported_rows": len(imported_rows),
         "skipped_duplicate_rows": skipped_duplicate_rows,
         "invalid_rows": invalid_rows,
+        "invalid_reasons": invalid_reasons,
     }

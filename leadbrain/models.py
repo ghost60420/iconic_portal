@@ -164,6 +164,8 @@ class LeadBrainCompany(models.Model):
     raw_row_json = models.JSONField(default=dict, blank=True)
     research_json = models.JSONField(default=dict, blank=True)
     research_status = models.CharField(max_length=20, choices=RESEARCH_STATUS_CHOICES, default=STATUS_PENDING)
+    research_claim_token = models.CharField(max_length=64, blank=True, db_index=True)
+    research_claimed_at = models.DateTimeField(blank=True, null=True)
     research_error = models.TextField(blank=True)
     processed_at = models.DateTimeField(blank=True, null=True)
     reviewed = models.BooleanField(default=False)

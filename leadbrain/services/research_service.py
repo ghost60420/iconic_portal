@@ -10,6 +10,9 @@ USER_AGENT = "Mozilla/5.0 (compatible; LeadBrainLite/1.0; +https://femline.ca)"
 WEBSITE_TIMEOUT = 3
 SEARCH_TIMEOUT = 4
 MAX_RESPONSE_BYTES = 120000
+LEVEL_1 = 1
+LEVEL_2 = 2
+LEVEL_3 = 3
 APPAREL_TERMS = [
     "apparel",
     "clothing",
@@ -154,6 +157,125 @@ def detect_apparel_signals(text):
         if term in haystack:
             signals.append(term)
     return sorted(set(signals))
+
+
+def _row_source_text(company):
+    parts = [
+        _text(getattr(company, "company_name", "")),
+        _text(getattr(company, "website", "")),
+        _text(getattr(company, "email", "")),
+        _text(getattr(company, "phone", "")),
+    ]
+    raw_row = getattr(company, "raw_row_json", {}) or {}
+    parts.extend(_text(value) for value in raw_row.values())
+    return " ".join(part for part in parts if part)
+
+
+def _base_research_dict():
+    return {
+        "website_status": "missing",
+        "official_website_found": "",
+        "linkedin_url_found": "",
+        "public_email_found": "",
+        "public_phone_found": "",
+        "business_description": "",
+        "apparel_signals": [],
+        "search_summary": "",
+        "possible_contact_name": "",
+        "possible_contact_title": "",
+        "confidence_notes": "",
+        "business_type_detected": "",
+        "search_results": [],
+        "research_level_completed": 0,
+        "research_path": "level_1",
+        "level_1_passed": False,
+        "level_2_passed": False,
+        "pitch_summary": "",
+        "outreach_highlights": [],
+    }
+
+
+def _merge_research(base, extra):
+    for key in [
+        "official_website_found",
+        "linkedin_url_found",
+        "public_email_found",
+        "public_phone_found",
+        "business_description",
+        "search_summary",
+        "possible_contact_name",
+        "possible_contact_title",
+        "confidence_notes",
+        "business_type_detected",
+    ]:
+        if not base.get(key) and extra.get(key):
+            base[key] = extra[key]
+
+    base["search_results"] = base.get("search_results") or extra.get("search_results", [])
+    base["apparel_signals"] = sorted(set(base.get("apparel_signals", [])) | set(extra.get("apparel_signals", [])))
+    return base
+
+
+def _passes_level_1(company, research):
+    row_text = _row_source_text(company)
+    row_signals = detect_apparel_signals(row_text)
+    combined_signals = set(research.get("apparel_signals", [])) | set(row_signals)
+    has_public_presence = bool(
+        research.get("official_website_found")
+        or research.get("website_status") in {"live", "redirect"}
+        or _text(getattr(company, "website", ""))
+    )
+    has_contact_hints = bool(_text(getattr(company, "email", "")) or _text(getattr(company, "phone", "")))
+    has_business_text = bool(research.get("business_description") or research.get("search_summary"))
+    return has_public_presence or bool(combined_signals) or (has_contact_hints and has_business_text) or bool(row_signals)
+
+
+def _should_run_level_3(company, research):
+    from leadbrain.services.classification_service import map_fit_label, score_company
+
+    provisional_score = score_company(research, {"company_name": _text(getattr(company, "company_name", "")), "website": _text(getattr(company, "website", "")), "email": _text(getattr(company, "email", "")), "phone": _text(getattr(company, "phone", ""))})
+    fit_label = map_fit_label(provisional_score)
+    apparel_signals = research.get("apparel_signals", []) or []
+    if fit_label == "good_fit":
+        return True
+    if provisional_score >= 68 and research.get("official_website_found") and len(apparel_signals) >= 2:
+        return True
+    if research.get("official_website_found") and research.get("public_email_found") and research.get("business_type_detected") in {
+        "Apparel Brand",
+        "Manufacturer / Private Label",
+        "Uniform Supplier",
+        "Merch Brand",
+    }:
+        return True
+    return False
+
+
+def _build_level_3_enrichment(company, research):
+    company_name = _text(getattr(company, "company_name", "")) or "this company"
+    business_type = _text(research.get("business_type_detected", ""))
+    apparel_signals = research.get("apparel_signals", []) or []
+    highlights = []
+    if business_type:
+        highlights.append(business_type)
+    if apparel_signals:
+        highlights.append(", ".join(apparel_signals[:3]))
+    if research.get("official_website_found"):
+        highlights.append("active website")
+    if research.get("public_email_found") or research.get("public_phone_found") or research.get("linkedin_url_found"):
+        highlights.append("outreach contact available")
+    pitch_parts = []
+    if business_type:
+        pitch_parts.append(f"{company_name} looks like a {business_type.lower()}")
+    elif apparel_signals:
+        pitch_parts.append(f"{company_name} shows clear apparel relevance")
+    if research.get("public_email_found") or research.get("linkedin_url_found"):
+        pitch_parts.append("and has usable outreach contact signals")
+    if not pitch_parts:
+        pitch_parts.append(f"{company_name} is worth a stronger custom outreach review")
+    return {
+        "pitch_summary": " ".join(pitch_parts)[:320],
+        "outreach_highlights": highlights[:4],
+    }
 
 
 def check_website_status(url):
@@ -319,21 +441,7 @@ def _infer_business_type(text):
 
 def research_company(company):
     website = _normalize_url(getattr(company, "website", ""))
-    research = {
-        "website_status": "missing",
-        "official_website_found": "",
-        "linkedin_url_found": "",
-        "public_email_found": "",
-        "public_phone_found": "",
-        "business_description": "",
-        "apparel_signals": [],
-        "search_summary": "",
-        "possible_contact_name": "",
-        "possible_contact_title": "",
-        "confidence_notes": "",
-        "business_type_detected": "",
-        "search_results": [],
-    }
+    research = _base_research_dict()
 
     website_status = check_website_status(website)
     research["website_status"] = website_status["status"]
@@ -355,25 +463,26 @@ def research_company(company):
     elif website_status["status"] == "failed" and website_status.get("error"):
         research["confidence_notes"] = f"Website lookup had partial failure: {website_status['error']}"
 
-    if not research["official_website_found"] or not research["business_description"]:
+    row_text = _row_source_text(company)
+    combined_level_1_text = " ".join(part for part in [page_text, research.get("business_description", ""), row_text] if part)
+    research["apparel_signals"] = sorted(set(research["apparel_signals"]) | set(detect_apparel_signals(combined_level_1_text)))
+    research["business_type_detected"] = _infer_business_type(combined_level_1_text)
+    research["research_level_completed"] = LEVEL_1
+    research["research_path"] = "level_1"
+    research["level_1_passed"] = _passes_level_1(company, research)
+
+    if not research["level_1_passed"]:
+        if not research["confidence_notes"]:
+            research["confidence_notes"] = "Level 1 found weak public business signals."
+        return research
+
+    if not research["official_website_found"] or not research["business_description"] or not research.get("search_summary"):
         search_data = search_business_online(getattr(company, "company_name", ""), website=website)
-        for key in [
-            "official_website_found",
-            "linkedin_url_found",
-            "public_email_found",
-            "public_phone_found",
-            "business_description",
-            "search_summary",
-            "possible_contact_name",
-            "possible_contact_title",
-            "confidence_notes",
-            "search_results",
-        ]:
-            if not research.get(key):
-                research[key] = search_data.get(key, research.get(key))
-        research["apparel_signals"] = sorted(set(research["apparel_signals"]) | set(search_data.get("apparel_signals", [])))
+        research = _merge_research(research, search_data)
         if not research["official_website_found"]:
             research["official_website_found"] = search_data.get("official_website_found", "")
+        research["research_level_completed"] = LEVEL_2
+        research["research_path"] = "level_2"
 
     combined_text = " ".join(
         part
@@ -381,12 +490,20 @@ def research_company(company):
             page_text,
             research.get("business_description", ""),
             research.get("search_summary", ""),
-            getattr(company, "company_name", ""),
+            row_text,
         ]
         if part
     )
     research["apparel_signals"] = sorted(set(research["apparel_signals"]) | set(detect_apparel_signals(combined_text)))
     research["business_type_detected"] = _infer_business_type(combined_text)
+    research["research_level_completed"] = max(research["research_level_completed"], LEVEL_2)
+    research["research_path"] = "level_2"
+    research["level_2_passed"] = True
+
+    if _should_run_level_3(company, research):
+        research.update(_build_level_3_enrichment(company, research))
+        research["research_level_completed"] = LEVEL_3
+        research["research_path"] = "level_3"
 
     if not research["confidence_notes"]:
         if research["official_website_found"]:
