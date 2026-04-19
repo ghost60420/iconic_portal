@@ -21,21 +21,28 @@ def truncate_url(value: str) -> str:
 
 
 def update_upload_note(upload: LeadBrainUpload) -> None:
-    if upload.status == LeadBrainUpload.STATUS_PROCESSING:
-        upload.status_note = "Background batch analysis is running."
+    if upload.status == LeadBrainUpload.STATUS_QUEUED:
+        upload.status_note = upload.status_note or "Upload queued for background parsing."
+    elif upload.status == LeadBrainUpload.STATUS_PARSING:
+        upload.status_note = "Upload parsing is running in the background."
+    elif upload.status == LeadBrainUpload.STATUS_PROCESSING:
+        upload.status_note = "Background research and scoring are running."
     elif upload.status == LeadBrainUpload.STATUS_COMPLETE:
-        upload.status_note = "Background batch analysis finished successfully."
+        upload.status_note = "Background research finished successfully."
     elif upload.status == LeadBrainUpload.STATUS_PARTIAL:
-        upload.status_note = "Background batch analysis finished with some failed rows."
+        upload.status_note = "Background research finished with some failed rows."
     elif upload.status == LeadBrainUpload.STATUS_FAILED and not upload.status_note:
-        upload.status_note = "Background batch analysis did not complete."
+        upload.status_note = "Background processing did not complete."
+    elif upload.status == LeadBrainUpload.STATUS_CANCELLED:
+        upload.status_note = upload.status_note or "This upload was cancelled."
     upload.save(update_fields=["status_note", "updated_at"])
 
 
 def candidate_upload_queryset():
     return LeadBrainUpload.objects.filter(
         status__in=[
-            LeadBrainUpload.STATUS_PENDING,
+            LeadBrainUpload.STATUS_QUEUED,
+            LeadBrainUpload.STATUS_PARSING,
             LeadBrainUpload.STATUS_PROCESSING,
             LeadBrainUpload.STATUS_PARTIAL,
             LeadBrainUpload.STATUS_FAILED,
@@ -70,6 +77,8 @@ def mark_stale_batch_rows_pending(upload: LeadBrainUpload) -> None:
 
 def select_batch_ids(upload: LeadBrainUpload, batch_size: int) -> list[int]:
     mark_stale_batch_rows_pending(upload)
+    if upload.status == LeadBrainUpload.STATUS_CANCELLED:
+        return []
     return list(
         upload.companies.filter(
             research_status__in=[LeadBrainCompany.STATUS_PENDING, LeadBrainCompany.STATUS_FAILED]
@@ -80,6 +89,11 @@ def select_batch_ids(upload: LeadBrainUpload, batch_size: int) -> list[int]:
 
 
 def claim_batch(upload: LeadBrainUpload, batch_size: int, worker: LeadBrainWorker | None = None) -> list[int]:
+    if upload.status == LeadBrainUpload.STATUS_CANCELLED:
+        upload.refresh_progress()
+        update_upload_note(upload)
+        update_worker_heartbeat(worker, status=LeadBrainWorker.STATUS_IDLE, current_upload=None)
+        return []
     for _attempt in range(CLAIM_ATTEMPTS):
         batch_ids = select_batch_ids(upload, batch_size)
         if not batch_ids:
@@ -183,6 +197,10 @@ def process_upload_batch(
     batch_size: int,
     worker: LeadBrainWorker | None = None,
 ) -> int:
+    if upload.status == LeadBrainUpload.STATUS_CANCELLED:
+        upload.refresh_progress()
+        update_upload_note(upload)
+        return 0
     batch_ids = claim_batch(upload, batch_size, worker=worker)
     if not batch_ids:
         return 0

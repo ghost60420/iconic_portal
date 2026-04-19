@@ -1,0 +1,20 @@
+[Unit]
+Description=Lead Brain Celery Worker
+After=network.target redis6.service
+Requires=redis6.service
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/home/ec2-user/iconic_portal
+EnvironmentFile=/home/ec2-user/iconic_portal/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/ec2-user/iconic_portal/venv/bin/celery -A iconic_site worker -Q leadbrain --pool=threads --concurrency=4 --loglevel=INFO --hostname=leadbrain@%H
+Restart=always
+RestartSec=5
+CPUQuota=60%
+MemoryMax=700M
+
+[Install]
+WantedBy=multi-user.target
+

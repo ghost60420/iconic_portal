@@ -4,22 +4,28 @@ from django.db import models
 
 
 class LeadBrainUpload(models.Model):
-    STATUS_PENDING = "pending"
+    STATUS_QUEUED = "queued"
+    STATUS_PENDING = STATUS_QUEUED
+    STATUS_PARSING = "parsing"
     STATUS_PROCESSING = "processing"
     STATUS_COMPLETE = "complete"
     STATUS_FAILED = "failed"
     STATUS_PARTIAL = "partial"
+    STATUS_CANCELLED = "cancelled"
 
     STATUS_CHOICES = [
-        (STATUS_PENDING, "Pending"),
+        (STATUS_QUEUED, "Queued"),
+        (STATUS_PARSING, "Parsing"),
         (STATUS_PROCESSING, "Processing"),
+        (STATUS_PARTIAL, "Partial"),
         (STATUS_COMPLETE, "Complete"),
         (STATUS_FAILED, "Failed"),
-        (STATUS_PARTIAL, "Partial"),
+        (STATUS_CANCELLED, "Cancelled"),
     ]
 
     file = models.FileField(upload_to="leadbrain/uploads/")
     file_name = models.CharField(max_length=255, blank=True)
+    file_size = models.PositiveBigIntegerField(default=0)
     file_hash = models.CharField(max_length=64, blank=True, db_index=True)
     uploaded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -41,6 +47,9 @@ class LeadBrainUpload(models.Model):
     completed_rows = models.PositiveIntegerField(default=0)
     failed_rows = models.PositiveIntegerField(default=0)
     progress_percent = models.PositiveSmallIntegerField(default=0)
+    detected_columns_json = models.JSONField(default=list, blank=True)
+    sample_rows_json = models.JSONField(default=list, blank=True)
+    invalid_row_examples_json = models.JSONField(default=list, blank=True)
     status_note = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -50,7 +59,7 @@ class LeadBrainUpload(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["uploaded_by", "file_hash"],
-                condition=Q(status__in=["pending", "processing"]) & ~Q(file_hash=""),
+                condition=Q(status__in=["queued", "parsing", "processing"]) & ~Q(file_hash=""),
                 name="leadbrain_active_upload_per_user_hash",
             )
         ]
@@ -78,7 +87,13 @@ class LeadBrainUpload(models.Model):
         else:
             progress_percent = 0
 
-        if not total_rows:
+        if self.status == self.STATUS_CANCELLED:
+            status = self.STATUS_CANCELLED
+        elif self.status == self.STATUS_QUEUED and not total_rows:
+            status = self.STATUS_QUEUED
+        elif self.status == self.STATUS_PARSING and not total_rows:
+            status = self.STATUS_PARSING
+        elif not total_rows:
             status = self.STATUS_FAILED
         elif completed_rows == total_rows and not failed_rows:
             status = self.STATUS_COMPLETE
@@ -86,10 +101,10 @@ class LeadBrainUpload(models.Model):
             status = self.STATUS_FAILED
         elif processed_rows == total_rows and completed_rows and failed_rows:
             status = self.STATUS_PARTIAL
-        elif processing_rows or completed_rows or failed_rows:
+        elif pending_rows or processing_rows or completed_rows or failed_rows:
             status = self.STATUS_PROCESSING
         else:
-            status = self.STATUS_PENDING
+            status = self.STATUS_QUEUED
 
         self.row_count = total_rows
         self.total_rows = total_rows

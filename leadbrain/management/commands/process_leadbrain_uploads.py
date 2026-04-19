@@ -1,37 +1,45 @@
 from django.core.management.base import BaseCommand
 
 from leadbrain.models import LeadBrainUpload
-from leadbrain.services.processing_service import process_upload_batch, select_next_upload, update_upload_note
+from leadbrain.services.background_runner import launch_upload_processing, queue_parse_upload
 
 
 class Command(BaseCommand):
-    help = "Process queued Lead Brain Lite uploads in background batches."
+    help = "Queue Lead Brain Lite uploads for background parsing or processing."
 
     def add_arguments(self, parser):
         parser.add_argument("--upload", type=int, default=None)
-        parser.add_argument("--limit", type=int, default=5)
-        parser.add_argument("--batch-size", type=int, default=100)
+        parser.add_argument("--retry-failed-only", action="store_true")
 
     def handle(self, *args, **options):
         upload_id = options.get("upload")
-        limit = max(1, options.get("limit") or 1)
-        batch_size = max(1, options.get("batch_size") or 100)
+        retry_failed_only = options.get("retry_failed_only", False)
 
-        processed_uploads = 0
-        while processed_uploads < limit:
-            upload = select_next_upload(upload_id=upload_id)
-            if not upload:
-                break
-            self.stdout.write(self.style.NOTICE(f"Processing Lead Brain upload {upload.pk}"))
-            upload.refresh_progress()
-            update_upload_note(upload)
+        queryset = LeadBrainUpload.objects.all().order_by("uploaded_at", "id")
+        if upload_id:
+            queryset = queryset.filter(pk=upload_id)
+        else:
+            queryset = queryset.filter(
+                status__in=[
+                    LeadBrainUpload.STATUS_QUEUED,
+                    LeadBrainUpload.STATUS_PARSING,
+                    LeadBrainUpload.STATUS_PROCESSING,
+                    LeadBrainUpload.STATUS_FAILED,
+                    LeadBrainUpload.STATUS_PARTIAL,
+                ]
+            )
 
-            while True:
-                processed_rows = process_upload_batch(upload, batch_size=batch_size)
-                if not processed_rows:
-                    upload.refresh_progress()
-                    update_upload_note(upload)
-                    break
-            processed_uploads += 1
-            if upload_id:
-                break
+        queued = 0
+        for upload in queryset:
+            if retry_failed_only:
+                self.stdout.write(self.style.NOTICE(f"Queueing failed rows for upload {upload.pk}"))
+                launch_upload_processing(upload.pk)
+            elif upload.total_rows:
+                self.stdout.write(self.style.NOTICE(f"Queueing processing for upload {upload.pk}"))
+                launch_upload_processing(upload.pk)
+            else:
+                self.stdout.write(self.style.NOTICE(f"Queueing parse for upload {upload.pk}"))
+                queue_parse_upload(upload.pk)
+            queued += 1
+
+        self.stdout.write(self.style.SUCCESS(f"Queued {queued} Lead Brain upload job(s)."))

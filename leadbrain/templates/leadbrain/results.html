@@ -26,6 +26,9 @@
   .lb-badge.complete { background:rgba(34,197,94,0.12); border-color:#22c55e; color:#bbf7d0; }
   .lb-badge.failed { background:rgba(248,113,113,0.12); border-color:#f87171; color:#fecaca; }
   .lb-badge.partial { background:rgba(249,115,22,0.12); border-color:#fb923c; color:#fed7aa; }
+  .lb-badge.queued { background:rgba(96,165,250,0.12); border-color:#60a5fa; color:#dbeafe; }
+  .lb-badge.parsing { background:rgba(129,140,248,0.12); border-color:#818cf8; color:#c7d2fe; }
+  .lb-badge.cancelled { background:rgba(148,163,184,0.12); border-color:#94a3b8; color:#e2e8f0; }
   .lb-muted { color:#9ca3af; font-size:12px; }
   .lb-summary-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:16px; }
   .lb-stat { background:#0f172a; border:1px solid #243041; border-radius:12px; padding:12px; }
@@ -43,11 +46,24 @@
   </div>
   <div class="d-flex gap-2">
     {% if selected_upload %}
-      {% if selected_upload.status != 'processing' %}
+      {% if request.user.is_staff or request.user.is_superuser %}
+        {% if selected_upload.status == 'queued' or selected_upload.status == 'parsing' or selected_upload.status == 'processing' %}
+          <form method="post" action="{% url 'leadbrain_upload_cancel' selected_upload.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-warning fw-bold">Cancel Upload</button>
+          </form>
+        {% else %}
+          <form method="post" action="{% url 'leadbrain_upload_retry' selected_upload.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-warning fw-bold">Retry Upload</button>
+          </form>
+        {% endif %}
+      {% endif %}
+      {% if selected_upload.status != 'queued' and selected_upload.status != 'parsing' and selected_upload.status != 'processing' %}
         {% if selected_upload.pending_rows or selected_upload.failed_rows %}
           <form method="post" action="{% url 'leadbrain_start_analysis' selected_upload.pk %}">
             {% csrf_token %}
-            <button type="submit" class="btn btn-outline-warning fw-bold">Run Research</button>
+            <button type="submit" class="btn btn-outline-warning fw-bold">Retry Failed Rows</button>
           </form>
         {% endif %}
       {% endif %}
@@ -72,7 +88,7 @@
 </div>
 
 {% if selected_upload %}
-  <div class="alert {% if selected_upload.status == 'failed' %}alert-danger{% elif selected_upload.status == 'partial' %}alert-warning{% else %}alert-success{% endif %} mb-3">
+  <div class="alert {% if selected_upload.status == 'failed' %}alert-danger{% elif selected_upload.status == 'partial' or selected_upload.status == 'cancelled' %}alert-warning{% else %}alert-success{% endif %} mb-3">
     <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-2">
       <div>
         Upload <strong>{{ selected_upload.file_name|default:"Upload" }}</strong> is currently
@@ -98,8 +114,14 @@
     {% if selected_upload.status_note %}
       <div class="mt-2">{{ selected_upload.status_note }}</div>
     {% endif %}
-    {% if selected_upload.status == 'pending' %}
-      <div class="mt-2">Rows are saved and queued for background batch analysis.</div>
+    {% if selected_upload.status == 'queued' %}
+      <div class="mt-2">The upload is waiting in the background queue.</div>
+    {% endif %}
+    {% if selected_upload.status == 'parsing' %}
+      <div class="mt-2">The file is being parsed in the background.</div>
+    {% endif %}
+    {% if selected_upload.status == 'processing' %}
+      <div class="mt-2">Rows are being researched and scored in background batches.</div>
     {% endif %}
     {% if auto_refresh %}
       <div class="mt-2">This page refreshes automatically while rows are still being processed.</div>

@@ -21,6 +21,12 @@
   .lb-badge.idle { background:rgba(250,204,21,0.12); border-color:#facc15; color:#fde68a; }
   .lb-badge.failed { background:rgba(248,113,113,0.12); border-color:#f87171; color:#fecaca; }
   .lb-badge.stopped { background:rgba(148,163,184,0.12); border-color:#94a3b8; color:#e2e8f0; }
+  .lb-badge.queued { background:rgba(96,165,250,0.12); border-color:#60a5fa; color:#dbeafe; }
+  .lb-badge.parsing { background:rgba(129,140,248,0.12); border-color:#818cf8; color:#c7d2fe; }
+  .lb-badge.processing { background:rgba(250,204,21,0.12); border-color:#facc15; color:#fde68a; }
+  .lb-badge.partial { background:rgba(249,115,22,0.12); border-color:#fb923c; color:#fed7aa; }
+  .lb-badge.complete { background:rgba(34,197,94,0.12); border-color:#22c55e; color:#bbf7d0; }
+  .lb-badge.cancelled { background:rgba(148,163,184,0.12); border-color:#94a3b8; color:#e2e8f0; }
   .lb-muted { color:#9ca3af; font-size:12px; }
   .lb-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:16px; }
 </style>
@@ -34,56 +40,14 @@
     <a href="{% url 'leadbrain_home' %}" class="btn btn-outline-light">Home</a>
     <a href="{% url 'leadbrain_uploads' %}" class="btn btn-outline-light">Upload History</a>
     <a href="{% url 'leadbrain_results' %}" class="btn btn-warning fw-bold">Results</a>
+    <form method="post" action="{% url 'leadbrain_ops_repair' %}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-outline-warning fw-bold">Repair Stale Uploads</button>
+    </form>
   </div>
 </div>
 
 <div class="lb-grid mb-3">
-  <div class="lb-panel">
-    <h2 class="h5 mb-3">Worker Status</h2>
-    <table class="lb-table">
-      <thead>
-        <tr>
-          <th>Worker</th>
-          <th>Status</th>
-          <th>Current Upload</th>
-          <th>Heartbeat</th>
-          <th>Batches</th>
-          <th>Rows</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for worker in workers %}
-          <tr>
-            <td>
-              <div class="fw-bold">{{ worker.name }}</div>
-              {% if worker.hostname or worker.pid %}
-                <div class="lb-muted">{{ worker.hostname|default:"—" }}{% if worker.pid %} • pid {{ worker.pid }}{% endif %}</div>
-              {% endif %}
-            </td>
-            <td>
-              <span class="lb-badge {{ worker.status }}">{{ worker.get_status_display }}</span>
-              {% if worker.last_error %}
-                <div class="lb-muted mt-1">{{ worker.last_error|truncatechars:120 }}</div>
-              {% endif %}
-            </td>
-            <td>
-              {% if worker.current_upload %}
-                <a href="{% url 'leadbrain_results' %}?upload={{ worker.current_upload_id }}">#{{ worker.current_upload_id }}</a>
-              {% else %}
-                <span class="lb-muted">—</span>
-              {% endif %}
-            </td>
-            <td>{% if worker.heartbeat_at %}{{ worker.heartbeat_at|date:"Y-m-d H:i:s" }}{% else %}<span class="lb-muted">—</span>{% endif %}</td>
-            <td>{{ worker.processed_batches }}</td>
-            <td>{{ worker.processed_rows }}</td>
-          </tr>
-        {% empty %}
-          <tr><td colspan="6">No worker records yet.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-
   <div class="lb-panel">
     <h2 class="h5 mb-3">Active Uploads</h2>
     <table class="lb-table">
@@ -93,19 +57,26 @@
           <th>Status</th>
           <th>Progress</th>
           <th>Updated</th>
+          <th>Action</th>
         </tr>
       </thead>
       <tbody>
         {% for upload in active_uploads %}
-          <tr>
-            <td><a href="{% url 'leadbrain_results' %}?upload={{ upload.pk }}">{{ upload.file_name|default:"Upload" }}</a></td>
-            <td>{{ upload.get_status_display }}</td>
-            <td>{{ upload.progress_percent }}% • {{ upload.completed_rows }}/{{ upload.total_rows }}</td>
-            <td>{{ upload.updated_at|date:"Y-m-d H:i" }}</td>
-          </tr>
-        {% empty %}
-          <tr><td colspan="4">No active uploads.</td></tr>
-        {% endfor %}
+        <tr>
+          <td><a href="{% url 'leadbrain_results' %}?upload={{ upload.pk }}">{{ upload.file_name|default:"Upload" }}</a></td>
+          <td><span class="lb-badge {{ upload.status }}">{{ upload.get_status_display }}</span></td>
+          <td>{{ upload.progress_percent }}% • {{ upload.completed_rows }}/{{ upload.total_rows }}</td>
+          <td>{{ upload.updated_at|date:"Y-m-d H:i" }}</td>
+          <td>
+            <form method="post" action="{% url 'leadbrain_upload_cancel' upload.pk %}">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-warning fw-bold">Cancel</button>
+            </form>
+          </td>
+        </tr>
+      {% empty %}
+          <tr><td colspan="5">No active uploads.</td></tr>
+      {% endfor %}
       </tbody>
     </table>
   </div>
@@ -132,10 +103,16 @@
           <td>{{ upload.status_note|default:"—" }}</td>
           <td>
             <div class="d-flex gap-2 flex-wrap">
+              {% if upload.status != 'queued' and upload.status != 'parsing' and upload.status != 'processing' %}
+                <form method="post" action="{% url 'leadbrain_upload_retry' upload.pk %}">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-warning fw-bold">Retry Upload</button>
+                </form>
+              {% endif %}
               {% if upload.pending_rows or upload.failed_rows %}
                 <form method="post" action="{% url 'leadbrain_start_analysis' upload.pk %}">
                   {% csrf_token %}
-                  <button type="submit" class="btn btn-sm btn-outline-warning fw-bold">Rerun Upload</button>
+                  <button type="submit" class="btn btn-sm btn-outline-light fw-bold">Retry Failed Rows</button>
                 </form>
               {% endif %}
               <a href="{% url 'leadbrain_upload_delete' upload.pk %}" class="btn btn-sm btn-outline-danger fw-bold">Delete</a>

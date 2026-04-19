@@ -30,6 +30,8 @@
   .lb-badge.good { background:rgba(34,197,94,0.12); border-color:#22c55e; color:#bbf7d0; }
   .lb-badge.possible { background:rgba(250,204,21,0.12); border-color:#facc15; color:#fde68a; }
   .lb-badge.weak { background:rgba(248,113,113,0.12); border-color:#f87171; color:#fecaca; }
+  .lb-badge.info { background:rgba(59,130,246,0.12); border-color:#60a5fa; color:#bfdbfe; }
+  .lb-muted { color:#9ca3af; font-size:12px; }
 </style>
 
 <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
@@ -91,7 +93,7 @@
           <td>{{ upload.file_name|default:"—" }}</td>
           <td>{{ upload.uploaded_by|default:"—" }}</td>
           <td>
-            <span class="lb-badge {% if upload.status == 'complete' %}good{% elif upload.status == 'processing' %}possible{% elif upload.status == 'partial' %}possible{% else %}weak{% endif %}">
+            <span class="lb-badge {% if upload.status == 'complete' %}good{% elif upload.status == 'processing' %}possible{% elif upload.status == 'partial' %}possible{% elif upload.status == 'queued' or upload.status == 'parsing' %}info{% else %}weak{% endif %}">
               {{ upload.get_status_display }}
             </span>
             {% if upload.status_note %}
@@ -109,36 +111,4 @@
     </tbody>
   </table>
 </div>
-
-{% if request.user.is_staff or request.user.is_superuser %}
-  <div class="lb-panel mt-3">
-    <h2 class="h5 mb-3">Worker Status</h2>
-    <table class="lb-table">
-      <thead>
-        <tr>
-          <th>Worker</th>
-          <th>Status</th>
-          <th>Current Upload</th>
-          <th>Heartbeat</th>
-          <th>Batches</th>
-          <th>Rows</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for worker in worker_statuses %}
-          <tr>
-            <td>{{ worker.name }}</td>
-            <td><span class="lb-badge">{{ worker.get_status_display }}</span></td>
-            <td>{% if worker.current_upload %}<a href="{% url 'leadbrain_results' %}?upload={{ worker.current_upload_id }}">#{{ worker.current_upload_id }}</a>{% else %}<span class="lb-muted">—</span>{% endif %}</td>
-            <td>{% if worker.heartbeat_at %}{{ worker.heartbeat_at|date:"Y-m-d H:i" }}{% else %}<span class="lb-muted">—</span>{% endif %}</td>
-            <td>{{ worker.processed_batches }}</td>
-            <td>{{ worker.processed_rows }}</td>
-          </tr>
-        {% empty %}
-          <tr><td colspan="6">No worker records yet.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-{% endif %}
 {% endblock %}

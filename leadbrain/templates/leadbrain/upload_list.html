@@ -20,6 +20,7 @@
   .lb-badge.possible { background:rgba(250,204,21,0.12); border-color:#facc15; color:#fde68a; }
   .lb-badge.weak { background:rgba(248,113,113,0.12); border-color:#f87171; color:#fecaca; }
   .lb-badge.partial { background:rgba(249,115,22,0.12); border-color:#fb923c; color:#fed7aa; }
+  .lb-badge.info { background:rgba(59,130,246,0.12); border-color:#60a5fa; color:#bfdbfe; }
   .lb-muted { color:#9ca3af; font-size:12px; }
 </style>
 
@@ -67,7 +68,7 @@
           <td>{{ upload.uploaded_at|date:"Y-m-d H:i" }}</td>
           <td>{{ upload.updated_at|date:"Y-m-d H:i" }}</td>
           <td>
-            <span class="lb-badge {% if upload.status == 'complete' %}good{% elif upload.status == 'processing' %}possible{% elif upload.status == 'partial' %}partial{% else %}weak{% endif %}">
+            <span class="lb-badge {% if upload.status == 'complete' %}good{% elif upload.status == 'processing' %}possible{% elif upload.status == 'partial' %}partial{% elif upload.status == 'queued' or upload.status == 'parsing' %}info{% else %}weak{% endif %}">
               {{ upload.get_status_display }}
             </span>
             {% if upload.status_note %}
@@ -85,23 +86,35 @@
             <div class="lb-muted">{{ upload.completed_rows }} complete • {{ upload.failed_rows }} failed</div>
           </td>
           <td>
-            {% if upload.status == 'pending' or upload.status == 'processing' %}
+            {% if upload.status == 'queued' or upload.status == 'parsing' or upload.status == 'processing' %}
               <span class="lb-muted">Active</span>
+            {% elif upload.status == 'cancelled' %}
+              <span class="lb-muted">Cancelled</span>
             {% else %}
               <span class="lb-muted">Finished</span>
             {% endif %}
           </td>
           <td>
             <div class="d-flex gap-2 flex-wrap">
-              {% if upload.status != 'processing' %}
+              {% if request.user.is_staff or request.user.is_superuser %}
+                {% if upload.status == 'queued' or upload.status == 'parsing' or upload.status == 'processing' %}
+                  <form method="post" action="{% url 'leadbrain_upload_cancel' upload.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-warning fw-bold">Cancel</button>
+                  </form>
+                {% endif %}
+                {% if upload.status != 'queued' and upload.status != 'parsing' and upload.status != 'processing' %}
+                  <form method="post" action="{% url 'leadbrain_upload_retry' upload.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-warning fw-bold">Retry Upload</button>
+                  </form>
+                {% endif %}
                 {% if upload.pending_rows or upload.failed_rows %}
                   <form method="post" action="{% url 'leadbrain_start_analysis' upload.pk %}">
                     {% csrf_token %}
-                    <button type="submit" class="btn btn-sm btn-outline-warning fw-bold">Run Research</button>
+                    <button type="submit" class="btn btn-sm btn-outline-light fw-bold">Retry Failed Rows</button>
                   </form>
                 {% endif %}
-              {% endif %}
-              {% if request.user.is_staff or request.user.is_superuser %}
                 <a href="{% url 'leadbrain_upload_delete' upload.pk %}" class="btn btn-sm btn-outline-danger fw-bold">Delete</a>
               {% endif %}
               {% if not upload.pending_rows and not upload.failed_rows and not request.user.is_staff and not request.user.is_superuser %}
@@ -117,35 +130,4 @@
   </table>
 </div>
 
-{% if request.user.is_staff or request.user.is_superuser %}
-  <div class="lb-panel mt-3">
-    <h2 class="h5 mb-3">Worker Status</h2>
-    <table class="lb-table">
-      <thead>
-        <tr>
-          <th>Worker</th>
-          <th>Status</th>
-          <th>Current Upload</th>
-          <th>Heartbeat</th>
-          <th>Batches</th>
-          <th>Rows</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for worker in worker_statuses %}
-          <tr>
-            <td>{{ worker.name }}</td>
-            <td><span class="lb-badge">{{ worker.get_status_display }}</span></td>
-            <td>{% if worker.current_upload %}<a href="{% url 'leadbrain_results' %}?upload={{ worker.current_upload_id }}">#{{ worker.current_upload_id }}</a>{% else %}<span class="lb-muted">—</span>{% endif %}</td>
-            <td>{% if worker.heartbeat_at %}{{ worker.heartbeat_at|date:"Y-m-d H:i" }}{% else %}<span class="lb-muted">—</span>{% endif %}</td>
-            <td>{{ worker.processed_batches }}</td>
-            <td>{{ worker.processed_rows }}</td>
-          </tr>
-        {% empty %}
-          <tr><td colspan="6">No worker records yet.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-{% endif %}
 {% endblock %}
