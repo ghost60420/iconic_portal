@@ -18,15 +18,13 @@ from .forms import LeadBrainCompanyNotesForm, LeadBrainUploadForm
 from .models import LeadBrainCompany, LeadBrainUpload
 from .services.background_runner import launch_upload_processing, queue_parse_upload
 from .services.repair_service import repair_uploads
+from .services.upload_state import ACTIVE_UPLOAD_STATUSES, find_active_duplicate_upload, is_upload_stale, release_stale_upload
 
 
 logger = logging.getLogger(__name__)
 UPLOAD_PREVIEW_SESSION_KEY = "leadbrain_upload_preview"
-ACTIVE_UPLOAD_STATUSES = [
-    LeadBrainUpload.STATUS_QUEUED,
-    LeadBrainUpload.STATUS_PARSING,
-    LeadBrainUpload.STATUS_PROCESSING,
-]
+
+
 def _redirect_to_results_next(request):
     next_url = (request.POST.get("next") or request.GET.get("next") or "").strip()
     if next_url:
@@ -37,19 +35,22 @@ def _redirect_to_results_next(request):
 
 
 def _active_duplicate_upload(user, *, file_hash: str = "", file_name: str = "", file_size: int = 0):
-    if not getattr(user, "is_authenticated", False):
-        return None
-    queryset = LeadBrainUpload.objects.filter(uploaded_by=user, status__in=ACTIVE_UPLOAD_STATUSES)
-    if file_hash:
-        duplicate = queryset.filter(file_hash=file_hash).order_by("-uploaded_at", "-id").first()
-        if duplicate:
-            return duplicate
-    if file_name and file_size:
-        return queryset.filter(file_name=file_name, file_size=file_size).order_by("-uploaded_at", "-id").first()
-    return None
+    return find_active_duplicate_upload(
+        user_id=user.pk if getattr(user, "is_authenticated", False) else None,
+        file_hash=file_hash,
+        file_name=file_name,
+        file_size=file_size,
+    )
 
 
 def _upload_is_active(upload: LeadBrainUpload) -> bool:
+    if is_upload_stale(upload):
+        release_stale_upload(
+            upload,
+            reason="Marked failed after no Lead Brain progress was detected. You can retry or delete it now.",
+        )
+        upload.refresh_from_db()
+        return False
     return upload.status in ACTIVE_UPLOAD_STATUSES
 
 

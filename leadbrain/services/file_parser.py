@@ -1,6 +1,7 @@
 import csv
 import os
 import re
+from itertools import islice
 
 from openpyxl import load_workbook
 
@@ -64,6 +65,13 @@ def _normalize_website(value):
     if "://" not in website and "." in website and " " not in website:
         website = f"https://{website}"
     return website[:200]
+
+
+def _trim_row(values):
+    trimmed = list(values)
+    while trimmed and not _normalize_text(trimmed[-1]):
+        trimmed.pop()
+    return trimmed
 
 
 def _clean_email(value):
@@ -187,6 +195,67 @@ def _build_rows_from_records(records):
     }
 
 
+def _build_rows_from_iterable(records_iterable):
+    iterator = iter(records_iterable)
+    preview_records = list(islice(iterator, 25))
+    if not preview_records:
+        raise ValueError("The uploaded file is empty.")
+
+    header_index, header_row, header_map = _detect_header_row(preview_records)
+    parsed_rows = []
+    blank_rows = 0
+    detected_columns = []
+
+    for index, value in enumerate(header_row):
+        header_value = _normalize_text(value)
+        if not header_value:
+            continue
+        detected_columns.append(
+            {
+                "index": index,
+                "source": header_value,
+                "canonical": header_map.get(index, f"column_{index + 1}"),
+            }
+        )
+
+    def consume_rows(records, *, starting_row_number):
+        nonlocal blank_rows
+        current_row_number = starting_row_number
+        for values in records:
+            values = _trim_row(values)
+            row_dict = {}
+            raw_row = {}
+            for index, value in enumerate(values):
+                header_value = header_row[index] if index < len(header_row) else f"column_{index + 1}"
+                raw_row[str(header_value)] = value
+                canonical_key = header_map.get(index, f"column_{index + 1}")
+                row_dict[canonical_key] = _normalize_text(value)
+
+            if not any(_normalize_text(value) for value in row_dict.values()):
+                blank_rows += 1
+                current_row_number += 1
+                continue
+
+            row_dict["raw_row_json"] = raw_row
+            parsed_rows.append(extract_company_row(row_dict, current_row_number))
+            current_row_number += 1
+
+    consume_rows(preview_records[header_index + 1 :], starting_row_number=header_index + 2)
+    consume_rows(iterator, starting_row_number=len(preview_records) + 1)
+
+    if not parsed_rows:
+        raise ValueError("No usable rows were found in the uploaded file.")
+
+    return {
+        "rows": parsed_rows,
+        "source_row_count": len(parsed_rows),
+        "blank_rows": blank_rows,
+        "header_row_number": header_index + 1,
+        "detected_columns": detected_columns,
+        "sample_rows": [_preview_row(row) for row in parsed_rows[:5]],
+    }
+
+
 def _parse_csv(file_path):
     last_error = None
     for encoding in ("utf-8-sig", "utf-8", "latin-1"):
@@ -201,12 +270,17 @@ def _parse_csv(file_path):
 
 
 def _parse_xlsx(file_path):
-    workbook = load_workbook(file_path, data_only=True)
-    sheet = workbook.active
-    rows = []
-    for row in sheet.iter_rows(values_only=True):
-        rows.append([_normalize_text(value) for value in row])
-    return _build_rows_from_records(rows)
+    workbook = load_workbook(file_path, data_only=True, read_only=True)
+    try:
+        sheet = workbook.active
+
+        def row_iter():
+            for row in sheet.iter_rows(values_only=True):
+                yield _trim_row([_normalize_text(value) for value in row])
+
+        return _build_rows_from_iterable(row_iter())
+    finally:
+        workbook.close()
 
 
 def _parse_xls(file_path):

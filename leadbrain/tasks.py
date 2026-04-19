@@ -11,14 +11,10 @@ from leadbrain.models import LeadBrainCompany, LeadBrainUpload
 from leadbrain.services.file_parser import parse_uploaded_file_report
 from leadbrain.services.import_service import prepare_import_rows
 from leadbrain.services.processing_service import process_upload_batch, update_upload_note
+from leadbrain.services.upload_state import ACTIVE_UPLOAD_STATUSES, find_active_duplicate_upload
 
 
 logger = logging.getLogger(__name__)
-ACTIVE_UPLOAD_STATUSES = [
-    LeadBrainUpload.STATUS_QUEUED,
-    LeadBrainUpload.STATUS_PARSING,
-    LeadBrainUpload.STATUS_PROCESSING,
-]
 
 
 def _compute_upload_file_hash(upload: LeadBrainUpload) -> str:
@@ -83,18 +79,21 @@ def parse_upload_job(self, upload_id: int):
 
     try:
         file_hash = _compute_upload_file_hash(upload)
+        duplicate_upload = find_active_duplicate_upload(
+            user_id=upload.uploaded_by_id,
+            file_hash=file_hash,
+            exclude_pk=upload.pk,
+        )
+        if duplicate_upload:
+            _mark_upload_cancelled(upload, f"This file is already processing under upload job #{duplicate_upload.pk}.")
+            return "duplicate"
         upload.file_hash = file_hash
         upload.save(update_fields=["file_hash", "updated_at"])
     except IntegrityError:
-        duplicate_upload = (
-            LeadBrainUpload.objects.filter(
-                uploaded_by_id=upload.uploaded_by_id,
-                file_hash=upload.file_hash,
-                status__in=ACTIVE_UPLOAD_STATUSES,
-            )
-            .exclude(pk=upload.pk)
-            .order_by("-uploaded_at", "-id")
-            .first()
+        duplicate_upload = find_active_duplicate_upload(
+            user_id=upload.uploaded_by_id,
+            file_hash=file_hash,
+            exclude_pk=upload.pk,
         )
         _mark_upload_cancelled(
             upload,
@@ -104,15 +103,10 @@ def parse_upload_job(self, upload_id: int):
         )
         return "duplicate"
 
-    duplicate_upload = (
-        LeadBrainUpload.objects.filter(
-            uploaded_by_id=upload.uploaded_by_id,
-            file_hash=upload.file_hash,
-            status__in=ACTIVE_UPLOAD_STATUSES,
-        )
-        .exclude(pk=upload.pk)
-        .order_by("-uploaded_at", "-id")
-        .first()
+    duplicate_upload = find_active_duplicate_upload(
+        user_id=upload.uploaded_by_id,
+        file_hash=upload.file_hash,
+        exclude_pk=upload.pk,
     )
     if duplicate_upload:
         _mark_upload_cancelled(upload, f"This file is already processing under upload job #{duplicate_upload.pk}.")
@@ -135,29 +129,29 @@ def parse_upload_job(self, upload_id: int):
     source_row_count = parse_report.get("source_row_count", 0)
     batch_size = max(1, int(getattr(settings, "LEADBRAIN_PARSE_BATCH_SIZE", 500)))
 
-    companies = [
-        LeadBrainCompany(
-            upload=upload,
-            row_number=row.get("row_number", 0),
-            company_name=row.get("company_name", ""),
-            website=row.get("website", ""),
-            email=row.get("email", ""),
-            phone=row.get("phone", ""),
-            country=row.get("country", ""),
-            city=row.get("city", ""),
-            raw_row_json=row.get("raw_row_json", {}),
-            fit_label="",
-            fit_score=0,
-            suggested_action="Queued for Research",
-            research_status=LeadBrainCompany.STATUS_PENDING,
-        )
-        for row in import_rows
-    ]
-
     with transaction.atomic():
         upload.companies.all().delete()
-        for start in range(0, len(companies), batch_size):
-            LeadBrainCompany.objects.bulk_create(companies[start : start + batch_size], batch_size=batch_size)
+        for start in range(0, len(import_rows), batch_size):
+            batch_rows = import_rows[start : start + batch_size]
+            companies = [
+                LeadBrainCompany(
+                    upload=upload,
+                    row_number=row.get("row_number", 0),
+                    company_name=row.get("company_name", ""),
+                    website=row.get("website", ""),
+                    email=row.get("email", ""),
+                    phone=row.get("phone", ""),
+                    country=row.get("country", ""),
+                    city=row.get("city", ""),
+                    raw_row_json=row.get("raw_row_json", {}),
+                    fit_label="",
+                    fit_score=0,
+                    suggested_action="Queued for Research",
+                    research_status=LeadBrainCompany.STATUS_PENDING,
+                )
+                for row in batch_rows
+            ]
+            LeadBrainCompany.objects.bulk_create(companies, batch_size=batch_size)
 
         upload.row_count = imported_rows
         upload.source_row_count = source_row_count
