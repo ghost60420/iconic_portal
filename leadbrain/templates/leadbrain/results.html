@@ -103,6 +103,7 @@
       {{ selected_upload.imported_rows|default:selected_upload.total_rows }} imported from {{ selected_upload.source_row_count|default:selected_upload.total_rows }} file rows •
       {{ selected_upload.skipped_duplicate_rows }} duplicates skipped •
       {{ selected_upload.invalid_rows }} invalid skipped •
+      {{ selected_upload.blank_rows }} blank ignored •
     </div>
     <div class="lb-muted mt-1">
       {{ selected_upload.completed_rows }} complete •
@@ -113,6 +114,16 @@
     </div>
     {% if selected_upload.status_note %}
       <div class="mt-2">{{ selected_upload.status_note }}</div>
+    {% endif %}
+    {% if selected_upload.duplicate_row_examples_json %}
+      <div class="mt-2">
+        <div class="fw-bold mb-1">Sample duplicate matches</div>
+        <ul class="mb-0">
+          {% for example in selected_upload.duplicate_row_examples_json %}
+            <li>{{ example }}</li>
+          {% endfor %}
+        </ul>
+      </div>
     {% endif %}
     {% if selected_upload.status == 'queued' %}
       <div class="mt-2">The upload is waiting in the background queue.</div>

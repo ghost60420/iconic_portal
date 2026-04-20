@@ -15,8 +15,10 @@ from leadbrain.models import LeadBrainCompany, LeadBrainUpload, LeadBrainWorker
 from leadbrain.services.background_runner import launch_upload_processing
 from leadbrain.services.classification_service import classify_company
 from leadbrain.services.file_parser import parse_uploaded_file, parse_uploaded_file_report
+from leadbrain.services.import_service import prepare_import_rows
 from leadbrain.services.processing_service import claim_batch
 from leadbrain.services.research_service import research_company
+from leadbrain.services.upload_state import compute_uploaded_file_hash
 from leadbrain.views import UPLOAD_PREVIEW_SESSION_KEY
 
 
@@ -27,6 +29,12 @@ class LeadBrainUploadFormTests(SimpleTestCase):
         )
         self.assertFalse(form.is_valid())
         self.assertIn("Please upload a CSV, XLSX, or XLS file.", form.errors["file"])
+
+    def test_compute_uploaded_file_hash_resets_pointer(self):
+        upload = SimpleUploadedFile("companies.csv", b"Company Name\nABC Apparel\n")
+        digest = compute_uploaded_file_hash(upload)
+        self.assertEqual(len(digest), 64)
+        self.assertEqual(upload.read(), b"Company Name\nABC Apparel\n")
 
 
 class LeadBrainFileParserTests(SimpleTestCase):
@@ -73,6 +81,81 @@ class LeadBrainFileParserTests(SimpleTestCase):
         )
         self.assertEqual(report["sample_rows"][0]["company_name"], "ABC Apparel")
         self.assertEqual(report["sample_rows"][0]["website"], "https://abcapparel.com")
+
+
+class LeadBrainDuplicateImportTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username="leadbrain-dup", password="pass123", is_staff=True)
+        self.upload = LeadBrainUpload.objects.create(
+            file="leadbrain/uploads/existing.csv",
+            file_name="existing.csv",
+            uploaded_by=self.user,
+            status=LeadBrainUpload.STATUS_COMPLETE,
+            row_count=1,
+            source_row_count=1,
+            total_rows=1,
+            imported_rows=1,
+            completed_rows=1,
+            progress_percent=100,
+        )
+
+    def test_prepare_import_rows_reports_existing_website_duplicates(self):
+        LeadBrainCompany.objects.create(
+            upload=self.upload,
+            row_number=1,
+            company_name="Outdoor Cap",
+            website="http://www.outdoorcap.com",
+            email="jshort@outdoorcap.com",
+            raw_row_json={"Company Name": "Outdoor Cap"},
+            research_status=LeadBrainCompany.STATUS_COMPLETE,
+        )
+        rows = [
+            {
+                "row_number": 2,
+                "company_name": "Outdoor Cap",
+                "website": "http://www.outdoorcap.com",
+                "email": "jshort@outdoorcap.com",
+                "raw_row_json": {"Company Name": "Outdoor Cap"},
+            },
+            {
+                "row_number": 3,
+                "company_name": "New Brand",
+                "website": "http://www.newbrand.com",
+                "email": "hello@newbrand.com",
+                "raw_row_json": {"Company Name": "New Brand"},
+            },
+        ]
+
+        result = prepare_import_rows(rows)
+
+        self.assertEqual(result["imported_rows"], 1)
+        self.assertEqual(result["skipped_duplicate_rows"], 1)
+        self.assertIn("website exact match", result["duplicate_examples"][0])
+
+    def test_prepare_import_rows_reports_same_file_duplicates(self):
+        rows = [
+            {
+                "row_number": 2,
+                "company_name": "Outdoor Cap",
+                "website": "http://www.outdoorcap.com",
+                "email": "jshort@outdoorcap.com",
+                "raw_row_json": {"Company Name": "Outdoor Cap"},
+            },
+            {
+                "row_number": 3,
+                "company_name": "Outdoor Cap",
+                "website": "http://www.outdoorcap.com",
+                "email": "jshort@outdoorcap.com",
+                "raw_row_json": {"Company Name": "Outdoor Cap"},
+            },
+        ]
+
+        result = prepare_import_rows(rows)
+
+        self.assertEqual(result["imported_rows"], 1)
+        self.assertEqual(result["skipped_duplicate_rows"], 1)
+        self.assertIn("same file", result["duplicate_examples"][0])
 
 
 class LeadBrainClassificationTests(SimpleTestCase):

@@ -1,3 +1,4 @@
+import hashlib
 from datetime import timedelta
 
 from django.conf import settings
@@ -60,12 +61,33 @@ def release_stale_upload(upload: LeadBrainUpload, *, reason: str | None = None) 
     return upload
 
 
+def compute_uploaded_file_hash(upload_file) -> str:
+    digest = hashlib.sha256()
+    position = None
+    if hasattr(upload_file, "tell"):
+        try:
+            position = upload_file.tell()
+        except Exception:
+            position = None
+
+    for chunk in upload_file.chunks():
+        if not chunk:
+            continue
+        digest.update(chunk)
+
+    if hasattr(upload_file, "seek"):
+        try:
+            upload_file.seek(0 if position is None else position)
+        except Exception:
+            pass
+
+    return digest.hexdigest()
+
+
 def find_active_duplicate_upload(
     *,
     user_id: int | None,
     file_hash: str = "",
-    file_name: str = "",
-    file_size: int = 0,
     exclude_pk: int | None = None,
 ):
     if not user_id:
@@ -77,8 +99,6 @@ def find_active_duplicate_upload(
 
     if file_hash:
         queryset = queryset.filter(file_hash=file_hash)
-    elif file_name and file_size:
-        queryset = queryset.filter(file_name=file_name, file_size=file_size)
     else:
         return None
 

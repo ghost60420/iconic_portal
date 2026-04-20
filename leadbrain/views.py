@@ -7,6 +7,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.core.paginator import Paginator
 from django.db import transaction
+from django.db import IntegrityError
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
@@ -18,7 +19,13 @@ from .forms import LeadBrainCompanyNotesForm, LeadBrainUploadForm
 from .models import LeadBrainCompany, LeadBrainUpload
 from .services.background_runner import launch_upload_processing, queue_parse_upload
 from .services.repair_service import repair_uploads
-from .services.upload_state import ACTIVE_UPLOAD_STATUSES, find_active_duplicate_upload, is_upload_stale, release_stale_upload
+from .services.upload_state import (
+    ACTIVE_UPLOAD_STATUSES,
+    compute_uploaded_file_hash,
+    find_active_duplicate_upload,
+    is_upload_stale,
+    release_stale_upload,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -34,12 +41,10 @@ def _redirect_to_results_next(request):
     return redirect("leadbrain_results")
 
 
-def _active_duplicate_upload(user, *, file_hash: str = "", file_name: str = "", file_size: int = 0):
+def _active_duplicate_upload(user, *, file_hash: str = ""):
     return find_active_duplicate_upload(
         user_id=user.pk if getattr(user, "is_authenticated", False) else None,
         file_hash=file_hash,
-        file_name=file_name,
-        file_size=file_size,
     )
 
 
@@ -88,16 +93,15 @@ class LeadBrainUploadView(LoginRequiredMixin, View):
         upload_file = form.cleaned_data["file"]
         file_name = os.path.basename(upload_file.name or "")
         file_size = getattr(upload_file, "size", 0) or 0
+        file_hash = compute_uploaded_file_hash(upload_file)
         existing_upload = _active_duplicate_upload(
             request.user,
-            file_name=file_name,
-            file_size=file_size,
+            file_hash=file_hash,
         )
         if existing_upload:
             messages.info(
                 request,
-                f"{existing_upload.file_name or 'This file'} is already queued or processing. "
-                "The existing upload job is still running.",
+                f"{existing_upload.file_name or 'This file'} is already queued or processing under upload job #{existing_upload.pk}.",
             )
             return redirect(f"{reverse_lazy('leadbrain_results')}?upload={existing_upload.pk}")
 
@@ -106,11 +110,21 @@ class LeadBrainUploadView(LoginRequiredMixin, View):
             upload.uploaded_by = request.user
             upload.file_name = file_name
             upload.file_size = file_size
-            upload.file_hash = ""
+            upload.file_hash = file_hash
             upload.status = LeadBrainUpload.STATUS_QUEUED
             upload.status_note = "Upload queued for background parsing."
             upload.save()
             transaction.on_commit(lambda: queue_parse_upload(upload.pk))
+        except IntegrityError:
+            existing_upload = _active_duplicate_upload(request.user, file_hash=file_hash)
+            if existing_upload:
+                messages.info(
+                    request,
+                    f"{existing_upload.file_name or 'This file'} is already queued or processing under upload job #{existing_upload.pk}.",
+                )
+                return redirect(f"{reverse_lazy('leadbrain_results')}?upload={existing_upload.pk}")
+            messages.error(request, "A duplicate Lead Brain upload is already active.")
+            return redirect("leadbrain_upload")
         except Exception:
             logger.exception("leadbrain upload queue failed for %s", file_name or upload_file.name)
             if "upload" in locals() and upload.pk:
@@ -179,8 +193,6 @@ class LeadBrainUploadRetryView(LoginRequiredMixin, LeadBrainStaffOnlyMixin, View
         existing_upload = _active_duplicate_upload(
             request.user,
             file_hash=upload.file_hash,
-            file_name=upload.file_name,
-            file_size=upload.file_size,
         )
         if existing_upload and existing_upload.pk != upload.pk:
             messages.info(
@@ -196,6 +208,7 @@ class LeadBrainUploadRetryView(LoginRequiredMixin, LeadBrainStaffOnlyMixin, View
         upload.imported_rows = 0
         upload.skipped_duplicate_rows = 0
         upload.invalid_rows = 0
+        upload.blank_rows = 0
         upload.pending_rows = 0
         upload.processing_rows = 0
         upload.completed_rows = 0
@@ -204,6 +217,7 @@ class LeadBrainUploadRetryView(LoginRequiredMixin, LeadBrainStaffOnlyMixin, View
         upload.detected_columns_json = []
         upload.sample_rows_json = []
         upload.invalid_row_examples_json = []
+        upload.duplicate_row_examples_json = []
         upload.status = LeadBrainUpload.STATUS_QUEUED
         upload.status_note = "Upload retry requested and queued for background parsing."
         upload.save(
@@ -214,6 +228,7 @@ class LeadBrainUploadRetryView(LoginRequiredMixin, LeadBrainStaffOnlyMixin, View
                 "imported_rows",
                 "skipped_duplicate_rows",
                 "invalid_rows",
+                "blank_rows",
                 "pending_rows",
                 "processing_rows",
                 "completed_rows",
@@ -222,6 +237,7 @@ class LeadBrainUploadRetryView(LoginRequiredMixin, LeadBrainStaffOnlyMixin, View
                 "detected_columns_json",
                 "sample_rows_json",
                 "invalid_row_examples_json",
+                "duplicate_row_examples_json",
                 "status",
                 "status_note",
                 "updated_at",

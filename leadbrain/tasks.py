@@ -41,6 +41,13 @@ def _build_status_note(*, imported_rows: int, source_rows: int, duplicates: int,
     return " ".join(parts)
 
 
+def _append_examples(note: str, heading: str, examples) -> str:
+    examples = [example.strip() for example in (examples or []) if str(example).strip()]
+    if not examples:
+        return note
+    return f"{note} {heading}: " + " ".join(examples[:5])
+
+
 def _mark_upload_failed(upload: LeadBrainUpload, note: str) -> None:
     upload.status = LeadBrainUpload.STATUS_FAILED
     upload.status_note = note[:2000]
@@ -125,6 +132,7 @@ def parse_upload_job(self, upload_id: int):
     skipped_duplicate_rows = import_report["skipped_duplicate_rows"]
     invalid_rows = import_report["invalid_rows"]
     invalid_reasons = import_report["invalid_reasons"]
+    duplicate_examples = import_report.get("duplicate_examples", [])
     blank_rows = parse_report.get("blank_rows", 0)
     source_row_count = parse_report.get("source_row_count", 0)
     batch_size = max(1, int(getattr(settings, "LEADBRAIN_PARSE_BATCH_SIZE", 500)))
@@ -159,6 +167,7 @@ def parse_upload_job(self, upload_id: int):
         upload.imported_rows = imported_rows
         upload.skipped_duplicate_rows = skipped_duplicate_rows
         upload.invalid_rows = invalid_rows
+        upload.blank_rows = blank_rows
         upload.pending_rows = imported_rows
         upload.processing_rows = 0
         upload.completed_rows = 0
@@ -167,17 +176,26 @@ def parse_upload_job(self, upload_id: int):
         upload.detected_columns_json = parse_report.get("detected_columns", [])
         upload.sample_rows_json = parse_report.get("sample_rows", [])
         upload.invalid_row_examples_json = invalid_reasons
+        upload.duplicate_row_examples_json = duplicate_examples
         upload.status = LeadBrainUpload.STATUS_PROCESSING if imported_rows else LeadBrainUpload.STATUS_FAILED
-        upload.status_note = (
-            _build_status_note(
-                imported_rows=imported_rows,
-                source_rows=source_row_count,
-                duplicates=skipped_duplicate_rows,
-                invalid_rows=invalid_rows,
-                blank_rows=blank_rows,
-            )
-            if imported_rows
-            else f"No rows were imported. Skipped {skipped_duplicate_rows} duplicate row(s), ignored {invalid_rows} invalid row(s), and ignored {blank_rows} blank row(s)."
+        upload.status_note = _append_examples(
+            _append_examples(
+                (
+                    _build_status_note(
+                        imported_rows=imported_rows,
+                        source_rows=source_row_count,
+                        duplicates=skipped_duplicate_rows,
+                        invalid_rows=invalid_rows,
+                        blank_rows=blank_rows,
+                    )
+                    if imported_rows
+                    else f"No rows were imported. Skipped {skipped_duplicate_rows} duplicate row(s), ignored {invalid_rows} invalid row(s), and ignored {blank_rows} blank row(s)."
+                ),
+                "Sample duplicate matches",
+                duplicate_examples,
+            ),
+            "Invalid row examples",
+            invalid_reasons,
         )
         upload.save(
             update_fields=[
@@ -187,6 +205,7 @@ def parse_upload_job(self, upload_id: int):
                 "imported_rows",
                 "skipped_duplicate_rows",
                 "invalid_rows",
+                "blank_rows",
                 "pending_rows",
                 "processing_rows",
                 "completed_rows",
@@ -195,6 +214,7 @@ def parse_upload_job(self, upload_id: int):
                 "detected_columns_json",
                 "sample_rows_json",
                 "invalid_row_examples_json",
+                "duplicate_row_examples_json",
                 "status",
                 "status_note",
                 "updated_at",
