@@ -4,6 +4,7 @@ from .views import (
     LeadBrainCompanyDetailView,
     LeadBrainCompanyDeleteView,
     LeadBrainCompanyMarkNotRelevantView,
+    LeadBrainCompanyMoveToLeadsView,
     LeadBrainHomeView,
     LeadBrainOpsView,
     LeadBrainOpsRepairView,
@@ -30,6 +31,7 @@ urlpatterns = [
     path("results/", LeadBrainResultsView.as_view(), name="leadbrain_results"),
     path("company/<int:pk>/", LeadBrainCompanyDetailView.as_view(), name="leadbrain_company_detail"),
     path("company/<int:pk>/delete/", LeadBrainCompanyDeleteView.as_view(), name="leadbrain_company_delete"),
+    path("company/<int:pk>/move-to-leads/", LeadBrainCompanyMoveToLeadsView.as_view(), name="leadbrain_company_move_to_leads"),
     path(
         "company/<int:pk>/mark-not-relevant/",
         LeadBrainCompanyMarkNotRelevantView.as_view(),

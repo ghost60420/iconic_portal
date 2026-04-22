@@ -14,12 +14,15 @@ from leadbrain.forms import LeadBrainUploadForm
 from leadbrain.models import LeadBrainCompany, LeadBrainUpload, LeadBrainWorker
 from leadbrain.services.background_runner import launch_upload_processing
 from leadbrain.services.classification_service import classify_company
+from leadbrain.services.cleanup_service import cleanup_leadbrain_data
 from leadbrain.services.file_parser import parse_uploaded_file, parse_uploaded_file_report
 from leadbrain.services.import_service import prepare_import_rows
+from leadbrain.services.lead_export import create_lead_from_company
 from leadbrain.services.processing_service import claim_batch
 from leadbrain.services.research_service import research_company
 from leadbrain.services.upload_state import compute_uploaded_file_hash
 from leadbrain.views import UPLOAD_PREVIEW_SESSION_KEY
+from crm.models import Lead
 
 
 class LeadBrainUploadFormTests(SimpleTestCase):
@@ -156,6 +159,215 @@ class LeadBrainDuplicateImportTests(TestCase):
         self.assertEqual(result["imported_rows"], 1)
         self.assertEqual(result["skipped_duplicate_rows"], 1)
         self.assertIn("same file", result["duplicate_examples"][0])
+
+
+class LeadBrainCleanupTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username="leadbrain-cleanup", password="pass123", is_staff=True)
+        self.client.force_login(self.user)
+
+    def test_cleanup_archives_failed_uploads_and_duplicate_companies_by_website(self):
+        failed_upload = LeadBrainUpload.objects.create(
+            file="leadbrain/uploads/failed.csv",
+            file_name="failed.csv",
+            uploaded_by=self.user,
+            status=LeadBrainUpload.STATUS_FAILED,
+        )
+        keeper_upload = LeadBrainUpload.objects.create(
+            file="leadbrain/uploads/keeper.csv",
+            file_name="keeper.csv",
+            uploaded_by=self.user,
+            status=LeadBrainUpload.STATUS_COMPLETE,
+        )
+        duplicate_upload = LeadBrainUpload.objects.create(
+            file="leadbrain/uploads/duplicate.csv",
+            file_name="duplicate.csv",
+            uploaded_by=self.user,
+            status=LeadBrainUpload.STATUS_COMPLETE,
+        )
+        keeper = LeadBrainCompany.objects.create(
+            upload=keeper_upload,
+            row_number=1,
+            company_name="Keep Brand",
+            website="https://keepbrand.example.com",
+            research_status=LeadBrainCompany.STATUS_COMPLETE,
+            fit_score=88,
+            moved_to_leads=True,
+            raw_row_json={"Company Name": "Keep Brand"},
+        )
+        duplicate = LeadBrainCompany.objects.create(
+            upload=duplicate_upload,
+            row_number=2,
+            company_name="Keep Brand Copy",
+            website="http://www.keepbrand.example.com/",
+            research_status=LeadBrainCompany.STATUS_PENDING,
+            fit_score=12,
+            raw_row_json={"Company Name": "Keep Brand Copy"},
+        )
+
+        dry_run = cleanup_leadbrain_data(apply_changes=False)
+        self.assertEqual(dry_run.failed_uploads_found, 1)
+        self.assertEqual(dry_run.failed_uploads_archived, 0)
+        self.assertEqual(dry_run.duplicate_groups_found, 1)
+        self.assertEqual(dry_run.duplicate_rows_found, 1)
+
+        result = cleanup_leadbrain_data(apply_changes=True)
+
+        failed_upload.refresh_from_db()
+        keeper.refresh_from_db()
+        duplicate.refresh_from_db()
+        self.assertEqual(result.failed_uploads_archived, 1)
+        self.assertEqual(result.duplicate_rows_archived, 1)
+        self.assertFalse(failed_upload.is_active)
+        self.assertIn("upload status is failed", failed_upload.inactive_reason)
+        self.assertTrue(keeper.is_active)
+        self.assertFalse(duplicate.is_active)
+        self.assertEqual(duplicate.duplicate_of_id, keeper.pk)
+        self.assertIn("Duplicate website kept", duplicate.inactive_reason)
+
+    def test_results_and_upload_history_hide_inactive_by_default(self):
+        inactive_upload = LeadBrainUpload.objects.create(
+            file="leadbrain/uploads/inactive.csv",
+            file_name="inactive.csv",
+            uploaded_by=self.user,
+            status=LeadBrainUpload.STATUS_FAILED,
+            is_active=False,
+            inactive_reason="Archived for cleanup.",
+        )
+        active_upload = LeadBrainUpload.objects.create(
+            file="leadbrain/uploads/active.csv",
+            file_name="active.csv",
+            uploaded_by=self.user,
+            status=LeadBrainUpload.STATUS_COMPLETE,
+            is_active=True,
+        )
+        inactive_company = LeadBrainCompany.objects.create(
+            upload=inactive_upload,
+            row_number=1,
+            company_name="Inactive Brand",
+            website="https://inactive.example.com",
+            is_active=False,
+            inactive_reason="Archived duplicate.",
+            raw_row_json={"Company Name": "Inactive Brand"},
+        )
+        LeadBrainCompany.objects.create(
+            upload=active_upload,
+            row_number=2,
+            company_name="Active Brand",
+            website="https://active.example.com",
+            is_active=True,
+            raw_row_json={"Company Name": "Active Brand"},
+        )
+
+        results_response = self.client.get(reverse("leadbrain_results"))
+        uploads_response = self.client.get(reverse("leadbrain_uploads"))
+        results_with_inactive = self.client.get(reverse("leadbrain_results"), {"include_inactive": "1"})
+        uploads_with_inactive = self.client.get(reverse("leadbrain_uploads"), {"include_inactive": "1"})
+
+        self.assertEqual(results_response.status_code, 200)
+        self.assertEqual(uploads_response.status_code, 200)
+        self.assertNotContains(results_response, inactive_company.company_name)
+        self.assertNotContains(uploads_response, inactive_upload.file_name)
+        self.assertContains(results_with_inactive, inactive_company.company_name)
+        self.assertContains(results_with_inactive, inactive_company.inactive_reason)
+        self.assertContains(uploads_with_inactive, inactive_upload.file_name)
+        self.assertContains(uploads_with_inactive, inactive_upload.inactive_reason)
+
+
+class LeadBrainLeadExportTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username="leadbrain-export", password="pass123", is_staff=True)
+        self.upload = LeadBrainUpload.objects.create(
+            file="leadbrain/uploads/export.csv",
+            file_name="export.csv",
+            uploaded_by=self.user,
+            status=LeadBrainUpload.STATUS_COMPLETE,
+            row_count=1,
+            source_row_count=1,
+            total_rows=1,
+            imported_rows=1,
+            completed_rows=1,
+            progress_percent=100,
+        )
+
+    def test_create_lead_from_company_creates_lead_and_marks_company(self):
+        company = LeadBrainCompany.objects.create(
+            upload=self.upload,
+            row_number=1,
+            company_name="Move Brand",
+            website="https://movebrand.example.com",
+            email="hello@movebrand.example.com",
+            phone="555-0100",
+            country="Canada",
+            city="Vancouver",
+            linkedin_url="https://linkedin.com/company/movebrand",
+            best_contact_name="Alex Buyer",
+            fit_label=LeadBrainCompany.FIT_GOOD,
+            fit_score=81,
+            fit_reason="Strong fit",
+            suggested_action="Email First",
+            notes="Priority row",
+            research_status=LeadBrainCompany.STATUS_COMPLETE,
+        )
+
+        result = create_lead_from_company(company)
+
+        company.refresh_from_db()
+        self.assertTrue(result.created)
+        self.assertIsNotNone(result.lead)
+        self.assertTrue(company.moved_to_leads)
+        self.assertEqual(company.moved_to_lead_id, result.lead.pk)
+        self.assertEqual(company.moved_to_lead_code, result.lead.lead_id)
+        self.assertEqual(result.lead.account_brand, "Move Brand")
+        self.assertEqual(result.lead.lead_type, "outbound")
+        self.assertEqual(result.lead.source_channel, "Lead Brain Lite")
+
+    def test_create_lead_from_company_blocks_duplicate_website(self):
+        Lead.objects.create(
+            account_brand="Existing Brand",
+            website="https://existingbrand.example.com",
+            company_website="https://existingbrand.example.com",
+            lead_type="outbound",
+            outbound_status="Not Contacted",
+        )
+        company = LeadBrainCompany.objects.create(
+            upload=self.upload,
+            row_number=2,
+            company_name="Existing Brand",
+            website="https://existingbrand.example.com",
+            research_status=LeadBrainCompany.STATUS_COMPLETE,
+        )
+
+        result = create_lead_from_company(company)
+
+        company.refresh_from_db()
+        self.assertFalse(result.created)
+        self.assertIn("website exact match", result.message)
+        self.assertFalse(company.moved_to_leads)
+
+    def test_create_lead_from_company_blocks_duplicate_email(self):
+        Lead.objects.create(
+            account_brand="Email Match Brand",
+            email="duplicate@example.com",
+            lead_type="outbound",
+            outbound_status="Not Contacted",
+        )
+        company = LeadBrainCompany.objects.create(
+            upload=self.upload,
+            row_number=3,
+            company_name="Email Match Brand",
+            email="duplicate@example.com",
+            research_status=LeadBrainCompany.STATUS_COMPLETE,
+        )
+
+        result = create_lead_from_company(company)
+
+        company.refresh_from_db()
+        self.assertFalse(result.created)
+        self.assertIn("email exact match", result.message)
+        self.assertFalse(company.moved_to_leads)
 
 
 class LeadBrainClassificationTests(SimpleTestCase):

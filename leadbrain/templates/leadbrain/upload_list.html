@@ -38,6 +38,17 @@
   </div>
 </div>
 
+<div class="lb-panel mb-3">
+  <form method="get" class="d-flex align-items-center gap-3 flex-wrap">
+    <label class="form-check mb-0">
+      <input class="form-check-input" type="checkbox" name="include_inactive" value="1" {% if include_inactive %}checked{% endif %}>
+      <span class="form-check-label">Include Inactive Uploads</span>
+    </label>
+    <button type="submit" class="btn btn-sm btn-warning fw-bold">Apply</button>
+    <a href="{% url 'leadbrain_uploads' %}" class="btn btn-sm btn-outline-light">Reset</a>
+  </form>
+</div>
+
 <div class="lb-panel">
   <table class="lb-table">
     <thead>
@@ -90,6 +101,11 @@
           <td>
             {% if upload.status == 'queued' or upload.status == 'parsing' or upload.status == 'processing' %}
               <span class="lb-muted">Active</span>
+            {% elif not upload.is_active %}
+              <span class="lb-muted">Inactive</span>
+              {% if upload.inactive_reason %}
+                <div class="lb-muted mt-1">{{ upload.inactive_reason|truncatechars:90 }}</div>
+              {% endif %}
             {% elif upload.status == 'cancelled' %}
               <span class="lb-muted">Cancelled</span>
             {% else %}

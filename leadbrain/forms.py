@@ -29,4 +29,3 @@ class LeadBrainCompanyNotesForm(forms.ModelForm):
             "notes": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
             "reviewed": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
-

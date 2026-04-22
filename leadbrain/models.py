@@ -53,6 +53,9 @@ class LeadBrainUpload(models.Model):
     invalid_row_examples_json = models.JSONField(default=list, blank=True)
     duplicate_row_examples_json = models.JSONField(default=list, blank=True)
     status_note = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    inactive_at = models.DateTimeField(blank=True, null=True)
+    inactive_reason = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -187,6 +190,26 @@ class LeadBrainCompany(models.Model):
     processed_at = models.DateTimeField(blank=True, null=True)
     reviewed = models.BooleanField(default=False)
     notes = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    inactive_at = models.DateTimeField(blank=True, null=True)
+    inactive_reason = models.TextField(blank=True)
+    duplicate_of = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="inactive_duplicates",
+    )
+    moved_to_leads = models.BooleanField(default=False, db_index=True)
+    moved_to_lead = models.ForeignKey(
+        "crm.Lead",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="leadbrain_companies",
+    )
+    moved_to_lead_code = models.CharField(max_length=20, blank=True)
+    moved_to_leads_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -272,3 +272,4 @@ def process_upload_batch_job(self, upload_id: int):
         update_upload_note(upload)
 
     return processed_rows
+

@@ -18,6 +18,7 @@ from django.utils import timezone
 from .forms import LeadBrainCompanyNotesForm, LeadBrainUploadForm
 from .models import LeadBrainCompany, LeadBrainUpload
 from .services.background_runner import launch_upload_processing, queue_parse_upload
+from .services.lead_export import create_lead_from_company
 from .services.repair_service import repair_uploads
 from .services.upload_state import (
     ACTIVE_UPLOAD_STATUSES,
@@ -64,16 +65,16 @@ class LeadBrainHomeView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        fit_counts = LeadBrainCompany.objects.values("fit_label").annotate(total=Count("id"))
+        fit_counts = LeadBrainCompany.objects.filter(is_active=True).values("fit_label").annotate(total=Count("id"))
         fit_map = {row["fit_label"]: row["total"] for row in fit_counts}
         context.update(
             {
-                "total_uploads": LeadBrainUpload.objects.count(),
-                "total_companies": LeadBrainCompany.objects.count(),
+                "total_uploads": LeadBrainUpload.objects.filter(is_active=True).count(),
+                "total_companies": LeadBrainCompany.objects.filter(is_active=True).count(),
                 "good_fit_count": fit_map.get(LeadBrainCompany.FIT_GOOD, 0),
                 "possible_fit_count": fit_map.get(LeadBrainCompany.FIT_POSSIBLE, 0),
                 "weak_fit_count": fit_map.get(LeadBrainCompany.FIT_WEAK, 0),
-                "recent_uploads": LeadBrainUpload.objects.select_related("uploaded_by")[:10],
+                "recent_uploads": LeadBrainUpload.objects.filter(is_active=True).select_related("uploaded_by")[:10],
             }
         )
         return context
@@ -356,7 +357,12 @@ class LeadBrainUploadListView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["uploads"] = LeadBrainUpload.objects.select_related("uploaded_by")
+        include_inactive = self.request.GET.get("include_inactive") == "1"
+        uploads = LeadBrainUpload.objects.select_related("uploaded_by")
+        if not include_inactive:
+            uploads = uploads.filter(is_active=True)
+        context["uploads"] = uploads
+        context["include_inactive"] = include_inactive
         return context
 
 
@@ -365,7 +371,7 @@ class LeadBrainResultsView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        queryset = LeadBrainCompany.objects.select_related("upload")
+        queryset = LeadBrainCompany.objects.select_related("upload", "moved_to_lead")
 
         q = (self.request.GET.get("q") or "").strip()
         fit_label = (self.request.GET.get("fit_label") or "").strip()
@@ -374,6 +380,13 @@ class LeadBrainResultsView(LoginRequiredMixin, TemplateView):
         upload_id = (self.request.GET.get("upload") or "").strip()
         sort = (self.request.GET.get("sort") or "-fit_score").strip()
         reviewed = (self.request.GET.get("reviewed") or "").strip()
+        include_moved = self.request.GET.get("include_moved") == "1"
+        include_inactive = self.request.GET.get("include_inactive") == "1"
+
+        if not include_moved:
+            queryset = queryset.filter(moved_to_leads=False)
+        if not include_inactive:
+            queryset = queryset.filter(is_active=True)
 
         if q:
             queryset = queryset.filter(
@@ -434,6 +447,8 @@ class LeadBrainResultsView(LoginRequiredMixin, TemplateView):
                 "sort": sort,
                 "upload_id": upload_id,
                 "reviewed": reviewed,
+                "include_moved": include_moved,
+                "include_inactive": include_inactive,
                 "has_website": has_website,
                 "has_email": has_email,
                 "has_phone": has_phone,
@@ -507,7 +522,7 @@ class LeadBrainCompanyDetailView(LoginRequiredMixin, View):
     template_name = "leadbrain/company_detail.html"
 
     def get(self, request, pk):
-        company = get_object_or_404(LeadBrainCompany.objects.select_related("upload"), pk=pk)
+        company = get_object_or_404(LeadBrainCompany.objects.select_related("upload", "moved_to_lead"), pk=pk)
         return render(
             request,
             self.template_name,
@@ -520,7 +535,7 @@ class LeadBrainCompanyDetailView(LoginRequiredMixin, View):
         )
 
     def post(self, request, pk):
-        company = get_object_or_404(LeadBrainCompany.objects.select_related("upload"), pk=pk)
+        company = get_object_or_404(LeadBrainCompany.objects.select_related("upload", "moved_to_lead"), pk=pk)
         form = LeadBrainCompanyNotesForm(request.POST, instance=company)
         if form.is_valid():
             form.save()
@@ -537,3 +552,14 @@ class LeadBrainCompanyDetailView(LoginRequiredMixin, View):
                 "research_pretty": json.dumps(company.research_json or {}, indent=2, sort_keys=True),
             },
         )
+
+
+class LeadBrainCompanyMoveToLeadsView(LoginRequiredMixin, LeadBrainStaffOnlyMixin, View):
+    def post(self, request, pk):
+        company = get_object_or_404(LeadBrainCompany.objects.select_related("upload", "moved_to_lead"), pk=pk)
+        result = create_lead_from_company(company)
+        if result.created:
+            messages.success(request, result.message)
+        else:
+            messages.warning(request, result.message)
+        return _redirect_to_results_next(request)

@@ -62,10 +62,24 @@
     <h1 class="h3 mb-1">{{ company.company_name|default:"Unnamed company" }}</h1>
     <div class="text-secondary">Lead Brain Lite company detail</div>
     <div class="lb-muted mt-1">Upload {{ company.upload.file_name|default:"Upload" }} • Row {{ company.row_number }}</div>
+    {% if not company.is_active %}
+      <div class="lb-muted mt-1">
+        Inactive{% if company.duplicate_of_id %} • kept duplicate is company #{{ company.duplicate_of_id }}{% endif %}
+      </div>
+    {% endif %}
   </div>
   <div class="d-flex gap-2 flex-wrap">
     <a href="{% url 'leadbrain_results' %}" class="btn btn-outline-light">Back to Results</a>
     {% if request.user.is_staff or request.user.is_superuser %}
+      {% if company.moved_to_leads and company.moved_to_lead_id %}
+        <a href="{% url 'lead_detail' company.moved_to_lead_id %}" class="btn btn-success">Open Lead</a>
+      {% else %}
+        <form method="post" action="{% url 'leadbrain_company_move_to_leads' company.pk %}" onsubmit="return confirm('Move this company into the main Leads module?');">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{% url 'leadbrain_company_detail' company.pk %}">
+          <button type="submit" class="btn btn-success">Move to Leads</button>
+        </form>
+      {% endif %}
       <form method="post" action="{% url 'leadbrain_company_mark_not_relevant' company.pk %}" onsubmit="return confirm('Mark this row as not relevant?');">
         {% csrf_token %}
         <input type="hidden" name="next" value="{% url 'leadbrain_company_detail' company.pk %}">
@@ -84,6 +98,28 @@
   <div class="lb-grid">
     <section class="lb-panel">
       <h2 class="lb-panel-title">Company Profile</h2>
+      {% if not company.is_active %}
+        <div class="alert alert-warning">
+          This Lead Brain record is inactive.
+          {% if company.inactive_reason %}
+            <div class="mt-1">{{ company.inactive_reason }}</div>
+          {% endif %}
+          {% if company.duplicate_of_id %}
+            <div class="mt-1">
+              Kept duplicate:
+              <a href="{% url 'leadbrain_company_detail' company.duplicate_of_id %}">Company #{{ company.duplicate_of_id }}</a>
+            </div>
+          {% endif %}
+        </div>
+      {% endif %}
+      {% if company.moved_to_leads %}
+        <div class="alert alert-success">
+          This Lead Brain record was moved to Leads.
+          {% if company.moved_to_lead_id %}
+            <a href="{% url 'lead_detail' company.moved_to_lead_id %}">Open Lead #{{ company.moved_to_lead_id }}</a>
+          {% endif %}
+        </div>
+      {% endif %}
       <div class="lb-meta">
         <div class="lb-meta-label">Company</div><div>{{ company.company_name|default:"—" }}</div>
         <div class="lb-meta-label">Website</div><div>{% if company.website %}<a href="{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>{% else %}—{% endif %}</div>

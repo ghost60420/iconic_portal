@@ -9,6 +9,7 @@ class LeadBrainUploadAdmin(admin.ModelAdmin):
         "id",
         "file_name",
         "uploaded_by",
+        "is_active",
         "status",
         "source_row_count",
         "imported_rows",
@@ -21,8 +22,8 @@ class LeadBrainUploadAdmin(admin.ModelAdmin):
         "updated_at",
         "uploaded_at",
     ]
-    list_filter = ["status", "uploaded_at"]
-    search_fields = ["file_name", "file_hash", "status_note", "uploaded_by__username"]
+    list_filter = ["is_active", "status", "uploaded_at"]
+    search_fields = ["file_name", "file_hash", "status_note", "inactive_reason", "uploaded_by__username"]
     ordering = ["-uploaded_at"]
 
 
@@ -31,7 +32,12 @@ class LeadBrainCompanyAdmin(admin.ModelAdmin):
     list_display = [
         "id",
         "company_name",
+        "is_active",
         "research_status",
+        "duplicate_of",
+        "moved_to_leads",
+        "moved_to_lead",
+        "moved_to_lead_code",
         "fit_label",
         "fit_score",
         "website",
@@ -39,8 +45,8 @@ class LeadBrainCompanyAdmin(admin.ModelAdmin):
         "country",
         "reviewed",
     ]
-    list_filter = ["research_status", "fit_label", "reviewed", "country", "created_at"]
-    search_fields = ["company_name", "email", "website", "best_contact_name", "best_contact_title"]
+    list_filter = ["is_active", "research_status", "fit_label", "reviewed", "country", "created_at"]
+    search_fields = ["company_name", "email", "website", "best_contact_name", "best_contact_title", "inactive_reason"]
     ordering = ["-fit_score", "company_name"]
 
 
