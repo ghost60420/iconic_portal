@@ -1,0 +1,41 @@
+<style>
+  .lb-subnav {
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin:0 0 18px 0;
+  }
+  .lb-subnav-link {
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:9px 13px;
+    border-radius:999px;
+    border:1px solid #243041;
+    background:#0f172a;
+    color:#e5e7eb;
+    font-size:13px;
+    font-weight:800;
+    text-decoration:none;
+  }
+  .lb-subnav-link:hover {
+    color:#f8fafc;
+    border-color:#60a5fa;
+  }
+  .lb-subnav-link.is-active {
+    background:linear-gradient(135deg, rgba(253,230,138,0.18), rgba(245,158,11,0.18));
+    border-color:rgba(245,213,128,0.55);
+    color:#fef3c7;
+  }
+</style>
+
+<div class="lb-subnav" id="leadbrain-subnav">
+  <a href="{% url 'leadbrain_home' %}" class="lb-subnav-link {% if request.resolver_match.url_name == 'leadbrain_home' %}is-active{% endif %}">🏠 Overview</a>
+  <a href="{% url 'leadbrain_results' %}" class="lb-subnav-link {% if request.resolver_match.url_name == 'leadbrain_results' or request.resolver_match.url_name == 'leadbrain_company_detail' %}is-active{% endif %}">📋 Results</a>
+  <a href="{% url 'leadbrain_upload' %}" class="lb-subnav-link {% if request.resolver_match.url_name == 'leadbrain_upload' %}is-active{% endif %}">⬆️ Upload</a>
+  <a href="{% url 'leadbrain_uploads' %}" class="lb-subnav-link {% if request.resolver_match.url_name == 'leadbrain_uploads' or request.resolver_match.url_name == 'leadbrain_upload_delete' %}is-active{% endif %}">🗂️ Upload History</a>
+  <a href="{% url 'leadbrain_discovery_jobs' %}" class="lb-subnav-link {% if request.resolver_match.url_name == 'leadbrain_discovery_jobs' or request.resolver_match.url_name == 'leadbrain_discovery_job_create' or request.resolver_match.url_name == 'leadbrain_discovery_job_detail' or request.resolver_match.url_name == 'leadbrain_discovery_job_edit' %}is-active{% endif %}">🔎 Discovery Jobs / Online Scrubbing</a>
+  {% if request.user.is_staff or request.user.is_superuser %}
+    <a href="{% url 'leadbrain_ops' %}" class="lb-subnav-link {% if request.resolver_match.url_name == 'leadbrain_ops' %}is-active{% endif %}">🛠️ Operations</a>
+  {% endif %}
+</div>
