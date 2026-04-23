@@ -17,6 +17,7 @@ from .views import (
     LeadBrainOpsView,
     LeadBrainOpsRepairView,
     LeadBrainResultsView,
+    LeadBrainTopMatchesView,
     LeadBrainUploadCancelView,
     LeadBrainUploadRetryView,
     LeadBrainStartAnalysisView,
@@ -28,6 +29,7 @@ from .views import (
 
 urlpatterns = [
     path("", LeadBrainHomeView.as_view(), name="leadbrain_home"),
+    path("top-matches/", LeadBrainTopMatchesView.as_view(), name="leadbrain_top_matches"),
     path("discovery/", LeadBrainDiscoveryJobsView.as_view(), name="leadbrain_discovery_jobs"),
     path("discovery/create/", LeadBrainDiscoveryJobCreateView.as_view(), name="leadbrain_discovery_job_create"),
     path("discovery/<int:pk>/", LeadBrainDiscoveryJobDetailView.as_view(), name="leadbrain_discovery_job_detail"),

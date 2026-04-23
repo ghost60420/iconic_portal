@@ -31,6 +31,7 @@
 
 <div class="lb-subnav" id="leadbrain-subnav">
   <a href="{% url 'leadbrain_home' %}" class="lb-subnav-link {% if request.resolver_match.url_name == 'leadbrain_home' %}is-active{% endif %}">🏠 Overview</a>
+  <a href="{% url 'leadbrain_top_matches' %}" class="lb-subnav-link {% if request.resolver_match.url_name == 'leadbrain_top_matches' %}is-active{% endif %}">⭐ Top Matches</a>
   <a href="{% url 'leadbrain_results' %}" class="lb-subnav-link {% if request.resolver_match.url_name == 'leadbrain_results' or request.resolver_match.url_name == 'leadbrain_company_detail' %}is-active{% endif %}">📋 Results</a>
   <a href="{% url 'leadbrain_upload' %}" class="lb-subnav-link {% if request.resolver_match.url_name == 'leadbrain_upload' %}is-active{% endif %}">⬆️ Upload</a>
   <a href="{% url 'leadbrain_uploads' %}" class="lb-subnav-link {% if request.resolver_match.url_name == 'leadbrain_uploads' or request.resolver_match.url_name == 'leadbrain_upload_delete' %}is-active{% endif %}">🗂️ Upload History</a>

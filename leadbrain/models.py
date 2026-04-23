@@ -571,6 +571,28 @@ class LeadBrainCompany(models.Model):
             return "possible"
         return ""
 
+    @property
+    def leadbrain_source_label(self):
+        source_map = dict(LeadBrainDiscoveryJob.SOURCE_CHOICES)
+        if self.source_type:
+            return source_map.get(self.source_type, self.source_type)
+        if self.discovery_run_id or self.discovery_job_id:
+            return "Discovery"
+        return "Uploaded File"
+
+    @property
+    def contact_availability(self):
+        channels = []
+        if self.email:
+            channels.append("Email")
+        if self.phone:
+            channels.append("Phone")
+        if self.best_contact_name:
+            channels.append("Contact Name")
+        if self.linkedin_url:
+            channels.append("LinkedIn")
+        return ", ".join(channels) if channels else "No contact info"
+
 
 class LeadBrainWorker(models.Model):
     STATUS_STARTING = "starting"

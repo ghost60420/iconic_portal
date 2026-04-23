@@ -1,0 +1,146 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+<style>
+  .lb-panel {
+    background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+    border:1px solid #243041;
+    border-radius:14px;
+    padding:18px;
+    box-shadow:0 12px 28px rgba(0,0,0,0.35);
+  }
+  .lb-summary-grid {
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
+    gap:12px;
+    margin-bottom:16px;
+  }
+  .lb-stat {
+    background:#0f172a;
+    border:1px solid #243041;
+    border-radius:12px;
+    padding:12px;
+  }
+  .lb-stat-label { color:#93c5fd; font-size:11px; text-transform:uppercase; font-weight:800; }
+  .lb-stat-value { color:#f8fafc; font-size:24px; font-weight:900; margin-top:6px; }
+  .lb-table-wrap { overflow:auto; }
+  .lb-table { width:100%; min-width:1220px; border-collapse:collapse; }
+  .lb-table th, .lb-table td { padding:10px 12px; border-bottom:1px solid #243041; font-size:13px; vertical-align:top; }
+  .lb-table th { color:#93c5fd; font-size:11px; text-transform:uppercase; }
+  .lb-badge {
+    display:inline-flex; padding:4px 10px; border-radius:999px; font-size:11px; font-weight:800;
+    border:1px solid #334155; background:#0f172a; color:#e5e7eb;
+  }
+  .lb-badge.good_fit, .lb-badge.strong { background:rgba(34,197,94,0.12); border-color:#22c55e; color:#bbf7d0; }
+  .lb-badge.possible_fit, .lb-badge.possible { background:rgba(250,204,21,0.12); border-color:#facc15; color:#fde68a; }
+  .lb-muted { color:#9ca3af; font-size:12px; }
+  .lb-actions { display:flex; flex-wrap:wrap; gap:6px; min-width:180px; }
+</style>
+
+<div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+  <div>
+    <h1 class="h3 mb-1">Top Matches</h1>
+    <div class="text-secondary">Daily action queue for the best Lead Brain companies with usable contact signals.</div>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="{% url 'leadbrain_discovery_jobs' %}" class="btn btn-outline-light">Discovery Jobs</a>
+    <a href="{% url 'leadbrain_results' %}" class="btn btn-outline-light">All Results</a>
+  </div>
+</div>
+
+{% include "leadbrain/_subnav.html" %}
+
+<div class="lb-summary-grid">
+  <div class="lb-stat"><div class="lb-stat-label">Actionable Matches</div><div class="lb-stat-value">{{ total_count }}</div></div>
+  <div class="lb-stat"><div class="lb-stat-label">Strong Fit</div><div class="lb-stat-value">{{ strong_count }}</div></div>
+  <div class="lb-stat"><div class="lb-stat-label">Possible Fit</div><div class="lb-stat-value">{{ possible_count }}</div></div>
+  <div class="lb-stat"><div class="lb-stat-label">Discovery Source</div><div class="lb-stat-value">{{ discovery_count }}</div></div>
+  <div class="lb-stat"><div class="lb-stat-label">Uploaded Source</div><div class="lb-stat-value">{{ upload_count }}</div></div>
+</div>
+
+<div class="lb-panel">
+  <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+    <h2 class="h5 mb-0">Best Matches Ready for Review</h2>
+    <div class="lb-muted">Strong fits are shown first. Only rows with contact info, not moved to Leads, and not marked not relevant are included.</div>
+  </div>
+  <div class="lb-table-wrap">
+    <table class="lb-table">
+      <thead>
+        <tr>
+          <th>Company Name</th>
+          <th>Fit Score</th>
+          <th>Source</th>
+          <th>Suggested Action</th>
+          <th>Contact Availability</th>
+          <th>Move to Leads</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for company in companies %}
+          <tr>
+            <td>
+              <a href="{% url 'leadbrain_company_detail' company.pk %}" class="fw-bold">{{ company.company_name|default:"Unnamed company" }}</a>
+              <div class="lb-muted">{{ company.country|default:"—" }}{% if company.city %} • {{ company.city }}{% endif %}</div>
+            </td>
+            <td>
+              <div class="fw-bold">{{ company.fit_score }}</div>
+              {% if company.fit_label %}
+                <span class="lb-badge {{ company.fit_label }}">{{ company.get_fit_label_display }}</span>
+              {% endif %}
+            </td>
+            <td>
+              {{ company.leadbrain_source_label }}
+              {% if company.website %}
+                <div class="lb-muted"><a href="{{ company.website }}" target="_blank" rel="noopener">website</a></div>
+              {% endif %}
+            </td>
+            <td>{{ company.suggested_action|default:"—" }}</td>
+            <td>
+              {{ company.contact_availability }}
+              <div class="lb-muted mt-1">
+                {% if company.email %}
+                  {{ company.email }}
+                {% elif company.phone %}
+                  {{ company.phone }}
+                {% elif company.best_contact_name %}
+                  {{ company.best_contact_name }}
+                {% elif company.linkedin_url %}
+                  <a href="{{ company.linkedin_url }}" target="_blank" rel="noopener">LinkedIn</a>
+                {% endif %}
+              </div>
+            </td>
+            <td>
+              <div class="lb-actions">
+                <a href="{% url 'leadbrain_company_detail' company.pk %}" class="btn btn-sm btn-outline-light">Open</a>
+                {% if request.user.is_staff or request.user.is_superuser %}
+                  <form method="post" action="{% url 'leadbrain_company_move_to_leads' company.pk %}" onsubmit="return confirm('Move this company into the main Leads module?');">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button type="submit" class="btn btn-sm btn-success">Move to Leads</button>
+                  </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6">No top matches are ready yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if page_obj.paginator.num_pages > 1 %}
+    <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+      <div class="lb-muted">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</div>
+      <div class="d-flex gap-2">
+        {% if page_obj.has_previous %}
+          <a class="btn btn-outline-light btn-sm" href="?page={{ page_obj.previous_page_number }}">Previous</a>
+        {% endif %}
+        {% if page_obj.has_next %}
+          <a class="btn btn-outline-light btn-sm" href="?page={{ page_obj.next_page_number }}">Next</a>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
