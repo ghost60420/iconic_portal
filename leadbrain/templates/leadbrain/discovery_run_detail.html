@@ -1,0 +1,147 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+<style>
+  .lb-shell { display:grid; gap:16px; }
+  .lb-summary-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; }
+  .lb-panel, .lb-stat {
+    background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+    border:1px solid #243041;
+    border-radius:14px;
+    padding:18px;
+    box-shadow:0 12px 28px rgba(0,0,0,0.35);
+  }
+  .lb-stat-label { color:#93c5fd; font-size:11px; text-transform:uppercase; font-weight:800; }
+  .lb-stat-value { color:#f8fafc; font-size:24px; font-weight:900; margin-top:6px; }
+  .lb-table-wrap { overflow:auto; }
+  .lb-table { width:100%; min-width:1100px; border-collapse:collapse; }
+  .lb-table th, .lb-table td { padding:10px 12px; border-bottom:1px solid #243041; font-size:13px; vertical-align:top; }
+  .lb-table th { color:#93c5fd; font-size:11px; text-transform:uppercase; }
+  .lb-badge {
+    display:inline-flex; padding:4px 10px; border-radius:999px; font-size:11px; font-weight:800;
+    border:1px solid #334155; background:#0f172a; color:#e5e7eb;
+  }
+  .lb-badge.queued, .lb-badge.processing { background:rgba(96,165,250,0.12); border-color:#60a5fa; color:#dbeafe; }
+  .lb-badge.complete, .lb-badge.saved { background:rgba(34,197,94,0.12); border-color:#22c55e; color:#bbf7d0; }
+  .lb-badge.partial, .lb-badge.weak { background:rgba(249,115,22,0.12); border-color:#fb923c; color:#fed7aa; }
+  .lb-badge.failed, .lb-badge.duplicate { background:rgba(248,113,113,0.12); border-color:#f87171; color:#fecaca; }
+  .lb-muted { color:#9ca3af; font-size:12px; }
+  .lb-query-list { margin:0; padding-left:18px; }
+  .lb-pre {
+    margin:0;
+    white-space:pre-wrap;
+    word-break:break-word;
+    background:#030712;
+    border:1px solid #243041;
+    border-radius:12px;
+    padding:14px;
+    color:#e5e7eb;
+    font-size:12px;
+  }
+</style>
+
+<div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+  <div>
+    <h1 class="h3 mb-1">Discovery Run #{{ run.pk }}</h1>
+    <div class="text-secondary">{{ job.display_name }}</div>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="{% url 'leadbrain_discovery_job_detail' job.pk %}" class="btn btn-outline-light">Back to Job</a>
+    {% if run.upload_id %}
+      <a href="{% url 'leadbrain_results' %}?upload={{ run.upload_id }}" class="btn btn-outline-success">Open Leads</a>
+    {% endif %}
+  </div>
+</div>
+
+{% include "leadbrain/_subnav.html" %}
+
+<div class="lb-shell">
+  <div class="lb-summary-grid">
+    <div class="lb-stat"><div class="lb-stat-label">Status</div><div class="lb-stat-value"><span class="lb-badge {{ run.status }}">{{ run.get_status_display }}</span></div></div>
+    <div class="lb-stat"><div class="lb-stat-label">Found</div><div class="lb-stat-value">{{ run.results_found }}</div></div>
+    <div class="lb-stat"><div class="lb-stat-label">Saved</div><div class="lb-stat-value">{{ run.candidates_saved }}</div></div>
+    <div class="lb-stat"><div class="lb-stat-label">Duplicates</div><div class="lb-stat-value">{{ run.duplicates_skipped }}</div></div>
+    <div class="lb-stat"><div class="lb-stat-label">Weak</div><div class="lb-stat-value">{{ run.weak_skipped }}</div></div>
+    <div class="lb-stat"><div class="lb-stat-label">Failed</div><div class="lb-stat-value">{{ run.failed_candidates }}</div></div>
+  </div>
+
+  <section class="lb-panel">
+    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+      <h2 class="h5 mb-0">Queries Used</h2>
+      <div class="lb-muted">Started {{ run.started_at|date:"Y-m-d H:i" }}{% if run.finished_at %} • Finished {{ run.finished_at|date:"Y-m-d H:i" }}{% endif %}</div>
+    </div>
+    {% if run.queries_json %}
+      <ul class="lb-query-list">
+        {% for query in run.queries_json %}
+          <li>
+            {% if query.query %}{{ query.query }}{% else %}{{ query }}{% endif %}
+            {% if query.source_type %}<span class="lb-muted"> • {{ query.source_type }}</span>{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="lb-muted">No query details stored for this run.</div>
+    {% endif %}
+    {% if run.error_message %}
+      <div class="mt-3">
+        <div class="fw-bold mb-2">Error Message</div>
+        <pre class="lb-pre">{{ run.error_message }}</pre>
+      </div>
+    {% endif %}
+  </section>
+
+  <section class="lb-panel">
+    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+      <h2 class="h5 mb-0">Candidates</h2>
+      <div class="lb-muted">Showing up to the first 100 candidates for this run.</div>
+    </div>
+    <div class="lb-table-wrap">
+      <table class="lb-table">
+        <thead>
+          <tr>
+            <th>Company</th>
+            <th>Website</th>
+            <th>Source</th>
+            <th>Status</th>
+            <th>Fit</th>
+            <th>Skip Reason</th>
+            <th>Lead Brain</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for candidate in candidates %}
+            <tr>
+              <td>{{ candidate.company_name|default:"—" }}</td>
+              <td>{% if candidate.website %}<a href="{{ candidate.website }}" target="_blank" rel="noopener">{{ candidate.website }}</a>{% else %}—{% endif %}</td>
+              <td>
+                {{ candidate.source_type|default:"—" }}
+                {% if candidate.source_url %}
+                  <div class="lb-muted"><a href="{{ candidate.source_url }}" target="_blank" rel="noopener">source</a></div>
+                {% endif %}
+              </td>
+              <td><span class="lb-badge {{ candidate.discovery_status }}">{{ candidate.get_discovery_status_display }}</span></td>
+              <td>
+                {% if candidate.fit_label %}
+                  <div>{{ candidate.fit_score }} • {{ candidate.fit_label }}</div>
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td>{{ candidate.skip_reason|default:"—" }}</td>
+              <td>
+                {% if candidate.created_leadbrain_company_id %}
+                  <a href="{% url 'leadbrain_company_detail' candidate.created_leadbrain_company_id %}">Company #{{ candidate.created_leadbrain_company_id }}</a>
+                {% else %}
+                  <span class="lb-muted">—</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="7">No candidates stored for this run.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}

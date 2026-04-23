@@ -123,7 +123,7 @@
                   {% if job.upload_id %}
                     <a href="{% url 'leadbrain_results' %}?upload={{ job.upload_id }}" class="btn btn-sm btn-outline-success">View Results</a>
                   {% else %}
-                    <a href="{% url 'leadbrain_discovery_job_detail' job.pk %}" class="btn btn-sm btn-outline-light">View Results</a>
+                    <a href="{% url 'leadbrain_discovery_job_detail' job.pk %}" class="btn btn-sm btn-outline-light">View Runs</a>
                   {% endif %}
                 </div>
               </td>
@@ -161,7 +161,10 @@
           {% for run in latest_runs %}
             <tr>
               <td>
-                <a href="{% url 'leadbrain_discovery_job_detail' run.job_id %}">{{ run.job.display_name }}</a>
+                <div class="d-flex gap-2 flex-wrap">
+                  <a href="{% url 'leadbrain_discovery_job_detail' run.job_id %}">{{ run.job.display_name }}</a>
+                  <a href="{% url 'leadbrain_discovery_run_detail' run.pk %}" class="lb-muted">Run Detail</a>
+                </div>
               </td>
               <td><span class="lb-badge {{ run.status }}">{{ run.get_status_display }}</span></td>
               <td>{{ run.candidates_saved }}</td>

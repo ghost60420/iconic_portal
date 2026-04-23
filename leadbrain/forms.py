@@ -52,6 +52,7 @@ class LeadBrainDiscoveryJobForm(forms.ModelForm):
             "country",
             "niche",
             "schedule_type",
+            "run_time",
             "max_results",
             "max_runs_per_day",
             "apparel_only",
@@ -62,6 +63,7 @@ class LeadBrainDiscoveryJobForm(forms.ModelForm):
             "country": forms.Select(attrs={"class": "form-select"}),
             "niche": forms.Select(attrs={"class": "form-select"}),
             "schedule_type": forms.Select(attrs={"class": "form-select"}),
+            "run_time": forms.TimeInput(attrs={"class": "form-control", "type": "time"}),
             "max_results": forms.NumberInput(
                 attrs={"class": "form-control", "min": DISCOVERY_MIN_RESULTS, "max": DISCOVERY_MAX_RESULTS}
             ),

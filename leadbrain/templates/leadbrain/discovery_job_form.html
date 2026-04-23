@@ -73,6 +73,12 @@
         {% if form.schedule_type.errors %}<div class="text-danger small mt-1">{{ form.schedule_type.errors|join:", " }}</div>{% endif %}
       </div>
       <div>
+        <label class="form-label fw-bold">Run Time</label>
+        {{ form.run_time }}
+        {% if form.run_time.errors %}<div class="text-danger small mt-1">{{ form.run_time.errors|join:", " }}</div>{% endif %}
+        <div class="lb-muted mt-1">Used for daily or weekly schedules. Manual jobs can leave this blank.</div>
+      </div>
+      <div>
         <label class="form-label fw-bold">Runs Per Day</label>
         {{ form.max_runs_per_day }}
         {% if form.max_runs_per_day.errors %}<div class="text-danger small mt-1">{{ form.max_runs_per_day.errors|join:", " }}</div>{% endif %}

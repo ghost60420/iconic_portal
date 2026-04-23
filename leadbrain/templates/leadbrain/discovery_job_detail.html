@@ -81,6 +81,7 @@
       <div class="lb-meta-label">Niche</div><div>{{ job.get_niche_display }}</div>
       <div class="lb-meta-label">Sources</div><div>{{ job.source_summary }}</div>
       <div class="lb-meta-label">Schedule</div><div>{{ job.get_schedule_type_display }}{% if job.is_paused %} • paused{% endif %}</div>
+      <div class="lb-meta-label">Run Time</div><div>{{ job.run_time|time:"H:i"|default:"Default 09:00" }}</div>
       <div class="lb-meta-label">Max Leads Per Run</div><div>{{ job.max_results }}</div>
       <div class="lb-meta-label">Runs Per Day</div><div>{{ job.max_runs_per_day }}</div>
       <div class="lb-meta-label">Apparel Only</div><div>{% if job.apparel_only %}Yes{% else %}No{% endif %}</div>
@@ -133,9 +134,12 @@
               <td>{{ run.finished_at|date:"Y-m-d H:i"|default:"—" }}</td>
               <td>
                 {% if run.upload_id %}
-                  <a href="{% url 'leadbrain_results' %}?upload={{ run.upload_id }}">Open</a>
+                  <div class="d-flex gap-2 flex-wrap">
+                    <a href="{% url 'leadbrain_discovery_run_detail' run.pk %}">Run Detail</a>
+                    <a href="{% url 'leadbrain_results' %}?upload={{ run.upload_id }}">Open Leads</a>
+                  </div>
                 {% else %}
-                  <span class="lb-muted">—</span>
+                  <a href="{% url 'leadbrain_discovery_run_detail' run.pk %}">Run Detail</a>
                 {% endif %}
               </td>
             </tr>

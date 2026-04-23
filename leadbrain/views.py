@@ -194,6 +194,26 @@ class LeadBrainDiscoveryJobDetailView(LoginRequiredMixin, TemplateView):
         return context
 
 
+class LeadBrainDiscoveryRunDetailView(LoginRequiredMixin, TemplateView):
+    template_name = "leadbrain/discovery_run_detail.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        run = get_object_or_404(
+            LeadBrainDiscoveryRun.objects.select_related("job", "upload"),
+            pk=kwargs["pk"],
+        )
+        candidates = run.candidates.select_related("created_leadbrain_company")[:100]
+        context.update(
+            {
+                "run": run,
+                "job": run.job,
+                "candidates": candidates,
+            }
+        )
+        return context
+
+
 class LeadBrainDiscoveryJobRunNowView(LoginRequiredMixin, View):
     def post(self, request, pk):
         job = get_object_or_404(_discovery_jobs_queryset(), pk=pk)
