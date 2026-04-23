@@ -151,7 +151,10 @@ class IconicAIBrainTests(SimpleTestCase):
             result = build_iconic_ai_brain_email_draft(lead=lead, brain=brain)
 
         send_mail.assert_not_called()
-        self.assertEqual(set(result.keys()), {"subject", "body", "mailto_url"})
+        self.assertTrue(
+            {"subject", "body", "mailto_url", "recommended_mode", "reply_variants"} <= set(result.keys())
+        )
+        self.assertEqual(result["recommended_mode"], "follow_up_1")
         self.assertEqual(result["subject"], "Next steps for Hoodie")
         self.assertIn("Hello Sam Buyer,", result["body"])
         self.assertIn("your Hoodie inquiry for Acme Apparel", result["body"])
@@ -165,6 +168,9 @@ class IconicAIBrainTests(SimpleTestCase):
         self.assertTrue(result["mailto_url"].startswith("mailto:sam@example.com?"))
         self.assertIn("%20", result["mailto_url"])
         self.assertNotIn("+", result["mailto_url"])
+        self.assertIn("follow_up_5", result["reply_variants"])
+        self.assertIn("pricing_clarity", result["reply_variants"])
+        self.assertIn("objection_moq_concern", result["reply_variants"])
 
         source = inspect.getsource(lead_brain_email_draft_module)
         self.assertNotIn("send_mail", source)
@@ -193,6 +199,7 @@ class IconicAIBrainTests(SimpleTestCase):
             "Once I have that, I can give you a clearer idea of pricing and next steps.",
             result["body"],
         )
+        self.assertEqual(result["recommended_mode"], "follow_up_1")
 
     def test_email_draft_helper_uses_canada_tone(self):
         lead = WriteTrap(
@@ -211,6 +218,10 @@ class IconicAIBrainTests(SimpleTestCase):
 
         self.assertIn("your Beanies inquiry for Maple Works", result["body"])
         self.assertIn("If you send that over, I can guide you on the next steps.", result["body"])
+        self.assertIn(
+            "Once I have that, I can guide you on pricing and the next steps.",
+            result["reply_variants"]["pricing_clarity"]["body"],
+        )
 
     def test_email_draft_helper_uses_neutral_tone_when_market_is_unknown(self):
         lead = WriteTrap(
@@ -234,6 +245,82 @@ class IconicAIBrainTests(SimpleTestCase):
             result["body"],
         )
         self.assertIn("Could you share the product or style you have in mind?", result["body"])
+
+    def test_follow_up_sequence_variants_are_short_and_distinct(self):
+        lead = WriteTrap(
+            account_brand="Acme Apparel",
+            contact_name="Sam Buyer",
+            email="sam@example.com",
+            product_interest="Hoodie",
+            market="CA",
+        )
+        result = build_iconic_ai_brain_email_draft(
+            lead=lead,
+            brain={"missing_info": ["Website"], "suggested_next_step": ""},
+        )
+
+        follow_up_keys = [f"follow_up_{number}" for number in range(1, 6)]
+        bodies = []
+        for key in follow_up_keys:
+            variant = result["reply_variants"][key]
+            self.assertLessEqual(len(variant["body"].splitlines()), 7)
+            self.assertNotIn("<", variant["body"])
+            self.assertNotIn(">", variant["body"])
+            self.assertNotIn("*", variant["body"])
+            bodies.append(variant["body"])
+
+        self.assertEqual(len(set(bodies)), 5)
+        self.assertIn("Just checking back on", result["reply_variants"]["follow_up_2"]["body"])
+        self.assertIn("reconnect later", result["reply_variants"]["follow_up_4"]["body"].lower())
+        self.assertIn("I will close the loop", result["reply_variants"]["follow_up_5"]["body"])
+
+    def test_high_ticket_pricing_clarity_variant_uses_serious_signals(self):
+        lead = WriteTrap(
+            account_brand="Premium Label",
+            contact_name="Maya",
+            email="maya@example.com",
+            product_interest="Outerwear",
+            website="https://premium.example.com",
+            order_quantity="1500",
+            brand_fit_score=86,
+            qualification_status="Strong Fit",
+            market="US",
+            last_reply_date="2026-04-10",
+        )
+        result = build_iconic_ai_brain_email_draft(
+            lead=lead,
+            brain={"missing_info": ["Order quantity"], "suggested_next_step": "Share quantity for pricing clarity."},
+        )
+
+        self.assertEqual(result["recommended_mode"], "pricing_clarity")
+        variant = result["reply_variants"]["pricing_clarity"]
+        self.assertEqual(variant["subject"], "Pricing and next steps")
+        self.assertIn("clearer price direction", variant["body"])
+        self.assertIn("clearer idea of pricing and next steps", variant["body"])
+
+    def test_objection_variants_cover_moq_and_not_ready_for_call(self):
+        lead = WriteTrap(
+            account_brand="North Mill",
+            contact_name="Evan",
+            email="evan@example.com",
+            product_interest="T shirts",
+            market="",
+            country="Germany",
+        )
+        result = build_iconic_ai_brain_email_draft(
+            lead=lead,
+            brain={"missing_info": ["Order quantity"], "suggested_next_step": ""},
+        )
+
+        moq = result["reply_variants"]["objection_moq_concern"]
+        self.assertEqual(moq["subject"], "Quantity planning")
+        self.assertIn("right starting quantity", moq["body"])
+        self.assertIn("quantity range you are considering", moq["body"])
+
+        no_call = result["reply_variants"]["objection_not_ready_for_call"]
+        self.assertEqual(no_call["subject"], "No call needed")
+        self.assertIn("we can keep this over email", no_call["body"])
+        self.assertIn("send the key details here", no_call["body"])
 
 
 class _RelationList:

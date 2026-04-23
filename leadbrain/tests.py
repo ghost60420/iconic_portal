@@ -11,10 +11,26 @@ from django.urls import reverse
 from django.utils import timezone
 
 from leadbrain.forms import LeadBrainUploadForm
-from leadbrain.models import LeadBrainCompany, LeadBrainUpload, LeadBrainWorker
+from leadbrain.models import (
+    LeadBrainCompany,
+    LeadBrainDiscoveryCandidate,
+    LeadBrainDiscoveryJob,
+    LeadBrainDiscoveryRun,
+    LeadBrainUpload,
+    LeadBrainWorker,
+)
 from leadbrain.services.background_runner import launch_upload_processing
 from leadbrain.services.classification_service import classify_company
 from leadbrain.services.cleanup_service import cleanup_leadbrain_data
+from leadbrain.services.discovery_service import (
+    DISCOVERY_MAX_JOBS_PER_DAY,
+    DISCOVERY_MAX_RESULTS,
+    DISCOVERY_MIN_RESULTS,
+    can_queue_discovery_job,
+    process_discovery_runs,
+    queue_manual_discovery_run,
+    schedule_due_discovery_runs,
+)
 from leadbrain.services.file_parser import parse_uploaded_file, parse_uploaded_file_report
 from leadbrain.services.import_service import prepare_import_rows
 from leadbrain.services.lead_export import create_lead_from_company
@@ -159,6 +175,232 @@ class LeadBrainDuplicateImportTests(TestCase):
         self.assertEqual(result["imported_rows"], 1)
         self.assertEqual(result["skipped_duplicate_rows"], 1)
         self.assertIn("same file", result["duplicate_examples"][0])
+
+
+class LeadBrainDiscoveryTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username="leadbrain-discovery", password="pass123", is_staff=True)
+        self.client.force_login(self.user)
+
+    def test_run_now_view_queues_background_task(self):
+        job = LeadBrainDiscoveryJob.objects.create(
+            created_by=self.user,
+            name="Canada streetwear",
+            source_type=LeadBrainDiscoveryJob.SOURCE_WEB,
+            selected_sources_json=[LeadBrainDiscoveryJob.SOURCE_WEB],
+            source_types_json=[LeadBrainDiscoveryJob.SOURCE_WEB],
+            country=LeadBrainDiscoveryJob.COUNTRY_CANADA,
+            countries_json=[LeadBrainDiscoveryJob.COUNTRY_CANADA],
+            niche=LeadBrainDiscoveryJob.NICHE_STREETWEAR,
+            niches_json=[LeadBrainDiscoveryJob.NICHE_STREETWEAR],
+            max_results=DISCOVERY_MAX_RESULTS,
+            max_results_per_run=DISCOVERY_MAX_RESULTS,
+            minimum_score=65,
+            min_fit_score=65,
+        )
+        with patch("leadbrain.views.run_discovery_job_task.delay") as delay:
+            response = self.client.post(
+                reverse("leadbrain_discovery_job_run_now", args=[job.pk]),
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(job.status, LeadBrainDiscoveryJob.STATUS_QUEUED)
+        delay.assert_called_once_with(job.pk)
+
+    def test_discovery_job_form_clamps_results_to_safe_range_and_syncs_backend_fields(self):
+        response = self.client.post(
+            reverse("leadbrain_discovery_job_create"),
+            {
+                "name": "Streetwear Canada",
+                "selected_sources": [LeadBrainDiscoveryJob.SOURCE_WEB, LeadBrainDiscoveryJob.SOURCE_DIRECTORIES],
+                "country": LeadBrainDiscoveryJob.COUNTRY_CANADA,
+                "niche": LeadBrainDiscoveryJob.NICHE_STREETWEAR,
+                "schedule_type": LeadBrainDiscoveryJob.SCHEDULE_MANUAL,
+                "max_results": 5,
+                "max_runs_per_day": 3,
+                "apparel_only": "on",
+                "minimum_score": 40,
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        job = LeadBrainDiscoveryJob.objects.get()
+        self.assertEqual(job.max_results, DISCOVERY_MIN_RESULTS)
+        self.assertEqual(job.max_results_per_run, DISCOVERY_MIN_RESULTS)
+        self.assertEqual(job.selected_sources_json, [LeadBrainDiscoveryJob.SOURCE_WEB, LeadBrainDiscoveryJob.SOURCE_DIRECTORIES])
+        self.assertEqual(job.source_types_json, [LeadBrainDiscoveryJob.SOURCE_WEB, LeadBrainDiscoveryJob.SOURCE_DIRECTORIES])
+        self.assertEqual(job.countries_json, [LeadBrainDiscoveryJob.COUNTRY_CANADA])
+        self.assertEqual(job.niches_json, [LeadBrainDiscoveryJob.NICHE_STREETWEAR])
+        self.assertEqual(job.max_runs_per_day, DISCOVERY_MAX_JOBS_PER_DAY)
+        self.assertEqual(job.minimum_score, 65)
+        self.assertEqual(job.min_fit_score, 65)
+
+    def test_can_queue_discovery_job_enforces_daily_limit(self):
+        for _ in range(DISCOVERY_MAX_JOBS_PER_DAY):
+            LeadBrainDiscoveryJob.objects.create(
+                created_by=self.user,
+                source_type=LeadBrainDiscoveryJob.SOURCE_WEB,
+                country=LeadBrainDiscoveryJob.COUNTRY_CANADA,
+                niche=LeadBrainDiscoveryJob.NICHE_STREETWEAR,
+                max_results=DISCOVERY_MAX_RESULTS,
+                status=LeadBrainDiscoveryJob.STATUS_COMPLETE,
+            )
+
+        allowed, reason = can_queue_discovery_job(user=self.user)
+
+        self.assertFalse(allowed)
+        self.assertIn("Daily discovery job limit reached", reason)
+
+    def test_schedule_due_discovery_runs_creates_single_active_run(self):
+        job = LeadBrainDiscoveryJob.objects.create(
+            created_by=self.user,
+            source_type=LeadBrainDiscoveryJob.SOURCE_WEB,
+            selected_sources_json=[LeadBrainDiscoveryJob.SOURCE_WEB],
+            source_types_json=[LeadBrainDiscoveryJob.SOURCE_WEB],
+            country=LeadBrainDiscoveryJob.COUNTRY_CANADA,
+            countries_json=[LeadBrainDiscoveryJob.COUNTRY_CANADA],
+            niche=LeadBrainDiscoveryJob.NICHE_ACTIVEWEAR,
+            niches_json=[LeadBrainDiscoveryJob.NICHE_ACTIVEWEAR],
+            schedule_type=LeadBrainDiscoveryJob.SCHEDULE_DAILY,
+            max_results=DISCOVERY_MAX_RESULTS,
+            max_results_per_run=DISCOVERY_MAX_RESULTS,
+            minimum_score=65,
+            min_fit_score=65,
+            next_run_at=timezone.now() - timedelta(minutes=1),
+            status=LeadBrainDiscoveryJob.STATUS_QUEUED,
+        )
+        runs = schedule_due_discovery_runs()
+        self.assertEqual(len(runs), 1)
+        self.assertEqual(runs[0].job_id, job.pk)
+        job.refresh_from_db()
+        self.assertTrue(job.next_run_at and job.next_run_at > timezone.now())
+        self.assertEqual(schedule_due_discovery_runs(), [])
+
+    def test_process_discovery_runs_saves_only_viable_candidates(self):
+        job = LeadBrainDiscoveryJob.objects.create(
+            created_by=self.user,
+            source_type=LeadBrainDiscoveryJob.SOURCE_WEB,
+            selected_sources_json=[LeadBrainDiscoveryJob.SOURCE_WEB],
+            source_types_json=[LeadBrainDiscoveryJob.SOURCE_WEB],
+            country=LeadBrainDiscoveryJob.COUNTRY_CANADA,
+            countries_json=[LeadBrainDiscoveryJob.COUNTRY_CANADA],
+            niche=LeadBrainDiscoveryJob.NICHE_ACTIVEWEAR,
+            niches_json=[LeadBrainDiscoveryJob.NICHE_ACTIVEWEAR],
+            max_results=DISCOVERY_MAX_RESULTS,
+            max_results_per_run=DISCOVERY_MAX_RESULTS,
+            minimum_score=65,
+            min_fit_score=65,
+            status=LeadBrainDiscoveryJob.STATUS_QUEUED,
+        )
+        LeadBrainCompany.objects.create(
+            upload=LeadBrainUpload.objects.create(
+                file="leadbrain/uploads/existing-discovery.csv",
+                file_name="existing-discovery.csv",
+                uploaded_by=self.user,
+                status=LeadBrainUpload.STATUS_COMPLETE,
+                is_active=True,
+            ),
+            row_number=1,
+            company_name="Existing Discovery",
+            website="https://duplicate.example.com",
+            research_status=LeadBrainCompany.STATUS_COMPLETE,
+            raw_row_json={"Company Name": "Existing Discovery"},
+        )
+        run = queue_manual_discovery_run(job, created_by=self.user)
+
+        def fake_search_query_results(query, limit=10):
+            return {
+                "results": [
+                    {"title": "Fresh Brand", "url": "https://freshbrand.example.com", "snippet": "Activewear brand"},
+                    {"title": "Existing Discovery", "url": "https://duplicate.example.com", "snippet": "Duplicate"},
+                    {"title": "Weak Brand", "url": "https://weakbrand.example.com", "snippet": "Weak"},
+                ]
+            }
+
+        def fake_research(company):
+            if company.company_name == "Weak Brand":
+                return {
+                    "website_status": "live",
+                    "official_website_found": company.website,
+                    "linkedin_url_found": "",
+                    "instagram_url_found": "",
+                    "public_email_found": "",
+                    "public_phone_found": "",
+                    "business_description": "Weak general business",
+                    "apparel_signals": [],
+                    "search_summary": "",
+                    "possible_contact_name": "",
+                    "possible_contact_title": "",
+                    "confidence_notes": "",
+                    "business_type_detected": "General Business",
+                }
+            return {
+                "website_status": "live",
+                "official_website_found": company.website,
+                "linkedin_url_found": "",
+                "instagram_url_found": "",
+                "public_email_found": "hello@freshbrand.example.com",
+                "public_phone_found": "",
+                "business_description": "Activewear apparel brand",
+                "apparel_signals": ["activewear", "apparel"],
+                "search_summary": "Activewear apparel brand",
+                "possible_contact_name": "",
+                "possible_contact_title": "Buyer",
+                "confidence_notes": "",
+                "business_type_detected": "Apparel Brand",
+            }
+
+        def fake_classify(company, research_data):
+            if company.company_name == "Weak Brand":
+                return {
+                    "business_type": "General Business",
+                    "fit_label": LeadBrainCompany.FIT_WEAK,
+                    "fit_score": 40,
+                    "fit_reason": "Weak fit",
+                    "ai_summary": "Weak fit",
+                    "suggested_action": "Skip",
+                    "best_contact_title": "",
+                }
+            return {
+                "business_type": "Apparel Brand",
+                "fit_label": LeadBrainCompany.FIT_GOOD,
+                "fit_score": 84,
+                "fit_reason": "Strong fit",
+                "ai_summary": "Strong fit",
+                "suggested_action": "Good for Custom Pitch",
+                    "best_contact_title": "Buyer",
+                }
+
+        with patch(
+            "leadbrain.services.discovery_service.search_query_results",
+            side_effect=fake_search_query_results,
+        ), patch(
+            "leadbrain.services.discovery_service.research_company",
+            side_effect=fake_research,
+        ), patch(
+            "leadbrain.services.discovery_service.classify_company",
+            side_effect=fake_classify,
+        ):
+            processed = process_discovery_runs(limit=1, batch_size=10, run_id=run.pk)
+
+        self.assertGreaterEqual(processed, 1)
+        run.refresh_from_db()
+        job.refresh_from_db()
+        self.assertEqual(run.status, LeadBrainDiscoveryJob.STATUS_COMPLETE)
+        self.assertEqual(run.total_candidates_saved, 1)
+        self.assertEqual(run.total_duplicates_skipped, 1)
+        self.assertEqual(run.total_weak_skipped, 1)
+        self.assertEqual(job.candidates_saved, 1)
+        self.assertEqual(job.duplicates_skipped, 1)
+        self.assertEqual(job.weak_skipped, 1)
+        self.assertTrue(job.upload_id)
+        self.assertEqual(LeadBrainDiscoveryCandidate.objects.filter(run=run).count(), 3)
+        saved_company = LeadBrainCompany.objects.get(discovery_run=run)
+        self.assertEqual(saved_company.company_name, "Fresh Brand")
+        self.assertEqual(saved_company.fit_score, 84)
+        self.assertEqual(saved_company.discovery_job_id, job.pk)
+        self.assertEqual(saved_company.source_type, LeadBrainDiscoveryJob.SOURCE_WEB)
+        self.assertEqual(saved_company.raw_row_json["leadbrain_source"], "discovery")
 
 
 class LeadBrainCleanupTests(TestCase):
@@ -1265,3 +1507,75 @@ class LeadBrainUploadFlowTests(TestCase):
         self.assertEqual(LeadBrainUpload.objects.count(), 0)
         self.assertEqual(LeadBrainCompany.objects.count(), 0)
         self.assertEqual(LeadBrainWorker.objects.count(), 0)
+
+
+class LeadBrainDiscoveryUiTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="leadbrain-ui",
+            password="secret123",
+            is_staff=True,
+        )
+        self.client.force_login(self.user)
+
+    def test_discovery_dashboard_and_create_page_render(self):
+        response = self.client.get(reverse("leadbrain_discovery_jobs"), HTTP_HOST="femline.ca")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Discovery Jobs")
+
+        response = self.client.get(reverse("leadbrain_discovery_job_create"), HTTP_HOST="femline.ca")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Create Discovery Job")
+
+    @patch("leadbrain.views.run_discovery_job_task.delay")
+    def test_create_and_run_now_job(self, mocked_delay):
+        response = self.client.post(
+            reverse("leadbrain_discovery_job_create"),
+            {
+                "name": "Canada Discovery",
+                "country": LeadBrainDiscoveryJob.COUNTRY_CANADA,
+                "niche": LeadBrainDiscoveryJob.NICHE_STREETWEAR,
+                "selected_sources": [LeadBrainDiscoveryJob.SOURCE_WEB, LeadBrainDiscoveryJob.SOURCE_SHOPIFY],
+                "schedule_type": LeadBrainDiscoveryJob.SCHEDULE_DAILY,
+                "max_results": 25,
+                "max_runs_per_day": 2,
+                "apparel_only": "on",
+                "minimum_score": 70,
+            },
+            HTTP_HOST="femline.ca",
+        )
+        self.assertEqual(response.status_code, 302)
+        job = LeadBrainDiscoveryJob.objects.get(name="Canada Discovery")
+        self.assertEqual(job.schedule_type, LeadBrainDiscoveryJob.SCHEDULE_DAILY)
+        self.assertEqual(job.selected_sources, [LeadBrainDiscoveryJob.SOURCE_WEB, LeadBrainDiscoveryJob.SOURCE_SHOPIFY])
+
+        response = self.client.post(reverse("leadbrain_discovery_job_run_now", args=[job.pk]), HTTP_HOST="femline.ca")
+        self.assertEqual(response.status_code, 302)
+        mocked_delay.assert_called_once_with(job.pk)
+
+    def test_results_page_shows_discovery_badges(self):
+        upload = LeadBrainUpload.objects.create(
+            file="leadbrain/uploads/discovery-ui.csv",
+            file_name="discovery-ui.csv",
+            status=LeadBrainUpload.STATUS_COMPLETE,
+            row_count=1,
+            total_rows=1,
+            imported_rows=1,
+            completed_rows=1,
+            progress_percent=100,
+        )
+        LeadBrainCompany.objects.create(
+            upload=upload,
+            row_number=1,
+            company_name="Discovery Brand",
+            website="https://discoverybrand.example",
+            fit_label=LeadBrainCompany.FIT_GOOD,
+            fit_score=84,
+            research_status=LeadBrainCompany.STATUS_COMPLETE,
+            raw_row_json={"leadbrain_source": "discovery"},
+        )
+
+        response = self.client.get(reverse("leadbrain_results"), HTTP_HOST="femline.ca")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Discovery")
+        self.assertContains(response, "Strong")

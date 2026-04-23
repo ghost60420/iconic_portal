@@ -1,0 +1,14 @@
+{
+  "name": "iconic-whatsapp-web-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "qrcode": "^1.5.4",
+    "whatsapp-web.js": "^1.26.1"
+  }
+}

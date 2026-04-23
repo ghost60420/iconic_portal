@@ -1,0 +1,445 @@
+{% extends "crm/base.html" %}
+{% load humanize static %}
+{% block content %}
+
+<style>
+  :root{
+    --ink:#0f172a;
+    --muted:#64748b;
+    --line:#e2e8f0;
+    --paper:#ffffff;
+    --accent:#f59e0b;
+    --accent-dark:#7c5200;
+    --bg:#f8fafc;
+    --good:#22c55e;
+  }
+
+  .invoice-wrap{
+    max-width:1120px;
+    margin:0 auto;
+    color:var(--ink);
+    font-family:"Manrope", "Avenir Next", "Helvetica Neue", sans-serif;
+  }
+
+  .actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:12px;
+  }
+
+  .pill{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:8px 14px;
+    border-radius:999px;
+    font-weight:800;
+    font-size:12px;
+    border:1px solid var(--line);
+    background:#fff;
+    color:var(--ink);
+    text-decoration:none;
+    box-shadow:0 3px 0 rgba(15,23,42,0.08);
+    white-space:nowrap;
+  }
+  .pill:hover{ text-decoration:none; filter:brightness(0.98); }
+  .pill.gold{ background:linear-gradient(135deg,#fde68a,#f59e0b); border-color:#f59e0b; color:#111827; }
+  .pill.approve{ background:linear-gradient(135deg,#bbf7d0,#22c55e); border-color:#22c55e; color:#052e16; }
+
+  .invoice-shell{
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-radius:22px;
+    box-shadow:0 28px 60px rgba(15,23,42,0.12);
+    overflow:hidden;
+  }
+
+  .invoice-top{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:18px;
+    padding:24px 28px;
+    background:linear-gradient(140deg,#f8fafc 0%,#fff7e0 100%);
+  }
+
+  .brand{
+    display:flex;
+    gap:16px;
+    align-items:center;
+    flex-wrap:wrap;
+  }
+
+  .brand img{
+    height:64px;
+    width:auto;
+    border-radius:12px;
+    background:#fff;
+    border:1px solid var(--line);
+    padding:6px;
+  }
+
+  .brand-name{
+    font-size:20px;
+    font-weight:900;
+    letter-spacing:0.2px;
+  }
+
+  .brand-meta{
+    margin-top:6px;
+    font-size:12px;
+    line-height:1.5;
+    color:var(--muted);
+    font-weight:600;
+  }
+
+  .invoice-meta{
+    text-align:right;
+    font-size:12px;
+    color:var(--muted);
+    min-width:240px;
+  }
+
+  .badge{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:5px 10px;
+    border-radius:999px;
+    font-size:11px;
+    font-weight:800;
+    border:1px solid var(--line);
+    color:var(--accent-dark);
+    background:#fff;
+    margin-bottom:8px;
+  }
+
+  .badge.approved{ color:#065f46; border-color:#86efac; }
+
+  .meta-title{
+    font-size:20px;
+    font-weight:900;
+    color:var(--ink);
+    margin-bottom:8px;
+  }
+
+  .meta-row{
+    display:flex;
+    justify-content:space-between;
+    gap:10px;
+    margin-bottom:4px;
+    font-weight:700;
+  }
+
+  .meta-row span:first-child{ color:var(--muted); font-weight:700; }
+  .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+
+  .invoice-body{ padding:24px 28px 28px; background:var(--paper); }
+
+  .info-grid{
+    display:grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap:16px;
+    margin-bottom:18px;
+  }
+
+  .box{
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:16px;
+    background:#fff;
+  }
+
+  .box-title{
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.6px;
+    font-weight:800;
+    color:var(--muted);
+    margin-bottom:10px;
+  }
+
+  .value{ font-weight:800; color:var(--ink); }
+  .muted{ color:var(--muted); font-size:12px; font-weight:600; }
+  .stack > div{ margin-bottom:4px; }
+
+  .items{
+    width:100%;
+    border-collapse:collapse;
+    font-size:13px;
+    margin-top:4px;
+  }
+
+  .items th{
+    text-align:left;
+    padding:10px 8px;
+    border-bottom:1px solid var(--line);
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+    font-size:11px;
+    color:var(--muted);
+  }
+
+  .items td{
+    padding:10px 8px;
+    border-bottom:1px solid var(--line);
+    vertical-align:top;
+  }
+
+  .items td.num{ text-align:right; font-variant-numeric: tabular-nums; }
+  .item-detail td{ color:var(--muted); font-size:12px; }
+
+  .summary{
+    display:flex;
+    justify-content:flex-end;
+    margin-top:16px;
+  }
+
+  .summary table{
+    width:360px;
+    border-collapse:collapse;
+    font-size:13px;
+  }
+
+  .summary td{ padding:6px 0; }
+  .summary td:last-child{ text-align:right; font-weight:800; }
+  .summary .label{ color:var(--muted); font-weight:700; }
+  .summary .total{ font-size:18px; font-weight:900; color:var(--ink); }
+
+  .notes{
+    margin-top:18px;
+    border:1px dashed var(--line);
+    border-radius:14px;
+    padding:14px;
+    font-size:12px;
+    color:var(--muted);
+    line-height:1.5;
+    background:#fcfcfd;
+  }
+
+  .notes strong{ color:var(--ink); }
+
+  .foot-note{
+    margin-top:18px;
+    font-size:12px;
+    color:var(--muted);
+    font-weight:600;
+  }
+
+  .approve-meta{
+    margin-top:6px;
+    font-size:11px;
+    color:#065f46;
+    font-weight:700;
+  }
+
+  @media (max-width: 900px){
+    .invoice-top{ flex-direction:column; align-items:flex-start; }
+    .invoice-meta{ text-align:left; }
+    .info-grid{ grid-template-columns:1fr; }
+    .summary{ justify-content:flex-start; }
+  }
+
+  @media print{
+    .actions, .noPrint{ display:none !important; }
+    .crm-topbar{ display:none !important; }
+    .crm-dropdown-menu{ display:none !important; }
+    body{ background:#fff !important; }
+    .invoice-shell{ box-shadow:none; border:1px solid #cbd5e1; }
+    .invoice-top{ background:#fff; }
+  }
+</style>
+
+{% with cur=invoice.currency|default:"" invno=invoice.invoice_number|default:"" %}
+<div class="container-fluid">
+  <div class="invoice-wrap">
+
+    <div class="actions noPrint">
+      <a class="pill" href="{% url 'invoice_list' %}">Back to invoices</a>
+      {% if invoice.invoice_status != "APPROVED" %}
+        <a class="pill gold" href="{% url 'invoice_edit' invoice.pk %}">Edit</a>
+      {% endif %}
+      {% if invoice.invoice_status == "DRAFT" and can_approve_invoice %}
+        <form method="post" action="{% url 'invoice_approve' invoice.pk %}">
+          {% csrf_token %}
+          <button class="pill approve" type="submit">Approve</button>
+        </form>
+      {% endif %}
+      <a class="pill" href="#" onclick="window.print();return false;">Print</a>
+    </div>
+
+    <div class="invoice-shell">
+      <div class="invoice-top">
+        <div class="brand">
+          {% if company.logo_path %}
+            <img src="{% static company.logo_path %}" alt="{{ company.name }} logo">
+          {% endif %}
+          <div>
+            <div class="brand-name">{{ company.name }}</div>
+            <div class="brand-meta">
+              <div>{{ company.office_label }} Office</div>
+              {% if company.address %}<div>{{ company.address|linebreaksbr }}</div>{% endif %}
+              {% if company.phone or company.email %}
+                <div>
+                  {% if company.phone %}{{ company.phone }}{% endif %}
+                  {% if company.phone and company.email %} | {% endif %}
+                  {% if company.email %}{{ company.email }}{% endif %}
+                </div>
+              {% endif %}
+              {% if company.website %}<div>{{ company.website }}</div>{% endif %}
+              {% if company.tax_id %}<div>{{ company.tax_label }}: {{ company.tax_id }}</div>{% endif %}
+            </div>
+          </div>
+        </div>
+
+        <div class="invoice-meta">
+          <div class="badge">Bangladesh Invoice</div>
+          {% if invoice.invoice_status == "APPROVED" %}
+            <div class="badge approved">Approved</div>
+            <div class="approve-meta">
+              {% if invoice.approved_at %}{{ invoice.approved_at|date:"Y-m-d H:i" }}{% endif %}
+              {% if invoice.approved_by %} · {{ invoice.approved_by }}{% endif %}
+            </div>
+          {% endif %}
+          <div class="meta-title">Invoice</div>
+          <div class="meta-row"><span>Invoice #</span><span class="mono">{{ invno }}</span></div>
+          <div class="meta-row"><span>Issue date</span><span>{{ invoice.issue_date|date:"Y-m-d"|default:"" }}</span></div>
+          <div class="meta-row"><span>Due date</span><span>{% if invoice.due_date %}{{ invoice.due_date|date:"Y-m-d" }}{% else %}-{% endif %}</span></div>
+          <div class="meta-row"><span>Currency</span><span>{{ cur|default:"-" }}</span></div>
+          <div class="meta-row"><span>Invoice status</span><span>{{ invoice.get_invoice_status_display }}</span></div>
+          <div class="meta-row"><span>Payment status</span><span>{{ invoice.status|capfirst }}</span></div>
+        </div>
+      </div>
+
+      <div class="invoice-body">
+        <div class="info-grid">
+          <div class="box">
+            <div class="box-title">Bill To</div>
+            {% if invoice.customer %}
+              <div class="stack">
+                <div class="value">{{ invoice.customer.account_brand|default:invoice.customer.contact_name|default:"Customer" }}</div>
+                {% if invoice.customer.contact_name %}<div class="muted">{{ invoice.customer.contact_name }}</div>{% endif %}
+                {% if invoice.customer.email %}<div class="muted">{{ invoice.customer.email }}</div>{% endif %}
+                {% if invoice.customer.phone %}<div class="muted">{{ invoice.customer.phone }}</div>{% endif %}
+                {% if invoice.customer.address_line1 %}<div class="muted">{{ invoice.customer.address_line1 }}</div>{% endif %}
+                {% if invoice.customer.address_line2 %}<div class="muted">{{ invoice.customer.address_line2 }}</div>{% endif %}
+                {% if invoice.customer.city or invoice.customer.state or invoice.customer.province %}
+                  <div class="muted">
+                    {{ invoice.customer.city }}{% if invoice.customer.city and invoice.customer.state %}, {% endif %}{{ invoice.customer.state }}{% if invoice.customer.province %} {{ invoice.customer.province }}{% endif %}
+                  </div>
+                {% endif %}
+                {% if invoice.customer.postal_code or invoice.customer.country %}
+                  <div class="muted">{{ invoice.customer.postal_code }} {{ invoice.customer.country }}</div>
+                {% endif %}
+              </div>
+            {% else %}
+              <div class="muted">Customer not set.</div>
+            {% endif %}
+          </div>
+
+          <div class="box">
+            <div class="box-title">Order Details</div>
+            {% if invoice.order %}
+              <div class="stack">
+                <div class="value">{{ invoice.order.title|default:invoice.order.order_code }}</div>
+                {% if invoice.order.order_code %}<div class="muted">Order code: {{ invoice.order.order_code }}</div>{% endif %}
+                {% if invoice.order.qty_total %}<div class="muted">Quantity: {{ invoice.order.qty_total|intcomma }}</div>{% endif %}
+                {% if invoice.order.factory_location %}<div class="muted">Factory: {{ invoice.order.get_factory_location_display }}</div>{% endif %}
+                {% if invoice.order.style_name %}<div class="muted">Style: {{ invoice.order.style_name }}</div>{% endif %}
+              </div>
+            {% else %}
+              <div class="muted">No production order linked.</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="box" style="margin-bottom:16px;">
+          <div class="box-title">Itemized List</div>
+          <table class="items">
+            <thead>
+              <tr>
+                <th style="width:48%;">Description</th>
+                <th style="width:16%;" class="num">Qty</th>
+                <th style="width:18%;" class="num">Rate</th>
+                <th style="width:18%;" class="num">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in line_items %}
+                <tr class="{% if item.is_detail %}item-detail{% endif %}">
+                  <td>{{ item.description }}</td>
+                  <td class="num">
+                    {% if item.has_qty %}{{ item.qty|intcomma }}{% else %}-{% endif %}
+                  </td>
+                  <td class="num">
+                    {% if item.has_rate %}{{ cur }} {{ item.rate|floatformat:2|intcomma }}{% else %}-{% endif %}
+                  </td>
+                  <td class="num">
+                    {% if item.has_amount %}{{ cur }} {{ item.amount|floatformat:2|intcomma }}{% else %}{% if item.is_detail %}&nbsp;{% else %}-{% endif %}{% endif %}
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="4" class="muted">No items added yet.</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="summary">
+          <table>
+            <tr>
+              <td class="label">Subtotal</td>
+              <td>{{ cur }} {{ invoice.subtotal|default_if_none:0|floatformat:2|intcomma }}</td>
+            </tr>
+            <tr>
+              <td class="label">Shipping</td>
+              <td>{{ cur }} {{ invoice.shipping_amount|default_if_none:0|floatformat:2|intcomma }}</td>
+            </tr>
+            <tr>
+              <td class="label">Discount</td>
+              <td>{{ cur }} {{ invoice.discount_amount|default_if_none:0|floatformat:2|intcomma }}</td>
+            </tr>
+            <tr>
+              <td class="label">Tax</td>
+              <td>{{ cur }} {{ invoice.tax_amount|default_if_none:0|floatformat:2|intcomma }}</td>
+            </tr>
+            <tr>
+              <td class="label total">Total</td>
+              <td class="total">{{ cur }} {{ invoice.total_amount|default_if_none:0|floatformat:2|intcomma }}</td>
+            </tr>
+            <tr>
+              <td class="label">Paid</td>
+              <td>{{ cur }} {{ invoice.paid_amount|default_if_none:0|floatformat:2|intcomma }}</td>
+            </tr>
+            <tr>
+              <td class="label">Balance</td>
+              <td>{{ cur }} {{ invoice.balance|default_if_none:0|floatformat:2|intcomma }}</td>
+            </tr>
+          </table>
+        </div>
+
+        <div class="notes">
+          <strong>Payment status</strong><br>
+          {{ payment_status.label }} — {{ payment_status.note }}<br>
+          Paid: {{ cur }} {{ payment_status.paid|floatformat:2|intcomma }} · Balance: {{ cur }} {{ payment_status.balance|floatformat:2|intcomma }}
+        </div>
+
+        {% if invoice.notes %}
+          <div class="notes">
+            <strong>Notes</strong><br>
+            {{ invoice.notes|linebreaksbr }}
+          </div>
+        {% endif %}
+
+        <div class="foot-note">Remittance details will be shared separately by our accounts team.</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endwith %}
+
+{% endblock %}

@@ -1,0 +1,150 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+<style>
+  .lb-shell { display:grid; gap:16px; }
+  .lb-summary-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; }
+  .lb-panel, .lb-stat {
+    background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+    border: 1px solid #243041;
+    border-radius: 14px;
+    padding: 18px;
+    box-shadow: 0 12px 28px rgba(0,0,0,0.35);
+  }
+  .lb-stat-label { color:#93c5fd; font-size:11px; text-transform:uppercase; font-weight:800; }
+  .lb-stat-value { color:#f8fafc; font-size:24px; font-weight:900; margin-top:6px; }
+  .lb-meta { display:grid; grid-template-columns:180px minmax(0, 1fr); gap:10px 14px; font-size:13px; }
+  .lb-meta-label { color:#93c5fd; font-weight:800; }
+  .lb-table-wrap { overflow:auto; }
+  .lb-table { width:100%; min-width:920px; border-collapse:collapse; }
+  .lb-table th, .lb-table td { padding:10px 12px; border-bottom:1px solid #243041; font-size:13px; vertical-align:top; }
+  .lb-table th { color:#93c5fd; font-size:11px; text-transform:uppercase; }
+  .lb-badge {
+    display:inline-flex; padding:4px 10px; border-radius:999px; font-size:11px; font-weight:800;
+    border:1px solid #334155; background:#0f172a; color:#e5e7eb;
+  }
+  .lb-badge.queued { background:rgba(96,165,250,0.12); border-color:#60a5fa; color:#dbeafe; }
+  .lb-badge.processing { background:rgba(59,130,246,0.12); border-color:#60a5fa; color:#bfdbfe; }
+  .lb-badge.complete { background:rgba(34,197,94,0.12); border-color:#22c55e; color:#bbf7d0; }
+  .lb-badge.partial { background:rgba(249,115,22,0.12); border-color:#fb923c; color:#fed7aa; }
+  .lb-badge.failed, .lb-badge.cancelled { background:rgba(248,113,113,0.12); border-color:#f87171; color:#fecaca; }
+  .lb-muted { color:#9ca3af; font-size:12px; }
+</style>
+
+<div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+  <div>
+    <h1 class="h3 mb-1">{{ job.display_name }}</h1>
+    <div class="text-secondary">Discovery job detail and run history.</div>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <form method="post" action="{% url 'leadbrain_discovery_job_run_now' job.pk %}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-warning fw-bold">Run Now</button>
+    </form>
+    <a href="{% url 'leadbrain_discovery_job_edit' job.pk %}" class="btn btn-outline-light">Edit</a>
+    {% if job.upload_id %}
+      <a href="{% url 'leadbrain_results' %}?upload={{ job.upload_id }}" class="btn btn-outline-success">View Leads</a>
+    {% endif %}
+    <a href="{% url 'leadbrain_discovery_jobs' %}" class="btn btn-outline-light">Back to Jobs</a>
+  </div>
+</div>
+
+<div class="lb-shell">
+  <div class="lb-summary-grid">
+    <div class="lb-stat">
+      <div class="lb-stat-label">Runs</div>
+      <div class="lb-stat-value">{{ job.total_runs }}</div>
+    </div>
+    <div class="lb-stat">
+      <div class="lb-stat-label">Leads Found</div>
+      <div class="lb-stat-value">{{ job.total_leads_found }}</div>
+    </div>
+    <div class="lb-stat">
+      <div class="lb-stat-label">Strong Fits</div>
+      <div class="lb-stat-value">{{ job.total_strong_fits }}</div>
+    </div>
+    <div class="lb-stat">
+      <div class="lb-stat-label">Saved Leads</div>
+      <div class="lb-stat-value">{{ saved_leads }}</div>
+    </div>
+  </div>
+
+  <section class="lb-panel">
+    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+      <h2 class="h5 mb-0">Job Settings</h2>
+      <span class="lb-badge {{ job.status }}">{{ job.get_status_display }}</span>
+    </div>
+    <div class="lb-meta">
+      <div class="lb-meta-label">Country</div><div>{{ job.country }}</div>
+      <div class="lb-meta-label">Niche</div><div>{{ job.get_niche_display }}</div>
+      <div class="lb-meta-label">Sources</div><div>{{ job.source_summary }}</div>
+      <div class="lb-meta-label">Schedule</div><div>{{ job.get_schedule_type_display }}{% if job.is_paused %} • paused{% endif %}</div>
+      <div class="lb-meta-label">Max Leads Per Run</div><div>{{ job.max_results }}</div>
+      <div class="lb-meta-label">Runs Per Day</div><div>{{ job.max_runs_per_day }}</div>
+      <div class="lb-meta-label">Apparel Only</div><div>{% if job.apparel_only %}Yes{% else %}No{% endif %}</div>
+      <div class="lb-meta-label">Minimum Score</div><div>{{ job.minimum_score }}</div>
+      <div class="lb-meta-label">Last Run</div><div>{{ job.last_run_at|date:"Y-m-d H:i"|default:"—" }}</div>
+      <div class="lb-meta-label">Next Run</div><div>{{ job.next_run_at|date:"Y-m-d H:i"|default:"—" }}</div>
+    </div>
+    {% if job.status_note %}
+      <div class="lb-muted mt-3">{{ job.status_note }}</div>
+    {% endif %}
+  </section>
+
+  <section class="lb-panel">
+    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+      <h2 class="h5 mb-0">Recent Runs</h2>
+      {% if job.upload_id %}
+        <a href="{% url 'leadbrain_results' %}?upload={{ job.upload_id }}" class="btn btn-sm btn-outline-success">View Leads</a>
+      {% endif %}
+    </div>
+    <div class="lb-table-wrap">
+      <table class="lb-table">
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Found</th>
+            <th>Saved</th>
+            <th>Strong Fits</th>
+            <th>Duplicates</th>
+            <th>Weak</th>
+            <th>Started</th>
+            <th>Finished</th>
+            <th>Results</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for run in recent_runs %}
+            <tr>
+              <td>
+                <span class="lb-badge {{ run.status }}">{{ run.get_status_display }}</span>
+                {% if run.status_note %}
+                  <div class="lb-muted mt-1">{{ run.status_note|truncatechars:80 }}</div>
+                {% endif %}
+              </td>
+              <td>{{ run.results_found }}</td>
+              <td>{{ run.candidates_saved }}</td>
+              <td>{{ run.strong_fits_found }}</td>
+              <td>{{ run.duplicates_skipped }}</td>
+              <td>{{ run.weak_skipped }}</td>
+              <td>{{ run.started_at|date:"Y-m-d H:i" }}</td>
+              <td>{{ run.finished_at|date:"Y-m-d H:i"|default:"—" }}</td>
+              <td>
+                {% if run.upload_id %}
+                  <a href="{% url 'leadbrain_results' %}?upload={{ run.upload_id }}">Open</a>
+                {% else %}
+                  <span class="lb-muted">—</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="9">No runs yet.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}

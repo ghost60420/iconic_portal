@@ -20,7 +20,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.mail import EmailMessage, get_connection, send_mail
 from django.db import transaction, IntegrityError, connection
-from django.db.utils import OperationalError, ProgrammingError
+from django.db.utils import DataError, OperationalError, ProgrammingError
 from django.db.models import Case, Count, IntegerField, Q, When
 from django.db.models.functions import TruncDate, TruncMonth, TruncYear
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse, Http404
@@ -6091,8 +6091,11 @@ def _apply_production_library_links(order, request):
         raw_ids = _parse_id_list(request.POST.get(param))
         if raw_ids is None:
             continue
-        qs = model_cls.objects.filter(pk__in=raw_ids)
-        getattr(order, field_name).set(qs)
+        try:
+            qs = model_cls.objects.filter(pk__in=raw_ids)
+            getattr(order, field_name).set(qs)
+        except (AttributeError, OperationalError, ProgrammingError):
+            continue
 
 
 def _parse_production_lines_payload(raw):
@@ -6111,8 +6114,9 @@ def _parse_production_lines_payload(raw):
     for item in payload:
         if not isinstance(item, dict):
             continue
-        style_name = (item.get("style_name") or "").strip()
-        color_info = (item.get("color_info") or "").strip()
+        # These fields are posted outside the ModelForm, so enforce the DB max length here.
+        style_name = (item.get("style_name") or "").strip()[:200]
+        color_info = (item.get("color_info") or "").strip()[:200]
         size_ratio_note = (item.get("size_ratio_note") or "").strip()
         accessories_note = (item.get("accessories_note") or "").strip()
         packaging_note = (item.get("packaging_note") or "").strip()
@@ -6139,9 +6143,13 @@ def _save_production_lines(order, request):
     lines = _parse_production_lines_payload(raw)
     if lines is None:
         return
-    order.lines.all().delete()
-    for idx, data in enumerate(lines, start=1):
-        ProductionOrderLine.objects.create(order=order, line_no=idx, **data)
+    try:
+        order.lines.all().delete()
+        for idx, data in enumerate(lines, start=1):
+            ProductionOrderLine.objects.create(order=order, line_no=idx, **data)
+    except (AttributeError, DataError, IntegrityError, OperationalError, ProgrammingError):
+        return
+
     if lines:
         first = lines[0]
         updates = {}
@@ -6156,23 +6164,42 @@ def _save_production_lines(order, request):
             if getattr(order, field) != first.get(field, ""):
                 updates[field] = first.get(field, "")
         if updates:
-            for key, val in updates.items():
-                setattr(order, key, val)
-            order.save(update_fields=list(updates.keys()))
+            try:
+                for key, val in updates.items():
+                    setattr(order, key, val)
+                order.save(update_fields=list(updates.keys()))
+            except (DataError, IntegrityError, OperationalError, ProgrammingError):
+                return
 
 
 def _production_library_context(order=None):
-    selected_fabrics = list(order.fabrics.all()) if order else []
-    selected_accessories = list(order.accessories.all()) if order else []
-    selected_trims = list(order.trims.all()) if order else []
-    selected_threads = list(order.threads.all()) if order else []
+    def _safe_related_list(manager_name):
+        if not order:
+            return []
+        try:
+            return list(getattr(order, manager_name).all())
+        except (AttributeError, OperationalError, ProgrammingError):
+            return []
+
+    def _safe_library_queryset(model, order_by_field, limit=None):
+        try:
+            qs = model.objects.filter(is_active=True).order_by(order_by_field)
+            qs = qs[:limit] if limit else qs
+            return list(qs)
+        except (OperationalError, ProgrammingError):
+            return []
+
+    selected_fabrics = _safe_related_list("fabrics")
+    selected_accessories = _safe_related_list("accessories")
+    selected_trims = _safe_related_list("trims")
+    selected_threads = _safe_related_list("threads")
 
     return {
-        "library_products": Product.objects.filter(is_active=True).order_by("name"),
-        "library_fabrics": Fabric.objects.filter(is_active=True).order_by("name")[:200],
-        "library_accessories": Accessory.objects.filter(is_active=True).order_by("name")[:200],
-        "library_trims": Trim.objects.filter(is_active=True).order_by("name")[:200],
-        "library_threads": ThreadOption.objects.filter(is_active=True).order_by("name")[:200],
+        "library_products": _safe_library_queryset(Product, "name"),
+        "library_fabrics": _safe_library_queryset(Fabric, "name", limit=200),
+        "library_accessories": _safe_library_queryset(Accessory, "name", limit=200),
+        "library_trims": _safe_library_queryset(Trim, "name", limit=200),
+        "library_threads": _safe_library_queryset(ThreadOption, "name", limit=200),
         "selected_fabrics": selected_fabrics,
         "selected_accessories": selected_accessories,
         "selected_trims": selected_trims,
@@ -6181,6 +6208,17 @@ def _production_library_context(order=None):
         "selected_accessory_ids": [str(a.pk) for a in selected_accessories],
         "selected_trim_ids": [str(t.pk) for t in selected_trims],
         "selected_thread_ids": [str(t.pk) for t in selected_threads],
+    }
+
+
+def _production_inventory_context(order):
+    inventory_context = _production_inventory_context(order)
+
+    return {
+        "materials": materials,
+        "recommended_items": recommended_items,
+        "recommended_ids": recommended_ids,
+        "inventory_items": inventory_items,
     }
 
 
@@ -6358,20 +6396,31 @@ def production_edit(request, pk):
                 ProductionOrderMaterial.objects.filter(pk=line_id, order=order).delete()
             return redirect("production_edit", pk=pk)
 
-        form = ProductionOrderForm(request.POST, request.FILES, instance=order)
-        if form.is_valid():
-            obj = form.save()
-            _apply_production_library_links(obj, request)
-            _save_production_lines(obj, request)
+        try:
+            form = ProductionOrderForm(request.POST, request.FILES, instance=order)
+            if form.is_valid():
+                obj = form.save()
+                _apply_production_library_links(obj, request)
+                _save_production_lines(obj, request)
 
-            if not obj.customer_id and obj.opportunity and obj.opportunity.customer_id:
-                obj.customer = obj.opportunity.customer
-                obj.save(update_fields=["customer"])
+                if not obj.customer_id and obj.opportunity and obj.opportunity.customer_id:
+                    obj.customer = obj.opportunity.customer
+                    obj.save(update_fields=["customer"])
 
-            _apply_production_status_change(obj, old_status)
+                _apply_production_status_change(obj, old_status)
 
-            messages.success(request, "Production order updated.")
-            return redirect("production_detail", pk=pk)
+                messages.success(request, "Production order updated.")
+                return redirect("production_detail", pk=pk)
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "Production order POST failed for order %s",
+                order.pk,
+            )
+            messages.error(
+                request,
+                "Production order could not be updated. Please try shorter text or reload and try again.",
+            )
+            form = ProductionOrderForm(instance=order)
         order_lines = _production_order_lines_from_payload(request.POST.get("line_payload"))
     else:
         form = ProductionOrderForm(instance=order)
@@ -6381,38 +6430,61 @@ def production_edit(request, pk):
     except (OperationalError, ProgrammingError):
         materials = []
 
-    recommended_items = InventoryItem.objects.none()
+    recommended_items = []
     recommended_ids = []
     try:
         if order.fabrics.exists() or order.accessories.exists() or order.trims.exists() or order.threads.exists():
-            recommended_items = InventoryItem.objects.filter(
-                Q(fabric__in=order.fabrics.all())
-                | Q(accessory__in=order.accessories.all())
-                | Q(trim__in=order.trims.all())
-                | Q(thread_option__in=order.threads.all())
-            ).distinct()
+            recommended_items = list(
+                InventoryItem.objects.filter(
+                    Q(fabric__in=order.fabrics.all())
+                    | Q(accessory__in=order.accessories.all())
+                    | Q(trim__in=order.trims.all())
+                    | Q(thread_option__in=order.threads.all())
+                ).distinct()
+            )
         recommended_ids = [str(i.pk) for i in recommended_items]
     except (OperationalError, ProgrammingError):
         recommended_items = []
         recommended_ids = []
 
-    inventory_items = InventoryItem.objects.filter(is_active=True).order_by("category", "name")
+    try:
+        inventory_items = list(
+            InventoryItem.objects.filter(is_active=True).order_by("category", "name")
+        )
+    except (OperationalError, ProgrammingError):
+        inventory_items = []
 
-    return render(
-        request,
-        "crm/production_add.html",
-        {
+    try:
+        context = {
             "form": form,
             "is_edit": True,
             "order": order,
             "order_lines": order_lines or _production_order_lines_for_form(order),
-            "materials": materials,
-            "inventory_items": inventory_items,
-            "recommended_items": recommended_items,
-            "recommended_ids": recommended_ids,
+            **inventory_context,
             **_production_library_context(order),
-        },
-    )
+        }
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "Production edit context build failed for order %s",
+            order.pk,
+        )
+        context = {
+            "form": form,
+            "order": order,
+        }
+        return render(request, "crm/production_edit.html", context)
+    try:
+        return render(request, "crm/production_add.html", context)
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "Production edit rich template failed for order %s; falling back to simple edit template",
+            order.pk,
+        )
+        fallback_context = {
+            "form": form,
+            "order": order,
+        }
+        return render(request, "crm/production_edit.html", fallback_context)
 
 
 def production_detail(request, pk):
@@ -6442,10 +6514,7 @@ def production_detail(request, pk):
     order_delayed = order.is_delayed
     reject_percent = int((order.qty_reject / order.qty_total) * 100) if order.qty_total else 0
 
-    try:
-        materials = list(order.materials.select_related("inventory_item"))
-    except (OperationalError, ProgrammingError):
-        materials = []
+    inventory_context = _production_inventory_context(order)
     try:
         comments = _chatter_for_production(order)
     except (OperationalError, ProgrammingError):
@@ -6655,23 +6724,6 @@ def production_detail(request, pk):
                     comment.save(update_fields=["pinned"])
             return redirect("production_detail", pk=pk)
 
-    recommended_items = InventoryItem.objects.none()
-    recommended_ids = []
-    try:
-        if order.fabrics.exists() or order.accessories.exists() or order.trims.exists() or order.threads.exists():
-            recommended_items = InventoryItem.objects.filter(
-                Q(fabric__in=order.fabrics.all())
-                | Q(accessory__in=order.accessories.all())
-                | Q(trim__in=order.trims.all())
-                | Q(thread_option__in=order.threads.all())
-            ).distinct()
-        recommended_ids = [str(i.pk) for i in recommended_items]
-    except (OperationalError, ProgrammingError):
-        recommended_items = []
-        recommended_ids = []
-
-    inventory_items = InventoryItem.objects.filter(is_active=True).order_by("category", "name")
-
     context = {
         "order": order,
         "stages": stages,
@@ -6685,10 +6737,7 @@ def production_detail(request, pk):
         "lead": order.lead,
         "customer": order.customer,
         "comments": comments,
-        "materials": materials,
-        "inventory_items": inventory_items,
-        "recommended_items": recommended_items,
-        "recommended_ids": recommended_ids,
+        **inventory_context,
         "cost_sheet_active": cost_sheet_active,
         "actual_entries": actual_entries,
         "actual_entry_form": actual_entry_form,

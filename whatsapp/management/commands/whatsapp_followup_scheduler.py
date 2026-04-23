@@ -13,6 +13,9 @@ class Command(BaseCommand):
     help = "Queue no-reply followups for WhatsApp threads."
 
     def handle(self, *args, **options):
+        if not getattr(settings, "WHATSAPP_ENABLED", False):
+            self.stdout.write("WHATSAPP_ENABLED is off")
+            return
         if not getattr(settings, "WHATSAPP_AUTOMATION_ENABLED", False):
             self.stdout.write("WHATSAPP_AUTOMATION_ENABLED is off")
             return

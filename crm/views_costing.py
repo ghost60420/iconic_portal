@@ -420,6 +420,14 @@ def cost_sheet_detail(request, pk):
 
     calc = compute_costing(costing.id)
     grouped_lines = _group_lines(costing)
+    category_sections = [
+        {
+            "key": key,
+            "label": label,
+            "rows": grouped_lines.get(key, []),
+        }
+        for key, label in NEW_COSTING_CATEGORY_CHOICES
+    ]
 
     documents = OpportunityDocument.objects.filter(
         opportunity=costing.opportunity,
@@ -441,6 +449,7 @@ def cost_sheet_detail(request, pk):
         "documents": documents,
         "document_form": OpportunityDocumentForm(),
         "grouped_lines": grouped_lines,
+        "category_sections": category_sections,
         "category_choices": NEW_COSTING_CATEGORY_CHOICES,
         "uom_choices": NEW_COSTING_UOM_CHOICES,
         "can_approve": can_approve,

@@ -1,0 +1,120 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+<style>
+  .lb-shell { display:grid; gap:16px; max-width:980px; }
+  .lb-panel {
+    background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+    border: 1px solid #243041;
+    border-radius: 14px;
+    padding: 18px;
+    box-shadow: 0 12px 28px rgba(0,0,0,0.35);
+  }
+  .lb-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; }
+  .lb-section-title { margin:0 0 14px 0; font-size:18px; font-weight:800; color:#f8fafc; }
+  .lb-muted { color:#9ca3af; font-size:12px; }
+  .lb-check-grid { display:grid; gap:8px; }
+</style>
+
+<div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+  <div>
+    <h1 class="h3 mb-1">{% if job %}Edit Discovery Job{% else %}Create Discovery Job{% endif %}</h1>
+    <div class="text-secondary">Configure one controlled discovery pipeline without adding heavy frontend logic.</div>
+  </div>
+  <div class="d-flex gap-2">
+    {% if job %}
+      <a href="{% url 'leadbrain_discovery_job_detail' job.pk %}" class="btn btn-outline-light">Back to Job</a>
+    {% else %}
+      <a href="{% url 'leadbrain_discovery_jobs' %}" class="btn btn-outline-light">Back to Jobs</a>
+    {% endif %}
+  </div>
+</div>
+
+<form method="post" class="lb-shell">
+  {% csrf_token %}
+  <section class="lb-panel">
+    <h2 class="lb-section-title">A. Basic Setup</h2>
+    <div class="lb-grid">
+      <div>
+        <label class="form-label fw-bold">Job Name</label>
+        {{ form.name }}
+        {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors|join:", " }}</div>{% endif %}
+      </div>
+      <div>
+        <label class="form-label fw-bold">Country</label>
+        {{ form.country }}
+        {% if form.country.errors %}<div class="text-danger small mt-1">{{ form.country.errors|join:", " }}</div>{% endif %}
+      </div>
+      <div>
+        <label class="form-label fw-bold">Niche</label>
+        {{ form.niche }}
+        {% if form.niche.errors %}<div class="text-danger small mt-1">{{ form.niche.errors|join:", " }}</div>{% endif %}
+      </div>
+    </div>
+  </section>
+
+  <section class="lb-panel">
+    <h2 class="lb-section-title">B. Source Selection</h2>
+    <div class="lb-check-grid">
+      {{ form.selected_sources }}
+    </div>
+    {% if form.selected_sources.errors %}<div class="text-danger small mt-2">{{ form.selected_sources.errors|join:", " }}</div>{% endif %}
+    <div class="lb-muted mt-2">Choose one or more controlled discovery sources. Public web search uses Google-style query patterns only.</div>
+  </section>
+
+  <section class="lb-panel">
+    <h2 class="lb-section-title">C. Schedule</h2>
+    <div class="lb-grid">
+      <div>
+        <label class="form-label fw-bold">Schedule</label>
+        {{ form.schedule_type }}
+        {% if form.schedule_type.errors %}<div class="text-danger small mt-1">{{ form.schedule_type.errors|join:", " }}</div>{% endif %}
+      </div>
+      <div>
+        <label class="form-label fw-bold">Runs Per Day</label>
+        {{ form.max_runs_per_day }}
+        {% if form.max_runs_per_day.errors %}<div class="text-danger small mt-1">{{ form.max_runs_per_day.errors|join:", " }}</div>{% endif %}
+      </div>
+    </div>
+  </section>
+
+  <section class="lb-panel">
+    <h2 class="lb-section-title">D. Limits</h2>
+    <div class="lb-grid">
+      <div>
+        <label class="form-label fw-bold">Max Leads Per Run</label>
+        {{ form.max_results }}
+        {% if form.max_results.errors %}<div class="text-danger small mt-1">{{ form.max_results.errors|join:", " }}</div>{% endif %}
+      </div>
+    </div>
+    <div class="lb-muted mt-2">Lead Brain clamps each run to 20 to 50 candidates and processes everything in the background.</div>
+  </section>
+
+  <section class="lb-panel">
+    <h2 class="lb-section-title">E. Filters</h2>
+    <div class="lb-grid">
+      <div>
+        <label class="form-label fw-bold">Minimum Score</label>
+        {{ form.minimum_score }}
+        {% if form.minimum_score.errors %}<div class="text-danger small mt-1">{{ form.minimum_score.errors|join:", " }}</div>{% endif %}
+      </div>
+      <div class="d-flex align-items-end">
+        <div class="form-check">
+          {{ form.apparel_only }}
+          <label class="form-check-label" for="{{ form.apparel_only.id_for_label }}">Apparel only</label>
+        </div>
+      </div>
+    </div>
+    {% if form.apparel_only.errors %}<div class="text-danger small mt-1">{{ form.apparel_only.errors|join:", " }}</div>{% endif %}
+  </section>
+
+  <div class="d-flex gap-2 flex-wrap">
+    <button type="submit" class="btn btn-warning fw-bold">{% if job %}Save Job{% else %}Create Job{% endif %}</button>
+    {% if job %}
+      <a href="{% url 'leadbrain_discovery_job_detail' job.pk %}" class="btn btn-outline-light">Cancel</a>
+    {% else %}
+      <a href="{% url 'leadbrain_discovery_jobs' %}" class="btn btn-outline-light">Cancel</a>
+    {% endif %}
+  </div>
+</form>
+{% endblock %}

@@ -424,6 +424,17 @@ def search_business_online(company_name, website=""):
     }
 
 
+def search_query_results(query, *, limit=10):
+    search_url = f"https://html.duckduckgo.com/html/?q={quote(_text(query))}"
+    response, error = _safe_http_get(search_url, timeout=SEARCH_TIMEOUT)
+    if not response:
+        return {"results": [], "error": error}
+    return {
+        "results": _search_results_from_html(response["text"])[: max(1, limit)],
+        "error": "",
+    }
+
+
 def _infer_business_type(text):
     lowered = _text(text).lower()
     if not lowered:

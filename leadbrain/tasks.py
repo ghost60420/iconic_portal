@@ -7,7 +7,13 @@ from django.db import IntegrityError, close_old_connections, transaction
 from django.db.utils import OperationalError
 from django.utils import timezone
 
-from leadbrain.models import LeadBrainCompany, LeadBrainUpload
+from leadbrain.models import LeadBrainCompany, LeadBrainDiscoveryJob, LeadBrainDiscoveryRun, LeadBrainUpload
+from leadbrain.services.discovery_service import (
+    DISCOVERY_DEFAULT_BATCH_SIZE,
+    process_discovery_runs,
+    queue_manual_discovery_run,
+    schedule_due_discovery_runs,
+)
 from leadbrain.services.file_parser import parse_uploaded_file_report
 from leadbrain.services.import_service import prepare_import_rows
 from leadbrain.services.processing_service import process_upload_batch, update_upload_note
@@ -273,3 +279,74 @@ def process_upload_batch_job(self, upload_id: int):
 
     return processed_rows
 
+
+@shared_task(
+    bind=True,
+    autoretry_for=(OperationalError,),
+    retry_backoff=True,
+    retry_kwargs={"max_retries": 2},
+    queue="leadbrain",
+)
+def run_discovery_job_task(self, job_id: int):
+    close_old_connections()
+    job = LeadBrainDiscoveryJob.objects.filter(pk=job_id).first()
+    if not job:
+        return "missing"
+    if job.status == LeadBrainDiscoveryJob.STATUS_CANCELLED:
+        return "cancelled"
+
+    try:
+        run = queue_manual_discovery_run(job, created_by=job.created_by)
+        batch_size = max(1, int(getattr(settings, "LEADBRAIN_DISCOVERY_BATCH_SIZE", DISCOVERY_DEFAULT_BATCH_SIZE)))
+        process_discovery_runs_task.delay(run_id=run.pk, batch_size=batch_size)
+        return {"run_id": run.pk, "status": run.status}
+    except Exception as exc:
+        logger.exception("leadbrain discovery job failed for job %s", job_id)
+        job.status = LeadBrainDiscoveryJob.STATUS_FAILED
+        job.status_note = f"Discovery job failed: {exc}"
+        job.last_run_at = timezone.now()
+        job.save(update_fields=["status", "status_note", "last_run_at", "updated_at"])
+        if job.upload_id:
+            LeadBrainUpload.objects.filter(pk=job.upload_id).update(
+                status=LeadBrainUpload.STATUS_FAILED,
+                status_note=f"Discovery job failed: {exc}",
+                updated_at=timezone.now(),
+            )
+        return "failed"
+
+
+@shared_task(
+    bind=True,
+    queue="leadbrain",
+)
+def queue_due_discovery_jobs_task(self):
+    close_old_connections()
+    runs = schedule_due_discovery_runs()
+    batch_size = max(1, int(getattr(settings, "LEADBRAIN_DISCOVERY_BATCH_SIZE", DISCOVERY_DEFAULT_BATCH_SIZE)))
+    for run in runs:
+        process_discovery_runs_task.delay(run_id=run.pk, batch_size=batch_size)
+    return {"queued_runs": [run.pk for run in runs], "count": len(runs)}
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(OperationalError,),
+    retry_backoff=True,
+    retry_kwargs={"max_retries": 2},
+    queue="leadbrain",
+)
+def process_discovery_runs_task(self, run_id: int | None = None, batch_size: int = DISCOVERY_DEFAULT_BATCH_SIZE):
+    close_old_connections()
+    batch_size = max(1, int(batch_size or DISCOVERY_DEFAULT_BATCH_SIZE))
+    processed = process_discovery_runs(limit=1, batch_size=batch_size, run_id=run_id)
+
+    if run_id:
+        run = LeadBrainDiscoveryRun.objects.filter(pk=run_id).first()
+        if run and run.status in LeadBrainDiscoveryRun.ACTIVE_STATUSES:
+            process_discovery_runs_task.delay(run_id=run.pk, batch_size=batch_size)
+    elif processed:
+        next_run = LeadBrainDiscoveryRun.objects.filter(status__in=LeadBrainDiscoveryRun.ACTIVE_STATUSES).order_by("created_at", "id").first()
+        if next_run:
+            process_discovery_runs_task.delay(run_id=next_run.pk, batch_size=batch_size)
+
+    return {"processed": processed, "run_id": run_id}

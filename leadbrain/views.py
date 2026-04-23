@@ -15,11 +15,17 @@ from django.views import View
 from django.views.generic import TemplateView
 from django.utils import timezone
 
-from .forms import LeadBrainCompanyNotesForm, LeadBrainUploadForm
-from .models import LeadBrainCompany, LeadBrainUpload
+from .forms import (
+    LeadBrainCompanyNotesForm,
+    LeadBrainDiscoveryJobForm,
+    LeadBrainUploadForm,
+)
+from .models import LeadBrainCompany, LeadBrainDiscoveryJob, LeadBrainDiscoveryRun, LeadBrainUpload
 from .services.background_runner import launch_upload_processing, queue_parse_upload
+from .services.discovery_service import can_queue_discovery_job
 from .services.lead_export import create_lead_from_company
 from .services.repair_service import repair_uploads
+from .tasks import run_discovery_job_task
 from .services.upload_state import (
     ACTIVE_UPLOAD_STATUSES,
     compute_uploaded_file_hash,
@@ -31,6 +37,12 @@ from .services.upload_state import (
 
 logger = logging.getLogger(__name__)
 UPLOAD_PREVIEW_SESSION_KEY = "leadbrain_upload_preview"
+
+
+class LeadBrainStaffOnlyMixin(UserPassesTestMixin):
+    def test_func(self):
+        user = self.request.user
+        return bool(user and (user.is_staff or user.is_superuser))
 
 
 def _redirect_to_results_next(request):
@@ -60,6 +72,25 @@ def _upload_is_active(upload: LeadBrainUpload) -> bool:
     return upload.status in ACTIVE_UPLOAD_STATUSES
 
 
+def _discovery_jobs_queryset():
+    return LeadBrainDiscoveryJob.objects.select_related("created_by", "upload")
+
+
+def _discovery_dashboard_context(*, form=None):
+    jobs = _discovery_jobs_queryset()
+    return {
+        "form": form or LeadBrainDiscoveryJobForm(),
+        "jobs": jobs[:50],
+        "total_jobs": jobs.count(),
+        "active_jobs": jobs.filter(
+            status__in=[LeadBrainDiscoveryJob.STATUS_QUEUED, LeadBrainDiscoveryJob.STATUS_PROCESSING],
+            is_paused=False,
+        ).count(),
+        "paused_jobs": jobs.filter(is_paused=True).count(),
+        "latest_runs": LeadBrainDiscoveryRun.objects.select_related("job", "upload")[:12],
+    }
+
+
 class LeadBrainHomeView(LoginRequiredMixin, TemplateView):
     template_name = "leadbrain/home.html"
 
@@ -75,9 +106,140 @@ class LeadBrainHomeView(LoginRequiredMixin, TemplateView):
                 "possible_fit_count": fit_map.get(LeadBrainCompany.FIT_POSSIBLE, 0),
                 "weak_fit_count": fit_map.get(LeadBrainCompany.FIT_WEAK, 0),
                 "recent_uploads": LeadBrainUpload.objects.filter(is_active=True).select_related("uploaded_by")[:10],
+                "recent_discovery_jobs": LeadBrainDiscoveryJob.objects.select_related("created_by", "upload")[:8],
             }
         )
         return context
+
+
+class LeadBrainDiscoveryJobsView(LoginRequiredMixin, View):
+    template_name = "leadbrain/discovery_jobs.html"
+
+    def get(self, request):
+        return render(request, self.template_name, _discovery_dashboard_context())
+
+
+class LeadBrainDiscoveryJobCreateView(LoginRequiredMixin, View):
+    template_name = "leadbrain/discovery_job_form.html"
+
+    def get(self, request):
+        return render(request, self.template_name, {"form": LeadBrainDiscoveryJobForm(), "job": None})
+
+    def post(self, request):
+        form = LeadBrainDiscoveryJobForm(request.POST)
+        if not form.is_valid():
+            return render(request, self.template_name, {"form": form, "job": None})
+
+        job = form.save(commit=False)
+        job.created_by = request.user
+        job.status = (
+            LeadBrainDiscoveryJob.STATUS_COMPLETE
+            if job.schedule_type == LeadBrainDiscoveryJob.SCHEDULE_MANUAL
+            else LeadBrainDiscoveryJob.STATUS_QUEUED
+        )
+        job.status_note = "Discovery job created."
+        if job.schedule_type != LeadBrainDiscoveryJob.SCHEDULE_MANUAL:
+            job.next_run_at = job.compute_next_run_at()
+            job.status_note = "Discovery job scheduled."
+        job.save()
+        messages.success(request, "Discovery job created.")
+        return redirect("leadbrain_discovery_job_detail", pk=job.pk)
+
+
+class LeadBrainDiscoveryJobEditView(LoginRequiredMixin, View):
+    template_name = "leadbrain/discovery_job_form.html"
+
+    def get(self, request, pk):
+        job = get_object_or_404(_discovery_jobs_queryset(), pk=pk)
+        return render(request, self.template_name, {"form": LeadBrainDiscoveryJobForm(instance=job), "job": job})
+
+    def post(self, request, pk):
+        job = get_object_or_404(_discovery_jobs_queryset(), pk=pk)
+        form = LeadBrainDiscoveryJobForm(request.POST, instance=job)
+        if not form.is_valid():
+            return render(request, self.template_name, {"form": form, "job": job})
+        job = form.save(commit=False)
+        if job.schedule_type == LeadBrainDiscoveryJob.SCHEDULE_MANUAL:
+            job.next_run_at = None
+        elif not job.is_paused:
+            job.next_run_at = job.compute_next_run_at(reference=timezone.now())
+        job.status_note = "Discovery job updated."
+        job.save()
+        messages.success(request, "Discovery job updated.")
+        return redirect("leadbrain_discovery_job_detail", pk=job.pk)
+
+
+class LeadBrainDiscoveryJobDetailView(LoginRequiredMixin, TemplateView):
+    template_name = "leadbrain/discovery_job_detail.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        job = get_object_or_404(_discovery_jobs_queryset(), pk=kwargs["pk"])
+        runs = job.runs.select_related("upload")[:20]
+        context.update(
+            {
+                "job": job,
+                "recent_runs": runs,
+                "saved_leads": LeadBrainCompany.objects.filter(
+                    upload__discovery_runs__job=job,
+                    is_active=True,
+                ).distinct().count(),
+                "strong_fits": LeadBrainCompany.objects.filter(
+                    upload__discovery_runs__job=job,
+                    fit_score__gte=80,
+                    is_active=True,
+                ).distinct().count(),
+            }
+        )
+        return context
+
+
+class LeadBrainDiscoveryJobRunNowView(LoginRequiredMixin, View):
+    def post(self, request, pk):
+        job = get_object_or_404(_discovery_jobs_queryset(), pk=pk)
+        if job.runs.filter(status__in=LeadBrainDiscoveryRun.ACTIVE_STATUSES).exists():
+            messages.info(request, "This discovery job already has an active queued or processing run.")
+            return redirect("leadbrain_discovery_job_detail", pk=job.pk)
+        allowed, reason = can_queue_discovery_job(user=request.user)
+        if not allowed:
+            messages.error(request, reason)
+            return redirect("leadbrain_discovery_jobs")
+        job.status = LeadBrainDiscoveryJob.STATUS_QUEUED
+        job.status_note = "Discovery job queued for an immediate run."
+        if job.schedule_type != LeadBrainDiscoveryJob.SCHEDULE_MANUAL and not job.is_paused:
+            job.next_run_at = job.compute_next_run_at(reference=timezone.now())
+        job.save(update_fields=["status", "status_note", "next_run_at", "updated_at"])
+        transaction.on_commit(lambda: run_discovery_job_task.delay(job.pk))
+        messages.success(request, "Discovery job queued.")
+        return redirect("leadbrain_discovery_job_detail", pk=job.pk)
+
+
+class LeadBrainDiscoveryJobPauseView(LoginRequiredMixin, View):
+    def post(self, request, pk):
+        job = get_object_or_404(_discovery_jobs_queryset(), pk=pk)
+        job.is_paused = not job.is_paused
+        if job.is_paused:
+            job.next_run_at = None
+            job.status_note = "Discovery job paused."
+        elif job.schedule_type != LeadBrainDiscoveryJob.SCHEDULE_MANUAL:
+            job.next_run_at = job.compute_next_run_at(reference=timezone.now())
+            job.status_note = "Discovery job resumed."
+        else:
+            job.status_note = "Discovery job unpaused."
+        job.save(update_fields=["is_paused", "next_run_at", "status_note", "updated_at"])
+        messages.success(request, "Discovery job status updated.")
+        return redirect("leadbrain_discovery_jobs")
+
+
+class LeadBrainDiscoveryJobDeleteView(LoginRequiredMixin, View):
+    def post(self, request, pk):
+        job = get_object_or_404(_discovery_jobs_queryset(), pk=pk)
+        if job.status == LeadBrainDiscoveryJob.STATUS_PROCESSING:
+            messages.error(request, "Processing discovery jobs cannot be deleted while they are running.")
+            return redirect("leadbrain_discovery_jobs")
+        job.delete()
+        messages.success(request, "Discovery job deleted.")
+        return redirect("leadbrain_discovery_jobs")
 
 
 class LeadBrainUploadView(LoginRequiredMixin, View):
@@ -177,12 +339,6 @@ class LeadBrainStartAnalysisView(LoginRequiredMixin, View):
             messages.error(request, "Lead Brain research could not be queued.")
 
         return redirect(f"{reverse_lazy('leadbrain_results')}?upload={upload.pk}")
-
-
-class LeadBrainStaffOnlyMixin(UserPassesTestMixin):
-    def test_func(self):
-        user = self.request.user
-        return bool(user and (user.is_staff or user.is_superuser))
 
 
 class LeadBrainUploadRetryView(LoginRequiredMixin, LeadBrainStaffOnlyMixin, View):

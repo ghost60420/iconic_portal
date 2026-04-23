@@ -15,9 +15,9 @@
   }
 
   .page{
-    max-width:1200px;
+    width:min(1720px, calc(100vw - 32px));
     margin:18px auto 50px auto;
-    padding:0 12px;
+    padding:0 10px;
     color:var(--text);
   }
 
@@ -214,7 +214,7 @@
     background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
     border-radius:16px;
     border:1px solid var(--line);
-    padding:12px;
+    padding:14px;
     box-shadow:0 16px 36px rgba(0,0,0,0.35);
   }
 
@@ -387,6 +387,7 @@
   .table-wrap{
     overflow-x:auto;
     border-radius:12px;
+    width:100%;
   }
 
   .bulk-bar{
@@ -442,6 +443,11 @@
   }
 
   @media (max-width:768px){
+    .page{
+      width:auto;
+      margin:14px auto 40px auto;
+      padding:0 10px;
+    }
     th, td{ padding:7px 6px; }
   }
 </style>

@@ -23,6 +23,9 @@ class Command(BaseCommand):
         parser.add_argument("--limit", type=int, default=50, help="Max items per run")
 
     def handle(self, *args, **options):
+        if not getattr(settings, "WHATSAPP_ENABLED", False):
+            self.stdout.write("WHATSAPP_ENABLED is off")
+            return
         if not getattr(settings, "WHATSAPP_OUTBOUND_ENABLED", False):
             self.stdout.write("WHATSAPP_OUTBOUND_ENABLED is off")
             return

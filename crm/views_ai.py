@@ -18,7 +18,12 @@ except Exception:
     OpenAI = None
 
 from crm.ai.health import build_health_checks, run_and_store
-from crm.ai.openai_client import ask_openai
+from crm.ai.openai_client import (
+    ask_openai,
+    OpenAIConfigError,
+    OpenAILibraryMissingError,
+    OpenAIServiceError,
+)
 from crm.ai.suggestions import (
     lead_suggestion,
     lead_outbound_insights,
@@ -104,6 +109,17 @@ def _ask_openai_safe(*, request, user, prompt_text, meta=None, feature=""):
         prompt_text=prompt_text,
         meta=meta,
     )
+
+
+def _ai_error_response(exc: Exception) -> JsonResponse:
+    msg = (str(exc) or "AI request failed.")[:200]
+    if isinstance(exc, OpenAIConfigError):
+        return JsonResponse({"ok": False, "error": msg}, status=400)
+    if isinstance(exc, OpenAILibraryMissingError):
+        return JsonResponse({"ok": False, "error": msg}, status=503)
+    if isinstance(exc, OpenAIServiceError):
+        return JsonResponse({"ok": False, "error": msg}, status=502)
+    return JsonResponse({"ok": False, "error": msg}, status=500)
 
 
 def _send_and_log_email(*, request, lead, to_email: str, subject: str, body: str, message_type: str):
@@ -228,7 +244,7 @@ def ai_assistant_ask(request):
         )
         return JsonResponse({"ok": True, "answer": answer})
     except Exception as e:
-        return JsonResponse({"ok": False, "error": str(e)[:200]}, status=500)
+        return _ai_error_response(e)
 
 
 @login_required
@@ -363,8 +379,11 @@ def ai_system_status(request):
 @user_passes_test(can_ai_user)
 def ai_lead_suggest(request, pk):
     lead = get_object_or_404(Lead, pk=pk)
-    text = lead_suggestion(request=request, lead=lead)
-    return JsonResponse({"ok": True, "answer": text})
+    try:
+        text = lead_suggestion(request=request, lead=lead)
+        return JsonResponse({"ok": True, "answer": text})
+    except Exception as e:
+        return _ai_error_response(e)
 
 
 @require_POST
@@ -372,7 +391,10 @@ def ai_lead_suggest(request, pk):
 @user_passes_test(can_ai_user)
 def ai_lead_outbound(request, pk):
     lead = get_object_or_404(Lead, pk=pk)
-    text = lead_outbound_insights(request=request, lead=lead)
+    try:
+        text = lead_outbound_insights(request=request, lead=lead)
+    except Exception as e:
+        return _ai_error_response(e)
     try:
         LeadAIMessage.objects.create(
             lead=lead,
@@ -389,8 +411,11 @@ def ai_lead_outbound(request, pk):
 @user_passes_test(can_ai_user)
 def ai_opportunity_suggest(request, pk):
     opp = get_object_or_404(Opportunity, pk=pk)
-    text = opportunity_suggestion(request=request, opp=opp)
-    return JsonResponse({"ok": True, "answer": text})
+    try:
+        text = opportunity_suggestion(request=request, opp=opp)
+        return JsonResponse({"ok": True, "answer": text})
+    except Exception as e:
+        return _ai_error_response(e)
 
 
 @require_POST
@@ -398,8 +423,11 @@ def ai_opportunity_suggest(request, pk):
 @user_passes_test(can_ai_user)
 def ai_production_suggest(request, pk):
     po = get_object_or_404(ProductionOrder, pk=pk)
-    text = production_suggestion(request=request, po=po)
-    return JsonResponse({"ok": True, "answer": text})
+    try:
+        text = production_suggestion(request=request, po=po)
+        return JsonResponse({"ok": True, "answer": text})
+    except Exception as e:
+        return _ai_error_response(e)
 
 
 # -------------------------
@@ -442,7 +470,7 @@ Product: {getattr(lead, "product_interest", "")}
             feature="lead_thankyou",
         )
     except Exception as e:
-        return JsonResponse({"ok": False, "error": str(e)[:200]}, status=500)
+        return _ai_error_response(e)
 
     name = (getattr(lead, "contact_name", "") or "").strip()
     subject = f"Thanks {name}, we received your request".strip()
@@ -506,7 +534,7 @@ Time: {meeting_time} {meeting_tz}
             feature="lead_meeting_confirm",
         )
     except Exception as e:
-        return JsonResponse({"ok": False, "error": str(e)[:200]}, status=500)
+        return _ai_error_response(e)
 
     subject = f"Meeting confirmed {meeting_date} at {meeting_time} {meeting_tz}".strip()
 

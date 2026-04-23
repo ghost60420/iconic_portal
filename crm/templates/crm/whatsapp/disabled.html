@@ -1,0 +1,13 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+  <div class="card" style="max-width: 760px; margin: 40px auto; padding: 24px;">
+    <h2 style="margin: 0 0 8px;">WhatsApp is disabled</h2>
+    <p style="margin: 0 0 12px; color: #94a3b8;">
+      This module is currently turned off. No inbound or outbound WhatsApp traffic is processed.
+    </p>
+    <p style="margin: 0; color: #94a3b8;">
+      If you need this re-enabled, set <code>WHATSAPP_ENABLED=1</code> and restart services.
+    </p>
+  </div>
+{% endblock %}

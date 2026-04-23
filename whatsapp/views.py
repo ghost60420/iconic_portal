@@ -38,6 +38,21 @@ def _flag_enabled(name: str) -> bool:
     return bool(getattr(settings, name, False))
 
 
+def _whatsapp_enabled() -> bool:
+    return bool(getattr(settings, "WHATSAPP_ENABLED", False))
+
+
+def _disabled_html(request):
+    return render(request, "whatsapp/disabled.html", status=410)
+
+
+def _disabled_json():
+    return JsonResponse({"ok": False, "error": "WhatsApp disabled"}, status=410)
+
+def _use_infobip() -> bool:
+    return (getattr(settings, "WHATSAPP_PROVIDER", "") or "").strip().lower() == "infobip"
+
+
 def _get_account():
     phone = getattr(settings, "WHATSAPP_PHONE_NUMBER", "6045006009")
     account, _ = WhatsAppAccount.objects.get_or_create(phone_number=phone)
@@ -47,6 +62,10 @@ def _get_account():
 @login_required
 @require_access("can_whatsapp")
 def inbox(request):
+    if not _whatsapp_enabled():
+        return _disabled_html(request)
+    if _use_infobip():
+        return redirect("wa_api_inbox")
     if not _flag_enabled("WHATSAPP_ENABLED"):
         return render(request, "whatsapp/disabled.html")
 
@@ -79,6 +98,10 @@ def inbox(request):
 @login_required
 @require_access("can_whatsapp")
 def thread_view(request, pk):
+    if not _whatsapp_enabled():
+        return _disabled_html(request)
+    if _use_infobip():
+        return redirect("wa_api_inbox")
     if not _flag_enabled("WHATSAPP_ENABLED"):
         return render(request, "whatsapp/disabled.html")
 
@@ -91,6 +114,8 @@ def thread_view(request, pk):
 @require_access("can_whatsapp")
 @require_POST
 def start_chat(request):
+    if not _whatsapp_enabled():
+        return _disabled_json()
     if not _flag_enabled("WHATSAPP_OUTBOUND_ENABLED"):
         return JsonResponse({"ok": False, "error": "Outbound disabled"}, status=403)
 
@@ -143,6 +168,10 @@ def start_chat(request):
 @login_required
 @require_access("can_whatsapp")
 def settings_view(request):
+    if not _whatsapp_enabled():
+        return _disabled_html(request)
+    if _use_infobip():
+        return redirect("wa_api_inbox")
     if not _flag_enabled("WHATSAPP_ENABLED"):
         return render(request, "whatsapp/disabled.html")
 
@@ -183,6 +212,8 @@ def settings_view(request):
 @login_required
 @require_access("can_whatsapp")
 def qr_image(request):
+    if not _whatsapp_enabled():
+        return _disabled_json()
     if not _flag_enabled("WHATSAPP_ENABLED"):
         return HttpResponse("disabled", status=404)
 
@@ -211,6 +242,8 @@ def qr_image(request):
 @login_required
 @require_access("can_whatsapp")
 def status_json(request):
+    if not _whatsapp_enabled():
+        return _disabled_json()
     if not _flag_enabled("WHATSAPP_ENABLED"):
         return JsonResponse({"ok": False, "error": "disabled"}, status=403)
     try:
@@ -224,6 +257,8 @@ def status_json(request):
 @require_access("can_whatsapp")
 @require_POST
 def logout_view(request):
+    if not _whatsapp_enabled():
+        return _disabled_json()
     if not _flag_enabled("WHATSAPP_ENABLED"):
         return JsonResponse({"ok": False, "error": "Disabled"}, status=403)
 
@@ -242,6 +277,8 @@ def logout_view(request):
 @require_access("can_whatsapp")
 @require_POST
 def refresh_qr(request):
+    if not _whatsapp_enabled():
+        return _disabled_json()
     if not _flag_enabled("WHATSAPP_ENABLED"):
         return JsonResponse({"ok": False, "error": "Disabled"}, status=403)
 
@@ -255,6 +292,10 @@ def refresh_qr(request):
 @login_required
 @require_access("can_whatsapp")
 def automation_view(request):
+    if not _whatsapp_enabled():
+        return _disabled_html(request)
+    if _use_infobip():
+        return redirect("wa_api_inbox")
     if not _flag_enabled("WHATSAPP_ENABLED"):
         return render(request, "whatsapp/disabled.html")
 
@@ -266,6 +307,8 @@ def automation_view(request):
 @require_access("can_whatsapp")
 @require_POST
 def enqueue_message(request, pk):
+    if not _whatsapp_enabled():
+        return _disabled_json()
     if not _flag_enabled("WHATSAPP_OUTBOUND_ENABLED"):
         return JsonResponse({"ok": False, "error": "Outbound disabled"}, status=403)
 
@@ -292,6 +335,8 @@ def enqueue_message(request, pk):
 @require_access("can_whatsapp")
 @require_POST
 def schedule_followup(request, pk):
+    if not _whatsapp_enabled():
+        return _disabled_json()
     if not _flag_enabled("WHATSAPP_OUTBOUND_ENABLED"):
         return JsonResponse({"ok": False, "error": "Outbound disabled"}, status=403)
 
@@ -322,6 +367,8 @@ def schedule_followup(request, pk):
 @require_access("can_whatsapp")
 @require_POST
 def toggle_automation(request, pk):
+    if not _whatsapp_enabled():
+        return _disabled_json()
     thread = get_object_or_404(WhatsAppThread, pk=pk)
     thread.automation_enabled = not thread.automation_enabled
     thread.save(update_fields=["automation_enabled"])
@@ -332,6 +379,8 @@ def toggle_automation(request, pk):
 @require_access("can_whatsapp")
 @require_POST
 def create_lead(request, pk):
+    if not _whatsapp_enabled():
+        return _disabled_json()
     thread = get_object_or_404(WhatsAppThread, pk=pk)
     if thread.linked_lead:
         return JsonResponse({"ok": True, "lead_id": thread.linked_lead.pk})
@@ -343,6 +392,8 @@ def create_lead(request, pk):
 
 @csrf_exempt
 def webhook(request):
+    if not _whatsapp_enabled():
+        return HttpResponse("WhatsApp disabled", status=410)
     if not _flag_enabled("WHATSAPP_ENABLED"):
         return HttpResponse("disabled")
 

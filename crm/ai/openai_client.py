@@ -3,9 +3,24 @@
 import json
 import time
 from django.conf import settings
-from openai import OpenAI
+try:
+    from openai import OpenAI
+except Exception:
+    OpenAI = None
 
 from crm.utils.activity_log import log_activity
+
+class OpenAIConfigError(ValueError):
+    pass
+
+
+class OpenAILibraryMissingError(RuntimeError):
+    pass
+
+
+class OpenAIServiceError(RuntimeError):
+    pass
+
 
 _client = None
 _client_key = None
@@ -28,6 +43,8 @@ def get_client():
 
     api_key = _get_api_key()
     if not api_key:
+        return None
+    if OpenAI is None:
         return None
 
     if _client is None or _client_key != api_key:
@@ -95,7 +112,7 @@ def ask_openai(*, user=None, prompt_text="", meta=None, feature="openai_answer")
             level="error",
             message="OPENAI_API_KEY is missing",
         )
-        raise ValueError("OPENAI_API_KEY is missing in settings")
+        raise OpenAIConfigError("OPENAI_API_KEY is missing in settings")
 
     model = _get_model_name()
     start = time.time()
@@ -110,7 +127,9 @@ def ask_openai(*, user=None, prompt_text="", meta=None, feature="openai_answer")
             level="error",
             message="OpenAI client could not be created",
         )
-        raise ValueError("OpenAI client could not be created")
+        if OpenAI is None:
+            raise OpenAILibraryMissingError("OpenAI library is not installed on server")
+        raise OpenAIConfigError("OpenAI client could not be created")
 
     meta_text = _safe_json(meta)
 
@@ -161,4 +180,4 @@ def ask_openai(*, user=None, prompt_text="", meta=None, feature="openai_answer")
             error_detail=(str(e)[:2000] + ("\nMETA: " + meta_text if meta_text else ""))[:5000],
             latency_ms=latency_ms,
         )
-        raise
+        raise OpenAIServiceError(str(e)) from e

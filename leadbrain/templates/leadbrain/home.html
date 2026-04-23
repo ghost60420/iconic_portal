@@ -45,6 +45,7 @@
   <a href="{% url 'leadbrain_upload' %}" class="lb-btn primary">⬆️ Upload File</a>
   <a href="{% url 'leadbrain_results' %}" class="lb-btn">📋 View Results</a>
   <a href="{% url 'leadbrain_uploads' %}" class="lb-btn">🗂️ Upload History</a>
+  <a href="{% url 'leadbrain_discovery_jobs' %}" class="lb-btn">🔎 Discovery Jobs</a>
   {% if request.user.is_staff or request.user.is_superuser %}
     <a href="{% url 'leadbrain_ops' %}" class="lb-btn">🛠️ Operations</a>
   {% endif %}
@@ -107,6 +108,45 @@
         </tr>
       {% empty %}
         <tr><td colspan="7">No uploads yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="lb-panel mt-4">
+  <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+    <h2 class="h5 mb-0">Recent Discovery Jobs</h2>
+    <a href="{% url 'leadbrain_discovery_jobs' %}" class="btn btn-sm btn-outline-light">Open Discovery</a>
+  </div>
+  <table class="lb-table">
+    <thead>
+      <tr>
+        <th>Source</th>
+        <th>Country</th>
+        <th>Niche</th>
+        <th>Status</th>
+        <th>Found</th>
+        <th>Saved</th>
+        <th>Last Run</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for job in recent_discovery_jobs %}
+        <tr>
+          <td>{{ job.get_source_type_display }}</td>
+          <td>{{ job.country }}</td>
+          <td>{{ job.get_niche_display }}</td>
+          <td>
+            <span class="lb-badge {% if job.status == 'complete' %}good{% elif job.status == 'partial' or job.status == 'processing' %}possible{% elif job.status == 'queued' %}info{% else %}weak{% endif %}">
+              {{ job.get_status_display }}
+            </span>
+          </td>
+          <td>{{ job.results_found }}</td>
+          <td>{{ job.candidates_saved }}</td>
+          <td>{{ job.last_run_at|date:"Y-m-d H:i"|default:"—" }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7">No discovery jobs yet.</td></tr>
       {% endfor %}
     </tbody>
   </table>

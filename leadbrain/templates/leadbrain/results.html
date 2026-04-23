@@ -29,6 +29,10 @@
   .lb-badge.queued { background:rgba(96,165,250,0.12); border-color:#60a5fa; color:#dbeafe; }
   .lb-badge.parsing { background:rgba(129,140,248,0.12); border-color:#818cf8; color:#c7d2fe; }
   .lb-badge.cancelled { background:rgba(148,163,184,0.12); border-color:#94a3b8; color:#e2e8f0; }
+  .lb-badge.discovery { background:rgba(129,140,248,0.12); border-color:#818cf8; color:#c7d2fe; }
+  .lb-badge.new { background:rgba(56,189,248,0.12); border-color:#38bdf8; color:#bae6fd; }
+  .lb-badge.strong { background:rgba(34,197,94,0.12); border-color:#22c55e; color:#bbf7d0; }
+  .lb-badge.possible { background:rgba(250,204,21,0.12); border-color:#facc15; color:#fde68a; }
   .lb-muted { color:#9ca3af; font-size:12px; }
   .lb-summary-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:16px; }
   .lb-stat { background:#0f172a; border:1px solid #243041; border-radius:12px; padding:12px; }
@@ -241,6 +245,19 @@
           <tr>
             <td>
               <a href="{% url 'leadbrain_company_detail' company.pk %}" class="fw-bold">{{ company.company_name|default:"Unnamed company" }}</a>
+              <div class="d-flex gap-1 flex-wrap mt-1">
+                {% if company.is_discovery_source %}
+                  <span class="lb-badge discovery">Discovery</span>
+                {% endif %}
+                {% if company.is_new_discovery %}
+                  <span class="lb-badge new">New</span>
+                {% endif %}
+                {% if company.discovery_fit_badge == "strong" %}
+                  <span class="lb-badge strong">Strong</span>
+                {% elif company.discovery_fit_badge == "possible" %}
+                  <span class="lb-badge possible">Possible</span>
+                {% endif %}
+              </div>
               <div class="lb-muted">Upload #{{ company.upload_id }} • Row {{ company.row_number }}</div>
               {% if not company.is_active %}
                 <div class="lb-muted">Inactive • {{ company.inactive_reason|default:"Archived" }}</div>

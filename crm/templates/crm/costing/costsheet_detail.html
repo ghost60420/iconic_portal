@@ -585,22 +585,22 @@
       </div>
     </div>
 
-    {% for category,label in category_choices %}
+    {% for section in category_sections %}
       <div class="card">
-        <div class="card-title">{{ label }}</div>
+        <div class="card-title">{{ section.label }}</div>
         <div class="category-guide">
           <div class="category-guide-card">
-            <div class="category-guide-title">How to enter {{ label|lower }}</div>
-            <div class="category-guide-body" data-category-help="{{ category }}"></div>
+            <div class="category-guide-title">How to enter {{ section.label|lower }}</div>
+            <div class="category-guide-body" data-category-help="{{ section.key }}"></div>
           </div>
           <div class="category-guide-card">
             <div class="category-guide-title">Common items</div>
-            <div class="chip-row" data-category-chips="{{ category }}"></div>
+            <div class="chip-row" data-category-chips="{{ section.key }}"></div>
           </div>
         </div>
         <div class="muted" style="margin-bottom:6px;">Unit prices are BDT per selected UOM. Consumption is per piece unless the supplier quotes per order.</div>
         <div style="overflow:auto;">
-          <table class="line-table" data-category="{{ category }}">
+          <table class="line-table" data-category="{{ section.key }}">
             <thead>
               <tr>
                 <th style="min-width:160px;">Item</th>
@@ -616,11 +616,11 @@
               </tr>
             </thead>
             <tbody>
-              {% for row in grouped_lines[category] %}
-              <tr class="line-row" data-category="{{ category }}" data-id="{{ row.id|default:"" }}">
+              {% for row in section.rows %}
+              <tr class="line-row" data-category="{{ section.key }}" data-id="{{ row.id|default:"" }}">
                 <td>
                   <div style="display:flex; align-items:center; gap:6px;">
-                    <input type="text" data-field="item_name" value="{{ row.item_name }}" placeholder="Item name" list="costing-item-options-{{ category }}">
+                    <input type="text" data-field="item_name" value="{{ row.item_name }}" placeholder="Item name" list="costing-item-options-{{ section.key }}">
                     <span class="help-icon" title="">?</span>
                   </div>
                   <div class="row-tip" data-role="item-tip"></div>
@@ -676,7 +676,7 @@
           </table>
         </div>
         <div class="line-actions">
-          <button type="button" class="btnx add-row" data-category="{{ category }}">Add row</button>
+          <button type="button" class="btnx add-row" data-category="{{ section.key }}">Add row</button>
         </div>
       </div>
     {% endfor %}

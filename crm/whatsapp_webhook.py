@@ -31,6 +31,8 @@ def _verify_signature(request) -> bool:
 
 @csrf_exempt
 def whatsapp_webhook(request):
+    if not getattr(settings, "WHATSAPP_ENABLED", False):
+        return HttpResponse("WhatsApp disabled", status=410)
     # Meta verify (GET)
     if request.method == "GET":
         mode = request.GET.get("hub.mode")
