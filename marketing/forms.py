@@ -6,6 +6,9 @@ from .models import (
     ContactList,
     OutreachCampaign,
     OutreachMessageTemplate,
+    MarketingCompetitor,
+    MarketingCompetitorAccount,
+    MarketingCompetitorPost,
     SocialAccount,
 )
 
@@ -136,3 +139,66 @@ class SocialAccountConnectForm(forms.Form):
         required=False,
         widget=forms.TextInput(attrs={"class": "form-control"}),
     )
+
+
+class MarketingCompetitorForm(forms.ModelForm):
+    class Meta:
+        model = MarketingCompetitor
+        fields = ["name", "website", "industry", "notes", "is_active"]
+        widgets = {
+            "name": forms.TextInput(attrs={"class": "form-control"}),
+            "website": forms.URLInput(attrs={"class": "form-control"}),
+            "industry": forms.TextInput(attrs={"class": "form-control"}),
+            "notes": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
+        }
+
+
+class MarketingCompetitorAccountForm(forms.ModelForm):
+    class Meta:
+        model = MarketingCompetitorAccount
+        fields = [
+            "platform",
+            "profile_url",
+            "handle",
+            "followers_count",
+            "following_count",
+            "is_active",
+            "last_checked_at",
+        ]
+        widgets = {
+            "platform": forms.Select(attrs={"class": "form-select"}),
+            "profile_url": forms.URLInput(attrs={"class": "form-control"}),
+            "handle": forms.TextInput(attrs={"class": "form-control"}),
+            "followers_count": forms.NumberInput(attrs={"class": "form-control", "min": 0}),
+            "following_count": forms.NumberInput(attrs={"class": "form-control", "min": 0}),
+            "last_checked_at": forms.DateTimeInput(attrs={"class": "form-control", "type": "datetime-local"}),
+        }
+
+
+class MarketingCompetitorPostForm(forms.ModelForm):
+    class Meta:
+        model = MarketingCompetitorPost
+        fields = [
+            "post_url",
+            "caption_text",
+            "content_type",
+            "published_at",
+            "likes",
+            "comments",
+            "shares",
+            "views",
+            "saves",
+            "detected_theme",
+        ]
+        widgets = {
+            "post_url": forms.URLInput(attrs={"class": "form-control"}),
+            "caption_text": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
+            "content_type": forms.Select(attrs={"class": "form-select"}),
+            "published_at": forms.DateTimeInput(attrs={"class": "form-control", "type": "datetime-local"}),
+            "likes": forms.NumberInput(attrs={"class": "form-control", "min": 0}),
+            "comments": forms.NumberInput(attrs={"class": "form-control", "min": 0}),
+            "shares": forms.NumberInput(attrs={"class": "form-control", "min": 0}),
+            "views": forms.NumberInput(attrs={"class": "form-control", "min": 0}),
+            "saves": forms.NumberInput(attrs={"class": "form-control", "min": 0}),
+            "detected_theme": forms.TextInput(attrs={"class": "form-control"}),
+        }

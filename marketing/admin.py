@@ -26,6 +26,10 @@ from .models import (
     BestPracticeLibrary,
     OAuthCredential,
     OAuthConnectionRequest,
+    MarketingCompetitor,
+    MarketingCompetitorAccount,
+    MarketingCompetitorPost,
+    MarketingCompetitorInsight,
 )
 
 
@@ -171,3 +175,30 @@ class OAuthCredentialAdmin(admin.ModelAdmin):
 class OAuthConnectionRequestAdmin(admin.ModelAdmin):
     list_display = ("platform", "user", "status", "created_at")
     list_filter = ("platform", "status")
+
+
+@admin.register(MarketingCompetitor)
+class MarketingCompetitorAdmin(admin.ModelAdmin):
+    list_display = ("name", "industry", "website", "is_active", "updated_at")
+    search_fields = ("name", "website", "industry")
+    list_filter = ("is_active",)
+
+
+@admin.register(MarketingCompetitorAccount)
+class MarketingCompetitorAccountAdmin(admin.ModelAdmin):
+    list_display = ("competitor", "platform", "handle", "followers_count", "is_active", "last_checked_at")
+    search_fields = ("competitor__name", "handle", "profile_url")
+    list_filter = ("platform", "is_active")
+
+
+@admin.register(MarketingCompetitorPost)
+class MarketingCompetitorPostAdmin(admin.ModelAdmin):
+    list_display = ("competitor_account", "content_type", "published_at", "engagement_score", "engagement_rate")
+    search_fields = ("competitor_account__competitor__name", "post_url", "detected_theme")
+    list_filter = ("content_type", "competitor_account__platform")
+
+
+@admin.register(MarketingCompetitorInsight)
+class MarketingCompetitorInsightAdmin(admin.ModelAdmin):
+    list_display = ("competitor", "title", "priority_score", "created_at")
+    search_fields = ("competitor__name", "title")

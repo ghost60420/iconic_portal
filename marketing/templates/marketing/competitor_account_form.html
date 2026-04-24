@@ -1,0 +1,40 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+{% include "marketing/_style.html" %}
+
+<div class="mk-container">
+  <div class="mk-header">
+    <div>
+      <div class="mk-title">{{ page_title }}</div>
+      <div class="mk-sub">Add a manual competitor platform account for {{ competitor.name }}.</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_competitor_detail' competitor.id %}">Back to Detail</a>
+    </div>
+  </div>
+
+  <div class="mk-card">
+    <div class="mk-section-title">{{ competitor.name }}</div>
+    <form method="post" class="mk-form mk-stack">
+      {% csrf_token %}
+      {% for field in form %}
+        <div>
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}
+            <div class="mk-hint" style="margin-top:6px;">{{ field.help_text }}</div>
+          {% endif %}
+          {% if field.errors %}
+            <div class="text-warning" style="margin-top:6px;">{{ field.errors|join:", " }}</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+      <div class="d-flex gap-2 flex-wrap">
+        <button class="btn btn-warning mk-btn" type="submit">{{ submit_label }}</button>
+        <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_competitor_detail' competitor.id %}">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

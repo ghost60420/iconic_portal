@@ -4,13 +4,26 @@ from django.conf import settings
 from django.db.models import Sum
 from django.utils import timezone
 
-from marketing.models import InsightItem, SeoQueryDaily, SocialMetricDaily, OutreachSendLog
+from marketing.models import InsightItem, SeoQueryDaily, SocialMetricDaily, OutreachSendLog, SocialContent
 
 
-def _upsert_insight(*, source: str, title: str, reason: str, action: str, priority: int = 50):
+def _upsert_insight(
+    *,
+    source: str,
+    title: str,
+    reason: str,
+    action: str,
+    priority: int = 50,
+    platform: str = "",
+    related_type: str = "",
+    related_id: str = "",
+):
     InsightItem.objects.update_or_create(
         source=source,
         title=title,
+        platform=platform or "",
+        related_object_type=related_type or "",
+        related_object_id=str(related_id) if related_id else "",
         defaults={
             "reason": reason,
             "recommended_action": action,
@@ -43,6 +56,8 @@ def generate_rule_based_insights(days: int = 14):
                     reason=f"{impressions} impressions with {clicks} clicks",
                     action="Update page title/meta and add stronger CTA.",
                     priority=80,
+                    related_type="seo_query_warning",
+                    related_id=row.get("query") or "",
                 )
 
     # Social: top engagement rate
@@ -58,6 +73,7 @@ def generate_rule_based_insights(days: int = 14):
         )
     )
     for row in social_rows:
+        content = SocialContent.objects.filter(pk=row.get("content_id")).only("id", "platform").first()
         impressions = row.get("impressions") or 0
         if impressions == 0:
             continue
@@ -70,6 +86,9 @@ def generate_rule_based_insights(days: int = 14):
                 reason=f"Engagement rate {rate:.1%} on recent post",
                 action="Repurpose this format and post at similar time.",
                 priority=70,
+                platform=content.platform if content else "",
+                related_type="high_engagement_content",
+                related_id=content.id if content else "",
             )
             break
 
@@ -85,6 +104,7 @@ def generate_rule_based_insights(days: int = 14):
                 reason=f"Reply rate {reply_rate:.1%} on {sent} sends",
                 action="Test 2 new subject lines and add personalization.",
                 priority=85,
+                related_type="outreach_reply_warning",
             )
 
 

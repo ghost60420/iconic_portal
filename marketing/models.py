@@ -5,6 +5,7 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+from .services.metrics import calc_engagement_rate, calc_engagement_score, calc_engagement_total
 from .utils.crypto import encrypt_value, decrypt_value
 
 
@@ -693,3 +694,131 @@ class OAuthConnectionRequest(models.Model):
 
     def __str__(self) -> str:
         return f"{self.platform} {self.status}"
+
+
+class MarketingCompetitor(models.Model):
+    name = models.CharField(max_length=200)
+    website = models.URLField(blank=True, default="")
+    industry = models.CharField(max_length=120, blank=True, default="")
+    notes = models.TextField(blank=True, default="")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("name",)
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class MarketingCompetitorAccount(models.Model):
+    PLATFORM_CHOICES = [
+        ("instagram", "Instagram"),
+        ("facebook", "Facebook"),
+        ("linkedin", "LinkedIn"),
+        ("tiktok", "TikTok"),
+        ("youtube", "YouTube"),
+        ("google_business", "Google Business"),
+    ]
+
+    competitor = models.ForeignKey(
+        MarketingCompetitor,
+        on_delete=models.CASCADE,
+        related_name="accounts",
+    )
+    platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES)
+    profile_url = models.URLField(blank=True, default="")
+    handle = models.CharField(max_length=120, blank=True, default="")
+    followers_count = models.PositiveIntegerField(default=0)
+    following_count = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    last_checked_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("competitor__name", "platform", "handle")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["competitor", "platform", "handle"],
+                name="marketing_competitor_account_unique",
+            )
+        ]
+
+    def __str__(self) -> str:
+        label = self.handle or self.profile_url or self.get_platform_display()
+        return f"{self.competitor.name} {label}".strip()
+
+
+class MarketingCompetitorPost(models.Model):
+    competitor_account = models.ForeignKey(
+        MarketingCompetitorAccount,
+        on_delete=models.CASCADE,
+        related_name="posts",
+    )
+    post_url = models.URLField(blank=True, default="")
+    caption_text = models.TextField(blank=True, default="")
+    content_type = models.CharField(max_length=20, choices=SocialContent.CONTENT_CHOICES, default="post")
+    published_at = models.DateTimeField(null=True, blank=True)
+    likes = models.PositiveIntegerField(default=0)
+    comments = models.PositiveIntegerField(default=0)
+    shares = models.PositiveIntegerField(default=0)
+    views = models.PositiveIntegerField(default=0)
+    saves = models.PositiveIntegerField(default=0)
+    engagement_score = models.PositiveIntegerField(default=0)
+    engagement_rate = models.DecimalField(max_digits=8, decimal_places=4, default=Decimal("0"))
+    detected_theme = models.CharField(max_length=200, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-published_at", "-created_at")
+
+    def __str__(self) -> str:
+        return self.post_url or f"{self.competitor_account} post"
+
+    def save(self, *args, **kwargs):
+        engagement_total = calc_engagement_total(
+            likes=self.likes,
+            comments=self.comments,
+            shares=self.shares,
+            saves=self.saves,
+        )
+        self.engagement_score = calc_engagement_score(
+            likes=self.likes,
+            comments=self.comments,
+            shares=self.shares,
+            saves=self.saves,
+            clicks=0,
+        )
+        self.engagement_rate = Decimal(
+            str(
+                calc_engagement_rate(
+                    reach=0,
+                    views=self.views,
+                    engagement_total=engagement_total,
+                )
+            )
+        )
+        super().save(*args, **kwargs)
+
+
+class MarketingCompetitorInsight(models.Model):
+    competitor = models.ForeignKey(
+        MarketingCompetitor,
+        on_delete=models.CASCADE,
+        related_name="insights",
+    )
+    title = models.CharField(max_length=200)
+    reason = models.TextField(blank=True, default="")
+    recommended_action = models.TextField(blank=True, default="")
+    priority_score = models.IntegerField(default=50)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-priority_score", "-created_at")
+
+    def __str__(self) -> str:
+        return f"{self.competitor.name}: {self.title}"

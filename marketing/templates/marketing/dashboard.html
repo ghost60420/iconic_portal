@@ -4,248 +4,332 @@
 {% include "marketing/_style.html" %}
 
 <div class="mk-container">
-  <div class="mk-header">
+  <div class="mk-header mk-header-lg">
     <div>
-      <div class="mk-title">Marketing Intelligence</div>
-      <div class="mk-sub">Unified performance across Meta, LinkedIn, TikTok, YouTube, and Google Business.</div>
+      <div class="mk-title">{{ page_title }}</div>
+      <div class="mk-sub">{{ page_subtitle }}</div>
     </div>
-    <div class="d-flex gap-2 flex-wrap">
-      <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_connect' %}">Connect accounts</a>
-      <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_content' %}">Content library</a>
-      <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_insights' %}">Insights</a>
-      <a class="btn btn-warning mk-btn" href="{% url 'marketing_best_practices' %}">Best practices</a>
-      {% if MARKETING_ADS_ENABLED %}
-        <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_ads' %}">Ads</a>
-      {% endif %}
-      <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_workflow' %}">Workflow</a>
+    <div class="mk-header-actions">
+      <div class="mk-filter-group">
+        <a href="?range=today" class="mk-filter-chip {% if range_key == 'today' %}active{% endif %}">Today</a>
+        <a href="?range=7" class="mk-filter-chip {% if range_key == '7' %}active{% endif %}">7 Days</a>
+        <a href="?range=30" class="mk-filter-chip {% if range_key == '30' %}active{% endif %}">30 Days</a>
+        <a href="?range=90" class="mk-filter-chip {% if range_key == '90' %}active{% endif %}">90 Days</a>
+        <span class="mk-filter-chip disabled">Custom later</span>
+      </div>
+      <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-warning mk-btn" href="{% url 'marketing_insights' %}">Generate Insight</a>
+        <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_connect' %}">Sync Data</a>
+      </div>
     </div>
   </div>
 
+  <div class="mk-grid mk-kpi-grid">
+    {% for card in kpi_cards %}
+      <div class="mk-card mk-kpi-card">
+        <div class="mk-section-title">{{ card.title }}</div>
+        <div class="mk-kpi-value">{{ card.value|default:0 }}</div>
+        <div class="mk-kpi-change {% if card.change_pct > 0 %}up{% elif card.change_pct < 0 %}down{% else %}flat{% endif %}">
+          {% if card.change_pct > 0 %}+{% endif %}{{ card.change_pct|floatformat:0 }} percent {{ card.label }}
+        </div>
+        {% if card.detail %}
+          <div class="mk-hint" style="margin-top:8px;">{{ card.detail }}</div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+
   <div class="mk-grid">
-    <div class="mk-card" style="grid-column: span 6;">
-      <div class="mk-section-title">Last 7 days</div>
-      <div class="d-flex flex-wrap gap-3">
+    <div class="mk-card mk-span-12">
+      <div class="mk-section-head">
         <div>
-          <div class="mk-label">Impressions</div>
-          <div class="mk-stat">{{ kpi_7.impressions|default:0 }}</div>
-        </div>
-        <div>
-          <div class="mk-label">Reach</div>
-          <div class="mk-stat">{{ kpi_7.reach|default:0 }}</div>
-        </div>
-        <div>
-          <div class="mk-label">Views</div>
-          <div class="mk-stat">{{ kpi_7.views|default:0 }}</div>
-        </div>
-        <div>
-          <div class="mk-label">Clicks</div>
-          <div class="mk-stat">{{ kpi_7.clicks|default:0 }}</div>
-        </div>
-        <div>
-          <div class="mk-label">Engagement rate</div>
-          <div class="mk-stat">{{ kpi_7.engagement_rate|floatformat:2 }}%</div>
+          <div class="mk-section-title mb-0">Platform Performance</div>
+          <div class="mk-sub">Compare which channels are driving attention, clicks, and engagement.</div>
         </div>
       </div>
-    </div>
 
-    <div class="mk-card" style="grid-column: span 6;">
-      <div class="mk-section-title">Last 30 days</div>
-      <div class="d-flex flex-wrap gap-3">
-        <div>
-          <div class="mk-label">Impressions</div>
-          <div class="mk-stat">{{ kpi_30.impressions|default:0 }}</div>
-        </div>
-        <div>
-          <div class="mk-label">Reach</div>
-          <div class="mk-stat">{{ kpi_30.reach|default:0 }}</div>
-        </div>
-        <div>
-          <div class="mk-label">Views</div>
-          <div class="mk-stat">{{ kpi_30.views|default:0 }}</div>
-        </div>
-        <div>
-          <div class="mk-label">Clicks</div>
-          <div class="mk-stat">{{ kpi_30.clicks|default:0 }}</div>
-        </div>
-        <div>
-          <div class="mk-label">Engagement rate</div>
-          <div class="mk-stat">{{ kpi_30.engagement_rate|floatformat:2 }}%</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="mk-card" style="grid-column: span 8;">
-      <div class="mk-section-title">Followers change by platform</div>
-      <div class="mk-chart">
-        <canvas id="followersChart"></canvas>
-      </div>
-    </div>
-
-    <div class="mk-card" style="grid-column: span 4;">
-      <div class="mk-section-title">Marketing pipeline</div>
-      <div class="mk-label">Leads with UTM</div>
-      <div class="mk-stat">{{ marketing_leads|default:0 }}</div>
-      <div class="mk-label" style="margin-top:10px;">Opportunities with UTM</div>
-      <div class="mk-stat">{{ marketing_opps|default:0 }}</div>
-      <div class="mk-sub" style="margin-top:8px;">Tracking helps validate campaign ROI.</div>
-    </div>
-
-    <div class="mk-card" style="grid-column: span 4;">
-      <div class="mk-section-title">Top by engagement</div>
-      <div class="mk-table">
-        <table class="table table-dark table-sm mb-0">
-          <thead>
-            <tr>
-              <th>Content</th>
-              <th>Rate</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in top_by_engagement %}
-              <tr>
-                <td>
-                  <a href="{% url 'marketing_content_detail' row.content.id %}" style="color:#f8fafc; font-weight:700;">
-                    {{ row.content.title|default:row.content.external_content_id }}
-                  </a>
-                  <div class="mk-muted" style="font-size:11px;">{{ row.content.platform }}</div>
-                </td>
-                <td>{{ row.engagement_rate|floatformat:2 }}%</td>
-              </tr>
-            {% empty %}
-              <tr><td colspan="2" class="mk-muted">No data yet.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="mk-card" style="grid-column: span 4;">
-      <div class="mk-section-title">Top by views</div>
-      <div class="mk-table">
-        <table class="table table-dark table-sm mb-0">
-          <thead>
-            <tr>
-              <th>Content</th>
-              <th>Views</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in top_by_views %}
-              <tr>
-                <td>
-                  <a href="{% url 'marketing_content_detail' row.content.id %}" style="color:#f8fafc; font-weight:700;">
-                    {{ row.content.title|default:row.content.external_content_id }}
-                  </a>
-                  <div class="mk-muted" style="font-size:11px;">{{ row.content.platform }}</div>
-                </td>
-                <td>{{ row.views|default:0 }}</td>
-              </tr>
-            {% empty %}
-              <tr><td colspan="2" class="mk-muted">No data yet.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="mk-card" style="grid-column: span 4;">
-      <div class="mk-section-title">Top by clicks</div>
-      <div class="mk-table">
-        <table class="table table-dark table-sm mb-0">
-          <thead>
-            <tr>
-              <th>Content</th>
-              <th>Clicks</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in top_by_clicks %}
-              <tr>
-                <td>
-                  <a href="{% url 'marketing_content_detail' row.content.id %}" style="color:#f8fafc; font-weight:700;">
-                    {{ row.content.title|default:row.content.external_content_id }}
-                  </a>
-                  <div class="mk-muted" style="font-size:11px;">{{ row.content.platform }}</div>
-                </td>
-                <td>{{ row.clicks|default:0 }}</td>
-              </tr>
-            {% empty %}
-              <tr><td colspan="2" class="mk-muted">No data yet.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="mk-card" style="grid-column: span 12;">
-      <div class="mk-section-title">AI weekly action list</div>
-      {% if insights %}
-        <div class="d-flex flex-column gap-2">
-          {% for i in insights %}
-            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
-              <div style="color:#e2e8f0; font-weight:700;">
-                {{ i.title }}
-                <span class="mk-muted">{{ i.recommended_action }}</span>
+      <div class="mk-platform-grid">
+        {% for card in platform_summary %}
+          <div class="mk-platform-card">
+            <div class="mk-platform-top">
+              <div class="d-flex gap-2 align-items-center flex-wrap">
+                <div class="mk-platform-name">{{ card.label }}</div>
+                {% if card.is_best_platform %}
+                  <span class="mk-pill mk-pill-best">Best Platform</span>
+                {% endif %}
               </div>
-              <div class="d-flex gap-2">
-                <form method="post" action="{% url 'marketing_insight_update' i.id %}">
-                  {% csrf_token %}
-                  <input type="hidden" name="status" value="done" />
-                  <button class="btn btn-sm btn-outline-light" type="submit">Done</button>
-                </form>
-                <form method="post" action="{% url 'marketing_insight_update' i.id %}">
-                  {% csrf_token %}
-                  <input type="hidden" name="status" value="snoozed" />
-                  <button class="btn btn-sm btn-outline-light" type="submit">Snooze</button>
-                </form>
+              {% if card.status_tone == 'good' %}
+                <span class="mk-pill mk-pill-good">{{ card.status }}</span>
+              {% elif card.status_tone == 'warn' %}
+                <span class="mk-pill mk-pill-warn">{{ card.status }}</span>
+              {% else %}
+                <span class="mk-pill">{{ card.status }}</span>
+              {% endif %}
+            </div>
+
+            <div class="mk-platform-primary">
+              <div>
+                <div class="mk-label">Reach</div>
+                <div class="mk-mini-stat">{{ card.reach|default:0 }}</div>
+              </div>
+              <div>
+                <div class="mk-label">Views</div>
+                <div class="mk-mini-stat">{{ card.views|default:0 }}</div>
+              </div>
+              <div>
+                <div class="mk-label">Clicks</div>
+                <div class="mk-mini-stat">{{ card.clicks|default:0 }}</div>
+              </div>
+              <div>
+                <div class="mk-label">Engagement Rate</div>
+                <div class="mk-mini-stat">{{ card.engagement_rate|floatformat:2 }}%</div>
               </div>
             </div>
-          {% endfor %}
+
+            <div class="mk-platform-footer">
+              <div>
+                <div class="mk-label">Follower Change</div>
+                <div class="mk-mini-stat">
+                  {% if card.follower_change_available %}
+                    {{ card.followers_change|default:0 }}
+                  {% else %}
+                    <span class="mk-muted">Unavailable</span>
+                  {% endif %}
+                </div>
+              </div>
+              <div>
+                <div class="mk-label">Engagement</div>
+                <div class="mk-mini-stat">{{ card.engagement_total|default:0 }}</div>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="mk-card mk-span-6">
+      <div class="mk-section-head">
+        <div>
+          <div class="mk-section-title mb-0">Top Performing Posts</div>
+          <div class="mk-sub">Top 5 posts based on engagement score.</div>
         </div>
+      </div>
+      <div class="mk-table">
+        <table class="table table-dark table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Post</th>
+              <th>Type</th>
+              <th>Date</th>
+              <th>Score</th>
+              <th>Why it worked</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in top_posts %}
+              <tr>
+                <td>
+                  <div class="mk-row-title">{{ row.content.get_platform_display }}</div>
+                  <a href="{% url 'marketing_content_detail' row.content.id %}" class="mk-link-strong">{{ row.display_title }}</a>
+                </td>
+                <td>{{ row.content.get_content_type_display }}</td>
+                <td>{% if row.published_date %}{{ row.published_date|date:"M d, Y" }}{% else %}<span class="mk-muted">Not set</span>{% endif %}</td>
+                <td>{{ row.engagement_score|default:0 }}</td>
+                <td class="mk-muted">{{ row.why_note }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="5" class="mk-muted">Not enough content data yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="mk-card mk-span-6">
+      <div class="mk-section-head">
+        <div>
+          <div class="mk-section-title mb-0">Low Performing Posts</div>
+          <div class="mk-sub">Bottom 5 posts that need attention.</div>
+        </div>
+      </div>
+      <div class="mk-table">
+        <table class="table table-dark table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Post</th>
+              <th>Type</th>
+              <th>Date</th>
+              <th>Score</th>
+              <th>Suggested fix</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in weak_posts %}
+              <tr>
+                <td>
+                  <div class="mk-row-title">{{ row.content.get_platform_display }}</div>
+                  <a href="{% url 'marketing_content_detail' row.content.id %}" class="mk-link-strong">{{ row.display_title }}</a>
+                </td>
+                <td>{{ row.content.get_content_type_display }}</td>
+                <td>{% if row.published_date %}{{ row.published_date|date:"M d, Y" }}{% else %}<span class="mk-muted">Not set</span>{% endif %}</td>
+                <td>{{ row.engagement_score|default:0 }}</td>
+                <td class="mk-muted">{{ row.suggested_fix }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="5" class="mk-muted">No weak posts identified yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="mk-card mk-span-12">
+      <div class="mk-section-head">
+        <div>
+          <div class="mk-section-title mb-0">Performance Drivers</div>
+          <div class="mk-sub">Simple performance signals based on the current selected period.</div>
+        </div>
+      </div>
+      <div class="mk-driver-grid">
+        {% for chip in performance_drivers.chips %}
+          <div class="mk-driver-chip">
+            <div class="mk-label">{{ chip.label }}</div>
+            <div class="mk-driver-value">{{ chip.value }}</div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="mk-card mk-span-6">
+      <div class="mk-section-head">
+        <div>
+          <div class="mk-section-title mb-0">AI Marketing Insights</div>
+          <div class="mk-sub">Rule-based insights with safe fallback behavior.</div>
+        </div>
+      </div>
+      <div class="mk-insight-list">
+        {% for insight in ai_insights %}
+          <div class="mk-insight-item">
+            <div class="d-flex align-items-center justify-content-between gap-2">
+              <div class="mk-insight-title">{{ insight.title }}</div>
+              {% if insight.priority == 'High' %}
+                <span class="mk-pill mk-pill-warn">{{ insight.priority }}</span>
+              {% elif insight.priority == 'Medium' %}
+                <span class="mk-pill">{{ insight.priority }}</span>
+              {% else %}
+                <span class="mk-pill mk-pill-good">{{ insight.priority }}</span>
+              {% endif %}
+            </div>
+            <div class="mk-muted" style="margin-top:6px;">{{ insight.reason }}</div>
+            <div class="mk-insight-action">{{ insight.action }}</div>
+          </div>
+        {% empty %}
+          <div class="mk-muted">Not enough data yet.</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="mk-card mk-span-6">
+      <div class="mk-section-head">
+        <div>
+          <div class="mk-section-title mb-0">This Week’s Action Plan</div>
+          <div class="mk-sub">Simple actions for the marketing team.</div>
+        </div>
+      </div>
+      <div class="mk-table">
+        <table class="table table-dark table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Action</th>
+              <th>Platform</th>
+              <th>Priority</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in weekly_action_plan %}
+              <tr>
+                <td>{{ item.action }}</td>
+                <td>{{ item.platform }}</td>
+                <td>{{ item.priority }}</td>
+                <td><span class="mk-pill">{{ item.status }}</span></td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="4" class="mk-muted">No action plan yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="mk-card mk-span-12">
+      <div class="mk-section-head">
+        <div>
+          <div class="mk-section-title mb-0">Competitor Snapshot</div>
+          <div class="mk-sub">Manual competitor tracking overview for the current marketing team.</div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_competitors' %}">View Competitors</a>
+          <a class="btn btn-warning mk-btn" href="{% url 'marketing_competitor_add' %}">Add Competitor</a>
+        </div>
+      </div>
+
+      {% if competitor_snapshot.total_competitors %}
+        <div class="mk-driver-grid" style="margin-bottom:14px;">
+          <div class="mk-driver-chip">
+            <div class="mk-label">Total competitors</div>
+            <div class="mk-driver-value">{{ competitor_snapshot.total_competitors }}</div>
+          </div>
+          <div class="mk-driver-chip">
+            <div class="mk-label">Active competitors</div>
+            <div class="mk-driver-value">{{ competitor_snapshot.active_competitors }}</div>
+          </div>
+          <div class="mk-driver-chip">
+            <div class="mk-label">Highest engagement competitor</div>
+            <div class="mk-driver-value">
+              {% if competitor_snapshot.highest_engagement_competitor %}
+                {{ competitor_snapshot.highest_engagement_competitor.name }}
+              {% else %}
+                Not enough data yet
+              {% endif %}
+            </div>
+          </div>
+          <div class="mk-driver-chip">
+            <div class="mk-label">Most active competitor</div>
+            <div class="mk-driver-value">
+              {% if competitor_snapshot.most_active_competitor %}
+                {{ competitor_snapshot.most_active_competitor.name }}
+              {% else %}
+                Not enough data yet
+              {% endif %}
+            </div>
+          </div>
+          <div class="mk-driver-chip">
+            <div class="mk-label">Top competitor post</div>
+            <div class="mk-driver-value">
+              {% if competitor_snapshot.top_post %}
+                {{ competitor_snapshot.top_post.competitor_account.competitor.name }}
+              {% else %}
+                Not enough data yet
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        {% if competitor_snapshot.top_post %}
+          <div class="mk-callout">
+            Top competitor post:
+            {{ competitor_snapshot.top_post.detected_theme|default:"No theme set" }}
+            on {{ competitor_snapshot.top_post.competitor_account.get_platform_display }}
+            with score {{ competitor_snapshot.top_post.engagement_score }}.
+          </div>
+        {% endif %}
       {% else %}
-        <div class="mk-sub">No insights yet. Run marketing_generate_insights.</div>
+        <div class="mk-empty-state">
+          No competitor data yet. Add your first competitor.
+        </div>
       {% endif %}
     </div>
   </div>
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script>
-  const labels = {{ growth_labels_json|safe }};
-  const series = {{ growth_series_json|safe }};
-  const platformLabels = {{ platform_labels_json|safe }};
-
-  const datasets = Object.keys(series).map((key, idx) => {
-    const color = ["#f59e0b", "#60a5fa", "#22c55e", "#f472b6", "#a78bfa", "#38bdf8", "#e879f9"][idx % 7];
-    return {
-      label: platformLabels[key] || key,
-      data: series[key],
-      borderColor: color,
-      backgroundColor: "transparent",
-      tension: 0.25,
-    };
-  });
-
-  const ctx = document.getElementById("followersChart");
-  if (ctx) {
-    new Chart(ctx, {
-      type: "line",
-      data: {
-        labels: labels,
-        datasets: datasets,
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          x: { ticks: { color: "#94a3b8" } },
-          y: { ticks: { color: "#94a3b8" } },
-        },
-        plugins: {
-          legend: { labels: { color: "#e2e8f0" } },
-        },
-      },
-    });
-  }
-</script>
 {% endblock %}

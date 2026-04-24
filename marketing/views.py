@@ -1,10 +1,11 @@
 from datetime import timedelta
 import uuid
 import json
+import re
 
 from django.conf import settings
 from django.contrib import messages
-from django.db.models import Count, Sum, Q
+from django.db.models import Avg, Count, Sum, Q
 from django.db.models.functions import Coalesce
 from django.http import Http404, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
@@ -20,6 +21,9 @@ from marketing.forms import (
     OutreachMessageTemplateForm,
     TrackedLinkForm,
     SocialAccountConnectForm,
+    MarketingCompetitorForm,
+    MarketingCompetitorAccountForm,
+    MarketingCompetitorPostForm,
 )
 from marketing.models import (
     SocialAccount,
@@ -41,12 +45,26 @@ from marketing.models import (
     Contact,
     OAuthCredential,
     OAuthConnectionRequest,
+    MarketingCompetitor,
+    MarketingCompetitorAccount,
+    MarketingCompetitorPost,
+    MarketingCompetitorInsight,
 )
-from marketing.services.metrics import calc_engagement_total, calc_engagement_rate
+from marketing.services.metrics import calc_engagement_total, calc_engagement_rate, calc_engagement_score
 from marketing.services.oauth_meta import build_meta_oauth_url
 from marketing.utils.importer import import_contacts_from_csv
 from marketing.utils.activity import log_marketing_activity
 from marketing.utils.templates import seed_default_templates
+
+
+PLATFORM_CARD_CONFIG = [
+    {"key": "instagram", "label": "Instagram", "platforms": ["instagram"]},
+    {"key": "facebook", "label": "Facebook", "platforms": ["facebook", "meta_business"]},
+    {"key": "linkedin", "label": "LinkedIn", "platforms": ["linkedin"]},
+    {"key": "tiktok", "label": "TikTok", "platforms": ["tiktok"]},
+    {"key": "youtube", "label": "YouTube", "platforms": ["youtube"]},
+    {"key": "google_business", "label": "Google Business", "platforms": ["google_business"]},
+]
 
 
 def _require_enabled(flag_name: str | None = None):
@@ -219,9 +237,41 @@ def meta_oauth_callback(request):
     return redirect("marketing_connect")
 
 
-def _metric_totals(days: int):
-    since = timezone.localdate() - timedelta(days=days)
-    totals = SocialMetricDaily.objects.filter(date__gte=since).aggregate(
+def _date_window(range_key: str):
+    today = timezone.localdate()
+    normalized = (range_key or "30").strip().lower()
+    day_map = {
+        "today": 1,
+        "7": 7,
+        "30": 30,
+        "90": 90,
+    }
+    days = day_map.get(normalized, 30)
+    start = today - timedelta(days=days - 1)
+    end = today
+    previous_end = start - timedelta(days=1)
+    previous_start = previous_end - timedelta(days=days - 1)
+    return {
+        "key": normalized if normalized in day_map else "30",
+        "days": days,
+        "start": start,
+        "end": end,
+        "previous_start": previous_start,
+        "previous_end": previous_end,
+        "label": "Today" if days == 1 else f"Last {days} Days",
+    }
+
+
+def _percent_change(current: int | float, previous: int | float) -> float:
+    current_val = float(current or 0)
+    previous_val = float(previous or 0)
+    if previous_val <= 0:
+        return 100.0 if current_val > 0 else 0.0
+    return ((current_val - previous_val) / previous_val) * 100.0
+
+
+def _metric_totals(start_date, end_date):
+    totals = SocialMetricDaily.objects.filter(date__gte=start_date, date__lte=end_date).aggregate(
         impressions=Sum("impressions"),
         reach=Sum("reach"),
         views=Sum("views"),
@@ -235,11 +285,22 @@ def _metric_totals(days: int):
     reach = totals.get("reach") or 0
     views = totals.get("views") or 0
     clicks = totals.get("clicks") or 0
+    likes = totals.get("likes") or 0
+    comments = totals.get("comments") or 0
+    shares = totals.get("shares") or 0
+    saves = totals.get("saves") or 0
     engagement_total = calc_engagement_total(
-        likes=totals.get("likes") or 0,
-        comments=totals.get("comments") or 0,
-        shares=totals.get("shares") or 0,
-        saves=totals.get("saves") or 0,
+        likes=likes,
+        comments=comments,
+        shares=shares,
+        saves=saves,
+    )
+    engagement_score = calc_engagement_score(
+        likes=likes,
+        comments=comments,
+        shares=shares,
+        saves=saves,
+        clicks=clicks,
     )
     engagement_rate = calc_engagement_rate(
         impressions=impressions,
@@ -253,6 +314,7 @@ def _metric_totals(days: int):
         "views": views,
         "clicks": clicks,
         "engagement_total": engagement_total,
+        "engagement_score": engagement_score,
         "engagement_rate": engagement_rate,
     }
 
@@ -283,6 +345,13 @@ def _collect_content_metrics(content_qs, start_date=None, end_date=None):
             shares=item.shares,
             saves=item.saves,
         )
+        engagement_score = calc_engagement_score(
+            likes=item.likes,
+            comments=item.comments,
+            shares=item.shares,
+            saves=item.saves,
+            clicks=item.clicks,
+        )
         engagement_rate = calc_engagement_rate(
             impressions=item.impressions,
             reach=item.reach,
@@ -296,11 +365,616 @@ def _collect_content_metrics(content_qs, start_date=None, end_date=None):
                 "reach": item.reach,
                 "views": item.views,
                 "clicks": item.clicks,
+                "likes": item.likes,
+                "comments": item.comments,
+                "shares": item.shares,
+                "saves": item.saves,
                 "engagement_total": engagement_total,
+                "engagement_score": engagement_score,
                 "engagement_rate": engagement_rate,
             }
         )
     return rows
+
+
+def _marketing_lead_count(start_date, end_date):
+    return (
+        Lead.objects.filter(
+            created_date__gte=start_date,
+            created_date__lte=end_date,
+            utm_source__isnull=False,
+        )
+        .exclude(utm_source="")
+        .count()
+    )
+
+
+def _ad_conversions_count(start_date, end_date):
+    total = (
+        AdMetricDaily.objects.filter(date__gte=start_date, date__lte=end_date).aggregate(
+            conversions=Coalesce(Sum("conversions"), 0)
+        )
+    ).get("conversions") or 0
+    return int(total)
+
+
+def _build_kpi_cards(period):
+    current_metrics = _metric_totals(period["start"], period["end"])
+    previous_metrics = _metric_totals(period["previous_start"], period["previous_end"])
+    current_leads = _marketing_lead_count(period["start"], period["end"])
+    previous_leads = _marketing_lead_count(period["previous_start"], period["previous_end"])
+    current_conversions = _ad_conversions_count(period["start"], period["end"])
+    previous_conversions = _ad_conversions_count(period["previous_start"], period["previous_end"])
+    current_lead_conversion_total = current_leads + current_conversions
+    previous_lead_conversion_total = previous_leads + previous_conversions
+
+    cards = [
+        {
+            "title": "Total Reach",
+            "value": current_metrics["reach"],
+            "change_pct": _percent_change(current_metrics["reach"], previous_metrics["reach"]),
+            "label": "vs previous period",
+        },
+        {
+            "title": "Total Views",
+            "value": current_metrics["views"],
+            "change_pct": _percent_change(current_metrics["views"], previous_metrics["views"]),
+            "label": "vs previous period",
+        },
+        {
+            "title": "Total Engagement",
+            "value": current_metrics["engagement_total"],
+            "change_pct": _percent_change(current_metrics["engagement_total"], previous_metrics["engagement_total"]),
+            "label": "vs previous period",
+        },
+        {
+            "title": "Total Clicks",
+            "value": current_metrics["clicks"],
+            "change_pct": _percent_change(current_metrics["clicks"], previous_metrics["clicks"]),
+            "label": "vs previous period",
+        },
+        {
+            "title": "Leads / Conversions",
+            "value": current_lead_conversion_total,
+            "change_pct": _percent_change(current_lead_conversion_total, previous_lead_conversion_total),
+            "label": "vs previous period",
+            "detail": f"{current_leads} leads, {current_conversions} conversions",
+        },
+    ]
+
+    return {
+        "cards": cards,
+        "current_metrics": current_metrics,
+        "previous_metrics": previous_metrics,
+        "current_leads": current_leads,
+        "current_conversions": current_conversions,
+    }
+
+
+def _platform_comparison(start_date, end_date):
+    metric_rows = (
+        SocialMetricDaily.objects.filter(date__gte=start_date, date__lte=end_date)
+        .values("content__platform")
+        .annotate(
+            impressions=Coalesce(Sum("impressions"), 0),
+            reach=Coalesce(Sum("reach"), 0),
+            views=Coalesce(Sum("views"), 0),
+            clicks=Coalesce(Sum("clicks"), 0),
+            likes=Coalesce(Sum("likes"), 0),
+            comments=Coalesce(Sum("comments"), 0),
+            shares=Coalesce(Sum("shares"), 0),
+            saves=Coalesce(Sum("saves"), 0),
+        )
+    )
+    metric_map = {row["content__platform"]: row for row in metric_rows}
+
+    follower_rows = (
+        AccountMetricDaily.objects.filter(date__gte=start_date, date__lte=end_date)
+        .values("account__platform")
+        .annotate(
+            followers_change=Coalesce(Sum("followers_change"), 0),
+            row_count=Count("id"),
+        )
+    )
+    follower_map = {row["account__platform"]: row for row in follower_rows}
+
+    cards = []
+    for config in PLATFORM_CARD_CONFIG:
+        totals = {
+            "impressions": 0,
+            "reach": 0,
+            "views": 0,
+            "clicks": 0,
+            "likes": 0,
+            "comments": 0,
+            "shares": 0,
+            "saves": 0,
+        }
+        followers_change = 0
+        follower_data_points = 0
+
+        for platform_key in config["platforms"]:
+            row = metric_map.get(platform_key)
+            if row:
+                for key in totals:
+                    totals[key] += row.get(key) or 0
+            follower_row = follower_map.get(platform_key)
+            if follower_row:
+                followers_change += follower_row.get("followers_change") or 0
+                follower_data_points += follower_row.get("row_count") or 0
+
+        engagement_total = calc_engagement_total(
+            likes=totals["likes"],
+            comments=totals["comments"],
+            shares=totals["shares"],
+            saves=totals["saves"],
+        )
+        engagement_score = calc_engagement_score(
+            likes=totals["likes"],
+            comments=totals["comments"],
+            shares=totals["shares"],
+            saves=totals["saves"],
+            clicks=totals["clicks"],
+        )
+        engagement_rate = calc_engagement_rate(
+            impressions=totals["impressions"],
+            reach=totals["reach"],
+            views=totals["views"],
+            engagement_total=engagement_total,
+        ) * 100
+        has_activity = any(totals.values()) or follower_data_points > 0
+
+        cards.append(
+            {
+                "key": config["key"],
+                "label": config["label"],
+                "platform": config["key"],
+                "impressions": totals["impressions"],
+                "reach": totals["reach"],
+                "views": totals["views"],
+                "clicks": totals["clicks"],
+                "engagement_total": engagement_total,
+                "engagement_score": engagement_score,
+                "engagement_rate": engagement_rate,
+                "followers_change": followers_change,
+                "follower_change_available": follower_data_points > 0,
+                "has_activity": has_activity,
+            }
+        )
+
+    active_rates = [card["engagement_rate"] for card in cards if card["has_activity"]]
+    average_rate = sum(active_rates) / max(len(active_rates), 1) if active_rates else 0.0
+    best_key = ""
+    if cards:
+        best_key = max(cards, key=lambda item: (item["engagement_rate"], item["engagement_score"], item["clicks"]))["key"]
+
+    for card in cards:
+        if not card["has_activity"]:
+            card["status"] = "No Data"
+            card["status_tone"] = "stable"
+        elif card["engagement_rate"] > average_rate:
+            card["status"] = "Strong"
+            card["status_tone"] = "good"
+        elif average_rate and card["engagement_rate"] >= (average_rate * 0.85):
+            card["status"] = "Stable"
+            card["status_tone"] = "stable"
+        else:
+            card["status"] = "Needs Attention"
+            card["status_tone"] = "warn"
+        card["is_best_platform"] = card["key"] == best_key and card["has_activity"]
+
+    return cards
+
+
+def _content_type_rollups(rows):
+    label_map = dict(SocialContent.CONTENT_CHOICES)
+    totals = {}
+
+    for row in rows:
+        if not (row["impressions"] or row["views"] or row["engagement_score"]):
+            continue
+        content_type = row["content"].content_type or "post"
+        bucket = totals.setdefault(
+            content_type,
+            {
+                "key": content_type,
+                "label": label_map.get(content_type, content_type.replace("_", " ").title()),
+                "count": 0,
+                "impressions": 0,
+                "views": 0,
+                "clicks": 0,
+                "engagement_score": 0,
+                "engagement_rate_total": 0.0,
+            },
+        )
+        bucket["count"] += 1
+        bucket["impressions"] += row["impressions"]
+        bucket["views"] += row["views"]
+        bucket["clicks"] += row["clicks"]
+        bucket["engagement_score"] += row["engagement_score"]
+        bucket["engagement_rate_total"] += row["engagement_rate"]
+
+    rollups = []
+    for item in totals.values():
+        item["avg_engagement_rate"] = item["engagement_rate_total"] / max(item["count"], 1)
+        rollups.append(item)
+    return rollups
+
+
+def _extract_topic(rows):
+    stopwords = {
+        "the", "and", "for", "with", "your", "from", "this", "that", "have", "has", "are", "our", "you",
+        "into", "about", "more", "less", "what", "when", "where", "which", "their", "they", "them", "will",
+        "just", "than", "how", "why", "can", "new", "all", "one", "two", "too", "its", "it's", "iconic",
+        "apparel", "house", "brand", "brands", "post", "video", "reel", "factory",
+    }
+    scores = {}
+    for row in rows:
+        text = " ".join(
+            [
+                row["content"].title or "",
+                row["content"].message_text or "",
+            ]
+        ).lower()
+        for token in re.findall(r"[a-z0-9]{4,}", text):
+            if token in stopwords:
+                continue
+            scores[token] = scores.get(token, 0) + max(row["engagement_score"], 1)
+    if not scores:
+        return ""
+    return max(scores.items(), key=lambda item: item[1])[0].replace("_", " ").title()
+
+
+def _best_posting_window(rows):
+    day_scores = {}
+    hour_scores = {}
+
+    for row in rows:
+        published_at = row["content"].published_at
+        if not published_at or row["engagement_score"] <= 0:
+            continue
+        day = published_at.strftime("%A")
+        hour = published_at.strftime("%H:00")
+        day_scores[day] = day_scores.get(day, 0) + row["engagement_score"]
+        hour_scores[hour] = hour_scores.get(hour, 0) + row["engagement_score"]
+
+    best_day = max(day_scores.items(), key=lambda item: item[1]) if day_scores else None
+    best_hour = max(hour_scores.items(), key=lambda item: item[1]) if hour_scores else None
+    return best_day, best_hour
+
+
+def _performance_drivers(platform_cards, content_rows):
+    active_platforms = [card for card in platform_cards if card["has_activity"]]
+    best_platform = (
+        max(active_platforms, key=lambda item: (item["engagement_rate"], item["engagement_score"], item["clicks"]))
+        if active_platforms
+        else None
+    )
+    weakest_platform = (
+        min(active_platforms, key=lambda item: (item["engagement_rate"], item["engagement_score"]))
+        if len(active_platforms) > 1
+        else None
+    )
+
+    content_types = _content_type_rollups(content_rows)
+    best_content_type = (
+        max(content_types, key=lambda item: (item["avg_engagement_rate"], item["engagement_score"], item["count"]))
+        if content_types
+        else None
+    )
+    weakest_content_type = (
+        min(content_types, key=lambda item: (item["avg_engagement_rate"], item["engagement_score"]))
+        if len(content_types) > 1
+        else None
+    )
+
+    best_day, best_hour = _best_posting_window(content_rows)
+    highest_click_platform = (
+        max(active_platforms, key=lambda item: (item["clicks"], item["engagement_score"], item["engagement_rate"]))
+        if active_platforms
+        else None
+    )
+    best_topic = _extract_topic(sorted(content_rows, key=lambda row: row["engagement_score"], reverse=True)[:10])
+
+    chips = [
+        {
+            "label": "Best content type",
+            "value": best_content_type["label"] if best_content_type else "Not enough data yet",
+        },
+        {
+            "label": "Best posting day",
+            "value": best_day[0] if best_day else "Not enough data yet",
+        },
+        {
+            "label": "Best posting hour",
+            "value": best_hour[0] if best_hour else "Not enough data yet",
+        },
+        {
+            "label": "Best topic",
+            "value": best_topic or "Not enough data yet",
+        },
+        {
+            "label": "Best platform",
+            "value": best_platform["label"] if best_platform else "Not enough data yet",
+        },
+        {
+            "label": "Highest click source",
+            "value": highest_click_platform["label"] if highest_click_platform else "Not enough data yet",
+        },
+    ]
+
+    return {
+        "best_platform": best_platform,
+        "weakest_platform": weakest_platform,
+        "best_content_type": best_content_type,
+        "weakest_content_type": weakest_content_type,
+        "best_day": best_day,
+        "best_hour": best_hour,
+        "highest_click_platform": highest_click_platform,
+        "best_topic": best_topic,
+        "chips": chips,
+    }
+
+
+def _why_it_worked_note(row):
+    if row["clicks"] >= max(row["likes"], row["comments"], 1):
+        return "Strong CTA and clear click intent."
+    if row["shares"] > 0 or row["saves"] > 0:
+        return "Shareable or reusable format performed well."
+    if row["comments"] > 0:
+        return "This post generated conversation."
+    if row["views"] > row["reach"]:
+        return "The hook likely kept viewers watching."
+    return "Consistent creative and timing helped this post."
+
+
+def _suggested_fix(row, drivers):
+    best_hour = drivers.get("best_hour")
+    if best_hour and row["content"].published_at and row["content"].published_at.strftime("%H:00") != best_hour[0]:
+        return "Change posting time to the stronger hour."
+    if row["clicks"] == 0:
+        return "Try a stronger hook and clearer CTA."
+    if row["shares"] == 0 and row["saves"] == 0:
+        return "Use a more useful or shareable angle."
+    if row["content"].content_type not in {"reel", "short", "video"}:
+        return "Test video instead of a static format."
+    return "Tighten caption length and simplify the message."
+
+
+def _prepare_post_rows(rows, drivers, note_key: str):
+    prepared = []
+    for row in rows:
+        prepared.append(
+            {
+                **row,
+                "display_title": (row["content"].title or row["content"].external_content_id or "Untitled")[:60],
+                "published_date": row["content"].published_at,
+                note_key: _why_it_worked_note(row) if note_key == "why_note" else _suggested_fix(row, drivers),
+            }
+        )
+    return prepared
+
+
+def _rule_based_ai_insights(drivers, platform_cards, top_posts, weak_posts):
+    insights = []
+    if drivers["best_platform"]:
+        best = drivers["best_platform"]
+        insights.append(
+            {
+                "priority": "High",
+                "title": f"{best['label']} is your strongest platform",
+                "reason": f"It led the period with {best['engagement_rate']:.2f}% engagement.",
+                "action": f"Create more content tailored to {best['label']} next week.",
+            }
+        )
+    if drivers["weakest_platform"]:
+        weak = drivers["weakest_platform"]
+        insights.append(
+            {
+                "priority": "High",
+                "title": f"{weak['label']} needs attention",
+                "reason": f"It is below your average engagement benchmark at {weak['engagement_rate']:.2f}%.",
+                "action": f"Test a different hook and content angle on {weak['label']}.",
+            }
+        )
+    if drivers["best_content_type"]:
+        content_type = drivers["best_content_type"]
+        insights.append(
+            {
+                "priority": "Medium",
+                "title": f"{content_type['label']} is the best content type",
+                "reason": f"It delivered the best average engagement rate of {content_type['avg_engagement_rate']:.2f}%.",
+                "action": f"Prioritize more {content_type['label'].lower()} content in the next batch.",
+            }
+        )
+    if drivers["best_day"] and drivers["best_hour"]:
+        insights.append(
+            {
+                "priority": "Medium",
+                "title": "A stronger posting window is visible",
+                "reason": f"Your best results clustered on {drivers['best_day'][0]} around {drivers['best_hour'][0]}.",
+                "action": "Test that posting window again this week.",
+            }
+        )
+    if top_posts and weak_posts and top_posts[0]["engagement_score"] > max(weak_posts[0]["engagement_score"], 0):
+        gap = top_posts[0]["engagement_score"] - weak_posts[0]["engagement_score"]
+        insights.append(
+            {
+                "priority": "Low",
+                "title": "The gap between best and weakest posts is wide",
+                "reason": f"Top content outscored the weakest posts by {gap} engagement points.",
+                "action": "Reuse the winning creative structure and avoid repeating the weakest format unchanged.",
+            }
+        )
+    return insights[:5]
+
+
+def _weekly_action_plan(drivers, top_posts):
+    best_platform = drivers.get("best_platform")
+    weakest_platform = drivers.get("weakest_platform")
+    best_content_type = drivers.get("best_content_type")
+    top_post = top_posts[0] if top_posts else None
+    best_hour = drivers.get("best_hour")
+
+    actions = [
+        {
+            "action": f"Post more of your strongest {best_content_type['label'].lower()} content." if best_content_type else "Post more of your strongest content type.",
+            "platform": best_platform["label"] if best_platform else "All platforms",
+            "priority": "High",
+            "status": "Planned",
+        },
+        {
+            "action": f"Improve the weakest platform with one new creative test." if weakest_platform else "Improve the weakest platform with one creative test.",
+            "platform": weakest_platform["label"] if weakest_platform else "TBD",
+            "priority": "High",
+            "status": "Planned",
+        },
+        {
+            "action": "Reuse the format and hook from your top post." if top_post else "Reuse the format from your best recent post.",
+            "platform": top_post["content"].get_platform_display() if top_post else (best_platform["label"] if best_platform else "All platforms"),
+            "priority": "Medium",
+            "status": "Planned",
+        },
+        {
+            "action": f"Test posting around {best_hour[0]}." if best_hour else "Test one new posting time this week.",
+            "platform": best_platform["label"] if best_platform else "All platforms",
+            "priority": "Medium",
+            "status": "Planned",
+        },
+        {
+            "action": "Create one competitor-inspired content idea from market review.",
+            "platform": "All platforms",
+            "priority": "Low",
+            "status": "Planned",
+        },
+    ]
+    return actions
+
+
+def _priority_bucket(priority_score: int) -> str:
+    if int(priority_score or 0) >= 80:
+        return "High Priority"
+    if int(priority_score or 0) >= 60:
+        return "Medium Priority"
+    return "Low Priority"
+
+
+def _top_priority_dashboard_insights(fallback_insights):
+    items = list(
+        InsightItem.objects.filter(status="open")
+        .order_by("-priority_score", "-updated_at", "-created_at")[:5]
+    )
+    if items:
+        return [
+            {
+                "priority": _priority_bucket(item.priority_score).replace(" Priority", ""),
+                "title": item.title,
+                "reason": item.reason,
+                "action": item.recommended_action,
+                "platform": item.platform,
+                "priority_score": item.priority_score,
+            }
+            for item in items
+        ]
+    return fallback_insights[:5]
+
+
+def _competitor_dashboard_snapshot():
+    competitors = list(
+        MarketingCompetitor.objects.prefetch_related("accounts__posts").all()
+    )
+    if not competitors:
+        return {}
+
+    total_competitors = len(competitors)
+    active_competitors = len([item for item in competitors if item.is_active])
+
+    highest_engagement_competitor = None
+    most_active_competitor = None
+    highest_engagement_value = -1.0
+    most_active_count = -1
+    top_post = None
+
+    for competitor in competitors:
+        posts = []
+        for account in competitor.accounts.all():
+            posts.extend(list(account.posts.all()))
+        if posts:
+            avg_engagement = sum(float(post.engagement_rate or 0) for post in posts) / max(len(posts), 1)
+            if avg_engagement > highest_engagement_value:
+                highest_engagement_value = avg_engagement
+                highest_engagement_competitor = competitor
+            if len(posts) > most_active_count:
+                most_active_count = len(posts)
+                most_active_competitor = competitor
+            candidate_post = max(posts, key=lambda post: (post.engagement_score, float(post.engagement_rate or 0), post.views))
+            if not top_post or (candidate_post.engagement_score, float(candidate_post.engagement_rate or 0), candidate_post.views) > (
+                top_post.engagement_score,
+                float(top_post.engagement_rate or 0),
+                top_post.views,
+            ):
+                top_post = candidate_post
+
+    return {
+        "total_competitors": total_competitors,
+        "active_competitors": active_competitors,
+        "highest_engagement_competitor": highest_engagement_competitor,
+        "most_active_competitor": most_active_competitor,
+        "top_post": top_post,
+    }
+
+
+def _competitor_opportunities(competitor):
+    recent_since = timezone.now() - timedelta(days=30)
+    accounts = list(competitor.accounts.prefetch_related("posts").all())
+    if not accounts:
+        return []
+
+    competitor_posts = []
+    platforms = []
+    for account in accounts:
+        platforms.append(account.platform)
+        competitor_posts.extend([post for post in account.posts.all() if not post.published_at or post.published_at >= recent_since])
+
+    opportunities = []
+    our_post_count = SocialContent.objects.filter(
+        platform__in=platforms,
+        published_at__gte=recent_since,
+    ).count()
+    if len(competitor_posts) > our_post_count:
+        opportunities.append(
+            "This competitor is posting more often. Consider increasing posting consistency."
+        )
+
+    video_types = {"reel", "short", "video", "long_video"}
+    video_posts = [post for post in competitor_posts if post.content_type in video_types]
+    non_video_posts = [post for post in competitor_posts if post.content_type not in video_types]
+    if video_posts:
+        video_avg = sum(float(post.engagement_rate or 0) for post in video_posts) / max(len(video_posts), 1)
+        non_video_avg = sum(float(post.engagement_rate or 0) for post in non_video_posts) / max(len(non_video_posts), 1) if non_video_posts else 0.0
+        if video_avg > non_video_avg:
+            opportunities.append(
+                "Their video content is getting stronger engagement. Test short factory videos."
+            )
+
+    avg_comments = sum(post.comments for post in competitor_posts) / max(len(competitor_posts), 1) if competitor_posts else 0
+    if avg_comments >= 5:
+        opportunities.append(
+            "Their audience is responding in comments. Review the content theme and create your own version."
+        )
+
+    theme_counts = {}
+    for post in competitor_posts:
+        theme = (post.detected_theme or "").strip()
+        if theme:
+            theme_counts[theme] = theme_counts.get(theme, 0) + 1
+    if theme_counts:
+        top_theme = max(theme_counts.items(), key=lambda item: item[1])[0]
+        opportunities.append(
+            f"They repeat the theme '{top_theme}' often. Test your own distinctive version of that topic."
+        )
+
+    return opportunities[:4]
 
 
 def _followers_growth(days: int = 30):
@@ -338,31 +1012,52 @@ def marketing_home(request):
 def dashboard(request):
     _require_enabled()
 
-    kpi_7 = _metric_totals(7)
-    kpi_30 = _metric_totals(30)
+    period = _date_window(request.GET.get("range") or "30")
+    period_summary = _build_kpi_cards(period)
+    content_rows = _collect_content_metrics(
+        SocialContent.objects.all(),
+        start_date=period["start"],
+        end_date=period["end"],
+    )
 
-    since_30 = timezone.localdate() - timedelta(days=30)
-    content_rows = _collect_content_metrics(SocialContent.objects.all(), start_date=since_30)
-    top_by_engagement = sorted(content_rows, key=lambda r: r["engagement_rate"], reverse=True)[:10]
-    top_by_views = sorted(content_rows, key=lambda r: r["views"], reverse=True)[:10]
-    top_by_clicks = sorted(content_rows, key=lambda r: r["clicks"], reverse=True)[:10]
+    active_rows = [
+        row
+        for row in content_rows
+        if row["reach"] or row["views"] or row["clicks"] or row["engagement_score"]
+    ]
+    top_posts_raw = sorted(
+        active_rows,
+        key=lambda row: (row["engagement_score"], row["engagement_rate"], row["clicks"]),
+        reverse=True,
+    )[:5]
 
-    labels, series, platform_labels = _followers_growth(30)
+    weak_posts_raw = sorted(
+        [row for row in active_rows if row["reach"] > 0 or row["views"] > 0],
+        key=lambda row: (row["engagement_score"], row["engagement_rate"], -row["impressions"]),
+    )[:5]
 
-    insights = InsightItem.objects.filter(status="open").order_by("-priority_score", "-created_at")[:8]
+    platform_summary = _platform_comparison(period["start"], period["end"])
+    performance_drivers = _performance_drivers(platform_summary, content_rows)
+    top_posts = _prepare_post_rows(top_posts_raw, performance_drivers, "why_note")
+    weak_posts = _prepare_post_rows(weak_posts_raw, performance_drivers, "suggested_fix")
+    ai_insight_fallback = _rule_based_ai_insights(performance_drivers, platform_summary, top_posts, weak_posts)
+    ai_insights = _top_priority_dashboard_insights(ai_insight_fallback)
+    weekly_action_plan = _weekly_action_plan(performance_drivers, top_posts)
+    competitor_snapshot = _competitor_dashboard_snapshot()
 
     context = {
-        "kpi_7": kpi_7,
-        "kpi_30": kpi_30,
-        "top_by_engagement": top_by_engagement,
-        "top_by_views": top_by_views,
-        "top_by_clicks": top_by_clicks,
-        "growth_labels_json": json.dumps([d.isoformat() for d in labels]),
-        "growth_series_json": json.dumps(series),
-        "platform_labels_json": json.dumps(platform_labels),
-        "insights": insights,
-        "marketing_leads": Lead.objects.exclude(utm_source="").count(),
-        "marketing_opps": Opportunity.objects.filter(lead__utm_source__isnull=False).exclude(lead__utm_source="").count(),
+        "page_title": "Marketing Control Center",
+        "page_subtitle": "All social, ads, SEO, and campaign performance in one place.",
+        "period": period,
+        "range_key": period["key"],
+        "kpi_cards": period_summary["cards"],
+        "platform_summary": platform_summary,
+        "top_posts": top_posts,
+        "weak_posts": weak_posts,
+        "performance_drivers": performance_drivers,
+        "ai_insights": ai_insights,
+        "weekly_action_plan": weekly_action_plan,
+        "competitor_snapshot": competitor_snapshot,
     }
     return render(request, "marketing/dashboard.html", context)
 
@@ -432,16 +1127,170 @@ def insights_list(request):
 
         return redirect("marketing_insights")
 
+    insight_rows = list(qs[:200])
+    insight_groups = [
+        ("High Priority", [item for item in insight_rows if item.priority_score >= 80]),
+        ("Medium Priority", [item for item in insight_rows if 60 <= item.priority_score < 80]),
+        ("Low Priority", [item for item in insight_rows if item.priority_score < 60]),
+    ]
+
     return render(
         request,
         "marketing/insights_list.html",
         {
-            "insights": qs[:200],
+            "insights": insight_rows,
+            "insight_groups": insight_groups,
             "platform_choices": SocialAccount.PLATFORM_CHOICES,
             "status": status,
             "platform": platform,
             "priority": priority,
             "can_edit": _can_edit_marketing(request.user),
+        },
+    )
+
+
+def competitors_list(request):
+    _require_enabled()
+
+    competitors = MarketingCompetitor.objects.prefetch_related("accounts__posts").order_by("name")
+    rows = []
+    for competitor in competitors:
+        accounts = list(competitor.accounts.all())
+        posts = [post for account in accounts for post in account.posts.all()]
+        avg_engagement = sum(float(post.engagement_rate or 0) for post in posts) / max(len(posts), 1) if posts else 0.0
+        rows.append(
+            {
+                "competitor": competitor,
+                "accounts_count": len(accounts),
+                "posts_count": len(posts),
+                "avg_engagement": avg_engagement,
+            }
+        )
+
+    return render(
+        request,
+        "marketing/competitors_list.html",
+        {"rows": rows},
+    )
+
+
+def competitor_add(request):
+    _require_enabled()
+    form = MarketingCompetitorForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        competitor = form.save()
+        messages.success(request, "Competitor saved.")
+        return redirect("marketing_competitor_detail", pk=competitor.pk)
+
+    return render(
+        request,
+        "marketing/competitor_form.html",
+        {"form": form, "page_title": "Add Competitor", "submit_label": "Save Competitor"},
+    )
+
+
+def competitor_edit(request, pk: int):
+    _require_enabled()
+    competitor = get_object_or_404(MarketingCompetitor, pk=pk)
+    form = MarketingCompetitorForm(request.POST or None, instance=competitor)
+    if request.method == "POST" and form.is_valid():
+        competitor = form.save()
+        messages.success(request, "Competitor updated.")
+        return redirect("marketing_competitor_detail", pk=competitor.pk)
+
+    return render(
+        request,
+        "marketing/competitor_form.html",
+        {
+            "form": form,
+            "competitor": competitor,
+            "page_title": "Edit Competitor",
+            "submit_label": "Update Competitor",
+        },
+    )
+
+
+def competitor_account_add(request, pk: int):
+    _require_enabled()
+    competitor = get_object_or_404(MarketingCompetitor, pk=pk)
+    form = MarketingCompetitorAccountForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        account = form.save(commit=False)
+        account.competitor = competitor
+        account.save()
+        messages.success(request, "Competitor account saved.")
+        return redirect("marketing_competitor_detail", pk=competitor.pk)
+
+    return render(
+        request,
+        "marketing/competitor_account_form.html",
+        {
+            "form": form,
+            "competitor": competitor,
+            "page_title": "Add Competitor Account",
+            "submit_label": "Save Account",
+        },
+    )
+
+
+def competitor_post_add(request, pk: int):
+    _require_enabled()
+    account = get_object_or_404(MarketingCompetitorAccount.objects.select_related("competitor"), pk=pk)
+    form = MarketingCompetitorPostForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        post = form.save(commit=False)
+        post.competitor_account = account
+        post.save()
+        messages.success(request, "Competitor post saved.")
+        return redirect("marketing_competitor_detail", pk=account.competitor_id)
+
+    return render(
+        request,
+        "marketing/competitor_post_form.html",
+        {
+            "form": form,
+            "account": account,
+            "competitor": account.competitor,
+            "page_title": "Add Competitor Post",
+            "submit_label": "Save Post",
+        },
+    )
+
+
+def competitor_detail(request, pk: int):
+    _require_enabled()
+    competitor = get_object_or_404(
+        MarketingCompetitor.objects.prefetch_related("accounts__posts", "insights"),
+        pk=pk,
+    )
+    accounts = list(competitor.accounts.all())
+    all_posts = [post for account in accounts for post in account.posts.all()]
+    top_posts = sorted(
+        all_posts,
+        key=lambda post: (post.engagement_score, float(post.engagement_rate or 0), post.views),
+        reverse=True,
+    )[:5]
+    weak_posts = sorted(
+        [post for post in all_posts if post.views > 0],
+        key=lambda post: (post.engagement_score, float(post.engagement_rate or 0), -post.views),
+    )[:5]
+
+    avg_engagement = sum(float(post.engagement_rate or 0) for post in all_posts) / max(len(all_posts), 1) if all_posts else 0.0
+    total_followers = sum(account.followers_count for account in accounts)
+    opportunities = _competitor_opportunities(competitor)
+
+    return render(
+        request,
+        "marketing/competitor_detail.html",
+        {
+            "competitor": competitor,
+            "accounts": accounts,
+            "top_posts": top_posts,
+            "weak_posts": weak_posts,
+            "opportunities": opportunities,
+            "total_followers": total_followers,
+            "avg_engagement": avg_engagement,
+            "stored_insights": competitor.insights.all()[:10],
         },
     )
 
