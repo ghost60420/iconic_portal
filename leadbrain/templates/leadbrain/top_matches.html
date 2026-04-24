@@ -40,7 +40,7 @@
 <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
   <div>
     <h1 class="h3 mb-1">Top Matches</h1>
-    <div class="text-secondary">Daily action queue for the best Lead Brain companies with usable contact signals.</div>
+    <div class="text-secondary">Daily action queue for strong-fit companies with a website and usable contact details.</div>
   </div>
   <div class="d-flex gap-2 flex-wrap">
     <a href="{% url 'leadbrain_discovery_jobs' %}" class="btn btn-outline-light">Discovery Jobs</a>
@@ -52,16 +52,18 @@
 
 <div class="lb-summary-grid">
   <div class="lb-stat"><div class="lb-stat-label">Actionable Matches</div><div class="lb-stat-value">{{ total_count }}</div></div>
-  <div class="lb-stat"><div class="lb-stat-label">Strong Fit</div><div class="lb-stat-value">{{ strong_count }}</div></div>
-  <div class="lb-stat"><div class="lb-stat-label">Possible Fit</div><div class="lb-stat-value">{{ possible_count }}</div></div>
+  <div class="lb-stat"><div class="lb-stat-label">Strong Fit 80+</div><div class="lb-stat-value">{{ strong_count }}</div></div>
   <div class="lb-stat"><div class="lb-stat-label">Discovery Source</div><div class="lb-stat-value">{{ discovery_count }}</div></div>
   <div class="lb-stat"><div class="lb-stat-label">Uploaded Source</div><div class="lb-stat-value">{{ upload_count }}</div></div>
+  <div class="lb-stat"><div class="lb-stat-label">Has Email</div><div class="lb-stat-value">{{ email_count }}</div></div>
+  <div class="lb-stat"><div class="lb-stat-label">Has Phone</div><div class="lb-stat-value">{{ phone_count }}</div></div>
+  <div class="lb-stat"><div class="lb-stat-label">Has LinkedIn</div><div class="lb-stat-value">{{ linkedin_count }}</div></div>
 </div>
 
 <div class="lb-panel">
   <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
     <h2 class="h5 mb-0">Best Matches Ready for Review</h2>
-    <div class="lb-muted">Strong fits are shown first. Only rows with contact info, not moved to Leads, and not marked not relevant are included.</div>
+    <div class="lb-muted">Only strong fits with a website, contact info, not moved to Leads, and not marked not relevant are included.</div>
   </div>
   <div class="lb-table-wrap">
     <table class="lb-table">
@@ -70,9 +72,10 @@
           <th>Company Name</th>
           <th>Fit Score</th>
           <th>Source</th>
-          <th>Suggested Action</th>
           <th>Contact Availability</th>
+          <th>Suggested Action</th>
           <th>Move to Leads</th>
+          <th>Delete or Not Relevant</th>
         </tr>
       </thead>
       <tbody>
@@ -94,7 +97,6 @@
                 <div class="lb-muted"><a href="{{ company.website }}" target="_blank" rel="noopener">website</a></div>
               {% endif %}
             </td>
-            <td>{{ company.suggested_action|default:"—" }}</td>
             <td>
               {{ company.contact_availability }}
               <div class="lb-muted mt-1">
@@ -102,10 +104,22 @@
                   {{ company.email }}
                 {% elif company.phone %}
                   {{ company.phone }}
-                {% elif company.best_contact_name %}
-                  {{ company.best_contact_name }}
                 {% elif company.linkedin_url %}
                   <a href="{{ company.linkedin_url }}" target="_blank" rel="noopener">LinkedIn</a>
+                {% endif %}
+              </div>
+            </td>
+            <td>{{ company.suggested_action|default:"—" }}</td>
+            <td>
+              <div class="lb-actions">
+                {% if request.user.is_staff or request.user.is_superuser %}
+                  <form method="post" action="{% url 'leadbrain_company_move_to_leads' company.pk %}" onsubmit="return confirm('Move this company into the main Leads module?');">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button type="submit" class="btn btn-sm btn-success">Move to Leads</button>
+                  </form>
+                {% else %}
+                  <a href="{% url 'leadbrain_company_detail' company.pk %}" class="btn btn-sm btn-outline-light">Open</a>
                 {% endif %}
               </div>
             </td>
@@ -113,17 +127,22 @@
               <div class="lb-actions">
                 <a href="{% url 'leadbrain_company_detail' company.pk %}" class="btn btn-sm btn-outline-light">Open</a>
                 {% if request.user.is_staff or request.user.is_superuser %}
-                  <form method="post" action="{% url 'leadbrain_company_move_to_leads' company.pk %}" onsubmit="return confirm('Move this company into the main Leads module?');">
+                  <form method="post" action="{% url 'leadbrain_company_mark_not_relevant' company.pk %}" onsubmit="return confirm('Mark this row as not relevant?');">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                    <button type="submit" class="btn btn-sm btn-success">Move to Leads</button>
+                    <button type="submit" class="btn btn-sm btn-outline-warning">Not Relevant</button>
+                  </form>
+                  <form method="post" action="{% url 'leadbrain_company_delete' company.pk %}" onsubmit="return confirm('Delete this Lead Brain row? This cannot be undone.');">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
                   </form>
                 {% endif %}
               </div>
             </td>
           </tr>
         {% empty %}
-          <tr><td colspan="6">No top matches are ready yet.</td></tr>
+          <tr><td colspan="7">No top matches are ready yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>

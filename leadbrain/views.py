@@ -122,23 +122,18 @@ class LeadBrainTopMatchesView(LoginRequiredMixin, TemplateView):
             .filter(
                 is_active=True,
                 moved_to_leads=False,
-                fit_score__gte=65,
+                fit_score__gte=80,
+            )
+            .filter(
+                website__gt="",
             )
             .filter(
                 Q(email__gt="")
                 | Q(phone__gt="")
-                | Q(best_contact_name__gt="")
                 | Q(linkedin_url__gt="")
             )
             .exclude(suggested_action__iexact="Not Relevant")
-            .annotate(
-                strong_rank=Case(
-                    When(fit_score__gte=80, then=Value(0)),
-                    default=Value(1),
-                    output_field=IntegerField(),
-                )
-            )
-            .order_by("strong_rank", "-fit_score", "-created_at", "company_name", "id")
+            .order_by("-fit_score", "-created_at", "company_name", "id")
         )
 
         paginator = Paginator(queryset, 50)
@@ -149,10 +144,13 @@ class LeadBrainTopMatchesView(LoginRequiredMixin, TemplateView):
                 "page_obj": page_obj,
                 "companies": page_obj.object_list,
                 "total_count": queryset.count(),
-                "strong_count": queryset.filter(fit_score__gte=80).count(),
-                "possible_count": queryset.filter(fit_score__gte=65, fit_score__lt=80).count(),
+                "strong_count": queryset.count(),
+                "possible_count": 0,
                 "discovery_count": queryset.exclude(discovery_job__isnull=True).count(),
                 "upload_count": queryset.filter(discovery_job__isnull=True).count(),
+                "email_count": queryset.exclude(email="").count(),
+                "phone_count": queryset.exclude(phone="").count(),
+                "linkedin_count": queryset.exclude(linkedin_url="").count(),
             }
         )
         return context
