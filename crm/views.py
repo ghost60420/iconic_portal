@@ -19,6 +19,7 @@ except Exception:
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.mail import EmailMessage, get_connection, send_mail
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction, IntegrityError, connection
 from django.db.utils import DataError, OperationalError, ProgrammingError
 from django.db.models import Case, Count, IntegerField, Q, When
@@ -1718,8 +1719,8 @@ def _chatter_for_opportunity(opportunity):
 
 
 def _chatter_for_production(order):
-    lead = order.lead
-    opportunity = order.opportunity
+    lead = _safe_related_attr(order, "lead")
+    opportunity = _safe_related_attr(order, "opportunity")
     filters = Q(production=order)
     if opportunity:
         filters |= Q(opportunity=opportunity)
@@ -1731,6 +1732,13 @@ def _chatter_for_production(order):
         .order_by("-pinned", "-created_at")
         .distinct()
     )
+
+
+def _safe_related_attr(instance, attr_name, *, default=None):
+    try:
+        return getattr(instance, attr_name)
+    except (ObjectDoesNotExist, AttributeError, OperationalError, ProgrammingError):
+        return default
 
 
 def _lead_detail_impl(request, pk):
@@ -6212,7 +6220,34 @@ def _production_library_context(order=None):
 
 
 def _production_inventory_context(order):
-    inventory_context = _production_inventory_context(order)
+    try:
+        materials = list(order.materials.select_related("inventory_item"))
+    except (AttributeError, OperationalError, ProgrammingError):
+        materials = []
+
+    recommended_items = []
+    recommended_ids = []
+    try:
+        if order.fabrics.exists() or order.accessories.exists() or order.trims.exists() or order.threads.exists():
+            recommended_items = list(
+                InventoryItem.objects.filter(
+                    Q(fabric__in=order.fabrics.all())
+                    | Q(accessory__in=order.accessories.all())
+                    | Q(trim__in=order.trims.all())
+                    | Q(thread_option__in=order.threads.all())
+                ).distinct()
+            )
+        recommended_ids = [str(item.pk) for item in recommended_items]
+    except (AttributeError, OperationalError, ProgrammingError):
+        recommended_items = []
+        recommended_ids = []
+
+    try:
+        inventory_items = list(
+            InventoryItem.objects.filter(is_active=True).order_by("category", "name")
+        )
+    except (OperationalError, ProgrammingError):
+        inventory_items = []
 
     return {
         "materials": materials,
@@ -6490,6 +6525,10 @@ def production_edit(request, pk):
 def production_detail(request, pk):
     order = get_object_or_404(ProductionOrder, pk=pk)
     can_add_lines = ProductionOrderLine is not None and hasattr(order, "lines")
+    opportunity = _safe_related_attr(order, "opportunity")
+    lead = _safe_related_attr(order, "lead")
+    customer = _safe_related_attr(order, "customer")
+    product = _safe_related_attr(order, "product")
 
     # sorted stages
     stages = get_sorted_stages(order)
@@ -6514,24 +6553,32 @@ def production_detail(request, pk):
     order_delayed = order.is_delayed
     reject_percent = int((order.qty_reject / order.qty_total) * 100) if order.qty_total else 0
 
-    inventory_context = _production_inventory_context(order)
+    try:
+        inventory_context = _production_inventory_context(order)
+    except Exception:
+        logger.exception("production_detail: failed to load inventory context for order %s", order.pk)
+        inventory_context = {
+            "materials": [],
+            "recommended_items": [],
+            "recommended_ids": [],
+            "inventory_items": [],
+        }
     try:
         comments = _chatter_for_production(order)
-    except (OperationalError, ProgrammingError):
+    except Exception:
+        logger.exception("production_detail: failed to load chatter for order %s", order.pk)
         comments = []
     try:
         actual_entries = list(order.actual_cost_entries.all().order_by("section", "id"))
-    except (OperationalError, ProgrammingError):
+    except (AttributeError, OperationalError, ProgrammingError):
         actual_entries = []
     variance_report = None
-    try:
-        cost_sheet_active = order.cost_sheet_active
-    except (OperationalError, ProgrammingError):
-        cost_sheet_active = None
+    cost_sheet_active = _safe_related_attr(order, "cost_sheet_active")
     if cost_sheet_active:
         try:
             variance_report = build_variance_report(cost_sheet_active, order)
-        except (OperationalError, ProgrammingError):
+        except Exception:
+            logger.exception("production_detail: failed to build variance report for order %s", order.pk)
             variance_report = None
     actual_entry_form = ActualCostEntryForm()
 
@@ -6622,8 +6669,8 @@ def production_detail(request, pk):
                 author_name = request.user.username if request.user.is_authenticated else "User"
                 content = comment_text or f"Attachment: {attachment.name}"
                 LeadComment.objects.create(
-                    lead=order.lead,
-                    opportunity=order.opportunity,
+                    lead=lead,
+                    opportunity=opportunity,
                     production=order,
                     author=author_name,
                     content=content,
@@ -6632,8 +6679,8 @@ def production_detail(request, pk):
                 _send_chatter_mentions(
                     request,
                     comment_text,
-                    lead=order.lead,
-                    opportunity=order.opportunity,
+                    lead=lead,
+                    opportunity=opportunity,
                     production=order,
                     author=author_name,
                 )
@@ -6641,7 +6688,7 @@ def production_detail(request, pk):
             return redirect("production_detail", pk=pk)
 
         if action == "add_actual":
-            if not order.opportunity_id:
+            if not opportunity:
                 messages.error(request, "Link an opportunity to record actual costs.")
                 return redirect("production_detail", pk=pk)
             form = ActualCostEntryForm(request.POST)
@@ -6654,12 +6701,12 @@ def production_detail(request, pk):
                 except Exception:
                     entry.actual_total_cost = Decimal("0")
                 entry.production_order = order
-                entry.opportunity = order.opportunity
-                entry.cost_sheet = order.cost_sheet_active
+                entry.opportunity = opportunity
+                entry.cost_sheet = cost_sheet_active
                 entry.save()
-                if order.cost_sheet_active:
+                if cost_sheet_active:
                     CostSheetAudit.objects.create(
-                        cost_sheet=order.cost_sheet_active,
+                        cost_sheet=cost_sheet_active,
                         action="edited_actual",
                         changed_by=request.user if request.user.is_authenticated else None,
                         note=f"Actual cost added: {entry.item_name}",
@@ -6684,9 +6731,9 @@ def production_detail(request, pk):
                     entry.actual_total_cost = Decimal("0")
                 entry.notes = (request.POST.get("notes") or "").strip()
                 entry.save()
-                if order.cost_sheet_active:
+                if cost_sheet_active:
                     CostSheetAudit.objects.create(
-                        cost_sheet=order.cost_sheet_active,
+                        cost_sheet=cost_sheet_active,
                         action="edited_actual",
                         changed_by=request.user if request.user.is_authenticated else None,
                         note=f"Actual cost updated: {entry.item_name}",
@@ -6700,9 +6747,9 @@ def production_detail(request, pk):
             if entry:
                 entry_name = entry.item_name
                 entry.delete()
-                if order.cost_sheet_active:
+                if cost_sheet_active:
                     CostSheetAudit.objects.create(
-                        cost_sheet=order.cost_sheet_active,
+                        cost_sheet=cost_sheet_active,
                         action="edited_actual",
                         changed_by=request.user if request.user.is_authenticated else None,
                         note=f"Actual cost deleted: {entry_name}",
@@ -6714,10 +6761,10 @@ def production_detail(request, pk):
             comment_id = (request.POST.get("comment_id") or "").strip()
             if comment_id:
                 filters = Q(id=comment_id, production=order)
-                if order.opportunity:
-                    filters |= Q(id=comment_id, opportunity=order.opportunity)
-                if order.lead:
-                    filters |= Q(id=comment_id, lead=order.lead, opportunity__isnull=True, production__isnull=True)
+                if opportunity:
+                    filters |= Q(id=comment_id, opportunity=opportunity)
+                if lead:
+                    filters |= Q(id=comment_id, lead=lead, opportunity__isnull=True, production__isnull=True)
                 comment = LeadComment.objects.filter(filters).first()
                 if comment:
                     comment.pinned = not comment.pinned
@@ -6733,9 +6780,10 @@ def production_detail(request, pk):
         "attachments": attachments,
         "shipments": shipments,
         "reject_percent": reject_percent,
-        "opportunity": order.opportunity,
-        "lead": order.lead,
-        "customer": order.customer,
+        "opportunity": opportunity,
+        "lead": lead,
+        "customer": customer,
+        "product": product,
         "comments": comments,
         **inventory_context,
         "cost_sheet_active": cost_sheet_active,

@@ -569,8 +569,8 @@
     <div class="header-top">
       <div class="header-left">
         <div class="thumb-wrap">
-          {% if order.product and order.product.image %}
-            <img src="{{ order.product.image.url }}" alt="{{ order.product.name }}" class="thumb">
+          {% if product and product.image %}
+            <img src="{{ product.image.url }}" alt="{{ product.name }}" class="thumb">
           {% elif order.style_image %}
             <img src="{{ order.style_image.url }}" alt="{{ order.title }}" class="thumb">
           {% else %}
@@ -603,14 +603,14 @@
     <div class="meta-grid">
       <div class="meta-item">
         <div class="meta-label">Customer</div>
-        <div class="meta-value {% if not order.customer %}muted{% endif %}">
-          {% if order.customer %}{{ order.customer.account_brand|default:order.customer.contact_name|default:order.customer }}{% else %}Not set{% endif %}
+        <div class="meta-value {% if not customer %}muted{% endif %}">
+          {% if customer %}{{ customer.account_brand|default:customer.contact_name|default:customer }}{% else %}Not set{% endif %}
         </div>
       </div>
       <div class="meta-item">
         <div class="meta-label">Product</div>
-        <div class="meta-value {% if not order.product %}muted{% endif %}">
-          {% if order.product %}{{ order.product.name|default:order.product }}{% else %}Not set{% endif %}
+        <div class="meta-value {% if not product %}muted{% endif %}">
+          {% if product %}{{ product.name|default:product }}{% else %}Not set{% endif %}
         </div>
       </div>
       <div class="meta-item">
@@ -889,15 +889,15 @@
 
           <div class="sheet-line-meta">
             <span class="sheet-line-chip">
-              Client: {% if order.customer %}{{ order.customer.account_brand|default:order.customer.contact_name|default:order.customer }}{% else %}Not set{% endif %}
+              Client: {% if customer %}{{ customer.account_brand|default:customer.contact_name|default:customer }}{% else %}Not set{% endif %}
             </span>
             <span class="sheet-line-chip">
               Order: {{ order.order_code|default:"Not set" }}
             </span>
             <span class="sheet-line-chip">
               Opportunity:
-              {% if order.opportunity %}
-                <a href="{% url 'opportunity_detail' order.opportunity.id %}" style="color:#93c5fd;">{{ order.opportunity.opportunity_id|default:order.opportunity.id }}</a>
+              {% if opportunity %}
+                <a href="{% url 'opportunity_detail' opportunity.id %}" style="color:#93c5fd;">{{ opportunity.opportunity_id|default:opportunity.id }}</a>
               {% else %}
                 Not set
               {% endif %}
@@ -1044,7 +1044,11 @@
           <ul>
             {% for att in attachments %}
               <li>
-                <a href="{{ att.file.url }}" target="_blank">{{ att.name|default:att.file.name }}</a>
+                {% if att.file %}
+                  <a href="{{ att.file.url }}" target="_blank">{{ att.name|default:att.file.name }}</a>
+                {% else %}
+                  <span class="muted">{{ att.name|default:"Attachment file missing" }}</span>
+                {% endif %}
                 <form action="{% url 'production_attachment_delete' order.pk att.pk %}" method="post" style="display:inline;">
                   {% csrf_token %}
                   <button type="submit" class="btn btn-outline-danger btn-sm"
