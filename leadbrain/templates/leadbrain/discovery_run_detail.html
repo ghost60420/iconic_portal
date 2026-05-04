@@ -58,10 +58,10 @@
 <div class="lb-shell">
   <div class="lb-summary-grid">
     <div class="lb-stat"><div class="lb-stat-label">Status</div><div class="lb-stat-value"><span class="lb-badge {{ run.status }}">{{ run.get_status_display }}</span></div></div>
-    <div class="lb-stat"><div class="lb-stat-label">Found</div><div class="lb-stat-value">{{ run.results_found }}</div></div>
-    <div class="lb-stat"><div class="lb-stat-label">Saved</div><div class="lb-stat-value">{{ run.candidates_saved }}</div></div>
-    <div class="lb-stat"><div class="lb-stat-label">Duplicates</div><div class="lb-stat-value">{{ run.duplicates_skipped }}</div></div>
-    <div class="lb-stat"><div class="lb-stat-label">Weak</div><div class="lb-stat-value">{{ run.weak_skipped }}</div></div>
+    <div class="lb-stat"><div class="lb-stat-label">Candidates Found</div><div class="lb-stat-value">{{ run.results_found }}</div></div>
+    <div class="lb-stat"><div class="lb-stat-label">Saved To Lead Brain</div><div class="lb-stat-value">{{ run.candidates_saved }}</div></div>
+    <div class="lb-stat"><div class="lb-stat-label">Duplicates Skipped</div><div class="lb-stat-value">{{ run.duplicates_skipped }}</div></div>
+    <div class="lb-stat"><div class="lb-stat-label">Weak Skipped</div><div class="lb-stat-value">{{ run.weak_skipped }}</div></div>
     <div class="lb-stat"><div class="lb-stat-label">Failed</div><div class="lb-stat-value">{{ run.failed_candidates }}</div></div>
   </div>
 
@@ -114,7 +114,7 @@
               <td>{{ candidate.company_name|default:"—" }}</td>
               <td>{% if candidate.website %}<a href="{{ candidate.website }}" target="_blank" rel="noopener">{{ candidate.website }}</a>{% else %}—{% endif %}</td>
               <td>
-                {{ candidate.source_type|default:"—" }}
+                {{ candidate.source_type_label|default:"—" }}
                 {% if candidate.source_url %}
                   <div class="lb-muted"><a href="{{ candidate.source_url }}" target="_blank" rel="noopener">source</a></div>
                 {% endif %}

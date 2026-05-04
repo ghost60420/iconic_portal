@@ -1,9 +1,17 @@
 import html
 import json
 import re
+import ssl
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, quote, unquote, urlparse
 from urllib.request import Request, urlopen
+
+from leadbrain.services.shopify_directory import SHOPIFY_DIRECTORY_SOURCE, enrich_shopify_research
+
+try:
+    import certifi
+except Exception:  # pragma: no cover - optional dependency fallback
+    certifi = None
 
 
 USER_AGENT = "Mozilla/5.0 (compatible; LeadBrainLite/1.0; +https://femline.ca)"
@@ -21,7 +29,15 @@ APPAREL_TERMS = [
     "activewear",
     "sportswear",
     "kidswear",
+    "swimwear",
+    "hoodies",
+    "hoodie",
+    "t shirts",
+    "t shirt",
+    "tees",
     "merch",
+    "collection",
+    "product",
     "uniform",
     "private label",
     "clothing brand",
@@ -60,7 +76,8 @@ def _http_get(url, timeout=WEBSITE_TIMEOUT):
             "Accept-Language": "en-US,en;q=0.9",
         },
     )
-    with urlopen(request, timeout=timeout) as response:
+    context = _ssl_context()
+    with urlopen(request, timeout=timeout, context=context) as response:
         raw = response.read(MAX_RESPONSE_BYTES)
         content_type = response.headers.get("Content-Type", "")
         text = raw.decode("utf-8", errors="ignore")
@@ -81,6 +98,12 @@ def _safe_http_get(url, timeout=WEBSITE_TIMEOUT):
         return None, _text(exc.reason) or "network error"
     except Exception as exc:
         return None, _text(exc) or "request failed"
+
+
+def _ssl_context():
+    if certifi is not None:
+        return ssl.create_default_context(cafile=certifi.where())
+    return ssl.create_default_context()
 
 
 def _extract_title(text):
@@ -453,6 +476,12 @@ def _infer_business_type(text):
 def research_company(company):
     website = _normalize_url(getattr(company, "website", ""))
     research = _base_research_dict()
+    raw_row = getattr(company, "raw_row_json", {}) or {}
+    requested_country = _text(raw_row.get("requested_country") or raw_row.get("country"))
+    is_shopify_directory_candidate = (
+        _text(raw_row.get("source_type")) == SHOPIFY_DIRECTORY_SOURCE
+        or _text(raw_row.get("discovery_source_type")) == SHOPIFY_DIRECTORY_SOURCE
+    )
 
     website_status = check_website_status(website)
     research["website_status"] = website_status["status"]
@@ -473,6 +502,35 @@ def research_company(company):
         research["confidence_notes"] = "A live public website was found."
     elif website_status["status"] == "failed" and website_status.get("error"):
         research["confidence_notes"] = f"Website lookup had partial failure: {website_status['error']}"
+
+    if is_shopify_directory_candidate and (website or research["official_website_found"]):
+        shopify_research = enrich_shopify_research(
+            website=research["official_website_found"] or website,
+            homepage_html=website_html,
+            homepage_status=research["website_status"],
+            requested_country=requested_country,
+        )
+        research = _merge_research(research, shopify_research)
+        research["shopify_signal_found"] = bool(shopify_research.get("shopify_signal_found"))
+        research["shopify_signal_reasons"] = shopify_research.get("shopify_signal_reasons", [])
+        research["shopify_product_pages_found"] = int(shopify_research.get("shopify_product_pages_found") or 0)
+        research["shopify_collection_pages_found"] = int(shopify_research.get("shopify_collection_pages_found") or 0)
+        research["product_or_collection_found"] = bool(shopify_research.get("product_or_collection_found"))
+        research["contact_page_found"] = bool(shopify_research.get("contact_page_found"))
+        research["north_america_signal_found"] = bool(shopify_research.get("north_america_signal_found"))
+        research["robots_txt_checked"] = bool(shopify_research.get("robots_txt_checked"))
+        research["robots_txt_url"] = _text(shopify_research.get("robots_txt_url"))
+        research["robots_disallowed_examples"] = shopify_research.get("robots_disallowed_examples", [])
+        research["sitemap_checked"] = bool(shopify_research.get("sitemap_checked"))
+        research["checked_urls"] = shopify_research.get("checked_urls", [])
+        if not research["official_website_found"] and shopify_research.get("official_website_found"):
+            research["official_website_found"] = shopify_research.get("official_website_found", "")
+        if shopify_research.get("website_status") in {"live", "redirect"}:
+            research["website_status"] = shopify_research["website_status"]
+        if not research["business_type_detected"] and shopify_research.get("apparel_signals"):
+            research["business_type_detected"] = "Apparel Brand"
+        if shopify_research.get("confidence_notes"):
+            research["confidence_notes"] = shopify_research["confidence_notes"]
 
     row_text = _row_source_text(company)
     combined_level_1_text = " ".join(part for part in [page_text, research.get("business_description", ""), row_text] if part)

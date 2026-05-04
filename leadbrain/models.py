@@ -170,23 +170,31 @@ class LeadBrainDiscoveryJob(models.Model):
     SOURCE_WEB = "web_search"
     SOURCE_DIRECTORIES = "business_directories"
     SOURCE_SHOPIFY = "shopify_stores"
+    SOURCE_SHOPIFY_DIRECTORY = "shopify_clothing_directory"
     SOURCE_CHOICES = [
         (SOURCE_WEB, "Google Search Patterns"),
         (SOURCE_DIRECTORIES, "Business Directories"),
         (SOURCE_SHOPIFY, "Shopify Store Detection"),
+        (SOURCE_SHOPIFY_DIRECTORY, "Shopify Clothing Directory"),
     ]
 
     COUNTRY_CANADA = "Canada"
     COUNTRY_USA = "USA"
+    COUNTRY_NORTH_AMERICA = "North America"
 
     COUNTRY_CHOICES = [
         (COUNTRY_CANADA, "Canada"),
         (COUNTRY_USA, "USA"),
+        (COUNTRY_NORTH_AMERICA, "North America"),
     ]
 
     NICHE_STREETWEAR = "streetwear"
     NICHE_ACTIVEWEAR = "activewear"
     NICHE_KIDSWEAR = "kidswear"
+    NICHE_FASHION = "fashion"
+    NICHE_SWIMWEAR = "swimwear"
+    NICHE_HOODIES = "hoodies"
+    NICHE_TSHIRTS = "t_shirts"
     NICHE_ECOMMERCE = "ecommerce_apparel"
     NICHE_BOUTIQUE = "boutique_fashion"
     NICHE_PRIVATE_LABEL = "private_label"
@@ -196,6 +204,10 @@ class LeadBrainDiscoveryJob(models.Model):
         (NICHE_STREETWEAR, "Streetwear"),
         (NICHE_ACTIVEWEAR, "Activewear"),
         (NICHE_KIDSWEAR, "Kidswear"),
+        (NICHE_FASHION, "Fashion"),
+        (NICHE_SWIMWEAR, "Swimwear"),
+        (NICHE_HOODIES, "Hoodies"),
+        (NICHE_TSHIRTS, "T Shirts"),
         (NICHE_ECOMMERCE, "Ecommerce Apparel"),
         (NICHE_BOUTIQUE, "Boutique Fashion"),
         (NICHE_PRIVATE_LABEL, "Private Label"),
@@ -452,6 +464,11 @@ class LeadBrainDiscoveryCandidate(models.Model):
     def __str__(self):
         return self.company_name or self.website or f"Candidate {self.pk}"
 
+    @property
+    def source_type_label(self):
+        source_map = dict(LeadBrainDiscoveryJob.SOURCE_CHOICES)
+        return source_map.get(self.source_type, (self.source_type or "").replace("_", " ").title())
+
 
 class LeadBrainCompany(models.Model):
     STATUS_PENDING = "pending"
@@ -574,6 +591,8 @@ class LeadBrainCompany(models.Model):
     @property
     def leadbrain_source_label(self):
         source_map = dict(LeadBrainDiscoveryJob.SOURCE_CHOICES)
+        if self.source_detail:
+            return self.source_detail
         if self.source_type:
             return source_map.get(self.source_type, self.source_type)
         if self.discovery_run_id or self.discovery_job_id:

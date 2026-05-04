@@ -20,24 +20,75 @@ from leadbrain.models import (
 from leadbrain.services.classification_service import classify_company
 from leadbrain.services.matching import find_matching_lead
 from leadbrain.services.research_service import research_company, search_query_results
+from leadbrain.services.shopify_directory import (
+    SHOPIFY_DIRECTORY_SOURCE,
+    SHOPIFY_DIRECTORY_SOURCE_DETAIL,
+    build_shopify_directory_queries,
+    candidate_match_key,
+    normalize_candidate_website,
+    query_countries,
+    source_detail_label,
+)
 
 
 logger = logging.getLogger(__name__)
 
 DISCOVERY_SAVE_MIN_SCORE = 65
 DISCOVERY_STRONG_MIN_SCORE = 80
-DISCOVERY_MIN_RESULTS = 20
-DISCOVERY_MAX_RESULTS = 30
+DISCOVERY_MIN_RESULTS = 10
+DISCOVERY_MAX_RESULTS = 50
 DISCOVERY_MAX_JOBS_PER_DAY = 2
 DISCOVERY_MAX_ACTIVE_JOBS = 1
 DISCOVERY_DEFAULT_BATCH_SIZE = 10
 DISCOVERY_QUERY_LIMIT = 10
+
+SHOPIFY_DIRECTORY_EXCLUDED_HOSTS = {
+    "shopify.com",
+    "www.shopify.com",
+    "help.shopify.com",
+    "community.shopify.com",
+    "apps.shopify.com",
+    "themes.shopify.com",
+    "partners.shopify.com",
+    "duckduckgo.com",
+    "www.duckduckgo.com",
+    "yellowpages.ca",
+    "www.yellowpages.ca",
+    "yelp.com",
+    "www.yelp.com",
+    "mapquest.com",
+    "www.mapquest.com",
+    "canada411.ca",
+    "www.canada411.ca",
+    "builtwith.com",
+    "www.builtwith.com",
+}
+SHOPIFY_DIRECTORY_EXCLUDED_TEXT_TERMS = [
+    "best shopify stores",
+    "inspire your own",
+    "shopify theme",
+    "shopify themes",
+    "shopify app",
+    "shopify apps",
+    "shopify partners",
+    "shopify experts",
+    "shopify agency",
+    "shopify agencies",
+    "developer",
+    "development agency",
+    "how to start",
+    "guide to",
+]
 
 
 NICHE_LABELS = {
     LeadBrainDiscoveryJob.NICHE_STREETWEAR: "streetwear",
     LeadBrainDiscoveryJob.NICHE_ACTIVEWEAR: "activewear",
     LeadBrainDiscoveryJob.NICHE_KIDSWEAR: "kidswear",
+    LeadBrainDiscoveryJob.NICHE_FASHION: "fashion",
+    LeadBrainDiscoveryJob.NICHE_SWIMWEAR: "swimwear",
+    LeadBrainDiscoveryJob.NICHE_HOODIES: "hoodies",
+    LeadBrainDiscoveryJob.NICHE_TSHIRTS: "t shirts",
     LeadBrainDiscoveryJob.NICHE_ECOMMERCE: "ecommerce apparel",
     LeadBrainDiscoveryJob.NICHE_BOUTIQUE: "boutique fashion",
     LeadBrainDiscoveryJob.NICHE_PRIVATE_LABEL: "private label apparel",
@@ -179,6 +230,40 @@ def _looks_apparel_related(research_data, classification) -> bool:
     )
 
 
+def _shopify_directory_domain(url: str) -> str:
+    key = _website_key(url)
+    return key.split("/", 1)[0]
+
+
+def _looks_like_shopify_clothing_store(candidate: LeadBrainDiscoveryCandidate, research_data: dict, classification: dict) -> tuple[bool, str]:
+    if candidate.source_type != SHOPIFY_DIRECTORY_SOURCE:
+        return True, ""
+
+    host = _shopify_directory_domain(_text(research_data.get("official_website_found") or candidate.website))
+    combined_text = " ".join(
+        [
+            _text(candidate.company_name),
+            _text(research_data.get("business_description")),
+            _text(research_data.get("search_summary")),
+            _text(research_data.get("confidence_notes")),
+        ]
+    ).lower()
+
+    if host in SHOPIFY_DIRECTORY_EXCLUDED_HOSTS:
+        return False, "Skipped because the result was a platform, directory, or search domain."
+    if host.endswith(".shopify.com") and not host.endswith(".myshopify.com"):
+        return False, "Skipped because the result looked like a Shopify platform page, not a brand storefront."
+    if any(term in combined_text for term in SHOPIFY_DIRECTORY_EXCLUDED_TEXT_TERMS):
+        return False, "Skipped because the result looked like an article, agency, or informational page."
+    if not research_data.get("shopify_signal_found"):
+        return False, "Skipped because no reliable Shopify storefront signal was found."
+    if not research_data.get("product_or_collection_found"):
+        return False, "Skipped because no public product or collection pages were confirmed."
+    if not _looks_apparel_related(research_data, classification):
+        return False, "Skipped because the storefront did not look apparel-focused."
+    return True, ""
+
+
 def suggest_products_to_pitch(*, research_data, classification) -> list[str]:
     business_type = _text(classification.get("business_type", "")).lower()
     signals = {signal.lower() for signal in (research_data.get("apparel_signals") or [])}
@@ -200,37 +285,42 @@ def suggest_products_to_pitch(*, research_data, classification) -> list[str]:
 def _build_query_plan(job: LeadBrainDiscoveryJob) -> list[dict]:
     queries = []
     for country in job.effective_countries:
+        search_countries = query_countries(country) if country == LeadBrainDiscoveryJob.COUNTRY_NORTH_AMERICA else [country]
         for niche in job.effective_niches:
             niche_label = _niche_label(niche)
             for source in job.effective_source_types:
-                if source == LeadBrainDiscoveryJob.SOURCE_DIRECTORIES:
-                    domains = "site:yellowpages.ca OR site:yelp.com OR site:canada411.ca OR site:mapquest.com"
-                    query_list = [
-                        f"{domains} {country} {niche_label} apparel",
-                        f"{domains} {country} {niche_label} clothing brand",
-                        f"{domains} {country} {niche_label} fashion store",
-                    ]
-                elif source == LeadBrainDiscoveryJob.SOURCE_SHOPIFY:
-                    query_list = [
-                        f'"powered by shopify" {country} {niche_label} apparel',
-                        f'"powered by Shopify" {country} {niche_label} fashion brand',
-                        f"site:myshopify.com {country} {niche_label} clothing",
-                    ]
-                else:
-                    query_list = [
-                        f"{country} {niche_label} apparel brand",
-                        f"{country} {niche_label} clothing brand",
-                        f"{country} {niche_label} fashion company",
-                    ]
-                for query in query_list:
-                    queries.append(
-                        {
-                            "query": query,
-                            "source_type": source,
-                            "country": country,
-                            "niche": niche,
-                        }
-                    )
+                for search_country in search_countries:
+                    if source == LeadBrainDiscoveryJob.SOURCE_DIRECTORIES:
+                        domains = "site:yellowpages.ca OR site:yelp.com OR site:canada411.ca OR site:mapquest.com"
+                        query_list = [
+                            f"{domains} {search_country} {niche_label} apparel",
+                            f"{domains} {search_country} {niche_label} clothing brand",
+                            f"{domains} {search_country} {niche_label} fashion store",
+                        ]
+                    elif source == LeadBrainDiscoveryJob.SOURCE_SHOPIFY:
+                        query_list = [
+                            f'"powered by shopify" {search_country} {niche_label} apparel',
+                            f'"powered by Shopify" {search_country} {niche_label} fashion brand',
+                            f"site:myshopify.com {search_country} {niche_label} clothing",
+                        ]
+                    elif source == SHOPIFY_DIRECTORY_SOURCE:
+                        query_list = build_shopify_directory_queries(search_country, niche_label)
+                    else:
+                        query_list = [
+                            f"{search_country} {niche_label} apparel brand",
+                            f"{search_country} {niche_label} clothing brand",
+                            f"{search_country} {niche_label} fashion company",
+                        ]
+                    for query in query_list:
+                        queries.append(
+                            {
+                                "query": query,
+                                "source_type": source,
+                                "country": search_country,
+                                "job_country": country,
+                                "niche": niche,
+                            }
+                        )
     return queries
 
 
@@ -275,10 +365,12 @@ def _append_upload_snapshot(upload: LeadBrainUpload, saved_rows: list[dict]) -> 
 
 
 def _job_source_label(job: LeadBrainDiscoveryJob, source_type: str) -> str:
-    return dict(LeadBrainDiscoveryJob.SOURCE_CHOICES).get(source_type, source_type)
+    return dict(LeadBrainDiscoveryJob.SOURCE_CHOICES).get(source_type, source_detail_label(source_type))
 
 
 def _discovery_source_detail(candidate: LeadBrainDiscoveryCandidate) -> str:
+    if candidate.source_type == SHOPIFY_DIRECTORY_SOURCE:
+        return SHOPIFY_DIRECTORY_SOURCE_DETAIL
     parts = [_job_source_label(candidate.run.job, candidate.source_type or candidate.run.job.source_type)]
     if candidate.country:
         parts.append(candidate.country)
@@ -558,7 +650,17 @@ def initialize_discovery_run(run: LeadBrainDiscoveryRun) -> LeadBrainDiscoveryRu
             if len(candidates) >= candidate_budget:
                 break
             source_url = _text(result.get("url", ""))[:200]
-            website_key = _website_key(source_url)
+            source_type = query_spec["source_type"]
+            candidate_website = (
+                normalize_candidate_website(source_url)
+                if source_type in {LeadBrainDiscoveryJob.SOURCE_SHOPIFY, SHOPIFY_DIRECTORY_SOURCE}
+                else source_url
+            )
+            website_key = (
+                candidate_match_key(source_url)
+                if source_type in {LeadBrainDiscoveryJob.SOURCE_SHOPIFY, SHOPIFY_DIRECTORY_SOURCE}
+                else _website_key(source_url)
+            )
             company_name = _clean_company_name(result.get("title", ""))
             if not website_key:
                 continue
@@ -567,25 +669,32 @@ def initialize_discovery_run(run: LeadBrainDiscoveryRun) -> LeadBrainDiscoveryRu
                     LeadBrainDiscoveryCandidate(
                         run=run,
                         company_name=company_name,
-                        website=source_url,
-                        source_type=query_spec["source_type"],
+                        website=candidate_website,
+                        source_type=source_type,
                         source_url=source_url,
                         country=query_spec["country"],
                         niche=query_spec["niche"],
                         discovery_status=LeadBrainDiscoveryCandidate.STATUS_DUPLICATE,
-                        skip_reason="Duplicate URL in the same discovery run.",
+                        skip_reason=(
+                            "Duplicate domain in the same discovery run."
+                            if source_type == SHOPIFY_DIRECTORY_SOURCE
+                            else "Duplicate URL in the same discovery run."
+                        ),
                     )
                 )
                 if len(duplicate_examples) < 5:
-                    duplicate_examples.append(f"{company_name or source_url} skipped by same-run URL dedupe.")
+                    duplicate_examples.append(
+                        f"{company_name or source_url} skipped by same-run "
+                        f"{'domain' if source_type == SHOPIFY_DIRECTORY_SOURCE else 'URL'} dedupe."
+                    )
                 continue
 
             seen_urls.add(website_key)
             existing_company, company_rule = _find_matching_company(
-                website=source_url,
+                website=candidate_website,
                 company_name=company_name,
             )
-            duplicate_lead, lead_rule = find_matching_lead(website=source_url)
+            duplicate_lead, lead_rule = find_matching_lead(website=candidate_website)
 
             discovery_status = LeadBrainDiscoveryCandidate.STATUS_QUEUED
             skip_reason = ""
@@ -600,8 +709,8 @@ def initialize_discovery_run(run: LeadBrainDiscoveryRun) -> LeadBrainDiscoveryRu
                 LeadBrainDiscoveryCandidate(
                     run=run,
                     company_name=company_name,
-                    website=source_url,
-                    source_type=query_spec["source_type"],
+                    website=candidate_website,
+                    source_type=source_type,
                     source_url=source_url,
                     country=query_spec["country"],
                     niche=query_spec["niche"],
@@ -615,8 +724,8 @@ def initialize_discovery_run(run: LeadBrainDiscoveryRun) -> LeadBrainDiscoveryRu
                 sample_results.append(
                     {
                         "title": result.get("title", ""),
-                        "url": source_url,
-                        "source_type": query_spec["source_type"],
+                        "url": candidate_website,
+                        "source_type": source_type,
                         "country": query_spec["country"],
                         "niche": query_spec["niche"],
                         "query": query_spec["query"],
@@ -704,11 +813,94 @@ def _candidate_stub(candidate: LeadBrainDiscoveryCandidate) -> SimpleNamespace:
         raw_row_json={
             "leadbrain_source": "discovery",
             "source_type": candidate.source_type,
+            "source_detail": _discovery_source_detail(candidate),
             "country": candidate.country,
+            "requested_country": candidate.country,
             "niche": candidate.niche,
             "source_url": candidate.source_url,
         },
     )
+
+
+def _saved_company_source_type(candidate: LeadBrainDiscoveryCandidate) -> str:
+    if candidate.source_type == SHOPIFY_DIRECTORY_SOURCE:
+        return "discovery"
+    return _text(candidate.source_type or candidate.run.job.source_type)[:40]
+
+
+def _apply_discovery_score_adjustments(candidate: LeadBrainDiscoveryCandidate, research_data: dict, classification: dict) -> dict:
+    if candidate.source_type != SHOPIFY_DIRECTORY_SOURCE:
+        return classification
+
+    adjusted = dict(classification or {})
+    score = int(adjusted.get("fit_score") or 0)
+    boosts = []
+    penalties = []
+
+    if research_data.get("shopify_signal_found"):
+        score += 8
+        boosts.append("Shopify signal found")
+    else:
+        score -= 10
+        penalties.append("Shopify signal missing")
+
+    if research_data.get("product_or_collection_found"):
+        score += 8
+        boosts.append("product pages found")
+    else:
+        score -= 12
+        penalties.append("no product pages found")
+
+    apparel_signals = research_data.get("apparel_signals") or []
+    if apparel_signals:
+        score += min(8, len(apparel_signals) * 2)
+        boosts.append("apparel keywords found")
+    else:
+        score -= 16
+        penalties.append("no apparel signal")
+
+    if research_data.get("north_america_signal_found"):
+        score += 5
+        boosts.append("North America signal found")
+
+    if research_data.get("contact_page_found") or research_data.get("public_email_found") or research_data.get("public_phone_found"):
+        score += 4
+        boosts.append("contact page or contact signal found")
+
+    if research_data.get("website_status") not in {"live", "redirect"}:
+        score -= 20
+        penalties.append("dead or unavailable site")
+
+    if not _text(research_data.get("business_description")) and not _text(research_data.get("search_summary")):
+        score -= 6
+        penalties.append("brand positioning is unclear")
+
+    from leadbrain.services.classification_service import map_fit_label
+
+    score = max(0, min(100, score))
+    adjusted["fit_score"] = score
+    adjusted["fit_label"] = map_fit_label(score)
+
+    fit_reason = _text(adjusted.get("fit_reason"))
+    detail_parts = []
+    if boosts:
+        detail_parts.append("Boosts: " + ", ".join(boosts[:5]))
+    if penalties:
+        detail_parts.append("Reductions: " + ", ".join(penalties[:5]))
+    if detail_parts:
+        adjusted["fit_reason"] = " ".join(part for part in [fit_reason, " ".join(detail_parts)] if part).strip()
+
+    ai_summary = _text(adjusted.get("ai_summary"))
+    if research_data.get("shopify_signal_found"):
+        adjusted["ai_summary"] = " ".join(
+            part
+            for part in [
+                ai_summary,
+                "Shopify storefront signals and apparel collection checks were confirmed from public pages.",
+            ]
+            if part
+        ).strip()
+    return adjusted
 
 
 def _mark_candidate(candidate: LeadBrainDiscoveryCandidate, *, status: str, research_json=None, fit_score=0, fit_label="", skip_reason="", created_company=None, website=None):
@@ -747,6 +939,7 @@ def _save_candidate_to_leadbrain(run: LeadBrainDiscoveryRun, candidate: LeadBrai
         "discovery_source_type": candidate.source_type or job.source_type,
         "discovery_country": candidate.country or (job.effective_countries[0] if job.effective_countries else ""),
         "discovery_niche": candidate.niche or (job.effective_niches[0] if job.effective_niches else ""),
+        "discovery_source_detail": _discovery_source_detail(candidate),
     }
     products = suggest_products_to_pitch(research_data=research_data, classification=classification)
     research_data["discovery_tier"] = _discovery_band(score)
@@ -778,7 +971,7 @@ def _save_candidate_to_leadbrain(run: LeadBrainDiscoveryRun, candidate: LeadBrai
             f"Discovery source: {_discovery_source_detail(candidate)}.\n"
             f"Suggested pitch products: {', '.join(products)}."
         ),
-        source_type=_text(candidate.source_type or job.source_type)[:40],
+        source_type=_saved_company_source_type(candidate),
         source_detail=_discovery_source_detail(candidate),
         discovery_job=job,
         discovery_run=run,
@@ -820,6 +1013,7 @@ def process_discovery_run_batch(run: LeadBrainDiscoveryRun, *, batch_size=DISCOV
 
             research_data = research_company(_candidate_stub(candidate))
             classification = classify_company(_candidate_stub(candidate), research_data)
+            classification = _apply_discovery_score_adjustments(candidate, research_data, classification)
             website = _text(research_data.get("official_website_found") or candidate.website)[:200]
             email = _text(research_data.get("public_email_found"))
 
@@ -832,6 +1026,18 @@ def process_discovery_run_batch(run: LeadBrainDiscoveryRun, *, batch_size=DISCOV
                     fit_score=classification.get("fit_score", 0),
                     fit_label=classification.get("fit_label", ""),
                     skip_reason="Skipped because the website was unavailable or too weak to research.",
+                )
+                continue
+            storefront_ok, storefront_reason = _looks_like_shopify_clothing_store(candidate, research_data, classification)
+            if not storefront_ok:
+                _mark_candidate(
+                    candidate,
+                    status=LeadBrainDiscoveryCandidate.STATUS_WEAK,
+                    research_json=research_data,
+                    fit_score=classification.get("fit_score", 0),
+                    fit_label=classification.get("fit_label", ""),
+                    skip_reason=storefront_reason,
+                    website=website,
                 )
                 continue
             if candidate.run.job.apparel_only and not _looks_apparel_related(research_data, classification):
