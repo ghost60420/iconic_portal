@@ -8179,6 +8179,16 @@ try:
 except Exception:
     Shipment = None
 
+try:
+    from .models import Invoice
+except Exception:
+    Invoice = None
+
+try:
+    from .models import CustomerEvent
+except Exception:
+    CustomerEvent = None
+
 
 def _to_float(x):
     if x is None:
@@ -8210,6 +8220,45 @@ def _top_buckets(qs, key_name: str, limit: int = 6):
     return labels, values
 
 
+def _shift_month_start(d, offset):
+    month_index = (d.year * 12) + (d.month - 1) + offset
+    return date(month_index // 12, month_index % 12 + 1, 1)
+
+
+def _format_count(value):
+    try:
+        return f"{int(value):,}"
+    except Exception:
+        return "0"
+
+
+def _format_money(value, prefix="$"):
+    return f"{prefix} {_to_float(value):,.2f}"
+
+
+def _format_percent(value, places=1):
+    return f"{_to_float(value):,.{places}f}%"
+
+
+def _delta_pct(current, previous):
+    current_f = _to_float(current)
+    previous_f = _to_float(previous)
+    if previous_f == 0:
+        if current_f == 0:
+            return 0.0
+        return 100.0
+    return ((current_f - previous_f) / abs(previous_f)) * 100.0
+
+
+def _delta_tone(delta, inverse=False):
+    if abs(delta) < 0.05:
+        return "flat"
+    good = delta > 0
+    if inverse:
+        good = not good
+    return "up" if good else "down"
+
+
 @login_required
 def main_dashboard(request):
     today = timezone.localdate()
@@ -8221,10 +8270,14 @@ def main_dashboard(request):
         period_days = 30
 
     start_period = today - timedelta(days=period_days - 1)
+    previous_end = start_period - timedelta(days=1)
+    previous_start = previous_end - timedelta(days=period_days - 1)
+    period_label = f"Last {period_days} days"
 
     # Leads
     leads_today = Lead.objects.filter(created_date=today).count()
     leads_period = Lead.objects.filter(created_date__range=(start_period, today)).count()
+    prev_leads_period = Lead.objects.filter(created_date__range=(previous_start, previous_end)).count()
 
     leads_daily_qs = (
         Lead.objects.filter(created_date__range=(start_period, today))
@@ -8243,6 +8296,7 @@ def main_dashboard(request):
 
     # Opportunities
     opp_period = Opportunity.objects.filter(created_date__range=(start_period, today)).count()
+    prev_opp_period = Opportunity.objects.filter(created_date__range=(previous_start, previous_end)).count()
 
     opp_stage_base = Opportunity.objects.filter(created_date__range=(start_period, today))
     if not opp_stage_base.exists():
@@ -8370,6 +8424,23 @@ def main_dashboard(request):
         "rate_to_bdt",
     ]
 
+    def _cash_window_metrics(start_date, end_date):
+        revenue = Decimal("0")
+        expense = Decimal("0")
+        if start_date > end_date:
+            return {"revenue": revenue, "expense": expense, "net": revenue}
+        qs = AccountingEntry.objects.filter(date__range=(start_date, end_date)).only(*acc_only_fields)
+        for entry in qs.iterator():
+            if (entry.main_type or "").upper().strip() == "TRANSFER":
+                continue
+            direction = (entry.direction or "").upper().strip()
+            amt_cad = _entry_amount_cad(entry)
+            if direction == "IN":
+                revenue += amt_cad
+            elif direction == "OUT":
+                expense += amt_cad
+        return {"revenue": revenue, "expense": expense, "net": revenue - expense}
+
     acc_map = defaultdict(lambda: Decimal("0"))
     revenue_map = defaultdict(lambda: Decimal("0"))
     expense_map = defaultdict(lambda: Decimal("0"))
@@ -8449,6 +8520,41 @@ def main_dashboard(request):
     if revenue_cad_period > 0:
         gross_margin_pct_period = (revenue_cad_period - expense_cad_period) / revenue_cad_period * Decimal("100")
     net_cash_cad_period = revenue_cad_period - expense_cad_period
+    previous_window = _cash_window_metrics(previous_start, previous_end)
+
+    current_month_start = today.replace(day=1)
+    month_starts = [_shift_month_start(current_month_start, offset) for offset in range(-5, 1)]
+    monthly_revenue_map = {month_key: Decimal("0") for month_key in month_starts}
+    monthly_expense_map = {month_key: Decimal("0") for month_key in month_starts}
+    month_floor = month_starts[0]
+    monthly_entries = AccountingEntry.objects.filter(date__range=(month_floor, today)).only(*acc_only_fields)
+    for entry in monthly_entries.iterator():
+        if not entry.date:
+            continue
+        month_key = entry.date.replace(day=1)
+        if month_key not in monthly_revenue_map:
+            continue
+        if (entry.main_type or "").upper().strip() == "TRANSFER":
+            continue
+        direction = (entry.direction or "").upper().strip()
+        amt_cad = _entry_amount_cad(entry)
+        if direction == "IN":
+            monthly_revenue_map[month_key] += amt_cad
+        elif direction == "OUT":
+            monthly_expense_map[month_key] += amt_cad
+
+    monthly_profit_labels = []
+    monthly_profit_values = []
+    monthly_profit_map = {}
+    for month_key in month_starts:
+        monthly_profit = monthly_revenue_map[month_key] - monthly_expense_map[month_key]
+        monthly_profit_map[month_key] = monthly_profit
+        monthly_profit_labels.append(month_key.strftime("%b"))
+        monthly_profit_values.append(_to_float(monthly_profit))
+
+    monthly_profit_cad = monthly_profit_map.get(current_month_start, Decimal("0"))
+    previous_month_start = month_starts[-2] if len(month_starts) > 1 else current_month_start
+    previous_month_profit_cad = monthly_profit_map.get(previous_month_start, Decimal("0"))
 
     prod_revenue_cad_period = Decimal("0")
     prod_cost_cad_period = Decimal("0")
@@ -8610,9 +8716,11 @@ def main_dashboard(request):
     ship_delayed = [0]
     if Shipment is not None:
         try:
-            shipped = Shipment.objects.filter(Q(status__icontains="ship") | Q(status__icontains="delivered")).count()
-            pending = Shipment.objects.filter(Q(status__icontains="pending") | Q(status__icontains="preparing")).count()
-            delayed = Shipment.objects.filter(Q(status__icontains="delay")).count()
+            shipped = Shipment.objects.filter(status__in=["shipped", "out_for_delivery", "delivered"]).count()
+            pending = Shipment.objects.filter(status__in=["planned", "booked"]).count()
+            delayed = Shipment.objects.filter(ship_date__lt=today).exclude(
+                status__in=["delivered", "cancelled"]
+            ).count()
             ship_shipped = [int(shipped)]
             ship_pending = [int(pending)]
             ship_delayed = [int(delayed)]
@@ -8646,10 +8754,396 @@ def main_dashboard(request):
             lead_market_values.append(int(cnt))
 
     open_opps = Opportunity.objects.filter(is_open=True).count()
+    open_pipeline_value = Opportunity.objects.filter(is_open=True).aggregate(s=Sum("order_value"))["s"] or Decimal("0")
     overdue_followups = Lead.objects.filter(next_followup__lt=today).count()
+    due_soon_followups = Lead.objects.filter(
+        next_followup__gte=today,
+        next_followup__lte=today + timedelta(days=7),
+    ).count()
     conversion_rate = 0.0
     if leads_period > 0:
         conversion_rate = round((opp_period / leads_period) * 100, 1)
+    prev_conversion_rate = 0.0
+    if prev_leads_period > 0:
+        prev_conversion_rate = round((prev_opp_period / prev_leads_period) * 100, 1)
+
+    fit_buckets = Lead.objects.aggregate(
+        q1=Count("id", filter=Q(brand_fit_score__lte=24)),
+        q2=Count("id", filter=Q(brand_fit_score__gte=25, brand_fit_score__lte=49)),
+        q3=Count("id", filter=Q(brand_fit_score__gte=50, brand_fit_score__lte=74)),
+        q4=Count("id", filter=Q(brand_fit_score__gte=75)),
+    )
+    lead_fit_labels = ["0-24", "25-49", "50-74", "75-100"]
+    lead_fit_values = [
+        int(fit_buckets.get("q1") or 0),
+        int(fit_buckets.get("q2") or 0),
+        int(fit_buckets.get("q3") or 0),
+        int(fit_buckets.get("q4") or 0),
+    ]
+
+    lead_source_total = sum(lead_source_values)
+    lead_source_breakdown = []
+    for label, count in zip(lead_source_labels, lead_source_values):
+        share = 0
+        if lead_source_total:
+            share = int(round((count / lead_source_total) * 100))
+        lead_source_breakdown.append(
+            {
+                "label": label,
+                "count": int(count),
+                "share": share,
+            }
+        )
+
+    top_niches = []
+    niche_rows = []
+    niche_base = Opportunity.objects.filter(
+        stage__iexact="Closed Won",
+        updated_at__date__range=(start_period, today),
+    )
+    if not niche_base.exists():
+        niche_base = Opportunity.objects.filter(created_date__range=(start_period, today))
+    if not niche_base.exists():
+        niche_base = Opportunity.objects.all()
+    niche_rows = list(
+        niche_base.values("product_type").annotate(c=Count("id")).order_by("-c")
+    )
+    niche_total = sum(int(row.get("c") or 0) for row in niche_rows)
+    for row in niche_rows[:4]:
+        count = int(row.get("c") or 0)
+        share = int(round((count / niche_total) * 100)) if niche_total else 0
+        top_niches.append(
+            {
+                "label": (row.get("product_type") or "Other").strip() or "Other",
+                "count": count,
+                "share": share,
+            }
+        )
+
+    production_running_count = 0
+    production_hold_count = 0
+    ship_pending_total = int(ship_pending[0] if ship_pending else 0)
+    ship_delayed_total = int(ship_delayed[0] if ship_delayed else 0)
+    factory_workload = [
+        {"label": "Bangladesh", "orders": 0, "units": 0, "load_pct": 0},
+        {"label": "Canada", "orders": 0, "units": 0, "load_pct": 0},
+    ]
+    if ProductionOrder is not None:
+        try:
+            production_running_count = ProductionOrder.objects.filter(status="in_progress").count()
+            production_hold_count = ProductionOrder.objects.filter(status="hold").count()
+            workload_rows = list(
+                ProductionOrder.objects.filter(status__in=["planning", "in_progress", "hold"])
+                .values("factory_location")
+                .annotate(order_count=Count("id"), unit_total=Sum("qty_total"))
+                .order_by("-order_count")
+            )
+            workload_map = {
+                (row.get("factory_location") or "").lower(): {
+                    "orders": int(row.get("order_count") or 0),
+                    "units": int(row.get("unit_total") or 0),
+                }
+                for row in workload_rows
+            }
+            max_orders = max([row["orders"] for row in workload_map.values()] or [0])
+            factory_workload = []
+            for code, label in (("bd", "Bangladesh"), ("ca", "Canada")):
+                orders = int(workload_map.get(code, {}).get("orders", 0))
+                units = int(workload_map.get(code, {}).get("units", 0))
+                load_pct = int(round((orders / max_orders) * 100)) if max_orders else 0
+                factory_workload.append(
+                    {
+                        "label": label,
+                        "orders": orders,
+                        "units": units,
+                        "load_pct": load_pct,
+                    }
+                )
+        except Exception:
+            pass
+
+    pending_invoice_approvals = 0
+    outstanding_invoices_total = Decimal("0")
+    overdue_invoices_count = 0
+    outstanding_invoices = []
+    draft_invoices = []
+    invoice_status_labels = ["Draft", "Sent", "Partial", "Paid"]
+    invoice_status_values = [0, 0, 0, 0]
+    if Invoice is not None:
+        try:
+            invoice_counts = Invoice.objects.aggregate(
+                draft=Count("id", filter=Q(status="draft")),
+                sent=Count("id", filter=Q(status="sent")),
+                partial=Count("id", filter=Q(status="partial")),
+                paid=Count("id", filter=Q(status="paid")),
+            )
+            invoice_status_values = [
+                int(invoice_counts.get("draft") or 0),
+                int(invoice_counts.get("sent") or 0),
+                int(invoice_counts.get("partial") or 0),
+                int(invoice_counts.get("paid") or 0),
+            ]
+            open_invoice_base = Invoice.objects.exclude(status__in=["paid", "cancelled"])
+            invoice_totals = open_invoice_base.aggregate(
+                total=Sum("total_amount"),
+                paid=Sum("paid_amount"),
+                overdue=Count("id", filter=Q(due_date__lt=today)),
+            )
+            outstanding_invoices_total = (invoice_totals.get("total") or Decimal("0")) - (
+                invoice_totals.get("paid") or Decimal("0")
+            )
+            overdue_invoices_count = int(invoice_totals.get("overdue") or 0)
+            pending_invoice_approvals = Invoice.objects.filter(invoice_status="DRAFT").count()
+            outstanding_invoices = list(
+                open_invoice_base.select_related("customer", "order").order_by("due_date", "-issue_date")[:5]
+            )
+            draft_invoices = list(
+                Invoice.objects.select_related("customer", "order")
+                .filter(invoice_status="DRAFT")
+                .order_by("-created_at")[:4]
+            )
+        except Exception:
+            pass
+
+    recent_leads = list(
+        Lead.objects
+        .only(
+            "lead_id",
+            "account_brand",
+            "source",
+            "brand_fit_score",
+            "lead_status",
+            "created_date",
+            "next_followup",
+        )
+        .order_by("-created_date", "-id")[:5]
+    )
+
+    recent_production_updates = []
+    if ProductionOrder is not None:
+        try:
+            recent_production_updates = list(
+                ProductionOrder.objects
+                .only(
+                    "order_code",
+                    "title",
+                    "status",
+                    "updated_at",
+                    "qty_total",
+                    "factory_location",
+                )
+                .order_by("-updated_at")[:5]
+            )
+        except Exception:
+            recent_production_updates = []
+
+    recent_client_activity = []
+    if CustomerEvent is not None:
+        try:
+            recent_client_activity = list(
+                CustomerEvent.objects.select_related("customer", "opportunity", "production")
+                .only(
+                    "title",
+                    "details",
+                    "event_type",
+                    "created_at",
+                    "customer__account_brand",
+                    "customer__contact_name",
+                    "opportunity__opportunity_id",
+                    "production__order_code",
+                )
+                .order_by("-created_at")[:5]
+            )
+        except Exception:
+            recent_client_activity = []
+
+    revenue_delta_pct = _delta_pct(revenue_cad_period, previous_window["revenue"])
+    conversion_delta_pct = conversion_rate - prev_conversion_rate
+    monthly_profit_delta_pct = _delta_pct(monthly_profit_cad, previous_month_profit_cad)
+
+    primary_kpis = [
+        {
+            "title": "Total Revenue",
+            "value": _format_money(revenue_cad_period),
+            "note": f"{period_label} revenue excluding transfers.",
+            "trend_text": f"{revenue_delta_pct:+.0f}% vs prior window",
+            "trend_tone": _delta_tone(revenue_delta_pct),
+            "accent": "revenue",
+            "icon": "wallet",
+            "href": "#finance-section",
+        },
+        {
+            "title": "Open Opportunities",
+            "value": _format_count(open_opps),
+            "note": f"Open pipeline value {_format_money(open_pipeline_value)}.",
+            "trend_text": f"{_format_count(opp_period)} added in {period_label.lower()}",
+            "trend_tone": "up" if opp_period else "flat",
+            "accent": "pipeline",
+            "icon": "briefcase-business",
+            "href": "#sales-section",
+        },
+        {
+            "title": "Lead Conversion Rate",
+            "value": _format_percent(conversion_rate),
+            "note": f"{_format_count(opp_period)} opportunities from {_format_count(leads_period)} leads.",
+            "trend_text": f"{conversion_delta_pct:+.1f} pts vs prior window",
+            "trend_tone": _delta_tone(conversion_delta_pct),
+            "accent": "conversion",
+            "icon": "activity",
+            "href": "#lead-intelligence-section",
+        },
+        {
+            "title": "Production Running",
+            "value": _format_count(production_running_count),
+            "note": f"{_format_count(production_hold_count)} order(s) currently on hold.",
+            "trend_text": f"{_format_count(orders_processed_period)} processed in {period_label.lower()}",
+            "trend_tone": "up" if orders_processed_period else "flat",
+            "accent": "operations",
+            "icon": "factory",
+            "href": "#operations-section",
+        },
+        {
+            "title": "Monthly Profit",
+            "value": _format_money(monthly_profit_cad),
+            "note": f"{today.strftime('%B')} net cash after expenses.",
+            "trend_text": f"{monthly_profit_delta_pct:+.0f}% vs last month",
+            "trend_tone": _delta_tone(monthly_profit_delta_pct),
+            "accent": "profit",
+            "icon": "badge-dollar-sign",
+            "href": "#finance-section",
+        },
+        {
+            "title": "Pending Follow Ups",
+            "value": _format_count(overdue_followups),
+            "note": f"{_format_count(due_soon_followups)} due in the next 7 days.",
+            "trend_text": "Needs action" if overdue_followups else "In control",
+            "trend_tone": "down" if overdue_followups else "up",
+            "accent": "followup",
+            "icon": "bell-ring",
+            "href": "#activity-section",
+        },
+    ]
+
+    finance_summary_cards = [
+        {
+            "title": "Net Cash",
+            "value": _format_money(net_cash_cad_period),
+            "note": f"{period_label} revenue minus expenses.",
+            "trend_text": f"{gross_margin_pct_period:.1f}% gross margin",
+            "trend_tone": "up" if net_cash_cad_period >= 0 else "down",
+            "accent": "neutral",
+            "icon": "landmark",
+        },
+        {
+            "title": "Production Profit",
+            "value": _format_money(prod_profit_cad_period),
+            "note": "Production-linked accounting revenue less production costs.",
+            "trend_text": f"{prod_margin_pct_period:.1f}% margin",
+            "trend_tone": "up" if prod_profit_cad_period >= 0 else "down",
+            "accent": "neutral",
+            "icon": "sparkles",
+        },
+        {
+            "title": "Outstanding Invoices",
+            "value": _format_money(outstanding_invoices_total),
+            "note": f"{_format_count(overdue_invoices_count)} invoice(s) overdue.",
+            "trend_text": f"{_format_count(pending_invoice_approvals)} pending approval",
+            "trend_tone": "down" if overdue_invoices_count else "flat",
+            "accent": "neutral",
+            "icon": "receipt-text",
+        },
+        {
+            "title": "Orders Processed",
+            "value": _format_count(orders_processed_period),
+            "note": f"{_format_count(orders_created_period)} created in {period_label.lower()}.",
+            "trend_text": f"BDT {production_cost_bdt_period:,.2f} production cost",
+            "trend_tone": "flat",
+            "accent": "neutral",
+            "icon": "package-check",
+        },
+    ]
+
+    payroll_summary_cards = [
+        {
+            "title": "Payroll Total",
+            "value": f"BDT {payroll_total:,.2f}",
+            "note": f"{payroll_paid} paid | {payroll_unpaid} unpaid",
+            "trend_text": f"OT BDT {payroll_ot:,.2f}",
+            "trend_tone": "flat",
+            "accent": "neutral",
+            "icon": "users",
+        },
+        {
+            "title": "Bonus",
+            "value": f"BDT {payroll_bonus:,.2f}",
+            "note": "Current payroll cycle bonus total.",
+            "trend_text": f"Deduction BDT {payroll_deduction:,.2f}",
+            "trend_tone": "flat",
+            "accent": "neutral",
+            "icon": "gift",
+        },
+    ]
+
+    dashboard_alerts = []
+    if overdue_followups:
+        dashboard_alerts.append(
+            {
+                "title": f"{overdue_followups} overdue follow-up(s)",
+                "detail": "Leads with follow-up dates in the past.",
+                "tone": "down",
+            }
+        )
+    if pending_invoice_approvals:
+        dashboard_alerts.append(
+            {
+                "title": f"{pending_invoice_approvals} pending invoice approval(s)",
+                "detail": "Draft invoices waiting for approval review.",
+                "tone": "flat",
+            }
+        )
+    if ship_delayed_total:
+        dashboard_alerts.append(
+            {
+                "title": f"{ship_delayed_total} delayed shipment(s)",
+                "detail": "Shipments past ship date and not yet delivered.",
+                "tone": "down",
+            }
+        )
+    if production_hold_count:
+        dashboard_alerts.append(
+            {
+                "title": f"{production_hold_count} order(s) on hold",
+                "detail": "Production orders blocked or paused.",
+                "tone": "down",
+            }
+        )
+    if not dashboard_alerts:
+        dashboard_alerts.append(
+            {
+                "title": "No urgent blockers",
+                "detail": "Dashboard alerts are currently clear.",
+                "tone": "up",
+            }
+        )
+
+    action_recommendations = [
+        {
+            "title": f"Prioritize {overdue_followups} overdue follow-up(s)",
+            "detail": "Work the oldest leads first to protect pipeline conversion.",
+        },
+        {
+            "title": f"Review {pending_invoice_approvals} draft approval(s)",
+            "detail": "Clear invoice approvals before month-end billing slips.",
+        },
+        {
+            "title": f"Watch {ship_delayed_total} delayed shipment(s)",
+            "detail": "Check shipment notes and update client communication where needed.",
+        },
+        {
+            "title": f"Lean into {lead_source_labels[0] if lead_source_labels else 'top lead source'}",
+            "detail": "Highest-volume source remains the strongest acquisition channel right now.",
+        },
+    ]
 
     ai_notes = [
         f"Lead -> Opportunity conversion: {conversion_rate}%",
@@ -8673,12 +9167,18 @@ def main_dashboard(request):
         "lead_status_values": lead_status_values,
         "lead_source_labels": lead_source_labels,
         "lead_source_values": lead_source_values,
+        "lead_fit_labels": lead_fit_labels,
+        "lead_fit_values": lead_fit_values,
         "lead_priority_labels": lead_priority_labels,
         "lead_priority_values": lead_priority_values,
         "lead_market_labels": lead_market_labels,
         "lead_market_values": lead_market_values,
         "win_loss_labels": win_loss_labels,
         "win_loss_values": win_loss_values,
+        "monthly_profit_labels": monthly_profit_labels,
+        "monthly_profit_values": monthly_profit_values,
+        "invoice_status_labels": invoice_status_labels,
+        "invoice_status_values": invoice_status_values,
         "prod_labels": prod_labels,
         "prod_counts": prod_counts,
         "ship_labels": ship_labels,
@@ -8751,7 +9251,29 @@ def main_dashboard(request):
         "payroll_year": payroll_year,
         "payroll_month": payroll_month,
         "period_days": period_days,
-        "period_label": f"Last {period_days} days",
+        "period_label": period_label,
+        "monthly_profit_cad": monthly_profit_cad,
+        "production_running_count": production_running_count,
+        "production_hold_count": production_hold_count,
+        "ship_pending_total": ship_pending_total,
+        "ship_delayed_total": ship_delayed_total,
+        "pending_invoice_approvals": pending_invoice_approvals,
+        "outstanding_invoices_total": outstanding_invoices_total,
+        "overdue_invoices_count": overdue_invoices_count,
+        "lead_source_breakdown": lead_source_breakdown,
+        "top_niches": top_niches,
+        "factory_workload": factory_workload,
+        "outstanding_invoices": outstanding_invoices,
+        "draft_invoices": draft_invoices,
+        "recent_leads": recent_leads,
+        "recent_production_updates": recent_production_updates,
+        "recent_client_activity": recent_client_activity,
+        "primary_kpis": primary_kpis,
+        "finance_summary_cards": finance_summary_cards,
+        "payroll_summary_cards": payroll_summary_cards,
+        "dashboard_alerts": dashboard_alerts,
+        "dashboard_alerts_count": len([a for a in dashboard_alerts if a.get("tone") != "up"]),
+        "action_recommendations": action_recommendations,
         "ai_notes": ai_notes,
         "chart_data": chart_data,
     }

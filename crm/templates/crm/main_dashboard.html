@@ -1,881 +1,828 @@
 {% extends "crm/base.html" %}
 {% load humanize %}
+{% load static %}
+
 {% block content %}
+{% url 'leads_list' as leads_url %}
+{% url 'opportunities_list' as opps_url %}
+{% url 'production_list' as production_url %}
+{% url 'shipment_list' as shipment_url %}
+{% url 'invoice_list' as invoice_url %}
+{% url 'accounting_home' as accounting_url %}
+{% url 'accounting_bd_dashboard' as accounting_bd_url %}
+{% url 'production_profit_report' as production_profit_url %}
+{% url 'ai_hub' as ai_url %}
+{% url 'logout' as logout_url %}
 
-<style>
-  @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=Sora:wght@400;600;700&display=swap");
+<link rel="stylesheet" href="{% static 'crm/dashboard.css' %}">
 
-  :root{
-    --bg: #05070c;
-    --bg-2: #0b1020;
-    --panel: #0f172a;
-    --panel-2: #0b1224;
-    --text: #f8fafc;
-    --muted: #94a3b8;
-    --line: rgba(148,163,184,0.18);
-    --teal: #22d3ee;
-    --amber: #fbbf24;
-    --green: #4ade80;
-    --red: #fb7185;
-    --blue: #60a5fa;
-  }
-
-  .dash{
-    position: relative;
-    max-width: 1600px;
-    margin: 0 auto;
-    padding: 8px 10px 40px 10px;
-    color: var(--text);
-    font-family: "Sora", sans-serif;
-  }
-
-  .dash::before{
-    content:"";
-    position: absolute;
-    inset: -40px -20px auto -20px;
-    height: 420px;
-    background:
-      radial-gradient(400px 220px at 20% 20%, rgba(34,211,238,0.18), transparent 70%),
-      radial-gradient(420px 260px at 80% 10%, rgba(251,191,36,0.14), transparent 70%),
-      linear-gradient(180deg, rgba(15,23,42,0.85), transparent 70%);
-    z-index: 0;
-    pointer-events: none;
-  }
-
-  .dash > *{ position: relative; z-index: 1; }
-
-  .dash-hero{
-    display:flex;
-    justify-content: space-between;
-    align-items:flex-end;
-    gap:16px;
-    flex-wrap:wrap;
-    margin: 6px 0 18px;
-  }
-
-  .dash-title{
-    margin:0;
-    font-size: 28px;
-    font-weight: 700;
-    font-family: "Space Grotesk", sans-serif;
-    letter-spacing: 0.2px;
-  }
-
-  .dash-sub{
-    margin-top:6px;
-    color: var(--muted);
-    font-size: 12px;
-    font-weight: 600;
-  }
-
-  .dash-meta{
-    margin-top:8px;
-    display:flex;
-    gap:10px;
-    flex-wrap:wrap;
-    align-items:center;
-    font-size: 12px;
-    color: var(--muted);
-    font-weight: 600;
-  }
-
-  .meta-pill{
-    padding:6px 10px;
-    border-radius:999px;
-    border:1px solid var(--line);
-    background: rgba(255,255,255,0.04);
-  }
-
-  .dash-controls{
-    display:flex;
-    gap:10px;
-    align-items:center;
-    flex-wrap:wrap;
-  }
-
-  .dash-select{
-    background: var(--panel);
-    border:1px solid var(--line);
-    color: var(--text);
-    padding: 8px 12px;
-    border-radius: 10px;
-    font-weight: 700;
-  }
-
-  .dash-btn{
-    display:inline-flex;
-    align-items:center;
-    gap:8px;
-    padding: 8px 12px;
-    border-radius: 12px;
-    border:1px solid rgba(255,255,255,0.18);
-    background: rgba(255,255,255,0.06);
-    color: var(--text);
-    text-decoration:none;
-    font-size: 12px;
-    font-weight: 800;
-  }
-
-  .dash-btn:hover{ filter: brightness(1.05); text-decoration:none; }
-
-  .kpi-grid{
-    display:grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap:12px;
-  }
-
-  @media (max-width: 1200px){
-    .kpi-grid{ grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  }
-  @media (max-width: 760px){
-    .kpi-grid{ grid-template-columns: 1fr; }
-  }
-
-  .card{
-    background: linear-gradient(180deg, rgba(15,23,42,0.9), rgba(2,6,23,0.9));
-    border:1px solid var(--line);
-    border-radius: 18px;
-    padding: 14px;
-    box-shadow: 0 18px 40px rgba(0,0,0,0.5);
-    overflow:hidden;
-    animation: rise 0.5s ease both;
-    animation-delay: var(--d,0s);
-  }
-
-  @keyframes rise{
-    from{ opacity:0; transform: translateY(12px); }
-    to{ opacity:1; transform: translateY(0); }
-  }
-
-  .kpi-title{
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #cbd5e1;
-    font-weight: 800;
-  }
-  .kpi-value{
-    font-size: 28px;
-    font-weight: 700;
-    margin-top: 6px;
-    font-family: "Space Grotesk", sans-serif;
-    color: #f8fafc;
-    text-shadow: 0 1px 8px rgba(255,255,255,0.15);
-  }
-  .kpi-sub{
-    margin-top: 6px;
-    font-size: 12px;
-    color: #a5b4fc;
-    font-weight: 600;
-  }
-
-  .grid-2{ display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:12px; }
-  .grid-3{ display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:12px; }
-  .grid-4{ display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap:12px; }
-
-  @media (max-width: 1200px){
-    .grid-4{ grid-template-columns: repeat(2, minmax(0,1fr)); }
-    .grid-3{ grid-template-columns: repeat(2, minmax(0,1fr)); }
-    .grid-2{ grid-template-columns: 1fr; }
-  }
-  @media (max-width: 760px){
-    .grid-4,.grid-3,.grid-2{ grid-template-columns: 1fr; }
-  }
-
-  .card-head{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:12px;
-    margin-bottom: 10px;
-  }
-
-  .card-title{
-    margin:0;
-    font-size: 13px;
-    font-weight: 800;
-    color: #e2e8f0;
-  }
-
-  .card-note{
-    font-size: 11px;
-    color: #cbd5e1;
-    font-weight: 600;
-  }
-
-  .chartWrap{ height: 260px; }
-  .chartWrap.sm{ height: 200px; }
-  .chartWrap.xs{ height: 160px; }
-  canvas{ width:100% !important; height:100% !important; }
-
-  .ai-notes{
-    font-size: 12px;
-    line-height: 1.5;
-    color: var(--text);
-    margin: 0;
-    padding-left: 16px;
-  }
-  .ai-notes li{ margin-bottom: 6px; color: #e5e7eb; }
-
-  .section-label{
-    margin: 16px 0 8px 2px;
-    color: var(--muted);
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.45px;
-    font-weight: 800;
-  }
-
-  .finance-grid{
-    display:grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap:12px;
-  }
-
-  @media (max-width: 900px){
-    .finance-grid{ grid-template-columns: 1fr; }
-  }
-
-  .finance-card{
-    position: relative;
-    border-left: 3px solid rgba(251,191,36,0.8);
-  }
-
-  .finance-card.bd{
-    border-left-color: rgba(34,211,238,0.8);
-  }
-
-  .finance-row{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    margin-top: 8px;
-  }
-
-  .finance-label{
-    font-size: 11px;
-    color: var(--muted);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-  }
-
-  .finance-value{
-    font-size: 20px;
-    font-weight: 700;
-    font-family: "Space Grotesk", sans-serif;
-  }
-
-  .finance-value.pos{ color: var(--green); }
-  .finance-value.neg{ color: var(--red); }
-
-  .finance-note{
-    margin-top: 8px;
-    font-size: 11px;
-    color: var(--muted);
-  }
-
-  .finance-section{
-    margin-top: 10px;
-    padding-top: 8px;
-    border-top: 1px dashed rgba(148,163,184,0.2);
-  }
-
-  .finance-subtitle{
-    font-size: 11px;
-    color: var(--muted);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.35px;
-    margin-bottom: 6px;
-  }
-</style>
-
-<div class="container-fluid">
-  <div class="dash">
-
-    <div class="dash-hero">
-      <div>
-        <h2 class="dash-title">CRM Home</h2>
-        <div class="dash-sub">Live snapshot of leads, production, and revenue vs expenses.</div>
-        <div class="dash-meta">
-          <span class="meta-pill">Updated: {{ today|date:"M d, Y" }}</span>
-          <span class="meta-pill">{{ period_label }}</span>
-        </div>
+<div class="dashboard-shell" data-dashboard-root data-density="comfortable">
+  <section class="dashboard-topbar">
+    <div class="dashboard-brand">
+      <div class="dashboard-brand-copy">
+        <p class="dashboard-eyebrow">Iconic CRM</p>
+        <h1>CRM Dashboard</h1>
+        <p>Sales, operations, finance, and client movement grouped into one calmer workspace without changing the backend data flow.</p>
       </div>
+      <div class="dashboard-meta">
+        <span class="dashboard-chip">Updated {{ today|date:"M d, Y" }}</span>
+        <span class="dashboard-chip">{{ period_label }}</span>
+        <span class="dashboard-chip">Alerts {{ dashboard_alerts_count }}</span>
+      </div>
+    </div>
 
-      <form method="get" class="dash-controls">
-        <label class="dash-sub" for="days">Range</label>
-        <select id="days" name="days" class="dash-select" onchange="this.form.submit()">
-          <option value="7" {% if period_days == 7 %}selected{% endif %}>Last 7 days</option>
-          <option value="30" {% if period_days == 30 %}selected{% endif %}>Last 30 days</option>
-          <option value="60" {% if period_days == 60 %}selected{% endif %}>Last 60 days</option>
-          <option value="90" {% if period_days == 90 %}selected{% endif %}>Last 90 days</option>
-          <option value="180" {% if period_days == 180 %}selected{% endif %}>Last 180 days</option>
+    <div class="dashboard-toolbar">
+      <form class="dashboard-search" action="{{ leads_url }}" data-search-form>
+        <div class="dashboard-search-field">
+          <i data-lucide="search"></i>
+          <input
+            class="dashboard-search-input"
+            type="search"
+            placeholder="Search leads, opportunities, shipments, or invoices"
+            data-search-input
+          >
+        </div>
+        <select class="dashboard-search-scope dashboard-control-select" data-search-scope>
+          <option value="leads" data-url="{{ leads_url }}">Leads</option>
+          <option value="opportunities" data-url="{{ opps_url }}">Opportunities</option>
+          <option value="shipments" data-url="{{ shipment_url }}">Shipments</option>
+          <option value="invoices" data-url="{{ invoice_url }}">Invoices</option>
         </select>
-        <a class="dash-btn" href="{% url 'accounting_bd_dashboard' %}">BD Accounting</a>
-        <a class="dash-btn" href="{% url 'production_profit_report' %}">Production Profit</a>
+        <button class="dashboard-search-button" type="submit">
+          <i data-lucide="arrow-right"></i>
+          Search
+        </button>
       </form>
-    </div>
 
-    <div class="kpi-grid">
-      <div class="card" style="--d:0.02s;">
-        <div class="kpi-title">Leads Today</div>
-        <div class="kpi-value" style="color:var(--green);">{{ leads_today|default:0 }}</div>
-        <div class="kpi-sub">New leads received today.</div>
-      </div>
+      <div class="dashboard-toolbar-actions">
+        <form method="get" class="dashboard-range-form">
+          <label for="dashboard-days">Range</label>
+          <select id="dashboard-days" name="days" onchange="this.form.submit()">
+            <option value="7" {% if period_days == 7 %}selected{% endif %}>Last 7 days</option>
+            <option value="30" {% if period_days == 30 %}selected{% endif %}>Last 30 days</option>
+            <option value="60" {% if period_days == 60 %}selected{% endif %}>Last 60 days</option>
+            <option value="90" {% if period_days == 90 %}selected{% endif %}>Last 90 days</option>
+            <option value="180" {% if period_days == 180 %}selected{% endif %}>Last 180 days</option>
+          </select>
+        </form>
 
-      <div class="card" style="--d:0.04s;">
-        <div class="kpi-title">Leads {{ period_label }}</div>
-        <div class="kpi-value">{{ leads_period|default:0 }}</div>
-        <div class="kpi-sub">Lead volume in selected range.</div>
-      </div>
-
-      <div class="card" style="--d:0.06s;">
-        <div class="kpi-title">Opportunities {{ period_label }}</div>
-        <div class="kpi-value">{{ opp_period|default:0 }}</div>
-        <div class="kpi-sub">Created from leads.</div>
-      </div>
-
-      <div class="card" style="--d:0.08s;">
-        <div class="kpi-title">Conversion Rate</div>
-        <div class="kpi-value" style="color:var(--teal);">{{ conversion_rate|default:0 }}%</div>
-        <div class="kpi-sub">Leads → opportunities.</div>
-      </div>
-
-      <div class="card" style="--d:0.1s;">
-        <div class="kpi-title">Open Opportunities</div>
-        <div class="kpi-value">{{ open_opps|default:0 }}</div>
-        <div class="kpi-sub">Active pipeline right now.</div>
-      </div>
-
-      <div class="card" style="--d:0.12s;">
-        <div class="kpi-title">Net Cash (CAD) {{ period_label }}</div>
-        <div class="kpi-value" style="color:var(--amber);">$ {{ net_cash_cad_period|default:0|floatformat:2 }}</div>
-        <div class="kpi-sub">Excludes transfers; all sides in CAD.</div>
-      </div>
-    </div>
-
-    <div class="section-label">Revenue and expenses</div>
-    <div class="dash-sub" style="margin: -4px 0 10px;">Total accounting entries in range: {{ acc_entries_period }}</div>
-    <div class="finance-grid">
-      <div class="card finance-card">
-        <div class="card-head">
-          <div>
-            <p class="card-title">Canada accounting (CAD)</p>
-            <div class="card-note">MTD entries: {{ acc_ca_entries_month|default:0 }} | All-time entries: {{ acc_ca_entries_all|default:0 }}</div>
-          </div>
-          <span class="meta-pill">CAD</span>
+        <div class="dashboard-control-pair">
+          <button class="dashboard-control-button" type="button" data-compact-toggle aria-pressed="false">
+            <i data-lucide="panel-top"></i>
+            Compact Mode
+          </button>
+          <select class="dashboard-control-select" data-density-select aria-label="Dashboard density">
+            <option value="comfortable">Comfortable</option>
+            <option value="cozy">Cozy</option>
+            <option value="compact">Dense</option>
+          </select>
         </div>
-        <div class="finance-section">
-          <div class="finance-subtitle">Month-to-date</div>
-          <div class="finance-row">
-            <span class="finance-label">Money in</span>
-            <span class="finance-value pos">$ {{ acc_ca_income_cad_month|default:0|floatformat:2 }}</span>
-          </div>
-          <div class="finance-row">
-            <span class="finance-label">Money out</span>
-            <span class="finance-value neg">$ {{ acc_ca_out_cad_month|default:0|floatformat:2 }}</span>
-          </div>
-          <div class="finance-row">
-            <span class="finance-label">Net</span>
-            <span class="finance-value {% if acc_ca_net_cad_month < 0 %}neg{% else %}pos{% endif %}">$ {{ acc_ca_net_cad_month|default:0|floatformat:2 }}</span>
-          </div>
-        </div>
-        <div class="finance-section">
-          <div class="finance-subtitle">All time</div>
-          <div class="finance-row">
-            <span class="finance-label">Money in</span>
-            <span class="finance-value pos">$ {{ acc_ca_income_cad_all|default:0|floatformat:2 }}</span>
-          </div>
-          <div class="finance-row">
-            <span class="finance-label">Money out</span>
-            <span class="finance-value neg">$ {{ acc_ca_out_cad_all|default:0|floatformat:2 }}</span>
-          </div>
-          <div class="finance-row">
-            <span class="finance-label">Net</span>
-            <span class="finance-value {% if acc_ca_net_cad_all < 0 %}neg{% else %}pos{% endif %}">$ {{ acc_ca_net_cad_all|default:0|floatformat:2 }}</span>
-          </div>
-        </div>
-        <div class="finance-note">Totals use posted accounting entries in CAD.</div>
-      </div>
 
-      <div class="card finance-card bd">
-        <div class="card-head">
-          <div>
-            <p class="card-title">Bangladesh accounting (BDT)</p>
-            <div class="card-note">MTD entries: {{ acc_bd_entries_month|default:0 }} | All-time entries: {{ acc_bd_entries_all|default:0 }}</div>
+        <details class="dashboard-menu">
+          <summary>
+            <i data-lucide="bell"></i>
+            Notifications
+            {% if dashboard_alerts_count %}
+              <span class="dashboard-alert-count">{{ dashboard_alerts_count }}</span>
+            {% endif %}
+          </summary>
+          <div class="dashboard-menu-panel">
+            <p class="dashboard-menu-title">Attention Queue</p>
+            <ul class="dashboard-menu-list">
+              {% for alert in dashboard_alerts %}
+                <li class="dashboard-menu-item">
+                  <strong>{{ alert.title }}</strong>
+                  <span>{{ alert.detail }}</span>
+                </li>
+              {% endfor %}
+            </ul>
           </div>
-          <span class="meta-pill">BDT</span>
-        </div>
-        <div class="finance-section">
-          <div class="finance-subtitle">Month-to-date</div>
-          <div class="finance-row">
-            <span class="finance-label">Money in</span>
-            <span class="finance-value pos">BDT {{ acc_bd_income_bdt_month|default:0|floatformat:2 }}</span>
+        </details>
+
+        {% if ai_url %}
+          <a class="dashboard-ai-link" href="{{ ai_url }}">
+            <i data-lucide="sparkles"></i>
+            AI Assistant
+          </a>
+        {% endif %}
+
+        <details class="dashboard-menu">
+          <summary>
+            <i data-lucide="plus"></i>
+            Quick Actions
+          </summary>
+          <div class="dashboard-menu-panel">
+            <p class="dashboard-menu-title">Shortcuts</p>
+            <ul class="dashboard-menu-list">
+              <li><a class="dashboard-menu-link" href="{{ leads_url }}">Lead pipeline</a></li>
+              <li><a class="dashboard-menu-link" href="{{ opps_url }}">Opportunity board</a></li>
+              <li><a class="dashboard-menu-link" href="{{ production_url }}">Production floor</a></li>
+              <li><a class="dashboard-menu-link" href="{{ shipment_url }}">Shipment queue</a></li>
+              <li><a class="dashboard-menu-link" href="{{ invoice_url }}">Invoices</a></li>
+              <li><a class="dashboard-menu-link" href="{{ accounting_url }}">Accounting home</a></li>
+              <li><a class="dashboard-menu-link" href="{{ accounting_bd_url }}">BD accounting</a></li>
+              <li><a class="dashboard-menu-link" href="{{ production_profit_url }}">Production profit</a></li>
+            </ul>
           </div>
-          <div class="finance-row">
-            <span class="finance-label">Money out</span>
-            <span class="finance-value neg">BDT {{ acc_bd_out_bdt_month|default:0|floatformat:2 }}</span>
+        </details>
+
+        <details class="dashboard-menu">
+          <summary>
+            <i data-lucide="circle-user-round"></i>
+            {{ request.user.get_full_name|default:request.user.username }}
+          </summary>
+          <div class="dashboard-menu-panel">
+            <p class="dashboard-menu-title">Profile</p>
+            <ul class="dashboard-menu-list">
+              <li class="dashboard-menu-item">
+                <strong>{{ request.user.username }}</strong>
+                <span>Signed in and viewing the shared CRM workspace.</span>
+              </li>
+              <li><a class="dashboard-menu-link" href="{{ leads_url }}">Go to lead workspace</a></li>
+              <li><a class="dashboard-menu-link" href="{{ logout_url }}">Logout</a></li>
+            </ul>
           </div>
-          <div class="finance-row">
-            <span class="finance-label">Net</span>
-            <span class="finance-value {% if acc_bd_net_bdt_month < 0 %}neg{% else %}pos{% endif %}">BDT {{ acc_bd_net_bdt_month|default:0|floatformat:2 }}</span>
-          </div>
-        </div>
-        <div class="finance-section">
-          <div class="finance-subtitle">All time</div>
-          <div class="finance-row">
-            <span class="finance-label">Money in</span>
-            <span class="finance-value pos">BDT {{ acc_bd_income_bdt_all|default:0|floatformat:2 }}</span>
-          </div>
-          <div class="finance-row">
-            <span class="finance-label">Money out</span>
-            <span class="finance-value neg">BDT {{ acc_bd_out_bdt_all|default:0|floatformat:2 }}</span>
-          </div>
-          <div class="finance-row">
-            <span class="finance-label">Net</span>
-            <span class="finance-value {% if acc_bd_net_bdt_all < 0 %}neg{% else %}pos{% endif %}">BDT {{ acc_bd_net_bdt_all|default:0|floatformat:2 }}</span>
-          </div>
-        </div>
-        <div class="finance-note">BDT totals use the stored BDT conversions.</div>
+        </details>
       </div>
     </div>
+  </section>
 
-    <div class="section-label">Finance pulse</div>
-    <div class="grid-4">
-      <div class="card">
-        <div class="kpi-title">Total Revenue (CAD)</div>
-        <div class="kpi-value">$ {{ revenue_cad_period|default:0|floatformat:2 }}</div>
-        <div class="kpi-sub">All incoming entries excluding transfers.</div>
-      </div>
+  <div class="dashboard-grid dashboard-grid--kpis">
+    {% for kpi in primary_kpis %}
+      {% include "crm/dashboard/_metric_card.html" with title=kpi.title value=kpi.value note=kpi.note trend_text=kpi.trend_text trend_tone=kpi.trend_tone accent=kpi.accent icon=kpi.icon href=kpi.href %}
+    {% endfor %}
+  </div>
 
-      <div class="card">
-        <div class="kpi-title">Incoming Cash Flow (CAD)</div>
-        <div class="kpi-value" style="color:var(--green);">$ {{ acc_ca_income_cad_period|default:0|floatformat:2 }}</div>
-        <div class="kpi-sub">Canada-side money in for {{ period_label|lower }}.</div>
+  <section class="dashboard-section" id="sales-section">
+    <div class="dashboard-section-head">
+      <div>
+        <p class="dashboard-eyebrow">Sales Performance</p>
+        <h2>Pipeline momentum and source mix</h2>
+        <p>Opportunity creation stays prominent, while source distribution stays readable and uncluttered.</p>
       </div>
-
-      <div class="card">
-        <div class="kpi-title">Total Expenses (CAD)</div>
-        <div class="kpi-value" style="color:var(--red);">$ {{ expense_cad_period|default:0|floatformat:2 }}</div>
-        <div class="kpi-sub">All outgoing entries excluding transfers.</div>
-      </div>
-
-      <div class="card">
-        <div class="kpi-title">Net Cash (CAD)</div>
-        <div class="kpi-value" style="color:{% if net_cash_cad_period < 0 %}var(--red){% else %}var(--green){% endif %};">$ {{ net_cash_cad_period|default:0|floatformat:2 }}</div>
-        <div class="kpi-sub">Revenue minus expenses (excl transfers).</div>
-      </div>
-
-      <div class="card">
-        <div class="kpi-title">Swing Charge (CAD)</div>
-        <div class="kpi-value">$ {{ swing_cad_period|default:0|floatformat:2 }}</div>
-        <div class="kpi-sub">Entries tagged “Swing” on CA side.</div>
-      </div>
-
-      <div class="card">
-        <div class="kpi-title">Gross Margin</div>
-        <div class="kpi-value" style="color:{% if gross_margin_pct_period < 0 %}var(--red){% else %}var(--green){% endif %};">{{ gross_margin_pct_period|default:0|floatformat:1 }}%</div>
-        <div class="kpi-sub">Revenue vs expenses in this range.</div>
-      </div>
+      <a class="dashboard-section-link" href="{{ opps_url }}">
+        <i data-lucide="arrow-up-right"></i>
+        Open opportunities
+      </a>
     </div>
+    <div class="dashboard-grid dashboard-grid--sales">
+      <article class="dashboard-card">
+        <div class="dashboard-card-head">
+          <div class="dashboard-card-copy">
+            <span class="dashboard-card-title">Opportunity Trend</span>
+            <span class="dashboard-card-note">Leads and opportunities over {{ period_label|lower }}.</span>
+          </div>
+          <span class="dashboard-status-pill dashboard-status-pill--good">Live</span>
+        </div>
+        <div class="dashboard-chart-shell dashboard-chart-shell--lg is-loading" data-chart-shell>
+          <canvas data-chart="opportunity-trend"></canvas>
+        </div>
+      </article>
 
-    <div class="section-label">Operations snapshot</div>
-    <div class="grid-3">
-      <div class="card">
-        <div class="kpi-title">Orders Created</div>
-        <div class="kpi-value">{{ orders_created_period|default:0 }}</div>
-        <div class="kpi-sub">Production orders created {{ period_label|lower }}.</div>
-      </div>
-
-      <div class="card">
-        <div class="kpi-title">Orders Processed</div>
-        <div class="kpi-value" style="color:var(--teal);">{{ orders_processed_period|default:0 }}</div>
-        <div class="kpi-sub">Done / closed-won in this range.</div>
-      </div>
-
-      <div class="card">
-        <div class="kpi-title">Production Cost (BDT)</div>
-        <div class="kpi-value">BDT {{ production_cost_bdt_period|default:0|floatformat:2 }}</div>
-        <div class="kpi-sub">Total for completed orders.</div>
-      </div>
+      <article class="dashboard-card">
+        <div class="dashboard-card-head">
+          <div class="dashboard-card-copy">
+            <span class="dashboard-card-title">Lead Source Mix</span>
+            <span class="dashboard-card-note">Top acquisition channels across the live CRM.</span>
+          </div>
+        </div>
+        <div class="dashboard-chart-shell dashboard-chart-shell--lg is-loading" data-chart-shell>
+          <canvas data-chart="lead-source"></canvas>
+        </div>
+      </article>
     </div>
+  </section>
 
-    <div class="section-label">Production profit (CAD)</div>
-    <div class="grid-4">
-      <div class="card">
-        <div class="kpi-title">Production Revenue</div>
-        <div class="kpi-value">$ {{ prod_revenue_cad_period|default:0|floatformat:2 }}</div>
-        <div class="kpi-sub">Accounting entries linked to production.</div>
+  <section class="dashboard-section" id="operations-section">
+    <div class="dashboard-section-head">
+      <div>
+        <p class="dashboard-eyebrow">Operations</p>
+        <h2>Production, workload, and approvals</h2>
+        <p>Operational signals stay grouped together so blockers are visible before they spill into delivery or billing.</p>
       </div>
-
-      <div class="card">
-        <div class="kpi-title">Production Cost</div>
-        <div class="kpi-value" style="color:var(--red);">$ {{ prod_cost_cad_period|default:0|floatformat:2 }}</div>
-        <div class="kpi-sub">BD costs converted to CAD.</div>
-      </div>
-
-      <div class="card">
-        <div class="kpi-title">Production Profit</div>
-        <div class="kpi-value" style="color:{% if prod_profit_cad_period < 0 %}var(--red){% else %}var(--green){% endif %};">$ {{ prod_profit_cad_period|default:0|floatformat:2 }}</div>
-        <div class="kpi-sub">Revenue minus cost.</div>
-      </div>
-
-      <div class="card">
-        <div class="kpi-title">Production Margin</div>
-        <div class="kpi-value" style="color:{% if prod_margin_pct_period < 0 %}var(--red){% else %}var(--green){% endif %};">{{ prod_margin_pct_period|default:0|floatformat:1 }}%</div>
-        <div class="kpi-sub">Margin over the same period.</div>
-      </div>
+      <a class="dashboard-section-link" href="{{ production_url }}">
+        <i data-lucide="factory"></i>
+        Production board
+      </a>
     </div>
-
-    <div class="section-label">Insights</div>
-    <div class="grid-2">
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <p class="card-title">Lead & Opportunity Trend</p>
-            <div class="card-note">Daily activity for {{ period_label|lower }}</div>
-          </div>
-          <span class="meta-pill">Live</span>
-        </div>
-        <div class="chartWrap">
-          <canvas id="chartTrend"></canvas>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <p class="card-title">Cash Flow</p>
-            <div class="card-note">Net cash by day (CAD, excluding transfers)</div>
+    <div class="dashboard-grid dashboard-grid--ops">
+      <article class="dashboard-card">
+        <div class="dashboard-card-head">
+          <div class="dashboard-card-copy">
+            <span class="dashboard-card-title">Production Status</span>
+            <span class="dashboard-card-note">Planning, running, hold, and done volume.</span>
           </div>
         </div>
-        <div class="chartWrap">
-          <canvas id="chartCash"></canvas>
+        <div class="dashboard-chart-shell dashboard-chart-shell--sm is-loading" data-chart-shell>
+          <canvas data-chart="production-status"></canvas>
         </div>
-      </div>
-    </div>
+      </article>
 
-    <div class="grid-2" style="margin-top:12px;">
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <p class="card-title">Revenue vs Expenses</p>
-            <div class="card-note">Daily totals in CAD (excluding transfers)</div>
+      <article class="dashboard-card">
+        <div class="dashboard-card-head">
+          <div class="dashboard-card-copy">
+            <span class="dashboard-card-title">Factory Workload</span>
+            <span class="dashboard-card-note">Active work split by factory location.</span>
           </div>
         </div>
-        <div class="chartWrap">
-          <canvas id="chartRevenue"></canvas>
-        </div>
-      </div>
+        {% if factory_workload %}
+          <ul class="dashboard-list">
+            {% for row in factory_workload %}
+              <li class="dashboard-list-item">
+                <div class="dashboard-list-row">
+                  <strong>{{ row.label }}</strong>
+                  <span>{{ row.orders }} orders | {{ row.units|intcomma }} pcs</span>
+                </div>
+                <div class="dashboard-bar-track">
+                  <div class="dashboard-bar-fill" style="width: {{ row.load_pct }}%;"></div>
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <div class="dashboard-empty">No active factory workload is available right now.</div>
+        {% endif %}
+      </article>
 
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <p class="card-title">Orders Created vs Processed</p>
-            <div class="card-note">Production throughput over {{ period_label|lower }}</div>
+      <article class="dashboard-card">
+        <div class="dashboard-card-head">
+          <div class="dashboard-card-copy">
+            <span class="dashboard-card-title">Shipment Status</span>
+            <span class="dashboard-card-note">Planned, moving, and late delivery workload.</span>
           </div>
         </div>
-        <div class="chartWrap">
-          <canvas id="chartOrders"></canvas>
+        <div class="dashboard-chart-shell dashboard-chart-shell--sm is-loading" data-chart-shell>
+          <canvas data-chart="shipment-status"></canvas>
         </div>
-      </div>
-    </div>
+      </article>
 
-    <div class="grid-3" style="margin-top:12px;">
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <p class="card-title">Lead Qualification Funnel</p>
-            <div class="card-note">Each lead status in pipeline</div>
+      <article class="dashboard-card">
+        <div class="dashboard-card-head">
+          <div class="dashboard-card-copy">
+            <span class="dashboard-card-title">Pending Approvals</span>
+            <span class="dashboard-card-note">Approval queue and invoice pressure.</span>
+          </div>
+          <span class="dashboard-status-pill {% if pending_invoice_approvals %}dashboard-status-pill--warn{% else %}dashboard-status-pill--good{% endif %}">
+            {{ pending_invoice_approvals }} waiting
+          </span>
+        </div>
+        <div class="dashboard-inline-metrics">
+          <div class="dashboard-inline-metric">
+            <strong>{{ outstanding_invoices_total|floatformat:2|intcomma }}</strong>
+            <span>Outstanding balance</span>
+          </div>
+          <div class="dashboard-inline-metric">
+            <strong>{{ overdue_invoices_count }}</strong>
+            <span>Overdue invoices</span>
           </div>
         </div>
-        <div class="chartWrap sm">
-          <canvas id="chartLeadStatus"></canvas>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <p class="card-title">Opportunity Stages</p>
-            <div class="card-note">Pipeline distribution</div>
-          </div>
-        </div>
-        <div class="chartWrap sm">
-          <canvas id="chartOppStages"></canvas>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <p class="card-title">Win vs Lost</p>
-            <div class="card-note">Closed performance</div>
-          </div>
-        </div>
-        <div class="chartWrap sm">
-          <canvas id="chartWinLoss"></canvas>
-        </div>
-      </div>
-    </div>
-
-    <div class="grid-4" style="margin-top:12px;">
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <p class="card-title">Lead Sources</p>
-            <div class="card-note">Top channels</div>
-          </div>
-        </div>
-        <div class="chartWrap sm">
-          <canvas id="chartLeadSource"></canvas>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <p class="card-title">Market Split</p>
-            <div class="card-note">Lead geography</div>
-          </div>
-        </div>
-        <div class="chartWrap sm">
-          <canvas id="chartMarket"></canvas>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <p class="card-title">Lead Priority Mix</p>
-            <div class="card-note">Urgency distribution</div>
-          </div>
-        </div>
-        <div class="chartWrap sm">
-          <canvas id="chartPriority"></canvas>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <p class="card-title">AI Insights</p>
-            <div class="card-note">Quick signals</div>
-          </div>
-        </div>
-        <ul class="ai-notes">
-          {% for n in ai_notes %}
-            <li>{{ n }}</li>
+        <ul class="dashboard-list" style="margin-top: 12px;">
+          {% for invoice in draft_invoices %}
+            <li class="dashboard-list-item">
+              <strong>{{ invoice.invoice_number }}</strong>
+              <span>
+                {% if invoice.customer and invoice.customer.account_brand %}
+                  {{ invoice.customer.account_brand }}
+                {% elif invoice.order %}
+                  {{ invoice.order.title }}
+                {% else %}
+                  Approval pending
+                {% endif %}
+              </span>
+            </li>
+          {% empty %}
+            <li class="dashboard-empty">No draft approvals are waiting right now.</li>
           {% endfor %}
         </ul>
-        <div class="dash-sub" style="margin-top:8px;">Overdue follow-ups: <strong>{{ overdue_followups|default:0 }}</strong></div>
-      </div>
+      </article>
     </div>
+  </section>
 
-    <div class="grid-2" style="margin-top:12px;">
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <p class="card-title">Production Status</p>
-            <div class="card-note">On time vs delayed</div>
+  <section class="dashboard-section" id="lead-intelligence-section">
+    <div class="dashboard-section-head">
+      <div>
+        <p class="dashboard-eyebrow">Lead Intelligence</p>
+        <h2>Quality, source strength, and AI-read summaries</h2>
+        <p>Lead quality stays distinct from pipeline volume so sales attention stays focused on the right segments.</p>
+      </div>
+      <a class="dashboard-section-link" href="{{ leads_url }}">
+        <i data-lucide="brain-circuit"></i>
+        Lead workspace
+      </a>
+    </div>
+    <div class="dashboard-grid dashboard-grid--lead">
+      <article class="dashboard-card">
+        <div class="dashboard-card-head">
+          <div class="dashboard-card-copy">
+            <span class="dashboard-card-title">Lead Quality</span>
+            <span class="dashboard-card-note">Brand fit score distribution.</span>
           </div>
         </div>
-        <div class="chartWrap sm">
-          <canvas id="chartProduction"></canvas>
+        <div class="dashboard-chart-shell dashboard-chart-shell--sm is-loading" data-chart-shell>
+          <canvas data-chart="lead-fit"></canvas>
         </div>
-      </div>
+      </article>
 
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <p class="card-title">Shipping Status</p>
-            <div class="card-note">Shipped, pending, delayed</div>
+      <article class="dashboard-card">
+        <div class="dashboard-card-head">
+          <div class="dashboard-card-copy">
+            <span class="dashboard-card-title">Lead Source Breakdown</span>
+            <span class="dashboard-card-note">Share by top source channel.</span>
           </div>
         </div>
-        <div class="chartWrap sm">
-          <canvas id="chartShipping"></canvas>
+        <ul class="dashboard-list">
+          {% for row in lead_source_breakdown %}
+            <li class="dashboard-list-item">
+              <div class="dashboard-list-row">
+                <strong>{{ row.label }}</strong>
+                <span>{{ row.count|intcomma }} leads</span>
+              </div>
+              <div class="dashboard-bar-track">
+                <div class="dashboard-bar-fill" style="width: {{ row.share }}%;"></div>
+              </div>
+            </li>
+          {% empty %}
+            <li class="dashboard-empty">No lead source data is available.</li>
+          {% endfor %}
+        </ul>
+      </article>
+
+      <article class="dashboard-card">
+        <div class="dashboard-card-head">
+          <div class="dashboard-card-copy">
+            <span class="dashboard-card-title">Top Performing Niche</span>
+            <span class="dashboard-card-note">Recent opportunity product-type concentration.</span>
+          </div>
         </div>
+        <ul class="dashboard-list">
+          {% for niche in top_niches %}
+            <li class="dashboard-list-item">
+              <div class="dashboard-list-row">
+                <strong>{{ niche.label }}</strong>
+                <span>{{ niche.count|intcomma }} opps</span>
+              </div>
+              <div class="dashboard-item-meta">
+                <span class="dashboard-tag">{{ niche.share }}% share</span>
+              </div>
+            </li>
+          {% empty %}
+            <li class="dashboard-empty">No niche concentration is visible in the current data.</li>
+          {% endfor %}
+        </ul>
+      </article>
+
+      <article class="dashboard-card">
+        <div class="dashboard-card-head">
+          <div class="dashboard-card-copy">
+            <span class="dashboard-card-title">AI Insights</span>
+            <span class="dashboard-card-note">Read-only signals based on current CRM metrics.</span>
+          </div>
+          <span class="dashboard-status-pill dashboard-status-pill--flat">Read only</span>
+        </div>
+        <ul class="dashboard-insight-list">
+          {% for note in ai_notes %}
+            <li class="dashboard-list-item">
+              <strong>{{ note }}</strong>
+            </li>
+          {% endfor %}
+        </ul>
+        <div class="dashboard-inline-metrics" style="margin-top: 12px;">
+          <div class="dashboard-inline-metric">
+            <strong>{{ overdue_followups }}</strong>
+            <span>Overdue follow-ups</span>
+          </div>
+          <div class="dashboard-inline-metric">
+            <strong>{{ ship_delayed_total }}</strong>
+            <span>Delayed shipments</span>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="dashboard-section" id="finance-section">
+    <div class="dashboard-section-head">
+      <div>
+        <p class="dashboard-eyebrow">Finance</p>
+        <h2>Revenue, profitability, and invoice pressure</h2>
+        <p>Financial views are grouped into one band so cash signals read cleanly without crowding operational blocks.</p>
+      </div>
+      <a class="dashboard-section-link" href="{{ accounting_url }}">
+        <i data-lucide="landmark"></i>
+        Accounting
+      </a>
+    </div>
+    <div class="dashboard-grid dashboard-grid--finance">
+      <article class="dashboard-card">
+        <div class="dashboard-card-head">
+          <div class="dashboard-card-copy">
+            <span class="dashboard-card-title">Revenue vs Expenses</span>
+            <span class="dashboard-card-note">Daily CAD totals excluding transfers.</span>
+          </div>
+        </div>
+        <div class="dashboard-chart-shell dashboard-chart-shell--sm is-loading" data-chart-shell>
+          <canvas data-chart="revenue-expense"></canvas>
+        </div>
+      </article>
+
+      <article class="dashboard-card">
+        <div class="dashboard-card-head">
+          <div class="dashboard-card-copy">
+            <span class="dashboard-card-title">Monthly Profit Trend</span>
+            <span class="dashboard-card-note">Six-month net cash view in CAD.</span>
+          </div>
+        </div>
+        <div class="dashboard-chart-shell dashboard-chart-shell--sm is-loading" data-chart-shell>
+          <canvas data-chart="monthly-profit"></canvas>
+        </div>
+      </article>
+
+      <article class="dashboard-card">
+        <div class="dashboard-card-head">
+          <div class="dashboard-card-copy">
+            <span class="dashboard-card-title">Outstanding Invoices</span>
+            <span class="dashboard-card-note">Open invoice balance and due pressure.</span>
+          </div>
+        </div>
+        <ul class="dashboard-list">
+          {% for invoice in outstanding_invoices %}
+            <li class="dashboard-list-item">
+              <div class="dashboard-list-row">
+                <strong>{{ invoice.invoice_number }}</strong>
+                <span>{{ invoice.balance|floatformat:2|intcomma }} {{ invoice.currency }}</span>
+              </div>
+              <div class="dashboard-item-meta">
+                <span class="dashboard-tag {% if invoice.due_date and invoice.due_date < today %}dashboard-tag--bad{% endif %}">
+                  {% if invoice.due_date %}
+                    Due {{ invoice.due_date|date:"M d" }}
+                  {% else %}
+                    No due date
+                  {% endif %}
+                </span>
+                <span class="dashboard-tag">{{ invoice.status|title }}</span>
+              </div>
+            </li>
+          {% empty %}
+            <li class="dashboard-empty">No outstanding invoices are open right now.</li>
+          {% endfor %}
+        </ul>
+      </article>
+
+      <article class="dashboard-card">
+        <div class="dashboard-card-head">
+          <div class="dashboard-card-copy">
+            <span class="dashboard-card-title">Payment Status</span>
+            <span class="dashboard-card-note">Invoice status mix across billing.</span>
+          </div>
+        </div>
+        <div class="dashboard-chart-shell dashboard-chart-shell--sm is-loading" data-chart-shell>
+          <canvas data-chart="invoice-status"></canvas>
+        </div>
+      </article>
+    </div>
+
+    <div class="dashboard-grid dashboard-grid--summary">
+      {% for card in finance_summary_cards %}
+        {% include "crm/dashboard/_metric_card.html" with title=card.title value=card.value note=card.note trend_text=card.trend_text trend_tone=card.trend_tone accent=card.accent icon=card.icon size="compact" %}
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="dashboard-section" id="activity-section">
+    <div class="dashboard-section-head">
+      <div>
+        <p class="dashboard-eyebrow">Activity Feed</p>
+        <h2>Recent movement across leads, production, AI, and clients</h2>
+        <p>Live activity is separated into clean columns so recency reads faster and mobile stacking stays simple.</p>
+      </div>
+      <a class="dashboard-section-link" href="{{ leads_url }}">
+        <i data-lucide="clock-3"></i>
+        View recent work
+      </a>
+    </div>
+    <div class="dashboard-grid dashboard-grid--activity">
+      <article class="dashboard-card">
+        <div class="dashboard-card-head">
+          <div class="dashboard-card-copy">
+            <span class="dashboard-card-title">Recent Leads</span>
+            <span class="dashboard-card-note">Newest captured leads and their next state.</span>
+          </div>
+        </div>
+        <ul class="dashboard-feed-list">
+          {% for lead in recent_leads %}
+            <li class="dashboard-feed-item">
+              <strong>{{ lead.account_brand|default:lead.lead_id }}</strong>
+              <span>{{ lead.source|default:"Unknown source" }}</span>
+              <div class="dashboard-feed-meta">
+                <span class="dashboard-tag">{{ lead.lead_status|default:"New" }}</span>
+                <span class="dashboard-tag">Fit {{ lead.brand_fit_score }}</span>
+                <span class="dashboard-tag">{{ lead.created_date|date:"M d" }}</span>
+              </div>
+            </li>
+          {% empty %}
+            <li class="dashboard-empty">No recent leads are available.</li>
+          {% endfor %}
+        </ul>
+      </article>
+
+      <article class="dashboard-card">
+        <div class="dashboard-card-head">
+          <div class="dashboard-card-copy">
+            <span class="dashboard-card-title">Production Updates</span>
+            <span class="dashboard-card-note">Most recently touched production orders.</span>
+          </div>
+        </div>
+        <ul class="dashboard-feed-list">
+          {% for order in recent_production_updates %}
+            <li class="dashboard-feed-item">
+              <strong>{{ order.order_code|default:"Order" }}{% if order.title %} · {{ order.title }}{% endif %}</strong>
+              <span>{{ order.qty_total|intcomma }} pcs | {{ order.factory_location|upper }}</span>
+              <div class="dashboard-feed-meta">
+                <span class="dashboard-tag {% if order.status == 'hold' %}dashboard-tag--bad{% elif order.status == 'done' or order.status == 'closed_won' %}dashboard-tag--good{% endif %}">
+                  {{ order.status|title }}
+                </span>
+                <span class="dashboard-tag">{{ order.updated_at|date:"M d, H:i" }}</span>
+              </div>
+            </li>
+          {% empty %}
+            <li class="dashboard-empty">No production updates are available.</li>
+          {% endfor %}
+        </ul>
+      </article>
+
+      <article class="dashboard-card">
+        <div class="dashboard-card-head">
+          <div class="dashboard-card-copy">
+            <span class="dashboard-card-title">AI Recommendations</span>
+            <span class="dashboard-card-note">Low-risk prompts based on current dashboard signals.</span>
+          </div>
+        </div>
+        <ul class="dashboard-feed-list">
+          {% for rec in action_recommendations %}
+            <li class="dashboard-feed-item">
+              <strong>{{ rec.title }}</strong>
+              <span>{{ rec.detail }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      </article>
+
+      <article class="dashboard-card">
+        <div class="dashboard-card-head">
+          <div class="dashboard-card-copy">
+            <span class="dashboard-card-title">Latest Client Activity</span>
+            <span class="dashboard-card-note">Most recent customer events recorded in CRM.</span>
+          </div>
+        </div>
+        <ul class="dashboard-feed-list">
+          {% for event in recent_client_activity %}
+            <li class="dashboard-feed-item">
+              <strong>{{ event.title }}</strong>
+              <span>
+                {% if event.customer and event.customer.account_brand %}
+                  {{ event.customer.account_brand }}
+                {% elif event.customer and event.customer.contact_name %}
+                  {{ event.customer.contact_name }}
+                {% else %}
+                  Client record
+                {% endif %}
+              </span>
+              <div class="dashboard-feed-meta">
+                <span class="dashboard-tag">{{ event.event_type|title }}</span>
+                <span class="dashboard-tag">{{ event.created_at|date:"M d, H:i" }}</span>
+              </div>
+            </li>
+          {% empty %}
+            <li class="dashboard-empty">No recent client events are available.</li>
+          {% endfor %}
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <section class="dashboard-section">
+    <div class="dashboard-section-head">
+      <div>
+        <p class="dashboard-eyebrow">Deep Metrics</p>
+        <h2>Secondary widgets and detailed accounting</h2>
+        <p>The original dashboard signals are still here, regrouped into expandable blocks so the first screen stays focused.</p>
       </div>
     </div>
 
-    <div class="section-label">Payroll Snapshot ({{ payroll_year }} {{ payroll_month }})</div>
-    <div class="grid-4">
-      <div class="card">
-        <div class="kpi-title">Payroll Total (BDT)</div>
-        <div class="kpi-value" style="color:var(--green);">{{ payroll_total|default:0|floatformat:2 }}</div>
-        <div class="kpi-sub">Final pay total.</div>
-      </div>
-      <div class="card">
-        <div class="kpi-title">Overtime (BDT)</div>
-        <div class="kpi-value">{{ payroll_ot|default:0|floatformat:2 }}</div>
-        <div class="kpi-sub">Overtime total.</div>
-      </div>
-      <div class="card">
-        <div class="kpi-title">Bonus (BDT)</div>
-        <div class="kpi-value">{{ payroll_bonus|default:0|floatformat:2 }}</div>
-        <div class="kpi-sub">Bonus total.</div>
-      </div>
-      <div class="card">
-        <div class="kpi-title">Deduction (BDT)</div>
-        <div class="kpi-value" style="color:var(--red);">{{ payroll_deduction|default:0|floatformat:2 }}</div>
-        <div class="kpi-sub">Deduction total.</div>
-      </div>
-    </div>
+    <div class="dashboard-disclosures">
+      <details class="dashboard-disclosure">
+        <summary>
+          Pipeline Deep Dive
+          <span>Lead status, opportunity stages, win/loss, market split, priority mix</span>
+        </summary>
+        <div class="dashboard-disclosure-body">
+          <div class="dashboard-grid dashboard-grid--deep">
+            <article class="dashboard-card">
+              <div class="dashboard-card-head">
+                <div class="dashboard-card-copy">
+                  <span class="dashboard-card-title">Lead Qualification Funnel</span>
+                  <span class="dashboard-card-note">Lead status distribution.</span>
+                </div>
+              </div>
+              <div class="dashboard-chart-shell dashboard-chart-shell--sm is-loading" data-chart-shell>
+                <canvas data-chart="lead-status"></canvas>
+              </div>
+            </article>
 
-  </div>
+            <article class="dashboard-card">
+              <div class="dashboard-card-head">
+                <div class="dashboard-card-copy">
+                  <span class="dashboard-card-title">Opportunity Stages</span>
+                  <span class="dashboard-card-note">Pipeline stage distribution.</span>
+                </div>
+              </div>
+              <div class="dashboard-chart-shell dashboard-chart-shell--sm is-loading" data-chart-shell>
+                <canvas data-chart="opp-stages"></canvas>
+              </div>
+            </article>
+
+            <article class="dashboard-card">
+              <div class="dashboard-card-head">
+                <div class="dashboard-card-copy">
+                  <span class="dashboard-card-title">Win vs Lost</span>
+                  <span class="dashboard-card-note">Closed opportunity outcomes.</span>
+                </div>
+              </div>
+              <div class="dashboard-chart-shell dashboard-chart-shell--sm is-loading" data-chart-shell>
+                <canvas data-chart="win-loss"></canvas>
+              </div>
+            </article>
+
+            <article class="dashboard-card">
+              <div class="dashboard-card-head">
+                <div class="dashboard-card-copy">
+                  <span class="dashboard-card-title">Market Split</span>
+                  <span class="dashboard-card-note">Lead geography distribution.</span>
+                </div>
+              </div>
+              <div class="dashboard-chart-shell dashboard-chart-shell--sm is-loading" data-chart-shell>
+                <canvas data-chart="market"></canvas>
+              </div>
+            </article>
+
+            <article class="dashboard-card">
+              <div class="dashboard-card-head">
+                <div class="dashboard-card-copy">
+                  <span class="dashboard-card-title">Lead Priority Mix</span>
+                  <span class="dashboard-card-note">Priority labels across leads.</span>
+                </div>
+              </div>
+              <div class="dashboard-chart-shell dashboard-chart-shell--sm is-loading" data-chart-shell>
+                <canvas data-chart="priority"></canvas>
+              </div>
+            </article>
+          </div>
+        </div>
+      </details>
+
+      <details class="dashboard-disclosure">
+        <summary>
+          Accounting Detail
+          <span>CA and BD rollups plus daily cash flow</span>
+        </summary>
+        <div class="dashboard-disclosure-body">
+          <div class="dashboard-grid dashboard-grid--deep-two">
+            <article class="dashboard-card">
+              <div class="dashboard-card-head">
+                <div class="dashboard-card-copy">
+                  <span class="dashboard-card-title">Canada Accounting (CAD)</span>
+                  <span class="dashboard-card-note">Month-to-date and all-time posted entries.</span>
+                </div>
+              </div>
+              <div class="dashboard-finance-rows">
+                <div class="dashboard-finance-row">
+                  <div>
+                    <div class="dashboard-finance-label">MTD Money In</div>
+                    <span class="dashboard-card-note">{{ acc_ca_entries_month }} entries</span>
+                  </div>
+                  <div class="dashboard-finance-value dashboard-finance-value--good">$ {{ acc_ca_income_cad_month|floatformat:2|intcomma }}</div>
+                </div>
+                <div class="dashboard-finance-row">
+                  <div class="dashboard-finance-label">MTD Money Out</div>
+                  <div class="dashboard-finance-value dashboard-finance-value--bad">$ {{ acc_ca_out_cad_month|floatformat:2|intcomma }}</div>
+                </div>
+                <div class="dashboard-finance-row">
+                  <div class="dashboard-finance-label">MTD Net</div>
+                  <div class="dashboard-finance-value {% if acc_ca_net_cad_month < 0 %}dashboard-finance-value--bad{% else %}dashboard-finance-value--good{% endif %}">$ {{ acc_ca_net_cad_month|floatformat:2|intcomma }}</div>
+                </div>
+                <div class="dashboard-finance-row">
+                  <div class="dashboard-finance-label">All-time Net</div>
+                  <div class="dashboard-finance-value {% if acc_ca_net_cad_all < 0 %}dashboard-finance-value--bad{% else %}dashboard-finance-value--good{% endif %}">$ {{ acc_ca_net_cad_all|floatformat:2|intcomma }}</div>
+                </div>
+              </div>
+            </article>
+
+            <article class="dashboard-card">
+              <div class="dashboard-card-head">
+                <div class="dashboard-card-copy">
+                  <span class="dashboard-card-title">Bangladesh Accounting (BDT)</span>
+                  <span class="dashboard-card-note">Month-to-date and all-time converted totals.</span>
+                </div>
+              </div>
+              <div class="dashboard-finance-rows">
+                <div class="dashboard-finance-row">
+                  <div>
+                    <div class="dashboard-finance-label">MTD Money In</div>
+                    <span class="dashboard-card-note">{{ acc_bd_entries_month }} entries</span>
+                  </div>
+                  <div class="dashboard-finance-value dashboard-finance-value--good">BDT {{ acc_bd_income_bdt_month|floatformat:2|intcomma }}</div>
+                </div>
+                <div class="dashboard-finance-row">
+                  <div class="dashboard-finance-label">MTD Money Out</div>
+                  <div class="dashboard-finance-value dashboard-finance-value--bad">BDT {{ acc_bd_out_bdt_month|floatformat:2|intcomma }}</div>
+                </div>
+                <div class="dashboard-finance-row">
+                  <div class="dashboard-finance-label">MTD Net</div>
+                  <div class="dashboard-finance-value {% if acc_bd_net_bdt_month < 0 %}dashboard-finance-value--bad{% else %}dashboard-finance-value--good{% endif %}">BDT {{ acc_bd_net_bdt_month|floatformat:2|intcomma }}</div>
+                </div>
+                <div class="dashboard-finance-row">
+                  <div class="dashboard-finance-label">All-time Net</div>
+                  <div class="dashboard-finance-value {% if acc_bd_net_bdt_all < 0 %}dashboard-finance-value--bad{% else %}dashboard-finance-value--good{% endif %}">BDT {{ acc_bd_net_bdt_all|floatformat:2|intcomma }}</div>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <article class="dashboard-card" style="margin-top: 18px;">
+            <div class="dashboard-card-head">
+              <div class="dashboard-card-copy">
+                <span class="dashboard-card-title">Cash Flow</span>
+                <span class="dashboard-card-note">Daily net cash in CAD for {{ period_label|lower }}.</span>
+              </div>
+            </div>
+            <div class="dashboard-chart-shell dashboard-chart-shell--sm is-loading" data-chart-shell>
+              <canvas data-chart="cash-flow"></canvas>
+            </div>
+          </article>
+        </div>
+      </details>
+
+      <details class="dashboard-disclosure">
+        <summary>
+          Operations and Payroll
+          <span>Production throughput plus payroll snapshot</span>
+        </summary>
+        <div class="dashboard-disclosure-body">
+          <div class="dashboard-grid dashboard-grid--deep-two">
+            <article class="dashboard-card">
+              <div class="dashboard-card-head">
+                <div class="dashboard-card-copy">
+                  <span class="dashboard-card-title">Orders Created vs Processed</span>
+                  <span class="dashboard-card-note">Production throughput over {{ period_label|lower }}.</span>
+                </div>
+              </div>
+              <div class="dashboard-chart-shell dashboard-chart-shell--sm is-loading" data-chart-shell>
+                <canvas data-chart="orders"></canvas>
+              </div>
+            </article>
+
+            <article class="dashboard-card">
+              <div class="dashboard-card-head">
+                <div class="dashboard-card-copy">
+                  <span class="dashboard-card-title">Operations Snapshot</span>
+                  <span class="dashboard-card-note">Original supporting metrics retained for quick reference.</span>
+                </div>
+              </div>
+              <div class="dashboard-inline-metrics">
+                <div class="dashboard-inline-metric">
+                  <strong>{{ orders_created_period|intcomma }}</strong>
+                  <span>Orders created</span>
+                </div>
+                <div class="dashboard-inline-metric">
+                  <strong>{{ orders_processed_period|intcomma }}</strong>
+                  <span>Orders processed</span>
+                </div>
+                <div class="dashboard-inline-metric">
+                  <strong>BDT {{ production_cost_bdt_period|floatformat:2|intcomma }}</strong>
+                  <span>Production cost</span>
+                </div>
+                <div class="dashboard-inline-metric">
+                  <strong>{{ leads_today|intcomma }}</strong>
+                  <span>Leads today</span>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <div class="dashboard-grid dashboard-grid--payroll" style="margin-top: 18px;">
+            {% for card in payroll_summary_cards %}
+              {% include "crm/dashboard/_metric_card.html" with title=card.title value=card.value note=card.note trend_text=card.trend_text trend_tone=card.trend_tone accent=card.accent icon=card.icon size="compact" %}
+            {% endfor %}
+          </div>
+        </div>
+      </details>
+    </div>
+  </section>
 </div>
 
 {{ chart_data|json_script:"dash-data" }}
 
+<script defer src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script>
-  (function(){
-    const raw = document.getElementById("dash-data");
-    if (!raw || !window.Chart) return;
-    const data = JSON.parse(raw.textContent || "{}");
-
-    function safeLabels(labels){
-      return labels && labels.length ? labels : ["No data"];
-    }
-    function safeValues(values, len){
-      if (values && values.length) return values;
-      return Array(len || 1).fill(0);
-    }
-
-    const baseOpts = {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { labels: { color: "#e5e7eb", font: { weight: "700", size: 12 } } },
-        tooltip: { enabled: true }
-      },
-      scales: {
-        x: { ticks: { color: "#e2e8f0", font: { size: 11, weight: "600" } }, grid: { color: "rgba(148,163,184,0.15)" } },
-        y: { ticks: { color: "#e2e8f0", font: { size: 11, weight: "600" } }, grid: { color: "rgba(148,163,184,0.15)" } }
-      }
-    };
-
-    const trendLabels = safeLabels(data.leads_labels || []);
-    const leadsVals = safeValues(data.leads_values || [], trendLabels.length);
-    const oppVals = safeValues(data.opp_daily_values || [], trendLabels.length);
-
-    new Chart(document.getElementById("chartTrend"), {
-      type: "line",
-      data: {
-        labels: trendLabels,
-        datasets: [
-          { label: "Leads", data: leadsVals, borderWidth: 2, tension: 0.35, fill: true, pointRadius: 2 },
-          { label: "Opportunities", data: oppVals, borderWidth: 2, tension: 0.35, fill: false, pointRadius: 2 }
-        ]
-      },
-      options: baseOpts
-    });
-
-    const cashVals = safeValues(data.cash_daily_values || [], trendLabels.length);
-    new Chart(document.getElementById("chartCash"), {
-      type: "line",
-      data: { labels: trendLabels, datasets: [{ label: "Net cash", data: cashVals, borderWidth: 2, tension: 0.35, fill: false, pointRadius: 0 }] },
-      options: baseOpts
-    });
-
-    const revenueVals = safeValues(data.revenue_daily_values || [], trendLabels.length);
-    const expenseVals = safeValues(data.expense_daily_values || [], trendLabels.length);
-    new Chart(document.getElementById("chartRevenue"), {
-      type: "line",
-      data: {
-        labels: trendLabels,
-        datasets: [
-          { label: "Revenue", data: revenueVals, borderWidth: 2, tension: 0.35, fill: false, pointRadius: 0 },
-          { label: "Expenses", data: expenseVals, borderWidth: 2, tension: 0.35, fill: false, pointRadius: 0 }
-        ]
-      },
-      options: baseOpts
-    });
-
-    const ordersCreatedVals = safeValues(data.orders_created_values || [], trendLabels.length);
-    const ordersProcessedVals = safeValues(data.orders_processed_values || [], trendLabels.length);
-    new Chart(document.getElementById("chartOrders"), {
-      type: "line",
-      data: {
-        labels: trendLabels,
-        datasets: [
-          { label: "Created", data: ordersCreatedVals, borderWidth: 2, tension: 0.35, fill: false, pointRadius: 0 },
-          { label: "Processed", data: ordersProcessedVals, borderWidth: 2, tension: 0.35, fill: false, pointRadius: 0 }
-        ]
-      },
-      options: baseOpts
-    });
-
-    const leadStatusLabels = safeLabels(data.lead_status_labels || []);
-    const leadStatusVals = safeValues(data.lead_status_values || [], leadStatusLabels.length);
-    new Chart(document.getElementById("chartLeadStatus"), {
-      type: "bar",
-      data: { labels: leadStatusLabels, datasets: [{ label: "Leads", data: leadStatusVals, borderWidth: 1 }] },
-      options: Object.assign({}, baseOpts, { indexAxis: "y" })
-    });
-
-    const oppStageLabels = safeLabels(data.opp_stage_labels || []);
-    const oppStageVals = safeValues(data.opp_stage_values || [], oppStageLabels.length);
-    new Chart(document.getElementById("chartOppStages"), {
-      type: "bar",
-      data: { labels: oppStageLabels, datasets: [{ label: "Opportunities", data: oppStageVals, borderWidth: 1 }] },
-      options: Object.assign({}, baseOpts, { indexAxis: "y" })
-    });
-
-    new Chart(document.getElementById("chartWinLoss"), {
-      type: "doughnut",
-      data: { labels: data.win_loss_labels || ["Won","Lost"], datasets: [{ data: data.win_loss_values || [0,0] }] },
-      options: { responsive: true, maintainAspectRatio: false, plugins:{ legend:{ position:"bottom", labels:{ color:"#e5e7eb", font:{weight:"700", size: 12} } } } }
-    });
-
-    const sourceLabels = safeLabels(data.lead_source_labels || []);
-    const sourceVals = safeValues(data.lead_source_values || [], sourceLabels.length);
-    new Chart(document.getElementById("chartLeadSource"), {
-      type: "bar",
-      data: { labels: sourceLabels, datasets: [{ label: "Leads", data: sourceVals, borderWidth: 1 }] },
-      options: baseOpts
-    });
-
-    new Chart(document.getElementById("chartMarket"), {
-      type: "doughnut",
-      data: { labels: data.lead_market_labels || ["Unknown"], datasets: [{ data: data.lead_market_values || [0] }] },
-      options: { responsive: true, maintainAspectRatio: false, plugins:{ legend:{ position:"bottom", labels:{ color:"#e5e7eb", font:{weight:"700", size: 12} } } } }
-    });
-
-    const priorityLabels = safeLabels(data.lead_priority_labels || []);
-    const priorityVals = safeValues(data.lead_priority_values || [], priorityLabels.length);
-    new Chart(document.getElementById("chartPriority"), {
-      type: "bar",
-      data: { labels: priorityLabels, datasets: [{ label: "Leads", data: priorityVals, borderWidth: 1 }] },
-      options: baseOpts
-    });
-
-    new Chart(document.getElementById("chartProduction"), {
-      type: "bar",
-      data: { labels: data.prod_labels || ["On time","Delayed","Remake"], datasets: [{ label: "Orders", data: data.prod_counts || [0,0,0], borderWidth: 1 }] },
-      options: Object.assign({}, baseOpts, { indexAxis: "y" })
-    });
-
-    new Chart(document.getElementById("chartShipping"), {
-      type: "bar",
-      data: {
-        labels: data.ship_labels || ["This month"],
-        datasets: [
-          { label: "Shipped", data: data.ship_shipped || [0], stack: "s1" },
-          { label: "Pending", data: data.ship_pending || [0], stack: "s1" },
-          { label: "Delayed", data: data.ship_delayed || [0], stack: "s1" }
-        ]
-      },
-      options: Object.assign({}, baseOpts, {
-        scales: {
-          x: { stacked: true, ticks: { color:"#cbd5e1" }, grid:{ color:"rgba(148,163,184,0.15)" } },
-          y: { stacked: true, ticks: { color:"#cbd5e1" }, grid:{ color:"rgba(148,163,184,0.15)" } }
-        }
-      })
-    });
-  })();
-</script>
-
+<script src="{% static 'crm/dashboard.js' %}"></script>
 {% endblock %}

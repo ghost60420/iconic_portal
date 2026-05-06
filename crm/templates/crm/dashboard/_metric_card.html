@@ -1,0 +1,23 @@
+{% if href %}
+  <a class="dashboard-metric-card dashboard-metric-card--{{ accent|default:'neutral' }} dashboard-metric-card--{{ size|default:'default' }}" href="{{ href }}">
+{% else %}
+  <div class="dashboard-metric-card dashboard-metric-card--{{ accent|default:'neutral' }} dashboard-metric-card--{{ size|default:'default' }}">
+{% endif %}
+    <div class="dashboard-metric-head">
+      <span class="dashboard-metric-icon">
+        <i data-lucide="{{ icon|default:'sparkles' }}"></i>
+      </span>
+      {% if trend_text %}
+        <span class="dashboard-metric-trend dashboard-metric-trend--{{ trend_tone|default:'flat' }}">{{ trend_text }}</span>
+      {% endif %}
+    </div>
+    <div class="dashboard-metric-title">{{ title }}</div>
+    <div class="dashboard-metric-value">{{ value }}</div>
+    {% if note %}
+      <div class="dashboard-metric-note">{{ note }}</div>
+    {% endif %}
+{% if href %}
+  </a>
+{% else %}
+  </div>
+{% endif %}

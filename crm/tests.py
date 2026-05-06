@@ -1,7 +1,9 @@
 from unittest.mock import Mock, patch
 
+from django.contrib.auth import get_user_model
 from django.db.utils import OperationalError
 from django.test import TestCase
+from django.urls import reverse
 
 from crm.models import Lead, Opportunity
 from crm.views import _production_library_context
@@ -60,3 +62,28 @@ class ProductionLibraryContextTests(TestCase):
         self.assertEqual(list(context["library_accessories"]), [])
         self.assertEqual(list(context["library_trims"]), [])
         self.assertEqual(list(context["library_threads"]), [])
+
+
+class MainDashboardTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username="dashboard-user", password="pass1234")
+        self.client.force_login(self.user)
+
+    def test_dashboard_renders_redesigned_context(self):
+        response = self.client.get(reverse("main_dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "crm/main_dashboard.html")
+        self.assertContains(response, "CRM Dashboard")
+        self.assertIn("primary_kpis", response.context)
+        self.assertEqual(len(response.context["primary_kpis"]), 6)
+        self.assertIn("finance_summary_cards", response.context)
+        self.assertIn("dashboard_alerts", response.context)
+        self.assertIn("recent_leads", response.context)
+        self.assertIn("action_recommendations", response.context)
+
+        chart_data = response.context["chart_data"]
+        self.assertIn("lead_fit_labels", chart_data)
+        self.assertIn("monthly_profit_labels", chart_data)
+        self.assertIn("invoice_status_labels", chart_data)
