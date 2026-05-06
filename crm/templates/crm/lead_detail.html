@@ -279,19 +279,36 @@
   }
 </style>
 
-<div class="page">
+<link rel="stylesheet" href="{% static 'crm/lead_detail.css' %}?v=modern-detail-20260506">
 
-  <div class="top-bar">
-    <div>
+<div class="page lead-detail-page">
+  <div class="lead-detail-shell">
+
+  <section class="top-bar lead-detail-hero">
+    <div class="lead-detail-hero-copy">
+      <p class="lead-detail-eyebrow">Lead Detail</p>
       <h1>
-        {{ lead.account_brand }}
+        {{ lead.account_brand|default:"Lead" }}
+      </h1>
+      <p class="lead-detail-subtitle">
+        {% if lead.contact_name %}{{ lead.contact_name }}{% else %}Contact not set{% endif %}
+        {% if lead.email %} · {{ lead.email }}{% endif %}
+        {% if lead.phone %} · {{ lead.phone }}{% endif %}
+      </p>
+
+      <div class="lead-detail-badges">
         <span class="badge badge-status">{{ lead.lead_status }}</span>
         <span class="badge badge-priority">{{ lead.priority }}</span>
-      </h1>
-
-      <div>
         <span class="tag">Lead {{ lead.lead_id }}</span>
         <span class="tag">Market {{ lead.get_market_display }}</span>
+        {% if lead.source_channel %}
+          <span class="tag">{{ lead.source_channel }}</span>
+        {% elif lead.source %}
+          <span class="tag">{{ lead.source }}</span>
+        {% endif %}
+        {% if lead.brand_fit_score or lead.brand_fit_score == 0 %}
+          <span class="tag">Fit {{ lead.brand_fit_score }}</span>
+        {% endif %}
         {% if lead.country %}<span class="tag">{{ lead.country }}</span>{% endif %}
       </div>
 
@@ -313,85 +330,90 @@
     </div>
 
     <div class="top-links">
-      <a class="action-btn" href="{% url 'leads_list' %}">All leads</a>
       <a class="action-btn primary" href="{% url 'lead_edit' lead.pk %}">Edit</a>
-      <a class="action-btn" href="{% url 'calendar_add' %}?lead={{ lead.pk }}">Add follow up</a>
+      <a class="action-btn" href="#lead-notes">Add Note</a>
+      <a class="action-btn" href="#lead-convert">Create Opportunity</a>
+      <a class="action-btn" href="{% url 'calendar_add' %}?lead={{ lead.pk }}">Add Follow Up</a>
+      <a class="action-btn" href="{% url 'leads_list' %}">Back to Leads</a>
     </div>
-  </div>
+  </section>
 
-  <div class="summary-grid">
+  <section class="summary-grid" aria-label="Lead sales summary">
     <div class="summary-card">
-      <div class="summary-title">Contact</div>
+      <div class="summary-title">Contact Profile</div>
       <div class="summary-line">{{ lead.contact_name|default:"—" }}</div>
-      <div class="summary-sub">
-        {% if lead.email %}
-          <a href="mailto:{{ lead.email }}">{{ lead.email }}</a>
-        {% else %}
-          —
-        {% endif %}
-      </div>
-      <div class="summary-sub">
-        {% if lead.phone %}
-          <a href="tel:{{ lead.phone|cut:' '|cut:'-'|cut:'('|cut:')' }}">{{ lead.phone }}</a>
-        {% else %}
-          —
-        {% endif %}
-      </div>
+      <div class="summary-sub">{% if lead.email %}<a href="mailto:{{ lead.email }}">{{ lead.email }}</a>{% else %}—{% endif %}</div>
+      <div class="summary-sub">{% if lead.phone %}<a href="tel:{{ lead.phone|cut:' '|cut:'-'|cut:'('|cut:')' }}">{{ lead.phone }}</a>{% else %}—{% endif %}</div>
       {% if lead.website or lead.company_website %}
-        <div class="summary-sub">{{ lead.website|default:lead.company_website }}</div>
+        <div class="summary-sub"><a href="{{ lead.website|default:lead.company_website }}" target="_blank" rel="noopener">{{ lead.website|default:lead.company_website }}</a></div>
       {% endif %}
+      {% if lead.linkedin_url %}
+        <div class="summary-sub"><a href="{{ lead.linkedin_url }}" target="_blank" rel="noopener">LinkedIn profile</a></div>
+      {% endif %}
+      <div class="summary-sub">{% if lead.city %}{{ lead.city }}{% endif %}{% if lead.city and lead.country %}, {% endif %}{{ lead.country|default:"Location not set" }}</div>
     </div>
 
     <div class="summary-card">
-      <div class="summary-title">Pipeline</div>
-      <div class="summary-line">Status: {{ lead.lead_status }}</div>
-      <div class="summary-line">Priority: {{ lead.priority }}</div>
+      <div class="summary-title">Sales Status</div>
+      <div class="summary-line">{{ lead.lead_status }} · {{ lead.priority }}</div>
       <div class="summary-sub">
-        Type:
         <span class="badge {% if lead.lead_type == 'outbound' %}lead-outbound{% else %}lead-inbound{% endif %}">
           {{ lead.get_lead_type_display }}
         </span>
+        {% if lead.outbound_status %}<span class="pill weak">{{ lead.outbound_status }}</span>{% endif %}
       </div>
-      {% if lead.outbound_status %}
-        <div class="summary-sub">Outbound: {{ lead.outbound_status }}</div>
-      {% endif %}
-      <div class="summary-sub">Opportunities: {{ opportunities|length }}</div>
+      <div class="summary-sub">Last contact: {% if lead.last_reply_date %}{{ lead.last_reply_date }} reply{% elif lead.last_outreach_date %}{{ lead.last_outreach_date }} outreach{% else %}—{% endif %}</div>
+      <div class="summary-sub">Next follow up: {{ lead.next_follow_up_date|default:lead.next_followup|default:"—" }}</div>
+      <div class="summary-sub">
+        Assigned:
+        {% if lead.assigned_to %}
+          {% if lead.assigned_to.get_full_name %}{{ lead.assigned_to.get_full_name }}{% else %}{{ lead.assigned_to.username }}{% endif %}
+        {% elif lead.owner %}
+          {{ lead.owner }}
+        {% else %}
+          Unassigned
+        {% endif %}
+      </div>
+      <div class="lead-progress {% if lead.lead_status == 'Converted' %}lead-progress--converted{% elif lead.lead_status == 'Qualified' %}lead-progress--qualified{% elif lead.lead_status == 'Working' or lead.lead_status == 'Nurturing' %}lead-progress--working{% elif lead.lead_status == 'Lost' or lead.lead_status == 'Unqualified' %}lead-progress--lost{% endif %}" aria-hidden="true"><span></span></div>
+    </div>
+
+    <div class="summary-card">
+      <div class="summary-title">Lead Intelligence</div>
+      <div class="summary-line">Fit score: {{ lead.brand_fit_score }}</div>
+      <div class="summary-sub">Qualification: {{ lead.qualification_status|default:"—" }}</div>
+      <div class="summary-sub">Fit reason: {{ lead.qualification_reason|default:"—" }}</div>
+      <div class="summary-sub">Suggested action: {{ lead.recommended_next_action|default:"—" }}</div>
+      <div class="summary-sub">Best product: {{ lead.product_category_guess|default:lead.get_product_interest_display|default:lead.product_interest|default:"—" }}</div>
+    </div>
+
+    <div class="summary-card">
+      <div class="summary-title">Related Business</div>
+      <div class="summary-line">Opportunities: {{ opportunities|length }}</div>
+      <div class="summary-sub">Budget: CAD {{ budget_cad }}</div>
+      {% if budget_bdt and budget_bdt > 0 %}<div class="summary-sub">BDT {{ budget_bdt }}</div>{% endif %}
+      <div class="summary-sub">Quantity: {{ lead.order_quantity|default:"—" }}</div>
+      <div class="summary-sub">Product: {{ lead.get_product_interest_display|default:lead.product_interest|default:"—" }}</div>
       <div class="summary-sub">Created: {{ lead.created_date }}</div>
     </div>
 
     <div class="summary-card">
-      <div class="summary-title">Value</div>
-      <div class="summary-line">Budget: CAD {{ budget_cad }}</div>
-      {% if budget_bdt and budget_bdt > 0 %}
-        <div class="summary-sub">BDT {{ budget_bdt }}</div>
-      {% endif %}
-      <div class="summary-sub">Quantity: {{ lead.order_quantity|default:"—" }}</div>
-      <div class="summary-sub">{{ lead.product_interest|default:"—" }}</div>
-    </div>
-
-    <div class="summary-card">
-      <div class="summary-title">Next steps</div>
+      <div class="summary-title">Activity Focus</div>
       <div class="summary-line">Next follow up: {{ lead.next_follow_up_date|default:lead.next_followup|default:"—" }}</div>
       <div class="summary-sub">Tasks: {{ tasks|length }}</div>
       <div class="summary-sub">Notes: {{ comments|length }}</div>
+      <div class="summary-sub">Outreach events: {{ activities|length }}</div>
+      <div class="summary-sub">Upcoming calendar events: {{ upcoming_events|length }}</div>
     </div>
 
     <div class="summary-card">
-      <div class="summary-title">Qualification</div>
-      <div class="summary-line">Fit score: {{ lead.brand_fit_score }}</div>
-      <div class="summary-sub">Status: {{ lead.qualification_status|default:"—" }}</div>
+      <div class="summary-title">Source and Pitch</div>
+      <div class="summary-line">{{ lead.source_channel|default:lead.source|default:"—" }}</div>
       <div class="summary-sub">Channel: {{ lead.recommended_channel|default:"—" }}</div>
-      <div class="summary-sub">Next action: {{ lead.recommended_next_action|default:"—" }}</div>
+      <div class="summary-sub">Outbound method: {{ lead.outbound_method|default:"—" }}</div>
+      <div class="summary-sub">Target volume: {% if lead.target_order_volume_min or lead.target_order_volume_max %}{% if lead.target_order_volume_min and lead.target_order_volume_max %}{{ lead.target_order_volume_min }} - {{ lead.target_order_volume_max }}{% elif lead.target_order_volume_min %}{{ lead.target_order_volume_min }}+{% else %}Up to {{ lead.target_order_volume_max }}{% endif %}{% else %}—{% endif %}</div>
+      <div class="summary-sub">ICP match: {% if lead.ideal_customer_profile_match %}Yes{% else %}No{% endif %}</div>
     </div>
-
-    <div class="summary-card">
-      <div class="summary-title">Qualification</div>
-      <div class="summary-line">Fit score: {{ lead.brand_fit_score }}</div>
-      <div class="summary-sub">Status: {{ lead.qualification_status|default:"—" }}</div>
-      <div class="summary-sub">Channel: {{ lead.recommended_channel|default:"—" }}</div>
-      <div class="summary-sub">Next action: {{ lead.recommended_next_action|default:"—" }}</div>
-    </div>
-  </div>
+  </section>
 
   {% include "crm/partials/iconic_ai_brain.html" with brain=iconic_ai_brain lead=lead only %}
 
@@ -428,8 +450,8 @@
     </div>
   </div>
 
-  <div class="section">
-    <h2 class="section-title">Lead information</h2>
+  <details class="section lead-admin-section" id="lead-admin-data">
+    <summary class="section-title">Raw / admin lead data</summary>
 
     <div class="section-row">
       <div class="section-half">
@@ -573,9 +595,9 @@
         <td>{{ lead.notes|linebreaksbr }}</td>
       </tr>
     </table>
-  </div>
+  </details>
 
-  <div class="section">
+  <div class="section lead-contact-discovery-section">
     <h2 class="section-title">Contact discovery</h2>
     <p class="small">Public contact points found from imports or website research.</p>
     {% if lead.contact_points.exists %}
@@ -612,7 +634,7 @@
     {% endif %}
   </div>
 
-  <div class="section">
+  <div class="section lead-activity-section" id="lead-activity">
     <h2 class="section-title">Outreach timeline</h2>
     <p class="small">Log outreach actions and track follow ups. This timeline stays after conversion.</p>
 
@@ -682,7 +704,7 @@
     {% endif %}
   </div>
 
-  <div class="section">
+  <div class="section lead-task-section" id="lead-tasks">
     <h2 class="section-title">Tasks and reminders</h2>
 
     <form method="post" style="margin-bottom: 10px;">
@@ -756,7 +778,7 @@
     {% endif %}
   </div>
 
-  <div class="section">
+  <div class="section lead-notes-section" id="lead-notes">
     <h2 class="section-title">Chatter feed (Lead + Opportunities + Production)</h2>
 
     <form method="post" style="margin-bottom: 10px;" enctype="multipart/form-data">
@@ -816,7 +838,7 @@
   </div>
 
   {% if potential_duplicates %}
-    <div class="section">
+    <div class="section lead-admin-section">
       <h2 class="section-title">Possible duplicates</h2>
       <p class="small">Review possible duplicates and merge if needed.</p>
 
@@ -855,22 +877,27 @@
     </div>
   {% endif %}
 
-  <div class="section">
-    <h2 class="section-title">Client profile and convert</h2>
-    <p class="small">This will create an opportunity and customer record from this lead.</p>
+  <div class="section lead-business-section" id="lead-convert">
+    <h2 class="section-title">Related business and conversion</h2>
+    <p class="small">Opportunities and conversion actions connected to this lead.</p>
     {% if opportunities %}
-      <div class="small">This lead is already converted.</div>
-      <div style="margin-top:8px;">
-        <a class="action-btn" href="{% url 'opportunity_detail' opportunities.0.pk %}">View opportunity</a>
+      <div class="small">This lead has related opportunities.</div>
+      <div style="margin-top:10px;">
+        {% for opportunity in opportunities %}
+          <a class="action-btn" href="{% url 'opportunity_detail' opportunity.pk %}">
+            {{ opportunity.opportunity_id|default:opportunity.pk }} · {{ opportunity.stage|default:"Opportunity" }}
+          </a>
+        {% endfor %}
       </div>
     {% else %}
       <form method="post" action="{% url 'convert_lead_to_opportunity' lead.pk %}">
         {% csrf_token %}
-        <button type="submit">Convert to opportunity ✅</button>
+        <button type="submit">Create opportunity</button>
       </form>
     {% endif %}
   </div>
 
+  </div>
   </div>
 
   <script>

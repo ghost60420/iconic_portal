@@ -219,25 +219,63 @@
       background: rgba(250,204,21,0.10);
     }
   </style>
+  <link rel="stylesheet" href="{% static 'crm/lead_form.css' %}?v=sales-workspace-20260506">
 </head>
 
-<body>
+<body class="lead-edit-body">
   {% include "crm/navbar.html" %}
 
-  <div class="wrapper">
+  <div class="wrapper lead-edit-page">
 
-    <div class="top-bar">
-      <div>
-        <div class="title">{% if lead %}Edit lead{% else %}Add lead{% endif %}</div>
-        <div class="sub">Core details, product needs, and inbound or outbound tracking.</div>
+    <section class="top-bar lead-edit-hero">
+      <div class="lead-edit-hero-copy">
+        <div class="lead-edit-eyebrow">{% if lead %}Lead workspace{% else %}New lead workspace{% endif %}</div>
+        <div class="title lead-edit-title">
+          {% if lead %}
+            {{ lead.account_brand|default:"Untitled lead" }}
+          {% else %}
+            Add lead
+          {% endif %}
+        </div>
+        <div class="sub lead-edit-sub">
+          {% if lead %}
+            {{ lead.contact_name|default:"No contact name" }}{% if lead.email %} · {{ lead.email }}{% endif %}
+          {% else %}
+            Capture the details a sales rep needs first. Admin and AI metadata stays available below.
+          {% endif %}
+        </div>
+
+        <div class="lead-edit-badges" aria-label="Lead summary">
+          {% if lead %}
+            <span class="lead-edit-badge">{{ lead.get_lead_status_display|default:"Status unset" }}</span>
+            <span class="lead-edit-badge lead-edit-badge-hot">{{ lead.get_priority_display|default:"Priority unset" }}</span>
+            <span class="lead-edit-badge">{% firstof lead.assigned_to lead.owner "Unassigned" %}</span>
+            <span class="lead-edit-badge">{{ lead.brand_fit_score|default:"No" }}{% if lead.brand_fit_score %}%{% endif %} fit</span>
+            <span class="lead-edit-badge">{% firstof lead.get_source_display lead.source "Source unset" %}</span>
+          {% else %}
+            <span class="lead-edit-badge">Draft lead</span>
+            <span class="lead-edit-badge lead-edit-badge-hot">Set priority</span>
+            <span class="lead-edit-badge">Assign rep</span>
+            <span class="lead-edit-badge">Fit pending</span>
+            <span class="lead-edit-badge">Source pending</span>
+          {% endif %}
+        </div>
       </div>
-      <div class="links">
-        <a href="{% url 'leads_list' %}">All leads</a>
+
+      <div class="links lead-edit-actions-top" aria-label="Lead actions">
+        <button class="btn lead-primary-action" type="submit" form="lead-form" id="save-top-btn">
+          {% if lead %}Save changes{% else %}Save lead{% endif %}
+        </button>
         {% if lead %}
-          <a href="{% url 'lead_detail' lead.pk %}">Back to lead</a>
+          <a class="lead-action-link" href="{% url 'lead_detail' lead.pk %}#lead-notes">Add note</a>
+          <a class="lead-action-link" href="{% url 'lead_detail' lead.pk %}#lead-convert">Create opportunity</a>
+          <a class="lead-action-link" href="{% url 'lead_detail' lead.pk %}#iconic-ai-brain-panel">Send email draft</a>
+          <a class="lead-action-link" href="{% url 'lead_detail' lead.pk %}">Back to lead</a>
+        {% else %}
+          <a class="lead-action-link" href="{% url 'leads_list' %}">Back to leads</a>
         {% endif %}
       </div>
-    </div>
+    </section>
 
     {% if messages %}
       {% for message in messages %}
@@ -289,209 +327,351 @@
         </div>
       {% endif %}
 
-      <div class="grid">
-
-        <div class="card">
-          <div class="card-title">Lead info</div>
-
-          <label for="{{ form.account_brand.id_for_label }}">{{ form.account_brand.label }}{% if form.account_brand.field.required %}<span class="req">*</span>{% endif %}</label>
-          {{ form.account_brand }}
-          {{ form.account_brand.errors }}
-
-          <label for="{{ form.contact_name.id_for_label }}">{{ form.contact_name.label }}{% if form.contact_name.field.required %}<span class="req">*</span>{% endif %}</label>
-          {{ form.contact_name }}
-          {{ form.contact_name.errors }}
-
-          <label for="{{ form.email.id_for_label }}">{{ form.email.label }}{% if form.email.field.required %}<span class="req">*</span>{% endif %}</label>
-          {{ form.email }}
-          {{ form.email.errors }}
-
-          <label for="{{ form.phone.id_for_label }}">{{ form.phone.label }}{% if form.phone.field.required %}<span class="req">*</span>{% endif %}</label>
-          {{ form.phone }}
-          {{ form.phone.errors }}
-
-          <label for="{{ form.website.id_for_label }}">{{ form.website.label }}{% if form.website.field.required %}<span class="req">*</span>{% endif %}</label>
-          {{ form.website }}
-          {{ form.website.errors }}
-
-          <label for="{{ form.instagram_handle.id_for_label }}">{{ form.instagram_handle.label }}{% if form.instagram_handle.field.required %}<span class="req">*</span>{% endif %}</label>
-          {{ form.instagram_handle }}
-          {{ form.instagram_handle.errors }}
-
-          <label for="{{ form.linkedin_url.id_for_label }}">{{ form.linkedin_url.label }}{% if form.linkedin_url.field.required %}<span class="req">*</span>{% endif %}</label>
-          {{ form.linkedin_url }}
-          {{ form.linkedin_url.errors }}
-
-          <label for="{{ form.market.id_for_label }}">{{ form.market.label }}{% if form.market.field.required %}<span class="req">*</span>{% endif %}</label>
-          {{ form.market }}
-          {{ form.market.errors }}
-
-          <label for="{{ form.country.id_for_label }}">{{ form.country.label }}{% if form.country.field.required %}<span class="req">*</span>{% endif %}</label>
-          {{ form.country }}
-          {{ form.country.errors }}
-
-          <label for="{{ form.region.id_for_label }}">{{ form.region.label }}{% if form.region.field.required %}<span class="req">*</span>{% endif %}</label>
-          {{ form.region }}
-          {{ form.region.errors }}
-
-          <label for="{{ form.city.id_for_label }}">{{ form.city.label }}{% if form.city.field.required %}<span class="req">*</span>{% endif %}</label>
-          {{ form.city }}
-          {{ form.city.errors }}
+      <section class="lead-core-section" aria-label="Core sales info">
+        <div class="lead-section-head">
+          <div>
+            <p class="lead-section-kicker">Core sales info</p>
+            <h2>What sales needs to act</h2>
+          </div>
+          <p>Only the fields used most often stay visible. Advanced fields remain available below.</p>
         </div>
 
-        <div class="card">
-          <div class="card-title">Product</div>
+        <div class="lead-core-grid">
+          <article class="card lead-form-card lead-contact-card">
+            <div class="card-title">Company and contact</div>
 
-          <label for="{{ form.product_category.id_for_label }}">{{ form.product_category.label }}{% if form.product_category.field.required %}<span class="req">*</span>{% endif %}</label>
-          {{ form.product_category }}
-          {{ form.product_category.errors }}
+            <div class="lead-field">
+              <label for="{{ form.account_brand.id_for_label }}">{{ form.account_brand.label }}{% if form.account_brand.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.account_brand }}
+              {{ form.account_brand.errors }}
+            </div>
 
-          <label for="{{ form.product_interest.id_for_label }}">{{ form.product_interest.label }}{% if form.product_interest.field.required %}<span class="req">*</span>{% endif %}</label>
-          {{ form.product_interest }}
-          {{ form.product_interest.errors }}
+            <div class="lead-field">
+              <label for="{{ form.contact_name.id_for_label }}">{{ form.contact_name.label }}{% if form.contact_name.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.contact_name }}
+              {{ form.contact_name.errors }}
+            </div>
 
-          <label for="{{ form.order_quantity.id_for_label }}">{{ form.order_quantity.label }}{% if form.order_quantity.field.required %}<span class="req">*</span>{% endif %}</label>
-          {{ form.order_quantity }}
-          {{ form.order_quantity.errors }}
+            <div class="lead-field lead-field-half">
+              <label for="{{ form.email.id_for_label }}">{{ form.email.label }}{% if form.email.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.email }}
+              {{ form.email.errors }}
+            </div>
 
-          <label for="{{ form.budget.id_for_label }}">{{ form.budget.label }}{% if form.budget.field.required %}<span class="req">*</span>{% endif %}</label>
-          {{ form.budget }}
-          {{ form.budget.errors }}
+            <div class="lead-field lead-field-half">
+              <label for="{{ form.phone.id_for_label }}">{{ form.phone.label }}{% if form.phone.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.phone }}
+              {{ form.phone.errors }}
+            </div>
 
-          <label for="{{ form.target_order_volume_min.id_for_label }}">{{ form.target_order_volume_min.label }}</label>
-          {{ form.target_order_volume_min }}
-          {{ form.target_order_volume_min.errors }}
+            <div class="lead-field lead-field-half">
+              <label for="{{ form.website.id_for_label }}">{{ form.website.label }}{% if form.website.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.website }}
+              {{ form.website.errors }}
+            </div>
 
-          <label for="{{ form.target_order_volume_max.id_for_label }}">{{ form.target_order_volume_max.label }}</label>
-          {{ form.target_order_volume_max }}
-          {{ form.target_order_volume_max.errors }}
+            <div class="lead-field lead-field-half">
+              <label for="{{ form.country.id_for_label }}">{{ form.country.label }}{% if form.country.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.country }}
+              {{ form.country.errors }}
+            </div>
+          </article>
 
-          <label for="{{ form.preferred_contact_time.id_for_label }}">{{ form.preferred_contact_time.label }}{% if form.preferred_contact_time.field.required %}<span class="req">*</span>{% endif %}</label>
-          {{ form.preferred_contact_time }}
-          {{ form.preferred_contact_time.errors }}
+          <article class="card lead-form-card">
+            <div class="card-title">Sales status</div>
 
-          <label for="{{ form.notes.id_for_label }}">{{ form.notes.label }}{% if form.notes.field.required %}<span class="req">*</span>{% endif %}</label>
-          {{ form.notes }}
-          {{ form.notes.errors }}
+            <div class="lead-field lead-field-half">
+              <label for="{{ form.lead_status.id_for_label }}">{{ form.lead_status.label }}{% if form.lead_status.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.lead_status }}
+              {{ form.lead_status.errors }}
+            </div>
+
+            <div class="lead-field lead-field-half">
+              <label for="{{ form.priority.id_for_label }}">{{ form.priority.label }}{% if form.priority.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.priority }}
+              {{ form.priority.errors }}
+            </div>
+
+            <div class="lead-field">
+              <label for="{{ form.assigned_to.id_for_label }}">{{ form.assigned_to.label }}</label>
+              {{ form.assigned_to }}
+              {{ form.assigned_to.errors }}
+            </div>
+
+            <div class="lead-field">
+              <label for="{{ form.next_follow_up_date.id_for_label }}">{{ form.next_follow_up_date.label }}</label>
+              {{ form.next_follow_up_date }}
+              {{ form.next_follow_up_date.errors }}
+            </div>
+          </article>
+
+          <article class="card lead-form-card">
+            <div class="card-title">Product and value</div>
+
+            <div class="lead-field">
+              <label for="{{ form.product_interest.id_for_label }}">{{ form.product_interest.label }}{% if form.product_interest.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.product_interest }}
+              {{ form.product_interest.errors }}
+            </div>
+
+            <div class="lead-field lead-field-half">
+              <label for="{{ form.order_quantity.id_for_label }}">{{ form.order_quantity.label }}{% if form.order_quantity.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.order_quantity }}
+              {{ form.order_quantity.errors }}
+            </div>
+
+            <div class="lead-field lead-field-half">
+              <label for="{{ form.budget.id_for_label }}">{{ form.budget.label }}{% if form.budget.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.budget }}
+              {{ form.budget.errors }}
+            </div>
+          </article>
+
+          <article class="card lead-form-card lead-notes-card">
+            <div class="card-title">Sales notes</div>
+            <div class="lead-field">
+              <label for="{{ form.notes.id_for_label }}">{{ form.notes.label }}{% if form.notes.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.notes }}
+              {{ form.notes.errors }}
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="lead-intel-section" aria-label="Sales intelligence">
+        <div class="lead-section-head">
+          <div>
+            <p class="lead-section-kicker">Sales intelligence</p>
+            <h2>Suggested move</h2>
+          </div>
+          <p>Read-only context from the saved lead. Edit underlying AI fields in Advanced / admin when needed.</p>
         </div>
 
-        <div class="card">
-          <div class="card-title">Source and status</div>
+        <div class="lead-intel-grid">
+          <article class="lead-intel-card">
+            <span>Lead summary</span>
+            <strong>
+              {% if lead %}
+                {{ lead.account_brand|default:"This lead" }}{% if lead.product_interest %} is interested in {{ lead.product_interest }}{% endif %}{% if lead.order_quantity %} for {{ lead.order_quantity }} units{% endif %}.
+              {% else %}
+                Save the lead to build a summary.
+              {% endif %}
+            </strong>
+          </article>
+          <article class="lead-intel-card">
+            <span>Recommended pitch</span>
+            <strong>{% if lead %}{{ lead.recommended_channel|default:"Use the best available contact channel." }}{% else %}Save the lead to show pitch guidance.{% endif %}</strong>
+          </article>
+          <article class="lead-intel-card">
+            <span>Next action</span>
+            <strong>{% if lead %}{{ lead.recommended_next_action|default:"Set a follow-up and qualify budget, timeline, and product fit." }}{% else %}Set the first follow-up after saving.{% endif %}</strong>
+          </article>
+          <article class="lead-intel-card">
+            <span>Confidence score</span>
+            <strong>
+              {% if lead.confidence_level %}
+                {{ lead.confidence_level }}%
+              {% elif lead.brand_fit_score %}
+                {{ lead.brand_fit_score }}%
+              {% else %}
+                Not scored
+              {% endif %}
+            </strong>
+          </article>
+          <article class="lead-intel-card">
+            <span>Ideal product category</span>
+            <strong>{% if lead %}{% firstof lead.product_category_guess lead.get_product_category_display "Not identified" %}{% else %}Not identified{% endif %}</strong>
+          </article>
+          <article class="lead-intel-card">
+            <span>Qualification summary</span>
+            <strong>{% if lead %}{% firstof lead.qualification_reason lead.get_qualification_status_display "No qualification summary yet." %}{% else %}No qualification summary yet.{% endif %}</strong>
+          </article>
+        </div>
+      </section>
 
-          <label for="{{ form.source.id_for_label }}">{{ form.source.label }}{% if form.source.field.required %}<span class="req">*</span>{% endif %}</label>
-          {{ form.source }}
-          {{ form.source.errors }}
-
-          <label for="{{ form.source_channel.id_for_label }}">{{ form.source_channel.label }}</label>
-          {{ form.source_channel }}
-          {{ form.source_channel.errors }}
-
-          <label for="{{ form.lead_type.id_for_label }}">{{ form.lead_type.label }}{% if form.lead_type.field.required %}<span class="req">*</span>{% endif %}</label>
-          {{ form.lead_type }}
-          {{ form.lead_type.errors }}
-
-          <label for="{{ form.brand_stage.id_for_label }}">{{ form.brand_stage.label }}</label>
-          {{ form.brand_stage }}
-          {{ form.brand_stage.errors }}
-
-          <div class="outbound-only">
-            <label for="{{ form.outbound_status.id_for_label }}">{{ form.outbound_status.label }}</label>
-            {{ form.outbound_status }}
-            {{ form.outbound_status.errors }}
+      <section class="lead-advanced-section" aria-label="Advanced admin fields">
+        <div class="lead-section-head">
+          <div>
+            <p class="lead-section-kicker">Advanced / admin</p>
+            <h2>Full lead data</h2>
           </div>
-
-          <div class="outbound-only">
-            <label for="{{ form.outbound_method.id_for_label }}">{{ form.outbound_method.label }}</label>
-            {{ form.outbound_method }}
-            {{ form.outbound_method.errors }}
-          </div>
-
-          <label for="{{ form.lead_status.id_for_label }}">{{ form.lead_status.label }}{% if form.lead_status.field.required %}<span class="req">*</span>{% endif %}</label>
-          {{ form.lead_status }}
-          {{ form.lead_status.errors }}
-
-          <label for="{{ form.priority.id_for_label }}">{{ form.priority.label }}{% if form.priority.field.required %}<span class="req">*</span>{% endif %}</label>
-          {{ form.priority }}
-          {{ form.priority.errors }}
-
-          <label for="{{ form.priority_level.id_for_label }}">{{ form.priority_level.label }}</label>
-          {{ form.priority_level }}
-          {{ form.priority_level.errors }}
-
-          <label for="{{ form.owner.id_for_label }}">{{ form.owner.label }}{% if form.owner.field.required %}<span class="req">*</span>{% endif %}</label>
-          {{ form.owner }}
-          {{ form.owner.errors }}
-
-          <label for="{{ form.assigned_to.id_for_label }}">{{ form.assigned_to.label }}</label>
-          {{ form.assigned_to }}
-          {{ form.assigned_to.errors }}
-
-          <div class="outbound-only">
-            <label for="{{ form.last_outreach_date.id_for_label }}">{{ form.last_outreach_date.label }}</label>
-            {{ form.last_outreach_date }}
-            {{ form.last_outreach_date.errors }}
-          </div>
-
-          <div class="outbound-only">
-            <label for="{{ form.last_reply_date.id_for_label }}">{{ form.last_reply_date.label }}</label>
-            {{ form.last_reply_date }}
-            {{ form.last_reply_date.errors }}
-          </div>
-
-          <label for="{{ form.next_follow_up_date.id_for_label }}">{{ form.next_follow_up_date.label }}</label>
-          {{ form.next_follow_up_date }}
-          {{ form.next_follow_up_date.errors }}
-
-          <label for="{{ form.attachment.id_for_label }}">{{ form.attachment.label }}{% if form.attachment.field.required %}<span class="req">*</span>{% endif %}</label>
-          {{ form.attachment }}
-          {{ form.attachment.errors }}
+          <p>Admin, raw qualification, targeting, and AI fields are collapsed by default.</p>
         </div>
 
-        <div class="card">
-          <div class="card-title">Fit and qualification</div>
+        <details class="lead-edit-accordion">
+          <summary>Advanced contact and market metadata</summary>
+          <div class="lead-accordion-grid">
+            <div class="lead-field">
+              <label for="{{ form.instagram_handle.id_for_label }}">{{ form.instagram_handle.label }}{% if form.instagram_handle.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.instagram_handle }}
+              {{ form.instagram_handle.errors }}
+            </div>
+            <div class="lead-field">
+              <label for="{{ form.linkedin_url.id_for_label }}">{{ form.linkedin_url.label }}{% if form.linkedin_url.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.linkedin_url }}
+              {{ form.linkedin_url.errors }}
+            </div>
+            <div class="lead-field">
+              <label for="{{ form.market.id_for_label }}">{{ form.market.label }}{% if form.market.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.market }}
+              {{ form.market.errors }}
+            </div>
+            <div class="lead-field">
+              <label for="{{ form.region.id_for_label }}">{{ form.region.label }}{% if form.region.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.region }}
+              {{ form.region.errors }}
+            </div>
+            <div class="lead-field">
+              <label for="{{ form.city.id_for_label }}">{{ form.city.label }}{% if form.city.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.city }}
+              {{ form.city.errors }}
+            </div>
+          </div>
+        </details>
 
-          <label for="{{ form.brand_fit_score.id_for_label }}">{{ form.brand_fit_score.label }}</label>
-          {{ form.brand_fit_score }}
-          {{ form.brand_fit_score.errors }}
+        <details class="lead-edit-accordion">
+          <summary>Product targeting and buying intent</summary>
+          <div class="lead-accordion-grid">
+            <div class="lead-field">
+              <label for="{{ form.product_category.id_for_label }}">{{ form.product_category.label }}{% if form.product_category.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.product_category }}
+              {{ form.product_category.errors }}
+            </div>
+            <div class="lead-field">
+              <label for="{{ form.target_order_volume_min.id_for_label }}">{{ form.target_order_volume_min.label }}</label>
+              {{ form.target_order_volume_min }}
+              {{ form.target_order_volume_min.errors }}
+            </div>
+            <div class="lead-field">
+              <label for="{{ form.target_order_volume_max.id_for_label }}">{{ form.target_order_volume_max.label }}</label>
+              {{ form.target_order_volume_max }}
+              {{ form.target_order_volume_max.errors }}
+            </div>
+            <div class="lead-field">
+              <label for="{{ form.preferred_contact_time.id_for_label }}">{{ form.preferred_contact_time.label }}{% if form.preferred_contact_time.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.preferred_contact_time }}
+              {{ form.preferred_contact_time.errors }}
+            </div>
+          </div>
+        </details>
 
-          <label for="{{ form.ideal_customer_profile_match.id_for_label }}">{{ form.ideal_customer_profile_match.label }}</label>
-          {{ form.ideal_customer_profile_match }}
-          {{ form.ideal_customer_profile_match.errors }}
+        <details class="lead-edit-accordion">
+          <summary>Source, ownership, and outreach internals</summary>
+          <div class="lead-accordion-grid">
+            <div class="lead-field">
+              <label for="{{ form.source.id_for_label }}">{{ form.source.label }}{% if form.source.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.source }}
+              {{ form.source.errors }}
+            </div>
+            <div class="lead-field">
+              <label for="{{ form.source_channel.id_for_label }}">{{ form.source_channel.label }}</label>
+              {{ form.source_channel }}
+              {{ form.source_channel.errors }}
+            </div>
+            <div class="lead-field">
+              <label for="{{ form.lead_type.id_for_label }}">{{ form.lead_type.label }}{% if form.lead_type.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.lead_type }}
+              {{ form.lead_type.errors }}
+            </div>
+            <div class="lead-field">
+              <label for="{{ form.brand_stage.id_for_label }}">{{ form.brand_stage.label }}</label>
+              {{ form.brand_stage }}
+              {{ form.brand_stage.errors }}
+            </div>
+            <div class="lead-field outbound-only">
+              <label for="{{ form.outbound_status.id_for_label }}">{{ form.outbound_status.label }}</label>
+              {{ form.outbound_status }}
+              {{ form.outbound_status.errors }}
+            </div>
+            <div class="lead-field outbound-only">
+              <label for="{{ form.outbound_method.id_for_label }}">{{ form.outbound_method.label }}</label>
+              {{ form.outbound_method }}
+              {{ form.outbound_method.errors }}
+            </div>
+            <div class="lead-field">
+              <label for="{{ form.priority_level.id_for_label }}">{{ form.priority_level.label }}</label>
+              {{ form.priority_level }}
+              {{ form.priority_level.errors }}
+            </div>
+            <div class="lead-field">
+              <label for="{{ form.owner.id_for_label }}">{{ form.owner.label }}{% if form.owner.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.owner }}
+              {{ form.owner.errors }}
+            </div>
+            <div class="lead-field outbound-only">
+              <label for="{{ form.last_outreach_date.id_for_label }}">{{ form.last_outreach_date.label }}</label>
+              {{ form.last_outreach_date }}
+              {{ form.last_outreach_date.errors }}
+            </div>
+            <div class="lead-field outbound-only">
+              <label for="{{ form.last_reply_date.id_for_label }}">{{ form.last_reply_date.label }}</label>
+              {{ form.last_reply_date }}
+              {{ form.last_reply_date.errors }}
+            </div>
+            <div class="lead-field">
+              <label for="{{ form.attachment.id_for_label }}">{{ form.attachment.label }}{% if form.attachment.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.attachment }}
+              {{ form.attachment.errors }}
+            </div>
+          </div>
+        </details>
 
-          <label for="{{ form.qualification_status.id_for_label }}">{{ form.qualification_status.label }}</label>
-          {{ form.qualification_status }}
-          {{ form.qualification_status.errors }}
-
-          <label for="{{ form.qualification_reason.id_for_label }}">{{ form.qualification_reason.label }}</label>
-          {{ form.qualification_reason }}
-          {{ form.qualification_reason.errors }}
-
-          <label for="{{ form.confidence_level.id_for_label }}">{{ form.confidence_level.label }}</label>
-          {{ form.confidence_level }}
-          {{ form.confidence_level.errors }}
-
-          <label for="{{ form.target_order_range_estimate.id_for_label }}">{{ form.target_order_range_estimate.label }}</label>
-          {{ form.target_order_range_estimate }}
-          {{ form.target_order_range_estimate.errors }}
-
-          <label for="{{ form.product_category_guess.id_for_label }}">{{ form.product_category_guess.label }}</label>
-          {{ form.product_category_guess }}
-          {{ form.product_category_guess.errors }}
-
-          <label for="{{ form.recommended_channel.id_for_label }}">{{ form.recommended_channel.label }}</label>
-          {{ form.recommended_channel }}
-          {{ form.recommended_channel.errors }}
-
-          <label for="{{ form.recommended_next_action.id_for_label }}">{{ form.recommended_next_action.label }}</label>
-          {{ form.recommended_next_action }}
-          {{ form.recommended_next_action.errors }}
-
-          <label for="{{ form.disqualification_reason.id_for_label }}">{{ form.disqualification_reason.label }}</label>
-          {{ form.disqualification_reason }}
-          {{ form.disqualification_reason.errors }}
-        </div>
-
-      </div>
+        <details class="lead-edit-accordion">
+          <summary>Raw qualification and AI analysis</summary>
+          <div class="lead-accordion-grid">
+            <div class="lead-field">
+              <label for="{{ form.brand_fit_score.id_for_label }}">{{ form.brand_fit_score.label }}</label>
+              {{ form.brand_fit_score }}
+              {{ form.brand_fit_score.errors }}
+            </div>
+            <div class="lead-field">
+              <label for="{{ form.ideal_customer_profile_match.id_for_label }}">{{ form.ideal_customer_profile_match.label }}</label>
+              {{ form.ideal_customer_profile_match }}
+              {{ form.ideal_customer_profile_match.errors }}
+            </div>
+            <div class="lead-field">
+              <label for="{{ form.qualification_status.id_for_label }}">{{ form.qualification_status.label }}</label>
+              {{ form.qualification_status }}
+              {{ form.qualification_status.errors }}
+            </div>
+            <div class="lead-field">
+              <label for="{{ form.confidence_level.id_for_label }}">{{ form.confidence_level.label }}</label>
+              {{ form.confidence_level }}
+              {{ form.confidence_level.errors }}
+            </div>
+            <div class="lead-field">
+              <label for="{{ form.target_order_range_estimate.id_for_label }}">{{ form.target_order_range_estimate.label }}</label>
+              {{ form.target_order_range_estimate }}
+              {{ form.target_order_range_estimate.errors }}
+            </div>
+            <div class="lead-field">
+              <label for="{{ form.product_category_guess.id_for_label }}">{{ form.product_category_guess.label }}</label>
+              {{ form.product_category_guess }}
+              {{ form.product_category_guess.errors }}
+            </div>
+            <div class="lead-field">
+              <label for="{{ form.recommended_channel.id_for_label }}">{{ form.recommended_channel.label }}</label>
+              {{ form.recommended_channel }}
+              {{ form.recommended_channel.errors }}
+            </div>
+            <div class="lead-field">
+              <label for="{{ form.recommended_next_action.id_for_label }}">{{ form.recommended_next_action.label }}</label>
+              {{ form.recommended_next_action }}
+              {{ form.recommended_next_action.errors }}
+            </div>
+            <div class="lead-field lead-field-wide">
+              <label for="{{ form.qualification_reason.id_for_label }}">{{ form.qualification_reason.label }}</label>
+              {{ form.qualification_reason }}
+              {{ form.qualification_reason.errors }}
+            </div>
+            <div class="lead-field lead-field-wide">
+              <label for="{{ form.disqualification_reason.id_for_label }}">{{ form.disqualification_reason.label }}</label>
+              {{ form.disqualification_reason }}
+              {{ form.disqualification_reason.errors }}
+            </div>
+          </div>
+        </details>
+      </section>
 
       <div class="actions">
         <button class="btn" type="submit" id="save-btn">
@@ -515,6 +695,7 @@
     (function () {
       const form = document.getElementById("lead-form");
       const saveBtn = document.getElementById("save-btn");
+      const saveTopBtn = document.getElementById("save-top-btn");
       const saving = document.getElementById("saving-indicator");
       const saved = document.getElementById("saved-indicator");
       if (!form || !saveBtn) return;
@@ -538,11 +719,19 @@
         toggleOutboundFields();
       }
 
+      document.querySelectorAll(".lead-edit-accordion").forEach((section) => {
+        if (section.querySelector(".errorlist li")) {
+          section.open = true;
+        }
+      });
+
       form.addEventListener("submit", function () {
         if (saving) saving.style.display = "inline-flex";
         if (saved) saved.style.display = "none";
         saveBtn.disabled = true;
+        if (saveTopBtn) saveTopBtn.disabled = true;
         saveBtn.textContent = "Saving";
+        if (saveTopBtn) saveTopBtn.textContent = "Saving";
       });
 
       const params = new URLSearchParams(window.location.search || "");
@@ -555,7 +744,9 @@
 
       if (hasErrors()) {
         saveBtn.disabled = false;
+        if (saveTopBtn) saveTopBtn.disabled = false;
         saveBtn.textContent = "{% if lead %}Update lead{% else %}Save lead{% endif %}";
+        if (saveTopBtn) saveTopBtn.textContent = "{% if lead %}Save changes{% else %}Save lead{% endif %}";
       }
     })();
   </script>
