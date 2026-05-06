@@ -12,9 +12,15 @@
 {% url 'accounting_bd_dashboard' as accounting_bd_url %}
 {% url 'production_profit_report' as production_profit_url %}
 {% url 'ai_hub' as ai_url %}
+{% url 'ai_assistant' as ai_assistant_url %}
+{% url 'lead_add' as lead_add_url %}
+{% url 'add_opportunity' as opportunity_add_url %}
+{% url 'lead_import_outbound' as lead_import_url %}
+{% url 'invoice_add' as invoice_add_url %}
+{% url 'leadbrain_discovery_job_create' as discovery_create_url %}
 {% url 'logout' as logout_url %}
 
-<link rel="stylesheet" href="{% static 'crm/dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'crm/dashboard.css' %}?v=top-actions-layer-20260505">
 
 <div class="dashboard-shell" data-dashboard-root data-density="comfortable">
   <section class="dashboard-topbar">
@@ -66,7 +72,7 @@
           </select>
         </form>
 
-        <div class="dashboard-control-pair">
+        <div class="dashboard-control-pair" aria-label="Dashboard display controls">
           <button class="dashboard-control-button" type="button" data-compact-toggle aria-pressed="false">
             <i data-lucide="panel-top"></i>
             Compact Mode
@@ -78,53 +84,162 @@
           </select>
         </div>
 
-        <details class="dashboard-menu">
-          <summary>
-            <i data-lucide="bell"></i>
-            Notifications
-            {% if dashboard_alerts_count %}
-              <span class="dashboard-alert-count">{{ dashboard_alerts_count }}</span>
-            {% endif %}
-          </summary>
-          <div class="dashboard-menu-panel">
-            <p class="dashboard-menu-title">Attention Queue</p>
-            <ul class="dashboard-menu-list">
-              {% for alert in dashboard_alerts %}
-                <li class="dashboard-menu-item">
-                  <strong>{{ alert.title }}</strong>
-                  <span>{{ alert.detail }}</span>
-                </li>
-              {% endfor %}
-            </ul>
-          </div>
-        </details>
+        <div class="dashboard-action-cluster" aria-label="Dashboard action center">
+          <details class="dashboard-menu dashboard-menu--notifications" data-dashboard-menu>
+            <summary aria-label="Open notification center">
+              <span class="dashboard-action-icon">
+                <i data-lucide="bell"></i>
+              </span>
+              <span class="dashboard-action-copy">
+                <span class="dashboard-action-label">Notifications</span>
+                <span class="dashboard-action-sub">Action queue</span>
+              </span>
+              {% if dashboard_alerts_count %}
+                <span class="dashboard-alert-count" aria-label="{{ dashboard_alerts_count }} unread notifications">{{ dashboard_alerts_count }}</span>
+              {% endif %}
+            </summary>
+            <div class="dashboard-menu-panel dashboard-menu-panel--notifications">
+              <div class="dashboard-menu-header">
+                <div>
+                  <p class="dashboard-menu-title">Notification Center</p>
+                  <span class="dashboard-menu-subtitle">{{ period_label }} operational signals</span>
+                </div>
+                <span class="dashboard-status-pill {% if dashboard_alerts_count %}dashboard-status-pill--warn{% else %}dashboard-status-pill--good{% endif %}">
+                  {{ dashboard_alerts_count }} open
+                </span>
+              </div>
+              <div class="dashboard-notification-scroll">
+                <section class="dashboard-notification-group">
+                  <div class="dashboard-notification-heading">
+                    <i data-lucide="calendar-clock"></i>
+                    <span>Overdue follow ups</span>
+                  </div>
+                  {% if overdue_followups %}
+                    <a class="dashboard-notification-item dashboard-notification-item--warn" href="{{ leads_url }}">
+                      <strong>{{ overdue_followups }} follow up{{ overdue_followups|pluralize }} overdue</strong>
+                      <span>Review the lead queue and work oldest follow-ups first.</span>
+                    </a>
+                  {% else %}
+                    <div class="dashboard-notification-empty">No overdue follow-ups.</div>
+                  {% endif %}
+                </section>
 
-        {% if ai_url %}
-          <a class="dashboard-ai-link" href="{{ ai_url }}">
-            <i data-lucide="sparkles"></i>
-            AI Assistant
-          </a>
-        {% endif %}
+                <section class="dashboard-notification-group">
+                  <div class="dashboard-notification-heading">
+                    <i data-lucide="stamp"></i>
+                    <span>Pending approvals</span>
+                  </div>
+                  {% if pending_invoice_approvals %}
+                    <a class="dashboard-notification-item dashboard-notification-item--neutral" href="{{ invoice_url }}">
+                      <strong>{{ pending_invoice_approvals }} invoice approval{{ pending_invoice_approvals|pluralize }} pending</strong>
+                      <span>Draft invoices are waiting for approval review.</span>
+                    </a>
+                  {% else %}
+                    <div class="dashboard-notification-empty">No invoice approvals waiting.</div>
+                  {% endif %}
+                </section>
 
-        <details class="dashboard-menu">
-          <summary>
-            <i data-lucide="plus"></i>
-            Quick Actions
-          </summary>
-          <div class="dashboard-menu-panel">
-            <p class="dashboard-menu-title">Shortcuts</p>
-            <ul class="dashboard-menu-list">
-              <li><a class="dashboard-menu-link" href="{{ leads_url }}">Lead pipeline</a></li>
-              <li><a class="dashboard-menu-link" href="{{ opps_url }}">Opportunity board</a></li>
-              <li><a class="dashboard-menu-link" href="{{ production_url }}">Production floor</a></li>
-              <li><a class="dashboard-menu-link" href="{{ shipment_url }}">Shipment queue</a></li>
-              <li><a class="dashboard-menu-link" href="{{ invoice_url }}">Invoices</a></li>
-              <li><a class="dashboard-menu-link" href="{{ accounting_url }}">Accounting home</a></li>
-              <li><a class="dashboard-menu-link" href="{{ accounting_bd_url }}">BD accounting</a></li>
-              <li><a class="dashboard-menu-link" href="{{ production_profit_url }}">Production profit</a></li>
-            </ul>
-          </div>
-        </details>
+                <section class="dashboard-notification-group">
+                  <div class="dashboard-notification-heading">
+                    <i data-lucide="factory"></i>
+                    <span>Production alerts</span>
+                  </div>
+                  {% if production_hold_count or ship_delayed_total %}
+                    {% if production_hold_count %}
+                      <a class="dashboard-notification-item dashboard-notification-item--warn" href="{{ production_url }}">
+                        <strong>{{ production_hold_count }} production order{{ production_hold_count|pluralize }} on hold</strong>
+                        <span>Review paused production work before it blocks delivery.</span>
+                      </a>
+                    {% endif %}
+                    {% if ship_delayed_total %}
+                      <a class="dashboard-notification-item dashboard-notification-item--warn" href="{{ shipment_url }}">
+                        <strong>{{ ship_delayed_total }} delayed shipment{{ ship_delayed_total|pluralize }}</strong>
+                        <span>Check tracking status and client communication.</span>
+                      </a>
+                    {% endif %}
+                  {% else %}
+                    <div class="dashboard-notification-empty">No production or shipment alerts.</div>
+                  {% endif %}
+                </section>
+
+                <section class="dashboard-notification-group">
+                  <div class="dashboard-notification-heading">
+                    <i data-lucide="sparkles"></i>
+                    <span>Recent AI insights</span>
+                  </div>
+                  {% for note in ai_notes %}
+                    <div class="dashboard-notification-item dashboard-notification-item--ai">
+                      <strong>{{ note }}</strong>
+                    </div>
+                  {% empty %}
+                    <div class="dashboard-notification-empty">No AI insights available.</div>
+                  {% endfor %}
+                </section>
+              </div>
+            </div>
+          </details>
+
+          {% if ai_url %}
+            <a class="dashboard-ai-link" href="{{ ai_url }}">
+              <i data-lucide="sparkles"></i>
+              AI Assistant
+            </a>
+          {% endif %}
+
+          <details class="dashboard-menu dashboard-menu--actions" data-dashboard-menu>
+            <summary aria-label="Open quick action launcher">
+              <span class="dashboard-action-icon dashboard-action-icon--hot">
+                <i data-lucide="zap"></i>
+              </span>
+              <span class="dashboard-action-copy">
+                <span class="dashboard-action-label">Quick Actions</span>
+                <span class="dashboard-action-sub">Launch workflow</span>
+              </span>
+              <i class="dashboard-action-chevron" data-lucide="chevron-down"></i>
+            </summary>
+            <div class="dashboard-menu-panel dashboard-menu-panel--actions">
+              <div class="dashboard-menu-header">
+                <div>
+                  <p class="dashboard-menu-title">Action Launcher</p>
+                  <span class="dashboard-menu-subtitle">Create, import, and open AI workflows</span>
+                </div>
+              </div>
+              <div class="dashboard-action-sections">
+                <section class="dashboard-action-section">
+                  <p class="dashboard-action-section-title">Sales</p>
+                  <a class="dashboard-action-link dashboard-action-link--primary" href="{{ lead_add_url }}">
+                    <span class="dashboard-action-link-icon"><i data-lucide="user-plus"></i></span>
+                    <span><strong>Add Lead</strong><small>Create a new lead record</small></span>
+                  </a>
+                  <a class="dashboard-action-link" href="{{ opportunity_add_url }}">
+                    <span class="dashboard-action-link-icon"><i data-lucide="briefcase-business"></i></span>
+                    <span><strong>Add Opportunity</strong><small>Open a new sales opportunity</small></span>
+                  </a>
+                  <a class="dashboard-action-link" href="{{ lead_import_url }}">
+                    <span class="dashboard-action-link-icon"><i data-lucide="upload-cloud"></i></span>
+                    <span><strong>Upload Leads</strong><small>Import outbound lead CSV</small></span>
+                  </a>
+                </section>
+
+                <section class="dashboard-action-section">
+                  <p class="dashboard-action-section-title">Operations</p>
+                  <a class="dashboard-action-link" href="{{ invoice_add_url }}">
+                    <span class="dashboard-action-link-icon"><i data-lucide="receipt-text"></i></span>
+                    <span><strong>Create Invoice</strong><small>Start a new billing record</small></span>
+                  </a>
+                  <a class="dashboard-action-link" href="{{ discovery_create_url }}">
+                    <span class="dashboard-action-link-icon"><i data-lucide="radar"></i></span>
+                    <span><strong>Start Discovery Job</strong><small>Launch lead discovery</small></span>
+                  </a>
+                  <a class="dashboard-action-link" href="{{ ai_assistant_url|default:ai_url }}">
+                    <span class="dashboard-action-link-icon"><i data-lucide="sparkles"></i></span>
+                    <span><strong>Open AI Assistant</strong><small>Ask for CRM support</small></span>
+                  </a>
+                </section>
+              </div>
+            </div>
+          </details>
+        </div>
 
         <details class="dashboard-menu">
           <summary>
@@ -824,5 +939,5 @@
 
 <script defer src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script src="{% static 'crm/dashboard.js' %}"></script>
+<script src="{% static 'crm/dashboard.js' %}?v=top-actions-layer-20260505"></script>
 {% endblock %}

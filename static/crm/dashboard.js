@@ -36,6 +36,55 @@
 
   applyPrefs();
 
+  const dashboardMenus = Array.from(root.querySelectorAll("[data-dashboard-menu], .dashboard-toolbar-actions > .dashboard-menu"));
+
+  function syncDashboardMenuState() {
+    const hasOpenMenu = dashboardMenus.some(function (menu) {
+      return menu.open;
+    });
+    root.classList.toggle("has-dashboard-menu-open", hasOpenMenu);
+  }
+
+  function closeDashboardMenus(exceptMenu) {
+    dashboardMenus.forEach(function (menu) {
+      if (menu !== exceptMenu) {
+        menu.open = false;
+      }
+    });
+  }
+
+  dashboardMenus.forEach(function (menu) {
+    menu.addEventListener("toggle", function () {
+      if (menu.open) {
+        closeDashboardMenus(menu);
+      }
+      syncDashboardMenuState();
+    });
+  });
+
+  document.addEventListener("click", function (event) {
+    if (!dashboardMenus.length) return;
+    const target = event.target;
+    dashboardMenus.forEach(function (menu) {
+      if (menu.open && !menu.contains(target)) {
+        menu.open = false;
+      }
+    });
+    syncDashboardMenuState();
+  });
+
+  document.addEventListener("keydown", function (event) {
+    if (event.key !== "Escape") return;
+    const openMenu = dashboardMenus.find(function (menu) {
+      return menu.open;
+    });
+    if (!openMenu) return;
+    openMenu.open = false;
+    syncDashboardMenuState();
+    const summary = openMenu.querySelector("summary");
+    if (summary) summary.focus();
+  });
+
   const searchForm = root.querySelector("[data-search-form]");
   if (searchForm) {
     searchForm.addEventListener("submit", function (event) {
