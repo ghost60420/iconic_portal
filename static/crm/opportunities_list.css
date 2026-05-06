@@ -1,0 +1,611 @@
+.opp-page {
+  --opp-bg: #050b14;
+  --opp-panel: rgba(10, 20, 36, 0.86);
+  --opp-panel-strong: rgba(12, 24, 43, 0.94);
+  --opp-line: rgba(148, 163, 184, 0.18);
+  --opp-line-strong: rgba(148, 163, 184, 0.3);
+  --opp-text: #f8fafc;
+  --opp-soft: #d7e2f2;
+  --opp-muted: #94a3b8;
+  --opp-green: #22c55e;
+  --opp-sky: #38bdf8;
+  --opp-amber: #f59e0b;
+  --opp-violet: #a855f7;
+  --opp-red: #fb7185;
+  --opp-shadow: 0 28px 70px rgba(2, 8, 23, 0.42);
+  width: min(1680px, calc(100vw - 28px));
+  margin: 18px auto 54px;
+  color: var(--opp-text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.opp-page *,
+.opp-page *::before,
+.opp-page *::after {
+  box-sizing: border-box;
+}
+
+.opp-page a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.opp-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 22px;
+  align-items: start;
+  padding: 24px;
+  border: 1px solid var(--opp-line);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 15% 0%, rgba(56, 189, 248, 0.16), transparent 28rem),
+    radial-gradient(circle at 92% 18%, rgba(34, 197, 94, 0.12), transparent 28rem),
+    linear-gradient(135deg, rgba(14, 27, 48, 0.96), rgba(7, 13, 24, 0.96));
+  box-shadow: var(--opp-shadow);
+  backdrop-filter: blur(18px);
+}
+
+.opp-eyebrow {
+  margin: 0 0 8px;
+  color: #7dd3fc;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.opp-title {
+  margin: 0;
+  color: var(--opp-text);
+  font-size: clamp(30px, 3vw, 44px);
+  line-height: 1.02;
+  font-weight: 850;
+  letter-spacing: 0;
+}
+
+.opp-subtitle {
+  max-width: 780px;
+  margin: 12px 0 0;
+  color: var(--opp-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.opp-hero-actions,
+.opp-row-actions,
+.opp-pager-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  align-items: center;
+}
+
+.opp-hero-actions {
+  justify-content: flex-end;
+  max-width: 560px;
+}
+
+.opp-btn,
+.opp-sort-btn,
+.opp-page-chip,
+.opp-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid var(--opp-line);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.opp-btn--primary {
+  color: #03131d;
+  border-color: rgba(34, 197, 94, 0.3);
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.96), rgba(45, 212, 191, 0.92));
+  box-shadow: 0 14px 28px rgba(34, 197, 94, 0.14);
+}
+
+.opp-btn--ghost,
+.opp-sort-btn,
+.opp-page-chip,
+.opp-tab {
+  color: var(--opp-soft);
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: 0 12px 24px rgba(2, 8, 23, 0.18);
+}
+
+.opp-btn--tiny {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 11px;
+  font-size: 11px;
+}
+
+.opp-btn:hover,
+.opp-sort-btn:hover,
+.opp-tab:hover {
+  transform: translateY(-1px);
+  border-color: rgba(125, 211, 252, 0.36);
+  box-shadow: 0 16px 32px rgba(2, 8, 23, 0.28);
+  text-decoration: none;
+}
+
+.opp-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.opp-stat {
+  min-height: 112px;
+  padding: 18px;
+  border: 1px solid var(--opp-line);
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgba(12, 24, 43, 0.9), rgba(7, 13, 24, 0.92)),
+    rgba(7, 13, 24, 0.88);
+  box-shadow: 0 18px 42px rgba(2, 8, 23, 0.28);
+}
+
+.opp-stat span {
+  display: block;
+  color: var(--opp-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.opp-stat strong {
+  display: block;
+  margin-top: 12px;
+  color: var(--opp-text);
+  font-size: 28px;
+  line-height: 1;
+  font-weight: 850;
+}
+
+.opp-stat small {
+  display: block;
+  margin-top: 9px;
+  color: var(--opp-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.opp-tabs {
+  display: flex;
+  gap: 10px;
+  margin: 16px 0 0;
+  padding: 2px 0 4px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.opp-tab {
+  min-height: 38px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+}
+
+.opp-tab.active,
+.opp-sort-btn.active,
+.opp-page-chip {
+  color: #dffcf0;
+  border-color: rgba(34, 197, 94, 0.34);
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.16), rgba(56, 189, 248, 0.1));
+  box-shadow: 0 14px 30px rgba(34, 197, 94, 0.1);
+}
+
+.opp-panel,
+.opp-table-shell {
+  margin-top: 16px;
+  border: 1px solid var(--opp-line);
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(12, 24, 43, 0.9), rgba(7, 13, 24, 0.92)),
+    rgba(7, 13, 24, 0.9);
+  box-shadow: var(--opp-shadow);
+  backdrop-filter: blur(18px);
+}
+
+.opp-panel {
+  padding: 18px;
+}
+
+.opp-panel-head,
+.opp-table-head,
+.opp-pager {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.opp-panel-title,
+.opp-table-title {
+  margin: 0;
+  color: var(--opp-text);
+  font-size: 16px;
+  line-height: 1.2;
+  font-weight: 850;
+}
+
+.opp-panel-note,
+.opp-muted {
+  color: var(--opp-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.opp-panel-note {
+  margin: 6px 0 0;
+}
+
+.opp-filters {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(145px, 1fr));
+  gap: 12px;
+  align-items: end;
+  margin: 16px 0 0;
+}
+
+.opp-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.opp-field--wide {
+  grid-column: span 2;
+}
+
+.opp-label {
+  color: #9fb0c4;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.opp-input {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--opp-line);
+  border-radius: 14px;
+  outline: 0;
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--opp-text);
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.opp-input:focus,
+.opp-btn:focus-visible,
+.opp-tab:focus-visible,
+.opp-sort-btn:focus-visible {
+  outline: 2px solid rgba(125, 211, 252, 0.75);
+  outline-offset: 2px;
+  border-color: rgba(125, 211, 252, 0.46);
+}
+
+.opp-filter-actions {
+  display: flex;
+  align-items: end;
+}
+
+.opp-table-shell {
+  overflow: hidden;
+}
+
+.opp-table-head {
+  padding: 18px 18px 0;
+}
+
+.opp-table-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.opp-sort-toggle {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.opp-sort-btn,
+.opp-page-chip {
+  min-width: 42px;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 12px;
+}
+
+.opp-table-wrap {
+  width: 100%;
+  overflow: auto;
+  margin-top: 14px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.opp-table {
+  width: 100%;
+  min-width: 1220px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
+
+.opp-table th,
+.opp-table td {
+  padding: 14px 12px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.11);
+  text-align: left;
+  vertical-align: top;
+}
+
+.opp-table th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: rgba(7, 13, 24, 0.96);
+  color: #9fb0c4;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  backdrop-filter: blur(10px);
+}
+
+.opp-table tbody tr {
+  background: rgba(255, 255, 255, 0.018);
+  transition: background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.opp-table tbody tr:hover {
+  background: rgba(56, 189, 248, 0.07);
+  box-shadow: inset 3px 0 0 rgba(56, 189, 248, 0.65);
+}
+
+.opp-primary-cell {
+  min-width: 280px;
+}
+
+.opp-primary,
+.opp-value-stack,
+.opp-product-stack,
+.opp-date-stack,
+.opp-next-action {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.opp-primary strong,
+.opp-value-stack strong,
+.opp-product-stack strong,
+.opp-date-stack strong {
+  color: var(--opp-text);
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.opp-primary span,
+.opp-value-stack span,
+.opp-product-stack span,
+.opp-date-stack span {
+  color: var(--opp-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.opp-link {
+  color: #7dd3fc;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.opp-link:hover {
+  color: #bae6fd;
+  text-decoration: none;
+}
+
+.opp-stage-badge,
+.opp-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  background: rgba(148, 163, 184, 0.1);
+  color: #e2e8f0;
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.opp-status-pill {
+  margin-top: 7px;
+}
+
+.opp-stage-badge[data-stage="Prospecting"] { border-color: rgba(96, 165, 250, 0.42); color: #dbeafe; background: rgba(59, 130, 246, 0.13); }
+.opp-stage-badge[data-stage="Qualification"] { border-color: rgba(56, 189, 248, 0.42); color: #e0f2fe; background: rgba(56, 189, 248, 0.13); }
+.opp-stage-badge[data-stage="Needs Analysis"] { border-color: rgba(34, 211, 238, 0.42); color: #cffafe; background: rgba(34, 211, 238, 0.13); }
+.opp-stage-badge[data-stage="Proposal"] { border-color: rgba(250, 204, 21, 0.42); color: #fef3c7; background: rgba(250, 204, 21, 0.13); }
+.opp-stage-badge[data-stage="Negotiation"] { border-color: rgba(251, 146, 60, 0.42); color: #ffedd5; background: rgba(251, 146, 60, 0.13); }
+.opp-stage-badge[data-stage="Sampling"] { border-color: rgba(167, 139, 250, 0.42); color: #ede9fe; background: rgba(139, 92, 246, 0.13); }
+.opp-stage-badge[data-stage="Production"] { border-color: rgba(45, 212, 191, 0.42); color: #ccfbf1; background: rgba(45, 212, 191, 0.13); }
+.opp-stage-badge[data-stage="Shipment Complete"],
+.opp-stage-badge[data-stage="Closed Won"] { border-color: rgba(34, 197, 94, 0.42); color: #bbf7d0; background: rgba(34, 197, 94, 0.13); }
+.opp-stage-badge[data-stage="Closed Lost"] { border-color: rgba(248, 113, 113, 0.42); color: #fee2e2; background: rgba(248, 113, 113, 0.13); }
+
+.opp-status-pill.open {
+  border-color: rgba(34, 197, 94, 0.36);
+  color: #bbf7d0;
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.opp-status-pill.closed_won {
+  border-color: rgba(34, 197, 94, 0.42);
+  color: #bbf7d0;
+  background: rgba(34, 197, 94, 0.13);
+}
+
+.opp-status-pill.closed_lost {
+  border-color: rgba(248, 113, 113, 0.42);
+  color: #fee2e2;
+  background: rgba(248, 113, 113, 0.13);
+}
+
+.opp-next-action {
+  max-width: 260px;
+  color: var(--opp-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.opp-empty-state {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 38px 18px;
+  text-align: center;
+}
+
+.opp-empty-state strong {
+  color: var(--opp-text);
+  font-size: 18px;
+  font-weight: 850;
+}
+
+.opp-empty-state span {
+  max-width: 460px;
+  color: var(--opp-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.opp-pager {
+  align-items: center;
+  padding: 16px 18px 18px;
+}
+
+@media (max-width: 1180px) {
+  .opp-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .opp-hero-actions {
+    justify-content: flex-start;
+    max-width: none;
+  }
+
+  .opp-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .opp-filters {
+    grid-template-columns: repeat(3, minmax(145px, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .opp-page {
+    width: min(100% - 18px, 1680px);
+    margin-top: 12px;
+  }
+
+  .opp-hero,
+  .opp-panel {
+    padding: 16px;
+    border-radius: 22px;
+  }
+
+  .opp-summary-grid,
+  .opp-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .opp-field--wide {
+    grid-column: span 1;
+  }
+
+  .opp-filter-actions,
+  .opp-filter-actions .opp-btn,
+  .opp-hero-actions .opp-btn {
+    width: 100%;
+  }
+
+  .opp-table-head,
+  .opp-pager {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .opp-table,
+  .opp-table thead,
+  .opp-table tbody,
+  .opp-table th,
+  .opp-table td,
+  .opp-table tr {
+    display: block;
+    min-width: 0;
+  }
+
+  .opp-table thead {
+    display: none;
+  }
+
+  .opp-table tbody tr {
+    margin: 12px 12px 0;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    border-radius: 18px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .opp-table td {
+    display: grid;
+    grid-template-columns: 124px minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+    padding: 12px;
+  }
+
+  .opp-table td::before {
+    content: attr(data-label);
+    color: var(--opp-muted);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  .opp-row-actions {
+    align-items: stretch;
+  }
+
+  .opp-row-actions .opp-btn,
+  .opp-pager-actions,
+  .opp-pager-actions .opp-btn {
+    width: 100%;
+  }
+}

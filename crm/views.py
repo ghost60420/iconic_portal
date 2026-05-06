@@ -9538,7 +9538,7 @@ def opportunities_list(request):
     active_stages = _active_opportunity_stages()
     qs = (
         Opportunity.objects
-        .select_related("lead")
+        .select_related("lead", "lead__assigned_to")
         .exclude(stage="Production")
         .exclude(productionorder__isnull=False)
     )
@@ -9584,6 +9584,10 @@ def opportunities_list(request):
     if value_max is not None:
         qs = qs.filter(order_value__lte=value_max)
 
+    today = timezone.localdate()
+    summary = qs.aggregate(pipeline_value=Sum("order_value"))
+    due_followups = qs.filter(next_followup__isnull=False, next_followup__lte=today).count()
+
     if sort == "old":
         qs = qs.order_by("created_date", "id")
     else:
@@ -9597,5 +9601,8 @@ def opportunities_list(request):
         "page_obj": page_obj,
         "per_page": per_page,
         "stage_choices": Opportunity.STAGE_CHOICES,
+        "pipeline_value": summary.get("pipeline_value") or 0,
+        "due_followups": due_followups,
+        "visible_count": len(page_obj.object_list),
     }
     return render(request, "crm/opportunities_list.html", context)
