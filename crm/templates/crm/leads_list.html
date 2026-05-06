@@ -452,52 +452,72 @@
   }
 </style>
 
-<div class="page">
+<link rel="stylesheet" href="{% static 'crm/leads_list.css' %}?v=modern-list-20260506">
 
-  <div class="page-header">
+<div class="lead-page">
+  <div class="lead-shell">
+
+  <section class="lead-hero">
     <div>
-      <h1 class="page-title">Leads</h1>
-      <div class="page-subtitle">
-        Total <strong>{{ page_obj.paginator.count }}</strong> leads.
-        <span class="muted">
-          {% if request.GET.sort == "old" %}
-            Sorted oldest first.
-          {% else %}
-            Sorted newest first.
-          {% endif %}
-        </span>
-      </div>
+      <p class="lead-eyebrow">Sales Workspace</p>
+      <h1 class="lead-title">Leads</h1>
+      <p class="lead-subtitle">
+        A focused CRM list for scanning active leads, source quality, follow-up timing, and ownership without changing the lead workflow.
+      </p>
     </div>
 
-    <div class="page-actions">
-      <a href="/leads/add/" class="btn-main">Add lead</a>
-      <a href="/leads/quick-add/" class="btn-ghost">Quick add outbound</a>
-      <a href="/leads/import/" class="btn-ghost">Import outbound CSV</a>
-      <a href="/leads/intake/" class="btn-ghost">Lead intake</a>
-      <a href="/leads/dashboard/" class="btn-ghost">Lead dashboard</a>
-      <a href="/opportunities/" class="btn-ghost">View opportunities</a>
+    <div class="lead-hero-actions">
+      <a href="{% url 'lead_add' %}" class="lead-btn lead-btn--primary">Add lead</a>
+      <a href="{% url 'lead_quick_add' %}" class="lead-btn lead-btn--ghost">Quick add outbound</a>
+      <a href="{% url 'lead_import_outbound' %}" class="lead-btn lead-btn--ghost">Import CSV</a>
+      <a href="{% url 'lead_intake_dashboard' %}" class="lead-btn lead-btn--ghost">Lead intake</a>
+      <a href="{% url 'leads_dashboard' %}" class="lead-btn lead-btn--ghost">Analytics</a>
+      <a href="{% url 'opportunities_list' %}" class="lead-btn lead-btn--ghost">Opportunities</a>
     </div>
-  </div>
+  </section>
 
-  <div class="tabs">
+  <section class="lead-summary-grid" aria-label="Lead list summary">
+    <div class="lead-stat">
+      <span>Matching leads</span>
+      <strong>{{ page_obj.paginator.count }}</strong>
+      <small>{{ active_view|default:"all"|title }} view</small>
+    </div>
+    <div class="lead-stat">
+      <span>Rows visible</span>
+      <strong>{{ page_obj|length }}</strong>
+      <small>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</small>
+    </div>
+    <div class="lead-stat">
+      <span>Sort order</span>
+      <strong>{% if request.GET.sort == "old" %}Oldest{% else %}Newest{% endif %}</strong>
+      <small>Created date priority</small>
+    </div>
+    <div class="lead-stat">
+      <span>Density</span>
+      <strong>{{ per_page }}</strong>
+      <small>Leads per page</small>
+    </div>
+  </section>
+
+  <nav class="lead-tabs tabs" aria-label="Lead list views">
     <a class="tab {% if active_view == 'all' %}active{% endif %}" href="?view=all">All Leads</a>
-    <a class="tab {% if active_view == 'inbound' %}active{% endif %}" href="?view=inbound">Inbound Leads</a>
-    <a class="tab {% if active_view == 'outbound' %}active{% endif %}" href="?view=outbound">Outbound Leads</a>
+    <a class="tab {% if active_view == 'inbound' %}active{% endif %}" href="?view=inbound">Inbound</a>
+    <a class="tab {% if active_view == 'outbound' %}active{% endif %}" href="?view=outbound">Outbound</a>
     <a class="tab {% if active_view == 'followup' %}active{% endif %}" href="?view=followup">Follow Up Needed</a>
     <a class="tab {% if active_view == 'replied' %}active{% endif %}" href="?view=replied">Replied</a>
     <a class="tab {% if active_view == 'meeting' %}active{% endif %}" href="?view=meeting">Meeting Booked</a>
-    <a class="tab {% if active_view == 'high_fit' %}active{% endif %}" href="?view=high_fit">High Fit Brands</a>
-    <a class="tab {% if active_view == 'target_volume' %}active{% endif %}" href="?view=target_volume">1,000 to 5,000 pcs Target</a>
+    <a class="tab {% if active_view == 'high_fit' %}active{% endif %}" href="?view=high_fit">High Fit</a>
+    <a class="tab {% if active_view == 'target_volume' %}active{% endif %}" href="?view=target_volume">1,000 to 5,000 pcs</a>
     <a class="tab {% if active_view == 'no_response' %}active{% endif %}" href="?view=no_response">No Response</a>
     <a class="tab {% if active_view == 'archived' %}active{% endif %}" href="?view=archived">Archived</a>
-  </div>
+  </nav>
 
-  <div class="card">
+  <section class="lead-panel lead-ai-panel">
     <div class="ai-row">
       <div>
         <div class="card-title">Lead AI overview</div>
         <div class="card-note">
-          Ask for a quick overview, today focus, risk leads, or hot leads.
+          Current view context for pipeline focus, risk review, and hot lead prioritization.
         </div>
       </div>
 
@@ -526,12 +546,15 @@
     <div id="leads-ai-output" class="ai-output">
       Ready. Click Ask AI.
     </div>
-  </div>
+  </section>
 
-  <div class="card">
-    <div class="card-title">Filters</div>
-    <div class="card-note">
-      Use these to find leads fast. Filters apply across inbound and outbound.
+  <section class="lead-panel">
+    <div class="lead-panel-head">
+      <div>
+        <div class="card-title">Search and filters</div>
+        <div class="card-note">Filters apply across inbound and outbound leads.</div>
+      </div>
+      <a class="lead-btn lead-btn--ghost lead-btn--tiny" href="{% url 'leads_list' %}">Clear filters</a>
     </div>
 
     <form method="get" class="filters">
@@ -685,7 +708,7 @@
         <a class="btn-ghost" href="{% url 'leads_list' %}">Clear</a>
       </div>
     </form>
-  </div>
+  </section>
 
   <div class="table-shell">
     <div class="table-head">
@@ -749,10 +772,9 @@
       <table>
         <thead>
           <tr>
-            <th><input type="checkbox" id="select-all"></th>
-            <th>Lead id</th>
-            <th>Company</th>
-            <th>Lead name</th>
+            <th class="lead-select-cell"><input type="checkbox" id="select-all" aria-label="Select all leads"></th>
+            <th>Lead</th>
+            <th>Contact</th>
             <th>Lead type</th>
             <th>Lead status</th>
             <th>Source channel</th>
@@ -766,28 +788,61 @@
             <th>Last outreach</th>
             <th>Next follow up</th>
             <th>Created</th>
+            <th>Actions</th>
           </tr>
         </thead>
 
         <tbody>
           {% for lead in page_obj %}
             <tr>
-              <td><input type="checkbox" name="lead_ids" value="{{ lead.pk }}"></td>
-              <td>
-                <a href="{% url 'lead_detail' lead.pk %}" class="lead-link">
-                  {{ lead.lead_id }}
-                </a>
+              <td class="lead-select-cell" data-label="Select">
+                <input type="checkbox" name="lead_ids" value="{{ lead.pk }}" aria-label="Select {{ lead.lead_id }}">
               </td>
-              <td>{{ lead.account_brand|default:"—" }}</td>
-              <td>{{ lead.contact_name|default:"—" }}</td>
-              <td>
+              <td class="lead-primary" data-label="Lead">
+                <div class="lead-company-name">
+                  <div class="lead-id-line">
+                    <a href="{% url 'lead_detail' lead.pk %}" class="lead-link">{{ lead.lead_id }}</a>
+                    {% if lead.source_channel %}
+                      <span class="lead-source-badge">{{ lead.source_channel }}</span>
+                    {% elif lead.source %}
+                      <span class="lead-source-badge">{{ lead.source }}</span>
+                    {% else %}
+                      <span class="muted">No source</span>
+                    {% endif %}
+                  </div>
+                  <strong>{{ lead.account_brand|default:"—" }}</strong>
+                  <span class="muted">
+                    {% if lead.country %}{{ lead.country }}{% else %}Unknown country{% endif %}
+                    {% if lead.city %} · {{ lead.city }}{% endif %}
+                  </span>
+                </div>
+              </td>
+              <td data-label="Contact">
+                <div class="lead-contact">
+                  <strong>{{ lead.contact_name|default:"—" }}</strong>
+                  <div class="lead-contact-line">
+                    {% if lead.email %}<span class="muted">{{ lead.email }}</span>{% endif %}
+                    {% if lead.phone %}<span class="muted">{{ lead.phone }}</span>{% endif %}
+                    {% if not lead.email and not lead.phone %}<span class="muted">No contact detail</span>{% endif %}
+                  </div>
+                </div>
+              </td>
+              <td data-label="Lead type">
                 <span class="badge {% if lead.lead_type == 'outbound' %}lead-outbound{% else %}lead-inbound{% endif %}">
                   {{ lead.get_lead_type_display }}
                 </span>
               </td>
-              <td><span class="badge" data-status="{{ lead.lead_status }}">{{ lead.lead_status }}</span></td>
-              <td>{% if lead.source_channel %}{{ lead.source_channel }}{% else %}<span class="muted">—</span>{% endif %}</td>
-              <td>
+              <td data-label="Lead status"><span class="badge" data-status="{{ lead.lead_status }}">{{ lead.lead_status }}</span></td>
+              <td data-label="Source channel">
+                {% if lead.source_channel %}
+                  <span class="lead-source-badge">{{ lead.source_channel }}</span>
+                {% elif lead.source %}
+                  <span class="lead-source-badge">{{ lead.source }}</span>
+                {% else %}
+                  <span class="muted">—</span>
+                {% endif %}
+              </td>
+              <td data-label="Outbound status">
                 {% if lead.outbound_status %}
                   <span class="badge" data-outbound="{{ lead.outbound_status }}">{{ lead.outbound_status }}</span>
                 {% else %}
@@ -795,7 +850,7 @@
                 {% endif %}
               </td>
 
-              <td>
+              <td data-label="Assigned to">
                 {% if lead.assigned_to %}
                   <span class="badge">
                     {% if lead.assigned_to.get_full_name %}
@@ -811,9 +866,9 @@
                 {% endif %}
               </td>
 
-              <td>{{ lead.country|default:"—" }}</td>
-              <td>{{ lead.get_product_interest_display|default:lead.product_interest|default:"—" }}</td>
-              <td>
+              <td data-label="Country">{{ lead.country|default:"—" }}</td>
+              <td data-label="Product interest">{{ lead.get_product_interest_display|default:lead.product_interest|default:"—" }}</td>
+              <td data-label="Target volume">
                 {% if lead.target_order_volume_min or lead.target_order_volume_max %}
                   {% if lead.target_order_volume_min and lead.target_order_volume_max %}
                     {{ lead.target_order_volume_min }} - {{ lead.target_order_volume_max }}
@@ -826,35 +881,77 @@
                   <span class="muted">—</span>
                 {% endif %}
               </td>
-              <td>
+              <td data-label="Fit score">
                 {% if lead.brand_fit_score or lead.brand_fit_score == 0 %}
-                  {{ lead.brand_fit_score }}
+                  <span class="lead-score {% if lead.brand_fit_score >= 70 %}lead-score--high{% elif lead.brand_fit_score >= 40 %}lead-score--medium{% else %}lead-score--low{% endif %}">
+                    {{ lead.brand_fit_score }}
+                  </span>
                 {% else %}
                   <span class="muted">—</span>
                 {% endif %}
               </td>
-              <td>
+              <td data-label="Qualification">
                 {% if lead.qualification_status %}
                   <span class="badge" data-qual="{{ lead.qualification_status }}">{{ lead.qualification_status }}</span>
                 {% else %}
                   <span class="muted">—</span>
                 {% endif %}
               </td>
-              <td>{% if lead.last_outreach_date %}{{ lead.last_outreach_date }}{% else %}<span class="muted">—</span>{% endif %}</td>
-              <td>
+              <td data-label="Last contact">
+                <div class="lead-date-stack">
+                  {% if lead.last_reply_date %}
+                    <strong>{{ lead.last_reply_date }}</strong>
+                    <span class="muted">reply</span>
+                  {% elif lead.last_outreach_date %}
+                    <strong>{{ lead.last_outreach_date }}</strong>
+                    <span class="muted">outreach</span>
+                  {% else %}
+                    <span class="muted">—</span>
+                  {% endif %}
+                </div>
+              </td>
+              <td data-label="Next follow up">
                 {% if lead.next_follow_up_date %}
-                  {{ lead.next_follow_up_date }}
+                  <strong>{{ lead.next_follow_up_date }}</strong>
                 {% elif lead.next_followup %}
-                  {{ lead.next_followup }}
+                  <strong>{{ lead.next_followup }}</strong>
                 {% else %}
                   <span class="muted">—</span>
                 {% endif %}
               </td>
-              <td class="muted">{{ lead.created_date }}</td>
+              <td class="muted" data-label="Created">{{ lead.created_date }}</td>
+              <td data-label="Actions">
+                <div class="lead-row-actions">
+                  <details class="lead-quick-view">
+                    <summary>Quick view</summary>
+                    <div class="lead-quick-panel">
+                      <div><span>Lead ID</span><strong>{{ lead.lead_id }}</strong></div>
+                      <div><span>Company</span><strong>{{ lead.account_brand|default:"—" }}</strong></div>
+                      <div><span>Contact</span><strong>{{ lead.contact_name|default:"—" }}</strong></div>
+                      <div><span>Source</span><strong>{% if lead.source_channel %}{{ lead.source_channel }}{% elif lead.source %}{{ lead.source }}{% else %}—{% endif %}</strong></div>
+                      <div><span>Status</span><strong>{{ lead.lead_status }}</strong></div>
+                      <div><span>Outbound</span><strong>{{ lead.outbound_status|default:"—" }}</strong></div>
+                      <div><span>Assigned</span><strong>{% if lead.assigned_to %}{% if lead.assigned_to.get_full_name %}{{ lead.assigned_to.get_full_name }}{% else %}{{ lead.assigned_to.username }}{% endif %}{% elif lead.owner %}{{ lead.owner }}{% else %}Unassigned{% endif %}</strong></div>
+                      <div><span>Country</span><strong>{{ lead.country|default:"—" }}</strong></div>
+                      <div><span>Product</span><strong>{{ lead.get_product_interest_display|default:lead.product_interest|default:"—" }}</strong></div>
+                      <div><span>Target volume</span><strong>{% if lead.target_order_volume_min or lead.target_order_volume_max %}{% if lead.target_order_volume_min and lead.target_order_volume_max %}{{ lead.target_order_volume_min }} - {{ lead.target_order_volume_max }}{% elif lead.target_order_volume_min %}{{ lead.target_order_volume_min }}+{% else %}Up to {{ lead.target_order_volume_max }}{% endif %}{% else %}—{% endif %}</strong></div>
+                      <div><span>Fit score</span><strong>{% if lead.brand_fit_score or lead.brand_fit_score == 0 %}{{ lead.brand_fit_score }}{% else %}—{% endif %}</strong></div>
+                      <div><span>Next follow up</span><strong>{% if lead.next_follow_up_date %}{{ lead.next_follow_up_date }}{% elif lead.next_followup %}{{ lead.next_followup }}{% else %}—{% endif %}</strong></div>
+                    </div>
+                  </details>
+                  <a class="lead-btn lead-btn--primary lead-btn--tiny" href="{% url 'lead_detail' lead.pk %}">Open</a>
+                  <a class="lead-btn lead-btn--ghost lead-btn--tiny" href="{% url 'lead_edit' lead.pk %}">Edit</a>
+                </div>
+              </td>
             </tr>
           {% empty %}
             <tr>
-              <td colspan="17" class="muted">No leads yet.</td>
+              <td colspan="17">
+                <div class="lead-empty-state">
+                  <strong>No leads found</strong>
+                  <span>Try clearing filters or add a new lead to start building the pipeline.</span>
+                </div>
+              </td>
             </tr>
           {% endfor %}
         </tbody>
@@ -887,7 +984,7 @@
     </div>
 
   </div>
-
+  </div>
 </div>
 
 <script>
