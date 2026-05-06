@@ -1,1353 +1,716 @@
 {% extends "crm/base.html" %}
 {% load static %}
+
 {% block content %}
-
-<style>
-    .page-opp {
-        max-width: 1200px;
-        margin: 16px auto 28px auto;
-        padding: 0 8px;
-        color: #f9fafb;
-    }
-
-    a {
-        color: #fbbf24;
-        text-decoration: none;
-    }
-
-    a:hover {
-        text-decoration: underline;
-    }
-
-    .opp-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 10px;
-        flex-wrap: wrap;
-    }
-
-    .summary-grid{
-        display:grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap:10px;
-        margin: 10px 0 12px 0;
-    }
-
-    .summary-card{
-        background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
-        border:1px solid #1f2937;
-        border-radius:12px;
-        padding:10px 12px;
-        box-shadow: 0 10px 24px rgba(0,0,0,0.35);
-    }
-
-    .summary-title{
-        font-size:11px;
-        text-transform:uppercase;
-        letter-spacing:0.3px;
-        color:#9ca3af;
-        font-weight:800;
-    }
-
-    .summary-line{
-        margin-top:6px;
-        font-size:13px;
-        font-weight:700;
-        color:#f9fafb;
-    }
-
-    .summary-sub{
-        margin-top:4px;
-        font-size:12px;
-        color:#d1d5db;
-    }
-
-    .opp-header-left {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-    }
-
-    .opp-title {
-        font-size: 20px;
-        font-weight: 700;
-        color: #fefce8;
-    }
-
-    .opp-sub {
-        font-size: 12px;
-        color: #f3f4f6;
-    }
-
-    .opp-stage-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        padding: 2px 8px;
-        font-size: 11px;
-        border-radius: 999px;
-        border: 1px solid #facc15;
-        background: rgba(250, 204, 21, 0.15);
-        color: #fefce8;
-    }
-
-    .opp-header-right .btn {
-        margin-left: 3px;
-        margin-bottom: 3px;
-    }
-
-    .btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        padding: 4px 10px;
-        border-radius: 999px;
-        border: 1px solid transparent;
-        font-size: 12px;
-        cursor: pointer;
-        text-decoration: none;
-        white-space: nowrap;
-        user-select: none;
-    }
-
-    .btn:disabled {
-        opacity: 0.7;
-        cursor: not-allowed;
-    }
-
-    .btn-gold {
-        background: linear-gradient(135deg, #facc15, #f97316);
-        color: #111827;
-        border-color: #fbbf24;
-        font-weight: 600;
-    }
-
-    .btn-gold-soft {
-        background: rgba(250, 204, 21, 0.12);
-        color: #facc15;
-        border-color: #facc15;
-    }
-
-    .btn-blue {
-        background: rgba(56, 189, 248, 0.12);
-        color: #7dd3fc;
-        border-color: #0ea5e9;
-    }
-
-    .btn-slate {
-        background: #020617;
-        color: #e5e7eb;
-        border-color: #374151;
-    }
-
-    .btn-small {
-        padding: 3px 8px;
-        font-size: 11px;
-    }
-
-    .btn-outline-warning {
-        background: rgba(250, 204, 21, 0.10);
-        color: #facc15;
-        border-color: #facc15;
-    }
-
-    .btn-outline-warning:hover {
-        background: rgba(250, 204, 21, 0.18);
-        color: #ffe9a8;
-        text-decoration: none;
-    }
-
-    .btn-danger{
-        background: rgba(239, 68, 68, 0.16);
-        color: #fecaca;
-        border-color: #ef4444;
-    }
-
-    .btn-danger:hover{
-        background: rgba(239, 68, 68, 0.22);
-        color: #fff;
-    }
-
-    .card {
-        background: radial-gradient(circle at top left, #020617, #020617);
-        border: 1px solid #1f2937;
-        border-radius: 10px;
-        padding: 8px 10px;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.7);
-    }
-
-    .card-strong {
-        background: radial-gradient(circle at top left, #111827, #020617);
-    }
-
-    .card-title {
-        font-size: 13px;
-        font-weight: 600;
-        margin-bottom: 4px;
-        color: #fefce8;
-        border-bottom: 1px solid #111827;
-        padding-bottom: 3px;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-
-    .card-title span.emoji {
-        font-size: 15px;
-    }
-
-    .card-title-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 6px;
-    }
-
-    .grid-3 {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 8px;
-        margin-bottom: 10px;
-    }
-
-    .section {
-        margin-top: 12px;
-    }
-
-    .section-title {
-        font-size: 14px;
-        font-weight: 600;
-        margin-bottom: 4px;
-        color: #fefce8;
-    }
-
-    table.info-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 12px;
-    }
-
-    table.info-table td {
-        padding: 2px 2px;
-        vertical-align: top;
-    }
-
-    .label {
-        color: #9ca3af;
-        width: 110px;
-        font-size: 11px;
-    }
-
-    .value-main {
-        color: #f9fafb;
-        font-size: 12px;
-    }
-
-    .value-soft {
-        color: #e5e7eb;
-        font-size: 12px;
-    }
-
-    .muted {
-        color: #9ca3af;
-        font-size: 11px;
-    }
-
-    .pill {
-        display: inline-flex;
-        align-items: center;
-        padding: 1px 7px;
-        border-radius: 999px;
-        border: 1px solid #4b5563;
-        font-size: 11px;
-        color: #e5e7eb;
-        background: #020617;
-    }
-
-    .pill-green {
-        border-color: #22c55e;
-        color: #bbf7d0;
-        background: rgba(34, 197, 94, 0.1);
-    }
-
-    .pill-red {
-        border-color: #f97373;
-        color: #fecaca;
-        background: rgba(239, 68, 68, 0.18);
-    }
-
-    .ai-smart-card {
-        margin-bottom: 10px;
-    }
-
-    .ai-smart-header {
-        display: flex;
-        justify-content: space-between;
-        gap: 8px;
-        align-items: center;
-        margin-bottom: 4px;
-    }
-
-    .ai-smart-title {
-        font-size: 14px;
-        font-weight: 600;
-        color: #fefce8;
-    }
-
-    .ai-smart-note {
-        font-size: 11px;
-        color: #e5e7eb;
-    }
-
-    .ai-chip-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 5px;
-        margin: 4px 0 6px 0;
-    }
-
-    .ai-smart-status {
-        font-size: 11px;
-        color: #9ca3af;
-        text-align: right;
-    }
-
-    .ai-smart-output {
-        margin-top: 6px;
-        background: #020617;
-        border-radius: 8px;
-        border: 1px solid #1f2937;
-        padding: 6px;
-        min-height: 70px;
-        font-size: 12px;
-        color: #e5e7eb;
-        white-space: pre-wrap;
-    }
-
-    textarea,
-    input,
-    select {
-        background: #020617;
-        color: #f9fafb;
-        border: 1px solid #374151;
-        padding: 4px 6px;
-        font-size: 12px;
-        border-radius: 6px;
-        width: 100%;
-    }
-
-    textarea:focus,
-    input:focus,
-    select:focus {
-        outline: none;
-        border-color: #facc15;
-        box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.4);
-    }
-
-    textarea { resize: vertical; }
-
-    ul.simple-list {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-    }
-
-    ul.simple-list li {
-        padding: 3px 0;
-        font-size: 12px;
-        color: #e5e7eb;
-    }
-
-    details summary { cursor: pointer; }
-
-    .inline-field-row {
-        display: flex;
-        gap: 6px;
-        align-items: flex-end;
-        flex-wrap: wrap;
-    }
-
-    .calendar-wrap {
-        position: relative;
-        width: 100%;
-    }
-
-    .calendar-btn {
-        width: auto;
-        padding: 4px 10px;
-    }
-
-    .ship-actions {
-        display: flex;
-        gap: 6px;
-        justify-content: flex-end;
-        align-items: center;
-        margin-top: 6px;
-        flex-wrap: wrap;
-    }
-
-    .input-locked {
-        opacity: 0.8;
-    }
-
-    .ship-saved-pill {
-        display: none;
-        align-items: center;
-        gap: 6px;
-        font-size: 11px;
-        border: 1px solid #22c55e;
-        color: #bbf7d0;
-        background: rgba(34, 197, 94, 0.12);
-        padding: 3px 8px;
-        border-radius: 999px;
-        margin-right: auto;
-    }
-
-    .profit-card{
-        background: linear-gradient(180deg, rgba(34,197,94,0.12), rgba(2,6,23,0.9));
-        border: 1px solid rgba(34,197,94,0.35);
-    }
-
-    .profit-title{
-        font-size:13px;
-        font-weight:700;
-        color:#bbf7d0;
-        margin-bottom:6px;
-    }
-
-    .profit-value{
-        font-size:20px;
-        font-weight:800;
-        color:#f0fdf4;
-    }
-
-    .profit-negative{
-        color:#fecaca;
-    }
-
-    .profit-row{
-        display:flex;
-        justify-content:space-between;
-        gap:8px;
-        font-size:12px;
-        color:#e5e7eb;
-        margin-top:4px;
-    }
-
-    @media (max-width: 992px) {
-        .grid-3 {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-    }
-
-    @media (max-width: 768px) {
-        .grid-3 {
-            grid-template-columns: minmax(0, 1fr);
-        }
-        .opp-header {
-            align-items: flex-start;
-        }
-    }
-</style>
-
-<div class="page-opp">
-
-    <div class="opp-header card card-strong">
-        <div class="opp-header-left">
-            <div class="opp-title">
-                🎯 {{ opportunity.opportunity_id }} / {{ lead.account_brand }}
-            </div>
-            <div class="opp-sub">
-                Stage
-                <span class="opp-stage-pill">
-                    ⚙️ {{ opportunity.get_stage_display }}
-                </span>
-                &nbsp; | &nbsp;
-                Created {{ opportunity.created_date }}
-            </div>
-        </div>
-        <div class="opp-header-right">
-            <a href="{% url 'opportunities_list' %}" class="btn btn-slate btn-small">All opportunities</a>
-            {% if opportunity.lead %}
-            <a href="{% url 'lead_detail' opportunity.lead.pk %}" class="btn btn-blue btn-small">
-                View lead
-            </a>
-            {% endif %}
-            <a href="{% url 'opportunity_edit' opportunity.pk %}" class="btn btn-gold-soft btn-small">Edit</a>
-            {% if prod_orders %}
-                <a href="{% url 'production_detail' prod_orders.0.pk %}" class="btn btn-gold btn-small">
-                    View production
-                </a>
-            {% else %}
-                <a href="{% url 'production_from_opportunity' opportunity.pk %}" class="btn btn-gold btn-small">
-                    Open production order
-                </a>
-            {% endif %}
-            <form method="post" action="{% url 'opportunity_delete' opportunity.pk %}" style="display:inline-block;">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-danger btn-small" onclick="return confirm('Delete this opportunity? This cannot be undone.');">
-                    Delete
-                </button>
-            </form>
-        </div>
-    </div>
-
-    <div class="summary-grid">
-        <div class="summary-card">
-            <div class="summary-title">Pipeline</div>
-            <div class="summary-line">Stage: {{ opportunity.get_stage_display }}</div>
-            <div class="summary-sub">Status: {{ opportunity.status_label }}</div>
-            <div class="summary-sub">Next follow up: {% if opportunity.next_followup %}{{ opportunity.next_followup }}{% else %}—{% endif %}</div>
-            <div class="summary-sub">Created: {{ opportunity.created_date }}</div>
-        </div>
-
-        <div class="summary-card">
-            <div class="summary-title">Value</div>
-            <div class="summary-line">Order value (USD): {% if order_value_usd %}{{ order_value_usd }}{% else %}—{% endif %}</div>
-            <div class="summary-sub">FX rate (BDT/USD): {% if fx_rate_bdt_per_usd %}{{ fx_rate_bdt_per_usd }}{% else %}—{% endif %}</div>
-            <div class="summary-sub">Total value (BDT): {% if order_value_bdt %}{{ order_value_bdt }}{% else %}—{% endif %}</div>
-            <div class="summary-sub">BDT per piece: {% if bdt_per_piece %}{{ bdt_per_piece }}{% else %}—{% endif %}</div>
-            <div class="summary-sub">MOQ units: {% if opportunity.moq_units %}{{ opportunity.moq_units }}{% else %}—{% endif %}</div>
-            <div class="summary-sub">{{ opportunity.product_category }} / {{ opportunity.product_type }}</div>
-        </div>
-
-        <div class="summary-card">
-            <div class="summary-title">Production</div>
-            <div class="summary-line">Orders: {{ prod_orders|length }}</div>
-            <div class="summary-sub">Total pieces: {{ prod_total_qty }}</div>
-            <div class="summary-sub">
-                <a href="{% url 'production_list' %}">Open production list</a>
-            </div>
-        </div>
-
-        <div class="summary-card">
-            <div class="summary-title">Activity</div>
-            <div class="summary-line">Tasks: {{ opp_tasks|length }}</div>
-            <div class="summary-sub">Shipments: {{ shipments|length }}</div>
-            <div class="summary-sub">Files: {{ opp_files|length }}</div>
-        </div>
-    </div>
-
-    <div class="card card-strong" style="margin-bottom:12px;">
-        <div class="card-title-row">
-            <div class="card-title" style="margin:0; border-bottom:none; padding-bottom:0;">
-                <span class="emoji">📊</span> Costing
-            </div>
-            <div>
-                {% if costing_header %}
-                    <a href="{% url 'cost_sheet_detail' costing_header.pk %}" class="btn btn-blue btn-small">
-                        Open costing
-                    </a>
-                    <a href="{% url 'cost_sheet_export_pdf' costing_header.pk %}" class="btn btn-slate btn-small">
-                        Export PDF
-                    </a>
-                    <a href="{% url 'cost_sheet_export_excel' costing_header.pk %}" class="btn btn-slate btn-small">
-                        Export Excel
-                    </a>
-                {% else %}
-                    <a href="{% url 'cost_sheet_create_for_opportunity' opportunity.pk %}" class="btn btn-gold btn-small">
-                        Create costing
-                    </a>
-                {% endif %}
-            </div>
-        </div>
-
-        {% if costing_header %}
-            <table class="info-table" style="margin-top:6px;">
-                <tr>
-                    <td class="label">Status</td>
-                    <td class="value-main">{{ costing_header.get_status_display }}</td>
-                </tr>
-                <tr>
-                    <td class="label">Total cost / piece (BDT)</td>
-                    <td class="value-main">{{ costing_calc.display.total_cost_per_piece }}</td>
-                </tr>
-                <tr>
-                    <td class="label">FOB / piece (BDT)</td>
-                    <td class="value-main">{{ costing_calc.display.fob_per_piece }}</td>
-                </tr>
-                <tr>
-                    <td class="label">Margin %</td>
-                    <td class="value-main">{{ costing_calc.display.margin_percent }}%</td>
-                </tr>
-                <tr>
-                    <td class="label">Last updated</td>
-                    <td class="value-main">{{ costing_header.updated_at|date:"Y-m-d H:i" }}</td>
-                </tr>
-            </table>
-
-            <div style="margin-top:8px;">
-                <div class="summary-title" style="margin-bottom:4px;">Standard vs actual (placeholder)</div>
-                <table class="info-table">
-                    <tr>
-                        <td class="label">Standard cost / piece (BDT)</td>
-                        <td class="value-main">{{ variance_display.standard_cost_per_piece|default:"—" }}</td>
-                    </tr>
-                    <tr>
-                        <td class="label">Actual cost / piece (BDT)</td>
-                        <td class="value-main">{{ variance_display.actual_cost_per_piece|default:"—" }}</td>
-                    </tr>
-                    <tr>
-                        <td class="label">Variance / piece (BDT)</td>
-                        <td class="value-main">{{ variance_display.variance_per_piece|default:"—" }}</td>
-                    </tr>
-                    <tr>
-                        <td class="label">Total variance (BDT)</td>
-                        <td class="value-main">{{ variance_display.total_variance|default:"—" }}</td>
-                    </tr>
-                </table>
-            </div>
+<link rel="stylesheet" href="{% static 'crm/opportunity_detail.css' %}?v=detail-modern-20260506">
+
+<div class="opp-detail-page">
+  <section class="opp-detail-hero">
+    <div class="opp-hero-copy">
+      <p class="opp-eyebrow">Deal workspace</p>
+      <h1 class="opp-title">{{ opportunity.opportunity_id }}</h1>
+      <p class="opp-subtitle">
+        {% if lead %}
+          {{ lead.account_brand|default:"Company not set" }}
+          {% if lead.contact_name %} · {{ lead.contact_name }}{% endif %}
         {% else %}
-            <div class="muted" style="margin-top:6px;">No cost sheet yet for this opportunity.</div>
+          No linked lead
         {% endif %}
+      </p>
 
-        <div style="margin-top:10px;">
-            <div class="summary-title" style="margin-bottom:4px;">Upload costing files</div>
-            <form method="post" enctype="multipart/form-data" style="display:flex; gap:6px; flex-wrap:wrap; align-items:end;">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="upload_document">
-                <div style="flex:1; min-width:200px;">
-                    <label class="muted" style="display:block; margin-bottom:4px;">File</label>
-                    <input type="file" name="doc_file">
-                </div>
-                <div>
-                    <label class="muted" style="display:block; margin-bottom:4px;">Type</label>
-                    <select name="doc_type">
-                        <option value="costing_pdf">Costing PDF</option>
-                        <option value="costing_excel">Costing Excel</option>
-                        <option value="costing_other">Costing Other</option>
-                        <option value="other">Other</option>
-                    </select>
-                </div>
-                <button type="submit" class="btn btn-blue btn-small">Upload</button>
-            </form>
-
-            {% if opportunity_documents %}
-                <ul class="simple-list" style="margin-top:6px;">
-                    {% for doc in opportunity_documents %}
-                        <li>
-                            📎 <a href="{{ doc.file.url }}" target="_blank">{{ doc.original_name|default:doc.file.name }}</a>
-                            <span class="muted"> • {{ doc.get_doc_type_display }} • {{ doc.uploaded_at|date:"Y-m-d" }}</span>
-                        </li>
-                    {% endfor %}
-                </ul>
-            {% else %}
-                <div class="muted" style="margin-top:6px;">No costing documents uploaded yet.</div>
-            {% endif %}
-        </div>
+      <div class="opp-hero-badges">
+        <span class="opp-stage-badge" data-stage="{{ opportunity.stage }}">{{ opportunity.get_stage_display }}</span>
+        <span class="opp-status-pill {{ opportunity.status_key }}">{{ opportunity.status_label }}</span>
+        <span class="opp-badge">
+          {% if opportunity.order_value %}BDT {{ opportunity.order_value|floatformat:0 }}{% else %}Value not set{% endif %}
+        </span>
+        <span class="opp-badge">
+          {% if lead and lead.priority %}{{ lead.priority }} priority{% else %}Priority not set{% endif %}
+        </span>
+        <span class="opp-badge">
+          {% if lead and lead.assigned_to %}
+            {% if lead.assigned_to.get_full_name %}{{ lead.assigned_to.get_full_name }}{% else %}{{ lead.assigned_to.username }}{% endif %}
+          {% elif lead and lead.owner %}
+            {{ lead.owner }}
+          {% else %}
+            Unassigned
+          {% endif %}
+        </span>
+      </div>
     </div>
 
-    <div class="card profit-card" style="margin-bottom:12px;">
-        <div class="profit-title">Profit snapshot</div>
-        <div class="profit-value {% if profit_after_shipping and profit_after_shipping < 0 %}profit-negative{% endif %}">
-            {% if profit_after_shipping or profit_after_shipping == 0 %}
-                {{ profit_after_shipping|floatformat:2 }} BDT
-            {% else %}
-                — 
-            {% endif %}
-        </div>
-        <div class="profit-row">
-            <span>Order value</span>
-            <span>{% if opportunity.order_value %}{{ opportunity.order_value }}{% else %}—{% endif %}</span>
-        </div>
-        <div class="profit-row">
-            <span>Total cost</span>
-            <span>{% if total_cost_bdt or total_cost_bdt == 0 %}{{ total_cost_bdt }}{% else %}—{% endif %}</span>
-        </div>
-        <div class="profit-row">
-            <span>Margin %</span>
-            <span>
-                {% if profit_after_shipping_percent or profit_after_shipping_percent == 0 %}
-                    {{ profit_after_shipping_percent|floatformat:1 }}%
-                {% else %}
-                    —
-                {% endif %}
-            </span>
-        </div>
-        <div class="profit-row">
-            <span>Shipping cost</span>
-            <span>{% if shipping_cost_bdt %}{{ shipping_cost_bdt }} BDT{% else %}—{% endif %}</span>
-        </div>
+    <div class="opp-action-bar" aria-label="Opportunity actions">
+      <a href="{% url 'opportunity_edit' opportunity.pk %}" class="opp-btn opp-btn--primary">Edit</a>
+      {% if costing_header %}
+        <a href="{% url 'cost_sheet_export_pdf' costing_header.pk %}" class="opp-btn opp-btn--ghost">Open Quote</a>
+        <a href="{% url 'cost_sheet_detail' costing_header.pk %}" class="opp-btn opp-btn--ghost">Open Costing</a>
+      {% else %}
+        <a href="{% url 'cost_sheet_create_for_opportunity' opportunity.pk %}" class="opp-btn opp-btn--ghost">Create Quote</a>
+        <a href="{% url 'cost_sheet_create_for_opportunity' opportunity.pk %}" class="opp-btn opp-btn--ghost">Create Costing</a>
+      {% endif %}
+      <a href="{% url 'invoice_add' %}" class="opp-btn opp-btn--ghost">Create Invoice</a>
+      {% if prod_orders %}
+        <a href="{% url 'production_detail' prod_orders.0.pk %}" class="opp-btn opp-btn--ghost">View Production</a>
+      {% else %}
+        <a href="{% url 'production_from_opportunity' opportunity.pk %}" class="opp-btn opp-btn--ghost">Move to Production</a>
+      {% endif %}
+      <a href="{% url 'opportunities_list' %}" class="opp-btn opp-btn--ghost">Back</a>
+      <form method="post" action="{% url 'opportunity_delete' opportunity.pk %}" class="opp-inline-form">
+        {% csrf_token %}
+        <button type="submit" class="opp-btn opp-btn--danger" onclick="return confirm('Delete this opportunity? This cannot be undone.');">
+          Delete
+        </button>
+      </form>
     </div>
+  </section>
 
-    <div class="card card-strong ai-smart-card">
-        <div class="ai-smart-header">
-            <div>
-                <div class="ai-smart-title">🤖 AI view for this deal</div>
-                <div class="ai-smart-note">
-                    AI reads lead, customer and deal data and gives you next steps, risk, product ideas and email text.
-                </div>
-            </div>
-            <div id="opp-ai-status" class="ai-smart-status"></div>
+  <section class="opp-snapshot-grid" aria-label="Deal snapshot">
+    <article class="opp-snapshot-card">
+      <span>Order quantity</span>
+      <strong>{% if opportunity.moq_units %}{{ opportunity.moq_units }} units{% elif lead and lead.order_quantity %}{{ lead.order_quantity }}{% else %}Not set{% endif %}</strong>
+    </article>
+    <article class="opp-snapshot-card">
+      <span>Product category</span>
+      <strong>{{ opportunity.product_category|default:"Other" }}</strong>
+      <small>{{ opportunity.product_type|default:"Other" }}</small>
+    </article>
+    <article class="opp-snapshot-card">
+      <span>Estimated value</span>
+      <strong>{% if order_value_bdt %}BDT {{ order_value_bdt|floatformat:0 }}{% else %}Not set{% endif %}</strong>
+      <small>{% if order_value_usd %}USD {{ order_value_usd|floatformat:0 }}{% else %}USD not set{% endif %}</small>
+    </article>
+    <article class="opp-snapshot-card">
+      <span>Next follow up</span>
+      <strong>{% if opportunity.next_followup %}{{ opportunity.next_followup|date:"M j, Y" }}{% else %}Not set{% endif %}</strong>
+    </article>
+    <article class="opp-snapshot-card">
+      <span>Current stage</span>
+      <strong>{{ opportunity.get_stage_display }}</strong>
+      <small>{{ opportunity.status_label }}</small>
+    </article>
+    <article class="opp-snapshot-card">
+      <span>Probability</span>
+      <strong>Not tracked</strong>
+      <small>Use stage and follow-up quality as the current signal.</small>
+    </article>
+  </section>
+
+  <div class="opp-workspace-grid">
+    <main class="opp-main-column">
+      <section class="opp-panel">
+        <div class="opp-panel-head">
+          <div>
+            <p class="opp-section-kicker">Client and contact</p>
+            <h2>Who owns the conversation</h2>
+          </div>
+          {% if opportunity.lead %}
+            <a href="{% url 'lead_detail' opportunity.lead.pk %}" class="opp-btn opp-btn--tiny opp-btn--ghost">Open lead</a>
+          {% endif %}
         </div>
 
-        <div class="ai-chip-row">
-            <button type="button" class="btn btn-gold-soft btn-small" data-opp-mode="summary">Summary</button>
-            <button type="button" class="btn btn-blue btn-small" data-opp-mode="next_steps">Next steps</button>
-            <button type="button" class="btn btn-slate btn-small" data-opp-mode="risk">Risk check</button>
-            <button type="button" class="btn btn-slate btn-small" data-opp-mode="products">Product ideas</button>
-            <button type="button" class="btn btn-gold-soft btn-small" data-opp-mode="timeline">Simple time line</button>
+        <div class="opp-info-grid">
+          <div>
+            <span>Company</span>
+            <strong>{% if lead %}{{ lead.account_brand|default:"—" }}{% else %}—{% endif %}</strong>
+          </div>
+          <div>
+            <span>Contact</span>
+            <strong>{% if lead %}{{ lead.contact_name|default:"—" }}{% else %}—{% endif %}</strong>
+          </div>
+          <div>
+            <span>Email</span>
+            <strong>{% if lead and lead.email %}<a href="mailto:{{ lead.email }}">{{ lead.email }}</a>{% else %}—{% endif %}</strong>
+          </div>
+          <div>
+            <span>Phone</span>
+            <strong>{% if lead and lead.phone %}<a href="tel:{{ lead.phone }}">{{ lead.phone }}</a>{% else %}—{% endif %}</strong>
+          </div>
+          <div>
+            <span>Website</span>
+            <strong>
+              {% if lead %}
+                {% firstof lead.website lead.company_website "—" %}
+              {% else %}
+                —
+              {% endif %}
+            </strong>
+          </div>
+          <div>
+            <span>Location</span>
+            <strong>{% if lead %}{% firstof lead.city lead.country lead.get_market_display "—" %}{% else %}—{% endif %}</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="opp-panel">
+        <div class="opp-panel-head">
+          <div>
+            <p class="opp-section-kicker">Product and requirement</p>
+            <h2>What needs to be quoted and produced</h2>
+          </div>
         </div>
 
-        <div style="margin-top:4px; font-size:12px;">
-            <div style="margin-bottom:3px; color:#facc15;">
-                Email follow up helper
-            </div>
-            <textarea
-                id="opp-ai-email-body"
-                rows="2"
-                placeholder="Write a few points for the email and AI will turn it into a clean message."
-            ></textarea>
-            <button
-                type="button"
-                class="btn btn-gold btn-small"
-                id="opp-ai-email-btn"
-                style="margin-top:4px;"
-            >
-                Create email with AI
-            </button>
+        <div class="opp-info-grid opp-info-grid--wide">
+          <div>
+            <span>Product category</span>
+            <strong>{{ opportunity.product_category|default:"—" }}</strong>
+          </div>
+          <div>
+            <span>Product type</span>
+            <strong>{{ opportunity.product_type|default:"—" }}</strong>
+          </div>
+          <div>
+            <span>Lead product interest</span>
+            <strong>{% if lead %}{{ lead.product_interest|default:"—" }}{% else %}—{% endif %}</strong>
+          </div>
+          <div>
+            <span>Fabric details</span>
+            <strong>{% if lead %}{{ lead.product_category|default:"Not captured" }}{% else %}Not captured{% endif %}</strong>
+          </div>
+          <div>
+            <span>Order quantity</span>
+            <strong>{% if opportunity.moq_units %}{{ opportunity.moq_units }} units{% elif lead and lead.order_quantity %}{{ lead.order_quantity }}{% else %}—{% endif %}</strong>
+          </div>
+          <div>
+            <span>Target price / budget</span>
+            <strong>{% if lead %}{{ lead.budget|default:"—" }}{% else %}—{% endif %}</strong>
+          </div>
+          <div>
+            <span>Timeline</span>
+            <strong>{% if lead %}{{ lead.preferred_contact_time|default:"Not captured" }}{% else %}Not captured{% endif %}</strong>
+          </div>
+          <div>
+            <span>BDT per piece</span>
+            <strong>{% if bdt_per_piece %}{{ bdt_per_piece }}{% else %}—{% endif %}</strong>
+          </div>
         </div>
 
-        <div style="margin-top:6px;">
-            <div style="font-size:12px; color:#facc15; margin-bottom:3px;">
-                Ask a custom question
-            </div>
-            <div style="display:flex; gap:6px; margin-bottom:4px;">
-                <input
-                    type="text"
-                    id="opp-ai-chat-input"
-                    placeholder="Example: What should I do before sending a quote"
-                    style="flex:1;"
-                >
-                <button type="button" class="btn btn-blue btn-small" id="opp-ai-chat-btn">
-                    Ask AI
-                </button>
-            </div>
+        <div class="opp-notes-box">
+          <span>Opportunity notes</span>
+          <p>{{ opportunity.notes|default:"No opportunity notes yet."|linebreaksbr }}</p>
+        </div>
+      </section>
+
+      <section class="opp-panel" id="opportunity-stage">
+        <div class="opp-panel-head">
+          <div>
+            <p class="opp-section-kicker">Activity and follow up</p>
+            <h2>Next move</h2>
+          </div>
         </div>
 
-        <div id="opp-ai-output" class="ai-smart-output">
-            AI answer will appear here. It is also saved as an AI note for this opportunity.
-        </div>
+        <form method="post" class="opp-stage-form">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="update_stage">
 
-        <form id="opp-ai-csrf" style="display:none;">
-            {% csrf_token %}
-        </form>
-    </div>
-
-    <div class="grid-3">
-
-        <div class="card">
-
-            <div class="card-title-row">
-                <div class="card-title" style="margin:0; border-bottom:none; padding-bottom:0;">
-                    <span class="emoji">📌</span> Opportunity info
-                </div>
-
-                <a class="btn btn-outline-warning btn-small"
-                   href="{% url 'opportunity_edit' opportunity.pk %}">
-                    Edit
-                </a>
-            </div>
-
-            <table class="info-table">
-                <tr>
-                    <td class="label">Brand</td>
-                    <td class="value-main">{{ lead.account_brand }}</td>
-                </tr>
-                <tr>
-                    <td class="label">Stage</td>
-                    <td class="value-main">{{ opportunity.get_stage_display }}</td>
-                </tr>
-                <tr>
-                    <td class="label">Product type</td>
-                    <td class="value-main">{{ opportunity.product_type }}</td>
-                </tr>
-                <tr>
-                    <td class="label">Product category</td>
-                    <td class="value-main">{{ opportunity.product_category }}</td>
-                </tr>
-                <tr>
-                    <td class="label">MOQ units</td>
-                    <td class="value-main">
-                        {% if opportunity.moq_units %}
-                            {{ opportunity.moq_units }}
-                        {% else %}
-                            <span class="muted">None</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                <tr>
-                    <td class="label">Order value taka</td>
-                    <td class="value-main">
-                        {% if opportunity.order_value %}
-                            {{ opportunity.order_value }}
-                        {% else %}
-                            <span class="muted">Not set</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                <tr>
-                    <td class="label">Open</td>
-                    <td class="value-main">
-                        {% if opportunity.is_open %}
-                            <span class="pill pill-green">Open</span>
-                        {% else %}
-                            <span class="pill pill-red">Closed</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                <tr>
-                    <td class="label">Next follow up</td>
-                    <td class="value-main">
-                        {% if opportunity.next_followup %}
-                            {{ opportunity.next_followup|date:"Y-m-d" }}
-                        {% else %}
-                            <span class="muted">Not set</span>
-                        {% endif %}
-                    </td>
-                </tr>
-            </table>
-
-            <form method="post" style="margin-top:6px;">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="update_stage">
-
-                <div class="inline-field-row" style="margin-bottom:4px;">
-                    <div style="flex:1; min-width:190px;">
-                        <label style="font-size:11px; color:#e5e7eb;">Stage</label>
-                        <select name="stage">
-                            {% for value,label in stage_choices %}
-                                <option value="{{ value }}" {% if opportunity.stage == value %}selected{% endif %}>
-                                    {{ label }}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div style="flex:1; min-width:190px;">
-                        <label style="font-size:11px; color:#e5e7eb;">Next follow up</label>
-                        <div class="inline-field-row">
-                            <div style="flex:1;" class="calendar-wrap">
-                                <input
-                                    id="next-followup-date"
-                                    type="date"
-                                    name="next_followup"
-                                    value="{% if opportunity.next_followup %}{{ opportunity.next_followup|date:'Y-m-d' }}{% endif %}"
-                                >
-                            </div>
-                            <button type="button" class="btn btn-slate btn-small calendar-btn" id="next-followup-open">
-                                📅
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <div style="margin-bottom:4px;">
-                    <label style="font-size:11px; color:#e5e7eb;">
-                        <input type="checkbox" name="is_open" {% if opportunity.is_open %}checked{% endif %}>
-                        Opportunity is open
-                    </label>
-                </div>
-
-                <button type="submit" class="btn btn-gold btn-small">
-                    Save status
-                </button>
-            </form>
-
-        </div>
-
-        <div class="card">
-            <div class="card-title">
-                <span class="emoji">💰</span> Production and profit in taka
-            </div>
-            <table class="info-table">
-                <tr>
-                    <td class="label">Order value</td>
-                    <td class="value-main">
-                        {% if opportunity.order_value %}
-                            {{ opportunity.order_value }}
-                        {% else %}
-                            <span class="muted">Not set</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                <tr>
-                    <td class="label">Production cost BDT</td>
-                    <td class="value-main">
-                        {% if prod_total_actual_cost %}
-                            {{ prod_total_actual_cost }}
-                        {% else %}
-                            <span class="muted">No production cost yet</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                <tr>
-                    <td class="label">Shipping cost BDT</td>
-                    <td class="value-main">
-                        {% if shipping_cost_bdt %}
-                            {{ shipping_cost_bdt }}
-                        {% else %}
-                            <span class="muted">No shipping cost yet</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                <tr>
-                    <td class="label">Shipping cost CAD</td>
-                    <td class="value-main">
-                        {% if shipping_cost_cad %}
-                            {{ shipping_cost_cad }}
-                        {% else %}
-                            <span class="muted">No shipping cost yet</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                <tr>
-                    <td class="label">Total cost BDT</td>
-                    <td class="value-main">
-                        {% if total_cost_bdt %}
-                            {{ total_cost_bdt }}
-                        {% else %}
-                            <span class="muted">Need production and shipping cost</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                <tr>
-                    <td class="label">Profit after shipping</td>
-                    <td class="value-main">
-                        {% if profit_after_shipping is not None %}
-                            {{ profit_after_shipping|floatformat:2 }}
-                        {% else %}
-                            <span class="muted">Need order value and cost</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                <tr>
-                    <td class="label">Profit after shipping percent</td>
-                    <td class="value-main">
-                        {% if profit_after_shipping_percent is not None %}
-                            {{ profit_after_shipping_percent|floatformat:1 }} percent
-                        {% else %}
-                            <span class="muted">Need order value and cost</span>
-                        {% endif %}
-                    </td>
-                </tr>
-            </table>
-
-            {% if prod_orders %}
-                <p class="muted" style="margin-top:6px;">
-                    Linked work orders
-                    {% for po in prod_orders %}
-                        🧵 <a href="{% url 'production_detail' po.pk %}">{{ po.title }}</a>
-                        {% if not forloop.last %} | {% endif %}
-                    {% endfor %}
-                </p>
-            {% else %}
-                <p class="muted" style="margin-top:6px;">
-                    No production work order yet.
-                    When stage is set to Production a work order will be created.
-                </p>
-            {% endif %}
-        </div>
-
-        <div class="card">
-            <div class="card-title">
-                <span class="emoji">📦</span> Shipping info
-                {% if ship_locked %}
-                    <span class="pill pill-green" style="margin-left:auto;">Locked</span>
-                {% else %}
-                    <span class="pill" style="margin-left:auto;">Editable</span>
-                {% endif %}
-            </div>
-
-            <form method="post" id="shipping-form">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="save_shipping">
-
-                <table class="info-table" id="shipping-table">
-                    <tr>
-                        <td class="label">Name</td>
-                        <td>
-                            <input class="ship-input" type="text" name="shipping_name" value="{{ ship.name|default:'' }}">
-                        </td>
-                    </tr>
-                    <tr>
-                        <td class="label">Address 1</td>
-                        <td>
-                            <input class="ship-input" type="text" name="shipping_address1" value="{{ ship.address1|default:'' }}">
-                        </td>
-                    </tr>
-                    <tr>
-                        <td class="label">Address 2</td>
-                        <td>
-                            <input class="ship-input" type="text" name="shipping_address2" value="{{ ship.address2|default:'' }}">
-                        </td>
-                    </tr>
-                    <tr>
-                        <td class="label">City</td>
-                        <td>
-                            <input class="ship-input" type="text" name="shipping_city" value="{{ ship.city|default:'' }}">
-                        </td>
-                    </tr>
-                    <tr>
-                        <td class="label">State</td>
-                        <td>
-                            <input class="ship-input" type="text" name="shipping_state" value="{{ ship.state|default:'' }}">
-                        </td>
-                    </tr>
-                    <tr>
-                        <td class="label">Post code</td>
-                        <td>
-                            <input class="ship-input" type="text" name="shipping_postcode" value="{{ ship.post_code|default:'' }}">
-                        </td>
-                    </tr>
-                    <tr>
-                        <td class="label">Country</td>
-                        <td>
-                            <input class="ship-input" type="text" name="shipping_country" value="{{ ship.country|default:'' }}">
-                        </td>
-                    </tr>
-                </table>
-
-                <div class="ship-actions">
-                    <div class="ship-saved-pill" id="ship-saved-pill">Saved</div>
-
-                    <button type="button" class="btn btn-slate btn-small" id="ship-edit-btn">
-                        Edit
-                    </button>
-
-                    <button type="submit" class="btn btn-blue btn-small" id="ship-save-btn" style="margin-top:0;">
-                        Save shipping
-                    </button>
-                </div>
-
-                <div class="muted" style="margin-top:6px;">
-                    Shipping locks after save and is stored on the customer profile. Click Edit to change it.
-                </div>
-            </form>
-        </div>
-
-    </div>
-
-    <div class="section">
-        <div class="section-title">Lead contact</div>
-        <div class="card">
-            <table class="info-table">
-                <tr>
-                    <td class="label">Contact name</td>
-                    <td class="value-main">{{ lead.contact_name }}</td>
-                </tr>
-                <tr>
-                    <td class="label">Email</td>
-                    <td class="value-main">{{ lead.email }}</td>
-                </tr>
-                <tr>
-                    <td class="label">Phone</td>
-                    <td class="value-main">{{ lead.phone }}</td>
-                </tr>
-                <tr>
-                    <td class="label">Market</td>
-                    <td class="value-main">{{ lead.get_market_display }}</td>
-                </tr>
-                <tr>
-                    <td class="label">Country</td>
-                    <td class="value-main">{{ lead.country }}</td>
-                </tr>
-                <tr>
-                    <td class="label">City</td>
-                    <td class="value-main">{{ lead.city }}</td>
-                </tr>
-                <tr>
-                    <td class="label">Product interest</td>
-                    <td class="value-main">{{ lead.product_interest }}</td>
-                </tr>
-                <tr>
-                    <td class="label">Order quantity</td>
-                    <td class="value-main">{{ lead.order_quantity }}</td>
-                </tr>
-                <tr>
-                    <td class="label">Budget</td>
-                    <td class="value-main">{{ lead.budget }}</td>
-                </tr>
-            </table>
-
-            <p class="muted" style="margin-top:6px;">
-                Full lead view
-                {% if opportunity.lead %}
-                    <a href="{% url 'lead_detail' opportunity.lead.pk %}">
-                        View lead
-                    </a>
-                {% endif %}
-            </p>
-        </div>
-    </div>
-
-    <div class="section">
-        <div class="section-title">Production linked to this opportunity</div>
-        <div class="card">
-            {% if prod_orders %}
-                <table class="info-table">
-                    <tr>
-                        <td class="label">Number of orders</td>
-                        <td class="value-main">{{ prod_orders|length }}</td>
-                    </tr>
-                    <tr>
-                        <td class="label">Total pieces</td>
-                        <td class="value-main">{{ prod_total_qty }}</td>
-                    </tr>
-                    <tr>
-                        <td class="label">Total reject</td>
-                        <td class="value-main">{{ prod_total_reject }}</td>
-                    </tr>
-                    <tr>
-                        <td class="label">Total actual cost BDT</td>
-                        <td class="value-main">{{ prod_total_actual_cost }}</td>
-                    </tr>
-                </table>
-
-                <hr style="border-color:#111827; margin:6px 0;">
-
-                <ul class="simple-list">
-                    {% for po in prod_orders %}
-                        <li>
-                            🧵
-                            <a href="{% url 'production_detail' po.pk %}">
-                                {{ po.title }}
-                            </a>
-                            <span class="muted">
-                                • {{ po.qty_total }} pcs
-                                • Status {{ po.get_status_display }}
-                                {% if po.order_type %}
-                                    • Type {{ po.get_order_type_display }}
-                                {% endif %}
-                            </span>
-                        </li>
-                    {% endfor %}
-                </ul>
-            {% else %}
-                <p class="muted">
-                    No production orders are linked yet.
-                    When you create a production order and link this opportunity numbers will show here.
-                </p>
-            {% endif %}
-        </div>
-    </div>
-
-    <div class="section">
-        <div class="card">
-
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px;">
-                <div>
-                    <div class="card-title" style="margin-bottom:2px;">
-                        <span class="emoji">📦</span>
-                        <span>Shipments and shipping cost</span>
-                    </div>
-
-                    {% if shipments %}
-                        <div class="muted" style="font-size:11px;">
-                            {{ shipments|length }} shipment{{ shipments|length|pluralize }} linked to this opportunity.
-                        </div>
-                    {% else %}
-                        <div class="muted" style="font-size:11px;">
-                            No shipments yet. Use Add shipment to record courier cost.
-                        </div>
-                    {% endif %}
-                </div>
-
-                <a href="{% url 'shipping_add_for_opportunity' opportunity.pk %}"
-                   class="btn btn-gold btn-small">
-                    Add shipment
-                </a>
-            </div>
-
-            {% if shipments %}
-                <div style="font-size:12px; margin-bottom:6px;">
-                    <span class="pill pill-green">
-                        Total shipping cost {{ shipping_cost_bdt }} taka
-                    </span>
-                    {% if shipping_cost_cad %}
-                        <span class="pill" style="margin-left:4px;">
-                            About {{ shipping_cost_cad }} cad
-                        </span>
-                    {% endif %}
-                    <span class="muted" style="display:block; margin-top:2px;">
-                        Shipping cost is already included in the profit in taka box above.
-                    </span>
-                </div>
-
-                <div class="table-responsive" style="margin-top:4px;">
-                    <table class="table table-dark table-sm table-striped mb-0" style="font-size:12px;">
-                        <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Carrier</th>
-                            <th>Tracking</th>
-                            <th>Boxes</th>
-                            <th>Weight kg</th>
-                            <th>Cost BDT</th>
-                            <th>Cost CAD</th>
-                            <th>Status</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        {% for s in shipments %}
-                            <tr>
-                                <td>{{ s.ship_date|date:"Y-m-d"|default:"-" }}</td>
-                                <td>{{ s.get_carrier_display }}</td>
-                                <td>
-                                    {% if s.tracking_number %}
-                                        {% if s.tracking_url %}
-                                            <a href="{{ s.tracking_url }}" target="_blank">
-                                                {{ s.tracking_number }}
-                                            </a>
-                                        {% else %}
-                                            {{ s.tracking_number }}
-                                        {% endif %}
-                                    {% else %}
-                                        -
-                                    {% endif %}
-                                </td>
-                                <td>{{ s.box_count|default:"-" }}</td>
-                                <td>{{ s.total_weight_kg|default:"-" }}</td>
-                                <td>{{ s.cost_bdt|default:"-" }}</td>
-                                <td>{{ s.cost_cad|default:"-" }}</td>
-                                <td>{{ s.get_status_display }}</td>
-                            </tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            {% else %}
-                <p class="muted mb-0" style="font-size:13px; margin-top:4px;">
-                    Add a shipment when you book any courier. The cost will roll into the profit in taka box.
-                </p>
-            {% endif %}
-
-        </div>
-    </div>
-
-    <div class="section">
-        <details>
-            <summary style="color:#facc15;">
-                Old AI helper for this opportunity
-            </summary>
-            <div class="card" style="margin-top:6px;">
-                {% if agents %}
-                    <form method="post" style="margin-bottom:6px;">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="ai_quick">
-                        <label style="font-size:11px; color:#e5e7eb;">Quick AI action</label>
-                        <select name="quick_action" style="margin-bottom:4px;">
-                            <option value="summary">Summary</option>
-                            <option value="client_profile">Client profile</option>
-                            <option value="next_steps">Next steps</option>
-                            <option value="cold_email">Cold email</option>
-                            <option value="warm_followup">Warm follow up</option>
-                            <option value="mood">Mood and intent</option>
-                            <option value="product_reco">Product ideas</option>
-                        </select>
-                        <button type="submit" class="btn btn-gold btn-small">Run AI quick action</button>
-                    </form>
-
-                    <div class="muted" style="font-size:11px;">
-                        This old area can stay, but your new AI card above is the main one.
-                    </div>
-                {% else %}
-                    <p class="muted">
-                        No AI agents configured yet.
-                    </p>
-                {% endif %}
-            </div>
-        </details>
-    </div>
-
-    <div class="section">
-        <div class="section-title">Chatter feed (Lead + Opportunity + Production)</div>
-        <div class="card">
-            <form method="post" style="margin-bottom: 8px;" enctype="multipart/form-data">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="add_comment">
-                <textarea name="comment_text" rows="3"
-                          placeholder="Write a note about this opportunity"></textarea>
-                <div style="margin-top:6px;">
-                    <label style="font-size:11px; color:#e5e7eb;">Attachment (optional)</label>
-                    <input type="file" name="attachment">
-                </div>
-                <br>
-                <button class="btn btn-gold btn-small" type="submit" style="margin-top:4px;">
-                    Save note
-                </button>
-            </form>
-
-            {% if comments %}
-                {% for c in comments %}
-                    <div style="margin-bottom: 8px;">
-                        <strong class="value-main">{{ c.author }}</strong>
-                        <span class="muted">
-                            {{ c.created_at }}
-                            {% if c.production %} • Production{% elif c.opportunity %} • Opportunity{% else %} • Lead{% endif %}
-                            {% if c.pinned %} pinned{% endif %}
-                            {% if c.is_ai %} AI{% endif %}
-                        </span>
-                        <p class="value-soft">{{ c.content|linebreaksbr }}</p>
-                        {% if c.attachment %}
-                            <div class="muted" style="font-size:11px; margin-top:4px;">
-                                {% with c.attachment.name|cut:"chatter_attachments/" as attachment_name %}
-                                    <a href="{{ c.attachment.url }}" target="_blank" rel="noopener">
-                                        {{ attachment_name|default:"Attachment" }}
-                                    </a>
-                                {% endwith %}
-                            </div>
-                        {% endif %}
-                        <div class="muted" style="font-size:11px;">
-                            {% if c.production %}
-                                <a href="{% url 'production_detail' c.production.pk %}">Open production</a>
-                            {% elif c.opportunity %}
-                                <a href="{% url 'opportunity_detail' c.opportunity.pk %}">Open opportunity</a>
-                            {% elif c.lead %}
-                                <a href="{% url 'lead_detail' c.lead.pk %}">Open lead</a>
-                            {% endif %}
-                        </div>
-
-                        <form method="post" style="display:inline;">
-                            {% csrf_token %}
-                            <input type="hidden" name="action" value="toggle_pin_comment">
-                            <input type="hidden" name="comment_id" value="{{ c.id }}">
-                            <button type="submit" class="btn btn-slate btn-small">
-                                {% if c.pinned %}Unpin{% else %}Pin{% endif %}
-                            </button>
-                        </form>
-                    </div>
+          <div class="opp-form-grid">
+            <label>
+              <span>Stage</span>
+              <select name="stage">
+                {% for value,label in stage_choices %}
+                  <option value="{{ value }}" {% if opportunity.stage == value %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
+              </select>
+            </label>
+
+            <label>
+              <span>Next follow up</span>
+              <div class="opp-date-control">
+                <input
+                  id="next-followup-date"
+                  type="date"
+                  name="next_followup"
+                  value="{% if opportunity.next_followup %}{{ opportunity.next_followup|date:'Y-m-d' }}{% endif %}"
+                >
+                <button type="button" class="opp-btn opp-btn--tiny opp-btn--ghost" id="next-followup-open">Pick</button>
+              </div>
+            </label>
+
+            <label class="opp-check-row">
+              <input type="checkbox" name="is_open" {% if opportunity.is_open %}checked{% endif %}>
+              <span>Opportunity is open</span>
+            </label>
+
+            <button type="submit" class="opp-btn opp-btn--primary">Save status</button>
+          </div>
+        </form>
+
+        <div class="opp-task-grid">
+          <div class="opp-task-list">
+            <h3>Tasks</h3>
+            {% if opp_tasks %}
+              {% for t in opp_tasks %}
+                <div class="opp-task-item">
+                  <div>
+                    <strong>{{ t.title }}</strong>
+                    <span>{{ t.status }}{% if t.due_date %} · Due {{ t.due_date|date:"M j, Y" }}{% endif %}{% if t.assigned_to %} · {{ t.assigned_to }}{% endif %}</span>
+                    {% if t.description %}<p>{{ t.description }}</p>{% endif %}
+                  </div>
+                  {% if t.status != "Done" %}
+                    <form method="post">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="complete_opp_task">
+                      <input type="hidden" name="task_id" value="{{ t.id }}">
+                      <button type="submit" class="opp-btn opp-btn--tiny opp-btn--ghost">Done</button>
+                    </form>
+                  {% endif %}
+                </div>
+              {% endfor %}
             {% else %}
-                <p class="muted">
-                    No chatter notes yet.
-                </p>
+              <p class="opp-muted">No tasks yet.</p>
             {% endif %}
+          </div>
+
+          <form method="post" class="opp-add-task-form">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add_opp_task">
+            <h3>Add task</h3>
+            <label>
+              <span>Title</span>
+              <input type="text" name="task_title" placeholder="Follow up with buyer">
+            </label>
+            <div class="opp-form-grid opp-form-grid--compact">
+              <label>
+                <span>Due date</span>
+                <input type="date" name="task_due_date">
+              </label>
+              <label>
+                <span>Priority</span>
+                <select name="task_priority">
+                  <option value="Low">Low</option>
+                  <option value="Medium" selected>Medium</option>
+                  <option value="High">High</option>
+                </select>
+              </label>
+            </div>
+            <label>
+              <span>Assigned to</span>
+              <input type="text" name="task_assigned_to" placeholder="Rep name">
+            </label>
+            <label>
+              <span>Description</span>
+              <textarea name="task_description" rows="3" placeholder="What needs to happen next"></textarea>
+            </label>
+            <button type="submit" class="opp-btn opp-btn--primary">Add task</button>
+          </form>
         </div>
-    </div>
+      </section>
 
-    <div class="section">
-        <div class="section-title">Basic activity</div>
-        <ul class="simple-list">
-            <li>
-                <span class="muted">Lead created</span>
-                {{ lead.created_date }}
-            </li>
-            <li>
-                <span class="muted">Opportunity created</span>
-                {{ opportunity.created_date }}
-            </li>
-            <li>
-                <span class="muted">Lead status</span>
-                {{ lead.lead_status }}  |  Priority {{ lead.priority }}
-            </li>
+      <section class="opp-panel">
+        <div class="opp-panel-head">
+          <div>
+            <p class="opp-section-kicker">Quote and costing</p>
+            <h2>Commercial readiness</h2>
+          </div>
+          <div class="opp-panel-actions">
+            {% if costing_header %}
+              <a href="{% url 'cost_sheet_detail' costing_header.pk %}" class="opp-btn opp-btn--tiny opp-btn--primary">Open costing</a>
+              <a href="{% url 'cost_sheet_export_pdf' costing_header.pk %}" class="opp-btn opp-btn--tiny opp-btn--ghost">Export PDF</a>
+              <a href="{% url 'cost_sheet_export_excel' costing_header.pk %}" class="opp-btn opp-btn--tiny opp-btn--ghost">Export Excel</a>
+            {% else %}
+              <a href="{% url 'cost_sheet_create_for_opportunity' opportunity.pk %}" class="opp-btn opp-btn--tiny opp-btn--primary">Create costing</a>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="opp-costing-grid">
+          <article>
+            <span>Latest quote status</span>
+            <strong>{% if costing_header %}{{ costing_header.get_status_display }}{% else %}No quote yet{% endif %}</strong>
+            <small>{% if costing_header %}Updated {{ costing_header.updated_at|date:"Y-m-d H:i" }}{% else %}Create costing to generate quote outputs.{% endif %}</small>
+          </article>
+          <article>
+            <span>Total cost / piece</span>
+            <strong>{% if costing_calc %}{{ costing_calc.display.total_cost_per_piece }} BDT{% else %}—{% endif %}</strong>
+          </article>
+          <article>
+            <span>FOB / piece</span>
+            <strong>{% if costing_calc %}{{ costing_calc.display.fob_per_piece }} BDT{% else %}—{% endif %}</strong>
+          </article>
+          <article>
+            <span>Margin</span>
+            <strong>{% if costing_calc %}{{ costing_calc.display.margin_percent }}%{% else %}—{% endif %}</strong>
+          </article>
+        </div>
+
+        <div class="opp-document-row">
+          <div>
+            <h3>Linked costing records and files</h3>
+            {% if opportunity_documents %}
+              <ul class="opp-file-list">
+                {% for doc in opportunity_documents %}
+                  <li>
+                    <a href="{{ doc.file.url }}" target="_blank">{{ doc.original_name|default:doc.file.name }}</a>
+                    <span>{{ doc.get_doc_type_display }} · {{ doc.uploaded_at|date:"Y-m-d" }}</span>
+                  </li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <p class="opp-muted">No quote or costing documents uploaded yet.</p>
+            {% endif %}
+          </div>
+
+          <form method="post" enctype="multipart/form-data" class="opp-upload-form">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="upload_document">
+            <label>
+              <span>Costing file</span>
+              <input type="file" name="doc_file">
+            </label>
+            <label>
+              <span>Type</span>
+              <select name="doc_type">
+                <option value="costing_pdf">Costing PDF</option>
+                <option value="costing_excel">Costing Excel</option>
+                <option value="costing_other">Costing Other</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <button type="submit" class="opp-btn opp-btn--ghost">Upload costing file</button>
+          </form>
+        </div>
+      </section>
+
+      <section class="opp-panel">
+        <div class="opp-panel-head">
+          <div>
+            <p class="opp-section-kicker">Production readiness</p>
+            <h2>Can this move to the factory?</h2>
+          </div>
+          {% if prod_orders %}
+            <a href="{% url 'production_detail' prod_orders.0.pk %}" class="opp-btn opp-btn--tiny opp-btn--primary">Open production</a>
+          {% else %}
+            <a href="{% url 'production_from_opportunity' opportunity.pk %}" class="opp-btn opp-btn--tiny opp-btn--primary">Move to production</a>
+          {% endif %}
+        </div>
+
+        <div class="opp-readiness-grid">
+          <article>
+            <span>Sample status</span>
+            <strong>{% if opportunity.stage == "Sampling" %}In sampling{% else %}Not tracked{% endif %}</strong>
+          </article>
+          <article>
+            <span>Approval status</span>
+            <strong>{% if costing_header %}{{ costing_header.get_status_display }}{% else %}No costing approval yet{% endif %}</strong>
+          </article>
+          <article>
+            <span>Production orders</span>
+            <strong>{{ prod_orders|length }}</strong>
+            <small>{{ prod_total_qty }} total pieces</small>
+          </article>
+          <article>
+            <span>Shipments</span>
+            <strong>{{ shipments|length }}</strong>
+            <small>{% if shipping_cost_bdt %}{{ shipping_cost_bdt }} BDT shipping{% else %}No shipping cost yet{% endif %}</small>
+          </article>
+        </div>
+
+        <div class="opp-checklist">
+          <div class="{% if opportunity.product_category %}ready{% else %}missing{% endif %}">Product category</div>
+          <div class="{% if opportunity.moq_units or lead.order_quantity %}ready{% else %}missing{% endif %}">Quantity</div>
+          <div class="{% if opportunity.order_value or opportunity.order_value_usd %}ready{% else %}missing{% endif %}">Order value</div>
+          <div class="{% if costing_header %}ready{% else %}missing{% endif %}">Costing</div>
+          <div class="{% if ship_locked %}ready{% else %}missing{% endif %}">Shipping address</div>
+        </div>
+
+        {% if prod_orders %}
+          <ul class="opp-file-list opp-production-list">
+            {% for po in prod_orders %}
+              <li>
+                <a href="{% url 'production_detail' po.pk %}">{{ po.title }}</a>
+                <span>{{ po.qty_total }} pcs · {{ po.get_status_display }}{% if po.order_type %} · {{ po.get_order_type_display }}{% endif %}</span>
+              </li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      </section>
+
+      <section class="opp-panel">
+        <div class="opp-panel-head">
+          <div>
+            <p class="opp-section-kicker">Communication</p>
+            <h2>Notes and recent updates</h2>
+          </div>
+        </div>
+
+        <form method="post" enctype="multipart/form-data" class="opp-note-form">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="add_comment">
+          <textarea name="comment_text" rows="3" placeholder="Write a note about this opportunity"></textarea>
+          <div class="opp-note-actions">
+            <label>
+              <span>Attachment</span>
+              <input type="file" name="attachment">
+            </label>
+            <button class="opp-btn opp-btn--primary" type="submit">Save note</button>
+          </div>
+        </form>
+
+        <div class="opp-comment-list">
+          {% if comments %}
+            {% for c in comments %}
+              <article class="opp-comment">
+                <div class="opp-comment-head">
+                  <strong>{{ c.author }}</strong>
+                  <span>
+                    {{ c.created_at }}
+                    {% if c.production %} · Production{% elif c.opportunity %} · Opportunity{% else %} · Lead{% endif %}
+                    {% if c.pinned %} · pinned{% endif %}
+                    {% if c.is_ai %} · AI{% endif %}
+                  </span>
+                </div>
+                <p>{{ c.content|linebreaksbr }}</p>
+                {% if c.attachment %}
+                  <div class="opp-muted">
+                    {% with c.attachment.name|cut:"chatter_attachments/" as attachment_name %}
+                      <a href="{{ c.attachment.url }}" target="_blank" rel="noopener">{{ attachment_name|default:"Attachment" }}</a>
+                    {% endwith %}
+                  </div>
+                {% endif %}
+                <div class="opp-comment-actions">
+                  {% if c.production %}
+                    <a href="{% url 'production_detail' c.production.pk %}">Open production</a>
+                  {% elif c.opportunity %}
+                    <a href="{% url 'opportunity_detail' c.opportunity.pk %}">Open opportunity</a>
+                  {% elif c.lead %}
+                    <a href="{% url 'lead_detail' c.lead.pk %}">Open lead</a>
+                  {% endif %}
+                  <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="toggle_pin_comment">
+                    <input type="hidden" name="comment_id" value="{{ c.id }}">
+                    <button type="submit" class="opp-btn opp-btn--tiny opp-btn--ghost">{% if c.pinned %}Unpin{% else %}Pin{% endif %}</button>
+                  </form>
+                </div>
+              </article>
+            {% endfor %}
+          {% else %}
+            <p class="opp-muted">No chatter notes yet.</p>
+          {% endif %}
+        </div>
+
+        <details class="opp-subdetails">
+          <summary>Recent lead activity</summary>
+          <ul class="opp-file-list">
+            {% for activity in activities|slice:":8" %}
+              <li>
+                <strong>{{ activity.get_activity_type_display }}</strong>
+                <span>{{ activity.created_at|date:"Y-m-d H:i" }} · {{ activity.description }}</span>
+              </li>
+            {% empty %}
+              <li><span>No recent lead activity.</span></li>
+            {% endfor %}
+          </ul>
+        </details>
+      </section>
+    </main>
+
+    <aside class="opp-side-column">
+      <section class="opp-panel opp-profit-card">
+        <p class="opp-section-kicker">Profit snapshot</p>
+        <div class="opp-profit-value {% if profit_after_shipping and profit_after_shipping < 0 %}negative{% endif %}">
+          {% if profit_after_shipping or profit_after_shipping == 0 %}{{ profit_after_shipping|floatformat:2 }} BDT{% else %}—{% endif %}
+        </div>
+        <div class="opp-money-row"><span>Order value</span><strong>{% if opportunity.order_value %}{{ opportunity.order_value }}{% else %}—{% endif %}</strong></div>
+        <div class="opp-money-row"><span>Total cost</span><strong>{% if total_cost_bdt or total_cost_bdt == 0 %}{{ total_cost_bdt }}{% else %}—{% endif %}</strong></div>
+        <div class="opp-money-row"><span>Margin</span><strong>{% if profit_after_shipping_percent or profit_after_shipping_percent == 0 %}{{ profit_after_shipping_percent|floatformat:1 }}%{% else %}—{% endif %}</strong></div>
+        <div class="opp-money-row"><span>Shipping</span><strong>{% if shipping_cost_bdt %}{{ shipping_cost_bdt }} BDT{% else %}—{% endif %}</strong></div>
+      </section>
+
+      <section class="opp-panel opp-ai-card">
+        <div class="opp-panel-head">
+          <div>
+            <p class="opp-section-kicker">AI deal view</p>
+            <h2>Next steps and risk</h2>
+          </div>
+          <div id="opp-ai-status" class="opp-ai-status"></div>
+        </div>
+
+        <div class="opp-ai-buttons">
+          <button type="button" class="opp-btn opp-btn--tiny opp-btn--primary" data-opp-mode="summary">Summary</button>
+          <button type="button" class="opp-btn opp-btn--tiny opp-btn--ghost" data-opp-mode="next_steps">Next steps</button>
+          <button type="button" class="opp-btn opp-btn--tiny opp-btn--ghost" data-opp-mode="risk">Risk</button>
+          <button type="button" class="opp-btn opp-btn--tiny opp-btn--ghost" data-opp-mode="products">Products</button>
+          <button type="button" class="opp-btn opp-btn--tiny opp-btn--ghost" data-opp-mode="timeline">Timeline</button>
+        </div>
+
+        <label class="opp-full-field">
+          <span>Email follow up helper</span>
+          <textarea id="opp-ai-email-body" rows="3" placeholder="Write a few points for the email and AI will turn it into a clean message."></textarea>
+        </label>
+        <button type="button" class="opp-btn opp-btn--primary" id="opp-ai-email-btn">Create email with AI</button>
+
+        <label class="opp-full-field">
+          <span>Ask a custom question</span>
+          <input type="text" id="opp-ai-chat-input" placeholder="Example: What should I do before sending a quote">
+        </label>
+        <button type="button" class="opp-btn opp-btn--ghost" id="opp-ai-chat-btn">Ask AI</button>
+
+        <div id="opp-ai-output" class="opp-ai-output">
+          AI answer will appear here. It is also saved as an AI note for this opportunity.
+        </div>
+
+        <form id="opp-ai-csrf" class="opp-hidden-form">
+          {% csrf_token %}
+        </form>
+      </section>
+
+      <section class="opp-panel">
+        <div class="opp-panel-head">
+          <div>
+            <p class="opp-section-kicker">Shipping address</p>
+            <h2>Customer delivery info</h2>
+          </div>
+          {% if ship_locked %}<span class="opp-status-pill open">Saved</span>{% else %}<span class="opp-status-pill">Editable</span>{% endif %}
+        </div>
+
+        <form method="post" id="shipping-form" class="opp-shipping-form">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="save_shipping">
+          <label><span>Name</span><input class="ship-input" type="text" name="shipping_name" value="{{ ship.name|default:'' }}"></label>
+          <label><span>Address 1</span><input class="ship-input" type="text" name="shipping_address1" value="{{ ship.address1|default:'' }}"></label>
+          <label><span>Address 2</span><input class="ship-input" type="text" name="shipping_address2" value="{{ ship.address2|default:'' }}"></label>
+          <div class="opp-form-grid opp-form-grid--compact">
+            <label><span>City</span><input class="ship-input" type="text" name="shipping_city" value="{{ ship.city|default:'' }}"></label>
+            <label><span>State</span><input class="ship-input" type="text" name="shipping_state" value="{{ ship.state|default:'' }}"></label>
+          </div>
+          <div class="opp-form-grid opp-form-grid--compact">
+            <label><span>Post code</span><input class="ship-input" type="text" name="shipping_postcode" value="{{ ship.post_code|default:'' }}"></label>
+            <label><span>Country</span><input class="ship-input" type="text" name="shipping_country" value="{{ ship.country|default:'' }}"></label>
+          </div>
+          <div class="ship-actions">
+            <div class="ship-saved-pill" id="ship-saved-pill">Saved</div>
+            <button type="button" class="opp-btn opp-btn--ghost" id="ship-edit-btn">Edit</button>
+            <button type="submit" class="opp-btn opp-btn--primary" id="ship-save-btn">Save shipping</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="opp-panel">
+        <div class="opp-panel-head">
+          <div>
+            <p class="opp-section-kicker">Files</p>
+            <h2>Opportunity attachments</h2>
+          </div>
+        </div>
+
+        <form method="post" enctype="multipart/form-data" class="opp-upload-form">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="upload_file">
+          <label>
+            <span>File</span>
+            <input type="file" name="file_obj">
+          </label>
+          <button type="submit" class="opp-btn opp-btn--ghost">Upload file</button>
+        </form>
+
+        {% if opp_files %}
+          <ul class="opp-file-list">
+            {% for f in opp_files %}
+              <li>
+                <a href="{{ f.file.url }}" target="_blank">{{ f.original_name|default:f.file.name }}</a>
+                <span>{{ f.uploaded_at|date:"Y-m-d" }}{% if f.uploaded_by %} · {{ f.uploaded_by }}{% endif %}</span>
+                <form method="post">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="delete_file">
+                  <input type="hidden" name="file_id" value="{{ f.id }}">
+                  <button type="submit" class="opp-btn opp-btn--tiny opp-btn--danger" onclick="return confirm('Delete this file?');">Delete</button>
+                </form>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="opp-muted">No opportunity files uploaded yet.</p>
+        {% endif %}
+      </section>
+
+      <section class="opp-panel">
+        <div class="opp-panel-head">
+          <div>
+            <p class="opp-section-kicker">Shipments</p>
+            <h2>Delivery costs</h2>
+          </div>
+          <a href="{% url 'shipping_add_for_opportunity' opportunity.pk %}" class="opp-btn opp-btn--tiny opp-btn--primary">Add shipment</a>
+        </div>
+
+        {% if shipments %}
+          <ul class="opp-file-list">
+            {% for s in shipments %}
+              <li>
+                <strong>{{ s.ship_date|date:"Y-m-d"|default:"No date" }} · {{ s.get_carrier_display }}</strong>
+                <span>
+                  {% if s.tracking_number %}
+                    {% if s.tracking_url %}<a href="{{ s.tracking_url }}" target="_blank">{{ s.tracking_number }}</a>{% else %}{{ s.tracking_number }}{% endif %}
+                  {% else %}
+                    No tracking
+                  {% endif %}
+                  · {{ s.cost_bdt|default:"-" }} BDT · {{ s.get_status_display }}
+                </span>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="opp-muted">No shipments yet. Shipping cost will roll into profit once added.</p>
+        {% endif %}
+      </section>
+    </aside>
+  </div>
+
+  <details class="opp-admin-details">
+    <summary>Admin / raw details</summary>
+    <div class="opp-admin-grid">
+      <section class="opp-panel">
+        <p class="opp-section-kicker">Raw opportunity</p>
+        <div class="opp-info-grid">
+          <div><span>Opportunity ID</span><strong>{{ opportunity.opportunity_id }}</strong></div>
+          <div><span>Created</span><strong>{{ opportunity.created_date }}</strong></div>
+          <div><span>Updated</span><strong>{{ opportunity.updated_at|date:"Y-m-d H:i" }}</strong></div>
+          <div><span>Open flag</span><strong>{% if opportunity.is_open %}Open{% else %}Closed{% endif %}</strong></div>
+          <div><span>Converted lead type</span><strong>{{ opportunity.converted_from_lead_type|default:"—" }}</strong></div>
+          <div><span>Source channel</span><strong>{{ opportunity.converted_from_source_channel|default:"—" }}</strong></div>
+          <div><span>Outbound status</span><strong>{{ opportunity.converted_from_outbound_status|default:"—" }}</strong></div>
+          <div><span>FX rate</span><strong>{{ fx_rate_bdt_per_usd|default:"—" }}</strong></div>
+        </div>
+      </section>
+
+      <section class="opp-panel">
+        <p class="opp-section-kicker">Legacy AI helper</p>
+        <details class="opp-subdetails" open>
+          <summary>Run old quick action</summary>
+          {% if agents %}
+            <form method="post" class="opp-upload-form">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="ai_quick">
+              <label>
+                <span>Quick AI action</span>
+                <select name="quick_action">
+                  <option value="summary">Summary</option>
+                  <option value="client_profile">Client profile</option>
+                  <option value="next_steps">Next steps</option>
+                  <option value="cold_email">Cold email</option>
+                  <option value="warm_followup">Warm follow up</option>
+                  <option value="mood">Mood and intent</option>
+                  <option value="product_reco">Product ideas</option>
+                </select>
+              </label>
+              <button type="submit" class="opp-btn opp-btn--ghost">Run AI quick action</button>
+            </form>
+          {% else %}
+            <p class="opp-muted">No AI agents configured yet.</p>
+          {% endif %}
+        </details>
+      </section>
+
+      <section class="opp-panel">
+        <p class="opp-section-kicker">Basic activity</p>
+        <ul class="opp-file-list">
+          <li><strong>Lead created</strong><span>{{ lead.created_date }}</span></li>
+          <li><strong>Opportunity created</strong><span>{{ opportunity.created_date }}</span></li>
+          <li><strong>Lead status</strong><span>{{ lead.lead_status }} · Priority {{ lead.priority }}</span></li>
         </ul>
+      </section>
     </div>
-
+  </details>
 </div>
 
 <script>
@@ -1366,6 +729,7 @@
     const modeButtons = document.querySelectorAll("button[data-opp-mode]");
 
     function callOppAi(mode, extra) {
+        if (!statusBox || !outBox) return;
         statusBox.textContent = "AI is thinking";
         outBox.textContent = "";
         const body = {mode: mode};
@@ -1502,5 +866,4 @@
     setShippingLocked(hasShippingData());
 })();
 </script>
-
 {% endblock %}
