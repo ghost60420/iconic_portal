@@ -1,246 +1,194 @@
 {% extends "crm/base.html" %}
+{% load static %}
 {% block content %}
+<link rel="stylesheet" href="{% static 'crm/customers_list.css' %}?v=customers-modern-20260507">
 
-<style>
-  .cust-page {
-    max-width: 1200px;
-    margin: 24px auto 40px auto;
-    padding: 0 12px;
-    color: #f9fafb;
-  }
-
-  .cust-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-bottom: 14px;
-  }
-
-  .cust-title {
-    font-size: 22px;
-    font-weight: 700;
-    color: #fef9c3;
-  }
-
-  .cust-sub {
-    font-size: 12px;
-    color: #9ca3af;
-  }
-
-  .cust-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-    justify-content: flex-end;
-  }
-
-  .btn {
-    display: inline-block;
-    padding: 6px 12px;
-    border-radius: 999px;
-    border: 1px solid transparent;
-    font-size: 12px;
-    text-decoration: none;
-    white-space: nowrap;
-  }
-
-  .btn-gold {
-    background: linear-gradient(135deg, #facc15, #f97316);
-    color: #111827;
-    border-color: #fbbf24;
-    font-weight: 600;
-  }
-
-  .btn-slate {
-    background: #020617;
-    color: #e5e7eb;
-    border-color: #374151;
-  }
-
-  .cust-filters {
-    background: radial-gradient(circle at top left, #111827, #020617);
-    border: 1px solid #1f2937;
-    border-radius: 14px;
-    padding: 12px 14px;
-    margin-bottom: 14px;
-    display: grid;
-    grid-template-columns: 2fr 1fr auto;
-    gap: 10px;
-    align-items: center;
-  }
-
-  .cust-filters input[type="text"] {
-    width: 100%;
-    background: #020617;
-    color: #f9fafb;
-    border: 1px solid #374151;
-    border-radius: 999px;
-    padding: 6px 12px;
-    font-size: 12px;
-  }
-
-  .cust-filters select {
-    width: 100%;
-    background: #020617;
-    color: #f9fafb;
-    border: 1px solid #374151;
-    border-radius: 999px;
-    padding: 6px 10px;
-    font-size: 12px;
-  }
-
-  .cust-filter-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    font-size: 11px;
-    color: #e5e7eb;
-  }
-
-  .cust-filter-row label {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    cursor: pointer;
-  }
-
-  .cust-filter-row input[type="checkbox"] {
-    accent-color: #facc15;
-  }
-
-  .table-wrap {
-    background: radial-gradient(circle at top left, #111827, #020617);
-    border-radius: 12px;
-    border: 1px solid #1f2937;
-    padding: 10px 12px;
-    box-shadow: 0 0 16px rgba(0, 0, 0, 0.7);
-  }
-
-  .table {
-    font-size: 12px;
-    margin-bottom: 0;
-  }
-
-  .table thead th {
-    border-bottom-color: #374151;
-    color: #e5e7eb;
-    white-space: nowrap;
-  }
-
-  .table tbody tr:hover {
-    background: rgba(15, 23, 42, 0.9);
-  }
-
-  .cust-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 2px 8px;
-    border-radius: 999px;
-    border: 1px solid #4b5563;
-    font-size: 11px;
-    background: #020617;
-    color: #e5e7eb;
-  }
-
-  .muted {
-    color: #9ca3af;
-  }
-
-  @media (max-width: 900px) {
-    .cust-filters {
-      grid-template-columns: 1fr;
-    }
-  }
-</style>
-
-<div class="cust-page">
-  <div class="cust-header">
+<div class="customer-page">
+  <section class="customer-hero">
     <div>
-      <div class="cust-title">👥 Customers</div>
-      <div class="cust-sub">All customer records with activity, production, and history in one view.</div>
+      <p class="customer-eyebrow">Account management</p>
+      <h1>Customers</h1>
+      <p class="customer-subtitle">Track repeat customers, sales activity, production load, and account value from one clean list.</p>
     </div>
-    <div class="cust-actions">
-      <a href="{% url 'opportunities_list' %}" class="btn btn-slate">Back to opportunities</a>
+    <div class="customer-hero-actions">
+      <a href="{% url 'add_opportunity' %}" class="customer-btn customer-btn--primary">Create Opportunity</a>
+      <a href="{% url 'opportunities_list' %}" class="customer-btn customer-btn--ghost">Opportunities</a>
+      <a href="{% url 'production_list' %}" class="customer-btn customer-btn--ghost">Production</a>
+      <a href="{% url 'invoice_list' %}" class="customer-btn customer-btn--ghost">Invoices</a>
     </div>
-  </div>
+  </section>
 
-  <form class="cust-filters" method="get">
-    <input type="text" name="q" placeholder="Search name, company, email, or phone" value="{{ q|default:'' }}">
-    <div class="cust-filter-row">
+  <section class="customer-summary-grid" aria-label="Customer summary">
+    <article class="customer-stat">
+      <span>Total customers</span>
+      <strong>{{ summary.total }}</strong>
+      <small>{{ summary.active }} active accounts</small>
+    </article>
+    <article class="customer-stat">
+      <span>Active opportunities</span>
+      <strong>{{ summary.with_active_opps }}</strong>
+      <small>Customers with open sales work</small>
+    </article>
+    <article class="customer-stat">
+      <span>In production</span>
+      <strong>{{ summary.in_production }}</strong>
+      <small>Accounts with active production</small>
+    </article>
+    <article class="customer-stat">
+      <span>Total revenue</span>
+      <strong>{{ summary.total_revenue|floatformat:0 }}</strong>
+      <small>Linked opportunity value</small>
+    </article>
+  </section>
+
+  <form class="customer-filters" method="get">
+    <label class="customer-field customer-field--search">
+      <span>Search</span>
+      <input type="text" name="q" placeholder="Company, contact, email, phone, country" value="{{ q|default:'' }}">
+    </label>
+
+    <label class="customer-field">
+      <span>Country</span>
+      <select name="country">
+        <option value="">All countries</option>
+        {% for item in countries %}
+          <option value="{{ item }}" {% if country == item %}selected{% endif %}>{{ item }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label class="customer-field">
+      <span>Status</span>
+      <select name="status">
+        <option value="" {% if not status %}selected{% endif %}>All statuses</option>
+        <option value="active" {% if status == "active" %}selected{% endif %}>Active</option>
+        <option value="inactive" {% if status == "inactive" %}selected{% endif %}>Inactive</option>
+      </select>
+    </label>
+
+    <label class="customer-field">
+      <span>Sort</span>
+      <select name="sort">
+        <option value="recent" {% if sort == "recent" %}selected{% endif %}>Recently updated</option>
+        <option value="name" {% if sort == "name" %}selected{% endif %}>Name A to Z</option>
+        <option value="revenue" {% if sort == "revenue" %}selected{% endif %}>Revenue high to low</option>
+      </select>
+    </label>
+
+    <div class="customer-filter-toggles">
       <label>
         <input type="checkbox" name="has_active" value="1" {% if has_active %}checked{% endif %}>
-        Active opportunities
+        <span>Active opportunities</span>
       </label>
       <label>
         <input type="checkbox" name="has_production" value="1" {% if has_production %}checked{% endif %}>
-        In production
+        <span>In production</span>
       </label>
       <label>
         <input type="checkbox" name="has_completed" value="1" {% if has_completed %}checked{% endif %}>
-        Completed orders
+        <span>Completed orders</span>
       </label>
     </div>
-    <div style="display:flex; gap:6px; align-items:center; justify-content:flex-end; flex-wrap:wrap;">
-      <select name="sort">
-        <option value="recent" {% if sort == 'recent' %}selected{% endif %}>Recently updated</option>
-        <option value="name" {% if sort == 'name' %}selected{% endif %}>Name A to Z</option>
-      </select>
-      <button type="submit" class="btn btn-gold">Apply</button>
-      <a href="{% url 'customers_list' %}" class="btn btn-slate">Reset</a>
+
+    <div class="customer-filter-actions">
+      <button type="submit" class="customer-btn customer-btn--primary">Apply</button>
+      <a href="{% url 'customers_list' %}" class="customer-btn customer-btn--ghost">Reset</a>
     </div>
   </form>
 
-  <div class="table-wrap">
+  <section class="customer-table-shell">
+    <div class="customer-table-head">
+      <div>
+        <h2>Account list</h2>
+        <p>{{ page_obj.paginator.count }} customer record{% if page_obj.paginator.count != 1 %}s{% endif %} match the current view.</p>
+      </div>
+    </div>
+
     {% if customers %}
-      <div class="table-responsive">
-        <table class="table table-dark table-striped table-sm align-middle">
+      <div class="customer-table-wrap">
+        <table class="customer-table">
           <thead>
             <tr>
               <th>Customer</th>
+              <th>Contact</th>
               <th>Email</th>
               <th>Phone</th>
-              <th>Active opps</th>
-              <th>In production</th>
-              <th>Completed</th>
+              <th>Country</th>
+              <th>Opportunities</th>
+              <th>Revenue</th>
+              <th>Production</th>
               <th>Last activity</th>
-              <th style="text-align:right;">Open</th>
+              <th>Status</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {% for c in customers %}
               <tr>
-                <td>
-                  <div style="font-weight:600;">
-                    <a href="{% url 'customer_detail' c.pk %}">{{ c.contact_name|default:"No name" }}</a>
+                <td data-label="Customer">
+                  <div class="customer-account">
+                    <div class="customer-avatar">{{ c.initials }}</div>
+                    <div>
+                      <a href="{% url 'customer_detail' c.pk %}" class="customer-name">{{ c.display_name }}</a>
+                      <span>{{ c.customer_code|default:"No code" }}</span>
+                    </div>
                   </div>
-                  <div class="muted">
-                    {{ c.account_brand|default:"" }}
+                </td>
+                <td data-label="Contact">
+                  <div class="customer-stack">
+                    <strong>{{ c.contact_name|default:"Contact not set" }}</strong>
+                    <span>{{ c.account_brand|default:"Company not set" }}</span>
                   </div>
                 </td>
-                <td>{{ c.email|default:"" }}</td>
-                <td>{{ c.phone|default:"" }}</td>
-                <td>
-                  <span class="cust-pill">{{ c.active_opps|default:0 }}</span>
-                </td>
-                <td>
-                  <span class="cust-pill">{{ c.production_active|default:0 }}</span>
-                </td>
-                <td>
-                  <span class="cust-pill">{{ c.production_completed|default:0 }}</span>
-                </td>
-                <td class="muted">
-                  {% if c.last_activity %}
-                    {{ c.last_activity|date:"Y-m-d" }}
+                <td data-label="Email">
+                  {% if c.email %}
+                    <a class="customer-link" href="mailto:{{ c.email }}">{{ c.email }}</a>
                   {% else %}
-                    —
+                    <span class="customer-muted">No email</span>
                   {% endif %}
                 </td>
-                <td style="text-align:right;">
-                  <a href="{% url 'customer_detail' c.pk %}" class="btn btn-slate">View</a>
+                <td data-label="Phone">{{ c.phone|default:"-" }}</td>
+                <td data-label="Country">{{ c.country|default:"-" }}</td>
+                <td data-label="Opportunities">
+                  <div class="customer-metric-stack">
+                    <strong>{{ c.total_opps|default:0 }}</strong>
+                    <a href="{% url 'opportunities_list' %}?q={{ c.display_name|urlencode }}&status=all">View opportunities</a>
+                  </div>
+                </td>
+                <td data-label="Revenue">
+                  <div class="customer-metric-stack">
+                    <strong>{{ c.total_revenue|default:0|floatformat:0 }}</strong>
+                    <a href="{% url 'invoice_list' %}">Invoices</a>
+                  </div>
+                </td>
+                <td data-label="Production">
+                  <div class="customer-metric-stack">
+                    <strong>{{ c.production_active|default:0 }}</strong>
+                    <a href="{% url 'production_list' %}?q={{ c.display_name|urlencode }}&status=active">Active production</a>
+                  </div>
+                </td>
+                <td data-label="Last activity">
+                  {% if c.last_activity %}
+                    {{ c.last_activity|date:"M j, Y" }}
+                  {% else %}
+                    <span class="customer-muted">No activity</span>
+                  {% endif %}
+                </td>
+                <td data-label="Status">
+                  <span class="customer-status {{ c.status_key }}">{{ c.status_label }}</span>
+                </td>
+                <td data-label="Actions">
+                  <div class="customer-row-actions">
+                    <a href="{% url 'customer_detail' c.pk %}" class="customer-btn customer-btn--tiny customer-btn--primary">Open</a>
+                    <a href="/admin/crm/customer/{{ c.id }}/change/" class="customer-btn customer-btn--tiny customer-btn--ghost">Edit</a>
+                    <a href="{% url 'opportunities_list' %}?q={{ c.display_name|urlencode }}&status=all" class="customer-btn customer-btn--tiny customer-btn--ghost">Opportunities</a>
+                    <a href="{% url 'add_opportunity' %}?customer={{ c.pk }}" class="customer-btn customer-btn--tiny customer-btn--ghost">Create Opportunity</a>
+                    {% if c.email %}
+                      <a href="mailto:{{ c.email }}?subject=Follow up from Iconic Apparel House" class="customer-btn customer-btn--tiny customer-btn--ghost">Email Draft</a>
+                    {% else %}
+                      <span class="customer-btn customer-btn--tiny customer-btn--disabled">Email Draft</span>
+                    {% endif %}
+                  </div>
                 </td>
               </tr>
             {% endfor %}
@@ -248,9 +196,24 @@
         </table>
       </div>
     {% else %}
-      <div class="muted">No customers found.</div>
+      <div class="customer-empty-state">
+        <strong>No customers found</strong>
+        <span>Try clearing filters or create an opportunity from a returning account.</span>
+        <a href="{% url 'customers_list' %}" class="customer-btn customer-btn--primary">Clear filters</a>
+      </div>
     {% endif %}
-  </div>
-</div>
+  </section>
 
+  {% if page_obj.paginator.num_pages > 1 %}
+    <nav class="customer-pagination" aria-label="Customer pagination">
+      {% if page_obj.has_previous %}
+        <a class="customer-page-chip" href="?{% if query_params %}{{ query_params }}&{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>
+      {% endif %}
+      <span class="customer-page-chip active">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}
+        <a class="customer-page-chip" href="?{% if query_params %}{{ query_params }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
+      {% endif %}
+    </nav>
+  {% endif %}
+</div>
 {% endblock %}

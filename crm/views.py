@@ -9,7 +9,7 @@ from collections import defaultdict
 from datetime import timedelta, date
 from decimal import Decimal
 from types import SimpleNamespace
-from django.db.models import Count, Sum, Q, Max
+from django.db.models import Count, Sum, Q, Max, OuterRef, Subquery
 from django.db import models
 from django.conf import settings
 try:
@@ -2916,13 +2916,31 @@ def customers_list(request):
     has_active = (request.GET.get("has_active") or "").strip() == "1"
     has_production = (request.GET.get("has_production") or "").strip() == "1"
     has_completed = (request.GET.get("has_completed") or "").strip() == "1"
+    country = (request.GET.get("country") or "").strip()
+    status = (request.GET.get("status") or "").strip().lower()
     sort = (request.GET.get("sort") or "recent").strip().lower()
 
     active_stages = _active_opportunity_stages()
     completed_statuses = _production_completed_statuses()
     active_prod_statuses = _production_active_statuses()
 
+    revenue_subquery = (
+        Opportunity.objects
+        .filter(customer=OuterRef("pk"))
+        .order_by()
+        .values("customer")
+        .annotate(total=Sum("order_value"))
+        .values("total")
+    )
+
     qs = Customer.objects.all()
+    countries = (
+        Customer.objects
+        .exclude(country="")
+        .order_by("country")
+        .values_list("country", flat=True)
+        .distinct()
+    )
 
     if q:
         qs = qs.filter(
@@ -2930,9 +2948,21 @@ def customers_list(request):
             | Q(contact_name__icontains=q)
             | Q(email__icontains=q)
             | Q(phone__icontains=q)
+            | Q(country__icontains=q)
         )
+    if country:
+        qs = qs.filter(country__iexact=country)
+    if status == "active":
+        qs = qs.filter(is_active=True)
+    elif status == "inactive":
+        qs = qs.filter(is_active=False)
 
     qs = qs.annotate(
+        total_opps=Count("opportunities", distinct=True),
+        total_revenue=Subquery(
+            revenue_subquery,
+            output_field=models.DecimalField(max_digits=14, decimal_places=2),
+        ),
         active_opps=Count(
             "opportunities",
             filter=Q(opportunities__stage__in=active_stages),
@@ -2979,19 +3009,45 @@ def customers_list(request):
         ]
         dates = [d for d in dates if d]
         c.last_activity = max(dates) if dates else None
+        c.display_name = c.account_brand or c.contact_name or "Unnamed customer"
+        initials_source = c.display_name.replace("/", " ").replace("-", " ").split()
+        c.initials = "".join(part[0] for part in initials_source[:2]).upper() or "C"
+        c.status_key = "active" if c.is_active else "inactive"
+        c.status_label = "Active" if c.is_active else "Inactive"
 
     if sort == "name":
         customers.sort(key=lambda c: ((c.account_brand or "").lower(), (c.contact_name or "").lower()))
+    elif sort == "revenue":
+        customers.sort(key=lambda c: c.total_revenue or Decimal("0"), reverse=True)
     else:
         customers.sort(key=lambda c: c.last_activity or date.min, reverse=True)
 
+    summary = {
+        "total": len(customers),
+        "active": sum(1 for c in customers if c.is_active),
+        "with_active_opps": sum(1 for c in customers if (c.active_opps or 0) > 0),
+        "in_production": sum(1 for c in customers if (c.production_active or 0) > 0),
+        "total_revenue": sum((c.total_revenue or Decimal("0")) for c in customers),
+    }
+
+    paginator = Paginator(customers, 25)
+    page_obj = paginator.get_page(request.GET.get("page") or 1)
+    query_params = request.GET.copy()
+    query_params.pop("page", None)
+
     context = {
-        "customers": customers,
+        "customers": page_obj.object_list,
+        "page_obj": page_obj,
+        "summary": summary,
+        "countries": countries,
         "q": q,
         "has_active": has_active,
         "has_production": has_production,
         "has_completed": has_completed,
+        "country": country,
+        "status": status,
         "sort": sort,
+        "query_params": query_params.urlencode(),
     }
     return render(request, "crm/customers_list.html", context)
 
