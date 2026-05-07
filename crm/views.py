@@ -6430,6 +6430,7 @@ def production_list(request):
 
     total_orders = orders.count()
     active_orders = orders.filter(status__in=active_statuses).count()
+    completed_orders = orders.filter(status__in=completed_statuses).count()
     delayed_orders = len([row for row in orders_data if row["has_delay"]])
     total_pieces = sum(o.qty_total for o in orders)
     total_reject = sum(o.qty_reject for o in orders)
@@ -6442,6 +6443,7 @@ def production_list(request):
             "orders_data": orders_data,
             "total_orders": total_orders,
             "active_orders": active_orders,
+            "completed_orders": completed_orders,
             "delayed_orders": delayed_orders,
             "total_pieces": total_pieces,
             "total_reject": total_reject,

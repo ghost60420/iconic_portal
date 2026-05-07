@@ -1,422 +1,287 @@
 {% extends "crm/base.html" %}
 {% load static %}
 {% block content %}
+<link rel="stylesheet" href="{% static 'crm/production_list.css' %}?v=production-list-modern-20260507">
 
-<style>
-  .prod-list-page {
-    max-width: 1180px;
-    margin: 24px auto 40px auto;
-  }
-
-  .prod-list-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 14px;
-    flex-wrap: wrap;
-  }
-
-  .prod-list-title {
-    font-size: 20px;
-    font-weight: 700;
-    color: #ffffff;
-  }
-
-  .prod-list-sub {
-    font-size: 13px;
-    color: #9ca3af;
-  }
-
-  .prod-filters {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    margin-top: 6px;
-  }
-
-  .prod-filter-btn {
-    padding: 4px 10px;
-    border-radius: 999px;
-    border: 1px solid #374151;
-    background: #020617;
-    color: #e5e7eb;
-    font-size: 12px;
-    text-decoration: none;
-  }
-
-  .prod-filter-btn.active {
-    border-color: #facc15;
-    color: #fef9c3;
-    box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.35);
-  }
-
-  .prod-stats {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-    font-size: 12px;
-  }
-
-  .prod-stat-pill {
-    padding: 4px 9px;
-    border-radius: 999px;
-    border: 1px solid #374151;
-    background: #020617;
-    color: #e5e7eb;
-  }
-
-  .prod-list-card {
-    background: #050816;
-    border-radius: 14px;
-    border: 1px solid #1f2937;
-    padding: 10px 14px;
-    margin-bottom: 10px;
-    box-shadow: 0 0 16px rgba(0,0,0,0.6);
-  }
-
-  .prod-list-top {
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
-    align-items: center;
-    flex-wrap: wrap;
-    margin-bottom: 6px;
-  }
-
-  .prod-list-search {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-top: 8px;
-  }
-
-  .prod-list-search input {
-    background: #020617;
-    border: 1px solid #374151;
-    color: #e5e7eb;
-    border-radius: 999px;
-    padding: 6px 12px;
-    font-size: 12px;
-    min-width: 220px;
-  }
-
-  .prod-status-form {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-top: 6px;
-    justify-content: flex-end;
-  }
-
-  .prod-status-select {
-    background: #0b1222;
-    border: 1px solid #374151;
-    color: #e5e7eb;
-    border-radius: 8px;
-    padding: 4px 8px;
-    font-size: 11px;
-  }
-
-  .prod-list-main {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .prod-list-thumb {
-    width: 46px;
-    height: 46px;
-    border-radius: 10px;
-    overflow: hidden;
-    border: 1px solid #374151;
-    background: #020617;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    color: #6b7280;
-  }
-
-  .prod-list-thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .prod-list-order-title {
-    font-size: 15px;
-    font-weight: 600;
-    color: #f9fafb;
-  }
-
-  .prod-list-order-meta {
-    font-size: 12px;
-    color: #9ca3af;
-  }
-
-  .prod-list-badge-status {
-    font-size: 11px;
-    padding: 3px 8px;
-    border-radius: 999px;
-  }
-  .prod-list-badge-status.done { background:#16a34a; color:#ffffff; }
-  .prod-list-badge-status.in_progress { background:#0ea5e9; color:#020617; }
-  .prod-list-badge-status.hold { background:#78350f; color:#fef3c7; }
-  .prod-list-badge-status.planning { background:#4b5563; color:#f9fafb; }
-  .prod-list-badge-status.closed_won { background:#16a34a; color:#ffffff; }
-  .prod-list-badge-status.closed_lost { background:#b91c1c; color:#ffffff; }
-
-  .prod-list-progress-text {
-    font-size: 11px;
-    color: #9ca3af;
-  }
-
-  /* small stage strip */
-
-  .stage-strip-small {
-    display: flex;
-    border-radius: 999px;
-    overflow: hidden;
-    border: 1px solid #27272a;
-    background: #020617;
-    margin-top: 4px;
-  }
-
-  .stage-strip-small-item {
-    flex: 1 1 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    padding: 4px 6px;
-    font-size: 11px;
-    font-weight: 600;
-    border-right: 1px solid #020617;
-    white-space: nowrap;
-    color: #e5e7eb;
-  }
-  .stage-strip-small-item:last-child {
-    border-right: none;
-  }
-
-  .stage-strip-small-item.planned { background:#111827; }
-  .stage-strip-small-item.current { background:#1d4ed8; }
-  .stage-strip-small-item.done { background:#16a34a; }
-  .stage-strip-small-item.delay { background:#b91c1c; }
-  .stage-strip-small-item.hold { background:#78350f; }
-
-  .stage-emoji {
-    font-size: 13px;
-  }
-
-  .prod-list-bottom {
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
-    align-items: center;
-    margin-top: 6px;
-    flex-wrap: wrap;
-  }
-
-  .prod-list-info-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    font-size: 11px;
-    color: #9ca3af;
-  }
-
-  .prod-list-info-row strong {
-    color: #e5e7eb;
-  }
-
-  .prod-list-actions a {
-    font-size: 11px;
-  }
-
-  .badge-delay-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 999px;
-    display: inline-block;
-    margin-right: 4px;
-    background: #b91c1c;
-  }
-
-  @media (max-width: 768px) {
-    .prod-list-info-row {
-      flex-direction: column;
-      align-items: flex-start;
-    }
-  }
-</style>
-
-<div class="prod-list-page">
-
-  <div class="prod-list-header">
-    <div>
-      <div class="prod-list-title">Production orders</div>
-      <div class="prod-list-sub">
-        Track all bulk orders with live stage flow
-      </div>
-      <div class="prod-filters">
-        <a class="prod-filter-btn {% if status_filter != 'completed' and status_filter != 'all' %}active{% endif %}" href="?status=active">Active</a>
-        <a class="prod-filter-btn {% if status_filter == 'completed' %}active{% endif %}" href="?status=completed">Completed</a>
-        <a class="prod-filter-btn {% if status_filter == 'all' %}active{% endif %}" href="?status=all">All</a>
-      </div>
-      <form class="prod-list-search" method="get">
-        <input type="hidden" name="status" value="{{ status_filter }}">
-        <input type="text" name="q" placeholder="Search orders, customer, product..." value="{{ search_query }}">
-        <button type="submit" class="btn btn-sm btn-outline-light">Search</button>
-      </form>
-    </div>
-
-    <div class="prod-stats">
-      <div class="prod-stat-pill">
-        Total orders {{ total_orders }}
-      </div>
-      <div class="prod-stat-pill">
-        Active {{ active_orders }}
-      </div>
-      <div class="prod-stat-pill">
-        Delayed {{ delayed_orders }}
-      </div>
-      <div class="prod-stat-pill">
-        Total pieces {{ total_pieces }}
-      </div>
-      <div class="prod-stat-pill">
-        Reject {{ total_reject }} ({{ reject_percent }} percent)
+<div class="production-page">
+  <section class="production-hero">
+    <div class="production-hero-copy">
+      <p class="production-eyebrow">Factory operations</p>
+      <h1>Production</h1>
+      <p class="production-subtitle">
+        Track production status, factory progress, delivery timelines, pending actions, and linked sales context from one cleaner workspace.
+      </p>
+      <div class="production-hero-meta">
+        <span>{{ total_orders }} order{{ total_orders|pluralize }} in current view</span>
+        <span>{{ active_orders }} running</span>
+        <span>{{ delayed_orders }} delayed</span>
       </div>
     </div>
-  </div>
 
-  {% if orders_data %}
-    {% for row in orders_data %}
-      {% with order=row.order stages=row.stages percent=row.percent_done has_delay=row.has_delay %}
-        <div class="prod-list-card">
+    <div class="production-hero-actions">
+      <a href="{% url 'production_add' %}" class="production-btn production-btn--primary">Create Order</a>
+      <a href="{% url 'opportunities_list' %}" class="production-btn production-btn--ghost">Opportunities</a>
+      <a href="{% url 'shipment_list' %}" class="production-btn production-btn--ghost">Shipping</a>
+    </div>
+  </section>
 
-          <!-- top row -->
-          <div class="prod-list-top">
-            <div class="prod-list-main">
-              <div class="prod-list-thumb">
-                {% if order.product and order.product.image %}
-                  <img src="{{ order.product.image.url }}" alt="{{ order.product.name }}">
-                {% elif order.style_image %}
-                  <img src="{{ order.style_image.url }}" alt="{{ order.title }}">
-                {% else %}
-                  <span>Style</span>
-                {% endif %}
-              </div>
-              <div>
-                <div class="prod-list-order-title">
-                  {{ order.title }}
-                </div>
-                <div class="prod-list-order-meta">
-                  Code {{ order.order_code }}{% if order.customer %} · {{ order.customer.account_brand|default:order.customer.contact_name|default:order.customer }}{% endif %}
-                </div>
-              </div>
-            </div>
+  <section class="production-summary-grid" aria-label="Production summary">
+    <article class="production-stat">
+      <span>Total Production Orders</span>
+      <strong>{{ total_orders }}</strong>
+      <small>Matching the current search and filter</small>
+    </article>
+    <article class="production-stat">
+      <span>Running Orders</span>
+      <strong>{{ active_orders }}</strong>
+      <small>Planning, in progress, or on hold</small>
+    </article>
+    <article class="production-stat production-stat--risk">
+      <span>Delayed Orders</span>
+      <strong>{{ delayed_orders }}</strong>
+      <small>Stage delay or overdue timeline signals</small>
+    </article>
+    <article class="production-stat">
+      <span>Completed Orders</span>
+      <strong>{{ completed_orders }}</strong>
+      <small>Done, closed won, or closed lost</small>
+    </article>
+    <article class="production-stat">
+      <span>Total Quantity</span>
+      <strong>{{ total_pieces }}</strong>
+      <small>{{ total_reject }} rejected / {{ reject_percent }} percent</small>
+    </article>
+  </section>
 
-            <div class="text-end">
-              <div>
-                <span class="prod-list-badge-status {{ order.status }}">
-                  {{ order.get_status_display }}
-                </span>
-              </div>
-              <div class="prod-list-progress-text mt-1">
-                {{ percent }} percent complete
-              </div>
-              <form method="post" class="prod-status-form">
-                {% csrf_token %}
-                <input type="hidden" name="order_id" value="{{ order.pk }}">
-                <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                <select name="status" class="prod-status-select" onchange="this.form.submit()">
-                  {% for key, label in status_choices %}
-                    <option value="{{ key }}" {% if order.status == key %}selected{% endif %}>{{ label }}</option>
-                  {% endfor %}
-                </select>
-              </form>
-            </div>
-          </div>
+  <form class="production-filters" method="get">
+    <label class="production-field production-field--search">
+      <span>Search</span>
+      <input type="text" name="q" placeholder="Order, customer, product, lead" value="{{ search_query }}">
+    </label>
 
-          <!-- small stage strip -->
-          <div class="stage-strip-small">
-            {% for s in stages %}
-              <div class="stage-strip-small-item
-                {% if s.status == 'done' %}done
-                {% elif s.status == 'in_progress' %}current
-                {% elif s.status == 'delay' %}delay
-                {% elif s.status == 'hold' %}hold
-                {% else %}planned{% endif %}">
-                <span class="stage-emoji">
-                  {% if s.stage_key == "development" %}🧠
-                  {% elif s.stage_key == "sampling" %}🧪
-                  {% elif s.stage_key == "cutting" %}✂️
-                  {% elif s.stage_key == "sewing" %}🧵
-                  {% elif s.stage_key == "ironing" %}🧺
-                  {% elif s.stage_key == "qc" %}✅
-                  {% elif s.stage_key == "finishing" %}✨
-                  {% elif s.stage_key == "packing" %}📦
-                  {% elif s.stage_key == "shipping" %}🚚
-                  {% else %}⚙️{% endif %}
-                </span>
-                <span>
-                  {{ s.display_name|default:s.get_stage_key_display }}
-                </span>
-              </div>
-            {% empty %}
-              <div class="stage-strip-small-item planned">
-                No stages set
-              </div>
+    <label class="production-field">
+      <span>Status view</span>
+      <select name="status">
+        <option value="active" {% if status_filter != "completed" and status_filter != "all" %}selected{% endif %}>Active production</option>
+        <option value="completed" {% if status_filter == "completed" %}selected{% endif %}>Completed</option>
+        <option value="all" {% if status_filter == "all" %}selected{% endif %}>All orders</option>
+      </select>
+    </label>
+
+    <div class="production-filter-tabs" aria-label="Quick status filters">
+      <a class="{% if status_filter != 'completed' and status_filter != 'all' %}active{% endif %}" href="?status=active{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Active</a>
+      <a class="{% if status_filter == 'completed' %}active{% endif %}" href="?status=completed{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Completed</a>
+      <a class="{% if status_filter == 'all' %}active{% endif %}" href="?status=all{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">All</a>
+    </div>
+
+    <div class="production-filter-actions">
+      <button type="submit" class="production-btn production-btn--primary">Apply</button>
+      <a href="{% url 'production_list' %}" class="production-btn production-btn--ghost">Reset</a>
+    </div>
+  </form>
+
+  <section class="production-table-shell">
+    <div class="production-table-head">
+      <div>
+        <h2>Production orders</h2>
+        <p>Factory status, linked opportunity, delivery dates, progress, and actions stay visible without crowding the row.</p>
+      </div>
+    </div>
+
+    {% if orders_data %}
+      <div class="production-table-wrap">
+        <table class="production-table">
+          <thead>
+            <tr>
+              <th>Order</th>
+              <th>Client / Opportunity</th>
+              <th>Product</th>
+              <th>Quantity</th>
+              <th>Stage</th>
+              <th>Status</th>
+              <th>Dates</th>
+              <th>Owner</th>
+              <th>Progress</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in orders_data %}
+              {% with order=row.order stages=row.stages percent=row.percent_done has_delay=row.has_delay %}
+                <tr class="{% if has_delay %}is-delayed{% endif %}">
+                  <td data-label="Order">
+                    <div class="production-order-cell">
+                      <div class="production-thumb">
+                        {% if order.product and order.product.image %}
+                          <img src="{{ order.product.image.url }}" alt="{{ order.product.name }}">
+                        {% elif order.style_image %}
+                          <img src="{{ order.style_image.url }}" alt="{{ order.title }}">
+                        {% else %}
+                          <span>PO</span>
+                        {% endif %}
+                      </div>
+                      <div class="production-stack">
+                        <a href="{% url 'production_detail' order.pk %}" class="production-primary-link">{{ order.order_code|default:"No code" }}</a>
+                        <strong>{{ order.title }}</strong>
+                        <span>{{ order.get_factory_location_display|default:"Factory not set" }} / {{ order.get_order_type_display|default:"Order type not set" }}</span>
+                      </div>
+                    </div>
+                  </td>
+
+                  <td data-label="Client / Opportunity">
+                    <div class="production-stack">
+                      <strong>
+                        {% if order.customer %}
+                          {{ order.customer.account_brand|default:order.customer.contact_name|default:order.customer }}
+                        {% elif order.lead %}
+                          {{ order.lead.account_brand|default:order.lead.contact_name|default:order.lead }}
+                        {% else %}
+                          Client not linked
+                        {% endif %}
+                      </strong>
+                      {% if order.opportunity %}
+                        <a href="{% url 'opportunity_detail' order.opportunity.pk %}" class="production-inline-link">{{ order.opportunity.opportunity_id }}</a>
+                      {% else %}
+                        <span>No linked opportunity</span>
+                      {% endif %}
+                    </div>
+                  </td>
+
+                  <td data-label="Product">
+                    <div class="production-stack">
+                      <strong>
+                        {% if order.product %}
+                          {{ order.product.name }}
+                        {% elif order.style_name %}
+                          {{ order.style_name }}
+                        {% else %}
+                          Product not set
+                        {% endif %}
+                      </strong>
+                      <span>
+                        {% if order.opportunity %}
+                          {{ order.opportunity.product_category|default:order.opportunity.product_type|default:"Category not set" }}
+                        {% else %}
+                          {{ order.color_info|default:"Category not set" }}
+                        {% endif %}
+                      </span>
+                    </div>
+                  </td>
+
+                  <td data-label="Quantity">
+                    <div class="production-metric">
+                      <strong>{{ order.qty_total }}</strong>
+                      <span>Reject {{ order.qty_reject }}</span>
+                    </div>
+                  </td>
+
+                  <td data-label="Stage">
+                    <div class="production-stage-strip" aria-label="Production stage flow">
+                      {% for s in stages %}
+                        <span
+                          class="production-stage-chip
+                            {% if s.status == 'done' %}done
+                            {% elif s.status == 'in_progress' %}current
+                            {% elif s.status == 'delay' %}delay
+                            {% elif s.status == 'hold' %}hold
+                            {% else %}planned{% endif %}"
+                          title="{{ s.display_name|default:s.get_stage_key_display }} - {{ s.get_status_display }}"
+                        >
+                          {{ s.display_name|default:s.get_stage_key_display }}
+                        </span>
+                      {% empty %}
+                        <span class="production-stage-chip planned">No stages</span>
+                      {% endfor %}
+                    </div>
+                  </td>
+
+                  <td data-label="Status">
+                    <div class="production-status-stack">
+                      <span class="production-status-badge {{ order.status }}">{{ order.get_status_display }}</span>
+                      {% if has_delay %}
+                        <span class="production-priority-badge risk">Delayed</span>
+                      {% elif order.status == "done" or order.status == "closed_won" %}
+                        <span class="production-priority-badge good">Complete</span>
+                      {% else %}
+                        <span class="production-priority-badge good">On track</span>
+                      {% endif %}
+                      <form method="post" class="production-status-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="order_id" value="{{ order.pk }}">
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <select name="status" onchange="this.form.submit()" aria-label="Update status for {{ order.order_code|default:order.title }}">
+                          {% for key, label in status_choices %}
+                            <option value="{{ key }}" {% if order.status == key %}selected{% endif %}>{{ label }}</option>
+                          {% endfor %}
+                        </select>
+                      </form>
+                    </div>
+                  </td>
+
+                  <td data-label="Dates">
+                    <div class="production-stack">
+                      <strong>Start {{ order.created_at|date:"M j, Y"|default:"-" }}</strong>
+                      <span>Sample {{ order.sample_deadline|date:"M j, Y"|default:"-" }}</span>
+                      <span>Target {{ order.bulk_deadline|date:"M j, Y"|default:"-" }}</span>
+                    </div>
+                  </td>
+
+                  <td data-label="Owner">
+                    <div class="production-stack">
+                      {% if order.opportunity and order.opportunity.assigned_to %}
+                        <strong>{{ order.opportunity.assigned_to }}</strong>
+                        <span>Opportunity owner</span>
+                      {% elif order.lead and order.lead.assigned_to %}
+                        <strong>{{ order.lead.assigned_to }}</strong>
+                        <span>Lead owner</span>
+                      {% elif order.lead and order.lead.owner %}
+                        <strong>{{ order.lead.owner }}</strong>
+                        <span>Lead owner</span>
+                      {% else %}
+                        <strong>-</strong>
+                        <span>Not assigned</span>
+                      {% endif %}
+                    </div>
+                  </td>
+
+                  <td data-label="Progress">
+                    <div class="production-progress">
+                      <div class="production-progress-top">
+                        <strong>{{ percent }}%</strong>
+                        <span>{% if has_delay %}Needs review{% else %}In flow{% endif %}</span>
+                      </div>
+                      <div class="production-progress-bar" aria-hidden="true">
+                        <span style="width: {{ percent }}%;"></span>
+                      </div>
+                    </div>
+                  </td>
+
+                  <td data-label="Actions">
+                    <div class="production-actions">
+                      <a href="{% url 'production_detail' order.pk %}" class="production-btn production-btn--tiny production-btn--primary">Open</a>
+                      <a href="{% url 'production_edit' order.pk %}" class="production-btn production-btn--tiny production-btn--ghost">Edit</a>
+                      <a href="{% url 'production_next_stage' order.pk %}" class="production-btn production-btn--tiny production-btn--ghost">Update Status</a>
+                      <a href="{% url 'production_detail' order.pk %}" class="production-btn production-btn--tiny production-btn--ghost">Upload File</a>
+                      <a href="{% url 'shipping_add_for_order' order.pk %}" class="production-btn production-btn--tiny production-btn--ghost">Shipping</a>
+                      {% if order.opportunity %}
+                        <a href="{% url 'opportunity_detail' order.opportunity.pk %}" class="production-btn production-btn--tiny production-btn--ghost">Back to Opportunity</a>
+                      {% endif %}
+                    </div>
+                  </td>
+                </tr>
+              {% endwith %}
             {% endfor %}
-          </div>
-
-          <!-- bottom row -->
-          <div class="prod-list-bottom">
-            <div class="prod-list-info-row">
-              <div>
-                <strong>{{ order.qty_total }}</strong> pcs
-              </div>
-              <div>
-                Reject {{ order.qty_reject }}
-              </div>
-              <div>
-                Sample {{ order.sample_deadline|date:"Y-m-d"|default:"-" }}
-              </div>
-              <div>
-                Bulk {{ order.bulk_deadline|date:"Y-m-d"|default:"-" }}
-              </div>
-              <div>
-                {% if has_delay %}
-                  <span class="badge-delay-dot"></span>Possible delay
-                {% else %}
-                  On track
-                {% endif %}
-              </div>
-            </div>
-
-            <div class="prod-list-actions">
-              <a href="{% url 'production_detail' order.pk %}"
-                 class="btn btn-sm btn-outline-light">
-                Open
-              </a>
-              <a href="{% url 'production_next_stage' order.pk %}"
-                 class="btn btn-sm btn-warning">
-                Next stage
-              </a>
-            </div>
-          </div>
-
-        </div>
-      {% endwith %}
-    {% endfor %}
-  {% else %}
-    <div class="alert alert-secondary">
-      No production orders yet.
-    </div>
-  {% endif %}
-
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="production-empty-state">
+        <strong>No production orders found</strong>
+        <span>Adjust the search or status filter, or create a new production order when a deal moves into factory work.</span>
+        <a href="{% url 'production_add' %}" class="production-btn production-btn--primary">Create Order</a>
+      </div>
+    {% endif %}
+  </section>
 </div>
 
 {% endblock %}
