@@ -1,1354 +1,726 @@
 {% extends "crm/base.html" %}
 {% load static %}
 {% block content %}
-
-<style>
-  .prod-page {
-    max-width: 1100px;
-    margin: 20px auto 44px auto;
-    padding: 0 10px;
-  }
-
-  .cardx {
-    background: #050816;
-    border: 1px solid #1f2937;
-    border-radius: 14px;
-    box-shadow: 0 0 18px rgba(0,0,0,0.7);
-    padding: 14px;
-    margin-bottom: 12px;
-  }
-
-  .headerx {
-    background: radial-gradient(circle at top left, #1f2937, #050505);
-    border: 1px solid #1f2937;
-    border-radius: 14px;
-    box-shadow: 0 0 22px rgba(0,0,0,0.7);
-    padding: 14px;
-    margin-bottom: 12px;
-  }
-
-  .header-top {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-    align-items: center;
-  }
-
-  .header-left {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    min-width: 260px;
-  }
-
-  .thumb-wrap {
-    width: 64px;
-    height: 64px;
-    border-radius: 12px;
-    overflow: hidden;
-    border: 1px solid #374151;
-    background: #020617;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    color: #6b7280;
-    flex: 0 0 auto;
-  }
-
-  .thumb {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .title {
-    font-size: 20px;
-    font-weight: 800;
-    color: #ffffff;
-    line-height: 1.2;
-  }
-
-  .sub {
-    font-size: 12px;
-    color: #9ca3af;
-    margin-top: 2px;
-  }
-
-  .status-badge {
-    font-size: 12px;
-    padding: 4px 10px;
-    border-radius: 999px;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    border: 1px solid rgba(255,255,255,0.12);
-    user-select: none;
-  }
-
-  .status-badge.done { background: #16a34a; color: #ffffff; }
-  .status-badge.in_progress { background: #0ea5e9; color: #020617; }
-  .status-badge.hold { background: #78350f; color: #fef3c7; }
-  .status-badge.planning { background: #4b5563; color: #f9fafb; }
-  .status-badge.delay { background: #b91c1c; color: #ffffff; }
-
-  .progress-label {
-    font-size: 12px;
-    color: #9ca3af;
-    margin-top: 4px;
-  }
-
-  .meta-grid {
-    margin-top: 10px;
-    display: grid;
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-    gap: 10px;
-  }
-
-  .meta-item {
-    grid-column: span 3;
-    background: rgba(2,6,23,0.6);
-    border: 1px solid #111827;
-    border-radius: 12px;
-    padding: 10px;
-  }
-
-  .meta-label {
-    font-size: 11px;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: #9ca3af;
-    margin-bottom: 2px;
-  }
-
-  .meta-value {
-    font-size: 13px;
-    color: #f9fafb;
-    font-weight: 600;
-  }
-
-  .meta-value.muted {
-    color: #6b7280;
-    font-weight: 400;
-  }
-
-  .actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin: 8px 0 12px 0;
-  }
-
-  .section-title {
-    font-size: 14px;
-    font-weight: 700;
-    color: #f9fafb;
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .stage-wrap { margin-top: 6px; }
-
-  /* Stage flow - modern pill strip */
-  .stage-strip{
-    display:flex;
-    gap:12px;
-    padding:12px;
-    border-radius:18px;
-    border:1px solid #1f2937;
-    background:linear-gradient(180deg, rgba(2,6,23,0.9), rgba(2,6,23,0.6));
-    overflow-x:auto;
-    -webkit-overflow-scrolling:touch;
-  }
-
-  .stage-strip::-webkit-scrollbar{ height:8px; }
-  .stage-strip::-webkit-scrollbar-thumb{ background:#111827; border-radius:999px; }
-
-  .stage-form{ margin:0; flex:0 0 auto; }
-
-  .stage-btn{
-    border:0;
-    background:transparent;
-    padding:0;
-    outline:none;
-  }
-
-  .stage-item{
-    display:flex;
-    align-items:center;
-    gap:10px;
-    padding:10px 16px;
-    border-radius:999px;
-    border:1px solid rgba(148,163,184,0.18);
-    font-size:13px;
-    font-weight:800;
-    color:#e5e7eb;
-    white-space:nowrap;
-    user-select:none;
-    cursor:pointer;
-    min-height:42px;
-    background:rgba(15,23,42,0.75);
-    box-shadow:0 8px 18px rgba(0,0,0,0.35);
-    transition:filter 0.12s ease, transform 0.12s ease, border-color 0.12s ease;
-  }
-
-  .stage-item:hover{
-    filter:brightness(1.08);
-    transform:translateY(-1px);
-    border-color:rgba(245,204,21,0.35);
-  }
-
-  .actual-grid{
-    display:grid;
-    grid-template-columns: 1fr 1.4fr 0.6fr 0.8fr 0.8fr 0.9fr 1.2fr;
-    gap:6px;
-    align-items:center;
-    font-size:12px;
-  }
-
-  .actual-head{
-    color:#fef3c7;
-    text-transform:uppercase;
-    font-size:11px;
-    letter-spacing:0.04em;
-    margin-bottom:6px;
-  }
-
-  .stage-item.planned{ background:rgba(15,23,42,0.75); }
-  .stage-item.current{
-    background:linear-gradient(145deg, rgba(30,64,175,0.9), rgba(30,64,175,0.55));
-    color:#ffffff;
-    border-color:rgba(96,165,250,0.6);
-  }
-  .stage-item.done{
-    background:linear-gradient(145deg, rgba(22,163,74,0.9), rgba(22,163,74,0.55));
-    color:#ffffff;
-    border-color:rgba(34,197,94,0.65);
-  }
-  .stage-item.delay{
-    background:linear-gradient(145deg, rgba(185,28,28,0.9), rgba(185,28,28,0.55));
-    color:#ffffff;
-    border-color:rgba(248,113,113,0.65);
-  }
-  .stage-item.hold{
-    background:linear-gradient(145deg, rgba(120,53,15,0.95), rgba(120,53,15,0.6));
-    color:#fef3c7;
-    border-color:rgba(251,191,36,0.45);
-  }
-
-  .stage-emoji{ font-size:14px; line-height:1; }
-
-  .stage-chip-dot{
-    width:10px;
-    height:10px;
-    border-radius:999px;
-    background:rgba(148,163,184,0.6);
-    box-shadow:0 0 0 2px rgba(2,6,23,0.65) inset;
-  }
-
-  .stage-item.current .stage-chip-dot,
-  .stage-item.done .stage-chip-dot,
-  .stage-item.delay .stage-chip-dot,
-  .stage-item.hold .stage-chip-dot{
-    background:rgba(255,255,255,0.9);
-  }
-
-  .progress-row { margin-top: 10px; }
-
-  .stage-dates-head {
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
-    align-items: center;
-    flex-wrap: wrap;
-    margin-top: 12px;
-  }
-
-  .toggle-btn {
-    font-size: 11px;
-    padding: 4px 10px;
-    border-radius: 999px;
-    border: 1px solid #4b5563;
-    background: #020617;
-    color: #e5e7eb;
-    cursor: pointer;
-  }
-
-  .toggle-btn:hover {
-    border-color: #facc15;
-    color: #facc15;
-  }
-
-  .stage-table {
-    margin-top: 8px;
-    border-radius: 12px;
-    border: 1px solid #111827;
-    background: #020617;
-    overflow: hidden;
-  }
-
-  .stage-row {
-    display: grid;
-    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr) minmax(0, 1.1fr);
-    gap: 10px;
-    padding: 10px 12px;
-    border-bottom: 1px solid #111827;
-    font-size: 12px;
-  }
-
-  .stage-row:last-child { border-bottom: none; }
-
-  .stage-name {
-    font-weight: 800;
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    color: #f9fafb;
-  }
-
-  .small-label {
-    font-size: 11px;
-    color: #9ca3af;
-    margin-bottom: 2px;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-  }
-
-  .val {
-    font-size: 12px;
-    color: #e5e7eb;
-    font-weight: 600;
-  }
-
-  .grid-two {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 12px;
-  }
-
-  .note-box {
-    background: rgba(2,6,23,0.6);
-    border: 1px solid #111827;
-    border-radius: 12px;
-    padding: 12px;
-  }
-
-  .note-title {
-    font-size: 13px;
-    font-weight: 800;
-    color: #f9fafb;
-    margin-bottom: 6px;
-    border-bottom: 1px solid #111827;
-    padding-bottom: 6px;
-  }
-
-  .prewrap {
-    white-space: pre-wrap;
-    font-size: 12px;
-    color: #e5e7eb;
-  }
-
-  .muted { color: #6b7280; }
-
-  .dpr-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
-    gap: 10px;
-    margin-top: 10px;
-  }
-
-  .inputx {
-    background: #020617;
-    border: 1px solid #374151;
-    border-radius: 8px;
-    color: #e5e7eb;
-    font-size: 13px;
-    padding: 8px 10px;
-    width: 100%;
-  }
-
-  .inputx:focus {
-    border-color: #facc15;
-    outline: none;
-    box-shadow: 0 0 0 1px rgba(250,204,21,0.3);
-  }
-
-  .sheet-top {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 10px 18px;
-    margin-top: 8px;
-  }
-
-  .sheet-label {
-    font-size: 11px;
-    color: #9ca3af;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    margin-bottom: 2px;
-  }
-
-  .sheet-value {
-    font-size: 13px;
-    color: #f9fafb;
-    font-weight: 600;
-  }
-
-  .sheet-value.muted {
-    color: #6b7280;
-    font-weight: 400;
-  }
-
-  .sheet-line {
-    border-radius: 12px;
-    border: 1px solid #111827;
-    background: rgba(2,6,23,0.6);
-    padding: 12px;
-    margin-top: 12px;
-  }
-
-  .sheet-line-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 8px;
-  }
-
-  .sheet-line-title {
-    font-size: 13px;
-    font-weight: 800;
-    color: #f9fafb;
-  }
-
-  .sheet-line-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 8px;
-  }
-
-  .sheet-line-chip {
-    font-size: 11px;
-    padding: 4px 8px;
-    border-radius: 999px;
-    background: rgba(15,23,42,0.8);
-    border: 1px solid #1f2937;
-    color: #cbd5f5;
-  }
-
-  .size-grid {
-    border-radius: 12px;
-    border: 1px solid #111827;
-    background: #020617;
-    overflow: hidden;
-    margin-top: 6px;
-  }
-
-  .size-grid-row {
-    display: grid;
-    grid-template-columns: repeat(9, minmax(0, 1fr));
-  }
-
-  .size-cell {
-    font-size: 11px;
-    padding: 8px 6px;
-    text-align: center;
-    border-right: 1px solid #0b1120;
-    border-bottom: 1px solid #0b1120;
-    color: #e5e7eb;
-  }
-
-  .size-cell:last-child { border-right: none; }
-
-  .size-head .size-cell {
-    font-weight: 800;
-    background: rgba(15,23,42,0.6);
-  }
-
-  .size-summary {
-    margin-top: 6px;
-    font-size: 11px;
-    font-weight: 700;
-  }
-
-  .size-summary.ok { color: #22c55e; }
-  .size-summary.warn { color: #f97316; }
-
-  .lib-tag-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .lib-tag {
-    font-size: 11px;
-    padding: 3px 8px;
-    border-radius: 999px;
-    border: 1px solid #374151;
-    background: rgba(15, 23, 42, 0.8);
-    color: #e5e7eb;
-  }
-
-  .attach-list {
-    margin-top: 8px;
-    font-size: 12px;
-  }
-
-  .attach-list ul {
-    list-style: none;
-    padding-left: 0;
-    margin: 0;
-  }
-
-  .attach-list li {
-    margin-bottom: 6px;
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    flex-wrap: wrap;
-  }
-
-  .attach-list a {
-    color: #e5e7eb;
-    text-decoration: underline;
-    text-decoration-color: #4b5563;
-  }
-
-  .attach-list a:hover { text-decoration-color: #facc15; }
-
-  @media (max-width: 900px) {
-    .meta-item { grid-column: span 6; }
-  }
-
-  @media (max-width: 768px) {
-    .meta-item { grid-column: span 12; }
-    .grid-two { grid-template-columns: 1fr; }
-    .sheet-top { grid-template-columns: 1fr; }
-    .stage-row { grid-template-columns: 1fr; }
-    .dpr-grid { grid-template-columns: 1fr; }
-  }
-</style>
-
-<div class="prod-page">
-
-  <div class="cardx">
-    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
-      <div>
-        <div style="font-size:15px; font-weight:800; color:#fefce8;">
-          Production order: {{ order.title }}
-        </div>
-        <div class="sub">
-          Total pieces: {{ order.qty_total }}
-          {% if order.qty_reject %}
-            <span> • Reject pieces: {{ order.qty_reject }} ({{ reject_percent }}%)</span>
-          {% endif %}
-          {% if opportunity %}
-            <span> • Opportunity: {{ opportunity.opportunity_id }}</span>
-          {% endif %}
-        </div>
+<link rel="stylesheet" href="{% static 'crm/production_detail.css' %}?v=production-detail-modern-20260507">
+
+<div class="production-detail">
+  <section class="production-detail-hero">
+    <div class="production-hero-main">
+      <div class="production-thumb">
+        {% if product and product.image %}
+          <img src="{{ product.image.url }}" alt="{{ product.name }}">
+        {% elif order.style_image %}
+          <img src="{{ order.style_image.url }}" alt="{{ order.title }}">
+        {% else %}
+          <span>PO</span>
+        {% endif %}
       </div>
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        {% if opportunity %}
-          <a href="{% url 'opportunity_detail' opportunity.pk %}" class="btn btn-gold btn-sm">View opportunity</a>
-        {% endif %}
-        {% if lead %}
-          <a href="{% url 'lead_detail' lead.pk %}" class="btn btn-outline-light btn-sm">View lead</a>
-        {% endif %}
-        {% if customer %}
-          <a href="{% url 'customer_detail' customer.pk %}" class="btn btn-outline-secondary btn-sm">View customer</a>
-        {% endif %}
+
+      <div class="production-hero-copy">
+        <p class="production-eyebrow">Factory order workspace</p>
+        <h1>{{ order.order_code|default:"Production Order" }}</h1>
+        <div class="production-hero-title">{{ order.title }}</div>
+        <div class="production-hero-meta">
+          <span>
+            {% if customer %}
+              {{ customer.account_brand|default:customer.contact_name|default:customer }}
+            {% elif lead %}
+              {{ lead.account_brand|default:lead.contact_name|default:lead }}
+            {% else %}
+              Client not linked
+            {% endif %}
+          </span>
+          {% if opportunity %}
+            <a href="{% url 'opportunity_detail' opportunity.pk %}">Opportunity {{ opportunity.opportunity_id }}</a>
+          {% else %}
+            <span>No linked opportunity</span>
+          {% endif %}
+          <span>{{ order.get_factory_location_display|default:"Factory not set" }}</span>
+        </div>
+        <div class="production-hero-badges">
+          <span class="production-status-badge {{ order.status }}">{{ order.get_status_display }}</span>
+          {% if order_delayed %}
+            <span class="production-priority-badge risk">Delayed</span>
+          {% elif order.status == "done" or order.status == "closed_won" %}
+            <span class="production-priority-badge good">Complete</span>
+          {% else %}
+            <span class="production-priority-badge good">On track</span>
+          {% endif %}
+          <span class="production-progress-pill">{{ percent_done }}% complete</span>
+        </div>
       </div>
     </div>
-  </div>
 
-  <div class="headerx">
-    <div class="header-top">
-      <div class="header-left">
-        <div class="thumb-wrap">
-          {% if product and product.image %}
-            <img src="{{ product.image.url }}" alt="{{ product.name }}" class="thumb">
-          {% elif order.style_image %}
-            <img src="{{ order.style_image.url }}" alt="{{ order.title }}" class="thumb">
-          {% else %}
-            <span>Style</span>
-          {% endif %}
+    <div class="production-hero-actions" aria-label="Production quick actions">
+      <a href="{% url 'production_edit' order.pk %}" class="production-btn production-btn--primary">Edit</a>
+      <a href="#stage-progress" class="production-btn production-btn--ghost">Update Status</a>
+      <a href="{% url 'production_next_stage' order.pk %}" class="production-btn production-btn--ghost">Next Stage</a>
+      <a href="#production-files" class="production-btn production-btn--ghost">Upload File</a>
+      <a href="{% url 'shipping_add_for_order' order.pk %}" class="production-btn production-btn--ghost">Shipping</a>
+      {% if opportunity %}
+        <a href="{% url 'opportunity_detail' opportunity.pk %}" class="production-btn production-btn--ghost">Open Opportunity</a>
+      {% endif %}
+      <a href="{% url 'production_ai_help' order.pk %}" class="production-btn production-btn--ghost">AI Help</a>
+      <a href="{% url 'production_list' %}" class="production-btn production-btn--ghost">Back to Production</a>
+    </div>
+  </section>
+
+  <section class="production-snapshot-grid" aria-label="Production snapshot">
+    <article class="production-snapshot-card">
+      <span>Total quantity</span>
+      <strong>{{ order.qty_total }}</strong>
+      <small>{{ order.qty_reject }} rejected / {{ reject_percent }}%</small>
+    </article>
+    <article class="production-snapshot-card">
+      <span>Product / category</span>
+      <strong>{% if product %}{{ product.name }}{% elif order.style_name %}{{ order.style_name }}{% else %}Not set{% endif %}</strong>
+      <small>{% if opportunity %}{{ opportunity.product_category|default:opportunity.product_type|default:"Category not set" }}{% else %}{{ order.color_info|default:"Category not set" }}{% endif %}</small>
+    </article>
+    <article class="production-snapshot-card">
+      <span>Start date</span>
+      <strong>{{ order.created_at|date:"M j" }}</strong>
+      <small>{{ order.created_at|date:"Y"|default:"Not set" }}</small>
+    </article>
+    <article class="production-snapshot-card">
+      <span>Target delivery</span>
+      <strong>{% if order.bulk_deadline %}{{ order.bulk_deadline|date:"M j" }}{% else %}-{% endif %}</strong>
+      <small>{% if order.bulk_deadline %}{{ order.bulk_deadline|timeuntil }} remaining{% else %}No bulk date set{% endif %}</small>
+    </article>
+    <article class="production-snapshot-card">
+      <span>Current stage</span>
+      <strong>
+        {% if order.current_stage %}
+          {{ order.current_stage.display_name|default:order.current_stage.get_stage_key_display }}
+        {% else %}
+          {% for stage in stages %}{% if stage.status == "in_progress" %}{{ stage.display_name|default:stage.get_stage_key_display }}{% endif %}{% empty %}-{% endfor %}
+        {% endif %}
+      </strong>
+      <small>{{ percent_done }}% stage completion</small>
+    </article>
+    <article class="production-snapshot-card">
+      <span>Assigned person</span>
+      <strong>
+        {% if opportunity and opportunity.assigned_to %}
+          {{ opportunity.assigned_to }}
+        {% elif lead and lead.assigned_to %}
+          {{ lead.assigned_to }}
+        {% elif lead and lead.owner %}
+          {{ lead.owner }}
+        {% else %}
+          -
+        {% endif %}
+      </strong>
+      <small>{% if opportunity and opportunity.assigned_to %}Opportunity owner{% elif lead %}Lead owner{% else %}Not assigned{% endif %}</small>
+    </article>
+  </section>
+
+  <section class="production-detail-grid">
+    <main class="production-main-column">
+      <article class="production-panel" id="stage-progress">
+        <div class="production-panel-head">
+          <div>
+            <h2>Stage Progress Tracker</h2>
+            <p>Click a stage to move it forward. Use Next Stage to advance the order through the factory flow.</p>
+          </div>
+          <a href="{% url 'production_next_stage' order.pk %}" class="production-btn production-btn--tiny production-btn--primary">Next Stage</a>
         </div>
-        <div>
-          <div class="title">{{ order.title }}</div>
-          <div class="sub">
-            Order code <strong>{{ order.order_code }}</strong>
+
+        <div class="production-progress-summary">
+          <div>
+            <strong>{{ percent_done }}%</strong>
+            <span>{% if order_delayed %}Review delay risk{% else %}Factory progress{% endif %}</span>
+          </div>
+          <div class="production-progress-bar" aria-hidden="true">
+            <span class="{% if order_delayed %}risk{% endif %}" style="width: {{ percent_done }}%;"></span>
           </div>
         </div>
-      </div>
 
-      <div style="text-align:right;">
-        <div>
-          <span class="status-badge {{ order.status }}">
-            {{ order.get_status_display }}
-          </span>
-        </div>
-        <div class="progress-label">
-          {{ percent_done }} percent complete
-          {% if order_delayed %}
-            <span style="color:#fca5a5;"> • Possible delay</span>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-
-    <div class="meta-grid">
-      <div class="meta-item">
-        <div class="meta-label">Customer</div>
-        <div class="meta-value {% if not customer %}muted{% endif %}">
-          {% if customer %}{{ customer.account_brand|default:customer.contact_name|default:customer }}{% else %}Not set{% endif %}
-        </div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Product</div>
-        <div class="meta-value {% if not product %}muted{% endif %}">
-          {% if product %}{{ product.name|default:product }}{% else %}Not set{% endif %}
-        </div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Order type</div>
-        <div class="meta-value">{{ order.get_order_type_display }}</div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Total pieces</div>
-        <div class="meta-value">{{ order.qty_total }}</div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Reject pieces</div>
-        <div class="meta-value {% if not order.qty_reject %}muted{% endif %}">
-          {% if order.qty_reject %}{{ order.qty_reject }} ({{ reject_percent }}%){% else %}0{% endif %}
-        </div>
-      </div>
-
-      <div class="meta-item">
-        <div class="meta-label">Sample date</div>
-        <div class="meta-value {% if not order.sample_deadline %}muted{% endif %}">
-          {{ order.sample_deadline|date:"Y-m-d"|default:"-" }}
-        </div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Bulk date</div>
-        <div class="meta-value {% if not order.bulk_deadline %}muted{% endif %}">
-          {{ order.bulk_deadline|date:"Y-m-d"|default:"-" }}
-        </div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Factory</div>
-        <div class="meta-value {% if not order.factory_location %}muted{% endif %}">
-          {{ order.get_factory_location_display|default:"-" }}
-        </div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Created</div>
-        <div class="meta-value">
-          {{ order.created_at|date:"Y-m-d"|default:"-" }}
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="actions">
-    <a href="{% url 'production_list' %}" class="btn btn-outline-secondary btn-sm">Back</a>
-    <a href="{% url 'production_edit' order.pk %}" class="btn btn-outline-light btn-sm">Edit</a>
-    <a href="{% url 'production_next_stage' order.pk %}" class="btn btn-warning btn-sm">Next stage</a>
-    <a href="{% url 'production_ai_help' order.pk %}" class="btn btn-outline-light btn-sm">AI help</a>
-  </div>
-
-  <div class="cardx">
-    <div class="section-title">Stage flow</div>
-
-    <div class="stage-wrap">
-      <div class="stage-strip">
-        {% for stage in stages %}
-          <form method="post"
-                action="{% url 'production_stage_click' stage.id %}"
-                class="stage-form">
-            {% csrf_token %}
-            <button type="submit" class="stage-btn" title="Open {{ stage.display_name|default:stage.get_stage_key_display }}">
-              <div class="stage-item
+        <div class="production-stage-timeline">
+          {% for stage in stages %}
+            <form method="post" action="{% url 'production_stage_click' stage.id %}" class="production-stage-form">
+              {% csrf_token %}
+              <button type="submit" class="production-stage-node
                 {% if stage.status == 'done' %}done
                 {% elif stage.status == 'in_progress' %}current
                 {% elif stage.status == 'delay' %}delay
                 {% elif stage.status == 'hold' %}hold
-                {% else %}planned{% endif %}">
-                <span class="stage-chip-dot"></span>
-                <span class="stage-emoji">
-                  {% if stage.stage_key == "development" %}🧠
-                  {% elif stage.stage_key == "sampling" %}🧪
-                  {% elif stage.stage_key == "cutting" %}✂️
-                  {% elif stage.stage_key == "sewing" %}🧵
-                  {% elif stage.stage_key == "ironing" %}🧺
-                  {% elif stage.stage_key == "qc" %}✅
-                  {% elif stage.stage_key == "finishing" %}✨
-                  {% elif stage.stage_key == "packing" %}📦
-                  {% elif stage.stage_key == "shipping" %}🚚
-                  {% else %}⚙️{% endif %}
-                </span>
-                <span>{{ stage.display_name|default:stage.get_stage_key_display }}</span>
-              </div>
-            </button>
-          </form>
-        {% empty %}
-          <div class="stage-item planned">No stages</div>
-        {% endfor %}
-      </div>
-
-      <div class="progress-row">
-        <div class="progress-label">Progress {{ percent_done }} percent</div>
-        <div class="progress" style="height:8px;">
-          <div
-            class="progress-bar {% if order_delayed %}bg-danger{% else %}bg-warning{% endif %}"
-            role="progressbar"
-            style="width: {{ percent_done }}%;"
-          ></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="stage-dates-head">
-      <div class="section-title" style="margin:0;">Stage dates</div>
-      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-        <button type="button" id="stage-dates-toggle" class="toggle-btn">Hide</button>
-        <div class="muted" style="font-size:12px;">Click stage name below to edit dates</div>
-      </div>
-    </div>
-
-    <div class="stage-table" id="stage-dates-body">
-      {% for stage in stages %}
-        <div class="stage-row">
-          <div class="stage-name">
-            <span class="stage-emoji">
-              {% if stage.stage_key == "development" %}🧠
-              {% elif stage.stage_key == "sampling" %}🧪
-              {% elif stage.stage_key == "cutting" %}✂️
-              {% elif stage.stage_key == "sewing" %}🧵
-              {% elif stage.stage_key == "ironing" %}🧺
-              {% elif stage.stage_key == "qc" %}✅
-              {% elif stage.stage_key == "finishing" %}✨
-              {% elif stage.stage_key == "packing" %}📦
-              {% elif stage.stage_key == "shipping" %}🚚
-              {% else %}⚙️{% endif %}
-            </span>
-
-            <a href="{% url 'production_stage_edit' stage.id %}"
-               style="color:#f9fafb; text-decoration:underline; text-decoration-color:#4b5563;">
-              {{ stage.display_name|default:stage.get_stage_key_display }}
-            </a>
-          </div>
-
-          <div>
-            <div class="small-label">Planned</div>
-            <div class="val">
-              {{ stage.planned_start|date:"Y-m-d"|default:"-" }} to {{ stage.planned_end|date:"Y-m-d"|default:"-" }}
-            </div>
-          </div>
-
-          <div>
-            <div class="small-label">Actual</div>
-            <div class="val">
-              {{ stage.actual_start|date:"Y-m-d"|default:"-" }} to {{ stage.actual_end|date:"Y-m-d"|default:"-" }}
-            </div>
-          </div>
-        </div>
-      {% empty %}
-        <div style="padding:12px;" class="muted">No stages created yet for this order.</div>
-      {% endfor %}
-    </div>
-  </div>
-
-  <div class="cardx">
-    <div class="grid-two">
-      <div class="note-box">
-        <div class="note-title">Notes</div>
-        <div class="prewrap">
-          {% if order.notes %}{{ order.notes }}{% else %}<span class="muted">No notes yet.</span>{% endif %}
-        </div>
-      </div>
-
-      <div class="note-box">
-        <div class="note-title">AI advice</div>
-        <div class="prewrap">
-          {% if order.ai_note %}{{ order.ai_note }}{% else %}<span class="muted">No AI note yet. Use AI help.</span>{% endif %}
-        </div>
-        <div style="text-align:right; margin-top:10px;">
-          <a href="{% url 'production_ai_help' order.pk %}" class="btn btn-outline-warning btn-sm">
-            Update AI summary
-          </a>
-        </div>
-      </div>
-    </div>
-
-    <div class="note-box" style="margin-top:12px;">
-      <div class="note-title">Chatter feed (Lead + Opportunity + Production)</div>
-      <form method="post" style="margin-bottom:8px;" enctype="multipart/form-data">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="add_comment">
-        <textarea name="comment_text" rows="3" class="inputx" placeholder="Write a note about this production order"></textarea>
-        <div style="margin-top:6px;">
-          <label class="small-label">Attachment (optional)</label>
-          <input type="file" name="attachment" class="inputx">
-        </div>
-        <div style="text-align:right; margin-top:8px;">
-          <button type="submit" class="btn btn-warning btn-sm">Save note</button>
-        </div>
-      </form>
-
-      {% if comments %}
-        {% for c in comments %}
-          <div style="margin-bottom: 8px;">
-            <strong class="value-main">{{ c.author }}</strong>
-            <span class="muted">
-              {{ c.created_at }}
-              {% if c.production %} • Production{% elif c.opportunity %} • Opportunity{% else %} • Lead{% endif %}
-              {% if c.pinned %} pinned{% endif %}
-              {% if c.is_ai %} AI{% endif %}
-            </span>
-            <p class="value-soft">{{ c.content|linebreaksbr }}</p>
-            {% if c.attachment %}
-              <div class="muted" style="font-size:11px; margin-top:4px;">
-                {% with c.attachment.name|cut:"chatter_attachments/" as attachment_name %}
-                  <a href="{{ c.attachment.url }}" target="_blank" rel="noopener">
-                    {{ attachment_name|default:"Attachment" }}
-                  </a>
-                {% endwith %}
-              </div>
-            {% endif %}
-            <div class="muted" style="font-size:11px;">
-              {% if c.production %}
-                <a href="{% url 'production_detail' c.production.pk %}">Open production</a>
-              {% elif c.opportunity %}
-                <a href="{% url 'opportunity_detail' c.opportunity.pk %}">Open opportunity</a>
-              {% elif c.lead %}
-                <a href="{% url 'lead_detail' c.lead.pk %}">Open lead</a>
-              {% endif %}
-            </div>
-
-            <form method="post" style="display:inline;">
-              {% csrf_token %}
-              <input type="hidden" name="action" value="toggle_pin_comment">
-              <input type="hidden" name="comment_id" value="{{ c.id }}">
-              <button type="submit" class="btn btn-slate btn-small">
-                {% if c.pinned %}Unpin{% else %}Pin{% endif %}
+                {% else %}planned{% endif %}"
+                title="Update {{ stage.display_name|default:stage.get_stage_key_display }}"
+              >
+                <span class="production-stage-dot"></span>
+                <strong>{{ stage.display_name|default:stage.get_stage_key_display }}</strong>
+                <small>{{ stage.get_status_display }}</small>
               </button>
             </form>
-          </div>
-        {% endfor %}
-      {% else %}
-        <p class="muted">No chatter notes yet.</p>
-      {% endif %}
-    </div>
+          {% empty %}
+            <div class="production-empty-inline">No stages created yet for this order.</div>
+          {% endfor %}
+        </div>
 
-    <div class="note-box" style="margin-top:12px;">
-      <div class="note-title">Daily production report</div>
-      <form method="post" action="{% url 'production_dpr' order.pk %}">
-        {% csrf_token %}
-        <div class="dpr-grid">
-          <div>
-            <div class="small-label">Today pieces</div>
-            <input type="number" name="dpr_qty" min="0" required class="inputx">
+        <details class="production-subdetails" open>
+          <summary>Stage dates and manual edits</summary>
+          <div class="production-stage-table">
+            {% for stage in stages %}
+              <div class="production-stage-row">
+                <div>
+                  <a href="{% url 'production_stage_edit' stage.id %}">{{ stage.display_name|default:stage.get_stage_key_display }}</a>
+                  <span>{{ stage.get_status_display }}</span>
+                </div>
+                <div>
+                  <span>Planned</span>
+                  <strong>{{ stage.planned_start|date:"Y-m-d"|default:"-" }} to {{ stage.planned_end|date:"Y-m-d"|default:"-" }}</strong>
+                </div>
+                <div>
+                  <span>Actual</span>
+                  <strong>{{ stage.actual_start|date:"Y-m-d"|default:"-" }} to {{ stage.actual_end|date:"Y-m-d"|default:"-" }}</strong>
+                </div>
+                {% if stage.notes %}
+                  <div class="production-stage-note">{{ stage.notes }}</div>
+                {% endif %}
+              </div>
+            {% empty %}
+              <div class="production-empty-inline">No stage dates available.</div>
+            {% endfor %}
           </div>
+        </details>
+      </article>
+
+      <article class="production-panel">
+        <div class="production-panel-head">
           <div>
-            <div class="small-label">Note</div>
-            <input type="text" name="dpr_note" class="inputx">
+            <h2>Order Details</h2>
+            <p>Product specifications, fabric and trim selections, buyer notes, and production instructions.</p>
+          </div>
+          <div class="production-panel-actions">
+            <a href="{% url 'production_order_sheet_pdf' order.pk %}" class="production-btn production-btn--tiny production-btn--ghost">Order Sheet PDF</a>
+            <a href="{% url 'production_packing_list_pdf' order.pk %}" class="production-btn production-btn--tiny production-btn--ghost">Packing List PDF</a>
           </div>
         </div>
-        <div style="text-align:right; margin-top:10px;">
-          <button type="submit" class="btn btn-warning btn-sm">Add daily report</button>
+
+        <div class="production-info-grid">
+          <div>
+            <span>Style / product</span>
+            <strong>{% if product %}{{ product.name }}{% elif order.style_name %}{{ order.style_name }}{% else %}Not set{% endif %}</strong>
+          </div>
+          <div>
+            <span>Color details</span>
+            <strong>{{ order.color_info|default:"Not set" }}</strong>
+          </div>
+          <div>
+            <span>Order type</span>
+            <strong>{{ order.get_order_type_display }}</strong>
+          </div>
+          <div>
+            <span>Factory</span>
+            <strong>{{ order.get_factory_location_display|default:"Not set" }}</strong>
+          </div>
+          <div class="production-info-wide">
+            <span>Production notes</span>
+            <strong>{{ order.notes|default:"No production notes yet." }}</strong>
+          </div>
+          <div class="production-info-wide">
+            <span>AI / planning note</span>
+            <strong>{{ order.ai_note|default:"No AI note yet. Use AI help to generate a production summary." }}</strong>
+          </div>
         </div>
-      </form>
-    </div>
-  </div>
 
-  <div class="cardx">
-    <div class="section-title" style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
-      <span>Order sheet details</span>
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <a href="{% url 'production_order_sheet_pdf' order.pk %}" class="btn btn-outline-light btn-sm">Download order sheet PDF</a>
-        <a href="{% url 'production_packing_list_pdf' order.pk %}" class="btn btn-outline-light btn-sm">Download packing list PDF</a>
-      </div>
-    </div>
-
-    {% if order_lines %}
-      {% for line in order_lines %}
-        <div class="sheet-line">
-          <div class="sheet-line-head">
-            <div class="sheet-line-title">
-              Product line {{ forloop.counter }}
-              {% if line.style_name %} - {{ line.style_name }}{% endif %}
-              {% if line.color_info %} ({{ line.color_info }}){% endif %}
-            </div>
-          </div>
-
-          <div class="sheet-line-meta">
-            <span class="sheet-line-chip">
-              Client: {% if customer %}{{ customer.account_brand|default:customer.contact_name|default:customer }}{% else %}Not set{% endif %}
-            </span>
-            <span class="sheet-line-chip">
-              Order: {{ order.order_code|default:"Not set" }}
-            </span>
-            <span class="sheet-line-chip">
-              Opportunity:
-              {% if opportunity %}
-                <a href="{% url 'opportunity_detail' opportunity.id %}" style="color:#93c5fd;">{{ opportunity.opportunity_id|default:opportunity.id }}</a>
-              {% else %}
-                Not set
-              {% endif %}
-            </span>
-          </div>
-
-          <div class="sheet-top">
-            <div>
-              <div class="sheet-label">Style name</div>
-              <div class="sheet-value {% if not line.style_name %}muted{% endif %}">
-                {{ line.style_name|default:"not set" }}
-              </div>
-            </div>
-            <div>
-              <div class="sheet-label">Color info</div>
-              <div class="sheet-value {% if not line.color_info %}muted{% endif %}">
-                {{ line.color_info|default:"not set" }}
-              </div>
-            </div>
-          </div>
-
-          <div style="margin-top:12px;">
-            <div class="sheet-label">Size grid up to 5XL</div>
-
-            {% if line.size_total %}
-              <div class="size-grid">
-                <div class="size-grid-row size-head">
-                  {% for item in line.size_grid %}
-                    <div class="size-cell">{{ item.label }}</div>
-                  {% endfor %}
+        {% if order_lines %}
+          <div class="production-lines">
+            {% for line in order_lines %}
+              <article class="production-line-card">
+                <div class="production-line-head">
+                  <h3>Product line {{ forloop.counter }}{% if line.style_name %}: {{ line.style_name }}{% endif %}</h3>
+                  {% if line.color_info %}<span>{{ line.color_info }}</span>{% endif %}
                 </div>
-                <div class="size-grid-row">
-                  {% for item in line.size_grid %}
-                    <div class="size-cell">{% if item.qty %}{{ item.qty }}{% else %}-{% endif %}</div>
-                  {% endfor %}
+                <div class="production-line-grid">
+                  <div>
+                    <span>Style name</span>
+                    <strong>{{ line.style_name|default:"Not set" }}</strong>
+                  </div>
+                  <div>
+                    <span>Color info</span>
+                    <strong>{{ line.color_info|default:"Not set" }}</strong>
+                  </div>
+                  <div class="production-line-wide">
+                    <span>Accessories and trims</span>
+                    <strong>{{ line.accessories_note|default:"Not set" }}</strong>
+                  </div>
+                  <div class="production-line-wide">
+                    <span>Packaging details</span>
+                    <strong>{{ line.packaging_note|default:"Not set" }}</strong>
+                  </div>
+                  <div class="production-line-wide">
+                    <span>Extra order notes</span>
+                    <strong>{{ line.extra_order_note|default:"Not set" }}</strong>
+                  </div>
                 </div>
-              </div>
+                {% if line.size_total %}
+                  <div class="production-size-grid">
+                    <div class="production-size-row production-size-head">
+                      {% for item in line.size_grid %}
+                        <span>{{ item.label }}</span>
+                      {% endfor %}
+                    </div>
+                    <div class="production-size-row">
+                      {% for item in line.size_grid %}
+                        <span>{% if item.qty %}{{ item.qty }}{% else %}-{% endif %}</span>
+                      {% endfor %}
+                    </div>
+                  </div>
+                  <div class="production-size-total">Line total {{ line.size_total }}</div>
+                {% endif %}
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="production-empty-inline">No order sheet line details set.</div>
+        {% endif %}
 
-              <div class="size-summary ok">
-                Line total {{ line.size_total }}
+        <div class="production-library-grid">
+          <div>
+            <span>Fabrics</span>
+            {% if order.fabrics.all %}
+              <div class="production-tag-group">
+                {% for f in order.fabrics.all %}<span>{{ f.fabric_code }} {{ f.name }}</span>{% endfor %}
               </div>
             {% else %}
-              <div class="sheet-value muted">No size ratio set for this line.</div>
+              <strong>No fabrics linked.</strong>
             {% endif %}
           </div>
-
-          <div style="margin-top:12px;">
-            <div class="sheet-label">Accessories and trims</div>
-            <div class="prewrap {% if not line.accessories_note %}muted{% endif %}">
-              {{ line.accessories_note|default:"not set" }}
-            </div>
+          <div>
+            <span>Accessories</span>
+            {% if order.accessories.all %}
+              <div class="production-tag-group">
+                {% for a in order.accessories.all %}<span>{{ a.accessory_code }} {{ a.name }}</span>{% endfor %}
+              </div>
+            {% else %}
+              <strong>No accessories linked.</strong>
+            {% endif %}
           </div>
-
-          <div style="margin-top:12px;">
-            <div class="sheet-label">Packaging details</div>
-            <div class="prewrap {% if not line.packaging_note %}muted{% endif %}">
-              {{ line.packaging_note|default:"not set" }}
-            </div>
+          <div>
+            <span>Trims</span>
+            {% if order.trims.all %}
+              <div class="production-tag-group">
+                {% for t in order.trims.all %}<span>{{ t.trim_code }} {{ t.name }}</span>{% endfor %}
+              </div>
+            {% else %}
+              <strong>No trims linked.</strong>
+            {% endif %}
           </div>
-
-          <div style="margin-top:12px;">
-            <div class="sheet-label">Extra order notes</div>
-            <div class="prewrap {% if not line.extra_order_note %}muted{% endif %}">
-              {{ line.extra_order_note|default:"not set" }}
-            </div>
+          <div>
+            <span>Threads</span>
+            {% if order.threads.all %}
+              <div class="production-tag-group">
+                {% for t in order.threads.all %}<span>{{ t.thread_code }} {{ t.name }}</span>{% endfor %}
+              </div>
+            {% else %}
+              <strong>No threads linked.</strong>
+            {% endif %}
           </div>
         </div>
-      {% endfor %}
-    {% else %}
-      <div class="sheet-value muted">No order sheet details set.</div>
-    {% endif %}
+      </article>
 
-    <div style="margin-top:14px;">
-      <div class="sheet-label">Library selections</div>
-
-      <div style="margin-top:6px;">
-        <div class="small-label">Fabrics</div>
-        {% if order.fabrics.all %}
-          <div class="lib-tag-group">
-            {% for f in order.fabrics.all %}
-              <span class="lib-tag">{{ f.fabric_code }} {{ f.name }}</span>
-            {% endfor %}
+      <article class="production-panel">
+        <div class="production-panel-head">
+          <div>
+            <h2>Factory Action Section</h2>
+            <p>Current pending work, next action, missing information, and QC reminders.</p>
           </div>
-        {% else %}
-          <div class="sheet-value muted">No fabrics linked.</div>
-        {% endif %}
-      </div>
+          <a href="#production-files" class="production-btn production-btn--tiny production-btn--primary">Upload Documents</a>
+        </div>
 
-      <div style="margin-top:8px;">
-        <div class="small-label">Accessories</div>
-        {% if order.accessories.all %}
-          <div class="lib-tag-group">
-            {% for a in order.accessories.all %}
-              <span class="lib-tag">{{ a.accessory_code }} {{ a.name }}</span>
-            {% endfor %}
-          </div>
-        {% else %}
-          <div class="sheet-value muted">No accessories linked.</div>
-        {% endif %}
-      </div>
-
-      <div style="margin-top:8px;">
-        <div class="small-label">Trims</div>
-        {% if order.trims.all %}
-          <div class="lib-tag-group">
-            {% for t in order.trims.all %}
-              <span class="lib-tag">{{ t.trim_code }} {{ t.name }}</span>
-            {% endfor %}
-          </div>
-        {% else %}
-          <div class="sheet-value muted">No trims linked.</div>
-        {% endif %}
-      </div>
-
-      <div style="margin-top:8px;">
-        <div class="small-label">Threads</div>
-        {% if order.threads.all %}
-          <div class="lib-tag-group">
-            {% for t in order.threads.all %}
-              <span class="lib-tag">{{ t.thread_code }} {{ t.name }}</span>
-            {% endfor %}
-          </div>
-        {% else %}
-          <div class="sheet-value muted">No threads linked.</div>
-        {% endif %}
-      </div>
-    </div>
-
-    <div style="margin-top:14px;">
-      <div class="sheet-label">Attachments</div>
-
-      <form action="{% url 'production_attachment_add' order.pk %}"
-            method="post"
-            enctype="multipart/form-data"
-            style="margin-top:8px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
-        {% csrf_token %}
-        <input type="file" name="file" class="inputx" style="max-width:260px; padding:6px 8px;">
-        <input type="text" name="name" placeholder="File name optional" class="inputx" style="max-width:260px;">
-        <button type="submit" class="btn btn-warning btn-sm">Upload</button>
-      </form>
-
-      <div class="attach-list">
-        {% if attachments %}
-          <ul>
-            {% for att in attachments %}
-              <li>
-                {% if att.file %}
-                  <a href="{{ att.file.url }}" target="_blank">{{ att.name|default:att.file.name }}</a>
-                {% else %}
-                  <span class="muted">{{ att.name|default:"Attachment file missing" }}</span>
+        <div class="production-action-grid">
+          <article>
+            <span>Current pending task</span>
+            <strong>{% if order_delayed %}Review delayed stage and delivery plan{% elif percent_done == 100 %}Prepare final shipping and closeout{% else %}Advance the active production stage{% endif %}</strong>
+          </article>
+          <article>
+            <span>Next action</span>
+            <strong>{% if shipments %}Review shipping updates{% elif attachments %}Confirm files and stage dates{% else %}Upload tech pack or approval files{% endif %}</strong>
+          </article>
+          <article>
+            <span>QC notes</span>
+            <strong>
+              {% for stage in stages %}
+                {% if stage.stage_key == "qc" %}
+                  {{ stage.notes|default:"No QC notes yet." }}
                 {% endif %}
-                <form action="{% url 'production_attachment_delete' order.pk att.pk %}" method="post" style="display:inline;">
-                  {% csrf_token %}
-                  <button type="submit" class="btn btn-outline-danger btn-sm"
-                          onclick="return confirm('Delete this file?');">
-                    Delete
-                  </button>
-                </form>
-              </li>
-            {% endfor %}
-          </ul>
-        {% else %}
-          <div class="muted">No files added yet.</div>
-        {% endif %}
-      </div>
-    </div>
-  </div>
+              {% empty %}
+                No QC stage available.
+              {% endfor %}
+            </strong>
+          </article>
+        </div>
 
-  <div class="cardx">
-    <div class="section-title" style="margin-bottom:8px;">
-      Actual cost tracking
-    </div>
+        <div class="production-checklist">
+          <div class="{% if customer %}done{% else %}missing{% endif %}">Customer linked</div>
+          <div class="{% if opportunity %}done{% else %}missing{% endif %}">Opportunity linked</div>
+          <div class="{% if order_lines %}done{% else %}missing{% endif %}">Order sheet details</div>
+          <div class="{% if attachments %}done{% else %}missing{% endif %}">Factory documents</div>
+          <div class="{% if order.bulk_deadline %}done{% else %}missing{% endif %}">Target delivery date</div>
+          <div class="{% if shipments %}done{% else %}missing{% endif %}">Shipping record</div>
+        </div>
 
-    {% if cost_sheet_active %}
-      <div class="muted" style="margin-bottom:8px;">
-        Linked cost sheet: v{{ cost_sheet_active.version_number }}
-      </div>
-    {% else %}
-      <div class="muted" style="margin-bottom:8px;">
-        No active cost sheet linked yet.
-      </div>
-    {% endif %}
-    <div class="muted" style="margin-bottom:8px;">
-      All values are in BDT (৳) and total cost auto-calculates from qty × rate.
-    </div>
-
-    <div style="margin-bottom:12px;">
-      <form method="post" class="actual-grid">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="add_actual">
-        <div>
-          <div class="small-label">Section</div>
-          {{ actual_entry_form.section }}
-        </div>
-        <div>
-          <div class="small-label">Item</div>
-          {{ actual_entry_form.item_name }}
-        </div>
-        <div>
-          <div class="small-label">UOM</div>
-          {{ actual_entry_form.uom }}
-        </div>
-        <div>
-          <div class="small-label">Qty total</div>
-          {{ actual_entry_form.actual_qty_total }}
-        </div>
-        <div>
-          <div class="small-label">Rate (BDT)</div>
-          {{ actual_entry_form.actual_rate }}
-        </div>
-        <div>
-          <div class="small-label">Total cost (BDT)</div>
-          {{ actual_entry_form.actual_total_cost }}
-        </div>
-        <div style="grid-column:1 / -1;">
-          <div class="small-label">Notes</div>
-          {{ actual_entry_form.notes }}
-        </div>
-        <div style="grid-column:1 / -1; text-align:right;">
-          <button type="submit" class="btn btn-warning btn-sm">Add actual</button>
-        </div>
-      </form>
-    </div>
-
-    <div class="actual-head actual-grid">
-      <div>Section</div>
-      <div>Item</div>
-      <div>UOM</div>
-      <div>Qty</div>
-      <div>Rate (BDT)</div>
-      <div>Total (BDT)</div>
-      <div>Actions</div>
-    </div>
-
-    {% if actual_entries %}
-      {% for entry in actual_entries %}
-        <form method="post" class="actual-grid" style="margin-bottom:6px;">
+        <form method="post" action="{% url 'production_dpr' order.pk %}" class="production-dpr-form">
           {% csrf_token %}
-          <input type="hidden" name="entry_id" value="{{ entry.id }}">
-          <input type="hidden" name="section" value="{{ entry.section }}">
-          <div>{{ entry.get_section_display }}</div>
-          <input type="text" name="item_name" value="{{ entry.item_name }}">
-          <input type="text" name="uom" value="{{ entry.uom }}">
-          <input type="number" step="0.0001" name="actual_qty_total" value="{{ entry.actual_qty_total }}">
-          <input type="number" step="0.0001" name="actual_rate" value="{{ entry.actual_rate }}">
-          <input type="number" step="0.0001" name="actual_total_cost" value="{{ entry.actual_total_cost }}">
-          <div style="display:flex; gap:6px; flex-wrap:wrap;">
-            <button type="submit" name="action" value="update_actual" class="btn btn-outline-light btn-sm">Save</button>
-            <button type="submit" name="action" value="delete_actual" class="btn btn-outline-danger btn-sm">Delete</button>
+          <label>
+            <span>Today pieces</span>
+            <input type="number" name="dpr_qty" min="0" required>
+          </label>
+          <label>
+            <span>Daily note</span>
+            <input type="text" name="dpr_note" placeholder="Factory update, blocker, or handoff note">
+          </label>
+          <button type="submit" class="production-btn production-btn--primary">Add Daily Report</button>
+        </form>
+      </article>
+
+      <article class="production-panel" id="production-files">
+        <div class="production-panel-head">
+          <div>
+            <h2>Files and Documents</h2>
+            <p>Tech packs, sample photos, approval files, costing, invoice, and production attachments.</p>
+          </div>
+        </div>
+
+        <form action="{% url 'production_attachment_add' order.pk %}" method="post" enctype="multipart/form-data" class="production-upload-form">
+          {% csrf_token %}
+          <label>
+            <span>File</span>
+            <input type="file" name="file">
+          </label>
+          <label>
+            <span>File name</span>
+            <input type="text" name="name" placeholder="Optional file name">
+          </label>
+          <button type="submit" class="production-btn production-btn--primary">Upload</button>
+        </form>
+
+        <div class="production-doc-links">
+          <a href="{% url 'production_order_sheet_pdf' order.pk %}" class="production-doc-link">Order sheet PDF</a>
+          <a href="{% url 'production_packing_list_pdf' order.pk %}" class="production-doc-link">Packing list PDF</a>
+          {% if order.costing_header %}
+            <a href="{% url 'cost_sheet_detail' order.costing_header.pk %}" class="production-doc-link">Open costing #{{ order.costing_header.pk }}</a>
+          {% elif cost_sheet_active %}
+            <span class="production-doc-static">Legacy cost sheet v{{ cost_sheet_active.version_number }}</span>
+          {% endif %}
+          {% for invoice in order.invoices.all %}
+            <a href="{% url 'invoice_view' invoice.pk %}" class="production-doc-link">Invoice {{ invoice.invoice_number }}</a>
+          {% endfor %}
+        </div>
+
+        <div class="production-file-list">
+          {% if attachments %}
+            {% for att in attachments %}
+              <div class="production-file-row">
+                <div>
+                  {% if att.file %}
+                    <a href="{{ att.file.url }}" target="_blank" rel="noopener">{{ att.name|default:att.file.name }}</a>
+                  {% else %}
+                    <strong>{{ att.name|default:"Attachment file missing" }}</strong>
+                  {% endif %}
+                  <span>{{ att.created_at|date:"M j, Y H:i" }}</span>
+                </div>
+                <form action="{% url 'production_attachment_delete' order.pk att.pk %}" method="post">
+                  {% csrf_token %}
+                  <button type="submit" class="production-btn production-btn--tiny production-btn--danger" onclick="return confirm('Delete this file?');">Delete</button>
+                </form>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="production-empty-inline">No files added yet.</div>
+          {% endif %}
+        </div>
+      </article>
+
+      <article class="production-panel">
+        <div class="production-panel-head">
+          <div>
+            <h2>Shipping and Delivery</h2>
+            <p>Shipment status, tracking, carrier, delivery dates, and shipping actions.</p>
+          </div>
+          <div class="production-panel-actions">
+            <a href="{% url 'shipping_add_for_order' order.pk %}" class="production-btn production-btn--tiny production-btn--primary">Add Shipment</a>
+            <a href="{% url 'shipment_list' %}" class="production-btn production-btn--tiny production-btn--ghost">Shipping List</a>
+          </div>
+        </div>
+
+        {% if shipments %}
+          <div class="production-table-wrap">
+            <table class="production-mini-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Carrier</th>
+                  <th>Tracking</th>
+                  <th>Boxes</th>
+                  <th>Weight kg</th>
+                  <th>Cost BDT</th>
+                  <th>Cost CAD</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for s in shipments %}
+                  <tr>
+                    <td>{{ s.ship_date|date:"Y-m-d"|default:"-" }}</td>
+                    <td>{{ s.get_carrier_display }}</td>
+                    <td>
+                      {% if s.tracking_number %}
+                        {% if s.tracking_url %}
+                          <a href="{{ s.tracking_url }}" target="_blank" rel="noopener">{{ s.tracking_number }}</a>
+                        {% else %}
+                          {{ s.tracking_number }}
+                        {% endif %}
+                      {% else %}
+                        -
+                      {% endif %}
+                    </td>
+                    <td>{{ s.box_count|default:"-" }}</td>
+                    <td>{{ s.total_weight_kg|default:"-" }}</td>
+                    <td>{{ s.cost_bdt|default:"-" }}</td>
+                    <td>{{ s.cost_cad|default:"-" }}</td>
+                    <td><span class="production-status-badge {{ s.status }}">{{ s.get_status_display }}</span></td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="production-empty-inline">No shipments yet.</div>
+        {% endif %}
+      </article>
+
+      <article class="production-panel">
+        <div class="production-panel-head">
+          <div>
+            <h2>Costing and Actuals</h2>
+            <p>Actual factory costs, active costing, and variance reporting stay available for operations review.</p>
+          </div>
+          {% if order.costing_header %}
+            <a href="{% url 'cost_sheet_detail' order.costing_header.pk %}" class="production-btn production-btn--tiny production-btn--ghost">Open Costing</a>
+          {% endif %}
+        </div>
+
+        {% if order.costing_header %}
+          <div class="production-muted-block">Linked costing: COST-{{ order.costing_header.pk }} / {{ order.costing_header.get_status_display }}</div>
+        {% elif cost_sheet_active %}
+          <div class="production-muted-block">Linked cost sheet: v{{ cost_sheet_active.version_number }}</div>
+        {% else %}
+          <div class="production-muted-block">No active cost sheet linked yet.</div>
+        {% endif %}
+
+        <form method="post" class="actual-grid production-actual-form">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="add_actual">
+          <label><span>Section</span>{{ actual_entry_form.section }}</label>
+          <label><span>Item</span>{{ actual_entry_form.item_name }}</label>
+          <label><span>UOM</span>{{ actual_entry_form.uom }}</label>
+          <label><span>Qty total</span>{{ actual_entry_form.actual_qty_total }}</label>
+          <label><span>Rate (BDT)</span>{{ actual_entry_form.actual_rate }}</label>
+          <label><span>Total cost (BDT)</span>{{ actual_entry_form.actual_total_cost }}</label>
+          <label class="production-actual-wide"><span>Notes</span>{{ actual_entry_form.notes }}</label>
+          <div class="production-actual-wide production-form-actions">
+            <button type="submit" class="production-btn production-btn--primary">Add Actual</button>
           </div>
         </form>
-      {% endfor %}
-    {% else %}
-      <div class="muted">No actual costs yet.</div>
-    {% endif %}
 
-    {% if variance_report %}
-      <div style="margin-top:14px;">
-        <div class="section-title">Variance summary</div>
-        <div class="muted" style="margin-bottom:6px;">
-          Quoted {{ variance_report.display.quoted_price_per_piece }} · Standard {{ variance_report.display.standard_cost_per_piece }} · Actual {{ variance_report.display.actual_cost_per_piece }}
+        {% if actual_entries %}
+          <div class="production-actual-list">
+            {% for entry in actual_entries %}
+              <form method="post" class="actual-grid production-actual-row">
+                {% csrf_token %}
+                <input type="hidden" name="entry_id" value="{{ entry.id }}">
+                <input type="hidden" name="section" value="{{ entry.section }}">
+                <div><span>Section</span><strong>{{ entry.get_section_display }}</strong></div>
+                <label><span>Item</span><input type="text" name="item_name" value="{{ entry.item_name }}"></label>
+                <label><span>UOM</span><input type="text" name="uom" value="{{ entry.uom }}"></label>
+                <label><span>Qty</span><input type="number" step="0.0001" name="actual_qty_total" value="{{ entry.actual_qty_total }}"></label>
+                <label><span>Rate</span><input type="number" step="0.0001" name="actual_rate" value="{{ entry.actual_rate }}"></label>
+                <label><span>Total</span><input type="number" step="0.0001" name="actual_total_cost" value="{{ entry.actual_total_cost }}"></label>
+                <div class="production-row-actions">
+                  <button type="submit" name="action" value="update_actual" class="production-btn production-btn--tiny production-btn--ghost">Save</button>
+                  <button type="submit" name="action" value="delete_actual" class="production-btn production-btn--tiny production-btn--danger">Delete</button>
+                </div>
+              </form>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="production-empty-inline">No actual costs yet.</div>
+        {% endif %}
+
+        {% if variance_report %}
+          <div class="production-variance">
+            <h3>Variance summary</h3>
+            <p>Quoted {{ variance_report.display.quoted_price_per_piece }} / Standard {{ variance_report.display.standard_cost_per_piece }} / Actual {{ variance_report.display.actual_cost_per_piece }}</p>
+            <p>Variance per piece {{ variance_report.display.variance_per_piece }} / Total variance {{ variance_report.display.total_variance }}</p>
+            <div class="production-table-wrap">
+              <table class="production-mini-table">
+                <thead>
+                  <tr>
+                    <th>Section</th>
+                    <th>Standard total</th>
+                    <th>Actual total</th>
+                    <th>Difference</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in variance_report.variance_rows %}
+                    <tr>
+                      <td>{{ row.section_label }}</td>
+                      <td>{{ row.display_standard_total }}</td>
+                      <td>{{ row.display_actual_total }}</td>
+                      <td>{{ row.display_difference }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        {% endif %}
+      </article>
+
+      <article class="production-panel">
+        <div class="production-panel-head">
+          <div>
+            <h2>Activity and Notes</h2>
+            <p>Production updates, internal notes, pinned comments, and related lead/opportunity activity.</p>
+          </div>
         </div>
-        <div class="muted">
-          Variance per piece: {{ variance_report.display.variance_per_piece }} · Total variance: {{ variance_report.display.total_variance }}
+
+        <form method="post" enctype="multipart/form-data" class="production-note-form">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="add_comment">
+          <label>
+            <span>Internal note</span>
+            <textarea name="comment_text" rows="3" placeholder="Write a note about this production order"></textarea>
+          </label>
+          <label>
+            <span>Attachment</span>
+            <input type="file" name="attachment">
+          </label>
+          <button type="submit" class="production-btn production-btn--primary">Save Note</button>
+        </form>
+
+        {% if comments %}
+          <div class="production-timeline">
+            {% for c in comments %}
+              <article class="production-timeline-item">
+                <div>
+                  <strong>{{ c.author|default:"User" }}</strong>
+                  <span>{{ c.created_at }} / {% if c.production %}Production{% elif c.opportunity %}Opportunity{% else %}Lead{% endif %}{% if c.pinned %} / pinned{% endif %}{% if c.is_ai %} / AI{% endif %}</span>
+                </div>
+                <p>{{ c.content|linebreaksbr }}</p>
+                {% if c.attachment %}
+                  <a href="{{ c.attachment.url }}" target="_blank" rel="noopener">Open attachment</a>
+                {% endif %}
+                <div class="production-timeline-actions">
+                  {% if c.production %}
+                    <a href="{% url 'production_detail' c.production.pk %}">Open production</a>
+                  {% elif c.opportunity %}
+                    <a href="{% url 'opportunity_detail' c.opportunity.pk %}">Open opportunity</a>
+                  {% elif c.lead %}
+                    <a href="{% url 'lead_detail' c.lead.pk %}">Open lead</a>
+                  {% endif %}
+                  <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="toggle_pin_comment">
+                    <input type="hidden" name="comment_id" value="{{ c.id }}">
+                    <button type="submit" class="production-btn production-btn--tiny production-btn--ghost">{% if c.pinned %}Unpin{% else %}Pin{% endif %}</button>
+                  </form>
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="production-empty-inline">No activity notes yet.</div>
+        {% endif %}
+      </article>
+    </main>
+
+    <aside class="production-side-column">
+      <article class="production-panel">
+        <div class="production-panel-head">
+          <div>
+            <h2>Linked Records</h2>
+            <p>Sales, customer, costing, and invoice context.</p>
+          </div>
         </div>
-
-        <div class="table-responsive" style="margin-top:8px;">
-          <table class="table table-dark table-sm align-middle mb-0">
-            <thead>
-              <tr>
-                <th>Section</th>
-                <th>Standard total</th>
-                <th>Actual total</th>
-                <th>Difference</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for row in variance_report.variance_rows %}
-                <tr>
-                  <td>{{ row.section_label }}</td>
-                  <td>{{ row.display_standard_total }}</td>
-                  <td>{{ row.display_actual_total }}</td>
-                  <td>{{ row.display_difference }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+        <div class="production-linked-list">
+          {% if opportunity %}<a href="{% url 'opportunity_detail' opportunity.pk %}">Opportunity {{ opportunity.opportunity_id }}</a>{% endif %}
+          {% if customer %}<a href="{% url 'customer_detail' customer.pk %}">{{ customer.account_brand|default:customer.contact_name|default:"Customer" }}</a>{% endif %}
+          {% if lead %}<a href="{% url 'lead_detail' lead.pk %}">Lead {{ lead.lead_id|default:lead.pk }}</a>{% endif %}
+          {% if order.costing_header %}
+            <a href="{% url 'cost_sheet_detail' order.costing_header.pk %}">Costing COST-{{ order.costing_header.pk }}</a>
+          {% elif cost_sheet_active %}
+            <span>Legacy cost sheet v{{ cost_sheet_active.version_number }}</span>
+          {% endif %}
+          {% for invoice in order.invoices.all %}
+            <a href="{% url 'invoice_view' invoice.pk %}">Invoice {{ invoice.invoice_number }}</a>
+          {% empty %}
+            <span>No linked invoices.</span>
+          {% endfor %}
         </div>
-      </div>
-    {% endif %}
-  </div>
+      </article>
 
-  <div class="cardx">
-    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
-      <div class="section-title" style="margin:0;">Shipping for this order</div>
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <a href="{% url 'shipping_add_for_order' order.pk %}" class="btn btn-warning btn-sm">Add shipment</a>
-        <a href="{% url 'shipment_list' %}" class="btn btn-outline-light btn-sm">Open shipping list</a>
-      </div>
-    </div>
-
-    <div style="margin-top:10px;">
-      {% if shipments %}
-        <div class="table-responsive">
-          <table class="table table-dark table-sm align-middle mb-0">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Carrier</th>
-                <th>Tracking</th>
-                <th>Boxes</th>
-                <th>Weight kg</th>
-                <th>Cost BDT</th>
-                <th>Cost CAD</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for s in shipments %}
-                <tr>
-                  <td>{{ s.ship_date|date:"Y-m-d"|default:"-" }}</td>
-                  <td>{{ s.get_carrier_display }}</td>
-                  <td>
-                    {% if s.tracking_number %}
-                      {% if s.tracking_url %}
-                        <a href="{{ s.tracking_url }}" target="_blank">{{ s.tracking_number }}</a>
-                      {% else %}
-                        {{ s.tracking_number }}
-                      {% endif %}
-                    {% else %}
-                      -
-                    {% endif %}
-                  </td>
-                  <td>{{ s.box_count|default:"-" }}</td>
-                  <td>{{ s.total_weight_kg|default:"-" }}</td>
-                  <td>{{ s.cost_bdt|default:"-" }}</td>
-                  <td>{{ s.cost_cad|default:"-" }}</td>
-                  <td>{{ s.get_status_display }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+      <article class="production-panel">
+        <div class="production-panel-head">
+          <div>
+            <h2>Delivery Focus</h2>
+            <p>Timeline and shipping readiness.</p>
+          </div>
         </div>
-      {% else %}
-        <div class="muted" style="font-size:13px;">No shipments yet.</div>
-      {% endif %}
-    </div>
-  </div>
+        <div class="production-side-metrics">
+          <div>
+            <span>Sample date</span>
+            <strong>{{ order.sample_deadline|date:"M j, Y"|default:"-" }}</strong>
+          </div>
+          <div>
+            <span>Target delivery</span>
+            <strong>{{ order.bulk_deadline|date:"M j, Y"|default:"-" }}</strong>
+          </div>
+          <div>
+            <span>Shipping records</span>
+            <strong>{{ shipments|length }}</strong>
+          </div>
+        </div>
+      </article>
 
-  <div class="cardx">
-    <div class="section-title">Costs in taka</div>
-
-    <div class="meta-grid" style="margin-top:10px;">
-      <div class="meta-item">
-        <div class="meta-label">Fabric required kg</div>
-        <div class="meta-value">{{ order.fabric_required_kg|default:"not set" }}</div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Fabric received kg</div>
-        <div class="meta-value">{{ order.fabric_received_kg|default:"not set" }}</div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Fabric used kg</div>
-        <div class="meta-value">{{ order.fabric_used_kg|default:"not set" }}</div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Fabric cost per kg</div>
-        <div class="meta-value">{{ order.fabric_cost_per_kg_bdt|default:"not set" }}</div>
-      </div>
-
-      <div class="meta-item">
-        <div class="meta-label">Thread cost</div>
-        <div class="meta-value">{{ order.material_thread_cost_bdt|default:"not set" }}</div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Zipper cost</div>
-        <div class="meta-value">{{ order.material_zipper_cost_bdt|default:"not set" }}</div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Accessories cost</div>
-        <div class="meta-value">{{ order.material_accessories_cost_bdt|default:"not set" }}</div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Label cost</div>
-        <div class="meta-value">{{ order.material_label_cost_bdt|default:"not set" }}</div>
-      </div>
-
-      <div class="meta-item">
-        <div class="meta-label">Cutting cost</div>
-        <div class="meta-value">{{ order.production_cutting_cost_bdt|default:"not set" }}</div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Sewing cost</div>
-        <div class="meta-value">{{ order.production_sewing_cost_bdt|default:"not set" }}</div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Finishing cost</div>
-        <div class="meta-value">{{ order.production_finishing_cost_bdt|default:"not set" }}</div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Packing cost</div>
-        <div class="meta-value">{{ order.production_packing_cost_bdt|default:"not set" }}</div>
-      </div>
-
-      <div class="meta-item">
-        <div class="meta-label">Overhead cost</div>
-        <div class="meta-value">{{ order.production_overhead_cost_bdt|default:"not set" }}</div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Other work cost</div>
-        <div class="meta-value">{{ order.production_other_cost_bdt|default:"not set" }}</div>
-      </div>
-
-      <div class="meta-item">
-        <div class="meta-label">Remake needed</div>
-        <div class="meta-value">{% if order.remake_required %}Yes{% else %}No{% endif %}</div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Remake qty</div>
-        <div class="meta-value">{{ order.remake_qty|default:"not set" }}</div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Remake cost</div>
-        <div class="meta-value">{{ order.remake_cost_bdt|default:"not set" }}</div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Total actual cost</div>
-        <div class="meta-value">{{ order.actual_total_cost_bdt|default:"not set" }}</div>
-      </div>
-    </div>
-  </div>
-
+      <details class="production-panel production-raw-details">
+        <summary>
+          <span>Admin / Raw Details</span>
+          <small>Advanced production cost and internal fields</small>
+        </summary>
+        <div class="production-raw-grid">
+          <div><span>Order code</span><strong>{{ order.order_code|default:"Not set" }}</strong></div>
+          <div><span>Created</span><strong>{{ order.created_at|date:"Y-m-d H:i" }}</strong></div>
+          <div><span>Updated</span><strong>{{ order.updated_at|date:"Y-m-d H:i" }}</strong></div>
+          <div><span>Fabric required kg</span><strong>{{ order.fabric_required_kg|default:"not set" }}</strong></div>
+          <div><span>Fabric received kg</span><strong>{{ order.fabric_received_kg|default:"not set" }}</strong></div>
+          <div><span>Fabric used kg</span><strong>{{ order.fabric_used_kg|default:"not set" }}</strong></div>
+          <div><span>Fabric cost per kg</span><strong>{{ order.fabric_cost_per_kg_bdt|default:"not set" }}</strong></div>
+          <div><span>Thread cost</span><strong>{{ order.material_thread_cost_bdt|default:"not set" }}</strong></div>
+          <div><span>Zipper cost</span><strong>{{ order.material_zipper_cost_bdt|default:"not set" }}</strong></div>
+          <div><span>Accessories cost</span><strong>{{ order.material_accessories_cost_bdt|default:"not set" }}</strong></div>
+          <div><span>Label cost</span><strong>{{ order.material_label_cost_bdt|default:"not set" }}</strong></div>
+          <div><span>Cutting cost</span><strong>{{ order.production_cutting_cost_bdt|default:"not set" }}</strong></div>
+          <div><span>Sewing cost</span><strong>{{ order.production_sewing_cost_bdt|default:"not set" }}</strong></div>
+          <div><span>Finishing cost</span><strong>{{ order.production_finishing_cost_bdt|default:"not set" }}</strong></div>
+          <div><span>Packing cost</span><strong>{{ order.production_packing_cost_bdt|default:"not set" }}</strong></div>
+          <div><span>Overhead cost</span><strong>{{ order.production_overhead_cost_bdt|default:"not set" }}</strong></div>
+          <div><span>Other work cost</span><strong>{{ order.production_other_cost_bdt|default:"not set" }}</strong></div>
+          <div><span>Remake needed</span><strong>{% if order.remake_required %}Yes{% else %}No{% endif %}</strong></div>
+          <div><span>Remake qty</span><strong>{{ order.remake_qty|default:"not set" }}</strong></div>
+          <div><span>Remake cost</span><strong>{{ order.remake_cost_bdt|default:"not set" }}</strong></div>
+          <div><span>Total actual cost</span><strong>{{ order.actual_total_cost_bdt|default:"not set" }}</strong></div>
+        </div>
+      </details>
+    </aside>
+  </section>
 </div>
 
 <script>
   document.addEventListener("DOMContentLoaded", function () {
-    var toggle = document.getElementById("stage-dates-toggle");
-    var body = document.getElementById("stage-dates-body");
-    if (toggle && body) {
-      toggle.addEventListener("click", function () {
-        var hidden = body.style.display === "none";
-        if (hidden) {
-          body.style.display = "";
-          toggle.textContent = "Hide";
-        } else {
-          body.style.display = "none";
-          toggle.textContent = "Show";
-        }
-      });
-    }
-
     function parseNum(value) {
       var v = parseFloat(value);
       return Number.isFinite(v) ? v : null;
