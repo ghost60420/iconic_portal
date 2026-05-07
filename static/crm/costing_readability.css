@@ -1,0 +1,260 @@
+.dash,
+.reports,
+.guide {
+  --cost-page-bg: #06070d;
+  --cost-page-card: #0f172a;
+  --cost-page-card-soft: #111c31;
+  --cost-page-line: rgba(148, 163, 184, 0.25);
+  --cost-page-line-strong: rgba(148, 163, 184, 0.36);
+  --cost-page-text: #f8fafc;
+  --cost-page-secondary: #cbd5e1;
+  --cost-page-muted: #94a3b8;
+  --cost-page-heading: #ffffff;
+  --cost-page-accent: #5eead4;
+  --cost-page-warm: #facc15;
+  color: var(--cost-page-text);
+}
+
+.dash .card,
+.reports .card,
+.guide .card {
+  color: var(--cost-page-text);
+  background:
+    linear-gradient(180deg, rgba(17, 28, 49, 0.98), rgba(10, 15, 26, 0.98)),
+    var(--cost-page-card);
+  border-color: var(--cost-page-line);
+}
+
+.reports,
+.guide {
+  width: min(1280px, calc(100vw - 28px));
+  max-width: none;
+  margin: 18px auto 56px;
+  padding: 0;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.guide {
+  width: min(1050px, calc(100vw - 28px));
+}
+
+.reports *,
+.reports *::before,
+.reports *::after,
+.guide *,
+.guide *::before,
+.guide *::after {
+  box-sizing: border-box;
+}
+
+.reports .card,
+.guide .card {
+  border-radius: 22px;
+  padding: 20px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.34);
+}
+
+.costing-support-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+  background:
+    radial-gradient(circle at 10% -10%, rgba(94, 234, 212, 0.16), transparent 28rem),
+    radial-gradient(circle at 92% 10%, rgba(250, 204, 21, 0.12), transparent 24rem),
+    linear-gradient(135deg, rgba(24, 30, 45, 0.98), rgba(8, 11, 19, 0.98)) !important;
+}
+
+.costing-support-eyebrow {
+  margin: 0 0 8px;
+  color: var(--cost-page-accent);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.costing-support-hero h1,
+.dash h1,
+.reports h1,
+.guide h1 {
+  margin: 0;
+  color: var(--cost-page-heading);
+  font-size: clamp(28px, 3vw, 42px);
+  line-height: 1.04;
+  font-weight: 850;
+  letter-spacing: 0;
+}
+
+.costing-support-subtitle {
+  max-width: 720px;
+  margin: 10px 0 0;
+  color: var(--cost-page-secondary);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.costing-support-title,
+.dash-section-title,
+.reports h2,
+.guide h2 {
+  margin: 0 0 12px;
+  color: var(--cost-page-heading);
+  font-size: 16px;
+  font-weight: 850;
+  line-height: 1.25;
+}
+
+.costing-support-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.reports .btnx,
+.guide .btnx {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--cost-page-line-strong);
+  border-radius: 14px;
+  color: var(--cost-page-text);
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.22);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.reports .btnx:hover,
+.reports .btnx:focus-visible,
+.guide .btnx:hover,
+.guide .btnx:focus-visible {
+  color: #ffffff;
+  border-color: rgba(94, 234, 212, 0.5);
+  background: rgba(94, 234, 212, 0.12);
+  outline: none;
+}
+
+.dash label,
+.dash .dash-field span,
+.dash .dash-check span,
+.reports label,
+.guide label {
+  color: var(--cost-page-secondary);
+}
+
+.dash input,
+.dash select,
+.reports input,
+.reports select,
+.guide input,
+.guide select {
+  color: var(--cost-page-text);
+  background: rgba(8, 12, 20, 0.94);
+  border-color: var(--cost-page-line-strong);
+  color-scheme: dark;
+}
+
+.dash select option,
+.reports select option,
+.guide select option {
+  color: var(--cost-page-text);
+  background: #111827;
+}
+
+.dash .muted,
+.reports .muted,
+.guide .muted {
+  color: var(--cost-page-muted) !important;
+}
+
+.dash table,
+.reports table,
+.guide table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: var(--cost-page-secondary);
+}
+
+.dash th,
+.reports th,
+.guide th {
+  color: #e5e7eb;
+  background: rgba(255, 255, 255, 0.055);
+  border-bottom-color: rgba(148, 163, 184, 0.26);
+  font-weight: 850;
+  letter-spacing: 0.08em;
+}
+
+.dash td,
+.reports td,
+.guide td {
+  color: var(--cost-page-secondary);
+  border-bottom-color: rgba(148, 163, 184, 0.18);
+  font-weight: 650;
+}
+
+.dash tbody td:first-child,
+.reports tbody td:first-child,
+.guide tbody td:first-child {
+  color: var(--cost-page-text);
+  font-weight: 800;
+}
+
+.dash tbody tr:hover,
+.reports tbody tr:hover,
+.guide tbody tr:hover {
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.guide ol,
+.guide ul {
+  margin: 0;
+  padding-left: 22px;
+  color: var(--cost-page-secondary);
+}
+
+.guide li {
+  margin-bottom: 10px;
+  color: var(--cost-page-secondary);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.guide li::marker {
+  color: var(--cost-page-accent);
+  font-weight: 850;
+}
+
+@media (max-width: 760px) {
+  .reports,
+  .guide {
+    width: calc(100vw - 20px);
+  }
+
+  .costing-support-hero {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .costing-support-actions,
+  .reports .btnx,
+  .guide .btnx {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .reports .card,
+  .guide .card {
+    padding: 16px;
+    border-radius: 20px;
+  }
+}

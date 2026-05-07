@@ -1,4 +1,5 @@
 {% extends "crm/base.html" %}
+{% load static %}
 {% block content %}
 
 <style>
@@ -26,10 +27,23 @@
     margin-bottom: 6px;
   }
 </style>
+<link rel="stylesheet" href="{% static 'crm/costing_readability.css' %}?v=costing-readability-20260507">
 
 <div class="guide">
+  <div class="card costing-support-hero">
+    <div>
+      <p class="costing-support-eyebrow">Costing guide</p>
+      <h1>How to input costing without mistakes</h1>
+      <p class="costing-support-subtitle">Follow these rules to keep pricing, margins, and production assumptions clear.</p>
+    </div>
+    <div class="costing-support-actions">
+      <a href="{% url 'cost_sheet_list' %}" class="btnx">Back to list</a>
+      <a href="{% url 'cost_sheet_dashboard' %}" class="btnx">Dashboard</a>
+    </div>
+  </div>
+
   <div class="card">
-    <h2>How to input costing without mistakes</h2>
+    <h2>Workflow</h2>
     <ol>
       <li>Open an Opportunity and click Create costing.</li>
       <li>Fill the Header section (quantity, factory, currency, exchange rate).</li>

@@ -1,4 +1,5 @@
 {% extends "crm/base.html" %}
+{% load static %}
 {% block content %}
 
 <style>
@@ -48,18 +49,23 @@
     text-transform: uppercase;
   }
 </style>
+<link rel="stylesheet" href="{% static 'crm/costing_readability.css' %}?v=costing-readability-20260507">
 
 <div class="reports">
-  <div class="card" style="display:flex; justify-content:space-between; align-items:center;">
-    <div style="font-size:18px; font-weight:800;">Costing Reports</div>
-    <div style="display:flex; gap:8px;">
+  <div class="card costing-support-hero">
+    <div>
+      <p class="costing-support-eyebrow">Costing exports</p>
+      <h1>Costing Reports</h1>
+      <p class="costing-support-subtitle">Download pricing, margin, variance, and finance reports with clear review context.</p>
+    </div>
+    <div class="costing-support-actions">
       <a href="{% url 'cost_sheet_list' %}" class="btnx">Back to list</a>
     </div>
   </div>
 
   <div class="card">
-    <div style="font-weight:700; margin-bottom:8px;">Exports</div>
-    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+    <div class="costing-support-title">Exports</div>
+    <div class="costing-support-actions">
       <a class="btnx" href="{% url 'cost_sheet_reports' %}?export=list">Costing list CSV</a>
       <a class="btnx" href="{% url 'cost_sheet_reports' %}?export=margin">Margin report CSV</a>
       <a class="btnx" href="{% url 'cost_sheet_reports' %}?export=variance">Variance report CSV</a>
@@ -68,7 +74,7 @@
   </div>
 
   <div class="card">
-    <div style="font-weight:700; margin-bottom:6px;">Recent costings</div>
+    <div class="costing-support-title">Recent costings</div>
     <table>
       <thead>
         <tr>
