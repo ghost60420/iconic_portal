@@ -208,13 +208,43 @@ def cost_sheet_list(request):
     for sheet in qs:
         calc = compute_costing(sheet.id)
         if calc:
-            rows.append({"sheet": sheet, "calc": calc})
+            margin_percent = calc.get("margin_percent") or Decimal("0")
+            if margin_percent >= Decimal("20"):
+                margin_tone = "good"
+            elif margin_percent >= Decimal("5"):
+                margin_tone = "watch"
+            else:
+                margin_tone = "risk"
+            rows.append({"sheet": sheet, "calc": calc, "margin_tone": margin_tone})
+
+    total_cost_order = sum((row["calc"].get("total_cost_order") or Decimal("0")) for row in rows)
+    total_sales_order = sum((row["calc"].get("total_sales_order") or Decimal("0")) for row in rows)
+    total_profit_order = sum((row["calc"].get("total_profit_order") or Decimal("0")) for row in rows)
+    margin_values = [row["calc"].get("margin_percent") or Decimal("0") for row in rows]
+    average_margin = (sum(margin_values) / Decimal(len(margin_values))) if margin_values else Decimal("0")
+    customers_by_id = {
+        row["sheet"].customer_id: row["sheet"].customer
+        for row in rows
+        if row["sheet"].customer_id and row["sheet"].customer
+    }
 
     context = {
         "rows": rows,
-        "customers": list({row["sheet"].customer for row in rows if row["sheet"].customer}),
+        "customers": sorted(
+            customers_by_id.values(),
+            key=lambda customer: (customer.account_brand or customer.contact_name or "").lower(),
+        ),
         "status_choices": [("draft", "Draft"), ("approved", "Approved")],
         "product_types": Opportunity.PRODUCT_TYPE_CHOICES,
+        "summary": {
+            "count": len(rows),
+            "approved_count": sum(1 for row in rows if row["sheet"].status == "approved"),
+            "draft_count": sum(1 for row in rows if row["sheet"].status == "draft"),
+            "total_cost_order": total_cost_order,
+            "total_sales_order": total_sales_order,
+            "total_profit_order": total_profit_order,
+            "average_margin": average_margin,
+        },
         "selected": {
             "customer": customer_id,
             "product_type": product_type,
