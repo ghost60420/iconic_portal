@@ -1,0 +1,302 @@
+.dash {
+  --cost-dash-bg: #06070d;
+  --cost-dash-panel: rgba(18, 22, 34, 0.94);
+  --cost-dash-panel-soft: rgba(24, 30, 45, 0.92);
+  --cost-dash-line: rgba(148, 163, 184, 0.22);
+  --cost-dash-line-strong: rgba(148, 163, 184, 0.34);
+  --cost-dash-text: #f8fafc;
+  --cost-dash-secondary: #cbd5e1;
+  --cost-dash-muted: #94a3b8;
+  --cost-dash-accent: #5eead4;
+  --cost-dash-amber: #facc15;
+  --cost-dash-shadow: 0 24px 64px rgba(0, 0, 0, 0.34);
+  width: min(1500px, calc(100vw - 28px));
+  max-width: none;
+  margin: 18px auto 56px;
+  padding: 0;
+  color: var(--cost-dash-text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.dash *,
+.dash *::before,
+.dash *::after {
+  box-sizing: border-box;
+}
+
+.dash a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.dash .card {
+  color: var(--cost-dash-text);
+  background:
+    linear-gradient(180deg, rgba(24, 30, 45, 0.96), rgba(11, 15, 25, 0.96)),
+    var(--cost-dash-panel);
+  border: 1px solid var(--cost-dash-line);
+  border-radius: 22px;
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: var(--cost-dash-shadow);
+  backdrop-filter: blur(16px);
+}
+
+.dash-hero {
+  display: flex !important;
+  justify-content: space-between;
+  align-items: flex-start !important;
+  gap: 18px;
+  background:
+    radial-gradient(circle at 10% -10%, rgba(94, 234, 212, 0.16), transparent 28rem),
+    radial-gradient(circle at 92% 10%, rgba(250, 204, 21, 0.12), transparent 24rem),
+    linear-gradient(135deg, rgba(24, 30, 45, 0.98), rgba(8, 11, 19, 0.98)) !important;
+}
+
+.dash-eyebrow {
+  margin: 0 0 8px;
+  color: var(--cost-dash-accent);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.dash h1 {
+  margin: 0;
+  color: var(--cost-dash-text);
+  font-size: clamp(28px, 3vw, 42px);
+  line-height: 1.04;
+  font-weight: 850;
+  letter-spacing: 0;
+}
+
+.dash-subtitle {
+  max-width: 720px;
+  margin: 10px 0 0;
+  color: var(--cost-dash-secondary);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.dash-actions,
+.dash-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.dash .btnx {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--cost-dash-line-strong);
+  border-radius: 14px;
+  color: var(--cost-dash-text);
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.22);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.dash .btnx:hover,
+.dash .btnx:focus-visible {
+  transform: translateY(-1px);
+  color: #ffffff;
+  border-color: rgba(94, 234, 212, 0.5);
+  background: rgba(94, 234, 212, 0.12);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.34);
+  outline: none;
+}
+
+.dash-filter-card {
+  padding: 18px !important;
+}
+
+.dash-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(150px, 1fr)) minmax(140px, 0.65fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.dash-field,
+.dash-check {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  color: var(--cost-dash-secondary);
+}
+
+.dash-field span,
+.dash-check span {
+  color: var(--cost-dash-secondary);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dash-check {
+  min-height: 42px;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  padding: 0 12px;
+  border: 1px solid var(--cost-dash-line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.dash-check input {
+  width: 16px;
+  height: 16px;
+  min-height: 16px;
+  margin: 0;
+  accent-color: var(--cost-dash-accent);
+}
+
+.dash input,
+.dash select {
+  min-height: 42px;
+  color: var(--cost-dash-text);
+  background: rgba(8, 12, 20, 0.92);
+  border: 1px solid var(--cost-dash-line-strong);
+  border-radius: 14px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 650;
+  outline: none;
+  color-scheme: dark;
+}
+
+.dash select option {
+  color: #f8fafc;
+  background: #111827;
+}
+
+.dash input:focus,
+.dash select:focus {
+  border-color: rgba(94, 234, 212, 0.54);
+  box-shadow: 0 0 0 4px rgba(94, 234, 212, 0.11);
+}
+
+.dash .grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 16px;
+}
+
+.dash-section-title {
+  margin: 0 0 12px;
+  color: var(--cost-dash-text);
+  font-size: 16px;
+  font-weight: 850;
+  line-height: 1.2;
+}
+
+.dash .muted {
+  color: var(--cost-dash-muted) !important;
+}
+
+.dash table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: var(--cost-dash-secondary);
+  font-size: 13px;
+}
+
+.dash th,
+.dash td {
+  padding: 12px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.dash th {
+  color: #e5e7eb;
+  background: rgba(255, 255, 255, 0.045);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dash td {
+  color: var(--cost-dash-secondary);
+  font-weight: 650;
+}
+
+.dash tbody tr:hover {
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.dash tbody td:first-child {
+  color: var(--cost-dash-text);
+  font-weight: 800;
+}
+
+.dash-chart-wrap {
+  position: relative;
+  min-height: 285px;
+  height: clamp(260px, 28vw, 340px);
+}
+
+.dash-chart-wrap canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+@media (max-width: 1180px) {
+  .dash-filter-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .dash-filter-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 760px) {
+  .dash {
+    width: min(100vw - 20px, 680px);
+  }
+
+  .dash-hero,
+  .dash-filter-grid {
+    display: grid !important;
+    grid-template-columns: 1fr;
+  }
+
+  .dash-actions,
+  .dash-filter-actions,
+  .dash .btnx {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .dash .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dash .card {
+    padding: 16px;
+    border-radius: 20px;
+  }
+
+  .dash table {
+    font-size: 12px;
+  }
+
+  .dash th,
+  .dash td {
+    padding: 10px 8px;
+  }
+}

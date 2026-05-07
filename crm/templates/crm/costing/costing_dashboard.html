@@ -1,4 +1,5 @@
 {% extends "crm/base.html" %}
+{% load static %}
 {% block content %}
 
 <style>
@@ -63,49 +64,71 @@
     text-transform: uppercase;
   }
 </style>
+<link rel="stylesheet" href="{% static 'crm/costing_dashboard.css' %}?v=costing-dashboard-readable-20260507">
 
 <div class="dash">
-  <div class="card" style="display:flex; justify-content:space-between; align-items:center;">
-    <div style="font-size:18px; font-weight:800;">Costing Dashboard</div>
-    <div style="display:flex; gap:8px;">
+  <div class="card dash-hero">
+    <div>
+      <p class="dash-eyebrow">Costing intelligence</p>
+      <h1>Costing Dashboard</h1>
+      <p class="dash-subtitle">Review margin risk, cost trends, customer profitability, and category cost share.</p>
+    </div>
+    <div class="dash-actions">
       <a href="{% url 'cost_sheet_list' %}" class="btnx">Back to list</a>
     </div>
   </div>
 
-  <form class="card" method="get">
-    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-      <input type="date" name="start" value="{{ filters.start }}">
-      <input type="date" name="end" value="{{ filters.end }}">
-      <select name="customer">
-        <option value="">All customers</option>
-        {% for customer in customers %}
-          <option value="{{ customer.pk }}" {% if filters.customer == customer.pk|stringformat:"s" %}selected{% endif %}>{{ customer.account_brand|default:customer.contact_name }}</option>
-        {% endfor %}
-      </select>
-      <select name="product_type">
-        <option value="">All product types</option>
-        {% for key,label in product_types %}
-          <option value="{{ key }}" {% if filters.product_type == key %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
-      <select name="factory_location">
-        <option value="">All locations</option>
-        {% for key,label in factory_locations %}
-          <option value="{{ key }}" {% if filters.factory_location == key %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
-      <label style="display:flex; align-items:center; gap:6px;">
-        <input type="checkbox" name="approved" value="1" {% if filters.approved %}checked{% endif %}>
-        <span class="muted">Approved only</span>
+  <form class="card dash-filter-card" method="get">
+    <div class="dash-filter-grid">
+      <label class="dash-field">
+        <span>Start date</span>
+        <input type="date" name="start" value="{{ filters.start }}">
       </label>
-      <button class="btnx" type="submit">Filter</button>
-      <a class="btnx" href="{% url 'cost_sheet_dashboard' %}">Reset</a>
+      <label class="dash-field">
+        <span>End date</span>
+        <input type="date" name="end" value="{{ filters.end }}">
+      </label>
+      <label class="dash-field">
+        <span>Customer</span>
+        <select name="customer">
+          <option value="">All customers</option>
+          {% for customer in customers %}
+            <option value="{{ customer.pk }}" {% if filters.customer == customer.pk|stringformat:"s" %}selected{% endif %}>{{ customer.account_brand|default:customer.contact_name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="dash-field">
+        <span>Product type</span>
+        <select name="product_type">
+          <option value="">All product types</option>
+          {% for key,label in product_types %}
+            <option value="{{ key }}" {% if filters.product_type == key %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="dash-field">
+        <span>Factory location</span>
+        <select name="factory_location">
+          <option value="">All locations</option>
+          {% for key,label in factory_locations %}
+            <option value="{{ key }}" {% if filters.factory_location == key %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="dash-check">
+        <input type="checkbox" name="approved" value="1" {% if filters.approved %}checked{% endif %}>
+        <span>Approved only</span>
+      </label>
+      <div class="dash-filter-actions">
+        <button class="btnx" type="submit">Filter</button>
+        <a class="btnx" href="{% url 'cost_sheet_dashboard' %}">Reset</a>
+      </div>
     </div>
   </form>
 
   <div class="grid">
     <div class="card">
-      <div style="font-weight:700; margin-bottom:6px;">Top styles by profit</div>
+      <div class="dash-section-title">Top styles by profit</div>
       <table>
         <thead>
           <tr><th>Style</th><th>Profit</th></tr>
@@ -123,7 +146,7 @@
       </table>
     </div>
     <div class="card">
-      <div style="font-weight:700; margin-bottom:6px;">Lowest margin styles</div>
+      <div class="dash-section-title">Lowest margin styles</div>
       <table>
         <thead>
           <tr><th>Style</th><th>Margin %</th></tr>
@@ -144,17 +167,21 @@
 
   <div class="grid">
     <div class="card">
-      <div style="font-weight:700; margin-bottom:6px;">Cost breakdown share</div>
-      <canvas id="breakdownChart" height="200"></canvas>
+      <div class="dash-section-title">Cost breakdown share</div>
+      <div class="dash-chart-wrap">
+        <canvas id="breakdownChart"></canvas>
+      </div>
     </div>
     <div class="card">
-      <div style="font-weight:700; margin-bottom:6px;">Average cost per piece by month</div>
-      <canvas id="trendChart" height="200"></canvas>
+      <div class="dash-section-title">Average cost per piece by month</div>
+      <div class="dash-chart-wrap">
+        <canvas id="trendChart"></canvas>
+      </div>
     </div>
   </div>
 
   <div class="card">
-    <div style="font-weight:700; margin-bottom:6px;">Customer summary</div>
+    <div class="dash-section-title">Customer summary</div>
     <table>
       <thead>
         <tr><th>Customer</th><th>Total qty</th><th>Avg margin %</th></tr>
@@ -201,14 +228,84 @@
     }]
   };
 
+  const chartTextColor = "#e5e7eb";
+  const chartMutedColor = "#cbd5e1";
+  const chartGridColor = "rgba(148, 163, 184, 0.22)";
+  if (window.Chart) {
+    Chart.defaults.color = chartTextColor;
+    Chart.defaults.borderColor = chartGridColor;
+    Chart.defaults.font.family = "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
+  }
+
   const breakdownCanvas = document.getElementById("breakdownChart");
   if (breakdownCanvas) {
-    new Chart(breakdownCanvas, { type: "doughnut", data: breakdownData });
+    new Chart(breakdownCanvas, {
+      type: "doughnut",
+      data: breakdownData,
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: {
+              color: chartTextColor,
+              padding: 18,
+              boxWidth: 12,
+              boxHeight: 12,
+              font: { size: 12, weight: "700" }
+            }
+          },
+          tooltip: {
+            titleColor: "#ffffff",
+            bodyColor: chartMutedColor,
+            backgroundColor: "rgba(15, 23, 42, 0.96)",
+            borderColor: "rgba(148, 163, 184, 0.28)",
+            borderWidth: 1
+          }
+        }
+      }
+    });
   }
 
   const trendCanvas = document.getElementById("trendChart");
   if (trendCanvas) {
-    new Chart(trendCanvas, { type: "line", data: trendData, options: { scales: { y: { beginAtZero: true } } } });
+    new Chart(trendCanvas, {
+      type: "line",
+      data: trendData,
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            labels: {
+              color: chartTextColor,
+              font: { size: 12, weight: "700" }
+            }
+          },
+          tooltip: {
+            titleColor: "#ffffff",
+            bodyColor: chartMutedColor,
+            backgroundColor: "rgba(15, 23, 42, 0.96)",
+            borderColor: "rgba(148, 163, 184, 0.28)",
+            borderWidth: 1
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: chartMutedColor, font: { size: 11, weight: "650" } },
+            grid: { color: chartGridColor },
+            border: { color: "rgba(148, 163, 184, 0.3)" }
+          },
+          y: {
+            beginAtZero: true,
+            ticks: { color: chartMutedColor, font: { size: 11, weight: "650" } },
+            grid: { color: chartGridColor },
+            border: { color: "rgba(148, 163, 184, 0.3)" }
+          }
+        }
+      }
+    });
   }
 </script>
 
