@@ -1,744 +1,412 @@
 {% extends 'crm/base.html' %}
+{% load static %}
 
 {% block content %}
-<style>
-  :root {
-    --bg: #020617;
-    --panel: #0b1220;
-    --panel-2: #0f172a;
-    --line: #22304a;
-    --text: #f8fafc;
-    --muted: #94a3b8;
-    --accent: #f5d580;
-    --accent-2: #60a5fa;
-    --danger: #f87171;
-    --success: #34d399;
-  }
-
-  .calendar-shell {
-    max-width: 1400px;
-    margin: 18px auto 50px auto;
-    padding: 0 14px 30px 14px;
-    color: var(--text);
-  }
-
-  .calendar-hero {
-    display: grid;
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
-    gap: 16px;
-    padding: 16px;
-    border-radius: 18px;
-    border: 1px solid var(--line);
-    background: radial-gradient(circle at top left, rgba(30, 64, 175, 0.2), transparent 60%),
-                linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
-    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.4);
-  }
-
-  .calendar-title {
-    font-size: 26px;
-    font-weight: 900;
-    color: #fefce8;
-    letter-spacing: 0.4px;
-  }
-
-  .calendar-sub {
-    margin-top: 6px;
-    font-size: 13px;
-    color: var(--muted);
-    line-height: 1.5;
-  }
-
-  .calendar-kpis {
-    margin-top: 14px;
-    display: grid;
-    gap: 10px;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  }
-
-  .kpi-card {
-    padding: 10px 12px;
-    border-radius: 12px;
-    border: 1px solid rgba(148, 163, 184, 0.2);
-    background: rgba(2, 6, 23, 0.6);
-  }
-
-  .kpi-label {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-    color: var(--muted);
-    font-weight: 900;
-  }
-
-  .kpi-value {
-    margin-top: 6px;
-    font-size: 18px;
-    font-weight: 900;
-    color: #fef9c3;
-  }
-
-  .calendar-hero-right {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    align-items: flex-end;
-  }
-
-  .month-label {
-    font-size: 20px;
-    font-weight: 900;
-    color: #fef9c3;
-  }
-
-  .toolbar-row {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-  }
-
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 7px 14px;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    font-size: 12px;
-    font-weight: 900;
-    text-decoration: none;
-    color: #e5e7eb;
-    background: rgba(255, 255, 255, 0.04);
-    transition: all 0.12s ease;
-    white-space: nowrap;
-  }
-
-  .btn:hover {
-    filter: brightness(1.08);
-    text-decoration: none;
-  }
-
-  .btn.primary {
-    background: linear-gradient(145deg, #f5d580, #d4b35f);
-    color: #111827;
-    border-color: rgba(245, 213, 128, 0.5);
-    box-shadow: 0 4px 0 rgba(30, 41, 59, 0.8);
-  }
-
-  .btn.ghost {
-    background: rgba(2, 6, 23, 0.7);
-  }
-
-  .btn.accent {
-    background: linear-gradient(145deg, rgba(96, 165, 250, 0.28), rgba(59, 130, 246, 0.2));
-    border-color: rgba(96, 165, 250, 0.4);
-    color: #dbeafe;
-  }
-
-  .view-switch {
-    display: inline-flex;
-    border-radius: 999px;
-    overflow: hidden;
-    border: 1px solid rgba(148, 163, 184, 0.25);
-  }
-
-  .view-btn {
-    padding: 6px 14px;
-    font-size: 12px;
-    font-weight: 900;
-    background: rgba(2, 6, 23, 0.7);
-    color: var(--muted);
-    text-decoration: none;
-  }
-
-  .view-btn.active {
-    background: rgba(245, 213, 128, 0.2);
-    color: #fef9c3;
-  }
-
-  .jump-wrap {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    align-items: flex-end;
-    font-size: 11px;
-    color: var(--muted);
-  }
-
-  .jump-input {
-    background: rgba(2, 6, 23, 0.7);
-    color: #e5e7eb;
-    border: 1px solid rgba(148, 163, 184, 0.35);
-    border-radius: 10px;
-    padding: 6px 10px;
-    font-size: 12px;
-    font-weight: 800;
-  }
-
-  .calendar-body {
-    margin-top: 18px;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 320px;
-    gap: 16px;
-  }
-
-  .calendar-panel {
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
-    border-radius: 16px;
-    border: 1px solid var(--line);
-    padding: 14px;
-    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35);
-  }
-
-  .panel-title {
-    font-size: 14px;
-    font-weight: 900;
-    color: #fefce8;
-    margin: 0 0 6px 0;
-  }
-
-  .panel-sub {
-    font-size: 11px;
-    color: var(--muted);
-    margin-bottom: 10px;
-  }
-
-  .calendar-grid {
-    width: 100%;
-    border-collapse: collapse;
-    table-layout: fixed;
-  }
-
-  .calendar-grid th {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-    color: var(--muted);
-    padding: 8px 0;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
-  }
-
-  .calendar-grid td {
-    border: 1px solid rgba(148, 163, 184, 0.12);
-    vertical-align: top;
-    height: 130px;
-    padding: 6px;
-  }
-
-  .time-grid {
-    width: 100%;
-    border-collapse: collapse;
-    table-layout: fixed;
-  }
-
-  .time-grid th,
-  .time-grid td {
-    border: 1px solid rgba(148, 163, 184, 0.12);
-    padding: 6px;
-    vertical-align: top;
-  }
-
-  .time-grid th {
-    font-size: 11px;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-    background: rgba(2, 6, 23, 0.6);
-  }
-
-  .time-label {
-    width: 70px;
-    font-size: 11px;
-    font-weight: 900;
-    color: var(--muted);
-    text-align: right;
-    padding-right: 8px;
-  }
-
-  .time-slot {
-    min-height: 68px;
-    background: rgba(2, 6, 23, 0.65);
-    border-radius: 10px;
-  }
-
-  .time-slot-inner {
-    min-height: 56px;
-  }
-
-  .calendar-day-cell {
-    background: rgba(2, 6, 23, 0.7);
-    border-radius: 10px;
-  }
-
-  .calendar-day-out {
-    background: rgba(2, 6, 23, 0.35);
-    color: #6b7280;
-  }
-
-  .calendar-day-selected {
-    outline: 2px solid rgba(245, 213, 128, 0.5);
-    box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.9) inset;
-  }
-
-  .calendar-day-overdue {
-    outline: 2px solid rgba(248, 113, 113, 0.6);
-  }
-
-  .calendar-day-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 12px;
-    margin-bottom: 6px;
-  }
-
-  .calendar-day-number {
-    font-weight: 900;
-  }
-
-  .calendar-today-pill {
-    font-size: 10px;
-    padding: 2px 6px;
-    border-radius: 999px;
-    background: rgba(96, 165, 250, 0.25);
-    color: #dbeafe;
-  }
-
-  .calendar-events-wrap {
-    max-height: 92px;
-    overflow-y: auto;
-    padding-right: 2px;
-  }
-
-  .calendar-event-row {
-    display: flex;
-    gap: 6px;
-    padding: 4px 6px;
-    border-radius: 8px;
-    background: rgba(15, 23, 42, 0.75);
-    border: 1px solid rgba(148, 163, 184, 0.15);
-    margin-bottom: 6px;
-    cursor: grab;
-    transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
-  }
-
-  .calendar-event-row.is-overdue {
-    border-color: rgba(248, 113, 113, 0.7);
-    box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.25) inset;
-  }
-
-  .calendar-event-row.is-done {
-    opacity: 0.75;
-    text-decoration: line-through;
-    background: rgba(34, 197, 94, 0.12);
-    border-color: rgba(34, 197, 94, 0.55);
-  }
-
-  .calendar-event-row.dragging {
-    cursor: grabbing;
-    transform: scale(1.01);
-    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.45);
-  }
-
-  .calendar-day-cell.drop-target {
-    outline: 2px dashed rgba(96, 165, 250, 0.6);
-    outline-offset: 2px;
-    background: rgba(30, 64, 175, 0.12);
-  }
-
-  .time-slot.drop-target {
-    outline: 2px dashed rgba(96, 165, 250, 0.6);
-    outline-offset: 2px;
-    background: rgba(30, 64, 175, 0.12);
-  }
-
-  .calendar-event-link {
-    text-decoration: none;
-    color: inherit;
-    display: block;
-    flex: 1;
-  }
-
-  .event-pills {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin-bottom: 4px;
-  }
-
-  .event-pill {
-    font-size: 9px;
-    font-weight: 900;
-    padding: 2px 6px;
-    border-radius: 999px;
-    border: 1px solid transparent;
-    text-transform: uppercase;
-    letter-spacing: 0.2px;
-  }
-
-  .event-pill.type-call { background: rgba(59, 130, 246, 0.18); color: #dbeafe; border-color: rgba(59, 130, 246, 0.35); }
-  .event-pill.type-follow_up { background: rgba(34, 211, 238, 0.18); color: #cffafe; border-color: rgba(34, 211, 238, 0.35); }
-  .event-pill.type-sample { background: rgba(250, 204, 21, 0.2); color: #fef3c7; border-color: rgba(250, 204, 21, 0.4); }
-  .event-pill.type-production { background: rgba(148, 163, 184, 0.18); color: #e2e8f0; border-color: rgba(148, 163, 184, 0.4); }
-  .event-pill.type-shipping { background: rgba(34, 197, 94, 0.18); color: #bbf7d0; border-color: rgba(34, 197, 94, 0.35); }
-  .event-pill.type-payment { background: rgba(248, 113, 113, 0.2); color: #fee2e2; border-color: rgba(248, 113, 113, 0.4); }
-  .event-pill.type-other { background: rgba(107, 114, 128, 0.2); color: #e5e7eb; border-color: rgba(107, 114, 128, 0.4); }
-
-  .event-pill.priority-high { background: rgba(248, 113, 113, 0.2); color: #fee2e2; border-color: rgba(248, 113, 113, 0.4); }
-  .event-pill.priority-medium { background: rgba(250, 204, 21, 0.2); color: #fef3c7; border-color: rgba(250, 204, 21, 0.4); }
-  .event-pill.priority-low { background: rgba(148, 163, 184, 0.2); color: #e2e8f0; border-color: rgba(148, 163, 184, 0.35); }
-
-  .event-pill.status-planned { background: rgba(15, 23, 42, 0.6); color: #e2e8f0; border-color: rgba(148, 163, 184, 0.25); }
-  .event-pill.status-in_work { background: rgba(59, 130, 246, 0.18); color: #dbeafe; border-color: rgba(59, 130, 246, 0.35); }
-  .event-pill.status-done { background: rgba(34, 197, 94, 0.18); color: #bbf7d0; border-color: rgba(34, 197, 94, 0.35); }
-
-  .event-title {
-    font-size: 11px;
-    font-weight: 800;
-    color: #f8fafc;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .event-time {
-    font-size: 10px;
-    color: var(--muted);
-  }
-
-  .calendar-more-line {
-    font-size: 11px;
-    color: var(--muted);
-  }
-
-  .calendar-more-line a {
-    color: #93c5fd;
-    text-decoration: none;
-  }
-
-  .calendar-filter-label {
-    font-size: 11px;
-    font-weight: 900;
-    color: var(--muted);
-    margin-bottom: 4px;
-  }
-
-  .calendar-filter-select {
-    background: rgba(2, 6, 23, 0.8);
-    color: #e5e7eb;
-    border: 1px solid rgba(148, 163, 184, 0.35);
-    border-radius: 10px;
-    padding: 7px 10px;
-    font-size: 12px;
-    font-weight: 800;
-  }
-
-  .day-view-card {
-    padding: 10px;
-    border-radius: 12px;
-    border: 1px solid rgba(148, 163, 184, 0.2);
-    background: rgba(2, 6, 23, 0.6);
-    margin-bottom: 10px;
-  }
-
-  .day-view-title {
-    font-size: 14px;
-    font-weight: 800;
-    color: #fefce8;
-  }
-
-  .day-view-meta {
-    font-size: 12px;
-    color: var(--muted);
-  }
-
-  .side-event {
-    padding: 8px 10px;
-    border-radius: 10px;
-    background: rgba(2, 6, 23, 0.7);
-    border: 1px solid rgba(148, 163, 184, 0.2);
-    margin-bottom: 8px;
-  }
-
-  .side-actions {
-    margin-top: 6px;
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-  }
-
-  .side-actions a {
-    font-size: 11px;
-  }
-
-  @media (max-width: 1100px) {
-    .calendar-hero {
-      grid-template-columns: 1fr;
-    }
-    .calendar-hero-right {
-      align-items: flex-start;
-    }
-    .calendar-body {
-      grid-template-columns: 1fr;
-    }
-  }
-</style>
-
-<div class="calendar-shell">
-  <div class="calendar-hero">
-    <div>
-      <div class="calendar-title">Follow-Up Calendar</div>
-      <div class="calendar-sub">
-        Plan calls, follow up, sampling, production and shipping in one place.
-        Today is {{ today|date:"D, M d, Y" }}.
-      </div>
-      <div class="calendar-kpis">
-        <div class="kpi-card">
-          <div class="kpi-label">Today events</div>
-          <div class="kpi-value">{{ today_events_count }}</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">Next seven days</div>
-          <div class="kpi-value">{{ week_events_count }}</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">Overdue events</div>
-          <div class="kpi-value" style="color: var(--danger);">{{ overdue_events_count }}</div>
-        </div>
+<link rel="stylesheet" href="{% static 'crm/calendar_list.css' %}?v=calendar-modern-20260507">
+
+<div class="calendar-page">
+  <section class="calendar-hero">
+    <div class="calendar-hero-copy">
+      <p class="calendar-eyebrow">Sales and operations calendar</p>
+      <h1>Calendar</h1>
+      <p class="calendar-subtitle">
+        Follow ups, meetings, reminders, sampling, production deadlines, shipping, and payment events in one calmer workspace.
+      </p>
+      <div class="calendar-hero-meta">
+        <span>Today {{ today|date:"D, M j, Y" }}</span>
+        <span>Focus {{ selected_day|date:"D, M j" }}</span>
+        <span>{{ current_month|date:"F Y" }}</span>
       </div>
     </div>
 
-    <div class="calendar-hero-right">
-      <div class="month-label">{{ current_month|date:"F Y" }}</div>
-
-      <div class="toolbar-row">
-        <a href="?nav=prev&year={{ current_month|date:'Y' }}&month={{ current_month|date:'n' }}&view={{ current_view }}&status={{ status_filter }}&type={{ type_filter }}&priority={{ priority_filter }}&assigned={{ assigned_filter }}&lead={{ lead_filter }}&day={{ selected_day|date:'Y-m-d' }}" class="btn ghost">Prev</a>
-        <a href="?nav=today&view={{ current_view }}&status={{ status_filter }}&type={{ type_filter }}&priority={{ priority_filter }}&assigned={{ assigned_filter }}&lead={{ lead_filter }}" class="btn accent">Today</a>
-        <a href="?nav=next&year={{ current_month|date:'Y' }}&month={{ current_month|date:'n' }}&view={{ current_view }}&status={{ status_filter }}&type={{ type_filter }}&priority={{ priority_filter }}&assigned={{ assigned_filter }}&lead={{ lead_filter }}&day={{ selected_day|date:'Y-m-d' }}" class="btn ghost">Next</a>
-        <a href="{% url 'calendar_add' %}" class="btn primary">Add event</a>
-      </div>
-
-      <div class="toolbar-row">
-        <a href="?view={{ current_view }}&status={{ status_filter }}&type=production&priority={{ priority_filter }}&assigned={{ assigned_filter }}&lead={{ lead_filter }}&year={{ current_month|date:'Y' }}&month={{ current_month|date:'n' }}&day={{ selected_day|date:'Y-m-d' }}" class="btn ghost">Production view</a>
-      </div>
-
-      <div class="toolbar-row">
-        <div class="view-switch">
-          <a href="?year={{ current_month|date:'Y' }}&month={{ current_month|date:'n' }}&day={{ selected_day|date:'Y-m-d' }}&view=month&status={{ status_filter }}&type={{ type_filter }}&priority={{ priority_filter }}&assigned={{ assigned_filter }}&lead={{ lead_filter }}" class="view-btn {% if current_view == 'month' %}active{% endif %}">Month</a>
-          <a href="?year={{ current_month|date:'Y' }}&month={{ current_month|date:'n' }}&day={{ selected_day|date:'Y-m-d' }}&view=week&status={{ status_filter }}&type={{ type_filter }}&priority={{ priority_filter }}&assigned={{ assigned_filter }}&lead={{ lead_filter }}" class="view-btn {% if current_view == 'week' %}active{% endif %}">Week</a>
-          <a href="?year={{ current_month|date:'Y' }}&month={{ current_month|date:'n' }}&day={{ selected_day|date:'Y-m-d' }}&view=day&status={{ status_filter }}&type={{ type_filter }}&priority={{ priority_filter }}&assigned={{ assigned_filter }}&lead={{ lead_filter }}" class="view-btn {% if current_view == 'day' %}active{% endif %}">Day</a>
-        </div>
-        <div class="jump-wrap">
-          <span>Jump to date</span>
-          <input id="jump-date" class="jump-input" type="date" value="{{ selected_day|date:'Y-m-d' }}">
-        </div>
-      </div>
+    <div class="calendar-hero-actions" aria-label="Calendar quick actions">
+      <a href="{% url 'calendar_add' %}" class="calendar-btn calendar-btn--primary">Add Event</a>
+      <a href="{% url 'calendar_add' %}?type=follow_up" class="calendar-btn calendar-btn--ghost">Add Follow Up</a>
+      <a href="{% url 'calendar_add' %}?type=call" class="calendar-btn calendar-btn--ghost">Add Meeting</a>
+      <a href="?nav=today&view={{ current_view }}&status={{ status_filter }}&type={{ type_filter }}&priority={{ priority_filter }}&assigned={{ assigned_filter }}&lead={{ lead_filter }}" class="calendar-btn calendar-btn--ghost">Today</a>
+      <a href="?nav=prev&year={{ current_month|date:'Y' }}&month={{ current_month|date:'n' }}&view={{ current_view }}&status={{ status_filter }}&type={{ type_filter }}&priority={{ priority_filter }}&assigned={{ assigned_filter }}&lead={{ lead_filter }}&day={{ selected_day|date:'Y-m-d' }}" class="calendar-btn calendar-btn--ghost">Previous</a>
+      <a href="?nav=next&year={{ current_month|date:'Y' }}&month={{ current_month|date:'n' }}&view={{ current_view }}&status={{ status_filter }}&type={{ type_filter }}&priority={{ priority_filter }}&assigned={{ assigned_filter }}&lead={{ lead_filter }}&day={{ selected_day|date:'Y-m-d' }}" class="calendar-btn calendar-btn--ghost">Next</a>
     </div>
-  </div>
+  </section>
 
-  <div class="calendar-body">
-    <div class="calendar-panel">
+  <section class="calendar-summary-grid" aria-label="Calendar summary">
+    <article class="calendar-stat">
+      <span>Today events</span>
+      <strong>{{ today_events_count }}</strong>
+      <small>Calls, follow ups, meetings, and tasks due today</small>
+    </article>
+    <article class="calendar-stat">
+      <span>Next seven days</span>
+      <strong>{{ week_events_count }}</strong>
+      <small>Upcoming calendar load</small>
+    </article>
+    <article class="calendar-stat calendar-stat--risk">
+      <span>Overdue events</span>
+      <strong>{{ overdue_events_count }}</strong>
+      <small>Planned or in-work events past due</small>
+    </article>
+    <article class="calendar-stat">
+      <span>Selected day</span>
+      <strong>{{ selected_day_events|length }}</strong>
+      <small>{{ selected_day|date:"D, M j" }} visible event{{ selected_day_events|length|pluralize }}</small>
+    </article>
+  </section>
+
+  <section class="calendar-control-bar" aria-label="Calendar controls">
+    <div class="calendar-month-title">
+      <span>{{ current_view|title }} view</span>
+      <strong>{{ current_month|date:"F Y" }}</strong>
+    </div>
+
+    <div class="calendar-view-switch" aria-label="Calendar view switch">
+      <a href="?year={{ current_month|date:'Y' }}&month={{ current_month|date:'n' }}&day={{ selected_day|date:'Y-m-d' }}&view=month&status={{ status_filter }}&type={{ type_filter }}&priority={{ priority_filter }}&assigned={{ assigned_filter }}&lead={{ lead_filter }}" class="{% if current_view == 'month' %}active{% endif %}">Month</a>
+      <a href="?year={{ current_month|date:'Y' }}&month={{ current_month|date:'n' }}&day={{ selected_day|date:'Y-m-d' }}&view=week&status={{ status_filter }}&type={{ type_filter }}&priority={{ priority_filter }}&assigned={{ assigned_filter }}&lead={{ lead_filter }}" class="{% if current_view == 'week' %}active{% endif %}">Week</a>
+      <a href="?year={{ current_month|date:'Y' }}&month={{ current_month|date:'n' }}&day={{ selected_day|date:'Y-m-d' }}&view=day&status={{ status_filter }}&type={{ type_filter }}&priority={{ priority_filter }}&assigned={{ assigned_filter }}&lead={{ lead_filter }}" class="{% if current_view == 'day' %}active{% endif %}">Day</a>
+    </div>
+
+    <form class="calendar-jump-form">
+      <label for="jump-date">Jump to date</label>
+      <input id="jump-date" class="calendar-date-input" type="date" value="{{ selected_day|date:'Y-m-d' }}">
+    </form>
+  </section>
+
+  <section class="calendar-workspace">
+    <main class="calendar-main-panel" aria-label="Main calendar grid">
+      <div class="calendar-panel-head">
+        <div>
+          <h2>
+            {% if current_view == "day" %}
+              Day schedule
+            {% elif current_view == "week" %}
+              Week schedule
+            {% else %}
+              Month calendar
+            {% endif %}
+          </h2>
+          <p>
+            {% if current_view == "day" %}
+              Drag events into a time slot. Open an event to view details, edit, or mark complete.
+            {% elif current_view == "week" %}
+              Drag events between days and hours. Event cards keep type, priority, and status visible.
+            {% else %}
+              Click a date to focus the day. Month cells show the first two events to keep the grid readable.
+            {% endif %}
+          </p>
+        </div>
+      </div>
+
       {% if current_view == "day" %}
-        <div class="panel-title">Day schedule — {{ selected_day|date:"D, M d Y" }}</div>
-        <div class="panel-sub">Drag events into a specific time slot.</div>
-
-        <table class="time-grid">
-          <tbody>
-            {% for row in day_hour_rows %}
-              <tr>
-                <td class="time-label">{{ row.hour|stringformat:"02d" }}:00</td>
-                <td>
-                  <div class="time-slot" data-date="{{ selected_day|date:'Y-m-d' }}" data-hour="{{ row.hour }}">
-                    <div class="time-slot-inner">
-                      {% for e in row.events %}
-                        <div class="calendar-event-row {% if e.is_overdue %}is-overdue{% endif %} {% if e.status == 'done' %}is-done{% endif %}" draggable="true" data-event-id="{{ e.pk }}">
-                          <a href="{% url 'calendar_event_detail' e.pk %}" class="calendar-event-link">
-                            <div class="event-pills">
-                              <span class="event-pill type-{{ e.event_type }}">{{ e.get_event_type_display }}</span>
-                              <span class="event-pill status-{{ e.status }}">{{ e.get_status_display }}</span>
-                            </div>
-                            <div class="event-title">{{ e.title }}</div>
-                            <div class="event-time">{{ e.start_datetime|time:"h:i A" }}</div>
-                          </a>
-                        </div>
-                      {% endfor %}
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-
-        {% if day_overflow_events %}
-          <div class="panel-sub" style="margin-top:10px;">Outside time grid</div>
-          {% for e in day_overflow_events %}
-            <div class="day-view-card">
-              <a href="{% url 'calendar_event_detail' e.pk %}" class="calendar-event-link">
-                <div class="event-pills">
-                  <span class="event-pill type-{{ e.event_type }}">{{ e.get_event_type_display }}</span>
-                  <span class="event-pill status-{{ e.status }}">{{ e.get_status_display }}</span>
-                </div>
-                <div class="day-view-title">{{ e.title }}</div>
-                <div class="day-view-meta">{{ e.start_datetime|time:"h:i A" }}</div>
-              </a>
-            </div>
-          {% endfor %}
-        {% endif %}
-      {% elif current_view == "week" %}
-        <div class="panel-title">Week schedule</div>
-        <div class="panel-sub">Drag events to any day/time cell.</div>
-
-        <table class="time-grid">
-          <thead>
-            <tr>
-              <th style="width:70px;">Time</th>
-              {% for d in week_dates %}
-                <th>{{ d|date:"D M d" }}</th>
-              {% endfor %}
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in week_hour_rows %}
-              <tr>
-                <td class="time-label">{{ row.hour|stringformat:"02d" }}:00</td>
-                {% for cell in row.cells %}
+        <div class="calendar-time-scroll">
+          <table class="calendar-time-grid">
+            <tbody>
+              {% for row in day_hour_rows %}
+                <tr>
+                  <td class="calendar-time-label">{{ row.hour|stringformat:"02d" }}:00</td>
                   <td>
-                    <div class="time-slot" data-date="{{ cell.date|date:'Y-m-d' }}" data-hour="{{ row.hour }}">
-                      <div class="time-slot-inner">
-                        {% for e in cell.events %}
-                          <div class="calendar-event-row {% if e.is_overdue %}is-overdue{% endif %} {% if e.status == 'done' %}is-done{% endif %}" draggable="true" data-event-id="{{ e.pk }}">
+                    <div class="calendar-time-slot" data-date="{{ selected_day|date:'Y-m-d' }}" data-hour="{{ row.hour }}">
+                      <div class="calendar-time-slot-inner">
+                        {% for e in row.events %}
+                          <div class="calendar-event-row type-{{ e.event_type }} {% if e.is_overdue %}is-overdue{% endif %} {% if e.status == 'done' %}is-done{% endif %}" draggable="true" data-event-id="{{ e.pk }}">
                             <a href="{% url 'calendar_event_detail' e.pk %}" class="calendar-event-link">
-                              <div class="event-pills">
-                                <span class="event-pill type-{{ e.event_type }}">{{ e.get_event_type_display }}</span>
-                                <span class="event-pill status-{{ e.status }}">{{ e.get_status_display }}</span>
+                              <div class="calendar-event-topline">
+                                <span class="calendar-type-badge type-{{ e.event_type }}">{{ e.get_event_type_display }}</span>
+                                <span class="calendar-status-badge status-{{ e.status }}">{{ e.get_status_display }}</span>
                               </div>
-                              <div class="event-title">{{ e.title }}</div>
-                              <div class="event-time">{{ e.start_datetime|time:"h:i A" }}</div>
+                              <strong>{{ e.title }}</strong>
+                              <span>{{ e.start_datetime|time:"h:i A" }}{% if e.assigned_to_name %} - {{ e.assigned_to_name }}{% endif %}</span>
+                              {% if e.lead or e.customer %}
+                                <small>{% if e.lead %}{{ e.lead.account_brand|default:e.lead.lead_id }}{% elif e.customer %}{{ e.customer.account_brand|default:e.customer }}{% endif %}</small>
+                              {% endif %}
                             </a>
                           </div>
                         {% endfor %}
                       </div>
                     </div>
                   </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        {% if day_overflow_events %}
+          <div class="calendar-overflow-list">
+            <h3>Outside workday hours</h3>
+            {% for e in day_overflow_events %}
+              <a href="{% url 'calendar_event_detail' e.pk %}" class="calendar-list-event type-{{ e.event_type }}">
+                <span class="calendar-type-badge type-{{ e.event_type }}">{{ e.get_event_type_display }}</span>
+                <strong>{{ e.title }}</strong>
+                <small>{{ e.start_datetime|time:"h:i A" }}</small>
+              </a>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% elif current_view == "week" %}
+        <div class="calendar-time-scroll">
+          <table class="calendar-time-grid calendar-week-grid">
+            <thead>
+              <tr>
+                <th class="calendar-time-heading">Time</th>
+                {% for d in week_dates %}
+                  <th class="{% if d == today %}is-today-heading{% endif %}">{{ d|date:"D M j" }}</th>
                 {% endfor %}
               </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      {% else %}
-        <table class="calendar-grid">
-          <thead>
-            <tr>
-              <th>Mon</th>
-              <th>Tue</th>
-              <th>Wed</th>
-              <th>Thu</th>
-              <th>Fri</th>
-              <th>Sat</th>
-              <th>Sun</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for week in display_weeks %}
-              <tr>
-                {% for day in week %}
-                  <td
-                    class="calendar-day-cell
-                      {% if not day.in_month %}calendar-day-out{% endif %}
-                      {% if selected_day and day.date == selected_day %} calendar-day-selected{% endif %}
-                      {% if day.has_overdue %} calendar-day-overdue{% endif %}"
-                    data-date="{{ day.date|date:'Y-m-d' }}"
-                  >
-                    <div class="calendar-day-header">
-                      <a
-                        href="?year={{ current_month|date:'Y' }}&month={{ current_month|date:'n' }}&day={{ day.date|date:'Y-m-d' }}&view={{ current_view }}&status={{ status_filter }}&type={{ type_filter }}&priority={{ priority_filter }}&assigned={{ assigned_filter }}&lead={{ lead_filter }}"
-                        class="calendar-event-link"
-                      >
-                        <span class="calendar-day-number">{{ day.date.day }}</span>
-                        {% if day.is_today %}
-                          <span class="calendar-today-pill">Today</span>
-                        {% endif %}
-                      </a>
-                    </div>
-
-                    <div class="calendar-events-wrap">
-                      {% if day.events %}
-                        {% with day.events|length as total_events %}
-                          {% for e in day.events|slice:":3" %}
-                            <div
-                              class="calendar-event-row {% if e.is_overdue %}is-overdue{% endif %} {% if e.status == 'done' %}is-done{% endif %}"
-                              draggable="true"
-                              data-event-id="{{ e.pk }}"
-                            >
-                              <input
-                                type="checkbox"
-                                class="calendar-done-checkbox"
-                                {% if e.status == 'done' %}checked disabled{% endif %}
-                                data-toggle-done-id="{{ e.pk }}"
-                                title="Mark done"
-                              >
+            </thead>
+            <tbody>
+              {% for row in week_hour_rows %}
+                <tr>
+                  <td class="calendar-time-label">{{ row.hour|stringformat:"02d" }}:00</td>
+                  {% for cell in row.cells %}
+                    <td>
+                      <div class="calendar-time-slot" data-date="{{ cell.date|date:'Y-m-d' }}" data-hour="{{ row.hour }}">
+                        <div class="calendar-time-slot-inner">
+                          {% for e in cell.events %}
+                            <div class="calendar-event-row type-{{ e.event_type }} {% if e.is_overdue %}is-overdue{% endif %} {% if e.status == 'done' %}is-done{% endif %}" draggable="true" data-event-id="{{ e.pk }}">
                               <a href="{% url 'calendar_event_detail' e.pk %}" class="calendar-event-link">
-                                <div class="event-pills">
-                                  <span class="event-pill type-{{ e.event_type }}">{{ e.get_event_type_display }}</span>
-                                  <span class="event-pill priority-{{ e.priority }}">{{ e.get_priority_display }}</span>
-                                  <span class="event-pill status-{{ e.status }}">{{ e.get_status_display }}</span>
+                                <div class="calendar-event-topline">
+                                  <span class="calendar-type-badge type-{{ e.event_type }}">{{ e.get_event_type_display }}</span>
+                                  <span class="calendar-status-badge status-{{ e.status }}">{{ e.get_status_display }}</span>
                                 </div>
-                                <div class="event-title">
-                                  {{ e.title }}
-                                  {% if e.is_overdue %}
-                                    <span style="color: var(--danger); font-size: 9px;"> late</span>
-                                  {% endif %}
-                                </div>
-                                <div class="event-time">{{ e.start_datetime|time:"h:i A" }}</div>
+                                <strong>{{ e.title }}</strong>
+                                <span>{{ e.start_datetime|time:"h:i A" }}</span>
                               </a>
                             </div>
                           {% endfor %}
-
-                          {% if total_events > 3 %}
-                            <div class="calendar-more-line">
-                              <a href="?year={{ current_month|date:'Y' }}&month={{ current_month|date:'n' }}&day={{ day.date|date:'Y-m-d' }}">+ {{ total_events|add:"-3" }} more</a>
-                            </div>
-                          {% endif %}
-                        {% endwith %}
-                      {% endif %}
-                    </div>
-                  </td>
-                {% endfor %}
+                        </div>
+                      </div>
+                    </td>
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="calendar-grid-wrap">
+          <table class="calendar-grid">
+            <thead>
+              <tr>
+                <th>Mon</th>
+                <th>Tue</th>
+                <th>Wed</th>
+                <th>Thu</th>
+                <th>Fri</th>
+                <th>Sat</th>
+                <th>Sun</th>
               </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {% for week in display_weeks %}
+                <tr>
+                  {% for day in week %}
+                    <td
+                      class="calendar-day-cell
+                        {% if not day.in_month %}calendar-day-out{% endif %}
+                        {% if selected_day and day.date == selected_day %} calendar-day-selected{% endif %}
+                        {% if day.is_today %} calendar-day-today{% endif %}
+                        {% if day.has_overdue %} calendar-day-overdue{% endif %}"
+                      data-date="{{ day.date|date:'Y-m-d' }}"
+                    >
+                      <div class="calendar-day-header">
+                        <a
+                          href="?year={{ current_month|date:'Y' }}&month={{ current_month|date:'n' }}&day={{ day.date|date:'Y-m-d' }}&view={{ current_view }}&status={{ status_filter }}&type={{ type_filter }}&priority={{ priority_filter }}&assigned={{ assigned_filter }}&lead={{ lead_filter }}"
+                          class="calendar-day-link"
+                        >
+                          <span class="calendar-day-number">{{ day.date.day }}</span>
+                          {% if day.is_today %}
+                            <span class="calendar-today-pill">Today</span>
+                          {% endif %}
+                        </a>
+                        {% if day.events %}
+                          <span class="calendar-day-count">{{ day.events|length }}</span>
+                        {% endif %}
+                      </div>
+
+                      <div class="calendar-events-wrap">
+                        {% if day.events %}
+                          {% with day.events|length as total_events %}
+                            {% for e in day.events|slice:":2" %}
+                              <div
+                                class="calendar-event-row type-{{ e.event_type }} {% if e.is_overdue %}is-overdue{% endif %} {% if e.status == 'done' %}is-done{% endif %}"
+                                draggable="true"
+                                data-event-id="{{ e.pk }}"
+                              >
+                                <input
+                                  type="checkbox"
+                                  class="calendar-done-checkbox"
+                                  {% if e.status == 'done' %}checked disabled{% endif %}
+                                  data-toggle-done-id="{{ e.pk }}"
+                                  title="Mark done"
+                                  aria-label="Mark {{ e.title }} done"
+                                >
+                                <a href="{% url 'calendar_event_detail' e.pk %}" class="calendar-event-link">
+                                  <div class="calendar-event-topline">
+                                    <span class="calendar-type-badge type-{{ e.event_type }}">{{ e.get_event_type_display }}</span>
+                                    <span class="calendar-priority-badge priority-{{ e.priority }}">{{ e.get_priority_display }}</span>
+                                    <span class="calendar-status-badge status-{{ e.status }}">{{ e.get_status_display }}</span>
+                                  </div>
+                                  <strong>
+                                    {{ e.title }}
+                                    {% if e.is_overdue %}
+                                      <span class="calendar-late-label">late</span>
+                                    {% endif %}
+                                  </strong>
+                                  <span>{{ e.start_datetime|time:"h:i A" }}{% if e.reminder_minutes_before %} - reminder {{ e.reminder_minutes_before }}m{% endif %}</span>
+                                </a>
+                              </div>
+                            {% endfor %}
+
+                            {% if total_events > 2 %}
+                              <div class="calendar-more-line">
+                                <a href="?year={{ current_month|date:'Y' }}&month={{ current_month|date:'n' }}&day={{ day.date|date:'Y-m-d' }}&view=day&status={{ status_filter }}&type={{ type_filter }}&priority={{ priority_filter }}&assigned={{ assigned_filter }}&lead={{ lead_filter }}">+ {{ total_events|add:"-2" }} more</a>
+                              </div>
+                            {% endif %}
+                          {% endwith %}
+                        {% else %}
+                          <div class="calendar-day-empty">No events</div>
+                        {% endif %}
+                      </div>
+                    </td>
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
       {% endif %}
-    </div>
+    </main>
 
-    <div class="calendar-side">
-      <div class="calendar-panel" style="margin-bottom: 14px;">
-        <div class="panel-title">Quick filters</div>
-        <div class="panel-sub">Filter by status, type, priority, user or lead.</div>
+    <aside class="calendar-sidebar" aria-label="Calendar sidebar">
+      <section class="calendar-side-panel calendar-side-panel--today">
+        <div class="calendar-side-head">
+          <div>
+            <h2>Today Summary</h2>
+            <p>{{ today|date:"D, M j" }}</p>
+          </div>
+          <span class="calendar-side-count">{{ today_events_count }}</span>
+        </div>
+        <div class="calendar-mini-actions">
+          <a href="?nav=today&view=day&status=all&type=all&priority=all&assigned=all&lead=all" class="calendar-chip-link">Open today</a>
+          <a href="?view=day&year={{ current_month|date:'Y' }}&month={{ current_month|date:'n' }}&day={{ selected_day|date:'Y-m-d' }}&status=all&type=follow_up&priority={{ priority_filter }}&assigned={{ assigned_filter }}&lead={{ lead_filter }}" class="calendar-chip-link">Follow ups</a>
+          <a href="?view=day&year={{ current_month|date:'Y' }}&month={{ current_month|date:'n' }}&day={{ selected_day|date:'Y-m-d' }}&status=all&type=call&priority={{ priority_filter }}&assigned={{ assigned_filter }}&lead={{ lead_filter }}" class="calendar-chip-link">Meetings</a>
+        </div>
+      </section>
 
-        <form method="get">
+      <section class="calendar-side-panel">
+        <div class="calendar-side-head">
+          <div>
+            <h2>Upcoming Events</h2>
+            <p>{{ selected_day|date:"D, M j" }} focus day</p>
+          </div>
+          <span class="calendar-side-count">{{ selected_day_events|length }}</span>
+        </div>
+
+        {% if selected_day_events %}
+          <div class="calendar-side-list">
+            {% for e in selected_day_events %}
+              <article class="calendar-side-event type-{{ e.event_type }} {% if e.is_overdue %}is-overdue{% endif %} {% if e.status == 'done' %}is-done{% endif %}">
+                <div class="calendar-event-topline">
+                  <span class="calendar-type-badge type-{{ e.event_type }}">{{ e.get_event_type_display }}</span>
+                  <span class="calendar-status-badge status-{{ e.status }}">{{ e.get_status_display }}</span>
+                </div>
+                <a href="{% url 'calendar_event_detail' e.pk %}">{{ e.title }}</a>
+                <span>{{ e.start_datetime|time:"h:i A" }}{% if e.assigned_to_name %} - {{ e.assigned_to_name }}{% endif %}</span>
+                {% if e.reminder_minutes_before %}
+                  <small>Reminder {{ e.reminder_minutes_before }} minutes before</small>
+                {% endif %}
+                {% if e.ai_note %}
+                  <p>{{ e.ai_note|truncatechars:90 }}</p>
+                {% endif %}
+                <div class="calendar-side-actions">
+                  <a href="{% url 'calendar_event_detail' e.pk %}" class="calendar-btn calendar-btn--tiny calendar-btn--ghost">View</a>
+                  <a href="{% url 'calendar_edit' e.pk %}" class="calendar-btn calendar-btn--tiny calendar-btn--ghost">Edit</a>
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="calendar-empty-state">
+            <strong>No events on this focus day</strong>
+            <span>Add a follow up, meeting, production reminder, or task when work is scheduled.</span>
+          </div>
+        {% endif %}
+      </section>
+
+      <section class="calendar-side-panel">
+        <div class="calendar-side-head">
+          <div>
+            <h2>Follow Up Queue</h2>
+            <p>Sales follow ups on the selected day</p>
+          </div>
+          <a href="?view={{ current_view }}&year={{ current_month|date:'Y' }}&month={{ current_month|date:'n' }}&day={{ selected_day|date:'Y-m-d' }}&status={{ status_filter }}&type=follow_up&priority={{ priority_filter }}&assigned={{ assigned_filter }}&lead={{ lead_filter }}" class="calendar-chip-link">Filter</a>
+        </div>
+        <div class="calendar-side-list calendar-side-list--compact">
+          {% for e in selected_day_events %}
+            {% if e.event_type == "follow_up" %}
+              <a href="{% url 'calendar_event_detail' e.pk %}" class="calendar-queue-link type-follow_up">
+                <strong>{{ e.title }}</strong>
+                <span>{{ e.start_datetime|time:"h:i A" }} - {{ e.get_status_display }}</span>
+              </a>
+            {% endif %}
+          {% endfor %}
+        </div>
+        <p class="calendar-side-note">Use the filter link to review the full visible follow-up queue.</p>
+      </section>
+
+      <section class="calendar-side-panel">
+        <div class="calendar-side-head">
+          <div>
+            <h2>Production / Deadlines</h2>
+            <p>Production, sampling, shipping, and payment reminders</p>
+          </div>
+          <a href="?view={{ current_view }}&year={{ current_month|date:'Y' }}&month={{ current_month|date:'n' }}&day={{ selected_day|date:'Y-m-d' }}&status={{ status_filter }}&type=production&priority={{ priority_filter }}&assigned={{ assigned_filter }}&lead={{ lead_filter }}" class="calendar-chip-link">Production</a>
+        </div>
+        <div class="calendar-side-list calendar-side-list--compact">
+          {% for e in selected_day_events %}
+            {% if e.event_type == "production" or e.event_type == "sample" or e.event_type == "shipping" or e.event_type == "payment" %}
+              <a href="{% url 'calendar_event_detail' e.pk %}" class="calendar-queue-link type-{{ e.event_type }}">
+                <strong>{{ e.title }}</strong>
+                <span>{{ e.get_event_type_display }}{% if e.production_stage %} - {{ e.get_production_stage_display }}{% endif %}</span>
+              </a>
+            {% endif %}
+          {% endfor %}
+        </div>
+        <div class="calendar-mini-actions">
+          <a href="?view={{ current_view }}&year={{ current_month|date:'Y' }}&month={{ current_month|date:'n' }}&day={{ selected_day|date:'Y-m-d' }}&status={{ status_filter }}&type=sample&priority={{ priority_filter }}&assigned={{ assigned_filter }}&lead={{ lead_filter }}" class="calendar-chip-link">Samples</a>
+          <a href="?view={{ current_view }}&year={{ current_month|date:'Y' }}&month={{ current_month|date:'n' }}&day={{ selected_day|date:'Y-m-d' }}&status={{ status_filter }}&type=shipping&priority={{ priority_filter }}&assigned={{ assigned_filter }}&lead={{ lead_filter }}" class="calendar-chip-link">Shipping</a>
+          <a href="?view={{ current_view }}&year={{ current_month|date:'Y' }}&month={{ current_month|date:'n' }}&day={{ selected_day|date:'Y-m-d' }}&status={{ status_filter }}&type=payment&priority={{ priority_filter }}&assigned={{ assigned_filter }}&lead={{ lead_filter }}" class="calendar-chip-link">Payments</a>
+        </div>
+      </section>
+
+      <section class="calendar-side-panel">
+        <div class="calendar-side-head">
+          <div>
+            <h2>Quick Filters</h2>
+            <p>Status, type, priority, user, and lead</p>
+          </div>
+        </div>
+
+        <form method="get" class="calendar-filter-form">
           <input type="hidden" name="year" value="{{ current_month|date:'Y' }}">
           <input type="hidden" name="month" value="{{ current_month|date:'n' }}">
           <input type="hidden" name="day" value="{{ selected_day|date:'Y-m-d' }}">
           <input type="hidden" name="view" value="{{ current_view }}">
 
-          <div style="margin-bottom: 10px;">
-            <div class="calendar-filter-label">Status</div>
-            <select name="status" class="calendar-filter-select" onchange="this.form.submit()">
+          <label>
+            <span>Status</span>
+            <select name="status" onchange="this.form.submit()">
               <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All</option>
               <option value="planned" {% if status_filter == 'planned' %}selected{% endif %}>Planned</option>
               <option value="in_work" {% if status_filter == 'in_work' %}selected{% endif %}>In work</option>
               <option value="done" {% if status_filter == 'done' %}selected{% endif %}>Done</option>
             </select>
-          </div>
+          </label>
 
-          <div style="margin-bottom: 10px;">
-            <div class="calendar-filter-label">Type</div>
-            <select name="type" class="calendar-filter-select" onchange="this.form.submit()">
+          <label>
+            <span>Type</span>
+            <select name="type" onchange="this.form.submit()">
               <option value="all" {% if type_filter == 'all' %}selected{% endif %}>All</option>
-              <option value="call" {% if type_filter == 'call' %}selected{% endif %}>Call</option>
+              <option value="call" {% if type_filter == 'call' %}selected{% endif %}>Call / meeting</option>
               <option value="follow_up" {% if type_filter == 'follow_up' %}selected{% endif %}>Follow up</option>
               <option value="sample" {% if type_filter == 'sample' %}selected{% endif %}>Sample work</option>
               <option value="production" {% if type_filter == 'production' %}selected{% endif %}>Production</option>
@@ -746,73 +414,46 @@
               <option value="payment" {% if type_filter == 'payment' %}selected{% endif %}>Payment</option>
               <option value="other" {% if type_filter == 'other' %}selected{% endif %}>Other</option>
             </select>
-          </div>
+          </label>
 
-          <div style="margin-bottom: 10px;">
-            <div class="calendar-filter-label">Priority</div>
-            <select name="priority" class="calendar-filter-select" onchange="this.form.submit()">
+          <label>
+            <span>Priority</span>
+            <select name="priority" onchange="this.form.submit()">
               <option value="all" {% if priority_filter == 'all' %}selected{% endif %}>All</option>
               <option value="low" {% if priority_filter == 'low' %}selected{% endif %}>Low</option>
               <option value="medium" {% if priority_filter == 'medium' %}selected{% endif %}>Medium</option>
               <option value="high" {% if priority_filter == 'high' %}selected{% endif %}>High</option>
             </select>
-          </div>
+          </label>
 
-          <div style="margin-bottom: 10px;">
-            <div class="calendar-filter-label">Assigned to</div>
-            <select name="assigned" class="calendar-filter-select" onchange="this.form.submit()">
+          <label>
+            <span>Assigned to</span>
+            <select name="assigned" onchange="this.form.submit()">
               <option value="all" {% if assigned_filter == 'all' %}selected{% endif %}>All</option>
               {% for name in assigned_choices %}
                 <option value="{{ name }}" {% if assigned_filter == name %}selected{% endif %}>{{ name }}</option>
               {% endfor %}
             </select>
-          </div>
+          </label>
 
-          <div>
-            <div class="calendar-filter-label">Lead</div>
-            <select name="lead" class="calendar-filter-select" onchange="this.form.submit()">
+          <label>
+            <span>Lead</span>
+            <select name="lead" onchange="this.form.submit()">
               <option value="all" {% if lead_filter == 'all' %}selected{% endif %}>All</option>
               {% for lead_id, brand in lead_choices %}
                 <option value="{{ lead_id }}" {% if lead_filter == lead_id %}selected{% endif %}>{{ lead_id }} {{ brand }}</option>
               {% endfor %}
             </select>
+          </label>
+
+          <div class="calendar-filter-actions">
+            <button type="submit" class="calendar-btn calendar-btn--primary">Apply</button>
+            <a href="{% url 'calendar_list' %}" class="calendar-btn calendar-btn--ghost">Reset</a>
           </div>
         </form>
-      </div>
-
-      <div class="calendar-panel" style="margin-bottom: 14px;">
-        <div class="panel-title">Events on {{ selected_day|date:"D, M d" }}</div>
-        {% if selected_day_events %}
-          {% for e in selected_day_events %}
-            <div class="side-event">
-              <div class="event-pills">
-                <span class="event-pill type-{{ e.event_type }}">{{ e.get_event_type_display }}</span>
-                <span class="event-pill status-{{ e.status }}">{{ e.get_status_display }}</span>
-              </div>
-              <div class="event-title">{{ e.title }}</div>
-              <div class="event-time">{{ e.start_datetime|time:"h:i A" }}</div>
-              {% if e.ai_note %}
-                <div class="event-time" style="margin-top:4px;">{{ e.ai_note|truncatechars:70 }}</div>
-              {% endif %}
-              <div class="side-actions">
-                <a href="{% url 'calendar_event_detail' e.pk %}" class="btn ghost">Open</a>
-                <a href="{% url 'calendar_edit' e.pk %}" class="btn accent">Edit</a>
-              </div>
-            </div>
-          {% endfor %}
-        {% else %}
-          <div class="panel-sub">No events on this day yet.</div>
-        {% endif %}
-      </div>
-
-      <div class="calendar-panel">
-        <div class="panel-title">Tips</div>
-        <div class="panel-sub">
-          Click a date to focus the day. Drag and drop to move events. Use filters to narrow follow-ups fast.
-        </div>
-      </div>
-    </div>
-  </div>
+      </section>
+    </aside>
+  </section>
 </div>
 
 <script>
@@ -895,7 +536,7 @@
     }
 
     wireDropTargets(".calendar-day-cell");
-    wireDropTargets(".time-slot");
+    wireDropTargets(".calendar-time-slot");
 
     var jumpInput = document.getElementById("jump-date");
     if (jumpInput) {
