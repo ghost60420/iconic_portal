@@ -1,4 +1,5 @@
 {% extends "crm/base.html" %}
+{% load static %}
 {% block content %}
 
 <style>
@@ -321,30 +322,164 @@
     line-height: 1.4;
   }
 </style>
+<link rel="stylesheet" href="{% static 'crm/costing_detail.css' %}?v=costing-detail-modern-20260506">
 
 <div class="costing-detail">
-  <div class="card">
-    <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-      <div>
-        <div style="font-size:18px; font-weight:800;">Costing: {{ costing.opportunity.opportunity_id }}</div>
-        <div class="muted">{{ costing.style_name|default:costing.style_code|default:"-" }} - {{ costing.get_product_type_display }}</div>
-        {% if costing.approved_at %}
-          <div class="muted" style="margin-top:4px;">Approved {{ costing.approved_at|date:"Y-m-d H:i" }}{% if costing.approved_by %} by {{ costing.approved_by.username }}{% endif %}</div>
-        {% endif %}
+  <section class="costing-detail-hero">
+    <div class="costing-hero-copy">
+      <p class="costing-eyebrow">Pricing workspace</p>
+      <h1>{% firstof costing.style_name costing.style_code costing.opportunity.product_category "Costing sheet" %}</h1>
+      <div class="costing-hero-meta">
+        <a href="{% url 'opportunity_detail' costing.opportunity.pk %}">{{ costing.opportunity.opportunity_id }}</a>
+        <span>{% firstof costing.customer.account_brand costing.customer.contact_name costing.brand "Client not set" %}</span>
+        <span>{{ costing.get_product_type_display }}</span>
       </div>
-      <div style="display:flex; gap:8px; align-items:center;">
+      <div class="costing-hero-badges">
         <span class="pill pill-{{ costing.status }}">{{ costing.get_status_display }}</span>
-        <a class="btnx" href="{% url 'cost_sheet_list' %}">Back to list</a>
-        <a class="btnx" href="{% url 'cost_sheet_guide' %}">Guide</a>
-        {% if not is_locked %}
-          <button form="costing-form" type="submit" class="btnx btnx-primary">Save</button>
-        {% endif %}
-        {% if can_approve and not is_locked %}
-          <button form="approve-form" type="submit" class="btnx btnx-soft">Approve</button>
-        {% endif %}
+        <span class="costing-currency-badge">{{ costing.currency }}</span>
+        <span class="costing-id-badge">COST-{{ costing.pk }}</span>
       </div>
+      {% if costing.approved_at %}
+        <p class="costing-approval-note">
+          Approved {{ costing.approved_at|date:"Y-m-d H:i" }}{% if costing.approved_by %} by {{ costing.approved_by.username }}{% endif %}
+        </p>
+      {% endif %}
     </div>
-  </div>
+
+    <div class="costing-hero-actions">
+      <a class="btnx" href="#costing-form">Edit</a>
+      <a class="btnx" href="{% url 'cost_sheet_export_excel' costing.pk %}">Export Excel</a>
+      <a class="btnx" href="{% url 'cost_sheet_export_pdf' costing.pk %}">Download PDF</a>
+      <a class="btnx" href="{% url 'opportunity_detail' costing.opportunity.pk %}">Open Opportunity</a>
+      <a class="btnx" href="{% url 'cost_sheet_list' %}">Back to Costing List</a>
+      <a class="btnx" href="{% url 'cost_sheet_guide' %}">Guide</a>
+      {% if not is_locked %}
+        <button form="costing-form" type="submit" class="btnx btnx-primary">Save</button>
+      {% endif %}
+      {% if can_approve and not is_locked %}
+        <button form="approve-form" type="submit" class="btnx btnx-soft">Approve</button>
+      {% endif %}
+    </div>
+  </section>
+
+  {% if calc %}
+    <section class="costing-kpi-grid" aria-label="Costing summary">
+      <article class="costing-kpi">
+        <span>Total cost</span>
+        <strong>{{ calc.display.total_cost_order }}</strong>
+        <small>Full order cost</small>
+      </article>
+      <article class="costing-kpi">
+        <span>Cost per piece</span>
+        <strong>{{ calc.display.total_cost_per_piece }}</strong>
+        <small>Before margin and commission</small>
+      </article>
+      <article class="costing-kpi">
+        <span>Selling price / pc</span>
+        <strong>{{ calc.display.fob_per_piece }}</strong>
+        <small>FOB before final offer add-ons</small>
+      </article>
+      <article class="costing-kpi">
+        <span>Profit / pc</span>
+        <strong>{{ calc.display.profit_per_piece }}</strong>
+        <small>{{ calc.display.total_profit_order }} total profit</small>
+      </article>
+      <article class="costing-kpi costing-kpi--accent {{ margin_tone }}">
+        <span>Margin</span>
+        <strong>{{ calc.display.margin_percent }}%</strong>
+        <small>{{ margin_tone|title }} pricing signal</small>
+      </article>
+      <article class="costing-kpi">
+        <span>Order quantity</span>
+        <strong>{{ costing.order_quantity }}</strong>
+        <small>{{ costing.currency }} pricing basis</small>
+      </article>
+    </section>
+  {% else %}
+    <section class="card costing-empty-review">
+      <div>
+        <div class="card-title">Summary not ready</div>
+        <p class="muted">Add line items and save to calculate cost, selling price, profit, and margin.</p>
+      </div>
+      {% if not is_locked %}
+        <button form="costing-form" type="submit" class="btnx btnx-primary">Save costing</button>
+      {% endif %}
+    </section>
+  {% endif %}
+
+  <section class="costing-context-grid">
+    <article class="card costing-context-card">
+      <div class="card-title">Opportunity context</div>
+      <div class="costing-field-list">
+        <div>
+          <span>Opportunity</span>
+          <strong><a href="{% url 'opportunity_detail' costing.opportunity.pk %}">{{ costing.opportunity.opportunity_id }}</a></strong>
+        </div>
+        <div>
+          <span>Stage</span>
+          <strong>{{ costing.opportunity.stage }}</strong>
+        </div>
+        <div>
+          <span>Client</span>
+          <strong>{% firstof costing.customer.account_brand costing.customer.contact_name costing.brand "Client not set" %}</strong>
+        </div>
+        <div>
+          <span>Product category</span>
+          <strong>{{ costing.opportunity.product_category }}</strong>
+        </div>
+        <div>
+          <span>Target quantity</span>
+          <strong>{{ costing.opportunity.moq_units|default:costing.order_quantity|default:"-" }}</strong>
+        </div>
+        <div>
+          <span>Target value</span>
+          <strong>{{ costing.opportunity.order_value|default:"-" }}</strong>
+        </div>
+        <div>
+          <span>Next follow up</span>
+          <strong>{{ costing.opportunity.next_followup|date:"M j, Y"|default:"Not set" }}</strong>
+        </div>
+        <div>
+          <span>Updated</span>
+          <strong>{{ costing.updated_at|date:"M j, Y" }}</strong>
+        </div>
+      </div>
+    </article>
+
+    <article class="card costing-pricing-card">
+      <div class="card-title">Pricing and margin</div>
+      {% if calc %}
+        <div class="costing-pricing-grid">
+          <div>
+            <span>Suggested selling price</span>
+            <strong>{{ calc.display.fob_per_piece }}</strong>
+          </div>
+          <div>
+            <span>Final offer / pc</span>
+            <strong>{{ calc.display.final_offer_fob_per_piece }}</strong>
+          </div>
+          <div>
+            <span>Final offer total</span>
+            <strong>{{ calc.display.total_final_offer_order }}</strong>
+          </div>
+          <div>
+            <span>Exchange rate</span>
+            <strong>{{ costing.exchange_rate|default:"-" }}</strong>
+          </div>
+          <div>
+            <span>Target margin</span>
+            <strong>{{ costing.target_margin_percent|default:"-" }}%</strong>
+          </div>
+          <div>
+            <span>Commission</span>
+            <strong>{{ costing.commission_percent }}%</strong>
+          </div>
+        </div>
+      {% else %}
+        <p class="muted">Pricing will appear once costing lines are saved.</p>
+      {% endif %}
+    </article>
+  </section>
 
   <div class="card" id="costing-guide-panel">
     <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
@@ -375,11 +510,19 @@
     <input type="hidden" name="action" value="save_costing">
     <input type="hidden" name="line_payload" id="line-payload">
 
-    <div class="card">
-      <div class="card-title">Header</div>
+    <div class="card costing-form-card">
+      <div class="costing-section-head">
+        <div>
+          <div class="card-title">Commercial setup</div>
+          <p class="section-lead">Core quote fields stay editable here. Save recalculates the pricing summary and updates the linked opportunity summary.</p>
+        </div>
+        {% if is_locked %}
+          <span class="costing-lock-badge">Approved and locked</span>
+        {% endif %}
+      </div>
 
       <div class="header-section">
-        <div class="section-subtitle">Commercial & quote setup</div>
+        <div class="section-subtitle">Quote controls</div>
         <div class="section-lead">Use common dropdown suggestions where they fit. You can still type a custom value when the program or buyer is different.</div>
         <div class="header-grid">
           <div>
@@ -475,8 +618,11 @@
         </div>
       </div>
 
-      <div class="header-section">
-        <div class="section-subtitle">Product specification snapshot</div>
+      <details class="header-section costing-admin-details">
+        <summary>
+          <span>Admin / product specification details</span>
+          <small>Advanced style assumptions and internal notes</small>
+        </summary>
         <div class="section-lead">These fields help the team understand why a style costs what it does, even before reviewing the line items below.</div>
         <div class="header-grid">
           <div>
@@ -550,11 +696,11 @@
             <div class="field-help">{{ form.notes.help_text }}</div>
           </div>
         </div>
-      </div>
+      </details>
     </div>
 
-    <div class="card">
-      <div class="card-title">SMV & Labor</div>
+    <div class="card costing-form-card">
+      <div class="card-title">SMV and labor</div>
       <div class="section-lead">Enter minute values only. The system uses CPM and efficiency to calculate labor cost per piece.</div>
       <div class="header-grid">
         <div>
@@ -586,8 +732,14 @@
     </div>
 
     {% for section in category_sections %}
-      <div class="card">
-        <div class="card-title">{{ section.label }}</div>
+      <div class="card costing-breakdown-card">
+        <div class="costing-section-head">
+          <div>
+            <div class="card-title">{{ section.label }}</div>
+            <p class="section-lead">Review unit costs, supplier assumptions, consumption, wastage, and remarks for this cost group.</p>
+          </div>
+          <span class="costing-row-count">{{ section.rows|length }} rows</span>
+        </div>
         <div class="category-guide">
           <div class="category-guide-card">
             <div class="category-guide-title">How to enter {{ section.label|lower }}</div>
@@ -635,7 +787,7 @@
                 </td>
                 <td><input type="number" step="0.0001" data-field="unit_price" value="{{ row.unit_price }}" placeholder="0.00"></td>
                 <td><input type="number" step="0.0001" data-field="freight" value="{{ row.freight }}" placeholder="0.00"></td>
-                <td><input type="number" step="0.0001" data-field="consumption_value" value="{{ row.consumption_value }}" placeholder="0.00" list="costing-consumption-options-{{ category }}"></td>
+                <td><input type="number" step="0.0001" data-field="consumption_value" value="{{ row.consumption_value }}" placeholder="0.00" list="costing-consumption-options-{{ section.key }}"></td>
                 <td><input type="number" step="0.01" data-field="wastage_percent" value="{{ row.wastage_percent }}" placeholder="0"></td>
                 <td><input type="number" step="0.0001" data-field="denominator_value" value="{{ row.denominator_value }}" placeholder="0"></td>
                 <td>
@@ -682,8 +834,16 @@
     {% endfor %}
   </form>
 
-  <div class="card">
-    <div class="card-title">Summary & Pricing</div>
+  <div class="card costing-review-card">
+    <div class="costing-section-head">
+      <div>
+        <div class="card-title">Cost breakdown and pricing detail</div>
+        <p class="section-lead">Use this section to compare per-piece cost, order-level totals, margin, and the cost groups driving the quote.</p>
+      </div>
+      {% if calc %}
+        <span class="costing-margin-badge {{ margin_tone }}">{{ calc.display.margin_percent }}% margin</span>
+      {% endif %}
+    </div>
     {% if calc %}
       {% if calc.advisories %}
         <div class="advisory-list">
@@ -733,7 +893,7 @@
           <div class="summary-value">{{ calc.display.total_final_offer_order }} <span class="unit-badge">BDT total order</span></div>
         </div>
       </div>
-      <div style="margin-top:12px; overflow:auto;">
+      <div class="costing-table-scroll">
         <table class="line-table">
           <thead>
             <tr>
@@ -816,21 +976,26 @@
     {% endif %}
   </div>
 
-  <div class="card">
-    <div class="card-title">Documents</div>
-    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+  <div class="card costing-documents-card">
+    <div class="costing-section-head">
+      <div>
+        <div class="card-title">Documents and exports</div>
+        <p class="section-lead">Download the current costing or attach supporting pricing files.</p>
+      </div>
+    </div>
+    <div class="costing-doc-actions">
       <a class="btnx" href="{% url 'cost_sheet_export_pdf' costing.pk %}">Export PDF</a>
       <a class="btnx" href="{% url 'cost_sheet_export_excel' costing.pk %}">Export Excel</a>
     </div>
-    <form method="post" enctype="multipart/form-data" style="margin-top:10px; display:flex; gap:6px; flex-wrap:wrap; align-items:end;">
+    <form method="post" enctype="multipart/form-data" class="costing-upload-form">
       {% csrf_token %}
       <input type="hidden" name="action" value="upload_document">
-      <div style="flex:1; min-width:200px;">
-        <label class="muted" style="display:block; margin-bottom:4px;">File</label>
+      <div>
+        <label class="muted">File</label>
         <input type="file" name="file">
       </div>
       <div>
-        <label class="muted" style="display:block; margin-bottom:4px;">Type</label>
+        <label class="muted">Type</label>
         <select name="doc_type">
           <option value="costing_pdf">Costing PDF</option>
           <option value="costing_excel">Costing Excel</option>
@@ -842,21 +1007,21 @@
     </form>
 
     {% if documents %}
-      <ul class="simple-list" style="margin-top:6px;">
+      <ul class="simple-list costing-document-list">
         {% for doc in documents %}
           <li>
-            📎 <a href="{{ doc.file.url }}" target="_blank">{{ doc.original_name|default:doc.file.name }}</a>
+            <a href="{{ doc.file.url }}" target="_blank">{{ doc.original_name|default:doc.file.name }}</a>
             <span class="muted"> • {{ doc.get_doc_type_display }} • {{ doc.uploaded_at|date:"Y-m-d" }}</span>
           </li>
         {% endfor %}
       </ul>
     {% else %}
-      <div class="muted" style="margin-top:6px;">No costing documents uploaded yet.</div>
+      <div class="muted costing-empty-documents">No costing documents uploaded yet.</div>
     {% endif %}
   </div>
 
   {% if can_approve and is_locked %}
-    <div class="card">
+    <div class="card costing-unlock-card">
       <div class="card-title">Unlock costing</div>
       <form method="post">
         {% csrf_token %}

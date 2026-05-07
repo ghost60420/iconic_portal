@@ -449,6 +449,15 @@ def cost_sheet_detail(request, pk):
             return redirect("cost_sheet_detail", pk=pk)
 
     calc = compute_costing(costing.id)
+    margin_tone = "neutral"
+    if calc:
+        margin_percent = calc.get("margin_percent") or Decimal("0")
+        if margin_percent >= Decimal("20"):
+            margin_tone = "good"
+        elif margin_percent >= Decimal("5"):
+            margin_tone = "watch"
+        else:
+            margin_tone = "risk"
     grouped_lines = _group_lines(costing)
     category_sections = [
         {
@@ -474,6 +483,7 @@ def cost_sheet_detail(request, pk):
     context = {
         "costing": costing,
         "calc": calc,
+        "margin_tone": margin_tone,
         "form": form,
         "smv_form": smv_form,
         "documents": documents,
