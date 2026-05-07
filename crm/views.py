@@ -3191,6 +3191,27 @@ def customer_detail(request, pk):
     production_active = prod_orders.filter(status__in=active_prod_statuses)
     production_completed = prod_orders.filter(status__in=completed_statuses)
 
+    invoice_model = globals().get("Invoice")
+    if invoice_model is not None:
+        invoices = (
+            invoice_model.objects
+            .filter(Q(customer=customer) | Q(order__customer=customer))
+            .select_related("order", "customer")
+            .order_by("-issue_date", "-created_at")
+            .distinct()
+        )
+        unpaid_invoices = invoices.exclude(status__in=["paid", "cancelled"])
+        invoice_totals = invoices.aggregate(total=Sum("total_amount"), paid=Sum("paid_amount"))
+        invoice_total = invoice_totals.get("total") or Decimal("0.00")
+        invoice_paid = invoice_totals.get("paid") or Decimal("0.00")
+        unpaid_invoice_total = sum((invoice.balance or Decimal("0.00")) for invoice in unpaid_invoices)
+    else:
+        invoices = []
+        unpaid_invoices = []
+        invoice_total = Decimal("0.00")
+        invoice_paid = Decimal("0.00")
+        unpaid_invoice_total = Decimal("0.00")
+
     prod_costs = (
         ProductionOrder.objects
         .filter(opportunity__in=opportunities)
@@ -3229,18 +3250,44 @@ def customer_detail(request, pk):
     notes_list = customer.notes_list.all().order_by("-created_at")
     events = customer.customer_events.all().order_by("-created_at")[:50]
 
+    activity_dates = [
+        customer.updated_at.date() if customer.updated_at else None,
+        customer.created_date,
+    ]
+    activity_dates.extend([opp.updated_at.date() for opp in opportunities if opp.updated_at])
+    activity_dates.extend([order.updated_at.date() for order in prod_orders if order.updated_at])
+    activity_dates.extend([note.created_at.date() for note in notes_list if note.created_at])
+    activity_dates.extend([event.created_at.date() for event in events if event.created_at])
+    activity_dates.extend([invoice.updated_at.date() for invoice in invoices if getattr(invoice, "updated_at", None)])
+    activity_dates = [item for item in activity_dates if item]
+    last_activity = max(activity_dates) if activity_dates else None
+
+    display_name = customer.account_brand or customer.contact_name or "Customer"
+    initials_source = display_name.replace("/", " ").replace("-", " ").split()
+    customer_initials = "".join(part[0] for part in initials_source[:2]).upper() or "C"
+
     context = {
         "customer": customer,
+        "customer_display_name": display_name,
+        "customer_initials": customer_initials,
+        "customer_status_key": "active" if customer.is_active else "inactive",
+        "customer_status_label": "Active" if customer.is_active else "Inactive",
         "leads": leads,
         "opportunities": opportunities,
         "active_opps": active_opps,
         "production_active": production_active,
         "production_completed": production_completed,
+        "invoices": invoices,
+        "unpaid_invoices": unpaid_invoices,
+        "invoice_total": invoice_total,
+        "invoice_paid": invoice_paid,
+        "unpaid_invoice_total": unpaid_invoice_total,
         "total_revenue": total_revenue,
         "total_orders": total_orders,
         "total_cost_bdt": total_cost_bdt,
         "profit_estimate": profit_estimate,
         "profit_margin": profit_margin,
+        "last_activity": last_activity,
         "notes_list": notes_list,
         "events": events,
         "prod_orders": prod_orders,

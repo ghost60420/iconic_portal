@@ -1,547 +1,427 @@
 {% extends "crm/base.html" %}
+{% load static %}
 {% block content %}
+<link rel="stylesheet" href="{% static 'crm/customer_detail.css' %}?v=customer-detail-modern-20260507">
 
-<style>
-  .cust-detail-page {
-    max-width: 1200px;
-    margin: 24px auto 40px auto;
-    padding: 0 12px 20px 12px;
-    color: #f9fafb;
-  }
-
-  .cust-header {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-    align-items: center;
-    margin-bottom: 14px;
-  }
-
-  .cust-title {
-    font-size: 22px;
-    font-weight: 700;
-    color: #fef9c3;
-  }
-
-  .cust-sub {
-    font-size: 12px;
-    color: #cbd5f5;
-  }
-
-  .cust-badges {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 6px;
-  }
-
-  .cust-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-    justify-content: flex-end;
-  }
-
-  .btn {
-    display: inline-block;
-    padding: 6px 12px;
-    border-radius: 999px;
-    border: 1px solid transparent;
-    font-size: 12px;
-    text-decoration: none;
-    white-space: nowrap;
-  }
-
-  .btn-gold {
-    background: linear-gradient(135deg, #facc15, #f97316);
-    color: #111827;
-    border-color: #fbbf24;
-    font-weight: 600;
-  }
-
-  .btn-slate {
-    background: #020617;
-    color: #e5e7eb;
-    border-color: #374151;
-  }
-
-  .summary-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-    margin-bottom: 14px;
-  }
-
-  .summary-card {
-    background: radial-gradient(circle at top left, #111827, #020617);
-    border: 1px solid #1f2937;
-    border-radius: 12px;
-    padding: 10px 12px;
-  }
-
-  .summary-title {
-    font-size: 11px;
-    color: #facc15;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .summary-value {
-    font-size: 16px;
-    font-weight: 700;
-    color: #f9fafb;
-  }
-
-  .summary-sub {
-    font-size: 11px;
-    color: #9ca3af;
-  }
-
-  .cust-grid {
-    display: grid;
-    grid-template-columns: 1.3fr 0.9fr;
-    gap: 14px;
-  }
-
-  .card {
-    background: radial-gradient(circle at top left, #111827, #020617);
-    border: 1px solid #1f2937;
-    border-radius: 14px;
-    padding: 12px 14px;
-    margin-bottom: 12px;
-  }
-
-  .card-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: #fefce8;
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .info-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px 14px;
-  }
-
-  .info-label {
-    font-size: 10px;
-    color: #c7b36b;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .info-value {
-    font-size: 12px;
-    color: #f9fafb;
-  }
-
-  .table-small {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 12px;
-  }
-
-  .table-small th,
-  .table-small td {
-    border-bottom: 1px solid #1f2937;
-    padding: 6px 4px;
-    text-align: left;
-  }
-
-  .table-small th {
-    color: #cbd5f5;
-    font-size: 11px;
-  }
-
-  .table-small tbody tr {
-    transition: background 0.12s ease;
-  }
-
-  .table-small tbody tr.clickable-row {
-    cursor: pointer;
-  }
-
-  .table-small tbody tr.clickable-row:hover {
-    background: rgba(30, 41, 59, 0.55);
-  }
-
-  .pill {
-    display: inline-flex;
-    align-items: center;
-    padding: 2px 8px;
-    border-radius: 999px;
-    border: 1px solid #374151;
-    font-size: 11px;
-    color: #e5e7eb;
-    background: #020617;
-  }
-
-  .muted {
-    color: #9ca3af;
-  }
-
-  .notes-box {
-    background: #020617;
-    border: 1px solid #1f2937;
-    border-radius: 10px;
-    padding: 8px;
-    font-size: 12px;
-    white-space: pre-wrap;
-  }
-
-  .note-item {
-    padding: 8px 0;
-    border-bottom: 1px solid #1f2937;
-  }
-
-  .note-item:last-child {
-    border-bottom: none;
-  }
-
-  .ai-output-box,
-  .ai-chat-log,
-  .ai-email-box,
-  .ai-custom-box {
-    background: #020617;
-    border-radius: 8px;
-    border: 1px solid #1f2937;
-    padding: 8px;
-    font-size: 12px;
-  }
-
-  .ai-chip-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 8px;
-  }
-
-  .ai-chip {
-    background: #020617;
-    color: #f5d580;
-    border: 1px solid #4b5563;
-    border-radius: 999px;
-    padding: 4px 10px;
-    font-size: 11px;
-    cursor: pointer;
-  }
-
-  .ai-chip:hover {
-    background: #111827;
-  }
-
-  .ai-status {
-    font-size: 11px;
-    color: #9ca3af;
-    margin-top: 4px;
-  }
-
-  @media (max-width: 980px) {
-    .cust-grid {
-      grid-template-columns: 1fr;
-    }
-    .summary-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-  }
-
-  @media (max-width: 680px) {
-    .summary-grid {
-      grid-template-columns: 1fr;
-    }
-    .info-grid {
-      grid-template-columns: 1fr;
-    }
-  }
-</style>
-
-<div class="cust-detail-page">
-  <div class="cust-header">
-    <div>
-      <div class="cust-title">
-        {{ customer.account_brand|default:customer.contact_name|default:"Customer" }}
-        <span class="muted" style="font-size:12px;">[{{ customer.customer_code }}]</span>
-      </div>
-      <div class="cust-sub">
-        {{ customer.contact_name|default:"" }} - {{ customer.email|default:"" }} - {{ customer.phone|default:"" }}
-      </div>
-      <div class="cust-badges">
-        <span class="pill">Active opps {{ active_opps|length }}</span>
-        <span class="pill">In production {{ production_active|length }}</span>
-        <span class="pill">Completed {{ production_completed|length }}</span>
-      </div>
-    </div>
-    <div class="cust-actions">
-      <a href="{% url 'customers_list' %}" class="btn btn-slate">Back to customers</a>
-      <a href="{% url 'add_opportunity' %}?customer={{ customer.id }}" class="btn btn-gold">Add opportunity</a>
-      <a href="#customer-notes" class="btn btn-slate">Add note</a>
-      <a href="/admin/crm/customer/{{ customer.id }}/change/" class="btn btn-slate">Edit customer</a>
-    </div>
-  </div>
-
-  <div class="summary-grid">
-    <div class="summary-card">
-      <div class="summary-title">Total opportunities</div>
-      <div class="summary-value">{{ opportunities|length }}</div>
-      <div class="summary-sub">Active {{ active_opps|length }}</div>
-    </div>
-    <div class="summary-card">
-      <div class="summary-title">Production</div>
-      <div class="summary-value">{{ production_active|length }}</div>
-      <div class="summary-sub">Completed {{ production_completed|length }}</div>
-    </div>
-    <div class="summary-card">
-      <div class="summary-title">Revenue</div>
-      <div class="summary-value">{{ total_revenue }}</div>
-      <div class="summary-sub">
-        {% if profit_estimate != None %}
-          Profit est. {{ profit_estimate|floatformat:2 }} ({{ profit_margin|floatformat:1 }}%)
-        {% else %}
-          Profit data not available
-        {% endif %}
-      </div>
-    </div>
-  </div>
-
-  <div class="cust-grid">
-    <div>
-      <div class="card">
-        <div class="card-title">📇 Overview</div>
-        <div class="info-grid">
-          <div>
-            <div class="info-label">Company</div>
-            <div class="info-value">{{ customer.account_brand|default:"—" }}</div>
-          </div>
-          <div>
-            <div class="info-label">Contact</div>
-            <div class="info-value">{{ customer.contact_name|default:"—" }}</div>
-          </div>
-          <div>
-            <div class="info-label">Website</div>
-            <div class="info-value">{{ customer.website|default:"—" }}</div>
-          </div>
-          <div>
-            <div class="info-label">Industry</div>
-            <div class="info-value">{{ customer.industry|default:"—" }}</div>
-          </div>
-          <div>
-            <div class="info-label">Market</div>
-            <div class="info-value">{{ customer.market|default:"—" }}</div>
-          </div>
-          <div>
-            <div class="info-label">Created</div>
-            <div class="info-value">{{ customer.created_date|date:"Y-m-d" }}</div>
-          </div>
-          <div>
-            <div class="info-label">Address</div>
-            <div class="info-value">
-              {{ customer.address_line1|default:customer.shipping_address1|default:"" }}
-              {{ customer.address_line2|default:customer.shipping_address2|default:"" }}
-              {{ customer.city|default:customer.shipping_city|default:"" }}
-              {{ customer.state|default:customer.shipping_state|default:"" }}
-              {{ customer.postal_code|default:customer.shipping_postcode|default:"" }}
-              {{ customer.country|default:customer.shipping_country|default:"" }}
-            </div>
-          </div>
+<div class="customer-detail-page">
+  <section class="customer-detail-hero">
+    <div class="customer-hero-main">
+      <div class="customer-avatar">{{ customer_initials }}</div>
+      <div>
+        <p class="customer-eyebrow">Account workspace</p>
+        <h1>{{ customer_display_name }}</h1>
+        <div class="customer-hero-meta">
+          <span>{{ customer.contact_name|default:"Contact not set" }}</span>
+          <span>{% firstof customer.city customer.shipping_city "City not set" %}</span>
+          <span>{% firstof customer.country customer.shipping_country "Country not set" %}</span>
+          <span>{{ customer.customer_code }}</span>
+        </div>
+        <div class="customer-hero-badges">
+          <span class="customer-status {{ customer_status_key }}">{{ customer_status_label }}</span>
+          <span class="customer-pill">Active opps {{ active_opps|length }}</span>
+          <span class="customer-pill">Production {{ production_active|length }}</span>
         </div>
       </div>
-
-      <div class="card">
-        <div class="card-title">🎯 Opportunities</div>
-        {% if opportunities %}
-          <table class="table-small">
-            <thead>
-              <tr>
-                <th>Opportunity</th>
-                <th>Stage</th>
-                <th>Value</th>
-                <th>Margin</th>
-                <th>Updated</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for opp in opportunities %}
-                <tr class="clickable-row" data-href="{% url 'opportunity_detail' opp.pk %}?customer={{ customer.id }}">
-                  <td>
-                    <a href="{% url 'opportunity_detail' opp.pk %}?customer={{ customer.id }}">{{ opp.opportunity_id }}</a>
-                  </td>
-                  <td>{{ opp.stage }}</td>
-                  <td>{% if opp.order_value %}{{ opp.order_value }}{% else %}—{% endif %}</td>
-                  <td>
-                    {% if opp.profit_margin_pct != None %}
-                      {{ opp.profit_margin_pct|floatformat:1 }}%
-                    {% else %}
-                      —
-                    {% endif %}
-                  </td>
-                  <td>{{ opp.updated_at|date:"Y-m-d" }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        {% else %}
-          <div class="muted" style="margin-bottom:8px;">No opportunities yet.</div>
-          <a href="{% url 'add_opportunity' %}?customer={{ customer.id }}" class="btn btn-gold">Create opportunity</a>
-        {% endif %}
-      </div>
-
-      <div class="card">
-        <div class="card-title">🏭 Production</div>
-        {% if production_active %}
-          <div class="muted" style="margin-bottom:6px;">In production</div>
-          <table class="table-small" style="margin-bottom:10px;">
-            <thead>
-              <tr>
-                <th>Order</th>
-                <th>Status</th>
-                <th>Due</th>
-                <th>Updated</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for order in production_active %}
-                <tr class="clickable-row" data-href="{% url 'production_detail' order.pk %}">
-                  <td>
-                    <a href="{% url 'production_detail' order.pk %}">{{ order.order_code|default:order.title }}</a>
-                  </td>
-                  <td><span class="pill">{{ order.get_status_display }}</span></td>
-                  <td>{{ order.bulk_deadline|date:"Y-m-d"|default:"—" }}</td>
-                  <td>{{ order.updated_at|date:"Y-m-d" }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        {% endif %}
-
-        {% if production_completed %}
-          <div class="muted" style="margin-bottom:6px;">Completed</div>
-          <table class="table-small">
-            <thead>
-              <tr>
-                <th>Order</th>
-                <th>Status</th>
-                <th>Completed</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for order in production_completed %}
-                <tr class="clickable-row" data-href="{% url 'production_detail' order.pk %}">
-                  <td>
-                    <a href="{% url 'production_detail' order.pk %}">{{ order.order_code|default:order.title }}</a>
-                  </td>
-                  <td><span class="pill">{{ order.get_status_display }}</span></td>
-                  <td>{{ order.updated_at|date:"Y-m-d" }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        {% endif %}
-
-        {% if not production_active and not production_completed %}
-          <div class="muted">No production orders yet.</div>
-        {% endif %}
-      </div>
     </div>
 
-    <div>
-      <div class="card" id="customer-notes">
-        <div class="card-title">📝 Notes & communications</div>
-        <div class="notes-box" style="margin-bottom:10px;">
+    <div class="customer-hero-actions">
+      <a href="/admin/crm/customer/{{ customer.id }}/change/" class="customer-btn customer-btn--primary">Edit Customer</a>
+      <a href="{% url 'add_opportunity' %}?customer={{ customer.id }}" class="customer-btn customer-btn--ghost">Create Opportunity</a>
+      <a href="{% url 'invoice_list' %}" class="customer-btn customer-btn--ghost">View Invoices</a>
+      <a href="{% url 'production_list' %}?q={{ customer_display_name|urlencode }}&status=active" class="customer-btn customer-btn--ghost">View Production</a>
+      <a href="{% url 'customers_list' %}" class="customer-btn customer-btn--ghost">Back to Customers</a>
+      <a href="#customer-notes" class="customer-btn customer-btn--ghost">Add Note</a>
+    </div>
+  </section>
+
+  <section class="customer-summary-grid" aria-label="Account summary">
+    <article class="customer-summary-card">
+      <span>Total opportunities</span>
+      <strong>{{ opportunities|length }}</strong>
+      <small>{{ active_opps|length }} active opportunities</small>
+    </article>
+    <article class="customer-summary-card">
+      <span>Total revenue</span>
+      <strong>{{ total_revenue|floatformat:0 }}</strong>
+      <small>{{ total_orders }} valued orders</small>
+    </article>
+    <article class="customer-summary-card">
+      <span>Active production</span>
+      <strong>{{ production_active|length }}</strong>
+      <small>{{ production_completed|length }} completed orders</small>
+    </article>
+    <article class="customer-summary-card">
+      <span>Unpaid invoices</span>
+      <strong>{{ unpaid_invoices|length }}</strong>
+      <small>{{ unpaid_invoice_total|floatformat:2 }} outstanding</small>
+    </article>
+    <article class="customer-summary-card">
+      <span>Invoice value</span>
+      <strong>{{ invoice_total|floatformat:0 }}</strong>
+      <small>{{ invoice_paid|floatformat:0 }} paid</small>
+    </article>
+    <article class="customer-summary-card">
+      <span>Last activity</span>
+      <strong>{% if last_activity %}{{ last_activity|date:"M j" }}{% else %}-{% endif %}</strong>
+      <small>{% if last_activity %}{{ last_activity|date:"Y" }}{% else %}No activity yet{% endif %}</small>
+    </article>
+  </section>
+
+  <section class="customer-detail-grid">
+    <div class="customer-main-column">
+      <article class="customer-card">
+        <div class="customer-section-head">
+          <div>
+            <h2>Contact and company</h2>
+            <p>Primary account details for sales follow up and repeat order planning.</p>
+          </div>
+        </div>
+        <div class="customer-info-grid">
+          <div>
+            <span>Email</span>
+            {% if customer.email %}
+              <strong><a href="mailto:{{ customer.email }}">{{ customer.email }}</a></strong>
+            {% else %}
+              <strong>-</strong>
+            {% endif %}
+          </div>
+          <div>
+            <span>Phone</span>
+            <strong>{{ customer.phone|default:"-" }}</strong>
+          </div>
+          <div>
+            <span>Website</span>
+            {% if customer.website %}
+              <strong><a href="{{ customer.website }}" target="_blank" rel="noopener">{{ customer.website }}</a></strong>
+            {% else %}
+              <strong>-</strong>
+            {% endif %}
+          </div>
+          <div>
+            <span>Industry</span>
+            <strong>{{ customer.industry|default:"-" }}</strong>
+          </div>
+          <div>
+            <span>Market</span>
+            <strong>{{ customer.market|default:"-" }}</strong>
+          </div>
+          <div>
+            <span>Country / city</span>
+            <strong>{% firstof customer.country customer.shipping_country "-" %}{% if customer.city or customer.shipping_city %}, {% firstof customer.city customer.shipping_city %}{% endif %}</strong>
+          </div>
+          <div class="customer-info-wide">
+            <span>Address</span>
+            <strong>
+              {% firstof customer.address_line1 customer.shipping_address1 "" %}
+              {% firstof customer.address_line2 customer.shipping_address2 "" %}
+              {% firstof customer.city customer.shipping_city "" %}
+              {% firstof customer.state customer.shipping_state "" %}
+              {% firstof customer.postal_code customer.shipping_postcode "" %}
+              {% firstof customer.country customer.shipping_country "" %}
+            </strong>
+          </div>
+          <div class="customer-info-wide">
+            <span>Company notes</span>
+            <strong>{{ customer.notes|default:"No account notes yet." }}</strong>
+          </div>
+        </div>
+      </article>
+
+      <article class="customer-card">
+        <div class="customer-section-head">
+          <div>
+            <h2>Opportunities</h2>
+            <p>Related sales opportunities, value, status, and next follow up.</p>
+          </div>
+          <a href="{% url 'add_opportunity' %}?customer={{ customer.id }}" class="customer-btn customer-btn--tiny customer-btn--primary">Create Opportunity</a>
+        </div>
+        {% if opportunities %}
+          <div class="customer-table-wrap">
+            <table class="customer-mini-table">
+              <thead>
+                <tr>
+                  <th>Opportunity</th>
+                  <th>Stage</th>
+                  <th>Value</th>
+                  <th>Margin</th>
+                  <th>Next follow up</th>
+                  <th>Open</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for opp in opportunities %}
+                  <tr class="clickable-row" data-href="{% url 'opportunity_detail' opp.pk %}?customer={{ customer.id }}">
+                    <td>
+                      <a href="{% url 'opportunity_detail' opp.pk %}?customer={{ customer.id }}">{{ opp.opportunity_id }}</a>
+                      <span>{{ opp.product_category|default:"-" }}</span>
+                    </td>
+                    <td><span class="customer-stage-badge">{{ opp.stage }}</span></td>
+                    <td>{% if opp.order_value %}{{ opp.order_value }}{% else %}-{% endif %}</td>
+                    <td>{% if opp.profit_margin_pct != None %}{{ opp.profit_margin_pct|floatformat:1 }}%{% else %}-{% endif %}</td>
+                    <td>{{ opp.next_followup|date:"M j, Y"|default:"-" }}</td>
+                    <td><a class="customer-btn customer-btn--tiny customer-btn--ghost" href="{% url 'opportunity_detail' opp.pk %}?customer={{ customer.id }}">Open</a></td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="customer-empty-block">
+            <strong>No opportunities yet</strong>
+            <span>Create an opportunity when this account has a new inquiry or repeat order.</span>
+          </div>
+        {% endif %}
+      </article>
+
+      <article class="customer-card">
+        <div class="customer-section-head">
+          <div>
+            <h2>Production</h2>
+            <p>Linked active and completed production orders for this account.</p>
+          </div>
+          <a href="{% url 'production_list' %}?q={{ customer_display_name|urlencode }}&status=active" class="customer-btn customer-btn--tiny customer-btn--ghost">View Production</a>
+        </div>
+        {% if production_active or production_completed %}
+          <div class="customer-table-wrap">
+            <table class="customer-mini-table">
+              <thead>
+                <tr>
+                  <th>Order</th>
+                  <th>Status</th>
+                  <th>Quantity</th>
+                  <th>Delivery</th>
+                  <th>Updated</th>
+                  <th>Open</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for order in production_active %}
+                  <tr class="clickable-row" data-href="{% url 'production_detail' order.pk %}">
+                    <td><a href="{% url 'production_detail' order.pk %}">{{ order.order_code|default:order.title }}</a></td>
+                    <td><span class="customer-stage-badge active">{{ order.get_status_display }}</span></td>
+                    <td>{{ order.qty_total|default:"-" }}</td>
+                    <td>{{ order.bulk_deadline|date:"M j, Y"|default:"-" }}</td>
+                    <td>{{ order.updated_at|date:"M j, Y" }}</td>
+                    <td><a class="customer-btn customer-btn--tiny customer-btn--ghost" href="{% url 'production_detail' order.pk %}">Open</a></td>
+                  </tr>
+                {% endfor %}
+                {% for order in production_completed %}
+                  <tr class="clickable-row" data-href="{% url 'production_detail' order.pk %}">
+                    <td><a href="{% url 'production_detail' order.pk %}">{{ order.order_code|default:order.title }}</a></td>
+                    <td><span class="customer-stage-badge done">{{ order.get_status_display }}</span></td>
+                    <td>{{ order.qty_total|default:"-" }}</td>
+                    <td>{{ order.bulk_deadline|date:"M j, Y"|default:"-" }}</td>
+                    <td>{{ order.updated_at|date:"M j, Y" }}</td>
+                    <td><a class="customer-btn customer-btn--tiny customer-btn--ghost" href="{% url 'production_detail' order.pk %}">Open</a></td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="customer-empty-block">
+            <strong>No production orders yet</strong>
+            <span>Production orders will appear here after an opportunity is moved into production.</span>
+          </div>
+        {% endif %}
+      </article>
+
+      <article class="customer-card">
+        <div class="customer-section-head">
+          <div>
+            <h2>Invoices and finance</h2>
+            <p>Invoice status, balances, and quick links for finance follow up.</p>
+          </div>
+          <a href="{% url 'invoice_list' %}" class="customer-btn customer-btn--tiny customer-btn--ghost">View Invoices</a>
+        </div>
+        {% if invoices %}
+          <div class="customer-table-wrap">
+            <table class="customer-mini-table">
+              <thead>
+                <tr>
+                  <th>Invoice</th>
+                  <th>Status</th>
+                  <th>Total</th>
+                  <th>Paid</th>
+                  <th>Balance</th>
+                  <th>Due</th>
+                  <th>Open</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for invoice in invoices %}
+                  <tr class="clickable-row" data-href="{% url 'invoice_view' invoice.pk %}">
+                    <td><a href="{% url 'invoice_view' invoice.pk %}">{{ invoice.invoice_number }}</a></td>
+                    <td><span class="customer-stage-badge {{ invoice.status }}">{{ invoice.get_status_display }}</span></td>
+                    <td>{{ invoice.total_amount|floatformat:2 }} {{ invoice.currency }}</td>
+                    <td>{{ invoice.paid_amount|floatformat:2 }}</td>
+                    <td>{{ invoice.balance|floatformat:2 }}</td>
+                    <td>{{ invoice.due_date|date:"M j, Y"|default:"-" }}</td>
+                    <td><a class="customer-btn customer-btn--tiny customer-btn--ghost" href="{% url 'invoice_view' invoice.pk %}">Open</a></td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="customer-empty-block">
+            <strong>No invoices yet</strong>
+            <span>Invoices linked to this account or its production orders will show here.</span>
+          </div>
+        {% endif %}
+      </article>
+    </div>
+
+    <aside class="customer-side-column">
+      <article class="customer-card" id="customer-notes">
+        <div class="customer-section-head">
+          <div>
+            <h2>Activity and notes</h2>
+            <p>Account notes, communication history, and recent updates.</p>
+          </div>
+        </div>
+
+        <div class="customer-notes-box">
           {% if customer.notes %}
             {{ customer.notes }}
           {% else %}
-            <span class="muted">No account notes yet.</span>
+            <span class="customer-muted">No account notes yet.</span>
           {% endif %}
         </div>
 
         {% if notes_list %}
-          {% for note in notes_list %}
-            <div class="note-item">
-              <div style="font-size:11px; color:#facc15;">{{ note.author|default:"User" }} · {{ note.created_at|date:"Y-m-d H:i" }}</div>
-              <div>{{ note.content }}</div>
-            </div>
-          {% endfor %}
+          <div class="customer-timeline">
+            {% for note in notes_list %}
+              <div class="customer-timeline-item">
+                <span>{{ note.author|default:"User" }} - {{ note.created_at|date:"M j, Y H:i" }}</span>
+                <strong>{{ note.content }}</strong>
+              </div>
+            {% endfor %}
+          </div>
         {% else %}
-          <div class="muted">No quick notes yet.</div>
+          <div class="customer-empty-inline">No quick notes yet.</div>
         {% endif %}
 
-        <form method="post" style="margin-top:10px;">
+        <form method="post" class="customer-note-form">
           {% csrf_token %}
           <input type="hidden" name="action" value="add_note">
-          <textarea name="note_content" rows="3" class="form-control form-control-sm bg-dark text-light border-secondary" placeholder="Add a quick note"></textarea>
-          <button type="submit" class="btn btn-gold" style="margin-top:6px;">Save note</button>
+          <textarea name="note_content" rows="3" placeholder="Add a quick note"></textarea>
+          <button type="submit" class="customer-btn customer-btn--primary">Save Note</button>
         </form>
-      </div>
+      </article>
 
-      <div class="card">
-        <div class="card-title">🧭 Timeline</div>
+      <article class="customer-card">
+        <div class="customer-section-head">
+          <div>
+            <h2>Recent updates</h2>
+            <p>Timeline events from sales and production activity.</p>
+          </div>
+        </div>
         {% if events %}
-          {% for e in events %}
-            <div class="note-item">
-              <div style="font-size:11px; color:#facc15;">{{ e.created_at|date:"Y-m-d H:i" }}</div>
-              <div style="font-weight:600;">{{ e.title }}</div>
-              <div class="muted">{{ e.details }}</div>
-            </div>
-          {% endfor %}
+          <div class="customer-timeline">
+            {% for e in events %}
+              <div class="customer-timeline-item">
+                <span>{{ e.created_at|date:"M j, Y H:i" }}</span>
+                <strong>{{ e.title }}</strong>
+                <p>{{ e.details }}</p>
+              </div>
+            {% endfor %}
+          </div>
         {% else %}
-          <div class="muted">No timeline events yet.</div>
+          <div class="customer-empty-inline">No timeline events yet.</div>
         {% endif %}
-      </div>
+      </article>
 
-      <div class="card">
-        <div class="card-title">🤖 AI assistant</div>
-        <div class="muted" style="margin-bottom:6px;">
-          Use AI to summarize, suggest follow-up, and draft emails.
+      <article class="customer-card">
+        <div class="customer-section-head">
+          <div>
+            <h2>AI assistant</h2>
+            <p>Summarize the account, suggest follow up, or draft an email.</p>
+          </div>
         </div>
 
         <div class="ai-chip-row">
-          <div class="ai-chip" data-mode="overview">Analyze customer</div>
-          <div class="ai-chip" data-mode="followup">Suggest follow up</div>
-          <div class="ai-chip" data-mode="order_size">Predict order size</div>
-          <div class="ai-chip" data-mode="product_ideas">Recommend products</div>
-          <div class="ai-chip" data-mode="risk_score">Risk and potential</div>
-          <div class="ai-chip" data-mode="full_summary">Full summary</div>
+          <button type="button" class="ai-chip" data-mode="overview">Analyze customer</button>
+          <button type="button" class="ai-chip" data-mode="followup">Suggest follow up</button>
+          <button type="button" class="ai-chip" data-mode="order_size">Predict order size</button>
+          <button type="button" class="ai-chip" data-mode="product_ideas">Recommend products</button>
+          <button type="button" class="ai-chip" data-mode="risk_score">Risk and potential</button>
+          <button type="button" class="ai-chip" data-mode="full_summary">Full summary</button>
         </div>
 
         <div class="ai-output-box" id="ai-output">AI answer will appear here.</div>
         <div class="ai-status" id="ai-status">Ready</div>
-        <div class="ai-chat-log" id="ai-chat-log" style="max-height:160px; overflow-y:auto; margin-top:8px;">
-          <div class="muted">AI reply history will show here.</div>
+        <div class="ai-chat-log" id="ai-chat-log">
+          <div class="customer-muted">AI reply history will show here.</div>
         </div>
 
-        <div class="ai-email-box" style="margin-top:10px;">
-          <label for="ai-email-purpose" style="font-size:11px; color:#c7b36b;">Email purpose</label>
-          <input id="ai-email-purpose" type="text" class="form-control form-control-sm bg-dark text-light border-secondary" placeholder="Example follow up after sample sent">
+        <div class="ai-email-box">
+          <label for="ai-email-purpose">Email purpose</label>
+          <input id="ai-email-purpose" type="text" placeholder="Example: follow up after sample sent">
 
-          <label for="ai-email-tone" style="font-size:11px; color:#c7b36b; margin-top:6px;">Email tone</label>
-          <select id="ai-email-tone" class="form-select form-select-sm bg-dark text-light border-secondary">
+          <label for="ai-email-tone">Email tone</label>
+          <select id="ai-email-tone">
             <option value="">Friendly</option>
             <option value="very friendly and warm">Very friendly</option>
             <option value="short and direct">Short and direct</option>
             <option value="formal and professional">Formal</option>
           </select>
 
-          <button type="button" class="btn btn-slate" id="ai-email-btn" style="margin-top:6px;">AI write email</button>
+          <button type="button" class="customer-btn customer-btn--ghost" id="ai-email-btn">AI write email</button>
         </div>
 
-        <div class="ai-custom-box" style="margin-top:10px;">
-          <label for="ai-custom-question" style="font-size:11px; color:#c7b36b;">Custom question</label>
-          <input id="ai-custom-question" type="text" class="form-control form-control-sm bg-dark text-light border-secondary" placeholder="Example: How can we upsell this client?">
-          <button type="button" class="btn btn-slate" id="ai-custom-btn" style="margin-top:6px;">Ask</button>
+        <div class="ai-custom-box">
+          <label for="ai-custom-question">Custom question</label>
+          <input id="ai-custom-question" type="text" placeholder="Example: How can we upsell this client?">
+          <button type="button" class="customer-btn customer-btn--ghost" id="ai-custom-btn">Ask</button>
         </div>
 
-        <form id="customer-ai-csrf" style="display:none;">
+        <form id="customer-ai-csrf" class="customer-hidden-form">
           {% csrf_token %}
         </form>
-      </div>
-    </div>
-  </div>
+      </article>
+
+      <details class="customer-card customer-admin-card">
+        <summary>
+          <span>Admin / raw data</span>
+          <small>Customer codes, shipping data, linked leads, and internal fields</small>
+        </summary>
+        <div class="customer-info-grid customer-admin-grid">
+          <div>
+            <span>Customer code</span>
+            <strong>{{ customer.customer_code }}</strong>
+          </div>
+          <div>
+            <span>Created</span>
+            <strong>{{ customer.created_date|date:"M j, Y" }}</strong>
+          </div>
+          <div>
+            <span>Updated</span>
+            <strong>{{ customer.updated_at|date:"M j, Y H:i" }}</strong>
+          </div>
+          <div>
+            <span>Billing address</span>
+            <strong>{{ customer.address_line1 }} {{ customer.address_line2 }} {{ customer.city }} {{ customer.state }} {{ customer.postal_code }} {{ customer.country }}</strong>
+          </div>
+          <div>
+            <span>Shipping address</span>
+            <strong>{{ customer.shipping_name }} {{ customer.shipping_address1 }} {{ customer.shipping_address2 }} {{ customer.shipping_city }} {{ customer.shipping_state }} {{ customer.shipping_postcode }} {{ customer.shipping_country }}</strong>
+          </div>
+          <div>
+            <span>Linked leads</span>
+            <strong>{{ leads|length }}</strong>
+          </div>
+        </div>
+        {% if leads %}
+          <div class="customer-lead-list">
+            {% for lead in leads %}
+              <a href="{% url 'lead_detail' lead.pk %}">{{ lead.lead_id }} - {{ lead.account_brand|default:lead.contact_name|default:"Lead" }}</a>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </details>
+    </aside>
+  </section>
 </div>
 
 <script>
@@ -582,8 +462,8 @@
 
   function appendChat(role, text) {
     const div = document.createElement("div");
-    div.className = "note-item";
-    div.innerHTML = "<strong>" + role + "</strong>: " + (text || "");
+    div.className = "customer-timeline-item";
+    div.innerHTML = "<strong>" + role + "</strong><p>" + (text || "") + "</p>";
     chatLog.appendChild(div);
     chatLog.scrollTop = chatLog.scrollHeight;
   }
