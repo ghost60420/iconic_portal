@@ -219,7 +219,7 @@
       background: rgba(250,204,21,0.10);
     }
   </style>
-  <link rel="stylesheet" href="{% static 'crm/lead_form.css' %}?v=sales-workspace-20260506">
+  <link rel="stylesheet" href="{% static 'crm/lead_form.css' %}?v=sales-workspace-20260508-errors">
 </head>
 
 <body class="lead-edit-body">
@@ -287,6 +287,30 @@
 
     {% if form.non_field_errors %}
       <div class="msg msg-error">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    {% if form.errors %}
+      <div class="lead-error-summary" id="lead-error-summary" role="alert" tabindex="-1" aria-labelledby="lead-error-summary-title">
+        <h2 id="lead-error-summary-title">Could not save lead</h2>
+        <p>Fix the fields below, then click Update Lead again. Fields inside Advanced / admin have been opened automatically.</p>
+        <ul>
+          {% for field in form %}
+            {% if field.errors %}
+              <li>
+                <a href="#{{ field.id_for_label }}">
+                  <strong>{{ field.label }}</strong>
+                  {% for error in field.errors %}
+                    <span>{{ error }}</span>
+                  {% endfor %}
+                </a>
+              </li>
+            {% endif %}
+          {% endfor %}
+          {% for error in form.non_field_errors %}
+            <li><strong>Form</strong> <span>{{ error }}</span></li>
+          {% endfor %}
+        </ul>
+      </div>
     {% endif %}
 
     <form method="post" action="" enctype="multipart/form-data" id="lead-form" novalidate>
@@ -375,6 +399,12 @@
               {{ form.country }}
               {{ form.country.errors }}
             </div>
+
+            <div class="lead-field lead-field-half">
+              <label for="{{ form.market.id_for_label }}">{{ form.market.label }}{% if form.market.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.market }}
+              {{ form.market.errors }}
+            </div>
           </article>
 
           <article class="card lead-form-card">
@@ -390,6 +420,18 @@
               <label for="{{ form.priority.id_for_label }}">{{ form.priority.label }}{% if form.priority.field.required %}<span class="req">*</span>{% endif %}</label>
               {{ form.priority }}
               {{ form.priority.errors }}
+            </div>
+
+            <div class="lead-field lead-field-half">
+              <label for="{{ form.priority_level.id_for_label }}">{{ form.priority_level.label }}{% if form.priority_level.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.priority_level }}
+              {{ form.priority_level.errors }}
+            </div>
+
+            <div class="lead-field lead-field-half">
+              <label for="{{ form.qualification_status.id_for_label }}">{{ form.qualification_status.label }}{% if form.qualification_status.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.qualification_status }}
+              {{ form.qualification_status.errors }}
             </div>
 
             <div class="lead-field">
@@ -409,9 +451,27 @@
             <div class="card-title">Product and value</div>
 
             <div class="lead-field">
+              <label for="{{ form.product_category.id_for_label }}">{{ form.product_category.label }}{% if form.product_category.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.product_category }}
+              {{ form.product_category.errors }}
+            </div>
+
+            <div class="lead-field">
               <label for="{{ form.product_interest.id_for_label }}">{{ form.product_interest.label }}{% if form.product_interest.field.required %}<span class="req">*</span>{% endif %}</label>
               {{ form.product_interest }}
               {{ form.product_interest.errors }}
+            </div>
+
+            <div class="lead-field lead-field-half">
+              <label for="{{ form.source.id_for_label }}">{{ form.source.label }}{% if form.source.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.source }}
+              {{ form.source.errors }}
+            </div>
+
+            <div class="lead-field lead-field-half">
+              <label for="{{ form.lead_type.id_for_label }}">{{ form.lead_type.label }}{% if form.lead_type.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.lead_type }}
+              {{ form.lead_type.errors }}
             </div>
 
             <div class="lead-field lead-field-half">
@@ -498,7 +558,7 @@
           <p>Admin, raw qualification, targeting, and AI fields are collapsed by default.</p>
         </div>
 
-        <details class="lead-edit-accordion">
+        <details class="lead-edit-accordion" {% if form.instagram_handle.errors or form.linkedin_url.errors or form.region.errors or form.city.errors %}open{% endif %}>
           <summary>Advanced contact and market metadata</summary>
           <div class="lead-accordion-grid">
             <div class="lead-field">
@@ -510,11 +570,6 @@
               <label for="{{ form.linkedin_url.id_for_label }}">{{ form.linkedin_url.label }}{% if form.linkedin_url.field.required %}<span class="req">*</span>{% endif %}</label>
               {{ form.linkedin_url }}
               {{ form.linkedin_url.errors }}
-            </div>
-            <div class="lead-field">
-              <label for="{{ form.market.id_for_label }}">{{ form.market.label }}{% if form.market.field.required %}<span class="req">*</span>{% endif %}</label>
-              {{ form.market }}
-              {{ form.market.errors }}
             </div>
             <div class="lead-field">
               <label for="{{ form.region.id_for_label }}">{{ form.region.label }}{% if form.region.field.required %}<span class="req">*</span>{% endif %}</label>
@@ -529,14 +584,9 @@
           </div>
         </details>
 
-        <details class="lead-edit-accordion">
+        <details class="lead-edit-accordion" {% if form.target_order_volume_min.errors or form.target_order_volume_max.errors or form.preferred_contact_time.errors %}open{% endif %}>
           <summary>Product targeting and buying intent</summary>
           <div class="lead-accordion-grid">
-            <div class="lead-field">
-              <label for="{{ form.product_category.id_for_label }}">{{ form.product_category.label }}{% if form.product_category.field.required %}<span class="req">*</span>{% endif %}</label>
-              {{ form.product_category }}
-              {{ form.product_category.errors }}
-            </div>
             <div class="lead-field">
               <label for="{{ form.target_order_volume_min.id_for_label }}">{{ form.target_order_volume_min.label }}</label>
               {{ form.target_order_volume_min }}
@@ -555,23 +605,13 @@
           </div>
         </details>
 
-        <details class="lead-edit-accordion">
+        <details class="lead-edit-accordion" {% if form.source_channel.errors or form.brand_stage.errors or form.outbound_status.errors or form.outbound_method.errors or form.owner.errors or form.last_outreach_date.errors or form.last_reply_date.errors or form.attachment.errors %}open{% endif %}>
           <summary>Source, ownership, and outreach internals</summary>
           <div class="lead-accordion-grid">
-            <div class="lead-field">
-              <label for="{{ form.source.id_for_label }}">{{ form.source.label }}{% if form.source.field.required %}<span class="req">*</span>{% endif %}</label>
-              {{ form.source }}
-              {{ form.source.errors }}
-            </div>
             <div class="lead-field">
               <label for="{{ form.source_channel.id_for_label }}">{{ form.source_channel.label }}</label>
               {{ form.source_channel }}
               {{ form.source_channel.errors }}
-            </div>
-            <div class="lead-field">
-              <label for="{{ form.lead_type.id_for_label }}">{{ form.lead_type.label }}{% if form.lead_type.field.required %}<span class="req">*</span>{% endif %}</label>
-              {{ form.lead_type }}
-              {{ form.lead_type.errors }}
             </div>
             <div class="lead-field">
               <label for="{{ form.brand_stage.id_for_label }}">{{ form.brand_stage.label }}</label>
@@ -587,11 +627,6 @@
               <label for="{{ form.outbound_method.id_for_label }}">{{ form.outbound_method.label }}</label>
               {{ form.outbound_method }}
               {{ form.outbound_method.errors }}
-            </div>
-            <div class="lead-field">
-              <label for="{{ form.priority_level.id_for_label }}">{{ form.priority_level.label }}</label>
-              {{ form.priority_level }}
-              {{ form.priority_level.errors }}
             </div>
             <div class="lead-field">
               <label for="{{ form.owner.id_for_label }}">{{ form.owner.label }}{% if form.owner.field.required %}<span class="req">*</span>{% endif %}</label>
@@ -616,7 +651,7 @@
           </div>
         </details>
 
-        <details class="lead-edit-accordion">
+        <details class="lead-edit-accordion" {% if form.brand_fit_score.errors or form.ideal_customer_profile_match.errors or form.confidence_level.errors or form.target_order_range_estimate.errors or form.product_category_guess.errors or form.recommended_channel.errors or form.recommended_next_action.errors or form.qualification_reason.errors or form.disqualification_reason.errors %}open{% endif %}>
           <summary>Raw qualification and AI analysis</summary>
           <div class="lead-accordion-grid">
             <div class="lead-field">
@@ -628,11 +663,6 @@
               <label for="{{ form.ideal_customer_profile_match.id_for_label }}">{{ form.ideal_customer_profile_match.label }}</label>
               {{ form.ideal_customer_profile_match }}
               {{ form.ideal_customer_profile_match.errors }}
-            </div>
-            <div class="lead-field">
-              <label for="{{ form.qualification_status.id_for_label }}">{{ form.qualification_status.label }}</label>
-              {{ form.qualification_status }}
-              {{ form.qualification_status.errors }}
             </div>
             <div class="lead-field">
               <label for="{{ form.confidence_level.id_for_label }}">{{ form.confidence_level.label }}</label>
@@ -705,7 +735,8 @@
         const outboundBlocks = document.querySelectorAll(".outbound-only");
         const show = leadType && leadType.value === "outbound";
         outboundBlocks.forEach((el) => {
-          el.style.display = show ? "block" : "none";
+          const hasError = Boolean(el.querySelector(".errorlist li"));
+          el.style.display = show || hasError ? "block" : "none";
         });
       }
 
@@ -719,10 +750,32 @@
         toggleOutboundFields();
       }
 
-      document.querySelectorAll(".lead-edit-accordion").forEach((section) => {
-        if (section.querySelector(".errorlist li")) {
-          section.open = true;
+      document.querySelectorAll(".errorlist li").forEach((errorItem) => {
+        const field = errorItem.closest(".lead-field");
+        const section = errorItem.closest(".lead-edit-accordion");
+        if (field) {
+          field.classList.add("has-error");
+          const input = field.querySelector("input, select, textarea");
+          if (input) input.setAttribute("aria-invalid", "true");
         }
+        if (section) section.open = true;
+      });
+
+      document.querySelectorAll(".lead-edit-accordion").forEach((section) => {
+        if (section.querySelector(".lead-field.has-error")) section.open = true;
+      });
+
+      document.querySelectorAll(".lead-error-summary a[href^='#']").forEach((link) => {
+        link.addEventListener("click", function () {
+          const target = document.querySelector(this.getAttribute("href"));
+          if (!target) return;
+          const section = target.closest(".lead-edit-accordion");
+          if (section) section.open = true;
+          window.setTimeout(function () {
+            target.focus({ preventScroll: true });
+            target.scrollIntoView({ behavior: "smooth", block: "center" });
+          }, 0);
+        });
       });
 
       form.addEventListener("submit", function () {
@@ -743,6 +796,13 @@
       }
 
       if (hasErrors()) {
+        const summary = document.getElementById("lead-error-summary");
+        if (summary) {
+          window.setTimeout(function () {
+            summary.focus({ preventScroll: true });
+            summary.scrollIntoView({ behavior: "smooth", block: "start" });
+          }, 100);
+        }
         saveBtn.disabled = false;
         if (saveTopBtn) saveTopBtn.disabled = false;
         saveBtn.textContent = "{% if lead %}Update lead{% else %}Save lead{% endif %}";
