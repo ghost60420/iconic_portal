@@ -7918,41 +7918,107 @@ def shipment_list(request):
         qs = qs.select_related(*sr)
 
     status_filter = (request.GET.get("status") or "all").strip().lower()
+    carrier_filter = (request.GET.get("carrier") or "all").strip().lower()
     search_query = (request.GET.get("q") or "").strip()
 
     if status_filter != "all":
         qs = qs.filter(status=status_filter)
+
+    carrier_keys = {key for key, _label in Shipment.CARRIER_CHOICES}
+    if carrier_filter != "all" and carrier_filter in carrier_keys:
+        qs = qs.filter(carrier=carrier_filter)
 
     if search_query:
         qs = qs.filter(
             Q(tracking_number__icontains=search_query)
             | Q(customer__account_brand__icontains=search_query)
             | Q(customer__contact_name__icontains=search_query)
+            | Q(customer__shipping_city__icontains=search_query)
+            | Q(customer__shipping_country__icontains=search_query)
+            | Q(customer__city__icontains=search_query)
+            | Q(customer__country__icontains=search_query)
+            | Q(opportunity__opportunity_id__icontains=search_query)
             | Q(order__order_code__icontains=search_query)
             | Q(order__title__icontains=search_query)
         )
 
     shipments = qs.order_by("-ship_date", "-created_at")
+    today = timezone.localdate()
+    delayed_cutoff = today - timedelta(days=14)
 
     total_shipments = shipments.count()
+    in_transit_shipments = shipments.filter(status__in=["shipped", "out_for_delivery"]).count()
+    delivered_shipments = shipments.filter(status="delivered").count()
+    delayed_shipments = shipments.filter(
+        status__in=["shipped", "out_for_delivery"],
+        ship_date__lt=delayed_cutoff,
+    ).count()
+    pending_tracking_shipments = shipments.filter(
+        Q(tracking_number__isnull=True) | Q(tracking_number="")
+    ).count()
     total_boxes = sum((s.box_count or 0) for s in shipments)
     total_weight = sum((s.total_weight_kg or 0) for s in shipments)
     total_cost_bdt = sum((s.cost_bdt or Decimal("0")) for s in shipments)
     total_cost_cad = sum((s.cost_cad or Decimal("0")) for s in shipments)
+
+    shipment_rows = []
+    for shipment in shipments:
+        customer = getattr(shipment, "customer", None)
+        city = ""
+        country = ""
+        client_name = "Client not linked"
+        if customer:
+            city = (
+                getattr(customer, "shipping_city", "")
+                or getattr(customer, "city", "")
+                or ""
+            )
+            country = (
+                getattr(customer, "shipping_country", "")
+                or getattr(customer, "country", "")
+                or ""
+            )
+            client_name = (
+                getattr(customer, "account_brand", "")
+                or getattr(customer, "contact_name", "")
+                or str(customer)
+            )
+
+        shipment_rows.append(
+            {
+                "shipment": shipment,
+                "shipment_number": f"SHP-{shipment.pk:05d}",
+                "client_name": client_name,
+                "destination_city": city or "-",
+                "destination_country": country or "-",
+                "is_delayed": (
+                    shipment.status in {"shipped", "out_for_delivery"}
+                    and shipment.ship_date
+                    and shipment.ship_date < delayed_cutoff
+                ),
+            }
+        )
 
     return render(
         request,
         "crm/shipment_list.html",
         {
             "shipments": shipments,
+            "shipment_rows": shipment_rows,
             "total_shipments": total_shipments,
+            "in_transit_shipments": in_transit_shipments,
+            "delivered_shipments": delivered_shipments,
+            "delayed_shipments": delayed_shipments,
+            "pending_tracking_shipments": pending_tracking_shipments,
             "total_boxes": total_boxes,
             "total_weight": total_weight,
             "total_cost_bdt": total_cost_bdt,
             "total_cost_cad": total_cost_cad,
             "status_filter": status_filter,
+            "carrier_filter": carrier_filter,
             "search_query": search_query,
             "status_choices": Shipment.STATUS_CHOICES,
+            "carrier_choices": Shipment.CARRIER_CHOICES,
         },
     )
 

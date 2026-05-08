@@ -1,370 +1,279 @@
 {% extends "crm/base.html" %}
+{% load static %}
 {% block content %}
+<link rel="stylesheet" href="{% static 'crm/shipment_list.css' %}?v=shipping-list-modern-20260507">
 
-<style>
-  .ship-page {
-    max-width: 1100px;
-    margin: 16px auto;
-    padding: 0 8px;
-    color: #f9fafb;
-  }
-
-  .ship-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 10px;
-    flex-wrap: wrap;
-  }
-
-  .ship-title {
-    font-size: 18px;
-    font-weight: 600;
-  }
-
-  .ship-actions .btn {
-    margin-left: 4px;
-    margin-bottom: 4px;
-  }
-
-  .ship-filter-row {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    margin-top: 6px;
-  }
-
-  .ship-filter-btn {
-    padding: 4px 10px;
-    border-radius: 999px;
-    border: 1px solid #374151;
-    background: #020617;
-    color: #e5e7eb;
-    font-size: 11px;
-    text-decoration: none;
-  }
-
-  .ship-filter-btn.active {
-    border-color: #facc15;
-    color: #fef9c3;
-    box-shadow: 0 0 0 1px rgba(250,204,21,0.35);
-  }
-
-  .ship-search {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    flex-wrap: wrap;
-    margin-top: 8px;
-  }
-
-  .ship-search input {
-    background: #020617;
-    border: 1px solid #374151;
-    color: #e5e7eb;
-    border-radius: 999px;
-    padding: 5px 12px;
-    font-size: 12px;
-    min-width: 220px;
-  }
-
-  .btn {
-    display: inline-block;
-    padding: 4px 10px;
-    border-radius: 999px;
-    border: 1px solid transparent;
-    font-size: 12px;
-    cursor: pointer;
-    text-decoration: none;
-    white-space: nowrap;
-  }
-
-  .btn-slate {
-    background: #020617;
-    color: #e5e7eb;
-    border-color: #374151;
-  }
-
-  .btn-gold {
-    background: linear-gradient(135deg, #facc15, #f97316);
-    color: #111827;
-    border-color: #fbbf24;
-    font-weight: 600;
-  }
-
-  .btn-gold-soft {
-    background: rgba(250, 204, 21, 0.12);
-    color: #facc15;
-    border-color: #facc15;
-  }
-
-  .btn-danger {
-    background: rgba(248, 113, 113, 0.12);
-    color: #fca5a5;
-    border-color: #f87171;
-  }
-
-  .btn-small {
-    padding: 3px 8px;
-    font-size: 11px;
-  }
-
-  .card-box {
-    background: radial-gradient(circle at top left, #111827, #020617);
-    border: 1px solid #1f2937;
-    border-radius: 10px;
-    padding: 10px 12px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.7);
-  }
-
-  .pill {
-    display: inline-flex;
-    align-items: center;
-    padding: 2px 8px;
-    border-radius: 999px;
-    border: 1px solid #4b5563;
-    font-size: 11px;
-    color: #e5e7eb;
-    background: #020617;
-  }
-
-  .pill-green {
-    border-color: #22c55e;
-    color: #bbf7d0;
-    background: rgba(34, 197, 94, 0.1);
-  }
-
-  .pill-blue {
-    border-color: #0ea5e9;
-    color: #7dd3fc;
-    background: rgba(56, 189, 248, 0.1);
-  }
-
-  .muted {
-    font-size: 12px;
-    color: #9ca3af;
-  }
-
-  table.table-dark {
-    font-size: 12px;
-  }
-
-  thead tr {
-    background: #020617;
-  }
-
-  .status-pill {
-    padding: 1px 7px;
-    border-radius: 999px;
-    font-size: 11px;
-  }
-
-  .status-planned {
-    background: rgba(148, 163, 184, 0.25);
-    color: #e5e7eb;
-  }
-
-  .status-booked {
-    background: rgba(59, 130, 246, 0.25);
-    color: #bfdbfe;
-  }
-
-  .status-shipped {
-    background: rgba(234, 179, 8, 0.25);
-    color: #facc15;
-  }
-
-  .status-delivered {
-    background: rgba(22, 163, 74, 0.25);
-    color: #bbf7d0;
-  }
-
-  .status-out_for_delivery {
-    background: rgba(56, 189, 248, 0.2);
-    color: #bae6fd;
-  }
-
-  .status-cancelled {
-    background: rgba(248, 113, 113, 0.25);
-    color: #fecaca;
-  }
-
-  .status-select {
-    background: #0b1222;
-    border: 1px solid #374151;
-    color: #e5e7eb;
-    border-radius: 8px;
-    padding: 4px 6px;
-    font-size: 11px;
-  }
-</style>
-
-<div class="ship-page">
-
-  <div class="ship-header">
-    <div class="ship-title">
-      📦 Shipments
-    </div>
-    <div class="ship-actions">
-      <a href="{% url 'opportunities_list' %}" class="btn btn-slate btn-small">
-        Back to opportunities
-      </a>
-      <a href="{% url 'shipment_add' %}" class="btn btn-gold btn-small">
-        Add shipment
-      </a>
-    </div>
-  </div>
-
-  <!-- summary bar -->
-  <div class="card-box" style="margin-bottom:10px;">
-    <div class="row">
-      <div class="col-md-3 col-6" style="margin-bottom:6px;">
-        <div class="muted">Total shipments</div>
-        <div class="pill pill-green">
-          {{ total_shipments }} shipments
-        </div>
-      </div>
-      <div class="col-md-3 col-6" style="margin-bottom:6px;">
-        <div class="muted">Total boxes</div>
-        <div class="pill pill-blue">
-          {{ total_boxes }} boxes
-        </div>
-      </div>
-      <div class="col-md-3 col-6" style="margin-bottom:6px;">
-        <div class="muted">Total weight</div>
-        <div class="pill">
-          {{ total_weight }} kg
-        </div>
-      </div>
-      <div class="col-md-3 col-6" style="margin-bottom:6px;">
-        <div class="muted">Total shipping cost</div>
-        <div class="pill">
-          {{ total_cost_bdt }} taka
-          {% if total_cost_cad %}
-            &nbsp; | &nbsp; {{ total_cost_cad }} cad
-          {% endif %}
-        </div>
+<div class="shipping-page">
+  <section class="shipping-hero">
+    <div class="shipping-hero-copy">
+      <p class="shipping-eyebrow">Delivery operations</p>
+      <h1>Shipping</h1>
+      <p class="shipping-subtitle">
+        Track carriers, tracking numbers, customer shipments, delivery status, and pending handoffs from one focused workspace.
+      </p>
+      <div class="shipping-hero-meta">
+        <span>{{ total_shipments }} shipment{{ total_shipments|pluralize }} in view</span>
+        <span>{{ in_transit_shipments }} in transit</span>
+        <span>{{ pending_tracking_shipments }} pending tracking</span>
       </div>
     </div>
-  </div>
 
-  <div class="card-box" style="margin-bottom:10px;">
-    <div class="ship-filter-row">
-      <a class="ship-filter-btn {% if status_filter == 'all' %}active{% endif %}" href="?status=all">All</a>
-      <a class="ship-filter-btn {% if status_filter == 'planned' %}active{% endif %}" href="?status=planned">Planned</a>
-      <a class="ship-filter-btn {% if status_filter == 'booked' %}active{% endif %}" href="?status=booked">Booked</a>
-      <a class="ship-filter-btn {% if status_filter == 'shipped' %}active{% endif %}" href="?status=shipped">Shipped</a>
-      <a class="ship-filter-btn {% if status_filter == 'out_for_delivery' %}active{% endif %}" href="?status=out_for_delivery">Out for delivery</a>
-      <a class="ship-filter-btn {% if status_filter == 'delivered' %}active{% endif %}" href="?status=delivered">Delivered</a>
-      <a class="ship-filter-btn {% if status_filter == 'cancelled' %}active{% endif %}" href="?status=cancelled">Cancelled</a>
+    <div class="shipping-hero-actions" aria-label="Shipping quick actions">
+      <a href="{% url 'shipment_add' %}" class="shipping-btn shipping-btn--primary">Add Shipment</a>
+      <a href="{% url 'production_list' %}" class="shipping-btn shipping-btn--ghost">Production</a>
+      <a href="{% url 'opportunities_list' %}" class="shipping-btn shipping-btn--ghost">Opportunities</a>
+    </div>
+  </section>
+
+  <section class="shipping-summary-grid" aria-label="Shipping summary">
+    <article class="shipping-stat">
+      <span>Total Shipments</span>
+      <strong>{{ total_shipments }}</strong>
+      <small>Matching the current search and filters</small>
+    </article>
+    <article class="shipping-stat">
+      <span>In Transit</span>
+      <strong>{{ in_transit_shipments }}</strong>
+      <small>Shipped or out for delivery</small>
+    </article>
+    <article class="shipping-stat">
+      <span>Delivered</span>
+      <strong>{{ delivered_shipments }}</strong>
+      <small>Completed delivery records</small>
+    </article>
+    <article class="shipping-stat shipping-stat--risk">
+      <span>Delayed</span>
+      <strong>{{ delayed_shipments }}</strong>
+      <small>In-transit shipments older than 14 days</small>
+    </article>
+    <article class="shipping-stat">
+      <span>Pending Tracking</span>
+      <strong>{{ pending_tracking_shipments }}</strong>
+      <small>Shipments missing tracking numbers</small>
+    </article>
+  </section>
+
+  <form class="shipping-filters" method="get">
+    <label class="shipping-field shipping-field--search">
+      <span>Search</span>
+      <input type="text" name="q" placeholder="Tracking, client, order, city, country" value="{{ search_query }}">
+    </label>
+
+    <label class="shipping-field">
+      <span>Status</span>
+      <select name="status">
+        <option value="all" {% if status_filter == "all" %}selected{% endif %}>All statuses</option>
+        {% for key, label in status_choices %}
+          <option value="{{ key }}" {% if status_filter == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label class="shipping-field">
+      <span>Carrier</span>
+      <select name="carrier">
+        <option value="all" {% if carrier_filter == "all" %}selected{% endif %}>All carriers</option>
+        {% for key, label in carrier_choices %}
+          <option value="{{ key }}" {% if carrier_filter == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <div class="shipping-filter-tabs" aria-label="Quick status filters">
+      <a class="{% if status_filter == 'all' %}active{% endif %}" href="?status=all&carrier={{ carrier_filter }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">All</a>
+      <a class="{% if status_filter == 'shipped' %}active{% endif %}" href="?status=shipped&carrier={{ carrier_filter }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Shipped</a>
+      <a class="{% if status_filter == 'out_for_delivery' %}active{% endif %}" href="?status=out_for_delivery&carrier={{ carrier_filter }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Out for Delivery</a>
+      <a class="{% if status_filter == 'delivered' %}active{% endif %}" href="?status=delivered&carrier={{ carrier_filter }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Delivered</a>
     </div>
 
-    <form method="get" class="ship-search">
-      <input type="hidden" name="status" value="{{ status_filter }}">
-      <input type="text" name="q" placeholder="Search tracking, customer, order..." value="{{ search_query }}">
-      <button type="submit" class="btn btn-gold-soft btn-small">Search</button>
-    </form>
-  </div>
+    <div class="shipping-filter-actions">
+      <button type="submit" class="shipping-btn shipping-btn--primary">Apply</button>
+      <a href="{% url 'shipment_list' %}" class="shipping-btn shipping-btn--ghost">Reset</a>
+    </div>
+  </form>
 
-  <!-- table -->
-  <div class="card-box">
-    {% if shipments %}
-      <div class="table-responsive">
-        <table class="table table-dark table-sm table-striped mb-0">
+  <section class="shipping-table-shell">
+    <div class="shipping-table-head">
+      <div>
+        <h2>Client shipments</h2>
+        <p>Shipment status, carrier, tracking, destination, linked production order, opportunity, invoices, and actions stay visible without crowding the row.</p>
+      </div>
+    </div>
+
+    {% if shipment_rows %}
+      <div class="shipping-table-wrap">
+        <table class="shipping-table">
           <thead>
             <tr>
-              <th>Date</th>
-              <th>Carrier</th>
-              <th>Tracking</th>
-              <th>Order</th>
-              <th>Customer</th>
-              <th>Boxes</th>
-              <th>Weight kg</th>
-              <th>Cost BDT</th>
-              <th>Cost CAD</th>
+              <th>Shipment</th>
+              <th>Client / Destination</th>
+              <th>Production / Opportunity</th>
+              <th>Carrier / Tracking</th>
+              <th>Dates</th>
               <th>Status</th>
-              <th style="width:80px;">Actions</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {% for s in shipments %}
-              <tr>
-                <td>{{ s.ship_date|date:"Y-m-d"|default:"-" }}</td>
-                <td>{{ s.get_carrier_display }}</td>
-                <td>
-                  {% if s.tracking_number %}
-                    {% if s.tracking_url %}
-                      <a href="{{ s.tracking_url }}" target="_blank">
-                        {{ s.tracking_number }}
-                      </a>
-                    {% else %}
-                      {{ s.tracking_number }}
-                    {% endif %}
-                  {% else %}
-                    -
-                  {% endif %}
-                </td>
-                <td>
-                  {% if s.order %}
-                    <a href="{% url 'production_detail' s.order.pk %}">
-                      {{ s.order.order_code|default:s.order.pk }}
-                    </a>
-                  {% else %}
-                    -
-                  {% endif %}
-                </td>
-                <td>
-                  {% if s.customer %}
-                    {{ s.customer.account_brand|default:s.customer.contact_name|default:s.customer }}
-                  {% else %}
-                    -
-                  {% endif %}
-                </td>
-                <td>{{ s.box_count|default:"-" }}</td>
-                <td>{{ s.total_weight_kg|default:"-" }}</td>
-                <td>{{ s.cost_bdt|default:"-" }}</td>
-                <td>{{ s.cost_cad|default:"-" }}</td>
-                <td>
-                  <span class="status-pill
-                    {% if s.status == 'planned' %}status-planned{% endif %}
-                    {% if s.status == 'booked' %}status-booked{% endif %}
-                    {% if s.status == 'shipped' %}status-shipped{% endif %}
-                    {% if s.status == 'out_for_delivery' %}status-out_for_delivery{% endif %}
-                    {% if s.status == 'delivered' %}status-delivered{% endif %}
-                    {% if s.status == 'cancelled' %}status-cancelled{% endif %}
-                  ">
-                    {{ s.get_status_display }}
-                  </span>
-                </td>
-                <td>
-                  <a href="{% url 'shipment_detail' s.pk %}" class="btn btn-slate btn-small">View</a>
-                  <form method="post" style="margin-top:4px;">
-                    {% csrf_token %}
-                    <input type="hidden" name="shipment_id" value="{{ s.pk }}">
-                    <select name="status" class="status-select" onchange="this.form.submit()">
-                      {% for key, label in status_choices %}
-                        <option value="{{ key }}" {% if s.status == key %}selected{% endif %}>{{ label }}</option>
-                      {% endfor %}
-                    </select>
-                  </form>
-                  <form method="post" action="{% url 'shipment_delete' s.pk %}" style="margin-top:4px;" onsubmit="return confirm('Delete this shipment?');">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-danger btn-small">Delete</button>
-                  </form>
-                </td>
-              </tr>
+            {% for row in shipment_rows %}
+              {% with s=row.shipment %}
+                <tr class="{% if row.is_delayed %}is-delayed{% endif %}">
+                  <td data-label="Shipment">
+                    <div class="shipping-shipment-cell">
+                      <div class="shipping-mark">SH</div>
+                      <div class="shipping-stack">
+                        <a href="{% url 'shipment_detail' s.pk %}" class="shipping-primary-link">{{ row.shipment_number }}</a>
+                        <strong>{{ s.get_shipment_type_display|default:"Shipment" }}</strong>
+                        <span>Created {{ s.created_at|date:"M j, Y" }}</span>
+                      </div>
+                    </div>
+                  </td>
+
+                  <td data-label="Client / Destination">
+                    <div class="shipping-stack">
+                      <strong>{{ row.client_name }}</strong>
+                      <span>{{ row.destination_city }}{% if row.destination_city != "-" and row.destination_country != "-" %}, {% endif %}{{ row.destination_country }}</span>
+                      {% if s.customer %}
+                        <a href="{% url 'customer_detail' s.customer.pk %}" class="shipping-inline-link">Open Customer</a>
+                      {% endif %}
+                    </div>
+                  </td>
+
+                  <td data-label="Production / Opportunity">
+                    <div class="shipping-stack">
+                      {% if s.order %}
+                        <a href="{% url 'production_detail' s.order.pk %}" class="shipping-inline-link">{{ s.order.order_code|default:s.order.pk }}</a>
+                        <span>{{ s.order.title|default:"Production order" }}</span>
+                      {% else %}
+                        <strong>No production order</strong>
+                      {% endif %}
+                      {% if s.opportunity %}
+                        <a href="{% url 'opportunity_detail' s.opportunity.pk %}" class="shipping-inline-link">{{ s.opportunity.opportunity_id }}</a>
+                      {% else %}
+                        <span>No linked opportunity</span>
+                      {% endif %}
+                      {% if s.order %}
+                        {% for invoice in s.order.invoices.all %}
+                          <a href="{% url 'invoice_view' invoice.pk %}" class="shipping-inline-link">Invoice {{ invoice.invoice_number }}</a>
+                        {% endfor %}
+                      {% endif %}
+                    </div>
+                  </td>
+
+                  <td data-label="Carrier / Tracking">
+                    <div class="shipping-stack">
+                      <strong>{{ s.get_carrier_display }}</strong>
+                      {% if s.tracking_number %}
+                        <div class="shipping-tracking-line">
+                          {% if s.tracking_url %}
+                            <a href="{{ s.tracking_url }}" target="_blank" rel="noopener" class="shipping-inline-link">{{ s.tracking_number }}</a>
+                          {% else %}
+                            <span>{{ s.tracking_number }}</span>
+                          {% endif %}
+                          <button type="button" class="shipping-copy-btn" data-copy="{{ s.tracking_number }}">Copy</button>
+                        </div>
+                      {% else %}
+                        <span class="shipping-muted-warning">Tracking pending</span>
+                      {% endif %}
+                      {% if s.last_tracking_status %}
+                        <span>{{ s.last_tracking_status }}</span>
+                      {% endif %}
+                    </div>
+                  </td>
+
+                  <td data-label="Dates">
+                    <div class="shipping-date-grid">
+                      <div>
+                        <span>Ship date</span>
+                        <strong>{{ s.ship_date|date:"M j, Y"|default:"Not set" }}</strong>
+                      </div>
+                      <div>
+                        <span>ETA</span>
+                        <strong>Not set</strong>
+                      </div>
+                      <div>
+                        <span>Delivered</span>
+                        <strong>{{ s.delivered_at|date:"M j, Y"|default:"-" }}</strong>
+                      </div>
+                    </div>
+                  </td>
+
+                  <td data-label="Status">
+                    <div class="shipping-status-stack">
+                      <span class="shipping-status-badge status-{{ s.status }}">{{ s.get_status_display }}</span>
+                      {% if row.is_delayed %}
+                        <span class="shipping-priority-badge risk">Delayed</span>
+                      {% elif s.status == "delivered" %}
+                        <span class="shipping-priority-badge good">Delivered</span>
+                      {% elif s.tracking_number %}
+                        <span class="shipping-priority-badge good">Tracking ready</span>
+                      {% else %}
+                        <span class="shipping-priority-badge warn">Needs tracking</span>
+                      {% endif %}
+                      <form method="post" class="shipping-status-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="shipment_id" value="{{ s.pk }}">
+                        <select name="status" onchange="this.form.submit()" aria-label="Update status for {{ row.shipment_number }}">
+                          {% for key, label in status_choices %}
+                            <option value="{{ key }}" {% if s.status == key %}selected{% endif %}>{{ label }}</option>
+                          {% endfor %}
+                        </select>
+                      </form>
+                    </div>
+                  </td>
+
+                  <td data-label="Actions">
+                    <div class="shipping-actions">
+                      <a href="{% url 'shipment_detail' s.pk %}" class="shipping-btn shipping-btn--tiny shipping-btn--primary">Open</a>
+                      <a href="{% url 'shipment_edit' s.pk %}" class="shipping-btn shipping-btn--tiny shipping-btn--ghost">Edit</a>
+                      {% if s.tracking_url %}
+                        <a href="{{ s.tracking_url }}" target="_blank" rel="noopener" class="shipping-btn shipping-btn--tiny shipping-btn--ghost">Track</a>
+                      {% else %}
+                        <a href="{% url 'shipment_refresh_tracking' s.pk %}" class="shipping-btn shipping-btn--tiny shipping-btn--ghost">Track</a>
+                      {% endif %}
+                      {% if s.order %}
+                        <a href="{% url 'production_detail' s.order.pk %}" class="shipping-btn shipping-btn--tiny shipping-btn--ghost">Open Production</a>
+                      {% endif %}
+                      {% if s.opportunity %}
+                        <a href="{% url 'opportunity_detail' s.opportunity.pk %}" class="shipping-btn shipping-btn--tiny shipping-btn--ghost">Open Opportunity</a>
+                      {% endif %}
+                      <form method="post" action="{% url 'shipment_delete' s.pk %}" onsubmit="return confirm('Delete this shipment?');">
+                        {% csrf_token %}
+                        <button type="submit" class="shipping-btn shipping-btn--tiny shipping-btn--danger">Delete</button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              {% endwith %}
             {% endfor %}
           </tbody>
         </table>
       </div>
     {% else %}
-      <p class="muted mb-0">
-        No shipments added yet.
-      </p>
+      <div class="shipping-empty-state">
+        <strong>No shipments found</strong>
+        <span>Try a different search or filter, or add the first shipment for a production order.</span>
+        <a href="{% url 'shipment_add' %}" class="shipping-btn shipping-btn--primary">Add Shipment</a>
+      </div>
     {% endif %}
-  </div>
-
+  </section>
 </div>
+
+<script>
+  document.addEventListener("click", function (event) {
+    var button = event.target.closest("[data-copy]");
+    if (!button) return;
+    var value = button.getAttribute("data-copy");
+    if (!value) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(value).then(function () {
+        button.textContent = "Copied";
+        window.setTimeout(function () {
+          button.textContent = "Copy";
+        }, 1200);
+      });
+    }
+  });
+</script>
 
 {% endblock %}
