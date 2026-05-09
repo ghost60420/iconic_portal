@@ -600,7 +600,14 @@
 
       <div class="field">
         <div class="label">Assigned to</div>
-        <input class="input" name="assigned_to" value="{{ request.GET.assigned_to|default:'' }}" placeholder="Username">
+        <select class="input" name="assigned_to">
+          <option value="">All users</option>
+          {% for u in users %}
+            <option value="{{ u.id }}" {% if assigned_to_filter == u.id|stringformat:"s" %}selected{% endif %}>
+              {% if u.get_full_name %}{{ u.get_full_name }}{% else %}{{ u.username }}{% endif %}
+            </option>
+          {% endfor %}
+        </select>
       </div>
 
       <div class="field" style="min-width:170px;">

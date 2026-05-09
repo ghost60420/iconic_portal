@@ -736,6 +736,12 @@ def leads_list(request):
     market = (request.GET.get("market") or "").strip()
     owner = (request.GET.get("owner") or "").strip()
     assigned_to = (request.GET.get("assigned_to") or "").strip()
+    assigned_to_id = None
+    if assigned_to:
+        try:
+            assigned_to_id = int(assigned_to)
+        except ValueError:
+            assigned_to_id = None
     created_from_raw = (request.GET.get("created_from") or "").strip()
     created_to_raw = (request.GET.get("created_to") or "").strip()
     value_min_raw = (request.GET.get("value_min") or "").strip()
@@ -827,8 +833,10 @@ def leads_list(request):
     if owner:
         qs = qs.filter(Q(owner__icontains=owner))
 
-    if assigned_to:
-        qs = qs.filter(assigned_to__username__icontains=assigned_to)
+    if assigned_to_id:
+        qs = qs.filter(assigned_to_id=assigned_to_id)
+    elif assigned_to:
+        qs = qs.filter(assigned_to__username__iexact=assigned_to)
 
     created_from = parse_date(created_from_raw) if created_from_raw else None
     created_to = parse_date(created_to_raw) if created_to_raw else None
@@ -929,6 +937,7 @@ def leads_list(request):
         "qual_status_choices": LEAD_QUAL_STATUS_CHOICES,
         "active_view": view,
         "users": users,
+        "assigned_to_filter": assigned_to,
     }
     return render(request, "crm/leads_list.html", context)
 
