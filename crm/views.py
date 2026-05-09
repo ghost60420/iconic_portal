@@ -736,8 +736,10 @@ def leads_list(request):
     market = (request.GET.get("market") or "").strip()
     owner = (request.GET.get("owner") or "").strip()
     assigned_to = (request.GET.get("assigned_to") or "").strip()
+    assigned_to_key = assigned_to.lower()
+    assigned_to_unassigned = assigned_to_key == "unassigned"
     assigned_to_id = None
-    if assigned_to:
+    if assigned_to and not assigned_to_unassigned:
         try:
             assigned_to_id = int(assigned_to)
         except ValueError:
@@ -833,11 +835,6 @@ def leads_list(request):
     if owner:
         qs = qs.filter(Q(owner__icontains=owner))
 
-    if assigned_to_id:
-        qs = qs.filter(assigned_to_id=assigned_to_id)
-    elif assigned_to:
-        qs = qs.filter(assigned_to__username__iexact=assigned_to)
-
     created_from = parse_date(created_from_raw) if created_from_raw else None
     created_to = parse_date(created_to_raw) if created_to_raw else None
     if created_from:
@@ -923,10 +920,120 @@ def leads_list(request):
             filtered.append(lead)
         qs = filtered
 
+    users = list(get_user_model().objects.all().order_by("first_name", "last_name", "username"))
+
+    def build_assignee_url(value):
+        params = request.GET.copy()
+        params.pop("page", None)
+        if value:
+            params["assigned_to"] = str(value)
+        else:
+            params.pop("assigned_to", None)
+        query = params.urlencode()
+        return f"{request.path}?{query}" if query else request.path
+
+    def display_user(user):
+        return user.get_full_name() or user.username or user.email or f"User {user.pk}"
+
+    def count_assignees(source):
+        if isinstance(source, list):
+            total = len(source)
+            counts = defaultdict(int)
+            unassigned = 0
+            for lead in source:
+                if lead.assigned_to_id:
+                    counts[lead.assigned_to_id] += 1
+                else:
+                    unassigned += 1
+            return total, dict(counts), unassigned
+
+        total = source.count()
+        counts = {}
+        unassigned = 0
+        for row in source.order_by().values("assigned_to_id").annotate(count=Count("id", distinct=True)):
+            if row["assigned_to_id"]:
+                counts[row["assigned_to_id"]] = row["count"]
+            else:
+                unassigned = row["count"]
+        return total, counts, unassigned
+
+    assignee_total, assignee_counts, unassigned_count = count_assignees(qs)
+    assignee_summary = [
+        {
+            "label": "All users",
+            "count": assignee_total,
+            "caption": "total leads",
+            "url": build_assignee_url(""),
+            "active": not assigned_to,
+        }
+    ]
+
+    priority_users = []
+    for label in ("Admin604", "Refat"):
+        label_key = label.lower()
+        for user in users:
+            user_text = " ".join(
+                filter(None, [user.username, user.first_name, user.last_name, user.email])
+            ).lower()
+            if user.pk not in {u.pk for u in priority_users} and label_key in user_text:
+                priority_users.append(user)
+                break
+
+    seen_user_ids = set()
+
+    def add_assignee_item(user, force=False):
+        count = assignee_counts.get(user.pk, 0)
+        if not force and count <= 0:
+            return
+        seen_user_ids.add(user.pk)
+        assignee_summary.append(
+            {
+                "label": display_user(user),
+                "count": count,
+                "caption": "lead" if count == 1 else "leads",
+                "url": build_assignee_url(user.pk),
+                "active": assigned_to == str(user.pk) or assigned_to_key == (user.username or "").lower(),
+            }
+        )
+
+    for user in priority_users:
+        add_assignee_item(user, force=True)
+
+    for user in users:
+        if user.pk in seen_user_ids:
+            continue
+        add_assignee_item(user)
+
+    if unassigned_count:
+        assignee_summary.append(
+            {
+                "label": "Unassigned",
+                "count": unassigned_count,
+                "caption": "lead" if unassigned_count == 1 else "leads",
+                "url": build_assignee_url("unassigned"),
+                "active": assigned_to_unassigned,
+            }
+        )
+
+    if assigned_to_unassigned:
+        if isinstance(qs, list):
+            qs = [lead for lead in qs if lead.assigned_to_id is None]
+        else:
+            qs = qs.filter(assigned_to__isnull=True)
+    elif assigned_to_id:
+        if isinstance(qs, list):
+            qs = [lead for lead in qs if lead.assigned_to_id == assigned_to_id]
+        else:
+            qs = qs.filter(assigned_to_id=assigned_to_id)
+    elif assigned_to:
+        if isinstance(qs, list):
+            qs = [lead for lead in qs if lead.assigned_to and lead.assigned_to.username.lower() == assigned_to_key]
+        else:
+            qs = qs.filter(assigned_to__username__iexact=assigned_to)
+
     paginator = Paginator(qs, per_page)
     page_number = request.GET.get("page") or 1
     page_obj = paginator.get_page(page_number)
-    users = get_user_model().objects.all().order_by("first_name", "last_name", "username")
 
     context = {
         "page_obj": page_obj,
@@ -938,6 +1045,7 @@ def leads_list(request):
         "active_view": view,
         "users": users,
         "assigned_to_filter": assigned_to,
+        "assignee_summary": assignee_summary,
     }
     return render(request, "crm/leads_list.html", context)
 

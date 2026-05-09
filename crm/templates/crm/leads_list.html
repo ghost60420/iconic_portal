@@ -452,7 +452,7 @@
   }
 </style>
 
-<link rel="stylesheet" href="{% static 'crm/leads_list.css' %}?v=modern-list-20260506">
+<link rel="stylesheet" href="{% static 'crm/leads_list.css' %}?v=compact-assignees-20260509">
 
 <div class="lead-page">
   <div class="lead-shell">
@@ -496,6 +496,27 @@
       <span>Density</span>
       <strong>{{ per_page }}</strong>
       <small>Leads per page</small>
+    </div>
+  </section>
+
+  <section class="lead-panel lead-assignee-summary" aria-label="Assignee summary">
+    <div class="lead-panel-head">
+      <div>
+        <div class="card-title">Assignee workload</div>
+        <div class="card-note">Click a count to filter this lead view by owner.</div>
+      </div>
+      {% if assigned_to_filter %}
+        <a class="lead-btn lead-btn--ghost lead-btn--tiny" href="{{ assignee_summary.0.url }}">All users</a>
+      {% endif %}
+    </div>
+    <div class="lead-assignee-grid">
+      {% for item in assignee_summary %}
+        <a class="lead-assignee-card {% if item.active %}active{% endif %}" href="{{ item.url }}">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.count }}</strong>
+          <small>{{ item.caption }}</small>
+        </a>
+      {% endfor %}
     </div>
   </section>
 
@@ -602,6 +623,7 @@
         <div class="label">Assigned to</div>
         <select class="input" name="assigned_to">
           <option value="">All users</option>
+          <option value="unassigned" {% if assigned_to_filter == "unassigned" %}selected{% endif %}>Unassigned</option>
           {% for u in users %}
             <option value="{{ u.id }}" {% if assigned_to_filter == u.id|stringformat:"s" %}selected{% endif %}>
               {% if u.get_full_name %}{{ u.get_full_name }}{% else %}{{ u.username }}{% endif %}
@@ -788,7 +810,7 @@
             <th>Outbound status</th>
             <th>Assigned to</th>
             <th>Country</th>
-            <th>Product interest</th>
+            <th>Product</th>
             <th>Target volume</th>
             <th>Fit score</th>
             <th>Qualification</th>
@@ -830,6 +852,11 @@
                   <div class="lead-contact-line">
                     {% if lead.email %}<span class="muted">{{ lead.email }}</span>{% endif %}
                     {% if lead.phone %}<span class="muted">{{ lead.phone }}</span>{% endif %}
+                    {% if lead.last_reply_date %}
+                      <span class="lead-compact-meta">Reply {{ lead.last_reply_date }}</span>
+                    {% elif lead.last_outreach_date %}
+                      <span class="lead-compact-meta">Outreach {{ lead.last_outreach_date }}</span>
+                    {% endif %}
                     {% if not lead.email and not lead.phone %}<span class="muted">No contact detail</span>{% endif %}
                   </div>
                 </div>
@@ -839,7 +866,18 @@
                   {{ lead.get_lead_type_display }}
                 </span>
               </td>
-              <td data-label="Lead status"><span class="badge" data-status="{{ lead.lead_status }}">{{ lead.lead_status }}</span></td>
+              <td data-label="Status">
+                <div class="lead-status-stack">
+                  <span class="badge" data-status="{{ lead.lead_status }}">{{ lead.lead_status }}</span>
+                  <span class="lead-compact-meta">{{ lead.get_lead_type_display }}</span>
+                  {% if lead.outbound_status %}
+                    <span class="badge" data-outbound="{{ lead.outbound_status }}">{{ lead.outbound_status }}</span>
+                  {% endif %}
+                  {% if lead.qualification_status %}
+                    <span class="lead-compact-meta">{{ lead.qualification_status }}</span>
+                  {% endif %}
+                </div>
+              </td>
               <td data-label="Source channel">
                 {% if lead.source_channel %}
                   <span class="lead-source-badge">{{ lead.source_channel }}</span>
@@ -874,7 +912,30 @@
               </td>
 
               <td data-label="Country">{{ lead.country|default:"—" }}</td>
-              <td data-label="Product interest">{{ lead.get_product_interest_display|default:lead.product_interest|default:"—" }}</td>
+              <td data-label="Product">
+                <div class="lead-product-stack">
+                  <strong>{{ lead.get_product_interest_display|default:lead.product_interest|default:"—" }}</strong>
+                  {% if lead.product_category %}
+                    <span class="muted">{{ lead.get_product_category_display|default:lead.product_category }}</span>
+                  {% endif %}
+                  {% if lead.target_order_volume_min or lead.target_order_volume_max %}
+                    <span class="lead-compact-meta">
+                      {% if lead.target_order_volume_min and lead.target_order_volume_max %}
+                        {{ lead.target_order_volume_min }} - {{ lead.target_order_volume_max }} pcs
+                      {% elif lead.target_order_volume_min %}
+                        {{ lead.target_order_volume_min }}+ pcs
+                      {% else %}
+                        Up to {{ lead.target_order_volume_max }} pcs
+                      {% endif %}
+                    </span>
+                  {% endif %}
+                  {% if lead.brand_fit_score or lead.brand_fit_score == 0 %}
+                    <span class="lead-score {% if lead.brand_fit_score >= 70 %}lead-score--high{% elif lead.brand_fit_score >= 40 %}lead-score--medium{% else %}lead-score--low{% endif %}">
+                      Fit {{ lead.brand_fit_score }}
+                    </span>
+                  {% endif %}
+                </div>
+              </td>
               <td data-label="Target volume">
                 {% if lead.target_order_volume_min or lead.target_order_volume_max %}
                   {% if lead.target_order_volume_min and lead.target_order_volume_max %}
