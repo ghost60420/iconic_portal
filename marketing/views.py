@@ -1,4 +1,5 @@
 from datetime import timedelta
+from decimal import Decimal
 import uuid
 import json
 import re
@@ -26,6 +27,7 @@ from marketing.forms import (
     MarketingCompetitorPostForm,
 )
 from marketing.models import (
+    SeoProperty,
     SocialAccount,
     SocialAudienceDaily,
     AccountMetricDaily,
@@ -33,6 +35,7 @@ from marketing.models import (
     AdMetricDaily,
     BestPracticeLibrary,
     Campaign,
+    TrackedLink,
     ContactList,
     InsightItem,
     OutreachCampaign,
@@ -41,6 +44,8 @@ from marketing.models import (
     SeoQueryDaily,
     SocialContent,
     SocialMetricDaily,
+    WebsitePageDaily,
+    WebsiteTrafficDaily,
     UnsubscribeEvent,
     Contact,
     OAuthCredential,
@@ -65,6 +70,8 @@ PLATFORM_CARD_CONFIG = [
     {"key": "youtube", "label": "YouTube", "platforms": ["youtube"]},
     {"key": "google_business", "label": "Google Business", "platforms": ["google_business"]},
 ]
+
+PLATFORM_CARD_LABELS = {item["key"]: item["label"] for item in PLATFORM_CARD_CONFIG}
 
 
 def _require_enabled(flag_name: str | None = None):
@@ -396,6 +403,179 @@ def _ad_conversions_count(start_date, end_date):
         )
     ).get("conversions") or 0
     return int(total)
+
+
+def _website_totals(start_date, end_date):
+    qs = WebsiteTrafficDaily.objects.filter(date__gte=start_date, date__lte=end_date)
+    totals = qs.aggregate(
+        visitors=Coalesce(Sum("visitors"), 0),
+        sessions=Coalesce(Sum("sessions"), 0),
+        engaged_sessions=Coalesce(Sum("engaged_sessions"), 0),
+        page_views=Coalesce(Sum("page_views"), 0),
+        conversions=Coalesce(Sum("conversions"), 0),
+    )
+    sessions = totals.get("sessions") or 0
+    engaged_sessions = totals.get("engaged_sessions") or 0
+    totals["engagement_rate"] = _conversion_rate(engaged_sessions, sessions)
+    totals["avg_engagement_seconds"] = qs.aggregate(avg=Avg("avg_engagement_seconds")).get("avg") or 0
+    return totals
+
+
+def _lead_channel_rows(start_date, end_date):
+    rows = (
+        Lead.objects.filter(created_date__gte=start_date, created_date__lte=end_date)
+        .values("utm_source")
+        .annotate(leads=Count("id"))
+        .order_by("-leads", "utm_source")[:8]
+    )
+    return [
+        {
+            "label": row.get("utm_source") or "Direct / untagged",
+            "leads": row.get("leads") or 0,
+        }
+        for row in rows
+    ]
+
+
+def _website_analytics_summary(period):
+    current = _website_totals(period["start"], period["end"])
+    previous = _website_totals(period["previous_start"], period["previous_end"])
+    top_pages = (
+        WebsitePageDaily.objects.filter(date__gte=period["start"], date__lte=period["end"])
+        .values("page_path", "page_title")
+        .annotate(
+            visitors=Coalesce(Sum("visitors"), 0),
+            sessions=Coalesce(Sum("sessions"), 0),
+            page_views=Coalesce(Sum("page_views"), 0),
+            conversions=Coalesce(Sum("conversions"), 0),
+            avg_engagement_seconds=Avg("avg_engagement_seconds"),
+        )
+        .order_by("-visitors", "-page_views")[:12]
+    )
+    channel_rows = (
+        WebsiteTrafficDaily.objects.filter(date__gte=period["start"], date__lte=period["end"])
+        .values("channel", "source", "medium")
+        .annotate(
+            visitors=Coalesce(Sum("visitors"), 0),
+            sessions=Coalesce(Sum("sessions"), 0),
+            page_views=Coalesce(Sum("page_views"), 0),
+            conversions=Coalesce(Sum("conversions"), 0),
+        )
+        .order_by("-visitors", "-sessions")[:8]
+    )
+    prepared_channels = []
+    for row in channel_rows:
+        prepared_channels.append(
+            {
+                **row,
+                "label": row.get("channel") or row.get("source") or "Direct / unknown",
+                "detail": " / ".join([item for item in [row.get("source"), row.get("medium")] if item]),
+            }
+        )
+
+    return {
+        "current": current,
+        "previous": previous,
+        "cards": [
+            {
+                "label": "Website visitors",
+                "value": current["visitors"],
+                "change_pct": _percent_change(current["visitors"], previous["visitors"]),
+            },
+            {
+                "label": "Sessions",
+                "value": current["sessions"],
+                "change_pct": _percent_change(current["sessions"], previous["sessions"]),
+            },
+            {
+                "label": "Page views",
+                "value": current["page_views"],
+                "change_pct": _percent_change(current["page_views"], previous["page_views"]),
+            },
+            {
+                "label": "Website conversions",
+                "value": current["conversions"],
+                "change_pct": _percent_change(current["conversions"], previous["conversions"]),
+            },
+        ],
+        "top_pages": list(top_pages),
+        "channel_rows": prepared_channels,
+        "lead_channel_rows": _lead_channel_rows(period["start"], period["end"]),
+        "properties": SeoProperty.objects.filter(is_active=True).order_by("name"),
+    }
+
+
+def _search_totals(start_date, end_date):
+    totals = SeoQueryDaily.objects.filter(date__gte=start_date, date__lte=end_date).aggregate(
+        clicks=Coalesce(Sum("clicks"), 0),
+        impressions=Coalesce(Sum("impressions"), 0),
+        avg_position=Avg("position"),
+    )
+    clicks = totals.get("clicks") or 0
+    impressions = totals.get("impressions") or 0
+    totals["ctr"] = _conversion_rate(clicks, impressions)
+    totals["avg_position"] = totals.get("avg_position") or 0
+    return totals
+
+
+def _google_search_summary(period):
+    current = _search_totals(period["start"], period["end"])
+    previous = _search_totals(period["previous_start"], period["previous_end"])
+    query_rows = list(
+        SeoQueryDaily.objects.filter(date__gte=period["start"], date__lte=period["end"])
+        .values("query")
+        .annotate(
+            clicks=Coalesce(Sum("clicks"), 0),
+            impressions=Coalesce(Sum("impressions"), 0),
+            avg_position=Avg("position"),
+        )
+        .order_by("-clicks", "-impressions")[:15]
+    )
+    page_rows = list(
+        SeoPageDaily.objects.filter(date__gte=period["start"], date__lte=period["end"])
+        .values("page")
+        .annotate(
+            clicks=Coalesce(Sum("clicks"), 0),
+            impressions=Coalesce(Sum("impressions"), 0),
+            avg_position=Avg("position"),
+        )
+        .order_by("-clicks", "-impressions")[:15]
+    )
+    for row in query_rows:
+        row["ctr"] = _conversion_rate(row.get("clicks") or 0, row.get("impressions") or 0)
+    for row in page_rows:
+        row["ctr"] = _conversion_rate(row.get("clicks") or 0, row.get("impressions") or 0)
+    return {
+        "current": current,
+        "previous": previous,
+        "cards": [
+            {
+                "label": "Google clicks",
+                "value": current["clicks"],
+                "change_pct": _percent_change(current["clicks"], previous["clicks"]),
+            },
+            {
+                "label": "Google impressions",
+                "value": current["impressions"],
+                "change_pct": _percent_change(current["impressions"], previous["impressions"]),
+            },
+            {
+                "label": "Search CTR",
+                "value": f"{current['ctr']:.1f}%",
+                "change_pct": _percent_change(current["ctr"], previous["ctr"]),
+            },
+            {
+                "label": "Avg position",
+                "value": f"{float(current['avg_position']):.1f}",
+                "change_pct": _percent_change(float(previous["avg_position"] or 0), float(current["avg_position"] or 0)),
+                "inverse": True,
+            },
+        ],
+        "query_rows": query_rows,
+        "page_rows": page_rows,
+        "top_keyword": query_rows[0] if query_rows else None,
+        "properties": SeoProperty.objects.filter(is_active=True).order_by("name"),
+    }
 
 
 def _build_kpi_cards(period):
@@ -879,6 +1059,292 @@ def _top_priority_dashboard_insights(fallback_insights):
     return fallback_insights[:5]
 
 
+def _clean_utm(value: str | None) -> str:
+    return (value or "").strip()
+
+
+def _normalize_platform_source(source_value: str | None) -> str:
+    source = _clean_utm(source_value).lower()
+    if not source:
+        return ""
+    if "instagram" in source:
+        return "instagram"
+    if "facebook" in source or source in {"meta", "meta_business", "fb"}:
+        return "facebook"
+    if "linkedin" in source:
+        return "linkedin"
+    if "tiktok" in source:
+        return "tiktok"
+    if "youtube" in source:
+        return "youtube"
+    if "google" in source or source in {"gbp", "gmb"}:
+        return "google_business"
+    return ""
+
+
+def _opportunity_estimated_value(opportunity) -> Decimal:
+    return opportunity.order_value or opportunity.order_value_usd or Decimal("0")
+
+
+def _conversion_rate(numerator: int, denominator: int) -> float:
+    if not denominator:
+        return 0.0
+    return (float(numerator) / float(denominator)) * 100.0
+
+
+def _attribution_status(leads: int, opportunities: int, won_deals: int, estimated_value: Decimal):
+    if leads <= 0:
+        return "No Leads Yet", "stable"
+    if won_deals > 0 or estimated_value > 0 or opportunities > 0:
+        return "Strong", "good"
+    return "Needs Review", "warn"
+
+
+def _marketing_revenue_attribution(period):
+    start_date = period["start"]
+    end_date = period["end"]
+
+    platform_stats = {
+        item["key"]: {
+            "platform": item["key"],
+            "label": item["label"],
+            "leads": 0,
+            "opportunities": 0,
+            "won_deals": 0,
+            "estimated_value": Decimal("0"),
+        }
+        for item in PLATFORM_CARD_CONFIG
+    }
+
+    campaign_stats = {}
+
+    def ensure_campaign_row(utm_campaign: str, source: str, medium: str, campaign_name: str = ""):
+        key = (_clean_utm(utm_campaign), _clean_utm(source), _clean_utm(medium))
+        row = campaign_stats.get(key)
+        if not row:
+            row = {
+                "utm_campaign": key[0],
+                "source": key[1],
+                "medium": key[2],
+                "campaign_name": campaign_name or key[0] or "No Campaign Tag",
+                "clicks": None,
+                "leads": 0,
+                "opportunities": 0,
+                "won_deals": 0,
+                "estimated_value": Decimal("0"),
+            }
+            campaign_stats[key] = row
+        elif campaign_name and (not row["campaign_name"] or row["campaign_name"] == row["utm_campaign"]):
+            row["campaign_name"] = campaign_name
+        return row
+
+    tracked_links = list(TrackedLink.objects.select_related("campaign").all())
+    for link in tracked_links:
+        ensure_campaign_row(
+            utm_campaign=link.utm_campaign,
+            source=link.utm_source,
+            medium=link.utm_medium,
+            campaign_name=link.campaign.name,
+        )
+
+    lead_groups = (
+        Lead.objects.filter(created_date__gte=start_date, created_date__lte=end_date)
+        .exclude(utm_source="")
+        .values("utm_source", "utm_campaign", "utm_medium")
+        .annotate(leads=Count("id"))
+    )
+    for row in lead_groups:
+        source = _clean_utm(row.get("utm_source"))
+        platform_key = _normalize_platform_source(source)
+        if platform_key in platform_stats:
+            platform_stats[platform_key]["leads"] += int(row.get("leads") or 0)
+
+        if _clean_utm(row.get("utm_campaign")):
+            campaign_row = ensure_campaign_row(
+                utm_campaign=row.get("utm_campaign") or "",
+                source=source,
+                medium=row.get("utm_medium") or "",
+            )
+            campaign_row["leads"] += int(row.get("leads") or 0)
+
+    opportunity_qs = (
+        Opportunity.objects.filter(created_date__gte=start_date, created_date__lte=end_date)
+        .exclude(lead__utm_source="")
+        .select_related("lead")
+        .only(
+            "stage",
+            "order_value",
+            "order_value_usd",
+            "created_date",
+            "updated_at",
+            "lead__utm_source",
+            "lead__utm_campaign",
+            "lead__utm_medium",
+        )
+    )
+    for opportunity in opportunity_qs:
+        source = _clean_utm(opportunity.lead.utm_source)
+        platform_key = _normalize_platform_source(source)
+        estimated_value = _opportunity_estimated_value(opportunity)
+        if platform_key in platform_stats:
+            platform_stats[platform_key]["opportunities"] += 1
+            platform_stats[platform_key]["estimated_value"] += estimated_value
+
+        if _clean_utm(opportunity.lead.utm_campaign):
+            campaign_row = ensure_campaign_row(
+                utm_campaign=opportunity.lead.utm_campaign,
+                source=source,
+                medium=opportunity.lead.utm_medium,
+            )
+            campaign_row["opportunities"] += 1
+            campaign_row["estimated_value"] += estimated_value
+
+    won_qs = (
+        Opportunity.objects.filter(
+            stage="Closed Won",
+            updated_at__date__gte=start_date,
+            updated_at__date__lte=end_date,
+        )
+        .exclude(lead__utm_source="")
+        .select_related("lead")
+        .only("lead__utm_source", "lead__utm_campaign", "lead__utm_medium")
+    )
+    for opportunity in won_qs:
+        source = _clean_utm(opportunity.lead.utm_source)
+        platform_key = _normalize_platform_source(source)
+        if platform_key in platform_stats:
+            platform_stats[platform_key]["won_deals"] += 1
+
+        if _clean_utm(opportunity.lead.utm_campaign):
+            campaign_row = ensure_campaign_row(
+                utm_campaign=opportunity.lead.utm_campaign,
+                source=source,
+                medium=opportunity.lead.utm_medium,
+            )
+            campaign_row["won_deals"] += 1
+
+    platform_rows = []
+    for row in platform_stats.values():
+        row["lead_to_opp_rate"] = _conversion_rate(row["opportunities"], row["leads"])
+        row["opp_to_won_rate"] = _conversion_rate(row["won_deals"], row["opportunities"])
+        row["status"], row["status_tone"] = _attribution_status(
+            row["leads"],
+            row["opportunities"],
+            row["won_deals"],
+            row["estimated_value"],
+        )
+        platform_rows.append(row)
+    platform_rows = sorted(
+        platform_rows,
+        key=lambda item: (item["leads"], item["opportunities"], item["won_deals"], item["estimated_value"]),
+        reverse=True,
+    )
+
+    campaign_rows = []
+    for row in campaign_stats.values():
+        row["conversion_rate"] = _conversion_rate(row["opportunities"], row["leads"])
+        row["won_rate"] = _conversion_rate(row["won_deals"], row["opportunities"])
+        row["status"], row["status_tone"] = _attribution_status(
+            row["leads"],
+            row["opportunities"],
+            row["won_deals"],
+            row["estimated_value"],
+        )
+        campaign_rows.append(row)
+    campaign_rows = sorted(
+        campaign_rows,
+        key=lambda item: (item["leads"], item["opportunities"], item["won_deals"], item["estimated_value"]),
+        reverse=True,
+    )
+
+    top_platform_by_leads = next((row for row in platform_rows if row["leads"] > 0), None)
+    top_platform_by_conversion = next(
+        (
+            row
+            for row in sorted(platform_rows, key=lambda item: (item["lead_to_opp_rate"], item["opportunities"], item["leads"]), reverse=True)
+            if row["leads"] > 0 and row["opportunities"] > 0
+        ),
+        None,
+    )
+    top_campaign_by_leads = next((row for row in campaign_rows if row["leads"] > 0), None)
+    top_campaign_by_value = next(
+        (row for row in sorted(campaign_rows, key=lambda item: (item["estimated_value"], item["won_deals"], item["opportunities"]), reverse=True) if row["estimated_value"] > 0),
+        None,
+    )
+
+    attribution_insights = []
+    if top_platform_by_leads:
+        attribution_insights.append(
+            {
+                "title": f"{top_platform_by_leads['label']} generated the most leads this {period['label'].lower()}",
+                "reason": f"It produced {top_platform_by_leads['leads']} attributed lead(s).",
+                "action": f"Keep budget and creative focus on {top_platform_by_leads['label']} while it is converting attention into pipeline.",
+            }
+        )
+    if top_platform_by_conversion and top_platform_by_leads and top_platform_by_conversion["platform"] != top_platform_by_leads["platform"]:
+        attribution_insights.append(
+            {
+                "title": f"{top_platform_by_conversion['label']} has fewer leads but higher conversion",
+                "reason": f"It converted {top_platform_by_conversion['lead_to_opp_rate']:.1f}% of leads into opportunities.",
+                "action": f"Review the messaging from {top_platform_by_conversion['label']} and apply the same quality signals to weaker platforms.",
+            }
+        )
+
+    review_campaign = next((row for row in campaign_rows if row["leads"] > 0 and row["opportunities"] == 0), None)
+    if review_campaign:
+        attribution_insights.append(
+            {
+                "title": f"{review_campaign['campaign_name']} generated leads but no opportunities",
+                "reason": f"It brought in {review_campaign['leads']} lead(s) with no opportunity conversion yet.",
+                "action": "Review lead quality, landing page expectations, and CTA alignment for this campaign.",
+            }
+        )
+
+    pipeline_only_campaign = next((row for row in campaign_rows if row["opportunities"] > 0 and row["won_deals"] == 0), None)
+    if pipeline_only_campaign:
+        attribution_insights.append(
+            {
+                "title": f"{pipeline_only_campaign['campaign_name']} is generating pipeline but no wins yet",
+                "reason": f"It created {pipeline_only_campaign['opportunities']} opportunity(ies) without a closed won result in the period.",
+                "action": "Review follow-up quality and opportunity progression for this campaign.",
+            }
+        )
+
+    summary_chips = [
+        {
+            "label": "Top lead platform",
+            "value": top_platform_by_leads["label"] if top_platform_by_leads else "Not enough data yet",
+        },
+        {
+            "label": "Top converting platform",
+            "value": top_platform_by_conversion["label"] if top_platform_by_conversion else "Not enough data yet",
+        },
+        {
+            "label": "Top campaign by leads",
+            "value": top_campaign_by_leads["campaign_name"] if top_campaign_by_leads else "Not enough data yet",
+        },
+        {
+            "label": "Top campaign by estimated value",
+            "value": top_campaign_by_value["campaign_name"] if top_campaign_by_value else "Not enough data yet",
+        },
+        {
+            "label": "Attributed opportunities",
+            "value": sum(row["opportunities"] for row in platform_rows),
+        },
+        {
+            "label": "Won deals",
+            "value": sum(row["won_deals"] for row in platform_rows),
+        },
+    ]
+
+    return {
+        "platform_rows": platform_rows,
+        "campaign_rows": campaign_rows[:20],
+        "summary_chips": summary_chips,
+        "insights": attribution_insights[:4],
+    }
+
+
 def _competitor_dashboard_snapshot():
     competitors = list(
         MarketingCompetitor.objects.prefetch_related("accounts__posts").all()
@@ -1043,20 +1509,26 @@ def dashboard(request):
     ai_insight_fallback = _rule_based_ai_insights(performance_drivers, platform_summary, top_posts, weak_posts)
     ai_insights = _top_priority_dashboard_insights(ai_insight_fallback)
     weekly_action_plan = _weekly_action_plan(performance_drivers, top_posts)
+    revenue_attribution = _marketing_revenue_attribution(period)
     competitor_snapshot = _competitor_dashboard_snapshot()
+    website_summary = _website_analytics_summary(period)
+    google_search_summary = _google_search_summary(period)
 
     context = {
         "page_title": "Marketing Control Center",
-        "page_subtitle": "All social, ads, SEO, and campaign performance in one place.",
+        "page_subtitle": "Website traffic, Google search, social content, campaigns, and lead impact in one place.",
         "period": period,
         "range_key": period["key"],
         "kpi_cards": period_summary["cards"],
+        "website_summary": website_summary,
+        "google_search_summary": google_search_summary,
         "platform_summary": platform_summary,
         "top_posts": top_posts,
         "weak_posts": weak_posts,
         "performance_drivers": performance_drivers,
         "ai_insights": ai_insights,
         "weekly_action_plan": weekly_action_plan,
+        "revenue_attribution": revenue_attribution,
         "competitor_snapshot": competitor_snapshot,
     }
     return render(request, "marketing/dashboard.html", context)
@@ -1588,36 +2060,58 @@ def weekly_workflow(request):
 
 
 def seo_overview(request):
-    _require_enabled("MARKETING_SEO_ENABLED")
-    since = timezone.localdate() - timedelta(days=30)
+    _require_enabled()
+    return google_search_performance(request)
 
-    query_rows = (
-        SeoQueryDaily.objects.filter(date__gte=since)
-        .values("query")
-        .annotate(clicks=Sum("clicks"), impressions=Sum("impressions"))
-        .order_by("-impressions")[:50]
+
+def website_analytics(request):
+    _require_enabled()
+    period = _date_window(request.GET.get("range") or "30")
+    return render(
+        request,
+        "marketing/website_analytics.html",
+        {
+            "period": period,
+            "range_key": period["key"],
+            "website_summary": _website_analytics_summary(period),
+        },
     )
 
-    page_rows = (
-        SeoPageDaily.objects.filter(date__gte=since)
-        .values("page")
-        .annotate(clicks=Sum("clicks"), impressions=Sum("impressions"))
-        .order_by("-impressions")[:50]
-    )
 
-    return render(request, "marketing/seo_overview.html", {"query_rows": query_rows, "page_rows": page_rows})
+def google_search_performance(request):
+    _require_enabled()
+    period = _date_window(request.GET.get("range") or "30")
+    return render(
+        request,
+        "marketing/google_search_performance.html",
+        {
+            "period": period,
+            "range_key": period["key"],
+            "google_search_summary": _google_search_summary(period),
+        },
+    )
 
 
 def social_overview(request):
-    _require_enabled("MARKETING_SOCIAL_ENABLED")
+    _require_enabled()
 
+    period = _date_window(request.GET.get("range") or "30")
     top_content = (
         SocialContent.objects.all()
         .annotate(total_views=Sum("daily_metrics__views"))
         .order_by("-total_views")[:20]
     )
 
-    return render(request, "marketing/social_overview.html", {"top_content": top_content})
+    return render(
+        request,
+        "marketing/social_overview.html",
+        {
+            "period": period,
+            "range_key": period["key"],
+            "top_content": top_content,
+            "platform_summary": _platform_comparison(period["start"], period["end"]),
+        },
+    )
 
 
 def campaigns_list(request):
@@ -1642,9 +2136,20 @@ def campaigns_list(request):
     else:
         form = CampaignForm()
 
+    period = _date_window(request.GET.get("range") or "30")
     campaigns = Campaign.objects.all()
 
-    return render(request, "marketing/campaigns_list.html", {"form": form, "campaigns": campaigns})
+    return render(
+        request,
+        "marketing/campaigns_list.html",
+        {
+            "form": form,
+            "campaigns": campaigns,
+            "period": period,
+            "range_key": period["key"],
+            "revenue_attribution": _marketing_revenue_attribution(period),
+        },
+    )
 
 
 def campaign_detail(request, pk: int):

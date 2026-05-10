@@ -1,6 +1,8 @@
 from marketing.models import (
     SeoQueryDaily,
     SeoPageDaily,
+    WebsiteTrafficDaily,
+    WebsitePageDaily,
     SocialMetricDaily,
     SocialAudienceDaily,
     AccountMetricDaily,
@@ -35,6 +37,45 @@ def upsert_seo_page_daily(*, property_obj, payload: dict):
             "impressions": payload.get("impressions", 0),
             "ctr": payload.get("ctr", 0) or 0,
             "position": payload.get("position", 0) or 0,
+        },
+    )
+
+
+def upsert_website_traffic_daily(*, property_obj, payload: dict):
+    return WebsiteTrafficDaily.objects.update_or_create(
+        property=property_obj,
+        date=payload.get("date"),
+        channel=payload.get("channel", ""),
+        source=payload.get("source", ""),
+        medium=payload.get("medium", ""),
+        campaign=payload.get("campaign", ""),
+        defaults={
+            "visitors": payload.get("visitors", 0),
+            "sessions": payload.get("sessions", 0),
+            "engaged_sessions": payload.get("engaged_sessions", 0),
+            "page_views": payload.get("page_views", 0),
+            "events": payload.get("events", 0),
+            "conversions": payload.get("conversions", 0),
+            "engagement_rate": payload.get("engagement_rate", 0) or 0,
+            "avg_engagement_seconds": payload.get("avg_engagement_seconds", 0),
+        },
+    )
+
+
+def upsert_website_page_daily(*, property_obj, payload: dict):
+    return WebsitePageDaily.objects.update_or_create(
+        property=property_obj,
+        date=payload.get("date"),
+        page_path=payload.get("page_path") or payload.get("page") or "",
+        defaults={
+            "page_title": payload.get("page_title", "") or "",
+            "visitors": payload.get("visitors", 0),
+            "sessions": payload.get("sessions", 0),
+            "page_views": payload.get("page_views", 0),
+            "entrances": payload.get("entrances", 0),
+            "exits": payload.get("exits", 0),
+            "conversions": payload.get("conversions", 0),
+            "avg_engagement_seconds": payload.get("avg_engagement_seconds", 0),
         },
     )
 

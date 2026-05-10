@@ -66,6 +66,9 @@ class Command(BaseCommand):
 
                 platform_cred, _ = OAuthCredential.objects.get_or_create(platform="meta", platform_account=None)
                 platform_cred.set_tokens(access_token=access_token, refresh_token="", expires_at=expires_at)
+                platform_cred.account_name = "Meta Platform Token"
+                platform_cred.account_id = "meta"
+                platform_cred.is_active = True
                 platform_cred.scopes = ",".join(scopes)
                 platform_cred.save()
 
@@ -88,6 +91,9 @@ class Command(BaseCommand):
                     )
                     fb_cred, _ = OAuthCredential.objects.get_or_create(platform="facebook", platform_account=fb_account)
                     fb_cred.set_tokens(access_token=access_token, refresh_token="", expires_at=expires_at)
+                    fb_cred.account_name = name
+                    fb_cred.account_id = page_id
+                    fb_cred.is_active = True
                     fb_cred.scopes = ",".join(scopes)
                     fb_cred.save()
 
@@ -108,6 +114,9 @@ class Command(BaseCommand):
                             platform_account=ig_account,
                         )
                         ig_cred.set_tokens(access_token=access_token, refresh_token="", expires_at=expires_at)
+                        ig_cred.account_name = f"{name} (Instagram)"
+                        ig_cred.account_id = ig_id
+                        ig_cred.is_active = True
                         ig_cred.scopes = ",".join(scopes)
                         ig_cred.save()
 

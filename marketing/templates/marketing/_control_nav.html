@@ -1,0 +1,9 @@
+<div class="mk-control-nav">
+  <a class="{% if request.resolver_match.url_name == 'marketing_dashboard' %}active{% endif %}" href="{% url 'marketing_dashboard' %}">Dashboard</a>
+  <a class="{% if request.resolver_match.url_name == 'marketing_website' or request.resolver_match.url_name == 'marketing_website_analytics' %}active{% endif %}" href="{% url 'marketing_website' %}">Website Analytics</a>
+  <a class="{% if request.resolver_match.url_name == 'marketing_google_search' or request.resolver_match.url_name == 'marketing_seo' %}active{% endif %}" href="{% url 'marketing_google_search' %}">Google Search</a>
+  <a class="{% if request.resolver_match.url_name == 'marketing_social' %}active{% endif %}" href="{% url 'marketing_social' %}">Social Media</a>
+  <a class="{% if request.resolver_match.url_name == 'marketing_campaigns' or request.resolver_match.url_name == 'marketing_campaign_performance' %}active{% endif %}" href="{% url 'marketing_campaign_performance' %}">Campaigns</a>
+  <a class="{% if request.resolver_match.url_name == 'marketing_insights' or request.resolver_match.url_name == 'marketing_ai_insights' %}active{% endif %}" href="{% url 'marketing_ai_insights' %}">AI Insights</a>
+  <a class="{% if request.resolver_match.url_name == 'marketing_connect' or request.resolver_match.url_name == 'marketing_connection_settings' or request.resolver_match.url_name == 'marketing_social_connections' %}active{% endif %}" href="{% url 'marketing_connection_settings' %}">Connection Settings</a>
+</div>

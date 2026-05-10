@@ -3,15 +3,42 @@
 {% include "marketing/_style.html" %}
 
 <div class="mk-container">
-  <div class="mk-header">
+  <div class="mk-header mk-header-lg">
     <div>
-      <div class="mk-title">Campaigns & UTM Tracking</div>
-      <div class="mk-sub">Create campaigns and track leads.</div>
+      <div class="mk-title">Campaign Performance</div>
+      <div class="mk-sub">Campaign setup, UTM lead impact, opportunity conversion, and revenue signals.</div>
+    </div>
+    <div class="mk-header-actions">
+      <div class="mk-filter-group">
+        <a href="?range=today" class="mk-filter-chip {% if range_key == 'today' %}active{% endif %}">Today</a>
+        <a href="?range=7" class="mk-filter-chip {% if range_key == '7' %}active{% endif %}">7 Days</a>
+        <a href="?range=30" class="mk-filter-chip {% if range_key == '30' %}active{% endif %}">30 Days</a>
+        <a href="?range=90" class="mk-filter-chip {% if range_key == '90' %}active{% endif %}">90 Days</a>
+      </div>
+    </div>
+  </div>
+
+  {% include "marketing/_control_nav.html" %}
+
+  <div class="mk-card" style="margin-bottom:14px;">
+    <div class="mk-section-head">
+      <div>
+        <div class="mk-section-title mb-0">Marketing Lead Impact</div>
+        <div class="mk-sub">Read-only attribution from UTM fields on leads and linked opportunities.</div>
+      </div>
+    </div>
+    <div class="mk-driver-grid">
+      {% for chip in revenue_attribution.summary_chips %}
+        <div class="mk-driver-chip">
+          <div class="mk-label">{{ chip.label }}</div>
+          <div class="mk-driver-value">{{ chip.value }}</div>
+        </div>
+      {% endfor %}
     </div>
   </div>
 
   <div class="mk-grid">
-    <div class="mk-card" style="grid-column: span 4;">
+    <div class="mk-card mk-span-4">
       <div class="mk-section-title">Create Campaign</div>
       <form method="post" class="mk-form">
         {% csrf_token %}
@@ -20,7 +47,7 @@
       </form>
     </div>
 
-    <div class="mk-card" style="grid-column: span 8;">
+    <div class="mk-card mk-span-8">
       <div class="mk-section-title">Campaign List</div>
       <div class="mk-table table-responsive">
         <table class="table table-dark table-hover align-middle mb-0">
@@ -38,12 +65,64 @@
               <tr>
                 <td><a href="{% url 'marketing_campaign_detail' c.id %}">{{ c.name }}</a></td>
                 <td>{{ c.get_goal_display }}</td>
-                <td>{{ c.start_date }} -> {{ c.end_date }}</td>
-                <td>{% if c.is_active %}<span class="mk-badge">Active</span>{% else %}<span class="mk-badge">Paused</span>{% endif %}</td>
+                <td>{{ c.start_date }} to {{ c.end_date }}</td>
+                <td>{% if c.is_active %}<span class="mk-pill mk-pill-good">Active</span>{% else %}<span class="mk-pill">Paused</span>{% endif %}</td>
                 <td class="text-end"><a class="btn btn-sm btn-outline-light" href="{% url 'marketing_campaign_detail' c.id %}">Open</a></td>
               </tr>
             {% empty %}
               <tr><td colspan="5" class="text-muted">No campaigns yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="mk-card mk-span-12">
+      <div class="mk-section-head">
+        <div>
+          <div class="mk-section-title mb-0">Attributed Campaign Rows</div>
+          <div class="mk-sub">Campaign rows matched by UTM campaign, source, and medium for {{ period.label }}.</div>
+        </div>
+      </div>
+      <div class="mk-table table-responsive">
+        <table class="table table-dark table-hover align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Campaign</th>
+              <th>Source</th>
+              <th>Medium</th>
+              <th>Leads</th>
+              <th>Opportunities</th>
+              <th>Won</th>
+              <th>Estimated Value</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in revenue_attribution.campaign_rows %}
+              <tr>
+                <td>
+                  <div class="mk-link-strong">{{ row.campaign_name }}</div>
+                  {% if row.utm_campaign %}<div class="mk-hint">{{ row.utm_campaign }}</div>{% endif %}
+                </td>
+                <td>{{ row.source|default:"Not set" }}</td>
+                <td>{{ row.medium|default:"Not set" }}</td>
+                <td>{{ row.leads }}</td>
+                <td>{{ row.opportunities }}</td>
+                <td>{{ row.won_deals }}</td>
+                <td>{{ row.estimated_value|floatformat:0 }}</td>
+                <td>
+                  {% if row.status_tone == 'good' %}
+                    <span class="mk-pill mk-pill-good">{{ row.status }}</span>
+                  {% elif row.status_tone == 'warn' %}
+                    <span class="mk-pill mk-pill-warn">{{ row.status }}</span>
+                  {% else %}
+                    <span class="mk-pill">{{ row.status }}</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="8" class="mk-muted">No campaign attribution rows yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>

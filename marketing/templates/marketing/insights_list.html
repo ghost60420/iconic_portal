@@ -4,16 +4,18 @@
 {% include "marketing/_style.html" %}
 
 <div class="mk-container">
-  <div class="mk-header">
+  <div class="mk-header mk-header-lg">
     <div>
-      <div class="mk-title">Insights</div>
-      <div class="mk-sub">Action list from performance and audience signals.</div>
+      <div class="mk-title">AI Marketing Insights</div>
+      <div class="mk-sub">Action list from performance, audience, search, social, and campaign signals.</div>
     </div>
     <div class="d-flex gap-2 flex-wrap">
       <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_dashboard' %}">Dashboard</a>
       <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_workflow' %}">Weekly workflow</a>
     </div>
   </div>
+
+  {% include "marketing/_control_nav.html" %}
 
   <div class="mk-card" style="margin-bottom:16px;">
     <form method="get" class="mk-toolbar mk-form">

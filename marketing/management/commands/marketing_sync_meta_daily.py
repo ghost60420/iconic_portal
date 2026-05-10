@@ -17,10 +17,15 @@ from marketing.services.upsert import (
     upsert_social_audience_daily,
 )
 from marketing.services.errors import MarketingServiceError
+from marketing.services.social_connections import update_connection_sync_state
 
 
 class Command(BaseCommand):
     help = "Sync Meta (Facebook/Instagram) daily data."
+
+    def add_arguments(self, parser):
+        parser.add_argument("--account-id", default="")
+        parser.add_argument("--platform", default="")
 
     def _token_for_account(self, account):
         cred = OAuthCredential.objects.filter(platform_account=account).first()
@@ -37,7 +42,18 @@ class Command(BaseCommand):
             self.stdout.write("MARKETING_SOCIAL_ENABLED is off. Skipping.")
             return
 
-        for acct in SocialAccount.objects.filter(is_active=True, platform__in=["facebook", "instagram", "meta_business"]):
+        accounts = SocialAccount.objects.filter(is_active=True, platform__in=["facebook", "instagram", "meta_business"])
+        account_id = (options.get("account_id") or "").strip()
+        platform = (options.get("platform") or "").strip()
+        if account_id:
+            accounts = accounts.filter(external_account_id=account_id)
+        if platform:
+            accounts = accounts.filter(platform=platform)
+        if not accounts.exists():
+            self.stdout.write("No matching Meta accounts found.")
+            return
+
+        for acct in accounts:
             try:
                 token = self._token_for_account(acct)
                 today = timezone.localdate()
@@ -95,14 +111,17 @@ class Command(BaseCommand):
                 for row in audience_rows:
                     upsert_social_audience_daily(account_obj=acct, payload=row)
 
-                acct.last_sync_at = timezone.now()
-                acct.last_successful_sync = timezone.now()
+                synced_at = timezone.now()
+                acct.last_sync_at = synced_at
+                acct.last_successful_sync = synced_at
                 acct.last_sync_status = "ok"
                 acct.last_sync_message = ""
                 acct.save(update_fields=["last_sync_at", "last_successful_sync", "last_sync_status", "last_sync_message"])
+                update_connection_sync_state(acct, status="ok", synced_at=synced_at)
             except MarketingServiceError as exc:
                 acct.last_sync_status = "error"
                 acct.last_sync_message = str(exc)
                 acct.save(update_fields=["last_sync_status", "last_sync_message"])
+                update_connection_sync_state(acct, status="error", error=str(exc))
 
         self.stdout.write(self.style.SUCCESS("Meta sync complete."))

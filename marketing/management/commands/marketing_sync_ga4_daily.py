@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from marketing.models import OAuthCredential, SeoProperty
 from marketing.services.ga4 import fetch_ga4_daily
+from marketing.services.upsert import upsert_website_traffic_daily, upsert_website_page_daily
 from marketing.services.errors import MarketingServiceError
 
 
@@ -32,12 +33,18 @@ class Command(BaseCommand):
                 if start > end:
                     start = end
 
-                fetch_ga4_daily(
+                sync_payload = fetch_ga4_daily(
                     access_token=token,
                     property_id=prop.ga4_property_id,
                     start_date=start,
                     end_date=end,
                 )
+                traffic_rows = sync_payload.get("traffic_rows", []) if isinstance(sync_payload, dict) else sync_payload
+                page_rows = sync_payload.get("page_rows", []) if isinstance(sync_payload, dict) else []
+                for row in traffic_rows or []:
+                    upsert_website_traffic_daily(property_obj=prop, payload=row)
+                for row in page_rows or []:
+                    upsert_website_page_daily(property_obj=prop, payload=row)
 
                 prop.last_sync_at = timezone.now()
                 prop.last_sync_status = "ok"

@@ -24,6 +24,8 @@
     </div>
   </div>
 
+  {% include "marketing/_control_nav.html" %}
+
   <div class="mk-grid mk-kpi-grid">
     {% for card in kpi_cards %}
       <div class="mk-card mk-kpi-card">
@@ -40,6 +42,110 @@
   </div>
 
   <div class="mk-grid">
+    <div class="mk-card mk-span-12">
+      <div class="mk-section-head">
+        <div>
+          <div class="mk-section-title mb-0">Website and Google Search Snapshot</div>
+          <div class="mk-sub">Read-only analytics from stored background sync data. Page loads do not call Google APIs.</div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_website' %}">Website</a>
+          <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_google_search' %}">Google Search</a>
+        </div>
+      </div>
+
+      <div class="mk-grid">
+        <div class="mk-card mk-span-6">
+          <div class="mk-section-title">Website Traffic</div>
+          <div class="mk-metric-grid">
+            {% for card in website_summary.cards %}
+              <div class="mk-metric-card">
+                <div class="mk-label">{{ card.label }}</div>
+                <div class="mk-metric-value">{{ card.value }}</div>
+                <div class="mk-metric-change {% if card.change_pct > 0 %}up{% elif card.change_pct < 0 %}down{% endif %}">
+                  {% if card.change_pct > 0 %}+{% endif %}{{ card.change_pct|floatformat:0 }} percent vs previous
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="mk-card mk-span-6">
+          <div class="mk-section-title">Google Search Performance</div>
+          <div class="mk-metric-grid">
+            {% for card in google_search_summary.cards %}
+              <div class="mk-metric-card">
+                <div class="mk-label">{{ card.label }}</div>
+                <div class="mk-metric-value">{{ card.value }}</div>
+                <div class="mk-metric-change {% if card.change_pct > 0 %}up{% elif card.change_pct < 0 %}down{% endif %}">
+                  {% if card.change_pct > 0 %}+{% endif %}{{ card.change_pct|floatformat:0 }} percent vs previous
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="mk-card mk-span-6">
+          <div class="mk-section-title">Top Website Pages</div>
+          <div class="mk-table table-responsive">
+            <table class="table table-dark table-sm align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Page</th>
+                  <th>Visitors</th>
+                  <th>Views</th>
+                  <th>Conversions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in website_summary.top_pages|slice:":5" %}
+                  <tr>
+                    <td>
+                      <div class="mk-link-strong">{{ row.page_title|default:row.page_path }}</div>
+                      <div class="mk-hint">{{ row.page_path }}</div>
+                    </td>
+                    <td>{{ row.visitors }}</td>
+                    <td>{{ row.page_views }}</td>
+                    <td>{{ row.conversions }}</td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="4" class="mk-muted">No website analytics data yet.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="mk-card mk-span-6">
+          <div class="mk-section-title">Top Keywords</div>
+          <div class="mk-table table-responsive">
+            <table class="table table-dark table-sm align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Keyword</th>
+                  <th>Clicks</th>
+                  <th>Impressions</th>
+                  <th>Position</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in google_search_summary.query_rows|slice:":5" %}
+                  <tr>
+                    <td class="mk-link-strong">{{ row.query }}</td>
+                    <td>{{ row.clicks }}</td>
+                    <td>{{ row.impressions }}</td>
+                    <td>{{ row.avg_position|floatformat:1 }}</td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="4" class="mk-muted">No Google Search Console data yet.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="mk-card mk-span-12">
       <div class="mk-section-head">
         <div>
@@ -104,6 +210,171 @@
             </div>
           </div>
         {% endfor %}
+      </div>
+    </div>
+
+    <div class="mk-card mk-span-12">
+      <div class="mk-section-head">
+        <div>
+          <div class="mk-section-title mb-0">Marketing Revenue Attribution</div>
+          <div class="mk-sub">Read-only attribution using Lead and Opportunity UTM fields for the selected period.</div>
+        </div>
+      </div>
+
+      <div class="mk-driver-grid" style="margin-bottom:14px;">
+        {% for chip in revenue_attribution.summary_chips %}
+          <div class="mk-driver-chip">
+            <div class="mk-label">{{ chip.label }}</div>
+            <div class="mk-driver-value">{{ chip.value }}</div>
+          </div>
+        {% endfor %}
+      </div>
+
+      <div class="mk-section-head">
+        <div>
+          <div class="mk-section-title mb-0">Platform ROI</div>
+          <div class="mk-sub">Leads, opportunities, wins, and estimated value by attributed platform.</div>
+        </div>
+      </div>
+
+      <div class="mk-platform-grid" style="margin-bottom:14px;">
+        {% for row in revenue_attribution.platform_rows %}
+          <div class="mk-platform-card">
+            <div class="mk-platform-top">
+              <div class="mk-platform-name">{{ row.label }}</div>
+              {% if row.status_tone == 'good' %}
+                <span class="mk-pill mk-pill-good">{{ row.status }}</span>
+              {% elif row.status_tone == 'warn' %}
+                <span class="mk-pill mk-pill-warn">{{ row.status }}</span>
+              {% else %}
+                <span class="mk-pill">{{ row.status }}</span>
+              {% endif %}
+            </div>
+
+            <div class="mk-platform-primary">
+              <div>
+                <div class="mk-label">Leads</div>
+                <div class="mk-mini-stat">{{ row.leads }}</div>
+              </div>
+              <div>
+                <div class="mk-label">Opportunities</div>
+                <div class="mk-mini-stat">{{ row.opportunities }}</div>
+              </div>
+              <div>
+                <div class="mk-label">Won Deals</div>
+                <div class="mk-mini-stat">{{ row.won_deals }}</div>
+              </div>
+              <div>
+                <div class="mk-label">Estimated Value</div>
+                <div class="mk-mini-stat">{{ row.estimated_value|floatformat:0 }}</div>
+              </div>
+            </div>
+
+            <div class="mk-platform-footer">
+              <div>
+                <div class="mk-label">Lead to Opportunity</div>
+                <div class="mk-mini-stat">{{ row.lead_to_opp_rate|floatformat:1 }}%</div>
+              </div>
+              <div>
+                <div class="mk-label">Opportunity to Won</div>
+                <div class="mk-mini-stat">{{ row.opp_to_won_rate|floatformat:1 }}%</div>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      <div class="mk-grid">
+        <div class="mk-card mk-span-8">
+          <div class="mk-section-head">
+            <div>
+              <div class="mk-section-title mb-0">Campaign Performance</div>
+              <div class="mk-sub">Campaign rows are matched from UTM campaign, source, and medium only. Clicks show only when explicitly available.</div>
+            </div>
+          </div>
+
+          <div class="mk-table">
+            <table class="table table-dark table-sm mb-0">
+              <thead>
+                <tr>
+                  <th>Campaign</th>
+                  <th>Source</th>
+                  <th>Medium</th>
+                  <th>Clicks</th>
+                  <th>Leads</th>
+                  <th>Opportunities</th>
+                  <th>Won Deals</th>
+                  <th>Estimated Value</th>
+                  <th>Conversion Rate</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in revenue_attribution.campaign_rows %}
+                  <tr>
+                    <td>
+                      <div class="mk-row-title">Campaign</div>
+                      <span class="mk-link-strong">{{ row.campaign_name }}</span>
+                      {% if row.utm_campaign and row.campaign_name != row.utm_campaign %}
+                        <div class="mk-hint">UTM: {{ row.utm_campaign }}</div>
+                      {% endif %}
+                    </td>
+                    <td>{{ row.source|default:"Not set" }}</td>
+                    <td>{{ row.medium|default:"Not set" }}</td>
+                    <td>
+                      {% if row.clicks is not None %}
+                        {{ row.clicks }}
+                      {% else %}
+                        <span class="mk-muted">-</span>
+                      {% endif %}
+                    </td>
+                    <td>{{ row.leads }}</td>
+                    <td>{{ row.opportunities }}</td>
+                    <td>{{ row.won_deals }}</td>
+                    <td>{{ row.estimated_value|floatformat:0 }}</td>
+                    <td>
+                      {{ row.conversion_rate|floatformat:1 }}%
+                      {% if row.opportunities %}
+                        <div class="mk-hint">Won {{ row.won_rate|floatformat:1 }}%</div>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if row.status_tone == 'good' %}
+                        <span class="mk-pill mk-pill-good">{{ row.status }}</span>
+                      {% elif row.status_tone == 'warn' %}
+                        <span class="mk-pill mk-pill-warn">{{ row.status }}</span>
+                      {% else %}
+                        <span class="mk-pill">{{ row.status }}</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="10" class="mk-muted">No attributed campaign data yet.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="mk-card mk-span-4">
+          <div class="mk-section-head">
+            <div>
+              <div class="mk-section-title mb-0">Attribution Insights</div>
+              <div class="mk-sub">Short revenue and conversion notes from current UTM performance.</div>
+            </div>
+          </div>
+          <div class="mk-insight-list">
+            {% for insight in revenue_attribution.insights %}
+              <div class="mk-insight-item">
+                <div class="mk-insight-title">{{ insight.title }}</div>
+                <div class="mk-muted" style="margin-top:6px;">{{ insight.reason }}</div>
+                <div class="mk-insight-action">{{ insight.action }}</div>
+              </div>
+            {% empty %}
+              <div class="mk-empty-state">No attributed lead and opportunity data yet.</div>
+            {% endfor %}
+          </div>
+        </div>
       </div>
     </div>
 

@@ -80,6 +80,74 @@ class SeoPageDaily(models.Model):
         return f"{self.page} {self.date}"
 
 
+class WebsiteTrafficDaily(models.Model):
+    property = models.ForeignKey(SeoProperty, on_delete=models.CASCADE, related_name="traffic_days")
+    date = models.DateField(db_index=True)
+    channel = models.CharField(max_length=80, blank=True, default="", db_index=True)
+    source = models.CharField(max_length=120, blank=True, default="")
+    medium = models.CharField(max_length=120, blank=True, default="")
+    campaign = models.CharField(max_length=160, blank=True, default="")
+
+    visitors = models.PositiveIntegerField(default=0)
+    sessions = models.PositiveIntegerField(default=0)
+    engaged_sessions = models.PositiveIntegerField(default=0)
+    page_views = models.PositiveIntegerField(default=0)
+    events = models.PositiveIntegerField(default=0)
+    conversions = models.PositiveIntegerField(default=0)
+    engagement_rate = models.DecimalField(max_digits=6, decimal_places=4, default=Decimal("0"))
+    avg_engagement_seconds = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-date", "channel", "source")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["property", "date", "channel", "source", "medium", "campaign"],
+                name="website_traffic_daily_unique",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["property", "date"]),
+            models.Index(fields=["channel", "source"]),
+        ]
+
+    def __str__(self) -> str:
+        label = self.channel or self.source or "Website"
+        return f"{label} {self.date}"
+
+
+class WebsitePageDaily(models.Model):
+    property = models.ForeignKey(SeoProperty, on_delete=models.CASCADE, related_name="website_page_days")
+    date = models.DateField(db_index=True)
+    page_path = models.CharField(max_length=500, db_index=True)
+    page_title = models.CharField(max_length=300, blank=True, default="")
+
+    visitors = models.PositiveIntegerField(default=0)
+    sessions = models.PositiveIntegerField(default=0)
+    page_views = models.PositiveIntegerField(default=0)
+    entrances = models.PositiveIntegerField(default=0)
+    exits = models.PositiveIntegerField(default=0)
+    conversions = models.PositiveIntegerField(default=0)
+    avg_engagement_seconds = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-date", "page_path")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["property", "date", "page_path"],
+                name="website_page_daily_unique",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["property", "date"]),
+            models.Index(fields=["page_path"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.page_path} {self.date}"
+
+
 class SocialAccount(models.Model):
     PLATFORM_CHOICES = [
         ("facebook", "Facebook"),
@@ -650,11 +718,24 @@ class OAuthCredential(models.Model):
 
     encrypted_access_token = models.TextField(blank=True, default="")
     encrypted_refresh_token = models.TextField(blank=True, default="")
+    account_name = models.CharField(max_length=200, blank=True, default="")
+    account_id = models.CharField(max_length=120, blank=True, default="")
     expires_at = models.DateTimeField(null=True, blank=True)
     scopes = models.TextField(blank=True, default="")
+    is_active = models.BooleanField(default=True)
+    last_synced_at = models.DateTimeField(null=True, blank=True)
+    last_sync_status = models.CharField(max_length=30, blank=True, default="")
+    last_error = models.TextField(blank=True, default="")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("platform", "account_name", "account_id", "-updated_at")
+        indexes = [
+            models.Index(fields=["platform", "is_active"]),
+            models.Index(fields=["platform", "account_id"]),
+        ]
 
     def set_tokens(self, access_token: str = "", refresh_token: str = "", expires_at=None):
         self.encrypted_access_token = encrypt_value(access_token)
@@ -666,6 +747,22 @@ class OAuthCredential(models.Model):
 
     def get_refresh_token(self) -> str:
         return decrypt_value(self.encrypted_refresh_token)
+
+    @property
+    def token_expires_at(self):
+        return self.expires_at
+
+    @property
+    def has_access_token(self) -> bool:
+        return bool(self.get_access_token())
+
+    @property
+    def has_refresh_token(self) -> bool:
+        return bool(self.get_refresh_token())
+
+    def __str__(self) -> str:
+        label = self.account_name or self.account_id or self.get_platform_display()
+        return f"{self.get_platform_display()} {label}".strip()
 
 
 class OAuthConnectionRequest(models.Model):

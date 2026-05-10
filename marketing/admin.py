@@ -4,6 +4,8 @@ from .models import (
     SeoProperty,
     SeoQueryDaily,
     SeoPageDaily,
+    WebsiteTrafficDaily,
+    WebsitePageDaily,
     SocialAccount,
     SocialContent,
     SocialMetricDaily,
@@ -49,6 +51,20 @@ class SeoQueryDailyAdmin(admin.ModelAdmin):
 class SeoPageDailyAdmin(admin.ModelAdmin):
     list_display = ("property", "date", "page", "clicks", "impressions")
     list_filter = ("date",)
+
+
+@admin.register(WebsiteTrafficDaily)
+class WebsiteTrafficDailyAdmin(admin.ModelAdmin):
+    list_display = ("property", "date", "channel", "source", "visitors", "sessions", "page_views")
+    list_filter = ("date", "channel")
+    search_fields = ("source", "medium", "campaign")
+
+
+@admin.register(WebsitePageDaily)
+class WebsitePageDailyAdmin(admin.ModelAdmin):
+    list_display = ("property", "date", "page_path", "visitors", "sessions", "page_views")
+    list_filter = ("date",)
+    search_fields = ("page_path", "page_title")
 
 
 @admin.register(SocialAccount)

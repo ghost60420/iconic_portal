@@ -1,0 +1,281 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+{% include "marketing/_style.html" %}
+
+<style>
+  .mk-connection-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;}
+  .mk-connection-card{background:rgba(15,23,42,0.78);border:1px solid #243042;border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:12px;}
+  .mk-connection-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+  .mk-connection-actions{display:flex;flex-wrap:wrap;gap:8px;}
+  .mk-error-box{padding:10px 12px;border-radius:12px;border:1px solid rgba(248,113,113,0.32);background:rgba(127,29,29,0.22);color:#fecaca;}
+  .mk-token-state{display:flex;flex-wrap:wrap;gap:8px;}
+  .mk-token-pill{padding:4px 9px;border-radius:999px;border:1px solid #334155;background:#0f172a;color:#cbd5e1;font-size:11px;font-weight:900;}
+  .mk-token-pill.ok{border-color:#22c55e;color:#22c55e;background:rgba(34,197,94,0.12);}
+  .mk-token-pill.warn{border-color:#f59e0b;color:#f59e0b;background:rgba(245,158,11,0.12);}
+  @media (max-width: 1100px){
+    .mk-connection-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  }
+  @media (max-width: 700px){
+    .mk-connection-grid{grid-template-columns:repeat(1,minmax(0,1fr));}
+    .mk-connection-meta{grid-template-columns:repeat(1,minmax(0,1fr));}
+  }
+</style>
+
+<div class="mk-container">
+  <div class="mk-header">
+    <div>
+      <div class="mk-title">Connection Settings</div>
+      <div class="mk-sub">Admin-managed read-only connections for website, search, and social analytics.</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_dashboard' %}">Dashboard</a>
+    </div>
+  </div>
+
+  {% include "marketing/_control_nav.html" %}
+
+  <div class="mk-card mk-span-12" style="margin-bottom:14px;">
+    <div class="mk-section-title">Connection Scope</div>
+    <div class="mk-hint">
+      This page stores API credentials for analytics reads only. Tokens are encrypted using the marketing encryption key or Django secret key fallback.
+    </div>
+    <div class="mk-hint" style="margin-top:8px;">
+      Manual sync uses background management commands and keeps page loads fast.
+    </div>
+  </div>
+
+  <div class="mk-connection-grid" style="margin-bottom:14px;">
+    {% for card in cards %}
+      <div class="mk-connection-card">
+        <div class="mk-platform-top" style="margin-bottom:0;">
+          <div>
+            <div class="mk-platform-name">{{ card.config.label }}</div>
+            <div class="mk-hint">{{ card.config.api_name }}</div>
+            {% if card.config.phase %}<div class="mk-hint">{{ card.config.phase }}</div>{% endif %}
+          </div>
+          {% if card.connection %}
+            {% if card.last_sync_status == "ok" %}
+              <span class="mk-pill mk-pill-good">Connected</span>
+            {% elif card.last_sync_status == "error" %}
+              <span class="mk-pill mk-pill-warn">Needs Attention</span>
+            {% else %}
+              <span class="mk-pill">Saved</span>
+            {% endif %}
+          {% else %}
+            <span class="mk-pill">Not Connected</span>
+          {% endif %}
+        </div>
+
+        {% if card.connection %}
+          <div>
+            <div class="mk-section-title" style="margin-bottom:4px;">{{ card.connection.account_name|default:"Unnamed account" }}</div>
+            <div class="mk-hint">{{ card.connection.account_id|default:"No account id" }}</div>
+            {% if card.connection_count > 1 %}
+              <div class="mk-hint" style="margin-top:6px;">{{ card.connection_count }} saved connections for this platform.</div>
+            {% endif %}
+          </div>
+        {% else %}
+          <div class="mk-empty-state" style="padding:12px;">
+            No {{ card.config.label }} connection saved yet.
+          </div>
+        {% endif %}
+
+        <div class="mk-token-state">
+          <span class="mk-token-pill {% if card.has_access_token %}ok{% else %}warn{% endif %}">
+            {% if card.has_access_token %}Access token saved{% else %}Access token missing{% endif %}
+          </span>
+          <span class="mk-token-pill {% if card.has_refresh_token %}ok{% else %}warn{% endif %}">
+            {% if card.has_refresh_token %}Refresh token saved{% else %}Refresh token optional{% endif %}
+          </span>
+        </div>
+
+        <div class="mk-connection-meta">
+          <div>
+            <div class="mk-label">Last Sync</div>
+            <div class="mk-mini-stat">{{ card.last_synced_at|date:"Y-m-d H:i"|default:"Never synced" }}</div>
+          </div>
+          <div>
+            <div class="mk-label">Status</div>
+            <div class="mk-mini-stat">{{ card.last_sync_status|default:"Not synced" }}</div>
+          </div>
+        </div>
+
+        {% if card.last_error %}
+          <div class="mk-error-box">
+            {{ card.last_error }}
+          </div>
+        {% endif %}
+
+        <div class="mk-hint">
+          Manual command: <code>{{ card.config.command_hint }}</code>
+        </div>
+
+        <div class="mk-connection-actions">
+          <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_connect' %}?platform={{ card.config.key }}#connection-form">
+            {% if card.connection %}Add another{% else %}Add connection{% endif %}
+          </a>
+          {% if card.connection %}
+            <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_connect' %}?edit={{ card.connection.pk }}#connection-form">Edit</a>
+            <form method="post" action="{% url 'marketing_social_connection_sync' card.connection.pk %}">
+              {% csrf_token %}
+              <button class="btn btn-warning mk-btn" type="submit">Sync Now</button>
+            </form>
+          {% endif %}
+          {% if card.config.oauth_supported %}
+            {% if meta_configured %}
+              <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_meta_oauth_start' %}">{{ card.config.oauth_label }}</a>
+            {% else %}
+              <span class="mk-hint">Meta OAuth requires app ID, secret, and redirect URI.</span>
+            {% endif %}
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="mk-grid">
+    <div class="mk-card" style="grid-column: span 7;">
+      <div class="mk-section-head">
+        <div>
+          <div class="mk-section-title mb-0">Saved Connections</div>
+          <div class="mk-sub">Read-only analytics credentials by platform account.</div>
+        </div>
+      </div>
+
+      {% if connections %}
+        <div class="mk-table">
+          <table class="table table-dark table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Platform</th>
+                <th>Account</th>
+                <th>Token</th>
+                <th>Last Sync</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for connection in connections %}
+                <tr>
+                  <td>{{ connection.get_platform_display }}</td>
+                  <td>
+                    <div>{{ connection.account_name|default:"-" }}</div>
+                    <div class="mk-hint">{{ connection.account_id|default:"No account id" }}</div>
+                  </td>
+                  <td>
+                    {% if connection.has_access_token %}
+                      <span class="mk-pill mk-pill-good">Saved</span>
+                    {% else %}
+                      <span class="mk-pill mk-pill-warn">Missing</span>
+                    {% endif %}
+                  </td>
+                  <td>{{ connection.last_synced_at|date:"Y-m-d H:i"|default:"Never" }}</td>
+                  <td>
+                    {{ connection.last_sync_status|default:"Not synced" }}
+                    {% if connection.last_error %}
+                      <div class="mk-hint">{{ connection.last_error }}</div>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <div class="d-flex gap-2 flex-wrap">
+                      <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_connect' %}?edit={{ connection.pk }}#connection-form">Edit</a>
+                      <form method="post" action="{% url 'marketing_social_connection_sync' connection.pk %}">
+                        {% csrf_token %}
+                        <button class="btn btn-warning mk-btn" type="submit">Sync Now</button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="mk-empty-state">No marketing analytics connections saved yet.</div>
+      {% endif %}
+    </div>
+
+    <div class="mk-card" id="connection-form" style="grid-column: span 5;">
+      <div class="mk-section-head">
+        <div>
+          <div class="mk-section-title mb-0">{% if editable_connection %}Edit Connection{% else %}Add Connection{% endif %}</div>
+          <div class="mk-sub">Store read-only API credentials without exposing raw tokens in the UI.</div>
+        </div>
+      </div>
+
+      {% if editable_connection %}
+        <div class="mk-hint" style="margin-bottom:12px;">
+          Existing tokens stay in place unless you paste new ones below.
+        </div>
+      {% endif %}
+
+      <form method="post" class="mk-form">
+        {% csrf_token %}
+        {{ form.connection_id }}
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="mk-label">Platform</label>
+            {{ form.platform }}
+            {% for error in form.platform.errors %}<div class="mk-hint text-danger">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-6">
+            <label class="mk-label">Active</label>
+            <div class="form-check" style="padding-top:9px;">
+              {{ form.is_active }}
+              <label class="form-check-label" for="{{ form.is_active.id_for_label }}">Connection can sync</label>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="mk-label">Account Name</label>
+            {{ form.account_name }}
+            {% for error in form.account_name.errors %}<div class="mk-hint text-danger">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-6">
+            <label class="mk-label">Account ID</label>
+            {{ form.account_id }}
+            {% for error in form.account_id.errors %}<div class="mk-hint text-danger">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-6">
+            <label class="mk-label">Access Token</label>
+            {{ form.access_token }}
+            {% for error in form.access_token.errors %}<div class="mk-hint text-danger">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-6">
+            <label class="mk-label">Refresh Token</label>
+            {{ form.refresh_token }}
+            {% for error in form.refresh_token.errors %}<div class="mk-hint text-danger">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-6">
+            <label class="mk-label">Token Expires At</label>
+            {{ form.token_expires_at }}
+            {% for error in form.token_expires_at.errors %}<div class="mk-hint text-danger">{{ error }}</div>{% endfor %}
+          </div>
+          <div class="col-md-6">
+            <label class="mk-label">Scopes</label>
+            {{ form.scopes }}
+            {% for error in form.scopes.errors %}<div class="mk-hint text-danger">{{ error }}</div>{% endfor %}
+          </div>
+        </div>
+
+        <div class="mk-hint" style="margin-top:12px;">
+          Facebook and Instagram can use the Meta OAuth button above. Other platforms use official developer portal credentials pasted here for analytics-only access.
+        </div>
+        <div class="mk-hint" style="margin-top:8px;">
+          {% if meta_configured %}
+            Meta redirect URI: <code>{{ meta_redirect_uri }}</code>
+          {% else %}
+            Meta OAuth is not configured in this environment.
+          {% endif %}
+        </div>
+
+        <div class="d-flex gap-2 flex-wrap" style="margin-top:16px;">
+          <button class="btn btn-warning mk-btn" type="submit">Save Connection</button>
+          <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_connect' %}">Reset</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
