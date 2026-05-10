@@ -1,467 +1,364 @@
 {% extends "crm/base.html" %}
+{% load static %}
 {% block content %}
+<link rel="stylesheet" href="{% static 'crm/shipment_detail.css' %}?v=shipping-detail-modern-20260508">
 
-<style>
-  .ship-page {
-    max-width: 960px;
-    margin: 16px auto;
-    padding: 0 10px 24px 10px;
-    color: #f9fafb;
-  }
-
-  .ship-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 12px;
-    flex-wrap: wrap;
-  }
-
-  .ship-title {
-    font-size: 18px;
-    font-weight: 600;
-  }
-
-  .ship-subtitle {
-    font-size: 12px;
-    color: #9ca3af;
-  }
-
-  .ship-actions .btn {
-    margin-left: 4px;
-    margin-bottom: 4px;
-  }
-
-  .btn {
-    display: inline-block;
-    padding: 4px 10px;
-    border-radius: 999px;
-    border: 1px solid transparent;
-    font-size: 12px;
-    cursor: pointer;
-    text-decoration: none;
-    white-space: nowrap;
-  }
-
-  .btn-slate {
-    background: #020617;
-    color: #e5e7eb;
-    border-color: #374151;
-  }
-
-  .btn-gold {
-    background: linear-gradient(135deg, #facc15, #f97316);
-    color: #111827;
-    border-color: #fbbf24;
-    font-weight: 600;
-  }
-
-  .btn-soft {
-    background: rgba(148, 163, 184, 0.2);
-    color: #e5e7eb;
-    border-color: #64748b;
-  }
-
-  .btn-small {
-    padding: 3px 8px;
-    font-size: 11px;
-  }
-
-  .pill {
-    display: inline-flex;
-    align-items: center;
-    padding: 2px 8px;
-    border-radius: 999px;
-    border: 1px solid #4b5563;
-    font-size: 11px;
-    background: #020617;
-    color: #e5e7eb;
-  }
-
-  .pill-green {
-    border-color: #22c55e;
-    color: #bbf7d0;
-    background: rgba(22, 163, 74, 0.25);
-  }
-
-  .pill-orange {
-    border-color: #f97316;
-    color: #fed7aa;
-    background: rgba(248, 113, 113, 0.15);
-  }
-
-  .pill-sky {
-    border-color: #0ea5e9;
-    color: #bae6fd;
-    background: rgba(8, 47, 73, 0.7);
-  }
-
-  .pill-blue {
-    border-color: #38bdf8;
-    color: #bae6fd;
-    background: rgba(56, 189, 248, 0.18);
-  }
-
-  .card-shell {
-    background: radial-gradient(circle at top left, #111827, #020617);
-    border: 1px solid #1f2937;
-    border-radius: 10px;
-    padding: 10px 12px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.7);
-  }
-
-  .card-shell + .card-shell {
-    margin-top: 12px;
-  }
-
-  .card-title-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 6px;
-    border-bottom: 1px solid #111827;
-    padding-bottom: 4px;
-    font-size: 13px;
-    font-weight: 600;
-  }
-
-  .card-title-row span.emoji {
-    margin-right: 4px;
-  }
-
-  .ship-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: 18px;
-    row-gap: 4px;
-    font-size: 13px;
-  }
-
-  .ship-row {
-    display: flex;
-    margin-bottom: 2px;
-  }
-
-  .ship-label {
-    color: #9ca3af;
-    width: 130px;
-    font-size: 12px;
-  }
-
-  .ship-value {
-    font-size: 13px;
-    color: #f9fafb;
-  }
-
-  .muted {
-    color: #9ca3af;
-    font-size: 12px;
-  }
-
-  .status-timeline {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-top: 8px;
-  }
-
-  .status-chip {
-    padding: 4px 10px;
-    border-radius: 999px;
-    border: 1px solid #374151;
-    font-size: 11px;
-    color: #e5e7eb;
-    background: #020617;
-  }
-
-  .status-chip.active {
-    border-color: #facc15;
-    color: #fef9c3;
-    box-shadow: 0 0 0 1px rgba(250,204,21,0.35);
-  }
-
-  @media (max-width: 768px) {
-    .ship-grid {
-      grid-template-columns: minmax(0, 1fr);
-    }
-    .ship-label {
-      width: 120px;
-    }
-  }
-</style>
-
-<div class="ship-page">
-
-  <!-- header -->
-  <div class="ship-header">
-    <div>
-      <div class="ship-title">
-        📦 Shipment detail
-      </div>
-      <div class="ship-subtitle">
-        ID {{ shipment.id }}{% if shipment.ship_date %} • Ship date {{ shipment.ship_date }}{% endif %}
-      </div>
-    </div>
-
-    <div class="ship-actions">
-      <a href="{% url 'shipment_list' %}" class="btn btn-slate btn-small">Back to list</a>
-      <a href="{% url 'shipment_edit' shipment.pk %}" class="btn btn-soft btn-small">Edit</a>
-
-      {% if shipment.customer and shipment.customer.email %}
-        <a href="{% url 'shipment_notify_customer' shipment.pk %}" class="btn btn-gold btn-small">
-          Email customer
-        </a>
-      {% endif %}
-
-      <a href="{% url 'shipment_refresh_tracking' shipment.pk %}" class="btn btn-soft btn-small">
-        Refresh tracking
-      </a>
-    </div>
-  </div>
-
-  <div class="card-shell" style="margin-bottom:10px;">
-    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
-      <div class="muted">Quick status update</div>
-      <form method="post" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="update_status">
-        <select name="status" class="btn btn-soft btn-small" style="padding:4px 8px;">
-          {% for key, label in shipment.STATUS_CHOICES %}
-            <option value="{{ key }}" {% if shipment.status == key %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-        <button type="submit" class="btn btn-gold btn-small">Update</button>
-      </form>
-    </div>
-    <div class="status-timeline">
-      <span class="status-chip {% if shipment.status == 'planned' %}active{% endif %}">Planned</span>
-      <span class="status-chip {% if shipment.status == 'booked' %}active{% endif %}">Booked</span>
-      <span class="status-chip {% if shipment.status == 'shipped' %}active{% endif %}">Shipped</span>
-      <span class="status-chip {% if shipment.status == 'out_for_delivery' %}active{% endif %}">Out for delivery</span>
-      <span class="status-chip {% if shipment.status == 'delivered' %}active{% endif %}">Delivered</span>
-      <span class="status-chip {% if shipment.status == 'cancelled' %}active{% endif %}">Cancelled</span>
-    </div>
-  </div>
-
-  <!-- summary strip -->
-  <div class="card-shell" style="margin-bottom:10px;">
-    <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
-      <span class="pill pill-sky">
-        {{ shipment.get_carrier_display }}{% if shipment.shipment_type %} • {{ shipment.get_shipment_type_display }}{% endif %}
-      </span>
-
-      {% if shipment.ship_date %}
-        <span class="pill">
-          Ship date {{ shipment.ship_date }}
-        </span>
-      {% endif %}
-
-      <span class="pill
-        {% if shipment.status == 'delivered' %}pill-green
-        {% elif shipment.status == 'out_for_delivery' %}pill-blue
-        {% elif shipment.status == 'shipped' %}pill-orange
-        {% else %}pill{% endif %}
-      ">
-        Status {{ shipment.get_status_display }}
-      </span>
-
-      {% if shipment.cost_bdt %}
-        <span class="pill pill-green">
-          Cost {{ shipment.cost_bdt }} taka
-        </span>
-      {% endif %}
-
-      {% if shipment.cost_cad %}
-        <span class="pill">
-          Cost {{ shipment.cost_cad }} cad
-        </span>
-      {% endif %}
-    </div>
-  </div>
-
-  <!-- main info cards -->
-  <div class="card-shell">
-    <div class="card-title-row">
-      <div>
-        <span class="emoji">🚚</span> Shipping info
-      </div>
-    </div>
-
-    <div class="ship-grid">
-
-      <div class="ship-row">
-        <div class="ship-label">Carrier</div>
-        <div class="ship-value">{{ shipment.get_carrier_display }}</div>
-      </div>
-
-      <div class="ship-row">
-        <div class="ship-label">Tracking</div>
-        <div class="ship-value">
-          {% if shipment.tracking_number %}
-            {% if shipment.tracking_url %}
-              <a href="{{ shipment.tracking_url }}" target="_blank" style="color:#fbbf24;">
-                {{ shipment.tracking_number }}
-              </a>
-            {% else %}
-              {{ shipment.tracking_number }}
-            {% endif %}
-          {% else %}
-            <span class="muted">Not set</span>
-          {% endif %}
-        </div>
-      </div>
-      
-      <div class="ship-row">
-        <div class="ship-label">Last tracking</div>
-        <div class="ship-value">
-          {% if shipment.last_tracking_status %}
-            {{ shipment.last_tracking_status }}
-            {% if shipment.last_tracking_check %}
-              <span class="muted"> ({{ shipment.last_tracking_check }})</span>
-            {% endif %}
-          {% else %}
-            <span class="muted">No tracking update yet</span>
-          {% endif %}
-        </div>
-      </div>
-
-      <div class="ship-row">
-        <div class="ship-label">Ship date</div>
-        <div class="ship-value">
-          {% if shipment.ship_date %}
-            {{ shipment.ship_date }}
-          {% else %}
-            <span class="muted">Not set</span>
-          {% endif %}
-        </div>
-      </div>
-
-      <div class="ship-row">
-        <div class="ship-label">Shipment type</div>
-        <div class="ship-value">
-          {% if shipment.shipment_type %}
-            {{ shipment.get_shipment_type_display }}
-          {% else %}
-            <span class="muted">Not set</span>
-          {% endif %}
-        </div>
-      </div>
-
-      <div class="ship-row">
-        <div class="ship-label">Boxes</div>
-        <div class="ship-value">
-          {% if shipment.box_count %}
-            {{ shipment.box_count }}
-          {% else %}
-            <span class="muted">Not set</span>
-          {% endif %}
-        </div>
-      </div>
-
-      <div class="ship-row">
-        <div class="ship-label">Total weight kg</div>
-        <div class="ship-value">
-          {% if shipment.total_weight_kg %}
-            {{ shipment.total_weight_kg }}
-          {% else %}
-            <span class="muted">Not set</span>
-          {% endif %}
-        </div>
-      </div>
-
-      <div class="ship-row">
-        <div class="ship-label">Cost taka</div>
-        <div class="ship-value">
-          {% if shipment.cost_bdt %}
-            {{ shipment.cost_bdt }}
-          {% else %}
-            <span class="muted">Not set</span>
-          {% endif %}
-        </div>
-      </div>
-
-      <div class="ship-row">
-        <div class="ship-label">Cost cad</div>
-        <div class="ship-value">
-          {% if shipment.cost_cad %}
-            {{ shipment.cost_cad }}
-          {% else %}
-            <span class="muted">Not set</span>
-          {% endif %}
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <div class="card-shell">
-    <div class="card-title-row">
-      <div>
-        <span class="emoji">👥</span> Linked records
-      </div>
-    </div>
-
-    <div class="ship-row">
-      <div class="ship-label">Opportunity</div>
-      <div class="ship-value">
-        {% if shipment.opportunity %}
-          <a href="{% url 'opportunity_detail' shipment.opportunity.pk %}" style="color:#fbbf24;">
-            {{ shipment.opportunity.opportunity_id }}
-          </a>
-        {% else %}
-          <span class="muted">None</span>
-        {% endif %}
-      </div>
-    </div>
-
-    <div class="ship-row">
-      <div class="ship-label">Order</div>
-      <div class="ship-value">
-        {% if shipment.order %}
-          <a href="{% url 'production_detail' shipment.order.pk %}" style="color:#fbbf24;">
-            {{ shipment.order.order_code }} {{ shipment.order.title }}
-          </a>
-        {% else %}
-          <span class="muted">None</span>
-        {% endif %}
-      </div>
-    </div>
-
-    <div class="ship-row">
-      <div class="ship-label">Customer</div>
-      <div class="ship-value">
+<div class="shipping-detail">
+  <section class="shipping-detail-hero">
+    <div class="shipping-hero-copy">
+      <p class="shipping-eyebrow">Logistics workspace</p>
+      <h1>SHP-{{ shipment.pk|stringformat:"05d" }}</h1>
+      <div class="shipping-hero-title">
         {% if shipment.customer %}
           {{ shipment.customer.account_brand|default:shipment.customer.contact_name|default:shipment.customer }}
+        {% elif shipment.opportunity %}
+          Opportunity {{ shipment.opportunity.opportunity_id }}
+        {% elif shipment.order %}
+          {{ shipment.order.title }}
         {% else %}
-          <span class="muted">None</span>
+          Client not linked
         {% endif %}
       </div>
-    </div>
-  </div>
-
-  <div class="card-shell">
-    <div class="card-title-row">
-      <div>
-        <span class="emoji">📝</span> Notes
+      <div class="shipping-hero-meta">
+        <span class="shipping-status-badge status-{{ shipment.status }}">{{ shipment.get_status_display }}</span>
+        <span>{{ shipment.get_carrier_display }}</span>
+        <span>{% if shipment.tracking_number %}{{ shipment.tracking_number }}{% else %}Tracking pending{% endif %}</span>
+        <span>{{ shipment.get_shipment_type_display|default:"Shipment type not set" }}</span>
       </div>
     </div>
-    <p class="ship-value" style="margin-bottom:0;">
-      {% if shipment.notes %}
-        {{ shipment.notes|linebreaksbr }}
-      {% else %}
-        <span class="muted">No notes for this shipment.</span>
-      {% endif %}
-    </p>
-  </div>
 
+    <div class="shipping-hero-actions" aria-label="Shipping quick actions">
+      <a href="{% url 'shipment_edit' shipment.pk %}" class="shipping-btn shipping-btn--primary">Edit Shipment</a>
+      {% if shipment.tracking_url %}
+        <a href="{{ shipment.tracking_url }}" target="_blank" rel="noopener" class="shipping-btn shipping-btn--ghost">Track Shipment</a>
+        <a href="{% url 'shipment_refresh_tracking' shipment.pk %}" class="shipping-btn shipping-btn--ghost">Refresh Tracking</a>
+      {% else %}
+        <a href="{% url 'shipment_refresh_tracking' shipment.pk %}" class="shipping-btn shipping-btn--ghost">Track Shipment</a>
+      {% endif %}
+      <a href="#shipping-status" class="shipping-btn shipping-btn--ghost">Update Status</a>
+      {% if shipment.order %}
+        <a href="{% url 'production_detail' shipment.order.pk %}" class="shipping-btn shipping-btn--ghost">Open Production</a>
+      {% endif %}
+      {% if shipment.opportunity %}
+        <a href="{% url 'opportunity_detail' shipment.opportunity.pk %}" class="shipping-btn shipping-btn--ghost">Open Opportunity</a>
+      {% endif %}
+      <a href="{% url 'shipment_list' %}" class="shipping-btn shipping-btn--ghost">Back to Shipments</a>
+    </div>
+  </section>
+
+  <section class="shipping-snapshot-grid" aria-label="Shipping snapshot">
+    <article class="shipping-snapshot-card">
+      <span>Total boxes</span>
+      <strong>{{ shipment.box_count|default:"-" }}</strong>
+      <small>{% if shipment.box_count %}Packed shipment boxes{% else %}Not set{% endif %}</small>
+    </article>
+    <article class="shipping-snapshot-card">
+      <span>Total weight</span>
+      <strong>{{ shipment.total_weight_kg|default:"-" }}</strong>
+      <small>kg</small>
+    </article>
+    <article class="shipping-snapshot-card">
+      <span>Shipping cost</span>
+      <strong>{% if shipment.cost_cad %}{{ shipment.cost_cad }}{% elif shipment.cost_bdt %}{{ shipment.cost_bdt }}{% else %}-{% endif %}</strong>
+      <small>{% if shipment.cost_cad %}CAD{% elif shipment.cost_bdt %}BDT{% else %}Not set{% endif %}</small>
+    </article>
+    <article class="shipping-snapshot-card">
+      <span>Ship date</span>
+      <strong>{{ shipment.ship_date|date:"M j"|default:"-" }}</strong>
+      <small>{{ shipment.ship_date|date:"Y"|default:"Not set" }}</small>
+    </article>
+    <article class="shipping-snapshot-card">
+      <span>Estimated delivery</span>
+      <strong>-</strong>
+      <small>No ETA field on shipment record</small>
+    </article>
+    <article class="shipping-snapshot-card">
+      <span>Delivered date</span>
+      <strong>{{ shipment.delivered_at|date:"M j"|default:"-" }}</strong>
+      <small>{% if shipment.delivered_at %}{{ shipment.delivered_at|date:"Y H:i" }}{% else %}Not delivered yet{% endif %}</small>
+    </article>
+  </section>
+
+  <section class="shipping-detail-grid">
+    <main class="shipping-main-column">
+      <article class="shipping-panel" id="shipping-status">
+        <div class="shipping-panel-head">
+          <div>
+            <h2>Tracking and Delivery</h2>
+            <p>Carrier, tracking, timeline, destination, and current delivery signals.</p>
+          </div>
+          <form method="post" class="shipping-status-form">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="update_status">
+            <select name="status" aria-label="Update shipment status">
+              {% for key, label in shipment.STATUS_CHOICES %}
+                <option value="{{ key }}" {% if shipment.status == key %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="shipping-btn shipping-btn--primary">Update</button>
+          </form>
+        </div>
+
+        <div class="shipping-timeline" aria-label="Shipment status timeline">
+          <span class="{% if shipment.status == 'planned' %}active{% endif %}">Planned</span>
+          <span class="{% if shipment.status == 'booked' %}active{% endif %}">Booked</span>
+          <span class="{% if shipment.status == 'shipped' %}active{% endif %}">Shipped</span>
+          <span class="{% if shipment.status == 'out_for_delivery' %}active{% endif %}">Out for delivery</span>
+          <span class="{% if shipment.status == 'delivered' %}active{% endif %}">Delivered</span>
+          <span class="{% if shipment.status == 'cancelled' %}active{% endif %}">Cancelled</span>
+        </div>
+
+        <div class="shipping-info-grid">
+          <div>
+            <span>Tracking number</span>
+            <strong>
+              {% if shipment.tracking_number %}
+                {% if shipment.tracking_url %}
+                  <a href="{{ shipment.tracking_url }}" target="_blank" rel="noopener">{{ shipment.tracking_number }}</a>
+                {% else %}
+                  {{ shipment.tracking_number }}
+                {% endif %}
+              {% else %}
+                Not set
+              {% endif %}
+            </strong>
+          </div>
+          <div>
+            <span>Carrier</span>
+            <strong>{{ shipment.get_carrier_display }}</strong>
+          </div>
+          <div>
+            <span>Delivery ETA</span>
+            <strong>Not set</strong>
+          </div>
+          <div>
+            <span>External tracking link</span>
+            <strong>
+              {% if shipment.tracking_url %}
+                <a href="{{ shipment.tracking_url }}" target="_blank" rel="noopener">Open carrier tracking</a>
+              {% else %}
+                Carrier link not available.
+              {% endif %}
+            </strong>
+          </div>
+          <div>
+            <span>Delivered at</span>
+            <strong>{{ shipment.delivered_at|date:"M j, Y H:i"|default:"-" }}</strong>
+          </div>
+          <div>
+            <span>Destination city</span>
+            <strong>{% if shipment.customer %}{{ shipment.customer.shipping_city|default:shipment.customer.city|default:"-" }}{% else %}-{% endif %}</strong>
+          </div>
+          <div>
+            <span>Destination country</span>
+            <strong>{% if shipment.customer %}{{ shipment.customer.shipping_country|default:shipment.customer.country|default:"-" }}{% else %}-{% endif %}</strong>
+          </div>
+          <div class="shipping-info-wide">
+            <span>Last tracking update</span>
+            <strong>
+              {% if shipment.last_tracking_status %}
+                {{ shipment.last_tracking_status }}{% if shipment.last_tracking_check %} / {{ shipment.last_tracking_check|date:"M j, Y H:i" }}{% endif %}
+              {% else %}
+                No tracking update saved yet.
+              {% endif %}
+            </strong>
+          </div>
+          <div class="shipping-info-wide">
+            <span>Delivery notes</span>
+            <strong>{{ shipment.notes|default:"No delivery notes yet." }}</strong>
+          </div>
+        </div>
+      </article>
+
+      <article class="shipping-panel">
+        <div class="shipping-panel-head">
+          <div>
+            <h2>Linked Records</h2>
+            <p>Production, opportunity, invoice, and customer context for this shipment.</p>
+          </div>
+        </div>
+
+        <div class="shipping-linked-grid">
+          <article>
+            <span>Production order</span>
+            {% if shipment.order %}
+              <strong>{{ shipment.order.order_code|default:shipment.order.pk }}</strong>
+              <small>{{ shipment.order.title }}</small>
+              <a href="{% url 'production_detail' shipment.order.pk %}" class="shipping-inline-link">Open Production</a>
+            {% else %}
+              <strong>Not linked</strong>
+            {% endif %}
+          </article>
+          <article>
+            <span>Opportunity</span>
+            {% if shipment.opportunity %}
+              <strong>{{ shipment.opportunity.opportunity_id }}</strong>
+              <small>{{ shipment.opportunity.stage|default:"Opportunity" }}</small>
+              <a href="{% url 'opportunity_detail' shipment.opportunity.pk %}" class="shipping-inline-link">Open Opportunity</a>
+            {% else %}
+              <strong>Not linked</strong>
+            {% endif %}
+          </article>
+          <article>
+            <span>Customer</span>
+            {% if shipment.customer %}
+              <strong>{{ shipment.customer.account_brand|default:shipment.customer.contact_name|default:shipment.customer }}</strong>
+              <small>{{ shipment.customer.email|default:"No email" }}</small>
+              <a href="{% url 'customer_detail' shipment.customer.pk %}" class="shipping-inline-link">Open Customer</a>
+            {% else %}
+              <strong>Not linked</strong>
+            {% endif %}
+          </article>
+          <article>
+            <span>Invoices</span>
+            {% if shipment.order %}
+              {% for invoice in shipment.order.invoices.all %}
+                <strong><a href="{% url 'invoice_view' invoice.pk %}" class="shipping-inline-link">{{ invoice.invoice_number }}</a></strong>
+                <small>{{ invoice.get_status_display }} / {{ invoice.total_amount }} {{ invoice.currency }}</small>
+              {% empty %}
+                <strong>No linked invoices</strong>
+              {% endfor %}
+            {% else %}
+              <strong>No production order</strong>
+            {% endif %}
+          </article>
+        </div>
+      </article>
+
+      <article class="shipping-panel">
+        <div class="shipping-panel-head">
+          <div>
+            <h2>Shipping Documents</h2>
+            <p>Available shipment, invoice, tracking, and order documents.</p>
+          </div>
+        </div>
+
+        <div class="shipping-doc-links">
+          {% if shipment.tracking_url %}
+            <a href="{{ shipment.tracking_url }}" target="_blank" rel="noopener" class="shipping-doc-link">Carrier tracking page</a>
+          {% endif %}
+          {% if shipment.order %}
+            <a href="{% url 'production_order_sheet_pdf' shipment.order.pk %}" class="shipping-doc-link">Production order sheet</a>
+            <a href="{% url 'production_packing_list_pdf' shipment.order.pk %}" class="shipping-doc-link">Packing list</a>
+            {% for invoice in shipment.order.invoices.all %}
+              <a href="{% url 'invoice_view' invoice.pk %}" class="shipping-doc-link">Invoice {{ invoice.invoice_number }}</a>
+            {% endfor %}
+          {% endif %}
+          <span class="shipping-doc-placeholder">Shipping labels: not uploaded</span>
+          <span class="shipping-doc-placeholder">Customs documents: not uploaded</span>
+          <span class="shipping-doc-placeholder">Uploaded files: no shipment file field</span>
+          {% if not shipment.tracking_url and not shipment.order %}
+            <span class="shipping-empty-inline">No linked documents available yet.</span>
+          {% endif %}
+        </div>
+      </article>
+
+      <article class="shipping-panel">
+        <div class="shipping-panel-head">
+          <div>
+            <h2>Activity and Notes</h2>
+            <p>Shipping updates, internal notes, and delivery handoff details.</p>
+          </div>
+        </div>
+
+        <div class="shipping-activity-list">
+          <article>
+            <span>Status update</span>
+            <strong>{{ shipment.get_status_display }}</strong>
+            <small>Last updated {{ shipment.updated_at|date:"M j, Y H:i" }}</small>
+          </article>
+          <article>
+            <span>Tracking check</span>
+            <strong>{{ shipment.last_tracking_status|default:"No tracking update saved yet." }}</strong>
+            <small>{% if shipment.last_tracking_check %}Checked {{ shipment.last_tracking_check|date:"M j, Y H:i" }}{% else %}Use Track Shipment to refresh tracking status{% endif %}</small>
+          </article>
+          <article>
+            <span>Internal notes</span>
+            <strong>{{ shipment.notes|default:"No notes for this shipment." }}</strong>
+          </article>
+        </div>
+      </article>
+    </main>
+
+    <aside class="shipping-side-column">
+      <article class="shipping-panel">
+        <div class="shipping-panel-head">
+          <div>
+            <h2>Client Visibility</h2>
+            <p>Customer contact and delivery destination.</p>
+          </div>
+        </div>
+        <div class="shipping-side-list">
+          <div>
+            <span>Company</span>
+            <strong>{% if shipment.customer %}{{ shipment.customer.account_brand|default:shipment.customer.contact_name|default:shipment.customer }}{% else %}Not linked{% endif %}</strong>
+          </div>
+          <div>
+            <span>Email</span>
+            <strong>{% if shipment.customer %}{{ shipment.customer.email|default:"No email" }}{% else %}-{% endif %}</strong>
+          </div>
+          <div>
+            <span>Phone</span>
+            <strong>{% if shipment.customer %}{{ shipment.customer.phone|default:"No phone" }}{% else %}-{% endif %}</strong>
+          </div>
+          <div>
+            <span>Destination</span>
+            <strong>
+              {% if shipment.customer %}
+                {{ shipment.customer.shipping_address1|default:shipment.customer.address_line1|default:"" }}
+                {{ shipment.customer.shipping_address2|default:shipment.customer.address_line2|default:"" }}
+                {{ shipment.customer.shipping_city|default:shipment.customer.city|default:"" }}
+                {{ shipment.customer.shipping_state|default:shipment.customer.state|default:"" }}
+                {{ shipment.customer.shipping_postcode|default:shipment.customer.postal_code|default:"" }}
+                {{ shipment.customer.shipping_country|default:shipment.customer.country|default:"" }}
+              {% else %}
+                Not set
+              {% endif %}
+            </strong>
+          </div>
+          {% if shipment.customer and shipment.customer.email %}
+            <a href="{% url 'shipment_notify_customer' shipment.pk %}" class="shipping-btn shipping-btn--primary">Email Customer</a>
+          {% endif %}
+        </div>
+      </article>
+
+      <article class="shipping-panel">
+        <div class="shipping-panel-head">
+          <div>
+            <h2>Cost Summary</h2>
+            <p>Shipping cost and logistics quantities.</p>
+          </div>
+        </div>
+        <div class="shipping-side-list">
+          <div><span>Cost BDT</span><strong>{{ shipment.cost_bdt|default:"-" }}</strong></div>
+          <div><span>Rate BDT per CAD</span><strong>{{ shipment.rate_bdt_per_cad|default:"-" }}</strong></div>
+          <div><span>Cost CAD</span><strong>{{ shipment.cost_cad|default:"-" }}</strong></div>
+          <div><span>Boxes</span><strong>{{ shipment.box_count|default:"-" }}</strong></div>
+          <div><span>Weight kg</span><strong>{{ shipment.total_weight_kg|default:"-" }}</strong></div>
+        </div>
+      </article>
+
+      <details class="shipping-panel shipping-raw-details">
+        <summary>
+          <span>Admin / Raw Details</span>
+          <small>Advanced shipment fields and delete action</small>
+        </summary>
+        <div class="shipping-raw-grid">
+          <div><span>ID</span><strong>{{ shipment.pk }}</strong></div>
+          <div><span>Created</span><strong>{{ shipment.created_at|date:"Y-m-d H:i" }}</strong></div>
+          <div><span>Updated</span><strong>{{ shipment.updated_at|date:"Y-m-d H:i" }}</strong></div>
+          <div><span>Last notified status</span><strong>{{ shipment.last_notified_status|default:"-" }}</strong></div>
+          <div><span>Shipment type</span><strong>{{ shipment.get_shipment_type_display|default:"-" }}</strong></div>
+          <div><span>Raw status</span><strong>{{ shipment.status }}</strong></div>
+          <div><span>Raw carrier</span><strong>{{ shipment.carrier }}</strong></div>
+        </div>
+        <form method="post" action="{% url 'shipment_delete' shipment.pk %}" class="shipping-delete-form" onsubmit="return confirm('Delete this shipment?');">
+          {% csrf_token %}
+          <button type="submit" class="shipping-btn shipping-btn--danger">Delete Shipment</button>
+        </form>
+      </details>
+    </aside>
+  </section>
 </div>
 
 {% endblock %}
-
-{% if shipment.customer and shipment.customer.email %}
-<a href="{% url 'shipment_notify_customer' shipment.pk %}" 
-   class="btn btn-gold btn-small">
-  Email customer
-</a>
-{% endif %}
