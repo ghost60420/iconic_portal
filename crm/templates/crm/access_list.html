@@ -3,298 +3,531 @@
 
 {% block content %}
 <style>
-  .access-wrap{
-    max-width: 1400px;
-    margin: 0 auto;
+  .access-page{
+    max-width:1680px;
+    margin:0 auto;
+    padding:4px 6px 30px;
   }
-  .access-head{
+  .access-hero{
     display:flex;
-    align-items:flex-end;
+    align-items:flex-start;
     justify-content:space-between;
-    gap:12px;
+    gap:18px;
     flex-wrap:wrap;
-    margin-bottom: 14px;
+    padding:22px;
+    margin-bottom:16px;
+    border:1px solid #263142;
+    border-radius:18px;
+    background:linear-gradient(135deg,#0b1220 0%,#101827 52%,#0b0f18 100%);
+    box-shadow:0 18px 40px rgba(0,0,0,.34);
+  }
+  .access-eyebrow{
+    color:#f5d580;
+    font-size:12px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    margin-bottom:8px;
   }
   .access-title{
     margin:0;
-    color:#f8f9fa;
-    font-weight:900;
+    color:#f8fafc;
+    font-size:32px;
+    line-height:1.08;
+    font-weight:950;
   }
   .access-sub{
     color:#a8b0bd;
-    font-weight:700;
-    font-size:13px;
-    margin-top:4px;
+    font-size:14px;
+    font-weight:750;
+    margin-top:8px;
+    max-width:720px;
   }
-  .access-search{
+  .access-hero-actions{
     display:flex;
-    gap:8px;
-    align-items:center;
+    gap:10px;
     flex-wrap:wrap;
+    justify-content:flex-end;
   }
-  .access-search input{
-    height:38px;
-    min-width:240px;
-    background:#0b0d10;
-    border:1px solid #2a2f38;
-    border-radius:10px;
-    color:#e5e7eb;
-    font-weight:800;
-    padding:0 12px;
+  .access-btn{
+    min-height:42px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    font-weight:900;
+    border-radius:12px;
+    padding:9px 14px;
   }
-  .access-search .btn{
-    height:38px;
-    font-weight:800;
-  }
-  .access-grid{
+  .access-summary{
     display:grid;
-    grid-template-columns: repeat(2, minmax(0,1fr));
-    gap:14px;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:12px;
+    margin-bottom:16px;
   }
-  @media (max-width: 1100px){
-    .access-grid{ grid-template-columns: 1fr; }
+  .access-stat{
+    min-height:118px;
+    padding:16px;
+    border:1px solid #263142;
+    border-radius:16px;
+    background:linear-gradient(180deg,#0c1220,#090d14);
+    box-shadow:0 14px 30px rgba(0,0,0,.24);
   }
-  .access-card{
-    background:#0b0d10;
-    border:1px solid #2a2f38;
-    border-radius:14px;
-    padding:14px;
+  .access-stat-label{
+    color:#9aa4b2;
+    font-size:12px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.04em;
   }
-  .access-card form{ margin:0; }
-  .access-user{
+  .access-stat-value{
+    color:#f8fafc;
+    font-size:34px;
+    line-height:1;
+    font-weight:950;
+    margin-top:12px;
+  }
+  .access-stat-note{
+    color:#94a3b8;
+    font-size:12px;
+    font-weight:800;
+    margin-top:8px;
+  }
+  .access-toolbar{
     display:flex;
     align-items:center;
     justify-content:space-between;
+    gap:12px;
+    flex-wrap:wrap;
+    padding:14px;
+    margin-bottom:16px;
+    border:1px solid #263142;
+    border-radius:16px;
+    background:#0b0f18;
+  }
+  .access-search{
+    display:flex;
+    align-items:center;
     gap:10px;
     flex-wrap:wrap;
-    margin-bottom:10px;
+    flex:1 1 520px;
   }
-  .access-user-info{
+  .access-search input{
+    height:44px;
+    min-width:min(420px,100%);
+    flex:1 1 320px;
+    background:#101827;
+    border:1px solid #2c374a;
+    border-radius:12px;
+    color:#e5e7eb;
+    font-size:14px;
+    font-weight:800;
+    padding:0 14px;
+    outline:none;
+  }
+  .access-search input:focus{
+    border-color:#f5d580;
+    box-shadow:0 0 0 3px rgba(245,213,128,.12);
+  }
+  .access-results-note{
+    color:#a8b0bd;
+    font-size:13px;
+    font-weight:800;
+  }
+  .access-list{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:14px;
+  }
+  .access-card{
+    border:1px solid #263142;
+    border-radius:18px;
+    background:linear-gradient(180deg,#0b1019,#090d14);
+    box-shadow:0 16px 34px rgba(0,0,0,.24);
+    overflow:hidden;
+  }
+  .access-form{
+    margin:0;
+  }
+  .access-card-top{
+    display:grid;
+    grid-template-columns:minmax(260px,1fr) minmax(240px,auto);
+    gap:14px;
+    padding:18px;
+    border-bottom:1px solid #202938;
+  }
+  .access-person{
     display:flex;
-    flex-direction:column;
-    gap:4px;
+    gap:14px;
+    align-items:flex-start;
+    min-width:0;
+  }
+  .access-avatar{
+    width:48px;
+    height:48px;
+    flex:0 0 48px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border-radius:14px;
+    background:rgba(245,213,128,.14);
+    border:1px solid rgba(245,213,128,.28);
+    color:#f5d580;
+    font-size:20px;
+    font-weight:950;
+    text-transform:uppercase;
+  }
+  .access-person-main{
+    min-width:0;
   }
   .access-name{
     color:#f8fafc;
-    font-weight:900;
-    font-size:16px;
+    font-size:19px;
+    line-height:1.2;
+    font-weight:950;
+    word-break:break-word;
   }
   .access-email{
     color:#cbd5e1;
-    font-weight:700;
-    font-size:12px;
+    font-size:14px;
+    font-weight:750;
+    margin-top:4px;
+    word-break:break-word;
   }
   .access-badges{
     display:flex;
-    gap:6px;
+    gap:7px;
     flex-wrap:wrap;
     align-items:center;
+    margin-top:10px;
   }
   .access-badge{
-    font-size:11px;
-    font-weight:800;
-    padding:4px 8px;
-    border-radius:999px;
-    background:#111827;
-    border:1px solid #243040;
-    color:#e5e7eb;
-  }
-  .access-role{
-    display:flex;
+    display:inline-flex;
     align-items:center;
-    gap:8px;
-    flex-wrap:wrap;
-    margin-top:8px;
-  }
-  .access-role label{
-    color:#cbd5e1;
-    font-weight:800;
+    min-height:24px;
+    padding:4px 9px;
+    border-radius:999px;
+    border:1px solid #2b3748;
+    background:#111827;
+    color:#dbe4ee;
     font-size:12px;
+    font-weight:900;
+    line-height:1;
   }
-  .access-role select{
-    min-width:160px;
-    background:#0b0d10 !important;
-    border:1px solid #2a2f38 !important;
+  .access-badge.good{
+    border-color:rgba(34,197,94,.42);
+    color:#86efac;
+    background:rgba(34,197,94,.12);
+  }
+  .access-badge.warn{
+    border-color:rgba(245,158,11,.42);
+    color:#facc15;
+    background:rgba(245,158,11,.12);
+  }
+  .access-badge.danger{
+    border-color:rgba(248,113,113,.42);
+    color:#fecaca;
+    background:rgba(127,29,29,.2);
+  }
+  .access-role-panel{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    min-width:240px;
+    justify-self:end;
+  }
+  .access-role-panel label{
+    color:#94a3b8;
+    font-size:12px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+  }
+  .access-role-panel select{
+    min-height:44px;
+    min-width:220px;
+    background:#101827 !important;
+    border:1px solid #2c374a !important;
+    border-radius:12px !important;
     color:#e5e7eb !important;
-    font-weight:800 !important;
-    border-radius:10px !important;
+    font-size:14px !important;
+    font-weight:850 !important;
+  }
+  .access-locked{
+    color:#fecaca;
+    font-size:13px;
+    font-weight:900;
+  }
+  .access-permissions{
+    padding:18px;
   }
   .access-groups{
     display:grid;
-    grid-template-columns: repeat(2, minmax(0,1fr));
+    grid-template-columns:repeat(5,minmax(0,1fr));
     gap:12px;
-    margin-top:12px;
-  }
-  @media (max-width: 900px){
-    .access-groups{ grid-template-columns: 1fr; }
   }
   .access-group{
-    border:1px solid #202532;
-    border-radius:12px;
-    padding:10px;
-    background:#0f1218;
+    min-width:0;
+    padding:14px;
+    border:1px solid #222b39;
+    border-radius:14px;
+    background:#0f1622;
   }
   .access-group-title{
-    color:#e5e7eb;
-    font-weight:900;
+    color:#f5d580;
     font-size:12px;
+    font-weight:950;
     text-transform:uppercase;
-    letter-spacing:0.4px;
-    margin-bottom:8px;
+    letter-spacing:.05em;
+    margin-bottom:12px;
   }
   .access-group-grid{
-    display:grid;
-    grid-template-columns: repeat(2, minmax(0,1fr));
-    gap:8px;
-  }
-  @media (max-width: 700px){
-    .access-group-grid{ grid-template-columns: 1fr; }
+    display:flex;
+    flex-direction:column;
+    gap:10px;
   }
   .access-toggle{
     display:flex;
-    align-items:center;
-    gap:8px;
-    font-weight:800;
-    font-size:12px;
+    align-items:flex-start;
+    gap:10px;
+    min-height:32px;
     color:#e5e7eb;
+    font-size:14px;
+    font-weight:850;
+    line-height:1.25;
+    cursor:pointer;
   }
-  .access-toggle input{ transform: translateY(-1px); }
-  .access-actions{
-    display:flex;
-    gap:8px;
-    flex-wrap:wrap;
-    align-items:center;
-    margin-top:12px;
+  .access-toggle input{
+    width:20px;
+    height:20px;
+    flex:0 0 20px;
+    margin-top:0;
+    border-radius:6px;
+    cursor:pointer;
   }
-  .access-actions .btn{ font-weight:800; }
-  .access-locked{
-    color:#fca5a5;
-    font-size:12px;
-    font-weight:800;
+  .access-toggle input:disabled{
+    cursor:not-allowed;
+    opacity:.52;
   }
   .access-help{
     color:#94a3b8;
-    font-size:11px;
-    font-weight:700;
-    margin-top:6px;
+    font-size:12px;
+    font-weight:750;
+    line-height:1.35;
+    margin-left:30px;
+    margin-top:-6px;
+  }
+  .access-card-actions{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    flex-wrap:wrap;
+    padding:14px 18px 18px;
+  }
+  .access-actions{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    align-items:center;
   }
   .access-note{
     color:#94a3b8;
-    font-size:12px;
-    font-weight:700;
-    margin-top:6px;
+    font-size:13px;
+    font-weight:800;
+  }
+  .access-note.error{
+    color:#fecaca;
+  }
+  .access-empty{
+    padding:22px;
+    border:1px dashed #334155;
+    border-radius:16px;
+    background:#0b0f18;
+    color:#cbd5e1;
+    font-size:15px;
+    font-weight:850;
+  }
+  @media (max-width: 1350px){
+    .access-summary{grid-template-columns:repeat(2,minmax(0,1fr));}
+    .access-groups{grid-template-columns:repeat(3,minmax(0,1fr));}
+  }
+  @media (max-width: 950px){
+    .access-card-top{grid-template-columns:1fr;}
+    .access-role-panel{justify-self:stretch;}
+    .access-role-panel select{width:100%; min-width:0;}
+    .access-groups{grid-template-columns:repeat(2,minmax(0,1fr));}
+  }
+  @media (max-width: 700px){
+    .access-page{padding:0 0 24px;}
+    .access-title{font-size:26px;}
+    .access-hero,.access-toolbar{border-radius:14px;}
+    .access-summary{grid-template-columns:1fr;}
+    .access-groups{grid-template-columns:1fr;}
+    .access-card-top,.access-permissions,.access-card-actions{padding:14px;}
+    .access-search{flex-basis:100%;}
+    .access-btn{width:100%;}
   }
 </style>
 
-<div class="container-fluid access-wrap">
-  <div class="access-head">
+<div class="container-fluid access-page">
+  <div class="access-hero">
     <div>
-      <h3 class="access-title">User Access</h3>
+      <div class="access-eyebrow">Access Control</div>
+      <h1 class="access-title">User Access Management</h1>
       <div class="access-sub">
-        Click to grant or revoke access. Changes save per user.
+        Review teams, roles, and CRM permissions in one place. Changes save per user and keep the existing access rules intact.
       </div>
     </div>
+    <div class="access-hero-actions">
+      {% if request.user.is_superuser %}
+        {% url 'admin:index' as admin_url %}
+        {% if admin_url %}
+          <a href="{{ admin_url }}" class="btn btn-outline-warning access-btn">Open Admin</a>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
 
+  <div class="access-summary">
+    <div class="access-stat">
+      <div class="access-stat-label">Total Users</div>
+      <div class="access-stat-value">{{ summary.total_users }}</div>
+      <div class="access-stat-note">All CRM user accounts</div>
+    </div>
+    <div class="access-stat">
+      <div class="access-stat-label">Active Users</div>
+      <div class="access-stat-value">{{ summary.active_users }}</div>
+      <div class="access-stat-note">Can sign in if credentials are valid</div>
+    </div>
+    <div class="access-stat">
+      <div class="access-stat-label">Superusers</div>
+      <div class="access-stat-value">{{ summary.superusers }}</div>
+      <div class="access-stat-note">Protected high-access accounts</div>
+    </div>
+    <div class="access-stat">
+      <div class="access-stat-label">Staff Users</div>
+      <div class="access-stat-value">{{ summary.staff_users }}</div>
+      <div class="access-stat-note">Admin-site eligible accounts</div>
+    </div>
+  </div>
+
+  <div class="access-toolbar">
     <form method="get" class="access-search">
       <input
         type="text"
         name="q"
         value="{{ search_query|default:'' }}"
-        placeholder="Search user or email"
+        placeholder="Search by username or email"
+        autocomplete="off"
       >
-      <button class="btn btn-outline-light" type="submit">Search</button>
+      <button class="btn btn-outline-light access-btn" type="submit">Search</button>
       {% if search_query %}
-        <a class="btn btn-outline-secondary" href="{% url 'access_list' %}">Clear</a>
-      {% endif %}
-      {% if request.user.is_superuser %}
-        {% url 'admin:index' as admin_url %}
-        {% if admin_url %}
-          <a href="{{ admin_url }}" class="btn btn-outline-warning">Admin</a>
-        {% endif %}
+        <a class="btn btn-outline-secondary access-btn" href="{% url 'access_list' %}">Clear</a>
       {% endif %}
     </form>
+    <div class="access-results-note">
+      Showing {{ rows|length }} user{{ rows|length|pluralize }}{% if search_query %} for "{{ search_query }}"{% endif %}
+    </div>
   </div>
 
   {% if rows %}
-    <div class="access-grid">
+    <div class="access-list">
       {% for row in rows %}
         <div class="access-card">
           <form method="post" class="access-form">
             {% csrf_token %}
             <input type="hidden" name="user_id" value="{{ row.user.id }}">
 
-            <div class="access-user">
-              <div class="access-user-info">
-                <div class="access-name">{{ row.user.username }}</div>
-                <div class="access-email">{{ row.user.email|default:"-" }}</div>
-                <div class="access-badges">
-                  {% if row.user.is_superuser %}
-                    <span class="access-badge">Superuser</span>
-                  {% endif %}
-                  {% if row.user.is_staff %}
-                    <span class="access-badge">Staff</span>
-                  {% endif %}
-                  {% if row.user.is_active %}
-                    <span class="access-badge">Active</span>
-                  {% else %}
-                    <span class="access-badge">Inactive</span>
-                  {% endif %}
+            <div class="access-card-top">
+              <div class="access-person">
+                <div class="access-avatar">{{ row.user.username|slice:":1" }}</div>
+                <div class="access-person-main">
+                  <div class="access-name">
+                    {% if row.user.get_full_name %}
+                      {{ row.user.get_full_name }}
+                    {% else %}
+                      {{ row.user.username }}
+                    {% endif %}
+                  </div>
+                  <div class="access-email">{{ row.user.email|default:"No email set" }}</div>
+                  <div class="access-badges">
+                    <span class="access-badge">{{ row.user.username }}</span>
+                    <span class="access-badge good">{{ row.access.get_role_display }}</span>
+                    {% if row.user.is_superuser %}
+                      <span class="access-badge warn">Superuser</span>
+                    {% endif %}
+                    {% if row.user.is_staff %}
+                      <span class="access-badge">Staff</span>
+                    {% endif %}
+                    {% if row.user.is_active %}
+                      <span class="access-badge good">Active</span>
+                    {% else %}
+                      <span class="access-badge danger">Inactive</span>
+                    {% endif %}
+                  </div>
                 </div>
               </div>
 
-              <div class="text-end">
+              <div class="access-role-panel">
+                <label for="{{ row.form.role.id_for_label }}">Team</label>
+                {{ row.form.role }}
+                {% for error in row.form.role.errors %}
+                  <div class="access-note error">{{ error }}</div>
+                {% endfor %}
                 {% if not row.can_edit %}
-                  <div class="access-locked">Locked (superuser only)</div>
+                  <div class="access-locked">Locked for staff. Superuser required.</div>
                 {% endif %}
               </div>
             </div>
 
-            <div class="access-role">
-              <label for="{{ row.form.role.id_for_label }}">Team</label>
-              {{ row.form.role }}
-            </div>
-
-            <div class="access-groups">
-              {% for group in row.grouped_fields %}
-                <div class="access-group">
-                  <div class="access-group-title">{{ group.0 }}</div>
-                  <div class="access-group-grid">
-                    {% for field in group.1 %}
-                      <label class="access-toggle">
-                        {{ field }}
-                        <span>{{ field.label }}</span>
-                      </label>
-                      {% if field.help_text %}
-                        <div class="access-help">{{ field.help_text }}</div>
-                      {% endif %}
-                    {% endfor %}
-                  </div>
-                </div>
-              {% endfor %}
-            </div>
-
-            {% if row.form.errors %}
-              <div class="access-note" style="color:#fca5a5;">
-                Please fix the highlighted fields and save again.
+            <div class="access-permissions">
+              <div class="access-groups">
+                {% for group in row.grouped_fields %}
+                  <section class="access-group">
+                    <div class="access-group-title">{{ group.0 }}</div>
+                    <div class="access-group-grid">
+                      {% for field in group.1 %}
+                        <label class="access-toggle">
+                          {{ field }}
+                          <span>{{ field.label }}</span>
+                        </label>
+                        {% if field.help_text %}
+                          <div class="access-help">{{ field.help_text }}</div>
+                        {% endif %}
+                        {% for error in field.errors %}
+                          <div class="access-note error">{{ error }}</div>
+                        {% endfor %}
+                      {% endfor %}
+                    </div>
+                  </section>
+                {% endfor %}
               </div>
-            {% endif %}
+            </div>
 
-            <div class="access-actions">
-              <button type="submit" class="btn btn-warning">Save</button>
-              {% url 'access_edit' row.user.id as edit_url %}
-              {% if edit_url %}
-                <a href="{{ edit_url }}" class="btn btn-outline-light">Full edit</a>
-              {% endif %}
+            <div class="access-card-actions">
+              <div>
+                {% if row.form.errors %}
+                  <div class="access-note error">Please fix the highlighted fields and save again.</div>
+                {% else %}
+                  <div class="access-note">Last access update: {{ row.access.updated_at|date:"M d, Y H:i" }}</div>
+                {% endif %}
+              </div>
+              <div class="access-actions">
+                <button type="submit" class="btn btn-warning access-btn">Save Permissions</button>
+                {% url 'access_edit' row.user.id as edit_url %}
+                {% if edit_url %}
+                  <a href="{{ edit_url }}" class="btn btn-outline-light access-btn">Full Edit</a>
+                {% endif %}
+              </div>
             </div>
           </form>
         </div>
       {% endfor %}
     </div>
   {% else %}
-    <div class="card" style="background:#0b0d10; border:1px solid #2a2f38; border-radius:14px;">
-      <div class="card-body" style="color:#cbd5e1; font-weight:800;">
-        No users found.
-      </div>
+    <div class="access-empty">
+      No users found. Try a different username or email search.
     </div>
   {% endif %}
 </div>

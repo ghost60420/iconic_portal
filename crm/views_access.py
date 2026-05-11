@@ -51,10 +51,11 @@ def access_list(request):
     users = users_qs.select_related("access")
 
     field_groups = [
-        ("Core", ["can_leads", "can_opportunities", "can_customers", "can_inventory", "can_library"]),
-        ("Operations", ["can_production", "can_shipping", "can_accounting_bd", "can_accounting_ca"]),
-        ("Engagement", ["can_ai", "can_calendar", "can_marketing", "can_whatsapp"]),
+        ("Core", ["can_leads", "can_opportunities", "can_customers", "can_calendar"]),
+        ("Operations", ["can_inventory", "can_library", "can_production", "can_shipping"]),
+        ("Engagement", ["can_ai", "can_marketing", "can_whatsapp"]),
         ("Costing", ["can_costing", "can_costing_approve"]),
+        ("Admin / Accounting", ["can_accounting_bd", "can_accounting_ca"]),
     ]
 
     rows = []
@@ -94,6 +95,12 @@ def access_list(request):
         {
             "rows": rows,
             "search_query": q,
+            "summary": {
+                "total_users": User.objects.count(),
+                "active_users": User.objects.filter(is_active=True).count(),
+                "superusers": User.objects.filter(is_superuser=True).count(),
+                "staff_users": User.objects.filter(is_staff=True).count(),
+            },
         },
     )
 
