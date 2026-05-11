@@ -279,7 +279,7 @@
   }
 </style>
 
-<link rel="stylesheet" href="{% static 'crm/lead_detail.css' %}?v=modern-detail-20260506">
+<link rel="stylesheet" href="{% static 'crm/lead_detail.css' %}?v=client-notes-20260511">
 
 <div class="page lead-detail-page">
   <div class="lead-detail-shell">
@@ -413,6 +413,89 @@
       <div class="summary-sub">Target volume: {% if lead.target_order_volume_min or lead.target_order_volume_max %}{% if lead.target_order_volume_min and lead.target_order_volume_max %}{{ lead.target_order_volume_min }} - {{ lead.target_order_volume_max }}{% elif lead.target_order_volume_min %}{{ lead.target_order_volume_min }}+{% else %}Up to {{ lead.target_order_volume_max }}{% endif %}{% else %}—{% endif %}</div>
       <div class="summary-sub">ICP match: {% if lead.ideal_customer_profile_match %}Yes{% else %}No{% endif %}</div>
     </div>
+  </section>
+
+  <section class="section lead-client-notes-section" id="client-requirements-notes" aria-label="Client Requirements and Notes">
+    <div class="lead-client-notes-header">
+      <div>
+        <p class="lead-detail-eyebrow">Client Intake</p>
+        <h2 class="section-title">Client Requirements / Notes</h2>
+        <p class="small">Original request details captured from the lead form, intake email, or uploaded lead attachment.</p>
+      </div>
+      {% if lead.source_channel or lead.source %}
+        <span class="pill weak">{{ lead.source_channel|default:lead.source }}</span>
+      {% endif %}
+    </div>
+
+    {% if lead.notes or lead.product_category or lead.product_interest or lead.order_quantity or lead.budget or lead.preferred_contact_time or lead.country or lead.attachment %}
+      <div class="lead-client-notes-grid{% if not lead.product_category and not lead.product_interest and not lead.order_quantity and not lead.budget and not lead.preferred_contact_time and not lead.country and not lead.attachment %} lead-client-notes-grid--message-only{% endif %}">
+        <article class="client-note-message">
+          <span class="client-note-label">Original client message</span>
+          {% if lead.notes %}
+            <div class="client-note-text">{{ lead.notes|linebreaksbr }}</div>
+          {% else %}
+            <div class="client-note-empty-inline">No written client message captured.</div>
+          {% endif %}
+        </article>
+
+        <div class="client-note-meta-stack">
+          {% if lead.product_category or lead.product_interest %}
+            <div class="client-note-meta-card">
+              <span class="client-note-label">Product needs</span>
+              <strong>
+                {% if lead.product_interest %}
+                  {{ lead.get_product_interest_display|default:lead.product_interest }}
+                {% else %}
+                  {{ lead.get_product_category_display|default:lead.product_category }}
+                {% endif %}
+              </strong>
+              {% if lead.product_category and lead.product_interest %}
+                <small>{{ lead.get_product_category_display|default:lead.product_category }}</small>
+              {% endif %}
+            </div>
+          {% endif %}
+
+          {% if lead.order_quantity %}
+            <div class="client-note-meta-card">
+              <span class="client-note-label">Quantity</span>
+              <strong>{{ lead.order_quantity }}</strong>
+            </div>
+          {% endif %}
+
+          {% if lead.budget or lead.preferred_contact_time or lead.country %}
+            <div class="client-note-meta-card">
+              <span class="client-note-label">Preferences</span>
+              {% if lead.budget %}<small>Budget: CAD {{ lead.budget }}</small>{% endif %}
+              {% if lead.preferred_contact_time %}<small>Preferred contact: {{ lead.preferred_contact_time }}</small>{% endif %}
+              {% if lead.country %}
+                <small>Market: {{ lead.get_market_display|default:lead.market }}{% if lead.country %} / {{ lead.country }}{% endif %}</small>
+              {% endif %}
+            </div>
+          {% endif %}
+
+          {% if lead.preferred_contact_time or lead.next_follow_up_date or lead.next_followup %}
+            <div class="client-note-meta-card">
+              <span class="client-note-label">Timeline</span>
+              {% if lead.preferred_contact_time %}
+                <strong>{{ lead.preferred_contact_time }}</strong>
+              {% endif %}
+              {% if lead.next_follow_up_date or lead.next_followup %}
+                <small>CRM follow up: {{ lead.next_follow_up_date|default:lead.next_followup }}</small>
+              {% endif %}
+            </div>
+          {% endif %}
+
+          {% if lead.attachment %}
+            <div class="client-note-meta-card">
+              <span class="client-note-label">Uploaded form notes</span>
+              <a class="client-note-file" href="{{ lead.attachment.url }}" target="_blank" rel="noopener">Download attachment</a>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    {% else %}
+      <div class="client-note-empty">No client notes added yet.</div>
+    {% endif %}
   </section>
 
   {% include "crm/partials/iconic_ai_brain.html" with brain=iconic_ai_brain lead=lead only %}
