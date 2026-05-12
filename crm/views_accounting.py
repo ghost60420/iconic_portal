@@ -2,6 +2,7 @@
 
 import csv
 import io
+from datetime import timedelta
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
@@ -32,6 +33,7 @@ from django.db.models.functions import Coalesce
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 
 from .models import (
     AccountingEntry,
@@ -485,6 +487,297 @@ def accounting_home(request):
     if is_bd_user(request.user):
         return redirect("accounting_bd_daily")
     return HttpResponseForbidden("Access denied.")
+
+
+AP_CATEGORY_RULES = [
+    ("fabric_suppliers", "Fabric suppliers", ["fabric", "yarn", "dye", "knit", "mill"]),
+    ("trim_suppliers", "Trim suppliers", ["trim", "label", "tag", "button", "zip", "thread"]),
+    ("packaging_suppliers", "Packaging suppliers", ["pack", "poly", "carton", "box", "hanger"]),
+    ("freight_customs", "Freight and customs", ["freight", "custom", "duty", "courier", "shipping", "truck", "transport"]),
+    ("factories", "Factories", ["factory", "sewing", "cutting", "finishing", "print", "embro", "wash"]),
+    ("contractors", "Contractors", ["contract", "subcontract", "consult", "freelance", "service"]),
+    ("utilities", "Utilities", ["electric", "utility", "water", "gas", "internet", "phone"]),
+    ("office_expenses", "Office expenses", ["office", "rent", "salary", "software", "food", "repair", "maintenance"]),
+]
+
+
+AP_STATUS_OPTIONS = [
+    ("", "All statuses"),
+    ("unpaid", "Unpaid"),
+    ("partial", "Partially paid"),
+    ("paid", "Paid"),
+    ("overdue", "Overdue"),
+]
+
+
+def _parse_ap_date(value):
+    value = (value or "").strip()
+    return parse_date(value) if value else None
+
+
+def _ap_decimal(value):
+    try:
+        return Decimal(str(value)) if value is not None else Decimal("0")
+    except Exception:
+        return Decimal("0")
+
+
+def _ap_status_key(entry, today=None):
+    today = today or timezone.localdate()
+    status = (entry.status or "").upper().strip()
+    if status == "PAID":
+        return "paid"
+    if status == "PARTIAL":
+        return "overdue" if entry.date and entry.date < today else "partial"
+    if status in {"CANCELLED", "VOID"}:
+        return "cancelled"
+    if entry.date and entry.date < today:
+        return "overdue"
+    return "unpaid"
+
+
+def _ap_status_label(key):
+    return {
+        "unpaid": "Unpaid",
+        "partial": "Partially paid",
+        "paid": "Paid",
+        "overdue": "Overdue",
+        "cancelled": "Cancelled",
+    }.get(key, "Unpaid")
+
+
+def _ap_category(entry):
+    main_type = (entry.main_type or "").strip()
+    sub_type = (entry.sub_type or "").strip()
+    text = f"{main_type} {sub_type} {entry.description or ''} {entry.internal_note or ''}".lower()
+    for key, label, needles in AP_CATEGORY_RULES:
+        if any(needle in text for needle in needles):
+            return key, label
+    if main_type == "COGS":
+        return "factories", "Factories"
+    if main_type == "TAX":
+        return "freight_customs", "Freight and customs"
+    if main_type == "EXPENSE":
+        return "office_expenses", "Office expenses"
+    return "other", "Other vendors"
+
+
+def _ap_supplier_label(entry):
+    if entry.production_order_id and entry.production_order:
+        return f"Factory / {entry.production_order.order_code or entry.production_order.title or entry.production_order_id}"
+    if entry.shipment_id and entry.shipment:
+        tracking = getattr(entry.shipment, "tracking_number", "") or ""
+        carrier = getattr(entry.shipment, "carrier", "") or ""
+        if carrier or tracking:
+            return f"Freight / {carrier or 'Shipment'} {tracking}".strip()
+        return f"Freight / Shipment {entry.shipment_id}"
+    if entry.customer_id and entry.customer:
+        name = getattr(entry.customer, "account_brand", "") or getattr(entry.customer, "contact_name", "")
+        if name:
+            return f"Customer linked / {name}"
+    if entry.sub_type:
+        return entry.sub_type.strip()
+    description = (entry.description or "").strip()
+    if description:
+        return description.split("|")[0].split("-")[0][:80].strip() or "Unassigned vendor"
+    return "Unassigned vendor"
+
+
+def _ap_apply_db_filters(qs, filters):
+    if filters["date_from"]:
+        qs = qs.filter(date__gte=filters["date_from"])
+    if filters["date_to"]:
+        qs = qs.filter(date__lte=filters["date_to"])
+    if filters["currency"]:
+        qs = qs.filter(currency=filters["currency"])
+    if filters["side"]:
+        qs = qs.filter(side=filters["side"])
+    return qs
+
+
+def _ap_currency_totals(rows, amount_key):
+    totals = {}
+    for row in rows:
+        currency = row.get("currency") or "Unknown"
+        totals[currency] = totals.get(currency, Decimal("0")) + _ap_decimal(row.get(amount_key))
+    return [
+        {"currency": currency, "amount": amount}
+        for currency, amount in sorted(totals.items())
+        if amount != 0
+    ]
+
+
+def _ap_row(entry, today):
+    category_key, category_label = _ap_category(entry)
+    status_key = _ap_status_key(entry, today)
+    amount = _ap_decimal(entry.amount_original)
+    paid_amount = amount if status_key == "paid" else Decimal("0")
+    outstanding = Decimal("0") if status_key == "paid" else amount
+    return {
+        "entry": entry,
+        "supplier": _ap_supplier_label(entry),
+        "category_key": category_key,
+        "category_label": category_label,
+        "status_key": status_key,
+        "status_label": _ap_status_label(status_key),
+        "currency": (entry.currency or "Unknown").upper(),
+        "amount": amount,
+        "paid_amount": paid_amount,
+        "outstanding": outstanding,
+        "days_overdue": (today - entry.date).days if entry.date and entry.date < today and status_key != "paid" else 0,
+    }
+
+
+@login_required
+def accounts_payable_dashboard(request):
+    today = timezone.localdate()
+    filters = {
+        "date_from": _parse_ap_date(request.GET.get("date_from")),
+        "date_to": _parse_ap_date(request.GET.get("date_to")),
+        "supplier": (request.GET.get("supplier") or "").strip(),
+        "status": (request.GET.get("status") or "").strip(),
+        "currency": (request.GET.get("currency") or "").strip().upper(),
+        "side": (request.GET.get("side") or "").strip().upper(),
+        "category": (request.GET.get("category") or "").strip(),
+    }
+    filter_values = {
+        "date_from": filters["date_from"].isoformat() if filters["date_from"] else "",
+        "date_to": filters["date_to"].isoformat() if filters["date_to"] else "",
+        "supplier": filters["supplier"],
+        "status": filters["status"],
+        "currency": filters["currency"],
+        "side": filters["side"],
+        "category": filters["category"],
+    }
+
+    base_qs = (
+        AccountingEntry.objects.filter(direction=AccountingEntry.DIR_OUT)
+        .exclude(main_type="TRANSFER")
+        .exclude(status__iexact="CANCELLED")
+        .select_related("customer", "opportunity", "production_order", "shipment", "created_by")
+    )
+    supplier_choices = sorted({_ap_supplier_label(entry) for entry in base_qs[:1000]})
+
+    qs = _ap_apply_db_filters(base_qs, filters).order_by("date", "-id")
+    rows = [_ap_row(entry, today) for entry in qs[:1000]]
+    if filters["supplier"]:
+        rows = [row for row in rows if row["supplier"] == filters["supplier"]]
+    if filters["status"]:
+        rows = [row for row in rows if row["status_key"] == filters["status"]]
+    if filters["category"]:
+        rows = [row for row in rows if row["category_key"] == filters["category"]]
+
+    open_rows = [row for row in rows if row["status_key"] != "paid"]
+    paid_rows = [row for row in rows if row["status_key"] == "paid"]
+    overdue_rows = [row for row in rows if row["status_key"] == "overdue"]
+    due_week_rows = [
+        row for row in open_rows
+        if row["entry"].date and today <= row["entry"].date <= today + timedelta(days=7)
+    ]
+    due_month_rows = [
+        row for row in open_rows
+        if row["entry"].date and row["entry"].date.year == today.year and row["entry"].date.month == today.month
+    ]
+
+    total_bills = sum((row["amount"] for row in rows), Decimal("0"))
+    total_paid = sum((row["paid_amount"] for row in rows), Decimal("0"))
+    total_outstanding = sum((row["outstanding"] for row in open_rows), Decimal("0"))
+    due_week_total = sum((row["outstanding"] for row in due_week_rows), Decimal("0"))
+    due_month_total = sum((row["outstanding"] for row in due_month_rows), Decimal("0"))
+    overdue_total = sum((row["outstanding"] for row in overdue_rows), Decimal("0"))
+
+    supplier_map = {}
+    for row in open_rows:
+        key = (row["supplier"], row["currency"])
+        if key not in supplier_map:
+            supplier_map[key] = {
+                "supplier": row["supplier"],
+                "currency": row["currency"],
+                "bill_count": 0,
+                "overdue_count": 0,
+                "outstanding": Decimal("0"),
+            }
+        supplier_map[key]["bill_count"] += 1
+        supplier_map[key]["overdue_count"] += 1 if row["status_key"] == "overdue" else 0
+        supplier_map[key]["outstanding"] += row["outstanding"]
+    supplier_balance_rows = sorted(
+        supplier_map.values(),
+        key=lambda item: item["outstanding"],
+        reverse=True,
+    )[:30]
+
+    monthly_map = {}
+    for row in rows:
+        entry = row["entry"]
+        if not entry.date:
+            continue
+        key = entry.date.strftime("%Y-%m")
+        if key not in monthly_map:
+            monthly_map[key] = {
+                "key": key,
+                "label": entry.date.strftime("%b %Y"),
+                "total": Decimal("0"),
+                "paid": Decimal("0"),
+                "outstanding": Decimal("0"),
+                "count": 0,
+            }
+        monthly_map[key]["total"] += row["amount"]
+        monthly_map[key]["paid"] += row["paid_amount"]
+        monthly_map[key]["outstanding"] += row["outstanding"]
+        monthly_map[key]["count"] += 1
+    monthly_rows = [monthly_map[key] for key in sorted(monthly_map.keys())][-12:]
+    max_monthly = max([row["total"] for row in monthly_rows] or [Decimal("0")])
+    for row in monthly_rows:
+        row["bar_percent"] = int((row["total"] / max_monthly) * 100) if max_monthly > 0 else 0
+
+    category_rows = []
+    category_map = {}
+    for row in open_rows:
+        key = (row["category_key"], row["category_label"], row["currency"])
+        if key not in category_map:
+            category_map[key] = {
+                "category": row["category_label"],
+                "currency": row["currency"],
+                "outstanding": Decimal("0"),
+                "bill_count": 0,
+            }
+        category_map[key]["outstanding"] += row["outstanding"]
+        category_map[key]["bill_count"] += 1
+    category_rows = sorted(category_map.values(), key=lambda item: item["outstanding"], reverse=True)
+
+    return render(
+        request,
+        "crm/accounting_accounts_payable_dashboard.html",
+        {
+            "filter_values": filter_values,
+            "supplier_choices": supplier_choices,
+            "status_options": AP_STATUS_OPTIONS,
+            "currency_options": ["CAD", "BDT", "USD"],
+            "side_options": [("", "All sides"), ("CA", "Canada"), ("BD", "Bangladesh")],
+            "category_options": [(key, label) for key, label, _needles in AP_CATEGORY_RULES] + [("other", "Other vendors")],
+            "total_bills": total_bills,
+            "total_paid": total_paid,
+            "total_outstanding": total_outstanding,
+            "total_by_currency": _ap_currency_totals(rows, "amount"),
+            "paid_by_currency": _ap_currency_totals(rows, "paid_amount"),
+            "outstanding_by_currency": _ap_currency_totals(open_rows, "outstanding"),
+            "overdue_count": len(overdue_rows),
+            "due_week_count": len(due_week_rows),
+            "due_month_count": len(due_month_rows),
+            "bill_count": len(rows),
+            "paid_count": len(paid_rows),
+            "open_count": len(open_rows),
+            "overdue_total": overdue_total,
+            "due_week_total": due_week_total,
+            "due_month_total": due_month_total,
+            "outstanding_rows": open_rows[:75],
+            "payment_rows": paid_rows[:75],
+            "due_soon_rows": sorted(due_week_rows + overdue_rows, key=lambda row: row["entry"].date or today)[:40],
+            "supplier_balance_rows": supplier_balance_rows,
+            "monthly_rows": monthly_rows,
+            "category_rows": category_rows[:12],
+        },
+    )
 
 
 # --------------------

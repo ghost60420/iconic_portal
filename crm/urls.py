@@ -220,6 +220,7 @@ urlpatterns = [
     path("accounting/docs/upload/bd/", perm("can_accounting_bd", acc.accounting_doc_upload), name="accounting_docs_upload_bd"),
 
     # Shared accounting pages (CA or BD)
+    path("accounting/accounts-payable/", acc_any(acc.accounts_payable_dashboard), name="accounts_payable_dashboard"),
     path("accounting/entries/", acc_any(acc.accounting_entry_list), name="accounting_entry_list"),
     path("accounting/entries/add/", acc_any(acc.accounting_entry_add), name="accounting_entry_add"),
     path("accounting/entries/<int:pk>/edit/", acc_any(acc.accounting_entry_edit), name="accounting_entry_edit"),

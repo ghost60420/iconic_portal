@@ -1,0 +1,700 @@
+{% extends "crm/base.html" %}
+{% load humanize %}
+{% block content %}
+
+<style>
+  :root{
+    --ap-bg:#020617;
+    --ap-panel:#07111f;
+    --ap-line:#263348;
+    --ap-soft:rgba(148,163,184,0.14);
+    --ap-text:#f8fafc;
+    --ap-muted:#94a3b8;
+    --ap-gold:#f5c451;
+    --ap-good:#4ade80;
+    --ap-warn:#fbbf24;
+    --ap-bad:#fb7185;
+    --ap-blue:#60a5fa;
+  }
+
+  .ap-wrap{ max-width:1320px; margin:0 auto; color:var(--ap-text); }
+
+  .ap-hero{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:16px;
+    flex-wrap:wrap;
+    padding:22px;
+    border:1px solid rgba(245,196,81,0.22);
+    border-radius:22px;
+    background:
+      linear-gradient(135deg, rgba(245,196,81,0.15), transparent 38%),
+      linear-gradient(180deg, rgba(15,23,42,0.96), rgba(2,6,23,0.96));
+    box-shadow:0 24px 60px rgba(0,0,0,0.42);
+    margin-bottom:16px;
+  }
+
+  .ap-kicker{
+    color:var(--ap-gold);
+    font-size:12px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    margin-bottom:6px;
+  }
+
+  .ap-title{ margin:0; font-size:30px; line-height:1.1; font-weight:900; }
+  .ap-sub{
+    margin-top:8px;
+    max-width:760px;
+    color:var(--ap-muted);
+    font-size:13px;
+    line-height:1.5;
+    font-weight:700;
+  }
+
+  .ap-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+  .ap-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-height:38px;
+    padding:9px 13px;
+    border-radius:14px;
+    border:1px solid rgba(148,163,184,0.25);
+    background:rgba(15,23,42,0.82);
+    color:var(--ap-text);
+    text-decoration:none;
+    font-size:12px;
+    font-weight:900;
+  }
+  .ap-btn:hover{ color:var(--ap-text); border-color:rgba(245,196,81,0.55); }
+  .ap-btn--gold{ background:linear-gradient(135deg, #f6d365, #d9a622); color:#111827; border-color:rgba(245,196,81,0.55); }
+  .ap-btn--gold:hover{ color:#111827; }
+
+  .ap-filter{
+    display:grid;
+    grid-template-columns:repeat(7, minmax(0, 1fr));
+    gap:12px;
+    padding:14px;
+    border:1px solid var(--ap-line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.92), rgba(2,6,23,0.92));
+    margin-bottom:16px;
+  }
+
+  .ap-field label{
+    display:block;
+    margin-bottom:6px;
+    color:var(--ap-muted);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.07em;
+  }
+
+  .ap-field input,
+  .ap-field select{
+    width:100%;
+    min-height:42px;
+    border:1px solid rgba(148,163,184,0.26);
+    border-radius:14px;
+    background:#030712;
+    color:var(--ap-text);
+    padding:9px 11px;
+    font-size:13px;
+    font-weight:800;
+  }
+
+  .ap-filter-actions{ display:flex; gap:8px; align-items:end; }
+
+  .ap-summary{
+    display:grid;
+    grid-template-columns:repeat(4, minmax(0,1fr));
+    gap:12px;
+    margin-bottom:16px;
+  }
+
+  .ap-card{
+    padding:15px;
+    border:1px solid var(--ap-line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.94), rgba(2,6,23,0.94));
+    box-shadow:0 18px 44px rgba(0,0,0,0.32);
+  }
+
+  .ap-card span{
+    display:block;
+    color:var(--ap-muted);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+  }
+
+  .ap-card strong{
+    display:block;
+    margin-top:8px;
+    color:var(--ap-text);
+    font-size:24px;
+    line-height:1.12;
+    font-weight:900;
+  }
+
+  .ap-card small{
+    display:block;
+    margin-top:7px;
+    color:var(--ap-muted);
+    font-size:12px;
+    line-height:1.45;
+    font-weight:800;
+  }
+
+  .ap-chip-list{ display:flex; flex-wrap:wrap; gap:6px; margin-top:9px; }
+  .ap-chip{
+    display:inline-flex;
+    border:1px solid rgba(148,163,184,0.20);
+    border-radius:999px;
+    padding:4px 8px;
+    color:#e2e8f0;
+    background:rgba(148,163,184,0.08);
+    font-size:11px;
+    font-weight:900;
+  }
+
+  .ap-grid{
+    display:grid;
+    grid-template-columns:minmax(0, 1.55fr) minmax(330px, .95fr);
+    gap:14px;
+    align-items:start;
+  }
+
+  .ap-section{
+    border:1px solid var(--ap-line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.94), rgba(2,6,23,0.94));
+    overflow:hidden;
+    margin-bottom:14px;
+  }
+
+  .ap-section-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    flex-wrap:wrap;
+    padding:14px 16px;
+    border-bottom:1px solid rgba(148,163,184,0.16);
+  }
+
+  .ap-section-title{ margin:0; font-size:15px; font-weight:900; }
+  .ap-section-note{ color:var(--ap-muted); font-size:12px; font-weight:800; }
+
+  .ap-table-wrap{ overflow-x:auto; }
+  .ap-table{ width:100%; border-collapse:collapse; min-width:760px; }
+  .ap-table--compact{ min-width:540px; }
+
+  .ap-table th{
+    position:sticky;
+    top:0;
+    z-index:1;
+    padding:11px 12px;
+    background:#06101f;
+    border-bottom:1px solid rgba(148,163,184,0.16);
+    color:var(--ap-muted);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.07em;
+    text-align:left;
+    white-space:nowrap;
+  }
+
+  .ap-table td{
+    padding:12px;
+    border-bottom:1px solid rgba(148,163,184,0.11);
+    color:#e5e7eb;
+    font-size:13px;
+    font-weight:800;
+    vertical-align:top;
+  }
+
+  .ap-table tr:hover td{ background:rgba(245,196,81,0.05); }
+  .ap-right{ text-align:right !important; }
+  .ap-muted{ color:var(--ap-muted); font-size:12px; font-weight:800; }
+  .ap-link{ color:var(--ap-gold); text-decoration:none; font-weight:900; }
+  .ap-link:hover{ color:#fde68a; }
+
+  .ap-badge{
+    display:inline-flex;
+    align-items:center;
+    min-height:24px;
+    border-radius:999px;
+    padding:4px 9px;
+    border:1px solid rgba(148,163,184,0.26);
+    color:#e2e8f0;
+    background:rgba(148,163,184,0.10);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    white-space:nowrap;
+  }
+  .ap-badge--bad{ color:#fecdd3; background:rgba(251,113,133,0.12); border-color:rgba(251,113,133,0.36); }
+  .ap-badge--warn{ color:#fde68a; background:rgba(251,191,36,0.12); border-color:rgba(251,191,36,0.34); }
+  .ap-badge--good{ color:#bbf7d0; background:rgba(74,222,128,0.12); border-color:rgba(74,222,128,0.34); }
+  .ap-badge--blue{ color:#bfdbfe; background:rgba(96,165,250,0.12); border-color:rgba(96,165,250,0.34); }
+
+  .ap-empty{
+    padding:22px;
+    color:var(--ap-muted);
+    font-size:13px;
+    font-weight:800;
+    text-align:center;
+  }
+
+  .ap-cash{
+    display:grid;
+    grid-template-columns:repeat(3, minmax(0,1fr));
+    gap:10px;
+    padding:14px;
+  }
+
+  .ap-cash-card{
+    border:1px solid rgba(148,163,184,0.18);
+    border-radius:16px;
+    background:rgba(3,7,18,0.76);
+    padding:12px;
+  }
+
+  .ap-cash-card span{ display:block; color:var(--ap-muted); font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:.06em; }
+  .ap-cash-card strong{ display:block; margin-top:7px; font-size:18px; font-weight:900; }
+
+  .ap-chart-row{
+    display:grid;
+    grid-template-columns:86px minmax(0,1fr) 96px;
+    gap:10px;
+    align-items:center;
+    padding:11px 14px;
+    border-bottom:1px solid rgba(148,163,184,0.11);
+  }
+
+  .ap-bar{
+    height:11px;
+    border-radius:999px;
+    background:rgba(148,163,184,0.13);
+    overflow:hidden;
+  }
+
+  .ap-bar span{
+    display:block;
+    height:100%;
+    min-width:2px;
+    border-radius:999px;
+    background:linear-gradient(90deg, var(--ap-gold), #fb7185);
+  }
+
+  .ap-mobile-list{ display:none; }
+  .ap-mobile-card{ padding:14px; border-bottom:1px solid rgba(148,163,184,0.12); }
+
+  @media (max-width:1120px){
+    .ap-filter{ grid-template-columns:repeat(3, minmax(0,1fr)); }
+    .ap-summary{ grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .ap-grid{ grid-template-columns:1fr; }
+  }
+
+  @media (max-width:760px){
+    .ap-hero{ padding:16px; border-radius:18px; }
+    .ap-title{ font-size:24px; }
+    .ap-filter{ grid-template-columns:1fr; }
+    .ap-summary{ grid-template-columns:1fr; }
+    .ap-cash{ grid-template-columns:1fr; }
+    .ap-filter-actions{ align-items:stretch; flex-direction:column; }
+    .ap-btn{ width:100%; }
+    .ap-table-wrap{ display:none; }
+    .ap-mobile-list{ display:block; }
+  }
+</style>
+
+<div class="ap-wrap">
+  <div class="ap-hero">
+    <div>
+      <div class="ap-kicker">Accounting Phase 3</div>
+      <h1 class="ap-title">Accounts Payable Dashboard</h1>
+      <div class="ap-sub">
+        Track money-out bills, open balances, due dates, vendor categories, supplier exposure, and cash required from existing accounting entries.
+      </div>
+    </div>
+    <div class="ap-actions">
+      <a class="ap-btn" href="{% url 'accounting_entry_list' %}">Accounting entries</a>
+      <a class="ap-btn ap-btn--gold" href="{% url 'accounting_entry_add' %}">Add entry</a>
+    </div>
+  </div>
+
+  <form class="ap-filter" method="get">
+    <div class="ap-field">
+      <label for="date_from">From</label>
+      <input id="date_from" type="date" name="date_from" value="{{ filter_values.date_from }}">
+    </div>
+    <div class="ap-field">
+      <label for="date_to">To</label>
+      <input id="date_to" type="date" name="date_to" value="{{ filter_values.date_to }}">
+    </div>
+    <div class="ap-field">
+      <label for="supplier">Supplier</label>
+      <select id="supplier" name="supplier">
+        <option value="">All suppliers</option>
+        {% for supplier in supplier_choices %}
+          <option value="{{ supplier }}" {% if filter_values.supplier == supplier %}selected{% endif %}>{{ supplier }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="ap-field">
+      <label for="status">Status</label>
+      <select id="status" name="status">
+        {% for value, label in status_options %}
+          <option value="{{ value }}" {% if filter_values.status == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="ap-field">
+      <label for="currency">Currency</label>
+      <select id="currency" name="currency">
+        <option value="">All currencies</option>
+        {% for value in currency_options %}
+          <option value="{{ value }}" {% if filter_values.currency == value %}selected{% endif %}>{{ value }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="ap-field">
+      <label for="side">Side</label>
+      <select id="side" name="side">
+        {% for value, label in side_options %}
+          <option value="{{ value }}" {% if filter_values.side == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="ap-field">
+      <label for="category">Expense category</label>
+      <select id="category" name="category">
+        <option value="">All categories</option>
+        {% for value, label in category_options %}
+          <option value="{{ value }}" {% if filter_values.category == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="ap-filter-actions">
+      <button class="ap-btn ap-btn--gold" type="submit">Apply filters</button>
+      <a class="ap-btn" href="{% url 'accounts_payable_dashboard' %}">Reset</a>
+    </div>
+  </form>
+
+  <div class="ap-summary">
+    <div class="ap-card">
+      <span>Total bills</span>
+      <strong>{{ total_bills|floatformat:2|intcomma }}</strong>
+      <small>{{ bill_count }} money-out bill row(s) in the current filter.</small>
+      <div class="ap-chip-list">
+        {% for item in total_by_currency %}
+          <span class="ap-chip">{{ item.currency }} {{ item.amount|floatformat:2|intcomma }}</span>
+        {% empty %}
+          <span class="ap-chip">No bills</span>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="ap-card">
+      <span>Total paid</span>
+      <strong>{{ total_paid|floatformat:2|intcomma }}</strong>
+      <small>{{ paid_count }} paid bill row(s).</small>
+      <div class="ap-chip-list">
+        {% for item in paid_by_currency %}
+          <span class="ap-chip">{{ item.currency }} {{ item.amount|floatformat:2|intcomma }}</span>
+        {% empty %}
+          <span class="ap-chip">No paid bills</span>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="ap-card">
+      <span>Total outstanding</span>
+      <strong>{{ total_outstanding|floatformat:2|intcomma }}</strong>
+      <small>{{ open_count }} open bill row(s), {{ overdue_count }} overdue.</small>
+      <div class="ap-chip-list">
+        {% for item in outstanding_by_currency %}
+          <span class="ap-chip">{{ item.currency }} {{ item.amount|floatformat:2|intcomma }}</span>
+        {% empty %}
+          <span class="ap-chip">No open balance</span>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="ap-card">
+      <span>Due pressure</span>
+      <strong>{{ due_week_count }} this week</strong>
+      <small>{{ due_month_count }} due this month. Overdue total: {{ overdue_total|floatformat:2|intcomma }}.</small>
+    </div>
+  </div>
+
+  <section class="ap-section">
+    <div class="ap-section-head">
+      <div>
+        <h2 class="ap-section-title">Cash requirement summary</h2>
+        <div class="ap-section-note">Read-only projection from unpaid, partial, and overdue money-out entries.</div>
+      </div>
+    </div>
+    <div class="ap-cash">
+      <div class="ap-cash-card">
+        <span>Overdue cash required</span>
+        <strong>{{ overdue_total|floatformat:2|intcomma }}</strong>
+      </div>
+      <div class="ap-cash-card">
+        <span>Due this week</span>
+        <strong>{{ due_week_total|floatformat:2|intcomma }}</strong>
+      </div>
+      <div class="ap-cash-card">
+        <span>Due this month</span>
+        <strong>{{ due_month_total|floatformat:2|intcomma }}</strong>
+      </div>
+    </div>
+  </section>
+
+  <div class="ap-grid">
+    <div>
+      <section class="ap-section">
+        <div class="ap-section-head">
+          <div>
+            <h2 class="ap-section-title">Outstanding bills</h2>
+            <div class="ap-section-note">Unpaid, partially paid, and overdue money-out entries.</div>
+          </div>
+          <span class="ap-badge ap-badge--warn">{{ outstanding_rows|length }} shown</span>
+        </div>
+        {% if outstanding_rows %}
+          <div class="ap-table-wrap">
+            <table class="ap-table">
+              <thead>
+                <tr>
+                  <th>Bill / entry</th>
+                  <th>Supplier</th>
+                  <th>Category</th>
+                  <th>Status</th>
+                  <th>Side</th>
+                  <th>Due date</th>
+                  <th class="ap-right">Amount</th>
+                  <th class="ap-right">Outstanding</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in outstanding_rows %}
+                  <tr>
+                    <td>
+                      <a class="ap-link" href="{% url 'accounting_entry_edit' row.entry.pk %}">Entry #{{ row.entry.pk }}</a>
+                      <div class="ap-muted">{{ row.entry.description|default:"No description"|truncatechars:70 }}</div>
+                    </td>
+                    <td>{{ row.supplier }}</td>
+                    <td>{{ row.category_label }}</td>
+                    <td>
+                      {% if row.status_key == "overdue" %}
+                        <span class="ap-badge ap-badge--bad">{{ row.days_overdue }} days overdue</span>
+                      {% elif row.status_key == "partial" %}
+                        <span class="ap-badge ap-badge--warn">{{ row.status_label }}</span>
+                      {% else %}
+                        <span class="ap-badge ap-badge--blue">{{ row.status_label }}</span>
+                      {% endif %}
+                    </td>
+                    <td><span class="ap-badge {% if row.entry.side == 'BD' %}ap-badge--good{% else %}ap-badge--blue{% endif %}">{{ row.entry.get_side_display }}</span></td>
+                    <td>{{ row.entry.date|date:"Y-m-d" }}</td>
+                    <td class="ap-right">{{ row.currency }} {{ row.amount|floatformat:2|intcomma }}</td>
+                    <td class="ap-right">{{ row.currency }} {{ row.outstanding|floatformat:2|intcomma }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div class="ap-mobile-list">
+            {% for row in outstanding_rows %}
+              <div class="ap-mobile-card">
+                <a class="ap-link" href="{% url 'accounting_entry_edit' row.entry.pk %}">Entry #{{ row.entry.pk }}</a>
+                <div class="ap-muted">{{ row.supplier }} | {{ row.category_label }}</div>
+                <div style="margin-top:8px;">
+                  <span class="ap-badge {% if row.status_key == 'overdue' %}ap-badge--bad{% else %}ap-badge--blue{% endif %}">{{ row.status_label }}</span>
+                </div>
+                <div class="ap-muted" style="margin-top:8px;">Outstanding: {{ row.currency }} {{ row.outstanding|floatformat:2|intcomma }}</div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="ap-empty">No outstanding bills match the current filters.</div>
+        {% endif %}
+      </section>
+
+      <section class="ap-section">
+        <div class="ap-section-head">
+          <div>
+            <h2 class="ap-section-title">Payment history</h2>
+            <div class="ap-section-note">Paid money-out entries in the current filter.</div>
+          </div>
+          <span class="ap-badge ap-badge--good">{{ payment_rows|length }} shown</span>
+        </div>
+        {% if payment_rows %}
+          <div class="ap-table-wrap">
+            <table class="ap-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Entry</th>
+                  <th>Supplier</th>
+                  <th>Category</th>
+                  <th>Side</th>
+                  <th class="ap-right">Paid</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in payment_rows %}
+                  <tr>
+                    <td>{{ row.entry.date|date:"Y-m-d" }}</td>
+                    <td><a class="ap-link" href="{% url 'accounting_entry_edit' row.entry.pk %}">Entry #{{ row.entry.pk }}</a></td>
+                    <td>{{ row.supplier }}</td>
+                    <td>{{ row.category_label }}</td>
+                    <td><span class="ap-badge {% if row.entry.side == 'BD' %}ap-badge--good{% else %}ap-badge--blue{% endif %}">{{ row.entry.get_side_display }}</span></td>
+                    <td class="ap-right">{{ row.currency }} {{ row.paid_amount|floatformat:2|intcomma }}</td>
+                    <td>{{ row.entry.description|default:"No description"|truncatechars:80 }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="ap-empty">No paid bills match the current filters.</div>
+        {% endif %}
+      </section>
+    </div>
+
+    <div>
+      <section class="ap-section">
+        <div class="ap-section-head">
+          <div>
+            <h2 class="ap-section-title">Supplier balances</h2>
+            <div class="ap-section-note">Open payable exposure by supplier and currency.</div>
+          </div>
+        </div>
+        {% if supplier_balance_rows %}
+          <div class="ap-table-wrap">
+            <table class="ap-table ap-table--compact">
+              <thead>
+                <tr>
+                  <th>Supplier</th>
+                  <th class="ap-right">Open</th>
+                  <th class="ap-right">Overdue</th>
+                  <th class="ap-right">Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in supplier_balance_rows %}
+                  <tr>
+                    <td>{{ row.supplier }}</td>
+                    <td class="ap-right">{{ row.bill_count }}</td>
+                    <td class="ap-right">{{ row.overdue_count }}</td>
+                    <td class="ap-right">{{ row.currency }} {{ row.outstanding|floatformat:2|intcomma }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="ap-empty">No supplier balances match the current filters.</div>
+        {% endif %}
+      </section>
+
+      <section class="ap-section">
+        <div class="ap-section-head">
+          <div>
+            <h2 class="ap-section-title">Due soon bills</h2>
+            <div class="ap-section-note">Overdue and next-seven-day payable pressure.</div>
+          </div>
+        </div>
+        {% if due_soon_rows %}
+          <div class="ap-table-wrap">
+            <table class="ap-table ap-table--compact">
+              <thead>
+                <tr>
+                  <th>Entry</th>
+                  <th>Due</th>
+                  <th class="ap-right">Outstanding</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in due_soon_rows %}
+                  <tr>
+                    <td>
+                      <a class="ap-link" href="{% url 'accounting_entry_edit' row.entry.pk %}">#{{ row.entry.pk }}</a>
+                      <div class="ap-muted">{{ row.supplier }}</div>
+                    </td>
+                    <td>{{ row.entry.date|date:"Y-m-d" }}</td>
+                    <td class="ap-right">{{ row.currency }} {{ row.outstanding|floatformat:2|intcomma }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="ap-empty">No overdue or due-this-week bills match the current filters.</div>
+        {% endif %}
+      </section>
+
+      <section class="ap-section">
+        <div class="ap-section-head">
+          <div>
+            <h2 class="ap-section-title">Monthly payable chart</h2>
+            <div class="ap-section-note">Money-out bills grouped by entry date.</div>
+          </div>
+        </div>
+        {% if monthly_rows %}
+          {% for row in monthly_rows %}
+            <div class="ap-chart-row">
+              <div class="ap-muted">{{ row.label }}</div>
+              <div class="ap-bar"><span style="width:{{ row.bar_percent }}%;"></span></div>
+              <div class="ap-right ap-muted">{{ row.total|floatformat:0|intcomma }}</div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="ap-empty">No monthly payable data matches the current filters.</div>
+        {% endif %}
+      </section>
+
+      <section class="ap-section">
+        <div class="ap-section-head">
+          <div>
+            <h2 class="ap-section-title">Category cash requirement</h2>
+            <div class="ap-section-note">Open payable balance by expense category.</div>
+          </div>
+        </div>
+        {% if category_rows %}
+          <div class="ap-table-wrap">
+            <table class="ap-table ap-table--compact">
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th class="ap-right">Bills</th>
+                  <th class="ap-right">Outstanding</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in category_rows %}
+                  <tr>
+                    <td>{{ row.category }}</td>
+                    <td class="ap-right">{{ row.bill_count }}</td>
+                    <td class="ap-right">{{ row.currency }} {{ row.outstanding|floatformat:2|intcomma }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="ap-empty">No category cash requirement matches the current filters.</div>
+        {% endif %}
+      </section>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

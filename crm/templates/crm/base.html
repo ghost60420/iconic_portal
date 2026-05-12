@@ -283,6 +283,7 @@
     {% url 'email_sync_dashboard' as email_sync_url %}
     {% url 'accounting_home' as acc_home_url %}
     {% url 'accounts_receivable_dashboard' as ar_dashboard_url %}
+    {% url 'accounts_payable_dashboard' as ap_dashboard_url %}
     {% url 'invoice_list' as invoice_list_url %}
     {% url 'logout' as logout_url %}
     {% url 'access_list' as access_url %}
@@ -438,6 +439,7 @@
             <div class="crm-dd-title">Accounting shortcuts</div>
 
             {% if ar_dashboard_url %}<a class="crm-dd-item" href="{{ ar_dashboard_url }}">Accounts receivable</a>{% endif %}
+            {% if ap_dashboard_url %}<a class="crm-dd-item" href="{{ ap_dashboard_url }}">Accounts payable</a>{% endif %}
             {% if invoice_list_url %}<a class="crm-dd-item" href="{{ invoice_list_url }}">🧾 Invoices</a>{% endif %}
 
             {% if user|is_ca %}
