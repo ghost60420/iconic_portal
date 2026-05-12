@@ -26,6 +26,7 @@ from .models import (
     Event,
     InventoryItem,
     Invoice,
+    InvoicePayment,
     Lead,
     Opportunity,
     Shipment,
@@ -983,3 +984,66 @@ class InvoiceForm(forms.ModelForm):
 
     def clean_paid_amount(self):
         return self._clean_money("paid_amount")
+
+
+class InvoicePaymentForm(forms.ModelForm):
+    class Meta:
+        model = InvoicePayment
+        fields = [
+            "payment_date",
+            "amount",
+            "currency",
+            "side",
+            "payment_method",
+            "rate_to_cad",
+            "rate_to_bdt",
+            "production_order",
+            "notes",
+        ]
+        widgets = {
+            "payment_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "amount": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0.01"}),
+            "currency": forms.Select(attrs={"class": "form-select"}),
+            "side": forms.Select(attrs={"class": "form-select"}),
+            "payment_method": forms.Select(attrs={"class": "form-select"}),
+            "rate_to_cad": forms.NumberInput(attrs={"class": "form-control", "step": "0.000001", "min": "0"}),
+            "rate_to_bdt": forms.NumberInput(attrs={"class": "form-control", "step": "0.000001", "min": "0"}),
+            "production_order": forms.Select(attrs={"class": "form-select"}),
+            "notes": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+        }
+
+    def __init__(self, *args, invoice=None, **kwargs):
+        self.invoice = invoice
+        super().__init__(*args, **kwargs)
+
+        if invoice is not None:
+            invoice_currency = (getattr(invoice, "currency", "") or "CAD").upper()
+            invoice_side = (getattr(invoice, "invoice_region", "") or "").upper()
+            if invoice_side not in {"CA", "BD"}:
+                invoice_side = "BD" if invoice_currency == "BDT" else "CA"
+
+            self.fields["currency"].initial = invoice_currency
+            self.fields["side"].initial = invoice_side
+
+            if getattr(invoice, "order_id", None):
+                self.fields["production_order"].initial = invoice.order_id
+
+        self.fields["production_order"].required = False
+        self.fields["notes"].required = False
+
+    def clean_amount(self):
+        amount = self.cleaned_data.get("amount") or Decimal("0")
+        if amount <= 0:
+            raise forms.ValidationError("Enter a payment amount greater than zero.")
+        return amount
+
+    def clean(self):
+        cleaned = super().clean()
+        invoice_currency = ((getattr(self.invoice, "currency", "") if self.invoice else "") or "").upper()
+        payment_currency = (cleaned.get("currency") or "").upper()
+        if invoice_currency and payment_currency and payment_currency != invoice_currency:
+            raise forms.ValidationError(
+                "Payment currency must match the invoice currency for this phase. "
+                "Use the exchange-rate fields for accounting conversion."
+            )
+        return cleaned

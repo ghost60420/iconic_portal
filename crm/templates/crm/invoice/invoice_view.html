@@ -142,6 +142,155 @@
   .s-paid{ color:var(--good); }
   .s-cancelled{ color:var(--bad); }
   .s-unknown{ color:#e5e7eb; }
+  .s-unpaid{ color:#e5e7eb; }
+  .s-overpaid{ color:#fb7185; border-color:rgba(251,113,133,0.45); background:rgba(251,113,133,0.10); }
+
+  .pay-hero{
+    display:grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap:12px;
+    margin-bottom:12px;
+  }
+  @media (max-width: 1050px){ .pay-hero{ grid-template-columns:repeat(2, minmax(0,1fr)); } }
+  @media (max-width: 650px){ .pay-hero{ grid-template-columns:1fr; } }
+
+  .pay-kpi{
+    padding:14px;
+    border:1px solid rgba(148,163,184,0.18);
+    border-radius:18px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.92), rgba(2,6,23,0.92));
+    box-shadow:0 16px 36px rgba(0,0,0,0.36);
+  }
+  .pay-kpi span{
+    display:block;
+    color:var(--muted);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+  }
+  .pay-kpi strong{
+    display:block;
+    margin-top:8px;
+    color:var(--text);
+    font-size:22px;
+    line-height:1.15;
+    font-weight:900;
+  }
+  .pay-kpi small{
+    display:block;
+    margin-top:6px;
+    color:var(--muted);
+    font-size:12px;
+    font-weight:800;
+    line-height:1.4;
+  }
+
+  .pay-section{
+    margin-top:12px;
+  }
+  .pay-section-title{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    flex-wrap:wrap;
+    margin-bottom:12px;
+    font-weight:900;
+  }
+  .pay-form-grid{
+    display:grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap:12px;
+  }
+  @media (max-width: 900px){ .pay-form-grid{ grid-template-columns:1fr; } }
+
+  .pay-field label{
+    display:block;
+    margin-bottom:6px;
+    color:var(--muted);
+    font-size:11px;
+    font-weight:900;
+    letter-spacing:0.07em;
+    text-transform:uppercase;
+  }
+  .pay-field input,
+  .pay-field select,
+  .pay-field textarea{
+    width:100%;
+    min-height:42px;
+    padding:10px 12px;
+    border:1px solid rgba(148,163,184,0.28);
+    border-radius:14px;
+    background:#030712;
+    color:var(--text);
+    font-size:13px;
+    font-weight:800;
+  }
+  .pay-field textarea{ min-height:94px; }
+  .pay-field--wide{ grid-column:1 / -1; }
+  .pay-help{
+    margin-top:6px;
+    color:var(--muted);
+    font-size:11px;
+    font-weight:800;
+    line-height:1.4;
+  }
+  .pay-error,
+  .pay-alert{
+    margin-top:8px;
+    padding:10px 12px;
+    border-radius:14px;
+    border:1px solid rgba(251,113,133,0.48);
+    background:rgba(251,113,133,0.09);
+    color:#fecdd3;
+    font-size:12px;
+    font-weight:800;
+    line-height:1.45;
+  }
+  .pay-alert--warn{
+    border-color:rgba(251,191,36,0.42);
+    background:rgba(251,191,36,0.10);
+    color:#fde68a;
+  }
+  .pay-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-top:12px;
+  }
+  .pay-save{
+    min-height:42px;
+    padding:0 16px;
+    border-radius:999px;
+    border:1px solid rgba(255,215,128,0.55);
+    background:linear-gradient(145deg,#f5d580,#d4b35f);
+    color:#111827;
+    font-size:13px;
+    font-weight:900;
+  }
+
+  .pay-history{
+    width:100%;
+    border-collapse:collapse;
+    font-size:13px;
+  }
+  .pay-history th,
+  .pay-history td{
+    padding:10px 8px;
+    border-bottom:1px solid rgba(148,163,184,0.16);
+    text-align:left;
+    vertical-align:top;
+  }
+  .pay-history th{
+    color:var(--muted);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+  }
+  .pay-history .right{ text-align:right; }
 
   .totals{
     width:100%;
@@ -232,6 +381,181 @@
           <a class="pill gold" href="{% url 'invoice_edit' invoice.pk %}">Edit</a>
         {% endif %}
         <a class="pill" href="#" onclick="window.print();return false;">Print</a>
+      </div>
+    </div>
+
+    {% with pay_key=invoice.payment_status_key %}
+      <div class="pay-hero">
+        <div class="pay-kpi">
+          <span>Invoice amount</span>
+          <strong>{% if cur %}{{ cur }} {% endif %}{{ invoice.total_amount|default_if_none:0|floatformat:2|intcomma }}</strong>
+          <small>Approved invoice value for payment tracking.</small>
+        </div>
+
+        <div class="pay-kpi">
+          <span>Amount received</span>
+          <strong>{% if cur %}{{ cur }} {% endif %}{{ invoice.paid_amount|default_if_none:0|floatformat:2|intcomma }}</strong>
+          <small>{% if legacy_paid_amount %}Includes legacy received amount: {{ cur }} {{ legacy_paid_amount|floatformat:2|intcomma }}.{% else %}From recorded payment entries.{% endif %}</small>
+        </div>
+
+        <div class="pay-kpi">
+          <span>Balance due</span>
+          <strong>{% if cur %}{{ cur }} {% endif %}{{ invoice.balance|default_if_none:0|floatformat:2|intcomma }}</strong>
+          <small>{% if pay_key == "overpaid" %}Overpayment needs finance review.{% else %}Remaining unpaid invoice balance.{% endif %}</small>
+        </div>
+
+        <div class="pay-kpi">
+          <span>Payment status</span>
+          <strong>
+            <span class="status s-{{ pay_key }}">{{ invoice.payment_status_label }}</span>
+          </strong>
+          <small>{% if invoice.order %}Production: {{ invoice.order.order_code|default:invoice.order }}{% else %}No production order linked.{% endif %}</small>
+        </div>
+      </div>
+    {% endwith %}
+
+    <div class="cardx pay-section noPrint" id="payment-received-form">
+      <div class="pad">
+        <div class="pay-section-title">
+          <span>Record payment received</span>
+          {% if is_payment_month_closed %}
+            <span class="status s-overpaid">Current month closed</span>
+          {% endif %}
+        </div>
+
+        {% if payment_form.non_field_errors %}
+          <div class="pay-alert">{{ payment_form.non_field_errors }}</div>
+        {% endif %}
+        {% if is_payment_month_closed %}
+          <div class="pay-alert pay-alert--warn">
+            The current accounting month is closed. Choose an open payment date or open the month before saving.
+          </div>
+        {% endif %}
+
+        <form method="post" action="{% url 'invoice_payment_add' invoice.pk %}" novalidate>
+          {% csrf_token %}
+          <div class="pay-form-grid">
+            <div class="pay-field">
+              <label for="{{ payment_form.payment_date.id_for_label }}">Payment date</label>
+              {{ payment_form.payment_date }}
+              {% if payment_form.payment_date.errors %}<div class="pay-error">{{ payment_form.payment_date.errors }}</div>{% endif %}
+            </div>
+
+            <div class="pay-field">
+              <label for="{{ payment_form.amount.id_for_label }}">Amount received</label>
+              {{ payment_form.amount }}
+              {% if payment_form.amount.errors %}<div class="pay-error">{{ payment_form.amount.errors }}</div>{% endif %}
+            </div>
+
+            <div class="pay-field">
+              <label for="{{ payment_form.payment_method.id_for_label }}">Payment method</label>
+              {{ payment_form.payment_method }}
+              {% if payment_form.payment_method.errors %}<div class="pay-error">{{ payment_form.payment_method.errors }}</div>{% endif %}
+            </div>
+
+            <div class="pay-field">
+              <label for="{{ payment_form.currency.id_for_label }}">Currency</label>
+              {{ payment_form.currency }}
+              {% if payment_form.currency.errors %}<div class="pay-error">{{ payment_form.currency.errors }}</div>{% endif %}
+              <div class="pay-help">Must match the invoice currency in Phase 1.</div>
+            </div>
+
+            <div class="pay-field">
+              <label for="{{ payment_form.side.id_for_label }}">Accounting side</label>
+              {{ payment_form.side }}
+              {% if payment_form.side.errors %}<div class="pay-error">{{ payment_form.side.errors }}</div>{% endif %}
+              <div class="pay-help">Bangladesh payments create BD money-in entries.</div>
+            </div>
+
+            <div class="pay-field">
+              <label for="{{ payment_form.production_order.id_for_label }}">Related production order</label>
+              {{ payment_form.production_order }}
+              {% if payment_form.production_order.errors %}<div class="pay-error">{{ payment_form.production_order.errors }}</div>{% endif %}
+            </div>
+
+            <div class="pay-field">
+              <label for="{{ payment_form.rate_to_cad.id_for_label }}">Rate to CAD</label>
+              {{ payment_form.rate_to_cad }}
+              {% if payment_form.rate_to_cad.errors %}<div class="pay-error">{{ payment_form.rate_to_cad.errors }}</div>{% endif %}
+            </div>
+
+            <div class="pay-field">
+              <label for="{{ payment_form.rate_to_bdt.id_for_label }}">Rate to BDT</label>
+              {{ payment_form.rate_to_bdt }}
+              {% if payment_form.rate_to_bdt.errors %}<div class="pay-error">{{ payment_form.rate_to_bdt.errors }}</div>{% endif %}
+            </div>
+
+            <div class="pay-field pay-field--wide">
+              <label for="{{ payment_form.notes.id_for_label }}">Notes</label>
+              {{ payment_form.notes }}
+              {% if payment_form.notes.errors %}<div class="pay-error">{{ payment_form.notes.errors }}</div>{% endif %}
+            </div>
+          </div>
+
+          <div class="pay-actions">
+            <button class="pay-save" type="submit">Save payment received</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="cardx pay-section">
+      <div class="pad">
+        <div class="pay-section-title">
+          <span>Payment history</span>
+          <span class="sub">{{ payment_history|length }} payment record(s)</span>
+        </div>
+
+        {% if legacy_paid_amount %}
+          <div class="pay-alert pay-alert--warn">
+            This invoice has {{ cur }} {{ legacy_paid_amount|floatformat:2|intcomma }} recorded before payment history was enabled.
+          </div>
+        {% endif %}
+
+        {% if payment_history %}
+          <div style="overflow-x:auto;">
+            <table class="pay-history">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Method</th>
+                  <th>Production</th>
+                  <th>Accounting entry</th>
+                  <th class="right">Amount</th>
+                  <th class="right">BDT value</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for payment in payment_history %}
+                  <tr>
+                    <td>{{ payment.payment_date|date:"Y-m-d" }}</td>
+                    <td>{{ payment.get_payment_method_display }}</td>
+                    <td>
+                      {% if payment.production_order %}
+                        <a class="v" href="{% url 'production_detail' payment.production_order.pk %}">{{ payment.production_order.order_code|default:payment.production_order }}</a>
+                      {% else %}
+                        —
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if payment.accounting_entry %}
+                        <a class="v" href="{% url 'accounting_entry_edit' payment.accounting_entry.pk %}">Entry #{{ payment.accounting_entry.pk }}</a>
+                      {% else %}
+                        —
+                      {% endif %}
+                    </td>
+                    <td class="right">{{ payment.currency }} {{ payment.amount|floatformat:2|intcomma }}</td>
+                    <td class="right">BDT {{ payment.amount_bdt|floatformat:2|intcomma }}</td>
+                    <td>{{ payment.notes|default:"—" }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="pay-help">No payment history recorded yet.</div>
+        {% endif %}
       </div>
     </div>
 

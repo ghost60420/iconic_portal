@@ -3228,6 +3228,27 @@ class Invoice(models.Model):
     def balance(self):
         return (self.total_amount or Decimal("0")) - (self.paid_amount or Decimal("0"))
 
+    @property
+    def payment_status_key(self):
+        total = self.total_amount or Decimal("0")
+        paid = self.paid_amount or Decimal("0")
+        if paid <= 0:
+            return "unpaid"
+        if total > 0 and paid > total:
+            return "overpaid"
+        if total > 0 and paid >= total:
+            return "paid"
+        return "partial"
+
+    @property
+    def payment_status_label(self):
+        return {
+            "unpaid": "Unpaid",
+            "partial": "Partially paid",
+            "paid": "Paid",
+            "overpaid": "Overpaid",
+        }.get(self.payment_status_key, "Unpaid")
+
 
 class InvoiceAudit(models.Model):
     ACTION_CHOICES = [
@@ -3255,6 +3276,94 @@ class InvoiceAudit(models.Model):
 
     def __str__(self):
         return f"{self.invoice_id} {self.action}"
+
+
+class InvoicePayment(models.Model):
+    METHOD_CHOICES = [
+        ("bank", "Bank transfer"),
+        ("cash", "Cash"),
+        ("cheque", "Cheque"),
+        ("card", "Card"),
+        ("mobile", "Mobile payment"),
+        ("other", "Other"),
+    ]
+
+    SIDE_CHOICES = [
+        ("CA", "Canada"),
+        ("BD", "Bangladesh"),
+    ]
+
+    invoice = models.ForeignKey(
+        "Invoice",
+        on_delete=models.CASCADE,
+        related_name="payments",
+    )
+    accounting_entry = models.ForeignKey(
+        "AccountingEntry",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="invoice_payments",
+    )
+    production_order = models.ForeignKey(
+        "ProductionOrder",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="invoice_payments",
+    )
+
+    payment_date = models.DateField(default=timezone.localdate)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    currency = models.CharField(
+        max_length=10,
+        default="CAD",
+        choices=[
+            ("USD", "USD"),
+            ("CAD", "CAD"),
+            ("BDT", "BDT"),
+        ],
+    )
+    side = models.CharField(max_length=2, choices=SIDE_CHOICES, default="CA")
+    payment_method = models.CharField(max_length=20, choices=METHOD_CHOICES, default="bank")
+
+    rate_to_cad = models.DecimalField(max_digits=14, decimal_places=6, default=Decimal("0"))
+    rate_to_bdt = models.DecimalField(max_digits=14, decimal_places=6, default=Decimal("0"))
+    amount_cad = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+    amount_bdt = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+
+    notes = models.TextField(blank=True, default="")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="created_invoice_payments",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-payment_date", "-id"]
+
+    def save(self, *args, **kwargs):
+        amount = self.amount or Decimal("0")
+        currency = (self.currency or "").upper().strip()
+
+        if currency == "CAD":
+            self.rate_to_cad = Decimal("1")
+        if currency == "BDT":
+            self.rate_to_bdt = Decimal("1")
+
+        rate_to_cad = self.rate_to_cad or Decimal("0")
+        rate_to_bdt = self.rate_to_bdt or Decimal("0")
+
+        self.amount_cad = (amount * rate_to_cad).quantize(Decimal("0.01")) if rate_to_cad > 0 else Decimal("0")
+        self.amount_bdt = (amount * rate_to_bdt).quantize(Decimal("0.01")) if rate_to_bdt > 0 else Decimal("0")
+
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.invoice.invoice_number} payment {self.amount} {self.currency}"
 
 
 ## ==============================

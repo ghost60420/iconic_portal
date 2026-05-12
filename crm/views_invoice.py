@@ -4,13 +4,22 @@ from decimal import Decimal
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .models import Invoice, ProductionOrder
-from .forms import InvoiceForm
+from .models import (
+    AccountingEntry,
+    AccountingEntryAudit,
+    AccountingMonthClose,
+    AccountingMonthLock,
+    ExchangeRate,
+    Invoice,
+    InvoicePayment,
+    ProductionOrder,
+)
+from .forms import InvoiceForm, InvoicePaymentForm
 
 
 def superuser_only(user):
@@ -44,6 +53,103 @@ def _calc_totals(inv: Invoice) -> None:
             inv.status = "paid"
         elif total > 0:
             inv.status = "partial"
+
+
+def _invoice_payment_side(inv: Invoice) -> str:
+    region = (getattr(inv, "invoice_region", "") or "").upper().strip()
+    if region in {"CA", "BD"}:
+        return region
+    currency = (getattr(inv, "currency", "") or "").upper().strip()
+    return "BD" if currency == "BDT" else "CA"
+
+
+def _latest_cad_to_bdt() -> Decimal:
+    row = ExchangeRate.objects.order_by("-updated_at").first()
+    return row.cad_to_bdt if row and row.cad_to_bdt else Decimal("0")
+
+
+def _payment_rate_initial(currency: str) -> dict:
+    currency = (currency or "").upper().strip()
+    cad_to_bdt = _latest_cad_to_bdt()
+    data = {"rate_to_cad": Decimal("0"), "rate_to_bdt": Decimal("0")}
+
+    if currency == "CAD":
+        data["rate_to_cad"] = Decimal("1")
+        if cad_to_bdt > 0:
+            data["rate_to_bdt"] = cad_to_bdt
+    elif currency == "BDT":
+        data["rate_to_bdt"] = Decimal("1")
+        if cad_to_bdt > 0:
+            data["rate_to_cad"] = (Decimal("1") / cad_to_bdt).quantize(Decimal("0.000001"))
+
+    return data
+
+
+def _is_accounting_month_closed(payment_date, side: str) -> bool:
+    if not payment_date:
+        return False
+
+    year = payment_date.year
+    month = payment_date.month
+    side = (side or "").upper().strip()
+
+    if AccountingMonthClose.objects.filter(
+        year=year,
+        month=month,
+        is_closed=True,
+        side__in=[side, "ALL"],
+    ).exists():
+        return True
+
+    lock_fields = {field.name for field in AccountingMonthLock._meta.fields}
+    lock_filter = {"year": year, "month": month, "is_closed": True}
+    if "side" in lock_fields and side:
+        lock_filter["side"] = side
+    return AccountingMonthLock.objects.filter(**lock_filter).exists()
+
+
+def _entry_snapshot(entry: AccountingEntry) -> dict:
+    return {
+        "id": entry.id,
+        "date": str(entry.date) if entry.date else "",
+        "side": entry.side,
+        "direction": entry.direction,
+        "status": entry.status,
+        "main_type": entry.main_type,
+        "sub_type": entry.sub_type,
+        "currency": entry.currency,
+        "amount_original": str(entry.amount_original or ""),
+        "amount_cad": str(entry.amount_cad or ""),
+        "amount_bdt": str(entry.amount_bdt or ""),
+        "description": entry.description or "",
+        "internal_note": entry.internal_note or "",
+        "customer_id": entry.customer_id or "",
+        "production_order_id": entry.production_order_id or "",
+    }
+
+
+def _audit_accounting_entry(entry: AccountingEntry, user, note: str = "") -> None:
+    try:
+        AccountingEntryAudit.objects.create(
+            entry=entry,
+            action="CREATE",
+            changed_by=user if user and user.is_authenticated else None,
+            after_data=_entry_snapshot(entry),
+            note=note or "",
+        )
+    except Exception:
+        pass
+
+
+def _sync_invoice_payment_status(inv: Invoice) -> None:
+    total = _d(inv.total_amount)
+    paid = _d(inv.paid_amount)
+    if paid <= 0:
+        inv.status = "sent" if inv.status != "draft" else inv.status
+    elif total > 0 and paid >= total:
+        inv.status = "paid"
+    elif total > 0:
+        inv.status = "partial"
 
 
 def _next_invoice_number() -> str:
@@ -83,7 +189,9 @@ def invoice_list(request):
             Q(invoice_number__icontains=q)
             | Q(order__order_code__icontains=q)
             | Q(order__title__icontains=q)
-            | Q(customer__name__icontains=q)
+            | Q(customer__account_brand__icontains=q)
+            | Q(customer__contact_name__icontains=q)
+            | Q(customer__email__icontains=q)
         )
 
     if status:
@@ -93,15 +201,49 @@ def invoice_list(request):
         invoices = invoices.filter(currency=currency)
 
     invoices = invoices.order_by("-issue_date", "-created_at")
+    invoice_rows = list(invoices)
+    total_amount = sum((_d(inv.total_amount) for inv in invoice_rows), Decimal("0"))
+    received_amount = sum((_d(inv.paid_amount) for inv in invoice_rows), Decimal("0"))
+    unpaid_balance = sum((_d(inv.balance) for inv in invoice_rows), Decimal("0"))
+    open_count = sum(1 for inv in invoice_rows if inv.payment_status_key in {"unpaid", "partial", "overpaid"})
+
+    today = timezone.localdate()
+    monthly_received = (
+        InvoicePayment.objects.filter(payment_date__year=today.year, payment_date__month=today.month)
+        .aggregate(total=Sum("amount"))["total"]
+        or Decimal("0")
+    )
+    bd_received_total = (
+        Invoice.objects.filter(Q(invoice_region="BD") | Q(currency="BDT")).aggregate(total=Sum("paid_amount"))["total"]
+        or Decimal("0")
+    )
+    bd_unpaid_balance = sum(
+        (_d(inv.balance) for inv in Invoice.objects.filter(Q(invoice_region="BD") | Q(currency="BDT"))),
+        Decimal("0"),
+    )
+    production_received_rows = list(
+        InvoicePayment.objects.filter(production_order__isnull=False)
+        .values("production_order__order_code", "production_order__title")
+        .annotate(received_bdt=Sum("amount_bdt"), received_original=Sum("amount"))
+        .order_by("-received_bdt")[:8]
+    )
 
     return render(
         request,
         "crm/invoice/invoice_list.html",
         {
-            "invoices": invoices,
+            "invoices": invoice_rows,
             "q": q,
             "status": status,
             "currency": currency,
+            "total_amount": total_amount,
+            "received_amount": received_amount,
+            "unpaid_balance": unpaid_balance,
+            "open_count": open_count,
+            "monthly_received": monthly_received,
+            "bd_received_total": bd_received_total,
+            "bd_unpaid_balance": bd_unpaid_balance,
+            "production_received_rows": production_received_rows,
         },
     )
 
@@ -117,22 +259,46 @@ def _invoice_list_by_currency(request, currency_code: str):
             Q(invoice_number__icontains=q)
             | Q(order__order_code__icontains=q)
             | Q(order__title__icontains=q)
-            | Q(customer__name__icontains=q)
+            | Q(customer__account_brand__icontains=q)
+            | Q(customer__contact_name__icontains=q)
+            | Q(customer__email__icontains=q)
         )
 
     if status:
         invoices = invoices.filter(status=status)
 
     invoices = invoices.order_by("-issue_date", "-created_at")
+    invoice_rows = list(invoices)
+    total_amount = sum((_d(inv.total_amount) for inv in invoice_rows), Decimal("0"))
+    received_amount = sum((_d(inv.paid_amount) for inv in invoice_rows), Decimal("0"))
+    unpaid_balance = sum((_d(inv.balance) for inv in invoice_rows), Decimal("0"))
+    open_count = sum(1 for inv in invoice_rows if inv.payment_status_key in {"unpaid", "partial", "overpaid"})
+    today = timezone.localdate()
+    monthly_received = (
+        InvoicePayment.objects.filter(
+            currency=currency_code,
+            payment_date__year=today.year,
+            payment_date__month=today.month,
+        ).aggregate(total=Sum("amount"))["total"]
+        or Decimal("0")
+    )
 
     return render(
         request,
         "crm/invoice/invoice_list.html",
         {
-            "invoices": invoices,
+            "invoices": invoice_rows,
             "q": q,
             "status": status,
             "currency": currency_code,
+            "total_amount": total_amount,
+            "received_amount": received_amount,
+            "unpaid_balance": unpaid_balance,
+            "open_count": open_count,
+            "monthly_received": monthly_received,
+            "bd_received_total": received_amount if currency_code == "BDT" else Decimal("0"),
+            "bd_unpaid_balance": unpaid_balance if currency_code == "BDT" else Decimal("0"),
+            "production_received_rows": [],
         },
     )
 
@@ -298,7 +464,135 @@ def invoice_edit(request, pk):
 @user_passes_test(superuser_only)
 def invoice_view(request, pk):
     inv = get_object_or_404(Invoice.objects.select_related("order", "customer"), pk=pk)
-    return render(request, "crm/invoice/invoice_view.html", {"invoice": inv})
+    payment_history = list(
+        inv.payments.select_related("production_order", "accounting_entry", "created_by").order_by("-payment_date", "-id")
+    )
+    payment_total = sum((_d(payment.amount) for payment in payment_history), Decimal("0"))
+    legacy_paid_amount = _d(inv.paid_amount) - payment_total
+    if legacy_paid_amount < 0:
+        legacy_paid_amount = Decimal("0")
+
+    initial = {
+        "payment_date": timezone.localdate(),
+        "currency": inv.currency or "CAD",
+        "side": _invoice_payment_side(inv),
+        "production_order": inv.order_id or None,
+    }
+    initial.update(_payment_rate_initial(inv.currency))
+
+    return render(
+        request,
+        "crm/invoice/invoice_view.html",
+        {
+            "invoice": inv,
+            "payment_form": InvoicePaymentForm(invoice=inv, initial=initial),
+            "payment_history": payment_history,
+            "payment_total": payment_total,
+            "legacy_paid_amount": legacy_paid_amount,
+            "is_payment_month_closed": _is_accounting_month_closed(timezone.localdate(), _invoice_payment_side(inv)),
+        },
+    )
+
+
+@login_required
+@user_passes_test(superuser_only)
+@require_POST
+def invoice_payment_add(request, pk):
+    inv = get_object_or_404(Invoice.objects.select_related("order", "customer"), pk=pk)
+    form = InvoicePaymentForm(request.POST, invoice=inv)
+
+    if not form.is_valid():
+        payment_history = list(
+            inv.payments.select_related("production_order", "accounting_entry", "created_by").order_by("-payment_date", "-id")
+        )
+        payment_total = sum((_d(payment.amount) for payment in payment_history), Decimal("0"))
+        legacy_paid_amount = _d(inv.paid_amount) - payment_total
+        if legacy_paid_amount < 0:
+            legacy_paid_amount = Decimal("0")
+        messages.error(request, "Could not save payment. Please fix the errors below.")
+        return render(
+            request,
+            "crm/invoice/invoice_view.html",
+            {
+                "invoice": inv,
+                "payment_form": form,
+                "payment_history": payment_history,
+                "payment_total": payment_total,
+                "legacy_paid_amount": legacy_paid_amount,
+                "is_payment_month_closed": _is_accounting_month_closed(timezone.localdate(), _invoice_payment_side(inv)),
+            },
+        )
+
+    payment_date = form.cleaned_data["payment_date"]
+    side = (form.cleaned_data.get("side") or _invoice_payment_side(inv)).upper().strip()
+
+    if _is_accounting_month_closed(payment_date, side):
+        form.add_error(
+            "payment_date",
+            f"{side} accounting is closed for {payment_date:%Y-%m}. Open the month before recording this payment.",
+        )
+        messages.error(request, "Payment blocked because the accounting month is closed.")
+        payment_history = list(
+            inv.payments.select_related("production_order", "accounting_entry", "created_by").order_by("-payment_date", "-id")
+        )
+        payment_total = sum((_d(payment.amount) for payment in payment_history), Decimal("0"))
+        legacy_paid_amount = _d(inv.paid_amount) - payment_total
+        if legacy_paid_amount < 0:
+            legacy_paid_amount = Decimal("0")
+        return render(
+            request,
+            "crm/invoice/invoice_view.html",
+            {
+                "invoice": inv,
+                "payment_form": form,
+                "payment_history": payment_history,
+                "payment_total": payment_total,
+                "legacy_paid_amount": legacy_paid_amount,
+                "is_payment_month_closed": True,
+            },
+        )
+
+    with transaction.atomic():
+        payment = form.save(commit=False)
+        payment.invoice = inv
+        payment.side = side
+        payment.created_by = request.user if request.user.is_authenticated else None
+        if not payment.production_order_id and inv.order_id:
+            payment.production_order = inv.order
+        payment.save()
+
+        entry = AccountingEntry.objects.create(
+            date=payment.payment_date,
+            side=payment.side,
+            direction=AccountingEntry.DIR_IN,
+            status="PAID",
+            main_type="INCOME",
+            sub_type="Invoice payment received",
+            customer=inv.customer,
+            production_order=payment.production_order,
+            currency=payment.currency,
+            amount_original=payment.amount,
+            rate_to_cad=payment.rate_to_cad,
+            rate_to_bdt=payment.rate_to_bdt,
+            description=f"Payment received for invoice {inv.invoice_number}",
+            internal_note=payment.notes or "",
+            created_by=request.user if request.user.is_authenticated else None,
+        )
+        _audit_accounting_entry(entry, request.user, note=f"Invoice payment {inv.invoice_number}")
+
+        payment.accounting_entry = entry
+        payment.save(update_fields=["accounting_entry"])
+
+        inv.paid_amount = _d(inv.paid_amount) + _d(payment.amount)
+        _sync_invoice_payment_status(inv)
+        inv.updated_at = timezone.now()
+        inv.save(update_fields=["paid_amount", "status", "updated_at"])
+
+    if inv.payment_status_key == "overpaid":
+        messages.warning(request, "Payment saved. This invoice is now overpaid; review the balance.")
+    else:
+        messages.success(request, "Payment received and accounting entry saved.")
+    return redirect("invoice_view", pk=inv.pk)
 
 
 @login_required

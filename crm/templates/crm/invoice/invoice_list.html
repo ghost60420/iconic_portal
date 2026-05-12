@@ -77,6 +77,47 @@
     overflow:hidden;
   }
 
+  .summary-grid{
+    display:grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap:12px;
+    margin-bottom:14px;
+  }
+  @media (max-width: 1050px){ .summary-grid{ grid-template-columns:repeat(2, minmax(0,1fr)); } }
+  @media (max-width: 650px){ .summary-grid{ grid-template-columns:1fr; } }
+
+  .summary-card{
+    padding:14px;
+    border:1px solid rgba(148,163,184,0.18);
+    border-radius:18px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.92), rgba(2,6,23,0.92));
+    box-shadow:0 16px 36px rgba(0,0,0,0.36);
+  }
+  .summary-card span{
+    display:block;
+    color:var(--muted);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+  }
+  .summary-card strong{
+    display:block;
+    margin-top:8px;
+    color:var(--text);
+    font-size:22px;
+    line-height:1.15;
+    font-weight:900;
+  }
+  .summary-card small{
+    display:block;
+    margin-top:6px;
+    color:var(--muted);
+    font-size:12px;
+    line-height:1.4;
+    font-weight:800;
+  }
+
   .filters{
     padding:12px;
     border-bottom:1px solid rgba(148,163,184,0.18);
@@ -151,8 +192,12 @@
   .paid{ color:var(--good); }
   .cancelled{ color:var(--bad); }
   .unknown{ color:#e5e7eb; }
+  .unpaid{ color:#e5e7eb; }
+  .overpaid{ color:var(--bad); border-color:rgba(251,113,133,0.45); background:rgba(251,113,133,0.10); }
 
   .right{ text-align:right; }
+
+  .muted{ color:var(--muted); font-size:12px; font-weight:800; }
 
   .link{
     color:#fbbf24;
@@ -178,7 +223,7 @@
       <div>
         <h2 class="title">Invoices</h2>
         <div class="sub">
-          All invoices in the system. Use search and filter to find invoices fast.
+          Received payments, balances, Bangladesh production receipts, and invoice status in one place.
         </div>
       </div>
 
@@ -187,19 +232,47 @@
       </div>
     </div>
 
+    <div class="summary-grid">
+      <div class="summary-card">
+        <span>Total invoice amount</span>
+        <strong>{{ total_amount|default_if_none:0|floatformat:2|intcomma }}</strong>
+        <small>Filtered invoice total across visible records.</small>
+      </div>
+      <div class="summary-card">
+        <span>Amount received</span>
+        <strong>{{ received_amount|default_if_none:0|floatformat:2|intcomma }}</strong>
+        <small>This month received: {{ monthly_received|default_if_none:0|floatformat:2|intcomma }}.</small>
+      </div>
+      <div class="summary-card">
+        <span>Unpaid balance</span>
+        <strong>{{ unpaid_balance|default_if_none:0|floatformat:2|intcomma }}</strong>
+        <small>{{ open_count }} invoice(s) need payment review.</small>
+      </div>
+      <div class="summary-card">
+        <span>Bangladesh received</span>
+        <strong>BDT {{ bd_received_total|default_if_none:0|floatformat:2|intcomma }}</strong>
+        <small>BD unpaid balance: BDT {{ bd_unpaid_balance|default_if_none:0|floatformat:2|intcomma }}</small>
+      </div>
+    </div>
+
     <div class="cardx">
 
-      <div class="filters">
-        <input class="ctrl" id="q" type="text" placeholder="Search invoice, customer, order" autocomplete="off">
-        <select class="ctrl sm" id="statusFilter">
+      <form class="filters" method="get">
+        <input class="ctrl" id="q" name="q" type="text" placeholder="Search invoice, customer, order" value="{{ q }}" autocomplete="off">
+        <select class="ctrl sm" id="statusFilter" name="status">
           <option value="">All status</option>
-          <option value="draft">Draft</option>
-          <option value="sent">Sent</option>
-          <option value="partial">Partly paid</option>
-          <option value="paid">Paid</option>
-          <option value="cancelled">Cancelled</option>
+          <option value="draft" {% if status == "draft" %}selected{% endif %}>Draft</option>
+          <option value="sent" {% if status == "sent" %}selected{% endif %}>Sent</option>
+          <option value="partial" {% if status == "partial" %}selected{% endif %}>Partly paid</option>
+          <option value="paid" {% if status == "paid" %}selected{% endif %}>Paid</option>
+          <option value="cancelled" {% if status == "cancelled" %}selected{% endif %}>Cancelled</option>
         </select>
-      </div>
+        {% if currency %}
+          <input type="hidden" name="currency" value="{{ currency }}">
+        {% endif %}
+        <button class="pill gold" type="submit">Apply</button>
+        <a class="pill" href="{% url 'invoice_list' %}">Reset</a>
+      </form>
 
       <table id="invTable">
         <thead>
@@ -209,6 +282,7 @@
             <th>Order</th>
             <th>Status</th>
             <th class="right">Total</th>
+            <th class="right">Received</th>
             <th class="right">Balance</th>
             <th class="right">Action</th>
           </tr>
@@ -216,9 +290,10 @@
 
         <tbody>
           {% for inv in invoices %}
-            {% with st=inv.status|default:"unknown"|lower cur=inv.currency|default:"" %}
+            {% with st=inv.payment_status_key cur=inv.currency|default:"" %}
             <tr class="invRow"
                 data-status="{{ st }}"
+                data-db-status="{{ inv.status|default:'unknown'|lower }}"
                 data-href="{% url 'invoice_view' inv.pk %}">
 
               <td class="mono">
@@ -235,7 +310,7 @@
 
               <td>
                 <span class="status {% if st %}{{ st }}{% else %}unknown{% endif %}">
-                  {{ inv.get_status_display|default:"Unknown" }}
+                  {{ inv.payment_status_label }}
                 </span>
               </td>
 
@@ -246,18 +321,25 @@
 
               <td class="right">
                 {% if cur %}{{ cur }} {% endif %}
+                {{ inv.paid_amount|default_if_none:0|floatformat:2|intcomma }}
+              </td>
+
+              <td class="right">
+                {% if cur %}{{ cur }} {% endif %}
                 {{ inv.balance|default_if_none:0|floatformat:2|intcomma }}
               </td>
 
               <td class="right" onclick="event.stopPropagation();">
                 <a class="link" href="{% url 'invoice_view' inv.pk %}">View</a>
+                <span class="muted"> / </span>
+                <a class="link" href="{% url 'invoice_view' inv.pk %}#payment-received-form">Payment</a>
               </td>
 
             </tr>
             {% endwith %}
           {% empty %}
             <tr>
-              <td colspan="7" style="text-align:center; color:var(--muted); padding:20px;">
+              <td colspan="8" style="text-align:center; color:var(--muted); padding:20px;">
                 No invoices found
               </td>
             </tr>
@@ -266,6 +348,35 @@
       </table>
 
     </div>
+
+    {% if production_received_rows %}
+      <div class="cardx" style="margin-top:14px;">
+        <div class="filters" style="border-bottom:1px solid rgba(148,163,184,0.18);">
+          <div>
+            <div style="font-weight:900;">Bangladesh production received summary</div>
+            <div class="muted">Amount received by linked production order from recorded payment entries.</div>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Production order</th>
+              <th>Title</th>
+              <th class="right">Received BDT</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in production_received_rows %}
+              <tr>
+                <td class="mono">{{ row.production_order__order_code|default:"-" }}</td>
+                <td>{{ row.production_order__title|default:"-" }}</td>
+                <td class="right">BDT {{ row.received_bdt|default_if_none:0|floatformat:2|intcomma }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
 
   </div>
 </div>
@@ -296,9 +407,10 @@
       rows.forEach(function(r){
         var hay = rowText(r);
         var rowSt = norm(r.getAttribute("data-status"));
+        var rowDbSt = norm(r.getAttribute("data-db-status"));
 
         var okText = !textQ || hay.indexOf(textQ) >= 0;
-        var okSt = !st || rowSt === st;
+        var okSt = !st || rowSt === st || rowDbSt === st;
 
         r.style.display = (okText && okSt) ? "" : "none";
       });

@@ -360,9 +360,10 @@
               </div>
 
               <div class="mb-3">
-                <label for="{{ form.paid_amount.id_for_label }}">Paid amount</label>
+                <label for="{{ form.paid_amount.id_for_label }}">Opening / legacy received amount</label>
                 {{ form.paid_amount }}
                 {% if form.paid_amount.errors %}<div class="err">{{ form.paid_amount.errors }}</div>{% endif %}
+                <div class="help">Use the invoice detail page to record new payment received entries with history.</div>
               </div>
 
               <div class="previewBox" id="previewBox">

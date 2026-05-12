@@ -261,6 +261,7 @@ urlpatterns = [
     path("invoices/ca/add/", acc_any(getattr(inv, "invoice_add_ca", inv.invoice_add)), name="invoice_add_ca"),
     path("invoices/bd/add/", acc_any(getattr(inv, "invoice_add_bd", inv.invoice_add)), name="invoice_add_bd"),
     path("invoices/<int:pk>/", acc_any(inv.invoice_view), name="invoice_view"),
+    path("invoices/<int:pk>/payments/add/", acc_any(inv.invoice_payment_add), name="invoice_payment_add"),
     path("invoices/<int:pk>/edit/", acc_any(inv.invoice_edit), name="invoice_edit"),
     path("invoices/<int:pk>/approve/", acc_any(getattr(inv, "invoice_approve", inv.invoice_view)), name="invoice_approve"),
 
