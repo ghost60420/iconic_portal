@@ -254,6 +254,7 @@ urlpatterns = [
     path("email-sync/run/", login_required(views_email.email_sync_run), name="email_sync_run"),
 
     # Invoices
+    path("accounting/accounts-receivable/", acc_any(inv.accounts_receivable_dashboard), name="accounts_receivable_dashboard"),
     path("invoices/", acc_any(inv.invoice_list), name="invoice_list"),
     path("invoices/ca/", acc_any(getattr(inv, "invoice_list_ca", inv.invoice_list)), name="invoice_list_ca"),
     path("invoices/bd/", acc_any(getattr(inv, "invoice_list_bd", inv.invoice_list)), name="invoice_list_bd"),

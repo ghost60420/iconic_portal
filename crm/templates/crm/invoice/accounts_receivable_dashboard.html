@@ -1,0 +1,735 @@
+{% extends "crm/base.html" %}
+{% load humanize %}
+{% block content %}
+
+<style>
+  :root{
+    --ar-bg:#020617;
+    --ar-panel:#07111f;
+    --ar-panel-2:#0b1220;
+    --ar-line:#263348;
+    --ar-soft:rgba(148,163,184,0.14);
+    --ar-text:#f8fafc;
+    --ar-muted:#94a3b8;
+    --ar-gold:#f5c451;
+    --ar-good:#4ade80;
+    --ar-warn:#fbbf24;
+    --ar-bad:#fb7185;
+    --ar-blue:#60a5fa;
+  }
+
+  .ar-wrap{
+    max-width:1320px;
+    margin:0 auto;
+    color:var(--ar-text);
+  }
+
+  .ar-hero{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:16px;
+    flex-wrap:wrap;
+    padding:22px;
+    border:1px solid rgba(245,196,81,0.22);
+    border-radius:22px;
+    background:
+      linear-gradient(135deg, rgba(245,196,81,0.16), transparent 38%),
+      linear-gradient(180deg, rgba(15,23,42,0.96), rgba(2,6,23,0.96));
+    box-shadow:0 24px 60px rgba(0,0,0,0.42);
+    margin-bottom:16px;
+  }
+
+  .ar-kicker{
+    color:var(--ar-gold);
+    font-size:12px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    margin-bottom:6px;
+  }
+
+  .ar-title{
+    margin:0;
+    font-size:30px;
+    line-height:1.1;
+    font-weight:900;
+  }
+
+  .ar-sub{
+    margin-top:8px;
+    max-width:720px;
+    color:var(--ar-muted);
+    font-size:13px;
+    line-height:1.5;
+    font-weight:700;
+  }
+
+  .ar-actions{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+
+  .ar-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    min-height:38px;
+    padding:9px 13px;
+    border-radius:14px;
+    border:1px solid rgba(148,163,184,0.25);
+    background:rgba(15,23,42,0.82);
+    color:var(--ar-text);
+    text-decoration:none;
+    font-size:12px;
+    font-weight:900;
+  }
+
+  .ar-btn:hover{ color:var(--ar-text); border-color:rgba(245,196,81,0.55); }
+  .ar-btn--gold{ background:linear-gradient(135deg, #f6d365, #d9a622); color:#111827; border-color:rgba(245,196,81,0.55); }
+  .ar-btn--gold:hover{ color:#111827; }
+
+  .ar-filter{
+    display:grid;
+    grid-template-columns:repeat(6, minmax(0, 1fr));
+    gap:12px;
+    padding:14px;
+    border:1px solid var(--ar-line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.92), rgba(2,6,23,0.92));
+    margin-bottom:16px;
+  }
+
+  .ar-field label{
+    display:block;
+    margin-bottom:6px;
+    color:var(--ar-muted);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.07em;
+  }
+
+  .ar-field input,
+  .ar-field select{
+    width:100%;
+    min-height:42px;
+    border:1px solid rgba(148,163,184,0.26);
+    border-radius:14px;
+    background:#030712;
+    color:var(--ar-text);
+    padding:9px 11px;
+    font-size:13px;
+    font-weight:800;
+  }
+
+  .ar-check{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    min-height:42px;
+    padding:9px 11px;
+    border:1px solid rgba(148,163,184,0.26);
+    border-radius:14px;
+    background:#030712;
+    color:var(--ar-text);
+    font-size:13px;
+    font-weight:900;
+  }
+
+  .ar-check input{ width:18px; height:18px; accent-color:var(--ar-gold); }
+  .ar-filter-actions{ display:flex; gap:8px; align-items:end; }
+
+  .ar-summary{
+    display:grid;
+    grid-template-columns:repeat(4, minmax(0,1fr));
+    gap:12px;
+    margin-bottom:16px;
+  }
+
+  .ar-card{
+    padding:15px;
+    border:1px solid var(--ar-line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.94), rgba(2,6,23,0.94));
+    box-shadow:0 18px 44px rgba(0,0,0,0.32);
+  }
+
+  .ar-card span{
+    display:block;
+    color:var(--ar-muted);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+  }
+
+  .ar-card strong{
+    display:block;
+    margin-top:8px;
+    color:var(--ar-text);
+    font-size:24px;
+    line-height:1.12;
+    font-weight:900;
+  }
+
+  .ar-card small{
+    display:block;
+    margin-top:7px;
+    color:var(--ar-muted);
+    font-size:12px;
+    line-height:1.45;
+    font-weight:800;
+  }
+
+  .ar-currency-list{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    margin-top:9px;
+  }
+
+  .ar-mini{
+    display:inline-flex;
+    border:1px solid rgba(148,163,184,0.20);
+    border-radius:999px;
+    padding:4px 8px;
+    color:#e2e8f0;
+    background:rgba(148,163,184,0.08);
+    font-size:11px;
+    font-weight:900;
+  }
+
+  .ar-grid{
+    display:grid;
+    grid-template-columns:minmax(0, 1.6fr) minmax(320px, .9fr);
+    gap:14px;
+    align-items:start;
+  }
+
+  .ar-section{
+    border:1px solid var(--ar-line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.94), rgba(2,6,23,0.94));
+    overflow:hidden;
+    margin-bottom:14px;
+  }
+
+  .ar-section-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    flex-wrap:wrap;
+    padding:14px 16px;
+    border-bottom:1px solid rgba(148,163,184,0.16);
+  }
+
+  .ar-section-title{
+    margin:0;
+    font-size:15px;
+    font-weight:900;
+  }
+
+  .ar-section-note{
+    color:var(--ar-muted);
+    font-size:12px;
+    font-weight:800;
+  }
+
+  .ar-table-wrap{ overflow-x:auto; }
+  .ar-table{
+    width:100%;
+    border-collapse:collapse;
+    min-width:760px;
+  }
+
+  .ar-table th{
+    position:sticky;
+    top:0;
+    z-index:1;
+    padding:11px 12px;
+    background:#06101f;
+    border-bottom:1px solid rgba(148,163,184,0.16);
+    color:var(--ar-muted);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.07em;
+    text-align:left;
+    white-space:nowrap;
+  }
+
+  .ar-table td{
+    padding:12px;
+    border-bottom:1px solid rgba(148,163,184,0.11);
+    color:#e5e7eb;
+    font-size:13px;
+    font-weight:800;
+    vertical-align:top;
+  }
+
+  .ar-table tr:hover td{ background:rgba(245,196,81,0.05); }
+  .ar-right{ text-align:right !important; }
+  .ar-muted{ color:var(--ar-muted); font-size:12px; font-weight:800; }
+  .ar-link{ color:var(--ar-gold); text-decoration:none; font-weight:900; }
+  .ar-link:hover{ color:#fde68a; }
+
+  .ar-badge{
+    display:inline-flex;
+    align-items:center;
+    min-height:24px;
+    border-radius:999px;
+    padding:4px 9px;
+    border:1px solid rgba(148,163,184,0.26);
+    color:#e2e8f0;
+    background:rgba(148,163,184,0.10);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    white-space:nowrap;
+  }
+
+  .ar-badge--bad{ color:#fecdd3; background:rgba(251,113,133,0.12); border-color:rgba(251,113,133,0.36); }
+  .ar-badge--warn{ color:#fde68a; background:rgba(251,191,36,0.12); border-color:rgba(251,191,36,0.34); }
+  .ar-badge--good{ color:#bbf7d0; background:rgba(74,222,128,0.12); border-color:rgba(74,222,128,0.34); }
+  .ar-badge--blue{ color:#bfdbfe; background:rgba(96,165,250,0.12); border-color:rgba(96,165,250,0.34); }
+
+  .ar-empty{
+    padding:22px;
+    color:var(--ar-muted);
+    font-size:13px;
+    font-weight:800;
+    text-align:center;
+  }
+
+  .ar-cash-row{
+    display:grid;
+    grid-template-columns:86px minmax(0,1fr) 88px;
+    gap:10px;
+    align-items:center;
+    padding:11px 14px;
+    border-bottom:1px solid rgba(148,163,184,0.11);
+  }
+
+  .ar-bar{
+    height:11px;
+    border-radius:999px;
+    background:rgba(148,163,184,0.13);
+    overflow:hidden;
+  }
+
+  .ar-bar span{
+    display:block;
+    height:100%;
+    min-width:2px;
+    border-radius:999px;
+    background:linear-gradient(90deg, var(--ar-gold), #60a5fa);
+  }
+
+  .ar-mobile-list{ display:none; }
+  .ar-mobile-card{
+    padding:14px;
+    border-bottom:1px solid rgba(148,163,184,0.12);
+  }
+
+  @media (max-width:1100px){
+    .ar-filter{ grid-template-columns:repeat(3, minmax(0,1fr)); }
+    .ar-summary{ grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .ar-grid{ grid-template-columns:1fr; }
+  }
+
+  @media (max-width:720px){
+    .ar-hero{ padding:16px; border-radius:18px; }
+    .ar-title{ font-size:24px; }
+    .ar-filter{ grid-template-columns:1fr; }
+    .ar-summary{ grid-template-columns:1fr; }
+    .ar-filter-actions{ align-items:stretch; flex-direction:column; }
+    .ar-btn{ width:100%; }
+    .ar-table-wrap{ display:none; }
+    .ar-mobile-list{ display:block; }
+  }
+</style>
+
+<div class="ar-wrap">
+  <div class="ar-hero">
+    <div>
+      <div class="ar-kicker">Accounting Phase 2</div>
+      <h1 class="ar-title">Accounts Receivable Dashboard</h1>
+      <div class="ar-sub">
+        Track unpaid invoices, received payments, balances due, Bangladesh production receipts, customer exposure, and monthly cash flow.
+      </div>
+    </div>
+    <div class="ar-actions">
+      <a class="ar-btn" href="{% url 'invoice_list' %}">Invoice list</a>
+      <a class="ar-btn ar-btn--gold" href="{% url 'invoice_add' %}">Create invoice</a>
+    </div>
+  </div>
+
+  <form class="ar-filter" method="get">
+    <div class="ar-field">
+      <label for="date_from">From</label>
+      <input id="date_from" type="date" name="date_from" value="{{ filter_values.date_from }}">
+    </div>
+    <div class="ar-field">
+      <label for="date_to">To</label>
+      <input id="date_to" type="date" name="date_to" value="{{ filter_values.date_to }}">
+    </div>
+    <div class="ar-field">
+      <label for="customer">Customer</label>
+      <select id="customer" name="customer">
+        <option value="">All customers</option>
+        {% for customer in customers %}
+          <option value="{{ customer.pk }}" {% if filter_values.customer == customer.pk|stringformat:"s" %}selected{% endif %}>
+            {% if customer.account_brand %}{{ customer.account_brand }}{% elif customer.contact_name %}{{ customer.contact_name }}{% else %}Customer {{ customer.pk }}{% endif %}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="ar-field">
+      <label for="status">Invoice status</label>
+      <select id="status" name="status">
+        {% for value, label in status_options %}
+          <option value="{{ value }}" {% if filter_values.status == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="ar-field">
+      <label for="currency">Currency</label>
+      <select id="currency" name="currency">
+        <option value="">All currencies</option>
+        {% for value in currency_options %}
+          <option value="{{ value }}" {% if filter_values.currency == value %}selected{% endif %}>{{ value }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="ar-field">
+      <label for="side">Side</label>
+      <select id="side" name="side">
+        {% for value, label in side_options %}
+          <option value="{{ value }}" {% if filter_values.side == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="ar-field">
+      <label>Production</label>
+      <label class="ar-check">
+        <input type="checkbox" name="production_linked" value="1" {% if filter_values.production_linked %}checked{% endif %}>
+        Production linked only
+      </label>
+    </div>
+    <div class="ar-filter-actions">
+      <button class="ar-btn ar-btn--gold" type="submit">Apply filters</button>
+      <a class="ar-btn" href="{% url 'accounts_receivable_dashboard' %}">Reset</a>
+    </div>
+  </form>
+
+  <div class="ar-summary">
+    <div class="ar-card">
+      <span>Total invoiced</span>
+      <strong>{{ total_invoiced|floatformat:2|intcomma }}</strong>
+      <small>{{ invoice_count }} invoice(s) in the current filter.</small>
+      <div class="ar-currency-list">
+        {% for item in invoiced_by_currency %}
+          <span class="ar-mini">{{ item.currency }} {{ item.amount|floatformat:2|intcomma }}</span>
+        {% empty %}
+          <span class="ar-mini">No invoices</span>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="ar-card">
+      <span>Total received</span>
+      <strong>{{ total_received|floatformat:2|intcomma }}</strong>
+      <small>Invoice received totals. Payment history total: {{ visible_payment_total|floatformat:2|intcomma }}.</small>
+      <div class="ar-currency-list">
+        {% for item in received_by_currency %}
+          <span class="ar-mini">{{ item.currency }} {{ item.amount|floatformat:2|intcomma }}</span>
+        {% empty %}
+          <span class="ar-mini">No receipts</span>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="ar-card">
+      <span>Total balance due</span>
+      <strong>{{ total_balance_due|floatformat:2|intcomma }}</strong>
+      <small>{{ overdue_count }} overdue, {{ partial_count }} partially paid.</small>
+      <div class="ar-currency-list">
+        {% for item in balance_by_currency %}
+          <span class="ar-mini">{{ item.currency }} {{ item.amount|floatformat:2|intcomma }}</span>
+        {% empty %}
+          <span class="ar-mini">No open balance</span>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="ar-card">
+      <span>Bangladesh production received</span>
+      <strong>BDT {{ bd_production_received_total|floatformat:2|intcomma }}</strong>
+      <small>{{ paid_count }} paid invoice(s). BD total comes from production-linked payment history.</small>
+    </div>
+  </div>
+
+  <div class="ar-grid">
+    <div>
+      <section class="ar-section">
+        <div class="ar-section-head">
+          <div>
+            <h2 class="ar-section-title">Outstanding invoices</h2>
+            <div class="ar-section-note">Open invoice balances, sorted by due date.</div>
+          </div>
+          <span class="ar-badge ar-badge--warn">{{ outstanding_rows|length }} shown</span>
+        </div>
+        {% if outstanding_rows %}
+          <div class="ar-table-wrap">
+            <table class="ar-table">
+              <thead>
+                <tr>
+                  <th>Invoice</th>
+                  <th>Customer</th>
+                  <th>Production</th>
+                  <th>Status</th>
+                  <th>Due</th>
+                  <th class="ar-right">Total</th>
+                  <th class="ar-right">Received</th>
+                  <th class="ar-right">Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in outstanding_rows %}
+                  <tr>
+                    <td>
+                      <a class="ar-link" href="{% url 'invoice_view' row.invoice.pk %}">{{ row.invoice.invoice_number }}</a>
+                      <div class="ar-muted">{{ row.invoice.issue_date|date:"Y-m-d" }}</div>
+                    </td>
+                    <td>
+                      {% if row.invoice.customer %}
+                        {% if row.invoice.customer.account_brand %}{{ row.invoice.customer.account_brand }}{% else %}{{ row.invoice.customer.contact_name|default:"Customer" }}{% endif %}
+                      {% else %}
+                        No customer
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if row.invoice.order %}
+                        <a class="ar-link" href="{% url 'production_detail' row.invoice.order.pk %}">{{ row.invoice.order.order_code|default:row.invoice.order }}</a>
+                      {% else %}
+                        <span class="ar-muted">Not linked</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if row.is_overdue %}
+                        <span class="ar-badge ar-badge--bad">{{ row.days_overdue }} days overdue</span>
+                      {% else %}
+                        <span class="ar-badge ar-badge--blue">{{ row.invoice.payment_status_label }}</span>
+                      {% endif %}
+                    </td>
+                    <td>{{ row.invoice.due_date|date:"Y-m-d"|default:"-" }}</td>
+                    <td class="ar-right">{{ row.invoice.currency }} {{ row.invoice.total_amount|floatformat:2|intcomma }}</td>
+                    <td class="ar-right">{{ row.invoice.currency }} {{ row.invoice.paid_amount|floatformat:2|intcomma }}</td>
+                    <td class="ar-right">{{ row.invoice.currency }} {{ row.balance|floatformat:2|intcomma }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div class="ar-mobile-list">
+            {% for row in outstanding_rows %}
+              <div class="ar-mobile-card">
+                <a class="ar-link" href="{% url 'invoice_view' row.invoice.pk %}">{{ row.invoice.invoice_number }}</a>
+                <div class="ar-muted">
+                  {% if row.invoice.customer %}
+                    {% if row.invoice.customer.account_brand %}{{ row.invoice.customer.account_brand }}{% else %}{{ row.invoice.customer.contact_name|default:"Customer" }}{% endif %}
+                  {% else %}
+                    No customer
+                  {% endif %}
+                </div>
+                <div style="margin-top:8px;">
+                  {% if row.is_overdue %}
+                    <span class="ar-badge ar-badge--bad">{{ row.days_overdue }} days overdue</span>
+                  {% else %}
+                    <span class="ar-badge ar-badge--blue">{{ row.invoice.payment_status_label }}</span>
+                  {% endif %}
+                </div>
+                <div class="ar-muted" style="margin-top:8px;">Balance: {{ row.invoice.currency }} {{ row.balance|floatformat:2|intcomma }}</div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="ar-empty">No outstanding invoices match the current filters.</div>
+        {% endif %}
+      </section>
+
+      <section class="ar-section">
+        <div class="ar-section-head">
+          <div>
+            <h2 class="ar-section-title">Payment received history</h2>
+            <div class="ar-section-note">{{ payment_count }} payment record(s) match the current filters.</div>
+          </div>
+          <div class="ar-currency-list">
+            {% for item in payment_history_by_currency %}
+              <span class="ar-mini">{{ item.currency }} {{ item.amount|floatformat:2|intcomma }}</span>
+            {% endfor %}
+          </div>
+        </div>
+        {% if payment_rows %}
+          <div class="ar-table-wrap">
+            <table class="ar-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Invoice</th>
+                  <th>Customer</th>
+                  <th>Method</th>
+                  <th>Side</th>
+                  <th class="ar-right">Amount</th>
+                  <th class="ar-right">BDT value</th>
+                  <th>Accounting</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for payment in payment_rows %}
+                  <tr>
+                    <td>{{ payment.payment_date|date:"Y-m-d" }}</td>
+                    <td><a class="ar-link" href="{% url 'invoice_view' payment.invoice.pk %}">{{ payment.invoice.invoice_number }}</a></td>
+                    <td>
+                      {% if payment.invoice.customer %}
+                        {% if payment.invoice.customer.account_brand %}{{ payment.invoice.customer.account_brand }}{% else %}{{ payment.invoice.customer.contact_name|default:"Customer" }}{% endif %}
+                      {% else %}
+                        No customer
+                      {% endif %}
+                    </td>
+                    <td>{{ payment.get_payment_method_display }}</td>
+                    <td><span class="ar-badge {% if payment.side == 'BD' %}ar-badge--good{% else %}ar-badge--blue{% endif %}">{{ payment.get_side_display }}</span></td>
+                    <td class="ar-right">{{ payment.currency }} {{ payment.amount|floatformat:2|intcomma }}</td>
+                    <td class="ar-right">BDT {{ payment.amount_bdt|floatformat:2|intcomma }}</td>
+                    <td>
+                      {% if payment.accounting_entry %}
+                        <a class="ar-link" href="{% url 'accounting_entry_edit' payment.accounting_entry.pk %}">Entry #{{ payment.accounting_entry.pk }}</a>
+                      {% else %}
+                        <span class="ar-muted">Not linked</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div class="ar-mobile-list">
+            {% for payment in payment_rows %}
+              <div class="ar-mobile-card">
+                <a class="ar-link" href="{% url 'invoice_view' payment.invoice.pk %}">{{ payment.invoice.invoice_number }}</a>
+                <div class="ar-muted">{{ payment.payment_date|date:"Y-m-d" }} · {{ payment.get_payment_method_display }}</div>
+                <div class="ar-muted" style="margin-top:8px;">{{ payment.currency }} {{ payment.amount|floatformat:2|intcomma }} · BDT {{ payment.amount_bdt|floatformat:2|intcomma }}</div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="ar-empty">No payment history matches the current filters.</div>
+        {% endif %}
+      </section>
+    </div>
+
+    <div>
+      <section class="ar-section">
+        <div class="ar-section-head">
+          <div>
+            <h2 class="ar-section-title">Bangladesh production receipts</h2>
+            <div class="ar-section-note">Production-linked BD payment totals.</div>
+          </div>
+        </div>
+        {% if bd_receipt_rows %}
+          <div class="ar-table-wrap">
+            <table class="ar-table" style="min-width:520px;">
+              <thead>
+                <tr>
+                  <th>Production</th>
+                  <th class="ar-right">Payments</th>
+                  <th class="ar-right">Received BDT</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in bd_receipt_rows %}
+                  <tr>
+                    <td>
+                      {% if row.order %}
+                        <a class="ar-link" href="{% url 'production_detail' row.order.pk %}">{{ row.order.order_code|default:row.order }}</a>
+                        <div class="ar-muted">{{ row.order.title|default:"Production order" }}</div>
+                      {% else %}
+                        No production order
+                      {% endif %}
+                    </td>
+                    <td class="ar-right">{{ row.payments }}</td>
+                    <td class="ar-right">BDT {{ row.received_bdt|floatformat:2|intcomma }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="ar-empty">No Bangladesh production receipts match the current filters.</div>
+        {% endif %}
+      </section>
+
+      <section class="ar-section">
+        <div class="ar-section-head">
+          <div>
+            <h2 class="ar-section-title">Customer balance summary</h2>
+            <div class="ar-section-note">Outstanding amount by customer and currency.</div>
+          </div>
+        </div>
+        {% if customer_balance_rows %}
+          <div class="ar-table-wrap">
+            <table class="ar-table" style="min-width:560px;">
+              <thead>
+                <tr>
+                  <th>Customer</th>
+                  <th class="ar-right">Open</th>
+                  <th class="ar-right">Overdue</th>
+                  <th class="ar-right">Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in customer_balance_rows %}
+                  <tr>
+                    <td>
+                      {{ row.name }}
+                      <div class="ar-muted">{{ row.currency }} invoiced {{ row.invoiced|floatformat:2|intcomma }}</div>
+                    </td>
+                    <td class="ar-right">{{ row.invoice_count }}</td>
+                    <td class="ar-right">{{ row.overdue_count }}</td>
+                    <td class="ar-right">{{ row.currency }} {{ row.balance|floatformat:2|intcomma }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="ar-empty">No customer balances match the current filters.</div>
+        {% endif %}
+      </section>
+
+      <section class="ar-section">
+        <div class="ar-section-head">
+          <div>
+            <h2 class="ar-section-title">Monthly cash flow</h2>
+            <div class="ar-section-note">Received payments by payment date.</div>
+          </div>
+        </div>
+        {% if monthly_rows %}
+          {% for row in monthly_rows %}
+            <div class="ar-cash-row">
+              <div class="ar-muted">{{ row.label }}</div>
+              <div class="ar-bar"><span style="width:{{ row.bar_percent }}%;"></span></div>
+              <div class="ar-right ar-muted">{{ row.received|floatformat:0|intcomma }}</div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="ar-empty">No received payments in the current filters.</div>
+        {% endif %}
+      </section>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

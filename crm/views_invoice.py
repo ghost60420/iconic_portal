@@ -4,8 +4,9 @@ from decimal import Decimal
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import F, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.dateparse import parse_date
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
@@ -14,6 +15,7 @@ from .models import (
     AccountingEntryAudit,
     AccountingMonthClose,
     AccountingMonthLock,
+    Customer,
     ExchangeRate,
     Invoice,
     InvoicePayment,
@@ -152,6 +154,92 @@ def _sync_invoice_payment_status(inv: Invoice) -> None:
         inv.status = "partial"
 
 
+def _parse_ar_date(value):
+    value = (value or "").strip()
+    return parse_date(value) if value else None
+
+
+def _apply_ar_invoice_filters(invoices, filters):
+    if filters["date_from"]:
+        invoices = invoices.filter(issue_date__gte=filters["date_from"])
+    if filters["date_to"]:
+        invoices = invoices.filter(issue_date__lte=filters["date_to"])
+    if filters["customer_id"]:
+        invoices = invoices.filter(customer_id=filters["customer_id"])
+    if filters["currency"]:
+        invoices = invoices.filter(currency=filters["currency"])
+    if filters["production_linked"]:
+        invoices = invoices.filter(order__isnull=False)
+
+    side = filters["side"]
+    if side == "BD":
+        invoices = invoices.filter(Q(invoice_region="BD") | Q(currency="BDT"))
+    elif side == "CA":
+        invoices = invoices.filter(
+            Q(invoice_region="CA")
+            | (Q(invoice_region="") & Q(currency__in=["CAD", "USD"]))
+        )
+
+    status = filters["status"]
+    today = timezone.localdate()
+    if status == "unpaid":
+        invoices = invoices.filter(paid_amount__lte=0).exclude(status="cancelled")
+    elif status == "overdue":
+        invoices = invoices.filter(due_date__lt=today, total_amount__gt=F("paid_amount")).exclude(status="cancelled")
+    elif status == "overpaid":
+        invoices = invoices.filter(total_amount__gt=0, paid_amount__gt=F("total_amount"))
+    elif status in {choice[0] for choice in Invoice.STATUS_CHOICES}:
+        invoices = invoices.filter(status=status)
+
+    return invoices
+
+
+def _apply_ar_payment_filters(payments, filters):
+    if filters["date_from"]:
+        payments = payments.filter(payment_date__gte=filters["date_from"])
+    if filters["date_to"]:
+        payments = payments.filter(payment_date__lte=filters["date_to"])
+    if filters["customer_id"]:
+        payments = payments.filter(invoice__customer_id=filters["customer_id"])
+    if filters["currency"]:
+        payments = payments.filter(currency=filters["currency"])
+    if filters["side"]:
+        payments = payments.filter(side=filters["side"])
+    if filters["production_linked"]:
+        payments = payments.filter(production_order__isnull=False)
+
+    status = filters["status"]
+    today = timezone.localdate()
+    if status == "unpaid":
+        payments = payments.none()
+    elif status == "overdue":
+        payments = payments.filter(
+            invoice__due_date__lt=today,
+            invoice__total_amount__gt=F("invoice__paid_amount"),
+        ).exclude(invoice__status="cancelled")
+    elif status == "overpaid":
+        payments = payments.filter(
+            invoice__total_amount__gt=0,
+            invoice__paid_amount__gt=F("invoice__total_amount"),
+        )
+    elif status in {choice[0] for choice in Invoice.STATUS_CHOICES}:
+        payments = payments.filter(invoice__status=status)
+
+    return payments
+
+
+def _ar_currency_totals(rows, value_func):
+    totals = {}
+    for row in rows:
+        currency = (getattr(row, "currency", "") or "Unknown").upper()
+        totals[currency] = totals.get(currency, Decimal("0")) + _d(value_func(row))
+    return [
+        {"currency": currency, "amount": amount}
+        for currency, amount in sorted(totals.items())
+        if amount != 0
+    ]
+
+
 def _next_invoice_number() -> str:
     prefix = "INV"
     latest = Invoice.objects.filter(invoice_number__startswith=prefix).order_by("-invoice_number").first()
@@ -173,6 +261,187 @@ def _next_invoice_number() -> str:
         cand = f"{prefix}{n:05d}"
 
     return cand
+
+
+@login_required
+@user_passes_test(superuser_only)
+def accounts_receivable_dashboard(request):
+    filters = {
+        "date_from": _parse_ar_date(request.GET.get("date_from")),
+        "date_to": _parse_ar_date(request.GET.get("date_to")),
+        "customer_id": (request.GET.get("customer") or "").strip(),
+        "status": (request.GET.get("status") or "").strip(),
+        "currency": (request.GET.get("currency") or "").strip().upper(),
+        "side": (request.GET.get("side") or "").strip().upper(),
+        "production_linked": (request.GET.get("production_linked") or "") == "1",
+    }
+    filter_values = {
+        "date_from": filters["date_from"].isoformat() if filters["date_from"] else "",
+        "date_to": filters["date_to"].isoformat() if filters["date_to"] else "",
+        "customer": filters["customer_id"],
+        "status": filters["status"],
+        "currency": filters["currency"],
+        "side": filters["side"],
+        "production_linked": filters["production_linked"],
+    }
+
+    invoices_qs = Invoice.objects.select_related("order", "customer")
+    invoices_qs = _apply_ar_invoice_filters(invoices_qs, filters)
+    invoice_rows = list(invoices_qs.order_by("due_date", "-issue_date", "-created_at"))
+
+    payments_qs = InvoicePayment.objects.select_related(
+        "invoice",
+        "invoice__customer",
+        "production_order",
+        "accounting_entry",
+    )
+    payments_qs = _apply_ar_payment_filters(payments_qs, filters)
+    payment_rows = list(payments_qs.order_by("-payment_date", "-id"))
+
+    today = timezone.localdate()
+    open_invoices = [inv for inv in invoice_rows if _d(inv.balance) > 0 and inv.status != "cancelled"]
+    overdue_invoices = [inv for inv in open_invoices if inv.due_date and inv.due_date < today]
+    partial_invoices = [inv for inv in invoice_rows if inv.payment_status_key == "partial"]
+    paid_invoices = [inv for inv in invoice_rows if inv.payment_status_key == "paid"]
+
+    total_invoiced = sum((_d(inv.total_amount) for inv in invoice_rows), Decimal("0"))
+    total_received = sum((_d(inv.paid_amount) for inv in invoice_rows), Decimal("0"))
+    total_balance_due = sum((_d(inv.balance) for inv in open_invoices), Decimal("0"))
+    visible_payment_total = sum((_d(payment.amount) for payment in payment_rows), Decimal("0"))
+
+    invoiced_by_currency = _ar_currency_totals(invoice_rows, lambda inv: inv.total_amount)
+    received_by_currency = _ar_currency_totals(invoice_rows, lambda inv: inv.paid_amount)
+    balance_by_currency = _ar_currency_totals(open_invoices, lambda inv: inv.balance)
+    payment_history_by_currency = _ar_currency_totals(payment_rows, lambda payment: payment.amount)
+
+    outstanding_rows = []
+    for inv in open_invoices[:75]:
+        outstanding_rows.append(
+            {
+                "invoice": inv,
+                "balance": _d(inv.balance),
+                "is_overdue": bool(inv.due_date and inv.due_date < today),
+                "days_overdue": (today - inv.due_date).days if inv.due_date and inv.due_date < today else 0,
+            }
+        )
+
+    bd_payment_rows = [
+        payment
+        for payment in payment_rows
+        if payment.side == "BD" and payment.production_order_id
+    ]
+    bd_production_received_total = sum((_d(payment.amount_bdt) for payment in bd_payment_rows), Decimal("0"))
+    bd_receipts_by_order = {}
+    for payment in bd_payment_rows:
+        order = payment.production_order
+        key = payment.production_order_id
+        if key not in bd_receipts_by_order:
+            bd_receipts_by_order[key] = {
+                "order": order,
+                "received_bdt": Decimal("0"),
+                "received_original": Decimal("0"),
+                "payments": 0,
+            }
+        bd_receipts_by_order[key]["received_bdt"] += _d(payment.amount_bdt)
+        bd_receipts_by_order[key]["received_original"] += _d(payment.amount)
+        bd_receipts_by_order[key]["payments"] += 1
+    bd_receipt_rows = sorted(
+        bd_receipts_by_order.values(),
+        key=lambda row: row["received_bdt"],
+        reverse=True,
+    )[:20]
+
+    customer_balances = {}
+    for inv in open_invoices:
+        customer = inv.customer
+        name = customer.account_brand or customer.contact_name if customer else "No customer"
+        key = (customer.pk if customer else 0, name, inv.currency or "Unknown")
+        if key not in customer_balances:
+            customer_balances[key] = {
+                "customer": customer,
+                "name": name,
+                "currency": inv.currency or "Unknown",
+                "invoice_count": 0,
+                "overdue_count": 0,
+                "invoiced": Decimal("0"),
+                "received": Decimal("0"),
+                "balance": Decimal("0"),
+            }
+        row = customer_balances[key]
+        row["invoice_count"] += 1
+        row["overdue_count"] += 1 if inv.due_date and inv.due_date < today else 0
+        row["invoiced"] += _d(inv.total_amount)
+        row["received"] += _d(inv.paid_amount)
+        row["balance"] += _d(inv.balance)
+    customer_balance_rows = sorted(
+        customer_balances.values(),
+        key=lambda row: row["balance"],
+        reverse=True,
+    )[:25]
+
+    monthly_map = {}
+    for payment in payment_rows:
+        if not payment.payment_date:
+            continue
+        key = payment.payment_date.strftime("%Y-%m")
+        if key not in monthly_map:
+            monthly_map[key] = {
+                "key": key,
+                "label": payment.payment_date.strftime("%b %Y"),
+                "received": Decimal("0"),
+                "received_bdt": Decimal("0"),
+                "payments": 0,
+            }
+        monthly_map[key]["received"] += _d(payment.amount)
+        monthly_map[key]["received_bdt"] += _d(payment.amount_bdt)
+        monthly_map[key]["payments"] += 1
+    monthly_rows = [monthly_map[key] for key in sorted(monthly_map.keys())]
+    max_monthly = max([row["received"] for row in monthly_rows] or [Decimal("0")])
+    for row in monthly_rows:
+        row["bar_percent"] = int((row["received"] / max_monthly) * 100) if max_monthly > 0 else 0
+
+    customers = Customer.objects.filter(invoice__isnull=False).distinct().order_by("account_brand", "contact_name")
+
+    return render(
+        request,
+        "crm/invoice/accounts_receivable_dashboard.html",
+        {
+            "filter_values": filter_values,
+            "customers": customers,
+            "status_options": [
+                ("", "All statuses"),
+                ("unpaid", "Unpaid"),
+                ("partial", "Partially paid"),
+                ("paid", "Paid"),
+                ("overdue", "Overdue"),
+                ("overpaid", "Overpaid"),
+                ("draft", "Draft"),
+                ("sent", "Sent"),
+                ("cancelled", "Cancelled"),
+            ],
+            "currency_options": ["USD", "CAD", "BDT"],
+            "side_options": [("", "All sides"), ("CA", "Canada"), ("BD", "Bangladesh")],
+            "total_invoiced": total_invoiced,
+            "total_received": total_received,
+            "total_balance_due": total_balance_due,
+            "visible_payment_total": visible_payment_total,
+            "invoiced_by_currency": invoiced_by_currency,
+            "received_by_currency": received_by_currency,
+            "balance_by_currency": balance_by_currency,
+            "payment_history_by_currency": payment_history_by_currency,
+            "overdue_count": len(overdue_invoices),
+            "partial_count": len(partial_invoices),
+            "paid_count": len(paid_invoices),
+            "invoice_count": len(invoice_rows),
+            "payment_count": len(payment_rows),
+            "bd_production_received_total": bd_production_received_total,
+            "outstanding_rows": outstanding_rows,
+            "payment_rows": payment_rows[:75],
+            "bd_receipt_rows": bd_receipt_rows,
+            "customer_balance_rows": customer_balance_rows,
+            "monthly_rows": monthly_rows[-12:],
+        },
+    )
 
 
 @login_required
