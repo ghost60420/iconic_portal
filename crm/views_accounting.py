@@ -43,6 +43,8 @@ from .models import (
     ExchangeRate,
     BDStaff,
     BDStaffMonth,
+    Customer,
+    Product,
     ProductionOrder,
 )
 
@@ -776,6 +778,266 @@ def accounts_payable_dashboard(request):
             "supplier_balance_rows": supplier_balance_rows,
             "monthly_rows": monthly_rows,
             "category_rows": category_rows[:12],
+        },
+    )
+
+
+PL_OPEX_TYPES = {"EXPENSE", "TAX", "OTHER"}
+
+
+def _parse_pl_date(value):
+    value = (value or "").strip()
+    return parse_date(value) if value else None
+
+
+def _pl_decimal(value):
+    try:
+        return Decimal(str(value)) if value is not None else Decimal("0")
+    except Exception:
+        return Decimal("0")
+
+
+def _pl_amount_cad(entry):
+    amount_cad = _pl_decimal(getattr(entry, "amount_cad", None))
+    if amount_cad:
+        return amount_cad
+    currency = (entry.currency or "").upper().strip()
+    if currency == "CAD":
+        return _pl_decimal(entry.amount_original)
+    return Decimal("0")
+
+
+def _pl_customer_label(entry):
+    if entry.customer_id and entry.customer:
+        return entry.customer.account_brand or entry.customer.contact_name or f"Customer {entry.customer_id}"
+    if entry.production_order_id and entry.production_order and entry.production_order.customer_id:
+        customer = entry.production_order.customer
+        return customer.account_brand or customer.contact_name or f"Customer {customer.pk}"
+    return "Unassigned customer"
+
+
+def _pl_product_category(entry):
+    if entry.production_order_id and entry.production_order:
+        product = entry.production_order.product
+        if product and product.product_category:
+            return product.product_category
+        opportunity = entry.production_order.opportunity
+        if opportunity and opportunity.product_category:
+            return opportunity.product_category
+    if entry.opportunity_id and entry.opportunity and entry.opportunity.product_category:
+        return entry.opportunity.product_category
+    return "Uncategorized"
+
+
+def _pl_cost_category(entry):
+    sub_type = (entry.sub_type or "").strip()
+    if sub_type:
+        return sub_type
+    main_type = (entry.main_type or "").strip()
+    return main_type or "Uncategorized"
+
+
+def _pl_side_label(side):
+    return {"CA": "Canada", "BD": "Bangladesh"}.get((side or "").upper(), side or "Unknown")
+
+
+def _pl_row(entry):
+    return {
+        "entry": entry,
+        "amount": _pl_decimal(entry.amount_original),
+        "amount_cad": _pl_amount_cad(entry),
+        "currency": (entry.currency or "Unknown").upper(),
+        "main_type": (entry.main_type or "").upper().strip(),
+        "customer": _pl_customer_label(entry),
+        "product_category": _pl_product_category(entry),
+        "cost_category": _pl_cost_category(entry),
+        "side": (entry.side or "").upper().strip(),
+        "side_label": _pl_side_label(entry.side),
+    }
+
+
+def _pl_currency_totals(rows):
+    totals = {}
+    for row in rows:
+        currency = row["currency"]
+        totals[currency] = totals.get(currency, Decimal("0")) + row["amount"]
+    return [
+        {"currency": currency, "amount": amount}
+        for currency, amount in sorted(totals.items())
+        if amount != 0
+    ]
+
+
+def _pl_group(rows, key, amount_key="amount_cad", limit=20):
+    grouped = {}
+    for row in rows:
+        label = row.get(key) or "Uncategorized"
+        if label not in grouped:
+            grouped[label] = {"label": label, "amount": Decimal("0"), "count": 0}
+        grouped[label]["amount"] += _pl_decimal(row.get(amount_key))
+        grouped[label]["count"] += 1
+    return sorted(grouped.values(), key=lambda item: item["amount"], reverse=True)[:limit]
+
+
+def _pl_monthly_rows(rows):
+    monthly = {}
+    for row in rows:
+        entry = row["entry"]
+        if not entry.date:
+            continue
+        key = entry.date.strftime("%Y-%m")
+        if key not in monthly:
+            monthly[key] = {
+                "key": key,
+                "label": entry.date.strftime("%b %Y"),
+                "revenue": Decimal("0"),
+                "cogs": Decimal("0"),
+                "opex": Decimal("0"),
+                "net": Decimal("0"),
+            }
+        main_type = row["main_type"]
+        direction = (entry.direction or "").upper().strip()
+        amount = row["amount_cad"]
+        if direction == AccountingEntry.DIR_IN and main_type == "INCOME":
+            monthly[key]["revenue"] += amount
+        elif direction == AccountingEntry.DIR_OUT and main_type == "COGS":
+            monthly[key]["cogs"] += amount
+        elif direction == AccountingEntry.DIR_OUT and main_type in PL_OPEX_TYPES:
+            monthly[key]["opex"] += amount
+
+    rows_by_month = [monthly[key] for key in sorted(monthly.keys())][-12:]
+    max_value = max(
+        [max(row["revenue"], row["cogs"], row["opex"]) for row in rows_by_month] or [Decimal("0")]
+    )
+    for row in rows_by_month:
+        row["net"] = row["revenue"] - row["cogs"] - row["opex"]
+        row["revenue_bar"] = int((row["revenue"] / max_value) * 100) if max_value > 0 else 0
+        row["cost_bar"] = int(((row["cogs"] + row["opex"]) / max_value) * 100) if max_value > 0 else 0
+    return rows_by_month
+
+
+def _pl_side_comparison(rows):
+    sides = {
+        "CA": {"side": "CA", "label": "Canada", "revenue": Decimal("0"), "cogs": Decimal("0"), "opex": Decimal("0")},
+        "BD": {"side": "BD", "label": "Bangladesh", "revenue": Decimal("0"), "cogs": Decimal("0"), "opex": Decimal("0")},
+    }
+    for row in rows:
+        side = row["side"] if row["side"] in sides else "CA"
+        entry = row["entry"]
+        main_type = row["main_type"]
+        direction = (entry.direction or "").upper().strip()
+        amount = row["amount_cad"]
+        if direction == AccountingEntry.DIR_IN and main_type == "INCOME":
+            sides[side]["revenue"] += amount
+        elif direction == AccountingEntry.DIR_OUT and main_type == "COGS":
+            sides[side]["cogs"] += amount
+        elif direction == AccountingEntry.DIR_OUT and main_type in PL_OPEX_TYPES:
+            sides[side]["opex"] += amount
+
+    result = []
+    for row in sides.values():
+        row["gross_profit"] = row["revenue"] - row["cogs"]
+        row["net_profit"] = row["gross_profit"] - row["opex"]
+        result.append(row)
+    return result
+
+
+@login_required
+def profit_loss_dashboard(request):
+    filters = {
+        "date_from": _parse_pl_date(request.GET.get("date_from")),
+        "date_to": _parse_pl_date(request.GET.get("date_to")),
+        "customer_id": (request.GET.get("customer") or "").strip(),
+        "product_category": (request.GET.get("product_category") or "").strip(),
+        "side": (request.GET.get("side") or "").strip().upper(),
+        "currency": (request.GET.get("currency") or "").strip().upper(),
+    }
+    filter_values = {
+        "date_from": filters["date_from"].isoformat() if filters["date_from"] else "",
+        "date_to": filters["date_to"].isoformat() if filters["date_to"] else "",
+        "customer": filters["customer_id"],
+        "product_category": filters["product_category"],
+        "side": filters["side"],
+        "currency": filters["currency"],
+    }
+
+    qs = (
+        AccountingEntry.objects.exclude(main_type="TRANSFER")
+        .exclude(status__iexact="CANCELLED")
+        .select_related("customer", "opportunity", "production_order", "production_order__customer", "production_order__opportunity", "production_order__product")
+    )
+    if filters["date_from"]:
+        qs = qs.filter(date__gte=filters["date_from"])
+    if filters["date_to"]:
+        qs = qs.filter(date__lte=filters["date_to"])
+    if filters["customer_id"]:
+        qs = qs.filter(Q(customer_id=filters["customer_id"]) | Q(production_order__customer_id=filters["customer_id"]))
+    if filters["side"]:
+        qs = qs.filter(side=filters["side"])
+    if filters["currency"]:
+        qs = qs.filter(currency=filters["currency"])
+
+    rows = [_pl_row(entry) for entry in qs.order_by("date", "id")[:1500]]
+    if filters["product_category"]:
+        rows = [row for row in rows if row["product_category"] == filters["product_category"]]
+
+    revenue_rows = [
+        row for row in rows
+        if (row["entry"].direction or "").upper().strip() == AccountingEntry.DIR_IN and row["main_type"] == "INCOME"
+    ]
+    cogs_rows = [
+        row for row in rows
+        if (row["entry"].direction or "").upper().strip() == AccountingEntry.DIR_OUT and row["main_type"] == "COGS"
+    ]
+    opex_rows = [
+        row for row in rows
+        if (row["entry"].direction or "").upper().strip() == AccountingEntry.DIR_OUT and row["main_type"] in PL_OPEX_TYPES
+    ]
+
+    total_revenue = sum((row["amount_cad"] for row in revenue_rows), Decimal("0"))
+    total_cogs = sum((row["amount_cad"] for row in cogs_rows), Decimal("0"))
+    operating_expenses = sum((row["amount_cad"] for row in opex_rows), Decimal("0"))
+    gross_profit = total_revenue - total_cogs
+    net_profit = gross_profit - operating_expenses
+    gross_margin_percent = (gross_profit / total_revenue * Decimal("100")).quantize(Decimal("0.01")) if total_revenue > 0 else Decimal("0")
+    net_margin_percent = (net_profit / total_revenue * Decimal("100")).quantize(Decimal("0.01")) if total_revenue > 0 else Decimal("0")
+
+    customers = Customer.objects.filter(accounting_entries__isnull=False).distinct().order_by("account_brand", "contact_name")
+    product_categories = sorted({
+        value for value in Product.objects.exclude(product_category="").values_list("product_category", flat=True).distinct()
+    } | {
+        row["product_category"] for row in rows if row["product_category"] and row["product_category"] != "Uncategorized"
+    })
+
+    return render(
+        request,
+        "crm/accounting_profit_loss_dashboard.html",
+        {
+            "filter_values": filter_values,
+            "customers": customers,
+            "product_categories": product_categories,
+            "side_options": [("", "All sides"), ("CA", "Canada"), ("BD", "Bangladesh")],
+            "currency_options": ["CAD", "BDT", "USD"],
+            "total_revenue": total_revenue,
+            "total_cogs": total_cogs,
+            "gross_profit": gross_profit,
+            "gross_margin_percent": gross_margin_percent,
+            "operating_expenses": operating_expenses,
+            "net_profit": net_profit,
+            "net_margin_percent": net_margin_percent,
+            "revenue_currency_totals": _pl_currency_totals(revenue_rows),
+            "cogs_currency_totals": _pl_currency_totals(cogs_rows),
+            "opex_currency_totals": _pl_currency_totals(opex_rows),
+            "revenue_by_customer": _pl_group(revenue_rows, "customer"),
+            "revenue_by_product_category": _pl_group(revenue_rows, "product_category"),
+            "cost_by_category": _pl_group(cogs_rows, "cost_category"),
+            "opex_by_category": _pl_group(opex_rows, "cost_category"),
+            "monthly_rows": _pl_monthly_rows(rows),
+            "side_rows": _pl_side_comparison(rows),
+            "entry_count": len(rows),
+            "revenue_count": len(revenue_rows),
+            "cogs_count": len(cogs_rows),
+            "opex_count": len(opex_rows),
         },
     )
 

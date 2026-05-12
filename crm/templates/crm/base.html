@@ -284,6 +284,7 @@
     {% url 'accounting_home' as acc_home_url %}
     {% url 'accounts_receivable_dashboard' as ar_dashboard_url %}
     {% url 'accounts_payable_dashboard' as ap_dashboard_url %}
+    {% url 'profit_loss_dashboard' as profit_loss_url %}
     {% url 'invoice_list' as invoice_list_url %}
     {% url 'logout' as logout_url %}
     {% url 'access_list' as access_url %}
@@ -440,6 +441,7 @@
 
             {% if ar_dashboard_url %}<a class="crm-dd-item" href="{{ ar_dashboard_url }}">Accounts receivable</a>{% endif %}
             {% if ap_dashboard_url %}<a class="crm-dd-item" href="{{ ap_dashboard_url }}">Accounts payable</a>{% endif %}
+            {% if profit_loss_url %}<a class="crm-dd-item" href="{{ profit_loss_url }}">Profit and Loss</a>{% endif %}
             {% if invoice_list_url %}<a class="crm-dd-item" href="{{ invoice_list_url }}">🧾 Invoices</a>{% endif %}
 
             {% if user|is_ca %}

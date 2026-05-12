@@ -1,0 +1,501 @@
+{% extends "crm/base.html" %}
+{% load humanize %}
+{% block content %}
+
+<style>
+  :root{
+    --pl-bg:#020617;
+    --pl-line:#263348;
+    --pl-text:#f8fafc;
+    --pl-muted:#94a3b8;
+    --pl-gold:#f5c451;
+    --pl-good:#4ade80;
+    --pl-warn:#fbbf24;
+    --pl-bad:#fb7185;
+    --pl-blue:#60a5fa;
+  }
+
+  .pl-wrap{ max-width:1320px; margin:0 auto; color:var(--pl-text); }
+
+  .pl-hero{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:16px;
+    flex-wrap:wrap;
+    padding:22px;
+    border:1px solid rgba(245,196,81,0.22);
+    border-radius:22px;
+    background:
+      linear-gradient(135deg, rgba(245,196,81,0.15), transparent 38%),
+      linear-gradient(180deg, rgba(15,23,42,0.96), rgba(2,6,23,0.96));
+    box-shadow:0 24px 60px rgba(0,0,0,0.42);
+    margin-bottom:16px;
+  }
+
+  .pl-kicker{
+    color:var(--pl-gold);
+    font-size:12px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    margin-bottom:6px;
+  }
+
+  .pl-title{ margin:0; font-size:30px; line-height:1.1; font-weight:900; }
+  .pl-sub{ margin-top:8px; max-width:780px; color:var(--pl-muted); font-size:13px; line-height:1.5; font-weight:700; }
+
+  .pl-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+  .pl-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-height:38px;
+    padding:9px 13px;
+    border-radius:14px;
+    border:1px solid rgba(148,163,184,0.25);
+    background:rgba(15,23,42,0.82);
+    color:var(--pl-text);
+    text-decoration:none;
+    font-size:12px;
+    font-weight:900;
+  }
+  .pl-btn:hover{ color:var(--pl-text); border-color:rgba(245,196,81,0.55); }
+  .pl-btn--gold{ background:linear-gradient(135deg, #f6d365, #d9a622); color:#111827; border-color:rgba(245,196,81,0.55); }
+  .pl-btn--gold:hover{ color:#111827; }
+
+  .pl-filter{
+    display:grid;
+    grid-template-columns:repeat(6, minmax(0,1fr));
+    gap:12px;
+    padding:14px;
+    border:1px solid var(--pl-line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.92), rgba(2,6,23,0.92));
+    margin-bottom:16px;
+  }
+
+  .pl-field label{
+    display:block;
+    margin-bottom:6px;
+    color:var(--pl-muted);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.07em;
+  }
+
+  .pl-field input,
+  .pl-field select{
+    width:100%;
+    min-height:42px;
+    border:1px solid rgba(148,163,184,0.26);
+    border-radius:14px;
+    background:#030712;
+    color:var(--pl-text);
+    padding:9px 11px;
+    font-size:13px;
+    font-weight:800;
+  }
+
+  .pl-filter-actions{ display:flex; gap:8px; align-items:end; }
+
+  .pl-summary{
+    display:grid;
+    grid-template-columns:repeat(4, minmax(0,1fr));
+    gap:12px;
+    margin-bottom:16px;
+  }
+
+  .pl-card{
+    padding:15px;
+    border:1px solid var(--pl-line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.94), rgba(2,6,23,0.94));
+    box-shadow:0 18px 44px rgba(0,0,0,0.32);
+  }
+
+  .pl-card span{ display:block; color:var(--pl-muted); font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:.08em; }
+  .pl-card strong{ display:block; margin-top:8px; color:var(--pl-text); font-size:24px; line-height:1.12; font-weight:900; }
+  .pl-card small{ display:block; margin-top:7px; color:var(--pl-muted); font-size:12px; line-height:1.45; font-weight:800; }
+
+  .pl-chip-list{ display:flex; flex-wrap:wrap; gap:6px; margin-top:9px; }
+  .pl-chip{
+    display:inline-flex;
+    border:1px solid rgba(148,163,184,0.20);
+    border-radius:999px;
+    padding:4px 8px;
+    color:#e2e8f0;
+    background:rgba(148,163,184,0.08);
+    font-size:11px;
+    font-weight:900;
+  }
+
+  .pl-grid{ display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1.2fr); gap:14px; align-items:start; }
+
+  .pl-section{
+    border:1px solid var(--pl-line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.94), rgba(2,6,23,0.94));
+    overflow:hidden;
+    margin-bottom:14px;
+  }
+
+  .pl-section-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    flex-wrap:wrap;
+    padding:14px 16px;
+    border-bottom:1px solid rgba(148,163,184,0.16);
+  }
+
+  .pl-section-title{ margin:0; font-size:15px; font-weight:900; }
+  .pl-section-note{ color:var(--pl-muted); font-size:12px; font-weight:800; }
+
+  .pl-table-wrap{ overflow-x:auto; }
+  .pl-table{ width:100%; border-collapse:collapse; min-width:520px; }
+  .pl-table th{
+    padding:11px 12px;
+    background:#06101f;
+    border-bottom:1px solid rgba(148,163,184,0.16);
+    color:var(--pl-muted);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.07em;
+    text-align:left;
+    white-space:nowrap;
+  }
+  .pl-table td{
+    padding:12px;
+    border-bottom:1px solid rgba(148,163,184,0.11);
+    color:#e5e7eb;
+    font-size:13px;
+    font-weight:800;
+    vertical-align:top;
+  }
+
+  .pl-table tr:hover td{ background:rgba(245,196,81,0.05); }
+  .pl-right{ text-align:right !important; }
+  .pl-muted{ color:var(--pl-muted); font-size:12px; font-weight:800; }
+  .pl-empty{ padding:22px; color:var(--pl-muted); font-size:13px; font-weight:800; text-align:center; }
+
+  .pl-badge{
+    display:inline-flex;
+    align-items:center;
+    min-height:24px;
+    border-radius:999px;
+    padding:4px 9px;
+    border:1px solid rgba(148,163,184,0.26);
+    color:#e2e8f0;
+    background:rgba(148,163,184,0.10);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    white-space:nowrap;
+  }
+  .pl-badge--good{ color:#bbf7d0; background:rgba(74,222,128,0.12); border-color:rgba(74,222,128,0.34); }
+  .pl-badge--bad{ color:#fecdd3; background:rgba(251,113,133,0.12); border-color:rgba(251,113,133,0.36); }
+  .pl-badge--blue{ color:#bfdbfe; background:rgba(96,165,250,0.12); border-color:rgba(96,165,250,0.34); }
+
+  .pl-chart-row{
+    display:grid;
+    grid-template-columns:86px minmax(0,1fr) 102px;
+    gap:10px;
+    align-items:center;
+    padding:11px 14px;
+    border-bottom:1px solid rgba(148,163,184,0.11);
+  }
+
+  .pl-bars{ display:grid; gap:5px; }
+  .pl-bar{ height:9px; border-radius:999px; background:rgba(148,163,184,0.13); overflow:hidden; }
+  .pl-bar span{ display:block; height:100%; min-width:2px; border-radius:999px; }
+  .pl-bar-revenue span{ background:linear-gradient(90deg, var(--pl-good), #60a5fa); }
+  .pl-bar-cost span{ background:linear-gradient(90deg, var(--pl-warn), var(--pl-bad)); }
+
+  .pl-side-grid{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px; padding:14px; }
+  .pl-side-card{ border:1px solid rgba(148,163,184,0.18); border-radius:16px; background:rgba(3,7,18,0.76); padding:13px; }
+  .pl-side-card h3{ margin:0 0 10px; font-size:15px; font-weight:900; }
+  .pl-side-line{ display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-top:1px solid rgba(148,163,184,0.10); font-size:12px; font-weight:850; }
+
+  @media (max-width:1120px){
+    .pl-filter{ grid-template-columns:repeat(3, minmax(0,1fr)); }
+    .pl-summary{ grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .pl-grid{ grid-template-columns:1fr; }
+  }
+
+  @media (max-width:760px){
+    .pl-hero{ padding:16px; border-radius:18px; }
+    .pl-title{ font-size:24px; }
+    .pl-filter{ grid-template-columns:1fr; }
+    .pl-summary{ grid-template-columns:1fr; }
+    .pl-side-grid{ grid-template-columns:1fr; }
+    .pl-filter-actions{ align-items:stretch; flex-direction:column; }
+    .pl-btn{ width:100%; }
+  }
+</style>
+
+<div class="pl-wrap">
+  <div class="pl-hero">
+    <div>
+      <div class="pl-kicker">Accounting Phase 4</div>
+      <h1 class="pl-title">Profit and Loss</h1>
+      <div class="pl-sub">
+        Read-only P&L summary from accounting entries. Margins use CAD-equivalent values; original currency totals remain visible in the supporting chips.
+      </div>
+    </div>
+    <div class="pl-actions">
+      <a class="pl-btn" href="{% url 'accounting_entry_list' %}">Accounting entries</a>
+      <a class="pl-btn pl-btn--gold" href="{% url 'accounts_receivable_dashboard' %}">Accounts receivable</a>
+    </div>
+  </div>
+
+  <form class="pl-filter" method="get">
+    <div class="pl-field">
+      <label for="date_from">From</label>
+      <input id="date_from" type="date" name="date_from" value="{{ filter_values.date_from }}">
+    </div>
+    <div class="pl-field">
+      <label for="date_to">To</label>
+      <input id="date_to" type="date" name="date_to" value="{{ filter_values.date_to }}">
+    </div>
+    <div class="pl-field">
+      <label for="customer">Customer</label>
+      <select id="customer" name="customer">
+        <option value="">All customers</option>
+        {% for customer in customers %}
+          <option value="{{ customer.pk }}" {% if filter_values.customer == customer.pk|stringformat:"s" %}selected{% endif %}>
+            {% if customer.account_brand %}{{ customer.account_brand }}{% elif customer.contact_name %}{{ customer.contact_name }}{% else %}Customer {{ customer.pk }}{% endif %}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="pl-field">
+      <label for="product_category">Product category</label>
+      <select id="product_category" name="product_category">
+        <option value="">All categories</option>
+        {% for category in product_categories %}
+          <option value="{{ category }}" {% if filter_values.product_category == category %}selected{% endif %}>{{ category }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="pl-field">
+      <label for="side">Accounting side</label>
+      <select id="side" name="side">
+        {% for value, label in side_options %}
+          <option value="{{ value }}" {% if filter_values.side == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="pl-field">
+      <label for="currency">Currency</label>
+      <select id="currency" name="currency">
+        <option value="">All currencies</option>
+        {% for value in currency_options %}
+          <option value="{{ value }}" {% if filter_values.currency == value %}selected{% endif %}>{{ value }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="pl-filter-actions">
+      <button class="pl-btn pl-btn--gold" type="submit">Apply filters</button>
+      <a class="pl-btn" href="{% url 'profit_loss_dashboard' %}">Reset</a>
+    </div>
+  </form>
+
+  <div class="pl-summary">
+    <div class="pl-card">
+      <span>Total revenue</span>
+      <strong>CAD {{ total_revenue|floatformat:2|intcomma }}</strong>
+      <small>{{ revenue_count }} revenue row(s), CAD-equivalent basis.</small>
+      <div class="pl-chip-list">
+        {% for item in revenue_currency_totals %}
+          <span class="pl-chip">{{ item.currency }} {{ item.amount|floatformat:2|intcomma }}</span>
+        {% empty %}
+          <span class="pl-chip">No revenue</span>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="pl-card">
+      <span>Cost of goods sold</span>
+      <strong>CAD {{ total_cogs|floatformat:2|intcomma }}</strong>
+      <small>{{ cogs_count }} COGS row(s).</small>
+      <div class="pl-chip-list">
+        {% for item in cogs_currency_totals %}
+          <span class="pl-chip">{{ item.currency }} {{ item.amount|floatformat:2|intcomma }}</span>
+        {% empty %}
+          <span class="pl-chip">No COGS</span>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="pl-card">
+      <span>Gross profit</span>
+      <strong>CAD {{ gross_profit|floatformat:2|intcomma }}</strong>
+      <small>Gross margin: {{ gross_margin_percent|floatformat:2 }}%.</small>
+    </div>
+    <div class="pl-card">
+      <span>Net profit</span>
+      <strong>CAD {{ net_profit|floatformat:2|intcomma }}</strong>
+      <small>Operating expenses: CAD {{ operating_expenses|floatformat:2|intcomma }}. Net margin: {{ net_margin_percent|floatformat:2 }}%.</small>
+      <div class="pl-chip-list">
+        {% for item in opex_currency_totals %}
+          <span class="pl-chip">{{ item.currency }} {{ item.amount|floatformat:2|intcomma }}</span>
+        {% empty %}
+          <span class="pl-chip">No operating expenses</span>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="pl-grid">
+    <section class="pl-section">
+      <div class="pl-section-head">
+        <div>
+          <h2 class="pl-section-title">Revenue by customer</h2>
+          <div class="pl-section-note">Income entries grouped by linked customer.</div>
+        </div>
+      </div>
+      {% if revenue_by_customer %}
+        <div class="pl-table-wrap">
+          <table class="pl-table">
+            <thead><tr><th>Customer</th><th class="pl-right">Rows</th><th class="pl-right">Revenue CAD</th></tr></thead>
+            <tbody>
+              {% for row in revenue_by_customer %}
+                <tr><td>{{ row.label }}</td><td class="pl-right">{{ row.count }}</td><td class="pl-right">CAD {{ row.amount|floatformat:2|intcomma }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="pl-empty">No revenue by customer for the selected filters.</div>
+      {% endif %}
+    </section>
+
+    <section class="pl-section">
+      <div class="pl-section-head">
+        <div>
+          <h2 class="pl-section-title">Revenue by product category</h2>
+          <div class="pl-section-note">Uses linked production product or opportunity category when available.</div>
+        </div>
+      </div>
+      {% if revenue_by_product_category %}
+        <div class="pl-table-wrap">
+          <table class="pl-table">
+            <thead><tr><th>Product category</th><th class="pl-right">Rows</th><th class="pl-right">Revenue CAD</th></tr></thead>
+            <tbody>
+              {% for row in revenue_by_product_category %}
+                <tr><td>{{ row.label }}</td><td class="pl-right">{{ row.count }}</td><td class="pl-right">CAD {{ row.amount|floatformat:2|intcomma }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="pl-empty">No product-category revenue for the selected filters.</div>
+      {% endif %}
+    </section>
+
+    <section class="pl-section">
+      <div class="pl-section-head">
+        <div>
+          <h2 class="pl-section-title">Cost by category</h2>
+          <div class="pl-section-note">COGS entries grouped by sub type.</div>
+        </div>
+      </div>
+      {% if cost_by_category %}
+        <div class="pl-table-wrap">
+          <table class="pl-table">
+            <thead><tr><th>Cost category</th><th class="pl-right">Rows</th><th class="pl-right">Cost CAD</th></tr></thead>
+            <tbody>
+              {% for row in cost_by_category %}
+                <tr><td>{{ row.label }}</td><td class="pl-right">{{ row.count }}</td><td class="pl-right">CAD {{ row.amount|floatformat:2|intcomma }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="pl-empty">No COGS rows for the selected filters.</div>
+      {% endif %}
+    </section>
+
+    <section class="pl-section">
+      <div class="pl-section-head">
+        <div>
+          <h2 class="pl-section-title">Operating expense by category</h2>
+          <div class="pl-section-note">Expense, tax, and other money-out rows grouped by sub type.</div>
+        </div>
+      </div>
+      {% if opex_by_category %}
+        <div class="pl-table-wrap">
+          <table class="pl-table">
+            <thead><tr><th>Expense category</th><th class="pl-right">Rows</th><th class="pl-right">Expense CAD</th></tr></thead>
+            <tbody>
+              {% for row in opex_by_category %}
+                <tr><td>{{ row.label }}</td><td class="pl-right">{{ row.count }}</td><td class="pl-right">CAD {{ row.amount|floatformat:2|intcomma }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="pl-empty">No operating expenses for the selected filters.</div>
+      {% endif %}
+    </section>
+  </div>
+
+  <section class="pl-section">
+    <div class="pl-section-head">
+      <div>
+        <h2 class="pl-section-title">Monthly profit trend</h2>
+        <div class="pl-section-note">Revenue and total cost bars by month, with net profit shown on the right.</div>
+      </div>
+    </div>
+    {% if monthly_rows %}
+      {% for row in monthly_rows %}
+        <div class="pl-chart-row">
+          <div class="pl-muted">{{ row.label }}</div>
+          <div class="pl-bars">
+            <div class="pl-bar pl-bar-revenue"><span style="width:{{ row.revenue_bar }}%;"></span></div>
+            <div class="pl-bar pl-bar-cost"><span style="width:{{ row.cost_bar }}%;"></span></div>
+          </div>
+          <div class="pl-right">
+            {% if row.net >= 0 %}
+              <span class="pl-badge pl-badge--good">CAD {{ row.net|floatformat:0|intcomma }}</span>
+            {% else %}
+              <span class="pl-badge pl-badge--bad">CAD {{ row.net|floatformat:0|intcomma }}</span>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <div class="pl-empty">No monthly profit data matches the current filters.</div>
+    {% endif %}
+  </section>
+
+  <section class="pl-section">
+    <div class="pl-section-head">
+      <div>
+        <h2 class="pl-section-title">Canada vs Bangladesh comparison</h2>
+        <div class="pl-section-note">Revenue, COGS, operating expenses, gross profit, and net profit by accounting side.</div>
+      </div>
+    </div>
+    <div class="pl-side-grid">
+      {% for row in side_rows %}
+        <div class="pl-side-card">
+          <h3>{{ row.label }}</h3>
+          <div class="pl-side-line"><span>Revenue</span><strong>CAD {{ row.revenue|floatformat:2|intcomma }}</strong></div>
+          <div class="pl-side-line"><span>COGS</span><strong>CAD {{ row.cogs|floatformat:2|intcomma }}</strong></div>
+          <div class="pl-side-line"><span>Gross profit</span><strong>CAD {{ row.gross_profit|floatformat:2|intcomma }}</strong></div>
+          <div class="pl-side-line"><span>Operating expenses</span><strong>CAD {{ row.opex|floatformat:2|intcomma }}</strong></div>
+          <div class="pl-side-line"><span>Net profit</span><strong>CAD {{ row.net_profit|floatformat:2|intcomma }}</strong></div>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <div class="pl-muted" style="margin-top:12px;">
+    Rows included: {{ entry_count }}. P&L excludes transfer and cancelled entries. Closed month and audit behavior is unchanged.
+  </div>
+</div>
+
+{% endblock %}
