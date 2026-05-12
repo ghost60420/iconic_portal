@@ -820,12 +820,12 @@ def _pl_product_category(entry):
     if entry.production_order_id and entry.production_order:
         product = entry.production_order.product
         if product and product.product_category:
-            return product.product_category
+            return product.product_category.strip() or "Uncategorized"
         opportunity = entry.production_order.opportunity
         if opportunity and opportunity.product_category:
-            return opportunity.product_category
+            return opportunity.product_category.strip() or "Uncategorized"
     if entry.opportunity_id and entry.opportunity and entry.opportunity.product_category:
-        return entry.opportunity.product_category
+        return entry.opportunity.product_category.strip() or "Uncategorized"
     return "Uncategorized"
 
 
@@ -1004,7 +1004,8 @@ def profit_loss_dashboard(request):
 
     customers = Customer.objects.filter(accounting_entries__isnull=False).distinct().order_by("account_brand", "contact_name")
     product_categories = sorted({
-        value for value in Product.objects.exclude(product_category="").values_list("product_category", flat=True).distinct()
+        value.strip() for value in Product.objects.exclude(product_category="").values_list("product_category", flat=True).distinct()
+        if value and value.strip()
     } | {
         row["product_category"] for row in rows if row["product_category"] and row["product_category"] != "Uncategorized"
     })
