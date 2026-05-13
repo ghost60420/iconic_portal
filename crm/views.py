@@ -8978,6 +8978,453 @@ def ceo_dashboard(request):
     return render(request, "crm/ceo_dashboard.html", context)
 
 
+def _advisor_score(base=82, penalties=None, bonuses=None):
+    score = Decimal(str(base))
+    for penalty in penalties or []:
+        score -= Decimal(str(penalty))
+    for bonus in bonuses or []:
+        score += Decimal(str(bonus))
+    return int(max(Decimal("0"), min(Decimal("100"), score)))
+
+
+def _advisor_score_tone(score):
+    if score >= 82:
+        return "good"
+    if score >= 65:
+        return "blue"
+    if score >= 45:
+        return "warn"
+    return "bad"
+
+
+def _advisor_answer(question, metrics):
+    text = (question or "").strip()
+    if not text:
+        return ""
+    q = text.lower()
+
+    if any(word in q for word in ["cash", "flow", "money", "runway"]):
+        return (
+            f"Cash is projected at {_format_money(metrics['forecast_cash_30'])} over the next 30 days. "
+            f"Expected collections are {_format_money(metrics['receivables_30'])}, expected supplier payments are "
+            f"{_format_money(metrics['payables_30'])}, and current net cash movement is "
+            f"{_format_money(metrics['finance_net'])}. Prioritize overdue receivables if the forecast is tight."
+        )
+
+    if any(word in q for word in ["receivable", "invoice", "collection", "paid"]):
+        return (
+            f"There are {metrics['overdue_invoice_count']} overdue invoice(s) and "
+            f"{_format_money(metrics['invoice_open_total'])} in open receivables. The next 30 days show "
+            f"{_format_money(metrics['receivables_30'])} expected customer collections."
+        )
+
+    if any(word in q for word in ["sales", "pipeline", "lead", "opportunity", "conversion"]):
+        return (
+            f"Sales generated {metrics['leads_period']} lead(s) and {metrics['opp_period']} opportunity row(s) "
+            f"in this period. Open pipeline is {_format_money(metrics['open_pipeline_value'])}, with a "
+            f"{metrics['conversion_rate']:.1f}% lead-to-opportunity conversion rate. "
+            f"{metrics['overdue_followups']} follow-up(s) are overdue."
+        )
+
+    if any(word in q for word in ["production", "factory", "order", "manufacturing"]):
+        return (
+            f"Production has {metrics['production_running']} running order(s), {metrics['production_hold']} on hold, "
+            f"and {metrics['production_delayed']} delayed active order(s). Clear held and delayed orders before adding load."
+        )
+
+    if any(word in q for word in ["shipping", "shipment", "delivery", "logistics"]):
+        return (
+            f"Shipping has {metrics['shipments_in_transit']} shipment(s) in transit and "
+            f"{metrics['shipments_delayed']} delayed shipment(s). Review delayed shipments first and update client visibility."
+        )
+
+    if any(word in q for word in ["marketing", "website", "google", "social", "campaign"]):
+        return (
+            f"Marketing shows {metrics['website_visitors']} website visitor(s), {metrics['search_clicks']} Google click(s), "
+            f"{metrics['social_engagement']} social engagement(s), and {metrics['active_campaigns']} active campaign(s) "
+            f"in the selected period."
+        )
+
+    return (
+        f"The business health score is {metrics['overall_score']}/100. The biggest watch items are "
+        f"{metrics['overdue_followups']} overdue follow-up(s), {metrics['overdue_invoice_count']} overdue invoice(s), "
+        f"{metrics['production_delayed']} delayed production order(s), and {metrics['shipments_delayed']} delayed shipment(s)."
+    )
+
+
+@login_required
+def ai_executive_advisor(request):
+    today = timezone.localdate()
+    try:
+        period_days = int((request.GET.get("days") or "30").strip())
+    except Exception:
+        period_days = 30
+    if period_days not in (7, 30, 60, 90, 180):
+        period_days = 30
+
+    side = (request.GET.get("side") or "").strip().upper()
+    if side not in {"", "CA", "BD"}:
+        side = ""
+
+    question = (request.GET.get("question") or "").strip()[:500]
+    start_period = today - timedelta(days=period_days - 1)
+    previous_end = start_period - timedelta(days=1)
+    previous_start = previous_end - timedelta(days=period_days - 1)
+    period_label = f"Last {period_days} days"
+
+    leads_period = Lead.objects.filter(created_date__range=(start_period, today)).count()
+    prev_leads_period = Lead.objects.filter(created_date__range=(previous_start, previous_end)).count()
+    overdue_followups = Lead.objects.filter(next_followup__lt=today).exclude(
+        lead_status__in=["Converted", "Closed", "Disqualified", "Lost"]
+    ).count()
+    high_priority_leads = Lead.objects.filter(
+        created_date__range=(start_period, today),
+    ).filter(Q(priority__iexact="High") | Q(priority_level__iexact="High")).count()
+    due_soon_followups = Lead.objects.filter(
+        next_followup__range=(today, today + timedelta(days=7))
+    ).exclude(lead_status__in=["Converted", "Closed", "Disqualified", "Lost"]).count()
+
+    opp_period = Opportunity.objects.filter(created_date__range=(start_period, today)).count()
+    prev_opp_period = Opportunity.objects.filter(created_date__range=(previous_start, previous_end)).count()
+    open_pipeline_qs = Opportunity.objects.filter(is_open=True).exclude(stage__in=["Closed Won", "Closed Lost"])
+    open_opps = open_pipeline_qs.count()
+    open_pipeline_value = _ceo_decimal(open_pipeline_qs.aggregate(total=Sum("order_value")).get("total"))
+    won_period = Opportunity.objects.filter(stage="Closed Won", updated_at__date__range=(start_period, today)).count()
+    lost_period = Opportunity.objects.filter(stage="Closed Lost", updated_at__date__range=(start_period, today)).count()
+    conversion_rate = round((opp_period / leads_period) * 100, 1) if leads_period else 0
+    prev_conversion_rate = round((prev_opp_period / prev_leads_period) * 100, 1) if prev_leads_period else 0
+    pipeline_rows = list(
+        Opportunity.objects.values("stage")
+        .annotate(count=Count("id"), value=Sum("order_value"))
+        .order_by("-value", "-count")[:10]
+    )
+    pipeline_rows = _ceo_bar_rows(
+        [
+            {
+                "label": row.get("stage") or "Unknown",
+                "count": int(row.get("count") or 0),
+                "value": _ceo_decimal(row.get("value")),
+            }
+            for row in pipeline_rows
+        ],
+        ["count", "value"],
+    )
+
+    production_qs = ProductionOrder.objects.all()
+    if side == "CA":
+        production_qs = production_qs.filter(factory_location="ca")
+    elif side == "BD":
+        production_qs = production_qs.filter(factory_location="bd")
+    production_running = production_qs.filter(status="in_progress").count()
+    production_hold = production_qs.filter(status="hold").count()
+    production_delayed = production_qs.filter(
+        status__in=["planning", "in_progress", "hold"],
+        bulk_deadline__lt=today,
+    ).count()
+    production_due_soon = production_qs.filter(
+        status__in=["planning", "in_progress", "hold"],
+        bulk_deadline__range=(today, today + timedelta(days=14)),
+    ).count()
+
+    shipping_qs = Shipment.objects.all()
+    if side == "CA":
+        shipping_qs = shipping_qs.filter(order__factory_location="ca")
+    elif side == "BD":
+        shipping_qs = shipping_qs.filter(order__factory_location="bd")
+    shipments_in_transit = shipping_qs.filter(status__in=["booked", "shipped", "out_for_delivery"]).count()
+    shipments_delayed = shipping_qs.filter(ship_date__lt=today).exclude(status__in=["delivered", "cancelled"]).count()
+    shipments_without_tracking = shipping_qs.filter(tracking_number="").exclude(status__in=["delivered", "cancelled"]).count()
+
+    cad_to_bdt = _get_latest_cad_to_bdt_rate()
+    accounting_qs = AccountingEntry.objects.exclude(main_type="TRANSFER").exclude(status__iexact="CANCELLED")
+    if side:
+        accounting_qs = accounting_qs.filter(side=side)
+    period_entries = list(
+        accounting_qs.filter(date__range=(start_period, today)).only(
+            "date", "direction", "side", "currency", "main_type", "amount_original", "amount_cad", "rate_to_cad"
+        )[:2500]
+    )
+    previous_entries = list(
+        accounting_qs.filter(date__range=(previous_start, previous_end)).only(
+            "date", "direction", "side", "currency", "main_type", "amount_original", "amount_cad", "rate_to_cad"
+        )[:2500]
+    )
+
+    def _period_finance(entries):
+        revenue = Decimal("0")
+        expenses = Decimal("0")
+        for entry in entries:
+            amount = _ceo_amount_cad(entry, cad_to_bdt)
+            if (entry.direction or "").upper().strip() == "IN":
+                revenue += amount
+            elif (entry.direction or "").upper().strip() == "OUT":
+                expenses += amount
+        return {"revenue": revenue, "expenses": expenses, "net": revenue - expenses}
+
+    finance = _period_finance(period_entries)
+    previous_finance = _period_finance(previous_entries)
+    current_cash = Decimal("0")
+    for entry in accounting_qs.filter(date__lte=today).only(
+        "date", "direction", "currency", "amount_original", "amount_cad", "rate_to_cad"
+    )[:3500]:
+        amount = _ceo_amount_cad(entry, cad_to_bdt)
+        if (entry.direction or "").upper().strip() == "IN":
+            current_cash += amount
+        elif (entry.direction or "").upper().strip() == "OUT":
+            current_cash -= amount
+
+    invoice_qs = Invoice.objects.exclude(status="cancelled") if Invoice is not None else None
+    if invoice_qs is not None and side:
+        invoice_qs = invoice_qs.filter(Q(invoice_region=side) | Q(invoice_region="", currency="BDT" if side == "BD" else "CAD"))
+    invoice_open_total = Decimal("0")
+    overdue_invoice_count = 0
+    receivables_30 = Decimal("0")
+    overdue_receivable_rows = []
+    if invoice_qs is not None:
+        try:
+            open_invoices = list(
+                invoice_qs.exclude(status="paid")
+                .select_related("customer", "order", "order__customer")
+                .order_by("due_date", "-issue_date")[:1500]
+            )
+            for invoice in open_invoices:
+                balance = _ceo_decimal(invoice.balance)
+                invoice_open_total += balance
+                if invoice.due_date and invoice.due_date < today:
+                    overdue_invoice_count += 1
+                    overdue_receivable_rows.append(
+                        {
+                            "invoice": invoice,
+                            "customer": _exec_customer_label(invoice.customer or getattr(invoice.order, "customer", None)) if "_exec_customer_label" in globals() else str(invoice.customer or "No customer"),
+                            "due_date": invoice.due_date,
+                            "balance": balance,
+                        }
+                    )
+                if invoice.due_date and today <= invoice.due_date <= today + timedelta(days=30):
+                    receivables_30 += balance
+        except (OperationalError, ProgrammingError):
+            invoice_open_total = Decimal("0")
+            overdue_invoice_count = 0
+            receivables_30 = Decimal("0")
+            overdue_receivable_rows = []
+
+    payable_entries_30 = list(
+        accounting_qs.filter(direction="OUT", date__lte=today + timedelta(days=30))
+        .exclude(status__iexact="PAID")
+        .only("date", "direction", "currency", "amount_original", "amount_cad", "rate_to_cad", "status", "description", "sub_type")[:1000]
+    )
+    payables_30 = sum((_ceo_amount_cad(entry, cad_to_bdt) for entry in payable_entries_30), Decimal("0"))
+    forecast_cash_30 = current_cash + receivables_30 - payables_30
+    forecast_rows = [
+        {"label": "30 days", "cash": forecast_cash_30, "collections": receivables_30, "payments": payables_30},
+        {
+            "label": "60 days",
+            "cash": current_cash + (receivables_30 * Decimal("1.6")) - (payables_30 * Decimal("1.6")),
+            "collections": receivables_30 * Decimal("1.6"),
+            "payments": payables_30 * Decimal("1.6"),
+        },
+        {
+            "label": "90 days",
+            "cash": current_cash + (receivables_30 * Decimal("2.1")) - (payables_30 * Decimal("2.1")),
+            "collections": receivables_30 * Decimal("2.1"),
+            "payments": payables_30 * Decimal("2.1"),
+        },
+    ]
+    forecast_rows = _ceo_bar_rows(forecast_rows, ["cash", "collections", "payments"])
+
+    WebsiteTrafficDaily = _ceo_optional_model("marketing", "WebsiteTrafficDaily")
+    SeoQueryDaily = _ceo_optional_model("marketing", "SeoQueryDaily")
+    AccountMetricDaily = _ceo_optional_model("marketing", "AccountMetricDaily")
+    Campaign = _ceo_optional_model("marketing", "Campaign")
+    InsightItem = _ceo_optional_model("marketing", "InsightItem")
+    website_totals = _ceo_aggregate(
+        WebsiteTrafficDaily,
+        WebsiteTrafficDaily.objects.filter(date__range=(start_period, today)) if WebsiteTrafficDaily else None,
+        visitors=Sum("visitors"),
+        page_views=Sum("page_views"),
+        conversions=Sum("conversions"),
+    )
+    search_totals = _ceo_aggregate(
+        SeoQueryDaily,
+        SeoQueryDaily.objects.filter(date__range=(start_period, today)) if SeoQueryDaily else None,
+        clicks=Sum("clicks"),
+        impressions=Sum("impressions"),
+    )
+    social_totals = _ceo_aggregate(
+        AccountMetricDaily,
+        AccountMetricDaily.objects.filter(date__range=(start_period, today)) if AccountMetricDaily else None,
+        engagement=Sum("engagement_total"),
+        reach=Sum("reach"),
+    )
+    active_campaigns = 0
+    open_insights = 0
+    try:
+        if Campaign is not None:
+            active_campaigns = Campaign.objects.filter(is_active=True).count()
+        if InsightItem is not None:
+            open_insights = InsightItem.objects.filter(status="open").count()
+    except (OperationalError, ProgrammingError):
+        active_campaigns = 0
+        open_insights = 0
+
+    sales_score = _advisor_score(
+        82,
+        penalties=[min(overdue_followups * 2, 18), 8 if conversion_rate < prev_conversion_rate else 0],
+        bonuses=[6 if open_pipeline_value > 0 else 0],
+    )
+    production_score = _advisor_score(
+        84,
+        penalties=[min(production_delayed * 5, 25), min(production_hold * 3, 15)],
+        bonuses=[4 if production_running else 0],
+    )
+    shipping_score = _advisor_score(
+        86,
+        penalties=[min(shipments_delayed * 6, 24), min(shipments_without_tracking * 2, 12)],
+        bonuses=[4 if shipments_in_transit else 0],
+    )
+    marketing_score = _advisor_score(
+        74,
+        penalties=[8 if not website_totals.get("visitors") else 0, 6 if not search_totals.get("clicks") else 0],
+        bonuses=[5 if active_campaigns else 0, 4 if open_insights else 0],
+    )
+    accounting_score = _advisor_score(
+        82,
+        penalties=[min(overdue_invoice_count * 4, 24), 12 if forecast_cash_30 < 0 else 0, 8 if finance["net"] < 0 else 0],
+        bonuses=[6 if finance["net"] >= 0 else 0],
+    )
+    department_scores = [
+        {"label": "Sales", "score": sales_score, "tone": _advisor_score_tone(sales_score), "detail": f"{overdue_followups} overdue follow-up(s), {conversion_rate:.1f}% conversion."},
+        {"label": "Production", "score": production_score, "tone": _advisor_score_tone(production_score), "detail": f"{production_running} running, {production_delayed} delayed."},
+        {"label": "Shipping", "score": shipping_score, "tone": _advisor_score_tone(shipping_score), "detail": f"{shipments_in_transit} in transit, {shipments_delayed} delayed."},
+        {"label": "Marketing", "score": marketing_score, "tone": _advisor_score_tone(marketing_score), "detail": f"{website_totals.get('visitors') or 0} visitors, {active_campaigns} active campaigns."},
+        {"label": "Accounting", "score": accounting_score, "tone": _advisor_score_tone(accounting_score), "detail": f"{overdue_invoice_count} overdue invoice(s), {_format_money(forecast_cash_30)} 30-day cash."},
+    ]
+    overall_score = int(sum(row["score"] for row in department_scores) / len(department_scores))
+
+    critical_alerts = []
+    if overdue_invoice_count:
+        critical_alerts.append({"title": f"{overdue_invoice_count} overdue receivable(s)", "detail": f"Open receivables total {_format_money(invoice_open_total)}.", "tone": "bad"})
+    if forecast_cash_30 < 0:
+        critical_alerts.append({"title": "30-day cash forecast is negative", "detail": f"Projected cash is {_format_money(forecast_cash_30)}.", "tone": "bad"})
+    if overdue_followups:
+        critical_alerts.append({"title": f"{overdue_followups} overdue sales follow-up(s)", "detail": "Pipeline risk increases when follow-ups slip.", "tone": "warn"})
+    if production_delayed:
+        critical_alerts.append({"title": f"{production_delayed} delayed production order(s)", "detail": "Factory timelines need review.", "tone": "warn"})
+    if shipments_delayed:
+        critical_alerts.append({"title": f"{shipments_delayed} delayed shipment(s)", "detail": "Delivery status needs client-facing updates.", "tone": "warn"})
+    if not critical_alerts:
+        critical_alerts.append({"title": "No critical executive alerts", "detail": "Core warning signals are clear for this period.", "tone": "good"})
+
+    recommended_actions = [
+        {"title": "Collect overdue receivables", "detail": f"Follow up on {overdue_invoice_count} overdue invoice(s) before new spending commitments.", "priority": "High" if overdue_invoice_count else "Normal"},
+        {"title": "Work overdue sales follow-ups", "detail": f"Prioritize {overdue_followups} overdue lead follow-up(s) and {due_soon_followups} due soon.", "priority": "High" if overdue_followups else "Normal"},
+        {"title": "Clear production blockers", "detail": f"Review {production_hold} held order(s), {production_delayed} delayed order(s), and {production_due_soon} due soon.", "priority": "High" if production_delayed else "Normal"},
+        {"title": "Update logistics visibility", "detail": f"Check {shipments_delayed} delayed shipment(s) and {shipments_without_tracking} shipment(s) without tracking.", "priority": "High" if shipments_delayed else "Normal"},
+        {"title": "Review marketing insights", "detail": f"Use {open_insights} open marketing insight(s) and {active_campaigns} active campaign(s) to protect lead flow.", "priority": "Normal"},
+    ]
+
+    summary_cards = [
+        {"label": "Business Health", "value": f"{overall_score}/100", "note": "Composite department score.", "tone": _advisor_score_tone(overall_score)},
+        {"label": "30-Day Cash Forecast", "value": _format_money(forecast_cash_30), "note": f"Collections {_format_money(receivables_30)} less payments {_format_money(payables_30)}.", "tone": "good" if forecast_cash_30 >= 0 else "bad"},
+        {"label": "Open Pipeline", "value": _format_money(open_pipeline_value), "note": f"{open_opps} open opportunity row(s).", "tone": "blue"},
+        {"label": "Overdue Receivables", "value": _format_count(overdue_invoice_count), "note": f"Open AR {_format_money(invoice_open_total)}.", "tone": "bad" if overdue_invoice_count else "good"},
+        {"label": "Sales Follow-Ups", "value": _format_count(overdue_followups), "note": f"{due_soon_followups} due in the next 7 days.", "tone": "warn" if overdue_followups else "good"},
+        {"label": "Production Warnings", "value": _format_count(production_delayed), "note": f"{production_hold} order(s) on hold.", "tone": "warn" if production_delayed else "good"},
+        {"label": "Shipping Warnings", "value": _format_count(shipments_delayed), "note": f"{shipments_without_tracking} shipment(s) missing tracking.", "tone": "warn" if shipments_delayed else "good"},
+        {"label": "Marketing Signals", "value": _format_count(website_totals.get("visitors")), "note": f"{search_totals.get('clicks') or 0} search clicks, {social_totals.get('engagement') or 0} social engagement.", "tone": "blue"},
+    ]
+
+    metrics = {
+        "overall_score": overall_score,
+        "forecast_cash_30": forecast_cash_30,
+        "receivables_30": receivables_30,
+        "payables_30": payables_30,
+        "finance_net": finance["net"],
+        "overdue_invoice_count": overdue_invoice_count,
+        "invoice_open_total": invoice_open_total,
+        "leads_period": leads_period,
+        "opp_period": opp_period,
+        "open_pipeline_value": open_pipeline_value,
+        "conversion_rate": conversion_rate,
+        "overdue_followups": overdue_followups,
+        "production_running": production_running,
+        "production_hold": production_hold,
+        "production_delayed": production_delayed,
+        "shipments_in_transit": shipments_in_transit,
+        "shipments_delayed": shipments_delayed,
+        "website_visitors": website_totals.get("visitors") or 0,
+        "search_clicks": search_totals.get("clicks") or 0,
+        "social_engagement": social_totals.get("engagement") or 0,
+        "active_campaigns": active_campaigns,
+    }
+    advisor_answer = _advisor_answer(question, metrics)
+
+    context = {
+        "today": today,
+        "period_label": period_label,
+        "filter_values": {"days": str(period_days), "side": side, "question": question},
+        "side_options": [("", "All sides"), ("CA", "Canada"), ("BD", "Bangladesh")],
+        "summary_cards": summary_cards,
+        "critical_alerts": critical_alerts,
+        "recommended_actions": recommended_actions,
+        "department_scores": department_scores,
+        "forecast_rows": forecast_rows,
+        "overdue_receivable_rows": overdue_receivable_rows[:8],
+        "pipeline_rows": pipeline_rows,
+        "advisor_answer": advisor_answer,
+        "suggested_questions": [
+            "What should I focus on today?",
+            "How is cash flow looking?",
+            "What sales risks should I watch?",
+            "Are production or shipping timelines at risk?",
+            "How is marketing contributing to leads?",
+        ],
+        "sales_metrics": {
+            "leads_period": leads_period,
+            "prev_leads_period": prev_leads_period,
+            "opp_period": opp_period,
+            "prev_opp_period": prev_opp_period,
+            "won_period": won_period,
+            "lost_period": lost_period,
+            "conversion_rate": conversion_rate,
+            "prev_conversion_rate": prev_conversion_rate,
+            "high_priority_leads": high_priority_leads,
+        },
+        "operations_metrics": {
+            "production_running": production_running,
+            "production_hold": production_hold,
+            "production_delayed": production_delayed,
+            "production_due_soon": production_due_soon,
+            "shipments_in_transit": shipments_in_transit,
+            "shipments_delayed": shipments_delayed,
+            "shipments_without_tracking": shipments_without_tracking,
+        },
+        "marketing_metrics": {
+            "website_visitors": website_totals.get("visitors") or 0,
+            "page_views": website_totals.get("page_views") or 0,
+            "conversions": website_totals.get("conversions") or 0,
+            "search_clicks": search_totals.get("clicks") or 0,
+            "search_impressions": search_totals.get("impressions") or 0,
+            "social_engagement": social_totals.get("engagement") or 0,
+            "social_reach": social_totals.get("reach") or 0,
+            "active_campaigns": active_campaigns,
+            "open_insights": open_insights,
+        },
+        "finance_metrics": {
+            "revenue": finance["revenue"],
+            "expenses": finance["expenses"],
+            "net": finance["net"],
+            "previous_revenue": previous_finance["revenue"],
+            "current_cash": current_cash,
+            "invoice_open_total": invoice_open_total,
+            "receivables_30": receivables_30,
+            "payables_30": payables_30,
+            "forecast_cash_30": forecast_cash_30,
+        },
+    }
+    return render(request, "crm/ai_executive_advisor.html", context)
+
+
 @login_required
 def main_dashboard(request):
     today = timezone.localdate()

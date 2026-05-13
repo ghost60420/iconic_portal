@@ -1,0 +1,527 @@
+{% extends "crm/base.html" %}
+{% load humanize %}
+{% block content %}
+
+<style>
+  :root{
+    --aia-line:#263348;
+    --aia-text:#f8fafc;
+    --aia-muted:#94a3b8;
+    --aia-gold:#f5c451;
+    --aia-good:#4ade80;
+    --aia-warn:#fbbf24;
+    --aia-bad:#fb7185;
+    --aia-blue:#60a5fa;
+  }
+
+  .aia-wrap{ max-width:1420px; margin:0 auto; color:var(--aia-text); }
+
+  .aia-hero{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:18px;
+    flex-wrap:wrap;
+    padding:22px;
+    border:1px solid rgba(96,165,250,0.30);
+    border-radius:22px;
+    background:
+      linear-gradient(135deg, rgba(96,165,250,0.18), transparent 36%),
+      linear-gradient(180deg, rgba(15,23,42,0.96), rgba(2,6,23,0.96));
+    box-shadow:0 24px 60px rgba(0,0,0,0.42);
+    margin-bottom:16px;
+  }
+
+  .aia-kicker{
+    color:var(--aia-gold);
+    font-size:12px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    margin-bottom:6px;
+  }
+  .aia-title{ margin:0; font-size:30px; line-height:1.1; font-weight:950; }
+  .aia-sub{ margin-top:8px; max-width:850px; color:var(--aia-muted); font-size:13px; line-height:1.5; font-weight:750; }
+
+  .aia-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+  .aia-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-height:38px;
+    padding:9px 13px;
+    border-radius:14px;
+    border:1px solid rgba(148,163,184,0.25);
+    background:rgba(15,23,42,0.82);
+    color:var(--aia-text);
+    text-decoration:none;
+    font-size:12px;
+    font-weight:900;
+  }
+  .aia-btn:hover{ color:var(--aia-text); border-color:rgba(245,196,81,0.55); }
+  .aia-btn--gold{ background:linear-gradient(135deg, #f6d365, #d9a622); color:#111827; border-color:rgba(245,196,81,0.55); }
+  .aia-btn--gold:hover{ color:#111827; }
+
+  .aia-filter{
+    display:grid;
+    grid-template-columns:repeat(2, minmax(0,220px)) auto;
+    gap:12px;
+    align-items:end;
+    padding:14px;
+    border:1px solid var(--aia-line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.92), rgba(2,6,23,0.92));
+    margin-bottom:16px;
+  }
+  .aia-field label{
+    display:block;
+    margin-bottom:6px;
+    color:var(--aia-muted);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.07em;
+  }
+  .aia-field select,
+  .aia-field textarea{
+    width:100%;
+    border:1px solid rgba(148,163,184,0.26);
+    border-radius:14px;
+    background:#030712;
+    color:var(--aia-text);
+    padding:9px 11px;
+    font-size:13px;
+    font-weight:800;
+  }
+  .aia-field select{ min-height:42px; }
+  .aia-field textarea{ min-height:106px; resize:vertical; line-height:1.5; }
+
+  .aia-kpis{
+    display:grid;
+    grid-template-columns:repeat(4, minmax(0,1fr));
+    gap:12px;
+    margin-bottom:16px;
+  }
+  .aia-card{
+    padding:14px;
+    border:1px solid var(--aia-line);
+    border-radius:18px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.94), rgba(2,6,23,0.94));
+    box-shadow:0 18px 44px rgba(0,0,0,0.30);
+  }
+  .aia-card span{ display:block; color:var(--aia-muted); font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.07em; }
+  .aia-card strong{ display:block; margin-top:8px; color:var(--aia-text); font-size:21px; line-height:1.12; font-weight:950; }
+  .aia-card small{ display:block; margin-top:7px; color:var(--aia-muted); font-size:11px; line-height:1.45; font-weight:800; }
+  .aia-card--good{ border-color:rgba(74,222,128,0.28); }
+  .aia-card--warn{ border-color:rgba(251,191,36,0.30); }
+  .aia-card--bad{ border-color:rgba(251,113,133,0.34); }
+  .aia-card--blue{ border-color:rgba(96,165,250,0.30); }
+
+  .aia-layout{
+    display:grid;
+    grid-template-columns:minmax(0,1.34fr) minmax(380px,.96fr);
+    gap:14px;
+    align-items:start;
+  }
+  .aia-section{
+    border:1px solid var(--aia-line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.94), rgba(2,6,23,0.94));
+    overflow:hidden;
+    margin-bottom:14px;
+  }
+  .aia-section-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    flex-wrap:wrap;
+    padding:14px 16px;
+    border-bottom:1px solid rgba(148,163,184,0.16);
+  }
+  .aia-section-title{ margin:0; font-size:15px; font-weight:900; }
+  .aia-section-note{ color:var(--aia-muted); font-size:12px; font-weight:800; }
+  .aia-muted{ color:var(--aia-muted); font-size:12px; font-weight:800; }
+  .aia-right{ text-align:right !important; }
+
+  .aia-alert-list,
+  .aia-action-list{ display:grid; gap:10px; padding:14px; }
+  .aia-alert,
+  .aia-action{
+    border:1px solid rgba(148,163,184,0.17);
+    border-radius:16px;
+    background:rgba(3,7,18,0.72);
+    padding:12px;
+  }
+  .aia-alert strong,
+  .aia-action strong{ display:block; font-size:13px; font-weight:900; }
+  .aia-alert p,
+  .aia-action p{ margin:6px 0 0; color:var(--aia-muted); font-size:12px; line-height:1.45; font-weight:750; }
+  .aia-alert--bad,
+  .aia-action--High{ border-color:rgba(251,113,133,0.34); }
+  .aia-alert--warn{ border-color:rgba(251,191,36,0.30); }
+  .aia-alert--good{ border-color:rgba(74,222,128,0.28); }
+  .aia-alert--blue{ border-color:rgba(96,165,250,0.30); }
+
+  .aia-score-grid{ display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:10px; padding:14px; }
+  .aia-score{
+    border:1px solid rgba(148,163,184,0.17);
+    border-radius:16px;
+    background:rgba(3,7,18,0.72);
+    padding:12px;
+  }
+  .aia-score span{ display:block; color:var(--aia-muted); font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:.07em; }
+  .aia-score strong{ display:block; margin-top:7px; font-size:22px; font-weight:950; }
+
+  .aia-chart-row{
+    display:grid;
+    grid-template-columns:86px minmax(0,1fr) 112px;
+    gap:10px;
+    align-items:center;
+    padding:11px 14px;
+    border-bottom:1px solid rgba(148,163,184,0.11);
+  }
+  .aia-bars{ display:grid; gap:5px; }
+  .aia-bar{ height:8px; border-radius:999px; background:rgba(148,163,184,0.13); overflow:hidden; }
+  .aia-bar span{ display:block; height:100%; min-width:2px; border-radius:999px; }
+  .aia-bar-cash span{ background:linear-gradient(90deg, var(--aia-gold), var(--aia-blue)); }
+  .aia-bar-collections span{ background:linear-gradient(90deg, var(--aia-good), #14b8a6); }
+  .aia-bar-payments span{ background:linear-gradient(90deg, var(--aia-warn), var(--aia-bad)); }
+  .aia-bar-value span{ background:linear-gradient(90deg, var(--aia-blue), #a78bfa); }
+  .aia-bar-count span{ background:linear-gradient(90deg, var(--aia-gold), #fb923c); }
+
+  .aia-table-wrap{ overflow-x:auto; }
+  .aia-table{ width:100%; border-collapse:collapse; min-width:620px; }
+  .aia-table--compact{ min-width:460px; }
+  .aia-table th{
+    padding:11px 12px;
+    background:#06101f;
+    border-bottom:1px solid rgba(148,163,184,0.16);
+    color:var(--aia-muted);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.07em;
+    text-align:left;
+    white-space:nowrap;
+  }
+  .aia-table td{
+    padding:12px;
+    border-bottom:1px solid rgba(148,163,184,0.11);
+    color:#e5e7eb;
+    font-size:13px;
+    font-weight:800;
+    vertical-align:top;
+  }
+  .aia-table tr:hover td{ background:rgba(96,165,250,0.05); }
+
+  .aia-badge{
+    display:inline-flex;
+    align-items:center;
+    min-height:24px;
+    border-radius:999px;
+    padding:4px 9px;
+    border:1px solid rgba(148,163,184,0.26);
+    color:#e2e8f0;
+    background:rgba(148,163,184,0.10);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    white-space:nowrap;
+  }
+  .aia-badge--good{ color:#bbf7d0; background:rgba(74,222,128,0.12); border-color:rgba(74,222,128,0.34); }
+  .aia-badge--warn{ color:#fde68a; background:rgba(251,191,36,0.12); border-color:rgba(251,191,36,0.34); }
+  .aia-badge--bad{ color:#fecdd3; background:rgba(251,113,133,0.12); border-color:rgba(251,113,133,0.36); }
+  .aia-badge--blue{ color:#bfdbfe; background:rgba(96,165,250,0.12); border-color:rgba(96,165,250,0.34); }
+
+  .aia-chat{ padding:14px; display:grid; gap:12px; }
+  .aia-answer{
+    border:1px solid rgba(96,165,250,0.28);
+    border-radius:16px;
+    background:rgba(3,7,18,0.72);
+    padding:13px;
+    color:#e5e7eb;
+    font-size:13px;
+    line-height:1.55;
+    font-weight:800;
+  }
+  .aia-suggestions{ display:flex; gap:8px; flex-wrap:wrap; }
+  .aia-empty{ padding:22px; color:var(--aia-muted); font-size:13px; font-weight:800; text-align:center; }
+
+  @media (max-width:1180px){
+    .aia-kpis{ grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .aia-layout{ grid-template-columns:1fr; }
+    .aia-score-grid{ grid-template-columns:repeat(2, minmax(0,1fr)); }
+  }
+  @media (max-width:760px){
+    .aia-hero{ padding:16px; border-radius:18px; }
+    .aia-title{ font-size:24px; }
+    .aia-filter,
+    .aia-kpis,
+    .aia-score-grid{ grid-template-columns:1fr; }
+    .aia-btn{ width:100%; }
+  }
+</style>
+
+<div class="aia-wrap">
+  <div class="aia-hero">
+    <div>
+      <div class="aia-kicker">Read-only executive intelligence</div>
+      <h1 class="aia-title">AI Executive Advisor</h1>
+      <div class="aia-sub">
+        Deterministic executive insights from Leads, Opportunities, Production, Shipping, Marketing, and Accounting for {{ period_label|lower }}. The advisor reads CRM data only and does not write records or call external AI services.
+      </div>
+    </div>
+    <div class="aia-actions">
+      <a class="aia-btn" href="{% url 'ceo_dashboard' %}">CEO Dashboard</a>
+      <a class="aia-btn" href="{% url 'kpi_scorecard_dashboard' %}">KPI Scorecard</a>
+      <a class="aia-btn aia-btn--gold" href="{% url 'cash_flow_dashboard' %}">Cash Flow</a>
+    </div>
+  </div>
+
+  <form class="aia-filter" method="get">
+    <div class="aia-field">
+      <label for="days">Period</label>
+      <select id="days" name="days">
+        <option value="7" {% if filter_values.days == "7" %}selected{% endif %}>Last 7 days</option>
+        <option value="30" {% if filter_values.days == "30" %}selected{% endif %}>Last 30 days</option>
+        <option value="60" {% if filter_values.days == "60" %}selected{% endif %}>Last 60 days</option>
+        <option value="90" {% if filter_values.days == "90" %}selected{% endif %}>Last 90 days</option>
+        <option value="180" {% if filter_values.days == "180" %}selected{% endif %}>Last 180 days</option>
+      </select>
+    </div>
+    <div class="aia-field">
+      <label for="side">Side</label>
+      <select id="side" name="side">
+        {% for value,label in side_options %}
+          <option value="{{ value }}" {% if filter_values.side == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="aia-actions">
+      <button class="aia-btn aia-btn--gold" type="submit">Apply</button>
+      <a class="aia-btn" href="{% url 'ai_executive_advisor' %}">Reset</a>
+    </div>
+  </form>
+
+  <div class="aia-kpis">
+    {% for card in summary_cards %}
+      <div class="aia-card aia-card--{{ card.tone }}">
+        <span>{{ card.label }}</span>
+        <strong>{{ card.value }}</strong>
+        <small>{{ card.note }}</small>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="aia-layout">
+    <div>
+      <section class="aia-section">
+        <div class="aia-section-head">
+          <div>
+            <h2 class="aia-section-title">Department health scores</h2>
+            <div class="aia-section-note">Scores are calculated from current risk and activity signals.</div>
+          </div>
+        </div>
+        <div class="aia-score-grid">
+          {% for row in department_scores %}
+            <div class="aia-score">
+              <span>{{ row.label }}</span>
+              <strong>{{ row.score }}/100</strong>
+              <div style="margin-top:8px;"><span class="aia-badge aia-badge--{{ row.tone }}">{{ row.tone }}</span></div>
+              <div class="aia-section-note" style="margin-top:8px;">{{ row.detail }}</div>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="aia-section">
+        <div class="aia-section-head">
+          <div>
+            <h2 class="aia-section-title">Cash flow forecast</h2>
+            <div class="aia-section-note">Expected collections and supplier payments against current cash.</div>
+          </div>
+        </div>
+        {% for row in forecast_rows %}
+          <div class="aia-chart-row">
+            <div class="aia-muted">{{ row.label }}</div>
+            <div class="aia-bars">
+              <div class="aia-bar aia-bar-cash"><span style="width:{{ row.cash_bar }}%"></span></div>
+              <div class="aia-bar aia-bar-collections"><span style="width:{{ row.collections_bar }}%"></span></div>
+              <div class="aia-bar aia-bar-payments"><span style="width:{{ row.payments_bar }}%"></span></div>
+            </div>
+            <div class="aia-right"><span class="aia-badge {% if row.cash >= 0 %}aia-badge--good{% else %}aia-badge--bad{% endif %}">CAD {{ row.cash|floatformat:0|intcomma }}</span></div>
+          </div>
+        {% endfor %}
+      </section>
+
+      <section class="aia-section">
+        <div class="aia-section-head">
+          <div>
+            <h2 class="aia-section-title">Sales pipeline analysis</h2>
+            <div class="aia-section-note">Open pipeline and opportunity distribution by stage.</div>
+          </div>
+        </div>
+        {% if pipeline_rows %}
+          {% for row in pipeline_rows %}
+            <div class="aia-chart-row">
+              <div class="aia-muted">{{ row.label }}</div>
+              <div class="aia-bars">
+                <div class="aia-bar aia-bar-value"><span style="width:{{ row.value_bar }}%"></span></div>
+                <div class="aia-bar aia-bar-count"><span style="width:{{ row.count_bar }}%"></span></div>
+              </div>
+              <div class="aia-right"><span class="aia-badge aia-badge--blue">CAD {{ row.value|floatformat:0|intcomma }}</span></div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="aia-empty">No opportunity pipeline data found.</div>
+        {% endif %}
+      </section>
+
+      <section class="aia-section">
+        <div class="aia-section-head">
+          <div>
+            <h2 class="aia-section-title">Overdue receivables alerts</h2>
+            <div class="aia-section-note">Invoices requiring collection attention.</div>
+          </div>
+        </div>
+        <div class="aia-table-wrap">
+          {% if overdue_receivable_rows %}
+            <table class="aia-table">
+              <thead><tr><th>Invoice</th><th>Customer</th><th>Due</th><th class="aia-right">Balance</th></tr></thead>
+              <tbody>
+                {% for row in overdue_receivable_rows %}
+                  <tr>
+                    <td>{{ row.invoice.invoice_number }}</td>
+                    <td>{{ row.customer }}</td>
+                    <td>{{ row.due_date }}</td>
+                    <td class="aia-right">CAD {{ row.balance|floatformat:2|intcomma }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <div class="aia-empty">No overdue receivables found.</div>
+          {% endif %}
+        </div>
+      </section>
+    </div>
+
+    <div>
+      <section class="aia-section">
+        <div class="aia-section-head">
+          <div>
+            <h2 class="aia-section-title">Critical alerts</h2>
+            <div class="aia-section-note">Immediate executive-level warning signals.</div>
+          </div>
+        </div>
+        <div class="aia-alert-list">
+          {% for alert in critical_alerts %}
+            <div class="aia-alert aia-alert--{{ alert.tone }}">
+              <strong>{{ alert.title }}</strong>
+              <p>{{ alert.detail }}</p>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="aia-section">
+        <div class="aia-section-head">
+          <div>
+            <h2 class="aia-section-title">Recommended actions</h2>
+            <div class="aia-section-note">Prioritized next moves from current CRM signals.</div>
+          </div>
+        </div>
+        <div class="aia-action-list">
+          {% for action in recommended_actions %}
+            <div class="aia-action aia-action--{{ action.priority }}">
+              <strong>{{ action.title }} <span class="aia-badge {% if action.priority == 'High' %}aia-badge--bad{% else %}aia-badge--blue{% endif %}">{{ action.priority }}</span></strong>
+              <p>{{ action.detail }}</p>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="aia-section">
+        <div class="aia-section-head">
+          <div>
+            <h2 class="aia-section-title">Production and shipping warnings</h2>
+            <div class="aia-section-note">Factory and logistics risk snapshot.</div>
+          </div>
+        </div>
+        <div class="aia-table-wrap">
+          <table class="aia-table aia-table--compact">
+            <tbody>
+              <tr><td>Production running</td><td class="aia-right">{{ operations_metrics.production_running|intcomma }}</td></tr>
+              <tr><td>Production on hold</td><td class="aia-right">{{ operations_metrics.production_hold|intcomma }}</td></tr>
+              <tr><td>Production delayed</td><td class="aia-right">{{ operations_metrics.production_delayed|intcomma }}</td></tr>
+              <tr><td>Production due soon</td><td class="aia-right">{{ operations_metrics.production_due_soon|intcomma }}</td></tr>
+              <tr><td>Shipments in transit</td><td class="aia-right">{{ operations_metrics.shipments_in_transit|intcomma }}</td></tr>
+              <tr><td>Shipments delayed</td><td class="aia-right">{{ operations_metrics.shipments_delayed|intcomma }}</td></tr>
+              <tr><td>Shipments missing tracking</td><td class="aia-right">{{ operations_metrics.shipments_without_tracking|intcomma }}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="aia-section">
+        <div class="aia-section-head">
+          <div>
+            <h2 class="aia-section-title">AI chat panel</h2>
+            <div class="aia-section-note">Ask a read-only business question using current dashboard data.</div>
+          </div>
+        </div>
+        <div class="aia-chat">
+          <form method="get">
+            <input type="hidden" name="days" value="{{ filter_values.days }}">
+            <input type="hidden" name="side" value="{{ filter_values.side }}">
+            <div class="aia-field">
+              <label for="question">Business question</label>
+              <textarea id="question" name="question" placeholder="Ask about cash flow, receivables, sales, production, shipping, or marketing.">{{ filter_values.question }}</textarea>
+            </div>
+            <div class="aia-actions" style="margin-top:10px;">
+              <button class="aia-btn aia-btn--gold" type="submit">Ask Advisor</button>
+              <a class="aia-btn" href="{% url 'ai_executive_advisor' %}?days={{ filter_values.days }}&side={{ filter_values.side }}">Clear</a>
+            </div>
+          </form>
+          {% if advisor_answer %}
+            <div class="aia-answer">{{ advisor_answer }}</div>
+          {% else %}
+            <div class="aia-answer">Ask a question to get a concise answer from current CRM metrics. This panel is read-only and does not modify CRM data.</div>
+          {% endif %}
+          <div class="aia-suggestions">
+            {% for question in suggested_questions %}
+              <a class="aia-btn" href="{% url 'ai_executive_advisor' %}?days={{ filter_values.days }}&side={{ filter_values.side }}&question={{ question|urlencode }}">{{ question }}</a>
+            {% endfor %}
+          </div>
+        </div>
+      </section>
+
+      <section class="aia-section">
+        <div class="aia-section-head">
+          <div>
+            <h2 class="aia-section-title">Marketing and finance context</h2>
+            <div class="aia-section-note">Supporting signals behind the recommendations.</div>
+          </div>
+        </div>
+        <div class="aia-table-wrap">
+          <table class="aia-table aia-table--compact">
+            <tbody>
+              <tr><td>Website visitors</td><td class="aia-right">{{ marketing_metrics.website_visitors|intcomma }}</td></tr>
+              <tr><td>Google clicks / impressions</td><td class="aia-right">{{ marketing_metrics.search_clicks|intcomma }} / {{ marketing_metrics.search_impressions|intcomma }}</td></tr>
+              <tr><td>Social engagement / reach</td><td class="aia-right">{{ marketing_metrics.social_engagement|intcomma }} / {{ marketing_metrics.social_reach|intcomma }}</td></tr>
+              <tr><td>Active campaigns</td><td class="aia-right">{{ marketing_metrics.active_campaigns|intcomma }}</td></tr>
+              <tr><td>Open AI marketing insights</td><td class="aia-right">{{ marketing_metrics.open_insights|intcomma }}</td></tr>
+              <tr><td>Accounting revenue</td><td class="aia-right">CAD {{ finance_metrics.revenue|floatformat:2|intcomma }}</td></tr>
+              <tr><td>Accounting expenses</td><td class="aia-right">CAD {{ finance_metrics.expenses|floatformat:2|intcomma }}</td></tr>
+              <tr><td>Current cash baseline</td><td class="aia-right">CAD {{ finance_metrics.current_cash|floatformat:2|intcomma }}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
