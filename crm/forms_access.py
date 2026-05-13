@@ -21,6 +21,7 @@ class UserAccessForm(forms.ModelForm):
             "can_whatsapp",
             "can_costing",
             "can_costing_approve",
+            "can_view_ceo_tools",
             "can_accounting_bd",
             "can_accounting_ca",
             "can_library",
@@ -42,15 +43,18 @@ class UserAccessForm(forms.ModelForm):
             "can_whatsapp": "WhatsApp",
             "can_costing": "Costing",
             "can_costing_approve": "Costing approve/lock",
+            "can_view_ceo_tools": "CEO tools",
             "can_accounting_bd": "Accounting BD",
             "can_accounting_ca": "Accounting CA",
             "can_library": "Library",
         }
         help_texts = {
             "can_accounting_ca": "CA accounting is never allowed for BD users.",
+            "can_view_ceo_tools": "Restricts CEO Dashboard, AI Executive Advisor, and Daily Briefing access.",
         }
 
     def __init__(self, *args, **kwargs):
+        can_manage_ceo_tools = kwargs.pop("can_manage_ceo_tools", False)
         super().__init__(*args, **kwargs)
 
         # Add Bootstrap checkbox class to all boolean fields
@@ -65,6 +69,10 @@ class UserAccessForm(forms.ModelForm):
 
         if "can_accounting_ca" in self.fields:
             self.fields["can_accounting_ca"].widget.attrs["data-ca-checkbox"] = "1"
+
+        if "can_view_ceo_tools" in self.fields and not can_manage_ceo_tools:
+            self.fields["can_view_ceo_tools"].disabled = True
+            self.fields["can_view_ceo_tools"].help_text = "Only superusers can grant or remove CEO tools access."
 
         # Pick role from posted data first (so it updates on submit),
         # otherwise use instance role

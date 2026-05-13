@@ -3,6 +3,7 @@
 from functools import wraps
 from django.http import HttpResponseForbidden
 from django.db.utils import OperationalError, ProgrammingError
+from django.shortcuts import render
 
 from .models_access import UserAccess
 
@@ -120,3 +121,27 @@ def require_any_access(*flag_names):
         return wrapper
 
     return decorator
+
+
+def require_ceo_tools(view_func):
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        user = request.user
+
+        if not user.is_authenticated:
+            return HttpResponseForbidden("Login required")
+
+        if user.is_superuser:
+            return view_func(request, *args, **kwargs)
+
+        try:
+            access = get_access(user)
+        except (OperationalError, ProgrammingError):
+            return HttpResponseForbidden("Access data not ready. Please run migrations.")
+
+        if _has_flag(access, "can_view_ceo_tools"):
+            return view_func(request, *args, **kwargs)
+
+        return render(request, "crm/access_denied.html", {"required_permission": "CEO tools"}, status=403)
+
+    return wrapper

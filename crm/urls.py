@@ -17,7 +17,7 @@ try:
     from . import views_whatsapp as wa
 except Exception:
     wa = None
-from .permissions import bd_blocked, require_access, require_any_access
+from .permissions import bd_blocked, require_access, require_any_access, require_ceo_tools
 
 
 def home_redirect(request):
@@ -41,16 +41,20 @@ def wa_perm(view_func):
     return login_required(require_any_access("can_whatsapp", "can_leads")(view_func))
 
 
+def ceo_perm(view_func):
+    return login_required(require_ceo_tools(view_func))
+
+
 urlpatterns = [
     path("", home_redirect, name="home"),
     path("accounts/", include("django.contrib.auth.urls")),
     path("lead-brain/", include("leadbrain.urls")),
 
     path("main-dashboard/", login_required(views.main_dashboard), name="main_dashboard"),
-    path("ceo-dashboard/", login_required(views.ceo_dashboard), name="ceo_dashboard"),
-    path("ai-executive-advisor/", login_required(views.ai_executive_advisor), name="ai_executive_advisor"),
-    path("daily-ceo-briefing/", login_required(views.daily_ceo_briefing), name="daily_ceo_briefing"),
-    path("daily-ceo-briefing/email-draft/", login_required(views.daily_ceo_briefing_email_draft), name="daily_ceo_briefing_email_draft"),
+    path("ceo-dashboard/", ceo_perm(views.ceo_dashboard), name="ceo_dashboard"),
+    path("ai-executive-advisor/", ceo_perm(views.ai_executive_advisor), name="ai_executive_advisor"),
+    path("daily-ceo-briefing/", ceo_perm(views.daily_ceo_briefing), name="daily_ceo_briefing"),
+    path("daily-ceo-briefing/email-draft/", ceo_perm(views.daily_ceo_briefing_email_draft), name="daily_ceo_briefing_email_draft"),
 
     # AI Hub
     path("ai/", perm("can_ai", ai.ai_hub), name="ai_hub"),

@@ -31,9 +31,17 @@ def access_list(request):
         if target_user.is_superuser and not request.user.is_superuser:
             return HttpResponseForbidden("No access")
 
-        form = UserAccessForm(request.POST, instance=access, prefix=f"user_{target_user.id}")
+        original_ceo_tools_access = access.can_view_ceo_tools
+        form = UserAccessForm(
+            request.POST,
+            instance=access,
+            prefix=f"user_{target_user.id}",
+            can_manage_ceo_tools=request.user.is_superuser,
+        )
         if form.is_valid():
             obj = form.save(commit=False)
+            if not request.user.is_superuser:
+                obj.can_view_ceo_tools = original_ceo_tools_access
             if obj.role == UserAccess.ROLE_BD:
                 obj.can_accounting_ca = False
             obj.save()
@@ -55,7 +63,7 @@ def access_list(request):
         ("Operations", ["can_inventory", "can_library", "can_production", "can_shipping"]),
         ("Engagement", ["can_ai", "can_marketing", "can_whatsapp"]),
         ("Costing", ["can_costing", "can_costing_approve"]),
-        ("Admin / Accounting", ["can_accounting_bd", "can_accounting_ca"]),
+        ("Admin / Accounting", ["can_view_ceo_tools", "can_accounting_bd", "can_accounting_ca"]),
     ]
 
     rows = []
@@ -65,7 +73,11 @@ def access_list(request):
         if error_form is not None and error_user_id == u.id:
             form = error_form
         else:
-            form = UserAccessForm(instance=access, prefix=f"user_{u.id}")
+            form = UserAccessForm(
+                instance=access,
+                prefix=f"user_{u.id}",
+                can_manage_ceo_tools=request.user.is_superuser,
+            )
 
         if not can_edit:
             for field in form.fields.values():
@@ -116,9 +128,16 @@ def access_edit(request, user_id):
         return HttpResponseForbidden("No access")
 
     if request.method == "POST":
-        form = UserAccessForm(request.POST, instance=access)
+        original_ceo_tools_access = access.can_view_ceo_tools
+        form = UserAccessForm(
+            request.POST,
+            instance=access,
+            can_manage_ceo_tools=request.user.is_superuser,
+        )
         if form.is_valid():
             obj = form.save(commit=False)
+            if not request.user.is_superuser:
+                obj.can_view_ceo_tools = original_ceo_tools_access
 
             # Extra safety: BD can never have CA accounting
             if obj.role == UserAccess.ROLE_BD:
@@ -127,7 +146,7 @@ def access_edit(request, user_id):
             obj.save()
             return redirect("access_list")
     else:
-        form = UserAccessForm(instance=access)
+        form = UserAccessForm(instance=access, can_manage_ceo_tools=request.user.is_superuser)
 
     return render(
         request,

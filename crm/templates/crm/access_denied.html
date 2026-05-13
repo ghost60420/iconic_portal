@@ -1,0 +1,90 @@
+{% extends "crm/base.html" %}
+{% block content %}
+
+<style>
+  .access-denied-wrap {
+    max-width: 760px;
+    margin: 48px auto;
+    color: #f8fafc;
+  }
+  .access-denied-card {
+    border: 1px solid rgba(251, 191, 36, 0.28);
+    border-radius: 22px;
+    background:
+      linear-gradient(135deg, rgba(251, 191, 36, 0.12), transparent 38%),
+      linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(2, 6, 23, 0.96));
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.38);
+    padding: 26px;
+  }
+  .access-denied-kicker {
+    color: #f5c451;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .access-denied-title {
+    margin: 0;
+    font-size: 30px;
+    line-height: 1.1;
+    font-weight: 950;
+  }
+  .access-denied-text {
+    margin: 12px 0 0;
+    color: #94a3b8;
+    font-size: 14px;
+    line-height: 1.55;
+    font-weight: 750;
+  }
+  .access-denied-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 18px;
+  }
+  .access-denied-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    padding: 9px 13px;
+    border-radius: 14px;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    background: rgba(15, 23, 42, 0.82);
+    color: #f8fafc;
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 900;
+  }
+  .access-denied-btn:hover {
+    color: #f8fafc;
+    border-color: rgba(245, 196, 81, 0.55);
+  }
+  .access-denied-btn-primary {
+    background: linear-gradient(135deg, #f6d365, #d9a622);
+    color: #111827;
+    border-color: rgba(245, 196, 81, 0.55);
+  }
+  .access-denied-btn-primary:hover {
+    color: #111827;
+  }
+</style>
+
+<div class="access-denied-wrap">
+  <section class="access-denied-card">
+    <div class="access-denied-kicker">Access denied</div>
+    <h1 class="access-denied-title">This page is restricted.</h1>
+    <p class="access-denied-text">
+      Your account does not have {{ required_permission|default:"the required permission" }} access. Contact an administrator if this should be changed.
+    </p>
+    <div class="access-denied-actions">
+      <a class="access-denied-btn access-denied-btn-primary" href="{% url 'main_dashboard' %}">Back to CRM</a>
+      {% if request.user.is_staff %}
+        <a class="access-denied-btn" href="{% url 'access_list' %}">Access Settings</a>
+      {% endif %}
+    </div>
+  </section>
+</div>
+
+{% endblock %}

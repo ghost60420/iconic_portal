@@ -316,16 +316,18 @@
           <a href="{{ leads_url }}" class="crm-nav-item primary"><span>🏠</span><strong>CRM</strong></a>
         {% endif %}
 
-        {% if ceo_dash_url %}
-          <a href="{{ ceo_dash_url }}" class="crm-nav-item hot"><span>👑</span><strong>CEO Dashboard</strong></a>
-        {% endif %}
+        {% if request.user.is_superuser or request.user.access.can_view_ceo_tools %}
+          {% if ceo_dash_url %}
+            <a href="{{ ceo_dash_url }}" class="crm-nav-item hot"><span>👑</span><strong>CEO Dashboard</strong></a>
+          {% endif %}
 
-        {% if ai_executive_advisor_url %}
-          <a href="{{ ai_executive_advisor_url }}" class="crm-nav-item hot"><span>AI</span><strong>AI Executive Advisor</strong></a>
-        {% endif %}
+          {% if ai_executive_advisor_url %}
+            <a href="{{ ai_executive_advisor_url }}" class="crm-nav-item hot"><span>AI</span><strong>AI Executive Advisor</strong></a>
+          {% endif %}
 
-        {% if daily_ceo_briefing_url %}
-          <a href="{{ daily_ceo_briefing_url }}" class="crm-nav-item hot"><span>AM</span><strong>Daily Briefing</strong></a>
+          {% if daily_ceo_briefing_url %}
+            <a href="{{ daily_ceo_briefing_url }}" class="crm-nav-item hot"><span>AM</span><strong>Daily Briefing</strong></a>
+          {% endif %}
         {% endif %}
 
         {% if leads_url %}

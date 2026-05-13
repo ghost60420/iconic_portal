@@ -36,6 +36,7 @@ class UserAccess(models.Model):
     can_whatsapp = models.BooleanField(default=True)
     can_costing = models.BooleanField(default=True)
     can_costing_approve = models.BooleanField(default=False)
+    can_view_ceo_tools = models.BooleanField(default=False)
 
     # Accounting checkmarks
     can_accounting_bd = models.BooleanField(default=True)
@@ -62,6 +63,9 @@ class UserAccess(models.Model):
         # Hard rule: BD can never have CA accounting
         if self.role == self.ROLE_BD:
             self.can_accounting_ca = False
+        # Superusers always retain executive access even if the checkbox is posted off.
+        if self.user_id and self.user.is_superuser:
+            self.can_view_ceo_tools = True
 
     def save(self, *args, **kwargs):
         self.clean()
