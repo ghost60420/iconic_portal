@@ -1,0 +1,246 @@
+{% extends "crm/base.html" %}
+{% block content %}
+
+<style>
+  :root{
+    --draft-line:#263348;
+    --draft-text:#f8fafc;
+    --draft-muted:#94a3b8;
+    --draft-gold:#f5c451;
+    --draft-good:#4ade80;
+    --draft-warn:#fbbf24;
+    --draft-blue:#60a5fa;
+  }
+  .draft-wrap{max-width:1180px;margin:0 auto;color:var(--draft-text);}
+  .draft-hero{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:18px;
+    flex-wrap:wrap;
+    padding:22px;
+    border:1px solid rgba(245,196,81,0.25);
+    border-radius:22px;
+    background:
+      linear-gradient(135deg, rgba(245,196,81,0.14), transparent 38%),
+      linear-gradient(180deg, rgba(15,23,42,0.96), rgba(2,6,23,0.96));
+    box-shadow:0 24px 60px rgba(0,0,0,0.42);
+    margin-bottom:16px;
+  }
+  .draft-kicker{color:var(--draft-gold);font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;}
+  .draft-title{margin:0;font-size:30px;line-height:1.1;font-weight:950;}
+  .draft-sub{margin-top:8px;max-width:760px;color:var(--draft-muted);font-size:13px;line-height:1.5;font-weight:750;}
+  .draft-actions{display:flex;gap:10px;flex-wrap:wrap;}
+  .draft-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-height:40px;
+    padding:9px 13px;
+    border-radius:14px;
+    border:1px solid rgba(148,163,184,0.25);
+    background:rgba(15,23,42,0.82);
+    color:var(--draft-text);
+    text-decoration:none;
+    font-size:12px;
+    font-weight:900;
+    cursor:pointer;
+  }
+  .draft-btn:hover{color:var(--draft-text);border-color:rgba(245,196,81,0.55);}
+  .draft-btn--gold{background:linear-gradient(135deg, #f6d365, #d9a622);color:#111827;border-color:rgba(245,196,81,0.55);}
+  .draft-btn--gold:hover{color:#111827;}
+  .draft-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(320px,.8fr);gap:14px;align-items:start;}
+  .draft-panel{
+    border:1px solid var(--draft-line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.94), rgba(2,6,23,0.94));
+    overflow:hidden;
+    margin-bottom:14px;
+  }
+  .draft-panel-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    flex-wrap:wrap;
+    padding:14px 16px;
+    border-bottom:1px solid rgba(148,163,184,0.16);
+  }
+  .draft-panel-title{margin:0;font-size:15px;font-weight:950;}
+  .draft-note{color:var(--draft-muted);font-size:12px;font-weight:800;}
+  .draft-body{padding:14px;}
+  .draft-field{margin-bottom:14px;}
+  .draft-field label{
+    display:block;
+    margin-bottom:6px;
+    color:var(--draft-muted);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.07em;
+  }
+  .draft-field input,
+  .draft-field textarea{
+    width:100%;
+    border:1px solid rgba(148,163,184,0.26);
+    border-radius:14px;
+    background:#030712;
+    color:var(--draft-text);
+    padding:11px 12px;
+    font-size:13px;
+    font-weight:750;
+    line-height:1.55;
+  }
+  .draft-field textarea{min-height:520px;resize:vertical;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;}
+  .draft-copy-status{min-height:18px;color:var(--draft-good);font-size:12px;font-weight:850;}
+  .draft-alert{
+    border:1px solid rgba(251,191,36,0.30);
+    border-radius:16px;
+    background:rgba(251,191,36,0.08);
+    padding:12px;
+    color:#fde68a;
+    font-size:12px;
+    font-weight:800;
+    line-height:1.45;
+  }
+  .draft-mini-list{display:grid;gap:10px;}
+  .draft-mini{
+    border:1px solid rgba(148,163,184,0.17);
+    border-radius:16px;
+    background:rgba(3,7,18,0.68);
+    padding:12px;
+  }
+  .draft-mini span{display:block;color:var(--draft-muted);font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.07em;}
+  .draft-mini strong{display:block;margin-top:7px;font-size:18px;font-weight:950;}
+  .draft-mini small{display:block;margin-top:6px;color:var(--draft-muted);font-size:11px;font-weight:800;line-height:1.45;}
+  @media (max-width:980px){.draft-grid{grid-template-columns:1fr;}}
+  @media (max-width:640px){
+    .draft-title{font-size:24px;}
+    .draft-actions{width:100%;}
+    .draft-btn{width:100%;}
+  }
+</style>
+
+<div class="draft-wrap">
+  <section class="draft-hero">
+    <div>
+      <div class="draft-kicker">Daily CEO briefing email draft</div>
+      <h1 class="draft-title">Email Draft Preview</h1>
+      <div class="draft-sub">
+        Review and edit this draft before using it. This page does not send, queue, or save any email automatically.
+      </div>
+    </div>
+    <div class="draft-actions">
+      <a class="draft-btn" href="{{ briefing_url }}">Back to Briefing</a>
+      <button class="draft-btn draft-btn--gold" type="button" data-copy-target="draft-body">Copy Body</button>
+    </div>
+  </section>
+
+  <div class="draft-grid">
+    <main class="draft-panel">
+      <div class="draft-panel-head">
+        <h2 class="draft-panel-title">Generated Draft</h2>
+        <div class="draft-note">Generated {{ draft_generated_at|date:"M d, Y g:i A" }}</div>
+      </div>
+      <div class="draft-body">
+        <div class="draft-field">
+          <label for="draft-subject">Subject</label>
+          <input id="draft-subject" type="text" value="{{ email_subject }}">
+        </div>
+        <div class="draft-field">
+          <label for="draft-body">Body</label>
+          <textarea id="draft-body">{{ email_body }}</textarea>
+        </div>
+        <div class="draft-actions">
+          <button class="draft-btn" type="button" data-copy-target="draft-subject">Copy Subject</button>
+          <button class="draft-btn draft-btn--gold" type="button" data-copy-target="draft-body">Copy Body</button>
+        </div>
+        <div class="draft-copy-status" data-copy-status aria-live="polite"></div>
+      </div>
+    </main>
+
+    <aside>
+      <section class="draft-panel">
+        <div class="draft-panel-head">
+          <h2 class="draft-panel-title">Draft Safety</h2>
+        </div>
+        <div class="draft-body">
+          <div class="draft-alert">{{ draft_notice }}</div>
+        </div>
+      </section>
+
+      <section class="draft-panel">
+        <div class="draft-panel-head">
+          <h2 class="draft-panel-title">Included Sections</h2>
+          <div class="draft-note">{{ range_label }}</div>
+        </div>
+        <div class="draft-body">
+          <div class="draft-mini-list">
+            <div class="draft-mini">
+              <span>Sales</span>
+              <strong>{{ new_leads_total }} leads</strong>
+              <small>{{ opportunities_needing_followup }} opportunity follow-up(s).</small>
+            </div>
+            <div class="draft-mini">
+              <span>Operations</span>
+              <strong>{{ production_delays }} production delays</strong>
+              <small>{{ shipments_delayed }} delayed shipment(s), {{ shipments_due_soon }} shipment(s) due soon.</small>
+            </div>
+            <div class="draft-mini">
+              <span>Accounting</span>
+              <strong>${{ overdue_receivables|floatformat:2 }}</strong>
+              <small>{{ overdue_invoice_count }} overdue invoice(s), ${{ payables_due_soon|floatformat:2 }} payables due soon.</small>
+            </div>
+            <div class="draft-mini">
+              <span>Cash</span>
+              <strong>${{ current_cash|floatformat:2 }}</strong>
+              <small>{% if cash_flow_warning %}Cash warning included.{% else %}No immediate cash warning included.{% endif %}</small>
+            </div>
+          </div>
+        </div>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const status = document.querySelector("[data-copy-status]");
+
+    function setStatus(message) {
+      if (!status) return;
+      status.textContent = message;
+      window.setTimeout(function () {
+        status.textContent = "";
+      }, 2600);
+    }
+
+    function copyValue(targetId) {
+      const field = document.getElementById(targetId);
+      if (!field) return;
+      field.focus();
+      field.select();
+      const value = field.value || "";
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(value).then(function () {
+          setStatus("Copied to clipboard.");
+        }).catch(function () {
+          document.execCommand("copy");
+          setStatus("Copied to clipboard.");
+        });
+      } else {
+        document.execCommand("copy");
+        setStatus("Copied to clipboard.");
+      }
+    }
+
+    document.addEventListener("click", function (event) {
+      const button = event.target.closest("[data-copy-target]");
+      if (!button) return;
+      copyValue(button.getAttribute("data-copy-target"));
+    });
+  })();
+</script>
+
+{% endblock %}

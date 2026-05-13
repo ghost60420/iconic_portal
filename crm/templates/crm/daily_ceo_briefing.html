@@ -48,6 +48,7 @@
   }
   .brief-date span{display:block;color:var(--brief-muted);font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.07em;}
   .brief-date strong{display:block;margin-top:7px;font-size:16px;font-weight:950;}
+  .brief-hero-side{display:grid;gap:10px;justify-items:stretch;}
 
   .brief-filter{
     display:grid;
@@ -253,9 +254,12 @@
         A read-only morning view of sales, production, shipping, receivables, cash position, marketing signals, and recommended actions.
       </div>
     </div>
-    <div class="brief-date">
-      <span>Report window</span>
-      <strong>{{ range_label }}</strong>
+    <div class="brief-hero-side">
+      <div class="brief-date">
+        <span>Report window</span>
+        <strong>{{ range_label }}</strong>
+      </div>
+      <a class="brief-btn brief-btn--gold" href="{{ email_draft_url }}">Generate Email Draft</a>
     </div>
   </section>
 

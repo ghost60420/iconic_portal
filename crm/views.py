@@ -9444,8 +9444,160 @@ def _briefing_invoice_side(invoice):
     return "BD" if currency == "BDT" else "CA"
 
 
-@login_required
-def daily_ceo_briefing(request):
+def _briefing_option_label(options, value, fallback):
+    for option_value, label in options:
+        if option_value == value:
+            return label
+    return fallback
+
+
+def _briefing_date_label(value):
+    return value.strftime("%b %d, %Y") if value else "No date"
+
+
+def _briefing_person_label(user):
+    if not user:
+        return "Unassigned"
+    full_name = ""
+    try:
+        full_name = user.get_full_name()
+    except Exception:
+        full_name = ""
+    return full_name or getattr(user, "username", "") or "Assigned"
+
+
+def _briefing_lead_label(lead):
+    return getattr(lead, "account_brand", "") or getattr(lead, "contact_name", "") or getattr(lead, "lead_id", "") or "Unnamed lead"
+
+
+def _briefing_opportunity_customer_label(opportunity):
+    customer = getattr(opportunity, "customer", None)
+    if customer:
+        return _briefing_customer_label(customer)
+    lead = getattr(opportunity, "lead", None)
+    return getattr(lead, "account_brand", "") or "No customer"
+
+
+def _build_daily_ceo_briefing_email_draft(context):
+    side_label = _briefing_option_label(
+        context.get("side_options", []),
+        context.get("filter_values", {}).get("side", ""),
+        "All sides",
+    )
+    department_label = _briefing_option_label(
+        context.get("department_options", []),
+        context.get("filter_values", {}).get("department", ""),
+        "All departments",
+    )
+    subject = f"Daily CEO Briefing - {context.get('range_label', 'Today')}"
+    lines = [
+        "Daily CEO Briefing",
+        f"Report window: {context.get('range_label', '')}",
+        f"Side: {side_label}",
+        f"Department: {department_label}",
+        "",
+        "Draft only. No email has been sent automatically.",
+        "",
+        "EXECUTIVE SUMMARY",
+    ]
+
+    for card in context.get("executive_summary", []):
+        lines.append(f"- {card.get('label')}: {card.get('value')} - {card.get('note')}")
+
+    lines.extend(["", "NEW LEADS"])
+    new_leads = context.get("new_leads") or []
+    if new_leads:
+        for lead in new_leads:
+            priority = getattr(lead, "priority", "") or getattr(lead, "priority_level", "") or "Normal"
+            source = getattr(lead, "source", "") or "Unknown source"
+            product = getattr(lead, "product_interest", "") or "No product listed"
+            assigned = _briefing_person_label(getattr(lead, "assigned_to", None))
+            lines.append(f"- {_briefing_lead_label(lead)} ({getattr(lead, 'lead_id', 'No ID')}): {priority}, {source}, {product}, assigned to {assigned}.")
+    else:
+        lines.append("- No new leads in this briefing window.")
+
+    lines.extend(["", "OPPORTUNITY FOLLOW UPS"])
+    opportunity_rows = context.get("open_opportunity_rows") or []
+    if opportunity_rows:
+        for opportunity in opportunity_rows:
+            amount = _format_money(getattr(opportunity, "order_value", None))
+            lines.append(
+                f"- {getattr(opportunity, 'opportunity_id', 'Opportunity')}: "
+                f"{_briefing_opportunity_customer_label(opportunity)}, "
+                f"{getattr(opportunity, 'stage', 'No stage')}, "
+                f"next follow up {_briefing_date_label(getattr(opportunity, 'next_followup', None))}, "
+                f"value {amount}."
+            )
+    else:
+        lines.append("- No open opportunity follow-ups need attention for this filter.")
+
+    lines.extend(["", "PRODUCTION ALERTS"])
+    production_rows = context.get("production_alert_rows") or []
+    if production_rows:
+        for order in production_rows:
+            customer = _briefing_customer_label(getattr(order, "customer", None))
+            product = getattr(getattr(order, "product", None), "name", "") or "No product"
+            lines.append(
+                f"- {getattr(order, 'order_code', '') or getattr(order, 'title', 'Production order')}: "
+                f"{customer}, {product}, status {order.get_status_display()}, "
+                f"deadline {_briefing_date_label(getattr(order, 'bulk_deadline', None))}, "
+                f"qty {getattr(order, 'qty_total', 0)}."
+            )
+    else:
+        lines.append("- No production delay or due-soon alerts for this filter.")
+
+    lines.extend(["", "SHIPPING ALERTS"])
+    shipping_rows = context.get("shipping_alert_rows") or []
+    if shipping_rows:
+        for shipment in shipping_rows:
+            customer = _briefing_customer_label(getattr(shipment, "customer", None))
+            tracking = getattr(shipment, "tracking_number", "") or "Pending tracking"
+            lines.append(
+                f"- {tracking}: {customer}, carrier {shipment.get_carrier_display()}, "
+                f"status {shipment.get_status_display()}, ship date {_briefing_date_label(getattr(shipment, 'ship_date', None))}."
+            )
+    else:
+        lines.append("- No delayed or due-soon shipments for this filter.")
+
+    lines.extend(["", "OVERDUE INVOICES"])
+    overdue_rows = context.get("overdue_invoice_rows") or []
+    if overdue_rows:
+        for row in overdue_rows:
+            lines.append(
+                f"- {row.get('invoice')}: {row.get('customer')}, "
+                f"due {_briefing_date_label(row.get('due_date'))}, "
+                f"balance {_format_money(row.get('balance'))}, side {row.get('side')}."
+            )
+    else:
+        lines.append("- No overdue invoices for this filter.")
+
+    lines.extend(
+        [
+            "",
+            "CASH POSITION",
+            f"- Current cash estimate: {_format_money(context.get('current_cash'))}",
+            f"- Period revenue: {_format_money(context.get('period_revenue'))}",
+            f"- Period expenses: {_format_money(context.get('period_expenses'))}",
+            f"- Period net cash: {_format_money(context.get('period_net_cash'))}",
+            f"- Payables due soon: {_format_money(context.get('payables_due_soon'))}",
+            f"- Open receivables: {_format_money(context.get('invoice_open_total'))}",
+            f"- Cash warning: {'Yes' if context.get('cash_flow_warning') else 'No'}",
+            "",
+            "RECOMMENDED ACTIONS",
+        ]
+    )
+    for action in context.get("recommended_actions", []):
+        lines.append(f"- {action.get('title')}: {action.get('detail')}")
+
+    lines.extend(["", "AI STYLE RECOMMENDATIONS"])
+    for recommendation in context.get("ai_recommendations", []):
+        lines.append(f"- {recommendation.get('title')}: {recommendation.get('detail')}")
+
+    lines.extend(["", "Review this draft before sending."])
+    return subject, "\n".join(lines)
+
+
+def _build_daily_ceo_briefing_context(request):
     today = timezone.localdate()
     date_from = _briefing_parse_date(request.GET.get("date_from"), today)
     date_to = _briefing_parse_date(request.GET.get("date_to"), today)
@@ -9697,6 +9849,10 @@ def daily_ceo_briefing(request):
         "marketing": _show("marketing"),
     }
 
+    email_draft_url = reverse("daily_ceo_briefing_email_draft")
+    if request.GET.urlencode():
+        email_draft_url = f"{email_draft_url}?{request.GET.urlencode()}"
+
     context = {
         "today": today,
         "range_label": range_label,
@@ -9743,8 +9899,33 @@ def daily_ceo_briefing(request):
         "recommended_actions": recommended_actions,
         "ai_recommendations": ai_recommendations,
         "email_future_note": "Daily email delivery can be added later, but no automatic emails are sent by this page.",
+        "email_draft_url": email_draft_url,
     }
-    return render(request, "crm/daily_ceo_briefing.html", context)
+    return context
+
+
+@login_required
+def daily_ceo_briefing(request):
+    return render(request, "crm/daily_ceo_briefing.html", _build_daily_ceo_briefing_context(request))
+
+
+@login_required
+def daily_ceo_briefing_email_draft(request):
+    context = _build_daily_ceo_briefing_context(request)
+    subject, body = _build_daily_ceo_briefing_email_draft(context)
+    briefing_url = reverse("daily_ceo_briefing")
+    if request.GET.urlencode():
+        briefing_url = f"{briefing_url}?{request.GET.urlencode()}"
+    context.update(
+        {
+            "email_subject": subject,
+            "email_body": body,
+            "briefing_url": briefing_url,
+            "draft_generated_at": timezone.localtime(),
+            "draft_notice": "This is a preview draft only. No email was sent, queued, or saved to the outbox.",
+        }
+    )
+    return render(request, "crm/daily_ceo_briefing_email_draft.html", context)
 
 
 @login_required
