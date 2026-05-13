@@ -1,0 +1,551 @@
+{% extends "crm/base.html" %}
+{% load humanize %}
+{% block content %}
+
+<style>
+  :root{
+    --bva-line:#263348;
+    --bva-text:#f8fafc;
+    --bva-muted:#94a3b8;
+    --bva-gold:#f5c451;
+    --bva-good:#4ade80;
+    --bva-warn:#fbbf24;
+    --bva-bad:#fb7185;
+    --bva-blue:#60a5fa;
+  }
+
+  .bva-wrap{ max-width:1360px; margin:0 auto; color:var(--bva-text); }
+
+  .bva-hero{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:16px;
+    flex-wrap:wrap;
+    padding:22px;
+    border:1px solid rgba(245,196,81,0.22);
+    border-radius:22px;
+    background:
+      linear-gradient(135deg, rgba(245,196,81,0.15), transparent 38%),
+      linear-gradient(180deg, rgba(15,23,42,0.96), rgba(2,6,23,0.96));
+    box-shadow:0 24px 60px rgba(0,0,0,0.42);
+    margin-bottom:16px;
+  }
+
+  .bva-kicker{
+    color:var(--bva-gold);
+    font-size:12px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    margin-bottom:6px;
+  }
+
+  .bva-title{ margin:0; font-size:30px; line-height:1.1; font-weight:900; }
+  .bva-sub{ margin-top:8px; max-width:830px; color:var(--bva-muted); font-size:13px; line-height:1.5; font-weight:700; }
+
+  .bva-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+  .bva-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-height:38px;
+    padding:9px 13px;
+    border-radius:14px;
+    border:1px solid rgba(148,163,184,0.25);
+    background:rgba(15,23,42,0.82);
+    color:var(--bva-text);
+    text-decoration:none;
+    font-size:12px;
+    font-weight:900;
+  }
+  .bva-btn:hover{ color:var(--bva-text); border-color:rgba(245,196,81,0.55); }
+  .bva-btn--gold{ background:linear-gradient(135deg, #f6d365, #d9a622); color:#111827; border-color:rgba(245,196,81,0.55); }
+  .bva-btn--gold:hover{ color:#111827; }
+
+  .bva-filter{
+    display:grid;
+    grid-template-columns:repeat(7, minmax(0,1fr));
+    gap:12px;
+    padding:14px;
+    border:1px solid var(--bva-line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.92), rgba(2,6,23,0.92));
+    margin-bottom:16px;
+  }
+
+  .bva-field label{
+    display:block;
+    margin-bottom:6px;
+    color:var(--bva-muted);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.07em;
+  }
+
+  .bva-field input,
+  .bva-field select{
+    width:100%;
+    min-height:42px;
+    border:1px solid rgba(148,163,184,0.26);
+    border-radius:14px;
+    background:#030712;
+    color:var(--bva-text);
+    padding:9px 11px;
+    font-size:13px;
+    font-weight:800;
+  }
+
+  .bva-filter-actions{ display:flex; gap:8px; align-items:end; }
+
+  .bva-summary{
+    display:grid;
+    grid-template-columns:repeat(4, minmax(0,1fr));
+    gap:12px;
+    margin-bottom:16px;
+  }
+
+  .bva-card{
+    padding:15px;
+    border:1px solid var(--bva-line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.94), rgba(2,6,23,0.94));
+    box-shadow:0 18px 44px rgba(0,0,0,0.32);
+  }
+
+  .bva-card span{ display:block; color:var(--bva-muted); font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:.08em; }
+  .bva-card strong{ display:block; margin-top:8px; color:var(--bva-text); font-size:23px; line-height:1.12; font-weight:900; }
+  .bva-card small{ display:block; margin-top:7px; color:var(--bva-muted); font-size:12px; line-height:1.45; font-weight:800; }
+
+  .bva-grid{
+    display:grid;
+    grid-template-columns:minmax(0,1.35fr) minmax(360px,.95fr);
+    gap:14px;
+    align-items:start;
+  }
+
+  .bva-section{
+    border:1px solid var(--bva-line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.94), rgba(2,6,23,0.94));
+    overflow:hidden;
+    margin-bottom:14px;
+  }
+
+  .bva-section-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    flex-wrap:wrap;
+    padding:14px 16px;
+    border-bottom:1px solid rgba(148,163,184,0.16);
+  }
+
+  .bva-section-title{ margin:0; font-size:15px; font-weight:900; }
+  .bva-section-note{ color:var(--bva-muted); font-size:12px; font-weight:800; }
+  .bva-muted{ color:var(--bva-muted); font-size:12px; font-weight:800; }
+
+  .bva-table-wrap{ overflow-x:auto; }
+  .bva-table{ width:100%; border-collapse:collapse; min-width:640px; }
+  .bva-table--compact{ min-width:500px; }
+  .bva-table th{
+    padding:11px 12px;
+    background:#06101f;
+    border-bottom:1px solid rgba(148,163,184,0.16);
+    color:var(--bva-muted);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.07em;
+    text-align:left;
+    white-space:nowrap;
+  }
+  .bva-table td{
+    padding:12px;
+    border-bottom:1px solid rgba(148,163,184,0.11);
+    color:#e5e7eb;
+    font-size:13px;
+    font-weight:800;
+    vertical-align:top;
+  }
+  .bva-table tr:hover td{ background:rgba(245,196,81,0.05); }
+  .bva-right{ text-align:right !important; }
+  .bva-empty{ padding:22px; color:var(--bva-muted); font-size:13px; font-weight:800; text-align:center; }
+
+  .bva-badge{
+    display:inline-flex;
+    align-items:center;
+    min-height:24px;
+    border-radius:999px;
+    padding:4px 9px;
+    border:1px solid rgba(148,163,184,0.26);
+    color:#e2e8f0;
+    background:rgba(148,163,184,0.10);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    white-space:nowrap;
+  }
+  .bva-badge--good{ color:#bbf7d0; background:rgba(74,222,128,0.12); border-color:rgba(74,222,128,0.34); }
+  .bva-badge--bad{ color:#fecdd3; background:rgba(251,113,133,0.12); border-color:rgba(251,113,133,0.36); }
+  .bva-badge--blue{ color:#bfdbfe; background:rgba(96,165,250,0.12); border-color:rgba(96,165,250,0.34); }
+
+  .bva-chart-row{
+    display:grid;
+    grid-template-columns:74px minmax(0,1fr) 118px;
+    gap:10px;
+    align-items:center;
+    padding:11px 14px;
+    border-bottom:1px solid rgba(148,163,184,0.11);
+  }
+  .bva-bars{ display:grid; gap:5px; }
+  .bva-bar{ height:8px; border-radius:999px; background:rgba(148,163,184,0.13); overflow:hidden; }
+  .bva-bar span{ display:block; height:100%; min-width:2px; border-radius:999px; }
+  .bva-bar-budget span{ background:linear-gradient(90deg, var(--bva-gold), #f59e0b); }
+  .bva-bar-actual span{ background:linear-gradient(90deg, var(--bva-good), var(--bva-blue)); }
+  .bva-bar-expense span{ background:linear-gradient(90deg, var(--bva-warn), var(--bva-bad)); }
+
+  .bva-side-grid{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px; padding:14px; }
+  .bva-side-card{ border:1px solid rgba(148,163,184,0.18); border-radius:16px; background:rgba(3,7,18,0.76); padding:13px; }
+  .bva-side-card h3{ margin:0 0 10px; font-size:15px; font-weight:900; }
+  .bva-side-line{ display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-top:1px solid rgba(148,163,184,0.10); font-size:12px; font-weight:850; }
+
+  @media (max-width:1180px){
+    .bva-filter{ grid-template-columns:repeat(3, minmax(0,1fr)); }
+    .bva-summary{ grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .bva-grid{ grid-template-columns:1fr; }
+  }
+  @media (max-width:760px){
+    .bva-hero{ padding:16px; border-radius:18px; }
+    .bva-title{ font-size:24px; }
+    .bva-filter{ grid-template-columns:1fr; }
+    .bva-summary{ grid-template-columns:1fr; }
+    .bva-side-grid{ grid-template-columns:1fr; }
+    .bva-filter-actions{ align-items:stretch; flex-direction:column; }
+    .bva-btn{ width:100%; }
+  }
+</style>
+
+<div class="bva-wrap">
+  <div class="bva-hero">
+    <div>
+      <div class="bva-kicker">Accounting Phase 8</div>
+      <h1 class="bva-title">Budget vs Actual</h1>
+      <div class="bva-sub">
+        Read-only variance dashboard comparing configured budgets against actual accounting results. Budget source: {{ budget_source }}.
+      </div>
+    </div>
+    <div class="bva-actions">
+      <a class="bva-btn" href="{% url 'executive_financial_dashboard' %}">Executive Dashboard</a>
+      <a class="bva-btn" href="{% url 'profit_loss_dashboard' %}">Profit and Loss</a>
+      <a class="bva-btn bva-btn--gold" href="{% url 'accounting_entry_list' %}">Accounting entries</a>
+    </div>
+  </div>
+
+  <form class="bva-filter" method="get">
+    <div class="bva-field">
+      <label for="year">Year</label>
+      <select id="year" name="year">
+        {% for year in year_options %}
+          <option value="{{ year }}" {% if filter_values.year == year %}selected{% endif %}>{{ year }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="bva-field">
+      <label for="month">Month</label>
+      <select id="month" name="month">
+        <option value="" {% if not filter_values.month %}selected{% endif %}>All months</option>
+        {% for value,label in month_options %}
+          <option value="{{ value }}" {% if filter_values.month == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="bva-field">
+      <label for="customer">Customer</label>
+      <select id="customer" name="customer">
+        <option value="" {% if not filter_values.customer %}selected{% endif %}>All customers</option>
+        {% for customer in customers %}
+          <option value="{{ customer.pk }}" {% if filter_values.customer == customer.pk|stringformat:"s" %}selected{% endif %}>
+            {{ customer.account_brand|default:customer.contact_name|default:customer }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="bva-field">
+      <label for="product_category">Product category</label>
+      <select id="product_category" name="product_category">
+        <option value="" {% if not filter_values.product_category %}selected{% endif %}>All categories</option>
+        {% for category in product_categories %}
+          <option value="{{ category }}" {% if filter_values.product_category == category %}selected{% endif %}>{{ category }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="bva-field">
+      <label for="side">Side</label>
+      <select id="side" name="side">
+        {% for value,label in side_options %}
+          <option value="{{ value }}" {% if filter_values.side == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="bva-field">
+      <label for="currency">Currency</label>
+      <select id="currency" name="currency">
+        <option value="" {% if not filter_values.currency %}selected{% endif %}>All currencies</option>
+        {% for currency in currency_options %}
+          <option value="{{ currency }}" {% if filter_values.currency == currency %}selected{% endif %}>{{ currency }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="bva-filter-actions">
+      <button class="bva-btn bva-btn--gold" type="submit">Apply</button>
+      <a class="bva-btn" href="{% url 'budget_vs_actual_dashboard' %}">Reset</a>
+    </div>
+  </form>
+
+  <div class="bva-summary">
+    <div class="bva-card">
+      <span>Budget Revenue</span>
+      <strong>CAD {{ budget_revenue|floatformat:2|intcomma }}</strong>
+      <small>Configured revenue target.</small>
+    </div>
+    <div class="bva-card">
+      <span>Actual Revenue</span>
+      <strong>CAD {{ actual_revenue|floatformat:2|intcomma }}</strong>
+      <small>Income entries for selected filters.</small>
+    </div>
+    <div class="bva-card">
+      <span>Revenue Variance</span>
+      <strong>CAD {{ revenue_variance|floatformat:2|intcomma }}</strong>
+      <small>Revenue Variance % {{ revenue_variance_percent|floatformat:2 }}%</small>
+    </div>
+    <div class="bva-card">
+      <span>Budget Expenses</span>
+      <strong>CAD {{ budget_expenses|floatformat:2|intcomma }}</strong>
+      <small>Configured expense target.</small>
+    </div>
+    <div class="bva-card">
+      <span>Actual Expenses</span>
+      <strong>CAD {{ actual_expenses|floatformat:2|intcomma }}</strong>
+      <small>COGS, expenses, taxes, and other outgoing entries.</small>
+    </div>
+    <div class="bva-card">
+      <span>Expense Variance</span>
+      <strong>CAD {{ expense_variance|floatformat:2|intcomma }}</strong>
+      <small>Expense Variance % {{ expense_variance_percent|floatformat:2 }}%</small>
+    </div>
+    <div class="bva-card">
+      <span>Budget Net Profit</span>
+      <strong>CAD {{ budget_net_profit|floatformat:2|intcomma }}</strong>
+      <small>Budget revenue minus budget expenses.</small>
+    </div>
+    <div class="bva-card">
+      <span>Actual Net Profit</span>
+      <strong>CAD {{ actual_net_profit|floatformat:2|intcomma }}</strong>
+      <small>Profit Variance CAD {{ profit_variance|floatformat:2|intcomma }} / {{ profit_variance_percent|floatformat:2 }}%</small>
+    </div>
+  </div>
+
+  <div class="bva-grid">
+    <div>
+      <section class="bva-section">
+        <div class="bva-section-head">
+          <div>
+            <h2 class="bva-section-title">Monthly budget vs actual chart</h2>
+            <div class="bva-section-note">Budget revenue, actual revenue, and actual expenses by month.</div>
+          </div>
+        </div>
+        {% if monthly_rows %}
+          {% for row in monthly_rows %}
+            <div class="bva-chart-row">
+              <div class="bva-muted">{{ row.label }}</div>
+              <div class="bva-bars">
+                <div class="bva-bar bva-bar-budget"><span style="width:{{ row.budget_bar }}%"></span></div>
+                <div class="bva-bar bva-bar-actual"><span style="width:{{ row.actual_bar }}%"></span></div>
+                <div class="bva-bar bva-bar-expense"><span style="width:{{ row.expense_bar }}%"></span></div>
+              </div>
+              <div class="bva-right">
+                <span class="bva-badge {% if row.actual_net >= row.budget_net %}bva-badge--good{% else %}bva-badge--bad{% endif %}">
+                  CAD {{ row.actual_net|floatformat:0|intcomma }}
+                </span>
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="bva-empty">No budget months available.</div>
+        {% endif %}
+      </section>
+
+      <section class="bva-section">
+        <div class="bva-section-head">
+          <div>
+            <h2 class="bva-section-title">Revenue by customer</h2>
+            <div class="bva-section-note">Actual revenue vs configured customer budget.</div>
+          </div>
+        </div>
+        <div class="bva-table-wrap">
+          {% if revenue_by_customer %}
+            <table class="bva-table">
+              <thead><tr><th>Customer</th><th class="bva-right">Budget</th><th class="bva-right">Actual</th><th class="bva-right">Variance</th></tr></thead>
+              <tbody>
+                {% for row in revenue_by_customer %}
+                  <tr>
+                    <td>{{ row.label }}</td>
+                    <td class="bva-right">CAD {{ row.budget|floatformat:2|intcomma }}</td>
+                    <td class="bva-right">CAD {{ row.actual|floatformat:2|intcomma }}</td>
+                    <td class="bva-right">CAD {{ row.variance|floatformat:2|intcomma }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <div class="bva-empty">No customer revenue found.</div>
+          {% endif %}
+        </div>
+      </section>
+
+      <section class="bva-section">
+        <div class="bva-section-head">
+          <div>
+            <h2 class="bva-section-title">Expense by category</h2>
+            <div class="bva-section-note">Actual expense vs configured category budget.</div>
+          </div>
+        </div>
+        <div class="bva-table-wrap">
+          {% if expense_by_category %}
+            <table class="bva-table">
+              <thead><tr><th>Category</th><th class="bva-right">Budget</th><th class="bva-right">Actual</th><th class="bva-right">Variance</th></tr></thead>
+              <tbody>
+                {% for row in expense_by_category %}
+                  <tr>
+                    <td>{{ row.label }}</td>
+                    <td class="bva-right">CAD {{ row.budget|floatformat:2|intcomma }}</td>
+                    <td class="bva-right">CAD {{ row.actual|floatformat:2|intcomma }}</td>
+                    <td class="bva-right">CAD {{ row.variance|floatformat:2|intcomma }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <div class="bva-empty">No expense category activity found.</div>
+          {% endif %}
+        </div>
+      </section>
+    </div>
+
+    <div>
+      <section class="bva-section">
+        <div class="bva-section-head">
+          <div>
+            <h2 class="bva-section-title">Department comparison</h2>
+            <div class="bva-section-note">Sales, production, operations, and admin/tax variance.</div>
+          </div>
+        </div>
+        <div class="bva-table-wrap">
+          <table class="bva-table bva-table--compact">
+            <thead><tr><th>Department</th><th class="bva-right">Budget Net</th><th class="bva-right">Actual Net</th><th class="bva-right">Variance</th></tr></thead>
+            <tbody>
+              {% for row in department_rows %}
+                <tr>
+                  <td>{{ row.label }}</td>
+                  <td class="bva-right">CAD {{ row.budget_net|floatformat:2|intcomma }}</td>
+                  <td class="bva-right">CAD {{ row.actual_net|floatformat:2|intcomma }}</td>
+                  <td class="bva-right">CAD {{ row.variance|floatformat:2|intcomma }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="bva-section">
+        <div class="bva-section-head">
+          <div>
+            <h2 class="bva-section-title">Canada vs Bangladesh comparison</h2>
+            <div class="bva-section-note">Budget and actual net by accounting side.</div>
+          </div>
+        </div>
+        <div class="bva-side-grid">
+          {% for row in side_rows %}
+            <div class="bva-side-card">
+              <h3>{{ row.label }}</h3>
+              <div class="bva-side-line"><span>Budget revenue</span><strong>CAD {{ row.budget_revenue|floatformat:2|intcomma }}</strong></div>
+              <div class="bva-side-line"><span>Actual revenue</span><strong>CAD {{ row.actual_revenue|floatformat:2|intcomma }}</strong></div>
+              <div class="bva-side-line"><span>Budget expenses</span><strong>CAD {{ row.budget_expenses|floatformat:2|intcomma }}</strong></div>
+              <div class="bva-side-line"><span>Actual expenses</span><strong>CAD {{ row.actual_expenses|floatformat:2|intcomma }}</strong></div>
+              <div class="bva-side-line"><span>Profit variance</span><strong>CAD {{ row.variance|floatformat:2|intcomma }}</strong></div>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="bva-section">
+        <div class="bva-section-head">
+          <div>
+            <h2 class="bva-section-title">Top unfavorable variances</h2>
+            <div class="bva-section-note">Largest shortfalls or overspend items.</div>
+          </div>
+        </div>
+        <div class="bva-table-wrap">
+          {% if unfavorable_rows %}
+            <table class="bva-table bva-table--compact">
+              <thead><tr><th>Item</th><th>Type</th><th class="bva-right">Variance</th></tr></thead>
+              <tbody>
+                {% for row in unfavorable_rows %}
+                  <tr><td>{{ row.label }}</td><td>{{ row.type }}</td><td class="bva-right">CAD {{ row.variance|floatformat:2|intcomma }}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <div class="bva-empty">No unfavorable variances found.</div>
+          {% endif %}
+        </div>
+      </section>
+
+      <section class="bva-section">
+        <div class="bva-section-head">
+          <div>
+            <h2 class="bva-section-title">Top favorable variances</h2>
+            <div class="bva-section-note">Largest positive revenue or savings variances.</div>
+          </div>
+        </div>
+        <div class="bva-table-wrap">
+          {% if favorable_rows %}
+            <table class="bva-table bva-table--compact">
+              <thead><tr><th>Item</th><th>Type</th><th class="bva-right">Variance</th></tr></thead>
+              <tbody>
+                {% for row in favorable_rows %}
+                  <tr><td>{{ row.label }}</td><td>{{ row.type }}</td><td class="bva-right">CAD {{ row.variance|floatformat:2|intcomma }}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <div class="bva-empty">No favorable variances found.</div>
+          {% endif %}
+        </div>
+      </section>
+
+      <section class="bva-section">
+        <div class="bva-section-head">
+          <div>
+            <h2 class="bva-section-title">Dashboard source</h2>
+            <div class="bva-section-note">Read-only records used for this comparison.</div>
+          </div>
+        </div>
+        <div class="bva-table-wrap">
+          <table class="bva-table bva-table--compact">
+            <tbody>
+              <tr><td>Accounting rows</td><td class="bva-right">{{ entry_count|intcomma }}</td></tr>
+              <tr><td>Budget source</td><td class="bva-right">{{ budget_source }}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

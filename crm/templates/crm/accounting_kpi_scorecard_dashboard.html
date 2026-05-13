@@ -1,0 +1,476 @@
+{% extends "crm/base.html" %}
+{% load humanize %}
+{% block content %}
+
+<style>
+  :root{
+    --kpi-line:#263348;
+    --kpi-text:#f8fafc;
+    --kpi-muted:#94a3b8;
+    --kpi-gold:#f5c451;
+    --kpi-good:#4ade80;
+    --kpi-warn:#fbbf24;
+    --kpi-bad:#fb7185;
+    --kpi-blue:#60a5fa;
+  }
+
+  .kpi-wrap{ max-width:1380px; margin:0 auto; color:var(--kpi-text); }
+
+  .kpi-hero{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:16px;
+    flex-wrap:wrap;
+    padding:22px;
+    border:1px solid rgba(245,196,81,0.22);
+    border-radius:22px;
+    background:
+      linear-gradient(135deg, rgba(245,196,81,0.15), transparent 38%),
+      linear-gradient(180deg, rgba(15,23,42,0.96), rgba(2,6,23,0.96));
+    box-shadow:0 24px 60px rgba(0,0,0,0.42);
+    margin-bottom:16px;
+  }
+
+  .kpi-kicker{
+    color:var(--kpi-gold);
+    font-size:12px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    margin-bottom:6px;
+  }
+
+  .kpi-title{ margin:0; font-size:30px; line-height:1.1; font-weight:900; }
+  .kpi-sub{ margin-top:8px; max-width:850px; color:var(--kpi-muted); font-size:13px; line-height:1.5; font-weight:700; }
+
+  .kpi-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+  .kpi-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-height:38px;
+    padding:9px 13px;
+    border-radius:14px;
+    border:1px solid rgba(148,163,184,0.25);
+    background:rgba(15,23,42,0.82);
+    color:var(--kpi-text);
+    text-decoration:none;
+    font-size:12px;
+    font-weight:900;
+  }
+  .kpi-btn:hover{ color:var(--kpi-text); border-color:rgba(245,196,81,0.55); }
+  .kpi-btn--gold{ background:linear-gradient(135deg, #f6d365, #d9a622); color:#111827; border-color:rgba(245,196,81,0.55); }
+  .kpi-btn--gold:hover{ color:#111827; }
+
+  .kpi-filter{
+    display:grid;
+    grid-template-columns:repeat(6, minmax(0,1fr));
+    gap:12px;
+    padding:14px;
+    border:1px solid var(--kpi-line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.92), rgba(2,6,23,0.92));
+    margin-bottom:16px;
+  }
+
+  .kpi-field label{
+    display:block;
+    margin-bottom:6px;
+    color:var(--kpi-muted);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.07em;
+  }
+
+  .kpi-field input,
+  .kpi-field select{
+    width:100%;
+    min-height:42px;
+    border:1px solid rgba(148,163,184,0.26);
+    border-radius:14px;
+    background:#030712;
+    color:var(--kpi-text);
+    padding:9px 11px;
+    font-size:13px;
+    font-weight:800;
+  }
+
+  .kpi-filter-actions{ display:flex; gap:8px; align-items:end; }
+
+  .kpi-cards{
+    display:grid;
+    grid-template-columns:repeat(4, minmax(0,1fr));
+    gap:12px;
+    margin-bottom:16px;
+  }
+
+  .kpi-card{
+    padding:14px;
+    border:1px solid var(--kpi-line);
+    border-radius:18px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.94), rgba(2,6,23,0.94));
+    box-shadow:0 18px 44px rgba(0,0,0,0.30);
+  }
+  .kpi-card span{ display:block; color:var(--kpi-muted); font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.07em; }
+  .kpi-card strong{ display:block; margin-top:8px; color:var(--kpi-text); font-size:21px; line-height:1.12; font-weight:950; }
+  .kpi-card small{ display:block; margin-top:7px; color:var(--kpi-muted); font-size:11px; line-height:1.45; font-weight:800; }
+
+  .kpi-grid{
+    display:grid;
+    grid-template-columns:minmax(0,1.35fr) minmax(360px,.95fr);
+    gap:14px;
+    align-items:start;
+  }
+
+  .kpi-section{
+    border:1px solid var(--kpi-line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.94), rgba(2,6,23,0.94));
+    overflow:hidden;
+    margin-bottom:14px;
+  }
+
+  .kpi-section-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    flex-wrap:wrap;
+    padding:14px 16px;
+    border-bottom:1px solid rgba(148,163,184,0.16);
+  }
+
+  .kpi-section-title{ margin:0; font-size:15px; font-weight:900; }
+  .kpi-section-note{ color:var(--kpi-muted); font-size:12px; font-weight:800; }
+  .kpi-muted{ color:var(--kpi-muted); font-size:12px; font-weight:800; }
+
+  .kpi-table-wrap{ overflow-x:auto; }
+  .kpi-table{ width:100%; border-collapse:collapse; min-width:620px; }
+  .kpi-table--compact{ min-width:500px; }
+  .kpi-table th{
+    padding:11px 12px;
+    background:#06101f;
+    border-bottom:1px solid rgba(148,163,184,0.16);
+    color:var(--kpi-muted);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.07em;
+    text-align:left;
+    white-space:nowrap;
+  }
+  .kpi-table td{
+    padding:12px;
+    border-bottom:1px solid rgba(148,163,184,0.11);
+    color:#e5e7eb;
+    font-size:13px;
+    font-weight:800;
+    vertical-align:top;
+  }
+  .kpi-table tr:hover td{ background:rgba(245,196,81,0.05); }
+  .kpi-right{ text-align:right !important; }
+  .kpi-empty{ padding:22px; color:var(--kpi-muted); font-size:13px; font-weight:800; text-align:center; }
+
+  .kpi-badge{
+    display:inline-flex;
+    align-items:center;
+    min-height:24px;
+    border-radius:999px;
+    padding:4px 9px;
+    border:1px solid rgba(148,163,184,0.26);
+    color:#e2e8f0;
+    background:rgba(148,163,184,0.10);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    white-space:nowrap;
+  }
+  .kpi-badge--good{ color:#bbf7d0; background:rgba(74,222,128,0.12); border-color:rgba(74,222,128,0.34); }
+  .kpi-badge--warn{ color:#fde68a; background:rgba(251,191,36,0.12); border-color:rgba(251,191,36,0.34); }
+  .kpi-badge--bad{ color:#fecdd3; background:rgba(251,113,133,0.12); border-color:rgba(251,113,133,0.36); }
+  .kpi-badge--blue{ color:#bfdbfe; background:rgba(96,165,250,0.12); border-color:rgba(96,165,250,0.34); }
+
+  .kpi-chart-row{
+    display:grid;
+    grid-template-columns:86px minmax(0,1fr) 112px;
+    gap:10px;
+    align-items:center;
+    padding:11px 14px;
+    border-bottom:1px solid rgba(148,163,184,0.11);
+  }
+  .kpi-bars{ display:grid; gap:5px; }
+  .kpi-bar{ height:8px; border-radius:999px; background:rgba(148,163,184,0.13); overflow:hidden; }
+  .kpi-bar span{ display:block; height:100%; min-width:2px; border-radius:999px; }
+  .kpi-bar-revenue span{ background:linear-gradient(90deg, var(--kpi-good), var(--kpi-blue)); }
+  .kpi-bar-expense span{ background:linear-gradient(90deg, var(--kpi-warn), var(--kpi-bad)); }
+  .kpi-bar-profit span{ background:linear-gradient(90deg, var(--kpi-gold), #60a5fa); }
+
+  .kpi-side-grid{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px; padding:14px; }
+  .kpi-side-card{ border:1px solid rgba(148,163,184,0.18); border-radius:16px; background:rgba(3,7,18,0.76); padding:13px; }
+  .kpi-side-card h3{ margin:0 0 10px; font-size:15px; font-weight:900; }
+  .kpi-side-line{ display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-top:1px solid rgba(148,163,184,0.10); font-size:12px; font-weight:850; }
+
+  .kpi-health-grid{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px; padding:14px; }
+  .kpi-health-card{ border:1px solid rgba(148,163,184,0.18); border-radius:16px; background:rgba(3,7,18,0.76); padding:12px; }
+  .kpi-health-card span{ display:block; color:var(--kpi-muted); font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:.07em; }
+  .kpi-health-card strong{ display:block; margin-top:6px; font-size:18px; font-weight:950; }
+
+  @media (max-width:1180px){
+    .kpi-filter{ grid-template-columns:repeat(3, minmax(0,1fr)); }
+    .kpi-cards{ grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .kpi-grid{ grid-template-columns:1fr; }
+  }
+  @media (max-width:760px){
+    .kpi-hero{ padding:16px; border-radius:18px; }
+    .kpi-title{ font-size:24px; }
+    .kpi-filter{ grid-template-columns:1fr; }
+    .kpi-cards{ grid-template-columns:1fr; }
+    .kpi-side-grid,
+    .kpi-health-grid{ grid-template-columns:1fr; }
+    .kpi-filter-actions{ align-items:stretch; flex-direction:column; }
+    .kpi-btn{ width:100%; }
+  }
+</style>
+
+<div class="kpi-wrap">
+  <div class="kpi-hero">
+    <div>
+      <div class="kpi-kicker">Accounting Phase 9</div>
+      <h1 class="kpi-title">KPI Scorecard</h1>
+      <div class="kpi-sub">
+        Read-only executive KPI dashboard for revenue, margins, working capital, collection, concentration, and financial health.
+      </div>
+    </div>
+    <div class="kpi-actions">
+      <a class="kpi-btn" href="{% url 'executive_financial_dashboard' %}">Executive Dashboard</a>
+      <a class="kpi-btn" href="{% url 'budget_vs_actual_dashboard' %}">Budget vs Actual</a>
+      <a class="kpi-btn kpi-btn--gold" href="{% url 'accounting_entry_list' %}">Accounting entries</a>
+    </div>
+  </div>
+
+  <form class="kpi-filter" method="get">
+    <div class="kpi-field">
+      <label for="date_from">From</label>
+      <input id="date_from" type="date" name="date_from" value="{{ filter_values.date_from }}">
+    </div>
+    <div class="kpi-field">
+      <label for="date_to">To</label>
+      <input id="date_to" type="date" name="date_to" value="{{ filter_values.date_to }}">
+    </div>
+    <div class="kpi-field">
+      <label for="currency">Currency</label>
+      <select id="currency" name="currency">
+        <option value="" {% if not filter_values.currency %}selected{% endif %}>All currencies</option>
+        {% for currency in currency_options %}
+          <option value="{{ currency }}" {% if filter_values.currency == currency %}selected{% endif %}>{{ currency }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="kpi-field">
+      <label for="side">Side</label>
+      <select id="side" name="side">
+        {% for value,label in side_options %}
+          <option value="{{ value }}" {% if filter_values.side == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="kpi-field">
+      <label for="customer">Customer</label>
+      <select id="customer" name="customer">
+        <option value="" {% if not filter_values.customer %}selected{% endif %}>All customers</option>
+        {% for customer in customers %}
+          <option value="{{ customer.pk }}" {% if filter_values.customer == customer.pk|stringformat:"s" %}selected{% endif %}>
+            {{ customer.account_brand|default:customer.contact_name|default:customer }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="kpi-field">
+      <label for="product_category">Product category</label>
+      <select id="product_category" name="product_category">
+        <option value="" {% if not filter_values.product_category %}selected{% endif %}>All categories</option>
+        {% for category in product_categories %}
+          <option value="{{ category }}" {% if filter_values.product_category == category %}selected{% endif %}>{{ category }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="kpi-filter-actions">
+      <button class="kpi-btn kpi-btn--gold" type="submit">Apply</button>
+      <a class="kpi-btn" href="{% url 'kpi_scorecard_dashboard' %}">Reset</a>
+    </div>
+  </form>
+
+  <div class="kpi-cards">
+    <div class="kpi-card"><span>Revenue This Month</span><strong>CAD {{ revenue_this_month|floatformat:2|intcomma }}</strong><small>Income through selected end date month.</small></div>
+    <div class="kpi-card"><span>Revenue Year to Date</span><strong>CAD {{ revenue_ytd|floatformat:2|intcomma }}</strong><small>Income from Jan 1 through selected end date.</small></div>
+    <div class="kpi-card"><span>Gross Margin %</span><strong>{{ gross_margin_percent|floatformat:2 }}%</strong><small>Gross profit divided by revenue.</small></div>
+    <div class="kpi-card"><span>Net Profit %</span><strong>{{ net_profit_percent|floatformat:2 }}%</strong><small>Net profit divided by revenue.</small></div>
+    <div class="kpi-card"><span>Accounts Receivable Outstanding</span><strong>CAD {{ ar_outstanding|floatformat:2|intcomma }}</strong><small>{{ ar_invoice_count }} open invoice(s).</small></div>
+    <div class="kpi-card"><span>Average Collection Days</span><strong>{{ average_collection_days|floatformat:2 }}</strong><small>Average days from invoice issue to payment.</small></div>
+    <div class="kpi-card"><span>Accounts Payable Outstanding</span><strong>CAD {{ ap_outstanding|floatformat:2|intcomma }}</strong><small>{{ ap_row_count }} open payable row(s).</small></div>
+    <div class="kpi-card"><span>Inventory Value</span><strong>CAD {{ inventory_value|floatformat:2|intcomma }}</strong><small>Current inventory quantity times unit cost.</small></div>
+    <div class="kpi-card"><span>Cash Balance</span><strong>CAD {{ cash_balance|floatformat:2|intcomma }}</strong><small>Signed cash movement through selected end date.</small></div>
+    <div class="kpi-card"><span>Current Ratio</span><strong>{{ current_ratio|floatformat:2 }}x</strong><small>Current assets divided by current liabilities.</small></div>
+    <div class="kpi-card"><span>Debt to Equity Ratio</span><strong>{{ debt_to_equity_ratio|floatformat:2 }}x</strong><small>Liabilities divided by equity basis.</small></div>
+    <div class="kpi-card"><span>Budget Achievement %</span><strong>{{ budget_achievement_percent|floatformat:2 }}%</strong><small>This month revenue versus configured budget.</small></div>
+    <div class="kpi-card"><span>Return on Sales %</span><strong>{{ return_on_sales_percent|floatformat:2 }}%</strong><small>Net profit as percent of sales.</small></div>
+    <div class="kpi-card"><span>Operating Expense Ratio</span><strong>{{ operating_expense_ratio|floatformat:2 }}%</strong><small>Operating expenses divided by revenue.</small></div>
+  </div>
+
+  <div class="kpi-grid">
+    <div>
+      <section class="kpi-section">
+        <div class="kpi-section-head">
+          <div>
+            <h2 class="kpi-section-title">KPI trend charts</h2>
+            <div class="kpi-section-note">Revenue, expenses, and net profit movement.</div>
+          </div>
+        </div>
+        {% if monthly_rows %}
+          {% for row in monthly_rows %}
+            <div class="kpi-chart-row">
+              <div class="kpi-muted">{{ row.label }}</div>
+              <div class="kpi-bars">
+                <div class="kpi-bar kpi-bar-revenue"><span style="width:{{ row.revenue_bar }}%"></span></div>
+                <div class="kpi-bar kpi-bar-expense"><span style="width:{{ row.expense_bar }}%"></span></div>
+                <div class="kpi-bar kpi-bar-profit"><span style="width:{{ row.profit_bar }}%"></span></div>
+              </div>
+              <div class="kpi-right"><span class="kpi-badge {% if row.net_profit >= 0 %}kpi-badge--good{% else %}kpi-badge--bad{% endif %}">CAD {{ row.net_profit|floatformat:0|intcomma }}</span></div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="kpi-empty">No KPI trend data found for the selected filters.</div>
+        {% endif %}
+      </section>
+
+      <section class="kpi-section">
+        <div class="kpi-section-head">
+          <div>
+            <h2 class="kpi-section-title">Top 10 customers by revenue</h2>
+            <div class="kpi-section-note">Customer concentration and revenue contribution.</div>
+          </div>
+        </div>
+        <div class="kpi-table-wrap">
+          {% if top_customer_rows %}
+            <table class="kpi-table">
+              <thead><tr><th>Customer</th><th class="kpi-right">Rows</th><th class="kpi-right">Revenue</th></tr></thead>
+              <tbody>
+                {% for row in top_customer_rows %}
+                  <tr><td>{{ row.label }}</td><td class="kpi-right">{{ row.count }}</td><td class="kpi-right">CAD {{ row.amount|floatformat:2|intcomma }}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <div class="kpi-empty">No customer revenue found.</div>
+          {% endif %}
+        </div>
+      </section>
+
+      <section class="kpi-section">
+        <div class="kpi-section-head">
+          <div>
+            <h2 class="kpi-section-title">Top 10 expense categories</h2>
+            <div class="kpi-section-note">Largest COGS and operating expense categories.</div>
+          </div>
+        </div>
+        <div class="kpi-table-wrap">
+          {% if top_expense_rows %}
+            <table class="kpi-table">
+              <thead><tr><th>Category</th><th class="kpi-right">Rows</th><th class="kpi-right">Expense</th></tr></thead>
+              <tbody>
+                {% for row in top_expense_rows %}
+                  <tr><td>{{ row.label }}</td><td class="kpi-right">{{ row.count }}</td><td class="kpi-right">CAD {{ row.amount|floatformat:2|intcomma }}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <div class="kpi-empty">No expense categories found.</div>
+          {% endif %}
+        </div>
+      </section>
+    </div>
+
+    <div>
+      <section class="kpi-section">
+        <div class="kpi-section-head">
+          <div>
+            <h2 class="kpi-section-title">Financial health indicators</h2>
+            <div class="kpi-section-note">Red, yellow, and green performance badges.</div>
+          </div>
+        </div>
+        <div class="kpi-health-grid">
+          {% for row in health_rows %}
+            <div class="kpi-health-card">
+              <span>{{ row.label }}</span>
+              <strong>{{ row.value|floatformat:2 }}{{ row.suffix }}</strong>
+              <div style="margin-top:8px;"><span class="kpi-badge kpi-badge--{{ row.tone }}">{{ row.tone }}</span></div>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="kpi-section">
+        <div class="kpi-section-head">
+          <div>
+            <h2 class="kpi-section-title">Canada vs Bangladesh KPI comparison</h2>
+            <div class="kpi-section-note">Side-coded revenue, margin, profit, and expense ratio.</div>
+          </div>
+        </div>
+        <div class="kpi-side-grid">
+          {% for row in side_rows %}
+            <div class="kpi-side-card">
+              <h3>{{ row.label }}</h3>
+              <div class="kpi-side-line"><span>Revenue</span><strong>CAD {{ row.revenue|floatformat:2|intcomma }}</strong></div>
+              <div class="kpi-side-line"><span>Gross Margin</span><strong>{{ row.gross_margin_percent|floatformat:2 }}%</strong></div>
+              <div class="kpi-side-line"><span>Net Profit</span><strong>CAD {{ row.net_profit|floatformat:2|intcomma }}</strong></div>
+              <div class="kpi-side-line"><span>Net Profit %</span><strong>{{ row.net_profit_percent|floatformat:2 }}%</strong></div>
+              <div class="kpi-side-line"><span>Opex Ratio</span><strong>{{ row.opex_ratio|floatformat:2 }}%</strong></div>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="kpi-section">
+        <div class="kpi-section-head">
+          <div>
+            <h2 class="kpi-section-title">Customer concentration analysis</h2>
+            <div class="kpi-section-note">Revenue dependency across top accounts.</div>
+          </div>
+        </div>
+        <div class="kpi-table-wrap">
+          <table class="kpi-table kpi-table--compact">
+            <tbody>
+              <tr><td>Total top customer revenue</td><td class="kpi-right">CAD {{ total_customer_revenue|floatformat:2|intcomma }}</td></tr>
+              <tr><td>Top customer concentration</td><td class="kpi-right">{{ customer_concentration_percent|floatformat:2 }}%</td></tr>
+              <tr><td>Top 3 concentration</td><td class="kpi-right">{{ top_three_concentration_percent|floatformat:2 }}%</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="kpi-section">
+        <div class="kpi-section-head">
+          <div>
+            <h2 class="kpi-section-title">Working capital summary</h2>
+            <div class="kpi-section-note">Current assets, liabilities, and working capital.</div>
+          </div>
+        </div>
+        <div class="kpi-table-wrap">
+          <table class="kpi-table kpi-table--compact">
+            <tbody>
+              <tr><td>Current Assets</td><td class="kpi-right">CAD {{ current_assets|floatformat:2|intcomma }}</td></tr>
+              <tr><td>Current Liabilities</td><td class="kpi-right">CAD {{ current_liabilities|floatformat:2|intcomma }}</td></tr>
+              <tr><td>Working Capital</td><td class="kpi-right">CAD {{ working_capital|floatformat:2|intcomma }}</td></tr>
+              <tr><td>Rows included</td><td class="kpi-right">{{ entry_count|intcomma }}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

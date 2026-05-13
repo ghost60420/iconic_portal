@@ -288,6 +288,9 @@
     {% url 'executive_financial_dashboard' as executive_dashboard_url %}
     {% url 'balance_sheet_dashboard' as balance_sheet_url %}
     {% url 'cash_flow_dashboard' as cash_flow_url %}
+    {% url 'budget_vs_actual_dashboard' as budget_vs_actual_url %}
+    {% url 'kpi_scorecard_dashboard' as kpi_scorecard_url %}
+    {% url 'financial_forecast_dashboard' as financial_forecast_url %}
     {% url 'invoice_list' as invoice_list_url %}
     {% url 'logout' as logout_url %}
     {% url 'access_list' as access_url %}
@@ -448,6 +451,9 @@
             {% if executive_dashboard_url %}<a class="crm-dd-item" href="{{ executive_dashboard_url }}">Executive Dashboard</a>{% endif %}
             {% if balance_sheet_url %}<a class="crm-dd-item" href="{{ balance_sheet_url }}">Balance Sheet</a>{% endif %}
             {% if cash_flow_url %}<a class="crm-dd-item" href="{{ cash_flow_url }}">Cash Flow</a>{% endif %}
+            {% if budget_vs_actual_url %}<a class="crm-dd-item" href="{{ budget_vs_actual_url }}">Budget vs Actual</a>{% endif %}
+            {% if kpi_scorecard_url %}<a class="crm-dd-item" href="{{ kpi_scorecard_url }}">KPI Scorecard</a>{% endif %}
+            {% if financial_forecast_url %}<a class="crm-dd-item" href="{{ financial_forecast_url }}">Financial Forecast</a>{% endif %}
             {% if invoice_list_url %}<a class="crm-dd-item" href="{{ invoice_list_url }}">🧾 Invoices</a>{% endif %}
 
             {% if user|is_ca %}

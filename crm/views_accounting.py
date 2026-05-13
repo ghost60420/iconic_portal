@@ -2,7 +2,8 @@
 
 import csv
 import io
-from datetime import timedelta
+from datetime import date, timedelta
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
@@ -1891,6 +1892,1080 @@ def cash_flow_dashboard(request):
             "low_cash_tone": low_cash_tone,
             "entry_count": len(period_entries),
             "opening_entry_count": len(opening_entries),
+        },
+    )
+
+
+BVA_EXPENSE_TYPES = {"COGS"} | PL_OPEX_TYPES
+BVA_DEFAULT_DEPARTMENTS = {
+    "Sales": {"actual_revenue": Decimal("0"), "actual_expenses": Decimal("0")},
+    "Production": {"actual_revenue": Decimal("0"), "actual_expenses": Decimal("0")},
+    "Operations": {"actual_revenue": Decimal("0"), "actual_expenses": Decimal("0")},
+    "Admin / Tax": {"actual_revenue": Decimal("0"), "actual_expenses": Decimal("0")},
+}
+
+
+def _bva_int(value, default=None):
+    try:
+        return int(str(value).strip())
+    except Exception:
+        return default
+
+
+def _bva_budget_decimal(value):
+    if isinstance(value, dict):
+        for key in ("amount", "budget", "value", "total"):
+            if key in value:
+                return _pl_decimal(value.get(key))
+        return Decimal("0")
+    return _pl_decimal(value)
+
+
+def _bva_metric_value(value, metric):
+    if isinstance(value, dict):
+        aliases = {
+            "revenue": ("revenue", "budget_revenue", "sales", "income"),
+            "expenses": ("expenses", "budget_expenses", "expense", "costs", "cost"),
+            "net_profit": ("net_profit", "profit", "net"),
+        }.get(metric, (metric,))
+        for key in aliases:
+            if key in value:
+                return _bva_budget_decimal(value.get(key))
+        return Decimal("0")
+    return _bva_budget_decimal(value)
+
+
+def _bva_mapping_lookup(mapping, keys, metric):
+    if not isinstance(mapping, dict):
+        return None
+    normalized = {str(key).strip().lower(): value for key, value in mapping.items()}
+    for key in keys:
+        if key in mapping:
+            return _bva_metric_value(mapping[key], metric)
+        lowered = str(key).strip().lower()
+        if lowered in normalized:
+            return _bva_metric_value(normalized[lowered], metric)
+    return None
+
+
+def _bva_budget_config():
+    config = getattr(settings, "ACCOUNTING_BUDGETS", {})
+    return config if isinstance(config, dict) else {}
+
+
+def _bva_period_budget(config, metric, year, month):
+    if month:
+        monthly = _bva_mapping_lookup(
+            config.get("monthly", {}),
+            [f"{year}-{month:02d}", f"{year}-{month}", f"{month:02d}", str(month)],
+            metric,
+        )
+        if monthly is not None:
+            return monthly
+
+    annual = _bva_mapping_lookup(config.get("annual", {}), [str(year), year, "default"], metric)
+    if annual is not None:
+        return (annual / Decimal("12")).quantize(Decimal("0.01")) if month else annual
+
+    for key in (metric, f"budget_{metric}"):
+        if key in config:
+            amount = _bva_metric_value(config.get(key), metric)
+            return (amount / Decimal("12")).quantize(Decimal("0.01")) if month else amount
+
+    return Decimal("0")
+
+
+def _bva_named_budget(config, section, label, metric, year, month):
+    mapping = config.get(section, {})
+    amount = _bva_mapping_lookup(mapping, [label, "default"], metric)
+    if amount is None:
+        return Decimal("0")
+    return (amount / Decimal("12")).quantize(Decimal("0.01")) if month else amount
+
+
+def _bva_variance(actual, budget, metric):
+    actual = _pl_decimal(actual)
+    budget = _pl_decimal(budget)
+    if metric == "expenses":
+        variance = budget - actual
+    else:
+        variance = actual - budget
+    percent = (variance / budget * Decimal("100")).quantize(Decimal("0.01")) if budget else Decimal("0")
+    return variance, percent
+
+
+def _bva_department_for_row(row):
+    main_type = row["main_type"]
+    if main_type == "INCOME":
+        return "Sales"
+    if main_type == "COGS":
+        return "Production"
+    if main_type == "TAX":
+        return "Admin / Tax"
+    return "Operations"
+
+
+def _bva_monthly_rows(rows, year, selected_month, config):
+    month_numbers = [selected_month] if selected_month else list(range(1, 13))
+    monthly = {
+        month: {
+            "month": month,
+            "label": date(year, month, 1).strftime("%b"),
+            "budget_revenue": _bva_period_budget(config, "revenue", year, month),
+            "budget_expenses": _bva_period_budget(config, "expenses", year, month),
+            "actual_revenue": Decimal("0"),
+            "actual_expenses": Decimal("0"),
+        }
+        for month in month_numbers
+    }
+    for row in rows:
+        entry = row["entry"]
+        if not entry.date or entry.date.year != year or entry.date.month not in monthly:
+            continue
+        direction = (entry.direction or "").upper().strip()
+        amount = row["amount_cad"]
+        if direction == AccountingEntry.DIR_IN and row["main_type"] == "INCOME":
+            monthly[entry.date.month]["actual_revenue"] += amount
+        elif direction == AccountingEntry.DIR_OUT and row["main_type"] in BVA_EXPENSE_TYPES:
+            monthly[entry.date.month]["actual_expenses"] += amount
+    rows_by_month = [monthly[month] for month in month_numbers]
+    max_value = max(
+        [
+            max(row["budget_revenue"], row["actual_revenue"], row["budget_expenses"], row["actual_expenses"])
+            for row in rows_by_month
+        ] or [Decimal("0")]
+    )
+    for row in rows_by_month:
+        row["budget_net"] = row["budget_revenue"] - row["budget_expenses"]
+        row["actual_net"] = row["actual_revenue"] - row["actual_expenses"]
+        row["revenue_variance"], row["revenue_variance_percent"] = _bva_variance(row["actual_revenue"], row["budget_revenue"], "revenue")
+        row["expense_variance"], row["expense_variance_percent"] = _bva_variance(row["actual_expenses"], row["budget_expenses"], "expenses")
+        row["budget_bar"] = int((row["budget_revenue"] / max_value) * 100) if max_value > 0 else 0
+        row["actual_bar"] = int((row["actual_revenue"] / max_value) * 100) if max_value > 0 else 0
+        row["expense_bar"] = int((row["actual_expenses"] / max_value) * 100) if max_value > 0 else 0
+    return rows_by_month
+
+
+def _bva_group_rows(rows, key, budget_section, metric, year, month, config):
+    grouped = {}
+    for row in rows:
+        label = row.get(key) or "Uncategorized"
+        if label not in grouped:
+            grouped[label] = {"label": label, "actual": Decimal("0"), "budget": Decimal("0"), "count": 0}
+        grouped[label]["actual"] += row["amount_cad"]
+        grouped[label]["count"] += 1
+    for label, row in grouped.items():
+        row["budget"] = _bva_named_budget(config, budget_section, label, metric, year, month)
+        row["variance"], row["variance_percent"] = _bva_variance(row["actual"], row["budget"], metric)
+    return sorted(grouped.values(), key=lambda item: abs(item["variance"]), reverse=True)
+
+
+@login_required
+def budget_vs_actual_dashboard(request):
+    today = timezone.localdate()
+    selected_year = _bva_int(request.GET.get("year"), today.year) or today.year
+    selected_month = _bva_int(request.GET.get("month"), None)
+    if selected_month not in range(1, 13):
+        selected_month = None
+
+    start_date = date(selected_year, selected_month or 1, 1)
+    if selected_month:
+        end_date = (date(selected_year + 1, 1, 1) if selected_month == 12 else date(selected_year, selected_month + 1, 1)) - timedelta(days=1)
+    else:
+        end_date = date(selected_year, 12, 31)
+
+    filters = {
+        "year": selected_year,
+        "month": selected_month,
+        "customer_id": (request.GET.get("customer") or "").strip(),
+        "product_category": (request.GET.get("product_category") or "").strip(),
+        "side": (request.GET.get("side") or "").strip().upper(),
+        "currency": (request.GET.get("currency") or "").strip().upper(),
+    }
+    filter_values = {
+        "year": selected_year,
+        "month": str(selected_month or ""),
+        "customer": filters["customer_id"],
+        "product_category": filters["product_category"],
+        "side": filters["side"],
+        "currency": filters["currency"],
+    }
+
+    qs = (
+        AccountingEntry.objects.exclude(main_type="TRANSFER")
+        .exclude(status__iexact="CANCELLED")
+        .filter(date__gte=start_date, date__lte=end_date)
+        .select_related("customer", "opportunity", "production_order", "production_order__customer", "production_order__opportunity", "production_order__product")
+    )
+    if filters["customer_id"]:
+        qs = qs.filter(Q(customer_id=filters["customer_id"]) | Q(production_order__customer_id=filters["customer_id"]))
+    if filters["side"]:
+        qs = qs.filter(side=filters["side"])
+    if filters["currency"]:
+        qs = qs.filter(currency=filters["currency"])
+
+    rows = [_pl_row(entry) for entry in qs.order_by("date", "id")[:2500]]
+    if filters["product_category"]:
+        rows = [row for row in rows if row["product_category"] == filters["product_category"]]
+
+    revenue_rows = [
+        row for row in rows
+        if (row["entry"].direction or "").upper().strip() == AccountingEntry.DIR_IN and row["main_type"] == "INCOME"
+    ]
+    expense_rows = [
+        row for row in rows
+        if (row["entry"].direction or "").upper().strip() == AccountingEntry.DIR_OUT and row["main_type"] in BVA_EXPENSE_TYPES
+    ]
+
+    actual_revenue = sum((row["amount_cad"] for row in revenue_rows), Decimal("0"))
+    actual_expenses = sum((row["amount_cad"] for row in expense_rows), Decimal("0"))
+    actual_net_profit = actual_revenue - actual_expenses
+
+    config = _bva_budget_config()
+    budget_revenue = _bva_period_budget(config, "revenue", selected_year, selected_month)
+    budget_expenses = _bva_period_budget(config, "expenses", selected_year, selected_month)
+    budget_net_profit = budget_revenue - budget_expenses
+    revenue_variance, revenue_variance_percent = _bva_variance(actual_revenue, budget_revenue, "revenue")
+    expense_variance, expense_variance_percent = _bva_variance(actual_expenses, budget_expenses, "expenses")
+    profit_variance, profit_variance_percent = _bva_variance(actual_net_profit, budget_net_profit, "net_profit")
+
+    revenue_by_customer = _bva_group_rows(revenue_rows, "customer", "customers", "revenue", selected_year, selected_month, config)[:20]
+    expense_by_category = _bva_group_rows(expense_rows, "cost_category", "expense_categories", "expenses", selected_year, selected_month, config)[:20]
+
+    department_map = {name: dict(values, label=name, budget_revenue=Decimal("0"), budget_expenses=Decimal("0")) for name, values in BVA_DEFAULT_DEPARTMENTS.items()}
+    for row in rows:
+        department = _bva_department_for_row(row)
+        if department not in department_map:
+            department_map[department] = {"label": department, "actual_revenue": Decimal("0"), "actual_expenses": Decimal("0"), "budget_revenue": Decimal("0"), "budget_expenses": Decimal("0")}
+        if (row["entry"].direction or "").upper().strip() == AccountingEntry.DIR_IN and row["main_type"] == "INCOME":
+            department_map[department]["actual_revenue"] += row["amount_cad"]
+        elif (row["entry"].direction or "").upper().strip() == AccountingEntry.DIR_OUT and row["main_type"] in BVA_EXPENSE_TYPES:
+            department_map[department]["actual_expenses"] += row["amount_cad"]
+    for label, row in department_map.items():
+        row["budget_revenue"] = _bva_named_budget(config, "departments", label, "revenue", selected_year, selected_month)
+        row["budget_expenses"] = _bva_named_budget(config, "departments", label, "expenses", selected_year, selected_month)
+        row["actual_net"] = row["actual_revenue"] - row["actual_expenses"]
+        row["budget_net"] = row["budget_revenue"] - row["budget_expenses"]
+        row["variance"], row["variance_percent"] = _bva_variance(row["actual_net"], row["budget_net"], "net_profit")
+    department_rows = sorted(department_map.values(), key=lambda item: abs(item["variance"]), reverse=True)
+
+    side_rows = []
+    for side, label in [("CA", "Canada"), ("BD", "Bangladesh")]:
+        side_revenue = sum((row["amount_cad"] for row in revenue_rows if row["side"] == side), Decimal("0"))
+        side_expenses = sum((row["amount_cad"] for row in expense_rows if row["side"] == side), Decimal("0"))
+        side_budget_revenue = _bva_named_budget(config, "sides", side, "revenue", selected_year, selected_month)
+        side_budget_expenses = _bva_named_budget(config, "sides", side, "expenses", selected_year, selected_month)
+        side_actual_net = side_revenue - side_expenses
+        side_budget_net = side_budget_revenue - side_budget_expenses
+        side_variance, side_variance_percent = _bva_variance(side_actual_net, side_budget_net, "net_profit")
+        side_rows.append(
+            {
+                "side": side,
+                "label": label,
+                "budget_revenue": side_budget_revenue,
+                "actual_revenue": side_revenue,
+                "budget_expenses": side_budget_expenses,
+                "actual_expenses": side_expenses,
+                "budget_net": side_budget_net,
+                "actual_net": side_actual_net,
+                "variance": side_variance,
+                "variance_percent": side_variance_percent,
+            }
+        )
+
+    variance_rows = [
+        {"label": "Revenue", "type": "Revenue", "budget": budget_revenue, "actual": actual_revenue, "variance": revenue_variance, "variance_percent": revenue_variance_percent},
+        {"label": "Expenses", "type": "Expense", "budget": budget_expenses, "actual": actual_expenses, "variance": expense_variance, "variance_percent": expense_variance_percent},
+        {"label": "Net Profit", "type": "Profit", "budget": budget_net_profit, "actual": actual_net_profit, "variance": profit_variance, "variance_percent": profit_variance_percent},
+    ]
+    variance_rows.extend({"label": row["label"], "type": "Customer revenue", "budget": row["budget"], "actual": row["actual"], "variance": row["variance"], "variance_percent": row["variance_percent"]} for row in revenue_by_customer)
+    variance_rows.extend({"label": row["label"], "type": "Expense category", "budget": row["budget"], "actual": row["actual"], "variance": row["variance"], "variance_percent": row["variance_percent"]} for row in expense_by_category)
+    variance_rows.extend({"label": row["label"], "type": "Department", "budget": row["budget_net"], "actual": row["actual_net"], "variance": row["variance"], "variance_percent": row["variance_percent"]} for row in department_rows)
+    unfavorable_rows = sorted([row for row in variance_rows if row["variance"] < 0], key=lambda row: row["variance"])[:10]
+    favorable_rows = sorted([row for row in variance_rows if row["variance"] > 0], key=lambda row: row["variance"], reverse=True)[:10]
+
+    customers = Customer.objects.filter(accounting_entries__isnull=False).distinct().order_by("account_brand", "contact_name")
+    product_categories = sorted({
+        value.strip() for value in Product.objects.exclude(product_category="").values_list("product_category", flat=True).distinct()
+        if value and value.strip()
+    } | {
+        row["product_category"] for row in rows if row["product_category"] and row["product_category"] != "Uncategorized"
+    })
+    year_values = sorted({selected_year, today.year} | {d.year for d in AccountingEntry.objects.dates("date", "year", order="DESC")})
+
+    return render(
+        request,
+        "crm/accounting_budget_vs_actual_dashboard.html",
+        {
+            "filter_values": filter_values,
+            "year_options": year_values,
+            "month_options": [(str(i), date(selected_year, i, 1).strftime("%B")) for i in range(1, 13)],
+            "customers": customers,
+            "product_categories": product_categories,
+            "side_options": [("", "All sides"), ("CA", "Canada"), ("BD", "Bangladesh")],
+            "currency_options": ["CAD", "BDT", "USD"],
+            "budget_revenue": budget_revenue,
+            "actual_revenue": actual_revenue,
+            "revenue_variance": revenue_variance,
+            "revenue_variance_percent": revenue_variance_percent,
+            "budget_expenses": budget_expenses,
+            "actual_expenses": actual_expenses,
+            "expense_variance": expense_variance,
+            "expense_variance_percent": expense_variance_percent,
+            "budget_net_profit": budget_net_profit,
+            "actual_net_profit": actual_net_profit,
+            "profit_variance": profit_variance,
+            "profit_variance_percent": profit_variance_percent,
+            "monthly_rows": _bva_monthly_rows(rows, selected_year, selected_month, config),
+            "revenue_by_customer": revenue_by_customer,
+            "expense_by_category": expense_by_category,
+            "department_rows": department_rows,
+            "side_rows": side_rows,
+            "unfavorable_rows": unfavorable_rows,
+            "favorable_rows": favorable_rows,
+            "entry_count": len(rows),
+            "budget_source": "settings.ACCOUNTING_BUDGETS" if config else "Default zero budget",
+        },
+    )
+
+
+def _kpi_percent(numerator, denominator):
+    numerator = _pl_decimal(numerator)
+    denominator = _pl_decimal(denominator)
+    return (numerator / denominator * Decimal("100")).quantize(Decimal("0.01")) if denominator else Decimal("0")
+
+
+def _kpi_ratio(numerator, denominator):
+    numerator = _pl_decimal(numerator)
+    denominator = _pl_decimal(denominator)
+    return (numerator / denominator).quantize(Decimal("0.01")) if denominator else Decimal("0")
+
+
+def _kpi_tone(value, good_at=None, warn_at=None, inverse=False):
+    value = _pl_decimal(value)
+    good_at = _pl_decimal(good_at)
+    warn_at = _pl_decimal(warn_at)
+    if inverse:
+        if value <= good_at:
+            return "good"
+        if value <= warn_at:
+            return "warn"
+        return "bad"
+    if value >= good_at:
+        return "good"
+    if value >= warn_at:
+        return "warn"
+    return "bad"
+
+
+def _kpi_date_range(request, today):
+    date_from = _parse_pl_date(request.GET.get("date_from"))
+    date_to = _parse_pl_date(request.GET.get("date_to")) or today
+    if date_from and date_from > date_to:
+        date_from, date_to = date_to, date_from
+    return date_from, date_to
+
+
+def _kpi_base_entries(filters, date_from=None, date_to=None):
+    qs = (
+        AccountingEntry.objects.exclude(main_type="TRANSFER")
+        .exclude(status__iexact="CANCELLED")
+        .select_related("customer", "opportunity", "production_order", "production_order__customer", "production_order__opportunity", "production_order__product")
+    )
+    if date_from:
+        qs = qs.filter(date__gte=date_from)
+    if date_to:
+        qs = qs.filter(date__lte=date_to)
+    if filters["customer_id"]:
+        qs = qs.filter(Q(customer_id=filters["customer_id"]) | Q(production_order__customer_id=filters["customer_id"]))
+    if filters["side"]:
+        qs = qs.filter(side=filters["side"])
+    if filters["currency"]:
+        qs = qs.filter(currency=filters["currency"])
+    rows = [_pl_row(entry) for entry in qs.order_by("date", "id")[:3000]]
+    if filters["product_category"]:
+        rows = [row for row in rows if row["product_category"] == filters["product_category"]]
+    return rows
+
+
+def _kpi_row_totals(rows):
+    revenue_rows = [
+        row for row in rows
+        if (row["entry"].direction or "").upper().strip() == AccountingEntry.DIR_IN and row["main_type"] == "INCOME"
+    ]
+    cogs_rows = [
+        row for row in rows
+        if (row["entry"].direction or "").upper().strip() == AccountingEntry.DIR_OUT and row["main_type"] == "COGS"
+    ]
+    opex_rows = [
+        row for row in rows
+        if (row["entry"].direction or "").upper().strip() == AccountingEntry.DIR_OUT and row["main_type"] in PL_OPEX_TYPES
+    ]
+    revenue = sum((row["amount_cad"] for row in revenue_rows), Decimal("0"))
+    cogs = sum((row["amount_cad"] for row in cogs_rows), Decimal("0"))
+    opex = sum((row["amount_cad"] for row in opex_rows), Decimal("0"))
+    gross_profit = revenue - cogs
+    net_profit = gross_profit - opex
+    return {
+        "revenue_rows": revenue_rows,
+        "expense_rows": cogs_rows + opex_rows,
+        "revenue": revenue,
+        "cogs": cogs,
+        "opex": opex,
+        "gross_profit": gross_profit,
+        "net_profit": net_profit,
+        "gross_margin_percent": _kpi_percent(gross_profit, revenue),
+        "net_profit_percent": _kpi_percent(net_profit, revenue),
+        "operating_expense_ratio": _kpi_percent(opex, revenue),
+    }
+
+
+def _kpi_ar_open(filters, date_to):
+    cad_to_bdt = _bs_latest_cad_to_bdt()
+    qs = Invoice.objects.exclude(status="cancelled").select_related("customer", "order", "order__customer")
+    if date_to:
+        qs = qs.filter(issue_date__lte=date_to)
+    if filters["currency"]:
+        qs = qs.filter(currency=filters["currency"])
+    if filters["customer_id"]:
+        qs = qs.filter(Q(customer_id=filters["customer_id"]) | Q(order__customer_id=filters["customer_id"]))
+    invoices = list(qs.order_by("due_date", "-issue_date")[:2000])
+    if filters["side"]:
+        invoices = [invoice for invoice in invoices if _exec_invoice_side(invoice) == filters["side"]]
+    open_invoices = [invoice for invoice in invoices if _pl_decimal(invoice.balance) > 0]
+    return open_invoices, sum((_bs_invoice_balance_cad(invoice, cad_to_bdt) for invoice in open_invoices), Decimal("0"))
+
+
+def _kpi_average_collection_days(filters, date_from, date_to):
+    qs = InvoicePayment.objects.select_related("invoice", "invoice__customer", "production_order", "accounting_entry")
+    if date_from:
+        qs = qs.filter(payment_date__gte=date_from)
+    if date_to:
+        qs = qs.filter(payment_date__lte=date_to)
+    if filters["currency"]:
+        qs = qs.filter(currency=filters["currency"])
+    if filters["side"]:
+        qs = qs.filter(side=filters["side"])
+    if filters["customer_id"]:
+        qs = qs.filter(Q(invoice__customer_id=filters["customer_id"]) | Q(production_order__customer_id=filters["customer_id"]))
+    days = []
+    for payment in qs[:1000]:
+        issue_date = getattr(payment.invoice, "issue_date", None)
+        if issue_date and payment.payment_date:
+            days.append(max((payment.payment_date - issue_date).days, 0))
+    return Decimal(sum(days) / len(days)).quantize(Decimal("0.01")) if days else Decimal("0")
+
+
+def _kpi_ap_open(rows, today):
+    payable_rows = [
+        _ap_row(row["entry"], today)
+        for row in rows
+        if (row["entry"].direction or "").upper().strip() == AccountingEntry.DIR_OUT
+    ]
+    open_rows = [row for row in payable_rows if row["status_key"] != "paid"]
+    return open_rows, sum((_pl_amount_cad(row["entry"]) for row in open_rows), Decimal("0"))
+
+
+def _kpi_monthly_trends(rows):
+    monthly = {}
+    for row in rows:
+        entry = row["entry"]
+        if not entry.date:
+            continue
+        key = entry.date.strftime("%Y-%m")
+        if key not in monthly:
+            monthly[key] = {"key": key, "label": entry.date.strftime("%b %Y"), "revenue": Decimal("0"), "gross_profit": Decimal("0"), "net_profit": Decimal("0"), "expenses": Decimal("0")}
+        direction = (entry.direction or "").upper().strip()
+        if direction == AccountingEntry.DIR_IN and row["main_type"] == "INCOME":
+            monthly[key]["revenue"] += row["amount_cad"]
+            monthly[key]["gross_profit"] += row["amount_cad"]
+            monthly[key]["net_profit"] += row["amount_cad"]
+        elif direction == AccountingEntry.DIR_OUT and row["main_type"] == "COGS":
+            monthly[key]["gross_profit"] -= row["amount_cad"]
+            monthly[key]["net_profit"] -= row["amount_cad"]
+            monthly[key]["expenses"] += row["amount_cad"]
+        elif direction == AccountingEntry.DIR_OUT and row["main_type"] in PL_OPEX_TYPES:
+            monthly[key]["net_profit"] -= row["amount_cad"]
+            monthly[key]["expenses"] += row["amount_cad"]
+    rows_by_month = [monthly[key] for key in sorted(monthly.keys())][-12:]
+    max_value = max([max(row["revenue"], row["expenses"], abs(row["net_profit"])) for row in rows_by_month] or [Decimal("0")])
+    for row in rows_by_month:
+        row["gross_margin_percent"] = _kpi_percent(row["gross_profit"], row["revenue"])
+        row["net_margin_percent"] = _kpi_percent(row["net_profit"], row["revenue"])
+        row["revenue_bar"] = int((row["revenue"] / max_value) * 100) if max_value > 0 else 0
+        row["expense_bar"] = int((row["expenses"] / max_value) * 100) if max_value > 0 else 0
+        row["profit_bar"] = int((abs(row["net_profit"]) / max_value) * 100) if max_value > 0 else 0
+    return rows_by_month
+
+
+@login_required
+def kpi_scorecard_dashboard(request):
+    today = timezone.localdate()
+    date_from, date_to = _kpi_date_range(request, today)
+    filters = {
+        "date_from": date_from,
+        "date_to": date_to,
+        "currency": (request.GET.get("currency") or "").strip().upper(),
+        "side": (request.GET.get("side") or "").strip().upper(),
+        "customer_id": (request.GET.get("customer") or "").strip(),
+        "product_category": (request.GET.get("product_category") or "").strip(),
+    }
+    filter_values = {
+        "date_from": date_from.isoformat() if date_from else "",
+        "date_to": date_to.isoformat() if date_to else "",
+        "currency": filters["currency"],
+        "side": filters["side"],
+        "customer": filters["customer_id"],
+        "product_category": filters["product_category"],
+    }
+
+    month_start = date(date_to.year, date_to.month, 1)
+    ytd_start = date(date_to.year, 1, 1)
+    period_rows = _kpi_base_entries(filters, date_from, date_to)
+    month_rows = _kpi_base_entries(filters, month_start, date_to)
+    ytd_rows = _kpi_base_entries(filters, ytd_start, date_to)
+    as_of_rows = _kpi_base_entries(filters, None, date_to)
+
+    period_totals = _kpi_row_totals(period_rows)
+    month_totals = _kpi_row_totals(month_rows)
+    ytd_totals = _kpi_row_totals(ytd_rows)
+    as_of_totals = _kpi_row_totals(as_of_rows)
+    ar_invoices, ar_outstanding = _kpi_ar_open(filters, date_to)
+    average_collection_days = _kpi_average_collection_days(filters, date_from, date_to)
+    ap_rows, ap_outstanding = _kpi_ap_open(as_of_rows, today)
+    inventory_value = _bs_inventory_value_cad(filters)
+    cash_balance = sum(
+        (
+            _pl_amount_cad(row["entry"]) if (row["entry"].direction or "").upper().strip() == AccountingEntry.DIR_IN else -_pl_amount_cad(row["entry"])
+            for row in as_of_rows
+        ),
+        Decimal("0"),
+    )
+
+    current_assets = cash_balance + ar_outstanding + inventory_value
+    current_liabilities = ap_outstanding
+    total_equity = as_of_totals["net_profit"]
+    current_ratio = _kpi_ratio(current_assets, current_liabilities)
+    debt_to_equity_ratio = _kpi_ratio(current_liabilities, abs(total_equity))
+    config = _bva_budget_config()
+    budget_revenue = _bva_period_budget(config, "revenue", date_to.year, date_to.month)
+    budget_achievement_percent = _kpi_percent(month_totals["revenue"], budget_revenue)
+
+    top_customer_rows = _pl_group(period_totals["revenue_rows"], "customer", limit=10)
+    total_customer_revenue = sum((row["amount"] for row in top_customer_rows), Decimal("0"))
+    top_customer_amount = top_customer_rows[0]["amount"] if top_customer_rows else Decimal("0")
+    top_three_amount = sum((row["amount"] for row in top_customer_rows[:3]), Decimal("0"))
+    customer_concentration_percent = _kpi_percent(top_customer_amount, period_totals["revenue"])
+    top_three_concentration_percent = _kpi_percent(top_three_amount, period_totals["revenue"])
+    top_expense_rows = _pl_group(period_totals["expense_rows"], "cost_category", limit=10)
+
+    side_rows = []
+    for side, label in [("CA", "Canada"), ("BD", "Bangladesh")]:
+        side_rows_for_side = [row for row in period_rows if row["side"] == side]
+        totals = _kpi_row_totals(side_rows_for_side)
+        side_rows.append(
+            {
+                "side": side,
+                "label": label,
+                "revenue": totals["revenue"],
+                "gross_margin_percent": totals["gross_margin_percent"],
+                "net_profit_percent": totals["net_profit_percent"],
+                "net_profit": totals["net_profit"],
+                "opex_ratio": totals["operating_expense_ratio"],
+            }
+        )
+
+    health_rows = [
+        {"label": "Gross Margin", "value": period_totals["gross_margin_percent"], "suffix": "%", "tone": _kpi_tone(period_totals["gross_margin_percent"], 35, 20)},
+        {"label": "Net Profit", "value": period_totals["net_profit_percent"], "suffix": "%", "tone": _kpi_tone(period_totals["net_profit_percent"], 15, 5)},
+        {"label": "Current Ratio", "value": current_ratio, "suffix": "x", "tone": _kpi_tone(current_ratio, Decimal("1.5"), Decimal("1.0"))},
+        {"label": "Debt to Equity", "value": debt_to_equity_ratio, "suffix": "x", "tone": _kpi_tone(debt_to_equity_ratio, Decimal("1.0"), Decimal("2.0"), inverse=True)},
+        {"label": "Budget Achievement", "value": budget_achievement_percent, "suffix": "%", "tone": _kpi_tone(budget_achievement_percent, 100, 80)},
+        {"label": "Cash Balance", "value": cash_balance, "suffix": "", "tone": "good" if cash_balance >= 0 else "bad"},
+    ]
+
+    customers = Customer.objects.filter(accounting_entries__isnull=False).distinct().order_by("account_brand", "contact_name")
+    product_categories = sorted({
+        value.strip() for value in Product.objects.exclude(product_category="").values_list("product_category", flat=True).distinct()
+        if value and value.strip()
+    } | {
+        row["product_category"] for row in period_rows if row["product_category"] and row["product_category"] != "Uncategorized"
+    })
+
+    return render(
+        request,
+        "crm/accounting_kpi_scorecard_dashboard.html",
+        {
+            "filter_values": filter_values,
+            "currency_options": ["CAD", "BDT", "USD"],
+            "side_options": [("", "All sides"), ("CA", "Canada"), ("BD", "Bangladesh")],
+            "customers": customers,
+            "product_categories": product_categories,
+            "revenue_this_month": month_totals["revenue"],
+            "revenue_ytd": ytd_totals["revenue"],
+            "gross_margin_percent": period_totals["gross_margin_percent"],
+            "net_profit_percent": period_totals["net_profit_percent"],
+            "ar_outstanding": ar_outstanding,
+            "average_collection_days": average_collection_days,
+            "ap_outstanding": ap_outstanding,
+            "inventory_value": inventory_value,
+            "cash_balance": cash_balance,
+            "current_ratio": current_ratio,
+            "debt_to_equity_ratio": debt_to_equity_ratio,
+            "budget_achievement_percent": budget_achievement_percent,
+            "return_on_sales_percent": period_totals["net_profit_percent"],
+            "operating_expense_ratio": period_totals["operating_expense_ratio"],
+            "current_assets": current_assets,
+            "current_liabilities": current_liabilities,
+            "working_capital": current_assets - current_liabilities,
+            "monthly_rows": _kpi_monthly_trends(period_rows),
+            "side_rows": side_rows,
+            "top_customer_rows": top_customer_rows,
+            "top_expense_rows": top_expense_rows,
+            "total_customer_revenue": total_customer_revenue,
+            "customer_concentration_percent": customer_concentration_percent,
+            "top_three_concentration_percent": top_three_concentration_percent,
+            "health_rows": health_rows,
+            "entry_count": len(period_rows),
+            "ar_invoice_count": len(ar_invoices),
+            "ap_row_count": len(ap_rows),
+        },
+    )
+
+
+FF_HORIZON_OPTIONS = ((30, "30 days"), (60, "60 days"), (90, "90 days"))
+FF_HISTORY_DAYS = 180
+
+
+def _ff_int(value, default):
+    try:
+        parsed = int(str(value).strip())
+    except Exception:
+        return default
+    return parsed if parsed in {30, 60, 90} else default
+
+
+def _ff_projection(amount, history_days, forecast_days):
+    amount = _pl_decimal(amount)
+    if history_days <= 0:
+        return Decimal("0")
+    return (amount / Decimal(history_days) * Decimal(forecast_days)).quantize(Decimal("0.01"))
+
+
+def _ff_days_in_month(day):
+    next_month = date(day.year + 1, 1, 1) if day.month == 12 else date(day.year, day.month + 1, 1)
+    return (next_month - date(day.year, day.month, 1)).days
+
+
+def _ff_budget_for_days(config, metric, start_day, forecast_days):
+    total = Decimal("0")
+    cursor = start_day
+    remaining = int(forecast_days)
+    while remaining > 0:
+        next_month = date(cursor.year + 1, 1, 1) if cursor.month == 12 else date(cursor.year, cursor.month + 1, 1)
+        span = min(remaining, (next_month - cursor).days)
+        month_budget = _bva_period_budget(config, metric, cursor.year, cursor.month)
+        if month_budget:
+            total += (month_budget / Decimal(_ff_days_in_month(cursor)) * Decimal(span))
+        cursor = cursor + timedelta(days=span)
+        remaining -= span
+    return total.quantize(Decimal("0.01"))
+
+
+def _ff_entry_rows(filters, start_date=None, end_date=None, limit=3000):
+    qs = (
+        AccountingEntry.objects.exclude(main_type="TRANSFER")
+        .exclude(status__iexact="CANCELLED")
+        .select_related("customer", "opportunity", "production_order", "production_order__customer", "production_order__opportunity", "production_order__product")
+    )
+    if start_date:
+        qs = qs.filter(date__gte=start_date)
+    if end_date:
+        qs = qs.filter(date__lte=end_date)
+    if filters["side"]:
+        qs = qs.filter(side=filters["side"])
+    if filters["currency"]:
+        qs = qs.filter(currency=filters["currency"])
+    if filters["customer_id"]:
+        qs = qs.filter(Q(customer_id=filters["customer_id"]) | Q(production_order__customer_id=filters["customer_id"]))
+
+    rows = [_pl_row(entry) for entry in qs.order_by("date", "id")[:limit]]
+    if filters["product_category"]:
+        rows = [row for row in rows if row["product_category"] == filters["product_category"]]
+    return rows
+
+
+def _ff_row_totals(rows):
+    revenue = Decimal("0")
+    expenses = Decimal("0")
+    cash_in = Decimal("0")
+    cash_out = Decimal("0")
+    for row in rows:
+        entry = row["entry"]
+        direction = (entry.direction or "").upper().strip()
+        amount = row["amount_cad"]
+        if direction == AccountingEntry.DIR_IN:
+            cash_in += amount
+            if row["main_type"] == "INCOME":
+                revenue += amount
+        elif direction == AccountingEntry.DIR_OUT:
+            cash_out += amount
+            if row["main_type"] in BVA_EXPENSE_TYPES:
+                expenses += amount
+    return {
+        "revenue": revenue,
+        "expenses": expenses,
+        "net_profit": revenue - expenses,
+        "cash_in": cash_in,
+        "cash_out": cash_out,
+        "net_cash": cash_in - cash_out,
+    }
+
+
+def _ff_product_category_from_order(order):
+    if not order:
+        return "Uncategorized"
+    product = getattr(order, "product", None)
+    if product and product.product_category:
+        return product.product_category.strip() or "Uncategorized"
+    opportunity = getattr(order, "opportunity", None)
+    if opportunity and opportunity.product_category:
+        return opportunity.product_category.strip() or "Uncategorized"
+    return "Uncategorized"
+
+
+def _ff_open_invoice_rows(filters, today, horizon_days):
+    end_day = today + timedelta(days=horizon_days)
+    cad_to_bdt = _bs_latest_cad_to_bdt()
+    qs = (
+        Invoice.objects.exclude(status="cancelled")
+        .select_related("customer", "order", "order__customer", "order__product", "order__opportunity")
+        .filter(Q(due_date__lte=end_day) | Q(due_date__isnull=True, issue_date__lte=end_day))
+    )
+    if filters["currency"]:
+        qs = qs.filter(currency=filters["currency"])
+    if filters["customer_id"]:
+        qs = qs.filter(Q(customer_id=filters["customer_id"]) | Q(order__customer_id=filters["customer_id"]))
+
+    rows = []
+    for invoice in qs.order_by("due_date", "issue_date", "id")[:1500]:
+        if filters["side"] and _exec_invoice_side(invoice) != filters["side"]:
+            continue
+        product_category = _ff_product_category_from_order(invoice.order)
+        if filters["product_category"] and product_category != filters["product_category"]:
+            continue
+        balance = _pl_decimal(invoice.balance)
+        if balance <= 0:
+            continue
+        expected_date = invoice.due_date or invoice.issue_date or today
+        if expected_date > end_day:
+            continue
+        days_until = max((expected_date - today).days, 0)
+        rows.append(
+            {
+                "invoice": invoice,
+                "customer": _exec_customer_label(invoice.customer or getattr(invoice.order, "customer", None)),
+                "expected_date": expected_date,
+                "days_until": days_until,
+                "amount": _bs_invoice_balance_cad(invoice, cad_to_bdt),
+                "currency": (invoice.currency or "").upper(),
+                "side": _exec_invoice_side(invoice),
+                "product_category": product_category,
+            }
+        )
+    return rows
+
+
+def _ff_open_payable_rows(filters, today, horizon_days):
+    end_day = today + timedelta(days=horizon_days)
+    qs = (
+        AccountingEntry.objects.filter(direction=AccountingEntry.DIR_OUT)
+        .exclude(main_type="TRANSFER")
+        .exclude(status__iexact="CANCELLED")
+        .select_related("customer", "opportunity", "production_order", "production_order__customer", "production_order__opportunity", "production_order__product", "shipment")
+        .filter(date__lte=end_day)
+    )
+    if filters["side"]:
+        qs = qs.filter(side=filters["side"])
+    if filters["currency"]:
+        qs = qs.filter(currency=filters["currency"])
+    if filters["customer_id"]:
+        qs = qs.filter(Q(customer_id=filters["customer_id"]) | Q(production_order__customer_id=filters["customer_id"]))
+
+    rows = []
+    for entry in qs.order_by("date", "id")[:1500]:
+        ap_row = _ap_row(entry, today)
+        if ap_row["status_key"] == "paid":
+            continue
+        product_category = _pl_product_category(entry)
+        if filters["product_category"] and product_category != filters["product_category"]:
+            continue
+        expected_date = entry.date or end_day
+        rows.append(
+            {
+                "entry": entry,
+                "supplier": ap_row["supplier"],
+                "expected_date": expected_date,
+                "days_until": max((expected_date - today).days, 0),
+                "amount": _pl_amount_cad(entry),
+                "currency": (entry.currency or "").upper(),
+                "side": (entry.side or "").upper().strip(),
+                "status_label": ap_row["status_label"],
+                "product_category": product_category,
+            }
+        )
+    return rows
+
+
+def _ff_sum_due(rows, days):
+    return sum((row["amount"] for row in rows if row["days_until"] <= days), Decimal("0"))
+
+
+def _ff_horizon_rows(history_totals, history_days, current_cash, invoice_rows, payable_rows, today, config):
+    rows = []
+    for days, label in FF_HORIZON_OPTIONS:
+        revenue = _ff_projection(history_totals["revenue"], history_days, days)
+        expenses = _ff_projection(history_totals["expenses"], history_days, days)
+        net_cash_trend = _ff_projection(history_totals["net_cash"], history_days, days)
+        collections = _ff_sum_due(invoice_rows, days)
+        payments = _ff_sum_due(payable_rows, days)
+        cash_balance = current_cash + collections - payments + net_cash_trend
+        working_capital = cash_balance + collections - payments
+        budget_revenue = _ff_budget_for_days(config, "revenue", today, days)
+        budget_expenses = _ff_budget_for_days(config, "expenses", today, days)
+        rows.append(
+            {
+                "days": days,
+                "label": label,
+                "revenue": revenue,
+                "expenses": expenses,
+                "net_profit": revenue - expenses,
+                "cash_balance": cash_balance,
+                "collections": collections,
+                "payments": payments,
+                "working_capital": working_capital,
+                "budget_revenue": budget_revenue,
+                "budget_expenses": budget_expenses,
+                "budget_profit": budget_revenue - budget_expenses,
+                "revenue_variance": revenue - budget_revenue,
+                "expense_variance": budget_expenses - expenses,
+            }
+        )
+    return rows
+
+
+def _ff_period_rows(selected_days, history_totals, history_days, current_cash, invoice_rows, payable_rows):
+    rows = []
+    running_cash = current_cash
+    start_day = 0
+    while start_day < selected_days:
+        end_day = min(start_day + 30, selected_days)
+        span = end_day - start_day
+        revenue = _ff_projection(history_totals["revenue"], history_days, span)
+        expenses = _ff_projection(history_totals["expenses"], history_days, span)
+        net_cash_trend = _ff_projection(history_totals["net_cash"], history_days, span)
+        collections = sum(
+            (
+                row["amount"]
+                for row in invoice_rows
+                if (start_day == 0 and row["days_until"] <= end_day) or (start_day < row["days_until"] <= end_day)
+            ),
+            Decimal("0"),
+        )
+        payments = sum(
+            (
+                row["amount"]
+                for row in payable_rows
+                if (start_day == 0 and row["days_until"] <= end_day) or (start_day < row["days_until"] <= end_day)
+            ),
+            Decimal("0"),
+        )
+        running_cash = running_cash + collections - payments + net_cash_trend
+        rows.append(
+            {
+                "label": f"Days {start_day + 1}-{end_day}",
+                "revenue": revenue,
+                "expenses": expenses,
+                "net_profit": revenue - expenses,
+                "collections": collections,
+                "payments": payments,
+                "cash_balance": running_cash,
+            }
+        )
+        start_day = end_day
+
+    max_value = max(
+        [max(row["revenue"], row["expenses"], row["collections"], row["payments"], abs(row["cash_balance"])) for row in rows]
+        or [Decimal("0")]
+    )
+    for row in rows:
+        row["revenue_bar"] = int((row["revenue"] / max_value) * 100) if max_value > 0 else 0
+        row["expense_bar"] = int((row["expenses"] / max_value) * 100) if max_value > 0 else 0
+        row["collection_bar"] = int((row["collections"] / max_value) * 100) if max_value > 0 else 0
+        row["payment_bar"] = int((row["payments"] / max_value) * 100) if max_value > 0 else 0
+        row["cash_bar"] = int((abs(row["cash_balance"]) / max_value) * 100) if max_value > 0 else 0
+    return rows
+
+
+def _ff_scenario_rows(base, history_totals, history_days, selected_days, current_cash):
+    net_cash_trend = _ff_projection(history_totals["net_cash"], history_days, selected_days)
+    scenarios = [
+        ("Best case", Decimal("1.15"), Decimal("0.95"), Decimal("1.10"), Decimal("0.95"), "good"),
+        ("Base case", Decimal("1.00"), Decimal("1.00"), Decimal("1.00"), Decimal("1.00"), "blue"),
+        ("Worst case", Decimal("0.85"), Decimal("1.10"), Decimal("0.80"), Decimal("1.10"), "bad"),
+    ]
+    rows = []
+    for label, revenue_factor, expense_factor, collection_factor, payment_factor, tone in scenarios:
+        revenue = (base["revenue"] * revenue_factor).quantize(Decimal("0.01"))
+        expenses = (base["expenses"] * expense_factor).quantize(Decimal("0.01"))
+        collections = (base["collections"] * collection_factor).quantize(Decimal("0.01"))
+        payments = (base["payments"] * payment_factor).quantize(Decimal("0.01"))
+        cash_balance = current_cash + collections - payments + net_cash_trend
+        rows.append(
+            {
+                "label": label,
+                "tone": tone,
+                "revenue": revenue,
+                "expenses": expenses,
+                "net_profit": revenue - expenses,
+                "collections": collections,
+                "payments": payments,
+                "cash_balance": cash_balance,
+                "working_capital": cash_balance + collections - payments,
+            }
+        )
+    return rows
+
+
+def _ff_side_rows(history_rows, cash_rows, invoice_rows, payable_rows, history_days, selected_days):
+    rows = []
+    for side, label in [("CA", "Canada"), ("BD", "Bangladesh")]:
+        side_history = [row for row in history_rows if row["side"] == side]
+        side_cash_rows = [row for row in cash_rows if row["side"] == side]
+        side_history_totals = _ff_row_totals(side_history)
+        side_current_cash = sum(
+            (
+                row["amount_cad"] if (row["entry"].direction or "").upper().strip() == AccountingEntry.DIR_IN else -row["amount_cad"]
+                for row in side_cash_rows
+            ),
+            Decimal("0"),
+        )
+        collections = _ff_sum_due([row for row in invoice_rows if row["side"] == side], selected_days)
+        payments = _ff_sum_due([row for row in payable_rows if row["side"] == side], selected_days)
+        revenue = _ff_projection(side_history_totals["revenue"], history_days, selected_days)
+        expenses = _ff_projection(side_history_totals["expenses"], history_days, selected_days)
+        cash_balance = side_current_cash + collections - payments + _ff_projection(side_history_totals["net_cash"], history_days, selected_days)
+        rows.append(
+            {
+                "side": side,
+                "label": label,
+                "revenue": revenue,
+                "expenses": expenses,
+                "net_profit": revenue - expenses,
+                "collections": collections,
+                "payments": payments,
+                "cash_balance": cash_balance,
+            }
+        )
+    return rows
+
+
+@login_required
+def financial_forecast_dashboard(request):
+    today = timezone.localdate()
+    selected_horizon = _ff_int(request.GET.get("horizon"), 90)
+    filters = {
+        "horizon": selected_horizon,
+        "currency": (request.GET.get("currency") or "").strip().upper(),
+        "side": (request.GET.get("side") or "").strip().upper(),
+        "customer_id": (request.GET.get("customer") or "").strip(),
+        "product_category": (request.GET.get("product_category") or "").strip(),
+    }
+    filter_values = {
+        "horizon": str(selected_horizon),
+        "currency": filters["currency"],
+        "side": filters["side"],
+        "customer": filters["customer_id"],
+        "product_category": filters["product_category"],
+    }
+
+    history_start = today - timedelta(days=FF_HISTORY_DAYS - 1)
+    history_rows = _ff_entry_rows(filters, history_start, today)
+    cash_rows = _ff_entry_rows(filters, None, today)
+    history_totals = _ff_row_totals(history_rows)
+    history_days = max((today - history_start).days + 1, 1)
+    current_cash = sum(
+        (
+            row["amount_cad"] if (row["entry"].direction or "").upper().strip() == AccountingEntry.DIR_IN else -row["amount_cad"]
+            for row in cash_rows
+        ),
+        Decimal("0"),
+    )
+
+    max_horizon = max(days for days, _label in FF_HORIZON_OPTIONS)
+    invoice_rows = _ff_open_invoice_rows(filters, today, max_horizon)
+    payable_rows = _ff_open_payable_rows(filters, today, max_horizon)
+    config = _bva_budget_config()
+    horizon_rows = _ff_horizon_rows(history_totals, history_days, current_cash, invoice_rows, payable_rows, today, config)
+    selected_forecast = next((row for row in horizon_rows if row["days"] == selected_horizon), horizon_rows[-1])
+    for row in horizon_rows:
+        row["is_selected"] = row["days"] == selected_horizon
+
+    budget_rows = [
+        {
+            "label": "Revenue",
+            "forecast": selected_forecast["revenue"],
+            "budget": selected_forecast["budget_revenue"],
+            "variance": selected_forecast["revenue"] - selected_forecast["budget_revenue"],
+        },
+        {
+            "label": "Expenses",
+            "forecast": selected_forecast["expenses"],
+            "budget": selected_forecast["budget_expenses"],
+            "variance": selected_forecast["budget_expenses"] - selected_forecast["expenses"],
+        },
+        {
+            "label": "Net Profit",
+            "forecast": selected_forecast["net_profit"],
+            "budget": selected_forecast["budget_profit"],
+            "variance": selected_forecast["net_profit"] - selected_forecast["budget_profit"],
+        },
+    ]
+
+    customers = Customer.objects.all().order_by("account_brand", "contact_name")
+    product_categories = sorted({
+        value.strip() for value in Product.objects.exclude(product_category="").values_list("product_category", flat=True).distinct()
+        if value and value.strip()
+    } | {
+        row["product_category"] for row in history_rows if row["product_category"] and row["product_category"] != "Uncategorized"
+    })
+
+    return render(
+        request,
+        "crm/accounting_financial_forecast_dashboard.html",
+        {
+            "filter_values": filter_values,
+            "horizon_options": FF_HORIZON_OPTIONS,
+            "currency_options": ["CAD", "BDT", "USD"],
+            "side_options": [("", "All sides"), ("CA", "Canada"), ("BD", "Bangladesh")],
+            "customers": customers,
+            "product_categories": product_categories,
+            "history_start": history_start,
+            "today": today,
+            "history_days": history_days,
+            "history_entry_count": len(history_rows),
+            "current_cash": current_cash,
+            "horizon_rows": horizon_rows,
+            "selected_forecast": selected_forecast,
+            "period_rows": _ff_period_rows(selected_horizon, history_totals, history_days, current_cash, invoice_rows, payable_rows),
+            "scenario_rows": _ff_scenario_rows(selected_forecast, history_totals, history_days, selected_horizon, current_cash),
+            "budget_rows": budget_rows,
+            "side_rows": _ff_side_rows(history_rows, cash_rows, invoice_rows, payable_rows, history_days, selected_horizon),
+            "collection_rows": [row for row in invoice_rows if row["days_until"] <= selected_horizon][:30],
+            "payable_rows": [row for row in payable_rows if row["days_until"] <= selected_horizon][:30],
+            "collection_count": len([row for row in invoice_rows if row["days_until"] <= selected_horizon]),
+            "payable_count": len([row for row in payable_rows if row["days_until"] <= selected_horizon]),
+            "budget_source": "settings.ACCOUNTING_BUDGETS" if config else "Zero budget baseline",
         },
     )
 

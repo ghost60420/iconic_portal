@@ -1,0 +1,517 @@
+{% extends "crm/base.html" %}
+{% load humanize %}
+{% block content %}
+
+<style>
+  :root{
+    --ff-line:#263348;
+    --ff-text:#f8fafc;
+    --ff-muted:#94a3b8;
+    --ff-gold:#f5c451;
+    --ff-good:#4ade80;
+    --ff-warn:#fbbf24;
+    --ff-bad:#fb7185;
+    --ff-blue:#60a5fa;
+  }
+
+  .ff-wrap{ max-width:1400px; margin:0 auto; color:var(--ff-text); }
+
+  .ff-hero{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:16px;
+    flex-wrap:wrap;
+    padding:22px;
+    border:1px solid rgba(245,196,81,0.22);
+    border-radius:22px;
+    background:
+      linear-gradient(135deg, rgba(96,165,250,0.16), transparent 36%),
+      linear-gradient(180deg, rgba(15,23,42,0.96), rgba(2,6,23,0.96));
+    box-shadow:0 24px 60px rgba(0,0,0,0.42);
+    margin-bottom:16px;
+  }
+
+  .ff-kicker{
+    color:var(--ff-gold);
+    font-size:12px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    margin-bottom:6px;
+  }
+
+  .ff-title{ margin:0; font-size:30px; line-height:1.1; font-weight:900; }
+  .ff-sub{ margin-top:8px; max-width:850px; color:var(--ff-muted); font-size:13px; line-height:1.5; font-weight:700; }
+
+  .ff-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+  .ff-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-height:38px;
+    padding:9px 13px;
+    border-radius:14px;
+    border:1px solid rgba(148,163,184,0.25);
+    background:rgba(15,23,42,0.82);
+    color:var(--ff-text);
+    text-decoration:none;
+    font-size:12px;
+    font-weight:900;
+  }
+  .ff-btn:hover{ color:var(--ff-text); border-color:rgba(245,196,81,0.55); }
+  .ff-btn--gold{ background:linear-gradient(135deg, #f6d365, #d9a622); color:#111827; border-color:rgba(245,196,81,0.55); }
+  .ff-btn--gold:hover{ color:#111827; }
+
+  .ff-filter{
+    display:grid;
+    grid-template-columns:repeat(5, minmax(0,1fr)) auto;
+    gap:12px;
+    padding:14px;
+    border:1px solid var(--ff-line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.92), rgba(2,6,23,0.92));
+    margin-bottom:16px;
+  }
+
+  .ff-field label{
+    display:block;
+    margin-bottom:6px;
+    color:var(--ff-muted);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.07em;
+  }
+
+  .ff-field input,
+  .ff-field select{
+    width:100%;
+    min-height:42px;
+    border:1px solid rgba(148,163,184,0.26);
+    border-radius:14px;
+    background:#030712;
+    color:var(--ff-text);
+    padding:9px 11px;
+    font-size:13px;
+    font-weight:800;
+  }
+
+  .ff-filter-actions{ display:flex; gap:8px; align-items:end; }
+
+  .ff-horizon-grid,
+  .ff-focus-grid{
+    display:grid;
+    grid-template-columns:repeat(3, minmax(0,1fr));
+    gap:12px;
+    margin-bottom:16px;
+  }
+
+  .ff-focus-grid{ grid-template-columns:repeat(4, minmax(0,1fr)); }
+
+  .ff-card{
+    padding:14px;
+    border:1px solid var(--ff-line);
+    border-radius:18px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.94), rgba(2,6,23,0.94));
+    box-shadow:0 18px 44px rgba(0,0,0,0.30);
+  }
+  .ff-card--selected{ border-color:rgba(245,196,81,0.55); box-shadow:0 18px 50px rgba(245,196,81,0.12); }
+  .ff-card span{ display:block; color:var(--ff-muted); font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.07em; }
+  .ff-card strong{ display:block; margin-top:8px; color:var(--ff-text); font-size:21px; line-height:1.12; font-weight:950; }
+  .ff-card small{ display:block; margin-top:7px; color:var(--ff-muted); font-size:11px; line-height:1.45; font-weight:800; }
+  .ff-card-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+  .ff-card-stat{ border-top:1px solid rgba(148,163,184,0.14); padding-top:8px; }
+  .ff-card-stat b{ display:block; font-size:13px; }
+
+  .ff-grid{
+    display:grid;
+    grid-template-columns:minmax(0,1.35fr) minmax(360px,.95fr);
+    gap:14px;
+    align-items:start;
+  }
+
+  .ff-section{
+    border:1px solid var(--ff-line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.94), rgba(2,6,23,0.94));
+    overflow:hidden;
+    margin-bottom:14px;
+  }
+
+  .ff-section-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    flex-wrap:wrap;
+    padding:14px 16px;
+    border-bottom:1px solid rgba(148,163,184,0.16);
+  }
+
+  .ff-section-title{ margin:0; font-size:15px; font-weight:900; }
+  .ff-section-note{ color:var(--ff-muted); font-size:12px; font-weight:800; }
+  .ff-muted{ color:var(--ff-muted); font-size:12px; font-weight:800; }
+  .ff-right{ text-align:right !important; }
+
+  .ff-chart-row{
+    display:grid;
+    grid-template-columns:92px minmax(0,1fr) 120px;
+    gap:10px;
+    align-items:center;
+    padding:11px 14px;
+    border-bottom:1px solid rgba(148,163,184,0.11);
+  }
+  .ff-bars{ display:grid; gap:5px; }
+  .ff-bar{ height:8px; border-radius:999px; background:rgba(148,163,184,0.13); overflow:hidden; }
+  .ff-bar span{ display:block; height:100%; min-width:2px; border-radius:999px; }
+  .ff-bar-revenue span{ background:linear-gradient(90deg, var(--ff-good), var(--ff-blue)); }
+  .ff-bar-expense span{ background:linear-gradient(90deg, var(--ff-warn), var(--ff-bad)); }
+  .ff-bar-cash span{ background:linear-gradient(90deg, var(--ff-gold), #60a5fa); }
+  .ff-bar-collection span{ background:linear-gradient(90deg, #22c55e, #14b8a6); }
+  .ff-bar-payment span{ background:linear-gradient(90deg, #fb923c, #fb7185); }
+
+  .ff-table-wrap{ overflow-x:auto; }
+  .ff-table{ width:100%; border-collapse:collapse; min-width:650px; }
+  .ff-table--compact{ min-width:500px; }
+  .ff-table th{
+    padding:11px 12px;
+    background:#06101f;
+    border-bottom:1px solid rgba(148,163,184,0.16);
+    color:var(--ff-muted);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.07em;
+    text-align:left;
+    white-space:nowrap;
+  }
+  .ff-table td{
+    padding:12px;
+    border-bottom:1px solid rgba(148,163,184,0.11);
+    color:#e5e7eb;
+    font-size:13px;
+    font-weight:800;
+    vertical-align:top;
+  }
+  .ff-table tr:hover td{ background:rgba(245,196,81,0.05); }
+  .ff-empty{ padding:22px; color:var(--ff-muted); font-size:13px; font-weight:800; text-align:center; }
+
+  .ff-badge{
+    display:inline-flex;
+    align-items:center;
+    min-height:24px;
+    border-radius:999px;
+    padding:4px 9px;
+    border:1px solid rgba(148,163,184,0.26);
+    color:#e2e8f0;
+    background:rgba(148,163,184,0.10);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    white-space:nowrap;
+  }
+  .ff-badge--good{ color:#bbf7d0; background:rgba(74,222,128,0.12); border-color:rgba(74,222,128,0.34); }
+  .ff-badge--warn{ color:#fde68a; background:rgba(251,191,36,0.12); border-color:rgba(251,191,36,0.34); }
+  .ff-badge--bad{ color:#fecdd3; background:rgba(251,113,133,0.12); border-color:rgba(251,113,133,0.36); }
+  .ff-badge--blue{ color:#bfdbfe; background:rgba(96,165,250,0.12); border-color:rgba(96,165,250,0.34); }
+
+  .ff-side-grid,
+  .ff-scenario-grid{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px; padding:14px; }
+  .ff-scenario-grid{ grid-template-columns:repeat(3, minmax(0,1fr)); }
+  .ff-side-card,
+  .ff-scenario-card{ border:1px solid rgba(148,163,184,0.18); border-radius:16px; background:rgba(3,7,18,0.76); padding:13px; }
+  .ff-side-card h3,
+  .ff-scenario-card h3{ margin:0 0 10px; font-size:15px; font-weight:900; }
+  .ff-side-line{ display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-top:1px solid rgba(148,163,184,0.10); font-size:12px; font-weight:850; }
+
+  @media (max-width:1180px){
+    .ff-filter{ grid-template-columns:repeat(3, minmax(0,1fr)); }
+    .ff-horizon-grid,
+    .ff-focus-grid{ grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .ff-grid{ grid-template-columns:1fr; }
+  }
+  @media (max-width:760px){
+    .ff-hero{ padding:16px; border-radius:18px; }
+    .ff-title{ font-size:24px; }
+    .ff-filter,
+    .ff-horizon-grid,
+    .ff-focus-grid,
+    .ff-side-grid,
+    .ff-scenario-grid{ grid-template-columns:1fr; }
+    .ff-filter-actions{ align-items:stretch; flex-direction:column; }
+    .ff-btn{ width:100%; }
+  }
+</style>
+
+<div class="ff-wrap">
+  <div class="ff-hero">
+    <div>
+      <div class="ff-kicker">Accounting Phase 10</div>
+      <h1 class="ff-title">Financial Forecast</h1>
+      <div class="ff-sub">
+        Read-only projection using recent accounting averages, open receivables, and open payables. No accounting postings or locked-period rules are changed.
+      </div>
+    </div>
+    <div class="ff-actions">
+      <a class="ff-btn" href="{% url 'kpi_scorecard_dashboard' %}">KPI Scorecard</a>
+      <a class="ff-btn" href="{% url 'cash_flow_dashboard' %}">Cash Flow</a>
+      <a class="ff-btn ff-btn--gold" href="{% url 'accounting_entry_list' %}">Accounting entries</a>
+    </div>
+  </div>
+
+  <form class="ff-filter" method="get">
+    <div class="ff-field">
+      <label for="horizon">Forecast horizon</label>
+      <select id="horizon" name="horizon">
+        {% for days,label in horizon_options %}
+          <option value="{{ days }}" {% if filter_values.horizon == days|stringformat:"s" %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="ff-field">
+      <label for="currency">Currency</label>
+      <select id="currency" name="currency">
+        <option value="" {% if not filter_values.currency %}selected{% endif %}>All currencies</option>
+        {% for currency in currency_options %}
+          <option value="{{ currency }}" {% if filter_values.currency == currency %}selected{% endif %}>{{ currency }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="ff-field">
+      <label for="side">Side</label>
+      <select id="side" name="side">
+        {% for value,label in side_options %}
+          <option value="{{ value }}" {% if filter_values.side == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="ff-field">
+      <label for="customer">Customer</label>
+      <select id="customer" name="customer">
+        <option value="" {% if not filter_values.customer %}selected{% endif %}>All customers</option>
+        {% for customer in customers %}
+          <option value="{{ customer.pk }}" {% if filter_values.customer == customer.pk|stringformat:"s" %}selected{% endif %}>
+            {{ customer.account_brand|default:customer.contact_name|default:customer }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="ff-field">
+      <label for="product_category">Product category</label>
+      <select id="product_category" name="product_category">
+        <option value="" {% if not filter_values.product_category %}selected{% endif %}>All categories</option>
+        {% for category in product_categories %}
+          <option value="{{ category }}" {% if filter_values.product_category == category %}selected{% endif %}>{{ category }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="ff-filter-actions">
+      <button class="ff-btn ff-btn--gold" type="submit">Apply</button>
+      <a class="ff-btn" href="{% url 'financial_forecast_dashboard' %}">Reset</a>
+    </div>
+  </form>
+
+  <div class="ff-horizon-grid">
+    {% for row in horizon_rows %}
+      <div class="ff-card {% if row.is_selected %}ff-card--selected{% endif %}">
+        <span>Forecast Revenue {{ row.label }}</span>
+        <strong>CAD {{ row.revenue|floatformat:2|intcomma }}</strong>
+        <small>Forecast expenses: CAD {{ row.expenses|floatformat:2|intcomma }}</small>
+        <div class="ff-card-grid">
+          <div class="ff-card-stat"><span>Net Profit</span><b>CAD {{ row.net_profit|floatformat:2|intcomma }}</b></div>
+          <div class="ff-card-stat"><span>Cash Balance</span><b>CAD {{ row.cash_balance|floatformat:2|intcomma }}</b></div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="ff-focus-grid">
+    <div class="ff-card"><span>Forecast Net Profit</span><strong>CAD {{ selected_forecast.net_profit|floatformat:2|intcomma }}</strong><small>{{ selected_forecast.label }} selected forecast.</small></div>
+    <div class="ff-card"><span>Forecast Cash Balance</span><strong>CAD {{ selected_forecast.cash_balance|floatformat:2|intcomma }}</strong><small>Current cash plus expected cash movement.</small></div>
+    <div class="ff-card"><span>Expected Customer Collections</span><strong>CAD {{ selected_forecast.collections|floatformat:2|intcomma }}</strong><small>{{ collection_count }} open receivable item(s).</small></div>
+    <div class="ff-card"><span>Expected Supplier Payments</span><strong>CAD {{ selected_forecast.payments|floatformat:2|intcomma }}</strong><small>{{ payable_count }} open payable item(s).</small></div>
+    <div class="ff-card"><span>Expected Working Capital</span><strong>CAD {{ selected_forecast.working_capital|floatformat:2|intcomma }}</strong><small>Forecast cash plus expected AR minus AP.</small></div>
+    <div class="ff-card"><span>Current Cash Baseline</span><strong>CAD {{ current_cash|floatformat:2|intcomma }}</strong><small>Signed accounting cash through {{ today }}.</small></div>
+    <div class="ff-card"><span>History Window</span><strong>{{ history_days }} days</strong><small>{{ history_entry_count }} accounting row(s) from {{ history_start }}.</small></div>
+    <div class="ff-card"><span>Budget Source</span><strong>{{ budget_source }}</strong><small>Used only for forecast comparison.</small></div>
+  </div>
+
+  <div class="ff-grid">
+    <div>
+      <section class="ff-section">
+        <div class="ff-section-head">
+          <div>
+            <h2 class="ff-section-title">Revenue, expense, and cash forecast trend</h2>
+            <div class="ff-section-note">Projected movement across the selected horizon.</div>
+          </div>
+        </div>
+        {% if period_rows %}
+          {% for row in period_rows %}
+            <div class="ff-chart-row">
+              <div class="ff-muted">{{ row.label }}</div>
+              <div class="ff-bars">
+                <div class="ff-bar ff-bar-revenue"><span style="width:{{ row.revenue_bar }}%"></span></div>
+                <div class="ff-bar ff-bar-expense"><span style="width:{{ row.expense_bar }}%"></span></div>
+                <div class="ff-bar ff-bar-cash"><span style="width:{{ row.cash_bar }}%"></span></div>
+              </div>
+              <div class="ff-right"><span class="ff-badge {% if row.net_profit >= 0 %}ff-badge--good{% else %}ff-badge--bad{% endif %}">CAD {{ row.net_profit|floatformat:0|intcomma }}</span></div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="ff-empty">No forecast trend data found.</div>
+        {% endif %}
+      </section>
+
+      <section class="ff-section">
+        <div class="ff-section-head">
+          <div>
+            <h2 class="ff-section-title">Receivable collection forecast</h2>
+            <div class="ff-section-note">Open customer balances expected inside the selected horizon.</div>
+          </div>
+        </div>
+        <div class="ff-table-wrap">
+          {% if collection_rows %}
+            <table class="ff-table">
+              <thead><tr><th>Invoice</th><th>Customer</th><th>Expected date</th><th>Side</th><th class="ff-right">Amount</th></tr></thead>
+              <tbody>
+                {% for row in collection_rows %}
+                  <tr>
+                    <td>{{ row.invoice.invoice_number }}</td>
+                    <td>{{ row.customer }}</td>
+                    <td>{{ row.expected_date }}</td>
+                    <td>{{ row.side }}</td>
+                    <td class="ff-right">CAD {{ row.amount|floatformat:2|intcomma }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <div class="ff-empty">No open receivables found in this horizon.</div>
+          {% endif %}
+        </div>
+      </section>
+
+      <section class="ff-section">
+        <div class="ff-section-head">
+          <div>
+            <h2 class="ff-section-title">Payable payment forecast</h2>
+            <div class="ff-section-note">Open supplier or vendor outflows expected inside the selected horizon.</div>
+          </div>
+        </div>
+        <div class="ff-table-wrap">
+          {% if payable_rows %}
+            <table class="ff-table">
+              <thead><tr><th>Supplier</th><th>Status</th><th>Expected date</th><th>Side</th><th class="ff-right">Amount</th></tr></thead>
+              <tbody>
+                {% for row in payable_rows %}
+                  <tr>
+                    <td>{{ row.supplier }}</td>
+                    <td><span class="ff-badge {% if row.status_label == 'Overdue' %}ff-badge--bad{% else %}ff-badge--warn{% endif %}">{{ row.status_label }}</span></td>
+                    <td>{{ row.expected_date }}</td>
+                    <td>{{ row.side }}</td>
+                    <td class="ff-right">CAD {{ row.amount|floatformat:2|intcomma }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <div class="ff-empty">No open payable items found in this horizon.</div>
+          {% endif %}
+        </div>
+      </section>
+    </div>
+
+    <div>
+      <section class="ff-section">
+        <div class="ff-section-head">
+          <div>
+            <h2 class="ff-section-title">Best, base, and worst case scenarios</h2>
+            <div class="ff-section-note">Scenario analysis for the selected forecast horizon.</div>
+          </div>
+        </div>
+        <div class="ff-scenario-grid">
+          {% for row in scenario_rows %}
+            <div class="ff-scenario-card">
+              <h3>{{ row.label }}</h3>
+              <span class="ff-badge ff-badge--{{ row.tone }}">{{ row.tone }}</span>
+              <div class="ff-side-line"><span>Revenue</span><strong>CAD {{ row.revenue|floatformat:2|intcomma }}</strong></div>
+              <div class="ff-side-line"><span>Expenses</span><strong>CAD {{ row.expenses|floatformat:2|intcomma }}</strong></div>
+              <div class="ff-side-line"><span>Net Profit</span><strong>CAD {{ row.net_profit|floatformat:2|intcomma }}</strong></div>
+              <div class="ff-side-line"><span>Cash Balance</span><strong>CAD {{ row.cash_balance|floatformat:2|intcomma }}</strong></div>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="ff-section">
+        <div class="ff-section-head">
+          <div>
+            <h2 class="ff-section-title">Budget comparison</h2>
+            <div class="ff-section-note">Forecast compared with configured budget values.</div>
+          </div>
+        </div>
+        <div class="ff-table-wrap">
+          <table class="ff-table ff-table--compact">
+            <thead><tr><th>Metric</th><th class="ff-right">Budget</th><th class="ff-right">Forecast</th><th class="ff-right">Variance</th></tr></thead>
+            <tbody>
+              {% for row in budget_rows %}
+                <tr>
+                  <td>{{ row.label }}</td>
+                  <td class="ff-right">CAD {{ row.budget|floatformat:2|intcomma }}</td>
+                  <td class="ff-right">CAD {{ row.forecast|floatformat:2|intcomma }}</td>
+                  <td class="ff-right">CAD {{ row.variance|floatformat:2|intcomma }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="ff-section">
+        <div class="ff-section-head">
+          <div>
+            <h2 class="ff-section-title">Canada vs Bangladesh forecast</h2>
+            <div class="ff-section-note">Side-based revenue, expense, collection, payment, and cash forecast.</div>
+          </div>
+        </div>
+        <div class="ff-side-grid">
+          {% for row in side_rows %}
+            <div class="ff-side-card">
+              <h3>{{ row.label }}</h3>
+              <div class="ff-side-line"><span>Revenue</span><strong>CAD {{ row.revenue|floatformat:2|intcomma }}</strong></div>
+              <div class="ff-side-line"><span>Expenses</span><strong>CAD {{ row.expenses|floatformat:2|intcomma }}</strong></div>
+              <div class="ff-side-line"><span>Net Profit</span><strong>CAD {{ row.net_profit|floatformat:2|intcomma }}</strong></div>
+              <div class="ff-side-line"><span>Collections</span><strong>CAD {{ row.collections|floatformat:2|intcomma }}</strong></div>
+              <div class="ff-side-line"><span>Payments</span><strong>CAD {{ row.payments|floatformat:2|intcomma }}</strong></div>
+              <div class="ff-side-line"><span>Cash Balance</span><strong>CAD {{ row.cash_balance|floatformat:2|intcomma }}</strong></div>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="ff-section">
+        <div class="ff-section-head">
+          <div>
+            <h2 class="ff-section-title">Forecast calculation source</h2>
+            <div class="ff-section-note">Read-only inputs used to build this projection.</div>
+          </div>
+        </div>
+        <div class="ff-table-wrap">
+          <table class="ff-table ff-table--compact">
+            <tbody>
+              <tr><td>Historical accounting rows</td><td class="ff-right">{{ history_entry_count|intcomma }}</td></tr>
+              <tr><td>Historical average window</td><td class="ff-right">{{ history_days }} days</td></tr>
+              <tr><td>Open receivables in horizon</td><td class="ff-right">{{ collection_count|intcomma }}</td></tr>
+              <tr><td>Open payables in horizon</td><td class="ff-right">{{ payable_count|intcomma }}</td></tr>
+              <tr><td>Selected horizon</td><td class="ff-right">{{ selected_forecast.label }}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
