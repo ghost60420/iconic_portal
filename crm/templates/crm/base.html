@@ -285,6 +285,9 @@
     {% url 'accounts_receivable_dashboard' as ar_dashboard_url %}
     {% url 'accounts_payable_dashboard' as ap_dashboard_url %}
     {% url 'profit_loss_dashboard' as profit_loss_url %}
+    {% url 'executive_financial_dashboard' as executive_dashboard_url %}
+    {% url 'balance_sheet_dashboard' as balance_sheet_url %}
+    {% url 'cash_flow_dashboard' as cash_flow_url %}
     {% url 'invoice_list' as invoice_list_url %}
     {% url 'logout' as logout_url %}
     {% url 'access_list' as access_url %}
@@ -442,6 +445,9 @@
             {% if ar_dashboard_url %}<a class="crm-dd-item" href="{{ ar_dashboard_url }}">Accounts receivable</a>{% endif %}
             {% if ap_dashboard_url %}<a class="crm-dd-item" href="{{ ap_dashboard_url }}">Accounts payable</a>{% endif %}
             {% if profit_loss_url %}<a class="crm-dd-item" href="{{ profit_loss_url }}">Profit and Loss</a>{% endif %}
+            {% if executive_dashboard_url %}<a class="crm-dd-item" href="{{ executive_dashboard_url }}">Executive Dashboard</a>{% endif %}
+            {% if balance_sheet_url %}<a class="crm-dd-item" href="{{ balance_sheet_url }}">Balance Sheet</a>{% endif %}
+            {% if cash_flow_url %}<a class="crm-dd-item" href="{{ cash_flow_url }}">Cash Flow</a>{% endif %}
             {% if invoice_list_url %}<a class="crm-dd-item" href="{{ invoice_list_url }}">🧾 Invoices</a>{% endif %}
 
             {% if user|is_ca %}

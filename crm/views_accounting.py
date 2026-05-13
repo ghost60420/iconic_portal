@@ -44,6 +44,9 @@ from .models import (
     BDStaff,
     BDStaffMonth,
     Customer,
+    Invoice,
+    InvoicePayment,
+    InventoryItem,
     Product,
     ProductionOrder,
 )
@@ -1039,6 +1042,855 @@ def profit_loss_dashboard(request):
             "revenue_count": len(revenue_rows),
             "cogs_count": len(cogs_rows),
             "opex_count": len(opex_rows),
+        },
+    )
+
+
+def _exec_payment_amount_cad(payment):
+    amount_cad = _pl_decimal(getattr(payment, "amount_cad", None))
+    if amount_cad:
+        return amount_cad
+    if (payment.currency or "").upper().strip() == "CAD":
+        return _pl_decimal(payment.amount)
+    return Decimal("0")
+
+
+def _exec_invoice_side(invoice):
+    region = (getattr(invoice, "invoice_region", "") or "").upper().strip()
+    if region in {"CA", "BD"}:
+        return region
+    currency = (invoice.currency or "").upper().strip()
+    return "BD" if currency == "BDT" else "CA"
+
+
+def _exec_customer_label(customer):
+    if not customer:
+        return "No customer"
+    return customer.account_brand or customer.contact_name or f"Customer {customer.pk}"
+
+
+def _exec_currency_totals(rows, currency_getter, amount_getter):
+    totals = {}
+    for row in rows:
+        currency = (currency_getter(row) or "Unknown").upper()
+        totals[currency] = totals.get(currency, Decimal("0")) + _pl_decimal(amount_getter(row))
+    return [
+        {"currency": currency, "amount": amount}
+        for currency, amount in sorted(totals.items())
+        if amount != 0
+    ]
+
+
+def _exec_monthly_cash_rows(entries):
+    monthly = {}
+    for entry in entries:
+        if not entry.date:
+            continue
+        key = entry.date.strftime("%Y-%m")
+        if key not in monthly:
+            monthly[key] = {
+                "key": key,
+                "label": entry.date.strftime("%b %Y"),
+                "cash_in": Decimal("0"),
+                "cash_out": Decimal("0"),
+                "net": Decimal("0"),
+            }
+        amount = _pl_amount_cad(entry)
+        if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN:
+            monthly[key]["cash_in"] += amount
+        elif (entry.direction or "").upper().strip() == AccountingEntry.DIR_OUT:
+            monthly[key]["cash_out"] += amount
+
+    rows = [monthly[key] for key in sorted(monthly.keys())][-12:]
+    max_value = max(
+        [max(row["cash_in"], row["cash_out"]) for row in rows] or [Decimal("0")]
+    )
+    for row in rows:
+        row["net"] = row["cash_in"] - row["cash_out"]
+        row["in_bar"] = int((row["cash_in"] / max_value) * 100) if max_value > 0 else 0
+        row["out_bar"] = int((row["cash_out"] / max_value) * 100) if max_value > 0 else 0
+    return rows
+
+
+def _exec_health_score(total_revenue, total_received, total_receivables, total_payables, net_profit, cash_flow, overdue_count, due_vendor_count):
+    score = Decimal("65")
+    if total_revenue > 0:
+        score += Decimal("8")
+    if total_received > 0:
+        score += Decimal("7")
+    score += Decimal("10") if net_profit >= 0 else Decimal("-12")
+    score += Decimal("8") if cash_flow >= 0 else Decimal("-10")
+    if total_revenue > 0 and total_receivables > total_revenue * Decimal("0.35"):
+        score -= Decimal("8")
+    if total_received > 0 and total_payables > total_received * Decimal("0.50"):
+        score -= Decimal("7")
+    if overdue_count:
+        score -= min(Decimal(overdue_count) * Decimal("2"), Decimal("12"))
+    if due_vendor_count:
+        score -= min(Decimal(due_vendor_count), Decimal("8"))
+    score = max(Decimal("0"), min(Decimal("100"), score))
+    if score >= 82:
+        label = "Strong"
+        tone = "good"
+    elif score >= 65:
+        label = "Stable"
+        tone = "blue"
+    elif score >= 45:
+        label = "Needs attention"
+        tone = "warn"
+    else:
+        label = "High risk"
+        tone = "bad"
+    return int(score), label, tone
+
+
+@login_required
+def executive_financial_dashboard(request):
+    today = timezone.localdate()
+    filters = {
+        "date_from": _parse_pl_date(request.GET.get("date_from")),
+        "date_to": _parse_pl_date(request.GET.get("date_to")),
+        "currency": (request.GET.get("currency") or "").strip().upper(),
+        "side": (request.GET.get("side") or "").strip().upper(),
+    }
+    filter_values = {
+        "date_from": filters["date_from"].isoformat() if filters["date_from"] else "",
+        "date_to": filters["date_to"].isoformat() if filters["date_to"] else "",
+        "currency": filters["currency"],
+        "side": filters["side"],
+    }
+
+    accounting_qs = (
+        AccountingEntry.objects.exclude(main_type="TRANSFER")
+        .exclude(status__iexact="CANCELLED")
+        .select_related("customer", "opportunity", "production_order", "production_order__customer", "production_order__opportunity", "production_order__product")
+    )
+    if filters["date_from"]:
+        accounting_qs = accounting_qs.filter(date__gte=filters["date_from"])
+    if filters["date_to"]:
+        accounting_qs = accounting_qs.filter(date__lte=filters["date_to"])
+    if filters["side"]:
+        accounting_qs = accounting_qs.filter(side=filters["side"])
+    if filters["currency"]:
+        accounting_qs = accounting_qs.filter(currency=filters["currency"])
+
+    entries = list(accounting_qs.order_by("date", "id")[:2000])
+    pl_rows = [_pl_row(entry) for entry in entries]
+    revenue_rows = [
+        row for row in pl_rows
+        if (row["entry"].direction or "").upper().strip() == AccountingEntry.DIR_IN and row["main_type"] == "INCOME"
+    ]
+    cogs_rows = [
+        row for row in pl_rows
+        if (row["entry"].direction or "").upper().strip() == AccountingEntry.DIR_OUT and row["main_type"] == "COGS"
+    ]
+    opex_rows = [
+        row for row in pl_rows
+        if (row["entry"].direction or "").upper().strip() == AccountingEntry.DIR_OUT and row["main_type"] in PL_OPEX_TYPES
+    ]
+
+    total_revenue = sum((row["amount_cad"] for row in revenue_rows), Decimal("0"))
+    total_cogs = sum((row["amount_cad"] for row in cogs_rows), Decimal("0"))
+    total_opex = sum((row["amount_cad"] for row in opex_rows), Decimal("0"))
+    net_profit = total_revenue - total_cogs - total_opex
+    cash_in = sum(
+        (_pl_amount_cad(entry) for entry in entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN),
+        Decimal("0"),
+    )
+    cash_out = sum(
+        (_pl_amount_cad(entry) for entry in entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_OUT),
+        Decimal("0"),
+    )
+    cash_flow = cash_in - cash_out
+
+    invoice_qs = Invoice.objects.exclude(status="cancelled").select_related("customer", "order", "order__customer")
+    if filters["date_from"]:
+        invoice_qs = invoice_qs.filter(issue_date__gte=filters["date_from"])
+    if filters["date_to"]:
+        invoice_qs = invoice_qs.filter(issue_date__lte=filters["date_to"])
+    if filters["currency"]:
+        invoice_qs = invoice_qs.filter(currency=filters["currency"])
+    invoices = list(invoice_qs.order_by("due_date", "-issue_date", "-created_at")[:1500])
+    if filters["side"]:
+        invoices = [invoice for invoice in invoices if _exec_invoice_side(invoice) == filters["side"]]
+
+    payment_qs = InvoicePayment.objects.select_related("invoice", "invoice__customer", "production_order", "accounting_entry")
+    if filters["date_from"]:
+        payment_qs = payment_qs.filter(payment_date__gte=filters["date_from"])
+    if filters["date_to"]:
+        payment_qs = payment_qs.filter(payment_date__lte=filters["date_to"])
+    if filters["currency"]:
+        payment_qs = payment_qs.filter(currency=filters["currency"])
+    if filters["side"]:
+        payment_qs = payment_qs.filter(side=filters["side"])
+    payments = list(payment_qs.order_by("-payment_date", "-id")[:1500])
+
+    open_invoices = [invoice for invoice in invoices if _pl_decimal(invoice.balance) > 0]
+    overdue_invoices = [invoice for invoice in open_invoices if invoice.due_date and invoice.due_date < today]
+    total_receivables = sum((_pl_decimal(invoice.balance) for invoice in open_invoices), Decimal("0"))
+    total_received = sum((_exec_payment_amount_cad(payment) for payment in payments), Decimal("0"))
+
+    payable_rows = [
+        _ap_row(entry, today)
+        for entry in entries
+        if (entry.direction or "").upper().strip() == AccountingEntry.DIR_OUT
+    ]
+    open_payable_rows = [row for row in payable_rows if row["status_key"] != "paid"]
+    due_vendor_rows = [
+        row for row in open_payable_rows
+        if row["entry"].date and row["entry"].date <= today + timedelta(days=7)
+    ]
+    total_payables = sum((_pl_amount_cad(row["entry"]) for row in open_payable_rows), Decimal("0"))
+
+    customer_map = {}
+    for row in revenue_rows:
+        label = row["customer"]
+        if label not in customer_map:
+            customer_map[label] = {"label": label, "revenue": Decimal("0"), "receivable": Decimal("0"), "count": 0}
+        customer_map[label]["revenue"] += row["amount_cad"]
+        customer_map[label]["count"] += 1
+    for invoice in open_invoices:
+        label = _exec_customer_label(invoice.customer or getattr(invoice.order, "customer", None))
+        if label not in customer_map:
+            customer_map[label] = {"label": label, "revenue": Decimal("0"), "receivable": Decimal("0"), "count": 0}
+        customer_map[label]["receivable"] += _pl_decimal(invoice.balance)
+    top_customer_rows = sorted(
+        customer_map.values(),
+        key=lambda row: (row["revenue"], row["receivable"]),
+        reverse=True,
+    )[:12]
+
+    supplier_map = {}
+    for row in open_payable_rows:
+        supplier = row["supplier"]
+        if supplier not in supplier_map:
+            supplier_map[supplier] = {"label": supplier, "payable": Decimal("0"), "count": 0, "overdue_count": 0}
+        supplier_map[supplier]["payable"] += _pl_amount_cad(row["entry"])
+        supplier_map[supplier]["count"] += 1
+        supplier_map[supplier]["overdue_count"] += 1 if row["status_key"] == "overdue" else 0
+    top_supplier_rows = sorted(supplier_map.values(), key=lambda row: row["payable"], reverse=True)[:12]
+
+    side_rows = []
+    for side, label in [("CA", "Canada"), ("BD", "Bangladesh")]:
+        side_entries = [entry for entry in entries if (entry.side or "").upper().strip() == side]
+        side_revenue = sum(
+            (_pl_amount_cad(entry) for entry in side_entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN and (entry.main_type or "").upper().strip() == "INCOME"),
+            Decimal("0"),
+        )
+        side_cogs = sum(
+            (_pl_amount_cad(entry) for entry in side_entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_OUT and (entry.main_type or "").upper().strip() == "COGS"),
+            Decimal("0"),
+        )
+        side_opex = sum(
+            (_pl_amount_cad(entry) for entry in side_entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_OUT and (entry.main_type or "").upper().strip() in PL_OPEX_TYPES),
+            Decimal("0"),
+        )
+        side_payables = sum(
+            (_pl_amount_cad(row["entry"]) for row in open_payable_rows if (row["entry"].side or "").upper().strip() == side),
+            Decimal("0"),
+        )
+        side_received = sum((_exec_payment_amount_cad(payment) for payment in payments if payment.side == side), Decimal("0"))
+        side_receivables = sum((_pl_decimal(invoice.balance) for invoice in open_invoices if _exec_invoice_side(invoice) == side), Decimal("0"))
+        side_rows.append(
+            {
+                "side": side,
+                "label": label,
+                "revenue": side_revenue,
+                "received": side_received,
+                "receivables": side_receivables,
+                "payables": side_payables,
+                "net_profit": side_revenue - side_cogs - side_opex,
+            }
+        )
+
+    health_score, health_label, health_tone = _exec_health_score(
+        total_revenue,
+        total_received,
+        total_receivables,
+        total_payables,
+        net_profit,
+        cash_flow,
+        len(overdue_invoices),
+        len(due_vendor_rows),
+    )
+
+    return render(
+        request,
+        "crm/accounting_executive_dashboard.html",
+        {
+            "filter_values": filter_values,
+            "currency_options": ["CAD", "BDT", "USD"],
+            "side_options": [("", "All sides"), ("CA", "Canada"), ("BD", "Bangladesh")],
+            "total_revenue": total_revenue,
+            "total_received": total_received,
+            "total_receivables": total_receivables,
+            "total_payables": total_payables,
+            "net_profit": net_profit,
+            "cash_flow": cash_flow,
+            "cash_in": cash_in,
+            "cash_out": cash_out,
+            "overdue_invoices": len(overdue_invoices),
+            "due_vendor_bills": len(due_vendor_rows),
+            "receivable_currency_totals": _exec_currency_totals(open_invoices, lambda invoice: invoice.currency, lambda invoice: invoice.balance),
+            "received_currency_totals": _exec_currency_totals(payments, lambda payment: payment.currency, lambda payment: payment.amount),
+            "payable_currency_totals": _exec_currency_totals(open_payable_rows, lambda row: row["entry"].currency, lambda row: row["amount"]),
+            "top_customer_rows": top_customer_rows,
+            "top_supplier_rows": top_supplier_rows,
+            "monthly_rows": _exec_monthly_cash_rows(entries),
+            "side_rows": side_rows,
+            "health_score": health_score,
+            "health_label": health_label,
+            "health_tone": health_tone,
+            "entry_count": len(entries),
+            "invoice_count": len(invoices),
+            "payment_count": len(payments),
+        },
+    )
+
+
+BS_CURRENT_ASSET_KEYWORDS = ("prepaid", "advance", "deposit", "retainer")
+BS_FIXED_ASSET_KEYWORDS = ("fixed asset", "equipment", "machine", "machinery", "computer", "furniture", "vehicle")
+BS_CREDIT_CARD_KEYWORDS = ("credit card", "visa", "mastercard", "amex", "card payable")
+BS_LOAN_KEYWORDS = ("loan", "financing", "borrow", "lender")
+BS_TAX_KEYWORDS = ("tax", "hst", "gst", "vat", "source deduction")
+BS_EQUITY_KEYWORDS = ("owner", "capital", "equity", "shareholder", "investment")
+
+
+def _bs_entry_text(entry):
+    return " ".join([
+        entry.main_type or "",
+        entry.sub_type or "",
+        entry.description or "",
+        entry.internal_note or "",
+    ]).lower()
+
+
+def _bs_has(text, keywords):
+    return any(keyword in text for keyword in keywords)
+
+
+def _bs_latest_cad_to_bdt():
+    row = ExchangeRate.objects.order_by("-updated_at").first()
+    return row.cad_to_bdt if row and row.cad_to_bdt else Decimal("0")
+
+
+def _bs_invoice_balance_cad(invoice, cad_to_bdt):
+    balance = _pl_decimal(invoice.balance)
+    currency = (invoice.currency or "").upper().strip()
+    if currency == "CAD":
+        return balance
+    if currency == "BDT" and cad_to_bdt > 0:
+        return (balance / cad_to_bdt).quantize(Decimal("0.01"))
+    return Decimal("0")
+
+
+def _bs_inventory_value_cad(filters):
+    if filters["side"] or filters["currency"] not in {"", "CAD"}:
+        return Decimal("0")
+    total = Decimal("0")
+    for item in InventoryItem.objects.filter(is_active=True).only("unit_cost", "quantity"):
+        total += _pl_decimal(item.unit_cost) * _pl_decimal(item.quantity)
+    return total.quantize(Decimal("0.01"))
+
+
+def _bs_profit_from_entries(entries):
+    revenue = Decimal("0")
+    cogs = Decimal("0")
+    opex = Decimal("0")
+    for entry in entries:
+        text_type = (entry.main_type or "").upper().strip()
+        direction = (entry.direction or "").upper().strip()
+        amount = _pl_amount_cad(entry)
+        if direction == AccountingEntry.DIR_IN and text_type == "INCOME":
+            revenue += amount
+        elif direction == AccountingEntry.DIR_OUT and text_type == "COGS":
+            cogs += amount
+        elif direction == AccountingEntry.DIR_OUT and text_type in PL_OPEX_TYPES:
+            opex += amount
+    return revenue - cogs - opex
+
+
+def _bs_owner_capital(entries):
+    total = Decimal("0")
+    for entry in entries:
+        text = _bs_entry_text(entry)
+        if not _bs_has(text, BS_EQUITY_KEYWORDS):
+            continue
+        amount = _pl_amount_cad(entry)
+        if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN:
+            total += amount
+        elif (entry.direction or "").upper().strip() == AccountingEntry.DIR_OUT:
+            total -= amount
+    return total
+
+
+def _bs_liability_bucket(entry):
+    text = _bs_entry_text(entry)
+    if _bs_has(text, BS_CREDIT_CARD_KEYWORDS):
+        return "credit_cards"
+    if _bs_has(text, BS_LOAN_KEYWORDS):
+        return "loans"
+    if _bs_has(text, BS_TAX_KEYWORDS):
+        return "taxes_payable"
+    return "accounts_payable"
+
+
+def _bs_monthly_rows(entries):
+    monthly = {}
+    for entry in entries:
+        if not entry.date:
+            continue
+        key = entry.date.strftime("%Y-%m")
+        if key not in monthly:
+            monthly[key] = {
+                "key": key,
+                "label": entry.date.strftime("%b %Y"),
+                "assets": Decimal("0"),
+                "liabilities": Decimal("0"),
+                "equity": Decimal("0"),
+            }
+        amount = _pl_amount_cad(entry)
+        direction = (entry.direction or "").upper().strip()
+        main_type = (entry.main_type or "").upper().strip()
+        text = _bs_entry_text(entry)
+        if direction == AccountingEntry.DIR_IN:
+            monthly[key]["assets"] += amount
+            if _bs_has(text, BS_LOAN_KEYWORDS):
+                monthly[key]["liabilities"] += amount
+            elif main_type == "INCOME" or _bs_has(text, BS_EQUITY_KEYWORDS):
+                monthly[key]["equity"] += amount
+        elif direction == AccountingEntry.DIR_OUT:
+            monthly[key]["assets"] -= amount
+            if _bs_has(text, BS_CURRENT_ASSET_KEYWORDS) or _bs_has(text, BS_FIXED_ASSET_KEYWORDS):
+                monthly[key]["assets"] += amount
+            if main_type in {"COGS", "EXPENSE", "TAX", "OTHER"}:
+                monthly[key]["equity"] -= amount
+    rows = [monthly[key] for key in sorted(monthly.keys())][-12:]
+    max_value = max(
+        [max(abs(row["assets"]), abs(row["liabilities"]), abs(row["equity"])) for row in rows] or [Decimal("0")]
+    )
+    for row in rows:
+        row["asset_bar"] = int((abs(row["assets"]) / max_value) * 100) if max_value > 0 else 0
+        row["liability_bar"] = int((abs(row["liabilities"]) / max_value) * 100) if max_value > 0 else 0
+        row["equity_bar"] = int((abs(row["equity"]) / max_value) * 100) if max_value > 0 else 0
+    return rows
+
+
+@login_required
+def balance_sheet_dashboard(request):
+    today = timezone.localdate()
+    filters = {
+        "date_from": _parse_pl_date(request.GET.get("date_from")),
+        "date_to": _parse_pl_date(request.GET.get("date_to")),
+        "currency": (request.GET.get("currency") or "").strip().upper(),
+        "side": (request.GET.get("side") or "").strip().upper(),
+    }
+    filter_values = {
+        "date_from": filters["date_from"].isoformat() if filters["date_from"] else "",
+        "date_to": filters["date_to"].isoformat() if filters["date_to"] else "",
+        "currency": filters["currency"],
+        "side": filters["side"],
+    }
+
+    accounting_qs = (
+        AccountingEntry.objects.exclude(status__iexact="CANCELLED")
+        .select_related("customer", "opportunity", "production_order", "production_order__customer", "production_order__opportunity", "production_order__product")
+    )
+    if filters["date_from"]:
+        accounting_qs = accounting_qs.filter(date__gte=filters["date_from"])
+    if filters["date_to"]:
+        accounting_qs = accounting_qs.filter(date__lte=filters["date_to"])
+    if filters["side"]:
+        accounting_qs = accounting_qs.filter(side=filters["side"])
+    if filters["currency"]:
+        accounting_qs = accounting_qs.filter(currency=filters["currency"])
+
+    entries = list(accounting_qs.order_by("date", "id")[:2500])
+    non_transfer_entries = [entry for entry in entries if (entry.main_type or "").upper().strip() != "TRANSFER"]
+    cad_to_bdt = _bs_latest_cad_to_bdt()
+
+    cash_and_bank = sum(
+        (
+            _pl_amount_cad(entry) if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN else -_pl_amount_cad(entry)
+            for entry in entries
+        ),
+        Decimal("0"),
+    )
+    prepaid_expenses = sum(
+        (
+            _pl_amount_cad(entry)
+            for entry in non_transfer_entries
+            if (entry.direction or "").upper().strip() == AccountingEntry.DIR_OUT and _bs_has(_bs_entry_text(entry), BS_CURRENT_ASSET_KEYWORDS)
+        ),
+        Decimal("0"),
+    )
+    fixed_assets = sum(
+        (
+            _pl_amount_cad(entry)
+            for entry in non_transfer_entries
+            if (entry.direction or "").upper().strip() == AccountingEntry.DIR_OUT and _bs_has(_bs_entry_text(entry), BS_FIXED_ASSET_KEYWORDS)
+        ),
+        Decimal("0"),
+    )
+    inventory_value = _bs_inventory_value_cad(filters)
+
+    invoice_qs = Invoice.objects.exclude(status="cancelled").select_related("customer", "order", "order__customer")
+    if filters["date_from"]:
+        invoice_qs = invoice_qs.filter(issue_date__gte=filters["date_from"])
+    if filters["date_to"]:
+        invoice_qs = invoice_qs.filter(issue_date__lte=filters["date_to"])
+    if filters["currency"]:
+        invoice_qs = invoice_qs.filter(currency=filters["currency"])
+    invoices = list(invoice_qs.order_by("due_date", "-issue_date", "-created_at")[:2000])
+    if filters["side"]:
+        invoices = [invoice for invoice in invoices if _exec_invoice_side(invoice) == filters["side"]]
+    open_invoices = [invoice for invoice in invoices if _pl_decimal(invoice.balance) > 0]
+    accounts_receivable = sum((_bs_invoice_balance_cad(invoice, cad_to_bdt) for invoice in open_invoices), Decimal("0"))
+
+    payable_rows = [
+        _ap_row(entry, today)
+        for entry in non_transfer_entries
+        if (entry.direction or "").upper().strip() == AccountingEntry.DIR_OUT
+    ]
+    open_payable_rows = [row for row in payable_rows if row["status_key"] != "paid"]
+    liability_buckets = {
+        "accounts_payable": Decimal("0"),
+        "credit_cards": Decimal("0"),
+        "loans": Decimal("0"),
+        "taxes_payable": Decimal("0"),
+    }
+    for row in open_payable_rows:
+        liability_buckets[_bs_liability_bucket(row["entry"])] += _pl_amount_cad(row["entry"])
+    for entry in non_transfer_entries:
+        if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN and _bs_has(_bs_entry_text(entry), BS_LOAN_KEYWORDS):
+            liability_buckets["loans"] += _pl_amount_cad(entry)
+
+    current_assets = cash_and_bank + accounts_receivable + inventory_value + prepaid_expenses
+    total_assets = current_assets + fixed_assets
+    total_liabilities = sum(liability_buckets.values(), Decimal("0"))
+
+    retained_entries = []
+    if filters["date_from"]:
+        retained_qs = AccountingEntry.objects.exclude(main_type="TRANSFER").exclude(status__iexact="CANCELLED").filter(date__lt=filters["date_from"])
+        if filters["side"]:
+            retained_qs = retained_qs.filter(side=filters["side"])
+        if filters["currency"]:
+            retained_qs = retained_qs.filter(currency=filters["currency"])
+        retained_entries = list(retained_qs.order_by("date", "id")[:2500])
+
+    owner_capital = _bs_owner_capital(non_transfer_entries)
+    retained_earnings = _bs_profit_from_entries(retained_entries)
+    current_period_profit = _bs_profit_from_entries(non_transfer_entries)
+    total_equity = owner_capital + retained_earnings + current_period_profit
+    equation_right = total_liabilities + total_equity
+    balance_difference = total_assets - equation_right
+    is_balanced = abs(balance_difference) <= Decimal("0.01")
+
+    side_rows = []
+    for side, label in [("CA", "Canada"), ("BD", "Bangladesh")]:
+        side_entries = [entry for entry in entries if (entry.side or "").upper().strip() == side]
+        side_non_transfer = [entry for entry in side_entries if (entry.main_type or "").upper().strip() != "TRANSFER"]
+        side_cash = sum(
+            (
+                _pl_amount_cad(entry) if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN else -_pl_amount_cad(entry)
+                for entry in side_entries
+            ),
+            Decimal("0"),
+        )
+        side_ar = sum((_bs_invoice_balance_cad(invoice, cad_to_bdt) for invoice in open_invoices if _exec_invoice_side(invoice) == side), Decimal("0"))
+        side_payables = sum(
+            (
+                _pl_amount_cad(row["entry"])
+                for row in open_payable_rows
+                if (row["entry"].side or "").upper().strip() == side
+            ),
+            Decimal("0"),
+        )
+        side_profit = _bs_profit_from_entries(side_non_transfer)
+        side_rows.append(
+            {
+                "side": side,
+                "label": label,
+                "assets": side_cash + side_ar,
+                "liabilities": side_payables,
+                "equity": side_profit,
+                "difference": side_cash + side_ar - side_payables - side_profit,
+            }
+        )
+
+    return render(
+        request,
+        "crm/accounting_balance_sheet_dashboard.html",
+        {
+            "filter_values": filter_values,
+            "currency_options": ["CAD", "BDT", "USD"],
+            "side_options": [("", "All sides"), ("CA", "Canada"), ("BD", "Bangladesh")],
+            "total_assets": total_assets,
+            "current_assets": current_assets,
+            "cash_and_bank": cash_and_bank,
+            "accounts_receivable": accounts_receivable,
+            "inventory_value": inventory_value,
+            "prepaid_expenses": prepaid_expenses,
+            "fixed_assets": fixed_assets,
+            "total_liabilities": total_liabilities,
+            "accounts_payable": liability_buckets["accounts_payable"],
+            "credit_cards": liability_buckets["credit_cards"],
+            "loans": liability_buckets["loans"],
+            "taxes_payable": liability_buckets["taxes_payable"],
+            "total_equity": total_equity,
+            "owner_capital": owner_capital,
+            "retained_earnings": retained_earnings,
+            "current_period_profit": current_period_profit,
+            "equation_right": equation_right,
+            "balance_difference": balance_difference,
+            "is_balanced": is_balanced,
+            "balance_status": "Balanced" if is_balanced else "Out of Balance",
+            "side_rows": side_rows,
+            "monthly_rows": _bs_monthly_rows(entries),
+            "entry_count": len(entries),
+            "invoice_count": len(invoices),
+            "open_invoice_count": len(open_invoices),
+            "open_payable_count": len(open_payable_rows),
+        },
+    )
+
+
+def _cf_signed_amount(entry):
+    amount = _pl_amount_cad(entry)
+    return amount if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN else -amount
+
+
+def _cf_is_tax_payment(entry):
+    return (entry.main_type or "").upper().strip() == "TAX" or _bs_has(_bs_entry_text(entry), BS_TAX_KEYWORDS)
+
+
+def _cf_is_loan_payment(entry):
+    return _bs_has(_bs_entry_text(entry), BS_LOAN_KEYWORDS)
+
+
+def _cf_group_cash(entries, label_getter, limit=12):
+    grouped = {}
+    for entry in entries:
+        label = label_getter(entry) or "Unassigned"
+        if label not in grouped:
+            grouped[label] = {"label": label, "amount": Decimal("0"), "count": 0}
+        grouped[label]["amount"] += _pl_amount_cad(entry)
+        grouped[label]["count"] += 1
+    return sorted(grouped.values(), key=lambda row: row["amount"], reverse=True)[:limit]
+
+
+def _cf_daily_rows(entries):
+    grouped = {}
+    for entry in entries:
+        if not entry.date:
+            continue
+        key = entry.date.isoformat()
+        if key not in grouped:
+            grouped[key] = {"key": key, "label": entry.date.strftime("%b %d"), "cash_in": Decimal("0"), "cash_out": Decimal("0"), "net": Decimal("0")}
+        amount = _pl_amount_cad(entry)
+        if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN:
+            grouped[key]["cash_in"] += amount
+        else:
+            grouped[key]["cash_out"] += amount
+    rows = [grouped[key] for key in sorted(grouped.keys())][-21:]
+    for row in rows:
+        row["net"] = row["cash_in"] - row["cash_out"]
+    return rows
+
+
+def _cf_weekly_rows(entries):
+    grouped = {}
+    for entry in entries:
+        if not entry.date:
+            continue
+        iso = entry.date.isocalendar()
+        key = f"{iso.year}-W{iso.week:02d}"
+        if key not in grouped:
+            grouped[key] = {"key": key, "label": f"W{iso.week:02d} {iso.year}", "cash_in": Decimal("0"), "cash_out": Decimal("0"), "net": Decimal("0")}
+        amount = _pl_amount_cad(entry)
+        if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN:
+            grouped[key]["cash_in"] += amount
+        else:
+            grouped[key]["cash_out"] += amount
+    rows = [grouped[key] for key in sorted(grouped.keys())][-12:]
+    for row in rows:
+        row["net"] = row["cash_in"] - row["cash_out"]
+    return rows
+
+
+def _cf_monthly_rows(entries):
+    grouped = {}
+    for entry in entries:
+        if not entry.date:
+            continue
+        key = entry.date.strftime("%Y-%m")
+        if key not in grouped:
+            grouped[key] = {"key": key, "label": entry.date.strftime("%b %Y"), "cash_in": Decimal("0"), "cash_out": Decimal("0"), "net": Decimal("0")}
+        amount = _pl_amount_cad(entry)
+        if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN:
+            grouped[key]["cash_in"] += amount
+        else:
+            grouped[key]["cash_out"] += amount
+    rows = [grouped[key] for key in sorted(grouped.keys())][-12:]
+    max_value = max([max(row["cash_in"], row["cash_out"]) for row in rows] or [Decimal("0")])
+    for row in rows:
+        row["net"] = row["cash_in"] - row["cash_out"]
+        row["in_bar"] = int((row["cash_in"] / max_value) * 100) if max_value > 0 else 0
+        row["out_bar"] = int((row["cash_out"] / max_value) * 100) if max_value > 0 else 0
+    return rows
+
+
+@login_required
+def cash_flow_dashboard(request):
+    today = timezone.localdate()
+    forecast_end = today + timedelta(days=30)
+    filters = {
+        "date_from": _parse_pl_date(request.GET.get("date_from")),
+        "date_to": _parse_pl_date(request.GET.get("date_to")),
+        "currency": (request.GET.get("currency") or "").strip().upper(),
+        "side": (request.GET.get("side") or "").strip().upper(),
+        "customer_id": (request.GET.get("customer") or "").strip(),
+        "supplier": (request.GET.get("supplier") or "").strip(),
+    }
+    filter_values = {
+        "date_from": filters["date_from"].isoformat() if filters["date_from"] else "",
+        "date_to": filters["date_to"].isoformat() if filters["date_to"] else "",
+        "currency": filters["currency"],
+        "side": filters["side"],
+        "customer": filters["customer_id"],
+        "supplier": filters["supplier"],
+    }
+
+    base_qs = (
+        AccountingEntry.objects.exclude(status__iexact="CANCELLED")
+        .select_related("customer", "opportunity", "production_order", "production_order__customer", "shipment")
+    )
+    if filters["side"]:
+        base_qs = base_qs.filter(side=filters["side"])
+    if filters["currency"]:
+        base_qs = base_qs.filter(currency=filters["currency"])
+    if filters["customer_id"]:
+        base_qs = base_qs.filter(Q(customer_id=filters["customer_id"]) | Q(production_order__customer_id=filters["customer_id"]))
+
+    supplier_source = list(base_qs.filter(direction=AccountingEntry.DIR_OUT).order_by("-date", "-id")[:1500])
+    supplier_choices = sorted({_ap_supplier_label(entry) for entry in supplier_source})
+
+    opening_entries = []
+    if filters["date_from"]:
+        opening_entries = list(base_qs.filter(date__lt=filters["date_from"]).order_by("date", "id")[:2500])
+
+    period_qs = base_qs
+    if filters["date_from"]:
+        period_qs = period_qs.filter(date__gte=filters["date_from"])
+    if filters["date_to"]:
+        period_qs = period_qs.filter(date__lte=filters["date_to"])
+    period_entries = list(period_qs.order_by("date", "id")[:2500])
+
+    if filters["supplier"]:
+        opening_entries = [entry for entry in opening_entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_OUT and _ap_supplier_label(entry) == filters["supplier"]]
+        period_entries = [entry for entry in period_entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_OUT and _ap_supplier_label(entry) == filters["supplier"]]
+
+    inflow_entries = [entry for entry in period_entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN]
+    outflow_entries = [entry for entry in period_entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_OUT]
+
+    opening_cash_balance = sum((_cf_signed_amount(entry) for entry in opening_entries), Decimal("0"))
+    cash_received_from_customers = sum(
+        (
+            _pl_amount_cad(entry)
+            for entry in inflow_entries
+            if (entry.main_type or "").upper().strip() == "INCOME" or entry.customer_id or (entry.production_order_id and entry.production_order and entry.production_order.customer_id)
+        ),
+        Decimal("0"),
+    )
+    cash_paid_to_suppliers = sum(
+        (_pl_amount_cad(entry) for entry in outflow_entries if (entry.main_type or "").upper().strip() == "COGS"),
+        Decimal("0"),
+    )
+    loan_payments = sum((_pl_amount_cad(entry) for entry in outflow_entries if _cf_is_loan_payment(entry)), Decimal("0"))
+    tax_payments = sum((_pl_amount_cad(entry) for entry in outflow_entries if _cf_is_tax_payment(entry)), Decimal("0"))
+    operating_expenses_paid = sum(
+        (
+            _pl_amount_cad(entry)
+            for entry in outflow_entries
+            if (entry.main_type or "").upper().strip() in {"EXPENSE", "OTHER"} and not _cf_is_loan_payment(entry) and not _cf_is_tax_payment(entry)
+        ),
+        Decimal("0"),
+    )
+    net_cash_flow = sum((_cf_signed_amount(entry) for entry in period_entries), Decimal("0"))
+    closing_cash_balance = opening_cash_balance + net_cash_flow
+
+    invoice_qs = Invoice.objects.exclude(status="cancelled").select_related("customer", "order", "order__customer").filter(due_date__gte=today, due_date__lte=forecast_end)
+    if filters["currency"]:
+        invoice_qs = invoice_qs.filter(currency=filters["currency"])
+    if filters["customer_id"]:
+        invoice_qs = invoice_qs.filter(Q(customer_id=filters["customer_id"]) | Q(order__customer_id=filters["customer_id"]))
+    forecast_invoices = list(invoice_qs.order_by("due_date", "-issue_date")[:500])
+    if filters["side"]:
+        forecast_invoices = [invoice for invoice in forecast_invoices if _exec_invoice_side(invoice) == filters["side"]]
+    cad_to_bdt = _bs_latest_cad_to_bdt()
+    forecast_receivables = sum((_bs_invoice_balance_cad(invoice, cad_to_bdt) for invoice in forecast_invoices if _pl_decimal(invoice.balance) > 0), Decimal("0"))
+
+    forecast_payable_qs = base_qs.filter(direction=AccountingEntry.DIR_OUT, date__gte=today, date__lte=forecast_end)
+    forecast_payable_entries = list(forecast_payable_qs.order_by("date", "id")[:500])
+    forecast_payable_rows = [_ap_row(entry, today) for entry in forecast_payable_entries]
+    forecast_payable_rows = [row for row in forecast_payable_rows if row["status_key"] != "paid"]
+    if filters["supplier"]:
+        forecast_payable_rows = [row for row in forecast_payable_rows if _ap_supplier_label(row["entry"]) == filters["supplier"]]
+    forecast_payables = sum((_pl_amount_cad(row["entry"]) for row in forecast_payable_rows), Decimal("0"))
+    forecast_net = forecast_receivables - forecast_payables
+    forecast_closing_cash = closing_cash_balance + forecast_net
+    if forecast_closing_cash < 0:
+        low_cash_label = "Low cash risk"
+        low_cash_tone = "bad"
+    elif forecast_closing_cash < max(forecast_payables, Decimal("0.01")) * Decimal("0.25"):
+        low_cash_label = "Watch cash"
+        low_cash_tone = "warn"
+    else:
+        low_cash_label = "Cash stable"
+        low_cash_tone = "good"
+
+    side_rows = []
+    for side, label in [("CA", "Canada"), ("BD", "Bangladesh")]:
+        side_entries = [entry for entry in period_entries if (entry.side or "").upper().strip() == side]
+        side_in = sum((_pl_amount_cad(entry) for entry in side_entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN), Decimal("0"))
+        side_out = sum((_pl_amount_cad(entry) for entry in side_entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_OUT), Decimal("0"))
+        side_rows.append({"side": side, "label": label, "cash_in": side_in, "cash_out": side_out, "net": side_in - side_out})
+
+    customers = Customer.objects.filter(accounting_entries__isnull=False).distinct().order_by("account_brand", "contact_name")
+
+    return render(
+        request,
+        "crm/accounting_cash_flow_dashboard.html",
+        {
+            "filter_values": filter_values,
+            "currency_options": ["CAD", "BDT", "USD"],
+            "side_options": [("", "All sides"), ("CA", "Canada"), ("BD", "Bangladesh")],
+            "customers": customers,
+            "supplier_choices": supplier_choices,
+            "opening_cash_balance": opening_cash_balance,
+            "cash_received_from_customers": cash_received_from_customers,
+            "cash_paid_to_suppliers": cash_paid_to_suppliers,
+            "operating_expenses_paid": operating_expenses_paid,
+            "loan_payments": loan_payments,
+            "tax_payments": tax_payments,
+            "net_cash_flow": net_cash_flow,
+            "closing_cash_balance": closing_cash_balance,
+            "daily_rows": _cf_daily_rows(period_entries),
+            "weekly_rows": _cf_weekly_rows(period_entries),
+            "monthly_rows": _cf_monthly_rows(period_entries),
+            "top_inflow_rows": _cf_group_cash(inflow_entries, _pl_customer_label),
+            "top_outflow_rows": _cf_group_cash(outflow_entries, _ap_supplier_label),
+            "side_rows": side_rows,
+            "forecast_receivables": forecast_receivables,
+            "forecast_payables": forecast_payables,
+            "forecast_net": forecast_net,
+            "forecast_closing_cash": forecast_closing_cash,
+            "forecast_invoice_count": len(forecast_invoices),
+            "forecast_payable_count": len(forecast_payable_rows),
+            "low_cash_label": low_cash_label,
+            "low_cash_tone": low_cash_tone,
+            "entry_count": len(period_entries),
+            "opening_entry_count": len(opening_entries),
         },
     )
 
