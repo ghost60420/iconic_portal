@@ -9425,6 +9425,328 @@ def ai_executive_advisor(request):
     return render(request, "crm/ai_executive_advisor.html", context)
 
 
+def _briefing_parse_date(value, fallback):
+    parsed = parse_date((value or "").strip()) if value else None
+    return parsed or fallback
+
+
+def _briefing_customer_label(customer):
+    if not customer:
+        return "No customer"
+    return getattr(customer, "account_brand", "") or getattr(customer, "contact_name", "") or f"Customer {customer.pk}"
+
+
+def _briefing_invoice_side(invoice):
+    region = (getattr(invoice, "invoice_region", "") or "").upper().strip()
+    if region in {"CA", "BD"}:
+        return region
+    currency = (getattr(invoice, "currency", "") or "").upper().strip()
+    return "BD" if currency == "BDT" else "CA"
+
+
+@login_required
+def daily_ceo_briefing(request):
+    today = timezone.localdate()
+    date_from = _briefing_parse_date(request.GET.get("date_from"), today)
+    date_to = _briefing_parse_date(request.GET.get("date_to"), today)
+    if date_from > date_to:
+        date_from, date_to = date_to, date_from
+
+    side = (request.GET.get("side") or "").strip().upper()
+    if side not in {"", "CA", "BD"}:
+        side = ""
+
+    department = (request.GET.get("department") or "").strip().lower()
+    department_options = [
+        ("", "All departments"),
+        ("sales", "Sales"),
+        ("production", "Production"),
+        ("shipping", "Shipping"),
+        ("accounting", "Accounting"),
+        ("marketing", "Marketing"),
+    ]
+    if department not in {value for value, _label in department_options}:
+        department = ""
+
+    def _show(name):
+        return not department or department == name
+
+    filter_values = {
+        "date_from": date_from.isoformat(),
+        "date_to": date_to.isoformat(),
+        "side": side,
+        "department": department,
+    }
+    range_label = date_from.strftime("%b %d, %Y") if date_from == date_to else f"{date_from.strftime('%b %d, %Y')} - {date_to.strftime('%b %d, %Y')}"
+
+    leads_qs = Lead.objects.filter(created_date__range=(date_from, date_to))
+    if side:
+        leads_qs = leads_qs.filter(market=side)
+    new_leads_total = leads_qs.count()
+    high_priority_leads = leads_qs.filter(Q(priority__iexact="High") | Q(priority_level__iexact="High")).count()
+    new_leads = list(
+        leads_qs.select_related("assigned_to")
+        .only("lead_id", "account_brand", "contact_name", "source", "priority", "priority_level", "product_interest", "created_date", "assigned_to__username", "assigned_to__first_name", "assigned_to__last_name")
+        .order_by("-created_date", "-id")[:10]
+    )
+
+    opportunities_needing_followup_qs = (
+        Opportunity.objects.filter(is_open=True)
+        .exclude(stage__in=["Closed Won", "Closed Lost"])
+        .filter(Q(next_followup__lte=date_to) | Q(next_followup__isnull=True))
+    )
+    if side:
+        opportunities_needing_followup_qs = opportunities_needing_followup_qs.filter(lead__market=side)
+    opportunities_needing_followup = opportunities_needing_followup_qs.count()
+    open_opportunities = opportunities_needing_followup_qs.aggregate(
+        count=Count("id"),
+        total=Sum("order_value"),
+    )
+    open_opportunity_rows = list(
+        opportunities_needing_followup_qs.select_related("customer", "lead")
+        .only("opportunity_id", "stage", "order_value", "next_followup", "customer__account_brand", "customer__contact_name", "lead__account_brand")
+        .order_by("next_followup", "-order_value")[:10]
+    )
+
+    production_qs = ProductionOrder.objects.all()
+    if side == "CA":
+        production_qs = production_qs.filter(factory_location="ca")
+    elif side == "BD":
+        production_qs = production_qs.filter(factory_location="bd")
+    production_active = production_qs.filter(status__in=["planning", "in_progress", "hold"])
+    production_delays = production_active.filter(bulk_deadline__lt=today).count()
+    production_due_soon = production_active.filter(bulk_deadline__range=(today, today + timedelta(days=7))).count()
+    production_alert_rows = list(
+        production_active.select_related("customer", "opportunity", "product")
+        .filter(Q(bulk_deadline__lt=today) | Q(bulk_deadline__range=(today, today + timedelta(days=7))) | Q(status="hold"))
+        .only("order_code", "title", "status", "bulk_deadline", "qty_total", "factory_location", "customer__account_brand", "customer__contact_name", "opportunity__opportunity_id", "product__name")
+        .order_by("bulk_deadline", "-updated_at")[:10]
+    )
+
+    shipping_qs = Shipment.objects.all()
+    if side == "CA":
+        shipping_qs = shipping_qs.filter(order__factory_location="ca")
+    elif side == "BD":
+        shipping_qs = shipping_qs.filter(order__factory_location="bd")
+    shipments_due_soon = shipping_qs.filter(ship_date__range=(today, today + timedelta(days=7))).exclude(status__in=["delivered", "cancelled"]).count()
+    shipments_delayed = shipping_qs.filter(ship_date__lt=today).exclude(status__in=["delivered", "cancelled"]).count()
+    shipping_alert_rows = list(
+        shipping_qs.select_related("customer", "order", "opportunity")
+        .filter(Q(ship_date__lt=today) | Q(ship_date__range=(today, today + timedelta(days=7))))
+        .exclude(status__in=["delivered", "cancelled"])
+        .only("tracking_number", "carrier", "status", "ship_date", "customer__account_brand", "customer__contact_name", "order__order_code", "opportunity__opportunity_id")
+        .order_by("ship_date", "-created_at")[:10]
+    )
+
+    invoice_open_total = Decimal("0")
+    overdue_receivables = Decimal("0")
+    overdue_invoice_count = 0
+    overdue_invoice_rows = []
+    if Invoice is not None:
+        invoice_qs = Invoice.objects.exclude(status__in=["paid", "cancelled"]).select_related("customer", "order", "order__customer")
+        if side:
+            invoice_qs = invoice_qs.filter(Q(invoice_region=side) | Q(invoice_region="", currency="BDT" if side == "BD" else "CAD"))
+        for invoice in invoice_qs.order_by("due_date", "-issue_date")[:1500]:
+            balance = _ceo_decimal(invoice.balance)
+            invoice_open_total += balance
+            if invoice.due_date and invoice.due_date < today:
+                overdue_invoice_count += 1
+                overdue_receivables += balance
+                overdue_invoice_rows.append(
+                    {
+                        "invoice": invoice,
+                        "customer": _briefing_customer_label(invoice.customer or getattr(invoice.order, "customer", None)),
+                        "balance": balance,
+                        "due_date": invoice.due_date,
+                        "side": _briefing_invoice_side(invoice),
+                    }
+                )
+
+    cad_to_bdt = _get_latest_cad_to_bdt_rate()
+    accounting_qs = AccountingEntry.objects.exclude(main_type="TRANSFER").exclude(status__iexact="CANCELLED")
+    if side:
+        accounting_qs = accounting_qs.filter(side=side)
+
+    period_revenue = Decimal("0")
+    period_expenses = Decimal("0")
+    current_cash = Decimal("0")
+    for entry in accounting_qs.filter(date__lte=today).only("date", "direction", "currency", "amount_original", "amount_cad", "rate_to_cad", "main_type")[:3500]:
+        amount = _ceo_amount_cad(entry, cad_to_bdt)
+        direction = (entry.direction or "").upper().strip()
+        if direction == "IN":
+            current_cash += amount
+        elif direction == "OUT":
+            current_cash -= amount
+        if date_from <= entry.date <= date_to:
+            if direction == "IN":
+                period_revenue += amount
+            elif direction == "OUT":
+                period_expenses += amount
+    period_net_cash = period_revenue - period_expenses
+
+    payable_entries_due = list(
+        accounting_qs.filter(direction="OUT", date__range=(today, today + timedelta(days=7)))
+        .exclude(status__iexact="PAID")
+        .only("date", "status", "sub_type", "description", "currency", "amount_original", "amount_cad", "rate_to_cad")[:100]
+    )
+    payables_due_soon = sum((_ceo_amount_cad(entry, cad_to_bdt) for entry in payable_entries_due), Decimal("0"))
+    cash_flow_warning = current_cash + overdue_receivables - payables_due_soon < 0 or period_net_cash < 0
+
+    top_customer_qs = Opportunity.objects.select_related("customer", "lead").filter(created_date__range=(date_from, date_to))
+    if side:
+        top_customer_qs = top_customer_qs.filter(lead__market=side)
+    top_customer_rows = list(
+        top_customer_qs
+        .values("customer__account_brand", "customer__contact_name", "lead__account_brand")
+        .annotate(total=Sum("order_value"), count=Count("id"))
+        .order_by("-total", "-count")[:8]
+    )
+    top_customer_activity = [
+        {
+            "label": row.get("customer__account_brand") or row.get("customer__contact_name") or row.get("lead__account_brand") or "Unassigned customer",
+            "total": _ceo_decimal(row.get("total")),
+            "count": int(row.get("count") or 0),
+        }
+        for row in top_customer_rows
+    ]
+
+    WebsiteTrafficDaily = _ceo_optional_model("marketing", "WebsiteTrafficDaily")
+    SeoQueryDaily = _ceo_optional_model("marketing", "SeoQueryDaily")
+    AccountMetricDaily = _ceo_optional_model("marketing", "AccountMetricDaily")
+    Campaign = _ceo_optional_model("marketing", "Campaign")
+    InsightItem = _ceo_optional_model("marketing", "InsightItem")
+    website_totals = _ceo_aggregate(
+        WebsiteTrafficDaily,
+        WebsiteTrafficDaily.objects.filter(date__range=(date_from, date_to)) if WebsiteTrafficDaily else None,
+        visitors=Sum("visitors"),
+        page_views=Sum("page_views"),
+        conversions=Sum("conversions"),
+    )
+    search_totals = _ceo_aggregate(
+        SeoQueryDaily,
+        SeoQueryDaily.objects.filter(date__range=(date_from, date_to)) if SeoQueryDaily else None,
+        clicks=Sum("clicks"),
+        impressions=Sum("impressions"),
+    )
+    social_totals = _ceo_aggregate(
+        AccountMetricDaily,
+        AccountMetricDaily.objects.filter(date__range=(date_from, date_to)) if AccountMetricDaily else None,
+        engagement=Sum("engagement_total"),
+        reach=Sum("reach"),
+    )
+    active_campaigns = 0
+    open_insights = 0
+    try:
+        if Campaign is not None:
+            active_campaigns = Campaign.objects.filter(is_active=True).count()
+        if InsightItem is not None:
+            open_insights = InsightItem.objects.filter(status="open").count()
+    except (OperationalError, ProgrammingError):
+        active_campaigns = 0
+        open_insights = 0
+
+    executive_summary = [
+        {"label": "New Leads", "value": _format_count(new_leads_total), "note": f"{high_priority_leads} high priority lead(s).", "tone": "good" if new_leads_total else "blue"},
+        {"label": "Open Follow Ups", "value": _format_count(opportunities_needing_followup), "note": "Open opportunities due or missing follow-up.", "tone": "warn" if opportunities_needing_followup else "good"},
+        {"label": "Production Delays", "value": _format_count(production_delays), "note": f"{production_due_soon} production order(s) due soon.", "tone": "bad" if production_delays else "blue"},
+        {"label": "Shipping Alerts", "value": _format_count(shipments_delayed + shipments_due_soon), "note": f"{shipments_delayed} delayed, {shipments_due_soon} due soon.", "tone": "warn" if shipments_delayed else "blue"},
+        {"label": "Overdue Receivables", "value": _format_money(overdue_receivables), "note": f"{overdue_invoice_count} overdue invoice(s).", "tone": "bad" if overdue_invoice_count else "good"},
+        {"label": "Cash Position", "value": _format_money(current_cash), "note": f"Period net cash {_format_money(period_net_cash)}.", "tone": "bad" if cash_flow_warning else "good"},
+    ]
+
+    recommended_actions = []
+    if high_priority_leads:
+        recommended_actions.append({"title": "Assign high priority leads today", "detail": f"{high_priority_leads} high priority lead(s) arrived in the selected range.", "tone": "warn"})
+    if opportunities_needing_followup:
+        recommended_actions.append({"title": "Review open opportunity follow-ups", "detail": f"{opportunities_needing_followup} opportunity row(s) need follow-up attention.", "tone": "warn"})
+    if production_delays:
+        recommended_actions.append({"title": "Clear factory delay risks", "detail": f"{production_delays} active production order(s) are past bulk deadline.", "tone": "bad"})
+    if shipments_delayed:
+        recommended_actions.append({"title": "Update delayed shipments", "detail": f"{shipments_delayed} shipment(s) are past ship date and not delivered.", "tone": "warn"})
+    if overdue_invoice_count:
+        recommended_actions.append({"title": "Collect overdue receivables", "detail": f"Follow up on {overdue_invoice_count} overdue invoice(s) totaling {_format_money(overdue_receivables)}.", "tone": "bad"})
+    if cash_flow_warning:
+        recommended_actions.append({"title": "Watch cash before new commitments", "detail": f"Current cash plus overdue AR less near payables signals pressure.", "tone": "bad"})
+    if not recommended_actions:
+        recommended_actions.append({"title": "Keep the current operating rhythm", "detail": "No critical daily briefing blockers are showing for the selected filters.", "tone": "good"})
+
+    ai_recommendations = [
+        {
+            "title": "Protect revenue follow-up",
+            "detail": f"Start with {high_priority_leads} high priority lead(s) and {opportunities_needing_followup} open opportunity follow-up(s).",
+        },
+        {
+            "title": "Reduce execution risk",
+            "detail": f"Review {production_delays} production delay(s), {production_due_soon} due-soon order(s), and {shipments_delayed} delayed shipment(s).",
+        },
+        {
+            "title": "Preserve cash discipline",
+            "detail": f"Collect {_format_money(overdue_receivables)} overdue AR before approving discretionary spending.",
+        },
+        {
+            "title": "Use marketing signals",
+            "detail": f"Website visitors: {website_totals.get('visitors') or 0}; search clicks: {search_totals.get('clicks') or 0}; open insights: {open_insights}.",
+        },
+    ]
+
+    visible = {
+        "sales": _show("sales"),
+        "production": _show("production"),
+        "shipping": _show("shipping"),
+        "accounting": _show("accounting"),
+        "marketing": _show("marketing"),
+    }
+
+    context = {
+        "today": today,
+        "range_label": range_label,
+        "filter_values": filter_values,
+        "side_options": [("", "All sides"), ("CA", "Canada"), ("BD", "Bangladesh")],
+        "department_options": department_options,
+        "visible": visible,
+        "executive_summary": executive_summary,
+        "new_leads_total": new_leads_total,
+        "high_priority_leads": high_priority_leads,
+        "new_leads": new_leads,
+        "opportunities_needing_followup": opportunities_needing_followup,
+        "open_opportunities": open_opportunities,
+        "open_opportunity_rows": open_opportunity_rows,
+        "production_delays": production_delays,
+        "production_due_soon": production_due_soon,
+        "production_alert_rows": production_alert_rows,
+        "shipments_due_soon": shipments_due_soon,
+        "shipments_delayed": shipments_delayed,
+        "shipping_alert_rows": shipping_alert_rows,
+        "overdue_invoice_count": overdue_invoice_count,
+        "overdue_receivables": overdue_receivables,
+        "overdue_invoice_rows": overdue_invoice_rows[:10],
+        "invoice_open_total": invoice_open_total,
+        "payables_due_soon": payables_due_soon,
+        "payable_entries_due": payable_entries_due[:8],
+        "current_cash": current_cash,
+        "period_revenue": period_revenue,
+        "period_expenses": period_expenses,
+        "period_net_cash": period_net_cash,
+        "cash_flow_warning": cash_flow_warning,
+        "top_customer_activity": top_customer_activity,
+        "marketing_summary": {
+            "visitors": website_totals.get("visitors") or 0,
+            "page_views": website_totals.get("page_views") or 0,
+            "conversions": website_totals.get("conversions") or 0,
+            "search_clicks": search_totals.get("clicks") or 0,
+            "search_impressions": search_totals.get("impressions") or 0,
+            "social_engagement": social_totals.get("engagement") or 0,
+            "social_reach": social_totals.get("reach") or 0,
+            "active_campaigns": active_campaigns,
+            "open_insights": open_insights,
+        },
+        "recommended_actions": recommended_actions,
+        "ai_recommendations": ai_recommendations,
+        "email_future_note": "Daily email delivery can be added later, but no automatic emails are sent by this page.",
+    }
+    return render(request, "crm/daily_ceo_briefing.html", context)
+
+
 @login_required
 def main_dashboard(request):
     today = timezone.localdate()

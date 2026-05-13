@@ -1,0 +1,691 @@
+{% extends "crm/base.html" %}
+{% block content %}
+
+<style>
+  :root{
+    --brief-line:#263348;
+    --brief-text:#f8fafc;
+    --brief-muted:#94a3b8;
+    --brief-gold:#f5c451;
+    --brief-good:#4ade80;
+    --brief-warn:#fbbf24;
+    --brief-bad:#fb7185;
+    --brief-blue:#60a5fa;
+  }
+
+  .brief-wrap{max-width:1420px;margin:0 auto;color:var(--brief-text);}
+  .brief-hero{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:18px;
+    flex-wrap:wrap;
+    padding:22px;
+    border:1px solid rgba(245,196,81,0.25);
+    border-radius:22px;
+    background:
+      linear-gradient(135deg, rgba(245,196,81,0.14), transparent 38%),
+      linear-gradient(180deg, rgba(15,23,42,0.96), rgba(2,6,23,0.96));
+    box-shadow:0 24px 60px rgba(0,0,0,0.42);
+    margin-bottom:16px;
+  }
+  .brief-kicker{
+    color:var(--brief-gold);
+    font-size:12px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    margin-bottom:6px;
+  }
+  .brief-title{margin:0;font-size:30px;line-height:1.1;font-weight:950;}
+  .brief-sub{margin-top:8px;max-width:850px;color:var(--brief-muted);font-size:13px;line-height:1.5;font-weight:750;}
+  .brief-date{
+    min-width:210px;
+    padding:13px 15px;
+    border:1px solid rgba(148,163,184,0.22);
+    border-radius:18px;
+    background:rgba(3,7,18,0.62);
+  }
+  .brief-date span{display:block;color:var(--brief-muted);font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.07em;}
+  .brief-date strong{display:block;margin-top:7px;font-size:16px;font-weight:950;}
+
+  .brief-filter{
+    display:grid;
+    grid-template-columns:repeat(4, minmax(150px, 1fr)) auto;
+    gap:12px;
+    align-items:end;
+    padding:14px;
+    border:1px solid var(--brief-line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.92), rgba(2,6,23,0.92));
+    margin-bottom:16px;
+  }
+  .brief-field label{
+    display:block;
+    margin-bottom:6px;
+    color:var(--brief-muted);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.07em;
+  }
+  .brief-field input,
+  .brief-field select{
+    width:100%;
+    min-height:42px;
+    border:1px solid rgba(148,163,184,0.26);
+    border-radius:14px;
+    background:#030712;
+    color:var(--brief-text);
+    padding:9px 11px;
+    font-size:13px;
+    font-weight:800;
+  }
+  .brief-filter-actions{display:flex;gap:8px;align-items:end;}
+  .brief-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-height:42px;
+    padding:9px 13px;
+    border-radius:14px;
+    border:1px solid rgba(148,163,184,0.25);
+    background:rgba(15,23,42,0.82);
+    color:var(--brief-text);
+    text-decoration:none;
+    font-size:12px;
+    font-weight:900;
+    white-space:nowrap;
+  }
+  .brief-btn:hover{color:var(--brief-text);border-color:rgba(245,196,81,0.55);}
+  .brief-btn--gold{background:linear-gradient(135deg, #f6d365, #d9a622);color:#111827;border-color:rgba(245,196,81,0.55);}
+  .brief-btn--gold:hover{color:#111827;}
+
+  .brief-kpis{
+    display:grid;
+    grid-template-columns:repeat(6, minmax(0,1fr));
+    gap:12px;
+    margin-bottom:16px;
+  }
+  .brief-card{
+    padding:14px;
+    border:1px solid var(--brief-line);
+    border-radius:18px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.94), rgba(2,6,23,0.94));
+    box-shadow:0 18px 44px rgba(0,0,0,0.30);
+  }
+  .brief-card span{display:block;color:var(--brief-muted);font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.07em;}
+  .brief-card strong{display:block;margin-top:8px;color:var(--brief-text);font-size:21px;line-height:1.12;font-weight:950;}
+  .brief-card small{display:block;margin-top:7px;color:var(--brief-muted);font-size:11px;line-height:1.45;font-weight:800;}
+  .brief-tone-good{border-color:rgba(74,222,128,0.28);}
+  .brief-tone-warn{border-color:rgba(251,191,36,0.30);}
+  .brief-tone-bad{border-color:rgba(251,113,133,0.34);}
+  .brief-tone-blue{border-color:rgba(96,165,250,0.30);}
+
+  .brief-layout{
+    display:grid;
+    grid-template-columns:minmax(0, 1.35fr) minmax(380px, .95fr);
+    gap:14px;
+    align-items:start;
+  }
+  .brief-section{
+    border:1px solid var(--brief-line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.94), rgba(2,6,23,0.94));
+    overflow:hidden;
+    margin-bottom:14px;
+  }
+  .brief-section-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    flex-wrap:wrap;
+    padding:14px 16px;
+    border-bottom:1px solid rgba(148,163,184,0.16);
+  }
+  .brief-section-title{margin:0;font-size:15px;font-weight:950;}
+  .brief-section-note{color:var(--brief-muted);font-size:12px;font-weight:800;}
+  .brief-body{padding:14px;}
+  .brief-grid-2{display:grid;grid-template-columns:repeat(2, minmax(0,1fr));gap:12px;}
+  .brief-mini{
+    border:1px solid rgba(148,163,184,0.17);
+    border-radius:16px;
+    background:rgba(3,7,18,0.68);
+    padding:12px;
+  }
+  .brief-mini span{display:block;color:var(--brief-muted);font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.07em;}
+  .brief-mini strong{display:block;margin-top:7px;font-size:20px;font-weight:950;}
+  .brief-mini small{display:block;margin-top:6px;color:var(--brief-muted);font-size:11px;font-weight:800;line-height:1.45;}
+
+  .brief-table-wrap{overflow-x:auto;}
+  .brief-table{width:100%;border-collapse:separate;border-spacing:0 8px;}
+  .brief-table th{
+    color:var(--brief-muted);
+    font-size:10px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.07em;
+    text-align:left;
+    padding:0 10px 2px;
+  }
+  .brief-table td{
+    padding:10px;
+    border-top:1px solid rgba(148,163,184,0.14);
+    border-bottom:1px solid rgba(148,163,184,0.14);
+    background:rgba(3,7,18,0.60);
+    font-size:12px;
+    color:var(--brief-text);
+    vertical-align:top;
+  }
+  .brief-table td:first-child{border-left:1px solid rgba(148,163,184,0.14);border-radius:13px 0 0 13px;}
+  .brief-table td:last-child{border-right:1px solid rgba(148,163,184,0.14);border-radius:0 13px 13px 0;}
+  .brief-primary{display:block;font-size:13px;font-weight:950;color:var(--brief-text);}
+  .brief-secondary{display:block;margin-top:4px;color:var(--brief-muted);font-size:11px;font-weight:750;line-height:1.35;}
+  .brief-right{text-align:right!important;}
+  .brief-badge{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-height:24px;
+    padding:4px 8px;
+    border-radius:999px;
+    border:1px solid rgba(148,163,184,0.18);
+    background:rgba(15,23,42,0.86);
+    color:var(--brief-text);
+    font-size:10px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+  }
+  .brief-badge--good{border-color:rgba(74,222,128,0.32);color:#bbf7d0;}
+  .brief-badge--warn{border-color:rgba(251,191,36,0.34);color:#fde68a;}
+  .brief-badge--bad{border-color:rgba(251,113,133,0.38);color:#fecdd3;}
+  .brief-badge--blue{border-color:rgba(96,165,250,0.32);color:#bfdbfe;}
+
+  .brief-list{display:grid;gap:10px;}
+  .brief-item{
+    border:1px solid rgba(148,163,184,0.17);
+    border-radius:16px;
+    background:rgba(3,7,18,0.68);
+    padding:12px;
+  }
+  .brief-item strong{display:block;font-size:13px;font-weight:950;}
+  .brief-item p{margin:6px 0 0;color:var(--brief-muted);font-size:12px;line-height:1.45;font-weight:750;}
+  .brief-item--good{border-color:rgba(74,222,128,0.28);}
+  .brief-item--warn{border-color:rgba(251,191,36,0.30);}
+  .brief-item--bad{border-color:rgba(251,113,133,0.34);}
+
+  .brief-empty{
+    border:1px dashed rgba(148,163,184,0.25);
+    border-radius:16px;
+    padding:16px;
+    color:var(--brief-muted);
+    font-size:12px;
+    font-weight:800;
+    background:rgba(3,7,18,0.45);
+  }
+
+  @media (max-width:1200px){
+    .brief-kpis{grid-template-columns:repeat(3, minmax(0,1fr));}
+    .brief-layout{grid-template-columns:1fr;}
+  }
+  @media (max-width:900px){
+    .brief-filter{grid-template-columns:repeat(2, minmax(0,1fr));}
+    .brief-filter-actions{grid-column:1 / -1;}
+    .brief-kpis,.brief-grid-2{grid-template-columns:1fr;}
+  }
+  @media (max-width:640px){
+    .brief-hero,.brief-filter,.brief-section-head{border-radius:16px;}
+    .brief-title{font-size:24px;}
+    .brief-filter{grid-template-columns:1fr;}
+    .brief-filter-actions{flex-direction:column;align-items:stretch;}
+    .brief-btn{width:100%;}
+  }
+</style>
+
+<div class="brief-wrap">
+  <section class="brief-hero">
+    <div>
+      <div class="brief-kicker">Automated daily CEO briefing</div>
+      <h1 class="brief-title">Daily CEO Briefing</h1>
+      <div class="brief-sub">
+        A read-only morning view of sales, production, shipping, receivables, cash position, marketing signals, and recommended actions.
+      </div>
+    </div>
+    <div class="brief-date">
+      <span>Report window</span>
+      <strong>{{ range_label }}</strong>
+    </div>
+  </section>
+
+  <form method="get" class="brief-filter">
+    <div class="brief-field">
+      <label for="brief-date-from">Date from</label>
+      <input id="brief-date-from" type="date" name="date_from" value="{{ filter_values.date_from }}">
+    </div>
+    <div class="brief-field">
+      <label for="brief-date-to">Date to</label>
+      <input id="brief-date-to" type="date" name="date_to" value="{{ filter_values.date_to }}">
+    </div>
+    <div class="brief-field">
+      <label for="brief-side">Canada / Bangladesh side</label>
+      <select id="brief-side" name="side">
+        {% for value,label in side_options %}
+          <option value="{{ value }}" {% if filter_values.side == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="brief-field">
+      <label for="brief-department">Department</label>
+      <select id="brief-department" name="department">
+        {% for value,label in department_options %}
+          <option value="{{ value }}" {% if filter_values.department == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="brief-filter-actions">
+      <button class="brief-btn brief-btn--gold" type="submit">Apply</button>
+      <a class="brief-btn" href="{% url 'daily_ceo_briefing' %}">Today</a>
+    </div>
+  </form>
+
+  <section class="brief-kpis" aria-label="Today's Executive Summary">
+    {% for card in executive_summary %}
+      <article class="brief-card brief-tone-{{ card.tone }}">
+        <span>{{ card.label }}</span>
+        <strong>{{ card.value }}</strong>
+        <small>{{ card.note }}</small>
+      </article>
+    {% endfor %}
+  </section>
+
+  <div class="brief-layout">
+    <main>
+      <section class="brief-section">
+        <div class="brief-section-head">
+          <h2 class="brief-section-title">Today's Executive Summary</h2>
+          <div class="brief-section-note">Read-only operating snapshot</div>
+        </div>
+        <div class="brief-body brief-grid-2">
+          <div class="brief-mini">
+            <span>Sales urgency</span>
+            <strong>{{ high_priority_leads }} high priority</strong>
+            <small>{{ opportunities_needing_followup }} opportunities need follow up.</small>
+          </div>
+          <div class="brief-mini">
+            <span>Execution risk</span>
+            <strong>{{ production_delays }} delayed orders</strong>
+            <small>{{ shipments_delayed }} delayed shipments and {{ shipments_due_soon }} due soon.</small>
+          </div>
+          <div class="brief-mini">
+            <span>Receivables</span>
+            <strong>${{ overdue_receivables|floatformat:2 }}</strong>
+            <small>{{ overdue_invoice_count }} overdue invoice(s).</small>
+          </div>
+          <div class="brief-mini">
+            <span>Future email support</span>
+            <strong>Not sending</strong>
+            <small>{{ email_future_note }}</small>
+          </div>
+        </div>
+      </section>
+
+      {% if visible.sales %}
+        <section class="brief-section">
+          <div class="brief-section-head">
+            <h2 class="brief-section-title">New Leads</h2>
+            <div class="brief-section-note">{{ new_leads_total }} total, {{ high_priority_leads }} high priority</div>
+          </div>
+          <div class="brief-body">
+            {% if new_leads %}
+              <div class="brief-table-wrap">
+                <table class="brief-table">
+                  <thead>
+                    <tr>
+                      <th>Lead</th>
+                      <th>Source</th>
+                      <th>Priority</th>
+                      <th>Assigned</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for lead in new_leads %}
+                      <tr>
+                        <td>
+                          <span class="brief-primary">
+                            {% if lead.account_brand %}{{ lead.account_brand }}{% elif lead.contact_name %}{{ lead.contact_name }}{% else %}{{ lead.lead_id }}{% endif %}
+                          </span>
+                          <span class="brief-secondary">{{ lead.lead_id }}{% if lead.product_interest %} - {{ lead.product_interest }}{% endif %}</span>
+                        </td>
+                        <td>{{ lead.source|default:"Unknown" }}</td>
+                        <td>
+                          {% if lead.priority == "High" or lead.priority_level == "High" %}
+                            <span class="brief-badge brief-badge--bad">High</span>
+                          {% else %}
+                            <span class="brief-badge brief-badge--blue">{{ lead.priority|default:"Normal" }}</span>
+                          {% endif %}
+                        </td>
+                        <td>
+                          {% if lead.assigned_to %}
+                            {% with full_name=lead.assigned_to.get_full_name %}
+                              {% if full_name %}{{ full_name }}{% else %}{{ lead.assigned_to.username }}{% endif %}
+                            {% endwith %}
+                          {% else %}
+                            Unassigned
+                          {% endif %}
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <div class="brief-empty">No new leads in this briefing window.</div>
+            {% endif %}
+          </div>
+        </section>
+
+        <section class="brief-section">
+          <div class="brief-section-head">
+            <h2 class="brief-section-title">Open Opportunities</h2>
+            <div class="brief-section-note">{{ opportunities_needing_followup }} need attention</div>
+          </div>
+          <div class="brief-body">
+            {% if open_opportunity_rows %}
+              <div class="brief-table-wrap">
+                <table class="brief-table">
+                  <thead>
+                    <tr>
+                      <th>Opportunity</th>
+                      <th>Stage</th>
+                      <th>Next follow up</th>
+                      <th class="brief-right">Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for opportunity in open_opportunity_rows %}
+                      <tr>
+                        <td>
+                          <span class="brief-primary">{{ opportunity.opportunity_id }}</span>
+                          <span class="brief-secondary">
+                            {% if opportunity.customer %}
+                              {% if opportunity.customer.account_brand %}{{ opportunity.customer.account_brand }}{% elif opportunity.customer.contact_name %}{{ opportunity.customer.contact_name }}{% else %}No customer{% endif %}
+                            {% elif opportunity.lead and opportunity.lead.account_brand %}
+                              {{ opportunity.lead.account_brand }}
+                            {% else %}
+                              No customer
+                            {% endif %}
+                          </span>
+                        </td>
+                        <td><span class="brief-badge brief-badge--blue">{{ opportunity.stage }}</span></td>
+                        <td>{{ opportunity.next_followup|date:"M d, Y"|default:"Needs date" }}</td>
+                        <td class="brief-right">${{ opportunity.order_value|default:0|floatformat:2 }}</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <div class="brief-empty">No open opportunities need follow up for this filter.</div>
+            {% endif %}
+          </div>
+        </section>
+      {% endif %}
+
+      {% if visible.production %}
+        <section class="brief-section">
+          <div class="brief-section-head">
+            <h2 class="brief-section-title">Production Alerts</h2>
+            <div class="brief-section-note">{{ production_delays }} delayed, {{ production_due_soon }} due soon</div>
+          </div>
+          <div class="brief-body">
+            {% if production_alert_rows %}
+              <div class="brief-table-wrap">
+                <table class="brief-table">
+                  <thead>
+                    <tr>
+                      <th>Order</th>
+                      <th>Status</th>
+                      <th>Factory</th>
+                      <th>Deadline</th>
+                      <th class="brief-right">Qty</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for order in production_alert_rows %}
+                      <tr>
+                        <td>
+                          <span class="brief-primary">{{ order.order_code|default:order.title }}</span>
+                          <span class="brief-secondary">
+                            {% if order.customer %}
+                              {% if order.customer.account_brand %}{{ order.customer.account_brand }}{% elif order.customer.contact_name %}{{ order.customer.contact_name }}{% else %}No customer{% endif %}
+                            {% else %}
+                              No customer
+                            {% endif %}
+                            {% if order.product %} - {{ order.product.name }}{% endif %}
+                          </span>
+                        </td>
+                        <td><span class="brief-badge {% if order.status == 'hold' %}brief-badge--warn{% else %}brief-badge--blue{% endif %}">{{ order.get_status_display }}</span></td>
+                        <td>{{ order.get_factory_location_display }}</td>
+                        <td>{{ order.bulk_deadline|date:"M d, Y"|default:"No deadline" }}</td>
+                        <td class="brief-right">{{ order.qty_total }}</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <div class="brief-empty">No production delays or due-soon alerts for this filter.</div>
+            {% endif %}
+          </div>
+        </section>
+      {% endif %}
+
+      {% if visible.shipping %}
+        <section class="brief-section">
+          <div class="brief-section-head">
+            <h2 class="brief-section-title">Shipping Alerts</h2>
+            <div class="brief-section-note">{{ shipments_delayed }} delayed, {{ shipments_due_soon }} due soon</div>
+          </div>
+          <div class="brief-body">
+            {% if shipping_alert_rows %}
+              <div class="brief-table-wrap">
+                <table class="brief-table">
+                  <thead>
+                    <tr>
+                      <th>Shipment</th>
+                      <th>Carrier</th>
+                      <th>Status</th>
+                      <th>Ship date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for shipment in shipping_alert_rows %}
+                      <tr>
+                        <td>
+                          <span class="brief-primary">{{ shipment.tracking_number|default:"Pending tracking" }}</span>
+                          <span class="brief-secondary">
+                            {% if shipment.customer %}
+                              {% if shipment.customer.account_brand %}{{ shipment.customer.account_brand }}{% elif shipment.customer.contact_name %}{{ shipment.customer.contact_name }}{% else %}No customer{% endif %}
+                            {% else %}
+                              No customer
+                            {% endif %}
+                            {% if shipment.order %} - {{ shipment.order.order_code }}{% endif %}
+                          </span>
+                        </td>
+                        <td>{{ shipment.get_carrier_display }}</td>
+                        <td><span class="brief-badge brief-badge--warn">{{ shipment.get_status_display }}</span></td>
+                        <td>{{ shipment.ship_date|date:"M d, Y"|default:"No ship date" }}</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <div class="brief-empty">No delayed or due-soon shipments for this filter.</div>
+            {% endif %}
+          </div>
+        </section>
+      {% endif %}
+
+      {% if visible.accounting %}
+        <section class="brief-section">
+          <div class="brief-section-head">
+            <h2 class="brief-section-title">Overdue Invoices</h2>
+            <div class="brief-section-note">{{ overdue_invoice_count }} overdue, ${{ overdue_receivables|floatformat:2 }} due</div>
+          </div>
+          <div class="brief-body">
+            {% if overdue_invoice_rows %}
+              <div class="brief-table-wrap">
+                <table class="brief-table">
+                  <thead>
+                    <tr>
+                      <th>Invoice</th>
+                      <th>Customer</th>
+                      <th>Side</th>
+                      <th>Due date</th>
+                      <th class="brief-right">Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for row in overdue_invoice_rows %}
+                      <tr>
+                        <td><span class="brief-primary">{{ row.invoice }}</span></td>
+                        <td>{{ row.customer }}</td>
+                        <td><span class="brief-badge brief-badge--blue">{{ row.side }}</span></td>
+                        <td>{{ row.due_date|date:"M d, Y" }}</td>
+                        <td class="brief-right">${{ row.balance|floatformat:2 }}</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <div class="brief-empty">No overdue invoices for this filter.</div>
+            {% endif %}
+          </div>
+        </section>
+
+        <section class="brief-section">
+          <div class="brief-section-head">
+            <h2 class="brief-section-title">Cash Position</h2>
+            <div class="brief-section-note">{% if cash_flow_warning %}Warning active{% else %}No immediate cash warning{% endif %}</div>
+          </div>
+          <div class="brief-body brief-grid-2">
+            <div class="brief-mini">
+              <span>Current cash estimate</span>
+              <strong>${{ current_cash|floatformat:2 }}</strong>
+              <small>Based on existing accounting entry inflows and outflows.</small>
+            </div>
+            <div class="brief-mini">
+              <span>Period net cash</span>
+              <strong>${{ period_net_cash|floatformat:2 }}</strong>
+              <small>Revenue ${{ period_revenue|floatformat:2 }} less expenses ${{ period_expenses|floatformat:2 }}.</small>
+            </div>
+            <div class="brief-mini">
+              <span>Payables due soon</span>
+              <strong>${{ payables_due_soon|floatformat:2 }}</strong>
+              <small>Outgoing entries due in the next 7 days.</small>
+            </div>
+            <div class="brief-mini">
+              <span>Open receivables</span>
+              <strong>${{ invoice_open_total|floatformat:2 }}</strong>
+              <small>Unpaid and partially paid invoice balance.</small>
+            </div>
+          </div>
+        </section>
+      {% endif %}
+    </main>
+
+    <aside>
+      {% if visible.marketing %}
+        <section class="brief-section">
+          <div class="brief-section-head">
+            <h2 class="brief-section-title">Marketing Highlights</h2>
+            <div class="brief-section-note">{{ marketing_summary.open_insights }} open insight(s)</div>
+          </div>
+          <div class="brief-body brief-grid-2">
+            <div class="brief-mini">
+              <span>Website visitors</span>
+              <strong>{{ marketing_summary.visitors }}</strong>
+              <small>{{ marketing_summary.page_views }} page views, {{ marketing_summary.conversions }} conversions.</small>
+            </div>
+            <div class="brief-mini">
+              <span>Google search</span>
+              <strong>{{ marketing_summary.search_clicks }}</strong>
+              <small>{{ marketing_summary.search_impressions }} impressions.</small>
+            </div>
+            <div class="brief-mini">
+              <span>Social engagement</span>
+              <strong>{{ marketing_summary.social_engagement }}</strong>
+              <small>{{ marketing_summary.social_reach }} reach across connected accounts.</small>
+            </div>
+            <div class="brief-mini">
+              <span>Campaigns</span>
+              <strong>{{ marketing_summary.active_campaigns }}</strong>
+              <small>Active campaign records.</small>
+            </div>
+          </div>
+        </section>
+      {% endif %}
+
+      <section class="brief-section">
+        <div class="brief-section-head">
+          <h2 class="brief-section-title">Top Customer Activity</h2>
+          <div class="brief-section-note">Opportunity value in selected range</div>
+        </div>
+        <div class="brief-body">
+          {% if top_customer_activity %}
+            <div class="brief-list">
+              {% for row in top_customer_activity %}
+                <div class="brief-item">
+                  <strong>{{ row.label }}</strong>
+                  <p>{{ row.count }} opportunity record(s), ${{ row.total|floatformat:2 }} estimated value.</p>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="brief-empty">No customer opportunity activity for this briefing window.</div>
+          {% endif %}
+        </div>
+      </section>
+
+      <section class="brief-section">
+        <div class="brief-section-head">
+          <h2 class="brief-section-title">Recommended Actions</h2>
+          <div class="brief-section-note">Priority operating tasks</div>
+        </div>
+        <div class="brief-body">
+          <div class="brief-list">
+            {% for action in recommended_actions %}
+              <div class="brief-item brief-item--{{ action.tone }}">
+                <strong>{{ action.title }}</strong>
+                <p>{{ action.detail }}</p>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      </section>
+
+      <section class="brief-section">
+        <div class="brief-section-head">
+          <h2 class="brief-section-title">AI Style Recommendations</h2>
+          <div class="brief-section-note">Generated from existing CRM data only</div>
+        </div>
+        <div class="brief-body">
+          <div class="brief-list">
+            {% for recommendation in ai_recommendations %}
+              <div class="brief-item">
+                <strong>{{ recommendation.title }}</strong>
+                <p>{{ recommendation.detail }}</p>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      </section>
+    </aside>
+  </div>
+</div>
+
+{% endblock %}

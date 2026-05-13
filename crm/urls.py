@@ -49,6 +49,7 @@ urlpatterns = [
     path("main-dashboard/", login_required(views.main_dashboard), name="main_dashboard"),
     path("ceo-dashboard/", login_required(views.ceo_dashboard), name="ceo_dashboard"),
     path("ai-executive-advisor/", login_required(views.ai_executive_advisor), name="ai_executive_advisor"),
+    path("daily-ceo-briefing/", login_required(views.daily_ceo_briefing), name="daily_ceo_briefing"),
 
     # AI Hub
     path("ai/", perm("can_ai", ai.ai_hub), name="ai_hub"),
