@@ -9,6 +9,7 @@ from collections import defaultdict
 from datetime import timedelta, date
 from decimal import Decimal
 from types import SimpleNamespace
+from django.apps import apps
 from django.db.models import Count, Sum, Q, Max, OuterRef, Subquery
 from django.db import models
 from django.conf import settings
@@ -8545,6 +8546,436 @@ def _delta_tone(delta, inverse=False):
     if inverse:
         good = not good
     return "up" if good else "down"
+
+
+def _ceo_optional_model(app_label, model_name):
+    try:
+        return apps.get_model(app_label, model_name)
+    except Exception:
+        return None
+
+
+def _ceo_decimal(value):
+    try:
+        return Decimal(str(value)) if value is not None else Decimal("0")
+    except Exception:
+        return Decimal("0")
+
+
+def _ceo_amount_cad(entry, cad_to_bdt=None):
+    amount_cad = _ceo_decimal(getattr(entry, "amount_cad", None))
+    if amount_cad:
+        return amount_cad
+
+    amount = _ceo_decimal(getattr(entry, "amount_original", None))
+    currency = (getattr(entry, "currency", "") or "").upper().strip()
+    rate_to_cad = _ceo_decimal(getattr(entry, "rate_to_cad", None))
+    if currency == "CAD":
+        return amount
+    if rate_to_cad > 0:
+        return (amount * rate_to_cad).quantize(Decimal("0.01"))
+    if currency == "BDT" and cad_to_bdt and cad_to_bdt > 0:
+        return (amount / cad_to_bdt).quantize(Decimal("0.01"))
+    return Decimal("0")
+
+
+def _ceo_month_keys(today, months=6):
+    current_month = today.replace(day=1)
+    return [_shift_month_start(current_month, offset) for offset in range(-(months - 1), 1)]
+
+
+def _ceo_bar_rows(rows, keys):
+    max_value = max(
+        [max([abs(_to_float(row.get(key))) for key in keys] or [0]) for row in rows] or [0]
+    )
+    for row in rows:
+        for key in keys:
+            row[f"{key}_bar"] = int((abs(_to_float(row.get(key))) / max_value) * 100) if max_value else 0
+    return rows
+
+
+def _ceo_aggregate(model, qs, **fields):
+    if model is None:
+        return {name: 0 for name in fields}
+    try:
+        return qs.aggregate(**fields)
+    except (OperationalError, ProgrammingError):
+        return {name: 0 for name in fields}
+
+
+@login_required
+def ceo_dashboard(request):
+    today = timezone.localdate()
+    try:
+        period_days = int((request.GET.get("days") or "30").strip())
+    except Exception:
+        period_days = 30
+    if period_days not in (7, 30, 60, 90, 180):
+        period_days = 30
+
+    side = (request.GET.get("side") or "").strip().upper()
+    if side not in {"", "CA", "BD"}:
+        side = ""
+
+    start_period = today - timedelta(days=period_days - 1)
+    previous_end = start_period - timedelta(days=1)
+    previous_start = previous_end - timedelta(days=period_days - 1)
+    filter_values = {"days": str(period_days), "side": side}
+    period_label = f"Last {period_days} days"
+
+    leads_period = Lead.objects.filter(created_date__range=(start_period, today)).count()
+    prev_leads_period = Lead.objects.filter(created_date__range=(previous_start, previous_end)).count()
+    overdue_followups = Lead.objects.filter(next_followup__lt=today).exclude(
+        lead_status__in=["Converted", "Closed", "Disqualified", "Lost"]
+    ).count()
+    due_soon_followups = Lead.objects.filter(
+        next_followup__range=(today, today + timedelta(days=7))
+    ).exclude(lead_status__in=["Converted", "Closed", "Disqualified", "Lost"]).count()
+    lead_source_rows = list(
+        Lead.objects.filter(created_date__range=(start_period, today))
+        .values("source")
+        .annotate(count=Count("id"))
+        .order_by("-count")[:6]
+    )
+    assignee_rows = list(
+        Lead.objects.filter(created_date__range=(start_period, today))
+        .values("assigned_to__username", "assigned_to__first_name", "assigned_to__last_name")
+        .annotate(count=Count("id"))
+        .order_by("-count")[:8]
+    )
+    top_assignees = []
+    for row in assignee_rows:
+        name = " ".join(
+            part for part in [row.get("assigned_to__first_name"), row.get("assigned_to__last_name")] if part
+        ).strip()
+        top_assignees.append(
+            {
+                "label": name or row.get("assigned_to__username") or "Unassigned",
+                "count": int(row.get("count") or 0),
+            }
+        )
+
+    opp_base = Opportunity.objects.filter(created_date__range=(start_period, today))
+    opp_period = opp_base.count()
+    prev_opp_period = Opportunity.objects.filter(created_date__range=(previous_start, previous_end)).count()
+    open_opps = Opportunity.objects.filter(is_open=True).exclude(stage__in=["Closed Won", "Closed Lost"]).count()
+    open_pipeline_value = _ceo_decimal(
+        Opportunity.objects.filter(is_open=True)
+        .exclude(stage__in=["Closed Won", "Closed Lost"])
+        .aggregate(total=Sum("order_value"))
+        .get("total")
+    )
+    won_period = Opportunity.objects.filter(
+        stage="Closed Won", updated_at__date__range=(start_period, today)
+    ).count()
+    lost_period = Opportunity.objects.filter(
+        stage="Closed Lost", updated_at__date__range=(start_period, today)
+    ).count()
+    conversion_rate = round((opp_period / leads_period) * 100, 1) if leads_period else 0
+    prev_conversion_rate = round((prev_opp_period / prev_leads_period) * 100, 1) if prev_leads_period else 0
+    stage_rows = list(
+        Opportunity.objects.values("stage").annotate(count=Count("id")).order_by("-count")[:8]
+    )
+    top_customer_rows = list(
+        Opportunity.objects.select_related("customer", "lead")
+        .filter(created_date__range=(start_period, today))
+        .values("customer__account_brand", "customer__contact_name", "lead__account_brand")
+        .annotate(total=Sum("order_value"), count=Count("id"))
+        .order_by("-total", "-count")[:8]
+    )
+    top_customers = []
+    for row in top_customer_rows:
+        top_customers.append(
+            {
+                "label": row.get("customer__account_brand")
+                or row.get("customer__contact_name")
+                or row.get("lead__account_brand")
+                or "Unassigned customer",
+                "value": _ceo_decimal(row.get("total")),
+                "count": int(row.get("count") or 0),
+            }
+        )
+
+    production_qs = ProductionOrder.objects.all()
+    if side == "CA":
+        production_qs = production_qs.filter(factory_location="ca")
+    elif side == "BD":
+        production_qs = production_qs.filter(factory_location="bd")
+    production_active = production_qs.filter(status__in=["planning", "in_progress", "hold"])
+    production_running = production_qs.filter(status="in_progress").count()
+    production_hold = production_qs.filter(status="hold").count()
+    production_done_period = production_qs.filter(
+        status__in=["done", "closed_won"], updated_at__date__range=(start_period, today)
+    ).count()
+    production_delayed = production_active.filter(bulk_deadline__lt=today).count()
+    production_quantity = production_active.aggregate(total=Sum("qty_total")).get("total") or 0
+    production_rows = list(
+        production_qs.values("status").annotate(count=Count("id")).order_by("-count")
+    )
+
+    shipping_qs = Shipment.objects.all()
+    if side == "CA":
+        shipping_qs = shipping_qs.filter(order__factory_location="ca")
+    elif side == "BD":
+        shipping_qs = shipping_qs.filter(order__factory_location="bd")
+    shipments_period = shipping_qs.filter(created_at__date__range=(start_period, today)).count()
+    shipments_in_transit = shipping_qs.filter(status__in=["booked", "shipped", "out_for_delivery"]).count()
+    shipments_delayed = shipping_qs.filter(
+        ship_date__lt=today,
+    ).exclude(status__in=["delivered", "cancelled"]).count()
+    shipment_status_rows = list(
+        shipping_qs.values("status").annotate(count=Count("id")).order_by("-count")
+    )
+
+    cad_to_bdt = _get_latest_cad_to_bdt_rate()
+    accounting_qs = AccountingEntry.objects.exclude(main_type="TRANSFER").exclude(status__iexact="CANCELLED")
+    if side:
+        accounting_qs = accounting_qs.filter(side=side)
+    period_entries = list(
+        accounting_qs.filter(date__range=(start_period, today)).only(
+            "date", "direction", "side", "currency", "main_type", "amount_original", "amount_cad", "rate_to_cad"
+        )[:2500]
+    )
+    prev_entries = list(
+        accounting_qs.filter(date__range=(previous_start, previous_end)).only(
+            "date", "direction", "side", "currency", "main_type", "amount_original", "amount_cad", "rate_to_cad"
+        )[:2500]
+    )
+
+    def _finance_totals(entries):
+        revenue = Decimal("0")
+        expenses = Decimal("0")
+        for entry in entries:
+            direction = (entry.direction or "").upper().strip()
+            amount = _ceo_amount_cad(entry, cad_to_bdt)
+            if direction == "IN":
+                revenue += amount
+            elif direction == "OUT":
+                expenses += amount
+        return {"revenue": revenue, "expenses": expenses, "net": revenue - expenses}
+
+    finance_totals = _finance_totals(period_entries)
+    prev_finance_totals = _finance_totals(prev_entries)
+
+    invoice_qs = Invoice.objects.exclude(status="cancelled") if Invoice is not None else None
+    if invoice_qs is not None and side:
+        invoice_qs = invoice_qs.filter(Q(invoice_region=side) | Q(invoice_region="", currency="BDT" if side == "BD" else "CAD"))
+    invoice_open_total = Decimal("0")
+    overdue_invoice_count = 0
+    if invoice_qs is not None:
+        try:
+            open_invoices = invoice_qs.exclude(status="paid")
+            invoice_totals = open_invoices.aggregate(total=Sum("total_amount"), paid=Sum("paid_amount"))
+            invoice_open_total = _ceo_decimal(invoice_totals.get("total")) - _ceo_decimal(invoice_totals.get("paid"))
+            overdue_invoice_count = open_invoices.filter(due_date__lt=today).count()
+        except (OperationalError, ProgrammingError):
+            invoice_open_total = Decimal("0")
+            overdue_invoice_count = 0
+
+    WebsiteTrafficDaily = _ceo_optional_model("marketing", "WebsiteTrafficDaily")
+    WebsitePageDaily = _ceo_optional_model("marketing", "WebsitePageDaily")
+    SeoQueryDaily = _ceo_optional_model("marketing", "SeoQueryDaily")
+    AccountMetricDaily = _ceo_optional_model("marketing", "AccountMetricDaily")
+    Campaign = _ceo_optional_model("marketing", "Campaign")
+    InsightItem = _ceo_optional_model("marketing", "InsightItem")
+
+    website_totals = _ceo_aggregate(
+        WebsiteTrafficDaily,
+        WebsiteTrafficDaily.objects.filter(date__range=(start_period, today)) if WebsiteTrafficDaily else None,
+        visitors=Sum("visitors"),
+        sessions=Sum("sessions"),
+        page_views=Sum("page_views"),
+        conversions=Sum("conversions"),
+    )
+    search_totals = _ceo_aggregate(
+        SeoQueryDaily,
+        SeoQueryDaily.objects.filter(date__range=(start_period, today)) if SeoQueryDaily else None,
+        clicks=Sum("clicks"),
+        impressions=Sum("impressions"),
+    )
+    social_totals = _ceo_aggregate(
+        AccountMetricDaily,
+        AccountMetricDaily.objects.filter(date__range=(start_period, today)) if AccountMetricDaily else None,
+        engagement=Sum("engagement_total"),
+        reach=Sum("reach"),
+        views=Sum("views"),
+    )
+    active_campaigns = 0
+    open_insights = 0
+    top_pages = []
+    try:
+        if Campaign is not None:
+            active_campaigns = Campaign.objects.filter(is_active=True).count()
+        if InsightItem is not None:
+            open_insights = InsightItem.objects.filter(status="open").count()
+        if WebsitePageDaily is not None:
+            top_pages = list(
+                WebsitePageDaily.objects.filter(date__range=(start_period, today))
+                .values("page_path")
+                .annotate(page_views=Sum("page_views"), visitors=Sum("visitors"))
+                .order_by("-page_views")[:6]
+            )
+    except (OperationalError, ProgrammingError):
+        active_campaigns = 0
+        open_insights = 0
+        top_pages = []
+
+    month_rows = []
+    month_keys = _ceo_month_keys(today)
+    lead_month_map = {
+        row["month"]: int(row["count"] or 0)
+        for row in Lead.objects.filter(created_date__gte=month_keys[0])
+        .annotate(month=TruncMonth("created_date"))
+        .values("month")
+        .annotate(count=Count("id"))
+    }
+    opp_month_map = {
+        row["month"]: int(row["count"] or 0)
+        for row in Opportunity.objects.filter(created_date__gte=month_keys[0])
+        .annotate(month=TruncMonth("created_date"))
+        .values("month")
+        .annotate(count=Count("id"))
+    }
+    revenue_month_map = defaultdict(lambda: Decimal("0"))
+    expense_month_map = defaultdict(lambda: Decimal("0"))
+    for entry in accounting_qs.filter(date__gte=month_keys[0]).only(
+        "date", "direction", "currency", "amount_original", "amount_cad", "rate_to_cad"
+    )[:2500]:
+        if not entry.date:
+            continue
+        month_key = entry.date.replace(day=1)
+        if month_key not in month_keys:
+            continue
+        amount = _ceo_amount_cad(entry, cad_to_bdt)
+        if (entry.direction or "").upper().strip() == "IN":
+            revenue_month_map[month_key] += amount
+        elif (entry.direction or "").upper().strip() == "OUT":
+            expense_month_map[month_key] += amount
+    for month_key in month_keys:
+        revenue = revenue_month_map[month_key]
+        expenses = expense_month_map[month_key]
+        month_rows.append(
+            {
+                "label": month_key.strftime("%b"),
+                "leads": lead_month_map.get(month_key, 0),
+                "opportunities": opp_month_map.get(month_key, 0),
+                "revenue": revenue,
+                "expenses": expenses,
+                "net": revenue - expenses,
+            }
+        )
+    month_rows = _ceo_bar_rows(month_rows, ["leads", "opportunities", "revenue", "expenses", "net"])
+
+    alerts = []
+    if overdue_followups:
+        alerts.append({"title": f"{overdue_followups} overdue follow-up(s)", "detail": "Sales follow-up dates are past due.", "tone": "bad"})
+    if overdue_invoice_count:
+        alerts.append({"title": f"{overdue_invoice_count} overdue invoice(s)", "detail": "Open receivables need collection attention.", "tone": "bad"})
+    if production_delayed:
+        alerts.append({"title": f"{production_delayed} delayed production order(s)", "detail": "Bulk deadlines have passed on active orders.", "tone": "warn"})
+    if shipments_delayed:
+        alerts.append({"title": f"{shipments_delayed} delayed shipment(s)", "detail": "Ship dates have passed without delivery.", "tone": "warn"})
+    if finance_totals["net"] < 0:
+        alerts.append({"title": "Negative net cash movement", "detail": f"{period_label} outflows exceed inflows.", "tone": "bad"})
+    if open_insights:
+        alerts.append({"title": f"{open_insights} open marketing insight(s)", "detail": "Marketing recommendations are waiting for review.", "tone": "blue"})
+    if not alerts:
+        alerts.append({"title": "No critical alerts", "detail": "Core sales, operations, and finance alerts are clear.", "tone": "good"})
+
+    key_trends = [
+        {
+            "label": "Lead Volume",
+            "value": f"{_delta_pct(leads_period, prev_leads_period):+.0f}%",
+            "tone": _delta_tone(_delta_pct(leads_period, prev_leads_period)),
+            "detail": f"{leads_period:,} leads vs {prev_leads_period:,} previous.",
+        },
+        {
+            "label": "Opportunity Creation",
+            "value": f"{_delta_pct(opp_period, prev_opp_period):+.0f}%",
+            "tone": _delta_tone(_delta_pct(opp_period, prev_opp_period)),
+            "detail": f"{opp_period:,} opportunities vs {prev_opp_period:,} previous.",
+        },
+        {
+            "label": "Revenue",
+            "value": f"{_delta_pct(finance_totals['revenue'], prev_finance_totals['revenue']):+.0f}%",
+            "tone": _delta_tone(_delta_pct(finance_totals["revenue"], prev_finance_totals["revenue"])),
+            "detail": f"{period_label} revenue compared with prior window.",
+        },
+        {
+            "label": "Conversion",
+            "value": f"{conversion_rate - prev_conversion_rate:+.1f} pts",
+            "tone": _delta_tone(conversion_rate - prev_conversion_rate),
+            "detail": f"{conversion_rate:.1f}% lead-to-opportunity rate.",
+        },
+    ]
+
+    kpi_cards = [
+        {"label": "Revenue", "value": _format_money(finance_totals["revenue"]), "note": f"{period_label} accounting inflow.", "tone": "good"},
+        {"label": "Net Cash", "value": _format_money(finance_totals["net"]), "note": "Revenue less accounting outflow.", "tone": "good" if finance_totals["net"] >= 0 else "bad"},
+        {"label": "Open Pipeline", "value": _format_money(open_pipeline_value), "note": f"{open_opps:,} open opportunities.", "tone": "blue"},
+        {"label": "Lead Conversion", "value": _format_percent(conversion_rate), "note": f"{opp_period:,} opportunities from {leads_period:,} leads.", "tone": "good" if conversion_rate >= prev_conversion_rate else "warn"},
+        {"label": "Production Running", "value": _format_count(production_running), "note": f"{production_quantity:,} active units.", "tone": "blue"},
+        {"label": "Shipments In Transit", "value": _format_count(shipments_in_transit), "note": f"{shipments_period:,} shipment(s) created in period.", "tone": "blue"},
+        {"label": "Website Visitors", "value": _format_count(website_totals.get("visitors")), "note": f"{_format_count(website_totals.get('page_views'))} page views.", "tone": "blue"},
+        {"label": "Receivables", "value": _format_money(invoice_open_total), "note": f"{overdue_invoice_count:,} overdue invoice(s).", "tone": "warn" if overdue_invoice_count else "blue"},
+    ]
+
+    context = {
+        "today": today,
+        "period_days": period_days,
+        "period_label": period_label,
+        "filter_values": filter_values,
+        "side_options": [("", "All sides"), ("CA", "Canada"), ("BD", "Bangladesh")],
+        "kpi_cards": kpi_cards,
+        "alerts": alerts,
+        "key_trends": key_trends,
+        "month_rows": month_rows,
+        "lead_source_rows": lead_source_rows,
+        "stage_rows": stage_rows,
+        "production_rows": production_rows,
+        "shipment_status_rows": shipment_status_rows,
+        "top_assignees": top_assignees,
+        "top_customers": top_customers,
+        "top_pages": top_pages,
+        "marketing_summary": {
+            "visitors": website_totals.get("visitors") or 0,
+            "sessions": website_totals.get("sessions") or 0,
+            "page_views": website_totals.get("page_views") or 0,
+            "conversions": website_totals.get("conversions") or 0,
+            "search_clicks": search_totals.get("clicks") or 0,
+            "search_impressions": search_totals.get("impressions") or 0,
+            "social_engagement": social_totals.get("engagement") or 0,
+            "social_reach": social_totals.get("reach") or 0,
+            "social_views": social_totals.get("views") or 0,
+            "active_campaigns": active_campaigns,
+            "open_insights": open_insights,
+        },
+        "operations_summary": {
+            "production_running": production_running,
+            "production_hold": production_hold,
+            "production_done_period": production_done_period,
+            "production_delayed": production_delayed,
+            "shipments_in_transit": shipments_in_transit,
+            "shipments_delayed": shipments_delayed,
+        },
+        "finance_summary": {
+            "revenue": finance_totals["revenue"],
+            "expenses": finance_totals["expenses"],
+            "net": finance_totals["net"],
+            "invoice_open_total": invoice_open_total,
+            "overdue_invoice_count": overdue_invoice_count,
+        },
+        "sales_summary": {
+            "leads_period": leads_period,
+            "opp_period": opp_period,
+            "open_opps": open_opps,
+            "won_period": won_period,
+            "lost_period": lost_period,
+            "overdue_followups": overdue_followups,
+            "due_soon_followups": due_soon_followups,
+        },
+    }
+    return render(request, "crm/ceo_dashboard.html", context)
 
 
 @login_required

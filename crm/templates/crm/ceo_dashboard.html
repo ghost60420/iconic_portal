@@ -1,0 +1,533 @@
+{% extends "crm/base.html" %}
+{% load humanize %}
+{% block content %}
+
+<style>
+  :root{
+    --ceo-bg:#030712;
+    --ceo-panel:#0b1220;
+    --ceo-panel-2:#101827;
+    --ceo-line:#253247;
+    --ceo-text:#f8fafc;
+    --ceo-muted:#94a3b8;
+    --ceo-gold:#f5c451;
+    --ceo-good:#4ade80;
+    --ceo-warn:#fbbf24;
+    --ceo-bad:#fb7185;
+    --ceo-blue:#60a5fa;
+  }
+
+  .ceo-wrap{ max-width:1420px; margin:0 auto; color:var(--ceo-text); }
+
+  .ceo-hero{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:18px;
+    flex-wrap:wrap;
+    padding:22px;
+    border:1px solid rgba(245,196,81,0.24);
+    border-radius:22px;
+    background:
+      linear-gradient(135deg, rgba(245,196,81,0.13), transparent 35%),
+      linear-gradient(180deg, rgba(15,23,42,0.96), rgba(2,6,23,0.96));
+    box-shadow:0 24px 60px rgba(0,0,0,0.42);
+    margin-bottom:16px;
+  }
+
+  .ceo-kicker{
+    color:var(--ceo-gold);
+    font-size:12px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    margin-bottom:6px;
+  }
+
+  .ceo-title{ margin:0; font-size:30px; line-height:1.1; font-weight:950; }
+  .ceo-sub{ margin-top:8px; max-width:830px; color:var(--ceo-muted); font-size:13px; line-height:1.5; font-weight:750; }
+
+  .ceo-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+  .ceo-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-height:38px;
+    padding:9px 13px;
+    border-radius:14px;
+    border:1px solid rgba(148,163,184,0.25);
+    background:rgba(15,23,42,0.82);
+    color:var(--ceo-text);
+    text-decoration:none;
+    font-size:12px;
+    font-weight:900;
+  }
+  .ceo-btn:hover{ color:var(--ceo-text); border-color:rgba(245,196,81,0.55); }
+  .ceo-btn--gold{ background:linear-gradient(135deg, #f6d365, #d9a622); color:#111827; border-color:rgba(245,196,81,0.55); }
+  .ceo-btn--gold:hover{ color:#111827; }
+
+  .ceo-filter{
+    display:grid;
+    grid-template-columns:repeat(2, minmax(0,220px)) auto;
+    gap:12px;
+    align-items:end;
+    padding:14px;
+    border:1px solid var(--ceo-line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.92), rgba(2,6,23,0.92));
+    margin-bottom:16px;
+  }
+
+  .ceo-field label{
+    display:block;
+    margin-bottom:6px;
+    color:var(--ceo-muted);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.07em;
+  }
+
+  .ceo-field select{
+    width:100%;
+    min-height:42px;
+    border:1px solid rgba(148,163,184,0.26);
+    border-radius:14px;
+    background:#030712;
+    color:var(--ceo-text);
+    padding:9px 11px;
+    font-size:13px;
+    font-weight:850;
+  }
+
+  .ceo-filter-actions{ display:flex; gap:8px; align-items:end; }
+
+  .ceo-kpis{
+    display:grid;
+    grid-template-columns:repeat(4, minmax(0,1fr));
+    gap:12px;
+    margin-bottom:16px;
+  }
+
+  .ceo-card{
+    padding:14px;
+    border:1px solid var(--ceo-line);
+    border-radius:18px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.94), rgba(2,6,23,0.94));
+    box-shadow:0 18px 44px rgba(0,0,0,0.30);
+  }
+  .ceo-card span{ display:block; color:var(--ceo-muted); font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.07em; }
+  .ceo-card strong{ display:block; margin-top:8px; color:var(--ceo-text); font-size:21px; line-height:1.12; font-weight:950; }
+  .ceo-card small{ display:block; margin-top:7px; color:var(--ceo-muted); font-size:11px; line-height:1.45; font-weight:800; }
+  .ceo-card--good{ border-color:rgba(74,222,128,0.28); }
+  .ceo-card--warn{ border-color:rgba(251,191,36,0.30); }
+  .ceo-card--bad{ border-color:rgba(251,113,133,0.34); }
+  .ceo-card--blue{ border-color:rgba(96,165,250,0.30); }
+
+  .ceo-layout{
+    display:grid;
+    grid-template-columns:minmax(0,1.4fr) minmax(360px,.9fr);
+    gap:14px;
+    align-items:start;
+  }
+
+  .ceo-section{
+    border:1px solid var(--ceo-line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.94), rgba(2,6,23,0.94));
+    overflow:hidden;
+    margin-bottom:14px;
+  }
+
+  .ceo-section-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    flex-wrap:wrap;
+    padding:14px 16px;
+    border-bottom:1px solid rgba(148,163,184,0.16);
+  }
+
+  .ceo-section-title{ margin:0; font-size:15px; font-weight:900; }
+  .ceo-section-note{ color:var(--ceo-muted); font-size:12px; font-weight:800; }
+  .ceo-muted{ color:var(--ceo-muted); font-size:12px; font-weight:800; }
+  .ceo-right{ text-align:right !important; }
+
+  .ceo-chart-row{
+    display:grid;
+    grid-template-columns:82px minmax(0,1fr) 108px;
+    gap:10px;
+    align-items:center;
+    padding:11px 14px;
+    border-bottom:1px solid rgba(148,163,184,0.11);
+  }
+  .ceo-bars{ display:grid; gap:5px; }
+  .ceo-bar{ height:8px; border-radius:999px; background:rgba(148,163,184,0.13); overflow:hidden; }
+  .ceo-bar span{ display:block; height:100%; min-width:2px; border-radius:999px; }
+  .ceo-bar-leads span{ background:linear-gradient(90deg, #38bdf8, #60a5fa); }
+  .ceo-bar-opps span{ background:linear-gradient(90deg, var(--ceo-gold), #fb923c); }
+  .ceo-bar-revenue span{ background:linear-gradient(90deg, var(--ceo-good), #14b8a6); }
+  .ceo-bar-expense span{ background:linear-gradient(90deg, var(--ceo-warn), var(--ceo-bad)); }
+  .ceo-bar-net span{ background:linear-gradient(90deg, #a78bfa, var(--ceo-blue)); }
+
+  .ceo-mini-grid{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px; padding:14px; }
+  .ceo-mini{
+    border:1px solid rgba(148,163,184,0.17);
+    border-radius:16px;
+    background:rgba(3,7,18,0.72);
+    padding:12px;
+  }
+  .ceo-mini h3{ margin:0 0 10px; font-size:14px; font-weight:900; }
+  .ceo-line{
+    display:flex;
+    justify-content:space-between;
+    gap:10px;
+    padding:7px 0;
+    border-top:1px solid rgba(148,163,184,0.10);
+    font-size:12px;
+    font-weight:850;
+  }
+
+  .ceo-table-wrap{ overflow-x:auto; }
+  .ceo-table{ width:100%; border-collapse:collapse; min-width:560px; }
+  .ceo-table--compact{ min-width:420px; }
+  .ceo-table th{
+    padding:11px 12px;
+    background:#06101f;
+    border-bottom:1px solid rgba(148,163,184,0.16);
+    color:var(--ceo-muted);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.07em;
+    text-align:left;
+    white-space:nowrap;
+  }
+  .ceo-table td{
+    padding:12px;
+    border-bottom:1px solid rgba(148,163,184,0.11);
+    color:#e5e7eb;
+    font-size:13px;
+    font-weight:800;
+    vertical-align:top;
+  }
+  .ceo-table tr:hover td{ background:rgba(245,196,81,0.05); }
+
+  .ceo-badge{
+    display:inline-flex;
+    align-items:center;
+    min-height:24px;
+    border-radius:999px;
+    padding:4px 9px;
+    border:1px solid rgba(148,163,184,0.26);
+    color:#e2e8f0;
+    background:rgba(148,163,184,0.10);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    white-space:nowrap;
+  }
+  .ceo-badge--good,
+  .ceo-badge--up{ color:#bbf7d0; background:rgba(74,222,128,0.12); border-color:rgba(74,222,128,0.34); }
+  .ceo-badge--warn,
+  .ceo-badge--flat{ color:#fde68a; background:rgba(251,191,36,0.12); border-color:rgba(251,191,36,0.34); }
+  .ceo-badge--bad,
+  .ceo-badge--down{ color:#fecdd3; background:rgba(251,113,133,0.12); border-color:rgba(251,113,133,0.36); }
+  .ceo-badge--blue{ color:#bfdbfe; background:rgba(96,165,250,0.12); border-color:rgba(96,165,250,0.34); }
+
+  .ceo-alert-list{ display:grid; gap:10px; padding:14px; }
+  .ceo-alert{
+    border:1px solid rgba(148,163,184,0.17);
+    border-radius:16px;
+    background:rgba(3,7,18,0.72);
+    padding:12px;
+  }
+  .ceo-alert strong{ display:block; font-size:13px; font-weight:900; }
+  .ceo-alert p{ margin:6px 0 0; color:var(--ceo-muted); font-size:12px; line-height:1.45; font-weight:750; }
+  .ceo-alert--bad{ border-color:rgba(251,113,133,0.34); }
+  .ceo-alert--warn{ border-color:rgba(251,191,36,0.30); }
+  .ceo-alert--good{ border-color:rgba(74,222,128,0.28); }
+  .ceo-alert--blue{ border-color:rgba(96,165,250,0.30); }
+
+  .ceo-empty{ padding:22px; color:var(--ceo-muted); font-size:13px; font-weight:800; text-align:center; }
+
+  @media (max-width:1180px){
+    .ceo-kpis{ grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .ceo-layout{ grid-template-columns:1fr; }
+  }
+  @media (max-width:760px){
+    .ceo-hero{ padding:16px; border-radius:18px; }
+    .ceo-title{ font-size:24px; }
+    .ceo-filter,
+    .ceo-kpis,
+    .ceo-mini-grid{ grid-template-columns:1fr; }
+    .ceo-filter-actions{ align-items:stretch; flex-direction:column; }
+    .ceo-btn{ width:100%; }
+  }
+</style>
+
+<div class="ceo-wrap">
+  <div class="ceo-hero">
+    <div>
+      <div class="ceo-kicker">Executive Command Center</div>
+      <h1 class="ceo-title">CEO Dashboard</h1>
+      <div class="ceo-sub">
+        Leads, opportunities, production, shipping, marketing, and accounting in one read-only operating view for {{ period_label|lower }}.
+      </div>
+    </div>
+    <div class="ceo-actions">
+      <a class="ceo-btn" href="{% url 'main_dashboard' %}">CRM Dashboard</a>
+      <a class="ceo-btn" href="{% url 'kpi_scorecard_dashboard' %}">KPI Scorecard</a>
+      <a class="ceo-btn ceo-btn--gold" href="{% url 'accounting_home' %}">Accounting</a>
+    </div>
+  </div>
+
+  <form class="ceo-filter" method="get">
+    <div class="ceo-field">
+      <label for="days">Period</label>
+      <select id="days" name="days">
+        <option value="7" {% if filter_values.days == "7" %}selected{% endif %}>Last 7 days</option>
+        <option value="30" {% if filter_values.days == "30" %}selected{% endif %}>Last 30 days</option>
+        <option value="60" {% if filter_values.days == "60" %}selected{% endif %}>Last 60 days</option>
+        <option value="90" {% if filter_values.days == "90" %}selected{% endif %}>Last 90 days</option>
+        <option value="180" {% if filter_values.days == "180" %}selected{% endif %}>Last 180 days</option>
+      </select>
+    </div>
+    <div class="ceo-field">
+      <label for="side">Side</label>
+      <select id="side" name="side">
+        {% for value,label in side_options %}
+          <option value="{{ value }}" {% if filter_values.side == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="ceo-filter-actions">
+      <button class="ceo-btn ceo-btn--gold" type="submit">Apply</button>
+      <a class="ceo-btn" href="{% url 'ceo_dashboard' %}">Reset</a>
+    </div>
+  </form>
+
+  <div class="ceo-kpis">
+    {% for card in kpi_cards %}
+      <div class="ceo-card ceo-card--{{ card.tone }}">
+        <span>{{ card.label }}</span>
+        <strong>{{ card.value }}</strong>
+        <small>{{ card.note }}</small>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="ceo-layout">
+    <div>
+      <section class="ceo-section">
+        <div class="ceo-section-head">
+          <div>
+            <h2 class="ceo-section-title">Key trends</h2>
+            <div class="ceo-section-note">Monthly sales and finance movement.</div>
+          </div>
+        </div>
+        {% if month_rows %}
+          {% for row in month_rows %}
+            <div class="ceo-chart-row">
+              <div class="ceo-muted">{{ row.label }}</div>
+              <div class="ceo-bars">
+                <div class="ceo-bar ceo-bar-leads"><span style="width:{{ row.leads_bar }}%"></span></div>
+                <div class="ceo-bar ceo-bar-opps"><span style="width:{{ row.opportunities_bar }}%"></span></div>
+                <div class="ceo-bar ceo-bar-revenue"><span style="width:{{ row.revenue_bar }}%"></span></div>
+                <div class="ceo-bar ceo-bar-expense"><span style="width:{{ row.expenses_bar }}%"></span></div>
+                <div class="ceo-bar ceo-bar-net"><span style="width:{{ row.net_bar }}%"></span></div>
+              </div>
+              <div class="ceo-right">
+                <span class="ceo-badge {% if row.net >= 0 %}ceo-badge--good{% else %}ceo-badge--bad{% endif %}">CAD {{ row.net|floatformat:0|intcomma }}</span>
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="ceo-empty">No trend data found for the selected filters.</div>
+        {% endif %}
+      </section>
+
+      <section class="ceo-section">
+        <div class="ceo-section-head">
+          <div>
+            <h2 class="ceo-section-title">Sales overview</h2>
+            <div class="ceo-section-note">Lead sources, opportunity stages, and follow-up load.</div>
+          </div>
+        </div>
+        <div class="ceo-mini-grid">
+          <div class="ceo-mini">
+            <h3>Lead sources</h3>
+            {% for row in lead_source_rows %}
+              <div class="ceo-line"><span>{{ row.source|default:"Unknown" }}</span><strong>{{ row.count|intcomma }}</strong></div>
+            {% empty %}
+              <div class="ceo-empty">No lead source data.</div>
+            {% endfor %}
+          </div>
+          <div class="ceo-mini">
+            <h3>Opportunity stages</h3>
+            {% for row in stage_rows %}
+              <div class="ceo-line"><span>{{ row.stage|default:"Unknown" }}</span><strong>{{ row.count|intcomma }}</strong></div>
+            {% empty %}
+              <div class="ceo-empty">No opportunity stage data.</div>
+            {% endfor %}
+          </div>
+        </div>
+      </section>
+
+      <section class="ceo-section">
+        <div class="ceo-section-head">
+          <div>
+            <h2 class="ceo-section-title">Operations overview</h2>
+            <div class="ceo-section-note">Production and shipping status distribution.</div>
+          </div>
+        </div>
+        <div class="ceo-mini-grid">
+          <div class="ceo-mini">
+            <h3>Production</h3>
+            {% for row in production_rows %}
+              <div class="ceo-line"><span>{{ row.status|default:"Unknown" }}</span><strong>{{ row.count|intcomma }}</strong></div>
+            {% empty %}
+              <div class="ceo-empty">No production orders found.</div>
+            {% endfor %}
+          </div>
+          <div class="ceo-mini">
+            <h3>Shipping</h3>
+            {% for row in shipment_status_rows %}
+              <div class="ceo-line"><span>{{ row.status|default:"Unknown" }}</span><strong>{{ row.count|intcomma }}</strong></div>
+            {% empty %}
+              <div class="ceo-empty">No shipments found.</div>
+            {% endfor %}
+          </div>
+        </div>
+      </section>
+
+      <section class="ceo-section">
+        <div class="ceo-section-head">
+          <div>
+            <h2 class="ceo-section-title">Marketing impact</h2>
+            <div class="ceo-section-note">Website, Google search, social, campaigns, and insight signals.</div>
+          </div>
+        </div>
+        <div class="ceo-mini-grid">
+          <div class="ceo-mini">
+            <h3>Marketing KPIs</h3>
+            <div class="ceo-line"><span>Website visitors</span><strong>{{ marketing_summary.visitors|intcomma }}</strong></div>
+            <div class="ceo-line"><span>Page views</span><strong>{{ marketing_summary.page_views|intcomma }}</strong></div>
+            <div class="ceo-line"><span>Search clicks</span><strong>{{ marketing_summary.search_clicks|intcomma }}</strong></div>
+            <div class="ceo-line"><span>Search impressions</span><strong>{{ marketing_summary.search_impressions|intcomma }}</strong></div>
+            <div class="ceo-line"><span>Social engagement</span><strong>{{ marketing_summary.social_engagement|intcomma }}</strong></div>
+            <div class="ceo-line"><span>Active campaigns</span><strong>{{ marketing_summary.active_campaigns|intcomma }}</strong></div>
+          </div>
+          <div class="ceo-mini">
+            <h3>Top website pages</h3>
+            {% for row in top_pages %}
+              <div class="ceo-line"><span>{{ row.page_path|truncatechars:38 }}</span><strong>{{ row.page_views|default:0|intcomma }}</strong></div>
+            {% empty %}
+              <div class="ceo-empty">No website page data.</div>
+            {% endfor %}
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div>
+      <section class="ceo-section">
+        <div class="ceo-section-head">
+          <div>
+            <h2 class="ceo-section-title">Alerts</h2>
+            <div class="ceo-section-note">Immediate risks and follow-up signals.</div>
+          </div>
+        </div>
+        <div class="ceo-alert-list">
+          {% for alert in alerts %}
+            <div class="ceo-alert ceo-alert--{{ alert.tone }}">
+              <strong>{{ alert.title }}</strong>
+              <p>{{ alert.detail }}</p>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="ceo-section">
+        <div class="ceo-section-head">
+          <div>
+            <h2 class="ceo-section-title">Executive trend signals</h2>
+            <div class="ceo-section-note">Current period compared with prior period.</div>
+          </div>
+        </div>
+        <div class="ceo-table-wrap">
+          <table class="ceo-table ceo-table--compact">
+            <tbody>
+              {% for trend in key_trends %}
+                <tr>
+                  <td>{{ trend.label }}<br><span class="ceo-muted">{{ trend.detail }}</span></td>
+                  <td class="ceo-right"><span class="ceo-badge ceo-badge--{{ trend.tone }}">{{ trend.value }}</span></td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="ceo-section">
+        <div class="ceo-section-head">
+          <div>
+            <h2 class="ceo-section-title">Top performers</h2>
+            <div class="ceo-section-note">Lead owners and customers contributing activity.</div>
+          </div>
+        </div>
+        <div class="ceo-table-wrap">
+          <table class="ceo-table ceo-table--compact">
+            <thead><tr><th>Lead owner</th><th class="ceo-right">Leads</th></tr></thead>
+            <tbody>
+              {% for row in top_assignees %}
+                <tr><td>{{ row.label }}</td><td class="ceo-right">{{ row.count|intcomma }}</td></tr>
+              {% empty %}
+                <tr><td colspan="2"><div class="ceo-empty">No assigned leads in period.</div></td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="ceo-table-wrap">
+          <table class="ceo-table ceo-table--compact">
+            <thead><tr><th>Customer</th><th class="ceo-right">Pipeline</th></tr></thead>
+            <tbody>
+              {% for row in top_customers %}
+                <tr><td>{{ row.label }}<br><span class="ceo-muted">{{ row.count }} opportunity row(s)</span></td><td class="ceo-right">CAD {{ row.value|floatformat:2|intcomma }}</td></tr>
+              {% empty %}
+                <tr><td colspan="2"><div class="ceo-empty">No customer pipeline in period.</div></td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="ceo-section">
+        <div class="ceo-section-head">
+          <div>
+            <h2 class="ceo-section-title">Department summaries</h2>
+            <div class="ceo-section-note">Read-only totals by operating area.</div>
+          </div>
+        </div>
+        <div class="ceo-table-wrap">
+          <table class="ceo-table ceo-table--compact">
+            <tbody>
+              <tr><td>Leads in period</td><td class="ceo-right">{{ sales_summary.leads_period|intcomma }}</td></tr>
+              <tr><td>Opportunities in period</td><td class="ceo-right">{{ sales_summary.opp_period|intcomma }}</td></tr>
+              <tr><td>Won / Lost</td><td class="ceo-right">{{ sales_summary.won_period|intcomma }} / {{ sales_summary.lost_period|intcomma }}</td></tr>
+              <tr><td>Production delayed</td><td class="ceo-right">{{ operations_summary.production_delayed|intcomma }}</td></tr>
+              <tr><td>Shipments delayed</td><td class="ceo-right">{{ operations_summary.shipments_delayed|intcomma }}</td></tr>
+              <tr><td>Accounting revenue</td><td class="ceo-right">CAD {{ finance_summary.revenue|floatformat:2|intcomma }}</td></tr>
+              <tr><td>Accounting expenses</td><td class="ceo-right">CAD {{ finance_summary.expenses|floatformat:2|intcomma }}</td></tr>
+              <tr><td>Open receivables</td><td class="ceo-right">CAD {{ finance_summary.invoice_open_total|floatformat:2|intcomma }}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

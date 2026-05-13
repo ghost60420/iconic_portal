@@ -273,6 +273,7 @@
     {% url 'production_list' as prod_url %}
     {% url 'shipment_list' as ship_url %}
     {% url 'main_dashboard' as main_dash_url %}
+    {% url 'ceo_dashboard' as ceo_dash_url %}
     {% url 'leadbrain_home' as leadbrain_home_url %}
     {% url 'ai_hub' as ai_hub_url %}
     {% url 'inventory_list' as inv_url %}
@@ -311,6 +312,10 @@
           <a href="{{ main_dash_url }}" class="crm-nav-item primary"><span>🏠</span><strong>CRM</strong></a>
         {% elif leads_url %}
           <a href="{{ leads_url }}" class="crm-nav-item primary"><span>🏠</span><strong>CRM</strong></a>
+        {% endif %}
+
+        {% if ceo_dash_url %}
+          <a href="{{ ceo_dash_url }}" class="crm-nav-item hot"><span>👑</span><strong>CEO Dashboard</strong></a>
         {% endif %}
 
         {% if leads_url %}
