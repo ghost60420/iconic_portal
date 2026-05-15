@@ -24,6 +24,17 @@
       margin: 0;
       padding: 0;
     }
+    select,
+    option {
+      list-style: none !important;
+      list-style-type: none !important;
+      counter-reset: none !important;
+      counter-increment: none !important;
+    }
+    select::marker,
+    option::marker {
+      content: "" !important;
+    }
     a { color: var(--gold); text-decoration: none; }
     a:hover { text-decoration: underline; }
 
