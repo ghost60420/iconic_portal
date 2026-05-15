@@ -933,6 +933,11 @@ class LeadResearchJob(models.Model):
 # -----------------------------------
 
 class Opportunity(models.Model):
+    ORDER_CURRENCY_CHOICES = [
+        ("CAD", "CAD"),
+        ("USD", "USD"),
+    ]
+
     STAGE_CHOICES = [
         ("Prospecting", "Prospecting"),
         ("Qualification", "Qualification"),
@@ -1056,6 +1061,12 @@ class Opportunity(models.Model):
     )
 
     moq_units = models.IntegerField(null=True, blank=True)
+
+    order_currency = models.CharField(
+        max_length=3,
+        choices=ORDER_CURRENCY_CHOICES,
+        default="CAD",
+    )
 
     order_value = models.DecimalField(
         max_digits=12,

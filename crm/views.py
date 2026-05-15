@@ -11084,6 +11084,9 @@ def add_opportunity(request):
         stage = request.POST.get("stage") or "Prospecting"
         product_type = request.POST.get("product_type") or "Other"
         product_category = request.POST.get("product_category") or "Other"
+        order_currency = (request.POST.get("order_currency") or "CAD").upper()
+        if order_currency not in {"CAD", "USD"}:
+            order_currency = "CAD"
         moq_units_raw = request.POST.get("moq_units")
         order_value_raw = request.POST.get("order_value")
         order_value_usd_raw = request.POST.get("order_value_usd")
@@ -11109,6 +11112,7 @@ def add_opportunity(request):
             product_category=product_category,
             customer=customer,
             moq_units=moq_units,
+            order_currency=order_currency,
             order_value=order_value,
             order_value_usd=order_value_usd,
             fx_rate_bdt_per_usd=fx_rate,
@@ -11135,6 +11139,8 @@ def add_opportunity(request):
         "stage_choices": Opportunity.STAGE_CHOICES,
         "type_choices": Opportunity.PRODUCT_TYPE_CHOICES,
         "category_choices": Opportunity.PRODUCT_CATEGORY_CHOICES,
+        "currency_choices": Opportunity.ORDER_CURRENCY_CHOICES,
+        "default_currency": "CAD",
         "selected_customer_id": request.GET.get("customer") or "",
         "selected_lead_id": request.GET.get("lead") or "",
     }
