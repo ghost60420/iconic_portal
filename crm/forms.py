@@ -36,6 +36,7 @@ from .models import (
     Trim,
     ThreadOption,
     LibraryAttachment,
+    lead_product_interest_choices,
 )
 
 # --------------------------------------------------
@@ -133,7 +134,7 @@ class LeadForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
 
         category_choices = [("", "Select a category")] + list(Opportunity.PRODUCT_CATEGORY_CHOICES)
-        interest_choices = [("", "Select an interest")] + list(Opportunity.PRODUCT_TYPE_CHOICES)
+        interest_choices = [("", "Select an interest")] + list(lead_product_interest_choices())
 
         if "product_category" in self.fields:
             self.fields["product_category"].choices = category_choices
@@ -150,7 +151,7 @@ class LeadForm(forms.ModelForm):
             self.fields["product_interest"].widget.attrs.update({"class": "form-control"})
 
             current_value = getattr(self.instance, "product_interest", "") or ""
-            if current_value and current_value not in dict(Opportunity.PRODUCT_TYPE_CHOICES):
+            if current_value and current_value not in dict(self.fields["product_interest"].choices):
                 self.fields["product_interest"].choices.append((current_value, current_value))
 
         if "assigned_to" in self.fields:
@@ -191,7 +192,7 @@ class QuickOutboundLeadForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if "product_interest" in self.fields:
-            self.fields["product_interest"].choices = [("", "Select an interest")] + list(Opportunity.PRODUCT_TYPE_CHOICES)
+            self.fields["product_interest"].choices = [("", "Select an interest")] + list(lead_product_interest_choices())
         if "assigned_to" in self.fields:
             self.fields["assigned_to"].queryset = get_user_model().objects.all().order_by("first_name", "last_name", "username")
 

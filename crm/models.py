@@ -304,12 +304,41 @@ PRIORITY_CHOICES = [
 ]
 
 
+SPORTS_PRODUCT_CATEGORY_CHOICES = [
+    ("Basketball Jersey", "Basketball Jersey"),
+    ("Soccer Jersey", "Soccer Jersey"),
+    ("Football Jersey", "Football Jersey"),
+    ("Baseball Jersey", "Baseball Jersey"),
+    ("Hockey Jersey", "Hockey Jersey"),
+    ("Volleyball Jersey", "Volleyball Jersey"),
+    ("Rugby Jersey", "Rugby Jersey"),
+    ("Sports Tracksuit", "Sports Tracksuit"),
+    ("Team Uniform", "Team Uniform"),
+    ("Training Jersey", "Training Jersey"),
+    ("Warm Up Jacket", "Warm Up Jacket"),
+    ("Warm Up Pants", "Warm Up Pants"),
+    ("Athletic Shorts", "Athletic Shorts"),
+    ("Compression Shirt", "Compression Shirt"),
+    ("Compression Shorts", "Compression Shorts"),
+    ("Sports Polo", "Sports Polo"),
+    ("Coach Jacket", "Coach Jacket"),
+    ("Sideline Jacket", "Sideline Jacket"),
+    ("Tracksuit Set", "Tracksuit Set"),
+    ("Practice Jersey", "Practice Jersey"),
+]
+
+
+def _extend_choices(base_choices, extra_choices):
+    existing = {value for value, _label in base_choices}
+    return list(base_choices) + [choice for choice in extra_choices if choice[0] not in existing]
+
+
 def lead_product_category_choices():
     return Opportunity.PRODUCT_CATEGORY_CHOICES
 
 
 def lead_product_interest_choices():
-    return Opportunity.PRODUCT_TYPE_CHOICES
+    return _extend_choices(Opportunity.PRODUCT_TYPE_CHOICES, SPORTS_PRODUCT_CATEGORY_CHOICES)
 
 
 # ----------------------------
@@ -932,7 +961,7 @@ class Opportunity(models.Model):
         ("Other", "Other"),
     ]
 
-    PRODUCT_CATEGORY_CHOICES = [
+    PRODUCT_CATEGORY_BASE_CHOICES = [
         ("Leggings", "Leggings"),
         ("Sports Bra", "Sports Bra"),
         ("Crop Top", "Crop Top"),
@@ -983,6 +1012,7 @@ class Opportunity(models.Model):
         ("Headband", "Headband"),
         ("Other", "Other"),
     ]
+    PRODUCT_CATEGORY_CHOICES = _extend_choices(PRODUCT_CATEGORY_BASE_CHOICES, SPORTS_PRODUCT_CATEGORY_CHOICES)
 
     lead = models.ForeignKey(
         "Lead",
