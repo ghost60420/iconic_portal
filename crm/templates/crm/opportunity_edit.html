@@ -4,238 +4,433 @@
 {% block content %}
 
 <style>
-    .page-opp-edit {
-        max-width: 800px;
-        margin: 20px auto;
-        padding: 0 10px;
-        color: #f9fafb;
+  .opp-edit-page {
+    max-width: 1180px;
+    margin: 0 auto;
+    color: #e5e7eb;
+  }
+
+  .opp-edit-hero {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 18px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+    padding: 22px;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 18px;
+    background:
+      radial-gradient(circle at top left, rgba(250, 204, 21, 0.18), transparent 34%),
+      linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(2, 6, 23, 0.96));
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.38);
+  }
+
+  .opp-edit-kicker {
+    margin: 0 0 8px;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #fde68a;
+  }
+
+  .opp-edit-hero h1 {
+    margin: 0;
+    font-size: clamp(26px, 4vw, 40px);
+    line-height: 1.05;
+    letter-spacing: 0;
+    color: #f8fafc;
+  }
+
+  .opp-edit-hero p {
+    margin: 10px 0 0;
+    max-width: 650px;
+    color: #a8b0bd;
+    font-size: 14px;
+  }
+
+  .opp-edit-meta {
+    display: grid;
+    gap: 8px;
+    min-width: 220px;
+  }
+
+  .opp-edit-pill {
+    display: inline-flex;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 9px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    background: rgba(2, 6, 23, 0.48);
+    color: #f8fafc;
+    font-size: 12px;
+    font-weight: 900;
+    white-space: nowrap;
+  }
+
+  .opp-edit-pill span {
+    color: #94a3b8;
+    font-weight: 800;
+  }
+
+  .opp-edit-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 0.58fr);
+    gap: 18px;
+    align-items: start;
+  }
+
+  .opp-edit-main {
+    display: grid;
+    gap: 18px;
+  }
+
+  .opp-edit-card {
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 16px;
+    background: rgba(15, 23, 42, 0.82);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.26);
+    overflow: hidden;
+  }
+
+  .opp-edit-card-header {
+    padding: 16px 18px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(2, 6, 23, 0.45);
+  }
+
+  .opp-edit-card-header h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 900;
+    color: #f8fafc;
+  }
+
+  .opp-edit-card-header p {
+    margin: 5px 0 0;
+    color: #94a3b8;
+    font-size: 12px;
+  }
+
+  .opp-edit-card-body {
+    padding: 18px;
+  }
+
+  .opp-edit-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .opp-edit-field {
+    min-width: 0;
+  }
+
+  .opp-edit-field-full {
+    grid-column: 1 / -1;
+  }
+
+  .opp-edit-field label {
+    display: block;
+    margin-bottom: 7px;
+    font-size: 12px;
+    font-weight: 900;
+    color: #dbeafe;
+  }
+
+  .opp-edit-field input,
+  .opp-edit-field select,
+  .opp-edit-field textarea {
+    width: 100%;
+    min-height: 42px;
+    padding: 10px 12px;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    border-radius: 12px;
+    background: rgba(2, 6, 23, 0.84);
+    color: #f8fafc;
+    font-size: 13px;
+    box-sizing: border-box;
+  }
+
+  .opp-edit-field textarea {
+    min-height: 132px;
+    resize: vertical;
+  }
+
+  .opp-edit-field input:focus,
+  .opp-edit-field select:focus,
+  .opp-edit-field textarea:focus {
+    outline: none;
+    border-color: rgba(250, 204, 21, 0.65);
+    box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.14);
+  }
+
+  .opp-edit-help {
+    margin-top: 7px;
+    color: #94a3b8;
+    font-size: 11px;
+    line-height: 1.45;
+  }
+
+  .opp-edit-results {
+    display: grid;
+    gap: 10px;
+  }
+
+  .opp-edit-result {
+    padding: 12px;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    border-radius: 14px;
+    background: rgba(2, 6, 23, 0.42);
+  }
+
+  .opp-edit-result span {
+    display: block;
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  .opp-edit-result strong {
+    display: block;
+    margin-top: 4px;
+    color: #f8fafc;
+    font-size: 18px;
+  }
+
+  .opp-edit-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(148, 163, 184, 0.14);
+    flex-wrap: wrap;
+  }
+
+  .opp-edit-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    padding: 10px 16px;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    font-size: 13px;
+    font-weight: 900;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .opp-edit-btn-primary {
+    border-color: rgba(245, 158, 11, 0.45);
+    background: linear-gradient(135deg, #facc15, #f59e0b);
+    color: #111827;
+    box-shadow: 0 12px 24px rgba(245, 158, 11, 0.18);
+  }
+
+  .opp-edit-btn-secondary {
+    background: rgba(2, 6, 23, 0.52);
+    color: #e5e7eb;
+  }
+
+  .opp-edit-btn:hover {
+    filter: brightness(1.05);
+    text-decoration: none;
+  }
+
+  @media (max-width: 900px) {
+    .opp-edit-shell {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .opp-edit-grid {
+      grid-template-columns: 1fr;
     }
 
-    .card {
-        background: radial-gradient(circle at top left, #111827, #020617);
-        border: 1px solid #1f2937;
-        border-radius: 10px;
-        padding: 12px 14px;
-        box-shadow: 0 0 12px rgba(0, 0, 0, 0.7);
+    .opp-edit-hero,
+    .opp-edit-card-body {
+      padding: 16px;
     }
 
-    .card-title {
-        font-size: 15px;
-        font-weight: 600;
-        margin-bottom: 8px;
-        color: #fefce8;
-        border-bottom: 1px solid #111827;
-        padding-bottom: 4px;
+    .opp-edit-actions {
+      justify-content: stretch;
     }
 
-    label {
-        font-size: 12px;
-        color: #e5e7eb;
-        display: block;
-        margin-bottom: 3px;
+    .opp-edit-btn {
+      width: 100%;
     }
-
-    input,
-    select,
-    textarea {
-        width: 100%;
-        background: #020617;
-        color: #f9fafb;
-        border: 1px solid #374151;
-        border-radius: 6px;
-        padding: 5px 7px;
-        font-size: 12px;
-        margin-bottom: 8px;
-    }
-
-    input:focus,
-    select:focus,
-    textarea:focus {
-        outline: none;
-        border-color: #facc15;
-        box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.4);
-    }
-
-    .row {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
-    }
-
-    .col {
-        flex: 1;
-        min-width: 180px;
-    }
-
-    .btn {
-        display: inline-block;
-        padding: 5px 12px;
-        border-radius: 999px;
-        border: 1px solid transparent;
-        font-size: 12px;
-        cursor: pointer;
-        text-decoration: none;
-        white-space: nowrap;
-    }
-
-    .btn-gold {
-        background: linear-gradient(135deg, #facc15, #f97316);
-        color: #111827;
-        border-color: #fbbf24;
-        font-weight: 600;
-    }
-
-    .btn-slate {
-        background: #020617;
-        color: #e5e7eb;
-        border-color: #374151;
-    }
-
-    .btn-row {
-        margin-top: 10px;
-        display: flex;
-        gap: 8px;
-    }
-
-    .muted {
-        font-size: 11px;
-        color: #9ca3af;
-        margin-top: 6px;
-    }
+  }
 </style>
 
-<div class="page-opp-edit">
-    <div class="card">
-        <div class="card-title">
-            Edit opportunity
-            <span style="font-size:12px; color:#facc15;">
-                {{ opportunity.opportunity_id }} / {{ opportunity.lead.account_brand }}
-            </span>
+<div class="opp-edit-page">
+  <section class="opp-edit-hero">
+    <div>
+      <p class="opp-edit-kicker">Sales Pipeline</p>
+      <h1>Edit Opportunity</h1>
+      <p>Update the deal stage, product details, and CAD/USD order value without changing the existing opportunity workflow.</p>
+    </div>
+    <div class="opp-edit-meta">
+      <div class="opp-edit-pill"><span>Opportunity</span>{{ opportunity.opportunity_id }}</div>
+      <div class="opp-edit-pill"><span>Account</span>{{ account_label }}</div>
+    </div>
+  </section>
+
+  <form method="post" class="opp-edit-shell">
+    {% csrf_token %}
+
+    <div class="opp-edit-main">
+      <section class="opp-edit-card">
+        <div class="opp-edit-card-header">
+          <h2>Deal Overview</h2>
+          <p>Keep the main sales stage and minimum order quantity current.</p>
+        </div>
+        <div class="opp-edit-card-body">
+          <div class="opp-edit-grid">
+            <div class="opp-edit-field">
+              <label for="stage_display">Current Stage</label>
+              <input type="text" id="stage_display" value="{{ opportunity.stage }}" readonly>
+            </div>
+            <div class="opp-edit-field">
+              <label for="moq_units">MOQ Units</label>
+              <input type="number" name="moq_units" id="moq_units" value="{{ opportunity.moq_units|default_if_none:'' }}" min="0">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="opp-edit-card">
+        <div class="opp-edit-card-header">
+          <h2>Product Details</h2>
+          <p>Product type and category stay aligned with the current CRM dropdowns.</p>
+        </div>
+        <div class="opp-edit-card-body">
+          <div class="opp-edit-grid">
+            <div class="opp-edit-field">
+              <label for="product_type">Product Type</label>
+              <select name="product_type" id="product_type">
+                {% for key, label in product_type_choices %}
+                  <option value="{{ key }}" {% if opportunity.product_type == key %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="opp-edit-field">
+              <label for="product_category">Product Category</label>
+              <select name="product_category" id="product_category">
+                {% for key, label in product_category_choices %}
+                  <option value="{{ key }}" {% if opportunity.product_category == key %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+              <div class="opp-edit-help">Sports categories such as Basketball Jersey and Soccer Jersey remain available.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="opp-edit-card">
+        <div class="opp-edit-card-header">
+          <h2>Notes</h2>
+          <p>Internal sales context for quoting, follow up, and production handoff.</p>
+        </div>
+        <div class="opp-edit-card-body">
+          <div class="opp-edit-field">
+            <label for="notes">Opportunity Notes</label>
+            <textarea name="notes" id="notes" rows="4">{{ opportunity.notes }}</textarea>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <aside class="opp-edit-card">
+      <div class="opp-edit-card-header">
+        <h2>Value and Currency</h2>
+        <p>Default is CAD when an older opportunity has no saved currency.</p>
+      </div>
+      <div class="opp-edit-card-body">
+        <div class="opp-edit-grid">
+          <div class="opp-edit-field">
+            <label for="order_currency">Order Currency</label>
+            <select name="order_currency" id="order_currency">
+              {% for value, label in order_currency_choices %}
+                <option value="{{ value }}" {% if selected_order_currency == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="opp-edit-field">
+            <label for="order_value_usd">Order Value</label>
+            <input type="number" step="0.01" name="order_value_usd" id="order_value_usd" value="{{ opportunity.order_value_usd|default_if_none:'' }}" placeholder="Example 2500">
+            <div class="opp-edit-help">Enter the order amount in the selected currency.</div>
+          </div>
+
+          <div class="opp-edit-field opp-edit-field-full">
+            <label for="fx_rate_bdt_per_usd">Exchange Rate (BDT per 1 selected currency)</label>
+            <input type="number" step="0.0001" name="fx_rate_bdt_per_usd" id="fx_rate_bdt_per_usd" value="{{ opportunity.fx_rate_bdt_per_usd|default_if_none:'' }}" placeholder="Example 82.50 for CAD or 110.50 for USD">
+          </div>
         </div>
 
-        <form method="post">
-            {% csrf_token %}
+        <div class="opp-edit-results" style="margin-top:16px;">
+          <div class="opp-edit-result">
+            <span>Total order value (BDT)</span>
+            <strong id="order_value_bdt">{{ opportunity.order_value|default_if_none:"-" }}</strong>
+          </div>
+          <div class="opp-edit-result">
+            <span>BDT per piece</span>
+            <strong id="bdt_per_piece">{% if bdt_per_piece %}{{ bdt_per_piece }}{% else %}-{% endif %}</strong>
+          </div>
+        </div>
 
-            <div class="row">
-                <div class="col">
-                    <label>Product type</label>
-                    <select name="product_type">
-                        {% for key, label in product_type_choices %}
-                            <option value="{{ key }}" {% if opportunity.product_type == key %}selected{% endif %}>
-                                {{ label }}
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col">
-                    <label>Product category</label>
-                    <select name="product_category">
-                        {% for key, label in product_category_choices %}
-                            <option value="{{ key }}" {% if opportunity.product_category == key %}selected{% endif %}>
-                                {{ label }}
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-
-            <div class="row">
-                <div class="col">
-                    <label>MOQ units</label>
-                    <input type="number"
-                           name="moq_units"
-                           id="moq_units"
-                           value="{{ opportunity.moq_units }}">
-                </div>
-                <div class="col">
-                    <label>Order value (USD)</label>
-                    <input type="number"
-                           step="0.01"
-                           name="order_value_usd"
-                           id="order_value_usd"
-                           value="{{ opportunity.order_value_usd }}">
-                </div>
-                <div class="col">
-                    <label>Exchange rate (BDT per 1 USD)</label>
-                    <input type="number"
-                           step="0.0001"
-                           name="fx_rate_bdt_per_usd"
-                           id="fx_rate_bdt_per_usd"
-                           value="{{ opportunity.fx_rate_bdt_per_usd }}">
-                </div>
-            </div>
-
-            <div class="row">
-                <div class="col">
-                    <label>Total order value (BDT)</label>
-                    <input type="text"
-                           id="order_value_bdt"
-                           value="{{ opportunity.order_value|default_if_none:'' }}"
-                           readonly>
-                </div>
-                <div class="col">
-                    <label>BDT per piece</label>
-                    <input type="text"
-                           id="bdt_per_piece"
-                           value="{% if bdt_per_piece %}{{ bdt_per_piece }}{% endif %}"
-                           readonly>
-                </div>
-            </div>
-
-            <label>Notes</label>
-            <textarea name="notes" rows="3">{{ opportunity.notes }}</textarea>
-
-            <div class="btn-row">
-                <button type="submit" class="btn btn-gold">Save changes</button>
-                <a href="{% url 'opportunity_detail' opportunity.pk %}" class="btn btn-slate">
-                    Cancel
-                </a>
-            </div>
-
-            <p class="muted">
-                Use this screen to set the sales order value and notes.
-                Profit is calculated on the detail page from order value and production cost.
-            </p>
-        </form>
-    </div>
-  <script>
-    (function () {
-        function parseNum(v) {
-            const n = parseFloat(v);
-            return Number.isFinite(n) ? n : 0;
-        }
-
-        const moq = document.getElementById("moq_units");
-        const usd = document.getElementById("order_value_usd");
-        const fx = document.getElementById("fx_rate_bdt_per_usd");
-        const bdt = document.getElementById("order_value_bdt");
-        const perPiece = document.getElementById("bdt_per_piece");
-
-        function recalc() {
-            const usdVal = parseNum(usd && usd.value);
-            const fxVal = parseNum(fx && fx.value);
-            const moqVal = parseNum(moq && moq.value);
-
-            if (usdVal > 0 && fxVal > 0) {
-                const totalBdt = usdVal * fxVal;
-                bdt.value = totalBdt.toFixed(2);
-                if (moqVal > 0) {
-                    perPiece.value = (totalBdt / moqVal).toFixed(2);
-                } else {
-                    perPiece.value = "";
-                }
-            } else {
-                bdt.value = "";
-                perPiece.value = "";
-            }
-        }
-
-        [moq, usd, fx].forEach((el) => {
-            if (!el) return;
-            el.addEventListener("input", recalc);
-        });
-    })();
-</script>
+        <div class="opp-edit-actions">
+          <a href="{% url 'opportunity_detail' opportunity.pk %}" class="opp-edit-btn opp-edit-btn-secondary">Cancel</a>
+          <button type="submit" class="opp-edit-btn opp-edit-btn-primary">Save Changes</button>
+        </div>
+      </div>
+    </aside>
+  </form>
 </div>
+
+<script>
+  (function () {
+    function parseNum(value) {
+      const number = parseFloat(value);
+      return Number.isFinite(number) ? number : 0;
+    }
+
+    const moq = document.getElementById("moq_units");
+    const orderAmount = document.getElementById("order_value_usd");
+    const fx = document.getElementById("fx_rate_bdt_per_usd");
+    const bdt = document.getElementById("order_value_bdt");
+    const perPiece = document.getElementById("bdt_per_piece");
+
+    function recalc() {
+      const orderAmountVal = parseNum(orderAmount && orderAmount.value);
+      const fxVal = parseNum(fx && fx.value);
+      const moqVal = parseNum(moq && moq.value);
+
+      if (orderAmountVal > 0 && fxVal > 0) {
+        const totalBdt = orderAmountVal * fxVal;
+        bdt.textContent = totalBdt.toFixed(2);
+        if (moqVal > 0) {
+          perPiece.textContent = (totalBdt / moqVal).toFixed(2);
+        } else {
+          perPiece.textContent = "-";
+        }
+      } else {
+        bdt.textContent = "-";
+        perPiece.textContent = "-";
+      }
+    }
+
+    [moq, orderAmount, fx].forEach((field) => {
+      if (!field) return;
+      field.addEventListener("input", recalc);
+    });
+  })();
+</script>
 
 {% endblock %}

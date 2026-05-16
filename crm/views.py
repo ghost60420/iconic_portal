@@ -6005,16 +6005,31 @@ def opportunity_edit(request, pk):
     product_category_choices = Opportunity.PRODUCT_CATEGORY_CHOICES
     product_type_keys = {k for k, _ in product_type_choices}
     product_category_keys = {k for k, _ in product_category_choices}
+    order_currency_choices = Opportunity.ORDER_CURRENCY_CHOICES
+    order_currency_keys = {k for k, _ in order_currency_choices}
+    selected_order_currency = (getattr(opportunity, "order_currency", "") or "CAD").upper()
+    if selected_order_currency not in order_currency_keys:
+        selected_order_currency = "CAD"
+    account_label = (
+        getattr(opportunity.lead, "account_brand", "")
+        or (getattr(opportunity.customer, "account_brand", "") if opportunity.customer_id else "")
+        or "Not linked"
+    )
 
     if request.method == "POST":
         # very basic safe update
         product_type = request.POST.get("product_type") or opportunity.product_type
         product_category = request.POST.get("product_category") or opportunity.product_category
+        order_currency = (request.POST.get("order_currency") or selected_order_currency).upper()
 
         if product_type in product_type_keys:
             opportunity.product_type = product_type
         if product_category in product_category_keys:
             opportunity.product_category = product_category
+        if order_currency in order_currency_keys:
+            opportunity.order_currency = order_currency
+        else:
+            opportunity.order_currency = "CAD"
 
         moq_raw = request.POST.get("moq_units")
         if moq_raw:
@@ -6055,6 +6070,9 @@ def opportunity_edit(request, pk):
             "opportunity": opportunity,
             "product_type_choices": product_type_choices,
             "product_category_choices": product_category_choices,
+            "order_currency_choices": order_currency_choices,
+            "selected_order_currency": selected_order_currency,
+            "account_label": account_label,
             "bdt_per_piece": (
                 (Decimal(opportunity.order_value) / Decimal(opportunity.moq_units)).quantize(Decimal("0.01"))
                 if opportunity.order_value and opportunity.moq_units
