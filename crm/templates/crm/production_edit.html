@@ -145,6 +145,47 @@
     opacity:0.75;
   }
 
+  .prod-edit-size-breakdown{
+    grid-column:1 / -1;
+  }
+
+  .prod-edit-size-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(106px,1fr));
+    gap:8px;
+    margin-top:8px;
+  }
+
+  .prod-edit-size-row{
+    display:grid;
+    grid-template-columns:42px minmax(0,1fr);
+    align-items:center;
+    gap:6px;
+    border:1px solid #1f2937;
+    background:rgba(15,23,42,0.72);
+    border-radius:8px;
+    padding:6px;
+  }
+
+  .prod-edit-size-label{
+    color:#cbd5e1;
+    font-size:11px;
+    font-weight:700;
+    text-align:center;
+  }
+
+  .prod-edit-size-note{
+    margin-top:10px;
+  }
+
+  .prod-edit-size-note textarea{
+    min-height:54px;
+  }
+
+  .prod-edit-hidden{
+    display:none;
+  }
+
   @media (max-width:520px){
     .prod-edit-card{ padding:14px 14px; }
   }
@@ -289,9 +330,27 @@
           {% for e in form.color_info.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
         </div>
 
-        <div class="prod-edit-field">
-          <label for="{{ form.size_ratio_note.id_for_label }}">Size and ratio</label>
-          {{ form.size_ratio_note }}
+        <div class="prod-edit-field prod-edit-size-breakdown">
+          <label>Size Breakdown</label>
+          <div class="prod-edit-help">
+            Enter quantity by size. The grid saves into the existing size ratio field without changing production logic.
+          </div>
+          <div class="prod-edit-size-grid" aria-label="Size quantity breakdown">
+            {% for size_label in production_size_labels %}
+              <label class="prod-edit-size-row">
+                <span class="prod-edit-size-label">{{ size_label }}</span>
+                <input type="number" min="0" data-edit-size-field="{{ size_label }}" placeholder="0">
+              </label>
+            {% endfor %}
+          </div>
+          <div class="prod-edit-size-note">
+            <label for="prod-edit-size-notes">Size instructions</label>
+            <textarea id="prod-edit-size-notes" placeholder="Optional notes such as tall fit, mixed youth pack, or special grading."></textarea>
+            <div class="prod-edit-help">Existing non-size notes stay here so they are not lost when saving.</div>
+          </div>
+          <div class="prod-edit-hidden">
+            {{ form.size_ratio_note }}
+          </div>
           {% for e in form.size_ratio_note.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
         </div>
 
@@ -475,5 +534,98 @@
 
   </form>
 </div>
+
+<script>
+  (function () {
+    var sizeKeys = ["YXS", "YS", "YM", "YL", "YXL", "XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"];
+
+    function normKey(value) {
+      return (value || "").toString().trim().toUpperCase();
+    }
+
+    function escapeRegExp(text) {
+      return (text || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+
+    function parseSizeRatio(text) {
+      var out = {};
+      if (!text) return out;
+      var re = /([A-Za-z0-9]+)\s*[:=]?\s*([0-9]+)/g;
+      var match;
+      while ((match = re.exec(text)) !== null) {
+        out[normKey(match[1])] = match[2];
+      }
+      return out;
+    }
+
+    function extractSizeNotes(text) {
+      if (!text) return "";
+      return text
+        .split(/[,;\n]+/)
+        .map(function (chunk) { return chunk.trim(); })
+        .filter(function (chunk) {
+          if (!chunk) return false;
+          return !sizeKeys.some(function (key) {
+            var re = new RegExp("^" + escapeRegExp(key) + "\\s*[:=]?\\s*[0-9]+$", "i");
+            return re.test(chunk);
+          });
+        })
+        .join("\n");
+    }
+
+    function syncSizeField(sizeField, noteField, inputs) {
+      if (!sizeField) return;
+      var out = [];
+      sizeKeys.forEach(function (key) {
+        var el = inputs[key];
+        var value = el ? (el.value || "").trim() : "";
+        if (value && value !== "0") {
+          out.push(key + " " + value);
+        }
+      });
+      var notes = noteField ? (noteField.value || "").trim() : "";
+      if (notes) out.push(notes);
+      sizeField.value = out.join("\n");
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+      var form = document.querySelector(".prod-edit-page form");
+      var sizeField = document.getElementById("id_size_ratio_note");
+      var noteField = document.getElementById("prod-edit-size-notes");
+      if (!form || !sizeField) return;
+
+      var inputs = {};
+      sizeKeys.forEach(function (key) {
+        inputs[key] = document.querySelector('[data-edit-size-field="' + key + '"]');
+      });
+
+      var parsed = parseSizeRatio(sizeField.value);
+      sizeKeys.forEach(function (key) {
+        if (inputs[key] && parsed[key]) {
+          inputs[key].value = parsed[key];
+        }
+      });
+      if (noteField) {
+        noteField.value = extractSizeNotes(sizeField.value);
+      }
+
+      Object.keys(inputs).forEach(function (key) {
+        var input = inputs[key];
+        if (!input) return;
+        input.addEventListener("input", function () {
+          syncSizeField(sizeField, noteField, inputs);
+        });
+      });
+      if (noteField) {
+        noteField.addEventListener("input", function () {
+          syncSizeField(sizeField, noteField, inputs);
+        });
+      }
+      form.addEventListener("submit", function () {
+        syncSizeField(sizeField, noteField, inputs);
+      });
+    });
+  })();
+</script>
 
 {% endblock %}

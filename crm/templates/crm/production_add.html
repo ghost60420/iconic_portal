@@ -258,20 +258,28 @@
   }
 
   .size-grid-wrapper {
-    margin-top: 4px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(106px, 1fr));
+    gap: 8px;
+    margin-top: 8px;
   }
 
-  .size-grid-label-row,
-  .size-grid-input-row {
+  .size-grid-row {
     display: grid;
-    grid-template-columns: repeat(9, minmax(0, 1fr));
-    gap: 4px;
+    grid-template-columns: 42px minmax(0, 1fr);
+    align-items: center;
+    gap: 6px;
+    border: 1px solid #1f2937;
+    background: rgba(15,23,42,0.72);
+    border-radius: 8px;
+    padding: 6px;
   }
 
   .size-grid-label {
     font-size: 11px;
+    color: #cbd5e1;
+    font-weight: 700;
     text-align: center;
-    color: #9ca3af;
   }
 
   .size-grid-input {
@@ -289,6 +297,14 @@
     border-color: #facc15;
     outline: none;
     box-shadow: 0 0 0 1px rgba(250,204,21,0.3);
+  }
+
+  .size-note-field {
+    margin-top: 10px;
+  }
+
+  .size-note-field textarea {
+    min-height: 54px;
   }
 
   .prod-add-hidden {
@@ -619,35 +635,24 @@
                 </div>
 
                 <div class="prod-add-field size-grid-block" style="grid-column:1 / -1;">
-                  <div class="prod-add-label">Sizes and ratio up to 5XL</div>
-
-                  <div class="size-grid-wrapper">
-                    <div class="size-grid-label-row">
-                      <div class="size-grid-label">XS</div>
-                      <div class="size-grid-label">S</div>
-                      <div class="size-grid-label">M</div>
-                      <div class="size-grid-label">L</div>
-                      <div class="size-grid-label">XL</div>
-                      <div class="size-grid-label">2XL</div>
-                      <div class="size-grid-label">3XL</div>
-                      <div class="size-grid-label">4XL</div>
-                      <div class="size-grid-label">5XL</div>
-                    </div>
-                    <div class="size-grid-input-row">
-                      <input type="number" min="0" class="size-grid-input" data-size-field="XS" placeholder="0">
-                      <input type="number" min="0" class="size-grid-input" data-size-field="S" placeholder="0">
-                      <input type="number" min="0" class="size-grid-input" data-size-field="M" placeholder="0">
-                      <input type="number" min="0" class="size-grid-input" data-size-field="L" placeholder="0">
-                      <input type="number" min="0" class="size-grid-input" data-size-field="XL" placeholder="0">
-                      <input type="number" min="0" class="size-grid-input" data-size-field="2XL" placeholder="0">
-                      <input type="number" min="0" class="size-grid-input" data-size-field="3XL" placeholder="0">
-                      <input type="number" min="0" class="size-grid-input" data-size-field="4XL" placeholder="0">
-                      <input type="number" min="0" class="size-grid-input" data-size-field="5XL" placeholder="0">
-                    </div>
+                  <div class="prod-add-label">Size Breakdown</div>
+                  <div class="prod-add-help">
+                    Enter quantity by size. Youth and adult sizes are saved into the existing size ratio field.
                   </div>
 
-                  <div class="prod-add-help">
-                    Fill how many pieces for every size. System will store this inside the size ratio note field.
+                  <div class="size-grid-wrapper" aria-label="Size quantity breakdown">
+                    {% for size_label in production_size_labels %}
+                      <label class="size-grid-row">
+                        <span class="size-grid-label">{{ size_label }}</span>
+                        <input type="number" min="0" class="size-grid-input" data-size-field="{{ size_label }}" placeholder="0">
+                      </label>
+                    {% endfor %}
+                  </div>
+
+                  <div class="size-note-field">
+                    <div class="prod-add-label">Size instructions</div>
+                    <textarea data-size-note-field placeholder="Optional notes such as tall fit, mixed youth pack, or special grading."></textarea>
+                    <div class="prod-add-help">Existing non-size notes stay here so they are not lost when saving.</div>
                   </div>
 
                   <div class="prod-add-hidden">
@@ -1191,9 +1196,21 @@
         </div>
       </div>
 
-      <div style="margin-top:12px;">
-        <div class="prod-add-label">Size ratio note</div>
-        <textarea id="line-modal-size" rows="4" class="inputx" placeholder="Example: XS 20, S 40, M 60, L 40"></textarea>
+      <div class="size-grid-block" style="margin-top:12px;">
+        <div class="prod-add-label">Size Breakdown</div>
+        <div class="size-grid-wrapper" aria-label="New line size quantity breakdown">
+          {% for size_label in production_size_labels %}
+            <label class="size-grid-row">
+              <span class="size-grid-label">{{ size_label }}</span>
+              <input type="number" min="0" class="size-grid-input" data-modal-size-field="{{ size_label }}" placeholder="0">
+            </label>
+          {% endfor %}
+        </div>
+        <div class="size-note-field">
+          <div class="prod-add-label">Size instructions</div>
+          <textarea id="line-modal-size-notes" rows="2" class="inputx" placeholder="Optional special size instructions"></textarea>
+        </div>
+        <textarea id="line-modal-size" class="prod-add-hidden"></textarea>
       </div>
 
       <div style="margin-top:12px;">
@@ -1225,31 +1242,42 @@
       return (k || "").toString().trim().toUpperCase();
     }
 
+    function escapeRegExp(text) {
+      return (text || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+
     function parseSizeRatio(text) {
-      // supports: "XS 10, S 20" or "XS:10, S:20" or "XS=10"
+      // supports commas, line breaks, and "XS 10", "XS:10", or "XS=10".
       var out = {};
       if (!text) return out;
 
-      text.split(",").forEach(function (chunk) {
-        var c = chunk.trim();
-        if (!c) return;
-
-        var m = c.match(/^([A-Za-z0-9]+)\s*[:= ]\s*([0-9]+)$/);
-        if (m) {
-          out[normKey(m[1])] = m[2];
-          return;
-        }
-
-        var parts = c.split(/\s+/);
-        if (parts.length >= 2) {
-          out[normKey(parts[0])] = parts[1];
-        }
-      });
+      var re = /([A-Za-z0-9]+)\s*[:=]?\s*([0-9]+)/g;
+      var match;
+      while ((match = re.exec(text)) !== null) {
+        out[normKey(match[1])] = match[2];
+      }
 
       return out;
     }
 
-    function buildSizeRatio(sizeKeys, inputs) {
+    function extractSizeNotes(text, sizeKeys) {
+      if (!text) return "";
+      return text
+        .split(/[,;\n]+/)
+        .map(function (chunk) {
+          return chunk.trim();
+        })
+        .filter(function (chunk) {
+          if (!chunk) return false;
+          return !sizeKeys.some(function (key) {
+            var re = new RegExp("^" + escapeRegExp(key) + "\\s*[:=]?\\s*[0-9]+$", "i");
+            return re.test(chunk);
+          });
+        })
+        .join("\n");
+    }
+
+    function buildSizeRatio(sizeKeys, inputs, noteField) {
       var out = [];
       sizeKeys.forEach(function (key) {
         var el = inputs[key];
@@ -1259,7 +1287,9 @@
           out.push(key + " " + v);
         }
       });
-      return out.join(", ");
+      var notes = noteField ? (noteField.value || "").trim() : "";
+      if (notes) out.push(notes);
+      return out.join("\n");
     }
 
     document.addEventListener("DOMContentLoaded", function () {
@@ -1273,13 +1303,14 @@
       var lineModalStyle = document.getElementById("line-modal-style");
       var lineModalColor = document.getElementById("line-modal-color");
       var lineModalSize = document.getElementById("line-modal-size");
+      var lineModalSizeNotes = document.getElementById("line-modal-size-notes");
       var lineModalAccessories = document.getElementById("line-modal-accessories");
       var lineModalPackaging = document.getElementById("line-modal-packaging");
       var lineModalExtra = document.getElementById("line-modal-extra");
       var lineModalNote = document.getElementById("line-modal-note");
       if (!form || !lineList || !linePayload) return;
 
-      var sizeKeys = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"];
+      var sizeKeys = ["YXS", "YS", "YM", "YL", "YXL", "XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"];
 
       function getLineField(line, name) {
         if (!line) return null;
@@ -1312,13 +1343,29 @@
         if (lineModalStyle) lineModalStyle.value = "";
         if (lineModalColor) lineModalColor.value = "";
         if (lineModalSize) lineModalSize.value = "";
+        if (lineModalSizeNotes) lineModalSizeNotes.value = "";
+        if (lineModal) {
+          lineModal.querySelectorAll("[data-modal-size-field]").forEach(function (el) {
+            el.value = "";
+          });
+        }
         if (lineModalAccessories) lineModalAccessories.value = "";
         if (lineModalPackaging) lineModalPackaging.value = "";
         if (lineModalExtra) lineModalExtra.value = "";
         if (lineModalNote) lineModalNote.style.display = "none";
       }
 
+      function syncModalSize() {
+        if (!lineModalSize || !lineModal) return;
+        var inputs = {};
+        sizeKeys.forEach(function (key) {
+          inputs[key] = lineModal.querySelector('[data-modal-size-field="' + key + '"]');
+        });
+        lineModalSize.value = buildSizeRatio(sizeKeys, inputs, lineModalSizeNotes);
+      }
+
       function readLineModalValues() {
+        syncModalSize();
         return {
           style_name: lineModalStyle ? lineModalStyle.value.trim() : "",
           color_info: lineModalColor ? lineModalColor.value.trim() : "",
@@ -1336,6 +1383,9 @@
 
       function clearLineFields(line) {
         line.querySelectorAll("[data-size-field]").forEach(function (el) {
+          el.value = "";
+        });
+        line.querySelectorAll("[data-size-note-field]").forEach(function (el) {
           el.value = "";
         });
         line.querySelectorAll("[data-field]").forEach(function (el) {
@@ -1365,21 +1415,26 @@
       function syncLineSize(line) {
         var sizeField = getLineField(line, "size_ratio_note");
         if (!sizeField) return;
+        var noteField = line.querySelector("[data-size-note-field]");
         var inputs = {};
         sizeKeys.forEach(function (key) {
           inputs[key] = line.querySelector('[data-size-field="' + key + '"]');
         });
-        sizeField.value = buildSizeRatio(sizeKeys, inputs);
+        sizeField.value = buildSizeRatio(sizeKeys, inputs, noteField);
       }
 
       function initLine(line) {
         var sizeField = getLineField(line, "size_ratio_note");
         if (!sizeField) return;
+        var noteField = line.querySelector("[data-size-note-field]");
         var inputs = {};
         sizeKeys.forEach(function (key) {
           inputs[key] = line.querySelector('[data-size-field="' + key + '"]');
         });
         var parsed = parseSizeRatio(sizeField.value);
+        if (noteField) {
+          noteField.value = extractSizeNotes(sizeField.value, sizeKeys);
+        }
         sizeKeys.forEach(function (key) {
           if (inputs[key] && parsed[key]) {
             inputs[key].value = parsed[key];
@@ -1389,9 +1444,14 @@
           var el = inputs[key];
           if (!el) return;
           el.addEventListener("input", function () {
-            sizeField.value = buildSizeRatio(sizeKeys, inputs);
+            sizeField.value = buildSizeRatio(sizeKeys, inputs, noteField);
           });
         });
+        if (noteField) {
+          noteField.addEventListener("input", function () {
+            sizeField.value = buildSizeRatio(sizeKeys, inputs, noteField);
+          });
+        }
       }
 
       function refreshLineIndexes() {

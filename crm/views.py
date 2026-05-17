@@ -6192,7 +6192,22 @@ def _apply_production_status_change(order, old_status):
 
 # size grid helpers
 
-SIZE_LABELS = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"]
+SIZE_LABELS = [
+    "YXS",
+    "YS",
+    "YM",
+    "YL",
+    "YXL",
+    "XS",
+    "S",
+    "M",
+    "L",
+    "XL",
+    "2XL",
+    "3XL",
+    "4XL",
+    "5XL",
+]
 
 
 def build_size_grid_from_text(text):
@@ -6209,7 +6224,11 @@ def build_size_grid_from_text(text):
     for label in SIZE_LABELS:
         qty = 0
         if text:
-            pattern = r"\b" + re.escape(label) + r"\s+(\d+)"
+            pattern = (
+                r"(?<![A-Z0-9])"
+                + re.escape(label)
+                + r"(?![A-Z0-9])\s*[:=]?\s*(\d+)"
+            )
             m = re.search(pattern, text)
             if m:
                 qty = int(m.group(1))
@@ -6616,6 +6635,7 @@ def production_add(request):
             "is_edit": False,
             "order": None,
             "order_lines": order_lines or _production_order_lines_for_form(),
+            "production_size_labels": SIZE_LABELS,
             **_production_library_context(),
         },
     )
@@ -6730,12 +6750,20 @@ def production_edit(request, pk):
     except (OperationalError, ProgrammingError):
         inventory_items = []
 
+    inventory_context = {
+        "materials": materials,
+        "recommended_items": recommended_items,
+        "recommended_ids": recommended_ids,
+        "inventory_items": inventory_items,
+    }
+
     try:
         context = {
             "form": form,
             "is_edit": True,
             "order": order,
             "order_lines": order_lines or _production_order_lines_for_form(order),
+            "production_size_labels": SIZE_LABELS,
             **inventory_context,
             **_production_library_context(order),
         }
@@ -6747,6 +6775,7 @@ def production_edit(request, pk):
         context = {
             "form": form,
             "order": order,
+            "production_size_labels": SIZE_LABELS,
         }
         return render(request, "crm/production_edit.html", context)
     try:
@@ -6759,6 +6788,7 @@ def production_edit(request, pk):
         fallback_context = {
             "form": form,
             "order": order,
+            "production_size_labels": SIZE_LABELS,
         }
         return render(request, "crm/production_edit.html", fallback_context)
 
