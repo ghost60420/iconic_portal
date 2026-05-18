@@ -254,20 +254,33 @@
                     <strong>{{ line.extra_order_note|default:"Not set" }}</strong>
                   </div>
                 </div>
-                {% if line.size_total %}
-                  <div class="production-size-grid">
-                    <div class="production-size-row production-size-head">
-                      {% for item in line.size_grid %}
-                        <span>{{ item.label }}</span>
-                      {% endfor %}
-                    </div>
-                    <div class="production-size-row">
-                      {% for item in line.size_grid %}
-                        <span>{% if item.qty %}{{ item.qty }}{% else %}-{% endif %}</span>
-                      {% endfor %}
-                    </div>
+                {% if line.size_total or line.size_notes %}
+                  <div class="production-size-breakdown">
+                    <div class="production-size-title">Size Breakdown</div>
+                    {% if line.size_items %}
+                      <div class="production-size-table" role="table" aria-label="Size breakdown for product line {{ forloop.counter }}">
+                        <div class="production-size-table-row production-size-table-head" role="row">
+                          <span role="columnheader">Size</span>
+                          <span role="columnheader">Quantity</span>
+                        </div>
+                        {% for item in line.size_items %}
+                          <div class="production-size-table-row" role="row">
+                            <span role="cell">{{ item.label }}</span>
+                            <strong role="cell">{{ item.qty }}</strong>
+                          </div>
+                        {% endfor %}
+                      </div>
+                    {% endif %}
+                    {% if line.size_total %}
+                      <div class="production-size-total">Line total {{ line.size_total }}</div>
+                    {% endif %}
+                    {% if line.size_notes %}
+                      <div class="production-size-notes">
+                        <span>Special sizing notes</span>
+                        <strong>{{ line.size_notes|linebreaksbr }}</strong>
+                      </div>
+                    {% endif %}
                   </div>
-                  <div class="production-size-total">Line total {{ line.size_total }}</div>
                 {% endif %}
               </article>
             {% endfor %}

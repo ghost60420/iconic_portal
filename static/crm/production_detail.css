@@ -642,42 +642,82 @@
   font-size: 12px;
 }
 
-.production-size-grid {
-  margin-top: 12px;
+.production-size-breakdown {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.38);
+}
+
+.production-size-title {
+  color: #fef3c7;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.production-size-table {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.production-size-table-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 38px;
+  padding: 8px 10px;
   border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 8px;
-  overflow: hidden;
+  background: rgba(2, 6, 23, 0.56);
 }
 
-.production-size-row {
-  display: grid;
-  grid-template-columns: repeat(9, minmax(0, 1fr));
+.production-size-table-head {
+  background: rgba(250, 204, 21, 0.1);
 }
 
-.production-size-row span {
-  padding: 8px 6px;
-  border-right: 1px solid rgba(148, 163, 184, 0.1);
-  color: #e2e8f0;
+.production-size-table-row span {
+  color: #94a3b8;
   font-size: 12px;
-  text-align: center;
+  font-weight: 800;
 }
 
-.production-size-row span:last-child {
-  border-right: 0;
-}
-
-.production-size-head {
-  background: rgba(15, 23, 42, 0.7);
-}
-
-.production-size-head span {
-  color: #fef3c7;
-  font-weight: 850;
+.production-size-table-row strong {
+  color: #e2e8f0;
+  font-size: 14px;
+  font-weight: 900;
 }
 
 .production-size-total {
-  margin-top: 8px;
+  margin-top: 10px;
+  color: #94a3b8;
+  font-size: 12px;
   font-weight: 850;
+}
+
+.production-size-notes {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.production-size-notes span {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.production-size-notes strong {
+  color: #e2e8f0;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .production-library-grid {
@@ -1022,7 +1062,6 @@
     flex-direction: column;
   }
 
-  .production-size-grid,
   .production-mini-table {
     min-width: 680px;
   }

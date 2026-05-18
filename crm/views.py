@@ -6210,6 +6210,37 @@ SIZE_LABELS = [
 ]
 
 
+def _size_pattern(label):
+    import re
+
+    return re.compile(
+        r"(?<![A-Z0-9])"
+        + re.escape(label)
+        + r"(?![A-Z0-9])\s*[:=]?\s*(\d+)",
+        re.IGNORECASE,
+    )
+
+
+def extract_size_notes_from_text(text):
+    """
+    Preserve any non-size instructions stored beside the size quantities.
+    """
+    raw_text = text or ""
+    if not raw_text.strip():
+        return ""
+
+    cleaned = raw_text
+    for label in SIZE_LABELS:
+        cleaned = _size_pattern(label).sub("", cleaned)
+
+    notes = []
+    for chunk in cleaned.replace(",", "\n").replace(";", "\n").splitlines():
+        note = chunk.strip(" \t:-=,;")
+        if note:
+            notes.append(note)
+    return "\n".join(notes)
+
+
 def build_size_grid_from_text(text):
     """
     Build a size grid from a size ratio string.
@@ -6219,17 +6250,10 @@ def build_size_grid_from_text(text):
     result = []
     total = 0
 
-    import re
-
     for label in SIZE_LABELS:
         qty = 0
         if text:
-            pattern = (
-                r"(?<![A-Z0-9])"
-                + re.escape(label)
-                + r"(?![A-Z0-9])\s*[:=]?\s*(\d+)"
-            )
-            m = re.search(pattern, text)
+            m = _size_pattern(label).search(text)
             if m:
                 qty = int(m.group(1))
         result.append({"label": label, "qty": qty if qty else None})
@@ -6257,12 +6281,15 @@ def _build_order_line_dict(
     extra_order_note="",
 ):
     size_grid, size_total = build_size_grid_from_text(size_ratio_note)
+    size_items = [item for item in size_grid if item.get("qty")]
     return {
         "style_name": style_name,
         "color_info": color_info,
         "size_ratio_note": size_ratio_note,
         "size_grid": size_grid,
+        "size_items": size_items,
         "size_total": size_total,
+        "size_notes": extract_size_notes_from_text(size_ratio_note),
         "accessories_note": accessories_note,
         "packaging_note": packaging_note,
         "extra_order_note": extra_order_note,
