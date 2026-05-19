@@ -331,6 +331,13 @@
         </div>
 
         <div class="prod-edit-field prod-edit-size-breakdown">
+          <label for="{{ form.size_group.id_for_label }}">Size Group</label>
+          {{ form.size_group }}
+          {% for e in form.size_group.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+          <div class="prod-edit-help">Default is Unisex. This does not change the saved size quantities.</div>
+        </div>
+
+        <div class="prod-edit-field prod-edit-size-breakdown">
           <label>Size Breakdown</label>
           <div class="prod-edit-help">
             Enter quantity by size. The grid saves into the existing size ratio field without changing production logic.

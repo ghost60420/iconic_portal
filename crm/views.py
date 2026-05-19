@@ -6209,6 +6209,16 @@ SIZE_LABELS = [
     "5XL",
 ]
 
+SIZE_GROUP_CHOICES = ProductionOrder.SIZE_GROUP_CHOICES
+DEFAULT_SIZE_GROUP = "unisex"
+SIZE_GROUP_LABELS = dict(SIZE_GROUP_CHOICES)
+VALID_SIZE_GROUPS = {key for key, _ in SIZE_GROUP_CHOICES}
+
+
+def normalize_size_group(value):
+    value = (value or DEFAULT_SIZE_GROUP).strip().lower()
+    return value if value in VALID_SIZE_GROUPS else DEFAULT_SIZE_GROUP
+
 
 def _size_pattern(label):
     import re
@@ -6275,16 +6285,20 @@ def build_size_grid(order):
 def _build_order_line_dict(
     style_name="",
     color_info="",
+    size_group=DEFAULT_SIZE_GROUP,
     size_ratio_note="",
     accessories_note="",
     packaging_note="",
     extra_order_note="",
 ):
+    size_group = normalize_size_group(size_group)
     size_grid, size_total = build_size_grid_from_text(size_ratio_note)
     size_items = [item for item in size_grid if item.get("qty")]
     return {
         "style_name": style_name,
         "color_info": color_info,
+        "size_group": size_group,
+        "size_group_display": SIZE_GROUP_LABELS.get(size_group, "Unisex"),
         "size_ratio_note": size_ratio_note,
         "size_grid": size_grid,
         "size_items": size_items,
@@ -6309,6 +6323,7 @@ def _production_order_lines(order):
             _build_order_line_dict(
                 style_name=line.style_name,
                 color_info=line.color_info,
+                size_group=line.size_group,
                 size_ratio_note=line.size_ratio_note,
                 accessories_note=line.accessories_note,
                 packaging_note=line.packaging_note,
@@ -6321,6 +6336,7 @@ def _production_order_lines(order):
         _build_order_line_dict(
             style_name=order.style_name,
             color_info=order.color_info,
+            size_group=order.size_group,
             size_ratio_note=order.size_ratio_note,
             accessories_note=order.accessories_note,
             packaging_note=order.packaging_note,
@@ -6343,6 +6359,7 @@ def _production_order_lines_from_payload(raw):
         _build_order_line_dict(
             style_name=line.get("style_name", ""),
             color_info=line.get("color_info", ""),
+            size_group=line.get("size_group", DEFAULT_SIZE_GROUP),
             size_ratio_note=line.get("size_ratio_note", ""),
             accessories_note=line.get("accessories_note", ""),
             packaging_note=line.get("packaging_note", ""),
@@ -6410,6 +6427,7 @@ def _parse_production_lines_payload(raw):
         # These fields are posted outside the ModelForm, so enforce the DB max length here.
         style_name = (item.get("style_name") or "").strip()[:200]
         color_info = (item.get("color_info") or "").strip()[:200]
+        size_group = normalize_size_group(item.get("size_group"))
         size_ratio_note = (item.get("size_ratio_note") or "").strip()
         accessories_note = (item.get("accessories_note") or "").strip()
         packaging_note = (item.get("packaging_note") or "").strip()
@@ -6420,6 +6438,7 @@ def _parse_production_lines_payload(raw):
             {
                 "style_name": style_name,
                 "color_info": color_info,
+                "size_group": size_group,
                 "size_ratio_note": size_ratio_note,
                 "accessories_note": accessories_note,
                 "packaging_note": packaging_note,
@@ -6449,6 +6468,7 @@ def _save_production_lines(order, request):
         for field in [
             "style_name",
             "color_info",
+            "size_group",
             "size_ratio_note",
             "accessories_note",
             "packaging_note",
@@ -6663,6 +6683,7 @@ def production_add(request):
             "order": None,
             "order_lines": order_lines or _production_order_lines_for_form(),
             "production_size_labels": SIZE_LABELS,
+            "production_size_group_choices": SIZE_GROUP_CHOICES,
             **_production_library_context(),
         },
     )
@@ -6791,6 +6812,7 @@ def production_edit(request, pk):
             "order": order,
             "order_lines": order_lines or _production_order_lines_for_form(order),
             "production_size_labels": SIZE_LABELS,
+            "production_size_group_choices": SIZE_GROUP_CHOICES,
             **inventory_context,
             **_production_library_context(order),
         }
@@ -6803,6 +6825,7 @@ def production_edit(request, pk):
             "form": form,
             "order": order,
             "production_size_labels": SIZE_LABELS,
+            "production_size_group_choices": SIZE_GROUP_CHOICES,
         }
         return render(request, "crm/production_edit.html", context)
     try:
@@ -6816,6 +6839,7 @@ def production_edit(request, pk):
             "form": form,
             "order": order,
             "production_size_labels": SIZE_LABELS,
+            "production_size_group_choices": SIZE_GROUP_CHOICES,
         }
         return render(request, "crm/production_edit.html", fallback_context)
 

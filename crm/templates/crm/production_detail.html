@@ -254,8 +254,12 @@
                     <strong>{{ line.extra_order_note|default:"Not set" }}</strong>
                   </div>
                 </div>
-                {% if line.size_total or line.size_notes %}
+                {% if line.size_total or line.size_notes or line.size_group_display %}
                   <div class="production-size-breakdown">
+                    <div class="production-size-group">
+                      <span>Size Group</span>
+                      <strong>{{ line.size_group_display|default:"Unisex" }}</strong>
+                    </div>
                     <div class="production-size-title">Size Breakdown</div>
                     {% if line.size_items %}
                       <div class="production-size-table" role="table" aria-label="Size breakdown for product line {{ forloop.counter }}">

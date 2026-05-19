@@ -22,6 +22,7 @@ class ProductionOrderForm(forms.ModelForm):
             # middle section
             "style_name",
             "color_info",
+            "size_group",
             "size_ratio_note",
             "accessories_note",
             "packaging_note",
@@ -94,6 +95,10 @@ class ProductionOrderForm(forms.ModelForm):
             if not self.instance.pk:
                 self.fields["status"].initial = "planning"
 
+        if "size_group" in self.fields:
+            self.fields["size_group"].required = False
+            self.fields["size_group"].initial = self.instance.size_group or "unisex"
+
         # helper text for middle section
         self.fields["style_name"].widget.attrs["placeholder"] = "Internal style name"
         self.fields["color_info"].widget.attrs["placeholder"] = "Color list or code"
@@ -101,6 +106,11 @@ class ProductionOrderForm(forms.ModelForm):
         self.fields["accessories_note"].widget.attrs["placeholder"] = "Zipper, buttons, drawcord, label plan"
         self.fields["packaging_note"].widget.attrs["placeholder"] = "Poly, carton, bundle, sticker"
         self.fields["extra_order_note"].widget.attrs["placeholder"] = "Anything extra for this order"
+
+    def clean_size_group(self):
+        value = (self.cleaned_data.get("size_group") or "unisex").strip().lower()
+        valid_values = {key for key, _ in ProductionOrder.SIZE_GROUP_CHOICES}
+        return value if value in valid_values else "unisex"
 
 
 class ProductionStageForm(forms.ModelForm):

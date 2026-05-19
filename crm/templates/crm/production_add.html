@@ -635,6 +635,16 @@
                 </div>
 
                 <div class="prod-add-field size-grid-block" style="grid-column:1 / -1;">
+                  <div class="prod-add-field">
+                    <div class="prod-add-label">Size Group</div>
+                    <select data-field="size_group">
+                      {% for value, label in production_size_group_choices %}
+                        <option value="{{ value }}" {% if line.size_group == value %}selected{% endif %}>{{ label }}</option>
+                      {% endfor %}
+                    </select>
+                    <div class="prod-add-help">Default is Unisex. This does not change the saved size quantities.</div>
+                  </div>
+
                   <div class="prod-add-label">Size Breakdown</div>
                   <div class="prod-add-help">
                     Enter quantity by size. Youth and adult sizes are saved into the existing size ratio field.
@@ -1197,6 +1207,13 @@
       </div>
 
       <div class="size-grid-block" style="margin-top:12px;">
+        <div class="prod-add-label">Size Group</div>
+        <select id="line-modal-size-group" class="inputx">
+          {% for value, label in production_size_group_choices %}
+            <option value="{{ value }}" {% if value == "unisex" %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+
         <div class="prod-add-label">Size Breakdown</div>
         <div class="size-grid-wrapper" aria-label="New line size quantity breakdown">
           {% for size_label in production_size_labels %}
@@ -1302,6 +1319,7 @@
       var lineModalSave = document.getElementById("line-modal-save");
       var lineModalStyle = document.getElementById("line-modal-style");
       var lineModalColor = document.getElementById("line-modal-color");
+      var lineModalSizeGroup = document.getElementById("line-modal-size-group");
       var lineModalSize = document.getElementById("line-modal-size");
       var lineModalSizeNotes = document.getElementById("line-modal-size-notes");
       var lineModalAccessories = document.getElementById("line-modal-accessories");
@@ -1342,6 +1360,7 @@
       function resetLineModal() {
         if (lineModalStyle) lineModalStyle.value = "";
         if (lineModalColor) lineModalColor.value = "";
+        if (lineModalSizeGroup) lineModalSizeGroup.value = "unisex";
         if (lineModalSize) lineModalSize.value = "";
         if (lineModalSizeNotes) lineModalSizeNotes.value = "";
         if (lineModal) {
@@ -1369,6 +1388,7 @@
         return {
           style_name: lineModalStyle ? lineModalStyle.value.trim() : "",
           color_info: lineModalColor ? lineModalColor.value.trim() : "",
+          size_group: lineModalSizeGroup ? lineModalSizeGroup.value : "unisex",
           size_ratio_note: lineModalSize ? lineModalSize.value.trim() : "",
           accessories_note: lineModalAccessories ? lineModalAccessories.value.trim() : "",
           packaging_note: lineModalPackaging ? lineModalPackaging.value.trim() : "",
@@ -1378,7 +1398,7 @@
 
       function setLineField(line, name, value) {
         var el = getLineField(line, name);
-        if (el) el.value = value || "";
+        if (el) el.value = value || (name === "size_group" ? "unisex" : "");
       }
 
       function clearLineFields(line) {
@@ -1391,6 +1411,8 @@
         line.querySelectorAll("[data-field]").forEach(function (el) {
           el.value = "";
         });
+        var sizeGroup = getLineField(line, "size_group");
+        if (sizeGroup) sizeGroup.value = "unisex";
       }
 
       function addLineFromModal(values) {
@@ -1402,6 +1424,7 @@
         clearLineFields(clone);
         setLineField(clone, "style_name", values.style_name);
         setLineField(clone, "color_info", values.color_info);
+        setLineField(clone, "size_group", values.size_group);
         setLineField(clone, "size_ratio_note", values.size_ratio_note);
         setLineField(clone, "accessories_note", values.accessories_note);
         setLineField(clone, "packaging_note", values.packaging_note);
@@ -1559,6 +1582,7 @@
             line_no: idx + 1,
             style_name: (getLineField(line, "style_name") || {}).value || "",
             color_info: (getLineField(line, "color_info") || {}).value || "",
+            size_group: (getLineField(line, "size_group") || {}).value || "unisex",
             size_ratio_note: (getLineField(line, "size_ratio_note") || {}).value || "",
             accessories_note: (getLineField(line, "accessories_note") || {}).value || "",
             packaging_note: (getLineField(line, "packaging_note") || {}).value || "",

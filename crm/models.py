@@ -2728,6 +2728,14 @@ class ProductionOrder(models.Model):
         ("closed_lost", "Closed Lost"),
     ]
 
+    SIZE_GROUP_CHOICES = [
+        ("men", "Men"),
+        ("women", "Women"),
+        ("kids", "Kids"),
+        ("youth", "Youth"),
+        ("unisex", "Unisex"),
+    ]
+
     # basic order info
     title = models.CharField(max_length=200)
     order_code = models.CharField(max_length=50, unique=True, blank=True)
@@ -2801,6 +2809,11 @@ class ProductionOrder(models.Model):
     # style and work order details
     style_name = models.CharField(max_length=200, blank=True)
     color_info = models.CharField(max_length=200, blank=True)
+    size_group = models.CharField(
+        max_length=20,
+        choices=SIZE_GROUP_CHOICES,
+        default="unisex",
+    )
     size_ratio_note = models.TextField(blank=True)
     accessories_note = models.TextField(blank=True)
     packaging_note = models.TextField(blank=True)
@@ -2968,6 +2981,11 @@ class ProductionOrderLine(models.Model):
 
     style_name = models.CharField(max_length=200, blank=True)
     color_info = models.CharField(max_length=200, blank=True)
+    size_group = models.CharField(
+        max_length=20,
+        choices=ProductionOrder.SIZE_GROUP_CHOICES,
+        default="unisex",
+    )
     size_ratio_note = models.TextField(blank=True)
     accessories_note = models.TextField(blank=True)
     packaging_note = models.TextField(blank=True)
