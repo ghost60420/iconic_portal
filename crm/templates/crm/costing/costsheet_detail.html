@@ -510,6 +510,8 @@
     <input type="hidden" name="action" value="save_costing">
     <input type="hidden" name="line_payload" id="line-payload">
 
+    <div class="costing-entry-layout">
+      <div class="costing-entry-main">
     <div class="card costing-form-card">
       <div class="costing-section-head">
         <div>
@@ -700,8 +702,19 @@
     </div>
 
     <div class="card costing-form-card">
-      <div class="card-title">SMV and labor</div>
-      <div class="section-lead">Enter minute values only. The system uses CPM and efficiency to calculate labor cost per piece.</div>
+      <div class="costing-section-head">
+        <div>
+          <div class="card-title">SMV and labor</div>
+          <div class="section-lead">Enter minute values only. The system uses CPM and efficiency to calculate labor cost per piece.</div>
+        </div>
+        <div class="garment-template-actions" aria-label="Quick garment templates">
+          <button type="button" class="btnx garment-template-btn" data-garment-template="t_shirt">T Shirt</button>
+          <button type="button" class="btnx garment-template-btn" data-garment-template="hoodie">Hoodie</button>
+          <button type="button" class="btnx garment-template-btn" data-garment-template="jersey">Jersey</button>
+          <button type="button" class="btnx garment-template-btn" data-garment-template="joggers">Joggers</button>
+          <button type="button" class="btnx garment-template-btn" data-garment-template="swimwear">Swimwear</button>
+        </div>
+      </div>
       <div class="header-grid">
         <div>
           <label>Machine SMV</label>
@@ -751,20 +764,27 @@
           </div>
         </div>
         <div class="muted" style="margin-bottom:6px;">Unit prices are BDT per selected UOM. Consumption is per piece unless the supplier quotes per order.</div>
-        <div style="overflow:auto;">
+        <div class="line-entry-toolbar">
+          <div class="line-entry-helper">
+            Basic costing only needs Item, UOM, Unit Price, Consumption, and Wastage.
+          </div>
+          <div class="line-preset-actions" aria-label="Common costing presets">
+            <button type="button" class="btnx line-preset-btn" data-preset="basic_fabric">Basic Fabric</button>
+            <button type="button" class="btnx line-preset-btn" data-preset="packaging">Packaging</button>
+            <button type="button" class="btnx line-preset-btn" data-preset="label">Label</button>
+          </div>
+        </div>
+        <div class="costing-table-scroll">
           <table class="line-table" data-category="{{ section.key }}">
             <thead>
               <tr>
-                <th style="min-width:160px;">Item</th>
-                <th style="min-width:110px;">UOM</th>
-                <th style="min-width:120px;">Unit price <span class="unit-badge">BDT</span></th>
-                <th style="min-width:110px;">Freight <span class="unit-badge">BDT</span></th>
-                <th style="min-width:120px;">Consumption</th>
-                <th style="min-width:110px;">Wastage %</th>
-                <th style="min-width:120px;">Denominator</th>
-                <th style="min-width:220px;">Details</th>
-                <th style="min-width:160px;">Remarks</th>
-                <th style="width:60px;"></th>
+                <th class="line-item-col">Item</th>
+                <th class="line-uom-col">UOM</th>
+                <th class="line-number-col">Unit Price <span class="unit-badge">BDT</span></th>
+                <th class="line-number-col">Consumption</th>
+                <th class="line-number-col">Wastage %</th>
+                <th class="line-cost-col">Calculated Cost</th>
+                <th class="line-action-col"></th>
               </tr>
             </thead>
             <tbody>
@@ -785,13 +805,38 @@
                   </select>
                   <div class="muted unit-label">BDT per {{ row.uom }}</div>
                 </td>
-                <td><input type="number" step="0.0001" data-field="unit_price" value="{{ row.unit_price }}" placeholder="0.00"></td>
-                <td><input type="number" step="0.0001" data-field="freight" value="{{ row.freight }}" placeholder="0.00"></td>
-                <td><input type="number" step="0.0001" data-field="consumption_value" value="{{ row.consumption_value }}" placeholder="0.00" list="costing-consumption-options-{{ section.key }}"></td>
-                <td><input type="number" step="0.01" data-field="wastage_percent" value="{{ row.wastage_percent }}" placeholder="0"></td>
-                <td><input type="number" step="0.0001" data-field="denominator_value" value="{{ row.denominator_value }}" placeholder="0"></td>
                 <td>
-                  <div class="detail-stack">
+                  <input type="number" step="0.0001" data-field="unit_price" value="{{ row.unit_price }}" placeholder="0.00">
+                </td>
+                <td>
+                  <input type="number" step="0.0001" data-field="consumption_value" value="{{ row.consumption_value }}" placeholder="1" list="costing-consumption-options-{{ section.key }}">
+                </td>
+                <td>
+                  <input type="number" step="0.01" data-field="wastage_percent" value="{{ row.wastage_percent }}" placeholder="0">
+                </td>
+                <td>
+                  <output class="line-calculated-cost" data-role="calculated-cost">BDT 0.00</output>
+                </td>
+                <td>
+                  <div class="line-row-actions">
+                    <button type="button" class="btnx drag-row" title="Drag to sort">Move</button>
+                    <button type="button" class="btnx btnx-soft duplicate-row">Duplicate</button>
+                    <button type="button" class="btnx btnx-soft toggle-advanced-row" aria-expanded="false">Show Advanced</button>
+                    <button type="button" class="btnx btnx-danger remove-row">Remove</button>
+                  </div>
+                </td>
+              </tr>
+              <tr class="line-advanced-row" hidden>
+                <td colspan="7">
+                  <div class="line-advanced-panel">
+                    <div>
+                      <label>Freight BDT</label>
+                      <input type="number" step="0.0001" data-field="freight" value="{{ row.freight }}" placeholder="0.00">
+                    </div>
+                    <div>
+                      <label>Denominator</label>
+                      <input type="number" step="0.0001" data-field="denominator_value" value="{{ row.denominator_value }}" placeholder="1">
+                    </div>
                     <div>
                       <label>Reference</label>
                       <input type="text" data-field="item_reference" value="{{ row.item_reference }}" placeholder="Ref">
@@ -816,15 +861,22 @@
                       <label>Cut width</label>
                       <input type="text" data-field="cut_width" value="{{ row.cut_width }}" placeholder="Cut width">
                     </div>
+                    <div class="line-advanced-remarks">
+                      <label>Remarks</label>
+                      <textarea rows="3" data-field="remarks" placeholder="Remarks">{{ row.remarks }}</textarea>
+                    </div>
                   </div>
-                </td>
-                <td><textarea rows="4" data-field="remarks" placeholder="Remarks">{{ row.remarks }}</textarea></td>
-                <td>
-                  <button type="button" class="btnx btnx-danger remove-row">Remove</button>
                 </td>
               </tr>
               {% endfor %}
             </tbody>
+            <tfoot>
+              <tr class="line-section-total-row">
+                <td colspan="5">{{ section.total_label }}</td>
+                <td><output class="line-section-total" data-section-total="{{ section.key }}">BDT 0.00</output></td>
+                <td></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
         <div class="line-actions">
@@ -832,6 +884,42 @@
         </div>
       </div>
     {% endfor %}
+      </div>
+
+      <aside class="card costing-smart-panel" aria-label="Smart costing summary">
+        <div class="card-title">Grand Total</div>
+        <div class="smart-summary-list">
+          <div><span>Material Cost</span><strong data-smart-summary="material">BDT 0.00</strong></div>
+          <div><span>Labor Cost</span><strong data-smart-summary="labor">BDT 0.00</strong></div>
+          <div><span>CM Cost</span><strong data-smart-summary="cm">BDT 0.00</strong></div>
+          <div><span>Logistics</span><strong data-smart-summary="logistics">BDT 0.00</strong></div>
+          <div><span>Other</span><strong data-smart-summary="other">BDT 0.00</strong></div>
+          <div class="smart-summary-total"><span>Total FOB Cost</span><strong data-smart-summary="total">BDT 0.00</strong></div>
+        </div>
+
+        <div class="smart-panel-section">
+          <div class="smart-panel-title">Currency Conversion</div>
+          <div class="smart-rate-grid">
+            <label>BDT / USD <input type="number" step="0.0001" value="120" data-smart-rate="USD"></label>
+            <label>BDT / CAD <input type="number" step="0.0001" value="90" data-smart-rate="CAD"></label>
+          </div>
+          <div class="smart-currency-grid">
+            <div><span>BDT</span><strong data-currency-total="BDT">0.00</strong></div>
+            <div><span>USD</span><strong data-currency-total="USD">0.00</strong></div>
+            <div><span>CAD</span><strong data-currency-total="CAD">0.00</strong></div>
+          </div>
+        </div>
+
+        <div class="smart-panel-section">
+          <div class="smart-panel-title">Profit Margin Calculator</div>
+          <label class="smart-margin-field">Target Margin % <input type="number" step="0.01" data-smart-margin-target></label>
+          <div class="smart-suggested-price">
+            <span>Suggested Selling Price</span>
+            <strong data-smart-selling-price>BDT 0.00</strong>
+          </div>
+        </div>
+      </aside>
+    </div>
   </form>
 
   <div class="card costing-review-card">
@@ -1184,12 +1272,31 @@
       <div class="muted unit-label">BDT per piece</div>
     </td>
     <td><input type="number" step="0.0001" data-field="unit_price" value="" placeholder="0.00"></td>
-    <td><input type="number" step="0.0001" data-field="freight" value="" placeholder="0.00"></td>
-    <td><input type="number" step="0.0001" data-field="consumption_value" value="" placeholder="0.00"></td>
-    <td><input type="number" step="0.01" data-field="wastage_percent" value="" placeholder="0"></td>
-    <td><input type="number" step="0.0001" data-field="denominator_value" value="" placeholder="0"></td>
+    <td><input type="number" step="0.0001" data-field="consumption_value" value="1" placeholder="1"></td>
+    <td><input type="number" step="0.01" data-field="wastage_percent" value="0" placeholder="0"></td>
     <td>
-      <div class="detail-stack">
+      <output class="line-calculated-cost" data-role="calculated-cost">BDT 0.00</output>
+    </td>
+    <td>
+      <div class="line-row-actions">
+        <button type="button" class="btnx drag-row" title="Drag to sort">Move</button>
+        <button type="button" class="btnx btnx-soft duplicate-row">Duplicate</button>
+        <button type="button" class="btnx btnx-soft toggle-advanced-row" aria-expanded="false">Show Advanced</button>
+        <button type="button" class="btnx btnx-danger remove-row">Remove</button>
+      </div>
+    </td>
+  </tr>
+  <tr class="line-advanced-row" hidden>
+    <td colspan="7">
+      <div class="line-advanced-panel">
+        <div>
+          <label>Freight BDT</label>
+          <input type="number" step="0.0001" data-field="freight" value="0" placeholder="0.00">
+        </div>
+        <div>
+          <label>Denominator</label>
+          <input type="number" step="0.0001" data-field="denominator_value" value="1" placeholder="1">
+        </div>
         <div>
           <label>Reference</label>
           <input type="text" data-field="item_reference" value="" placeholder="Ref">
@@ -1214,65 +1321,158 @@
           <label>Cut width</label>
           <input type="text" data-field="cut_width" value="" placeholder="Cut width">
         </div>
+        <div class="line-advanced-remarks">
+          <label>Remarks</label>
+          <textarea rows="3" data-field="remarks" placeholder="Remarks"></textarea>
+        </div>
       </div>
     </td>
-    <td><textarea rows="4" data-field="remarks" placeholder="Remarks"></textarea></td>
-    <td><button type="button" class="btnx btnx-danger remove-row">Remove</button></td>
   </tr>
 </template>
 
 <script>
+  const costingIsLocked = {{ is_locked|yesno:"true,false" }};
+
   const helpTextByCategory = {
-    fabric: \"Main shell fabric, pocketing, rib, contrast fabric. Use consumption per piece.\",
-    sewing_trim: \"Thread, zipper, elastic, tape, buttons and trims used in sewing. Use denominator for cone/roll/pack costs.\",
-    packaging_trim: \"Polybag, carton, barcode sticker, tissue, insert card and export packing items.\",
-    labels_branding: \"Main label, size label, care label, hangtag, patch, print branding or badge costs.\",
-    wash_process: \"Washing, dyeing, printing, embroidery, heat transfer, pleating or special process costs.\",
-    cm_labor: \"Cut-make, sewing, finishing or subcontract labor lines if you price them directly instead of SMV only.\",
-    logistics_compliance: \"Testing, inspection, freight, compliance, courier, banking or document costs.\",
-    other: \"Any other cost not covered above. Use per order only when the vendor quotes a total order amount.\"
+    fabric: "Main shell fabric, pocketing, rib, contrast fabric. Use consumption per piece.",
+    sewing_trim: "Thread, zipper, elastic, tape, buttons and trims used in sewing. Use denominator for cone/roll/pack costs.",
+    packaging_trim: "Polybag, carton, barcode sticker, tissue, insert card and export packing items.",
+    labels_branding: "Main label, size label, care label, hangtag, patch, print branding or badge costs.",
+    wash_process: "Washing, dyeing, printing, embroidery, heat transfer, pleating or special process costs.",
+    cm_labor: "Cut-make, sewing, finishing or subcontract labor lines if you price them directly instead of SMV only.",
+    logistics_compliance: "Testing, inspection, freight, compliance, courier, banking or document costs.",
+    other: "Any other cost not covered above. Use per order only when the vendor quotes a total order amount."
   };
 
   const categoryConfig = {
     fabric: {
-      items: [\"Main fabric\", \"Rib\", \"Pocketing\", \"Contrast fabric\", \"Lining fabric\"],
-      defaults: { uom: \"kg\", denominator_value: \"1\", wastage_percent: \"3\" },
-      rowTip: \"Use supplier price per kg or meter, then add garment consumption per piece.\",
+      items: ["Main fabric", "Rib", "Pocketing", "Contrast fabric", "Lining fabric"],
+      defaults: { uom: "kg", freight: "0", consumption_value: "1", denominator_value: "1", wastage_percent: "0" },
+      rowTip: "Use supplier price per kg or meter, then add garment consumption per piece.",
     },
     sewing_trim: {
-      items: [\"Sewing thread\", \"Zipper\", \"Drawcord\", \"Elastic\", \"Button\", \"Twill tape\"],
-      defaults: { uom: \"piece\", wastage_percent: \"2\" },
-      rowTip: \"Use denominator when one cone, roll or pack covers many garments.\",
+      items: ["Sewing thread", "Zipper", "Drawcord", "Elastic", "Button", "Twill tape"],
+      defaults: { uom: "piece", freight: "0", consumption_value: "1", denominator_value: "1", wastage_percent: "0" },
+      rowTip: "Use denominator when one cone, roll or pack covers many garments.",
     },
     packaging_trim: {
-      items: [\"Polybag\", \"Carton\", \"Barcode sticker\", \"Size sticker\", \"Tissue paper\", \"Insert card\"],
-      defaults: { uom: \"piece\", wastage_percent: \"1\" },
-      rowTip: \"Packaging is usually a small per-piece cost unless carton freight is quoted per order.\",
+      items: ["Polybag", "Carton", "Barcode sticker", "Size sticker", "Tissue paper", "Insert card"],
+      defaults: { uom: "piece", freight: "0", consumption_value: "1", denominator_value: "1", wastage_percent: "0" },
+      rowTip: "Packaging is usually a small per-piece cost unless carton freight is quoted per order.",
     },
     labels_branding: {
-      items: [\"Main label\", \"Care label\", \"Size label\", \"Hangtag\", \"Patch\", \"Heat transfer logo\"],
-      defaults: { uom: \"piece\", wastage_percent: \"1\" },
-      rowTip: \"Separate brand trims from sewing trims so branding cost stays visible in the summary.\",
+      items: ["Main label", "Care label", "Size label", "Hangtag", "Patch", "Heat transfer logo"],
+      defaults: { uom: "piece", freight: "0", consumption_value: "1", denominator_value: "1", wastage_percent: "0" },
+      rowTip: "Separate brand trims from sewing trims so branding cost stays visible in the summary.",
     },
     wash_process: {
-      items: [\"Garment wash\", \"Screen print\", \"Embroidery\", \"Heat transfer\", \"Special finish\"],
-      defaults: { uom: \"piece\", wastage_percent: \"0\" },
-      rowTip: \"Enter the factory or subcontract process cost per garment piece.\",
+      items: ["Garment wash", "Screen print", "Embroidery", "Heat transfer", "Special finish"],
+      defaults: { uom: "piece", freight: "0", consumption_value: "1", denominator_value: "1", wastage_percent: "0" },
+      rowTip: "Enter the factory or subcontract process cost per garment piece.",
     },
     cm_labor: {
-      items: [\"CM charge\", \"Subcontract sewing\", \"Handwork\", \"Finishing labor\", \"Packing labor\"],
-      defaults: { uom: \"piece\", wastage_percent: \"0\" },
-      rowTip: \"Use this when labor is quoted directly, in addition to or instead of SMV logic.\",
+      items: ["CM charge", "Subcontract sewing", "Handwork", "Finishing labor", "Packing labor"],
+      defaults: { uom: "piece", freight: "0", consumption_value: "1", denominator_value: "1", wastage_percent: "0" },
+      rowTip: "Use this when labor is quoted directly, in addition to or instead of SMV logic.",
     },
     logistics_compliance: {
-      items: [\"Testing\", \"Inspection\", \"Courier\", \"Bank charge\", \"Freight\", \"Compliance audit\"],
-      defaults: { uom: \"order\", wastage_percent: \"0\" },
-      rowTip: \"If vendor gives a single total charge for the order, keep UOM as per order.\",
+      items: ["Testing", "Inspection", "Courier", "Bank charge", "Freight", "Compliance audit"],
+      defaults: { uom: "order", freight: "0", consumption_value: "1", denominator_value: "1", wastage_percent: "0" },
+      rowTip: "If vendor gives a single total charge for the order, keep UOM as per order.",
     },
     other: {
-      items: [\"Sample cost\", \"Allowance\", \"Wastage reserve\", \"Miscellaneous charge\"],
-      defaults: { uom: \"piece\", wastage_percent: \"0\" },
-      rowTip: \"Only use this bucket for genuine extras that do not fit another category.\",
+      items: ["Sample cost", "Allowance", "Wastage reserve", "Miscellaneous charge"],
+      defaults: { uom: "piece", freight: "0", consumption_value: "1", denominator_value: "1", wastage_percent: "0" },
+      rowTip: "Only use this bucket for genuine extras that do not fit another category.",
+    }
+  };
+
+  const rowPresets = {
+    basic_fabric: {
+      category: "fabric",
+      fields: {
+        item_name: "Main fabric",
+        uom: "kg",
+        unit_price: "",
+        consumption_value: "1",
+        wastage_percent: "0",
+        freight: "0",
+        denominator_value: "1"
+      }
+    },
+    packaging: {
+      category: "packaging_trim",
+      fields: {
+        item_name: "Polybag",
+        uom: "piece",
+        unit_price: "",
+        consumption_value: "1",
+        wastage_percent: "0",
+        freight: "0",
+        denominator_value: "1"
+      }
+    },
+    label: {
+      category: "labels_branding",
+      fields: {
+        item_name: "Main label",
+        uom: "piece",
+        unit_price: "",
+        consumption_value: "1",
+        wastage_percent: "0",
+        freight: "0",
+        denominator_value: "1"
+      }
+    }
+  };
+
+  const garmentTemplates = {
+    t_shirt: {
+      smv: { machine_smv: "8", finishing_smv: "2", cpm: "2.10", efficiency_costing: "75", efficiency_planned: "80" },
+      rows: [
+        { category: "fabric", fields: { item_name: "Main fabric", uom: "kg", unit_price: "", consumption_value: "0.22", wastage_percent: "4", freight: "0", denominator_value: "1" } },
+        { category: "sewing_trim", fields: { item_name: "Sewing thread", uom: "cone", unit_price: "", consumption_value: "0.02", wastage_percent: "0", freight: "0", denominator_value: "100" } },
+        { category: "labels_branding", fields: { item_name: "Main label", uom: "piece", unit_price: "", consumption_value: "1", wastage_percent: "0", freight: "0", denominator_value: "1" } },
+        { category: "packaging_trim", fields: { item_name: "Polybag", uom: "piece", unit_price: "", consumption_value: "1", wastage_percent: "0", freight: "0", denominator_value: "1" } }
+      ]
+    },
+    hoodie: {
+      smv: { machine_smv: "18", finishing_smv: "4", cpm: "2.30", efficiency_costing: "72", efficiency_planned: "78" },
+      rows: [
+        { category: "fabric", fields: { item_name: "Fleece fabric", uom: "kg", unit_price: "", consumption_value: "0.68", wastage_percent: "6", freight: "0", denominator_value: "1" } },
+        { category: "fabric", fields: { item_name: "Rib", uom: "kg", unit_price: "", consumption_value: "0.12", wastage_percent: "5", freight: "0", denominator_value: "1" } },
+        { category: "sewing_trim", fields: { item_name: "Drawcord", uom: "piece", unit_price: "", consumption_value: "1", wastage_percent: "1", freight: "0", denominator_value: "1" } },
+        { category: "sewing_trim", fields: { item_name: "Zipper", uom: "piece", unit_price: "", consumption_value: "1", wastage_percent: "1", freight: "0", denominator_value: "1" } },
+        { category: "packaging_trim", fields: { item_name: "Polybag", uom: "piece", unit_price: "", consumption_value: "1", wastage_percent: "0", freight: "0", denominator_value: "1" } }
+      ]
+    },
+    jersey: {
+      smv: { machine_smv: "10", finishing_smv: "2", cpm: "2.15", efficiency_costing: "76", efficiency_planned: "82" },
+      rows: [
+        { category: "fabric", fields: { item_name: "Performance fabric", uom: "kg", unit_price: "", consumption_value: "0.28", wastage_percent: "4", freight: "0", denominator_value: "1" } },
+        { category: "fabric", fields: { item_name: "Rib", uom: "kg", unit_price: "", consumption_value: "0.04", wastage_percent: "4", freight: "0", denominator_value: "1" } },
+        { category: "labels_branding", fields: { item_name: "Heat transfer logo", uom: "piece", unit_price: "", consumption_value: "1", wastage_percent: "1", freight: "0", denominator_value: "1" } },
+        { category: "packaging_trim", fields: { item_name: "Polybag", uom: "piece", unit_price: "", consumption_value: "1", wastage_percent: "0", freight: "0", denominator_value: "1" } }
+      ]
+    },
+    joggers: {
+      smv: { machine_smv: "14", finishing_smv: "3", cpm: "2.25", efficiency_costing: "74", efficiency_planned: "80" },
+      rows: [
+        { category: "fabric", fields: { item_name: "Main fabric", uom: "kg", unit_price: "", consumption_value: "0.55", wastage_percent: "5", freight: "0", denominator_value: "1" } },
+        { category: "fabric", fields: { item_name: "Rib", uom: "kg", unit_price: "", consumption_value: "0.10", wastage_percent: "5", freight: "0", denominator_value: "1" } },
+        { category: "sewing_trim", fields: { item_name: "Elastic", uom: "piece", unit_price: "", consumption_value: "1", wastage_percent: "1", freight: "0", denominator_value: "1" } },
+        { category: "sewing_trim", fields: { item_name: "Drawcord", uom: "piece", unit_price: "", consumption_value: "1", wastage_percent: "1", freight: "0", denominator_value: "1" } },
+        { category: "packaging_trim", fields: { item_name: "Polybag", uom: "piece", unit_price: "", consumption_value: "1", wastage_percent: "0", freight: "0", denominator_value: "1" } }
+      ]
+    },
+    swimwear: {
+      smv: { machine_smv: "11", finishing_smv: "3", cpm: "2.25", efficiency_costing: "73", efficiency_planned: "78" },
+      rows: [
+        { category: "fabric", fields: { item_name: "Swim fabric", uom: "kg", unit_price: "", consumption_value: "0.24", wastage_percent: "4", freight: "0", denominator_value: "1" } },
+        { category: "sewing_trim", fields: { item_name: "Elastic", uom: "piece", unit_price: "", consumption_value: "1", wastage_percent: "2", freight: "0", denominator_value: "1" } },
+        { category: "labels_branding", fields: { item_name: "Care label", uom: "piece", unit_price: "", consumption_value: "1", wastage_percent: "0", freight: "0", denominator_value: "1" } },
+        { category: "packaging_trim", fields: { item_name: "Polybag", uom: "piece", unit_price: "", consumption_value: "1", wastage_percent: "0", freight: "0", denominator_value: "1" } }
+      ]
     }
   };
 
@@ -1291,8 +1491,10 @@
   function applyCategoryDefaults(row) {
     const config = categoryConfig[row.dataset.category] || {};
     const defaults = config.defaults || {};
+    const advancedRow = getAdvancedRow(row);
     Object.entries(defaults).forEach(([field, value]) => {
-      const input = row.querySelector(`[data-field="${field}"]`);
+      const input = row.querySelector(`[data-field="${field}"]`) ||
+        (advancedRow ? advancedRow.querySelector(`[data-field="${field}"]`) : null);
       if (input && !input.value) {
         input.value = value;
       }
@@ -1322,44 +1524,411 @@
     }
   }
 
+  function getAdvancedRow(row) {
+    const advancedRow = row.nextElementSibling;
+    if (advancedRow && advancedRow.classList.contains('line-advanced-row')) {
+      return advancedRow;
+    }
+    return null;
+  }
+
+  function numberValue(row, fieldName, fallback) {
+    const advancedRow = getAdvancedRow(row);
+    const input = row.querySelector(`[data-field="${fieldName}"]`) ||
+      (advancedRow ? advancedRow.querySelector(`[data-field="${fieldName}"]`) : null);
+    if (!input || input.value === '') {
+      return fallback;
+    }
+    const value = parseFloat(input.value);
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  function getOrderQuantity() {
+    const input = document.querySelector('#costing-form [name="order_quantity"]');
+    if (!input || input.value === '') {
+      return 0;
+    }
+    const value = parseFloat(input.value);
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  function formNumber(name, fallback) {
+    const input = document.querySelector(`#costing-form [name="${name}"]`);
+    if (!input || input.value === '') {
+      return fallback;
+    }
+    const value = parseFloat(input.value);
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  function formatBdt(value) {
+    const amount = Number.isFinite(value) ? value : 0;
+    return `BDT ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
+  }
+
+  function formatAmount(value) {
+    const amount = Number.isFinite(value) ? value : 0;
+    return amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+  }
+
+  function calculateRowCost(row) {
+    const unitPrice = numberValue(row, 'unit_price', 0);
+    const freight = numberValue(row, 'freight', 0);
+    const consumption = numberValue(row, 'consumption_value', 1);
+    const wastage = numberValue(row, 'wastage_percent', 0);
+    const denominatorRaw = numberValue(row, 'denominator_value', 1);
+    const denominator = denominatorRaw > 0 ? denominatorRaw : 1;
+    let cost = ((unitPrice + freight) * consumption * (1 + (wastage / 100))) / denominator;
+
+    const uom = row.querySelector('[data-field="uom"]')?.value;
+    const orderQuantity = getOrderQuantity();
+    if (uom === 'order' && orderQuantity > 0) {
+      cost = cost / orderQuantity;
+    }
+    return Number.isFinite(cost) ? cost : 0;
+  }
+
+  function syncCalculatedCost(row) {
+    const cost = calculateRowCost(row);
+    row.dataset.calculatedCost = cost.toString();
+    const output = row.querySelector('[data-role="calculated-cost"]');
+    if (output) {
+      output.textContent = formatBdt(cost);
+    }
+    return cost;
+  }
+
+  function syncSmartRatesFromSheet() {
+    const currencyInput = document.querySelector('#costing-form [name="currency"]');
+    const exchangeRate = formNumber('exchange_rate', 0);
+    const currency = currencyInput ? currencyInput.value : 'BDT';
+    if (exchangeRate > 0 && (currency === 'USD' || currency === 'CAD')) {
+      const rateInput = document.querySelector(`[data-smart-rate="${currency}"]`);
+      if (rateInput) {
+        rateInput.value = exchangeRate;
+      }
+    }
+  }
+
+  function calculateSmvLabor() {
+    const machine = formNumber('machine_smv', 0);
+    const finishing = formNumber('finishing_smv', 0);
+    const cpm = formNumber('cpm', 0);
+    const efficiencyRaw = formNumber('efficiency_costing', 100);
+    const efficiency = efficiencyRaw > 0 ? efficiencyRaw / 100 : 1;
+    return ((machine + finishing) * cpm) / efficiency;
+  }
+
+  function setSummaryValue(name, value) {
+    document.querySelectorAll(`[data-smart-summary="${name}"]`).forEach((el) => {
+      el.textContent = formatBdt(value);
+    });
+  }
+
+  function syncSmartTotals() {
+    const totals = {};
+    document.querySelectorAll('table[data-category]').forEach((table) => {
+      const category = table.dataset.category;
+      let sectionTotal = 0;
+      table.querySelectorAll('tbody .line-row').forEach((row) => {
+        sectionTotal += syncCalculatedCost(row);
+      });
+      totals[category] = sectionTotal;
+      const output = table.querySelector(`[data-section-total="${category}"]`);
+      if (output) {
+        output.textContent = formatBdt(sectionTotal);
+      }
+    });
+
+    const fabric = totals.fabric || 0;
+    const sewingTrim = totals.sewing_trim || 0;
+    const packagingTrim = totals.packaging_trim || 0;
+    const labels = totals.labels_branding || 0;
+    const wash = totals.wash_process || 0;
+    const cm = totals.cm_labor || 0;
+    const logistics = totals.logistics_compliance || 0;
+    const other = totals.other || 0;
+    const fabricFinance = fabric * (formNumber('finance_percent_fabric', 0) / 100);
+    const trimFinance = (sewingTrim + packagingTrim + labels) * (formNumber('finance_percent_trims', 0) / 100);
+    const material = fabric + sewingTrim + packagingTrim + labels + wash + fabricFinance + trimFinance;
+    const labor = calculateSmvLabor();
+    const total = material + labor + cm + logistics + other;
+
+    setSummaryValue('material', material);
+    setSummaryValue('labor', labor);
+    setSummaryValue('cm', cm);
+    setSummaryValue('logistics', logistics);
+    setSummaryValue('other', other);
+    setSummaryValue('total', total);
+
+    const usdRate = formNumberFromSelector('[data-smart-rate="USD"]', 120);
+    const cadRate = formNumberFromSelector('[data-smart-rate="CAD"]', 90);
+    setCurrencyValue('BDT', total);
+    setCurrencyValue('USD', usdRate > 0 ? total / usdRate : 0);
+    setCurrencyValue('CAD', cadRate > 0 ? total / cadRate : 0);
+
+    const marginTarget = formNumberFromSelector('[data-smart-margin-target]', formNumber('target_margin_percent', 0));
+    const suggested = marginTarget < 100 ? total / (1 - (marginTarget / 100)) : 0;
+    const sellingOutput = document.querySelector('[data-smart-selling-price]');
+    if (sellingOutput) {
+      sellingOutput.textContent = formatBdt(suggested);
+    }
+  }
+
+  function formNumberFromSelector(selector, fallback) {
+    const input = document.querySelector(selector);
+    if (!input || input.value === '') {
+      return fallback;
+    }
+    const value = parseFloat(input.value);
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  function setCurrencyValue(currency, value) {
+    document.querySelectorAll(`[data-currency-total="${currency}"]`).forEach((el) => {
+      el.textContent = formatAmount(value);
+    });
+  }
+
+  function setAdvancedState(row, open) {
+    const advancedRow = getAdvancedRow(row);
+    const toggle = row.querySelector('.toggle-advanced-row');
+    if (!advancedRow || !toggle) {
+      return;
+    }
+    advancedRow.hidden = !open;
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    toggle.textContent = open ? 'Hide Advanced' : 'Show Advanced';
+  }
+
+  function setRowField(row, fieldName, value) {
+    const advancedRow = getAdvancedRow(row);
+    const input = row.querySelector(`[data-field="${fieldName}"]`) ||
+      (advancedRow ? advancedRow.querySelector(`[data-field="${fieldName}"]`) : null);
+    if (input) {
+      input.value = value;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      if (input.tagName === 'SELECT') {
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }
+  }
+
+  function getRowFieldData(row) {
+    const data = {};
+    [row, getAdvancedRow(row)].forEach((scope) => {
+      if (!scope) return;
+      scope.querySelectorAll('[data-field]').forEach((input) => {
+        data[input.dataset.field] = input.value;
+      });
+    });
+    return data;
+  }
+
+  function addLineRow(category, preset) {
+    const table = document.querySelector(`table[data-category="${category}"] tbody`);
+    const tpl = document.getElementById('line-row-template');
+    if (!table || !tpl) {
+      return null;
+    }
+    const clone = tpl.content.cloneNode(true);
+    const row = clone.querySelector('.line-row');
+    row.dataset.category = category;
+    const itemInput = row.querySelector('[data-field="item_name"]');
+    if (itemInput) {
+      itemInput.setAttribute('list', `costing-item-options-${category}`);
+    }
+    table.appendChild(clone);
+    bindRow(row);
+    if (preset && preset.fields) {
+      Object.entries(preset.fields).forEach(([field, value]) => setRowField(row, field, value));
+      updateUnitLabel(row);
+      syncCalculatedCost(row);
+    }
+    syncSmartTotals();
+    row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    return row;
+  }
+
+  function duplicateLineRow(row) {
+    const fields = getRowFieldData(row);
+    addLineRow(row.dataset.category, { fields });
+  }
+
+  function moveRowPairBefore(row, target, afterTarget) {
+    const advancedRow = getAdvancedRow(row);
+    const targetAdvanced = getAdvancedRow(target);
+    const fragment = document.createDocumentFragment();
+    fragment.appendChild(row);
+    if (advancedRow) {
+      fragment.appendChild(advancedRow);
+    }
+    const reference = afterTarget
+      ? (targetAdvanced ? targetAdvanced.nextElementSibling : target.nextElementSibling)
+      : target;
+    target.parentNode.insertBefore(fragment, reference);
+  }
+
+  function bindSortableTable(tbody) {
+    tbody.addEventListener('dragover', (event) => {
+      if (!draggedLineRow || costingIsLocked) {
+        return;
+      }
+      const target = event.target.closest('.line-row');
+      if (!target || target === draggedLineRow || target.dataset.category !== draggedLineRow.dataset.category) {
+        return;
+      }
+      event.preventDefault();
+      const rect = target.getBoundingClientRect();
+      moveRowPairBefore(draggedLineRow, target, event.clientY > rect.top + (rect.height / 2));
+    });
+  }
+
   function bindRow(row) {
     applyCategoryDefaults(row);
+    row.draggable = !costingIsLocked;
+    row.addEventListener('dragstart', (event) => {
+      if (costingIsLocked || !event.target.closest('.drag-row')) {
+        event.preventDefault();
+        return;
+      }
+      draggedLineRow = row;
+      row.classList.add('line-row-dragging');
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', row.dataset.category || '');
+    });
+    row.addEventListener('dragend', () => {
+      row.classList.remove('line-row-dragging');
+      draggedLineRow = null;
+      syncSmartTotals();
+    });
     const select = row.querySelector('.uom-select');
     if (select) {
-      select.addEventListener('change', () => updateUnitLabel(row));
+      select.addEventListener('change', () => {
+        updateUnitLabel(row);
+        syncCalculatedCost(row);
+        syncSmartTotals();
+      });
       updateUnitLabel(row);
     }
+    const advancedToggle = row.querySelector('.toggle-advanced-row');
+    if (advancedToggle) {
+      advancedToggle.addEventListener('click', () => {
+        const advancedRow = getAdvancedRow(row);
+        setAdvancedState(row, !advancedRow || advancedRow.hidden);
+      });
+      setAdvancedState(row, false);
+    }
+    [row, getAdvancedRow(row)].forEach((scope) => {
+      if (!scope) return;
+      scope.querySelectorAll('[data-field]').forEach((input) => {
+        input.addEventListener('input', () => {
+          syncCalculatedCost(row);
+          syncSmartTotals();
+        });
+      });
+    });
     const helpIcon = row.querySelector('.help-icon');
     if (helpIcon) {
-      helpIcon.title = helpTextByCategory[row.dataset.category] || \"Enter cost per garment piece.\";
+      helpIcon.title = helpTextByCategory[row.dataset.category] || "Enter cost per garment piece.";
     }
     const remove = row.querySelector('.remove-row');
     if (remove) {
       remove.addEventListener('click', () => {
+        const advancedRow = getAdvancedRow(row);
+        if (advancedRow) {
+          advancedRow.remove();
+        }
         row.remove();
+        syncSmartTotals();
       });
     }
+    const duplicate = row.querySelector('.duplicate-row');
+    if (duplicate) {
+      duplicate.addEventListener('click', () => duplicateLineRow(row));
+    }
+    syncCalculatedCost(row);
   }
 
+  let draggedLineRow = null;
+
   document.querySelectorAll('.line-row').forEach(bindRow);
+  document.querySelectorAll('table[data-category] tbody').forEach(bindSortableTable);
   renderCategoryGuides();
 
   document.querySelectorAll('.add-row').forEach((btn) => {
+    btn.addEventListener('click', () => addLineRow(btn.getAttribute('data-category')));
+  });
+
+  document.querySelectorAll('.line-preset-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const category = btn.getAttribute('data-category');
-      const table = document.querySelector(`table[data-category="${category}"] tbody`);
-      const tpl = document.getElementById('line-row-template');
-      const clone = tpl.content.cloneNode(true);
-      const row = clone.querySelector('.line-row');
-      row.dataset.category = category;
-      const itemInput = row.querySelector('[data-field="item_name"]');
-      if (itemInput) {
-        itemInput.setAttribute('list', `costing-item-options-${category}`);
+      const preset = rowPresets[btn.getAttribute('data-preset')];
+      if (preset) {
+        addLineRow(preset.category, preset);
       }
-      table.appendChild(clone);
-      bindRow(table.lastElementChild);
     });
   });
+
+  function setFormField(name, value) {
+    const input = document.querySelector(`#costing-form [name="${name}"]`);
+    if (input) {
+      input.value = value;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }
+
+  document.querySelectorAll('.garment-template-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const template = garmentTemplates[btn.getAttribute('data-garment-template')];
+      if (!template || costingIsLocked) {
+        return;
+      }
+      Object.entries(template.smv || {}).forEach(([field, value]) => setFormField(field, value));
+      (template.rows || []).forEach((rowPreset) => addLineRow(rowPreset.category, rowPreset));
+      syncSmartTotals();
+    });
+  });
+
+  const orderQuantityInput = document.querySelector('#costing-form [name="order_quantity"]');
+  if (orderQuantityInput) {
+    orderQuantityInput.addEventListener('input', () => {
+      document.querySelectorAll('.line-row').forEach(syncCalculatedCost);
+      syncSmartTotals();
+    });
+  }
+
+  const targetMarginInput = document.querySelector('#costing-form [name="target_margin_percent"]');
+  const smartMarginInput = document.querySelector('[data-smart-margin-target]');
+  if (targetMarginInput && smartMarginInput) {
+    smartMarginInput.value = targetMarginInput.value || '';
+    targetMarginInput.addEventListener('input', () => {
+      smartMarginInput.value = targetMarginInput.value;
+      syncSmartTotals();
+    });
+    smartMarginInput.addEventListener('input', () => {
+      targetMarginInput.value = smartMarginInput.value;
+      syncSmartTotals();
+    });
+  }
+
+  document.querySelectorAll('#costing-form [name="machine_smv"], #costing-form [name="finishing_smv"], #costing-form [name="cpm"], #costing-form [name="efficiency_costing"], #costing-form [name="finance_percent_fabric"], #costing-form [name="finance_percent_trims"], [data-smart-rate]').forEach((input) => {
+    input.addEventListener('input', syncSmartTotals);
+  });
+
+  document.querySelectorAll('#costing-form [name="currency"], #costing-form [name="exchange_rate"]').forEach((input) => {
+    input.addEventListener('input', () => {
+      syncSmartRatesFromSheet();
+      syncSmartTotals();
+    });
+    input.addEventListener('change', () => {
+      syncSmartRatesFromSheet();
+      syncSmartTotals();
+    });
+  });
+
+  syncSmartRatesFromSheet();
+  syncSmartTotals();
 
   const form = document.getElementById('costing-form');
   if (form) {
@@ -1373,6 +1942,12 @@
         row.querySelectorAll('[data-field]').forEach((input) => {
           data[input.dataset.field] = input.value;
         });
+        const advancedRow = getAdvancedRow(row);
+        if (advancedRow) {
+          advancedRow.querySelectorAll('[data-field]').forEach((input) => {
+            data[input.dataset.field] = input.value;
+          });
+        }
         rows.push(data);
       });
       document.getElementById('line-payload').value = JSON.stringify(rows);
@@ -1410,7 +1985,7 @@
   }
 
   {% if is_locked %}
-  document.querySelectorAll('#costing-form input, #costing-form select, #costing-form textarea, #costing-form button.add-row, #costing-form button.remove-row').forEach((el) => {
+  document.querySelectorAll('#costing-form input, #costing-form select, #costing-form textarea, #costing-form button.add-row, #costing-form button.remove-row, #costing-form button.line-preset-btn, #costing-form button.garment-template-btn, #costing-form button.duplicate-row, #costing-form button.drag-row').forEach((el) => {
     if (el.type !== 'hidden') {
       el.disabled = true;
     }

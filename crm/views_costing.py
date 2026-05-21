@@ -59,7 +59,7 @@ def _build_line_dict(line=None, category=None):
             "freight": line.freight,
             "consumption_value": line.consumption_value,
             "wastage_percent": line.wastage_percent,
-            "denominator_value": line.denominator_value,
+            "denominator_value": line.denominator_value if line.denominator_value is not None else "",
             "placement": line.placement,
             "color": line.color,
             "gsm": line.gsm,
@@ -75,10 +75,10 @@ def _build_line_dict(line=None, category=None):
         "supplier": "",
         "uom": "piece",
         "unit_price": "",
-        "freight": "",
-        "consumption_value": "",
-        "wastage_percent": "",
-        "denominator_value": "",
+        "freight": "0",
+        "consumption_value": "1",
+        "wastage_percent": "0",
+        "denominator_value": "1",
         "placement": "",
         "color": "",
         "gsm": "",
@@ -122,9 +122,9 @@ def _save_line_items(costing, payload):
         line.uom = (row.get("uom") or "piece").strip() or "piece"
         line.unit_price = row.get("unit_price") or 0
         line.freight = row.get("freight") or 0
-        line.consumption_value = row.get("consumption_value") or 0
+        line.consumption_value = row.get("consumption_value") or 1
         line.wastage_percent = row.get("wastage_percent") or 0
-        line.denominator_value = row.get("denominator_value") or None
+        line.denominator_value = row.get("denominator_value") or 1
         line.placement = (row.get("placement") or "").strip()
         line.color = (row.get("color") or "").strip()
         line.gsm = (row.get("gsm") or "").strip()
@@ -459,10 +459,21 @@ def cost_sheet_detail(request, pk):
         else:
             margin_tone = "risk"
     grouped_lines = _group_lines(costing)
+    section_total_labels = {
+        "fabric": "Fabric Total",
+        "sewing_trim": "Sewing Trims Total",
+        "packaging_trim": "Packaging Total",
+        "labels_branding": "Labels Total",
+        "wash_process": "Wash / Process Total",
+        "cm_labor": "CM / Labor Total",
+        "logistics_compliance": "Logistics Total",
+        "other": "Other Total",
+    }
     category_sections = [
         {
             "key": key,
             "label": label,
+            "total_label": section_total_labels.get(key, f"{label} Total"),
             "rows": grouped_lines.get(key, []),
         }
         for key, label in NEW_COSTING_CATEGORY_CHOICES
