@@ -483,6 +483,8 @@ def cost_sheet_detail(request, pk):
         opportunity=costing.opportunity,
         doc_type__in=["costing_pdf", "costing_excel", "costing_other"],
     ).order_by("-uploaded_at")
+    audits = costing.audits.select_related("changed_by").all()[:8]
+    snapshots = costing.snapshots.all()[:6]
 
     form = CostingHeaderForm(instance=costing)
     smv_form = CostingSMVForm(instance=_safe_costing_smv(costing))
@@ -498,6 +500,8 @@ def cost_sheet_detail(request, pk):
         "form": form,
         "smv_form": smv_form,
         "documents": documents,
+        "audits": audits,
+        "snapshots": snapshots,
         "document_form": OpportunityDocumentForm(),
         "grouped_lines": grouped_lines,
         "category_sections": category_sections,
@@ -604,6 +608,7 @@ def cost_sheet_export_pdf(request, pk):
     )
 
     try:
+        from reportlab.lib import colors
         from reportlab.lib.pagesizes import letter
         from reportlab.pdfgen import canvas
     except ImportError:
@@ -617,9 +622,19 @@ def cost_sheet_export_pdf(request, pk):
         width, height = letter
         y = height - 50
 
-        p.setFont("Helvetica-Bold", 16)
-        p.drawString(50, y, "Costing Sheet")
-        y -= 22
+        p.setFillColor(colors.HexColor("#111827"))
+        p.rect(0, height - 88, width, 88, fill=1, stroke=0)
+        p.setFillColor(colors.white)
+        p.setFont("Helvetica-Bold", 18)
+        p.drawString(50, height - 44, "ICONIC CRM")
+        p.setFont("Helvetica", 11)
+        p.drawString(50, height - 62, "Professional FOB Quotation")
+        p.setFont("Helvetica-Bold", 12)
+        p.drawRightString(width - 50, height - 44, f"COST-{costing.pk}")
+        p.setFont("Helvetica", 9)
+        p.drawRightString(width - 50, height - 62, timezone.now().strftime("%Y-%m-%d"))
+        p.setFillColor(colors.black)
+        y = height - 116
 
         p.setFont("Helvetica", 10)
         header_lines = [
@@ -629,17 +644,19 @@ def cost_sheet_export_pdf(request, pk):
             f"Product type: {costing.get_product_type_display()}",
             f"Quantity: {costing.order_quantity}",
             f"Factory location: {costing.get_factory_location_display()}",
-            f"Status: {costing.get_status_display()}",
+            f"Approval status: {costing.get_status_display()}",
             f"Currency: {costing.currency}",
-            f"Date: {timezone.now().date()}",
         ]
         for line in header_lines:
             p.drawString(50, y, line)
             y -= 14
 
-        y -= 6
-        p.setFont("Helvetica-Bold", 11)
-        p.drawString(50, y, "Summary")
+        y -= 10
+        p.setFillColor(colors.HexColor("#f3f4f6"))
+        p.rect(45, y - 76, width - 90, 92, fill=1, stroke=0)
+        p.setFillColor(colors.black)
+        p.setFont("Helvetica-Bold", 12)
+        p.drawString(55, y, "FOB Summary")
         y -= 16
         p.setFont("Helvetica", 10)
         summary_lines = [
@@ -648,10 +665,10 @@ def cost_sheet_export_pdf(request, pk):
             f"Profit per piece: {format_bdt(calc['display']['profit_per_piece'])}",
             f"Margin %: {calc['display']['margin_percent']}",
             f"Total cost order: {format_bdt(calc['display']['total_cost_order'])}",
-            f"Total sales order: {format_bdt(calc['display']['total_sales_order'])}",
+            f"Final offer total: {format_bdt(calc['display']['total_final_offer_order'])}",
         ]
         for line in summary_lines:
-            p.drawString(50, y, line)
+            p.drawString(55, y, line)
             y -= 14
 
         y -= 6

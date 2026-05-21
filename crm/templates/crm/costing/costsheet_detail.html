@@ -348,6 +348,8 @@
 
     <div class="costing-hero-actions">
       <a class="btnx" href="#costing-form">Edit</a>
+      <a class="btnx" href="{% url 'cost_sheet_duplicate' costing.pk %}">Duplicate Cost Sheet</a>
+      <button type="button" class="btnx" data-print-fob>Print FOB Quote</button>
       <a class="btnx" href="{% url 'cost_sheet_export_excel' costing.pk %}">Export Excel</a>
       <a class="btnx" href="{% url 'cost_sheet_export_pdf' costing.pk %}">Download PDF</a>
       <a class="btnx" href="{% url 'opportunity_detail' costing.opportunity.pk %}">Open Opportunity</a>
@@ -359,6 +361,29 @@
       {% if can_approve and not is_locked %}
         <button form="approve-form" type="submit" class="btnx btnx-soft">Approve</button>
       {% endif %}
+      <div class="costing-save-state saved" data-save-state>
+        <span data-save-state-dot></span>
+        <strong data-save-state-label>Saved</strong>
+      </div>
+    </div>
+  </section>
+
+  <section class="costing-workflow-strip" aria-label="Costing approval workflow">
+    <div class="workflow-step {% if costing.status == 'draft' %}active{% endif %}">
+      <span>Draft</span>
+      <small>Editable costing</small>
+    </div>
+    <div class="workflow-step">
+      <span>Reviewing</span>
+      <small>Internal review</small>
+    </div>
+    <div class="workflow-step {% if costing.status == 'approved' %}active{% endif %}">
+      <span>Approved</span>
+      <small>Locked after approval</small>
+    </div>
+    <div class="workflow-step">
+      <span>Sent to client</span>
+      <small>Exported quote</small>
     </div>
   </section>
 
@@ -687,18 +712,29 @@
             {{ form.special_trims }}
             <div class="field-help">{{ form.special_trims.help_text }}</div>
           </div>
-          <div style="grid-column: 1 / -1;">
-            <label>Fit / construction remarks</label>
-            {{ form.fit_remarks }}
-            <div class="field-help">{{ form.fit_remarks.help_text }}</div>
-          </div>
-          <div style="grid-column: 1 / -1;">
-            <label>Notes</label>
-            {{ form.notes }}
-            <div class="field-help">{{ form.notes.help_text }}</div>
-          </div>
         </div>
       </details>
+    </div>
+
+    <div class="card costing-form-card">
+      <div class="costing-section-head">
+        <div>
+          <div class="card-title">Costing notes</div>
+          <div class="section-lead">Separate internal costing assumptions from notes that may be useful for the client quotation.</div>
+        </div>
+      </div>
+      <div class="costing-notes-grid">
+        <div>
+          <label>Internal notes</label>
+          {{ form.fit_remarks }}
+          <div class="field-help">Private construction, production, and pricing assumptions for the team.</div>
+        </div>
+        <div>
+          <label>Client notes</label>
+          {{ form.notes }}
+          <div class="field-help">Client-facing quote notes, inclusions, exclusions, or commercial remarks.</div>
+        </div>
+      </div>
     </div>
 
     <div class="card costing-form-card">
@@ -815,7 +851,7 @@
                   <input type="number" step="0.01" data-field="wastage_percent" value="{{ row.wastage_percent }}" placeholder="0">
                 </td>
                 <td>
-                  <output class="line-calculated-cost" data-role="calculated-cost">BDT 0.00</output>
+                  <output class="line-calculated-cost" data-role="calculated-cost" aria-readonly="true">BDT 0.00</output>
                 </td>
                 <td>
                   <div class="line-row-actions">
@@ -873,7 +909,7 @@
             <tfoot>
               <tr class="line-section-total-row">
                 <td colspan="5">{{ section.total_label }}</td>
-                <td><output class="line-section-total" data-section-total="{{ section.key }}">BDT 0.00</output></td>
+                <td><output class="line-section-total" data-section-total="{{ section.key }}" aria-readonly="true">BDT 0.00</output></td>
                 <td></td>
               </tr>
             </tfoot>
@@ -916,6 +952,18 @@
           <div class="smart-suggested-price">
             <span>Suggested Selling Price</span>
             <strong data-smart-selling-price>BDT 0.00</strong>
+          </div>
+        </div>
+
+        <div class="smart-panel-section">
+          <div class="smart-panel-title">Calculation Lock</div>
+          <p class="smart-lock-note">Calculated totals are read only. Edit cost inputs, SMV, margin, or currency to update them.</p>
+        </div>
+
+        <div class="smart-panel-section">
+          <div class="smart-panel-title">Warnings</div>
+          <div class="smart-warning-list" data-smart-warnings>
+            <div class="smart-warning-muted">No live warnings.</div>
           </div>
         </div>
       </aside>
@@ -1108,6 +1156,73 @@
     {% endif %}
   </div>
 
+  <div class="card costing-version-card">
+    <div class="costing-section-head">
+      <div>
+        <div class="card-title">Version history</div>
+        <p class="section-lead">Audit activity and approval snapshots for this costing sheet.</p>
+      </div>
+      <span class="costing-row-count">{{ snapshots|length }} saved versions</span>
+    </div>
+    {% if snapshots %}
+      <div class="costing-version-list">
+        {% for snapshot in snapshots %}
+          <div class="costing-version-item">
+            <strong>Version {{ forloop.revcounter }}</strong>
+            <span>{{ snapshot.source|title }} snapshot</span>
+            <small>{{ snapshot.created_at|date:"M j, Y H:i" }}</small>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="muted">No saved approval versions yet. Approving a costing stores a locked snapshot.</div>
+    {% endif %}
+    {% if audits %}
+      <div class="costing-audit-list">
+        {% for audit in audits %}
+          <div class="costing-audit-item">
+            <strong>{{ audit.get_action_display }}</strong>
+            <span>{% if audit.note %}{{ audit.note }}{% else %}No note{% endif %}</span>
+            <small>{{ audit.changed_at|date:"M j, Y H:i" }}{% if audit.changed_by %} · {{ audit.changed_by.username }}{% endif %}</small>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+
+  <section class="costing-print-quote" aria-label="Printable FOB quotation">
+    <div class="print-quote-header">
+      <div>
+        <div class="print-logo">ICONIC</div>
+        <p>FOB Quotation</p>
+      </div>
+      <div>
+        <strong>COST-{{ costing.pk }}</strong>
+        <span>{{ costing.updated_at|date:"M j, Y" }}</span>
+      </div>
+    </div>
+    <div class="print-quote-grid">
+      <div><span>Customer</span><strong>{% firstof costing.customer.account_brand costing.customer.contact_name costing.brand "Client not set" %}</strong></div>
+      <div><span>Opportunity</span><strong>{{ costing.opportunity.opportunity_id }}</strong></div>
+      <div><span>Style</span><strong>{% firstof costing.style_name costing.style_code "-" %}</strong></div>
+      <div><span>Quantity</span><strong>{{ costing.order_quantity }}</strong></div>
+      <div><span>Status</span><strong>{{ costing.get_status_display }}</strong></div>
+      <div><span>Currency</span><strong>{{ costing.currency }}</strong></div>
+    </div>
+    {% if calc %}
+      <div class="print-quote-summary">
+        <div><span>Total Cost / Pc</span><strong>{{ calc.display.total_cost_per_piece }} BDT</strong></div>
+        <div><span>FOB / Pc</span><strong>{{ calc.display.fob_per_piece }} BDT</strong></div>
+        <div><span>Margin</span><strong>{{ calc.display.margin_percent }}%</strong></div>
+        <div><span>Total Offer</span><strong>{{ calc.display.total_final_offer_order }} BDT</strong></div>
+      </div>
+    {% endif %}
+    <div class="print-quote-notes">
+      <span>Notes</span>
+      <p>{{ costing.notes|default:"-" }}</p>
+    </div>
+  </section>
+
   {% if can_approve and is_locked %}
     <div class="card costing-unlock-card">
       <div class="card-title">Unlock costing</div>
@@ -1275,7 +1390,7 @@
     <td><input type="number" step="0.0001" data-field="consumption_value" value="1" placeholder="1"></td>
     <td><input type="number" step="0.01" data-field="wastage_percent" value="0" placeholder="0"></td>
     <td>
-      <output class="line-calculated-cost" data-role="calculated-cost">BDT 0.00</output>
+      <output class="line-calculated-cost" data-role="calculated-cost" aria-readonly="true">BDT 0.00</output>
     </td>
     <td>
       <div class="line-row-actions">
@@ -1673,6 +1788,40 @@
     if (sellingOutput) {
       sellingOutput.textContent = formatBdt(suggested);
     }
+    syncCostingWarnings(total, suggested);
+  }
+
+  function syncCostingWarnings(totalCost, suggestedPrice) {
+    const warnings = [];
+    document.querySelectorAll('.line-row').forEach((row) => {
+      const itemName = row.querySelector('[data-field="item_name"]')?.value || 'Unnamed row';
+      const unitPrice = numberValue(row, 'unit_price', 0);
+      const consumption = numberValue(row, 'consumption_value', 1);
+      if (itemName.trim() && unitPrice <= 0) {
+        warnings.push(`Zero pricing: ${itemName}`);
+      }
+      if (itemName.trim() && consumption <= 0) {
+        warnings.push(`Missing consumption: ${itemName}`);
+      }
+    });
+    if (suggestedPrice > 0 && totalCost > 0 && suggestedPrice <= totalCost) {
+      warnings.push('Negative margin risk: suggested price is at or below total cost.');
+    }
+    if (!document.querySelectorAll('.line-row').length) {
+      warnings.push('No costing rows entered yet.');
+    }
+
+    const container = document.querySelector('[data-smart-warnings]');
+    if (!container) {
+      return;
+    }
+    if (!warnings.length) {
+      container.innerHTML = '<div class="smart-warning-muted">No live warnings.</div>';
+      return;
+    }
+    container.innerHTML = warnings.slice(0, 6).map((warning) => (
+      `<div class="smart-warning-item">${warning}</div>`
+    )).join('');
   }
 
   function formNumberFromSelector(selector, fallback) {
@@ -1746,6 +1895,7 @@
       syncCalculatedCost(row);
     }
     syncSmartTotals();
+    markDirty();
     row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     return row;
   }
@@ -1801,6 +1951,7 @@
       row.classList.remove('line-row-dragging');
       draggedLineRow = null;
       syncSmartTotals();
+      markDirty();
     });
     const select = row.querySelector('.uom-select');
     if (select) {
@@ -1841,6 +1992,7 @@
         }
         row.remove();
         syncSmartTotals();
+        markDirty();
       });
     }
     const duplicate = row.querySelector('.duplicate-row');
@@ -1878,6 +2030,23 @@
     }
   }
 
+  function setSaveState(state) {
+    const wrapper = document.querySelector('[data-save-state]');
+    const label = document.querySelector('[data-save-state-label]');
+    if (!wrapper || !label) {
+      return;
+    }
+    wrapper.classList.remove('saved', 'saving', 'dirty');
+    wrapper.classList.add(state);
+    label.textContent = state === 'saving' ? 'Saving...' : state === 'dirty' ? 'Unsaved changes' : 'Saved';
+  }
+
+  function markDirty() {
+    if (!costingIsLocked) {
+      setSaveState('dirty');
+    }
+  }
+
   document.querySelectorAll('.garment-template-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const template = garmentTemplates[btn.getAttribute('data-garment-template')];
@@ -1887,6 +2056,7 @@
       Object.entries(template.smv || {}).forEach(([field, value]) => setFormField(field, value));
       (template.rows || []).forEach((rowPreset) => addLineRow(rowPreset.category, rowPreset));
       syncSmartTotals();
+      markDirty();
     });
   });
 
@@ -1929,10 +2099,21 @@
 
   syncSmartRatesFromSheet();
   syncSmartTotals();
+  setSaveState('saved');
+
+  document.querySelectorAll('#costing-form input, #costing-form select, #costing-form textarea').forEach((input) => {
+    input.addEventListener('input', markDirty);
+    input.addEventListener('change', markDirty);
+  });
+
+  document.querySelectorAll('[data-print-fob]').forEach((btn) => {
+    btn.addEventListener('click', () => window.print());
+  });
 
   const form = document.getElementById('costing-form');
   if (form) {
     form.addEventListener('submit', (event) => {
+      setSaveState('saving');
       const rows = [];
       document.querySelectorAll('.line-row').forEach((row, idx) => {
         const data = { category: row.dataset.category, sort_order: idx + 1 };
