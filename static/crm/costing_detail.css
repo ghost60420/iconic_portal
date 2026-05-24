@@ -482,6 +482,10 @@
   box-shadow: 0 0 0 4px rgba(45, 212, 191, 0.1);
 }
 
+.costing-detail .line-row:focus-within td {
+  background: rgba(45, 212, 191, 0.035);
+}
+
 .costing-detail input:disabled,
 .costing-detail select:disabled,
 .costing-detail textarea:disabled {
@@ -818,6 +822,12 @@
   padding: 0 9px;
   font-size: 11px;
   box-shadow: none;
+}
+
+.costing-detail .line-row-actions .btnx:focus-visible,
+.costing-detail .line-preset-btn:focus-visible,
+.costing-detail .garment-template-btn:focus-visible {
+  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.14);
 }
 
 .costing-detail .line-row-actions .drag-row {

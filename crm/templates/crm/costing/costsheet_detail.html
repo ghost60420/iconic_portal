@@ -856,9 +856,9 @@
                 <td>
                   <div class="line-row-actions">
                     <button type="button" class="btnx drag-row" title="Drag to sort">Move</button>
-                    <button type="button" class="btnx btnx-soft duplicate-row">Duplicate</button>
-                    <button type="button" class="btnx btnx-soft toggle-advanced-row" aria-expanded="false">Show Advanced</button>
-                    <button type="button" class="btnx btnx-danger remove-row">Remove</button>
+                    <button type="button" class="btnx btnx-soft duplicate-row" title="Duplicate this row">Duplicate</button>
+                    <button type="button" class="btnx btnx-soft toggle-advanced-row" aria-expanded="false" title="Show advanced fields">Show Advanced</button>
+                    <button type="button" class="btnx btnx-danger remove-row" title="Remove this row">Remove</button>
                   </div>
                 </td>
               </tr>
@@ -916,7 +916,7 @@
           </table>
         </div>
         <div class="line-actions">
-          <button type="button" class="btnx add-row" data-category="{{ section.key }}">Add row</button>
+          <button type="button" class="btnx add-row" data-category="{{ section.key }}" aria-keyshortcuts="Alt+N Control+Enter Meta+Enter" title="Add row">Add row</button>
         </div>
       </div>
     {% endfor %}
@@ -1395,9 +1395,9 @@
     <td>
       <div class="line-row-actions">
         <button type="button" class="btnx drag-row" title="Drag to sort">Move</button>
-        <button type="button" class="btnx btnx-soft duplicate-row">Duplicate</button>
-        <button type="button" class="btnx btnx-soft toggle-advanced-row" aria-expanded="false">Show Advanced</button>
-        <button type="button" class="btnx btnx-danger remove-row">Remove</button>
+        <button type="button" class="btnx btnx-soft duplicate-row" title="Duplicate this row">Duplicate</button>
+        <button type="button" class="btnx btnx-soft toggle-advanced-row" aria-expanded="false" title="Show advanced fields">Show Advanced</button>
+        <button type="button" class="btnx btnx-danger remove-row" title="Remove this row">Remove</button>
       </div>
     </td>
   </tr>
@@ -1874,7 +1874,10 @@
     return data;
   }
 
-  function addLineRow(category, preset) {
+  function addLineRow(category, preset, options = {}) {
+    if (costingIsLocked) {
+      return null;
+    }
     const table = document.querySelector(`table[data-category="${category}"] tbody`);
     const tpl = document.getElementById('line-row-template');
     if (!table || !tpl) {
@@ -1896,7 +1899,10 @@
     }
     syncSmartTotals();
     markDirty();
-    row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    if (options.focus !== false) {
+      row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      focusFirstFieldInRow(row, preset && preset.fields && preset.fields.item_name ? 'unit_price' : 'item_name');
+    }
     return row;
   }
 
@@ -2047,6 +2053,93 @@
     }
   }
 
+  function isVisibleField(input) {
+    if (!input || input.type === 'hidden' || input.disabled || input.readOnly) {
+      return false;
+    }
+    if (input.closest('[hidden]')) {
+      return false;
+    }
+    return Boolean(input.offsetParent) || input === document.activeElement;
+  }
+
+  function isKeyboardField(input) {
+    if (!input || !input.matches('input, select, textarea')) {
+      return false;
+    }
+    if (input.closest('#costing-form') !== form) {
+      return false;
+    }
+    return isVisibleField(input);
+  }
+
+  function getKeyboardFields() {
+    if (!form) {
+      return [];
+    }
+    return Array.from(form.querySelectorAll('input, select, textarea')).filter(isKeyboardField);
+  }
+
+  function focusFirstFieldInRow(row, preferredField = 'item_name') {
+    if (!row) {
+      return false;
+    }
+    const preferred = row.querySelector(`[data-field="${preferredField}"]`);
+    const fallback = Array.from(row.querySelectorAll('[data-field]')).find(isVisibleField);
+    const target = isVisibleField(preferred) ? preferred : fallback;
+    if (!target) {
+      return false;
+    }
+    target.focus({ preventScroll: true });
+    if (target.select && target.tagName !== 'SELECT') {
+      target.select();
+    }
+    return true;
+  }
+
+  function focusNextKeyboardField(current) {
+    const fields = getKeyboardFields();
+    const index = fields.indexOf(current);
+    const next = fields[index + 1] || fields[0];
+    if (next) {
+      next.focus();
+      if (next.select && next.tagName !== 'SELECT') {
+        next.select();
+      }
+    }
+  }
+
+  function getActiveCostingCategory() {
+    const active = document.activeElement;
+    const activeRow = active ? active.closest('.line-row') : null;
+    if (activeRow && activeRow.dataset.category) {
+      return activeRow.dataset.category;
+    }
+    const advancedRow = active ? active.closest('.line-advanced-row') : null;
+    const baseRow = advancedRow ? advancedRow.previousElementSibling : null;
+    if (baseRow && baseRow.classList.contains('line-row') && baseRow.dataset.category) {
+      return baseRow.dataset.category;
+    }
+    const activeTable = active ? active.closest('table[data-category]') : null;
+    if (activeTable) {
+      return activeTable.dataset.category;
+    }
+    const firstTable = document.querySelector('table[data-category]');
+    return firstTable ? firstTable.dataset.category : '';
+  }
+
+  function addKeyboardLineRow() {
+    const category = getActiveCostingCategory();
+    if (!category) {
+      return;
+    }
+    const row = addLineRow(category, null, { focus: false });
+    if (row) {
+      row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      focusFirstFieldInRow(row);
+    }
+  }
+
   document.querySelectorAll('.garment-template-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const template = garmentTemplates[btn.getAttribute('data-garment-template')];
@@ -2054,7 +2147,17 @@
         return;
       }
       Object.entries(template.smv || {}).forEach(([field, value]) => setFormField(field, value));
-      (template.rows || []).forEach((rowPreset) => addLineRow(rowPreset.category, rowPreset));
+      const insertedRows = [];
+      (template.rows || []).forEach((rowPreset) => {
+        const row = addLineRow(rowPreset.category, rowPreset, { focus: false });
+        if (row) {
+          insertedRows.push(row);
+        }
+      });
+      if (insertedRows.length) {
+        insertedRows[0].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        focusFirstFieldInRow(insertedRows[0], 'unit_price');
+      }
       syncSmartTotals();
       markDirty();
     });
@@ -2112,6 +2215,25 @@
 
   const form = document.getElementById('costing-form');
   if (form) {
+    form.addEventListener('keydown', (event) => {
+      const target = event.target;
+      const isFormField = isKeyboardField(target);
+      const plainEnter = event.key === 'Enter' && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey;
+      const rowAddShortcut = event.key === 'Enter' && (event.ctrlKey || event.metaKey) &&
+        !event.shiftKey && !event.altKey && target.closest('.line-table');
+
+      if (plainEnter && isFormField && target.tagName !== 'TEXTAREA') {
+        event.preventDefault();
+        focusNextKeyboardField(target);
+        return;
+      }
+
+      if (rowAddShortcut && !costingIsLocked) {
+        event.preventDefault();
+        addKeyboardLineRow();
+      }
+    });
+
     form.addEventListener('submit', (event) => {
       setSaveState('saving');
       const rows = [];
@@ -2134,6 +2256,31 @@
       document.getElementById('line-payload').value = JSON.stringify(rows);
     });
   }
+
+  document.addEventListener('keydown', (event) => {
+    if (costingIsLocked || event.key.toLowerCase() !== 'n' || !event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+      return;
+    }
+    const target = event.target;
+    if (target && target.closest && target.closest('#costing-form')) {
+      event.preventDefault();
+      addKeyboardLineRow();
+    }
+  });
+
+  window.setTimeout(() => {
+    if (costingIsLocked || window.location.hash || (document.activeElement && document.activeElement !== document.body)) {
+      return;
+    }
+    const firstRow = document.querySelector('.line-row');
+    if (focusFirstFieldInRow(firstRow)) {
+      return;
+    }
+    const firstField = getKeyboardFields()[0];
+    if (firstField) {
+      firstField.focus();
+    }
+  }, 80);
 
   const guideKey = "costingInputGuideOpen";
   const guideBody = document.getElementById("guide-body");
