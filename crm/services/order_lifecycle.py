@@ -1,6 +1,6 @@
 from decimal import Decimal, ROUND_HALF_UP
 
-from django.db.models import Q, Sum
+from django.db.models import F, Q, Sum
 from django.utils import timezone
 
 from crm.models import ActualCostEntry, Invoice, OrderLifecycle, Shipment
@@ -39,7 +39,7 @@ def can_view_lifecycle_profit(user):
         return False
     return any(
         bool(getattr(access, flag, False))
-        for flag in ("can_accounting_ca", "can_accounting_bd", "can_costing", "can_costing_approve")
+        for flag in ("can_accounting_ca", "can_accounting_bd", "can_costing_approve", "can_view_ceo_tools")
     )
 
 
@@ -73,14 +73,22 @@ def _first_existing(**links):
 def _infer_status(lifecycle):
     if lifecycle.status == "cancelled":
         return "cancelled"
+    invoice = lifecycle.invoice
+    production_order = lifecycle.production_order
     shipment = lifecycle.shipping_record
+    if invoice and invoice.status == "cancelled":
+        return "cancelled"
+    if production_order and production_order.status == "closed_lost":
+        return "cancelled"
+    if shipment and shipment.status == "cancelled":
+        return "cancelled"
     if shipment and shipment.status == "delivered":
         return "completed"
     if shipment:
         return "shipping"
-    if lifecycle.production_order_id:
+    if production_order:
         return "production"
-    if lifecycle.invoice_id:
+    if invoice:
         return "invoice"
     if lifecycle.quotation_id:
         return "quotation"
@@ -466,7 +474,7 @@ def lifecycle_dashboard_metrics():
         "active_orders": active.count(),
         "orders_in_costing": active.filter(status="costing").count(),
         "orders_waiting_quotation": active.filter(status="quotation").count(),
-        "orders_waiting_payment": sum(1 for row in active if row.invoice_id and _d(row.invoice.balance) > 0),
+        "orders_waiting_payment": active.filter(invoice__total_amount__gt=F("invoice__paid_amount")).count(),
         "orders_in_production": active.filter(status="production").count(),
         "orders_ready_to_ship": active.filter(status="production", production_order__status__in=["done", "closed_won"]).count(),
         "completed_this_month": lifecycles.filter(status="completed", updated_at__date__gte=month_start).count(),

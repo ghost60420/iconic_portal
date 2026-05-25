@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, render
 
 from .models import OrderLifecycle
@@ -10,6 +11,7 @@ from .services.order_lifecycle import (
 )
 
 
+@login_required
 def order_lifecycle_detail(request, pk):
     lifecycle = get_object_or_404(
         OrderLifecycle.objects.select_related(
@@ -31,7 +33,13 @@ def order_lifecycle_detail(request, pk):
         messages.warning(request, "Lifecycle financials could not be refreshed. Showing last saved values.")
 
     can_view_profit = can_view_lifecycle_profit(request.user)
-    profit_breakdown = build_lifecycle_profit_breakdown(lifecycle) if can_view_profit else None
+    profit_breakdown = None
+    if can_view_profit:
+        try:
+            profit_breakdown = build_lifecycle_profit_breakdown(lifecycle)
+        except Exception:
+            can_view_profit = False
+            messages.warning(request, "Lifecycle profit details could not be loaded.")
     steps = lifecycle_timeline_steps(lifecycle)
 
     return render(
