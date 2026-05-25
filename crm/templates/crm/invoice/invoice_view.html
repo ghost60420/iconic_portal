@@ -186,6 +186,56 @@
     line-height:1.4;
   }
 
+  .internal-profit{
+    margin-bottom:12px;
+    padding:14px;
+    border:1px solid rgba(251,191,36,0.42);
+    border-radius:18px;
+    background:linear-gradient(180deg, rgba(113,63,18,0.40), rgba(15,23,42,0.92));
+    box-shadow:0 16px 36px rgba(0,0,0,0.32);
+  }
+  .internal-profit-title{
+    display:flex;
+    justify-content:space-between;
+    gap:12px;
+    flex-wrap:wrap;
+    margin-bottom:12px;
+    color:#fde68a;
+    font-weight:900;
+  }
+  .internal-profit-title small{
+    color:#fef3c7;
+    font-size:12px;
+    font-weight:800;
+  }
+  .internal-profit-grid{
+    display:grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap:10px;
+  }
+  @media (max-width: 900px){ .internal-profit-grid{ grid-template-columns:1fr; } }
+  .internal-profit-cell{
+    padding:10px 12px;
+    border:1px solid rgba(251,191,36,0.22);
+    border-radius:14px;
+    background:rgba(2,6,23,0.55);
+  }
+  .internal-profit-cell span{
+    display:block;
+    color:var(--muted);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:0.07em;
+  }
+  .internal-profit-cell strong{
+    display:block;
+    margin-top:6px;
+    color:var(--text);
+    font-size:16px;
+    font-weight:900;
+  }
+
   .pay-section{
     margin-top:12px;
   }
@@ -379,6 +429,8 @@
         <a class="pill" href="{% url 'invoice_list' %}">Back to invoices</a>
         {% if invoice.pk %}
           <a class="pill gold" href="{% url 'invoice_edit' invoice.pk %}">Edit</a>
+          <a class="pill" href="{% url 'invoice_client_view' invoice.pk %}">Client invoice</a>
+          <a class="pill" href="{% url 'invoice_pdf' invoice.pk %}">PDF</a>
         {% endif %}
         <a class="pill" href="#" onclick="window.print();return false;">Print</a>
       </div>
@@ -413,6 +465,47 @@
         </div>
       </div>
     {% endwith %}
+
+    {% if can_manage_invoice_costing %}
+      <div class="internal-profit noPrint">
+        <div class="internal-profit-title">
+          <span>Internal Profit Estimate</span>
+          <small>Internal only. Hidden from client invoice and PDF.</small>
+        </div>
+        <div class="internal-profit-grid">
+          <div class="internal-profit-cell">
+            <span>Invoice Total</span>
+            <strong>{% if cur %}{{ cur }} {% endif %}{{ invoice.total_amount|default_if_none:0|floatformat:2|intcomma }}</strong>
+          </div>
+          <div class="internal-profit-cell">
+            <span>Sewing Charge</span>
+            <strong>{% if cur %}{{ cur }} {% endif %}{{ invoice.sewing_charge|default_if_none:0|floatformat:2|intcomma }}</strong>
+          </div>
+          <div class="internal-profit-cell">
+            <span>Other Internal Cost</span>
+            <strong>{% if cur %}{{ cur }} {% endif %}{{ invoice.other_internal_cost|default_if_none:0|floatformat:2|intcomma }}</strong>
+          </div>
+          <div class="internal-profit-cell">
+            <span>Total Internal Cost</span>
+            <strong>{% if cur %}{{ cur }} {% endif %}{{ invoice.total_internal_cost|default_if_none:0|floatformat:2|intcomma }}</strong>
+          </div>
+          <div class="internal-profit-cell">
+            <span>Estimated Gross Profit</span>
+            <strong>{% if cur %}{{ cur }} {% endif %}{{ invoice.estimated_gross_profit|default_if_none:0|floatformat:2|intcomma }}</strong>
+          </div>
+          <div class="internal-profit-cell">
+            <span>Estimated Profit Margin</span>
+            <strong>{{ invoice.estimated_profit_margin|default_if_none:0|floatformat:2 }}%</strong>
+          </div>
+        </div>
+        {% if invoice.internal_cost_note %}
+          <div class="note">
+            <div style="margin-bottom:6px; color:#fde68a; font-weight:900;">Internal cost note</div>
+            {{ invoice.internal_cost_note }}
+          </div>
+        {% endif %}
+      </div>
+    {% endif %}
 
     <div class="cardx pay-section noPrint" id="payment-received-form">
       <div class="pad">

@@ -935,6 +935,9 @@ class InvoiceForm(forms.ModelForm):
             "paid_amount",
             "status",
             "notes",
+            "sewing_charge",
+            "other_internal_cost",
+            "internal_cost_note",
         ]
         widgets = {
             "invoice_number": forms.TextInput(attrs={"class": "form-control", "placeholder": "Auto if blank"}),
@@ -947,9 +950,13 @@ class InvoiceForm(forms.ModelForm):
             "total_amount": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0", "readonly": "readonly"}),
             "paid_amount": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0"}),
             "notes": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
+            "sewing_charge": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0"}),
+            "other_internal_cost": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0"}),
+            "internal_cost_note": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
         }
 
     def __init__(self, *args, **kwargs):
+        can_edit_internal_costs = kwargs.pop("can_edit_internal_costs", False)
         super().__init__(*args, **kwargs)
 
         if "invoice_number" in self.fields:
@@ -961,6 +968,14 @@ class InvoiceForm(forms.ModelForm):
 
         if "status" in self.fields:
             self.fields["status"].required = False
+
+        if can_edit_internal_costs:
+            for field_name in ("sewing_charge", "other_internal_cost", "internal_cost_note"):
+                if field_name in self.fields:
+                    self.fields[field_name].required = False
+        else:
+            for field_name in ("sewing_charge", "other_internal_cost", "internal_cost_note"):
+                self.fields.pop(field_name, None)
 
     def _clean_money(self, field_name):
         v = self.cleaned_data.get(field_name)
@@ -985,6 +1000,12 @@ class InvoiceForm(forms.ModelForm):
 
     def clean_paid_amount(self):
         return self._clean_money("paid_amount")
+
+    def clean_sewing_charge(self):
+        return self._clean_money("sewing_charge")
+
+    def clean_other_internal_cost(self):
+        return self._clean_money("other_internal_cost")
 
 
 class InvoicePaymentForm(forms.ModelForm):

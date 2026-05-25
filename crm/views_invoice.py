@@ -1,10 +1,14 @@
 # crm/views_invoice.py
 
+import io
 from decimal import Decimal
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.staticfiles import finders
 from django.db import transaction
 from django.db.models import F, Q, Sum
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.dateparse import parse_date
 from django.utils import timezone
@@ -24,8 +28,39 @@ from .models import (
 from .forms import InvoiceForm, InvoicePaymentForm
 
 
+DEFAULT_INVOICE_TERMS = """For bulk orders, 50% advance confirms the order and 50% is due before shipment.
+
+For samples, 100% payment is required before development begins.
+
+Production starts after payment is cleared.
+
+Any change after approval may affect price and timeline.
+
+Shipping time may vary due to courier, customs, or international delay.
+
+Import duties and local taxes are the buyer's responsibility unless agreed otherwise.
+
+Any issue must be reported within 5 days of receiving goods.
+
+All agreements are governed under the laws of British Columbia, Canada."""
+
+
+def can_manage_invoices(user):
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    if user.is_staff:
+        return True
+    try:
+        access = user.access
+    except Exception:
+        return False
+    return bool(getattr(access, "can_accounting_ca", False) or getattr(access, "can_accounting_bd", False))
+
+
 def superuser_only(user):
-    return bool(user and user.is_superuser)
+    return can_manage_invoices(user)
 
 
 def _d(v):
@@ -261,6 +296,121 @@ def _next_invoice_number() -> str:
         cand = f"{prefix}{n:05d}"
 
     return cand
+
+
+def _invoice_region(inv: Invoice) -> str:
+    region = (getattr(inv, "invoice_region", "") or "").upper().strip()
+    if region in {"CA", "BD"}:
+        return region
+
+    customer = getattr(inv, "customer", None)
+    country = (getattr(customer, "country", "") or "").lower().strip() if customer else ""
+    if country in {"bd", "bangladesh"} or "bangladesh" in country:
+        return "BD"
+    if country in {"ca", "canada"} or "canada" in country:
+        return "CA"
+
+    return "BD" if (getattr(inv, "currency", "") or "").upper().strip() == "BDT" else "CA"
+
+
+def _invoice_company(region: str) -> dict:
+    region = "BD" if region == "BD" else "CA"
+    return {
+        "name": getattr(settings, "INVOICE_COMPANY_NAME", "Iconic Apparel House"),
+        "email": getattr(settings, "INVOICE_COMPANY_EMAIL", "info@iconicapparelhouse.com"),
+        "phone": getattr(settings, "INVOICE_COMPANY_PHONE", "604-500-6009"),
+        "website": getattr(settings, "INVOICE_COMPANY_WEBSITE", "iconicapparelhouse.com"),
+        "logo_path": getattr(settings, "INVOICE_LOGO_PATH", "img/image.png"),
+        "office_label": "Bangladesh" if region == "BD" else "Canada",
+        "address": getattr(settings, f"INVOICE_ADDRESS_{region}", ""),
+        "tax_label": getattr(settings, f"INVOICE_TAX_LABEL_{region}", ""),
+        "tax_id": getattr(settings, f"INVOICE_TAX_ID_{region}", ""),
+    }
+
+
+def _invoice_policy_text(inv: Invoice) -> str:
+    override = (getattr(inv, "terms_override", "") or "").strip()
+    return override or DEFAULT_INVOICE_TERMS
+
+
+def _invoice_payment_status(inv: Invoice) -> dict:
+    key = getattr(inv, "payment_status_key", "unpaid")
+    notes = {
+        "unpaid": "Payment has not been received yet.",
+        "partial": "Partial payment has been received.",
+        "paid": "Payment is complete.",
+        "overpaid": "Received amount is higher than the invoice total.",
+    }
+    return {
+        "key": key,
+        "label": getattr(inv, "payment_status_label", "Unpaid"),
+        "note": notes.get(key, "Payment status is being reviewed."),
+        "paid": _d(getattr(inv, "paid_amount", Decimal("0"))),
+        "balance": _d(getattr(inv, "balance", Decimal("0"))),
+    }
+
+
+def _invoice_line_items(inv: Invoice) -> list[dict]:
+    order = getattr(inv, "order", None)
+    subtotal = _d(getattr(inv, "subtotal", Decimal("0")))
+    qty = _d(getattr(order, "qty_total", Decimal("0"))) if order else Decimal("0")
+    rate = Decimal("0")
+    if qty > 0 and subtotal > 0:
+        rate = (subtotal / qty).quantize(Decimal("0.01"))
+
+    description = "Apparel production"
+    detail_parts = []
+    if order:
+        description = getattr(order, "title", "") or getattr(order, "style_name", "") or getattr(order, "order_code", "") or description
+        if getattr(order, "style_name", ""):
+            detail_parts.append(f"Style: {order.style_name}")
+        if getattr(order, "color_info", ""):
+            detail_parts.append(f"Color: {order.color_info}")
+        if getattr(order, "order_code", ""):
+            detail_parts.append(f"Order code: {order.order_code}")
+
+    rows = [
+        {
+            "description": description,
+            "qty": qty,
+            "rate": rate,
+            "amount": subtotal,
+            "has_qty": qty > 0,
+            "has_rate": rate > 0,
+            "has_amount": subtotal > 0,
+            "is_detail": False,
+        }
+    ]
+    if detail_parts:
+        rows.append(
+            {
+                "description": " | ".join(detail_parts),
+                "qty": Decimal("0"),
+                "rate": Decimal("0"),
+                "amount": Decimal("0"),
+                "has_qty": False,
+                "has_rate": False,
+                "has_amount": False,
+                "is_detail": True,
+            }
+        )
+    return rows
+
+
+def _invoice_client_context(inv: Invoice, user=None) -> dict:
+    region = _invoice_region(inv)
+    return {
+        "invoice": inv,
+        "company": _invoice_company(region),
+        "line_items": _invoice_line_items(inv),
+        "payment_status": _invoice_payment_status(inv),
+        "policy_text": _invoice_policy_text(inv),
+        "can_approve_invoice": can_manage_invoices(user),
+    }
+
+
+def _invoice_client_template(inv: Invoice) -> str:
+    return "crm/invoice/invoice_bd.html" if _invoice_region(inv) == "BD" else "crm/invoice/invoice_ca.html"
 
 
 @login_required
@@ -601,7 +751,7 @@ def invoice_add(request):
             order = None
 
     if request.method == "POST":
-        form = InvoiceForm(request.POST)
+        form = InvoiceForm(request.POST, can_edit_internal_costs=can_manage_invoices(request.user))
         if form.is_valid():
             with transaction.atomic():
                 inv = form.save(commit=False)
@@ -628,9 +778,13 @@ def invoice_add(request):
             messages.success(request, "Invoice created.")
             return redirect("invoice_view", pk=inv.pk)
     else:
-        form = InvoiceForm(initial=initial)
+        form = InvoiceForm(initial=initial, can_edit_internal_costs=can_manage_invoices(request.user))
 
-    return render(request, "crm/invoice/invoice_form.html", {"form": form, "mode": "add"})
+    return render(
+        request,
+        "crm/invoice/invoice_form.html",
+        {"form": form, "mode": "add", "can_manage_invoice_costing": can_manage_invoices(request.user)},
+    )
 
 
 @login_required
@@ -638,7 +792,7 @@ def invoice_add(request):
 def invoice_add_ca(request):
     # wrapper to force CAD
     if request.method == "POST":
-        form = InvoiceForm(request.POST)
+        form = InvoiceForm(request.POST, can_edit_internal_costs=can_manage_invoices(request.user))
         if form.is_valid():
             with transaction.atomic():
                 inv = form.save(commit=False)
@@ -659,8 +813,12 @@ def invoice_add_ca(request):
             messages.success(request, "Invoice created.")
             return redirect("invoice_view", pk=inv.pk)
     else:
-        form = InvoiceForm(initial={"currency": "CAD"})
-    return render(request, "crm/invoice/invoice_form.html", {"form": form, "mode": "add"})
+        form = InvoiceForm(initial={"currency": "CAD"}, can_edit_internal_costs=can_manage_invoices(request.user))
+    return render(
+        request,
+        "crm/invoice/invoice_form.html",
+        {"form": form, "mode": "add", "can_manage_invoice_costing": can_manage_invoices(request.user)},
+    )
 
 
 @login_required
@@ -668,7 +826,7 @@ def invoice_add_ca(request):
 def invoice_add_bd(request):
     # wrapper to force BDT
     if request.method == "POST":
-        form = InvoiceForm(request.POST)
+        form = InvoiceForm(request.POST, can_edit_internal_costs=can_manage_invoices(request.user))
         if form.is_valid():
             with transaction.atomic():
                 inv = form.save(commit=False)
@@ -689,8 +847,12 @@ def invoice_add_bd(request):
             messages.success(request, "Invoice created.")
             return redirect("invoice_view", pk=inv.pk)
     else:
-        form = InvoiceForm(initial={"currency": "BDT"})
-    return render(request, "crm/invoice/invoice_form.html", {"form": form, "mode": "add"})
+        form = InvoiceForm(initial={"currency": "BDT"}, can_edit_internal_costs=can_manage_invoices(request.user))
+    return render(
+        request,
+        "crm/invoice/invoice_form.html",
+        {"form": form, "mode": "add", "can_manage_invoice_costing": can_manage_invoices(request.user)},
+    )
 
 
 @login_required
@@ -699,7 +861,7 @@ def invoice_edit(request, pk):
     inv = get_object_or_404(Invoice, pk=pk)
 
     if request.method == "POST":
-        form = InvoiceForm(request.POST, instance=inv)
+        form = InvoiceForm(request.POST, instance=inv, can_edit_internal_costs=can_manage_invoices(request.user))
         if form.is_valid():
             with transaction.atomic():
                 inv2 = form.save(commit=False)
@@ -720,12 +882,12 @@ def invoice_edit(request, pk):
             messages.success(request, "Invoice updated.")
             return redirect("invoice_view", pk=inv.pk)
     else:
-        form = InvoiceForm(instance=inv)
+        form = InvoiceForm(instance=inv, can_edit_internal_costs=can_manage_invoices(request.user))
 
     return render(
         request,
         "crm/invoice/invoice_form.html",
-        {"form": form, "mode": "edit", "invoice": inv},
+        {"form": form, "mode": "edit", "invoice": inv, "can_manage_invoice_costing": can_manage_invoices(request.user)},
     )
 
 
@@ -759,8 +921,257 @@ def invoice_view(request, pk):
             "payment_total": payment_total,
             "legacy_paid_amount": legacy_paid_amount,
             "is_payment_month_closed": _is_accounting_month_closed(timezone.localdate(), _invoice_payment_side(inv)),
+            "can_manage_invoice_costing": can_manage_invoices(request.user),
         },
     )
+
+
+@login_required
+@user_passes_test(superuser_only)
+def invoice_client_view(request, pk):
+    inv = get_object_or_404(Invoice.objects.select_related("order", "customer"), pk=pk)
+    return render(request, _invoice_client_template(inv), _invoice_client_context(inv, request.user))
+
+
+def _pdf_money(currency: str, amount) -> str:
+    return f"{currency} {_d(amount):,.2f}" if currency else f"{_d(amount):,.2f}"
+
+
+def _pdf_text_lines(pdf, text: str, max_width: int, font_name: str, font_size: int) -> list[str]:
+    words = (text or "").split()
+    if not words:
+        return [""]
+
+    lines = []
+    current = ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if pdf.stringWidth(candidate, font_name, font_size) <= max_width:
+            current = candidate
+        else:
+            if current:
+                lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines
+
+
+@login_required
+@user_passes_test(superuser_only)
+def invoice_pdf(request, pk):
+    inv = get_object_or_404(Invoice.objects.select_related("order", "customer"), pk=pk)
+
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.utils import ImageReader
+        from reportlab.pdfgen import canvas
+    except ImportError:
+        messages.error(request, "PDF export is unavailable. Please install ReportLab.")
+        return redirect("invoice_client_view", pk=pk)
+
+    context = _invoice_client_context(inv, request.user)
+    company = context["company"]
+    payment_status = context["payment_status"]
+    line_items = context["line_items"]
+    currency = getattr(inv, "currency", "") or ""
+
+    buffer = io.BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=letter, pageCompression=0)
+    width, height = letter
+    left = 46
+    right = width - 46
+    y = height - 44
+
+    def ensure_space(required):
+        nonlocal y
+        if y < required:
+            pdf.showPage()
+            y = height - 46
+
+    pdf.setFillColor(colors.HexColor("#111827"))
+    pdf.rect(0, height - 104, width, 104, fill=1, stroke=0)
+
+    logo_path = company.get("logo_path") or ""
+    logo_file = finders.find(logo_path) if logo_path else ""
+    if logo_file:
+        try:
+            pdf.drawImage(ImageReader(logo_file), left, height - 92, width=54, height=54, preserveAspectRatio=True, mask="auto")
+        except Exception:
+            logo_file = ""
+
+    pdf.setFillColor(colors.white)
+    pdf.setFont("Helvetica-Bold", 18)
+    pdf.drawString(left + 66 if logo_file else left, height - 60, company["name"])
+    pdf.setFont("Helvetica", 9)
+    meta_start = left + 66 if logo_file else left
+    pdf.drawString(meta_start, height - 76, "Professional apparel manufacturing invoice")
+
+    pdf.setFont("Helvetica-Bold", 18)
+    pdf.drawRightString(right, height - 58, "INVOICE")
+    pdf.setFont("Helvetica", 9)
+    pdf.drawRightString(right, height - 76, f"Invoice # {inv.invoice_number or ''}")
+
+    y = height - 132
+    pdf.setFillColor(colors.HexColor("#111827"))
+    pdf.setFont("Helvetica-Bold", 10)
+    pdf.drawString(left, y, "From")
+    pdf.drawString(width / 2 + 12, y, "Invoice Details")
+    y -= 15
+
+    pdf.setFont("Helvetica", 9)
+    company_lines = [
+        company.get("name", ""),
+        company.get("address", ""),
+        " | ".join(part for part in [company.get("phone", ""), company.get("email", "")] if part),
+        company.get("website", ""),
+    ]
+    detail_lines = [
+        f"Issue date: {inv.issue_date:%Y-%m-%d}" if inv.issue_date else "Issue date: -",
+        f"Due date: {inv.due_date:%Y-%m-%d}" if inv.due_date else "Due date: -",
+        f"Currency: {currency or '-'}",
+        f"Payment status: {payment_status['label']}",
+    ]
+    row_y = y
+    for line in [line for line in company_lines if line]:
+        pdf.drawString(left, row_y, line[:84])
+        row_y -= 12
+    row_y = y
+    for line in detail_lines:
+        pdf.drawString(width / 2 + 12, row_y, line)
+        row_y -= 12
+    y -= 70
+
+    ensure_space(120)
+    pdf.setFont("Helvetica-Bold", 10)
+    pdf.drawString(left, y, "Bill To")
+    y -= 15
+    pdf.setFont("Helvetica", 9)
+    customer = inv.customer
+    customer_lines = []
+    if customer:
+        customer_lines = [
+            getattr(customer, "account_brand", "") or getattr(customer, "contact_name", "") or "Customer",
+            getattr(customer, "contact_name", ""),
+            getattr(customer, "email", ""),
+            getattr(customer, "phone", ""),
+            getattr(customer, "address_line1", ""),
+            getattr(customer, "address_line2", ""),
+            " ".join(
+                part
+                for part in [
+                    getattr(customer, "city", ""),
+                    getattr(customer, "state", "") or getattr(customer, "province", ""),
+                    getattr(customer, "postal_code", ""),
+                    getattr(customer, "country", ""),
+                ]
+                if part
+            ),
+        ]
+    else:
+        customer_lines = ["Customer not set."]
+    for line in [line for line in customer_lines if line]:
+        pdf.drawString(left, y, line[:100])
+        y -= 12
+
+    y -= 14
+    ensure_space(180)
+    pdf.setFillColor(colors.HexColor("#f8fafc"))
+    pdf.rect(left, y - 22, right - left, 24, fill=1, stroke=0)
+    pdf.setFillColor(colors.HexColor("#111827"))
+    pdf.setFont("Helvetica-Bold", 9)
+    pdf.drawString(left + 8, y - 14, "Description")
+    pdf.drawRightString(right - 198, y - 14, "Qty")
+    pdf.drawRightString(right - 112, y - 14, "Rate")
+    pdf.drawRightString(right - 8, y - 14, "Amount")
+    y -= 30
+
+    pdf.setFont("Helvetica", 9)
+    for item in line_items:
+        ensure_space(110)
+        if item.get("is_detail"):
+            pdf.setFillColor(colors.HexColor("#64748b"))
+            pdf.setFont("Helvetica", 8)
+        else:
+            pdf.setFillColor(colors.HexColor("#111827"))
+            pdf.setFont("Helvetica", 9)
+        desc_lines = _pdf_text_lines(pdf, item["description"], 255, pdf._fontname, pdf._fontsize)
+        start_y = y
+        for desc_line in desc_lines:
+            pdf.drawString(left + 8, y, desc_line)
+            y -= 11
+        if not item.get("is_detail"):
+            pdf.drawRightString(right - 198, start_y, f"{item['qty']:,.0f}" if item.get("has_qty") else "-")
+            pdf.drawRightString(right - 112, start_y, _pdf_money(currency, item["rate"]) if item.get("has_rate") else "-")
+            pdf.drawRightString(right - 8, start_y, _pdf_money(currency, item["amount"]) if item.get("has_amount") else "-")
+        pdf.setStrokeColor(colors.HexColor("#e2e8f0"))
+        pdf.line(left, y - 2, right, y - 2)
+        y -= 8
+
+    y -= 8
+    summary_x = right - 210
+    summary_rows = [
+        ("Subtotal", inv.subtotal),
+        ("Shipping", inv.shipping_amount),
+        ("Discount", inv.discount_amount),
+        ("Tax", inv.tax_amount),
+        ("Grand total", inv.total_amount),
+        ("Amount paid", inv.paid_amount),
+        ("Balance due", inv.balance),
+    ]
+    for label, amount in summary_rows:
+        ensure_space(80)
+        is_total = label in {"Grand total", "Balance due"}
+        pdf.setFont("Helvetica-Bold" if is_total else "Helvetica", 10 if is_total else 9)
+        pdf.drawString(summary_x, y, label)
+        pdf.drawRightString(right, y, _pdf_money(currency, amount))
+        y -= 15
+
+    y -= 8
+    ensure_space(130)
+    pdf.setFillColor(colors.HexColor("#fef3c7"))
+    pdf.roundRect(left, y - 28, right - left, 34, 7, fill=1, stroke=0)
+    pdf.setFillColor(colors.HexColor("#111827"))
+    pdf.setFont("Helvetica-Bold", 10)
+    pdf.drawString(left + 12, y - 8, f"Payment status: {payment_status['label']}")
+    pdf.setFont("Helvetica", 9)
+    pdf.drawString(left + 12, y - 21, payment_status["note"][:110])
+    y -= 56
+
+    if inv.notes:
+        ensure_space(100)
+        pdf.setFont("Helvetica-Bold", 10)
+        pdf.drawString(left, y, "Notes")
+        y -= 14
+        pdf.setFont("Helvetica", 9)
+        for line in _pdf_text_lines(pdf, inv.notes, int(right - left), "Helvetica", 9):
+            ensure_space(60)
+            pdf.drawString(left, y, line)
+            y -= 12
+        y -= 10
+
+    ensure_space(160)
+    pdf.setFont("Helvetica-Bold", 10)
+    pdf.drawString(left, y, "Terms and Conditions")
+    y -= 14
+    pdf.setFont("Helvetica", 8)
+    for paragraph in (context["policy_text"] or "").splitlines():
+        if not paragraph.strip():
+            y -= 5
+            continue
+        for line in _pdf_text_lines(pdf, paragraph.strip(), int(right - left), "Helvetica", 8):
+            ensure_space(50)
+            pdf.drawString(left, y, line)
+            y -= 11
+
+    pdf.showPage()
+    pdf.save()
+
+    filename = f"invoice_{inv.invoice_number or inv.pk}.pdf"
+    response = HttpResponse(buffer.getvalue(), content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
 
 
 @login_required
@@ -789,6 +1200,7 @@ def invoice_payment_add(request, pk):
                 "payment_total": payment_total,
                 "legacy_paid_amount": legacy_paid_amount,
                 "is_payment_month_closed": _is_accounting_month_closed(timezone.localdate(), _invoice_payment_side(inv)),
+                "can_manage_invoice_costing": can_manage_invoices(request.user),
             },
         )
 
@@ -818,6 +1230,7 @@ def invoice_payment_add(request, pk):
                 "payment_total": payment_total,
                 "legacy_paid_amount": legacy_paid_amount,
                 "is_payment_month_closed": True,
+                "can_manage_invoice_costing": can_manage_invoices(request.user),
             },
         )
 

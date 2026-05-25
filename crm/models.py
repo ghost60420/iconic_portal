@@ -3273,6 +3273,9 @@ class Invoice(models.Model):
     )
 
     notes = models.TextField(blank=True)
+    sewing_charge = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
+    other_internal_cost = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
+    internal_cost_note = models.TextField(blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -3286,6 +3289,32 @@ class Invoice(models.Model):
     @property
     def balance(self):
         return (self.total_amount or Decimal("0")) - (self.paid_amount or Decimal("0"))
+
+    @staticmethod
+    def _decimal_or_zero(value):
+        if value in ("", None):
+            return Decimal("0")
+        if isinstance(value, Decimal):
+            return value
+        try:
+            return Decimal(str(value))
+        except Exception:
+            return Decimal("0")
+
+    @property
+    def total_internal_cost(self):
+        return self._decimal_or_zero(self.sewing_charge) + self._decimal_or_zero(self.other_internal_cost)
+
+    @property
+    def estimated_gross_profit(self):
+        return self._decimal_or_zero(self.total_amount) - self.total_internal_cost
+
+    @property
+    def estimated_profit_margin(self):
+        total = self._decimal_or_zero(self.total_amount)
+        if total <= 0:
+            return Decimal("0")
+        return (self.estimated_gross_profit / total) * Decimal("100")
 
     @property
     def payment_status_key(self):

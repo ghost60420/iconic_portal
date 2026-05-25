@@ -14,6 +14,9 @@
     --good:#22c55e;
   }
 
+  .crm-topbar{ display:none !important; }
+  .crm-wrapper{ padding:24px 20px 40px !important; }
+
   .invoice-wrap{
     max-width:1120px;
     margin:0 auto;
@@ -117,6 +120,23 @@
   }
 
   .badge.approved{ color:#065f46; border-color:#86efac; }
+
+  .status-pill{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:4px 9px;
+    border-radius:999px;
+    font-size:11px;
+    font-weight:900;
+    border:1px solid var(--line);
+    background:#f8fafc;
+    color:var(--ink);
+  }
+  .status-paid{ color:#065f46; border-color:#86efac; background:#f0fdf4; }
+  .status-partial{ color:#92400e; border-color:#fde68a; background:#fffbeb; }
+  .status-unpaid{ color:#334155; }
+  .status-overpaid{ color:#9f1239; border-color:#fecdd3; background:#fff1f2; }
 
   .meta-title{
     font-size:20px;
@@ -261,6 +281,7 @@
       {% if invoice.invoice_status != "APPROVED" %}
         <a class="pill gold" href="{% url 'invoice_edit' invoice.pk %}">Edit</a>
       {% endif %}
+      <a class="pill" href="{% url 'invoice_pdf' invoice.pk %}">Download PDF</a>
       {% if invoice.invoice_status == "DRAFT" and can_approve_invoice %}
         <form method="post" action="{% url 'invoice_approve' invoice.pk %}">
           {% csrf_token %}
@@ -309,7 +330,7 @@
           <div class="meta-row"><span>Due date</span><span>{% if invoice.due_date %}{{ invoice.due_date|date:"Y-m-d" }}{% else %}-{% endif %}</span></div>
           <div class="meta-row"><span>Currency</span><span>{{ cur|default:"-" }}</span></div>
           <div class="meta-row"><span>Invoice status</span><span>{{ invoice.get_invoice_status_display }}</span></div>
-          <div class="meta-row"><span>Payment status</span><span>{{ invoice.status|capfirst }}</span></div>
+          <div class="meta-row"><span>Payment status</span><span class="status-pill status-{{ payment_status.key }}">{{ payment_status.label }}</span></div>
         </div>
       </div>
 
@@ -408,15 +429,15 @@
               <td>{{ cur }} {{ invoice.tax_amount|default_if_none:0|floatformat:2|intcomma }}</td>
             </tr>
             <tr>
-              <td class="label total">Total</td>
+              <td class="label total">Grand total</td>
               <td class="total">{{ cur }} {{ invoice.total_amount|default_if_none:0|floatformat:2|intcomma }}</td>
             </tr>
             <tr>
-              <td class="label">Paid</td>
+              <td class="label">Amount paid</td>
               <td>{{ cur }} {{ invoice.paid_amount|default_if_none:0|floatformat:2|intcomma }}</td>
             </tr>
             <tr>
-              <td class="label">Balance</td>
+              <td class="label">Balance due</td>
               <td>{{ cur }} {{ invoice.balance|default_if_none:0|floatformat:2|intcomma }}</td>
             </tr>
           </table>
@@ -436,6 +457,13 @@
         {% endif %}
 
         <div class="foot-note">Remittance details will be shared separately by our accounts team.</div>
+
+        {% if policy_text %}
+          <div class="notes">
+            <strong>Terms and Conditions</strong><br>
+            {{ policy_text|linebreaksbr }}
+          </div>
+        {% endif %}
       </div>
     </div>
   </div>
