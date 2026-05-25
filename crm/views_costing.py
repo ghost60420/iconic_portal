@@ -4,12 +4,14 @@ import logging
 from collections import defaultdict
 from decimal import Decimal
 
+from django.conf import settings
 from django.contrib import messages
 from django.core.files.base import ContentFile
 from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from .forms_costing import CostingHeaderForm, CostingSMVForm, OpportunityDocumentForm
 from .models import (
@@ -25,9 +27,33 @@ from .models import (
 )
 from .services.costing_currency import format_bdt
 from .services.costing_engine import compute_costing, validate_costing
+from .services.costing_workflow import (
+    CostingWorkflowError,
+    convert_costing_to_quotation,
+    create_invoice_from_costing,
+    get_costing_quote_amounts,
+)
+from .services.order_lifecycle import create_lifecycle_from_costing
 
 
 logger = logging.getLogger(__name__)
+
+
+DEFAULT_QUOTATION_TERMS = """For bulk orders, 50% advance confirms the order and 50% is due before shipment.
+
+For samples, 100% payment is required before development begins.
+
+Production starts after payment is cleared.
+
+Any change after approval may affect price and timeline.
+
+Shipping time may vary due to courier, customs, or international delay.
+
+Import duties and local taxes are the buyer's responsibility unless agreed otherwise.
+
+Any issue must be reported within 5 days of receiving goods.
+
+All agreements are governed under the laws of British Columbia, Canada."""
 
 
 def _can_approve(user):
@@ -37,6 +63,70 @@ def _can_approve(user):
         return True
     access = getattr(user, "access", None)
     return bool(access and access.can_costing_approve)
+
+
+def _can_convert_to_invoice(user):
+    return bool(user and user.is_authenticated and user.is_superuser)
+
+
+def _quotation_company():
+    return {
+        "name": getattr(settings, "INVOICE_COMPANY_NAME", "Iconic Apparel House"),
+        "email": getattr(settings, "INVOICE_COMPANY_EMAIL", "info@iconicapparelhouse.com"),
+        "phone": getattr(settings, "INVOICE_COMPANY_PHONE", "604-500-6009"),
+        "website": getattr(settings, "INVOICE_COMPANY_WEBSITE", "iconicapparelhouse.com"),
+        "address": getattr(settings, "INVOICE_ADDRESS_CA", ""),
+    }
+
+
+def _quotation_context(costing, user=None):
+    amounts = get_costing_quote_amounts(costing)
+    return {
+        "costing": costing,
+        "amounts": amounts,
+        "company": _quotation_company(),
+        "terms": DEFAULT_QUOTATION_TERMS,
+        "can_convert_to_invoice": _can_convert_to_invoice(user),
+    }
+
+
+def _workflow_context(costing, user=None):
+    invoice = costing.invoices.select_related("order").order_by("-created_at", "-id").first()
+    production_order = None
+    if invoice and invoice.order_id:
+        production_order = invoice.order
+    if not production_order:
+        production_order = costing.production_orders.order_by("-created_at", "-id").first()
+    lifecycle = costing.order_lifecycles_as_quotation.order_by("-updated_at", "-id").first()
+    if not lifecycle:
+        lifecycle = costing.order_lifecycles_as_costing.order_by("-updated_at", "-id").first()
+    return {
+        "is_quotation": bool(costing.quotation_number and costing.quoted_at),
+        "invoice": invoice,
+        "production_order": production_order,
+        "lifecycle": lifecycle,
+        "can_convert_to_invoice": _can_convert_to_invoice(user),
+    }
+
+
+def _pdf_lines(pdf, text, max_width, font_name="Helvetica", font_size=9):
+    words = (text or "").split()
+    if not words:
+        return [""]
+
+    lines = []
+    current = ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if pdf.stringWidth(candidate, font_name, font_size) <= max_width:
+            current = candidate
+        else:
+            if current:
+                lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines
 
 
 def _safe_costing_smv(costing):
@@ -272,6 +362,7 @@ def cost_sheet_create(request, opportunity_id=None):
             if opportunity:
                 costing.opportunity = opportunity
             costing.save()
+            create_lifecycle_from_costing(costing, user=request.user)
             CostingAuditLog.objects.create(
                 costing=costing,
                 action="created",
@@ -343,6 +434,7 @@ def cost_sheet_detail(request, pk):
                 calc = compute_costing(header.id)
                 if calc:
                     _update_opportunity_summary(header, calc)
+                create_lifecycle_from_costing(header, user=request.user)
 
                 CostingAuditLog.objects.create(
                     costing=header,
@@ -384,6 +476,7 @@ def cost_sheet_detail(request, pk):
             costing.approved_by = request.user if request.user.is_authenticated else None
             costing.approved_at = timezone.now()
             costing.save(update_fields=["status", "approved_by", "approved_at"])
+            create_lifecycle_from_costing(costing, user=request.user)
 
             if calc:
                 _update_opportunity_summary(costing, calc)
@@ -509,8 +602,213 @@ def cost_sheet_detail(request, pk):
         "uom_choices": NEW_COSTING_UOM_CHOICES,
         "can_approve": can_approve,
         "is_locked": is_locked,
+        "workflow": _workflow_context(costing, request.user),
     }
     return render(request, "crm/costing/costsheet_detail.html", context)
+
+
+@require_POST
+def cost_sheet_convert_to_quotation(request, pk):
+    costing = get_object_or_404(CostingHeader.objects.select_related("opportunity", "customer"), pk=pk)
+    if not _can_approve(request.user):
+        messages.error(request, "You do not have permission to convert this costing to a quotation.")
+        return redirect("cost_sheet_detail", pk=pk)
+
+    try:
+        convert_costing_to_quotation(costing, user=request.user)
+    except CostingWorkflowError as exc:
+        messages.error(request, str(exc))
+        return redirect("cost_sheet_detail", pk=pk)
+
+    messages.success(request, f"Quotation {costing.quotation_number} is ready.")
+    return redirect("cost_sheet_client_quotation", pk=pk)
+
+
+def cost_sheet_client_quotation(request, pk):
+    costing = get_object_or_404(CostingHeader.objects.select_related("opportunity", "customer"), pk=pk)
+    if costing.status != "approved":
+        messages.error(request, "Approve the costing before viewing the client quotation.")
+        return redirect("cost_sheet_detail", pk=pk)
+    if not costing.quotation_number:
+        messages.error(request, "Convert this approved costing to a quotation first.")
+        return redirect("cost_sheet_detail", pk=pk)
+
+    try:
+        context = _quotation_context(costing, request.user)
+    except CostingWorkflowError as exc:
+        messages.error(request, str(exc))
+        return redirect("cost_sheet_detail", pk=pk)
+
+    return render(request, "crm/costing/quotation_client.html", context)
+
+
+def cost_sheet_quotation_pdf(request, pk):
+    costing = get_object_or_404(CostingHeader.objects.select_related("opportunity", "customer"), pk=pk)
+    if costing.status != "approved" or not costing.quotation_number:
+        messages.error(request, "Convert this approved costing to a quotation before downloading the quotation PDF.")
+        return redirect("cost_sheet_detail", pk=pk)
+
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+    except ImportError:
+        messages.error(request, "PDF export is unavailable. Please install ReportLab.")
+        return redirect("cost_sheet_client_quotation", pk=pk)
+
+    try:
+        context = _quotation_context(costing, request.user)
+        amounts = context["amounts"]
+        company = context["company"]
+        buffer = io.BytesIO()
+        pdf = canvas.Canvas(buffer, pagesize=letter, pageCompression=0)
+        width, height = letter
+        left = 46
+        right = width - 46
+        y = height - 46
+
+        pdf.setFillColor(colors.HexColor("#111827"))
+        pdf.rect(0, height - 104, width, 104, fill=1, stroke=0)
+        pdf.setFillColor(colors.white)
+        pdf.setFont("Helvetica-Bold", 18)
+        pdf.drawString(left, height - 58, company["name"])
+        pdf.setFont("Helvetica", 9)
+        pdf.drawString(left, height - 76, "Professional apparel manufacturing quotation")
+        pdf.setFont("Helvetica-Bold", 18)
+        pdf.drawRightString(right, height - 58, "QUOTATION")
+        pdf.setFont("Helvetica", 9)
+        pdf.drawRightString(right, height - 76, f"Quote # {costing.quotation_number}")
+
+        y = height - 132
+        pdf.setFillColor(colors.HexColor("#111827"))
+        pdf.setFont("Helvetica-Bold", 10)
+        pdf.drawString(left, y, "From")
+        pdf.drawString(width / 2 + 12, y, "Quotation Details")
+        y -= 15
+
+        pdf.setFont("Helvetica", 9)
+        company_lines = [
+            company.get("name", ""),
+            company.get("address", ""),
+            " | ".join(part for part in [company.get("phone", ""), company.get("email", "")] if part),
+            company.get("website", ""),
+        ]
+        detail_lines = [
+            f"Quote date: {costing.quoted_at:%Y-%m-%d}" if costing.quoted_at else f"Quote date: {timezone.localdate():%Y-%m-%d}",
+            f"Opportunity: {costing.opportunity.opportunity_id}",
+            f"Currency: {costing.currency}",
+            f"Reference: {costing.quotation_number}",
+        ]
+        row_y = y
+        for line in [line for line in company_lines if line]:
+            pdf.drawString(left, row_y, line[:84])
+            row_y -= 12
+        row_y = y
+        for line in detail_lines:
+            pdf.drawString(width / 2 + 12, row_y, line[:70])
+            row_y -= 12
+
+        y -= 78
+        pdf.setFont("Helvetica-Bold", 10)
+        pdf.drawString(left, y, "Customer")
+        y -= 15
+        pdf.setFont("Helvetica", 9)
+        customer = costing.customer
+        customer_lines = [
+            (getattr(customer, "account_brand", "") or getattr(customer, "contact_name", "") or "Customer") if customer else "Customer",
+            getattr(customer, "contact_name", "") if customer else "",
+            getattr(customer, "email", "") if customer else "",
+            getattr(customer, "phone", "") if customer else "",
+        ]
+        for line in [line for line in customer_lines if line]:
+            pdf.drawString(left, y, line[:92])
+            y -= 12
+
+        y -= 16
+        pdf.setFillColor(colors.HexColor("#f3f4f6"))
+        pdf.rect(left, y - 98, right - left, 118, fill=1, stroke=0)
+        pdf.setFillColor(colors.HexColor("#111827"))
+        pdf.setFont("Helvetica-Bold", 10)
+        pdf.drawString(left + 10, y, "Item")
+        pdf.drawRightString(right - 190, y, "Qty")
+        pdf.drawRightString(right - 95, y, "Unit Price")
+        pdf.drawRightString(right - 10, y, "Amount")
+        y -= 20
+        pdf.setFont("Helvetica", 9)
+        description = costing.style_name or costing.style_code or costing.get_product_type_display()
+        pdf.drawString(left + 10, y, description[:58])
+        pdf.drawRightString(right - 190, y, f"{amounts['quantity']}")
+        pdf.drawRightString(right - 95, y, f"{costing.currency} {amounts['unit_price']:,.2f}")
+        pdf.drawRightString(right - 10, y, f"{costing.currency} {amounts['order_total']:,.2f}")
+        y -= 18
+        specs = " | ".join(
+            part
+            for part in [
+                f"Fabric: {costing.fabric_type}" if costing.fabric_type else "",
+                f"GSM: {costing.fabric_gsm}" if costing.fabric_gsm else "",
+                f"Composition: {costing.fabric_composition}" if costing.fabric_composition else "",
+                f"Packaging: {costing.packaging_type}" if costing.packaging_type else "",
+            ]
+            if part
+        )
+        pdf.drawString(left + 10, y, (specs or "Apparel production quotation")[:110])
+        y -= 38
+        pdf.setFont("Helvetica-Bold", 12)
+        pdf.drawRightString(right - 10, y, f"Total: {costing.currency} {amounts['order_total']:,.2f}")
+
+        y -= 44
+        pdf.setFont("Helvetica-Bold", 10)
+        pdf.drawString(left, y, "Terms and Conditions")
+        y -= 14
+        pdf.setFont("Helvetica", 8.5)
+        for paragraph in DEFAULT_QUOTATION_TERMS.splitlines():
+            if not paragraph.strip():
+                y -= 5
+                continue
+            for line in _pdf_lines(pdf, paragraph, right - left, "Helvetica", 8.5):
+                if y < 48:
+                    pdf.showPage()
+                    y = height - 46
+                    pdf.setFont("Helvetica", 8.5)
+                pdf.drawString(left, y, line)
+                y -= 11
+
+        pdf.showPage()
+        pdf.save()
+        data = buffer.getvalue()
+    except CostingWorkflowError as exc:
+        messages.error(request, str(exc))
+        return redirect("cost_sheet_detail", pk=pk)
+    except Exception:
+        logger.exception("Failed to generate client quotation PDF", extra={"costing_header": costing.pk})
+        messages.error(request, "Could not generate the quotation PDF. Please try again.")
+        return redirect("cost_sheet_client_quotation", pk=pk)
+
+    filename = f"quotation_{costing.quotation_number or costing.pk}.pdf"
+    response = HttpResponse(content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response.write(data)
+    return response
+
+
+@require_POST
+def cost_sheet_convert_to_invoice(request, pk):
+    costing = get_object_or_404(CostingHeader.objects.select_related("opportunity", "customer"), pk=pk)
+    if not _can_convert_to_invoice(request.user):
+        messages.error(request, "Only invoice managers can convert quotations to invoices.")
+        return redirect("cost_sheet_detail", pk=pk)
+
+    try:
+        invoice, created = create_invoice_from_costing(costing, user=request.user)
+    except CostingWorkflowError as exc:
+        messages.error(request, str(exc))
+        return redirect("cost_sheet_detail", pk=pk)
+
+    if created:
+        messages.success(request, f"Invoice {invoice.invoice_number} created from quotation.")
+    else:
+        messages.info(request, f"Invoice {invoice.invoice_number} already exists for this quotation.")
+    return redirect("invoice_view", pk=invoice.pk)
 
 
 def cost_sheet_duplicate(request, pk):

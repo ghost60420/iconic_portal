@@ -1,0 +1,274 @@
+{% extends "crm/base.html" %}
+{% load humanize %}
+{% block content %}
+
+<style>
+  .quote-wrap{
+    max-width:1040px;
+    margin:0 auto;
+    color:#111827;
+    background:#ffffff;
+    border:1px solid #e5e7eb;
+    box-shadow:0 18px 48px rgba(15,23,42,0.12);
+  }
+  .quote-topbar{
+    max-width:1040px;
+    margin:0 auto 12px;
+    display:flex;
+    justify-content:space-between;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  .quote-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-height:36px;
+    padding:8px 13px;
+    border-radius:8px;
+    border:1px solid #cbd5e1;
+    background:#ffffff;
+    color:#0f172a;
+    font-size:13px;
+    font-weight:800;
+    text-decoration:none;
+  }
+  .quote-btn.primary{
+    background:#111827;
+    color:#ffffff;
+    border-color:#111827;
+  }
+  .quote-head{
+    display:grid;
+    grid-template-columns:1.25fr 0.75fr;
+    gap:22px;
+    padding:30px;
+    background:#111827;
+    color:#ffffff;
+  }
+  .quote-logo{
+    width:56px;
+    height:56px;
+    border-radius:10px;
+    background:#ffffff;
+    color:#111827;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-weight:900;
+    margin-bottom:12px;
+  }
+  .quote-title{
+    margin:0;
+    font-size:28px;
+    font-weight:900;
+    letter-spacing:0;
+  }
+  .quote-meta{
+    text-align:right;
+    font-size:13px;
+    line-height:1.7;
+    color:#e5e7eb;
+  }
+  .quote-meta strong{
+    display:block;
+    color:#ffffff;
+    font-size:20px;
+  }
+  .quote-section{
+    padding:26px 30px;
+    border-bottom:1px solid #e5e7eb;
+  }
+  .quote-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:18px;
+  }
+  .quote-label{
+    font-size:11px;
+    font-weight:900;
+    letter-spacing:.08em;
+    color:#64748b;
+    text-transform:uppercase;
+    margin-bottom:8px;
+  }
+  .quote-text{
+    font-size:14px;
+    line-height:1.6;
+    color:#111827;
+  }
+  .quote-table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:14px;
+  }
+  .quote-table th{
+    background:#f8fafc;
+    color:#475569;
+    text-transform:uppercase;
+    font-size:11px;
+    letter-spacing:.06em;
+    text-align:left;
+    padding:12px;
+    border-bottom:1px solid #e5e7eb;
+  }
+  .quote-table td{
+    padding:14px 12px;
+    border-bottom:1px solid #e5e7eb;
+    vertical-align:top;
+  }
+  .quote-table .num{
+    text-align:right;
+    white-space:nowrap;
+  }
+  .quote-total{
+    display:flex;
+    justify-content:flex-end;
+    padding-top:18px;
+  }
+  .quote-total-box{
+    min-width:260px;
+    border:1px solid #e5e7eb;
+    background:#f8fafc;
+    padding:16px;
+  }
+  .quote-total-box span{
+    display:block;
+    color:#64748b;
+    font-size:12px;
+    font-weight:900;
+    text-transform:uppercase;
+  }
+  .quote-total-box strong{
+    display:block;
+    margin-top:6px;
+    color:#111827;
+    font-size:24px;
+  }
+  .quote-terms{
+    white-space:pre-line;
+    font-size:12px;
+    line-height:1.7;
+    color:#334155;
+  }
+  @media (max-width:760px){
+    .quote-head,
+    .quote-grid{ grid-template-columns:1fr; }
+    .quote-meta{ text-align:left; }
+    .quote-section{ padding:20px; }
+    .quote-head{ padding:22px; }
+  }
+  @media print{
+    .quote-topbar, .navbar, .sidebar, .messages{ display:none !important; }
+    body{ background:#ffffff !important; }
+    .quote-wrap{ box-shadow:none; border:0; }
+  }
+</style>
+
+<div class="quote-topbar">
+  <a class="quote-btn" href="{% url 'cost_sheet_detail' costing.pk %}">Back</a>
+  <div>
+    <a class="quote-btn" href="{% url 'cost_sheet_quotation_pdf' costing.pk %}">Download PDF</a>
+    {% if can_convert_to_invoice %}
+      <form method="post" action="{% url 'cost_sheet_convert_to_invoice' costing.pk %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="quote-btn primary" style="cursor:pointer;">Convert to Invoice</button>
+      </form>
+    {% endif %}
+    <a class="quote-btn primary" href="#" onclick="window.print();return false;">Print</a>
+  </div>
+</div>
+
+<article class="quote-wrap">
+  <header class="quote-head">
+    <div>
+      <div class="quote-logo">IAH</div>
+      <h1 class="quote-title">{{ company.name }}</h1>
+      <div class="quote-text" style="color:#e5e7eb;">
+        {{ company.address }}<br>
+        {{ company.phone }}{% if company.email %} | {{ company.email }}{% endif %}<br>
+        {{ company.website }}
+      </div>
+    </div>
+    <div class="quote-meta">
+      <strong>Quotation</strong>
+      Quote # {{ costing.quotation_number }}<br>
+      Date {% if costing.quoted_at %}{{ costing.quoted_at|date:"Y-m-d" }}{% else %}{% now "Y-m-d" %}{% endif %}<br>
+      Opportunity {{ costing.opportunity.opportunity_id }}<br>
+      Currency {{ costing.currency }}
+    </div>
+  </header>
+
+  <section class="quote-section quote-grid">
+    <div>
+      <div class="quote-label">Bill To</div>
+      <div class="quote-text">
+        {% if costing.customer %}
+          <strong>{% firstof costing.customer.account_brand costing.customer.contact_name "Customer" %}</strong><br>
+          {% if costing.customer.contact_name %}{{ costing.customer.contact_name }}<br>{% endif %}
+          {% if costing.customer.email %}{{ costing.customer.email }}<br>{% endif %}
+          {% if costing.customer.phone %}{{ costing.customer.phone }}<br>{% endif %}
+          {% if costing.customer.address_line1 %}{{ costing.customer.address_line1 }}<br>{% endif %}
+          {% if costing.customer.city or costing.customer.country %}
+            {{ costing.customer.city }}{% if costing.customer.city and costing.customer.country %}, {% endif %}{{ costing.customer.country }}
+          {% endif %}
+        {% else %}
+          Customer details not set
+        {% endif %}
+      </div>
+    </div>
+    <div>
+      <div class="quote-label">Style Details</div>
+      <div class="quote-text">
+        Style: {% firstof costing.style_name costing.style_code "-" %}<br>
+        Product: {{ costing.get_product_type_display }}<br>
+        Quantity: {{ amounts.quantity|intcomma }}<br>
+        Factory: {{ costing.get_factory_location_display }}
+      </div>
+    </div>
+  </section>
+
+  <section class="quote-section">
+    <table class="quote-table">
+      <thead>
+        <tr>
+          <th>Description</th>
+          <th class="num">Qty</th>
+          <th class="num">Unit Price</th>
+          <th class="num">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <strong>{% firstof costing.style_name costing.style_code costing.get_product_type_display "Apparel production" %}</strong>
+            <div class="quote-text">
+              {% if costing.fabric_type %}Fabric: {{ costing.fabric_type }}{% endif %}
+              {% if costing.fabric_gsm %} | GSM: {{ costing.fabric_gsm }}{% endif %}
+              {% if costing.fabric_composition %} | {{ costing.fabric_composition }}{% endif %}
+              {% if costing.packaging_type %}<br>Packaging: {{ costing.packaging_type }}{% endif %}
+              {% if costing.print_type %}<br>Print: {{ costing.print_type }}{% endif %}
+              {% if costing.embroidery %}<br>Embroidery: {{ costing.embroidery }}{% endif %}
+            </div>
+          </td>
+          <td class="num">{{ amounts.quantity|intcomma }}</td>
+          <td class="num">{{ costing.currency }} {{ amounts.unit_price|floatformat:2|intcomma }}</td>
+          <td class="num">{{ costing.currency }} {{ amounts.order_total|floatformat:2|intcomma }}</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="quote-total">
+      <div class="quote-total-box">
+        <span>Total Quote</span>
+        <strong>{{ costing.currency }} {{ amounts.order_total|floatformat:2|intcomma }}</strong>
+      </div>
+    </div>
+  </section>
+
+  <section class="quote-section">
+    <div class="quote-label">Terms and Conditions</div>
+    <div class="quote-terms">{{ terms }}</div>
+  </section>
+</article>
+
+{% endblock %}

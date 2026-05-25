@@ -1688,6 +1688,15 @@ class CostingHeader(models.Model):
         related_name="approved_costing_headers",
     )
     approved_at = models.DateTimeField(null=True, blank=True)
+    quotation_number = models.CharField(max_length=50, blank=True, default="", db_index=True)
+    quoted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="quoted_costing_headers",
+    )
+    quoted_at = models.DateTimeField(null=True, blank=True)
     notes = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1809,6 +1818,9 @@ class CostingAuditLog(models.Model):
         ("updated", "Updated"),
         ("approved", "Approved"),
         ("unlocked", "Unlocked"),
+        ("quoted", "Converted to quotation"),
+        ("invoice_created", "Converted to invoice"),
+        ("production_created", "Converted to production order"),
         ("exported", "Exported"),
         ("uploaded_file", "Uploaded file"),
     ]
@@ -3195,6 +3207,110 @@ class Shipment(models.Model):
         super().save(*args, **kwargs)
 
 
+class OrderLifecycle(models.Model):
+    STATUS_CHOICES = [
+        ("lead", "Lead"),
+        ("costing", "Costing"),
+        ("quotation", "Quotation"),
+        ("invoice", "Invoice"),
+        ("production", "Production"),
+        ("shipping", "Shipping"),
+        ("completed", "Completed"),
+        ("cancelled", "Cancelled"),
+    ]
+
+    customer = models.ForeignKey(
+        "Customer",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_lifecycles",
+    )
+    lead = models.ForeignKey(
+        "Lead",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_lifecycles",
+    )
+    opportunity = models.ForeignKey(
+        "Opportunity",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_lifecycles",
+    )
+    costing = models.ForeignKey(
+        "CostingHeader",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_lifecycles_as_costing",
+    )
+    quotation = models.ForeignKey(
+        "CostingHeader",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_lifecycles_as_quotation",
+    )
+    invoice = models.ForeignKey(
+        "Invoice",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_lifecycles",
+    )
+    production_order = models.ForeignKey(
+        "ProductionOrder",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_lifecycles",
+    )
+    shipping_record = models.ForeignKey(
+        "Shipment",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_lifecycles",
+    )
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="lead", db_index=True)
+    estimated_revenue = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+    estimated_cost = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+    estimated_profit = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+    estimated_margin = models.DecimalField(max_digits=7, decimal_places=2, default=Decimal("0"))
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_order_lifecycles",
+    )
+    notes = models.TextField(blank=True, default="")
+
+    class Meta:
+        ordering = ["-updated_at", "-id"]
+        indexes = [
+            models.Index(fields=["status", "updated_at"]),
+            models.Index(fields=["customer", "status"]),
+            models.Index(fields=["opportunity", "status"]),
+        ]
+
+    def __str__(self):
+        if self.invoice_id and self.invoice:
+            return f"Lifecycle for {self.invoice.invoice_number}"
+        if self.production_order_id and self.production_order:
+            return f"Lifecycle for {self.production_order.order_code or self.production_order_id}"
+        if self.quotation_id and self.quotation:
+            return f"Lifecycle for {self.quotation.quotation_number or 'COST-' + str(self.quotation_id)}"
+        return f"Order Lifecycle {self.pk or ''}".strip()
+
+
 class Invoice(models.Model):
     STATUS_CHOICES = [
         ("draft", "Draft"),
@@ -3206,6 +3322,13 @@ class Invoice(models.Model):
 
     order = models.ForeignKey(
         "ProductionOrder",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="invoices",
+    )
+    costing_header = models.ForeignKey(
+        "CostingHeader",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,

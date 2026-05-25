@@ -349,9 +349,34 @@
     <div class="costing-hero-actions">
       <a class="btnx" href="#costing-form">Edit</a>
       <a class="btnx" href="{% url 'cost_sheet_duplicate' costing.pk %}">Duplicate Cost Sheet</a>
-      <button type="button" class="btnx" data-print-fob>Print FOB Quote</button>
+      <button type="button" class="btnx" data-print-fob>Print Internal Costing</button>
       <a class="btnx" href="{% url 'cost_sheet_export_excel' costing.pk %}">Export Excel</a>
-      <a class="btnx" href="{% url 'cost_sheet_export_pdf' costing.pk %}">Download PDF</a>
+      <a class="btnx" href="{% url 'cost_sheet_export_pdf' costing.pk %}">Internal PDF</a>
+      {% if is_locked %}
+        {% if workflow.is_quotation %}
+          <a class="btnx btnx-soft" href="{% url 'cost_sheet_client_quotation' costing.pk %}">Open Client Quotation</a>
+          <a class="btnx" href="{% url 'cost_sheet_quotation_pdf' costing.pk %}">Quotation PDF</a>
+        {% elif can_approve %}
+          <form method="post" action="{% url 'cost_sheet_convert_to_quotation' costing.pk %}" style="display:inline;">
+            {% csrf_token %}
+            <button type="submit" class="btnx btnx-soft">Convert to Quotation</button>
+          </form>
+        {% endif %}
+        {% if workflow.invoice %}
+          <a class="btnx btnx-soft" href="{% url 'invoice_view' workflow.invoice.pk %}">Open Invoice</a>
+        {% elif workflow.is_quotation and workflow.can_convert_to_invoice %}
+          <form method="post" action="{% url 'cost_sheet_convert_to_invoice' costing.pk %}" style="display:inline;">
+            {% csrf_token %}
+            <button type="submit" class="btnx btnx-soft">Convert to Invoice</button>
+          </form>
+        {% endif %}
+        {% if workflow.production_order %}
+          <a class="btnx btnx-soft" href="{% url 'production_detail' workflow.production_order.pk %}">Open Production Order</a>
+        {% endif %}
+        {% if workflow.lifecycle %}
+          <a class="btnx" href="{% url 'order_lifecycle_detail' workflow.lifecycle.pk %}">Lifecycle Timeline</a>
+        {% endif %}
+      {% endif %}
       <a class="btnx" href="{% url 'opportunity_detail' costing.opportunity.pk %}">Open Opportunity</a>
       <a class="btnx" href="{% url 'cost_sheet_list' %}">Back to Costing List</a>
       <a class="btnx" href="{% url 'cost_sheet_guide' %}">Guide</a>
@@ -373,17 +398,25 @@
       <span>Draft</span>
       <small>Editable costing</small>
     </div>
-    <div class="workflow-step">
-      <span>Reviewing</span>
-      <small>Internal review</small>
-    </div>
     <div class="workflow-step {% if costing.status == 'approved' %}active{% endif %}">
       <span>Approved</span>
       <small>Locked after approval</small>
     </div>
-    <div class="workflow-step">
-      <span>Sent to client</span>
-      <small>Exported quote</small>
+    <div class="workflow-step {% if workflow.is_quotation %}active{% endif %}">
+      <span>Quotation</span>
+      <small>{% if workflow.is_quotation %}{{ costing.quotation_number }}{% else %}Ready after approval{% endif %}</small>
+    </div>
+    <div class="workflow-step {% if workflow.invoice %}active{% endif %}">
+      <span>Invoice</span>
+      <small>{% if workflow.invoice %}{{ workflow.invoice.invoice_number }}{% else %}Convert quote{% endif %}</small>
+    </div>
+    <div class="workflow-step {% if workflow.production_order %}active{% endif %}">
+      <span>Production</span>
+      <small>{% if workflow.production_order %}{{ workflow.production_order.order_code|default:"Created" }}{% else %}After invoice{% endif %}</small>
+    </div>
+    <div class="workflow-step {% if workflow.production_order %}active{% endif %}">
+      <span>Profit</span>
+      <small>Tracked from invoice and actuals</small>
     </div>
   </section>
 

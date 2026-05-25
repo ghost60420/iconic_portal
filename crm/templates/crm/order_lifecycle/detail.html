@@ -1,0 +1,240 @@
+{% extends "crm/base.html" %}
+{% load humanize %}
+{% block content %}
+
+<style>
+  .ol-wrap{
+    max-width:1180px;
+    margin:0 auto;
+    color:#f8fafc;
+  }
+  .ol-hero{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:18px;
+    flex-wrap:wrap;
+    margin-bottom:18px;
+  }
+  .ol-eyebrow{
+    margin:0 0 6px;
+    color:#94a3b8;
+    font-size:12px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+  }
+  .ol-title{
+    margin:0;
+    font-size:30px;
+    font-weight:900;
+    letter-spacing:0;
+  }
+  .ol-sub{
+    margin-top:8px;
+    color:#cbd5e1;
+    font-size:13px;
+    line-height:1.5;
+  }
+  .ol-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-height:36px;
+    padding:8px 13px;
+    border-radius:8px;
+    border:1px solid rgba(148,163,184,.35);
+    color:#f8fafc;
+    text-decoration:none;
+    font-weight:900;
+    font-size:13px;
+    background:#0f172a;
+  }
+  .ol-summary{
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:12px;
+    margin-bottom:18px;
+  }
+  .ol-kpi{
+    border:1px solid rgba(148,163,184,.24);
+    background:#0f172a;
+    border-radius:8px;
+    padding:14px;
+  }
+  .ol-kpi span{
+    display:block;
+    color:#94a3b8;
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+  }
+  .ol-kpi strong{
+    display:block;
+    margin-top:6px;
+    font-size:22px;
+  }
+  .ol-timeline{
+    display:grid;
+    grid-template-columns:repeat(7,minmax(120px,1fr));
+    gap:10px;
+    margin-bottom:18px;
+  }
+  .ol-step{
+    border:1px solid rgba(148,163,184,.22);
+    background:#020617;
+    border-radius:8px;
+    padding:12px;
+    min-height:146px;
+  }
+  .ol-step.done{
+    border-color:rgba(34,197,94,.5);
+    background:linear-gradient(180deg,rgba(22,101,52,.35),#020617);
+  }
+  .ol-step-label{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    font-weight:900;
+  }
+  .ol-dot{
+    width:10px;
+    height:10px;
+    border-radius:50%;
+    background:#64748b;
+  }
+  .ol-step.done .ol-dot{ background:#22c55e; }
+  .ol-step small{
+    display:block;
+    margin-top:8px;
+    color:#94a3b8;
+    line-height:1.45;
+  }
+  .ol-step a{
+    display:inline-flex;
+    margin-top:10px;
+    color:#fde68a;
+    font-size:12px;
+    font-weight:900;
+    text-decoration:none;
+  }
+  .ol-panel{
+    border:1px solid rgba(148,163,184,.24);
+    background:#0f172a;
+    border-radius:8px;
+    padding:16px;
+    margin-bottom:18px;
+  }
+  .ol-panel h2{
+    margin:0 0 10px;
+    font-size:17px;
+    font-weight:900;
+  }
+  .ol-table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:13px;
+  }
+  .ol-table th,
+  .ol-table td{
+    padding:10px;
+    border-bottom:1px solid rgba(148,163,184,.18);
+    text-align:left;
+  }
+  .ol-table th{
+    color:#94a3b8;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+  }
+  .ol-right{ text-align:right !important; }
+  @media (max-width:980px){
+    .ol-summary{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .ol-timeline{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+  }
+  @media (max-width:620px){
+    .ol-summary,
+    .ol-timeline{ grid-template-columns:1fr; }
+  }
+</style>
+
+<div class="ol-wrap">
+  <section class="ol-hero">
+    <div>
+      <p class="ol-eyebrow">Order Lifecycle</p>
+      <h1 class="ol-title">
+        {% if lifecycle.invoice %}{{ lifecycle.invoice.invoice_number }}
+        {% elif lifecycle.production_order %}{{ lifecycle.production_order.order_code|default:lifecycle.production_order.title }}
+        {% elif lifecycle.quotation %}{{ lifecycle.quotation.quotation_number|default:"Quotation" }}
+        {% else %}Lifecycle {{ lifecycle.pk }}{% endif %}
+      </h1>
+      <div class="ol-sub">
+        Status: {{ lifecycle.get_status_display }}
+        {% if lifecycle.customer %} | Customer: {% firstof lifecycle.customer.account_brand lifecycle.customer.contact_name lifecycle.customer %}{% endif %}
+        {% if lifecycle.opportunity %} | Opportunity: {{ lifecycle.opportunity.opportunity_id }}{% endif %}
+      </div>
+    </div>
+    <a class="ol-btn" href="{% url 'main_dashboard' %}">Dashboard</a>
+  </section>
+
+  {% if can_view_profit %}
+    <section class="ol-summary" aria-label="Lifecycle financial summary">
+      <article class="ol-kpi">
+        <span>Invoice Total</span>
+        <strong>{{ profit_breakdown.currency }} {{ profit_breakdown.display.invoice_total|intcomma }}</strong>
+      </article>
+      <article class="ol-kpi">
+        <span>Total Cost</span>
+        <strong>{{ profit_breakdown.currency }} {{ profit_breakdown.display.total_cost|intcomma }}</strong>
+      </article>
+      <article class="ol-kpi">
+        <span>Net Profit</span>
+        <strong>{{ profit_breakdown.currency }} {{ profit_breakdown.display.net_profit|intcomma }}</strong>
+      </article>
+      <article class="ol-kpi">
+        <span>Margin</span>
+        <strong>{{ profit_breakdown.display.margin }}%</strong>
+      </article>
+    </section>
+  {% endif %}
+
+  <section class="ol-timeline" aria-label="Order lifecycle timeline">
+    {% for step in steps %}
+      <article class="ol-step {% if step.is_done %}done{% endif %}">
+        <div class="ol-step-label"><span class="ol-dot"></span>{{ step.label }}</div>
+        <small>
+          Status: {% if step.is_done %}Done{% else %}Waiting{% endif %}<br>
+          Date: {% if step.date %}{{ step.date|date:"Y-m-d" }}{% else %}-{% endif %}<br>
+          {% if can_view_profit and step.amount %}Amount: {{ profit_breakdown.currency }} {{ step.amount|floatformat:2|intcomma }}<br>{% endif %}
+          {% if step.notes %}{{ step.notes }}{% else %}&nbsp;{% endif %}
+        </small>
+        {% if step.record %}
+          <a href="{% url step.url_name step.record.pk %}">Open linked record</a>
+        {% endif %}
+      </article>
+    {% endfor %}
+  </section>
+
+  {% if can_view_profit %}
+    <section class="ol-panel">
+      <h2>Net Profit Formula</h2>
+      <table class="ol-table">
+        <tbody>
+          <tr><th>Invoice Total</th><td class="ol-right">{{ profit_breakdown.currency }} {{ profit_breakdown.display.invoice_total|intcomma }}</td></tr>
+          <tr><th>Minus Sewing Cost</th><td class="ol-right">{{ profit_breakdown.currency }} {{ profit_breakdown.display.sewing_cost|intcomma }}</td></tr>
+          <tr><th>Minus Fabric Cost</th><td class="ol-right">{{ profit_breakdown.currency }} {{ profit_breakdown.display.fabric_cost|intcomma }}</td></tr>
+          <tr><th>Minus Print Cost</th><td class="ol-right">{{ profit_breakdown.currency }} {{ profit_breakdown.display.print_cost|intcomma }}</td></tr>
+          <tr><th>Minus Shipping</th><td class="ol-right">{{ profit_breakdown.currency }} {{ profit_breakdown.display.shipping_cost|intcomma }}</td></tr>
+          <tr><th>Minus Trim Cost</th><td class="ol-right">{{ profit_breakdown.currency }} {{ profit_breakdown.display.trim_cost|intcomma }}</td></tr>
+          <tr><th>Minus Sampling</th><td class="ol-right">{{ profit_breakdown.currency }} {{ profit_breakdown.display.sampling_cost|intcomma }}</td></tr>
+          {% if profit_breakdown.other_internal_cost %}
+            <tr><th>Minus Other Internal Cost</th><td class="ol-right">{{ profit_breakdown.currency }} {{ profit_breakdown.display.other_internal_cost|intcomma }}</td></tr>
+          {% endif %}
+          <tr><th>Net Profit</th><td class="ol-right"><strong>{{ profit_breakdown.currency }} {{ profit_breakdown.display.net_profit|intcomma }}</strong></td></tr>
+        </tbody>
+      </table>
+    </section>
+  {% endif %}
+</div>
+
+{% endblock %}

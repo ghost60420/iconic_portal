@@ -12,6 +12,7 @@ from . import views_accounting as acc
 from . import views_access as access
 from . import views_costing as costing
 from . import views_iconic_ai_brain as iconic_ai_brain
+from . import views_order_lifecycle as lifecycle
 
 try:
     from . import views_whatsapp as wa
@@ -109,6 +110,10 @@ urlpatterns = [
     path("costing/add/", login_required(costing.cost_sheet_create), name="cost_sheet_create"),
     path("costing/add/opportunity/<int:opportunity_id>/", login_required(costing.cost_sheet_create), name="cost_sheet_create_for_opportunity"),
     path("costing/<int:pk>/", login_required(costing.cost_sheet_detail), name="cost_sheet_detail"),
+    path("costing/<int:pk>/convert/quotation/", login_required(costing.cost_sheet_convert_to_quotation), name="cost_sheet_convert_to_quotation"),
+    path("costing/<int:pk>/quotation/", login_required(costing.cost_sheet_client_quotation), name="cost_sheet_client_quotation"),
+    path("costing/<int:pk>/quotation/pdf/", login_required(costing.cost_sheet_quotation_pdf), name="cost_sheet_quotation_pdf"),
+    path("costing/<int:pk>/convert/invoice/", login_required(costing.cost_sheet_convert_to_invoice), name="cost_sheet_convert_to_invoice"),
     path("costing/<int:pk>/duplicate/", login_required(costing.cost_sheet_duplicate), name="cost_sheet_duplicate"),
     path("costing/<int:pk>/export/pdf/", login_required(costing.cost_sheet_export_pdf), name="cost_sheet_export_pdf"),
     path("costing/<int:pk>/export/excel/", login_required(costing.cost_sheet_export_excel), name="cost_sheet_export_excel"),
@@ -117,6 +122,7 @@ urlpatterns = [
     path("costing/guide/", login_required(costing.cost_sheet_guide), name="cost_sheet_guide"),
 
     path("chatter/", login_required(views.chatter_feed), name="chatter_feed"),
+    path("order-lifecycle/<int:pk>/", login_required(lifecycle.order_lifecycle_detail), name="order_lifecycle_detail"),
 
     path("customers/", perm("can_customers", views.customers_list), name="customers_list"),
     path("customers/<int:pk>/", perm("can_customers", views.customer_detail), name="customer_detail"),
@@ -283,6 +289,7 @@ urlpatterns = [
     path("invoices/<int:pk>/payments/add/", acc_any(inv.invoice_payment_add), name="invoice_payment_add"),
     path("invoices/<int:pk>/edit/", acc_any(inv.invoice_edit), name="invoice_edit"),
     path("invoices/<int:pk>/approve/", acc_any(getattr(inv, "invoice_approve", inv.invoice_view)), name="invoice_approve"),
+    path("invoices/<int:pk>/convert/production/", acc_any(inv.invoice_convert_to_production_order), name="invoice_convert_to_production_order"),
 
     # Access
     path("access/", login_required(access.access_list), name="access_list"),

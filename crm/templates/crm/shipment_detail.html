@@ -39,6 +39,9 @@
       {% if shipment.order %}
         <a href="{% url 'production_detail' shipment.order.pk %}" class="shipping-btn shipping-btn--ghost">Open Production</a>
       {% endif %}
+      {% if lifecycle %}
+        <a href="{% url 'order_lifecycle_detail' lifecycle.pk %}" class="shipping-btn shipping-btn--ghost">Lifecycle</a>
+      {% endif %}
       {% if shipment.opportunity %}
         <a href="{% url 'opportunity_detail' shipment.opportunity.pk %}" class="shipping-btn shipping-btn--ghost">Open Opportunity</a>
       {% endif %}

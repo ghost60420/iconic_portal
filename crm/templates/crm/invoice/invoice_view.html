@@ -431,6 +431,18 @@
           <a class="pill gold" href="{% url 'invoice_edit' invoice.pk %}">Edit</a>
           <a class="pill" href="{% url 'invoice_client_view' invoice.pk %}">Client invoice</a>
           <a class="pill" href="{% url 'invoice_pdf' invoice.pk %}">PDF</a>
+          {% if invoice.costing_header %}
+            <a class="pill" href="{% url 'cost_sheet_detail' invoice.costing_header.pk %}">Costing</a>
+            {% if not invoice.order %}
+              <form method="post" action="{% url 'invoice_convert_to_production_order' invoice.pk %}" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="pill gold" style="cursor:pointer;">Convert to Production</button>
+              </form>
+            {% endif %}
+          {% endif %}
+          {% if lifecycle %}
+            <a class="pill" href="{% url 'order_lifecycle_detail' lifecycle.pk %}">Lifecycle</a>
+          {% endif %}
         {% endif %}
         <a class="pill" href="#" onclick="window.print();return false;">Print</a>
       </div>
@@ -472,6 +484,20 @@
           <span>Internal Profit Estimate</span>
           <small>Internal only. Hidden from client invoice and PDF.</small>
         </div>
+        {% if invoice.costing_header %}
+          <div class="note" style="margin-bottom:12px;">
+            Source costing:
+            <a href="{% url 'cost_sheet_detail' invoice.costing_header.pk %}" style="color:#fde68a; font-weight:900;">COST-{{ invoice.costing_header.pk }}</a>
+            {% if invoice.costing_header.quotation_number %}
+              | Quotation
+              <a href="{% url 'cost_sheet_client_quotation' invoice.costing_header.pk %}" style="color:#fde68a; font-weight:900;">{{ invoice.costing_header.quotation_number }}</a>
+            {% endif %}
+            {% if invoice.order %}
+              | Production
+              <a href="{% url 'production_detail' invoice.order.pk %}" style="color:#fde68a; font-weight:900;">{{ invoice.order.order_code|default:invoice.order.pk }}</a>
+            {% endif %}
+          </div>
+        {% endif %}
         <div class="internal-profit-grid">
           <div class="internal-profit-cell">
             <span>Invoice Total</span>
@@ -498,6 +524,19 @@
             <strong>{{ invoice.estimated_profit_margin|default_if_none:0|floatformat:2 }}%</strong>
           </div>
         </div>
+        {% if lifecycle_profit %}
+          <div class="note" style="margin-top:12px;">
+            <div style="margin-bottom:8px; color:#fde68a; font-weight:900;">Net profit formula</div>
+            Invoice Total {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.invoice_total|floatformat:2|intcomma }}
+            - Sewing Cost {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.sewing_cost|floatformat:2|intcomma }}
+            - Fabric Cost {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.fabric_cost|floatformat:2|intcomma }}
+            - Print Cost {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.print_cost|floatformat:2|intcomma }}
+            - Shipping {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.shipping_cost|floatformat:2|intcomma }}
+            - Trim Cost {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.trim_cost|floatformat:2|intcomma }}
+            - Sampling {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.sampling_cost|floatformat:2|intcomma }}
+            = Net Profit {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.net_profit|floatformat:2|intcomma }}
+          </div>
+        {% endif %}
         {% if invoice.internal_cost_note %}
           <div class="note">
             <div style="margin-bottom:6px; color:#fde68a; font-weight:900;">Internal cost note</div>

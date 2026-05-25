@@ -26,6 +26,8 @@ from .models import (
     ProductionOrder,
 )
 from .forms import InvoiceForm, InvoicePaymentForm
+from .services.costing_workflow import CostingWorkflowError, create_or_link_production_order_from_invoice
+from .services.order_lifecycle import build_lifecycle_profit_breakdown, create_lifecycle_from_invoice
 
 
 DEFAULT_INVOICE_TERMS = """For bulk orders, 50% advance confirms the order and 50% is due before shipment.
@@ -774,6 +776,7 @@ def invoice_add(request):
                 _calc_totals(inv)
                 inv.save()
                 form.save_m2m()
+                create_lifecycle_from_invoice(inv, user=request.user)
 
             messages.success(request, "Invoice created.")
             return redirect("invoice_view", pk=inv.pk)
@@ -878,6 +881,7 @@ def invoice_edit(request, pk):
                 _calc_totals(inv2)
                 inv2.save()
                 form.save_m2m()
+                create_lifecycle_from_invoice(inv2, user=request.user)
 
             messages.success(request, "Invoice updated.")
             return redirect("invoice_view", pk=inv.pk)
@@ -902,6 +906,10 @@ def invoice_view(request, pk):
     legacy_paid_amount = _d(inv.paid_amount) - payment_total
     if legacy_paid_amount < 0:
         legacy_paid_amount = Decimal("0")
+    lifecycle = inv.order_lifecycles.order_by("-updated_at", "-id").first()
+    lifecycle_profit = None
+    if lifecycle and can_manage_invoices(request.user):
+        lifecycle_profit = build_lifecycle_profit_breakdown(lifecycle)
 
     initial = {
         "payment_date": timezone.localdate(),
@@ -922,6 +930,8 @@ def invoice_view(request, pk):
             "legacy_paid_amount": legacy_paid_amount,
             "is_payment_month_closed": _is_accounting_month_closed(timezone.localdate(), _invoice_payment_side(inv)),
             "can_manage_invoice_costing": can_manage_invoices(request.user),
+            "lifecycle": lifecycle,
+            "lifecycle_profit": lifecycle_profit,
         },
     )
 
@@ -1269,6 +1279,7 @@ def invoice_payment_add(request, pk):
         _sync_invoice_payment_status(inv)
         inv.updated_at = timezone.now()
         inv.save(update_fields=["paid_amount", "status", "updated_at"])
+        create_lifecycle_from_invoice(inv, user=request.user)
 
     if inv.payment_status_key == "overpaid":
         messages.warning(request, "Payment saved. This invoice is now overpaid; review the balance.")
@@ -1293,5 +1304,24 @@ def invoice_approve(request, pk):
     if hasattr(inv, "status"):
         inv.status = "sent"
     inv.save()
+    create_lifecycle_from_invoice(inv, user=request.user)
     messages.success(request, "Invoice approved.")
     return redirect("invoice_view", pk=inv.pk)
+
+
+@login_required
+@user_passes_test(superuser_only)
+@require_POST
+def invoice_convert_to_production_order(request, pk):
+    inv = get_object_or_404(Invoice.objects.select_related("costing_header", "order"), pk=pk)
+    try:
+        order, created = create_or_link_production_order_from_invoice(inv, user=request.user)
+    except CostingWorkflowError as exc:
+        messages.error(request, str(exc))
+        return redirect("invoice_view", pk=pk)
+
+    if created:
+        messages.success(request, f"Production order {order.order_code or order.pk} created from invoice.")
+    else:
+        messages.info(request, f"Invoice linked to production order {order.order_code or order.pk}.")
+    return redirect("production_detail", pk=order.pk)

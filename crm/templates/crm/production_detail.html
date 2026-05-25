@@ -56,7 +56,7 @@
       <a href="#stage-progress" class="production-btn production-btn--ghost">Update Status</a>
       <a href="{% url 'production_next_stage' order.pk %}" class="production-btn production-btn--ghost">Next Stage</a>
       <a href="#production-files" class="production-btn production-btn--ghost">Upload File</a>
-      <a href="{% url 'shipping_add_for_order' order.pk %}" class="production-btn production-btn--ghost">Shipping</a>
+      <a href="{% url 'shipping_add_for_order' order.pk %}" class="production-btn production-btn--ghost">Move to Shipping</a>
       {% if opportunity %}
         <a href="{% url 'opportunity_detail' opportunity.pk %}" class="production-btn production-btn--ghost">Open Opportunity</a>
       {% endif %}
@@ -525,6 +525,95 @@
           <div class="production-muted-block">Linked cost sheet: v{{ cost_sheet_active.version_number }}</div>
         {% else %}
           <div class="production-muted-block">No active cost sheet linked yet.</div>
+        {% endif %}
+
+        {% if lifecycle_profit and can_view_lifecycle_profit %}
+          <div class="production-variance" style="margin-bottom:16px;">
+            <h3>Automatic Profit Tracker</h3>
+            <p>
+              Invoice Total {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.invoice_total }}
+              - Sewing {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.sewing_cost }}
+              - Fabric {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.fabric_cost }}
+              - Print {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.print_cost }}
+              - Shipping {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.shipping_cost }}
+              - Trim {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.trim_cost }}
+              - Sampling {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.sampling_cost }}
+              = Net Profit {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.net_profit }}
+            </p>
+            <div class="production-table-wrap">
+              <table class="production-mini-table">
+                <thead>
+                  <tr>
+                    <th>Metric</th>
+                    <th>Value</th>
+                    <th>Basis</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Invoice Total</td>
+                    <td>{{ lifecycle_profit.currency }} {{ lifecycle_profit.display.invoice_total }}</td>
+                    <td>Linked invoice or quotation</td>
+                  </tr>
+                  <tr>
+                    <td>Sewing Cost</td>
+                    <td>{{ lifecycle_profit.currency }} {{ lifecycle_profit.display.sewing_cost }}</td>
+                    <td>Invoice internal sewing charge or costing labor</td>
+                  </tr>
+                  <tr>
+                    <td>Fabric Cost</td>
+                    <td>{{ lifecycle_profit.currency }} {{ lifecycle_profit.display.fabric_cost }}</td>
+                    <td>Approved costing fabric bucket</td>
+                  </tr>
+                  <tr>
+                    <td>Print Cost</td>
+                    <td>{{ lifecycle_profit.currency }} {{ lifecycle_profit.display.print_cost }}</td>
+                    <td>Print, process, embroidery, or wash costing rows</td>
+                  </tr>
+                  <tr>
+                    <td>Shipping</td>
+                    <td>{{ lifecycle_profit.currency }} {{ lifecycle_profit.display.shipping_cost }}</td>
+                    <td>Linked shipment internal cost</td>
+                  </tr>
+                  <tr>
+                    <td>Trim Cost</td>
+                    <td>{{ lifecycle_profit.currency }} {{ lifecycle_profit.display.trim_cost }}</td>
+                    <td>Approved costing trims bucket</td>
+                  </tr>
+                  <tr>
+                    <td>Sampling</td>
+                    <td>{{ lifecycle_profit.currency }} {{ lifecycle_profit.display.sampling_cost }}</td>
+                    <td>Sampling/development costing rows</td>
+                  </tr>
+                  {% if lifecycle_profit.other_internal_cost %}
+                    <tr>
+                      <td>Other Internal Cost</td>
+                      <td>{{ lifecycle_profit.currency }} {{ lifecycle_profit.display.other_internal_cost }}</td>
+                      <td>Remaining internal cost not mapped above</td>
+                    </tr>
+                  {% endif %}
+                  {% if lifecycle_profit.actual_production_cost %}
+                    <tr>
+                      <td>Actual Production Cost</td>
+                      <td>BDT {{ lifecycle_profit.display.actual_production_cost }}</td>
+                      <td>{% if lifecycle_profit.can_use_actual_production %}Used as production cost basis{% else %}Recorded in BDT; not mixed into {{ lifecycle_profit.currency }} profit{% endif %}</td>
+                    </tr>
+                  {% endif %}
+                  <tr>
+                    <td>Net Profit</td>
+                    <td>{{ lifecycle_profit.currency }} {{ lifecycle_profit.display.net_profit }}</td>
+                    <td>{{ lifecycle_profit.display.margin }}% margin</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            {% if lifecycle %}
+              <div class="production-muted-block">
+                Lifecycle:
+                <a href="{% url 'order_lifecycle_detail' lifecycle.pk %}">Open order lifecycle</a>
+              </div>
+            {% endif %}
+          </div>
         {% endif %}
 
         <form method="post" class="actual-grid production-actual-form">

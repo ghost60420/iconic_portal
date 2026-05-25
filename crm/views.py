@@ -37,6 +37,13 @@ from .models import Product, Fabric, Accessory, Trim, ThreadOption, InventoryIte
 
 from .services.costing import build_variance_report, calculate_cost_sheet
 from .services.costing_engine import compute_costing
+from .services.order_lifecycle import (
+    build_lifecycle_profit_breakdown,
+    can_view_lifecycle_profit,
+    create_lifecycle_from_production,
+    create_lifecycle_from_shipping,
+    lifecycle_dashboard_metrics,
+)
 
 def _parse_decimal(value):
     try:
@@ -97,6 +104,7 @@ from .models import (
     OpportunityDocument,
     OpportunityFile,
     OpportunityTask,
+    OrderLifecycle,
     Product,
     ProductTypeMaster,
     ProductCategoryMaster,
@@ -6668,6 +6676,7 @@ def production_add(request):
             order = form.save()
             _save_production_lines(order, request)
             _apply_production_library_links(order, request)
+            create_lifecycle_from_production(order, user=request.user)
             messages.success(request, "Production order created.")
             return redirect("production_detail", pk=order.pk)
         order_lines = _production_order_lines_from_payload(request.POST.get("line_payload"))
@@ -6752,6 +6761,7 @@ def production_edit(request, pk):
                     obj.save(update_fields=["customer"])
 
                 _apply_production_status_change(obj, old_status)
+                create_lifecycle_from_production(obj, user=request.user)
 
                 messages.success(request, "Production order updated.")
                 return redirect("production_detail", pk=pk)
@@ -6902,6 +6912,36 @@ def production_detail(request, pk):
         except Exception:
             logger.exception("production_detail: failed to build variance report for order %s", order.pk)
             variance_report = None
+    lifecycle = None
+    lifecycle_profit = None
+    can_view_profit = can_view_lifecycle_profit(request.user)
+    try:
+        lifecycle = order.order_lifecycles.select_related(
+            "customer",
+            "lead",
+            "opportunity",
+            "costing",
+            "quotation",
+            "invoice",
+            "production_order",
+            "shipping_record",
+        ).order_by("-updated_at", "-id").first()
+        if lifecycle is None:
+            invoice = order.invoices.select_related("costing_header", "customer").order_by("-created_at", "-id").first()
+            lifecycle = OrderLifecycle(
+                customer=customer or getattr(invoice, "customer", None),
+                lead=lead,
+                opportunity=opportunity,
+                costing=getattr(order, "costing_header", None) or getattr(invoice, "costing_header", None),
+                quotation=getattr(order, "costing_header", None) or getattr(invoice, "costing_header", None),
+                invoice=invoice,
+                production_order=order,
+            )
+        if can_view_profit:
+            lifecycle_profit = build_lifecycle_profit_breakdown(lifecycle)
+    except Exception:
+        logger.exception("production_detail: failed to build lifecycle profit for order %s", order.pk)
+        lifecycle_profit = None
     actual_entry_form = ActualCostEntryForm()
 
     if request.method == "POST":
@@ -7112,6 +7152,9 @@ def production_detail(request, pk):
         "actual_entries": actual_entries,
         "actual_entry_form": actual_entry_form,
         "variance_report": variance_report,
+        "lifecycle": lifecycle if getattr(lifecycle, "pk", None) else None,
+        "lifecycle_profit": lifecycle_profit,
+        "can_view_lifecycle_profit": can_view_profit,
         "can_add_lines": can_add_lines,
     }
 
@@ -8126,6 +8169,7 @@ def shipment_list(request):
                     shipment.delivered_at = timezone.now()
                 shipment.save()
                 _handle_shipment_status_change(request, shipment, old_status)
+                create_lifecycle_from_shipping(shipment, user=request.user)
                 messages.success(request, f"Shipment status updated to {shipment.get_status_display()}.")
         return redirect("shipment_list")
 
@@ -8254,6 +8298,7 @@ def shipment_add(request):
                 shipment.rate_bdt_per_cad = rate
             shipment.save()
             _handle_shipment_status_change(request, shipment, None)
+            create_lifecycle_from_shipping(shipment, user=request.user)
             messages.success(request, "Shipment created.")
             return redirect("shipment_detail", pk=shipment.pk)
 
@@ -8279,6 +8324,7 @@ def shipment_detail(request, pk):
         qs = qs.select_related(*sr)
 
     shipment = get_object_or_404(qs, pk=pk)
+    lifecycle = shipment.order_lifecycles.order_by("-updated_at", "-id").first()
     if request.method == "POST":
         action = (request.POST.get("action") or "").strip()
         if action == "update_status":
@@ -8292,9 +8338,10 @@ def shipment_detail(request, pk):
                     shipment.delivered_at = timezone.now()
                 shipment.save()
                 _handle_shipment_status_change(request, shipment, old_status)
+                create_lifecycle_from_shipping(shipment, user=request.user)
                 messages.success(request, f"Shipment status updated to {shipment.get_status_display()}.")
             return redirect("shipment_detail", pk=pk)
-    return render(request, "crm/shipment_detail.html", {"shipment": shipment})
+    return render(request, "crm/shipment_detail.html", {"shipment": shipment, "lifecycle": lifecycle})
 
 
 def shipment_edit(request, pk):
@@ -8310,6 +8357,7 @@ def shipment_edit(request, pk):
                 shipment.rate_bdt_per_cad = rate
             shipment.save()
             _handle_shipment_status_change(request, shipment, old_status)
+            create_lifecycle_from_shipping(shipment, user=request.user)
             messages.success(request, "Shipment updated.")
             return redirect("shipment_detail", pk=pk)
 
@@ -8377,6 +8425,7 @@ def shipping_add_for_opportunity(request, pk):
 
             shipment.save()
             _handle_shipment_status_change(request, shipment, None)
+            create_lifecycle_from_shipping(shipment, user=request.user)
             messages.success(request, "Shipment created for this opportunity.")
             return redirect("opportunity_detail", pk=opportunity.pk)
 
@@ -8447,6 +8496,7 @@ def shipping_add_for_order(request, pk):
 
             shipment.save()
             _handle_shipment_status_change(request, shipment, None)
+            create_lifecycle_from_shipping(shipment, user=request.user)
             messages.success(request, "Shipment created for this order.")
             return redirect("production_detail", pk=order.pk)
 
@@ -10955,6 +11005,15 @@ def main_dashboard(request):
         "ship_delayed": ship_delayed,
     }
 
+    can_view_order_lifecycle_profit = can_view_lifecycle_profit(request.user)
+    lifecycle_summary = None
+    if can_view_order_lifecycle_profit:
+        try:
+            lifecycle_summary = lifecycle_dashboard_metrics()
+        except Exception:
+            logger.exception("main_dashboard: failed to build order lifecycle summary")
+            lifecycle_summary = None
+
     ctx = {
         "today": today,
         "leads_today": leads_today,
@@ -11044,6 +11103,8 @@ def main_dashboard(request):
         "action_recommendations": action_recommendations,
         "ai_notes": ai_notes,
         "chart_data": chart_data,
+        "can_view_order_lifecycle_profit": can_view_order_lifecycle_profit,
+        "lifecycle_summary": lifecycle_summary,
     }
 
     return render(request, "crm/main_dashboard.html", ctx)

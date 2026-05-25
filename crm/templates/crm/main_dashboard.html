@@ -268,6 +268,56 @@
     {% endfor %}
   </div>
 
+  {% if can_view_order_lifecycle_profit and lifecycle_summary %}
+    <section class="dashboard-section" id="order-lifecycle-section">
+      <div class="dashboard-section-head">
+        <div>
+          <p class="dashboard-eyebrow">Order Lifecycle</p>
+          <h2>Costing to shipping workflow</h2>
+          <p>Internal view of connected orders, payment progress, and protected profit estimates.</p>
+        </div>
+        <a class="dashboard-section-link" href="{% url 'cost_sheet_list' %}">
+          <i data-lucide="arrow-up-right"></i>
+          Open costing
+        </a>
+      </div>
+      <div class="dashboard-grid dashboard-grid--ops">
+        <article class="dashboard-card">
+          <div class="dashboard-card-head">
+            <div class="dashboard-card-copy">
+              <span class="dashboard-card-title">Lifecycle Status</span>
+              <span class="dashboard-card-note">Active order movement across the operating flow.</span>
+            </div>
+          </div>
+          <ul class="dashboard-list">
+            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Active orders</strong><span>{{ lifecycle_summary.active_orders|intcomma }}</span></div></li>
+            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>In costing</strong><span>{{ lifecycle_summary.orders_in_costing|intcomma }}</span></div></li>
+            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Waiting quotation approval</strong><span>{{ lifecycle_summary.orders_waiting_quotation|intcomma }}</span></div></li>
+            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Waiting payment</strong><span>{{ lifecycle_summary.orders_waiting_payment|intcomma }}</span></div></li>
+            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>In production</strong><span>{{ lifecycle_summary.orders_in_production|intcomma }}</span></div></li>
+            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Ready to ship</strong><span>{{ lifecycle_summary.orders_ready_to_ship|intcomma }}</span></div></li>
+            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Completed this month</strong><span>{{ lifecycle_summary.completed_this_month|intcomma }}</span></div></li>
+          </ul>
+        </article>
+
+        <article class="dashboard-card">
+          <div class="dashboard-card-head">
+            <div class="dashboard-card-copy">
+              <span class="dashboard-card-title">Lifecycle Financials</span>
+              <span class="dashboard-card-note">Internal only. Never shown on client invoice or PDF.</span>
+            </div>
+          </div>
+          <ul class="dashboard-list">
+            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Total invoice value</strong><span>{{ lifecycle_summary.total_invoice_value|floatformat:2|intcomma }}</span></div></li>
+            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Estimated profit</strong><span>{{ lifecycle_summary.estimated_profit|floatformat:2|intcomma }}</span></div></li>
+            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Average margin</strong><span>{{ lifecycle_summary.average_margin|floatformat:2 }}%</span></div></li>
+            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Outstanding balance</strong><span>{{ lifecycle_summary.outstanding_balance|floatformat:2|intcomma }}</span></div></li>
+          </ul>
+        </article>
+      </div>
+    </section>
+  {% endif %}
+
   <section class="dashboard-section" id="sales-section">
     <div class="dashboard-section-head">
       <div>
