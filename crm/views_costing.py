@@ -34,6 +34,7 @@ from .services.costing_workflow import (
     get_costing_quote_amounts,
 )
 from .services.order_lifecycle import create_lifecycle_from_costing
+from .permissions import can_view_internal_costing
 
 
 logger = logging.getLogger(__name__)
@@ -274,6 +275,7 @@ def _costing_header_initial(opportunity=None):
 
 
 def cost_sheet_list(request):
+    can_view_costing_profit = can_view_internal_costing(request.user)
     qs = CostingHeader.objects.select_related("opportunity", "customer").order_by("-updated_at")
 
     customer_id = (request.GET.get("customer") or "").strip()
@@ -341,6 +343,7 @@ def cost_sheet_list(request):
             "status": status,
             "q": search,
         },
+        "can_view_internal_costing": can_view_costing_profit,
     }
     return render(request, "crm/costing/costsheet_list.html", context)
 
@@ -390,6 +393,7 @@ def cost_sheet_create(request, opportunity_id=None):
 
 
 def cost_sheet_detail(request, pk):
+    can_view_costing_profit = can_view_internal_costing(request.user)
     costing = get_object_or_404(
         CostingHeader.objects.select_related("opportunity", "customer").prefetch_related("line_items"),
         pk=pk,
@@ -603,6 +607,7 @@ def cost_sheet_detail(request, pk):
         "can_approve": can_approve,
         "is_locked": is_locked,
         "workflow": _workflow_context(costing, request.user),
+        "can_view_internal_costing": can_view_costing_profit,
     }
     return render(request, "crm/costing/costsheet_detail.html", context)
 
@@ -1100,6 +1105,7 @@ def cost_sheet_export_excel(request, pk):
 
 
 def cost_sheet_dashboard(request):
+    can_view_costing_profit = can_view_internal_costing(request.user)
     qs = CostingHeader.objects.select_related("customer", "opportunity").order_by("-updated_at")
 
     approved_only = (request.GET.get("approved") or "").strip() == "1"
@@ -1187,11 +1193,13 @@ def cost_sheet_dashboard(request):
             ("other", "Other"),
         ],
         "customers": list({row["costing"].customer for row in rows if row["costing"].customer}),
+        "can_view_internal_costing": can_view_costing_profit,
     }
     return render(request, "crm/costing/costing_dashboard.html", context)
 
 
 def cost_sheet_reports(request):
+    can_view_costing_profit = can_view_internal_costing(request.user)
     qs = CostingHeader.objects.select_related("customer", "opportunity").order_by("-updated_at")
     export = (request.GET.get("export") or "").strip()
 
@@ -1246,6 +1254,7 @@ def cost_sheet_reports(request):
 
     context = {
         "rows": rows,
+        "can_view_internal_costing": can_view_costing_profit,
     }
     return render(request, "crm/costing/costing_reports.html", context)
 

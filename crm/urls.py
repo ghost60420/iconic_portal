@@ -46,6 +46,10 @@ def ceo_perm(view_func):
     return login_required(require_ceo_tools(view_func))
 
 
+def costing_perm(view_func):
+    return login_required(require_access("can_costing")(require_access("can_view_internal_costing")(view_func)))
+
+
 urlpatterns = [
     path("", home_redirect, name="home"),
     path("accounts/", include("django.contrib.auth.urls")),
@@ -106,20 +110,20 @@ urlpatterns = [
     path("opportunities/<int:pk>/ai/suggest/", perm("can_ai", ai.ai_opportunity_suggest), name="ai_opportunity_suggest"),
 
     # Costing
-    path("costing/", login_required(costing.cost_sheet_list), name="cost_sheet_list"),
-    path("costing/add/", login_required(costing.cost_sheet_create), name="cost_sheet_create"),
-    path("costing/add/opportunity/<int:opportunity_id>/", login_required(costing.cost_sheet_create), name="cost_sheet_create_for_opportunity"),
-    path("costing/<int:pk>/", login_required(costing.cost_sheet_detail), name="cost_sheet_detail"),
-    path("costing/<int:pk>/convert/quotation/", login_required(costing.cost_sheet_convert_to_quotation), name="cost_sheet_convert_to_quotation"),
-    path("costing/<int:pk>/quotation/", login_required(costing.cost_sheet_client_quotation), name="cost_sheet_client_quotation"),
-    path("costing/<int:pk>/quotation/pdf/", login_required(costing.cost_sheet_quotation_pdf), name="cost_sheet_quotation_pdf"),
-    path("costing/<int:pk>/convert/invoice/", login_required(costing.cost_sheet_convert_to_invoice), name="cost_sheet_convert_to_invoice"),
-    path("costing/<int:pk>/duplicate/", login_required(costing.cost_sheet_duplicate), name="cost_sheet_duplicate"),
-    path("costing/<int:pk>/export/pdf/", login_required(costing.cost_sheet_export_pdf), name="cost_sheet_export_pdf"),
-    path("costing/<int:pk>/export/excel/", login_required(costing.cost_sheet_export_excel), name="cost_sheet_export_excel"),
-    path("costing/dashboard/", login_required(costing.cost_sheet_dashboard), name="cost_sheet_dashboard"),
-    path("costing/reports/", login_required(costing.cost_sheet_reports), name="cost_sheet_reports"),
-    path("costing/guide/", login_required(costing.cost_sheet_guide), name="cost_sheet_guide"),
+    path("costing/", costing_perm(costing.cost_sheet_list), name="cost_sheet_list"),
+    path("costing/add/", costing_perm(costing.cost_sheet_create), name="cost_sheet_create"),
+    path("costing/add/opportunity/<int:opportunity_id>/", costing_perm(costing.cost_sheet_create), name="cost_sheet_create_for_opportunity"),
+    path("costing/<int:pk>/", costing_perm(costing.cost_sheet_detail), name="cost_sheet_detail"),
+    path("costing/<int:pk>/convert/quotation/", costing_perm(costing.cost_sheet_convert_to_quotation), name="cost_sheet_convert_to_quotation"),
+    path("costing/<int:pk>/quotation/", costing_perm(costing.cost_sheet_client_quotation), name="cost_sheet_client_quotation"),
+    path("costing/<int:pk>/quotation/pdf/", costing_perm(costing.cost_sheet_quotation_pdf), name="cost_sheet_quotation_pdf"),
+    path("costing/<int:pk>/convert/invoice/", costing_perm(costing.cost_sheet_convert_to_invoice), name="cost_sheet_convert_to_invoice"),
+    path("costing/<int:pk>/duplicate/", costing_perm(costing.cost_sheet_duplicate), name="cost_sheet_duplicate"),
+    path("costing/<int:pk>/export/pdf/", costing_perm(costing.cost_sheet_export_pdf), name="cost_sheet_export_pdf"),
+    path("costing/<int:pk>/export/excel/", costing_perm(costing.cost_sheet_export_excel), name="cost_sheet_export_excel"),
+    path("costing/dashboard/", costing_perm(costing.cost_sheet_dashboard), name="cost_sheet_dashboard"),
+    path("costing/reports/", costing_perm(costing.cost_sheet_reports), name="cost_sheet_reports"),
+    path("costing/guide/", costing_perm(costing.cost_sheet_guide), name="cost_sheet_guide"),
 
     path("chatter/", login_required(views.chatter_feed), name="chatter_feed"),
     path("order-lifecycle/<int:pk>/", login_required(lifecycle.order_lifecycle_detail), name="order_lifecycle_detail"),

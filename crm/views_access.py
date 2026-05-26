@@ -62,7 +62,7 @@ def access_list(request):
         ("Core", ["can_leads", "can_opportunities", "can_customers", "can_calendar"]),
         ("Operations", ["can_inventory", "can_library", "can_production", "can_shipping"]),
         ("Engagement", ["can_ai", "can_marketing", "can_whatsapp"]),
-        ("Costing", ["can_costing", "can_costing_approve"]),
+        ("Costing", ["can_costing", "can_view_internal_costing", "can_costing_approve"]),
         ("Admin / Accounting", ["can_view_ceo_tools", "can_accounting_bd", "can_accounting_ca"]),
     ]
 

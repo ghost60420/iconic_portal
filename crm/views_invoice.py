@@ -26,6 +26,7 @@ from .models import (
     ProductionOrder,
 )
 from .forms import InvoiceForm, InvoicePaymentForm
+from .permissions import can_view_internal_costing
 from .services.costing_workflow import CostingWorkflowError, create_or_link_production_order_from_invoice
 from .services.order_lifecycle import build_lifecycle_profit_breakdown, create_lifecycle_from_invoice
 
@@ -63,6 +64,10 @@ def can_manage_invoices(user):
 
 def superuser_only(user):
     return can_manage_invoices(user)
+
+
+def can_manage_invoice_internal_costing(user):
+    return can_view_internal_costing(user)
 
 
 def _d(v):
@@ -742,6 +747,7 @@ def invoice_add(request):
     # optional prefill from order
     order_id = request.GET.get("order_id")
     initial = {}
+    can_edit_internal_costs = can_manage_invoice_internal_costing(request.user)
 
     if order_id:
         try:
@@ -753,7 +759,7 @@ def invoice_add(request):
             order = None
 
     if request.method == "POST":
-        form = InvoiceForm(request.POST, can_edit_internal_costs=can_manage_invoices(request.user))
+        form = InvoiceForm(request.POST, can_edit_internal_costs=can_edit_internal_costs)
         if form.is_valid():
             with transaction.atomic():
                 inv = form.save(commit=False)
@@ -781,12 +787,12 @@ def invoice_add(request):
             messages.success(request, "Invoice created.")
             return redirect("invoice_view", pk=inv.pk)
     else:
-        form = InvoiceForm(initial=initial, can_edit_internal_costs=can_manage_invoices(request.user))
+        form = InvoiceForm(initial=initial, can_edit_internal_costs=can_edit_internal_costs)
 
     return render(
         request,
         "crm/invoice/invoice_form.html",
-        {"form": form, "mode": "add", "can_manage_invoice_costing": can_manage_invoices(request.user)},
+        {"form": form, "mode": "add", "can_manage_invoice_costing": can_edit_internal_costs},
     )
 
 
@@ -794,8 +800,9 @@ def invoice_add(request):
 @user_passes_test(superuser_only)
 def invoice_add_ca(request):
     # wrapper to force CAD
+    can_edit_internal_costs = can_manage_invoice_internal_costing(request.user)
     if request.method == "POST":
-        form = InvoiceForm(request.POST, can_edit_internal_costs=can_manage_invoices(request.user))
+        form = InvoiceForm(request.POST, can_edit_internal_costs=can_edit_internal_costs)
         if form.is_valid():
             with transaction.atomic():
                 inv = form.save(commit=False)
@@ -816,11 +823,11 @@ def invoice_add_ca(request):
             messages.success(request, "Invoice created.")
             return redirect("invoice_view", pk=inv.pk)
     else:
-        form = InvoiceForm(initial={"currency": "CAD"}, can_edit_internal_costs=can_manage_invoices(request.user))
+        form = InvoiceForm(initial={"currency": "CAD"}, can_edit_internal_costs=can_edit_internal_costs)
     return render(
         request,
         "crm/invoice/invoice_form.html",
-        {"form": form, "mode": "add", "can_manage_invoice_costing": can_manage_invoices(request.user)},
+        {"form": form, "mode": "add", "can_manage_invoice_costing": can_edit_internal_costs},
     )
 
 
@@ -828,8 +835,9 @@ def invoice_add_ca(request):
 @user_passes_test(superuser_only)
 def invoice_add_bd(request):
     # wrapper to force BDT
+    can_edit_internal_costs = can_manage_invoice_internal_costing(request.user)
     if request.method == "POST":
-        form = InvoiceForm(request.POST, can_edit_internal_costs=can_manage_invoices(request.user))
+        form = InvoiceForm(request.POST, can_edit_internal_costs=can_edit_internal_costs)
         if form.is_valid():
             with transaction.atomic():
                 inv = form.save(commit=False)
@@ -850,11 +858,11 @@ def invoice_add_bd(request):
             messages.success(request, "Invoice created.")
             return redirect("invoice_view", pk=inv.pk)
     else:
-        form = InvoiceForm(initial={"currency": "BDT"}, can_edit_internal_costs=can_manage_invoices(request.user))
+        form = InvoiceForm(initial={"currency": "BDT"}, can_edit_internal_costs=can_edit_internal_costs)
     return render(
         request,
         "crm/invoice/invoice_form.html",
-        {"form": form, "mode": "add", "can_manage_invoice_costing": can_manage_invoices(request.user)},
+        {"form": form, "mode": "add", "can_manage_invoice_costing": can_edit_internal_costs},
     )
 
 
@@ -862,9 +870,10 @@ def invoice_add_bd(request):
 @user_passes_test(superuser_only)
 def invoice_edit(request, pk):
     inv = get_object_or_404(Invoice, pk=pk)
+    can_edit_internal_costs = can_manage_invoice_internal_costing(request.user)
 
     if request.method == "POST":
-        form = InvoiceForm(request.POST, instance=inv, can_edit_internal_costs=can_manage_invoices(request.user))
+        form = InvoiceForm(request.POST, instance=inv, can_edit_internal_costs=can_edit_internal_costs)
         if form.is_valid():
             with transaction.atomic():
                 inv2 = form.save(commit=False)
@@ -886,12 +895,12 @@ def invoice_edit(request, pk):
             messages.success(request, "Invoice updated.")
             return redirect("invoice_view", pk=inv.pk)
     else:
-        form = InvoiceForm(instance=inv, can_edit_internal_costs=can_manage_invoices(request.user))
+        form = InvoiceForm(instance=inv, can_edit_internal_costs=can_edit_internal_costs)
 
     return render(
         request,
         "crm/invoice/invoice_form.html",
-        {"form": form, "mode": "edit", "invoice": inv, "can_manage_invoice_costing": can_manage_invoices(request.user)},
+        {"form": form, "mode": "edit", "invoice": inv, "can_manage_invoice_costing": can_edit_internal_costs},
     )
 
 
@@ -907,8 +916,9 @@ def invoice_view(request, pk):
     if legacy_paid_amount < 0:
         legacy_paid_amount = Decimal("0")
     lifecycle = inv.order_lifecycles.order_by("-updated_at", "-id").first()
+    can_view_invoice_costing = can_manage_invoice_internal_costing(request.user)
     lifecycle_profit = None
-    if lifecycle and can_manage_invoices(request.user):
+    if lifecycle and can_view_invoice_costing:
         lifecycle_profit = build_lifecycle_profit_breakdown(lifecycle)
 
     initial = {
@@ -929,7 +939,7 @@ def invoice_view(request, pk):
             "payment_total": payment_total,
             "legacy_paid_amount": legacy_paid_amount,
             "is_payment_month_closed": _is_accounting_month_closed(timezone.localdate(), _invoice_payment_side(inv)),
-            "can_manage_invoice_costing": can_manage_invoices(request.user),
+            "can_manage_invoice_costing": can_view_invoice_costing,
             "lifecycle": lifecycle,
             "lifecycle_profit": lifecycle_profit,
         },
@@ -1210,7 +1220,7 @@ def invoice_payment_add(request, pk):
                 "payment_total": payment_total,
                 "legacy_paid_amount": legacy_paid_amount,
                 "is_payment_month_closed": _is_accounting_month_closed(timezone.localdate(), _invoice_payment_side(inv)),
-                "can_manage_invoice_costing": can_manage_invoices(request.user),
+                "can_manage_invoice_costing": can_manage_invoice_internal_costing(request.user),
             },
         )
 
@@ -1240,7 +1250,7 @@ def invoice_payment_add(request, pk):
                 "payment_total": payment_total,
                 "legacy_paid_amount": legacy_paid_amount,
                 "is_payment_month_closed": True,
-                "can_manage_invoice_costing": can_manage_invoices(request.user),
+                "can_manage_invoice_costing": can_manage_invoice_internal_costing(request.user),
             },
         )
 

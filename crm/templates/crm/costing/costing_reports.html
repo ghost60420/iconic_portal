@@ -56,13 +56,14 @@
     <div>
       <p class="costing-support-eyebrow">Costing exports</p>
       <h1>Costing Reports</h1>
-      <p class="costing-support-subtitle">Download pricing, margin, variance, and finance reports with clear review context.</p>
+      <p class="costing-support-subtitle">{% if can_view_internal_costing %}Download pricing, margin, variance, and finance reports with clear review context.{% else %}Internal costing reports are restricted.{% endif %}</p>
     </div>
     <div class="costing-support-actions">
       <a href="{% url 'cost_sheet_list' %}" class="btnx">Back to list</a>
     </div>
   </div>
 
+  {% if can_view_internal_costing %}
   <div class="card">
     <div class="costing-support-title">Exports</div>
     <div class="costing-support-actions">
@@ -102,6 +103,12 @@
       </tbody>
     </table>
   </div>
+  {% else %}
+    <div class="card">
+      <div class="costing-support-title">Internal costing restricted</div>
+      <p class="muted">You do not have permission to view costing profit, margin, or internal cost reports.</p>
+    </div>
+  {% endif %}
 </div>
 
 {% endblock %}

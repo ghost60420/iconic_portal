@@ -4,6 +4,7 @@ from django.db.models import F, Q, Sum
 from django.utils import timezone
 
 from crm.models import ActualCostEntry, Invoice, OrderLifecycle, Shipment
+from crm.permissions import can_view_internal_costing
 from crm.services.costing_engine import compute_costing
 
 
@@ -30,17 +31,7 @@ def _user_or_none(user):
 
 
 def can_view_lifecycle_profit(user):
-    if not user or not getattr(user, "is_authenticated", False):
-        return False
-    if user.is_superuser or user.is_staff:
-        return True
-    access = getattr(user, "access", None)
-    if not access:
-        return False
-    return any(
-        bool(getattr(access, flag, False))
-        for flag in ("can_accounting_ca", "can_accounting_bd", "can_costing_approve", "can_view_ceo_tools")
-    )
+    return can_view_internal_costing(user)
 
 
 def _first_existing(**links):

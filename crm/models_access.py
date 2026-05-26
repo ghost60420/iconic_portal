@@ -35,6 +35,7 @@ class UserAccess(models.Model):
     can_marketing = models.BooleanField(default=True)
     can_whatsapp = models.BooleanField(default=True)
     can_costing = models.BooleanField(default=True)
+    can_view_internal_costing = models.BooleanField(default=False)
     can_costing_approve = models.BooleanField(default=False)
     can_view_ceo_tools = models.BooleanField(default=False)
 
@@ -66,6 +67,7 @@ class UserAccess(models.Model):
         # Superusers always retain executive access even if the checkbox is posted off.
         if self.user_id and self.user.is_superuser:
             self.can_view_ceo_tools = True
+            self.can_view_internal_costing = True
 
     def save(self, *args, **kwargs):
         self.clean()

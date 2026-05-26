@@ -420,7 +420,7 @@
     </div>
   </section>
 
-  {% if calc %}
+  {% if calc and can_view_internal_costing %}
     <section class="costing-kpi-grid" aria-label="Costing summary">
       <article class="costing-kpi">
         <span>Total cost</span>
@@ -453,7 +453,7 @@
         <small>{{ costing.currency }} pricing basis</small>
       </article>
     </section>
-  {% else %}
+  {% elif not calc %}
     <section class="card costing-empty-review">
       <div>
         <div class="card-title">Summary not ready</div>
@@ -504,39 +504,41 @@
       </div>
     </article>
 
-    <article class="card costing-pricing-card">
-      <div class="card-title">Pricing and margin</div>
-      {% if calc %}
-        <div class="costing-pricing-grid">
-          <div>
-            <span>Suggested selling price</span>
-            <strong>{{ calc.display.fob_per_piece }}</strong>
+    {% if can_view_internal_costing %}
+      <article class="card costing-pricing-card">
+        <div class="card-title">Pricing and margin</div>
+        {% if calc %}
+          <div class="costing-pricing-grid">
+            <div>
+              <span>Suggested selling price</span>
+              <strong>{{ calc.display.fob_per_piece }}</strong>
+            </div>
+            <div>
+              <span>Final offer / pc</span>
+              <strong>{{ calc.display.final_offer_fob_per_piece }}</strong>
+            </div>
+            <div>
+              <span>Final offer total</span>
+              <strong>{{ calc.display.total_final_offer_order }}</strong>
+            </div>
+            <div>
+              <span>Exchange rate</span>
+              <strong>{{ costing.exchange_rate|default:"-" }}</strong>
+            </div>
+            <div>
+              <span>Target margin</span>
+              <strong>{{ costing.target_margin_percent|default:"-" }}%</strong>
+            </div>
+            <div>
+              <span>Commission</span>
+              <strong>{{ costing.commission_percent }}%</strong>
+            </div>
           </div>
-          <div>
-            <span>Final offer / pc</span>
-            <strong>{{ calc.display.final_offer_fob_per_piece }}</strong>
-          </div>
-          <div>
-            <span>Final offer total</span>
-            <strong>{{ calc.display.total_final_offer_order }}</strong>
-          </div>
-          <div>
-            <span>Exchange rate</span>
-            <strong>{{ costing.exchange_rate|default:"-" }}</strong>
-          </div>
-          <div>
-            <span>Target margin</span>
-            <strong>{{ costing.target_margin_percent|default:"-" }}%</strong>
-          </div>
-          <div>
-            <span>Commission</span>
-            <strong>{{ costing.commission_percent }}%</strong>
-          </div>
-        </div>
-      {% else %}
-        <p class="muted">Pricing will appear once costing lines are saved.</p>
-      {% endif %}
-    </article>
+        {% else %}
+          <p class="muted">Pricing will appear once costing lines are saved.</p>
+        {% endif %}
+      </article>
+    {% endif %}
   </section>
 
   <div class="card" id="costing-guide-panel">
@@ -979,14 +981,16 @@
           </div>
         </div>
 
-        <div class="smart-panel-section">
-          <div class="smart-panel-title">Profit Margin Calculator</div>
-          <label class="smart-margin-field">Target Margin % <input type="number" step="0.01" data-smart-margin-target></label>
-          <div class="smart-suggested-price">
-            <span>Suggested Selling Price</span>
-            <strong data-smart-selling-price>BDT 0.00</strong>
+        {% if can_view_internal_costing %}
+          <div class="smart-panel-section">
+            <div class="smart-panel-title">Profit Margin Calculator</div>
+            <label class="smart-margin-field">Target Margin % <input type="number" step="0.01" data-smart-margin-target></label>
+            <div class="smart-suggested-price">
+              <span>Suggested Selling Price</span>
+              <strong data-smart-selling-price>BDT 0.00</strong>
+            </div>
           </div>
-        </div>
+        {% endif %}
 
         <div class="smart-panel-section">
           <div class="smart-panel-title">Calculation Lock</div>
@@ -1003,6 +1007,7 @@
     </div>
   </form>
 
+  {% if can_view_internal_costing %}
   <div class="card costing-review-card">
     <div class="costing-section-head">
       <div>
@@ -1144,6 +1149,7 @@
       <div class="muted">No totals yet. Add line items and save.</div>
     {% endif %}
   </div>
+  {% endif %}
 
   <div class="card costing-documents-card">
     <div class="costing-section-head">
@@ -1242,7 +1248,7 @@
       <div><span>Status</span><strong>{{ costing.get_status_display }}</strong></div>
       <div><span>Currency</span><strong>{{ costing.currency }}</strong></div>
     </div>
-    {% if calc %}
+    {% if calc and can_view_internal_costing %}
       <div class="print-quote-summary">
         <div><span>Total Cost / Pc</span><strong>{{ calc.display.total_cost_per_piece }} BDT</strong></div>
         <div><span>FOB / Pc</span><strong>{{ calc.display.fob_per_piece }} BDT</strong></div>

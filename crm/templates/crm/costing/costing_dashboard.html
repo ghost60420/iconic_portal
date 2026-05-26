@@ -79,6 +79,7 @@
     </div>
   </div>
 
+  {% if can_view_internal_costing %}
   <form class="card dash-filter-card" method="get">
     <div class="dash-filter-grid">
       <label class="dash-field">
@@ -309,5 +310,12 @@
     });
   }
 </script>
+{% else %}
+  <div class="card">
+    <div class="dash-section-title">Internal costing restricted</div>
+    <p class="muted">You do not have permission to view costing profit, margin, or internal cost metrics.</p>
+  </div>
+</div>
+{% endif %}
 
 {% endblock %}

@@ -28,21 +28,23 @@
       <strong>{{ summary.count }}</strong>
       <small>{{ summary.approved_count }} approved · {{ summary.draft_count }} draft</small>
     </article>
-    <article class="costing-stat">
-      <span>Total cost</span>
-      <strong>{{ summary.total_cost_order|floatformat:0 }}</strong>
-      <small>Order-level production cost for current filters.</small>
-    </article>
-    <article class="costing-stat">
-      <span>Quoted value</span>
-      <strong>{{ summary.total_sales_order|floatformat:0 }}</strong>
-      <small>Total FOB value for current filters.</small>
-    </article>
-    <article class="costing-stat">
-      <span>Profit / margin</span>
-      <strong>{{ summary.total_profit_order|floatformat:0 }}</strong>
-      <small>Average margin {{ summary.average_margin|floatformat:1 }}%</small>
-    </article>
+    {% if can_view_internal_costing %}
+      <article class="costing-stat">
+        <span>Total cost</span>
+        <strong>{{ summary.total_cost_order|floatformat:0 }}</strong>
+        <small>Order-level production cost for current filters.</small>
+      </article>
+      <article class="costing-stat">
+        <span>Quoted value</span>
+        <strong>{{ summary.total_sales_order|floatformat:0 }}</strong>
+        <small>Total FOB value for current filters.</small>
+      </article>
+      <article class="costing-stat">
+        <span>Profit / margin</span>
+        <strong>{{ summary.total_profit_order|floatformat:0 }}</strong>
+        <small>Average margin {{ summary.average_margin|floatformat:1 }}%</small>
+      </article>
+    {% endif %}
   </section>
 
   <section class="costing-panel">
@@ -102,7 +104,7 @@
     <div class="costing-table-head">
       <div>
         <h2>Pricing review</h2>
-        <p>Compare total cost, selling price, profit, margin, and status before sharing quotes.</p>
+        <p>{% if can_view_internal_costing %}Compare total cost, selling price, profit, margin, and status before sharing quotes.{% else %}Review costing status and client quotation readiness.{% endif %}</p>
       </div>
     </div>
 
@@ -112,10 +114,12 @@
           <tr>
             <th>Opportunity / Client</th>
             <th>Product / Style</th>
-            <th>Total cost</th>
-            <th>Cost / pc</th>
-            <th>Selling price</th>
-            <th>Margin / profit</th>
+            {% if can_view_internal_costing %}
+              <th>Total cost</th>
+              <th>Cost / pc</th>
+              <th>Selling price</th>
+              <th>Margin / profit</th>
+            {% endif %}
             <th>Currency</th>
             <th>Status</th>
             <th>Created</th>
@@ -156,41 +160,43 @@
                   </div>
                 </td>
 
-                <td data-label="Total cost">
-                  <div class="costing-money">
-                    <strong>{{ calc.display.total_cost_order }}</strong>
-                    <span>Total order cost</span>
-                  </div>
-                </td>
+                {% if can_view_internal_costing %}
+                  <td data-label="Total cost">
+                    <div class="costing-money">
+                      <strong>{{ calc.display.total_cost_order }}</strong>
+                      <span>Total order cost</span>
+                    </div>
+                  </td>
 
-                <td data-label="Cost / pc">
-                  <div class="costing-money">
-                    <strong>{{ calc.display.total_cost_per_piece }}</strong>
-                    <span>Per piece</span>
-                  </div>
-                </td>
+                  <td data-label="Cost / pc">
+                    <div class="costing-money">
+                      <strong>{{ calc.display.total_cost_per_piece }}</strong>
+                      <span>Per piece</span>
+                    </div>
+                  </td>
 
-                <td data-label="Selling price">
-                  <div class="costing-money">
-                    {% if calc.fob_per_piece %}
-                      <strong>{{ calc.display.fob_per_piece }}</strong>
-                      <span>FOB / pc</span>
-                    {% else %}
-                      <strong class="costing-muted">Not set</strong>
-                      <span>Needs target margin or manual FOB</span>
-                    {% endif %}
-                  </div>
-                </td>
+                  <td data-label="Selling price">
+                    <div class="costing-money">
+                      {% if calc.fob_per_piece %}
+                        <strong>{{ calc.display.fob_per_piece }}</strong>
+                        <span>FOB / pc</span>
+                      {% else %}
+                        <strong class="costing-muted">Not set</strong>
+                        <span>Needs target margin or manual FOB</span>
+                      {% endif %}
+                    </div>
+                  </td>
 
-                <td data-label="Margin / profit">
-                  <div class="costing-margin-stack">
-                    <span class="costing-margin-badge {{ row.margin_tone }}">
-                      {{ calc.display.margin_percent }}%
-                    </span>
-                    <strong>{{ calc.display.profit_per_piece }} / pc</strong>
-                    <span>{{ calc.display.total_profit_order }} total profit</span>
-                  </div>
-                </td>
+                  <td data-label="Margin / profit">
+                    <div class="costing-margin-stack">
+                      <span class="costing-margin-badge {{ row.margin_tone }}">
+                        {{ calc.display.margin_percent }}%
+                      </span>
+                      <strong>{{ calc.display.profit_per_piece }} / pc</strong>
+                      <span>{{ calc.display.total_profit_order }} total profit</span>
+                    </div>
+                  </td>
+                {% endif %}
 
                 <td data-label="Currency">
                   <span class="costing-currency">{{ sheet.currency }}</span>

@@ -58,6 +58,18 @@ def _has_flag(access, flag_name):
     return bool(getattr(access, flag_name, False))
 
 
+def can_view_internal_costing(user):
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    if user.is_superuser:
+        return True
+    try:
+        access = get_access(user)
+    except (OperationalError, ProgrammingError):
+        return False
+    return bool(getattr(access, "can_view_internal_costing", False))
+
+
 def require_access(flag_name):
     def decorator(view_func):
         @wraps(view_func)
