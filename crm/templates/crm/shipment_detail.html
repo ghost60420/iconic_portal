@@ -98,6 +98,10 @@
                 <option value="{{ key }}" {% if shipment.status == key %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
             </select>
+            <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:800;">
+              <input type="checkbox" name="notify_customer" value="1" checked>
+              Notify customer
+            </label>
             <button type="submit" class="shipping-btn shipping-btn--primary">Update</button>
           </form>
         </div>
@@ -320,7 +324,10 @@
             </strong>
           </div>
           {% if shipment.customer and shipment.customer.email %}
-            <a href="{% url 'shipment_notify_customer' shipment.pk %}" class="shipping-btn shipping-btn--primary">Email Customer</a>
+            <form method="post" action="{% url 'shipment_notify_customer' shipment.pk %}">
+              {% csrf_token %}
+              <button type="submit" class="shipping-btn shipping-btn--primary">Email Customer</button>
+            </form>
           {% endif %}
         </div>
       </article>

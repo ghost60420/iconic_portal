@@ -19,7 +19,7 @@ except Exception:
     OpenAI = None
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.core.mail import EmailMessage, get_connection, send_mail
+from django.core.mail import send_mail
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction, IntegrityError, connection
 from django.db.utils import DataError, OperationalError, ProgrammingError
@@ -340,55 +340,17 @@ canada_required = user_passes_test(is_canada_user, login_url="login")
 # ------------------------------------------
 
 def send_shipment_update_email(shipment, event_label):
-    email_to = None
-
-    if shipment.customer and shipment.customer.email:
-        email_to = shipment.customer.email
-    elif shipment.opportunity and shipment.opportunity.lead and shipment.opportunity.lead.email:
-        email_to = shipment.opportunity.lead.email
-
-    if not email_to:
-        return
-
-    subject = f"Update on your shipment {shipment.tracking_number or shipment.pk}"
-
-    lines = []
-    lines.append("Hi,")
-    lines.append("")
-    lines.append("This is a quick update about your shipment from Iconic Apparel House.")
-    lines.append(f"Status: {shipment.get_status_display()} ({event_label})")
-
-    if shipment.carrier:
-        lines.append(f"Carrier: {shipment.get_carrier_display()}")
-
-    if shipment.tracking_number:
-        if shipment.tracking_url:
-            lines.append(f"Tracking link: {shipment.tracking_url}")
-        else:
-            lines.append(f"Tracking number: {shipment.tracking_number}")
-
-    if shipment.box_count:
-        lines.append(f"Boxes: {shipment.box_count}")
-
-    if shipment.total_weight_kg:
-        lines.append(f"Weight: {shipment.total_weight_kg} kg")
-
-    if shipment.cost_cad:
-        lines.append(f"Shipping cost we paid: {shipment.cost_cad} CAD")
-
-    lines.append("")
-    lines.append("If you have any questions just reply to this email.")
-    lines.append("")
-    lines.append("Thank you")
-    lines.append("Iconic Apparel House team")
-
-    body = "\n".join(lines)
-    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", None) or "no-reply@iconicapparelhouse.com"
-
+    status_key = getattr(shipment, "status", "") or "shipped"
     try:
-        send_mail(subject, body, from_email, [email_to], fail_silently=True)
+        from .tasks import send_shipment_status_notification as shipment_notification_task
+
+        shipment_notification_task.apply_async(
+            args=[shipment.pk, status_key],
+            kwargs={"force": True},
+            retry=False,
+        )
     except Exception:
-        pass
+        logger.exception("Shipment notification compatibility queue failed", extra={"shipment_id": shipment.pk})
 
 # ------------------------------------------
 # Production stage order (non accounting)
@@ -8039,6 +8001,8 @@ from django.utils import timezone
 
 from .models import Shipment, ProductionOrder, Opportunity
 from .forms import ShipmentForm
+from .services.shipment_notifications import SHIPMENT_NOTIFY_STATUSES, shipment_email_target
+from .tasks import send_shipment_status_notification
 
 
 def form_fields(form_class):
@@ -8075,83 +8039,64 @@ def _select_related_fields():
     return fields
 
 
-SHIPMENT_NOTIFY_STATUSES = {
-    "shipped": "Dispatched",
-    "out_for_delivery": "Out for delivery",
-    "delivered": "Delivered",
-}
+def _shipment_notify_requested(request):
+    return (request.POST.get("notify_customer") or "").strip().lower() in {"1", "on", "true", "yes"}
 
 
-def _shipment_email_target(shipment):
-    if getattr(shipment, "customer", None) and shipment.customer and getattr(shipment.customer, "email", None):
-        name = shipment.customer.contact_name or shipment.customer.account_brand or "Customer"
-        return shipment.customer.email, name
-    if getattr(shipment, "opportunity", None) and shipment.opportunity and getattr(shipment.opportunity, "lead", None):
-        lead = shipment.opportunity.lead
-        if lead and getattr(lead, "email", None):
-            name = lead.contact_name or lead.account_brand or "Customer"
-            return lead.email, name
-    return None, None
-
-
-def _send_email_safe(subject, body, from_email, to_list):
-    timeout = getattr(settings, "EMAIL_TIMEOUT", 5)
-    host_user = getattr(settings, "EMAIL_HOST_USER", "") or ""
-    host_password = getattr(settings, "EMAIL_HOST_PASSWORD", "") or ""
-    if not host_user or not host_password:
-        return False
-    try:
-        connection = get_connection(timeout=timeout)
-        message = EmailMessage(subject, body, from_email, to_list, connection=connection)
-        return message.send(fail_silently=True) > 0
-    except Exception:
-        return False
-
-
-def _send_shipment_status_email(request, shipment, status_key):
-    email_to, name = _shipment_email_target(shipment)
+def _queue_shipment_status_notification(shipment, status_key, *, force=False):
+    email_to, _name = shipment_email_target(shipment)
     if not email_to:
-        return False
+        logger.warning("Shipment notification queue skipped: no recipient", extra={"shipment_id": shipment.pk})
+        return False, "missing_recipient"
 
-    status_label = SHIPMENT_NOTIFY_STATUSES.get(status_key, "Shipment update")
-    carrier_name = shipment.get_carrier_display() if hasattr(shipment, "get_carrier_display") else "Carrier"
-    ship_date = shipment.ship_date or timezone.localdate()
-    tracking_line = shipment.tracking_number or "Tracking will be shared soon."
+    def enqueue():
+        try:
+            options = {"retry": False}
+            queue_name = getattr(settings, "SHIPMENT_NOTIFICATION_QUEUE", "") or ""
+            if queue_name:
+                options["queue"] = queue_name
+            send_shipment_status_notification.apply_async(
+                args=[shipment.pk, status_key],
+                kwargs={"force": force},
+                **options,
+            )
+        except Exception:
+            logger.exception(
+                "Shipment notification queue failed",
+                extra={"shipment_id": shipment.pk, "status": status_key},
+            )
+            return False
+        return True
 
-    subject = f"Shipment update: {status_label}"
-    lines = [
-        f"Hello {name},",
-        "",
-        f"Your shipment is now: {status_label}.",
-        "",
-        f"Carrier: {carrier_name}",
-        f"Tracking: {tracking_line}",
-        f"Ship date: {ship_date}",
-    ]
-    if getattr(shipment, "tracking_url", None):
-        lines.append(f"Tracking link: {shipment.tracking_url}")
-    lines += ["", "Thank you,", "Iconic Apparel House"]
-    body = "\n".join(lines)
+    if connection.in_atomic_block:
+        transaction.on_commit(enqueue)
+        return True, "queued"
 
-    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "info@iconicapparelhouse.com")
-    return _send_email_safe(subject, body, from_email, [email_to])
+    if enqueue():
+        return True, "queued"
+    return False, "queue_failed"
 
 
-def _handle_shipment_status_change(request, shipment, old_status):
+def _handle_shipment_status_change(request, shipment, old_status, *, notify_customer=False):
     new_status = shipment.status
     if new_status == old_status:
-        return
+        return False
     if new_status not in SHIPMENT_NOTIFY_STATUSES:
-        return
+        return False
     if shipment.last_notified_status == new_status:
-        return
+        return False
+    if not notify_customer:
+        return False
 
-    sent = _send_shipment_status_email(request, shipment, new_status)
-    if sent:
-        shipment.last_notified_status = new_status
-        if new_status == "delivered" and not shipment.delivered_at:
-            shipment.delivered_at = timezone.now()
-        shipment.save(update_fields=["last_notified_status", "delivered_at"])
+    queued, reason = _queue_shipment_status_notification(shipment, new_status)
+    if queued:
+        messages.info(request, "Customer shipment notification queued.")
+        return True
+    if reason == "missing_recipient":
+        messages.warning(request, "Shipment saved, but no customer email address was found for notification.")
+    else:
+        messages.warning(request, "Shipment saved, but notification could not be queued.")
+    return False
 
 
 def shipment_list(request):
@@ -8168,7 +8113,12 @@ def shipment_list(request):
                 if new_status == "delivered" and not shipment.delivered_at:
                     shipment.delivered_at = timezone.now()
                 shipment.save()
-                _handle_shipment_status_change(request, shipment, old_status)
+                _handle_shipment_status_change(
+                    request,
+                    shipment,
+                    old_status,
+                    notify_customer=_shipment_notify_requested(request),
+                )
                 create_lifecycle_from_shipping(shipment, user=request.user)
                 messages.success(request, f"Shipment status updated to {shipment.get_status_display()}.")
         return redirect("shipment_list")
@@ -8297,7 +8247,12 @@ def shipment_add(request):
             if rate not in [None, ""]:
                 shipment.rate_bdt_per_cad = rate
             shipment.save()
-            _handle_shipment_status_change(request, shipment, None)
+            _handle_shipment_status_change(
+                request,
+                shipment,
+                None,
+                notify_customer=_shipment_notify_requested(request),
+            )
             create_lifecycle_from_shipping(shipment, user=request.user)
             messages.success(request, "Shipment created.")
             return redirect("shipment_detail", pk=shipment.pk)
@@ -8337,7 +8292,12 @@ def shipment_detail(request, pk):
                 if new_status == "delivered" and not shipment.delivered_at:
                     shipment.delivered_at = timezone.now()
                 shipment.save()
-                _handle_shipment_status_change(request, shipment, old_status)
+                _handle_shipment_status_change(
+                    request,
+                    shipment,
+                    old_status,
+                    notify_customer=_shipment_notify_requested(request),
+                )
                 create_lifecycle_from_shipping(shipment, user=request.user)
                 messages.success(request, f"Shipment status updated to {shipment.get_status_display()}.")
             return redirect("shipment_detail", pk=pk)
@@ -8356,7 +8316,12 @@ def shipment_edit(request, pk):
             if rate not in [None, ""]:
                 shipment.rate_bdt_per_cad = rate
             shipment.save()
-            _handle_shipment_status_change(request, shipment, old_status)
+            _handle_shipment_status_change(
+                request,
+                shipment,
+                old_status,
+                notify_customer=_shipment_notify_requested(request),
+            )
             create_lifecycle_from_shipping(shipment, user=request.user)
             messages.success(request, "Shipment updated.")
             return redirect("shipment_detail", pk=pk)
@@ -8424,7 +8389,12 @@ def shipping_add_for_opportunity(request, pk):
                 shipment.ship_date = timezone.localdate()
 
             shipment.save()
-            _handle_shipment_status_change(request, shipment, None)
+            _handle_shipment_status_change(
+                request,
+                shipment,
+                None,
+                notify_customer=_shipment_notify_requested(request),
+            )
             create_lifecycle_from_shipping(shipment, user=request.user)
             messages.success(request, "Shipment created for this opportunity.")
             return redirect("opportunity_detail", pk=opportunity.pk)
@@ -8495,7 +8465,12 @@ def shipping_add_for_order(request, pk):
                 shipment.cost_cad = Decimal("0")
 
             shipment.save()
-            _handle_shipment_status_change(request, shipment, None)
+            _handle_shipment_status_change(
+                request,
+                shipment,
+                None,
+                notify_customer=_shipment_notify_requested(request),
+            )
             create_lifecycle_from_shipping(shipment, user=request.user)
             messages.success(request, "Shipment created for this order.")
             return redirect("production_detail", pk=order.pk)
@@ -8540,6 +8515,7 @@ def shipment_refresh_tracking(request, pk):
     return redirect("shipment_detail", pk=pk)
 
 
+@require_POST
 def shipment_notify_customer(request, pk):
     qs = Shipment.objects.all()
     sr = _select_related_fields()
@@ -8548,43 +8524,13 @@ def shipment_notify_customer(request, pk):
 
     shipment = get_object_or_404(qs, pk=pk)
 
-    email_to = None
-    if getattr(shipment, "customer", None) and shipment.customer and getattr(shipment.customer, "email", None):
-        email_to = shipment.customer.email
-    elif getattr(shipment, "opportunity", None) and shipment.opportunity and getattr(shipment.opportunity, "lead", None):
-        if shipment.opportunity.lead and getattr(shipment.opportunity.lead, "email", None):
-            email_to = shipment.opportunity.lead.email
-
-    if not email_to:
+    queued, reason = _queue_shipment_status_notification(shipment, shipment.status, force=True)
+    if queued:
+        messages.success(request, "Customer shipment notification queued.")
+    elif reason == "missing_recipient":
         messages.error(request, "No email address found for this shipment.")
-        return redirect("shipment_detail", pk=pk)
-
-    carrier_name = shipment.get_carrier_display() if hasattr(shipment, "get_carrier_display") else "Carrier"
-    ship_date = shipment.ship_date or timezone.localdate()
-    tracking_line = shipment.tracking_number or "Tracking will be shared soon."
-
-    subject = "Your shipment from Iconic Apparel House is on the way"
-
-    lines = [
-        "Hello,",
-        "",
-        "Your shipment is on the way.",
-        "",
-        f"Carrier: {carrier_name}",
-        f"Tracking: {tracking_line}",
-        f"Ship date: {ship_date}",
-    ]
-    if getattr(shipment, "tracking_url", None):
-        lines.append(f"Tracking link: {shipment.tracking_url}")
-    lines += ["", "Thank you,", "Iconic Apparel House"]
-
-    body = "\n".join(lines)
-    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "info@iconicapparelhouse.com")
-
-    if _send_email_safe(subject, body, from_email, [email_to]):
-        messages.success(request, "Email sent.")
     else:
-        messages.error(request, "Could not send email right now. Please try again later.")
+        messages.error(request, "Could not queue email right now. Shipment was not changed.")
 
     return redirect("shipment_detail", pk=pk)
 
