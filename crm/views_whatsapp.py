@@ -1962,11 +1962,3 @@ def wa_webhook(request):
         return HttpResponse("ok")
 
     return HttpResponseForbidden("forbidden")
-
-
-@csrf_exempt
-def wa_infobip_webhook(request):
-    """
-    Webhook stub kept to avoid 500s when WhatsApp integration is disabled.
-    """
-    return HttpResponse("WhatsApp webhook disabled", status=410)
