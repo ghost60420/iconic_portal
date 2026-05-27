@@ -117,6 +117,15 @@
           {% endfor %}
         </select>
       </label>
+      <label class="dash-field">
+        <span>Currency</span>
+        <select name="currency">
+          <option value="">All currencies</option>
+          {% for key,label in currencies %}
+            <option value="{{ key }}" {% if filters.currency == key %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
       <label class="dash-check">
         <input type="checkbox" name="approved" value="1" {% if filters.approved %}checked{% endif %}>
         <span>Approved only</span>
@@ -139,7 +148,7 @@
           {% for row in top_profit %}
             <tr>
               <td>{{ row.costing.style_name|default:row.costing.style_code|default:"-" }}</td>
-              <td>{{ row.display.total_profit_order }}</td>
+              <td>{{ row.costing.currency }} {{ row.display.total_profit_order }}</td>
             </tr>
           {% empty %}
             <tr><td colspan="2" class="muted">No data</td></tr>
@@ -175,7 +184,7 @@
       </div>
     </div>
     <div class="card">
-      <div class="dash-section-title">Average cost per piece by month</div>
+      <div class="dash-section-title">Average cost per piece by month{% if filters.currency %} ({{ filters.currency }}){% endif %}</div>
       <div class="dash-chart-wrap">
         <canvas id="trendChart"></canvas>
       </div>
@@ -221,7 +230,7 @@
   const trendData = {
     labels: {{ trend_labels|safe }},
     datasets: [{
-      label: "Avg cost per piece",
+      label: "Avg cost per piece{% if filters.currency %} ({{ filters.currency }}){% endif %}",
       data: {{ trend_values|safe }},
       borderColor: "#38bdf8",
       backgroundColor: "rgba(56,189,248,0.15)",

@@ -495,7 +495,7 @@ class CostSheetSimpleForm(forms.ModelForm):
             "notes": forms.Textarea(attrs={"rows": 3, "placeholder": "Assumptions and remarks"}),
         }
         labels = {
-            "exchange_rate_bdt_per_cad": "Exchange rate (\u09F3 per 1 CAD)",
+            "exchange_rate_bdt_per_cad": "Exchange rate (local currency per 1 CAD)",
         }
 
 

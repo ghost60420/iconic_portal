@@ -31,18 +31,33 @@
     {% if can_view_internal_costing %}
       <article class="costing-stat">
         <span>Total cost</span>
-        <strong>{{ summary.total_cost_order|floatformat:0 }}</strong>
-        <small>Order-level production cost for current filters.</small>
+        {% if summary.by_currency %}
+          <strong>{% if summary.by_currency|length == 1 %}{{ summary.by_currency.0.currency }} {{ summary.by_currency.0.total_cost_order|floatformat:0 }}{% else %}{{ summary.by_currency|length }} currencies{% endif %}</strong>
+          <small>{% for row in summary.by_currency %}{{ row.currency }} {{ row.total_cost_order|floatformat:0 }}{% if not forloop.last %} · {% endif %}{% endfor %}</small>
+        {% else %}
+          <strong>0</strong>
+          <small>Order-level production cost for current filters.</small>
+        {% endif %}
       </article>
       <article class="costing-stat">
         <span>Quoted value</span>
-        <strong>{{ summary.total_sales_order|floatformat:0 }}</strong>
-        <small>Total FOB value for current filters.</small>
+        {% if summary.by_currency %}
+          <strong>{% if summary.by_currency|length == 1 %}{{ summary.by_currency.0.currency }} {{ summary.by_currency.0.total_sales_order|floatformat:0 }}{% else %}{{ summary.by_currency|length }} currencies{% endif %}</strong>
+          <small>{% for row in summary.by_currency %}{{ row.currency }} {{ row.total_sales_order|floatformat:0 }}{% if not forloop.last %} · {% endif %}{% endfor %}</small>
+        {% else %}
+          <strong>0</strong>
+          <small>Total FOB value for current filters.</small>
+        {% endif %}
       </article>
       <article class="costing-stat">
         <span>Profit / margin</span>
-        <strong>{{ summary.total_profit_order|floatformat:0 }}</strong>
-        <small>Average margin {{ summary.average_margin|floatformat:1 }}%</small>
+        {% if summary.by_currency %}
+          <strong>{% if summary.by_currency|length == 1 %}{{ summary.by_currency.0.currency }} {{ summary.by_currency.0.total_profit_order|floatformat:0 }}{% else %}{{ summary.by_currency|length }} currencies{% endif %}</strong>
+          <small>{% for row in summary.by_currency %}{{ row.currency }} {{ row.total_profit_order|floatformat:0 }}{% if not forloop.last %} · {% endif %}{% endfor %} · Avg margin {{ summary.average_margin|floatformat:1 }}%</small>
+        {% else %}
+          <strong>0</strong>
+          <small>Average margin {{ summary.average_margin|floatformat:1 }}%</small>
+        {% endif %}
       </article>
     {% endif %}
   </section>
@@ -163,14 +178,14 @@
                 {% if can_view_internal_costing %}
                   <td data-label="Total cost">
                     <div class="costing-money">
-                      <strong>{{ calc.display.total_cost_order }}</strong>
+                      <strong>{{ sheet.currency }} {{ calc.display.total_cost_order }}</strong>
                       <span>Total order cost</span>
                     </div>
                   </td>
 
                   <td data-label="Cost / pc">
                     <div class="costing-money">
-                      <strong>{{ calc.display.total_cost_per_piece }}</strong>
+                      <strong>{{ sheet.currency }} {{ calc.display.total_cost_per_piece }}</strong>
                       <span>Per piece</span>
                     </div>
                   </td>
@@ -178,7 +193,7 @@
                   <td data-label="Selling price">
                     <div class="costing-money">
                       {% if calc.fob_per_piece %}
-                        <strong>{{ calc.display.fob_per_piece }}</strong>
+                        <strong>{{ sheet.currency }} {{ calc.display.fob_per_piece }}</strong>
                         <span>FOB / pc</span>
                       {% else %}
                         <strong class="costing-muted">Not set</strong>
@@ -192,8 +207,8 @@
                       <span class="costing-margin-badge {{ row.margin_tone }}">
                         {{ calc.display.margin_percent }}%
                       </span>
-                      <strong>{{ calc.display.profit_per_piece }} / pc</strong>
-                      <span>{{ calc.display.total_profit_order }} total profit</span>
+                      <strong>{{ sheet.currency }} {{ calc.display.profit_per_piece }} / pc</strong>
+                      <span>{{ sheet.currency }} {{ calc.display.total_profit_order }} total profit</span>
                     </div>
                   </td>
                 {% endif %}

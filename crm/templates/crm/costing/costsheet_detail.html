@@ -834,7 +834,7 @@
             <div class="chip-row" data-category-chips="{{ section.key }}"></div>
           </div>
         </div>
-        <div class="muted" style="margin-bottom:6px;">Unit prices are BDT per selected UOM. Consumption is per piece unless the supplier quotes per order.</div>
+        <div class="muted" style="margin-bottom:6px;">Unit prices are <span data-currency-code>{{ costing.currency|default:"BDT" }}</span> per selected UOM. Consumption is per piece unless the supplier quotes per order.</div>
         <div class="line-entry-toolbar">
           <div class="line-entry-helper">
             Basic costing only needs Item, UOM, Unit Price, Consumption, and Wastage.
@@ -851,7 +851,7 @@
               <tr>
                 <th class="line-item-col">Item</th>
                 <th class="line-uom-col">UOM</th>
-                <th class="line-number-col">Unit Price <span class="unit-badge">BDT</span></th>
+                <th class="line-number-col">Unit Price <span class="unit-badge" data-currency-code>{{ costing.currency|default:"BDT" }}</span></th>
                 <th class="line-number-col">Consumption</th>
                 <th class="line-number-col">Wastage %</th>
                 <th class="line-cost-col">Calculated Cost</th>
@@ -874,7 +874,7 @@
                       <option value="{{ uom_key }}" {% if row.uom == uom_key %}selected{% endif %}>{{ uom_label }}</option>
                     {% endfor %}
                   </select>
-                  <div class="muted unit-label">BDT per {{ row.uom }}</div>
+                  <div class="muted unit-label">{{ costing.currency|default:"BDT" }} per {{ row.uom }}</div>
                 </td>
                 <td>
                   <input type="number" step="0.0001" data-field="unit_price" value="{{ row.unit_price }}" placeholder="0.00">
@@ -886,7 +886,7 @@
                   <input type="number" step="0.01" data-field="wastage_percent" value="{{ row.wastage_percent }}" placeholder="0">
                 </td>
                 <td>
-                  <output class="line-calculated-cost" data-role="calculated-cost" aria-readonly="true">BDT 0.00</output>
+                  <output class="line-calculated-cost" data-role="calculated-cost" aria-readonly="true">{{ costing.currency|default:"BDT" }} 0.00</output>
                 </td>
                 <td>
                   <div class="line-row-actions">
@@ -901,7 +901,7 @@
                 <td colspan="7">
                   <div class="line-advanced-panel">
                     <div>
-                      <label>Freight BDT</label>
+                      <label>Freight <span data-currency-code>{{ costing.currency|default:"BDT" }}</span></label>
                       <input type="number" step="0.0001" data-field="freight" value="{{ row.freight }}" placeholder="0.00">
                     </div>
                     <div>
@@ -944,7 +944,7 @@
             <tfoot>
               <tr class="line-section-total-row">
                 <td colspan="5">{{ section.total_label }}</td>
-                <td><output class="line-section-total" data-section-total="{{ section.key }}" aria-readonly="true">BDT 0.00</output></td>
+                <td><output class="line-section-total" data-section-total="{{ section.key }}" aria-readonly="true">{{ costing.currency|default:"BDT" }} 0.00</output></td>
                 <td></td>
               </tr>
             </tfoot>
@@ -960,19 +960,19 @@
       <aside class="card costing-smart-panel" aria-label="Smart costing summary">
         <div class="card-title">Grand Total</div>
         <div class="smart-summary-list">
-          <div><span>Material Cost</span><strong data-smart-summary="material">BDT 0.00</strong></div>
-          <div><span>Labor Cost</span><strong data-smart-summary="labor">BDT 0.00</strong></div>
-          <div><span>CM Cost</span><strong data-smart-summary="cm">BDT 0.00</strong></div>
-          <div><span>Logistics</span><strong data-smart-summary="logistics">BDT 0.00</strong></div>
-          <div><span>Other</span><strong data-smart-summary="other">BDT 0.00</strong></div>
-          <div class="smart-summary-total"><span>Total FOB Cost</span><strong data-smart-summary="total">BDT 0.00</strong></div>
+          <div><span>Material Cost</span><strong data-smart-summary="material">{{ costing.currency|default:"BDT" }} 0.00</strong></div>
+          <div><span>Labor Cost</span><strong data-smart-summary="labor">{{ costing.currency|default:"BDT" }} 0.00</strong></div>
+          <div><span>CM Cost</span><strong data-smart-summary="cm">{{ costing.currency|default:"BDT" }} 0.00</strong></div>
+          <div><span>Logistics</span><strong data-smart-summary="logistics">{{ costing.currency|default:"BDT" }} 0.00</strong></div>
+          <div><span>Other</span><strong data-smart-summary="other">{{ costing.currency|default:"BDT" }} 0.00</strong></div>
+          <div class="smart-summary-total"><span>Total FOB Cost</span><strong data-smart-summary="total">{{ costing.currency|default:"BDT" }} 0.00</strong></div>
         </div>
 
         <div class="smart-panel-section">
           <div class="smart-panel-title">Currency Conversion</div>
           <div class="smart-rate-grid">
-            <label>BDT / USD <input type="number" step="0.0001" value="120" data-smart-rate="USD"></label>
-            <label>BDT / CAD <input type="number" step="0.0001" value="90" data-smart-rate="CAD"></label>
+            <label>USD rate <input type="number" step="0.0001" value="120" data-smart-rate="USD"></label>
+            <label>CAD rate <input type="number" step="0.0001" value="90" data-smart-rate="CAD"></label>
           </div>
           <div class="smart-currency-grid">
             <div><span>BDT</span><strong data-currency-total="BDT">0.00</strong></div>
@@ -987,7 +987,7 @@
             <label class="smart-margin-field">Target Margin % <input type="number" step="0.01" data-smart-margin-target></label>
             <div class="smart-suggested-price">
               <span>Suggested Selling Price</span>
-              <strong data-smart-selling-price>BDT 0.00</strong>
+              <strong data-smart-selling-price>{{ costing.currency|default:"BDT" }} 0.00</strong>
             </div>
           </div>
         {% endif %}
@@ -1032,15 +1032,15 @@
       <div class="summary-grid">
         <div class="summary-card">
           <div class="summary-label">Total cost per piece</div>
-          <div class="summary-value">{{ calc.display.total_cost_per_piece }} <span class="unit-badge">BDT per piece</span></div>
+          <div class="summary-value">{{ calc.display.total_cost_per_piece }} <span class="unit-badge">{{ costing.currency|default:"BDT" }} per piece</span></div>
         </div>
         <div class="summary-card">
           <div class="summary-label">FOB per piece</div>
-          <div class="summary-value">{{ calc.display.fob_per_piece }} <span class="unit-badge">BDT per piece</span></div>
+          <div class="summary-value">{{ calc.display.fob_per_piece }} <span class="unit-badge">{{ costing.currency|default:"BDT" }} per piece</span></div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Profit per piece</div>
-          <div class="summary-value">{{ calc.display.profit_per_piece }} <span class="unit-badge">BDT per piece</span></div>
+          <div class="summary-value">{{ calc.display.profit_per_piece }} <span class="unit-badge">{{ costing.currency|default:"BDT" }} per piece</span></div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Margin %</div>
@@ -1048,23 +1048,23 @@
         </div>
         <div class="summary-card">
           <div class="summary-label">Total cost order</div>
-          <div class="summary-value">{{ calc.display.total_cost_order }} <span class="unit-badge">BDT total order</span></div>
+          <div class="summary-value">{{ calc.display.total_cost_order }} <span class="unit-badge">{{ costing.currency|default:"BDT" }} total order</span></div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Total sales order</div>
-          <div class="summary-value">{{ calc.display.total_sales_order }} <span class="unit-badge">BDT total order</span></div>
+          <div class="summary-value">{{ calc.display.total_sales_order }} <span class="unit-badge">{{ costing.currency|default:"BDT" }} total order</span></div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Total profit order</div>
-          <div class="summary-value">{{ calc.display.total_profit_order }} <span class="unit-badge">BDT total order</span></div>
+          <div class="summary-value">{{ calc.display.total_profit_order }} <span class="unit-badge">{{ costing.currency|default:"BDT" }} total order</span></div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Final offer FOB per piece</div>
-          <div class="summary-value">{{ calc.display.final_offer_fob_per_piece }} <span class="unit-badge">BDT per piece</span></div>
+          <div class="summary-value">{{ calc.display.final_offer_fob_per_piece }} <span class="unit-badge">{{ costing.currency|default:"BDT" }} per piece</span></div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Final offer total</div>
-          <div class="summary-value">{{ calc.display.total_final_offer_order }} <span class="unit-badge">BDT total order</span></div>
+          <div class="summary-value">{{ calc.display.total_final_offer_order }} <span class="unit-badge">{{ costing.currency|default:"BDT" }} total order</span></div>
         </div>
       </div>
       <div class="costing-table-scroll">
@@ -1072,8 +1072,8 @@
           <thead>
             <tr>
               <th>Category</th>
-              <th>BDT per piece</th>
-              <th>BDT total order</th>
+              <th>{{ costing.currency|default:"BDT" }} per piece</th>
+              <th>{{ costing.currency|default:"BDT" }} total order</th>
             </tr>
           </thead>
           <tbody>
@@ -1250,10 +1250,10 @@
     </div>
     {% if calc and can_view_internal_costing %}
       <div class="print-quote-summary">
-        <div><span>Total Cost / Pc</span><strong>{{ calc.display.total_cost_per_piece }} BDT</strong></div>
-        <div><span>FOB / Pc</span><strong>{{ calc.display.fob_per_piece }} BDT</strong></div>
+        <div><span>Total Cost / Pc</span><strong>{{ costing.currency|default:"BDT" }} {{ calc.display.total_cost_per_piece }}</strong></div>
+        <div><span>FOB / Pc</span><strong>{{ costing.currency|default:"BDT" }} {{ calc.display.fob_per_piece }}</strong></div>
         <div><span>Margin</span><strong>{{ calc.display.margin_percent }}%</strong></div>
-        <div><span>Total Offer</span><strong>{{ calc.display.total_final_offer_order }} BDT</strong></div>
+        <div><span>Total Offer</span><strong>{{ costing.currency|default:"BDT" }} {{ calc.display.total_final_offer_order }}</strong></div>
       </div>
     {% endif %}
     <div class="print-quote-notes">
@@ -1423,13 +1423,13 @@
           <option value="{{ uom_key }}">{{ uom_label }}</option>
         {% endfor %}
       </select>
-      <div class="muted unit-label">BDT per piece</div>
+      <div class="muted unit-label">{{ costing.currency|default:"BDT" }} per piece</div>
     </td>
     <td><input type="number" step="0.0001" data-field="unit_price" value="" placeholder="0.00"></td>
     <td><input type="number" step="0.0001" data-field="consumption_value" value="1" placeholder="1"></td>
     <td><input type="number" step="0.01" data-field="wastage_percent" value="0" placeholder="0"></td>
     <td>
-      <output class="line-calculated-cost" data-role="calculated-cost" aria-readonly="true">BDT 0.00</output>
+      <output class="line-calculated-cost" data-role="calculated-cost" aria-readonly="true">{{ costing.currency|default:"BDT" }} 0.00</output>
     </td>
     <td>
       <div class="line-row-actions">
@@ -1444,7 +1444,7 @@
     <td colspan="7">
       <div class="line-advanced-panel">
         <div>
-          <label>Freight BDT</label>
+          <label>Freight <span data-currency-code>{{ costing.currency|default:"BDT" }}</span></label>
           <input type="number" step="0.0001" data-field="freight" value="0" placeholder="0.00">
         </div>
         <div>
@@ -1630,6 +1630,22 @@
     }
   };
 
+  const supportedCostingCurrencies = ["BDT", "CAD", "USD"];
+
+  function selectedCostingCurrency() {
+    const input = document.querySelector('#costing-form [name="currency"]');
+    const value = input && input.value ? input.value.toUpperCase() : '{{ costing.currency|default:"BDT" }}';
+    return supportedCostingCurrencies.includes(value) ? value : 'BDT';
+  }
+
+  function syncCurrencyLabels() {
+    const currency = selectedCostingCurrency();
+    document.querySelectorAll('[data-currency-code]').forEach((el) => {
+      el.textContent = currency;
+    });
+    document.querySelectorAll('.line-row').forEach(updateUnitLabel);
+  }
+
   function renderCategoryGuides() {
     document.querySelectorAll('[data-category-help]').forEach((el) => {
       const category = el.getAttribute('data-category-help');
@@ -1674,7 +1690,8 @@
     const uom = row.querySelector('[data-field="uom"]').value;
     const label = row.querySelector('.unit-label');
     if (label) {
-      label.textContent = uom === 'order' ? 'BDT per order' : `BDT per ${uom}`;
+      const currency = selectedCostingCurrency();
+      label.textContent = uom === 'order' ? `${currency} per order` : `${currency} per ${uom}`;
     }
   }
 
@@ -1715,9 +1732,9 @@
     return Number.isFinite(value) ? value : fallback;
   }
 
-  function formatBdt(value) {
+  function formatCostingMoney(value) {
     const amount = Number.isFinite(value) ? value : 0;
-    return `BDT ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
+    return `${selectedCostingCurrency()} ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
   }
 
   function formatAmount(value) {
@@ -1747,15 +1764,14 @@
     row.dataset.calculatedCost = cost.toString();
     const output = row.querySelector('[data-role="calculated-cost"]');
     if (output) {
-      output.textContent = formatBdt(cost);
+      output.textContent = formatCostingMoney(cost);
     }
     return cost;
   }
 
   function syncSmartRatesFromSheet() {
-    const currencyInput = document.querySelector('#costing-form [name="currency"]');
     const exchangeRate = formNumber('exchange_rate', 0);
-    const currency = currencyInput ? currencyInput.value : 'BDT';
+    const currency = selectedCostingCurrency();
     if (exchangeRate > 0 && (currency === 'USD' || currency === 'CAD')) {
       const rateInput = document.querySelector(`[data-smart-rate="${currency}"]`);
       if (rateInput) {
@@ -1775,7 +1791,7 @@
 
   function setSummaryValue(name, value) {
     document.querySelectorAll(`[data-smart-summary="${name}"]`).forEach((el) => {
-      el.textContent = formatBdt(value);
+      el.textContent = formatCostingMoney(value);
     });
   }
 
@@ -1790,7 +1806,7 @@
       totals[category] = sectionTotal;
       const output = table.querySelector(`[data-section-total="${category}"]`);
       if (output) {
-        output.textContent = formatBdt(sectionTotal);
+        output.textContent = formatCostingMoney(sectionTotal);
       }
     });
 
@@ -1817,15 +1833,15 @@
 
     const usdRate = formNumberFromSelector('[data-smart-rate="USD"]', 120);
     const cadRate = formNumberFromSelector('[data-smart-rate="CAD"]', 90);
-    setCurrencyValue('BDT', total);
-    setCurrencyValue('USD', usdRate > 0 ? total / usdRate : 0);
-    setCurrencyValue('CAD', cadRate > 0 ? total / cadRate : 0);
+    setCurrencyValue('BDT', convertFromSelectedCurrency(total, 'BDT', usdRate, cadRate));
+    setCurrencyValue('USD', convertFromSelectedCurrency(total, 'USD', usdRate, cadRate));
+    setCurrencyValue('CAD', convertFromSelectedCurrency(total, 'CAD', usdRate, cadRate));
 
     const marginTarget = formNumberFromSelector('[data-smart-margin-target]', formNumber('target_margin_percent', 0));
     const suggested = marginTarget < 100 ? total / (1 - (marginTarget / 100)) : 0;
     const sellingOutput = document.querySelector('[data-smart-selling-price]');
     if (sellingOutput) {
-      sellingOutput.textContent = formatBdt(suggested);
+      sellingOutput.textContent = formatCostingMoney(suggested);
     }
     syncCostingWarnings(total, suggested);
   }
@@ -1876,6 +1892,27 @@
     document.querySelectorAll(`[data-currency-total="${currency}"]`).forEach((el) => {
       el.textContent = formatAmount(value);
     });
+  }
+
+  function convertFromSelectedCurrency(value, targetCurrency, usdRate, cadRate) {
+    const selectedCurrency = selectedCostingCurrency();
+    let bdtValue = Number.isFinite(value) ? value : 0;
+    if (selectedCurrency === 'USD') {
+      bdtValue = usdRate > 0 ? bdtValue * usdRate : 0;
+    } else if (selectedCurrency === 'CAD') {
+      bdtValue = cadRate > 0 ? bdtValue * cadRate : 0;
+    }
+
+    if (targetCurrency === 'BDT') {
+      return bdtValue;
+    }
+    if (targetCurrency === 'USD') {
+      return usdRate > 0 ? bdtValue / usdRate : 0;
+    }
+    if (targetCurrency === 'CAD') {
+      return cadRate > 0 ? bdtValue / cadRate : 0;
+    }
+    return 0;
   }
 
   function setAdvancedState(row, open) {
@@ -2230,15 +2267,18 @@
 
   document.querySelectorAll('#costing-form [name="currency"], #costing-form [name="exchange_rate"]').forEach((input) => {
     input.addEventListener('input', () => {
+      syncCurrencyLabels();
       syncSmartRatesFromSheet();
       syncSmartTotals();
     });
     input.addEventListener('change', () => {
+      syncCurrencyLabels();
       syncSmartRatesFromSheet();
       syncSmartTotals();
     });
   });
 
+  syncCurrencyLabels();
   syncSmartRatesFromSheet();
   syncSmartTotals();
   setSaveState('saved');

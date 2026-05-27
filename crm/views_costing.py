@@ -21,11 +21,12 @@ from .models import (
     CostingAuditLog,
     CostingSnapshot,
     NEW_COSTING_CATEGORY_CHOICES,
+    NEW_COSTING_CURRENCY_CHOICES,
     NEW_COSTING_UOM_CHOICES,
     Opportunity,
     OpportunityDocument,
 )
-from .services.costing_currency import format_bdt
+from .services.costing_currency import format_costing_money, normalize_costing_currency
 from .services.costing_engine import compute_costing, validate_costing
 from .services.costing_workflow import (
     CostingWorkflowError,
@@ -68,6 +69,14 @@ def _can_approve(user):
 
 def _can_convert_to_invoice(user):
     return bool(user and user.is_authenticated and user.is_superuser)
+
+
+def _costing_currency(costing):
+    return normalize_costing_currency(getattr(costing, "currency", None))
+
+
+def _format_costing_money(costing, value):
+    return format_costing_money(value, _costing_currency(costing))
 
 
 def _quotation_company():
@@ -312,6 +321,25 @@ def cost_sheet_list(request):
     total_cost_order = sum((row["calc"].get("total_cost_order") or Decimal("0")) for row in rows)
     total_sales_order = sum((row["calc"].get("total_sales_order") or Decimal("0")) for row in rows)
     total_profit_order = sum((row["calc"].get("total_profit_order") or Decimal("0")) for row in rows)
+    summary_by_currency = defaultdict(lambda: {
+        "total_cost_order": Decimal("0"),
+        "total_sales_order": Decimal("0"),
+        "total_profit_order": Decimal("0"),
+    })
+    for row in rows:
+        currency = _costing_currency(row["sheet"])
+        summary_by_currency[currency]["total_cost_order"] += row["calc"].get("total_cost_order") or Decimal("0")
+        summary_by_currency[currency]["total_sales_order"] += row["calc"].get("total_sales_order") or Decimal("0")
+        summary_by_currency[currency]["total_profit_order"] += row["calc"].get("total_profit_order") or Decimal("0")
+    currency_summary_rows = [
+        {
+            "currency": currency,
+            "total_cost_order": values["total_cost_order"],
+            "total_sales_order": values["total_sales_order"],
+            "total_profit_order": values["total_profit_order"],
+        }
+        for currency, values in sorted(summary_by_currency.items())
+    ]
     margin_values = [row["calc"].get("margin_percent") or Decimal("0") for row in rows]
     average_margin = (sum(margin_values) / Decimal(len(margin_values))) if margin_values else Decimal("0")
     customers_by_id = {
@@ -336,6 +364,7 @@ def cost_sheet_list(request):
             "total_sales_order": total_sales_order,
             "total_profit_order": total_profit_order,
             "average_margin": average_margin,
+            "by_currency": currency_summary_rows,
         },
         "selected": {
             "customer": customer_id,
@@ -963,12 +992,12 @@ def cost_sheet_export_pdf(request, pk):
         y -= 16
         p.setFont("Helvetica", 10)
         summary_lines = [
-            f"Total cost per piece: {format_bdt(calc['display']['total_cost_per_piece'])}",
-            f"FOB per piece: {format_bdt(calc['display']['fob_per_piece'])}",
-            f"Profit per piece: {format_bdt(calc['display']['profit_per_piece'])}",
+            f"Total cost per piece: {_format_costing_money(costing, calc['display']['total_cost_per_piece'])}",
+            f"FOB per piece: {_format_costing_money(costing, calc['display']['fob_per_piece'])}",
+            f"Profit per piece: {_format_costing_money(costing, calc['display']['profit_per_piece'])}",
             f"Margin %: {calc['display']['margin_percent']}",
-            f"Total cost order: {format_bdt(calc['display']['total_cost_order'])}",
-            f"Final offer total: {format_bdt(calc['display']['total_final_offer_order'])}",
+            f"Total cost order: {_format_costing_money(costing, calc['display']['total_cost_order'])}",
+            f"Final offer total: {_format_costing_money(costing, calc['display']['total_final_offer_order'])}",
         ]
         for line in summary_lines:
             p.drawString(55, y, line)
@@ -989,7 +1018,7 @@ def cost_sheet_export_pdf(request, pk):
             y -= 12
             p.setFont("Helvetica", 9)
             for item in items:
-                line = f"{item['item_name']} | {item['uom']} | {format_bdt(item['cost_per_piece'])}"
+                line = f"{item['item_name']} | {item['uom']} | {_format_costing_money(costing, item['cost_per_piece'])}"
                 p.drawString(60, y, line[:110])
                 y -= 12
                 if y < 80:
@@ -1049,28 +1078,30 @@ def cost_sheet_export_excel(request, pk):
         ws_summary.append(["Factory location", costing.get_factory_location_display()])
         ws_summary.append(["Status", costing.get_status_display()])
         ws_summary.append(["Currency", costing.currency])
-        ws_summary.append(["Exchange rate", format_bdt(costing.exchange_rate) if costing.exchange_rate else ""])
+        exchange_rate_label = f"Per 1 {_costing_currency(costing)}" if _costing_currency(costing) != "BDT" else ""
+        ws_summary.append(["Exchange rate", costing.exchange_rate or "", exchange_rate_label])
 
         ws_summary.append([])
-        ws_summary.append(["Total cost per piece", format_bdt(calc["display"]["total_cost_per_piece"])])
-        ws_summary.append(["FOB per piece", format_bdt(calc["display"]["fob_per_piece"])])
-        ws_summary.append(["Profit per piece", format_bdt(calc["display"]["profit_per_piece"])])
+        ws_summary.append(["Total cost per piece", _format_costing_money(costing, calc["display"]["total_cost_per_piece"])])
+        ws_summary.append(["FOB per piece", _format_costing_money(costing, calc["display"]["fob_per_piece"])])
+        ws_summary.append(["Profit per piece", _format_costing_money(costing, calc["display"]["profit_per_piece"])])
         ws_summary.append(["Margin %", float(calc["display"]["margin_percent"])])
-        ws_summary.append(["Total cost order", format_bdt(calc["display"]["total_cost_order"])])
-        ws_summary.append(["Total sales order", format_bdt(calc["display"]["total_sales_order"])])
-        ws_summary.append(["Total profit order", format_bdt(calc["display"]["total_profit_order"])])
+        ws_summary.append(["Total cost order", _format_costing_money(costing, calc["display"]["total_cost_order"])])
+        ws_summary.append(["Total sales order", _format_costing_money(costing, calc["display"]["total_sales_order"])])
+        ws_summary.append(["Total profit order", _format_costing_money(costing, calc["display"]["total_profit_order"])])
 
         ws_lines = wb.create_sheet("Line items")
+        currency = _costing_currency(costing)
         ws_lines.append([
             "Category",
             "Item",
             "UOM",
-            "Unit price",
-            "Freight",
+            f"Unit price ({currency})",
+            f"Freight ({currency})",
             "Consumption",
             "Wastage %",
             "Denominator",
-            "Cost per piece",
+            f"Cost per piece ({currency})",
         ])
         for row in calc["line_rows"]:
             ws_lines.append([
@@ -1112,6 +1143,7 @@ def cost_sheet_dashboard(request):
     customer_id = (request.GET.get("customer") or "").strip()
     product_type = (request.GET.get("product_type") or "").strip()
     factory_location = (request.GET.get("factory_location") or "").strip()
+    currency = (request.GET.get("currency") or "").strip().upper()
     start_date = (request.GET.get("start") or "").strip()
     end_date = (request.GET.get("end") or "").strip()
 
@@ -1123,6 +1155,8 @@ def cost_sheet_dashboard(request):
         qs = qs.filter(product_type=product_type)
     if factory_location:
         qs = qs.filter(factory_location=factory_location)
+    if currency:
+        qs = qs.filter(currency=currency)
     if start_date:
         qs = qs.filter(updated_at__date__gte=start_date)
     if end_date:
@@ -1183,10 +1217,12 @@ def cost_sheet_dashboard(request):
             "customer": customer_id,
             "product_type": product_type,
             "factory_location": factory_location,
+            "currency": currency,
             "start": start_date,
             "end": end_date,
         },
         "product_types": Opportunity.PRODUCT_TYPE_CHOICES,
+        "currencies": NEW_COSTING_CURRENCY_CHOICES,
         "factory_locations": [
             ("bd", "Bangladesh"),
             ("ca", "Canada"),
@@ -1212,40 +1248,42 @@ def cost_sheet_reports(request):
     if export:
         output = io.StringIO()
         if export == "list":
-            output.write("Opportunity,Customer,Style,Qty,Cost per piece,FOB per piece,Margin %\n")
+            output.write("Opportunity,Customer,Style,Currency,Qty,Cost per piece,FOB per piece,Margin %\n")
             for row in rows:
                 cost = row["costing"]
                 output.write(
-                    f"{cost.opportunity.opportunity_id},{(cost.customer.account_brand if cost.customer else '')},{cost.style_name},{row['order_quantity']},{row['total_cost_per_piece']},{row['fob_per_piece']},{row['margin_percent']}\n"
+                    f"{cost.opportunity.opportunity_id},{(cost.customer.account_brand if cost.customer else '')},{cost.style_name},{_costing_currency(cost)},{row['order_quantity']},{row['total_cost_per_piece']},{row['fob_per_piece']},{row['margin_percent']}\n"
                 )
         elif export == "margin":
-            output.write("Opportunity,Style,Margin %,Total profit\n")
+            output.write("Opportunity,Style,Currency,Margin %,Total profit\n")
             for row in rows:
                 cost = row["costing"]
                 output.write(
-                    f"{cost.opportunity.opportunity_id},{cost.style_name},{row['margin_percent']},{row['total_profit_order']}\n"
+                    f"{cost.opportunity.opportunity_id},{cost.style_name},{_costing_currency(cost)},{row['margin_percent']},{row['total_profit_order']}\n"
                 )
         elif export == "finance":
-            output.write("Month,Fabric finance,Trim finance\n")
+            output.write("Month,Currency,Fabric finance,Trim finance\n")
             month_totals = defaultdict(lambda: {"fabric": Decimal("0"), "trims": Decimal("0")})
             for row in rows:
-                key = row["costing"].updated_at.strftime("%Y-%m")
+                key = (row["costing"].updated_at.strftime("%Y-%m"), _costing_currency(row["costing"]))
                 month_totals[key]["fabric"] += row["fabric_finance"] * Decimal(row["order_quantity"])
                 month_totals[key]["trims"] += row["trims_finance"] * Decimal(row["order_quantity"])
             for key in sorted(month_totals.keys()):
-                output.write(f"{key},{month_totals[key]['fabric']},{month_totals[key]['trims']}\n")
+                month, currency = key
+                output.write(f"{month},{currency},{month_totals[key]['fabric']},{month_totals[key]['trims']}\n")
         else:
-            output.write("Style,Old cost per piece,New cost per piece,Delta\n")
+            output.write("Style,Currency,Old cost per piece,New cost per piece,Delta\n")
             by_style = defaultdict(list)
             for row in rows:
-                by_style[row["costing"].style_code or row["costing"].style_name].append(row)
+                by_style[(row["costing"].style_code or row["costing"].style_name, _costing_currency(row["costing"]))].append(row)
             for style, items in by_style.items():
                 if len(items) < 2:
                     continue
                 items_sorted = sorted(items, key=lambda r: r["costing"].updated_at)
                 old = items_sorted[0]["total_cost_per_piece"]
                 new = items_sorted[-1]["total_cost_per_piece"]
-                output.write(f"{style},{old},{new},{new - old}\n")
+                style_name, currency = style
+                output.write(f"{style_name},{currency},{old},{new},{new - old}\n")
 
         resp = HttpResponse(content_type="text/csv")
         resp["Content-Disposition"] = f'attachment; filename="costing_{export}_report.csv"'

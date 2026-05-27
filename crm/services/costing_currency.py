@@ -2,6 +2,7 @@ from decimal import Decimal, ROUND_HALF_UP
 
 
 MONEY_QUANT = Decimal("0.01")
+SUPPORTED_COSTING_CURRENCIES = {"BDT", "CAD", "USD"}
 
 
 def _to_decimal(value):
@@ -22,6 +23,17 @@ def _format_decimal(value):
 
 def format_money(value, symbol):
     return f"{symbol} {_format_decimal(value)}"
+
+
+def normalize_costing_currency(currency):
+    code = (currency or "BDT").upper().strip()
+    if code in SUPPORTED_COSTING_CURRENCIES:
+        return code
+    return "BDT"
+
+
+def format_costing_money(value, currency):
+    return f"{normalize_costing_currency(currency)} {_format_decimal(value)}"
 
 
 def format_bdt(value):
