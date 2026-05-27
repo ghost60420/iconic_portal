@@ -416,9 +416,9 @@
         <div class="production-doc-links">
           <a href="{% url 'production_order_sheet_pdf' order.pk %}" class="production-doc-link">Order sheet PDF</a>
           <a href="{% url 'production_packing_list_pdf' order.pk %}" class="production-doc-link">Packing list PDF</a>
-          {% if order.costing_header %}
+          {% if can_view_lifecycle_profit and order.costing_header %}
             <a href="{% url 'cost_sheet_detail' order.costing_header.pk %}" class="production-doc-link">Open costing #{{ order.costing_header.pk }}</a>
-          {% elif cost_sheet_active %}
+          {% elif can_view_lifecycle_profit and cost_sheet_active %}
             <span class="production-doc-static">Legacy cost sheet v{{ cost_sheet_active.version_number }}</span>
           {% endif %}
           {% for invoice in order.invoices.all %}
@@ -472,8 +472,10 @@
                   <th>Tracking</th>
                   <th>Boxes</th>
                   <th>Weight kg</th>
-                  <th>Cost BDT</th>
-                  <th>Cost CAD</th>
+                  {% if can_view_lifecycle_profit %}
+                    <th>Cost BDT</th>
+                    <th>Cost CAD</th>
+                  {% endif %}
                   <th>Status</th>
                 </tr>
               </thead>
@@ -495,8 +497,10 @@
                     </td>
                     <td>{{ s.box_count|default:"-" }}</td>
                     <td>{{ s.total_weight_kg|default:"-" }}</td>
-                    <td>{{ s.cost_bdt|default:"-" }}</td>
-                    <td>{{ s.cost_cad|default:"-" }}</td>
+                    {% if can_view_lifecycle_profit %}
+                      <td>{{ s.cost_bdt|default:"-" }}</td>
+                      <td>{{ s.cost_cad|default:"-" }}</td>
+                    {% endif %}
                     <td><span class="production-status-badge {{ s.status }}">{{ s.get_status_display }}</span></td>
                   </tr>
                 {% endfor %}
@@ -508,6 +512,7 @@
         {% endif %}
       </article>
 
+      {% if can_view_lifecycle_profit %}
       <article class="production-panel">
         <div class="production-panel-head">
           <div>
@@ -685,6 +690,17 @@
           </div>
         {% endif %}
       </article>
+      {% else %}
+      <article class="production-panel">
+        <div class="production-panel-head">
+          <div>
+            <h2>Restricted Section</h2>
+            <p>Additional financial details are available only to approved internal users.</p>
+          </div>
+        </div>
+        <div class="production-muted-block">You do not have permission to view this financial section.</div>
+      </article>
+      {% endif %}
 
       <article class="production-panel">
         <div class="production-panel-head">
@@ -749,16 +765,16 @@
         <div class="production-panel-head">
           <div>
             <h2>Linked Records</h2>
-            <p>Sales, customer, costing, and invoice context.</p>
+            <p>{% if can_view_lifecycle_profit %}Sales, customer, costing, and invoice context.{% else %}Sales, customer, and invoice context.{% endif %}</p>
           </div>
         </div>
         <div class="production-linked-list">
           {% if opportunity %}<a href="{% url 'opportunity_detail' opportunity.pk %}">Opportunity {{ opportunity.opportunity_id }}</a>{% endif %}
           {% if customer %}<a href="{% url 'customer_detail' customer.pk %}">{{ customer.account_brand|default:customer.contact_name|default:"Customer" }}</a>{% endif %}
           {% if lead %}<a href="{% url 'lead_detail' lead.pk %}">Lead {{ lead.lead_id|default:lead.pk }}</a>{% endif %}
-          {% if order.costing_header %}
+          {% if can_view_lifecycle_profit and order.costing_header %}
             <a href="{% url 'cost_sheet_detail' order.costing_header.pk %}">Costing COST-{{ order.costing_header.pk }}</a>
-          {% elif cost_sheet_active %}
+          {% elif can_view_lifecycle_profit and cost_sheet_active %}
             <span>Legacy cost sheet v{{ cost_sheet_active.version_number }}</span>
           {% endif %}
           {% for invoice in order.invoices.all %}
@@ -792,6 +808,7 @@
         </div>
       </article>
 
+      {% if can_view_lifecycle_profit %}
       <details class="production-panel production-raw-details">
         <summary>
           <span>Admin / Raw Details</span>
@@ -821,6 +838,7 @@
           <div><span>Total actual cost</span><strong>{{ order.actual_total_cost_bdt|default:"not set" }}</strong></div>
         </div>
       </details>
+      {% endif %}
     </aside>
   </section>
 </div>

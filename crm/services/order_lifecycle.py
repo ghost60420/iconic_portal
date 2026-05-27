@@ -365,7 +365,7 @@ def create_lifecycle_from_shipping(shipping_record, user=None):
     )
 
 
-def lifecycle_timeline_steps(lifecycle):
+def lifecycle_timeline_steps(lifecycle, include_amounts=True):
     return [
         {
             "key": "lead",
@@ -384,7 +384,7 @@ def lifecycle_timeline_steps(lifecycle):
             "record": lifecycle.costing,
             "url_name": "cost_sheet_detail",
             "is_done": bool(lifecycle.costing_id),
-            "amount": lifecycle.estimated_cost if lifecycle.costing_id else None,
+            "amount": lifecycle.estimated_cost if include_amounts and lifecycle.costing_id else None,
             "notes": lifecycle.costing.get_status_display() if lifecycle.costing_id else "",
         },
         {
@@ -394,7 +394,7 @@ def lifecycle_timeline_steps(lifecycle):
             "record": lifecycle.quotation,
             "url_name": "cost_sheet_client_quotation",
             "is_done": bool(lifecycle.quotation_id),
-            "amount": lifecycle.estimated_revenue if lifecycle.quotation_id else None,
+            "amount": lifecycle.estimated_revenue if include_amounts and lifecycle.quotation_id else None,
             "notes": getattr(lifecycle.quotation, "quotation_number", "") if lifecycle.quotation_id else "",
         },
         {
@@ -404,7 +404,7 @@ def lifecycle_timeline_steps(lifecycle):
             "record": lifecycle.invoice,
             "url_name": "invoice_view",
             "is_done": bool(lifecycle.invoice_id),
-            "amount": _d(getattr(lifecycle.invoice, "total_amount", Decimal("0"))) if lifecycle.invoice_id else None,
+            "amount": _d(getattr(lifecycle.invoice, "total_amount", Decimal("0"))) if include_amounts and lifecycle.invoice_id else None,
             "notes": lifecycle.invoice.payment_status_label if lifecycle.invoice_id else "",
         },
         {
@@ -434,7 +434,7 @@ def lifecycle_timeline_steps(lifecycle):
             "record": lifecycle.shipping_record,
             "url_name": "shipment_detail",
             "is_done": lifecycle.status == "completed",
-            "amount": lifecycle.estimated_profit,
+            "amount": lifecycle.estimated_profit if include_amounts else None,
             "notes": "Delivered" if lifecycle.status == "completed" else "",
         },
     ]

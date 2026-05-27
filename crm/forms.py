@@ -730,7 +730,12 @@ class ShipmentForm(forms.ModelForm):
         ]
 
     def __init__(self, *args, **kwargs):
+        can_edit_internal_costing = kwargs.pop("can_edit_internal_costing", False)
         super().__init__(*args, **kwargs)
+
+        if not can_edit_internal_costing:
+            for field_name in ("cost_bdt", "cost_cad", "rate_bdt_per_cad"):
+                self.fields.pop(field_name, None)
 
         if ORDER_FIELD and ORDER_FIELD in SHIPMENT_FIELDS and ORDER_FIELD not in self.fields:
             fk_model = Shipment._meta.get_field(ORDER_FIELD).remote_field.model

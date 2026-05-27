@@ -143,7 +143,7 @@
                   <th>Opportunity</th>
                   <th>Stage</th>
                   <th>Value</th>
-                  <th>Margin</th>
+                  {% if can_view_internal_financials %}<th>Margin</th>{% endif %}
                   <th>Next follow up</th>
                   <th>Open</th>
                 </tr>
@@ -157,7 +157,7 @@
                     </td>
                     <td><span class="customer-stage-badge">{{ opp.stage }}</span></td>
                     <td>{% if opp.order_value %}{{ opp.order_value }}{% else %}-{% endif %}</td>
-                    <td>{% if opp.profit_margin_pct != None %}{{ opp.profit_margin_pct|floatformat:1 }}%{% else %}-{% endif %}</td>
+                    {% if can_view_internal_financials %}<td>{% if opp.profit_margin_pct != None %}{{ opp.profit_margin_pct|floatformat:1 }}%{% else %}-{% endif %}</td>{% endif %}
                     <td>{{ opp.next_followup|date:"M j, Y"|default:"-" }}</td>
                     <td><a class="customer-btn customer-btn--tiny customer-btn--ghost" href="{% url 'opportunity_detail' opp.pk %}?customer={{ customer.id }}">Open</a></td>
                   </tr>

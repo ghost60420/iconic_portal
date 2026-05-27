@@ -11,6 +11,19 @@ from .services.order_lifecycle import (
 )
 
 
+def _sanitize_lifecycle_for_context(lifecycle):
+    lifecycle.estimated_revenue = None
+    lifecycle.estimated_cost = None
+    lifecycle.estimated_profit = None
+    lifecycle.estimated_margin = None
+    invoice = getattr(lifecycle, "invoice", None)
+    if invoice:
+        invoice.sewing_charge = 0
+        invoice.other_internal_cost = 0
+        invoice.internal_cost_note = ""
+    return lifecycle
+
+
 @login_required
 def order_lifecycle_detail(request, pk):
     lifecycle = get_object_or_404(
@@ -27,20 +40,18 @@ def order_lifecycle_detail(request, pk):
         ),
         pk=pk,
     )
-    try:
-        lifecycle = refresh_lifecycle(lifecycle)
-    except Exception:
-        messages.warning(request, "Lifecycle financials could not be refreshed. Showing last saved values.")
-
     can_view_profit = can_view_lifecycle_profit(request.user)
     profit_breakdown = None
     if can_view_profit:
         try:
+            lifecycle = refresh_lifecycle(lifecycle)
             profit_breakdown = build_lifecycle_profit_breakdown(lifecycle)
         except Exception:
             can_view_profit = False
             messages.warning(request, "Lifecycle profit details could not be loaded.")
-    steps = lifecycle_timeline_steps(lifecycle)
+    if not can_view_profit:
+        lifecycle = _sanitize_lifecycle_for_context(lifecycle)
+    steps = lifecycle_timeline_steps(lifecycle, include_amounts=can_view_profit)
 
     return render(
         request,

@@ -2380,6 +2380,7 @@ from django.utils import timezone
 def opportunity_detail(request, pk):
     opportunity = get_object_or_404(Opportunity, pk=pk)
     lead = opportunity.lead
+    can_view_internal_financials = can_view_lifecycle_profit(request.user)
 
     customer_param = (request.GET.get("customer") or "").strip()
     if customer_param and opportunity.customer_id and str(opportunity.customer_id) != customer_param:
@@ -2395,10 +2396,13 @@ def opportunity_detail(request, pk):
 
     # Files
     opp_files = OpportunityFile.objects.filter(opportunity=opportunity).order_by("-uploaded_at")
-    opportunity_documents = OpportunityDocument.objects.filter(
-        opportunity=opportunity,
-        doc_type__in=["costing_pdf", "costing_excel", "costing_other"],
-    ).order_by("-uploaded_at")
+    if can_view_internal_financials:
+        opportunity_documents = OpportunityDocument.objects.filter(
+            opportunity=opportunity,
+            doc_type__in=["costing_pdf", "costing_excel", "costing_other"],
+        ).order_by("-uploaded_at")
+    else:
+        opportunity_documents = OpportunityDocument.objects.none()
     active_cost_sheet = CostSheet.objects.filter(opportunity=opportunity, is_active=True).order_by(
         "-updated_at", "-id"
     ).first()
@@ -2426,9 +2430,10 @@ def opportunity_detail(request, pk):
 
     shipping_cost_bdt = Decimal("0")
     shipping_cost_cad = Decimal("0")
-    for s in shipments:
-        shipping_cost_bdt += s.cost_bdt or Decimal("0")
-        shipping_cost_cad += s.cost_cad or Decimal("0")
+    if can_view_internal_financials:
+        for s in shipments:
+            shipping_cost_bdt += s.cost_bdt or Decimal("0")
+            shipping_cost_cad += s.cost_cad or Decimal("0")
 
     # Helper: shipping values for template
     ship = {
@@ -2718,14 +2723,17 @@ def opportunity_detail(request, pk):
     prod_totals = prod_orders.aggregate(
         total_qty=Sum("qty_total"),
         total_reject=Sum("qty_reject"),
-        total_actual_cost=Sum("actual_total_cost_bdt"),
     )
 
     prod_total_qty = prod_totals.get("total_qty") or 0
     prod_total_reject = prod_totals.get("total_reject") or 0
-    prod_total_actual_cost = prod_totals.get("total_actual_cost") or 0
+    prod_total_actual_cost = None
+    if can_view_internal_financials:
+        prod_total_actual_cost = (
+            prod_orders.aggregate(total_actual_cost=Sum("actual_total_cost_bdt")).get("total_actual_cost") or 0
+        )
 
-    costing_calc = compute_costing(costing_header.id) if costing_header else None
+    costing_calc = compute_costing(costing_header.id) if costing_header and can_view_internal_financials else None
     variance_placeholder = None
     variance_display = None
     if costing_calc:
@@ -2764,11 +2772,11 @@ def opportunity_detail(request, pk):
             }
 
     order_value = opportunity.order_value or 0
-    total_cost_bdt = (prod_total_actual_cost or 0) + (shipping_cost_bdt or 0)
+    total_cost_bdt = (prod_total_actual_cost or 0) + (shipping_cost_bdt or 0) if can_view_internal_financials else None
 
     profit_after_shipping = None
     profit_after_shipping_percent = None
-    if order_value:
+    if can_view_internal_financials and order_value:
         profit_after_shipping = order_value - total_cost_bdt
         profit_after_shipping_percent = (profit_after_shipping / order_value) * 100
 
@@ -2815,6 +2823,7 @@ def opportunity_detail(request, pk):
 
         "profit_after_shipping": profit_after_shipping,
         "profit_after_shipping_percent": profit_after_shipping_percent,
+        "can_view_internal_financials": can_view_internal_financials,
 
         "order_value_usd": order_value_usd,
         "fx_rate_bdt_per_usd": fx_rate,
@@ -3232,6 +3241,7 @@ def customer_ai_focus(request):
 
 def customer_detail(request, pk):
     customer = get_object_or_404(Customer, pk=pk)
+    can_view_internal_financials = can_view_lifecycle_profit(request.user)
     leads = customer.leads.all().order_by("-created_date", "-id")
 
     opportunities = (
@@ -3300,24 +3310,26 @@ def customer_detail(request, pk):
         invoice_paid = Decimal("0.00")
         unpaid_invoice_total = Decimal("0.00")
 
-    prod_costs = (
-        ProductionOrder.objects
-        .filter(opportunity__in=opportunities)
-        .values("opportunity_id")
-        .annotate(total_cost=Sum("actual_total_cost_bdt"))
-    )
-    prod_cost_map = {row["opportunity_id"]: (row["total_cost"] or Decimal("0")) for row in prod_costs}
-
-    total_cost_bdt = (
-        ProductionOrder.objects
-        .filter(customer=customer)
-        .aggregate(total_cost=Sum("actual_total_cost_bdt"))
-        .get("total_cost") or Decimal("0.00")
-    )
-
     profit_estimate = None
     profit_margin = None
-    if total_revenue is not None and total_cost_bdt is not None:
+    total_cost_bdt = None
+    prod_cost_map = {}
+    if can_view_internal_financials:
+        prod_costs = (
+            ProductionOrder.objects
+            .filter(opportunity__in=opportunities)
+            .values("opportunity_id")
+            .annotate(total_cost=Sum("actual_total_cost_bdt"))
+        )
+        prod_cost_map = {row["opportunity_id"]: (row["total_cost"] or Decimal("0")) for row in prod_costs}
+
+        total_cost_bdt = (
+            ProductionOrder.objects
+            .filter(customer=customer)
+            .aggregate(total_cost=Sum("actual_total_cost_bdt"))
+            .get("total_cost") or Decimal("0.00")
+        )
+
         profit_estimate = total_revenue - total_cost_bdt
         if total_revenue:
             try:
@@ -3327,7 +3339,7 @@ def customer_detail(request, pk):
 
     for opp in opportunities:
         cost = prod_cost_map.get(opp.id)
-        if opp.order_value and cost is not None:
+        if can_view_internal_financials and opp.order_value and cost is not None:
             try:
                 opp.profit_margin_pct = ((opp.order_value - cost) / opp.order_value) * 100
             except Exception:
@@ -3375,6 +3387,7 @@ def customer_detail(request, pk):
         "total_cost_bdt": total_cost_bdt,
         "profit_estimate": profit_estimate,
         "profit_margin": profit_margin,
+        "can_view_internal_financials": can_view_internal_financials,
         "last_activity": last_activity,
         "notes_list": notes_list,
         "events": events,
@@ -6632,8 +6645,13 @@ def production_add(request):
     Create new production order.
     """
     order_lines = None
+    can_edit_internal_costing = can_view_lifecycle_profit(request.user)
     if request.method == "POST":
-        form = ProductionOrderForm(request.POST, request.FILES)
+        form = ProductionOrderForm(
+            request.POST,
+            request.FILES,
+            can_edit_internal_costing=can_edit_internal_costing,
+        )
         if form.is_valid():
             order = form.save()
             _save_production_lines(order, request)
@@ -6643,7 +6661,7 @@ def production_add(request):
             return redirect("production_detail", pk=order.pk)
         order_lines = _production_order_lines_from_payload(request.POST.get("line_payload"))
     else:
-        form = ProductionOrderForm()
+        form = ProductionOrderForm(can_edit_internal_costing=can_edit_internal_costing)
 
     return render(
         request,
@@ -6655,6 +6673,7 @@ def production_add(request):
             "order_lines": order_lines or _production_order_lines_for_form(),
             "production_size_labels": SIZE_LABELS,
             "production_size_group_choices": SIZE_GROUP_CHOICES,
+            "can_view_lifecycle_profit": can_edit_internal_costing,
             **_production_library_context(),
         },
     )
@@ -6667,6 +6686,7 @@ def production_edit(request, pk):
     order = get_object_or_404(ProductionOrder, pk=pk)
     old_status = order.status
     order_lines = None
+    can_edit_internal_costing = can_view_lifecycle_profit(request.user)
 
     if request.method == "POST":
         action = (request.POST.get("action") or "").strip()
@@ -6712,7 +6732,12 @@ def production_edit(request, pk):
             return redirect("production_edit", pk=pk)
 
         try:
-            form = ProductionOrderForm(request.POST, request.FILES, instance=order)
+            form = ProductionOrderForm(
+                request.POST,
+                request.FILES,
+                instance=order,
+                can_edit_internal_costing=can_edit_internal_costing,
+            )
             if form.is_valid():
                 obj = form.save()
                 _apply_production_library_links(obj, request)
@@ -6736,10 +6761,10 @@ def production_edit(request, pk):
                 request,
                 "Production order could not be updated. Please try shorter text or reload and try again.",
             )
-            form = ProductionOrderForm(instance=order)
+            form = ProductionOrderForm(instance=order, can_edit_internal_costing=can_edit_internal_costing)
         order_lines = _production_order_lines_from_payload(request.POST.get("line_payload"))
     else:
-        form = ProductionOrderForm(instance=order)
+        form = ProductionOrderForm(instance=order, can_edit_internal_costing=can_edit_internal_costing)
 
     try:
         materials = list(order.materials.select_related("inventory_item"))
@@ -6785,6 +6810,7 @@ def production_edit(request, pk):
             "order_lines": order_lines or _production_order_lines_for_form(order),
             "production_size_labels": SIZE_LABELS,
             "production_size_group_choices": SIZE_GROUP_CHOICES,
+            "can_view_lifecycle_profit": can_edit_internal_costing,
             **inventory_context,
             **_production_library_context(order),
         }
@@ -6798,6 +6824,7 @@ def production_edit(request, pk):
             "order": order,
             "production_size_labels": SIZE_LABELS,
             "production_size_group_choices": SIZE_GROUP_CHOICES,
+            "can_view_lifecycle_profit": can_edit_internal_costing,
         }
         return render(request, "crm/production_edit.html", context)
     try:
@@ -6812,6 +6839,7 @@ def production_edit(request, pk):
             "order": order,
             "production_size_labels": SIZE_LABELS,
             "production_size_group_choices": SIZE_GROUP_CHOICES,
+            "can_view_lifecycle_profit": can_edit_internal_costing,
         }
         return render(request, "crm/production_edit.html", fallback_context)
 
@@ -6862,13 +6890,18 @@ def production_detail(request, pk):
     except Exception:
         logger.exception("production_detail: failed to load chatter for order %s", order.pk)
         comments = []
-    try:
-        actual_entries = list(order.actual_cost_entries.all().order_by("section", "id"))
-    except (AttributeError, OperationalError, ProgrammingError):
+    can_view_profit = can_view_lifecycle_profit(request.user)
+    if can_view_profit:
+        try:
+            actual_entries = list(order.actual_cost_entries.all().order_by("section", "id"))
+        except (AttributeError, OperationalError, ProgrammingError):
+            actual_entries = []
+    else:
         actual_entries = []
     variance_report = None
-    cost_sheet_active = _safe_related_attr(order, "cost_sheet_active")
-    if cost_sheet_active:
+    raw_cost_sheet_active = _safe_related_attr(order, "cost_sheet_active")
+    cost_sheet_active = raw_cost_sheet_active if can_view_profit else None
+    if can_view_profit and cost_sheet_active:
         try:
             variance_report = build_variance_report(cost_sheet_active, order)
         except Exception:
@@ -6876,7 +6909,6 @@ def production_detail(request, pk):
             variance_report = None
     lifecycle = None
     lifecycle_profit = None
-    can_view_profit = can_view_lifecycle_profit(request.user)
     try:
         lifecycle = order.order_lifecycles.select_related(
             "customer",
@@ -6904,10 +6936,13 @@ def production_detail(request, pk):
     except Exception:
         logger.exception("production_detail: failed to build lifecycle profit for order %s", order.pk)
         lifecycle_profit = None
-    actual_entry_form = ActualCostEntryForm()
+    actual_entry_form = ActualCostEntryForm() if can_view_profit else None
 
     if request.method == "POST":
         action = (request.POST.get("action") or "").strip()
+
+        if action in {"add_actual", "update_actual", "delete_actual"} and not can_view_profit:
+            return HttpResponseForbidden("No access")
 
         if action == "add_line":
             if not can_add_lines:
@@ -8100,6 +8135,7 @@ def _handle_shipment_status_change(request, shipment, old_status, *, notify_cust
 
 
 def shipment_list(request):
+    can_view_shipping_costs = can_view_lifecycle_profit(request.user)
     if request.method == "POST":
         ship_id = (request.POST.get("shipment_id") or "").strip()
         new_status = (request.POST.get("status") or "").strip()
@@ -8169,8 +8205,8 @@ def shipment_list(request):
     ).count()
     total_boxes = sum((s.box_count or 0) for s in shipments)
     total_weight = sum((s.total_weight_kg or 0) for s in shipments)
-    total_cost_bdt = sum((s.cost_bdt or Decimal("0")) for s in shipments)
-    total_cost_cad = sum((s.cost_cad or Decimal("0")) for s in shipments)
+    total_cost_bdt = sum((s.cost_bdt or Decimal("0")) for s in shipments) if can_view_shipping_costs else None
+    total_cost_cad = sum((s.cost_cad or Decimal("0")) for s in shipments) if can_view_shipping_costs else None
 
     shipment_rows = []
     for shipment in shipments:
@@ -8225,6 +8261,7 @@ def shipment_list(request):
             "total_weight": total_weight,
             "total_cost_bdt": total_cost_bdt,
             "total_cost_cad": total_cost_cad,
+            "can_view_shipping_costs": can_view_shipping_costs,
             "status_filter": status_filter,
             "carrier_filter": carrier_filter,
             "search_query": search_query,
@@ -8239,8 +8276,9 @@ def shipment_add(request):
     Create a new shipment from menu.
     If your ShipmentForm includes order or production_order, it will show.
     """
+    can_edit_internal_costing = can_view_lifecycle_profit(request.user)
     if request.method == "POST":
-        form = ShipmentForm(request.POST)
+        form = ShipmentForm(request.POST, can_edit_internal_costing=can_edit_internal_costing)
         if form.is_valid():
             shipment = form.save(commit=False)
             rate = form.cleaned_data.get("rate_bdt_per_cad")
@@ -8261,14 +8299,29 @@ def shipment_add(request):
         return render(
             request,
             "crm/shipment_form.html",
-            {"form": form, "is_edit": False, "order": None, "order_field": ORDER_FIELD},
+            {
+                "form": form,
+                "is_edit": False,
+                "order": None,
+                "order_field": ORDER_FIELD,
+                "can_view_shipping_costs": can_edit_internal_costing,
+            },
         )
 
-    form = ShipmentForm(initial={"ship_date": timezone.localdate()})
+    form = ShipmentForm(
+        initial={"ship_date": timezone.localdate()},
+        can_edit_internal_costing=can_edit_internal_costing,
+    )
     return render(
         request,
         "crm/shipment_form.html",
-        {"form": form, "is_edit": False, "order": None, "order_field": ORDER_FIELD},
+        {
+            "form": form,
+            "is_edit": False,
+            "order": None,
+            "order_field": ORDER_FIELD,
+            "can_view_shipping_costs": can_edit_internal_costing,
+        },
     )
 
 
@@ -8280,6 +8333,7 @@ def shipment_detail(request, pk):
 
     shipment = get_object_or_404(qs, pk=pk)
     lifecycle = shipment.order_lifecycles.order_by("-updated_at", "-id").first()
+    can_view_shipping_costs = can_view_lifecycle_profit(request.user)
     if request.method == "POST":
         action = (request.POST.get("action") or "").strip()
         if action == "update_status":
@@ -8301,14 +8355,27 @@ def shipment_detail(request, pk):
                 create_lifecycle_from_shipping(shipment, user=request.user)
                 messages.success(request, f"Shipment status updated to {shipment.get_status_display()}.")
             return redirect("shipment_detail", pk=pk)
-    return render(request, "crm/shipment_detail.html", {"shipment": shipment, "lifecycle": lifecycle})
+    return render(
+        request,
+        "crm/shipment_detail.html",
+        {
+            "shipment": shipment,
+            "lifecycle": lifecycle,
+            "can_view_shipping_costs": can_view_shipping_costs,
+        },
+    )
 
 
 def shipment_edit(request, pk):
     shipment = get_object_or_404(Shipment, pk=pk)
+    can_edit_internal_costing = can_view_lifecycle_profit(request.user)
 
     if request.method == "POST":
-        form = ShipmentForm(request.POST, instance=shipment)
+        form = ShipmentForm(
+            request.POST,
+            instance=shipment,
+            can_edit_internal_costing=can_edit_internal_costing,
+        )
         if form.is_valid():
             old_status = shipment.status
             shipment = form.save(commit=False)
@@ -8336,10 +8403,11 @@ def shipment_edit(request, pk):
                 "shipment": shipment,
                 "order": getattr(shipment, ORDER_FIELD, None) if ORDER_FIELD else None,
                 "order_field": ORDER_FIELD,
+                "can_view_shipping_costs": can_edit_internal_costing,
             },
         )
 
-    form = ShipmentForm(instance=shipment)
+    form = ShipmentForm(instance=shipment, can_edit_internal_costing=can_edit_internal_costing)
     return render(
         request,
         "crm/shipment_form.html",
@@ -8349,6 +8417,7 @@ def shipment_edit(request, pk):
             "shipment": shipment,
             "order": getattr(shipment, ORDER_FIELD, None) if ORDER_FIELD else None,
             "order_field": ORDER_FIELD,
+            "can_view_shipping_costs": can_edit_internal_costing,
         },
     )
 
@@ -8371,9 +8440,10 @@ def shipping_add_for_opportunity(request, pk):
     """
     opportunity = get_object_or_404(Opportunity, pk=pk)
     customer = getattr(opportunity, "customer", None)
+    can_edit_internal_costing = can_view_lifecycle_profit(request.user)
 
     if request.method == "POST":
-        form = ShipmentForm(request.POST)
+        form = ShipmentForm(request.POST, can_edit_internal_costing=can_edit_internal_costing)
         if form.is_valid():
             shipment = form.save(commit=False)
             rate = form.cleaned_data.get("rate_bdt_per_cad")
@@ -8409,6 +8479,7 @@ def shipping_add_for_opportunity(request, pk):
                 "is_edit": False,
                 "order": None,
                 "order_field": ORDER_FIELD,
+                "can_view_shipping_costs": can_edit_internal_costing,
             },
         )
 
@@ -8416,7 +8487,7 @@ def shipping_add_for_opportunity(request, pk):
     if customer and "customer" in form_fields(ShipmentForm):
         initial["customer"] = customer
 
-    form = ShipmentForm(initial=initial)
+    form = ShipmentForm(initial=initial, can_edit_internal_costing=can_edit_internal_costing)
     return render(
         request,
         "crm/shipment_form.html",
@@ -8426,6 +8497,7 @@ def shipping_add_for_opportunity(request, pk):
             "is_edit": False,
             "order": None,
             "order_field": ORDER_FIELD,
+            "can_view_shipping_costs": can_edit_internal_costing,
         },
     )
 
@@ -8436,13 +8508,14 @@ def shipping_add_for_order(request, pk):
     This sets the correct FK field name every time.
     """
     order = get_object_or_404(ProductionOrder, pk=pk)
+    can_edit_internal_costing = can_view_lifecycle_profit(request.user)
 
     if ORDER_FIELD is None:
         messages.error(request, "Shipment model has no order link field.")
         return redirect("production_detail", pk=order.pk)
 
     if request.method == "POST":
-        form = ShipmentForm(request.POST)
+        form = ShipmentForm(request.POST, can_edit_internal_costing=can_edit_internal_costing)
         if form.is_valid():
             shipment = form.save(commit=False)
 
@@ -8479,7 +8552,13 @@ def shipping_add_for_order(request, pk):
         return render(
             request,
             "crm/shipment_form.html",
-            {"form": form, "order": order, "is_edit": False, "order_field": ORDER_FIELD},
+            {
+                "form": form,
+                "order": order,
+                "is_edit": False,
+                "order_field": ORDER_FIELD,
+                "can_view_shipping_costs": can_edit_internal_costing,
+            },
         )
 
     # initial values
@@ -8489,11 +8568,17 @@ def shipping_add_for_order(request, pk):
     if "opportunity" in form_fields(ShipmentForm):
         initial["opportunity"] = getattr(order, "opportunity", None)
 
-    form = ShipmentForm(initial=initial)
+    form = ShipmentForm(initial=initial, can_edit_internal_costing=can_edit_internal_costing)
     return render(
         request,
         "crm/shipment_form.html",
-        {"form": form, "order": order, "is_edit": False, "order_field": ORDER_FIELD},
+        {
+            "form": form,
+            "order": order,
+            "is_edit": False,
+            "order_field": ORDER_FIELD,
+            "can_view_shipping_costs": can_edit_internal_costing,
+        },
     )
 
 
@@ -10037,6 +10122,7 @@ def main_dashboard(request):
     previous_end = start_period - timedelta(days=1)
     previous_start = previous_end - timedelta(days=period_days - 1)
     period_label = f"Last {period_days} days"
+    can_view_order_lifecycle_profit = can_view_lifecycle_profit(request.user)
 
     # Leads
     leads_today = Lead.objects.filter(created_date=today).count()
@@ -10787,6 +10873,8 @@ def main_dashboard(request):
             "href": "#activity-section",
         },
     ]
+    if not can_view_order_lifecycle_profit:
+        primary_kpis = [card for card in primary_kpis if card.get("title") != "Monthly Profit"]
 
     finance_summary_cards = [
         {
@@ -10826,6 +10914,12 @@ def main_dashboard(request):
             "icon": "package-check",
         },
     ]
+    if not can_view_order_lifecycle_profit:
+        finance_summary_cards = [
+            card
+            for card in finance_summary_cards
+            if card.get("title") == "Outstanding Invoices"
+        ]
 
     payroll_summary_cards = [
         {
@@ -10939,8 +11033,6 @@ def main_dashboard(request):
         "lead_market_values": lead_market_values,
         "win_loss_labels": win_loss_labels,
         "win_loss_values": win_loss_values,
-        "monthly_profit_labels": monthly_profit_labels,
-        "monthly_profit_values": monthly_profit_values,
         "invoice_status_labels": invoice_status_labels,
         "invoice_status_values": invoice_status_values,
         "prod_labels": prod_labels,
@@ -10950,8 +11042,10 @@ def main_dashboard(request):
         "ship_pending": ship_pending,
         "ship_delayed": ship_delayed,
     }
+    if can_view_order_lifecycle_profit:
+        chart_data["monthly_profit_labels"] = monthly_profit_labels
+        chart_data["monthly_profit_values"] = monthly_profit_values
 
-    can_view_order_lifecycle_profit = can_view_lifecycle_profit(request.user)
     lifecycle_summary = None
     if can_view_order_lifecycle_profit:
         try:
@@ -11006,14 +11100,14 @@ def main_dashboard(request):
         "net_cash_cad_period": net_cash_cad_period,
         "swing_cad_period": swing_cad_period,
         "swing_bdt_period": swing_bdt_period,
-        "gross_margin_pct_period": gross_margin_pct_period,
+        "gross_margin_pct_period": gross_margin_pct_period if can_view_order_lifecycle_profit else None,
         "orders_created_period": orders_created_period,
         "orders_processed_period": orders_processed_period,
-        "production_cost_bdt_period": production_cost_bdt_period,
+        "production_cost_bdt_period": production_cost_bdt_period if can_view_order_lifecycle_profit else None,
         "prod_revenue_cad_period": prod_revenue_cad_period,
-        "prod_cost_cad_period": prod_cost_cad_period,
-        "prod_profit_cad_period": prod_profit_cad_period,
-        "prod_margin_pct_period": prod_margin_pct_period,
+        "prod_cost_cad_period": prod_cost_cad_period if can_view_order_lifecycle_profit else None,
+        "prod_profit_cad_period": prod_profit_cad_period if can_view_order_lifecycle_profit else None,
+        "prod_margin_pct_period": prod_margin_pct_period if can_view_order_lifecycle_profit else None,
 
         "payroll_total": payroll_total,
         "payroll_ot": payroll_ot,
@@ -11025,7 +11119,7 @@ def main_dashboard(request):
         "payroll_month": payroll_month,
         "period_days": period_days,
         "period_label": period_label,
-        "monthly_profit_cad": monthly_profit_cad,
+        "monthly_profit_cad": monthly_profit_cad if can_view_order_lifecycle_profit else None,
         "production_running_count": production_running_count,
         "production_hold_count": production_hold_count,
         "ship_pending_total": ship_pending_total,

@@ -41,12 +41,14 @@
 
     <div class="opp-action-bar" aria-label="Opportunity actions">
       <a href="{% url 'opportunity_edit' opportunity.pk %}" class="opp-btn opp-btn--primary">Edit</a>
-      {% if costing_header %}
-        <a href="{% url 'cost_sheet_export_pdf' costing_header.pk %}" class="opp-btn opp-btn--ghost">Open Quote</a>
-        <a href="{% url 'cost_sheet_detail' costing_header.pk %}" class="opp-btn opp-btn--ghost">Open Costing</a>
-      {% else %}
-        <a href="{% url 'cost_sheet_create_for_opportunity' opportunity.pk %}" class="opp-btn opp-btn--ghost">Create Quote</a>
-        <a href="{% url 'cost_sheet_create_for_opportunity' opportunity.pk %}" class="opp-btn opp-btn--ghost">Create Costing</a>
+      {% if can_view_internal_financials %}
+        {% if costing_header %}
+          <a href="{% url 'cost_sheet_export_pdf' costing_header.pk %}" class="opp-btn opp-btn--ghost">Open Quote</a>
+          <a href="{% url 'cost_sheet_detail' costing_header.pk %}" class="opp-btn opp-btn--ghost">Open Costing</a>
+        {% else %}
+          <a href="{% url 'cost_sheet_create_for_opportunity' opportunity.pk %}" class="opp-btn opp-btn--ghost">Create Quote</a>
+          <a href="{% url 'cost_sheet_create_for_opportunity' opportunity.pk %}" class="opp-btn opp-btn--ghost">Create Costing</a>
+        {% endif %}
       {% endif %}
       <a href="{% url 'invoice_add' %}" class="opp-btn opp-btn--ghost">Create Invoice</a>
       {% if prod_orders %}
@@ -302,6 +304,7 @@
             <p class="opp-section-kicker">Quote and costing</p>
             <h2>Commercial readiness</h2>
           </div>
+          {% if can_view_internal_financials %}
           <div class="opp-panel-actions">
             {% if costing_header %}
               <a href="{% url 'cost_sheet_detail' costing_header.pk %}" class="opp-btn opp-btn--tiny opp-btn--primary">Open costing</a>
@@ -311,28 +314,32 @@
               <a href="{% url 'cost_sheet_create_for_opportunity' opportunity.pk %}" class="opp-btn opp-btn--tiny opp-btn--primary">Create costing</a>
             {% endif %}
           </div>
+          {% endif %}
         </div>
 
         <div class="opp-costing-grid">
           <article>
             <span>Latest quote status</span>
             <strong>{% if costing_header %}{{ costing_header.get_status_display }}{% else %}No quote yet{% endif %}</strong>
-            <small>{% if costing_header %}Updated {{ costing_header.updated_at|date:"Y-m-d H:i" }}{% else %}Create costing to generate quote outputs.{% endif %}</small>
+            <small>{% if costing_header %}Updated {{ costing_header.updated_at|date:"Y-m-d H:i" }}{% elif can_view_internal_financials %}Create costing to generate quote outputs.{% else %}Quote outputs are managed by approved users.{% endif %}</small>
           </article>
-          <article>
-            <span>Total cost / piece</span>
-            <strong>{% if costing_calc %}{{ costing_calc.display.total_cost_per_piece }} BDT{% else %}—{% endif %}</strong>
-          </article>
-          <article>
-            <span>FOB / piece</span>
-            <strong>{% if costing_calc %}{{ costing_calc.display.fob_per_piece }} BDT{% else %}—{% endif %}</strong>
-          </article>
-          <article>
-            <span>Margin</span>
-            <strong>{% if costing_calc %}{{ costing_calc.display.margin_percent }}%{% else %}—{% endif %}</strong>
-          </article>
+          {% if can_view_internal_financials %}
+            <article>
+              <span>Total cost / piece</span>
+              <strong>{% if costing_calc %}{{ costing_calc.display.total_cost_per_piece }} BDT{% else %}—{% endif %}</strong>
+            </article>
+            <article>
+              <span>FOB / piece</span>
+              <strong>{% if costing_calc %}{{ costing_calc.display.fob_per_piece }} BDT{% else %}—{% endif %}</strong>
+            </article>
+            <article>
+              <span>Margin</span>
+              <strong>{% if costing_calc %}{{ costing_calc.display.margin_percent }}%{% else %}—{% endif %}</strong>
+            </article>
+          {% endif %}
         </div>
 
+        {% if can_view_internal_financials %}
         <div class="opp-document-row">
           <div>
             <h3>Linked costing records and files</h3>
@@ -369,6 +376,7 @@
             <button type="submit" class="opp-btn opp-btn--ghost">Upload costing file</button>
           </form>
         </div>
+        {% endif %}
       </section>
 
       <section class="opp-panel">
@@ -401,7 +409,7 @@
           <article>
             <span>Shipments</span>
             <strong>{{ shipments|length }}</strong>
-            <small>{% if shipping_cost_bdt %}{{ shipping_cost_bdt }} BDT shipping{% else %}No shipping cost yet{% endif %}</small>
+            <small>{% if can_view_internal_financials %}{% if shipping_cost_bdt %}{{ shipping_cost_bdt }} BDT shipping{% else %}No shipping cost yet{% endif %}{% else %}Shipment records linked{% endif %}</small>
           </article>
         </div>
 
@@ -506,16 +514,18 @@
     </main>
 
     <aside class="opp-side-column">
-      <section class="opp-panel opp-profit-card">
-        <p class="opp-section-kicker">Profit snapshot</p>
-        <div class="opp-profit-value {% if profit_after_shipping and profit_after_shipping < 0 %}negative{% endif %}">
-          {% if profit_after_shipping or profit_after_shipping == 0 %}{{ profit_after_shipping|floatformat:2 }} BDT{% else %}—{% endif %}
-        </div>
-        <div class="opp-money-row"><span>Order value</span><strong>{% if opportunity.order_value %}{{ opportunity.order_value }}{% else %}—{% endif %}</strong></div>
-        <div class="opp-money-row"><span>Total cost</span><strong>{% if total_cost_bdt or total_cost_bdt == 0 %}{{ total_cost_bdt }}{% else %}—{% endif %}</strong></div>
-        <div class="opp-money-row"><span>Margin</span><strong>{% if profit_after_shipping_percent or profit_after_shipping_percent == 0 %}{{ profit_after_shipping_percent|floatformat:1 }}%{% else %}—{% endif %}</strong></div>
-        <div class="opp-money-row"><span>Shipping</span><strong>{% if shipping_cost_bdt %}{{ shipping_cost_bdt }} BDT{% else %}—{% endif %}</strong></div>
-      </section>
+      {% if can_view_internal_financials %}
+        <section class="opp-panel opp-profit-card">
+          <p class="opp-section-kicker">Profit snapshot</p>
+          <div class="opp-profit-value {% if profit_after_shipping and profit_after_shipping < 0 %}negative{% endif %}">
+            {% if profit_after_shipping or profit_after_shipping == 0 %}{{ profit_after_shipping|floatformat:2 }} BDT{% else %}—{% endif %}
+          </div>
+          <div class="opp-money-row"><span>Order value</span><strong>{% if opportunity.order_value %}{{ opportunity.order_value }}{% else %}—{% endif %}</strong></div>
+          <div class="opp-money-row"><span>Total cost</span><strong>{% if total_cost_bdt or total_cost_bdt == 0 %}{{ total_cost_bdt }}{% else %}—{% endif %}</strong></div>
+          <div class="opp-money-row"><span>Margin</span><strong>{% if profit_after_shipping_percent or profit_after_shipping_percent == 0 %}{{ profit_after_shipping_percent|floatformat:1 }}%{% else %}—{% endif %}</strong></div>
+          <div class="opp-money-row"><span>Shipping</span><strong>{% if shipping_cost_bdt %}{{ shipping_cost_bdt }} BDT{% else %}—{% endif %}</strong></div>
+        </section>
+      {% endif %}
 
       <section class="opp-panel opp-ai-card">
         <div class="opp-panel-head">
@@ -628,7 +638,7 @@
         <div class="opp-panel-head">
           <div>
             <p class="opp-section-kicker">Shipments</p>
-            <h2>Delivery costs</h2>
+            <h2>{% if can_view_internal_financials %}Delivery costs{% else %}Delivery updates{% endif %}</h2>
           </div>
           <a href="{% url 'shipping_add_for_opportunity' opportunity.pk %}" class="opp-btn opp-btn--tiny opp-btn--primary">Add shipment</a>
         </div>
@@ -644,7 +654,7 @@
                   {% else %}
                     No tracking
                   {% endif %}
-                  · {{ s.cost_bdt|default:"-" }} BDT · {{ s.get_status_display }}
+                  {% if can_view_internal_financials %} · {{ s.cost_bdt|default:"-" }} BDT{% endif %} · {{ s.get_status_display }}
                 </span>
               </li>
             {% endfor %}

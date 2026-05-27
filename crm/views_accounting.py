@@ -60,6 +60,7 @@ from .forms import (
     BDStaffForm,
     BDStaffMonthForm,
 )
+from .permissions import can_view_internal_costing
 
 try:
     from .models import AccountingMonthLock
@@ -3959,6 +3960,9 @@ def production_profit_rows(year=None, month=None):
 
 @login_required
 def production_profit_report(request):
+    if not can_view_internal_costing(request.user):
+        return HttpResponseForbidden("No access")
+
     today = timezone.localdate()
     y = _parse_int(request.GET.get("year") or str(today.year)) or today.year
     m = _parse_int(request.GET.get("month") or str(today.month)) or today.month

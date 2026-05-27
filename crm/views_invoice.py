@@ -70,6 +70,13 @@ def can_manage_invoice_internal_costing(user):
     return can_view_internal_costing(user)
 
 
+def _sanitize_invoice_internal_fields(inv: Invoice) -> Invoice:
+    inv.sewing_charge = Decimal("0")
+    inv.other_internal_cost = Decimal("0")
+    inv.internal_cost_note = ""
+    return inv
+
+
 def _d(v):
     try:
         return Decimal(str(v)) if v is not None else Decimal("0")
@@ -405,6 +412,7 @@ def _invoice_line_items(inv: Invoice) -> list[dict]:
 
 
 def _invoice_client_context(inv: Invoice, user=None) -> dict:
+    inv = _sanitize_invoice_internal_fields(inv)
     region = _invoice_region(inv)
     return {
         "invoice": inv,
@@ -897,10 +905,11 @@ def invoice_edit(request, pk):
     else:
         form = InvoiceForm(instance=inv, can_edit_internal_costs=can_edit_internal_costs)
 
+    display_invoice = inv if can_edit_internal_costs else _sanitize_invoice_internal_fields(inv)
     return render(
         request,
         "crm/invoice/invoice_form.html",
-        {"form": form, "mode": "edit", "invoice": inv, "can_manage_invoice_costing": can_edit_internal_costs},
+        {"form": form, "mode": "edit", "invoice": display_invoice, "can_manage_invoice_costing": can_edit_internal_costs},
     )
 
 
@@ -920,6 +929,7 @@ def invoice_view(request, pk):
     lifecycle_profit = None
     if lifecycle and can_view_invoice_costing:
         lifecycle_profit = build_lifecycle_profit_breakdown(lifecycle)
+    display_invoice = inv if can_view_invoice_costing else _sanitize_invoice_internal_fields(inv)
 
     initial = {
         "payment_date": timezone.localdate(),
@@ -933,7 +943,7 @@ def invoice_view(request, pk):
         request,
         "crm/invoice/invoice_view.html",
         {
-            "invoice": inv,
+            "invoice": display_invoice,
             "payment_form": InvoicePaymentForm(invoice=inv, initial=initial),
             "payment_history": payment_history,
             "payment_total": payment_total,
@@ -1209,18 +1219,20 @@ def invoice_payment_add(request, pk):
         legacy_paid_amount = _d(inv.paid_amount) - payment_total
         if legacy_paid_amount < 0:
             legacy_paid_amount = Decimal("0")
+        can_view_invoice_costing = can_manage_invoice_internal_costing(request.user)
+        display_invoice = inv if can_view_invoice_costing else _sanitize_invoice_internal_fields(inv)
         messages.error(request, "Could not save payment. Please fix the errors below.")
         return render(
             request,
             "crm/invoice/invoice_view.html",
             {
-                "invoice": inv,
+                "invoice": display_invoice,
                 "payment_form": form,
                 "payment_history": payment_history,
                 "payment_total": payment_total,
                 "legacy_paid_amount": legacy_paid_amount,
                 "is_payment_month_closed": _is_accounting_month_closed(timezone.localdate(), _invoice_payment_side(inv)),
-                "can_manage_invoice_costing": can_manage_invoice_internal_costing(request.user),
+                "can_manage_invoice_costing": can_view_invoice_costing,
             },
         )
 
@@ -1240,17 +1252,19 @@ def invoice_payment_add(request, pk):
         legacy_paid_amount = _d(inv.paid_amount) - payment_total
         if legacy_paid_amount < 0:
             legacy_paid_amount = Decimal("0")
+        can_view_invoice_costing = can_manage_invoice_internal_costing(request.user)
+        display_invoice = inv if can_view_invoice_costing else _sanitize_invoice_internal_fields(inv)
         return render(
             request,
             "crm/invoice/invoice_view.html",
             {
-                "invoice": inv,
+                "invoice": display_invoice,
                 "payment_form": form,
                 "payment_history": payment_history,
                 "payment_total": payment_total,
                 "legacy_paid_amount": legacy_paid_amount,
                 "is_payment_month_closed": True,
-                "can_manage_invoice_costing": can_manage_invoice_internal_costing(request.user),
+                "can_manage_invoice_costing": can_view_invoice_costing,
             },
         )
 

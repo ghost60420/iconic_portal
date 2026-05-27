@@ -2,6 +2,23 @@ from django import forms
 from .models import ProductionOrder, ProductionStage
 
 
+PRODUCTION_INTERNAL_COST_FIELDS = {
+    "fabric_cost_per_kg_bdt",
+    "material_thread_cost_bdt",
+    "material_zipper_cost_bdt",
+    "material_accessories_cost_bdt",
+    "material_label_cost_bdt",
+    "material_other_cost_bdt",
+    "production_cutting_cost_bdt",
+    "production_sewing_cost_bdt",
+    "production_finishing_cost_bdt",
+    "production_packing_cost_bdt",
+    "production_overhead_cost_bdt",
+    "production_other_cost_bdt",
+    "remake_cost_bdt",
+}
+
+
 class ProductionOrderForm(forms.ModelForm):
     class Meta:
         model = ProductionOrder
@@ -70,7 +87,12 @@ class ProductionOrderForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        can_edit_internal_costing = kwargs.pop("can_edit_internal_costing", False)
         super().__init__(*args, **kwargs)
+
+        if not can_edit_internal_costing:
+            for field_name in PRODUCTION_INTERNAL_COST_FIELDS:
+                self.fields.pop(field_name, None)
 
         # dark style for all fields
         for name, field in self.fields.items():

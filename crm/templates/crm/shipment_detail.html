@@ -60,11 +60,13 @@
       <strong>{{ shipment.total_weight_kg|default:"-" }}</strong>
       <small>kg</small>
     </article>
-    <article class="shipping-snapshot-card">
-      <span>Shipping cost</span>
-      <strong>{% if shipment.cost_cad %}{{ shipment.cost_cad }}{% elif shipment.cost_bdt %}{{ shipment.cost_bdt }}{% else %}-{% endif %}</strong>
-      <small>{% if shipment.cost_cad %}CAD{% elif shipment.cost_bdt %}BDT{% else %}Not set{% endif %}</small>
-    </article>
+    {% if can_view_shipping_costs %}
+      <article class="shipping-snapshot-card">
+        <span>Shipping cost</span>
+        <strong>{% if shipment.cost_cad %}{{ shipment.cost_cad }}{% elif shipment.cost_bdt %}{{ shipment.cost_bdt }}{% else %}-{% endif %}</strong>
+        <small>{% if shipment.cost_cad %}CAD{% elif shipment.cost_bdt %}BDT{% else %}Not set{% endif %}</small>
+      </article>
+    {% endif %}
     <article class="shipping-snapshot-card">
       <span>Ship date</span>
       <strong>{{ shipment.ship_date|date:"M j"|default:"-" }}</strong>
@@ -332,21 +334,23 @@
         </div>
       </article>
 
-      <article class="shipping-panel">
-        <div class="shipping-panel-head">
-          <div>
-            <h2>Cost Summary</h2>
-            <p>Shipping cost and logistics quantities.</p>
+      {% if can_view_shipping_costs %}
+        <article class="shipping-panel">
+          <div class="shipping-panel-head">
+            <div>
+              <h2>Cost Summary</h2>
+              <p>Shipping cost and logistics quantities.</p>
+            </div>
           </div>
-        </div>
-        <div class="shipping-side-list">
-          <div><span>Cost BDT</span><strong>{{ shipment.cost_bdt|default:"-" }}</strong></div>
-          <div><span>Rate BDT per CAD</span><strong>{{ shipment.rate_bdt_per_cad|default:"-" }}</strong></div>
-          <div><span>Cost CAD</span><strong>{{ shipment.cost_cad|default:"-" }}</strong></div>
-          <div><span>Boxes</span><strong>{{ shipment.box_count|default:"-" }}</strong></div>
-          <div><span>Weight kg</span><strong>{{ shipment.total_weight_kg|default:"-" }}</strong></div>
-        </div>
-      </article>
+          <div class="shipping-side-list">
+            <div><span>Cost BDT</span><strong>{{ shipment.cost_bdt|default:"-" }}</strong></div>
+            <div><span>Rate BDT per CAD</span><strong>{{ shipment.rate_bdt_per_cad|default:"-" }}</strong></div>
+            <div><span>Cost CAD</span><strong>{{ shipment.cost_cad|default:"-" }}</strong></div>
+            <div><span>Boxes</span><strong>{{ shipment.box_count|default:"-" }}</strong></div>
+            <div><span>Weight kg</span><strong>{{ shipment.total_weight_kg|default:"-" }}</strong></div>
+          </div>
+        </article>
+      {% endif %}
 
       <details class="shipping-panel shipping-raw-details">
         <summary>

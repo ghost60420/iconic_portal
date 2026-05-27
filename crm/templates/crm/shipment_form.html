@@ -154,7 +154,7 @@
         {% endif %}
       </div>
       <div class="ship-sub">
-        Link to production order and opportunity, set carrier, boxes, weight and cost in taka and cad.
+        {% if can_view_shipping_costs %}Link to production order and opportunity, set carrier, boxes, weight and cost in taka and cad.{% else %}Link to production order and opportunity, set carrier, boxes, weight, and delivery status.{% endif %}
       </div>
     </div>
     <div class="ship-actions">
@@ -313,21 +313,27 @@
         </div>
       </div>
 
-      <div class="card-title" style="margin-top:10px;">
-        <span class="emoji">💰</span>
-        Shipping cost
-      </div>
+      {% if form.cost_bdt or form.cost_cad %}
+        <div class="card-title" style="margin-top:10px;">
+          <span class="emoji">💰</span>
+          Shipping cost
+        </div>
 
-      <div class="row">
-        <div class="col-md-4 field-row">
-          <label>Cost in taka</label>
-          {{ form.cost_bdt }}
+        <div class="row">
+          {% if form.cost_bdt %}
+            <div class="col-md-4 field-row">
+              <label>Cost in taka</label>
+              {{ form.cost_bdt }}
+            </div>
+          {% endif %}
+          {% if form.cost_cad %}
+            <div class="col-md-4 field-row">
+              <label>Cost in cad</label>
+              {{ form.cost_cad }}
+            </div>
+          {% endif %}
         </div>
-        <div class="col-md-4 field-row">
-          <label>Cost in cad</label>
-          {{ form.cost_cad }}
-        </div>
-      </div>
+      {% endif %}
 
       <div class="card-title" style="margin-top:10px;">
         <span class="emoji">📝</span>

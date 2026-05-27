@@ -8,7 +8,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.core.files.base import ContentFile
 from django.db.models import Q
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -77,6 +77,12 @@ def _costing_currency(costing):
 
 def _format_costing_money(costing, value):
     return format_costing_money(value, _costing_currency(costing))
+
+
+def _deny_without_internal_costing(request):
+    if can_view_internal_costing(request.user):
+        return None
+    return HttpResponseForbidden("No access")
 
 
 def _quotation_company():
@@ -284,6 +290,9 @@ def _costing_header_initial(opportunity=None):
 
 
 def cost_sheet_list(request):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
     can_view_costing_profit = can_view_internal_costing(request.user)
     qs = CostingHeader.objects.select_related("opportunity", "customer").order_by("-updated_at")
 
@@ -378,6 +387,9 @@ def cost_sheet_list(request):
 
 
 def cost_sheet_create(request, opportunity_id=None):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
     opportunity = None
     if opportunity_id:
         opportunity = get_object_or_404(Opportunity, pk=opportunity_id)
@@ -422,6 +434,9 @@ def cost_sheet_create(request, opportunity_id=None):
 
 
 def cost_sheet_detail(request, pk):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
     can_view_costing_profit = can_view_internal_costing(request.user)
     costing = get_object_or_404(
         CostingHeader.objects.select_related("opportunity", "customer").prefetch_related("line_items"),
@@ -643,6 +658,9 @@ def cost_sheet_detail(request, pk):
 
 @require_POST
 def cost_sheet_convert_to_quotation(request, pk):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
     costing = get_object_or_404(CostingHeader.objects.select_related("opportunity", "customer"), pk=pk)
     if not _can_approve(request.user):
         messages.error(request, "You do not have permission to convert this costing to a quotation.")
@@ -659,6 +677,9 @@ def cost_sheet_convert_to_quotation(request, pk):
 
 
 def cost_sheet_client_quotation(request, pk):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
     costing = get_object_or_404(CostingHeader.objects.select_related("opportunity", "customer"), pk=pk)
     if costing.status != "approved":
         messages.error(request, "Approve the costing before viewing the client quotation.")
@@ -677,6 +698,9 @@ def cost_sheet_client_quotation(request, pk):
 
 
 def cost_sheet_quotation_pdf(request, pk):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
     costing = get_object_or_404(CostingHeader.objects.select_related("opportunity", "customer"), pk=pk)
     if costing.status != "approved" or not costing.quotation_number:
         messages.error(request, "Convert this approved costing to a quotation before downloading the quotation PDF.")
@@ -827,6 +851,9 @@ def cost_sheet_quotation_pdf(request, pk):
 
 @require_POST
 def cost_sheet_convert_to_invoice(request, pk):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
     costing = get_object_or_404(CostingHeader.objects.select_related("opportunity", "customer"), pk=pk)
     if not _can_convert_to_invoice(request.user):
         messages.error(request, "Only invoice managers can convert quotations to invoices.")
@@ -846,6 +873,9 @@ def cost_sheet_convert_to_invoice(request, pk):
 
 
 def cost_sheet_duplicate(request, pk):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
     costing = get_object_or_404(
         CostingHeader.objects.select_related("opportunity", "customer").prefetch_related("line_items"),
         pk=pk,
@@ -934,6 +964,9 @@ def _save_export_document(costing, filename, data, doc_type, user):
 
 
 def cost_sheet_export_pdf(request, pk):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
     costing = get_object_or_404(
         CostingHeader.objects.select_related("opportunity", "customer").prefetch_related("line_items"),
         pk=pk,
@@ -1052,6 +1085,9 @@ def cost_sheet_export_pdf(request, pk):
 
 
 def cost_sheet_export_excel(request, pk):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
     costing = get_object_or_404(
         CostingHeader.objects.select_related("opportunity", "customer").prefetch_related("line_items"),
         pk=pk,
@@ -1136,6 +1172,9 @@ def cost_sheet_export_excel(request, pk):
 
 
 def cost_sheet_dashboard(request):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
     can_view_costing_profit = can_view_internal_costing(request.user)
     qs = CostingHeader.objects.select_related("customer", "opportunity").order_by("-updated_at")
 
@@ -1235,6 +1274,9 @@ def cost_sheet_dashboard(request):
 
 
 def cost_sheet_reports(request):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
     can_view_costing_profit = can_view_internal_costing(request.user)
     qs = CostingHeader.objects.select_related("customer", "opportunity").order_by("-updated_at")
     export = (request.GET.get("export") or "").strip()
@@ -1298,4 +1340,7 @@ def cost_sheet_reports(request):
 
 
 def cost_sheet_guide(request):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
     return render(request, "crm/costing/costing_guide.html")

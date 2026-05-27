@@ -888,7 +888,7 @@
     </div>
 
     <div class="prod-add-card">
-      <div class="prod-add-card-title">Fabric and cost in taka</div>
+      <div class="prod-add-card-title">{% if can_view_lifecycle_profit %}Fabric and cost in taka{% else %}Fabric usage{% endif %}</div>
 
       <div class="prod-add-row">
 
@@ -919,113 +919,137 @@
           {% endif %}
         </div>
 
-        <div class="prod-add-field">
-          <div class="prod-add-label">Fabric cost per kg taka</div>
-          {{ form.fabric_cost_per_kg_bdt }}
-          <div class="prod-add-help">Rate per kg system will calculate total</div>
-          {% if form.fabric_cost_per_kg_bdt.errors %}
-            <div class="prod-add-errors">{{ form.fabric_cost_per_kg_bdt.errors|striptags }}</div>
-          {% endif %}
-        </div>
+        {% if form.fabric_cost_per_kg_bdt %}
+          <div class="prod-add-field">
+            <div class="prod-add-label">Fabric cost per kg taka</div>
+            {{ form.fabric_cost_per_kg_bdt }}
+            <div class="prod-add-help">Rate per kg system will calculate total</div>
+            {% if form.fabric_cost_per_kg_bdt.errors %}
+              <div class="prod-add-errors">{{ form.fabric_cost_per_kg_bdt.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        {% endif %}
 
-        <div class="prod-add-field">
-          <div class="prod-add-label">Thread cost taka</div>
-          {{ form.material_thread_cost_bdt }}
-          <div class="prod-add-help">Total thread cost for full order not per piece</div>
-          {% if form.material_thread_cost_bdt.errors %}
-            <div class="prod-add-errors">{{ form.material_thread_cost_bdt.errors|striptags }}</div>
-          {% endif %}
-        </div>
+        {% if form.material_thread_cost_bdt %}
+          <div class="prod-add-field">
+            <div class="prod-add-label">Thread cost taka</div>
+            {{ form.material_thread_cost_bdt }}
+            <div class="prod-add-help">Total thread cost for full order not per piece</div>
+            {% if form.material_thread_cost_bdt.errors %}
+              <div class="prod-add-errors">{{ form.material_thread_cost_bdt.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        {% endif %}
 
-        <div class="prod-add-field">
-          <div class="prod-add-label">Zipper cost taka</div>
-          {{ form.material_zipper_cost_bdt }}
-          <div class="prod-add-help">Total zipper cost for full order</div>
-          {% if form.material_zipper_cost_bdt.errors %}
-            <div class="prod-add-errors">{{ form.material_zipper_cost_bdt.errors|striptags }}</div>
-          {% endif %}
-        </div>
+        {% if form.material_zipper_cost_bdt %}
+          <div class="prod-add-field">
+            <div class="prod-add-label">Zipper cost taka</div>
+            {{ form.material_zipper_cost_bdt }}
+            <div class="prod-add-help">Total zipper cost for full order</div>
+            {% if form.material_zipper_cost_bdt.errors %}
+              <div class="prod-add-errors">{{ form.material_zipper_cost_bdt.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        {% endif %}
 
-        <div class="prod-add-field">
-          <div class="prod-add-label">Accessories cost taka</div>
-          {{ form.material_accessories_cost_bdt }}
-          <div class="prod-add-help">Total cost of all extra items for this order</div>
-          {% if form.material_accessories_cost_bdt.errors %}
-            <div class="prod-add-errors">{{ form.material_accessories_cost_bdt.errors|striptags }}</div>
-          {% endif %}
-        </div>
+        {% if form.material_accessories_cost_bdt %}
+          <div class="prod-add-field">
+            <div class="prod-add-label">Accessories cost taka</div>
+            {{ form.material_accessories_cost_bdt }}
+            <div class="prod-add-help">Total cost of all extra items for this order</div>
+            {% if form.material_accessories_cost_bdt.errors %}
+              <div class="prod-add-errors">{{ form.material_accessories_cost_bdt.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        {% endif %}
 
-        <div class="prod-add-field">
-          <div class="prod-add-label">Label cost taka</div>
-          {{ form.material_label_cost_bdt }}
-          <div class="prod-add-help">Total woven label or print label cost</div>
-          {% if form.material_label_cost_bdt.errors %}
-            <div class="prod-add-errors">{{ form.material_label_cost_bdt.errors|striptags }}</div>
-          {% endif %}
-        </div>
+        {% if form.material_label_cost_bdt %}
+          <div class="prod-add-field">
+            <div class="prod-add-label">Label cost taka</div>
+            {{ form.material_label_cost_bdt }}
+            <div class="prod-add-help">Total woven label or print label cost</div>
+            {% if form.material_label_cost_bdt.errors %}
+              <div class="prod-add-errors">{{ form.material_label_cost_bdt.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        {% endif %}
 
-        <div class="prod-add-field">
-          <div class="prod-add-label">Other material cost taka</div>
-          {{ form.material_other_cost_bdt }}
-          <div class="prod-add-help">Any other material cost for full order</div>
-          {% if form.material_other_cost_bdt.errors %}
-            <div class="prod-add-errors">{{ form.material_other_cost_bdt.errors|striptags }}</div>
-          {% endif %}
-        </div>
+        {% if form.material_other_cost_bdt %}
+          <div class="prod-add-field">
+            <div class="prod-add-label">Other material cost taka</div>
+            {{ form.material_other_cost_bdt }}
+            <div class="prod-add-help">Any other material cost for full order</div>
+            {% if form.material_other_cost_bdt.errors %}
+              <div class="prod-add-errors">{{ form.material_other_cost_bdt.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        {% endif %}
 
-        <div class="prod-add-field">
-          <div class="prod-add-label">Cutting cost taka</div>
-          {{ form.production_cutting_cost_bdt }}
-          <div class="prod-add-help">Total cutting labour cost for this order</div>
-          {% if form.production_cutting_cost_bdt.errors %}
-            <div class="prod-add-errors">{{ form.production_cutting_cost_bdt.errors|striptags }}</div>
-          {% endif %}
-        </div>
+        {% if form.production_cutting_cost_bdt %}
+          <div class="prod-add-field">
+            <div class="prod-add-label">Cutting cost taka</div>
+            {{ form.production_cutting_cost_bdt }}
+            <div class="prod-add-help">Total cutting labour cost for this order</div>
+            {% if form.production_cutting_cost_bdt.errors %}
+              <div class="prod-add-errors">{{ form.production_cutting_cost_bdt.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        {% endif %}
 
-        <div class="prod-add-field">
-          <div class="prod-add-label">Sewing cost taka</div>
-          {{ form.production_sewing_cost_bdt }}
-          <div class="prod-add-help">Total sewing labour cost for this order</div>
-          {% if form.production_sewing_cost_bdt.errors %}
-            <div class="prod-add-errors">{{ form.production_sewing_cost_bdt.errors|striptags }}</div>
-          {% endif %}
-        </div>
+        {% if form.production_sewing_cost_bdt %}
+          <div class="prod-add-field">
+            <div class="prod-add-label">Sewing cost taka</div>
+            {{ form.production_sewing_cost_bdt }}
+            <div class="prod-add-help">Total sewing labour cost for this order</div>
+            {% if form.production_sewing_cost_bdt.errors %}
+              <div class="prod-add-errors">{{ form.production_sewing_cost_bdt.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        {% endif %}
 
-        <div class="prod-add-field">
-          <div class="prod-add-label">Finishing cost taka</div>
-          {{ form.production_finishing_cost_bdt }}
-          <div class="prod-add-help">Total finishing cost for this order</div>
-          {% if form.production_finishing_cost_bdt.errors %}
-            <div class="prod-add-errors">{{ form.production_finishing_cost_bdt.errors|striptags }}</div>
-          {% endif %}
-        </div>
+        {% if form.production_finishing_cost_bdt %}
+          <div class="prod-add-field">
+            <div class="prod-add-label">Finishing cost taka</div>
+            {{ form.production_finishing_cost_bdt }}
+            <div class="prod-add-help">Total finishing cost for this order</div>
+            {% if form.production_finishing_cost_bdt.errors %}
+              <div class="prod-add-errors">{{ form.production_finishing_cost_bdt.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        {% endif %}
 
-        <div class="prod-add-field">
-          <div class="prod-add-label">Packing cost taka</div>
-          {{ form.production_packing_cost_bdt }}
-          <div class="prod-add-help">Total packing cost for this order</div>
-          {% if form.production_packing_cost_bdt.errors %}
-            <div class="prod-add-errors">{{ form.production_packing_cost_bdt.errors|striptags }}</div>
-          {% endif %}
-        </div>
+        {% if form.production_packing_cost_bdt %}
+          <div class="prod-add-field">
+            <div class="prod-add-label">Packing cost taka</div>
+            {{ form.production_packing_cost_bdt }}
+            <div class="prod-add-help">Total packing cost for this order</div>
+            {% if form.production_packing_cost_bdt.errors %}
+              <div class="prod-add-errors">{{ form.production_packing_cost_bdt.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        {% endif %}
 
-        <div class="prod-add-field">
-          <div class="prod-add-label">Overhead cost taka</div>
-          {{ form.production_overhead_cost_bdt }}
-          <div class="prod-add-help">Factory overhead share for this order total only</div>
-          {% if form.production_overhead_cost_bdt.errors %}
-            <div class="prod-add-errors">{{ form.production_overhead_cost_bdt.errors|striptags }}</div>
-          {% endif %}
-        </div>
+        {% if form.production_overhead_cost_bdt %}
+          <div class="prod-add-field">
+            <div class="prod-add-label">Overhead cost taka</div>
+            {{ form.production_overhead_cost_bdt }}
+            <div class="prod-add-help">Factory overhead share for this order total only</div>
+            {% if form.production_overhead_cost_bdt.errors %}
+              <div class="prod-add-errors">{{ form.production_overhead_cost_bdt.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        {% endif %}
 
-        <div class="prod-add-field">
-          <div class="prod-add-label">Other work cost taka</div>
-          {{ form.production_other_cost_bdt }}
-          <div class="prod-add-help">Any extra work cost for full order</div>
-          {% if form.production_other_cost_bdt.errors %}
-            <div class="prod-add-errors">{{ form.production_other_cost_bdt.errors|striptags }}</div>
-          {% endif %}
-        </div>
+        {% if form.production_other_cost_bdt %}
+          <div class="prod-add-field">
+            <div class="prod-add-label">Other work cost taka</div>
+            {{ form.production_other_cost_bdt }}
+            <div class="prod-add-help">Any extra work cost for full order</div>
+            {% if form.production_other_cost_bdt.errors %}
+              <div class="prod-add-errors">{{ form.production_other_cost_bdt.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        {% endif %}
 
         <div class="prod-add-field">
           <div class="prod-add-label">Remake needed</div>
@@ -1045,14 +1069,16 @@
           {% endif %}
         </div>
 
-        <div class="prod-add-field">
-          <div class="prod-add-label">Remake cost taka</div>
-          {{ form.remake_cost_bdt }}
-          <div class="prod-add-help">Total extra cost for remake pieces</div>
-          {% if form.remake_cost_bdt.errors %}
-            <div class="prod-add-errors">{{ form.remake_cost_bdt.errors|striptags }}</div>
-          {% endif %}
-        </div>
+        {% if form.remake_cost_bdt %}
+          <div class="prod-add-field">
+            <div class="prod-add-label">Remake cost taka</div>
+            {{ form.remake_cost_bdt }}
+            <div class="prod-add-help">Total extra cost for remake pieces</div>
+            {% if form.remake_cost_bdt.errors %}
+              <div class="prod-add-errors">{{ form.remake_cost_bdt.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        {% endif %}
 
       </div>
     </div>

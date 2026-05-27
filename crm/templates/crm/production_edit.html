@@ -383,7 +383,7 @@
     </div>
 
     <div class="prod-edit-card">
-      <div class="prod-edit-card-title">Fabric in kg and taka</div>
+      <div class="prod-edit-card-title">{% if can_view_lifecycle_profit %}Fabric in kg and taka{% else %}Fabric in kg{% endif %}</div>
       <div class="prod-edit-grid">
 
         <div class="prod-edit-field">
@@ -404,15 +404,18 @@
           {% for e in form.fabric_used_kg.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
         </div>
 
-        <div class="prod-edit-field">
-          <label for="{{ form.fabric_cost_per_kg_bdt.id_for_label }}">Fabric cost per kg taka</label>
-          {{ form.fabric_cost_per_kg_bdt }}
-          {% for e in form.fabric_cost_per_kg_bdt.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
-        </div>
+        {% if form.fabric_cost_per_kg_bdt %}
+          <div class="prod-edit-field">
+            <label for="{{ form.fabric_cost_per_kg_bdt.id_for_label }}">Fabric cost per kg taka</label>
+            {{ form.fabric_cost_per_kg_bdt }}
+            {% for e in form.fabric_cost_per_kg_bdt.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+          </div>
+        {% endif %}
 
       </div>
     </div>
 
+    {% if can_view_lifecycle_profit %}
     <div class="prod-edit-card">
       <div class="prod-edit-card-title">Material cost in taka</div>
       <div class="prod-edit-grid">
@@ -492,6 +495,7 @@
 
       </div>
     </div>
+    {% endif %}
 
     <div class="prod-edit-card">
       <div class="prod-edit-card-title">Remake and notes</div>
@@ -512,11 +516,13 @@
           {% for e in form.remake_qty.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
         </div>
 
-        <div class="prod-edit-field">
-          <label for="{{ form.remake_cost_bdt.id_for_label }}">Remake cost taka</label>
-          {{ form.remake_cost_bdt }}
-          {% for e in form.remake_cost_bdt.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
-        </div>
+        {% if form.remake_cost_bdt %}
+          <div class="prod-edit-field">
+            <label for="{{ form.remake_cost_bdt.id_for_label }}">Remake cost taka</label>
+            {{ form.remake_cost_bdt }}
+            {% for e in form.remake_cost_bdt.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+          </div>
+        {% endif %}
 
         <div class="prod-edit-field" style="grid-column:1 / -1;">
           <label for="{{ form.notes.id_for_label }}">Notes</label>

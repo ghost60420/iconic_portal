@@ -569,8 +569,8 @@
     <div class="dashboard-section-head">
       <div>
         <p class="dashboard-eyebrow">Finance</p>
-        <h2>Revenue, profitability, and invoice pressure</h2>
-        <p>Financial views are grouped into one band so cash signals read cleanly without crowding operational blocks.</p>
+        <h2>{% if can_view_order_lifecycle_profit %}Revenue, profitability, and invoice pressure{% else %}Revenue and invoice pressure{% endif %}</h2>
+        <p>{% if can_view_order_lifecycle_profit %}Financial views are grouped into one band so cash signals read cleanly without crowding operational blocks.{% else %}Some financial widgets are available only to approved internal users.{% endif %}</p>
       </div>
       <a class="dashboard-section-link" href="{{ accounting_url }}">
         <i data-lucide="landmark"></i>
@@ -590,17 +590,19 @@
         </div>
       </article>
 
-      <article class="dashboard-card">
-        <div class="dashboard-card-head">
-          <div class="dashboard-card-copy">
-            <span class="dashboard-card-title">Monthly Profit Trend</span>
-            <span class="dashboard-card-note">Six-month net cash view in CAD.</span>
+      {% if can_view_order_lifecycle_profit %}
+        <article class="dashboard-card">
+          <div class="dashboard-card-head">
+            <div class="dashboard-card-copy">
+              <span class="dashboard-card-title">Monthly Profit Trend</span>
+              <span class="dashboard-card-note">Six-month net cash view in CAD.</span>
+            </div>
           </div>
-        </div>
-        <div class="dashboard-chart-shell dashboard-chart-shell--sm is-loading" data-chart-shell>
-          <canvas data-chart="monthly-profit"></canvas>
-        </div>
-      </article>
+          <div class="dashboard-chart-shell dashboard-chart-shell--sm is-loading" data-chart-shell>
+            <canvas data-chart="monthly-profit"></canvas>
+          </div>
+        </article>
+      {% endif %}
 
       <article class="dashboard-card">
         <div class="dashboard-card-head">
