@@ -147,6 +147,15 @@
     font-size:13px;
   }
 
+  .invoice-table-wrap{
+    width:100%;
+    overflow-x:auto;
+  }
+
+  .invoice-table-wrap table{
+    min-width:860px;
+  }
+
   th, td{
     padding:10px 12px;
     border-bottom:1px solid rgba(148,163,184,0.18);
@@ -274,78 +283,80 @@
         <a class="pill" href="{% url 'invoice_list' %}">Reset</a>
       </form>
 
-      <table id="invTable">
-        <thead>
-          <tr>
-            <th>Invoice</th>
-            <th>Customer</th>
-            <th>Order</th>
-            <th>Status</th>
-            <th class="right">Total</th>
-            <th class="right">Received</th>
-            <th class="right">Balance</th>
-            <th class="right">Action</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {% for inv in invoices %}
-            {% with st=inv.payment_status_key cur=inv.currency|default:"" %}
-            <tr class="invRow"
-                data-status="{{ st }}"
-                data-db-status="{{ inv.status|default:'unknown'|lower }}"
-                data-href="{% url 'invoice_view' inv.pk %}">
-
-              <td class="mono">
-                {{ inv.invoice_number|default:"-" }}
-              </td>
-
-              <td>
-                {{ inv.customer|default:"-" }}
-              </td>
-
-              <td>
-                {{ inv.order|default:"-" }}
-              </td>
-
-              <td>
-                <span class="status {% if st %}{{ st }}{% else %}unknown{% endif %}">
-                  {{ inv.payment_status_label }}
-                </span>
-              </td>
-
-              <td class="right">
-                {% if cur %}{{ cur }} {% endif %}
-                {{ inv.total_amount|default_if_none:0|floatformat:2|intcomma }}
-              </td>
-
-              <td class="right">
-                {% if cur %}{{ cur }} {% endif %}
-                {{ inv.paid_amount|default_if_none:0|floatformat:2|intcomma }}
-              </td>
-
-              <td class="right">
-                {% if cur %}{{ cur }} {% endif %}
-                {{ inv.balance|default_if_none:0|floatformat:2|intcomma }}
-              </td>
-
-              <td class="right" onclick="event.stopPropagation();">
-                <a class="link" href="{% url 'invoice_view' inv.pk %}">View</a>
-                <span class="muted"> / </span>
-                <a class="link" href="{% url 'invoice_view' inv.pk %}#payment-received-form">Payment</a>
-              </td>
-
-            </tr>
-            {% endwith %}
-          {% empty %}
+      <div class="invoice-table-wrap">
+        <table id="invTable">
+          <thead>
             <tr>
-              <td colspan="8" style="text-align:center; color:var(--muted); padding:20px;">
-                No invoices found
-              </td>
+              <th>Invoice</th>
+              <th>Customer</th>
+              <th>Order</th>
+              <th>Status</th>
+              <th class="right">Total</th>
+              <th class="right">Received</th>
+              <th class="right">Balance</th>
+              <th class="right">Action</th>
             </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+          </thead>
+
+          <tbody>
+            {% for inv in invoices %}
+              {% with st=inv.payment_status_key cur=inv.currency|default:"" %}
+              <tr class="invRow"
+                  data-status="{{ st }}"
+                  data-db-status="{{ inv.status|default:'unknown'|lower }}"
+                  data-href="{% url 'invoice_view' inv.pk %}">
+
+                <td class="mono">
+                  {{ inv.invoice_number|default:"-" }}
+                </td>
+
+                <td>
+                  {{ inv.customer|default:"-" }}
+                </td>
+
+                <td>
+                  {{ inv.order|default:"-" }}
+                </td>
+
+                <td>
+                  <span class="status {% if st %}{{ st }}{% else %}unknown{% endif %}">
+                    {{ inv.payment_status_label }}
+                  </span>
+                </td>
+
+                <td class="right">
+                  {% if cur %}{{ cur }} {% endif %}
+                  {{ inv.total_amount|default_if_none:0|floatformat:2|intcomma }}
+                </td>
+
+                <td class="right">
+                  {% if cur %}{{ cur }} {% endif %}
+                  {{ inv.paid_amount|default_if_none:0|floatformat:2|intcomma }}
+                </td>
+
+                <td class="right">
+                  {% if cur %}{{ cur }} {% endif %}
+                  {{ inv.balance|default_if_none:0|floatformat:2|intcomma }}
+                </td>
+
+                <td class="right" onclick="event.stopPropagation();">
+                  <a class="link" href="{% url 'invoice_view' inv.pk %}">View</a>
+                  <span class="muted"> / </span>
+                  <a class="link" href="{% url 'invoice_view' inv.pk %}#payment-received-form">Payment</a>
+                </td>
+
+              </tr>
+              {% endwith %}
+            {% empty %}
+              <tr>
+                <td colspan="8" style="text-align:center; color:var(--muted); padding:20px;">
+                  No invoices found
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
 
     </div>
 
@@ -357,24 +368,26 @@
             <div class="muted">Amount received by linked production order from recorded payment entries.</div>
           </div>
         </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Production order</th>
-              <th>Title</th>
-              <th class="right">Received BDT</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in production_received_rows %}
+        <div class="invoice-table-wrap">
+          <table>
+            <thead>
               <tr>
-                <td class="mono">{{ row.production_order__order_code|default:"-" }}</td>
-                <td>{{ row.production_order__title|default:"-" }}</td>
-                <td class="right">BDT {{ row.received_bdt|default_if_none:0|floatformat:2|intcomma }}</td>
+                <th>Production order</th>
+                <th>Title</th>
+                <th class="right">Received BDT</th>
               </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {% for row in production_received_rows %}
+                <tr>
+                  <td class="mono">{{ row.production_order__order_code|default:"-" }}</td>
+                  <td>{{ row.production_order__title|default:"-" }}</td>
+                  <td class="right">BDT {{ row.received_bdt|default_if_none:0|floatformat:2|intcomma }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
       </div>
     {% endif %}
 

@@ -720,6 +720,14 @@
   margin-top: 18px;
 }
 
+.dashboard-grid--workflow {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.dashboard-grid--notifications {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .dashboard-grid--deep {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -814,6 +822,23 @@
   transform: translateY(-2px);
   transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
   border-color: rgba(125, 211, 252, 0.22);
+}
+
+.dashboard-notification-card {
+  display: block;
+  min-height: 142px;
+}
+
+.dashboard-notification-card--warn::before {
+  background: linear-gradient(90deg, #f59e0b, #fb7185);
+}
+
+.dashboard-notification-card--good::before {
+  background: linear-gradient(90deg, #34d399, #22c55e);
+}
+
+.dashboard-notification-card--flat::before {
+  background: linear-gradient(90deg, #94a3b8, #64748b);
 }
 
 .dashboard-metric-card--default {
@@ -1189,7 +1214,9 @@
   .dashboard-grid--lead,
   .dashboard-grid--finance,
   .dashboard-grid--activity,
-  .dashboard-grid--summary {
+  .dashboard-grid--summary,
+  .dashboard-grid--workflow,
+  .dashboard-grid--notifications {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1239,6 +1266,8 @@
   .dashboard-grid--finance,
   .dashboard-grid--activity,
   .dashboard-grid--summary,
+  .dashboard-grid--workflow,
+  .dashboard-grid--notifications,
   .dashboard-grid--deep {
     grid-template-columns: 1fr;
   }

@@ -100,6 +100,29 @@ def can_marketing(user):
     return bool(getattr(access, "can_marketing", False))
 
 
+@register.filter
+def can_access(user, flag_name):
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    if getattr(user, "is_superuser", False):
+        return True
+    access = _safe_access(user)
+    if not access:
+        return False
+    flag_name = (flag_name or "").strip()
+    if flag_name == "can_accounting_ca" and getattr(access, "is_bd", False):
+        return False
+    return bool(getattr(access, flag_name, False))
+
+
+@register.filter
+def is_current_url(request, url_name):
+    try:
+        return getattr(request.resolver_match, "url_name", "") == url_name
+    except Exception:
+        return False
+
+
 # -------------------------
 # Tags (optional, if you want to use: {% is_ca as ok %}
 # -------------------------

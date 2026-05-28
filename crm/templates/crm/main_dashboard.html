@@ -1,10 +1,13 @@
 {% extends "crm/base.html" %}
 {% load humanize %}
 {% load static %}
+{% load crm_groups %}
 
 {% block content %}
 {% url 'leads_list' as leads_url %}
 {% url 'opportunities_list' as opps_url %}
+{% url 'customers_list' as customers_url %}
+{% url 'cost_sheet_list' as costing_url %}
 {% url 'production_list' as production_url %}
 {% url 'shipment_list' as shipment_url %}
 {% url 'invoice_list' as invoice_url %}
@@ -14,9 +17,12 @@
 {% url 'ai_hub' as ai_url %}
 {% url 'ai_assistant' as ai_assistant_url %}
 {% url 'lead_add' as lead_add_url %}
+{% url 'cost_sheet_create' as cost_create_url %}
 {% url 'add_opportunity' as opportunity_add_url %}
 {% url 'lead_import_outbound' as lead_import_url %}
 {% url 'invoice_add' as invoice_add_url %}
+{% url 'production_add' as production_add_url %}
+{% url 'shipment_add' as shipment_add_url %}
 {% url 'leadbrain_discovery_job_create' as discovery_create_url %}
 {% url 'logout' as logout_url %}
 
@@ -207,34 +213,68 @@
               <div class="dashboard-action-sections">
                 <section class="dashboard-action-section">
                   <p class="dashboard-action-section-title">Sales</p>
-                  <a class="dashboard-action-link dashboard-action-link--primary" href="{{ lead_add_url }}">
-                    <span class="dashboard-action-link-icon"><i data-lucide="user-plus"></i></span>
-                    <span><strong>Add Lead</strong><small>Create a new lead record</small></span>
-                  </a>
-                  <a class="dashboard-action-link" href="{{ opportunity_add_url }}">
-                    <span class="dashboard-action-link-icon"><i data-lucide="briefcase-business"></i></span>
-                    <span><strong>Add Opportunity</strong><small>Open a new sales opportunity</small></span>
-                  </a>
-                  <a class="dashboard-action-link" href="{{ lead_import_url }}">
-                    <span class="dashboard-action-link-icon"><i data-lucide="upload-cloud"></i></span>
-                    <span><strong>Upload Leads</strong><small>Import outbound lead CSV</small></span>
-                  </a>
+                  {% if request.user|can_access:"can_leads" and lead_add_url %}
+                    <a class="dashboard-action-link dashboard-action-link--primary" href="{{ lead_add_url }}">
+                      <span class="dashboard-action-link-icon"><i data-lucide="user-plus"></i></span>
+                      <span><strong>Add Lead</strong><small>Create a new lead record</small></span>
+                    </a>
+                  {% endif %}
+                  {% if request.user|can_access:"can_opportunities" and opportunity_add_url %}
+                    <a class="dashboard-action-link" href="{{ opportunity_add_url }}">
+                      <span class="dashboard-action-link-icon"><i data-lucide="briefcase-business"></i></span>
+                      <span><strong>Add Opportunity</strong><small>Open a new sales opportunity</small></span>
+                    </a>
+                  {% endif %}
+                  {% if request.user|can_access:"can_leads" and lead_import_url %}
+                    <a class="dashboard-action-link" href="{{ lead_import_url }}">
+                      <span class="dashboard-action-link-icon"><i data-lucide="upload-cloud"></i></span>
+                      <span><strong>Upload Leads</strong><small>Import outbound lead CSV</small></span>
+                    </a>
+                  {% endif %}
                 </section>
 
                 <section class="dashboard-action-section">
                   <p class="dashboard-action-section-title">Operations</p>
-                  <a class="dashboard-action-link" href="{{ invoice_add_url }}">
-                    <span class="dashboard-action-link-icon"><i data-lucide="receipt-text"></i></span>
-                    <span><strong>Create Invoice</strong><small>Start a new billing record</small></span>
-                  </a>
-                  <a class="dashboard-action-link" href="{{ discovery_create_url }}">
-                    <span class="dashboard-action-link-icon"><i data-lucide="radar"></i></span>
-                    <span><strong>Start Discovery Job</strong><small>Launch lead discovery</small></span>
-                  </a>
-                  <a class="dashboard-action-link" href="{{ ai_assistant_url|default:ai_url }}">
-                    <span class="dashboard-action-link-icon"><i data-lucide="sparkles"></i></span>
-                    <span><strong>Open AI Assistant</strong><small>Ask for CRM support</small></span>
-                  </a>
+                  {% if request.user|can_access:"can_costing" %}
+                    {% if request.user|can_access:"can_view_internal_costing" and cost_create_url %}
+                      <a class="dashboard-action-link" href="{{ cost_create_url }}">
+                        <span class="dashboard-action-link-icon"><i data-lucide="calculator"></i></span>
+                        <span><strong>Create Costing</strong><small>Start an internal pricing sheet</small></span>
+                      </a>
+                    {% endif %}
+                  {% endif %}
+                  {% if request.user|can_access:"can_accounting_ca" or request.user|can_access:"can_accounting_bd" %}
+                    {% if invoice_add_url %}
+                      <a class="dashboard-action-link" href="{{ invoice_add_url }}">
+                        <span class="dashboard-action-link-icon"><i data-lucide="receipt-text"></i></span>
+                        <span><strong>Create Invoice</strong><small>Start a new billing record</small></span>
+                      </a>
+                    {% endif %}
+                  {% endif %}
+                  {% if request.user|can_access:"can_production" and production_add_url %}
+                    <a class="dashboard-action-link" href="{{ production_add_url }}">
+                      <span class="dashboard-action-link-icon"><i data-lucide="factory"></i></span>
+                      <span><strong>Create Production</strong><small>Open a production order</small></span>
+                    </a>
+                  {% endif %}
+                  {% if request.user|can_access:"can_shipping" and shipment_add_url %}
+                    <a class="dashboard-action-link" href="{{ shipment_add_url }}">
+                      <span class="dashboard-action-link-icon"><i data-lucide="truck"></i></span>
+                      <span><strong>Create Shipment</strong><small>Prepare a shipment record</small></span>
+                    </a>
+                  {% endif %}
+                  {% if discovery_create_url %}
+                    <a class="dashboard-action-link" href="{{ discovery_create_url }}">
+                      <span class="dashboard-action-link-icon"><i data-lucide="radar"></i></span>
+                      <span><strong>Start Discovery Job</strong><small>Launch lead discovery</small></span>
+                    </a>
+                  {% endif %}
+                  {% if request.user|can_access:"can_ai" and ai_assistant_url or request.user|can_access:"can_ai" and ai_url %}
+                    <a class="dashboard-action-link" href="{{ ai_assistant_url|default:ai_url }}">
+                      <span class="dashboard-action-link-icon"><i data-lucide="sparkles"></i></span>
+                      <span><strong>Open AI Assistant</strong><small>Ask for CRM support</small></span>
+                    </a>
+                  {% endif %}
                 </section>
               </div>
             </div>
@@ -267,6 +307,117 @@
       {% include "crm/dashboard/_metric_card.html" with title=kpi.title value=kpi.value note=kpi.note trend_text=kpi.trend_text trend_tone=kpi.trend_tone accent=kpi.accent icon=kpi.icon href=kpi.href %}
     {% endfor %}
   </div>
+
+  <section class="dashboard-section" id="workflow-section">
+    <div class="dashboard-section-head">
+      <div>
+        <p class="dashboard-eyebrow">Workflow Snapshot</p>
+        <h2>Daily operating queues</h2>
+        <p>Fast read-only counts for sales, finance, production, shipping, and lifecycle movement.</p>
+      </div>
+    </div>
+    <div class="dashboard-grid dashboard-grid--workflow">
+      <article class="dashboard-card">
+        <div class="dashboard-card-head">
+          <div class="dashboard-card-copy">
+            <span class="dashboard-card-title">Sales Pipeline</span>
+            <span class="dashboard-card-note">Lead, opportunity, and customer volume.</span>
+          </div>
+        </div>
+        <ul class="dashboard-list">
+          <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>New leads</strong><span>{{ new_leads_count|intcomma }}</span></div></li>
+          <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Open opportunities</strong><span>{{ open_opps|intcomma }}</span></div></li>
+          <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Customers</strong><span>{{ customer_count|intcomma }}</span></div></li>
+        </ul>
+      </article>
+
+      <article class="dashboard-card">
+        <div class="dashboard-card-head">
+          <div class="dashboard-card-copy">
+            <span class="dashboard-card-title">Financial</span>
+            <span class="dashboard-card-note">Quote, invoice, and cash collection pressure.</span>
+          </div>
+        </div>
+        <ul class="dashboard-list">
+          <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Pending quotations</strong><span>{{ pending_quotations_count|intcomma }}</span></div></li>
+          <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Unpaid invoices</strong><span>{{ unpaid_invoices_count|intcomma }}</span></div></li>
+          <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Partial payments</strong><span>{{ partial_payments_count|intcomma }}</span></div></li>
+          <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Outstanding balance</strong><span>{{ outstanding_invoices_total|floatformat:2|intcomma }}</span></div></li>
+        </ul>
+      </article>
+
+      <article class="dashboard-card">
+        <div class="dashboard-card-head">
+          <div class="dashboard-card-copy">
+            <span class="dashboard-card-title">Operations</span>
+            <span class="dashboard-card-note">Production and shipping queues.</span>
+          </div>
+        </div>
+        <ul class="dashboard-list">
+          <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Active production</strong><span>{{ active_production_count|intcomma }}</span></div></li>
+          <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Delayed production</strong><span>{{ delayed_production_count|intcomma }}</span></div></li>
+          <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Ready to ship</strong><span>{{ ready_to_ship_count|intcomma }}</span></div></li>
+          <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Shipped this month</strong><span>{{ shipped_this_month_count|intcomma }}</span></div></li>
+        </ul>
+      </article>
+
+      <article class="dashboard-card">
+        <div class="dashboard-card-head">
+          <div class="dashboard-card-copy">
+            <span class="dashboard-card-title">Lifecycle</span>
+            <span class="dashboard-card-note">Connected order workflow stages.</span>
+          </div>
+        </div>
+        <ul class="dashboard-list">
+          <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Active lifecycles</strong><span>{{ lifecycle_workflow_summary.active_order_lifecycles|intcomma }}</span></div></li>
+          <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Waiting payment</strong><span>{{ lifecycle_workflow_summary.waiting_for_payment|intcomma }}</span></div></li>
+          <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>In production</strong><span>{{ lifecycle_workflow_summary.in_production|intcomma }}</span></div></li>
+          <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Shipping</strong><span>{{ lifecycle_workflow_summary.shipping|intcomma }}</span></div></li>
+        </ul>
+      </article>
+
+      {% if can_view_order_lifecycle_profit and lifecycle_summary %}
+        <article class="dashboard-card">
+          <div class="dashboard-card-head">
+            <div class="dashboard-card-copy">
+              <span class="dashboard-card-title">Internal Profit</span>
+              <span class="dashboard-card-note">Visible only to approved internal users.</span>
+            </div>
+          </div>
+          <ul class="dashboard-list">
+            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Invoice value</strong><span>{{ lifecycle_summary.total_invoice_value|floatformat:2|intcomma }}</span></div></li>
+            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Estimated profit</strong><span>{{ lifecycle_summary.estimated_profit|floatformat:2|intcomma }}</span></div></li>
+            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Average margin</strong><span>{{ lifecycle_summary.average_margin|floatformat:2 }}%</span></div></li>
+          </ul>
+        </article>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="dashboard-section" id="notification-center">
+    <div class="dashboard-section-head">
+      <div>
+        <p class="dashboard-eyebrow">Notification Center</p>
+        <h2>Read-only operational alerts</h2>
+        <p>Simple placeholders for overdue invoices, production delays, shipment updates, unpaid balances, and approvals.</p>
+      </div>
+    </div>
+    <div class="dashboard-grid dashboard-grid--notifications">
+      {% for item in dashboard_notification_items %}
+        <a class="dashboard-card dashboard-notification-card dashboard-notification-card--{{ item.tone }}" href="{{ item.href }}">
+          <div class="dashboard-card-head">
+            <div class="dashboard-card-copy">
+              <span class="dashboard-card-title">{{ item.label }}</span>
+              <span class="dashboard-card-note">{{ item.detail }}</span>
+            </div>
+            <span class="dashboard-status-pill {% if item.tone == 'warn' %}dashboard-status-pill--warn{% elif item.tone == 'good' %}dashboard-status-pill--good{% else %}dashboard-status-pill--flat{% endif %}">
+              {{ item.count|intcomma }}
+            </span>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  </section>
 
   {% if can_view_order_lifecycle_profit and lifecycle_summary %}
     <section class="dashboard-section" id="order-lifecycle-section">

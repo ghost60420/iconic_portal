@@ -52,6 +52,9 @@ def order_lifecycle_detail(request, pk):
     if not can_view_profit:
         lifecycle = _sanitize_lifecycle_for_context(lifecycle)
     steps = lifecycle_timeline_steps(lifecycle, include_amounts=can_view_profit)
+    current_stage = lifecycle.status or "lead"
+    for step in steps:
+        step["is_current"] = step.get("key") == current_stage
 
     return render(
         request,

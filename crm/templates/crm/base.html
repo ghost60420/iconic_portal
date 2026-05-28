@@ -120,6 +120,12 @@
       border-color: rgba(245, 213, 128, 0.75);
     }
 
+    .crm-nav-item.active{
+      border-color: rgba(245, 213, 128, 0.56);
+      background: rgba(245, 213, 128, 0.14);
+      color:#fef3c7;
+    }
+
     .crm-nav-item:focus{
       outline: none;
       box-shadow: 0 0 0 3px rgba(96,165,250,0.22), 0 10px 20px rgba(0,0,0,0.35);
@@ -147,6 +153,65 @@
 
     .crm-spacer{ flex: 1 1 auto; }
     .crm-wrapper{ padding:16px 20px 40px 20px; }
+
+    .crm-main-nav{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      align-items:center;
+    }
+
+    .crm-quickbar{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
+      padding:10px 16px;
+      border-bottom:1px solid rgba(148,163,184,0.16);
+      background:rgba(7,13,24,0.92);
+      position:sticky;
+      top:58px;
+      z-index:1200;
+      backdrop-filter:blur(10px);
+    }
+
+    .crm-quickbar-label{
+      color:#94a3b8;
+      font-size:11px;
+      font-weight:900;
+      text-transform:uppercase;
+      letter-spacing:.08em;
+      margin-right:2px;
+    }
+
+    .crm-quick-action{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      min-height:34px;
+      padding:8px 12px;
+      border-radius:10px;
+      border:1px solid rgba(148,163,184,0.22);
+      background:rgba(15,23,42,0.74);
+      color:#f8fafc;
+      font-size:12px;
+      font-weight:900;
+      text-decoration:none;
+      white-space:nowrap;
+    }
+
+    .crm-quick-action:hover{
+      border-color:rgba(245,213,128,0.46);
+      background:rgba(245,213,128,0.12);
+      color:#fef3c7;
+      text-decoration:none;
+    }
+
+    .crm-quick-action.primary{
+      background:linear-gradient(140deg, var(--brand-1), var(--brand-2));
+      color:#111827;
+      border-color:rgba(245,213,128,0.62);
+    }
 
     .crm-dropdown{
       position:relative;
@@ -181,6 +246,11 @@
       visibility:visible;
       pointer-events:auto;
       transform: translateY(0);
+    }
+
+    .crm-main-nav .crm-dropdown:last-child .crm-dropdown-menu{
+      left:auto;
+      right:0;
     }
 
     .crm-dropdown-menu::before{
@@ -263,6 +333,20 @@
       .crm-topbar{
         padding: 10px 10px;
       }
+      .crm-main-nav,
+      .crm-quickbar{
+        overflow-x:auto;
+        flex-wrap:nowrap;
+        scrollbar-width:none;
+      }
+      .crm-main-nav::-webkit-scrollbar,
+      .crm-quickbar::-webkit-scrollbar{
+        display:none;
+      }
+      .crm-quickbar{
+        top:54px;
+        padding:9px 10px;
+      }
       .crm-wrapper{
         padding:14px 12px 34px 12px;
       }
@@ -279,12 +363,17 @@
   {% if request.user.is_authenticated %}
 
     {% url 'leads_list' as leads_url %}
+    {% url 'lead_add' as lead_add_url %}
     {% url 'opportunities_list' as opp_url %}
+    {% url 'add_opportunity' as opp_add_url %}
     {% url 'cost_sheet_list' as cost_url %}
+    {% url 'cost_sheet_create' as cost_create_url %}
     {% url 'customers_list' as cust_url %}
     {% url 'calendar_list' as cal_url %}
     {% url 'production_list' as prod_url %}
+    {% url 'production_add' as prod_add_url %}
     {% url 'shipment_list' as ship_url %}
+    {% url 'shipment_add' as ship_add_url %}
     {% url 'main_dashboard' as main_dash_url %}
     {% url 'ceo_dashboard' as ceo_dash_url %}
     {% url 'ai_executive_advisor' as ai_executive_advisor_url %}
@@ -297,6 +386,7 @@
     {% url 'world_dashboard' as world_dash_url %}
     {% url 'world_ai_fashion_news' as world_ai_url %}
     {% url 'email_sync_dashboard' as email_sync_url %}
+    {% url 'wa_api_inbox' as whatsapp_url %}
     {% url 'accounting_home' as acc_home_url %}
     {% url 'accounts_receivable_dashboard' as ar_dashboard_url %}
     {% url 'accounts_payable_dashboard' as ap_dashboard_url %}
@@ -308,6 +398,7 @@
     {% url 'kpi_scorecard_dashboard' as kpi_scorecard_url %}
     {% url 'financial_forecast_dashboard' as financial_forecast_url %}
     {% url 'invoice_list' as invoice_list_url %}
+    {% url 'invoice_add' as invoice_add_url %}
     {% url 'logout' as logout_url %}
     {% url 'access_list' as access_url %}
     {% url 'admin:index' as admin_url %}
@@ -319,209 +410,145 @@
     {% url 'trims_list' as trims_url %}
     {% url 'threads_list' as threads_url %}
 
+    {% with current_url=request.resolver_match.url_name can_leads=request.user|can_access:"can_leads" can_opps=request.user|can_access:"can_opportunities" can_customers=request.user|can_access:"can_customers" can_costing=request.user|can_access:"can_costing" can_internal=request.user|can_access:"can_view_internal_costing" can_production=request.user|can_access:"can_production" can_shipping=request.user|can_access:"can_shipping" can_inventory=request.user|can_access:"can_inventory" can_calendar=request.user|can_access:"can_calendar" can_ai_tools=request.user|can_access:"can_ai" can_marketing_tools=request.user|can_access:"can_marketing" can_whatsapp_tools=request.user|can_access:"can_whatsapp" can_ceo_tools=request.user|can_access:"can_view_ceo_tools" can_acc_ca=request.user|can_access:"can_accounting_ca" can_acc_bd=request.user|can_access:"can_accounting_bd" %}
     <div class="crm-topbar">
 
-      <div class="crm-nav-group">
-
+      <nav class="crm-main-nav" aria-label="CRM navigation">
         {% if main_dash_url %}
-          <a href="{{ main_dash_url }}" class="crm-nav-item primary"><span>🏠</span><strong>CRM</strong></a>
+          <a href="{{ main_dash_url }}" class="crm-nav-item primary {% if current_url == 'main_dashboard' %}active{% endif %}"><span>🏠</span><strong>CRM</strong></a>
         {% elif leads_url %}
           <a href="{{ leads_url }}" class="crm-nav-item primary"><span>🏠</span><strong>CRM</strong></a>
         {% endif %}
 
-        {% if request.user.is_superuser or request.user.access.can_view_ceo_tools %}
-          {% if ceo_dash_url %}
-            <a href="{{ ceo_dash_url }}" class="crm-nav-item hot"><span>👑</span><strong>CEO Dashboard</strong></a>
-          {% endif %}
-
-          {% if ai_executive_advisor_url %}
-            <a href="{{ ai_executive_advisor_url }}" class="crm-nav-item hot"><span>AI</span><strong>AI Executive Advisor</strong></a>
-          {% endif %}
-
-          {% if daily_ceo_briefing_url %}
-            <a href="{{ daily_ceo_briefing_url }}" class="crm-nav-item hot"><span>AM</span><strong>Daily Briefing</strong></a>
-          {% endif %}
-        {% endif %}
-
-        {% if leads_url %}
-          <a href="{{ leads_url }}" class="crm-nav-item hot"><span>🧲</span><strong>Leads</strong></a>
-        {% endif %}
-
-        {% if leadbrain_home_url %}
-          <a href="{{ leadbrain_home_url }}" class="crm-nav-item"><span>🧠</span><strong>Lead Brain Lite</strong></a>
-        {% endif %}
-
-        {% if opp_url %}
-          <a href="{{ opp_url }}" class="crm-nav-item hot"><span>📈</span><strong>Opportunities</strong></a>
-        {% endif %}
-
-        {% if cost_url %}
-          <a href="{{ cost_url }}" class="crm-nav-item"><span>🧮</span><strong>Costing</strong></a>
-        {% endif %}
-
-        {% if cust_url %}
-          <a href="{{ cust_url }}" class="crm-nav-item hot"><span>👥</span><strong>Customers</strong></a>
-        {% endif %}
-
-        {% if cal_url %}
-          <a href="{{ cal_url }}" class="crm-nav-item"><span>📅</span><strong>Calendar</strong></a>
-        {% endif %}
-
-        {% if prod_url %}
-          <a href="{{ prod_url }}" class="crm-nav-item"><span>🏭</span><strong>Production</strong></a>
-        {% endif %}
-
-        {% if ship_url %}
-          <a href="{{ ship_url }}" class="crm-nav-item"><span>📦</span><strong>Shipping</strong></a>
-        {% endif %}
-
-        {% if MARKETING_ENABLED and marketing_url %}
-          {% if request.user.is_authenticated %}
-            {% if request.user.is_superuser or request.user|in_group:"Marketing Manager" or request.user|can_marketing %}
-              <a href="{{ marketing_url }}" class="crm-nav-item"><span>📣</span><strong>Marketing</strong></a>
-            {% endif %}
-          {% endif %}
-        {% endif %}
-
-        {% if ai_hub_url and request.user.is_authenticated %}
-          {% if request.user.is_superuser or request.user|can_ai %}
-            <a href="{{ ai_hub_url }}" class="crm-nav-item"><span>🤖</span><strong>AI</strong></a>
-          {% endif %}
-        {% endif %}
-
-      </div>
-
-      <div class="crm-nav-group">
-
-        {# FIX: Always show Library menu, do not depend on request.user.access #}
-        <div class="crm-dropdown" id="libraryDropdown">
-          <a
-            href="{% if library_home_url %}{{ library_home_url }}{% else %}#{% endif %}"
-            class="crm-nav-item {% if not library_home_url %}is-disabled{% endif %}"
-            id="libraryBtn"
-            aria-haspopup="true"
-            aria-expanded="false"
-          >
-            <span>📚</span><strong>Library</strong>
-          </a>
-
-          <div class="crm-dropdown-menu" id="libraryMenu" role="menu">
-            <div class="crm-dd-title">Library</div>
-
-            {% if library_home_url %}<a class="crm-dd-item" href="{{ library_home_url }}">Library home</a>{% endif %}
-            {% if products_url %}<a class="crm-dd-item" href="{{ products_url }}">👕 Products</a>{% endif %}
-            {% if fabrics_url %}<a class="crm-dd-item" href="{{ fabrics_url }}">🧵 Fabrics</a>{% endif %}
-            {% if accessories_url %}<a class="crm-dd-item" href="{{ accessories_url }}">🧷 Accessories</a>{% endif %}
-            {% if trims_url %}<a class="crm-dd-item" href="{{ trims_url }}">🎀 Trims</a>{% endif %}
-            {% if threads_url %}<a class="crm-dd-item" href="{{ threads_url }}">🪡 Threads</a>{% endif %}
-
-            <div class="crm-dd-hint">
-              All product and material lists in one place.
+        {% if can_leads or can_opps or can_customers %}
+          <div class="crm-dropdown" id="salesDropdown">
+            <a href="{% if can_leads and leads_url %}{{ leads_url }}{% elif can_opps and opp_url %}{{ opp_url }}{% elif can_customers and cust_url %}{{ cust_url }}{% else %}#{% endif %}" class="crm-nav-item hot {% if current_url == 'leads_list' or current_url == 'lead_add' or current_url == 'opportunities_list' or current_url == 'add_opportunity' or current_url == 'customers_list' %}active{% endif %}" id="salesBtn" aria-haspopup="true" aria-expanded="false">
+              <span>🧲</span><strong>Sales</strong>
+            </a>
+            <div class="crm-dropdown-menu" role="menu">
+              <div class="crm-dd-title">Sales</div>
+              {% if can_leads and leads_url %}<a class="crm-dd-item" href="{{ leads_url }}">Leads</a>{% endif %}
+              {% if can_opps and opp_url %}<a class="crm-dd-item" href="{{ opp_url }}">Opportunities</a>{% endif %}
+              {% if can_customers and cust_url %}<a class="crm-dd-item" href="{{ cust_url }}">Customers</a>{% endif %}
             </div>
           </div>
-        </div>
-
-        {% if inv_url %}
-          <a href="{{ inv_url }}" class="crm-nav-item"><span>📦</span><strong>Inventory</strong></a>
         {% endif %}
 
-        {% if access_url %}
-          <a href="{{ access_url }}" class="crm-nav-item"><span>🔐</span><strong>Access</strong></a>
-        {% endif %}
+        {% if can_costing and can_internal or can_acc_ca or can_acc_bd %}
+          <div class="crm-dropdown" id="financialDropdown">
+            <a href="{% if can_acc_ca and acc_home_url or can_acc_bd and acc_home_url %}{{ acc_home_url }}{% elif can_acc_ca and invoice_list_url or can_acc_bd and invoice_list_url %}{{ invoice_list_url }}{% elif can_costing and can_internal and cost_url %}{{ cost_url }}{% else %}#{% endif %}" class="crm-nav-item hot {% if current_url == 'cost_sheet_list' or current_url == 'cost_sheet_dashboard' or current_url == 'invoice_list' or current_url == 'invoice_add' or current_url == 'accounting_home' %}active{% endif %}" id="financialBtn" aria-haspopup="true" aria-expanded="false">
+              <span>💰</span><strong>Financial</strong>
+            </a>
+            <div class="crm-dropdown-menu" role="menu">
+              <div class="crm-dd-title">Financial</div>
+              {% if can_costing and can_internal and cost_url %}<a class="crm-dd-item" href="{{ cost_url }}">Costing</a>{% endif %}
+              {% if can_costing and can_internal and cost_url %}<a class="crm-dd-item" href="{{ cost_url }}">Quotations</a>{% endif %}
+              {% if invoice_list_url and can_acc_ca or invoice_list_url and can_acc_bd %}<a class="crm-dd-item" href="{{ invoice_list_url }}">Invoices</a>{% endif %}
+              {% if acc_home_url and can_acc_ca or acc_home_url and can_acc_bd %}<a class="crm-dd-item" href="{{ acc_home_url }}">Accounting</a>{% endif %}
+              {% if ar_dashboard_url and can_acc_ca or ar_dashboard_url and can_acc_bd %}<a class="crm-dd-item" href="{{ ar_dashboard_url }}">Accounts receivable</a>{% endif %}
+              {% if ap_dashboard_url and can_acc_ca or ap_dashboard_url and can_acc_bd %}<a class="crm-dd-item" href="{{ ap_dashboard_url }}">Accounts payable</a>{% endif %}
+              {% if can_internal and profit_loss_url %}<a class="crm-dd-item" href="{{ profit_loss_url }}">Profit and Loss</a>{% endif %}
+              {% if can_internal and executive_dashboard_url %}<a class="crm-dd-item" href="{{ executive_dashboard_url }}">Executive dashboard</a>{% endif %}
+              {% if can_internal and balance_sheet_url %}<a class="crm-dd-item" href="{{ balance_sheet_url }}">Balance Sheet</a>{% endif %}
+              {% if can_internal and cash_flow_url %}<a class="crm-dd-item" href="{{ cash_flow_url }}">Cash Flow</a>{% endif %}
+              {% if can_internal and budget_vs_actual_url %}<a class="crm-dd-item" href="{{ budget_vs_actual_url }}">Budget vs Actual</a>{% endif %}
+              {% if can_internal and kpi_scorecard_url %}<a class="crm-dd-item" href="{{ kpi_scorecard_url }}">KPI Scorecard</a>{% endif %}
+              {% if can_internal and financial_forecast_url %}<a class="crm-dd-item" href="{{ financial_forecast_url }}">Financial Forecast</a>{% endif %}
 
-        {% if request.user.is_superuser and admin_url %}
-          <a href="{{ admin_url }}" class="crm-nav-item"><span>🛠️</span><strong>Admin</strong></a>
-        {% endif %}
+              {% if user|is_ca %}
+                {% url 'accounting_entry_list' as acc_all_entries_url %}
+                {% url 'accounting_ca_master' as acc_ca_master_url %}
+                {% url 'accounting_ca_grid' as acc_ca_grid_url %}
+                {% if acc_all_entries_url %}<a class="crm-dd-item" href="{{ acc_all_entries_url }}">All entries</a>{% endif %}
+                {% if acc_ca_master_url %}<a class="crm-dd-item" href="{{ acc_ca_master_url }}">Money transfer</a>{% endif %}
+                {% if acc_ca_grid_url %}<a class="crm-dd-item" href="{{ acc_ca_grid_url }}">Canada grid</a>{% endif %}
+              {% endif %}
 
-        <div class="crm-dropdown" id="worldDropdown">
-          <a
-            href="{% if world_tools_url %}{{ world_tools_url }}{% else %}#{% endif %}"
-            class="crm-nav-item {% if not world_tools_url %}is-disabled{% endif %}"
-            id="worldBtn"
-            aria-haspopup="true"
-            aria-expanded="false"
-          >
-            <span>🌍</span><strong>World</strong>
-          </a>
-
-          <div class="crm-dropdown-menu" id="worldMenu" role="menu">
-            <div class="crm-dd-title">World shortcuts</div>
-
-            {% if world_tools_url %}<a class="crm-dd-item" href="{{ world_tools_url }}">🧰 World tools</a>{% endif %}
-            {% if world_dash_url %}<a class="crm-dd-item" href="{{ world_dash_url }}">📊 World dashboard</a>{% endif %}
-            {% if world_ai_url %}<a class="crm-dd-item" href="{{ world_ai_url }}">🧠 AI fashion notes</a>{% endif %}
-
-            <div class="crm-dd-hint">
-              Quick access to world pages.
+              {% url 'accounting_bd_dashboard' as acc_bd_dash_url %}
+              {% url 'accounting_bd_grid' as acc_bd_grid_url %}
+              {% url 'accounting_bd_daily' as acc_bd_daily_url %}
+              {% url 'accounting_entry_add_bd' as acc_add_bd_url %}
+              {% url 'accounting_entry_add_ca' as acc_add_ca_url %}
+              {% url 'bd_staff_list' as bd_staff_list_url %}
+              {% url 'bd_staff_month_list' as bd_payroll_months_url %}
+              {% url 'bd_staff_add' as bd_staff_add_url %}
+              {% if can_acc_bd and acc_bd_dash_url %}<a class="crm-dd-item" href="{{ acc_bd_dash_url }}">Bangladesh dashboard</a>{% endif %}
+              {% if can_acc_bd and acc_bd_grid_url %}<a class="crm-dd-item" href="{{ acc_bd_grid_url }}">Bangladesh grid</a>{% endif %}
+              {% if can_acc_bd and acc_bd_daily_url %}<a class="crm-dd-item" href="{{ acc_bd_daily_url }}">Bangladesh daily sheet</a>{% endif %}
+              {% if can_acc_bd and acc_add_bd_url %}<a class="crm-dd-item" href="{{ acc_add_bd_url }}">Add Bangladesh entry</a>{% endif %}
+              {% if can_acc_ca and acc_add_ca_url %}<a class="crm-dd-item" href="{{ acc_add_ca_url }}">Add Canada entry</a>{% endif %}
+              {% if can_acc_bd and bd_staff_list_url %}<a class="crm-dd-item" href="{{ bd_staff_list_url }}">Bangladesh staff</a>{% endif %}
+              {% if can_acc_bd and bd_payroll_months_url %}<a class="crm-dd-item" href="{{ bd_payroll_months_url }}">BD payroll months</a>{% endif %}
+              {% if can_acc_bd and bd_staff_add_url %}<a class="crm-dd-item" href="{{ bd_staff_add_url }}">Add BD staff</a>{% endif %}
             </div>
           </div>
-        </div>
-
-        {% if email_sync_url %}
-          <a href="{{ email_sync_url }}" class="crm-nav-item"><span>📨</span><strong>Email Sync</strong></a>
         {% endif %}
 
-        <div class="crm-dropdown" id="accountingDropdown">
-          <a
-            href="{% if acc_home_url %}{{ acc_home_url }}{% else %}#{% endif %}"
-            class="crm-nav-item hot {% if not acc_home_url %}is-disabled{% endif %}"
-            id="accountingBtn"
-            aria-haspopup="true"
-            aria-expanded="false"
-          >
-            <span>💰</span><strong>Accounting</strong>
-          </a>
-
-          <div class="crm-dropdown-menu" id="accountingMenu" role="menu">
-            <div class="crm-dd-title">Accounting shortcuts</div>
-
-            {% if ar_dashboard_url %}<a class="crm-dd-item" href="{{ ar_dashboard_url }}">Accounts receivable</a>{% endif %}
-            {% if ap_dashboard_url %}<a class="crm-dd-item" href="{{ ap_dashboard_url }}">Accounts payable</a>{% endif %}
-            {% if profit_loss_url %}<a class="crm-dd-item" href="{{ profit_loss_url }}">Profit and Loss</a>{% endif %}
-            {% if executive_dashboard_url %}<a class="crm-dd-item" href="{{ executive_dashboard_url }}">Executive Dashboard</a>{% endif %}
-            {% if balance_sheet_url %}<a class="crm-dd-item" href="{{ balance_sheet_url }}">Balance Sheet</a>{% endif %}
-            {% if cash_flow_url %}<a class="crm-dd-item" href="{{ cash_flow_url }}">Cash Flow</a>{% endif %}
-            {% if budget_vs_actual_url %}<a class="crm-dd-item" href="{{ budget_vs_actual_url }}">Budget vs Actual</a>{% endif %}
-            {% if kpi_scorecard_url %}<a class="crm-dd-item" href="{{ kpi_scorecard_url }}">KPI Scorecard</a>{% endif %}
-            {% if financial_forecast_url %}<a class="crm-dd-item" href="{{ financial_forecast_url }}">Financial Forecast</a>{% endif %}
-            {% if invoice_list_url %}<a class="crm-dd-item" href="{{ invoice_list_url }}">🧾 Invoices</a>{% endif %}
-
-            {% if user|is_ca %}
-              {% url 'accounting_entry_list' as acc_all_entries_url %}
-              {% url 'accounting_ca_master' as acc_ca_master_url %}
-              {% url 'accounting_ca_grid' as acc_ca_grid_url %}
-              {% if acc_all_entries_url %}<a class="crm-dd-item" href="{{ acc_all_entries_url }}">🌎 All entries</a>{% endif %}
-              {% if acc_ca_master_url %}<a class="crm-dd-item" href="{{ acc_ca_master_url }}">💸 Money transfer</a>{% endif %}
-              {% if acc_ca_grid_url %}<a class="crm-dd-item" href="{{ acc_ca_grid_url }}">🧾 Canada grid</a>{% endif %}
-            {% endif %}
-
-            {% url 'accounting_bd_dashboard' as acc_bd_dash_url %}
-            {% url 'accounting_bd_grid' as acc_bd_grid_url %}
-            {% url 'accounting_bd_daily' as acc_bd_daily_url %}
-            {% url 'accounting_entry_add_bd' as acc_add_bd_url %}
-            {% url 'accounting_entry_add_ca' as acc_add_ca_url %}
-            {% url 'bd_staff_list' as bd_staff_list_url %}
-            {% url 'bd_staff_month_list' as bd_payroll_months_url %}
-            {% url 'bd_staff_add' as bd_staff_add_url %}
-
-            {% if acc_bd_dash_url %}<a class="crm-dd-item" href="{{ acc_bd_dash_url }}">🇧🇩 Bangladesh dashboard</a>{% endif %}
-            {% if acc_bd_grid_url %}<a class="crm-dd-item" href="{{ acc_bd_grid_url }}">🧾 Bangladesh grid</a>{% endif %}
-            {% if acc_bd_daily_url %}<a class="crm-dd-item" href="{{ acc_bd_daily_url }}">📅 Bangladesh daily sheet</a>{% endif %}
-
-            {% if acc_add_bd_url %}<a class="crm-dd-item" href="{{ acc_add_bd_url }}">➕ Add Bangladesh entry</a>{% endif %}
-            {% if acc_add_ca_url %}<a class="crm-dd-item" href="{{ acc_add_ca_url }}">➕ Add Canada entry</a>{% endif %}
-
-            {% if bd_staff_list_url %}<a class="crm-dd-item" href="{{ bd_staff_list_url }}">👥 Bangladesh staff</a>{% endif %}
-            {% if bd_payroll_months_url %}<a class="crm-dd-item" href="{{ bd_payroll_months_url }}">🧾 BD payroll months</a>{% endif %}
-            {% if bd_staff_add_url %}<a class="crm-dd-item" href="{{ bd_staff_add_url }}">➕ Add BD staff</a>{% endif %}
-
-            <div class="crm-dd-hint">
-              BD users see BD pages. CA users see master pages too.
+        {% if can_production or can_shipping or can_inventory or can_calendar %}
+          <div class="crm-dropdown" id="operationsDropdown">
+            <a href="{% if can_production and prod_url %}{{ prod_url }}{% elif can_shipping and ship_url %}{{ ship_url }}{% elif can_inventory and inv_url %}{{ inv_url }}{% elif can_calendar and cal_url %}{{ cal_url }}{% else %}#{% endif %}" class="crm-nav-item {% if current_url == 'production_list' or current_url == 'production_add' or current_url == 'shipment_list' or current_url == 'shipment_add' or current_url == 'inventory_list' or current_url == 'calendar_list' %}active{% endif %}" id="operationsBtn" aria-haspopup="true" aria-expanded="false">
+              <span>🏭</span><strong>Operations</strong>
+            </a>
+            <div class="crm-dropdown-menu" role="menu">
+              <div class="crm-dd-title">Operations</div>
+              {% if can_production and prod_url %}<a class="crm-dd-item" href="{{ prod_url }}">Production</a>{% endif %}
+              {% if can_shipping and ship_url %}<a class="crm-dd-item" href="{{ ship_url }}">Shipping</a>{% endif %}
+              {% if can_inventory and inv_url %}<a class="crm-dd-item" href="{{ inv_url }}">Inventory</a>{% endif %}
+              {% if can_calendar and cal_url %}<a class="crm-dd-item" href="{{ cal_url }}">Calendar</a>{% endif %}
             </div>
           </div>
-        </div>
+        {% endif %}
 
-      </div>
+        {% if MARKETING_ENABLED and can_marketing_tools and marketing_url or email_sync_url or can_whatsapp_tools and whatsapp_url %}
+          <div class="crm-dropdown" id="marketingDropdown">
+            <a href="{% if MARKETING_ENABLED and can_marketing_tools and marketing_url %}{{ marketing_url }}{% elif email_sync_url %}{{ email_sync_url }}{% elif can_whatsapp_tools and whatsapp_url %}{{ whatsapp_url }}{% else %}#{% endif %}" class="crm-nav-item {% if current_url == 'marketing_dashboard' or current_url == 'email_sync_dashboard' or current_url == 'wa_api_inbox' %}active{% endif %}" id="marketingBtn" aria-haspopup="true" aria-expanded="false">
+              <span>📣</span><strong>Marketing</strong>
+            </a>
+            <div class="crm-dropdown-menu" role="menu">
+              <div class="crm-dd-title">Marketing</div>
+              {% if MARKETING_ENABLED and can_marketing_tools and marketing_url %}<a class="crm-dd-item" href="{{ marketing_url }}">Marketing</a>{% endif %}
+              {% if email_sync_url %}<a class="crm-dd-item" href="{{ email_sync_url }}">Email Sync</a>{% endif %}
+              {% if can_whatsapp_tools and whatsapp_url %}<a class="crm-dd-item" href="{{ whatsapp_url }}">WhatsApp</a>{% endif %}
+            </div>
+          </div>
+        {% endif %}
+
+        {% if can_ai_tools or leadbrain_home_url or can_ceo_tools %}
+          <div class="crm-dropdown" id="aiToolsDropdown">
+            <a href="{% if can_ai_tools and ai_hub_url %}{{ ai_hub_url }}{% elif leadbrain_home_url %}{{ leadbrain_home_url }}{% elif ceo_dash_url %}{{ ceo_dash_url }}{% else %}#{% endif %}" class="crm-nav-item {% if current_url == 'ai_hub' or current_url == 'leadbrain_home' or current_url == 'ceo_dashboard' or current_url == 'ai_executive_advisor' or current_url == 'daily_ceo_briefing' %}active{% endif %}" id="aiToolsBtn" aria-haspopup="true" aria-expanded="false">
+              <span>🤖</span><strong>AI Tools</strong>
+            </a>
+            <div class="crm-dropdown-menu" role="menu">
+              <div class="crm-dd-title">AI Tools</div>
+              {% if can_ai_tools and ai_hub_url %}<a class="crm-dd-item" href="{{ ai_hub_url }}">AI Brain</a>{% endif %}
+              {% if leadbrain_home_url %}<a class="crm-dd-item" href="{{ leadbrain_home_url }}">Lead Brain</a>{% endif %}
+              {% if can_ceo_tools and ai_executive_advisor_url %}<a class="crm-dd-item" href="{{ ai_executive_advisor_url }}">AI Executive Advisor</a>{% endif %}
+              {% if can_ceo_tools and daily_ceo_briefing_url %}<a class="crm-dd-item" href="{{ daily_ceo_briefing_url }}">AM Daily Briefing</a>{% endif %}
+              {% if can_ceo_tools and ceo_dash_url %}<a class="crm-dd-item" href="{{ ceo_dash_url }}">CEO Dashboard</a>{% endif %}
+            </div>
+          </div>
+        {% endif %}
+
+        <div class="crm-dropdown" id="adminDropdown">
+          <a href="{% if access_url %}{{ access_url }}{% elif library_home_url %}{{ library_home_url }}{% elif world_tools_url %}{{ world_tools_url }}{% else %}#{% endif %}" class="crm-nav-item {% if current_url == 'access_list' or current_url == 'library_home' or current_url == 'world_tools' or current_url == 'world_dashboard' %}active{% endif %}" id="adminBtn" aria-haspopup="true" aria-expanded="false">
+            <span>🛠️</span><strong>Admin</strong>
+          </a>
+          <div class="crm-dropdown-menu" role="menu">
+            <div class="crm-dd-title">Admin</div>
+            {% if access_url %}<a class="crm-dd-item" href="{{ access_url }}">Access</a>{% endif %}
+            {% if request.user.is_superuser and admin_url %}<a class="crm-dd-item" href="{{ admin_url }}">Admin</a>{% endif %}
+            {% if library_home_url %}<a class="crm-dd-item" href="{{ library_home_url }}">Library</a>{% endif %}
+            {% if products_url %}<a class="crm-dd-item" href="{{ products_url }}">Products</a>{% endif %}
+            {% if fabrics_url %}<a class="crm-dd-item" href="{{ fabrics_url }}">Fabrics</a>{% endif %}
+            {% if accessories_url %}<a class="crm-dd-item" href="{{ accessories_url }}">Accessories</a>{% endif %}
+            {% if trims_url %}<a class="crm-dd-item" href="{{ trims_url }}">Trims</a>{% endif %}
+            {% if threads_url %}<a class="crm-dd-item" href="{{ threads_url }}">Threads</a>{% endif %}
+            {% if world_tools_url %}<a class="crm-dd-item" href="{{ world_tools_url }}">World tools</a>{% endif %}
+            {% if world_dash_url %}<a class="crm-dd-item" href="{{ world_dash_url }}">World dashboard</a>{% endif %}
+            {% if world_ai_url %}<a class="crm-dd-item" href="{{ world_ai_url }}">AI fashion notes</a>{% endif %}
+          </div>
+        </div>
+      </nav>
 
       <div class="crm-spacer"></div>
 
@@ -545,6 +572,20 @@
       </div>
 
     </div>
+
+    {% if current_url != 'main_dashboard' and current_url != 'leads_list' and current_url != 'lead_add' and current_url != 'cost_sheet_list' and current_url != 'cost_sheet_create' and current_url != 'invoice_list' and current_url != 'invoice_add' and current_url != 'production_list' and current_url != 'production_add' and current_url != 'shipment_list' and current_url != 'shipment_add' %}
+      {% if can_leads and lead_add_url or can_costing and can_internal and cost_create_url or can_acc_ca and invoice_add_url or can_acc_bd and invoice_add_url or can_production and prod_add_url or can_shipping and ship_add_url %}
+        <div class="crm-quickbar" aria-label="Global quick actions">
+          <span class="crm-quickbar-label">Quick actions</span>
+          {% if can_leads and lead_add_url %}<a class="crm-quick-action primary" href="{{ lead_add_url }}">+ New Lead</a>{% endif %}
+          {% if can_costing and can_internal and cost_create_url %}<a class="crm-quick-action" href="{{ cost_create_url }}">+ New Costing</a>{% endif %}
+          {% if can_acc_ca and invoice_add_url or can_acc_bd and invoice_add_url %}<a class="crm-quick-action" href="{{ invoice_add_url }}">+ New Invoice</a>{% endif %}
+          {% if can_production and prod_add_url %}<a class="crm-quick-action" href="{{ prod_add_url }}">+ New Production</a>{% endif %}
+          {% if can_shipping and ship_add_url %}<a class="crm-quick-action" href="{{ ship_add_url }}">+ New Shipment</a>{% endif %}
+        </div>
+      {% endif %}
+    {% endif %}
+    {% endwith %}
   {% endif %}
 
   <div class="crm-wrapper">
@@ -610,9 +651,12 @@
         });
       }
 
-      setupDropdown("accountingDropdown", "accountingBtn");
-      setupDropdown("libraryDropdown", "libraryBtn");
-      setupDropdown("worldDropdown", "worldBtn");
+      setupDropdown("salesDropdown", "salesBtn");
+      setupDropdown("financialDropdown", "financialBtn");
+      setupDropdown("operationsDropdown", "operationsBtn");
+      setupDropdown("marketingDropdown", "marketingBtn");
+      setupDropdown("aiToolsDropdown", "aiToolsBtn");
+      setupDropdown("adminDropdown", "adminBtn");
     })();
   </script>
 

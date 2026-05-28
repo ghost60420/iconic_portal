@@ -10,7 +10,7 @@ from datetime import timedelta, date
 from decimal import Decimal
 from types import SimpleNamespace
 from django.apps import apps
-from django.db.models import Count, Sum, Q, Max, OuterRef, Subquery
+from django.db.models import Count, F, Sum, Q, Max, OuterRef, Subquery
 from django.db import models
 from django.conf import settings
 try:
@@ -10725,6 +10725,8 @@ def main_dashboard(request):
     pending_invoice_approvals = 0
     outstanding_invoices_total = Decimal("0")
     overdue_invoices_count = 0
+    unpaid_invoices_count = 0
+    partial_payments_count = 0
     outstanding_invoices = []
     draft_invoices = []
     invoice_status_labels = ["Draft", "Sent", "Partial", "Paid"]
@@ -10753,6 +10755,8 @@ def main_dashboard(request):
                 invoice_totals.get("paid") or Decimal("0")
             )
             overdue_invoices_count = int(invoice_totals.get("overdue") or 0)
+            unpaid_invoices_count = open_invoice_base.filter(paid_amount__lte=0).count()
+            partial_payments_count = Invoice.objects.filter(status="partial").count()
             pending_invoice_approvals = Invoice.objects.filter(invoice_status="DRAFT").count()
             outstanding_invoices = list(
                 open_invoice_base.select_related("customer", "order").order_by("due_date", "-issue_date")[:5]
@@ -10764,6 +10768,95 @@ def main_dashboard(request):
             )
         except Exception:
             pass
+
+    new_leads_count = Lead.objects.filter(lead_status="New").count()
+    customer_count = Customer.objects.count()
+    pending_quotations_count = CostingHeader.objects.filter(status="approved").filter(
+        Q(quotation_number="") | Q(quotation_number__isnull=True)
+    ).count()
+
+    active_production_count = 0
+    delayed_production_count = 0
+    ready_to_ship_count = 0
+    shipped_this_month_count = 0
+    if ProductionOrder is not None:
+        try:
+            active_production_qs = ProductionOrder.objects.filter(status__in=["planning", "in_progress", "hold"])
+            active_production_count = active_production_qs.count()
+            delayed_production_count = active_production_qs.filter(bulk_deadline__lt=today).count()
+            ready_to_ship_count = (
+                ProductionOrder.objects.filter(status__in=["done", "closed_won"])
+                .exclude(shipments__status__in=["shipped", "out_for_delivery", "delivered"])
+                .distinct()
+                .count()
+            )
+        except Exception:
+            active_production_count = 0
+            delayed_production_count = 0
+            ready_to_ship_count = 0
+    if Shipment is not None:
+        try:
+            shipped_this_month_count = Shipment.objects.filter(
+                ship_date__gte=current_month_start,
+                status__in=["shipped", "out_for_delivery", "delivered"],
+            ).count()
+        except Exception:
+            shipped_this_month_count = 0
+
+    lifecycle_workflow_summary = {
+        "active_order_lifecycles": 0,
+        "waiting_for_payment": 0,
+        "in_production": 0,
+        "shipping": 0,
+    }
+    try:
+        active_lifecycles = OrderLifecycle.objects.exclude(status__in=["completed", "cancelled"])
+        lifecycle_workflow_summary = {
+            "active_order_lifecycles": active_lifecycles.count(),
+            "waiting_for_payment": active_lifecycles.filter(invoice__total_amount__gt=F("invoice__paid_amount")).count(),
+            "in_production": active_lifecycles.filter(status="production").count(),
+            "shipping": active_lifecycles.filter(status="shipping").count(),
+        }
+    except Exception:
+        logger.exception("main_dashboard: failed to build public lifecycle workflow counts")
+
+    dashboard_notification_items = [
+        {
+            "label": "Overdue invoices",
+            "count": overdue_invoices_count,
+            "detail": "Invoices past due date and not fully paid.",
+            "tone": "warn" if overdue_invoices_count else "good",
+            "href": "#finance-section",
+        },
+        {
+            "label": "Production delays",
+            "count": delayed_production_count,
+            "detail": "Active production orders with missed bulk deadlines.",
+            "tone": "warn" if delayed_production_count else "good",
+            "href": "#operations-section",
+        },
+        {
+            "label": "Shipment updates",
+            "count": ship_delayed_total,
+            "detail": "Shipments past ship date and not delivered.",
+            "tone": "warn" if ship_delayed_total else "good",
+            "href": "#operations-section",
+        },
+        {
+            "label": "Unpaid balances",
+            "count": unpaid_invoices_count,
+            "detail": "Open invoices with no recorded payment yet.",
+            "tone": "warn" if unpaid_invoices_count else "good",
+            "href": "#finance-section",
+        },
+        {
+            "label": "Pending approvals",
+            "count": pending_invoice_approvals + pending_quotations_count,
+            "detail": "Draft invoices and approved costings waiting to move forward.",
+            "tone": "flat" if pending_invoice_approvals or pending_quotations_count else "good",
+            "href": "#workflow-section",
+        },
+    ]
 
     recent_leads = list(
         Lead.objects
@@ -11132,11 +11225,22 @@ def main_dashboard(request):
         "monthly_profit_cad": monthly_profit_cad if can_view_order_lifecycle_profit else None,
         "production_running_count": production_running_count,
         "production_hold_count": production_hold_count,
+        "active_production_count": active_production_count,
+        "delayed_production_count": delayed_production_count,
+        "ready_to_ship_count": ready_to_ship_count,
         "ship_pending_total": ship_pending_total,
         "ship_delayed_total": ship_delayed_total,
+        "shipped_this_month_count": shipped_this_month_count,
+        "new_leads_count": new_leads_count,
+        "customer_count": customer_count,
+        "pending_quotations_count": pending_quotations_count,
         "pending_invoice_approvals": pending_invoice_approvals,
         "outstanding_invoices_total": outstanding_invoices_total,
         "overdue_invoices_count": overdue_invoices_count,
+        "unpaid_invoices_count": unpaid_invoices_count,
+        "partial_payments_count": partial_payments_count,
+        "lifecycle_workflow_summary": lifecycle_workflow_summary,
+        "dashboard_notification_items": dashboard_notification_items,
         "lead_source_breakdown": lead_source_breakdown,
         "top_niches": top_niches,
         "factory_workload": factory_workload,

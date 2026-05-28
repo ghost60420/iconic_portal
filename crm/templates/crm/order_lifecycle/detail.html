@@ -86,11 +86,29 @@
     border-radius:8px;
     padding:12px;
     min-height:146px;
+    position:relative;
+    overflow:hidden;
+  }
+  .ol-step::before{
+    content:"";
+    position:absolute;
+    inset:0 auto auto 0;
+    width:100%;
+    height:4px;
+    background:#475569;
   }
   .ol-step.done{
     border-color:rgba(34,197,94,.5);
     background:linear-gradient(180deg,rgba(22,101,52,.35),#020617);
   }
+  .ol-step.done::before{ background:#22c55e; }
+  .ol-step.current{
+    border-color:rgba(245,158,11,.72);
+    box-shadow:0 0 0 1px rgba(245,158,11,.22), 0 18px 36px rgba(0,0,0,.28);
+    background:linear-gradient(180deg,rgba(146,64,14,.42),#020617);
+  }
+  .ol-step.current::before{ background:#f59e0b; }
+  .ol-step.step-cancelled::before{ background:#ef4444; }
   .ol-step-label{
     display:flex;
     align-items:center;
@@ -104,6 +122,22 @@
     background:#64748b;
   }
   .ol-step.done .ol-dot{ background:#22c55e; }
+  .ol-step.current .ol-dot{ background:#f59e0b; box-shadow:0 0 0 5px rgba(245,158,11,.16); }
+  .ol-status-pill{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    margin-top:10px;
+    padding:5px 8px;
+    border-radius:999px;
+    border:1px solid rgba(148,163,184,.22);
+    background:rgba(15,23,42,.82);
+    color:#cbd5e1;
+    font-size:11px;
+    font-weight:900;
+  }
+  .ol-status-pill.done{ color:#bbf7d0; border-color:rgba(34,197,94,.4); background:rgba(22,101,52,.28); }
+  .ol-status-pill.current{ color:#fef3c7; border-color:rgba(245,158,11,.44); background:rgba(146,64,14,.28); }
   .ol-step small{
     display:block;
     margin-top:8px;
@@ -117,6 +151,16 @@
     font-size:12px;
     font-weight:900;
     text-decoration:none;
+  }
+  .ol-stage-caption{
+    margin:10px 0 18px;
+    padding:12px 14px;
+    border:1px solid rgba(148,163,184,.2);
+    border-radius:8px;
+    background:#0f172a;
+    color:#cbd5e1;
+    font-size:13px;
+    line-height:1.45;
   }
   .ol-panel{
     border:1px solid rgba(148,163,184,.24);
@@ -200,10 +244,13 @@
 
   <section class="ol-timeline" aria-label="Order lifecycle timeline">
     {% for step in steps %}
-      <article class="ol-step {% if step.is_done %}done{% endif %}">
+      <article class="ol-step step-{{ step.key }} {% if step.is_done %}done{% endif %} {% if step.is_current %}current{% endif %}">
         <div class="ol-step-label"><span class="ol-dot"></span>{{ step.label }}</div>
+        <span class="ol-status-pill {% if step.is_current %}current{% elif step.is_done %}done{% endif %}">
+          {% if step.is_current %}Current{% elif step.is_done %}Done{% else %}Waiting{% endif %}
+        </span>
         <small>
-          Status: {% if step.is_done %}Done{% else %}Waiting{% endif %}<br>
+          Status: {% if step.is_current %}Current stage{% elif step.is_done %}Done{% else %}Waiting{% endif %}<br>
           Date: {% if step.date %}{{ step.date|date:"Y-m-d" }}{% else %}-{% endif %}<br>
           {% if can_view_profit and step.amount %}Amount: {{ profit_breakdown.currency }} {{ step.amount|floatformat:2|intcomma }}<br>{% endif %}
           {% if step.notes %}{{ step.notes }}{% else %}&nbsp;{% endif %}
@@ -214,6 +261,11 @@
       </article>
     {% endfor %}
   </section>
+
+  <div class="ol-stage-caption">
+    Current stage: <strong>{{ lifecycle.get_status_display }}</strong>.
+    Linked records are clickable when available. Internal financial values remain hidden unless the user has internal costing permission.
+  </div>
 
   {% if can_view_profit %}
     <section class="ol-panel">
