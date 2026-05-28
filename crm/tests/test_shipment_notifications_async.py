@@ -3,11 +3,12 @@ from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from crm.models import Customer, Shipment
-from crm.tasks import send_shipment_status_notification
+from crm.tasks import send_shipment_notification_async
 
 
 class ShipmentAsyncNotificationTests(TestCase):
@@ -35,7 +36,7 @@ class ShipmentAsyncNotificationTests(TestCase):
     def test_status_update_saves_when_notification_queue_fails(self):
         self.client.force_login(self.user)
 
-        with patch("crm.views.send_shipment_status_notification.apply_async", side_effect=RuntimeError("broker down")):
+        with patch("crm.views.send_shipment_notification_async.apply_async", side_effect=RuntimeError("broker down")):
             response = self.client.post(
                 reverse("shipment_detail", args=[self.shipment.pk]),
                 {"action": "update_status", "status": "shipped", "notify_customer": "1"},
@@ -48,7 +49,7 @@ class ShipmentAsyncNotificationTests(TestCase):
     def test_status_update_without_notify_checkbox_does_not_queue_email(self):
         self.client.force_login(self.user)
 
-        with patch("crm.views.send_shipment_status_notification.apply_async") as apply_async:
+        with patch("crm.views.send_shipment_notification_async.apply_async") as apply_async:
             response = self.client.post(
                 reverse("shipment_detail", args=[self.shipment.pk]),
                 {"action": "update_status", "status": "shipped"},
@@ -58,6 +59,75 @@ class ShipmentAsyncNotificationTests(TestCase):
         self.shipment.refresh_from_db()
         self.assertEqual(self.shipment.status, "shipped")
         apply_async.assert_not_called()
+
+    def test_status_update_with_invalid_email_saves_without_queueing(self):
+        self.client.force_login(self.user)
+        self.customer.email = "not-an-email"
+        self.customer.save(update_fields=["email"])
+
+        with patch("crm.views.send_shipment_notification_async.apply_async") as apply_async:
+            response = self.client.post(
+                reverse("shipment_detail", args=[self.shipment.pk]),
+                {"action": "update_status", "status": "shipped", "notify_customer": "1"},
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.shipment.refresh_from_db()
+        self.assertEqual(self.shipment.status, "shipped")
+        apply_async.assert_not_called()
+
+    def test_duplicate_status_update_does_not_queue_duplicate_email(self):
+        self.client.force_login(self.user)
+        self.shipment.status = "shipped"
+        self.shipment.save(update_fields=["status"])
+
+        with patch("crm.views.send_shipment_notification_async.apply_async") as apply_async:
+            response = self.client.post(
+                reverse("shipment_detail", args=[self.shipment.pk]),
+                {"action": "update_status", "status": "shipped", "notify_customer": "1"},
+            )
+
+        self.assertEqual(response.status_code, 302)
+        apply_async.assert_not_called()
+
+    @override_settings(
+        EMAIL_HOST_USER="smtp-user",
+        EMAIL_HOST_PASSWORD="smtp-password",
+        DEFAULT_FROM_EMAIL="shipping@example.com",
+        SHIPMENT_EMAIL_TIMEOUT=1,
+    )
+    def test_successful_task_marks_shipment_notified(self):
+        self.shipment.status = "shipped"
+        self.shipment.save(update_fields=["status"])
+
+        with patch("crm.services.shipment_notifications.EmailMessage.send", return_value=1):
+            result = send_shipment_notification_async.run(self.shipment.pk, "shipped")
+
+        self.shipment.refresh_from_db()
+        self.assertEqual(result["status"], "sent")
+        self.assertEqual(self.shipment.last_notified_status, "shipped")
+
+    @override_settings(
+        EMAIL_HOST_USER="smtp-user",
+        EMAIL_HOST_PASSWORD="smtp-password",
+        DEFAULT_FROM_EMAIL="shipping@example.com",
+        SHIPMENT_EMAIL_TIMEOUT=1,
+    )
+    def test_duplicate_running_task_does_not_send_email(self):
+        self.shipment.status = "shipped"
+        self.shipment.save(update_fields=["status"])
+        lock_key = f"shipment-notification:{self.shipment.pk}:shipped"
+        cache.add(lock_key, "1", timeout=60)
+
+        try:
+            with patch("crm.services.shipment_notifications.EmailMessage.send") as send:
+                result = send_shipment_notification_async.run(self.shipment.pk, "shipped")
+        finally:
+            cache.delete(lock_key)
+
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["reason"], "already_running")
+        send.assert_not_called()
 
     @override_settings(
         EMAIL_HOST_USER="smtp-user",
@@ -71,7 +141,7 @@ class ShipmentAsyncNotificationTests(TestCase):
 
         with patch("crm.services.shipment_notifications.EmailMessage.send", side_effect=socket.timeout("timed out")):
             with self.assertRaises(socket.timeout):
-                send_shipment_status_notification.run(self.shipment.pk, "shipped")
+                send_shipment_notification_async.run(self.shipment.pk, "shipped")
 
         self.shipment.refresh_from_db()
         self.assertEqual(self.shipment.status, "shipped")
@@ -88,7 +158,7 @@ class ShipmentAsyncNotificationTests(TestCase):
         self.shipment.save(update_fields=["status"])
 
         with patch("crm.services.shipment_notifications.EmailMessage.send", return_value=0):
-            result = send_shipment_status_notification.run(self.shipment.pk, "shipped")
+            result = send_shipment_notification_async.run(self.shipment.pk, "shipped")
 
         self.shipment.refresh_from_db()
         self.assertEqual(result["status"], "failed")

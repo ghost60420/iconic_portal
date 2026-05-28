@@ -13,6 +13,7 @@ from .models import (
     Lead,
     Opportunity,
     Customer,
+    Shipment,
     BDStaff,
     BDStaffMonth,
     Product,
@@ -248,6 +249,27 @@ class OpportunityAdmin(admin.ModelAdmin):
     )
     list_filter = ("stage", "is_open")
     search_fields = ("opportunity_id", "lead__lead_id", "lead__account_brand")
+
+
+@admin.register(Shipment)
+class ShipmentAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "customer",
+        "carrier",
+        "tracking_number",
+        "status",
+        "ship_date",
+        "last_notified_status",
+        "last_tracking_check",
+    )
+    list_filter = ("status", "carrier", "last_notified_status", "ship_date")
+    search_fields = (
+        "tracking_number",
+        "customer__account_brand",
+        "customer__contact_name",
+        "customer__email",
+    )
 
 
 # -------------------------

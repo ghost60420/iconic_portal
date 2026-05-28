@@ -3,7 +3,9 @@ import smtplib
 import socket
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.mail import EmailMessage, get_connection
+from django.core.validators import validate_email
 from django.utils import timezone
 
 
@@ -15,11 +17,11 @@ SHIPMENT_NOTIFY_STATUSES = {
     "delivered": "Delivered",
 }
 
+SHIPMENT_EMAIL_TIMEOUT_EXCEPTIONS = (socket.timeout, TimeoutError)
 SHIPMENT_EMAIL_RETRY_EXCEPTIONS = (
     smtplib.SMTPException,
-    TimeoutError,
     OSError,
-    socket.timeout,
+    *SHIPMENT_EMAIL_TIMEOUT_EXCEPTIONS,
 )
 
 
@@ -35,10 +37,22 @@ def shipment_email_target(shipment):
     return None, None
 
 
+def validate_shipment_email(email):
+    if not email:
+        return False
+    try:
+        validate_email(email)
+    except ValidationError:
+        return False
+    return True
+
+
 def build_shipment_status_email(shipment, status_key):
     email_to, name = shipment_email_target(shipment)
     if not email_to:
         return None
+    if not validate_shipment_email(email_to):
+        return {"invalid_email": email_to}
 
     status_label = SHIPMENT_NOTIFY_STATUSES.get(status_key, "Shipment update")
     carrier_name = shipment.get_carrier_display() if hasattr(shipment, "get_carrier_display") else "Carrier"
@@ -72,8 +86,17 @@ def send_shipment_status_email(shipment, status_key):
     if not payload:
         logger.warning("Shipment notification skipped: no recipient", extra={"shipment_id": shipment.pk})
         return False, "missing_recipient"
+    if payload.get("invalid_email"):
+        logger.warning(
+            "Shipment notification skipped: invalid recipient",
+            extra={"shipment_id": shipment.pk, "email": payload["invalid_email"]},
+        )
+        return False, "invalid_recipient"
 
-    timeout = int(getattr(settings, "SHIPMENT_EMAIL_TIMEOUT", getattr(settings, "EMAIL_TIMEOUT", 8)) or 8)
+    try:
+        timeout = int(getattr(settings, "SHIPMENT_EMAIL_TIMEOUT", getattr(settings, "EMAIL_TIMEOUT", 8)) or 8)
+    except (TypeError, ValueError):
+        timeout = 8
     host_user = getattr(settings, "EMAIL_HOST_USER", "") or ""
     host_password = getattr(settings, "EMAIL_HOST_PASSWORD", "") or ""
     if not host_user or not host_password:
@@ -90,6 +113,9 @@ def send_shipment_status_email(shipment, status_key):
             connection=connection,
         )
         sent_count = message.send(fail_silently=False)
+    except SHIPMENT_EMAIL_TIMEOUT_EXCEPTIONS:
+        logger.exception("Shipment notification SMTP timeout", extra={"shipment_id": shipment.pk, "status": status_key})
+        raise
     except SHIPMENT_EMAIL_RETRY_EXCEPTIONS:
         logger.exception("Shipment notification SMTP failure", extra={"shipment_id": shipment.pk, "status": status_key})
         raise

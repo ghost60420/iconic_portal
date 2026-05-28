@@ -342,7 +342,7 @@ canada_required = user_passes_test(is_canada_user, login_url="login")
 def send_shipment_update_email(shipment, event_label):
     status_key = getattr(shipment, "status", "") or "shipped"
     try:
-        from .tasks import send_shipment_status_notification as shipment_notification_task
+        from .tasks import send_shipment_notification_async as shipment_notification_task
 
         shipment_notification_task.apply_async(
             args=[shipment.pk, status_key],
@@ -8036,8 +8036,8 @@ from django.utils import timezone
 
 from .models import Shipment, ProductionOrder, Opportunity
 from .forms import ShipmentForm
-from .services.shipment_notifications import SHIPMENT_NOTIFY_STATUSES, shipment_email_target
-from .tasks import send_shipment_status_notification
+from .services.shipment_notifications import SHIPMENT_NOTIFY_STATUSES, shipment_email_target, validate_shipment_email
+from .tasks import send_shipment_notification_async
 
 
 def form_fields(form_class):
@@ -8083,6 +8083,12 @@ def _queue_shipment_status_notification(shipment, status_key, *, force=False):
     if not email_to:
         logger.warning("Shipment notification queue skipped: no recipient", extra={"shipment_id": shipment.pk})
         return False, "missing_recipient"
+    if not validate_shipment_email(email_to):
+        logger.warning(
+            "Shipment notification queue skipped: invalid recipient",
+            extra={"shipment_id": shipment.pk, "email": email_to},
+        )
+        return False, "invalid_recipient"
 
     def enqueue():
         try:
@@ -8090,7 +8096,7 @@ def _queue_shipment_status_notification(shipment, status_key, *, force=False):
             queue_name = getattr(settings, "SHIPMENT_NOTIFICATION_QUEUE", "") or ""
             if queue_name:
                 options["queue"] = queue_name
-            send_shipment_status_notification.apply_async(
+            send_shipment_notification_async.apply_async(
                 args=[shipment.pk, status_key],
                 kwargs={"force": force},
                 **options,
@@ -8129,6 +8135,8 @@ def _handle_shipment_status_change(request, shipment, old_status, *, notify_cust
         return True
     if reason == "missing_recipient":
         messages.warning(request, "Shipment saved, but no customer email address was found for notification.")
+    elif reason == "invalid_recipient":
+        messages.warning(request, "Shipment saved, but the customer email address is invalid.")
     else:
         messages.warning(request, "Shipment saved, but notification could not be queued.")
     return False
@@ -8614,6 +8622,8 @@ def shipment_notify_customer(request, pk):
         messages.success(request, "Customer shipment notification queued.")
     elif reason == "missing_recipient":
         messages.error(request, "No email address found for this shipment.")
+    elif reason == "invalid_recipient":
+        messages.error(request, "Customer email address is invalid.")
     else:
         messages.error(request, "Could not queue email right now. Shipment was not changed.")
 
