@@ -39,8 +39,13 @@
         </div>
         <div class="production-hero-badges">
           <span class="production-status-badge {{ order.status }}">{{ order.get_status_display }}</span>
+          <span class="production-priority-badge {{ priority_badge.tone }}">{{ priority_badge.label }} priority</span>
           {% if order_delayed %}
             <span class="production-priority-badge risk">Delayed</span>
+          {% elif late_shipment %}
+            <span class="production-priority-badge risk">Late shipment</span>
+          {% elif shipment_pending %}
+            <span class="production-priority-badge warning">Shipment pending</span>
           {% elif order.status == "done" or order.status == "closed_won" %}
             <span class="production-priority-badge good">Complete</span>
           {% else %}
@@ -64,6 +69,14 @@
       <a href="{% url 'production_list' %}" class="production-btn production-btn--ghost">Back to Production</a>
     </div>
   </section>
+
+  <nav class="production-mobile-action-bar" aria-label="Factory quick actions">
+    <a href="{% url 'production_next_stage' order.pk %}" class="production-btn production-btn--primary">Next Stage</a>
+    {% if stages %}
+      <a href="{% url 'production_stage_edit' stages.0.id %}" class="production-btn production-btn--ghost">Stages</a>
+    {% endif %}
+    <a href="{% url 'shipping_add_for_order' order.pk %}" class="production-btn production-btn--ghost">Shipment</a>
+  </nav>
 
   <section class="production-snapshot-grid" aria-label="Production snapshot">
     <article class="production-snapshot-card">
@@ -133,6 +146,28 @@
           <div class="production-progress-bar" aria-hidden="true">
             <span class="{% if order_delayed %}risk{% endif %}" style="width: {{ percent_done }}%;"></span>
           </div>
+        </div>
+
+        <div class="production-control-tracker" aria-label="Manufacturing stage tracker">
+          {% for card in production_visual_stages %}
+            <article class="production-control-stage {{ card.status }}">
+              <div class="production-control-stage-top">
+                <span class="production-stage-dot"></span>
+                <strong>{{ card.label }}</strong>
+              </div>
+              <small>{{ card.status_label }}</small>
+              <span>{{ card.date|date:"M j, Y"|default:"No timestamp" }}</span>
+              <em>{{ card.assigned_to }}</em>
+              {% if card.stage %}
+                <a href="{% url 'production_stage_edit' card.stage.id %}">Edit stage</a>
+              {% endif %}
+            </article>
+          {% endfor %}
+        </div>
+
+        <div class="production-stage-subhead">
+          <strong>Quick stage updates</strong>
+          <span>Tap a stage card to start or complete that production step.</span>
         </div>
 
         <div class="production-stage-timeline">
@@ -462,6 +497,30 @@
           </div>
         </div>
 
+        <div class="production-shipment-focus {% if shipment_pending %}needs-action{% endif %}">
+          <div>
+            <span>Linked shipment</span>
+            {% if latest_shipment %}
+              <strong>{{ latest_shipment.get_status_display }}</strong>
+              <small>
+                {{ latest_shipment.get_carrier_display }}
+                {% if latest_shipment.tracking_number %} / {{ latest_shipment.tracking_number }}{% endif %}
+              </small>
+            {% else %}
+              <strong>{% if shipment_pending %}Ready to create{% else %}No shipment yet{% endif %}</strong>
+              <small>{% if shipment_pending %}Production is near shipping readiness.{% else %}Create when packing or shipping begins.{% endif %}</small>
+            {% endif %}
+          </div>
+          <div class="production-panel-actions">
+            {% if latest_shipment %}
+              <a href="{% url 'shipment_detail' latest_shipment.pk %}" class="production-btn production-btn--tiny production-btn--primary">Open Shipment</a>
+              <a href="{% url 'shipment_edit' latest_shipment.pk %}" class="production-btn production-btn--tiny production-btn--ghost">Update</a>
+            {% else %}
+              <a href="{% url 'shipping_add_for_order' order.pk %}" class="production-btn production-btn--tiny production-btn--primary">Create Shipment</a>
+            {% endif %}
+          </div>
+        </div>
+
         {% if shipments %}
           <div class="production-table-wrap">
             <table class="production-mini-table">
@@ -708,6 +767,20 @@
             <h2>Activity and Notes</h2>
             <p>Production updates, internal notes, pinned comments, and related lead/opportunity activity.</p>
           </div>
+        </div>
+
+        <div class="production-ops-timeline">
+          {% for item in production_activity %}
+            <article class="production-ops-timeline-item {{ item.tone }}">
+              <div>
+                <strong>{{ item.action }}</strong>
+                <span>{{ item.actor }} / {{ item.time|date:"M j, Y H:i" }}</span>
+              </div>
+              <small>{{ item.status }}</small>
+            </article>
+          {% empty %}
+            <div class="production-empty-inline">No production activity yet.</div>
+          {% endfor %}
         </div>
 
         <form method="post" enctype="multipart/form-data" class="production-note-form">

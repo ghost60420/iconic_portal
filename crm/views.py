@@ -1658,6 +1658,326 @@ def _production_active_statuses():
     return {"planning", "in_progress", "hold"}
 
 
+PRODUCTION_CONTROL_BUCKET_LABELS = {
+    "sampling": "Sampling",
+    "fabric": "Fabric sourcing",
+    "cutting": "Cutting",
+    "printing": "Printing",
+    "sewing": "Sewing",
+    "qc": "QC",
+    "packing": "Packing",
+    "shipped": "Shipped",
+}
+
+
+def _production_assignee_label(order):
+    opportunity = getattr(order, "opportunity", None)
+    lead = getattr(order, "lead", None)
+    if opportunity and getattr(opportunity, "assigned_to", None):
+        return str(opportunity.assigned_to)
+    if lead and getattr(lead, "assigned_to", None):
+        return str(lead.assigned_to)
+    if lead and getattr(lead, "owner", None):
+        return str(lead.owner)
+    return "Factory team"
+
+
+def _stage_status_label(status):
+    return dict(ProductionStage.STATUS_CHOICES).get(status, status.replace("_", " ").title() if status else "Planned")
+
+
+def _production_stage_lookup(stages):
+    return {stage.stage_key: stage for stage in stages}
+
+
+def _production_any_stage_started(stage_lookup, keys):
+    return any(
+        stage_lookup.get(key) and stage_lookup[key].status in {"in_progress", "hold", "delay", "done"}
+        for key in keys
+    )
+
+
+def _production_any_stage_done(stage_lookup, keys):
+    return any(stage_lookup.get(key) and stage_lookup[key].status == "done" for key in keys)
+
+
+def _production_stage_card(label, key, status, *, date_value=None, assigned_to=None, note="", stage=None):
+    if stage:
+        status = stage.status or status
+        date_value = stage.actual_end or stage.actual_start or stage.planned_end or stage.planned_start
+        note = stage.notes or note
+        label = stage.display_name or label
+        if stage.is_late and status != "done":
+            status = "delay"
+
+    return SimpleNamespace(
+        key=key,
+        label=label,
+        status=status or "planned",
+        status_label=_stage_status_label(status or "planned"),
+        date=date_value,
+        assigned_to=assigned_to or "Factory team",
+        note=note,
+        stage=stage,
+    )
+
+
+def _production_order_needs_print(order):
+    print_text = " ".join(
+        [
+            getattr(order, "title", "") or "",
+            getattr(order, "style_name", "") or "",
+            getattr(order, "notes", "") or "",
+            getattr(order, "accessories_note", "") or "",
+            getattr(order, "extra_order_note", "") or "",
+        ]
+    ).lower()
+    return any(token in print_text for token in ["print", "embroidery", "screen", "sublimation", "puff"])
+
+
+def _production_visual_stages(order, stages, shipments=None):
+    shipments = shipments or []
+    stage_lookup = _production_stage_lookup(stages)
+    assigned_to = _production_assignee_label(order)
+    cards = []
+
+    sampling_stage = stage_lookup.get("sampling") or stage_lookup.get("development")
+    cards.append(_production_stage_card("Sampling", "sampling", "planned", assigned_to=assigned_to, stage=sampling_stage))
+
+    required_kg = _safe_decimal_or_none(getattr(order, "fabric_required_kg", None)) or Decimal("0")
+    received_kg = _safe_decimal_or_none(getattr(order, "fabric_received_kg", None)) or Decimal("0")
+    if required_kg and received_kg >= required_kg:
+        fabric_status = "done"
+        fabric_note = f"{received_kg} kg received"
+    elif received_kg:
+        fabric_status = "in_progress"
+        fabric_note = f"{received_kg} kg received"
+    elif _production_any_stage_started(stage_lookup, ["cutting", "sewing", "qc", "finishing", "packing", "shipping"]):
+        fabric_status = "done"
+        fabric_note = "Fabric cleared for production"
+    else:
+        fabric_status = "planned"
+        fabric_note = "Fabric sourcing"
+    cards.append(
+        _production_stage_card(
+            "Fabric",
+            "fabric",
+            fabric_status,
+            date_value=getattr(order, "updated_at", None) if fabric_status != "planned" else None,
+            assigned_to=assigned_to,
+            note=fabric_note,
+        )
+    )
+
+    cutting_stage = stage_lookup.get("cutting")
+    cards.append(_production_stage_card("Cutting", "cutting", "planned", assigned_to=assigned_to, stage=cutting_stage))
+
+    needs_print = _production_order_needs_print(order)
+    if not needs_print:
+        print_status = "planned"
+        print_note = "Not specified"
+        print_date = None
+    elif _production_any_stage_started(stage_lookup, ["sewing", "qc", "finishing", "packing", "shipping"]):
+        print_status = "done"
+        print_note = "Artwork step cleared"
+        print_date = getattr(order, "updated_at", None)
+    elif _production_any_stage_done(stage_lookup, ["cutting"]):
+        print_status = "in_progress"
+        print_note = "Ready after cutting"
+        print_date = getattr(order, "updated_at", None)
+    else:
+        print_status = "planned"
+        print_note = "Awaiting cutting"
+        print_date = None
+    cards.append(
+        _production_stage_card(
+            "Printing",
+            "printing",
+            print_status,
+            date_value=print_date,
+            assigned_to=assigned_to,
+            note=print_note,
+        )
+    )
+
+    sewing_stage = stage_lookup.get("sewing")
+    cards.append(_production_stage_card("Sewing", "sewing", "planned", assigned_to=assigned_to, stage=sewing_stage))
+
+    qc_stage = stage_lookup.get("qc")
+    cards.append(_production_stage_card("QC", "qc", "planned", assigned_to=assigned_to, stage=qc_stage))
+
+    packing_stage = stage_lookup.get("packing") or stage_lookup.get("finishing") or stage_lookup.get("ironing")
+    cards.append(_production_stage_card("Packing", "packing", "planned", assigned_to=assigned_to, stage=packing_stage))
+
+    shipping_stage = stage_lookup.get("shipping")
+    delivered_or_shipped = [s for s in shipments if s.status in {"shipped", "out_for_delivery", "delivered"}]
+    if delivered_or_shipped:
+        latest = sorted(delivered_or_shipped, key=lambda s: s.ship_date or timezone.localdate(), reverse=True)[0]
+        shipment_status = "done" if latest.status == "delivered" else "in_progress"
+        shipment_note = latest.get_status_display()
+        shipment_date = latest.ship_date or latest.updated_at
+    elif shipping_stage:
+        shipment_status = shipping_stage.status
+        shipment_note = shipping_stage.notes or shipping_stage.get_status_display()
+        shipment_date = shipping_stage.actual_end or shipping_stage.actual_start or shipping_stage.planned_end
+    else:
+        shipment_status = "planned"
+        shipment_note = "Shipment pending"
+        shipment_date = None
+    cards.append(
+        _production_stage_card(
+            "Shipment",
+            "shipment",
+            shipment_status,
+            date_value=shipment_date,
+            assigned_to=assigned_to,
+            note=shipment_note,
+            stage=shipping_stage,
+        )
+    )
+
+    return cards
+
+
+def _production_stage_bucket(order, stages, shipments=None):
+    shipments = shipments or []
+    completed_statuses = _production_completed_statuses()
+    if order.status in completed_statuses:
+        return "shipped"
+    if any(s.status in {"shipped", "out_for_delivery", "delivered"} for s in shipments):
+        return "shipped"
+
+    stage_lookup = _production_stage_lookup(stages)
+    for stage in stages:
+        if stage.status in {"in_progress", "hold", "delay"}:
+            if stage.stage_key in {"development", "sampling"}:
+                return "sampling"
+            if stage.stage_key == "cutting":
+                return "cutting"
+            if stage.stage_key == "sewing":
+                return "sewing"
+            if stage.stage_key == "qc":
+                return "qc"
+            if stage.stage_key in {"ironing", "finishing", "packing"}:
+                return "packing"
+            if stage.stage_key == "shipping":
+                return "shipped"
+
+    required_kg = _safe_decimal_or_none(getattr(order, "fabric_required_kg", None)) or Decimal("0")
+    received_kg = _safe_decimal_or_none(getattr(order, "fabric_received_kg", None)) or Decimal("0")
+    if required_kg and received_kg < required_kg:
+        return "fabric"
+    if not _production_any_stage_done(stage_lookup, ["sampling", "development"]):
+        return "sampling"
+    if not _production_any_stage_done(stage_lookup, ["cutting"]):
+        return "cutting"
+    if _production_order_needs_print(order) and not _production_any_stage_started(stage_lookup, ["sewing", "qc", "finishing", "packing", "shipping"]):
+        return "printing"
+    if not _production_any_stage_done(stage_lookup, ["sewing"]):
+        return "sewing"
+    if not _production_any_stage_done(stage_lookup, ["qc"]):
+        return "qc"
+    if not _production_any_stage_done(stage_lookup, ["packing", "finishing", "ironing"]):
+        return "packing"
+    return "shipped"
+
+
+def _production_priority(order, percent_done, has_delay, late_shipment, shipment_pending, today):
+    completed_statuses = _production_completed_statuses()
+    if order.status in completed_statuses:
+        return {"key": "low", "label": "Low", "tone": "good", "reason": "Completed"}
+
+    deadline = getattr(order, "bulk_deadline", None)
+    if has_delay or late_shipment:
+        return {"key": "urgent", "label": "Urgent", "tone": "risk", "reason": "Delayed"}
+    if deadline and deadline <= today + timedelta(days=2):
+        return {"key": "urgent", "label": "Urgent", "tone": "risk", "reason": "Deadline close"}
+    if order.status == "hold":
+        return {"key": "high", "label": "High", "tone": "warning", "reason": "On hold"}
+    if shipment_pending:
+        return {"key": "high", "label": "High", "tone": "warning", "reason": "Shipment pending"}
+    if deadline and deadline <= today + timedelta(days=7):
+        return {"key": "high", "label": "High", "tone": "warning", "reason": "Due this week"}
+    if percent_done == 0 and order.status == "planning":
+        return {"key": "normal", "label": "Normal", "tone": "neutral", "reason": "Planning"}
+    return {"key": "normal", "label": "Normal", "tone": "neutral", "reason": "On track"}
+
+
+def _production_activity_timeline(order, stages, shipments, lifecycle=None, comments=None):
+    items = [
+        SimpleNamespace(
+            time=order.created_at,
+            actor="System",
+            action="Production order created",
+            status=order.get_status_display(),
+            tone="neutral",
+        )
+    ]
+    if order.updated_at and order.updated_at != order.created_at:
+        items.append(
+            SimpleNamespace(
+                time=order.updated_at,
+                actor="System",
+                action="Production order updated",
+                status=order.get_status_display(),
+                tone="neutral",
+            )
+        )
+
+    for stage in stages:
+        if not stage.updated_at:
+            continue
+        tone = "good" if stage.status == "done" else "risk" if stage.status == "delay" else "warning" if stage.status == "hold" else "neutral"
+        items.append(
+            SimpleNamespace(
+                time=stage.updated_at,
+                actor="Factory team",
+                action=f"{stage.display_name or stage.get_stage_key_display()} stage updated",
+                status=stage.get_status_display(),
+                tone=tone,
+            )
+        )
+
+    for shipment in shipments:
+        if not shipment.updated_at:
+            continue
+        tone = "good" if shipment.status == "delivered" else "neutral"
+        items.append(
+            SimpleNamespace(
+                time=shipment.updated_at,
+                actor="Shipping",
+                action=f"{shipment.get_carrier_display()} shipment updated",
+                status=shipment.get_status_display(),
+                tone=tone,
+            )
+        )
+
+    if lifecycle and getattr(lifecycle, "updated_at", None):
+        items.append(
+            SimpleNamespace(
+                time=lifecycle.updated_at,
+                actor="Lifecycle",
+                action="Order lifecycle updated",
+                status=lifecycle.get_status_display() if hasattr(lifecycle, "get_status_display") else lifecycle.status,
+                tone="neutral",
+            )
+        )
+
+    for comment in (comments or [])[:5]:
+        items.append(
+            SimpleNamespace(
+                time=getattr(comment, "created_at", None),
+                actor=getattr(comment, "author", "") or "User",
+                action="Production note added",
+                status="Note",
+                tone="neutral",
+            )
+        )
+
+    items.sort(key=lambda item: item.time or order.created_at, reverse=True)
+    return items[:12]
+
+
 def _find_or_create_customer_for_lead(lead):
     if lead.customer_id:
         return lead.customer
@@ -6549,6 +6869,7 @@ def production_list(request):
     """
     List of all production orders with small dashboard numbers.
     """
+    today = timezone.localdate()
     if request.method == "POST":
         order_id = request.POST.get("order_id")
         new_status = request.POST.get("status")
@@ -6569,10 +6890,14 @@ def production_list(request):
     completed_statuses = _production_completed_statuses()
     active_statuses = _production_active_statuses()
     search_query = (request.GET.get("q") or "").strip()
+    priority_filter = (request.GET.get("priority") or "all").strip().lower()
+    delayed_filter = (request.GET.get("delayed") or "all").strip().lower()
+    shipment_filter = (request.GET.get("shipment") or "all").strip().lower()
 
     orders = (
         ProductionOrder.objects
-        .select_related("customer", "product", "opportunity")
+        .select_related("customer", "product", "opportunity", "lead")
+        .prefetch_related("stages", "shipments", "order_lifecycles")
         .order_by("-created_at")
     )
 
@@ -6593,33 +6918,147 @@ def production_list(request):
     else:
         orders = orders.exclude(status__in=completed_statuses)
 
-    orders_data = []
+    orders_data_all = []
 
     for order in orders:
         stages = get_sorted_stages(order)
+        shipments = list(order.shipments.all())
 
         total_stages = len(stages)
         done_count = len([s for s in stages if s.status == "done"])
         percent_done = int((done_count / total_stages) * 100) if total_stages else 0
 
-        has_delay = any(s.status == "delay" or s.is_late for s in stages)
+        bulk_overdue = bool(
+            order.bulk_deadline
+            and today > order.bulk_deadline
+            and order.status not in completed_statuses
+        )
+        stage_delay = any(s.status == "delay" or s.is_late for s in stages)
+        late_shipment = any(
+            s.ship_date
+            and s.ship_date < today
+            and s.status not in {"delivered", "cancelled"}
+            for s in shipments
+        )
+        has_delay = bulk_overdue or stage_delay
+        shipment_pending = (
+            not shipments
+            and order.status not in completed_statuses
+            and (percent_done >= 80 or _production_any_stage_started(_production_stage_lookup(stages), ["shipping"]))
+        )
+        priority = _production_priority(
+            order,
+            percent_done,
+            has_delay,
+            late_shipment,
+            shipment_pending,
+            today,
+        )
+        lifecycle = None
+        try:
+            lifecycles = list(order.order_lifecycles.all())
+            lifecycle = lifecycles[0] if lifecycles else None
+        except (AttributeError, IndexError):
+            lifecycle = None
 
-        orders_data.append(
+        orders_data_all.append(
             {
                 "order": order,
                 "stages": stages,
+                "shipments": shipments,
                 "percent_done": percent_done,
                 "has_delay": has_delay,
+                "bulk_overdue": bulk_overdue,
+                "late_shipment": late_shipment,
+                "shipment_pending": shipment_pending,
+                "priority": priority,
+                "pipeline_bucket": _production_stage_bucket(order, stages, shipments),
+                "latest_shipment": shipments[0] if shipments else None,
+                "lifecycle": lifecycle,
             }
         )
 
-    total_orders = orders.count()
-    active_orders = orders.filter(status__in=active_statuses).count()
-    completed_orders = orders.filter(status__in=completed_statuses).count()
+    orders_data = []
+    for row in orders_data_all:
+        if priority_filter != "all" and row["priority"]["key"] != priority_filter:
+            continue
+        if delayed_filter == "delayed" and not row["has_delay"]:
+            continue
+        if delayed_filter == "on_track" and row["has_delay"]:
+            continue
+        if shipment_filter == "pending" and not row["shipment_pending"]:
+            continue
+        if shipment_filter == "linked" and not row["shipments"]:
+            continue
+        if shipment_filter == "late" and not row["late_shipment"]:
+            continue
+        orders_data.append(row)
+
+    total_orders = len(orders_data)
+    active_orders = len([row for row in orders_data if row["order"].status in active_statuses])
+    completed_orders = len([row for row in orders_data if row["order"].status in completed_statuses])
     delayed_orders = len([row for row in orders_data if row["has_delay"]])
-    total_pieces = sum(o.qty_total for o in orders)
-    total_reject = sum(o.qty_reject for o in orders)
+    total_pieces = sum(row["order"].qty_total for row in orders_data)
+    total_reject = sum(row["order"].qty_reject for row in orders_data)
     reject_percent = int((total_reject / total_pieces) * 100) if total_pieces else 0
+    late_shipment_count = len([row for row in orders_data if row["late_shipment"]])
+    overdue_approval_count = len([row for row in orders_data if row["order"].status == "hold"])
+    shipment_pending_count = len([row for row in orders_data if row["shipment_pending"]])
+
+    pipeline_counts = [
+        {
+            "key": key,
+            "label": label,
+            "count": len([row for row in orders_data if row["pipeline_bucket"] == key]),
+        }
+        for key, label in PRODUCTION_CONTROL_BUCKET_LABELS.items()
+    ]
+    urgent_orders = sorted(
+        [
+            row for row in orders_data
+            if row["priority"]["key"] in {"urgent", "high"} or row["has_delay"] or row["shipment_pending"]
+        ],
+        key=lambda row: (
+            0 if row["priority"]["key"] == "urgent" else 1 if row["priority"]["key"] == "high" else 2,
+            row["order"].bulk_deadline or date.max,
+        ),
+    )[:6]
+    shipped_today = sum(
+        1
+        for row in orders_data
+        for shipment in row["shipments"]
+        if shipment.ship_date == today and shipment.status in {"shipped", "out_for_delivery", "delivered"}
+    )
+    completed_today = len([
+        row for row in orders_data
+        if row["order"].status in completed_statuses and row["order"].updated_at.date() == today
+    ])
+    factory_summary = {
+        "active_orders": active_orders,
+        "units_in_production": sum(row["order"].qty_total for row in orders_data if row["order"].status in active_statuses),
+        "completed_today": completed_today,
+        "shipped_today": shipped_today,
+    }
+    can_view_profit = can_view_lifecycle_profit(request.user)
+    low_margin_orders = []
+    high_profit_orders = []
+    if can_view_profit:
+        profit_rows = [row for row in orders_data if row["lifecycle"]]
+        low_margin_orders = sorted(
+            [
+                row for row in profit_rows
+                if row["lifecycle"].estimated_revenue and row["lifecycle"].estimated_margin < Decimal("15")
+            ],
+            key=lambda row: row["lifecycle"].estimated_margin,
+        )[:4]
+        high_profit_orders = sorted(
+            [
+                row for row in profit_rows
+                if row["lifecycle"].estimated_profit and row["lifecycle"].estimated_profit > 0
+            ],
+            key=lambda row: row["lifecycle"].estimated_profit,
+            reverse=True,
+        )[:4]
 
     return render(
         request,
@@ -6635,7 +7074,19 @@ def production_list(request):
             "reject_percent": reject_percent,
             "status_filter": status_filter,
             "search_query": search_query,
+            "priority_filter": priority_filter,
+            "delayed_filter": delayed_filter,
+            "shipment_filter": shipment_filter,
             "status_choices": ProductionOrder.STATUS_CHOICES,
+            "pipeline_counts": pipeline_counts,
+            "urgent_orders": urgent_orders,
+            "late_shipment_count": late_shipment_count,
+            "overdue_approval_count": overdue_approval_count,
+            "shipment_pending_count": shipment_pending_count,
+            "factory_summary": factory_summary,
+            "can_view_lifecycle_profit": can_view_profit,
+            "low_margin_orders": low_margin_orders,
+            "high_profit_orders": high_profit_orders,
         },
     )
 
@@ -6845,12 +7296,27 @@ def production_edit(request, pk):
 
 
 def production_detail(request, pk):
-    order = get_object_or_404(ProductionOrder, pk=pk)
+    order = get_object_or_404(
+        ProductionOrder.objects.select_related("customer", "product", "opportunity", "lead")
+        .prefetch_related(
+            "stages",
+            "shipments",
+            "attachments",
+            "fabrics",
+            "accessories",
+            "trims",
+            "threads",
+            "invoices",
+            "order_lifecycles",
+        ),
+        pk=pk,
+    )
     can_add_lines = ProductionOrderLine is not None and hasattr(order, "lines")
     opportunity = _safe_related_attr(order, "opportunity")
     lead = _safe_related_attr(order, "lead")
     customer = _safe_related_attr(order, "customer")
     product = _safe_related_attr(order, "product")
+    today = timezone.localdate()
 
     # sorted stages
     stages = get_sorted_stages(order)
@@ -6873,6 +7339,27 @@ def production_detail(request, pk):
     # progress and delay
     percent_done = order.percent_done
     order_delayed = order.is_delayed
+    late_shipment = any(
+        s.ship_date
+        and s.ship_date < today
+        and s.status not in {"delivered", "cancelled"}
+        for s in shipments
+    )
+    shipment_pending = (
+        not shipments
+        and order.status not in _production_completed_statuses()
+        and (percent_done >= 80 or _production_any_stage_started(_production_stage_lookup(stages), ["shipping"]))
+    )
+    priority_badge = _production_priority(
+        order,
+        percent_done,
+        order_delayed,
+        late_shipment,
+        shipment_pending,
+        today,
+    )
+    production_visual_stages = _production_visual_stages(order, stages, shipments)
+    latest_shipment = shipments[0] if shipments else None
     reject_percent = int((order.qty_reject / order.qty_total) * 100) if order.qty_total else 0
 
     try:
@@ -6937,6 +7424,13 @@ def production_detail(request, pk):
         logger.exception("production_detail: failed to build lifecycle profit for order %s", order.pk)
         lifecycle_profit = None
     actual_entry_form = ActualCostEntryForm() if can_view_profit else None
+    production_activity = _production_activity_timeline(
+        order,
+        stages,
+        shipments,
+        lifecycle if getattr(lifecycle, "pk", None) else None,
+        comments,
+    )
 
     if request.method == "POST":
         action = (request.POST.get("action") or "").strip()
@@ -7135,6 +7629,12 @@ def production_detail(request, pk):
         "stages": stages,
         "percent_done": percent_done,
         "order_delayed": order_delayed,
+        "priority_badge": priority_badge,
+        "production_visual_stages": production_visual_stages,
+        "late_shipment": late_shipment,
+        "shipment_pending": shipment_pending,
+        "latest_shipment": latest_shipment,
+        "production_activity": production_activity,
         "order_lines": order_lines,
         "attachments": attachments,
         "shipments": shipments,

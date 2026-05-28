@@ -53,6 +53,83 @@
     </article>
   </section>
 
+  <section class="production-control-grid" aria-label="Production control center">
+    <article class="production-control-panel production-control-panel--urgent">
+      <div class="production-control-head">
+        <h2>Urgent Orders</h2>
+        <span>{{ urgent_orders|length }}</span>
+      </div>
+      <div class="production-control-list">
+        {% for row in urgent_orders %}
+          {% with order=row.order %}
+            <a href="{% url 'production_detail' order.pk %}" class="production-control-row">
+              <strong>{{ order.order_code|default:order.title }}</strong>
+              <span>{{ row.priority.label }} / {{ row.priority.reason }}</span>
+              <small>{% if order.bulk_deadline %}Target {{ order.bulk_deadline|date:"M j" }}{% else %}No target date{% endif %}</small>
+            </a>
+          {% endwith %}
+        {% empty %}
+          <div class="production-control-empty">No urgent production orders in this view.</div>
+        {% endfor %}
+      </div>
+    </article>
+
+    <article class="production-control-panel">
+      <div class="production-control-head">
+        <h2>Production Pipeline</h2>
+        <span>{{ total_orders }}</span>
+      </div>
+      <div class="production-pipeline-grid">
+        {% for item in pipeline_counts %}
+          <div class="production-pipeline-item">
+            <span>{{ item.label }}</span>
+            <strong>{{ item.count }}</strong>
+          </div>
+        {% endfor %}
+      </div>
+    </article>
+
+    <article class="production-control-panel">
+      <div class="production-control-head">
+        <h2>Factory Summary</h2>
+        <span>Today</span>
+      </div>
+      <div class="production-factory-grid">
+        <div><span>Active orders</span><strong>{{ factory_summary.active_orders }}</strong></div>
+        <div><span>Units in production</span><strong>{{ factory_summary.units_in_production }}</strong></div>
+        <div><span>Completed today</span><strong>{{ factory_summary.completed_today }}</strong></div>
+        <div><span>Shipped today</span><strong>{{ factory_summary.shipped_today }}</strong></div>
+      </div>
+    </article>
+
+    {% if can_view_lifecycle_profit %}
+      <article class="production-control-panel">
+        <div class="production-control-head">
+          <h2>Profit Awareness</h2>
+          <span>Internal</span>
+        </div>
+        <div class="production-profit-grid">
+          <div>
+            <strong>Low Margin</strong>
+            {% for row in low_margin_orders %}
+              <a href="{% url 'production_detail' row.order.pk %}">{{ row.order.order_code|default:row.order.title }} / {{ row.lifecycle.estimated_margin }}%</a>
+            {% empty %}
+              <span>No low margin lifecycle orders.</span>
+            {% endfor %}
+          </div>
+          <div>
+            <strong>High Profit</strong>
+            {% for row in high_profit_orders %}
+              <a href="{% url 'production_detail' row.order.pk %}">{{ row.order.order_code|default:row.order.title }} / {{ row.lifecycle.estimated_profit }}</a>
+            {% empty %}
+              <span>No profit data in this view.</span>
+            {% endfor %}
+          </div>
+        </div>
+      </article>
+    {% endif %}
+  </section>
+
   <form class="production-filters" method="get">
     <label class="production-field production-field--search">
       <span>Search</span>
@@ -65,6 +142,36 @@
         <option value="active" {% if status_filter != "completed" and status_filter != "all" %}selected{% endif %}>Active production</option>
         <option value="completed" {% if status_filter == "completed" %}selected{% endif %}>Completed</option>
         <option value="all" {% if status_filter == "all" %}selected{% endif %}>All orders</option>
+      </select>
+    </label>
+
+    <label class="production-field">
+      <span>Priority</span>
+      <select name="priority">
+        <option value="all" {% if priority_filter == "all" %}selected{% endif %}>All priorities</option>
+        <option value="urgent" {% if priority_filter == "urgent" %}selected{% endif %}>Urgent</option>
+        <option value="high" {% if priority_filter == "high" %}selected{% endif %}>High</option>
+        <option value="normal" {% if priority_filter == "normal" %}selected{% endif %}>Normal</option>
+        <option value="low" {% if priority_filter == "low" %}selected{% endif %}>Low</option>
+      </select>
+    </label>
+
+    <label class="production-field">
+      <span>Delay</span>
+      <select name="delayed">
+        <option value="all" {% if delayed_filter == "all" %}selected{% endif %}>All timelines</option>
+        <option value="delayed" {% if delayed_filter == "delayed" %}selected{% endif %}>Delayed only</option>
+        <option value="on_track" {% if delayed_filter == "on_track" %}selected{% endif %}>On track</option>
+      </select>
+    </label>
+
+    <label class="production-field">
+      <span>Shipment</span>
+      <select name="shipment">
+        <option value="all" {% if shipment_filter == "all" %}selected{% endif %}>All shipments</option>
+        <option value="pending" {% if shipment_filter == "pending" %}selected{% endif %}>Shipment pending</option>
+        <option value="linked" {% if shipment_filter == "linked" %}selected{% endif %}>Has shipment</option>
+        <option value="late" {% if shipment_filter == "late" %}selected{% endif %}>Late shipment</option>
       </select>
     </label>
 
@@ -198,8 +305,13 @@
                   <td data-label="Status">
                     <div class="production-status-stack">
                       <span class="production-status-badge {{ order.status }}">{{ order.get_status_display }}</span>
+                      <span class="production-priority-badge {{ row.priority.tone }}">{{ row.priority.label }} priority</span>
                       {% if has_delay %}
                         <span class="production-priority-badge risk">Delayed</span>
+                      {% elif row.late_shipment %}
+                        <span class="production-priority-badge risk">Late shipment</span>
+                      {% elif row.shipment_pending %}
+                        <span class="production-priority-badge warning">Shipment pending</span>
                       {% elif order.status == "done" or order.status == "closed_won" %}
                         <span class="production-priority-badge good">Complete</span>
                       {% else %}
