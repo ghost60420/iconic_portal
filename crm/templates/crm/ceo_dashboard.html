@@ -574,6 +574,77 @@
     {% endfor %}
   </div>
 
+  {% if executive_automation_cards %}
+    <section class="ceo-section">
+      <div class="ceo-section-head">
+        <div>
+          <h2 class="ceo-section-title">Executive Automations</h2>
+          <div class="ceo-section-note">Rule-based risks, orders needing attention, overdue payments, and inventory alerts.</div>
+        </div>
+        <span class="ceo-badge ceo-badge--blue">{{ automation_unread_count|intcomma }} unread</span>
+      </div>
+      <div class="ceo-exec-grid">
+        {% for card in executive_automation_cards %}
+          <article class="ceo-exec-card">
+            <h2>{{ card.title }}</h2>
+            <ul class="ceo-stat-list">
+              <li class="ceo-stat">
+                <span>{{ card.detail }}</span>
+                <strong><span class="ceo-badge ceo-badge--{{ card.tone }}">{{ card.count|intcomma }}</span></strong>
+              </li>
+            </ul>
+          </article>
+        {% endfor %}
+      </div>
+      <div class="ceo-mini-grid">
+        <div class="ceo-mini">
+          <h3>Orders Needing Attention</h3>
+          {% for item in orders_needing_attention %}
+            <div class="ceo-line">
+              <span>{{ item.title }}<br><span class="ceo-muted">{{ item.record_label|default:item.message|truncatechars:54 }}</span></span>
+              <strong><a class="ceo-badge {% if item.priority == 'critical' %}ceo-badge--bad{% elif item.priority == 'high' %}ceo-badge--warn{% else %}ceo-badge--blue{% endif %}" href="{{ item.target_url|default:'#' }}">{{ item.priority|title }}</a></strong>
+            </div>
+          {% empty %}
+            <div class="ceo-empty">No order automation risks found.</div>
+          {% endfor %}
+        </div>
+        <div class="ceo-mini">
+          <h3>Overdue Payments</h3>
+          {% for item in overdue_payment_notifications %}
+            <div class="ceo-line">
+              <span>{{ item.title }}<br><span class="ceo-muted">{{ item.record_label|default:item.message|truncatechars:54 }}</span></span>
+              <strong><a class="ceo-badge {% if item.priority == 'critical' %}ceo-badge--bad{% elif item.priority == 'high' %}ceo-badge--warn{% else %}ceo-badge--blue{% endif %}" href="{{ item.target_url|default:'#' }}">{{ item.priority|title }}</a></strong>
+            </div>
+          {% empty %}
+            <div class="ceo-empty">No payment automation risks found.</div>
+          {% endfor %}
+        </div>
+        <div class="ceo-mini">
+          <h3>Critical Inventory</h3>
+          {% for item in critical_inventory_notifications %}
+            <div class="ceo-line">
+              <span>{{ item.title }}<br><span class="ceo-muted">{{ item.record_label|default:item.message|truncatechars:54 }}</span></span>
+              <strong><a class="ceo-badge {% if item.priority == 'critical' %}ceo-badge--bad{% elif item.priority == 'high' %}ceo-badge--warn{% else %}ceo-badge--blue{% endif %}" href="{{ item.target_url|default:'#' }}">{{ item.priority|title }}</a></strong>
+            </div>
+          {% empty %}
+            <div class="ceo-empty">No inventory automation risks found.</div>
+          {% endfor %}
+        </div>
+        <div class="ceo-mini">
+          <h3>Generated Tasks</h3>
+          {% for task in automation_tasks|slice:":5" %}
+            <div class="ceo-line">
+              <span>{{ task.title }}<br><span class="ceo-muted">{{ task.record_label|default:task.description|truncatechars:54 }}</span></span>
+              <strong><a class="ceo-badge ceo-badge--blue" href="{{ task.target_url|default:'#' }}">{{ task.get_priority_display }}</a></strong>
+            </div>
+          {% empty %}
+            <div class="ceo-empty">No generated automation tasks are open.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+  {% endif %}
+
   <div class="ceo-layout">
     <div>
       <section class="ceo-section">

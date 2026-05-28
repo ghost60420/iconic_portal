@@ -1,6 +1,8 @@
 from django.db import models
 from django.db.utils import OperationalError, ProgrammingError
 from django.conf import settings
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
 from decimal import Decimal
 from .models_access import UserAccess
 
@@ -3467,6 +3469,154 @@ class OrderLifecycle(models.Model):
         if self.quotation_id and self.quotation:
             return f"Lifecycle for {self.quotation.quotation_number or 'COST-' + str(self.quotation_id)}"
         return f"Order Lifecycle {self.pk or ''}".strip()
+
+
+class AutomationRule(models.Model):
+    RULE_TYPE_CHOICES = [
+        ("invoice", "Invoice"),
+        ("production", "Production"),
+        ("inventory", "Inventory"),
+        ("lifecycle", "Lifecycle"),
+        ("general", "General"),
+    ]
+
+    rule_name = models.CharField(max_length=160, unique=True)
+    rule_type = models.CharField(max_length=30, choices=RULE_TYPE_CHOICES, default="general", db_index=True)
+    enabled = models.BooleanField(default=True, db_index=True)
+    trigger = models.CharField(max_length=160, blank=True, default="")
+    condition = models.JSONField(default=dict, blank=True)
+    action = models.JSONField(default=dict, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_automation_rules",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["rule_type", "rule_name"]
+        indexes = [
+            models.Index(fields=["rule_type", "enabled"]),
+        ]
+
+    def __str__(self):
+        return self.rule_name
+
+
+class AutomationNotification(models.Model):
+    PRIORITY_CHOICES = [
+        ("low", "Low"),
+        ("normal", "Normal"),
+        ("high", "High"),
+        ("critical", "Critical"),
+    ]
+
+    rule = models.ForeignKey(
+        "AutomationRule",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="notifications",
+    )
+    source_key = models.CharField(max_length=220, unique=True, db_index=True)
+    rule_type = models.CharField(max_length=30, choices=AutomationRule.RULE_TYPE_CHOICES, default="general", db_index=True)
+    title = models.CharField(max_length=220)
+    message = models.TextField(blank=True, default="")
+    priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default="normal", db_index=True)
+    is_read = models.BooleanField(default=False, db_index=True)
+    is_resolved = models.BooleanField(default=False, db_index=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    record_content_type = models.ForeignKey(ContentType, null=True, blank=True, on_delete=models.SET_NULL)
+    record_object_id = models.PositiveIntegerField(null=True, blank=True)
+    record = GenericForeignKey("record_content_type", "record_object_id")
+    record_label = models.CharField(max_length=220, blank=True, default="")
+    target_url = models.CharField(max_length=300, blank=True, default="")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["is_read", "-updated_at", "-id"]
+        indexes = [
+            models.Index(fields=["rule_type", "is_resolved", "is_read"]),
+            models.Index(fields=["priority", "is_resolved"]),
+            models.Index(fields=["record_content_type", "record_object_id"]),
+        ]
+
+    def __str__(self):
+        return self.title
+
+    @property
+    def read_status_label(self):
+        return "Read" if self.is_read else "Unread"
+
+
+class AutomationTask(models.Model):
+    STATUS_CHOICES = [
+        ("open", "Open"),
+        ("in_progress", "In Progress"),
+        ("done", "Done"),
+        ("cancelled", "Cancelled"),
+    ]
+    PRIORITY_CHOICES = [
+        ("low", "Low"),
+        ("normal", "Normal"),
+        ("high", "High"),
+        ("urgent", "Urgent"),
+    ]
+
+    rule = models.ForeignKey(
+        "AutomationRule",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tasks",
+    )
+    notification = models.ForeignKey(
+        "AutomationNotification",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tasks",
+    )
+    source_key = models.CharField(max_length=220, unique=True, db_index=True)
+    title = models.CharField(max_length=220)
+    description = models.TextField(blank=True, default="")
+    priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default="normal", db_index=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="open", db_index=True)
+    due_date = models.DateField(null=True, blank=True)
+
+    record_content_type = models.ForeignKey(ContentType, null=True, blank=True, on_delete=models.SET_NULL)
+    record_object_id = models.PositiveIntegerField(null=True, blank=True)
+    record = GenericForeignKey("record_content_type", "record_object_id")
+    record_label = models.CharField(max_length=220, blank=True, default="")
+    target_url = models.CharField(max_length=300, blank=True, default="")
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_automation_tasks",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["status", "due_date", "-updated_at"]
+        indexes = [
+            models.Index(fields=["status", "priority"]),
+            models.Index(fields=["record_content_type", "record_object_id"]),
+        ]
+
+    def __str__(self):
+        return self.title
 
 
 class Invoice(models.Model):

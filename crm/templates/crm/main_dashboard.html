@@ -115,6 +115,36 @@
                 </span>
               </div>
               <div class="dashboard-notification-scroll">
+                {% if automation_notifications %}
+                  <section class="dashboard-notification-group">
+                    <div class="dashboard-notification-heading">
+                      <i data-lucide="bell-ring"></i>
+                      <span>Automation alerts</span>
+                    </div>
+                    {% for item in automation_notifications %}
+                      <a class="dashboard-notification-item {% if item.priority == 'critical' or item.priority == 'high' %}dashboard-notification-item--warn{% else %}dashboard-notification-item--neutral{% endif %}" href="{{ item.target_url|default:'#notification-center' }}">
+                        <strong>{{ item.title }}</strong>
+                        <span>{{ item.message }}</span>
+                        <span>{{ item.read_status_label }} | {{ item.priority|title }}{% if item.record_label %} | {{ item.record_label }}{% endif %}</span>
+                      </a>
+                    {% endfor %}
+                  </section>
+
+                  <section class="dashboard-notification-group">
+                    <div class="dashboard-notification-heading">
+                      <i data-lucide="list-checks"></i>
+                      <span>Generated tasks</span>
+                    </div>
+                    {% for task in automation_tasks %}
+                      <a class="dashboard-notification-item dashboard-notification-item--ai" href="{{ task.target_url|default:'#notification-center' }}">
+                        <strong>{{ task.title }}</strong>
+                        <span>{{ task.get_status_display }} | {{ task.get_priority_display }}{% if task.due_date %} | Due {{ task.due_date|date:"M d" }}{% endif %}</span>
+                      </a>
+                    {% empty %}
+                      <div class="dashboard-notification-empty">No open automation tasks.</div>
+                    {% endfor %}
+                  </section>
+                {% else %}
                 <section class="dashboard-notification-group">
                   <div class="dashboard-notification-heading">
                     <i data-lucide="calendar-clock"></i>
@@ -181,6 +211,7 @@
                     <div class="dashboard-notification-empty">No AI insights available.</div>
                   {% endfor %}
                 </section>
+                {% endif %}
               </div>
             </div>
           </details>
@@ -398,8 +429,8 @@
     <div class="dashboard-section-head">
       <div>
         <p class="dashboard-eyebrow">Notification Center</p>
-        <h2>Read-only operational alerts</h2>
-        <p>Simple placeholders for overdue invoices, production delays, shipment updates, unpaid balances, and approvals.</p>
+        <h2>{% if automation_notifications %}Automation alerts and generated tasks{% else %}Read-only operational alerts{% endif %}</h2>
+        <p>{% if automation_notifications %}Persistent CRM automation notifications with unread status, priority, and linked records.{% else %}Simple placeholders for overdue invoices, production delays, shipment updates, unpaid balances, and approvals.{% endif %}</p>
       </div>
     </div>
     <div class="dashboard-grid dashboard-grid--notifications">
@@ -417,6 +448,55 @@
         </a>
       {% endfor %}
     </div>
+    {% if automation_notifications %}
+      <div class="dashboard-grid dashboard-grid--activity" style="margin-top: 16px;">
+        <article class="dashboard-card">
+          <div class="dashboard-card-head">
+            <div class="dashboard-card-copy">
+              <span class="dashboard-card-title">Unread Automation Alerts</span>
+              <span class="dashboard-card-note">{{ automation_unread_count|intcomma }} unread alert{{ automation_unread_count|pluralize }} across allowed modules.</span>
+            </div>
+          </div>
+          <ul class="dashboard-feed-list">
+            {% for item in automation_notifications %}
+              <li class="dashboard-feed-item">
+                <strong>{{ item.title }}</strong>
+                <span>{{ item.message }}</span>
+                <div class="dashboard-feed-meta">
+                  <span class="dashboard-tag {% if item.is_read %}dashboard-tag--good{% endif %}">{{ item.read_status_label }}</span>
+                  <span class="dashboard-tag {% if item.priority == 'critical' %}dashboard-tag--bad{% endif %}">{{ item.priority|title }}</span>
+                  {% if item.record_label %}<span class="dashboard-tag">{{ item.record_label|truncatechars:34 }}</span>{% endif %}
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+        </article>
+
+        <article class="dashboard-card">
+          <div class="dashboard-card-head">
+            <div class="dashboard-card-copy">
+              <span class="dashboard-card-title">Generated Internal Tasks</span>
+              <span class="dashboard-card-note">{{ automation_task_count|intcomma }} open automation task{{ automation_task_count|pluralize }}.</span>
+            </div>
+          </div>
+          <ul class="dashboard-feed-list">
+            {% for task in automation_tasks %}
+              <li class="dashboard-feed-item">
+                <strong>{{ task.title }}</strong>
+                <span>{{ task.description }}</span>
+                <div class="dashboard-feed-meta">
+                  <span class="dashboard-tag">{{ task.get_status_display }}</span>
+                  <span class="dashboard-tag {% if task.priority == 'urgent' %}dashboard-tag--bad{% endif %}">{{ task.get_priority_display }}</span>
+                  {% if task.due_date %}<span class="dashboard-tag">Due {{ task.due_date|date:"M d" }}</span>{% endif %}
+                </div>
+              </li>
+            {% empty %}
+              <li class="dashboard-empty">No generated automation tasks are open.</li>
+            {% endfor %}
+          </ul>
+        </article>
+      </div>
+    {% endif %}
   </section>
 
   {% if can_view_order_lifecycle_profit and lifecycle_summary %}

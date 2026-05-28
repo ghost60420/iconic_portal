@@ -44,6 +44,7 @@ from .services.order_lifecycle import (
     create_lifecycle_from_shipping,
     lifecycle_dashboard_metrics,
 )
+from .services.automation_engine import automation_dashboard_context
 
 def _parse_decimal(value):
     try:
@@ -10359,6 +10360,7 @@ def ceo_dashboard(request):
         executive_alert_cards.append(
             {"title": "Executive alerts clear", "detail": "No high-priority executive alerts are active for this period.", "tone": "good"}
         )
+    automation_context = automation_dashboard_context(request.user)
 
     alerts = []
     if overdue_followups:
@@ -10462,6 +10464,7 @@ def ceo_dashboard(request):
         "kpi_cards": kpi_cards,
         "alerts": alerts,
         "executive_alert_cards": executive_alert_cards,
+        **automation_context,
         "ai_insight_cards": ai_insight_cards,
         "revenue_overview": revenue_overview,
         "profit_overview": profit_overview,
@@ -12209,6 +12212,9 @@ def main_dashboard(request):
             "href": "#workflow-section",
         },
     ]
+    automation_context = automation_dashboard_context(request.user)
+    if automation_context.get("automation_notification_cards"):
+        dashboard_notification_items = automation_context["automation_notification_cards"]
 
     recent_leads = list(
         Lead.objects
@@ -12605,12 +12611,13 @@ def main_dashboard(request):
         "finance_summary_cards": finance_summary_cards,
         "payroll_summary_cards": payroll_summary_cards,
         "dashboard_alerts": dashboard_alerts,
-        "dashboard_alerts_count": len([a for a in dashboard_alerts if a.get("tone") != "up"]),
+        "dashboard_alerts_count": automation_context.get("automation_unread_count") or len([a for a in dashboard_alerts if a.get("tone") != "up"]),
         "action_recommendations": action_recommendations,
         "ai_notes": ai_notes,
         "chart_data": chart_data,
         "can_view_order_lifecycle_profit": can_view_order_lifecycle_profit,
         "lifecycle_summary": lifecycle_summary,
+        **automation_context,
     }
 
     return render(request, "crm/main_dashboard.html", ctx)
