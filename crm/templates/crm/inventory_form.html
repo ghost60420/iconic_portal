@@ -84,6 +84,10 @@
               {{ form.category }}
             </div>
             <div class="col-md-4 mb-3">
+              <label class="inv-form-label">Material group</label>
+              {{ form.material_group }}
+            </div>
+            <div class="col-md-4 mb-3">
               <label class="inv-form-label">Code</label>
               {{ form.code }}
             </div>
@@ -131,10 +135,12 @@
               <label class="inv-form-label">Unit type</label>
               {{ form.unit_type }}
             </div>
+            {% if can_view_inventory_financials %}
             <div class="col-md-4 mb-3">
               <label class="inv-form-label">Unit cost</label>
               {{ form.unit_cost }}
             </div>
+            {% endif %}
             <div class="col-md-4 mb-3">
               <label class="inv-form-label">Quantity</label>
               {{ form.quantity }}
@@ -145,6 +151,14 @@
               <label class="inv-form-label">Minimum level</label>
               {{ form.min_level }}
             </div>
+            <div class="col-md-4 mb-3">
+              <label class="inv-form-label">Minimum stock</label>
+              {{ form.minimum_stock }}
+            </div>
+            <div class="col-md-4 mb-3">
+              <label class="inv-form-label">Reorder level</label>
+              {{ form.reorder_level }}
+            </div>
             <div class="col-md-8 mb-3">
               <label class="inv-form-label">Location in factory or store</label>
               {{ form.location }}
@@ -153,6 +167,30 @@
               </div>
             </div>
           </div>
+          {% if can_view_inventory_financials %}
+          <div class="row">
+            <div class="col-md-4 mb-3">
+              <label class="inv-form-label">Incoming quantity</label>
+              {{ form.incoming_quantity }}
+            </div>
+            <div class="col-md-4 mb-3">
+              <label class="inv-form-label">Reserved quantity</label>
+              {{ form.reserved_quantity }}
+            </div>
+            <div class="col-md-4 mb-3">
+              <label class="inv-form-label">Damaged quantity</label>
+              {{ form.damaged_quantity }}
+            </div>
+            <div class="col-md-4 mb-3">
+              <label class="inv-form-label">Waste quantity</label>
+              {{ form.waste_quantity }}
+            </div>
+            <div class="col-md-8 mb-3">
+              <label class="inv-form-label">Supplier placeholder</label>
+              {{ form.supplier_name }}
+            </div>
+          </div>
+          {% endif %}
         </div>
 
         <!-- notes -->

@@ -886,7 +886,8 @@
 
 .production-dpr-form,
 .production-upload-form,
-.production-note-form {
+.production-note-form,
+.production-material-form {
   display: grid;
   grid-template-columns: minmax(180px, 0.7fr) minmax(240px, 1fr) auto;
   gap: 12px;
@@ -899,9 +900,14 @@
   align-items: end;
 }
 
+.production-material-form {
+  grid-template-columns: minmax(240px, 1fr) minmax(150px, 0.35fr) minmax(220px, 0.7fr) auto;
+}
+
 .production-dpr-form label,
 .production-upload-form label,
 .production-note-form label,
+.production-material-form label,
 .production-actual-form label,
 .production-actual-row label {
   display: grid;
@@ -912,6 +918,8 @@
 .production-upload-form input,
 .production-note-form input,
 .production-note-form textarea,
+.production-material-form input,
+.production-material-form select,
 .production-actual-form input,
 .production-actual-form select,
 .production-actual-form textarea,
@@ -938,6 +946,8 @@
 .production-upload-form input:focus,
 .production-note-form input:focus,
 .production-note-form textarea:focus,
+.production-material-form input:focus,
+.production-material-form select:focus,
 .production-actual-form input:focus,
 .production-actual-form select:focus,
 .production-actual-form textarea:focus,
@@ -950,7 +960,8 @@
 .production-timeline,
 .production-actual-list,
 .production-linked-list,
-.production-ops-timeline {
+.production-ops-timeline,
+.production-material-list {
   display: grid;
   gap: 10px;
   margin-top: 14px;
@@ -962,11 +973,58 @@
 .production-muted-block,
 .production-empty-inline,
 .production-shipment-focus,
-.production-ops-timeline-item {
+.production-ops-timeline-item,
+.production-material-row {
   padding: 12px;
   border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 8px;
   background: rgba(2, 6, 23, 0.45);
+}
+
+.production-material-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.75fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.production-material-row strong {
+  display: block;
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.production-material-row span,
+.production-material-row small {
+  display: block;
+  margin-top: 4px;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.production-material-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.production-material-actions form {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+}
+
+.production-material-actions input {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.76);
+  color: #f8fafc;
+  font-size: 12px;
+  padding: 6px 8px;
 }
 
 .production-shipment-focus {
@@ -1229,7 +1287,9 @@
   .production-side-metrics,
   .production-dpr-form,
   .production-upload-form,
-  .production-note-form {
+  .production-note-form,
+  .production-material-form,
+  .production-material-row {
     grid-template-columns: 1fr;
   }
 
@@ -1294,6 +1354,10 @@
 
   .production-mobile-action-bar {
     align-items: stretch;
+  }
+
+  .production-material-actions form {
+    grid-template-columns: 1fr;
   }
 
   .production-mini-table {

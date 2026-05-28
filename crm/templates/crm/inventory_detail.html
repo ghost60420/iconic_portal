@@ -103,6 +103,31 @@
   .reorder-row:last-child {
       border-bottom: none;
   }
+  .inv-action-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+  }
+  .inv-action-grid label {
+      color: #f0f0f0;
+      font-size: 12px;
+  }
+  .inv-action-grid input,
+  .inv-action-grid select,
+  .inv-action-grid textarea {
+      background: #050505;
+      border: 1px solid #444;
+      color: #f5f5f5;
+      border-radius: 8px;
+      padding: 8px 10px;
+      width: 100%;
+  }
+  .inv-wide {
+      grid-column: 1 / -1;
+  }
+  .inv-mobile-actions {
+      display: none;
+  }
 
   /* Make muted text readable only on inventory pages */
   .inv-page .text-muted {
@@ -113,6 +138,29 @@
   .inv-page .small {
       font-size: 12px;
       color: #cfcfcf;
+  }
+  @media (max-width: 767px) {
+      .inventory-detail-page .d-flex.inv-header-actions {
+          flex-direction: column;
+          gap: 8px;
+          width: 100%;
+      }
+      .inv-action-grid {
+          grid-template-columns: 1fr;
+      }
+      .inv-mobile-actions {
+          position: sticky;
+          top: 8px;
+          z-index: 20;
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
+          margin-bottom: 12px;
+          padding: 10px;
+          border: 1px solid #333;
+          border-radius: 10px;
+          background: rgba(10,10,10,0.94);
+      }
   }
 </style>
 
@@ -154,6 +202,11 @@
         </button>
       </form>
     </div>
+  </div>
+
+  <div class="inv-mobile-actions">
+    <a href="#movement-box" class="btn btn-warning btn-sm">Stock Update</a>
+    <a href="#production-usage" class="btn btn-outline-light btn-sm">Usage</a>
   </div>
 
   <div class="row">
@@ -239,38 +292,77 @@
 
           <div class="col-sm-6 col-lg-4">
             <div class="inv-detail-stat">
-              <div class="inv-detail-stat-label">🎯 Minimum level</div>
+              <div class="inv-detail-stat-label">🎯 Minimum stock</div>
               <div class="inv-detail-stat-value">
-                {{ item.min_level|default:"0" }}
+                {{ minimum_stock|default:"0" }}
               </div>
             </div>
           </div>
 
           <div class="col-sm-6 col-lg-4">
             <div class="inv-detail-stat">
-              <div class="inv-detail-stat-label">💰 Unit cost</div>
+              <div class="inv-detail-stat-label">🔁 Reorder level</div>
               <div class="inv-detail-stat-value">
-                {% if item.unit_cost %}
-                  {{ item.unit_cost }}
-                {% else %}
-                  Not set
-                {% endif %}
+                {{ reorder_level|default:"0" }}
               </div>
             </div>
           </div>
 
           <div class="col-sm-6 col-lg-4">
             <div class="inv-detail-stat">
-              <div class="inv-detail-stat-label">📊 Total value</div>
+              <div class="inv-detail-stat-label">🧾 Available</div>
               <div class="inv-detail-stat-value">
-                {% if total_value %}
-                  {{ total_value }}
-                {% else %}
-                  Not available
-                {% endif %}
+                {{ available_quantity }} {{ item.unit_type }}
               </div>
             </div>
           </div>
+
+          <div class="col-sm-6 col-lg-4">
+            <div class="inv-detail-stat">
+              <div class="inv-detail-stat-label">📌 Reserved</div>
+              <div class="inv-detail-stat-value">
+                {{ item.reserved_quantity|default:"0" }}
+              </div>
+            </div>
+          </div>
+
+          <div class="col-sm-6 col-lg-4">
+            <div class="inv-detail-stat">
+              <div class="inv-detail-stat-label">♻ Waste</div>
+              <div class="inv-detail-stat-value">
+                {{ waste_percent }}%
+              </div>
+            </div>
+          </div>
+
+          {% if can_view_inventory_financials %}
+            <div class="col-sm-6 col-lg-4">
+              <div class="inv-detail-stat">
+                <div class="inv-detail-stat-label">💰 Unit cost</div>
+                <div class="inv-detail-stat-value">
+                  {{ item.unit_cost|default:"Not set" }}
+                </div>
+              </div>
+            </div>
+
+            <div class="col-sm-6 col-lg-4">
+              <div class="inv-detail-stat">
+                <div class="inv-detail-stat-label">📊 Total value</div>
+                <div class="inv-detail-stat-value">
+                  {% if total_value %}{{ total_value }}{% else %}Not available{% endif %}
+                </div>
+              </div>
+            </div>
+
+            <div class="col-sm-6 col-lg-4">
+              <div class="inv-detail-stat">
+                <div class="inv-detail-stat-label">🏭 Supplier</div>
+                <div class="inv-detail-stat-value">
+                  {{ item.supplier_name|default:"Not set" }}
+                </div>
+              </div>
+            </div>
+          {% endif %}
 
           <div class="col-sm-6 col-lg-4">
             <div class="inv-detail-stat">
@@ -282,11 +374,50 @@
           </div>
         </div>
 
-        {% if item.min_level and item.quantity and item.quantity <= item.min_level %}
+        {% if item.needs_reorder %}
           <div class="alert alert-warning mt-2 mb-0 small">
-            This item is at or under the minimum level. Please plan a reorder.
+            This item is at or under reorder level. Please plan a reorder.
           </div>
         {% endif %}
+      </div>
+
+      <div class="inv-detail-card" id="movement-box">
+        <div class="d-flex justify-content-between mb-2">
+          <span class="inv-small-label">Quick movement entry</span>
+          <span class="inv-detail-header-badge">Warehouse update</span>
+        </div>
+        <form method="post" class="inv-action-grid">
+          {% csrf_token %}
+          <input type="hidden" name="inventory_action" value="movement">
+          <label>
+            Movement
+            <select name="movement_type">
+              {% for key, label in movement_choices %}
+                <option value="{{ key }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            Quantity
+            <input type="number" step="0.01" name="movement_quantity" placeholder="Example 50">
+          </label>
+          <label>
+            Linked production
+            <select name="production_order">
+              <option value="">No production link</option>
+              {% for po in production_options %}
+                <option value="{{ po.pk }}">{{ po.order_code|default:po.pk }} / {{ po.title }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="inv-wide">
+            Reason
+            <textarea name="movement_reason" rows="2" placeholder="Receiving, allocation correction, damage, warehouse count"></textarea>
+          </label>
+          <div class="inv-wide">
+            <button type="submit" class="btn btn-warning w-100">Save stock movement</button>
+          </div>
+        </form>
       </div>
 
       <!-- SmartBrain and Quick reorder row -->
@@ -390,7 +521,7 @@
         {% endif %}
       </div>
 
-      <div class="reorder-history-box" style="margin-top:12px;">
+      <div class="reorder-history-box" id="production-usage" style="margin-top:12px;">
         <div class="d-flex justify-content-between mb-1">
           <span class="inv-small-label">Used in production orders</span>
         </div>
@@ -403,7 +534,9 @@
                   {{ line.order.order_code }} — {{ line.order.title }}
                 </div>
                 <div class="inv-muted">
-                  Qty {{ line.quantity|default:"-" }} {{ line.unit_type|default:item.unit_type }}
+                  Allocated {{ line.allocated_quantity|default:line.quantity|default:"-" }} {{ line.unit_type|default:item.unit_type }}
+                  / Used {{ line.consumed_quantity|default:"0" }}
+                  / Remaining {{ line.remaining_quantity|default:"0" }}
                   {% if line.notes %} · {{ line.notes }}{% endif %}
                 </div>
               </div>
@@ -414,6 +547,35 @@
           {% endfor %}
         {% else %}
           <div class="inv-muted">No production orders linked yet.</div>
+        {% endif %}
+      </div>
+
+      <div class="reorder-history-box" style="margin-top:12px;">
+        <div class="d-flex justify-content-between mb-1">
+          <span class="inv-small-label">Movement logs</span>
+          <span class="inv-muted">Last 30 records</span>
+        </div>
+
+        {% if movements %}
+          {% for move in movements %}
+            <div class="reorder-row d-flex justify-content-between">
+              <div>
+                <div style="color:#f5f5f5;">
+                  {{ move.get_movement_type_display }} / {{ move.quantity }} {{ item.unit_type }}
+                </div>
+                <div class="inv-muted">
+                  {{ move.created_at|date:"Y M d H:i" }}
+                  {% if move.reason %} · {{ move.reason }}{% endif %}
+                  {% if move.production_order %} · {{ move.production_order.order_code|default:move.production_order.pk }}{% endif %}
+                </div>
+              </div>
+              <div class="inv-muted text-end">
+                {% if move.created_by %}{{ move.created_by.username }}{% else %}System{% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="inv-muted">No movement logs yet.</div>
         {% endif %}
       </div>
 

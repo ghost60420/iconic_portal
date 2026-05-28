@@ -2442,12 +2442,28 @@ class InventoryItem(models.Model):
         ("carton", "Carton"),
         ("other", "Other"),
     ]
+    MATERIAL_GROUP_CHOICES = [
+        ("fabric", "Fabric"),
+        ("trim", "Trim"),
+        ("label", "Label"),
+        ("packaging", "Packaging"),
+        ("printing_material", "Printing Material"),
+        ("accessories", "Accessories"),
+        ("sample_material", "Sample Material"),
+        ("other", "Other"),
+    ]
 
     name = models.CharField(max_length=200)
     category = models.CharField(
         max_length=50,
         choices=CATEGORY_CHOICES,
         default="other",
+    )
+    material_group = models.CharField(
+        max_length=40,
+        choices=MATERIAL_GROUP_CHOICES,
+        default="other",
+        db_index=True,
     )
 
     product = models.ForeignKey("Product", null=True, blank=True, on_delete=models.SET_NULL)
@@ -2463,6 +2479,13 @@ class InventoryItem(models.Model):
     unit_cost = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
     quantity = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     min_level = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    minimum_stock = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    reorder_level = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    incoming_quantity = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    reserved_quantity = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    damaged_quantity = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    waste_quantity = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    supplier_name = models.CharField(max_length=200, blank=True, default="")
 
     location = models.CharField(max_length=200, blank=True)
     image = models.ImageField(upload_to="inventory_images/", null=True, blank=True)
@@ -2478,6 +2501,54 @@ class InventoryItem(models.Model):
     def __str__(self):
         return f"{self.name} ({self.quantity} {self.unit_type})"
 
+    @property
+    def effective_material_group(self):
+        if self.material_group and self.material_group != "other":
+            return self.material_group
+        return {
+            "fabric_roll": "fabric",
+            "trim": "trim",
+            "polybag": "packaging",
+            "carton": "packaging",
+            "accessory": "accessories",
+            "thread": "sample_material",
+            "needle": "sample_material",
+        }.get(self.category, "other")
+
+    @property
+    def effective_minimum_stock(self):
+        return self.minimum_stock or self.min_level or Decimal("0")
+
+    @property
+    def effective_reorder_level(self):
+        return self.reorder_level or self.effective_minimum_stock
+
+    @property
+    def available_quantity(self):
+        return (self.quantity or Decimal("0")) - (self.reserved_quantity or Decimal("0"))
+
+    @property
+    def stock_value(self):
+        if self.unit_cost is None or self.quantity is None:
+            return Decimal("0")
+        return (self.unit_cost or Decimal("0")) * (self.quantity or Decimal("0"))
+
+    @property
+    def reserved_value(self):
+        if self.unit_cost is None:
+            return Decimal("0")
+        return (self.unit_cost or Decimal("0")) * (self.reserved_quantity or Decimal("0"))
+
+    @property
+    def waste_value(self):
+        if self.unit_cost is None:
+            return Decimal("0")
+        return (self.unit_cost or Decimal("0")) * ((self.waste_quantity or Decimal("0")) + (self.damaged_quantity or Decimal("0")))
+
+    @property
+    def needs_reorder(self):
+        return (self.quantity or Decimal("0")) <= self.effective_reorder_level
+
 
 class InventoryReorder(models.Model):
     inventory_item = models.ForeignKey(
@@ -2487,11 +2558,73 @@ class InventoryReorder(models.Model):
         null=True,
         blank=True,
     )
-    quantity = models.DecimalField(max_digits=12, decimal_places=2)
+    quantity = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    note = models.CharField(max_length=255, blank=True, default="")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
 
     def __str__(self):
         return f"Reorder for {self.inventory_item} - {self.quantity}"
+
+
+class InventoryMovement(models.Model):
+    MOVEMENT_CHOICES = [
+        ("received", "Received"),
+        ("allocated", "Allocated"),
+        ("consumed", "Consumed"),
+        ("adjusted", "Adjusted"),
+        ("damaged", "Damaged"),
+    ]
+
+    inventory_item = models.ForeignKey(
+        "InventoryItem",
+        on_delete=models.CASCADE,
+        related_name="movements",
+    )
+    movement_type = models.CharField(max_length=20, choices=MOVEMENT_CHOICES)
+    quantity = models.DecimalField(max_digits=12, decimal_places=2)
+    reason = models.CharField(max_length=255, blank=True, default="")
+    production_order = models.ForeignKey(
+        "ProductionOrder",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="inventory_movements",
+    )
+    production_material = models.ForeignKey(
+        "ProductionOrderMaterial",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="movements",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    notes = models.TextField(blank=True, default="")
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["inventory_item", "movement_type"]),
+            models.Index(fields=["production_order", "movement_type"]),
+            models.Index(fields=["created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.inventory_item} - {self.get_movement_type_display()} {self.quantity}"
 
 
 from django.utils import timezone
@@ -3012,6 +3145,13 @@ class ProductionOrderLine(models.Model):
 
 
 class ProductionOrderMaterial(models.Model):
+    STATUS_CHOICES = [
+        ("reserved", "Reserved"),
+        ("partial", "Partially Consumed"),
+        ("consumed", "Consumed"),
+        ("cancelled", "Cancelled"),
+    ]
+
     order = models.ForeignKey(
         "ProductionOrder",
         on_delete=models.CASCADE,
@@ -3023,8 +3163,12 @@ class ProductionOrderMaterial(models.Model):
         related_name="production_materials",
     )
     quantity = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    allocated_quantity = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    consumed_quantity = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    damaged_quantity = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     unit_type = models.CharField(max_length=50, blank=True, default="")
     notes = models.CharField(max_length=255, blank=True, default="")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="reserved")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -3033,7 +3177,21 @@ class ProductionOrderMaterial(models.Model):
     def save(self, *args, **kwargs):
         if not self.unit_type and self.inventory_item:
             self.unit_type = self.inventory_item.unit_type or ""
+        if not self.allocated_quantity and self.quantity:
+            self.allocated_quantity = self.quantity
+        remaining = self.remaining_quantity
+        if self.allocated_quantity and remaining <= 0:
+            self.status = "consumed"
+        elif self.consumed_quantity or self.damaged_quantity:
+            self.status = "partial"
         super().save(*args, **kwargs)
+
+    @property
+    def remaining_quantity(self):
+        allocated = self.allocated_quantity or self.quantity or Decimal("0")
+        consumed = self.consumed_quantity or Decimal("0")
+        damaged = self.damaged_quantity or Decimal("0")
+        return allocated - consumed - damaged
 
     def __str__(self):
         return f"{self.order.order_code} - {self.inventory_item.name}"

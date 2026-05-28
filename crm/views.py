@@ -33,7 +33,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
-from .models import Product, Fabric, Accessory, Trim, ThreadOption, InventoryItem, ProductionOrderMaterial
+from .models import Product, Fabric, Accessory, Trim, ThreadOption, InventoryItem, InventoryMovement, InventoryReorder, ProductionOrderMaterial
 
 from .services.costing import build_variance_report, calculate_cost_sheet
 from .services.costing_engine import compute_costing
@@ -4843,39 +4843,316 @@ def thread_detail(request, pk):
 # INVENTORY VIEWS
 # =========================
 
+INVENTORY_GROUP_FILTERS = {
+    "fabric": Q(material_group="fabric") | Q(category="fabric_roll"),
+    "trim": Q(material_group="trim") | Q(category="trim"),
+    "label": Q(material_group="label"),
+    "packaging": Q(material_group="packaging") | Q(category__in=["polybag", "carton"]),
+    "printing_material": Q(material_group="printing_material"),
+    "accessories": Q(material_group="accessories") | Q(category="accessory"),
+    "sample_material": Q(material_group="sample_material") | Q(category__in=["thread", "needle"]),
+}
+
+INVENTORY_GROUP_LABELS = [
+    ("fabric", "Fabric"),
+    ("trim", "Trim"),
+    ("label", "Label"),
+    ("packaging", "Packaging"),
+    ("printing_material", "Printing Material"),
+    ("accessories", "Accessories"),
+    ("sample_material", "Sample Material"),
+    ("other", "Other"),
+]
+
+
+def _inventory_can_view_financials(user):
+    return can_view_lifecycle_profit(user)
+
+
+def _inventory_decimal(value):
+    if value in ("", None):
+        return Decimal("0")
+    if isinstance(value, Decimal):
+        return value
+    try:
+        return Decimal(str(value))
+    except Exception:
+        return Decimal("0")
+
+
+def _inventory_group_key(item):
+    return getattr(item, "effective_material_group", None) or "other"
+
+
+def _inventory_group_label(key):
+    return dict(INVENTORY_GROUP_LABELS).get(key, "Other")
+
+
+def _inventory_reorder_level(item):
+    return getattr(item, "effective_reorder_level", None) or Decimal("0")
+
+
+def _inventory_minimum_stock(item):
+    return getattr(item, "effective_minimum_stock", None) or Decimal("0")
+
+
+def _inventory_is_low(item):
+    quantity = _inventory_decimal(getattr(item, "quantity", 0))
+    return quantity <= _inventory_reorder_level(item)
+
+
+def _inventory_value(item):
+    return getattr(item, "stock_value", Decimal("0")) or Decimal("0")
+
+
+def _inventory_waste_percent(item):
+    quantity = _inventory_decimal(getattr(item, "quantity", 0))
+    waste = _inventory_decimal(getattr(item, "waste_quantity", 0)) + _inventory_decimal(getattr(item, "damaged_quantity", 0))
+    total = quantity + waste
+    if total <= 0:
+        return Decimal("0")
+    return ((waste / total) * Decimal("100")).quantize(Decimal("0.01"))
+
+
+def _inventory_record_movement(item, movement_type, quantity, *, request=None, production_order=None, production_material=None, reason="", notes=""):
+    qty = _inventory_decimal(quantity)
+    if qty <= 0:
+        return None
+    return InventoryMovement.objects.create(
+        inventory_item=item,
+        movement_type=movement_type,
+        quantity=qty,
+        reason=reason or "",
+        production_order=production_order,
+        production_material=production_material,
+        created_by=request.user if request and request.user.is_authenticated else None,
+        notes=notes or "",
+    )
+
+
+def _inventory_apply_item_movement(item, movement_type, quantity):
+    qty = _inventory_decimal(quantity)
+    if qty <= 0:
+        return
+    if movement_type == "received":
+        item.quantity = _inventory_decimal(item.quantity) + qty
+        item.incoming_quantity = max(_inventory_decimal(item.incoming_quantity) - qty, Decimal("0"))
+    elif movement_type == "allocated":
+        item.reserved_quantity = _inventory_decimal(item.reserved_quantity) + qty
+    elif movement_type == "consumed":
+        item.quantity = _inventory_decimal(item.quantity) - qty
+        item.reserved_quantity = max(_inventory_decimal(item.reserved_quantity) - qty, Decimal("0"))
+    elif movement_type == "damaged":
+        item.quantity = _inventory_decimal(item.quantity) - qty
+        item.reserved_quantity = max(_inventory_decimal(item.reserved_quantity) - qty, Decimal("0"))
+        item.damaged_quantity = _inventory_decimal(item.damaged_quantity) + qty
+        item.waste_quantity = _inventory_decimal(item.waste_quantity) + qty
+    elif movement_type == "adjusted":
+        item.quantity = _inventory_decimal(item.quantity) + qty
+    item.save(update_fields=["quantity", "incoming_quantity", "reserved_quantity", "damaged_quantity", "waste_quantity", "updated_at"])
+
+
+def _inventory_movement_rows(item=None, limit=20):
+    qs = InventoryMovement.objects.select_related("inventory_item", "production_order", "created_by")
+    if item is not None:
+        qs = qs.filter(inventory_item=item)
+    return qs.order_by("-created_at", "-id")[:limit]
+
+
+def _production_reserve_inventory(order, item, quantity, note, request):
+    qty = _inventory_decimal(quantity)
+    if qty <= 0:
+        messages.warning(request, "Please enter a material quantity bigger than zero.")
+        return None
+
+    line = ProductionOrderMaterial.objects.filter(order=order, inventory_item=item).first()
+    old_allocated = _inventory_decimal(getattr(line, "allocated_quantity", None) or getattr(line, "quantity", 0)) if line else Decimal("0")
+    if line:
+        line.quantity = qty
+        line.allocated_quantity = qty
+        if note:
+            line.notes = note
+        line.save()
+    else:
+        line = ProductionOrderMaterial.objects.create(
+            order=order,
+            inventory_item=item,
+            quantity=qty,
+            allocated_quantity=qty,
+            unit_type=item.unit_type,
+            notes=note,
+        )
+
+    diff = qty - old_allocated
+    if diff > 0:
+        item.reserved_quantity = _inventory_decimal(item.reserved_quantity) + diff
+        item.save(update_fields=["reserved_quantity", "updated_at"])
+        _inventory_record_movement(
+            item,
+            "allocated",
+            diff,
+            request=request,
+            production_order=order,
+            production_material=line,
+            reason="Reserved for production",
+            notes=note,
+        )
+    elif diff < 0:
+        item.reserved_quantity = max(_inventory_decimal(item.reserved_quantity) + diff, Decimal("0"))
+        item.save(update_fields=["reserved_quantity", "updated_at"])
+        _inventory_record_movement(
+            item,
+            "adjusted",
+            abs(diff),
+            request=request,
+            production_order=order,
+            production_material=line,
+            reason="Production reservation reduced",
+            notes=note,
+        )
+    return line
+
+
+def _production_consume_inventory(line, quantity, request, movement_type="consumed"):
+    qty = _inventory_decimal(quantity)
+    if qty <= 0:
+        messages.warning(request, "Please enter a quantity bigger than zero.")
+        return
+
+    item = line.inventory_item
+    if movement_type == "damaged":
+        line.damaged_quantity = _inventory_decimal(line.damaged_quantity) + qty
+    else:
+        line.consumed_quantity = _inventory_decimal(line.consumed_quantity) + qty
+    line.save()
+
+    _inventory_apply_item_movement(item, movement_type, qty)
+    _inventory_record_movement(
+        item,
+        movement_type,
+        qty,
+        request=request,
+        production_order=line.order,
+        production_material=line,
+        reason="Production material usage" if movement_type == "consumed" else "Production material damage",
+    )
+    if _inventory_decimal(item.quantity) < 0:
+        messages.warning(request, "Material updated. Inventory is now negative for this item.")
+    else:
+        messages.success(request, "Production material movement saved.")
+
+
+def _production_remove_inventory_reservation(line, request):
+    item = line.inventory_item
+    remaining = max(_inventory_decimal(line.remaining_quantity), Decimal("0"))
+    if remaining > 0:
+        item.reserved_quantity = max(_inventory_decimal(item.reserved_quantity) - remaining, Decimal("0"))
+        item.save(update_fields=["reserved_quantity", "updated_at"])
+        _inventory_record_movement(
+            item,
+            "adjusted",
+            remaining,
+            request=request,
+            production_order=line.order,
+            production_material=line,
+            reason="Production reservation removed",
+        )
+    line.delete()
+
+
 def inventory_list(request):
-    items = InventoryItem.objects.all().order_by("name")
+    can_view_financials = _inventory_can_view_financials(request.user)
+    base_items = InventoryItem.objects.all().prefetch_related("production_materials")
+    items = base_items.order_by("name")
 
     search = request.GET.get("q", "").strip()
     category = request.GET.get("category", "").strip()
     status = request.GET.get("status", "all").strip() or "all"
+    stock_filter = request.GET.get("stock", "all").strip() or "all"
 
     if search:
         items = items.filter(
             Q(name__icontains=search)
             | Q(code__icontains=search)
             | Q(sku__icontains=search)
+            | Q(location__icontains=search)
         )
 
     if category:
-        items = items.filter(category=category)
+        if category in INVENTORY_GROUP_FILTERS:
+            items = items.filter(INVENTORY_GROUP_FILTERS[category])
+        elif category == "other":
+            combined = Q()
+            for group_q in INVENTORY_GROUP_FILTERS.values():
+                combined |= group_q
+            items = items.exclude(combined)
+        else:
+            items = items.filter(category=category)
 
     if status == "active":
         items = items.filter(is_active=True)
     elif status == "inactive":
         items = items.filter(is_active=False)
 
-    total_items = items.count()
-    total_quantity = items.aggregate(s=Sum("quantity"))["s"] or 0
+    item_rows = []
+    for item in items:
+        low_stock = _inventory_is_low(item)
+        negative_stock = _inventory_decimal(item.quantity) < 0
+        available_quantity = getattr(item, "available_quantity", Decimal("0"))
+        waste_percent = _inventory_waste_percent(item)
+        row = {
+            "item": item,
+            "material_group": _inventory_group_key(item),
+            "material_group_label": _inventory_group_label(_inventory_group_key(item)),
+            "low_stock": low_stock,
+            "negative_stock": negative_stock,
+            "available_quantity": available_quantity,
+            "reorder_level": _inventory_reorder_level(item),
+            "minimum_stock": _inventory_minimum_stock(item),
+            "waste_percent": waste_percent,
+            "needs_reorder": low_stock,
+        }
+        if stock_filter == "low" and not low_stock:
+            continue
+        if stock_filter == "negative" and not negative_stock:
+            continue
+        if stock_filter == "reserved" and not (_inventory_decimal(item.reserved_quantity) > 0):
+            continue
+        item_rows.append(row)
 
-    total_value = 0
-    low_stock_count = 0
-    for it in items:
-        if it.unit_cost and it.quantity:
-            total_value += it.unit_cost * it.quantity
-        if it.min_level is not None and it.quantity is not None:
-            if it.quantity <= it.min_level:
-                low_stock_count += 1
+    filtered_items = [row["item"] for row in item_rows]
+    total_items = len(item_rows)
+    total_quantity = sum((_inventory_decimal(row["item"].quantity) for row in item_rows), Decimal("0"))
+
+    total_value = sum((_inventory_value(row["item"]) for row in item_rows), Decimal("0")) if can_view_financials else None
+    low_stock_count = len([row for row in item_rows if row["low_stock"]])
+    negative_stock_count = len([row for row in item_rows if row["negative_stock"]])
+    incoming_stock = sum((_inventory_decimal(row["item"].incoming_quantity) for row in item_rows), Decimal("0"))
+    reserved_stock = sum((_inventory_decimal(row["item"].reserved_quantity) for row in item_rows), Decimal("0"))
+    active_materials = len([row for row in item_rows if row["item"].is_active])
+    low_by_group = {
+        key: len([row for row in item_rows if row["low_stock"] and row["material_group"] == key])
+        for key, _label in INVENTORY_GROUP_LABELS
+    }
+    reorder_alerts = [row for row in item_rows if row["needs_reorder"]][:8]
+    negative_alerts = [row for row in item_rows if row["negative_stock"]][:8]
+    delayed_incoming = [
+        row for row in item_rows
+        if _inventory_decimal(row["item"].incoming_quantity) > 0 and row["low_stock"]
+    ][:8]
+    recent_movements = list(_inventory_movement_rows(limit=12))
+    allocated_qty = ProductionOrderMaterial.objects.aggregate(s=Sum("allocated_quantity"))["s"] or Decimal("0")
+    consumed_qty = ProductionOrderMaterial.objects.aggregate(s=Sum("consumed_quantity"))["s"] or Decimal("0")
+    pending_allocation = sum((max(_inventory_decimal(line.remaining_quantity), Decimal("0")) for line in ProductionOrderMaterial.objects.all()), Decimal("0"))
+    dead_stock_count = len([
+        row for row in item_rows
+        if row["item"].is_active and not row["item"].production_materials.exists() and _inventory_decimal(row["item"].quantity) > 0
+    ])
+    dead_stock_value = sum(
+        (_inventory_value(row["item"]) for row in item_rows if row["item"].is_active and not row["item"].production_materials.exists()),
+        Decimal("0"),
+    ) if can_view_financials else None
+    waste_estimate = sum((getattr(row["item"], "waste_value", Decimal("0")) or Decimal("0") for row in item_rows), Decimal("0")) if can_view_financials else None
 
     if low_stock_count > 0:
         smartbrain_message = (
@@ -4889,63 +5166,141 @@ def inventory_list(request):
         )
 
     context = {
-        "items": items,
+        "items": filtered_items,
+        "item_rows": item_rows,
         "search": search,
         "selected_category": category,
         "selected_status": status,
+        "selected_stock": stock_filter,
         "total_items": total_items,
         "total_quantity": total_quantity,
         "total_value": total_value,
         "low_stock_count": low_stock_count,
+        "negative_stock_count": negative_stock_count,
+        "incoming_stock": incoming_stock,
+        "reserved_stock": reserved_stock,
+        "active_materials": active_materials,
+        "low_by_group": low_by_group,
+        "reorder_alerts": reorder_alerts,
+        "negative_alerts": negative_alerts,
+        "delayed_incoming": delayed_incoming,
+        "recent_movements": recent_movements,
+        "allocated_qty": allocated_qty,
+        "consumed_qty": consumed_qty,
+        "pending_allocation": pending_allocation,
+        "dead_stock_count": dead_stock_count,
+        "dead_stock_value": dead_stock_value,
+        "waste_estimate": waste_estimate,
+        "category_groups": INVENTORY_GROUP_LABELS,
+        "can_view_inventory_financials": can_view_financials,
         "smartbrain_message": smartbrain_message,
     }
     return render(request, "crm/inventory_list.html", context)
 
 
 def inventory_add(request):
+    can_view_financials = _inventory_can_view_financials(request.user)
     if request.method == "POST":
-        form = InventoryItemForm(request.POST, request.FILES)
+        form = InventoryItemForm(
+            request.POST,
+            request.FILES,
+            can_edit_internal_costing=can_view_financials,
+        )
         if form.is_valid():
             item = form.save()
+            if _inventory_decimal(item.quantity) > 0:
+                _inventory_record_movement(
+                    item,
+                    "received",
+                    item.quantity,
+                    request=request,
+                    reason="Initial stock entry",
+                )
             messages.success(request, "Inventory item created.")
             return redirect("inventory_detail", pk=item.pk)
     else:
-        form = InventoryItemForm()
+        form = InventoryItemForm(can_edit_internal_costing=can_view_financials)
 
     return render(
         request,
         "crm/inventory_form.html",
-        {"form": form, "mode": "add", "item": None},
+        {"form": form, "mode": "add", "item": None, "can_view_inventory_financials": can_view_financials},
     )
 
 
 def inventory_edit(request, pk):
     item = get_object_or_404(InventoryItem, pk=pk)
+    can_view_financials = _inventory_can_view_financials(request.user)
 
     if request.method == "POST":
-        form = InventoryItemForm(request.POST, request.FILES, instance=item)
+        old_quantity = _inventory_decimal(item.quantity)
+        form = InventoryItemForm(
+            request.POST,
+            request.FILES,
+            instance=item,
+            can_edit_internal_costing=can_view_financials,
+        )
         if form.is_valid():
-            form.save()
+            item = form.save()
+            new_quantity = _inventory_decimal(item.quantity)
+            delta = new_quantity - old_quantity
+            if delta:
+                _inventory_record_movement(
+                    item,
+                    "adjusted",
+                    abs(delta),
+                    request=request,
+                    reason="Manual inventory edit",
+                    notes=f"Quantity changed from {old_quantity} to {new_quantity}.",
+                )
             messages.success(request, "Inventory item updated.")
             return redirect("inventory_detail", pk=item.pk)
     else:
-        form = InventoryItemForm(instance=item)
+        form = InventoryItemForm(instance=item, can_edit_internal_costing=can_view_financials)
 
     return render(
         request,
         "crm/inventory_form.html",
-        {"form": form, "mode": "edit", "item": item},
+        {"form": form, "mode": "edit", "item": item, "can_view_inventory_financials": can_view_financials},
     )
 
 
 def inventory_detail(request, pk):
     item = get_object_or_404(InventoryItem, pk=pk)
+    can_view_financials = _inventory_can_view_financials(request.user)
 
     total_value = None
-    if item.unit_cost and item.quantity is not None:
+    if can_view_financials and item.unit_cost and item.quantity is not None:
         total_value = item.unit_cost * item.quantity
 
     # handle quick reorder post from detail page
+    if request.method == "POST" and request.POST.get("inventory_action") == "movement":
+        movement_type = (request.POST.get("movement_type") or "").strip()
+        qty = _inventory_decimal(request.POST.get("movement_quantity"))
+        reason = (request.POST.get("movement_reason") or "").strip()
+        production_id = (request.POST.get("production_order") or "").strip()
+        production_order = ProductionOrder.objects.filter(pk=production_id).first() if production_id else None
+
+        if movement_type not in {key for key, _label in InventoryMovement.MOVEMENT_CHOICES}:
+            messages.error(request, "Please choose a valid movement type.")
+        elif qty <= 0:
+            messages.warning(request, "Please enter a movement quantity bigger than zero.")
+        else:
+            _inventory_apply_item_movement(item, movement_type, qty)
+            _inventory_record_movement(
+                item,
+                movement_type,
+                qty,
+                request=request,
+                production_order=production_order,
+                reason=reason or "Manual warehouse movement",
+            )
+            if _inventory_decimal(item.quantity) < 0:
+                messages.warning(request, "Movement saved. This item now has negative stock.")
+            else:
+                messages.success(request, "Inventory movement saved.")
+            return redirect("inventory_detail", pk=item.pk)
+
     if request.method == "POST" and "quick_reorder" in request.POST:
         qty_str = (request.POST.get("reorder_quantity") or "0").strip()
         note = (request.POST.get("reorder_note") or "").strip()
@@ -4957,7 +5312,7 @@ def inventory_detail(request, pk):
 
         if qty > 0:
             InventoryReorder.objects.create(
-                item=item,
+                inventory_item=item,
                 quantity=qty,
                 note=note,
                 created_by=request.user if request.user.is_authenticated else None,
@@ -4969,17 +5324,28 @@ def inventory_detail(request, pk):
 
     reorders = item.reorders.all()[:20]
     production_lines = item.production_materials.select_related("order").order_by("-created_at")[:20]
+    movements = _inventory_movement_rows(item=item, limit=30)
+    production_options = ProductionOrder.objects.select_related("customer").order_by("-created_at")[:40]
 
     context = {
         "item": item,
         "total_value": total_value,
         "reorders": reorders,
         "production_lines": production_lines,
+        "movements": movements,
+        "production_options": production_options,
+        "movement_choices": InventoryMovement.MOVEMENT_CHOICES,
+        "can_view_inventory_financials": can_view_financials,
+        "minimum_stock": _inventory_minimum_stock(item),
+        "reorder_level": _inventory_reorder_level(item),
+        "available_quantity": getattr(item, "available_quantity", Decimal("0")),
+        "waste_percent": _inventory_waste_percent(item),
     }
     return render(request, "crm/inventory_detail.html", context)
 
 def inventory_detail_pdf(request, pk):
     item = get_object_or_404(InventoryItem, pk=pk)
+    can_view_financials = _inventory_can_view_financials(request.user)
 
     # try to use reportlab for real PDF
     try:
@@ -5014,15 +5380,23 @@ def inventory_detail_pdf(request, pk):
 
     lines = [
         f"Category: {item.get_category_display()}",
+        f"Material group: {_inventory_group_label(_inventory_group_key(item))}",
         f"Code: {item.code or 'Not set'}",
         f"SKU: {item.sku or 'Not set'}",
         f"Unit type: {item.unit_type or 'Not set'}",
         f"Quantity: {item.quantity}",
-        f"Minimum level: {item.min_level}",
-        f"Unit cost: {item.unit_cost or 'Not set'}",
+        f"Minimum stock: {_inventory_minimum_stock(item)}",
+        f"Reorder level: {_inventory_reorder_level(item)}",
+        f"Available quantity: {getattr(item, 'available_quantity', Decimal('0'))}",
+        f"Reserved quantity: {item.reserved_quantity}",
     ]
 
-    if item.unit_cost and item.quantity is not None:
+    if can_view_financials:
+        lines.append(f"Unit cost: {item.unit_cost or 'Not set'}")
+        lines.append(f"Supplier: {item.supplier_name or 'Not set'}")
+        lines.append(f"Waste quantity: {item.waste_quantity}")
+
+    if can_view_financials and item.unit_cost and item.quantity is not None:
         total_value = item.unit_cost * item.quantity
         lines.append(f"Total value: {total_value}")
 
@@ -5069,6 +5443,7 @@ def inventory_quick_reorder(request, pk):
 @require_POST
 def inventory_ai_overview(request):
     items = InventoryItem.objects.all()
+    can_view_financials = _inventory_can_view_financials(request.user)
 
     total_items = items.count()
     total_quantity = items.aggregate(s=Sum("quantity"))["s"] or 0
@@ -5081,7 +5456,7 @@ def inventory_ai_overview(request):
         cat = it.get_category_display()
         by_category[cat] = by_category.get(cat, 0) + 1
 
-        if it.unit_cost and it.quantity:
+        if can_view_financials and it.unit_cost and it.quantity:
             total_value += it.unit_cost * it.quantity
 
         if it.min_level is not None and it.quantity is not None:
@@ -5094,7 +5469,7 @@ def inventory_ai_overview(request):
         "You are the SmartBrain AI for a garment inventory system.\n"
         f"Total items: {total_items}\n"
         f"Total quantity: {total_quantity}\n"
-        f"Total value: {total_value}\n"
+        f"Total value: {total_value if can_view_financials else 'Restricted'}\n"
         f"Low stock: {low_stock}\n"
         f"Category summary: {cat_lines}\n\n"
         "Give short advice in simple English:\n"
@@ -6852,16 +7227,25 @@ def _production_inventory_context(order):
 
     try:
         inventory_items = list(
-            InventoryItem.objects.filter(is_active=True).order_by("category", "name")
+            InventoryItem.objects.filter(is_active=True).order_by("material_group", "category", "name")
         )
     except (OperationalError, ProgrammingError):
         inventory_items = []
+    try:
+        material_movements = list(
+            InventoryMovement.objects.filter(production_order=order)
+            .select_related("inventory_item", "created_by")
+            .order_by("-created_at", "-id")[:20]
+        )
+    except (OperationalError, ProgrammingError):
+        material_movements = []
 
     return {
         "materials": materials,
         "recommended_items": recommended_items,
         "recommended_ids": recommended_ids,
         "inventory_items": inventory_items,
+        "material_movements": material_movements,
     }
 
 
@@ -7148,29 +7532,8 @@ def production_edit(request, pk):
 
             item = InventoryItem.objects.filter(pk=item_id).first() if item_id else None
             if item:
-                qty_val = None
-                if qty_raw:
-                    try:
-                        qty_val = Decimal(qty_raw)
-                    except Exception:
-                        qty_val = None
-
-                line = ProductionOrderMaterial.objects.filter(order=order, inventory_item=item).first()
-                if line:
-                    if qty_val is not None:
-                        line.quantity = qty_val
-                    if note:
-                        line.notes = note
-                    line.save()
-                else:
-                    ProductionOrderMaterial.objects.create(
-                        order=order,
-                        inventory_item=item,
-                        quantity=qty_val,
-                        unit_type=item.unit_type,
-                        notes=note,
-                    )
-                messages.success(request, "Material added to order sheet.")
+                if _production_reserve_inventory(order, item, qty_raw, note, request):
+                    messages.success(request, "Material reserved for this production order.")
             else:
                 messages.error(request, "Please select a material.")
 
@@ -7179,7 +7542,9 @@ def production_edit(request, pk):
         if action == "remove_material":
             line_id = (request.POST.get("line_id") or "").strip()
             if line_id:
-                ProductionOrderMaterial.objects.filter(pk=line_id, order=order).delete()
+                line = ProductionOrderMaterial.objects.filter(pk=line_id, order=order).select_related("inventory_item").first()
+                if line:
+                    _production_remove_inventory_reservation(line, request)
             return redirect("production_edit", pk=pk)
 
         try:
@@ -7241,7 +7606,7 @@ def production_edit(request, pk):
 
     try:
         inventory_items = list(
-            InventoryItem.objects.filter(is_active=True).order_by("category", "name")
+            InventoryItem.objects.filter(is_active=True).order_by("material_group", "category", "name")
         )
     except (OperationalError, ProgrammingError):
         inventory_items = []
@@ -7479,38 +7844,34 @@ def production_detail(request, pk):
 
             item = InventoryItem.objects.filter(pk=item_id).first() if item_id else None
             if item:
-                qty_val = None
-                if qty_raw:
-                    try:
-                        qty_val = Decimal(qty_raw)
-                    except Exception:
-                        qty_val = None
-
-                line = ProductionOrderMaterial.objects.filter(order=order, inventory_item=item).first()
-                if line:
-                    if qty_val is not None:
-                        line.quantity = qty_val
-                    if note:
-                        line.notes = note
-                    line.save()
-                else:
-                    ProductionOrderMaterial.objects.create(
-                        order=order,
-                        inventory_item=item,
-                        quantity=qty_val,
-                        unit_type=item.unit_type,
-                        notes=note,
-                    )
-                messages.success(request, "Material added to order sheet.")
+                if _production_reserve_inventory(order, item, qty_raw, note, request):
+                    messages.success(request, "Material reserved for this production order.")
             else:
                 messages.error(request, "Please select a material.")
 
             return redirect("production_detail", pk=pk)
 
+        if action in {"consume_material", "damage_material"}:
+            line_id = (request.POST.get("line_id") or "").strip()
+            qty_raw = (request.POST.get("movement_quantity") or "").strip()
+            line = ProductionOrderMaterial.objects.filter(pk=line_id, order=order).select_related("inventory_item", "order").first()
+            if line:
+                _production_consume_inventory(
+                    line,
+                    qty_raw,
+                    request,
+                    movement_type="damaged" if action == "damage_material" else "consumed",
+                )
+            else:
+                messages.error(request, "Material allocation was not found.")
+            return redirect("production_detail", pk=pk)
+
         if action == "remove_material":
             line_id = (request.POST.get("line_id") or "").strip()
             if line_id:
-                ProductionOrderMaterial.objects.filter(pk=line_id, order=order).delete()
+                line = ProductionOrderMaterial.objects.filter(pk=line_id, order=order).select_related("inventory_item").first()
+                if line:
+                    _production_remove_inventory_reservation(line, request)
             return redirect("production_detail", pk=pk)
 
         if action == "add_comment":

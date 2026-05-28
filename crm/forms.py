@@ -787,12 +787,34 @@ class ShipmentForm(forms.ModelForm):
 # Inventory form
 # --------------------------------------------------
 class InventoryItemForm(forms.ModelForm):
+    INTERNAL_FIELDS = {
+        "unit_cost",
+        "supplier_name",
+        "incoming_quantity",
+        "reserved_quantity",
+        "damaged_quantity",
+        "waste_quantity",
+    }
+
     class Meta:
         model = InventoryItem
         fields = "__all__"
         widgets = {
             "notes": forms.Textarea(attrs={"rows": 3, "class": "form-control"}),
         }
+
+    def __init__(self, *args, can_edit_internal_costing=True, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field_name, field in self.fields.items():
+            if isinstance(field.widget, forms.Select):
+                field.widget.attrs.setdefault("class", "form-control")
+            elif isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs.setdefault("class", "form-check-input")
+            else:
+                field.widget.attrs.setdefault("class", "form-control")
+        if not can_edit_internal_costing:
+            for field_name in self.INTERNAL_FIELDS:
+                self.fields.pop(field_name, None)
 
 
 # --------------------------------------------------

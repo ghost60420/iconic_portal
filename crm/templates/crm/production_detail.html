@@ -427,6 +427,116 @@
         </form>
       </article>
 
+      <article class="production-panel" id="production-materials">
+        <div class="production-panel-head">
+          <div>
+            <h2>Warehouse Material Allocation</h2>
+            <p>Reserve material for this order, then record actual consumption or damage as production moves.</p>
+          </div>
+          <a href="{% url 'inventory_list' %}" class="production-btn production-btn--tiny production-btn--ghost">Open Inventory</a>
+        </div>
+
+        <form method="post" class="production-material-form">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="add_material">
+          <label>
+            <span>Material</span>
+            <select name="inventory_item">
+              <option value="">Select inventory item</option>
+              {% if recommended_items %}
+                <optgroup label="Recommended for this order">
+                  {% for item in recommended_items %}
+                    <option value="{{ item.pk }}">{{ item.name }} / {{ item.quantity }} {{ item.unit_type }}</option>
+                  {% endfor %}
+                </optgroup>
+              {% endif %}
+              <optgroup label="All active inventory">
+                {% for item in inventory_items %}
+                  <option value="{{ item.pk }}">{{ item.get_material_group_display|default:item.get_category_display }} / {{ item.name }} / {{ item.quantity }} {{ item.unit_type }}</option>
+                {% endfor %}
+              </optgroup>
+            </select>
+          </label>
+          <label>
+            <span>Reserve quantity</span>
+            <input type="number" step="0.01" name="quantity" placeholder="Example 500">
+          </label>
+          <label class="production-material-wide">
+            <span>Reason / notes</span>
+            <input type="text" name="note" placeholder="Fleece for body panels, labels, poly bags">
+          </label>
+          <button type="submit" class="production-btn production-btn--primary">Reserve Material</button>
+        </form>
+
+        {% if materials %}
+          <div class="production-material-list">
+            {% for line in materials %}
+              <article class="production-material-row">
+                <div>
+                  <strong>{{ line.inventory_item.name }}</strong>
+                  <span>
+                    Allocated {{ line.allocated_quantity|default:line.quantity|default:"0" }} {{ line.unit_type|default:line.inventory_item.unit_type }}
+                    / Used {{ line.consumed_quantity|default:"0" }}
+                    / Damaged {{ line.damaged_quantity|default:"0" }}
+                    / Remaining {{ line.remaining_quantity|default:"0" }}
+                  </span>
+                  {% if line.notes %}<small>{{ line.notes }}</small>{% endif %}
+                </div>
+                <div class="production-material-actions">
+                  <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="consume_material">
+                    <input type="hidden" name="line_id" value="{{ line.pk }}">
+                    <input type="number" step="0.01" name="movement_quantity" placeholder="Used">
+                    <button type="submit" class="production-btn production-btn--tiny production-btn--ghost">Consume</button>
+                  </form>
+                  <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="damage_material">
+                    <input type="hidden" name="line_id" value="{{ line.pk }}">
+                    <input type="number" step="0.01" name="movement_quantity" placeholder="Damaged">
+                    <button type="submit" class="production-btn production-btn--tiny production-btn--danger">Damage</button>
+                  </form>
+                  <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="remove_material">
+                    <input type="hidden" name="line_id" value="{{ line.pk }}">
+                    <button type="submit" class="production-btn production-btn--tiny production-btn--ghost">Release</button>
+                  </form>
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="production-empty-inline">No warehouse materials reserved yet.</div>
+        {% endif %}
+
+        {% if material_movements %}
+          <details class="production-subdetails">
+            <summary>Recent warehouse movements</summary>
+            <div class="production-stage-table">
+              {% for move in material_movements %}
+                <div class="production-stage-row">
+                  <div>
+                    <strong>{{ move.inventory_item.name }}</strong>
+                    <span>{{ move.get_movement_type_display }}</span>
+                  </div>
+                  <div>
+                    <span>Quantity</span>
+                    <strong>{{ move.quantity }}</strong>
+                  </div>
+                  <div>
+                    <span>Time</span>
+                    <strong>{{ move.created_at|date:"Y-m-d H:i" }}</strong>
+                  </div>
+                  {% if move.reason %}<div class="production-stage-note">{{ move.reason }}</div>{% endif %}
+                </div>
+              {% endfor %}
+            </div>
+          </details>
+        {% endif %}
+      </article>
+
       <article class="production-panel" id="production-files">
         <div class="production-panel-head">
           <div>
