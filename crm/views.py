@@ -9654,6 +9654,146 @@ def _ceo_aggregate(model, qs, **fields):
         return {name: 0 for name in fields}
 
 
+def _ceo_month_key(value):
+    if not value:
+        return None
+    if hasattr(value, "date"):
+        value = value.date()
+    return value.replace(day=1)
+
+
+def _ceo_percent(numerator, denominator):
+    numerator = _ceo_decimal(numerator)
+    denominator = _ceo_decimal(denominator)
+    if denominator <= 0:
+        return Decimal("0")
+    return (numerator / denominator * Decimal("100")).quantize(Decimal("0.01"))
+
+
+def _ceo_inventory_label(key):
+    labels = dict(INVENTORY_GROUP_LABELS)
+    return labels.get(key or "other", "Other")
+
+
+def _ceo_safe_inventory_snapshot(can_view_financials):
+    snapshot = {
+        "low_stock_count": 0,
+        "low_fabric": 0,
+        "low_trims": 0,
+        "low_packaging": 0,
+        "negative_stock": 0,
+        "active_materials": 0,
+        "incoming_stock": Decimal("0"),
+        "reserved_stock": Decimal("0"),
+        "allocated_qty": Decimal("0"),
+        "consumed_qty": Decimal("0"),
+        "pending_allocation": Decimal("0"),
+        "dead_stock_count": 0,
+        "waste_material_count": 0,
+        "total_value": None,
+        "dead_stock_value": None,
+        "waste_estimate": None,
+        "highest_usage_materials": [],
+        "category_usage_labels": [],
+        "category_usage_values": [],
+    }
+    try:
+        low_stock_filter = Q(quantity__lte=F("reorder_level")) | Q(
+            reorder_level=0,
+            quantity__lte=F("min_level"),
+        )
+        inventory_qs = InventoryItem.objects.filter(is_active=True)
+        stock_totals = inventory_qs.aggregate(
+            active_materials=Count("id"),
+            incoming_stock=Sum("incoming_quantity"),
+            reserved_stock=Sum("reserved_quantity"),
+        )
+        snapshot.update(
+            {
+                "low_stock_count": inventory_qs.filter(low_stock_filter).count(),
+                "low_fabric": inventory_qs.filter(low_stock_filter, material_group="fabric").count(),
+                "low_trims": inventory_qs.filter(low_stock_filter, material_group="trim").count(),
+                "low_packaging": inventory_qs.filter(low_stock_filter, material_group="packaging").count(),
+                "negative_stock": inventory_qs.filter(quantity__lt=0).count(),
+                "waste_material_count": inventory_qs.filter(Q(waste_quantity__gt=0) | Q(damaged_quantity__gt=0)).count(),
+                "active_materials": stock_totals.get("active_materials") or 0,
+                "incoming_stock": _ceo_decimal(stock_totals.get("incoming_stock")),
+                "reserved_stock": _ceo_decimal(stock_totals.get("reserved_stock")),
+            }
+        )
+
+        material_totals = ProductionOrderMaterial.objects.aggregate(
+            allocated=Sum("allocated_quantity"),
+            consumed=Sum("consumed_quantity"),
+        )
+        snapshot["allocated_qty"] = _ceo_decimal(material_totals.get("allocated"))
+        snapshot["consumed_qty"] = _ceo_decimal(material_totals.get("consumed"))
+        snapshot["pending_allocation"] = max(snapshot["allocated_qty"] - snapshot["consumed_qty"], Decimal("0"))
+
+        usage_rows = list(
+            ProductionOrderMaterial.objects.select_related("inventory_item")
+            .values("inventory_item__name", "inventory_item__material_group")
+            .annotate(
+                consumed=Sum("consumed_quantity"),
+                allocated=Sum("allocated_quantity"),
+            )
+            .order_by("-consumed", "-allocated")[:6]
+        )
+        highest_usage = []
+        for row in usage_rows:
+            used = _ceo_decimal(row.get("consumed")) or _ceo_decimal(row.get("allocated"))
+            highest_usage.append(
+                {
+                    "label": row.get("inventory_item__name") or "Unassigned material",
+                    "group": _ceo_inventory_label(row.get("inventory_item__material_group")),
+                    "used": used,
+                }
+            )
+        snapshot["highest_usage_materials"] = highest_usage
+
+        category_rows = list(
+            ProductionOrderMaterial.objects.values("inventory_item__material_group")
+            .annotate(
+                consumed=Sum("consumed_quantity"),
+                allocated=Sum("allocated_quantity"),
+            )
+            .order_by("-consumed", "-allocated")[:7]
+        )
+        for row in category_rows:
+            value = _ceo_decimal(row.get("consumed")) or _ceo_decimal(row.get("allocated"))
+            snapshot["category_usage_labels"].append(_ceo_inventory_label(row.get("inventory_item__material_group")))
+            snapshot["category_usage_values"].append(_to_float(value))
+
+        snapshot["dead_stock_count"] = (
+            inventory_qs.filter(quantity__gt=0, production_materials__isnull=True).distinct().count()
+        )
+
+        if can_view_financials:
+            stock_value_expr = models.ExpressionWrapper(
+                F("unit_cost") * F("quantity"),
+                output_field=models.DecimalField(max_digits=16, decimal_places=2),
+            )
+            waste_value_expr = models.ExpressionWrapper(
+                F("unit_cost") * (F("waste_quantity") + F("damaged_quantity")),
+                output_field=models.DecimalField(max_digits=16, decimal_places=2),
+            )
+            value_totals = inventory_qs.filter(unit_cost__isnull=False).aggregate(
+                total_value=Sum(stock_value_expr),
+                waste_estimate=Sum(waste_value_expr),
+            )
+            dead_stock_totals = inventory_qs.filter(
+                unit_cost__isnull=False,
+                quantity__gt=0,
+                production_materials__isnull=True,
+            ).distinct().aggregate(dead_stock_value=Sum(stock_value_expr))
+            snapshot["total_value"] = _ceo_decimal(value_totals.get("total_value"))
+            snapshot["waste_estimate"] = _ceo_decimal(value_totals.get("waste_estimate"))
+            snapshot["dead_stock_value"] = _ceo_decimal(dead_stock_totals.get("dead_stock_value"))
+    except (OperationalError, ProgrammingError) as exc:
+        logger.warning("ceo_dashboard: inventory intelligence metrics unavailable: %s", exc)
+    return snapshot
+
+
 @login_required
 def ceo_dashboard(request):
     today = timezone.localdate()
@@ -9673,6 +9813,7 @@ def ceo_dashboard(request):
     previous_start = previous_end - timedelta(days=period_days - 1)
     filter_values = {"days": str(period_days), "side": side}
     period_label = f"Last {period_days} days"
+    can_view_executive_financials = can_view_lifecycle_profit(request.user)
 
     leads_period = Lead.objects.filter(created_date__range=(start_period, today)).count()
     prev_leads_period = Lead.objects.filter(created_date__range=(previous_start, previous_end)).count()
@@ -9732,7 +9873,7 @@ def ceo_dashboard(request):
         .filter(created_date__range=(start_period, today))
         .values("customer__account_brand", "customer__contact_name", "lead__account_brand")
         .annotate(total=Sum("order_value"), count=Count("id"))
-        .order_by("-total", "-count")[:8]
+        .order_by(*(["-total", "-count"] if can_view_executive_financials else ["-count"]))[:8]
     )
     top_customers = []
     for row in top_customer_rows:
@@ -9823,6 +9964,41 @@ def ceo_dashboard(request):
             invoice_open_total = Decimal("0")
             overdue_invoice_count = 0
 
+    ceo_month_keys = _ceo_month_keys(today)
+    revenue_overview = None
+    invoice_month_labels = []
+    invoice_month_values = []
+    if can_view_executive_financials and invoice_qs is not None:
+        try:
+            invoice_period = invoice_qs.filter(issue_date__range=(start_period, today))
+            invoice_period_totals = invoice_period.aggregate(
+                total_invoiced=Sum("total_amount"),
+                total_paid=Sum("paid_amount"),
+            )
+            invoice_month_map = {
+                _ceo_month_key(row.get("month")): _ceo_decimal(row.get("total"))
+                for row in invoice_qs.filter(issue_date__gte=ceo_month_keys[0])
+                .annotate(month=TruncMonth("issue_date"))
+                .values("month")
+                .annotate(total=Sum("total_amount"))
+            }
+            for month_key in ceo_month_keys:
+                invoice_month_labels.append(month_key.strftime("%b"))
+                invoice_month_values.append(_to_float(invoice_month_map.get(month_key, Decimal("0"))))
+            revenue_overview = {
+                "total_invoiced": _ceo_decimal(invoice_period_totals.get("total_invoiced")),
+                "total_paid": _ceo_decimal(invoice_period_totals.get("total_paid")),
+                "outstanding_balance": invoice_open_total,
+                "overdue_invoice_count": overdue_invoice_count,
+                "monthly_rows": [
+                    {"label": label, "value": value}
+                    for label, value in zip(invoice_month_labels, invoice_month_values)
+                ],
+            }
+        except (OperationalError, ProgrammingError):
+            logger.exception("ceo_dashboard: invoice revenue overview unavailable")
+            revenue_overview = None
+
     WebsiteTrafficDaily = _ceo_optional_model("marketing", "WebsiteTrafficDaily")
     WebsitePageDaily = _ceo_optional_model("marketing", "WebsitePageDaily")
     SeoQueryDaily = _ceo_optional_model("marketing", "SeoQueryDaily")
@@ -9872,7 +10048,7 @@ def ceo_dashboard(request):
         top_pages = []
 
     month_rows = []
-    month_keys = _ceo_month_keys(today)
+    month_keys = ceo_month_keys
     lead_month_map = {
         row["month"]: int(row["count"] or 0)
         for row in Lead.objects.filter(created_date__gte=month_keys[0])
@@ -9917,16 +10093,283 @@ def ceo_dashboard(request):
         )
     month_rows = _ceo_bar_rows(month_rows, ["leads", "opportunities", "revenue", "expenses", "net"])
 
+    production_status_labels = [row.get("status") or "Unknown" for row in production_rows]
+    production_status_values = [int(row.get("count") or 0) for row in production_rows]
+    active_production_count = production_active.count()
+    production_due_soon = production_active.filter(
+        bulk_deadline__range=(today, today + timedelta(days=7))
+    ).count()
+    urgent_production = production_active.filter(
+        Q(status="hold") | Q(bulk_deadline__lte=today + timedelta(days=2))
+    ).count()
+    shipment_pending_count = (
+        production_qs.filter(status__in=["done", "closed_won"])
+        .exclude(shipments__status__in=["shipped", "out_for_delivery", "delivered"])
+        .distinct()
+        .count()
+    )
+    production_completion_rate = _ceo_percent(
+        production_done_period,
+        production_done_period + active_production_count,
+    )
+    production_intelligence = {
+        "active_production": active_production_count,
+        "delayed_orders": production_delayed,
+        "urgent_production": urgent_production,
+        "shipment_pending": shipment_pending_count,
+        "due_soon": production_due_soon,
+        "completion_rate": production_completion_rate,
+    }
+
+    inventory_intelligence = _ceo_safe_inventory_snapshot(can_view_executive_financials)
+
+    quotation_count = 0
+    quote_to_invoice_count = 0
+    quotation_approval_rate = Decimal("0")
+    repeat_customer_rate = Decimal("0")
+    repeat_customer_count = 0
+    total_invoice_customers = 0
+    quotation_funnel_labels = ["Costings", "Approved", "Quoted", "Invoiced"]
+    quotation_funnel_values = [0, 0, 0, 0]
+    try:
+        costings_total = CostingHeader.objects.count()
+        approved_costings = CostingHeader.objects.filter(status="approved").count()
+        quotation_count = CostingHeader.objects.exclude(quotation_number="").count()
+        quote_to_invoice_count = (
+            CostingHeader.objects.exclude(quotation_number="")
+            .filter(invoices__isnull=False)
+            .distinct()
+            .count()
+        )
+        quotation_approval_rate = _ceo_percent(quote_to_invoice_count, quotation_count)
+        quotation_funnel_values = [
+            int(costings_total),
+            int(approved_costings),
+            int(quotation_count),
+            int(quote_to_invoice_count),
+        ]
+        if invoice_qs is not None:
+            customer_invoice_qs = (
+                invoice_qs.exclude(customer__isnull=True)
+                .values("customer_id")
+                .annotate(invoice_count=Count("id"))
+            )
+            total_invoice_customers = customer_invoice_qs.count()
+            repeat_customer_count = customer_invoice_qs.filter(invoice_count__gt=1).count()
+            repeat_customer_rate = _ceo_percent(repeat_customer_count, total_invoice_customers)
+    except (OperationalError, ProgrammingError):
+        logger.exception("ceo_dashboard: sales intelligence metrics unavailable")
+
+    sales_intelligence = {
+        "top_customers": top_customers,
+        "lead_conversion_rate": conversion_rate,
+        "quotation_approval_rate": quotation_approval_rate,
+        "repeat_customer_rate": repeat_customer_rate,
+        "repeat_customer_count": repeat_customer_count,
+        "total_invoice_customers": total_invoice_customers,
+        "quotation_count": quotation_count,
+        "quote_to_invoice_count": quote_to_invoice_count,
+    }
+
+    lifecycle_active_orders = 0
+    lifecycle_waiting_payment = None
+    lifecycle_in_production = 0
+    lifecycle_shipping = 0
+    lifecycle_completed_month = 0
+    try:
+        lifecycle_active_qs = OrderLifecycle.objects.exclude(status__in=["completed", "cancelled"])
+        lifecycle_completed_qs = OrderLifecycle.objects.filter(status="completed")
+        if side == "CA":
+            side_filter = (
+                Q(production_order__factory_location="ca")
+                | Q(invoice__invoice_region="CA")
+                | Q(invoice__currency="CAD")
+            )
+            lifecycle_active_qs = lifecycle_active_qs.filter(side_filter).distinct()
+            lifecycle_completed_qs = lifecycle_completed_qs.filter(side_filter).distinct()
+        elif side == "BD":
+            side_filter = (
+                Q(production_order__factory_location="bd")
+                | Q(invoice__invoice_region="BD")
+                | Q(invoice__currency="BDT")
+            )
+            lifecycle_active_qs = lifecycle_active_qs.filter(side_filter).distinct()
+            lifecycle_completed_qs = lifecycle_completed_qs.filter(side_filter).distinct()
+        lifecycle_active_orders = lifecycle_active_qs.count()
+        lifecycle_in_production = lifecycle_active_qs.filter(status="production").count()
+        lifecycle_shipping = lifecycle_active_qs.filter(status="shipping").count()
+        lifecycle_completed_month = lifecycle_completed_qs.filter(
+            updated_at__date__gte=today.replace(day=1),
+        ).count()
+        if can_view_executive_financials:
+            lifecycle_waiting_payment = lifecycle_active_qs.filter(
+                invoice__total_amount__gt=F("invoice__paid_amount")
+            ).count()
+    except (OperationalError, ProgrammingError):
+        logger.exception("ceo_dashboard: lifecycle operations metrics unavailable")
+
+    shipped_this_month = shipping_qs.filter(
+        ship_date__gte=today.replace(day=1),
+        status__in=["shipped", "out_for_delivery", "delivered"],
+    ).count()
+    operations_snapshot = {
+        "active_lifecycle_orders": lifecycle_active_orders,
+        "waiting_for_payment": lifecycle_waiting_payment,
+        "in_production": lifecycle_in_production,
+        "shipping": lifecycle_shipping,
+        "completed_lifecycles_month": lifecycle_completed_month,
+        "shipped_this_month": shipped_this_month,
+        "production_completion_rate": production_completion_rate,
+        "overdue_invoices": overdue_invoice_count if can_view_executive_financials else None,
+    }
+
+    profit_overview = None
+    low_margin_orders = []
+    top_profit_customers = []
+    profit_month_labels = []
+    profit_month_values = []
+    if can_view_executive_financials:
+        try:
+            lifecycle_qs = OrderLifecycle.objects.select_related("customer", "invoice", "production_order").exclude(
+                status="cancelled"
+            )
+            if side == "CA":
+                lifecycle_qs = lifecycle_qs.filter(
+                    Q(production_order__factory_location="ca")
+                    | Q(invoice__invoice_region="CA")
+                    | Q(invoice__currency="CAD")
+                ).distinct()
+            elif side == "BD":
+                lifecycle_qs = lifecycle_qs.filter(
+                    Q(production_order__factory_location="bd")
+                    | Q(invoice__invoice_region="BD")
+                    | Q(invoice__currency="BDT")
+                ).distinct()
+            profit_totals = lifecycle_qs.aggregate(
+                revenue=Sum("estimated_revenue"),
+                cost=Sum("estimated_cost"),
+                profit=Sum("estimated_profit"),
+            )
+            total_estimated_revenue = _ceo_decimal(profit_totals.get("revenue"))
+            total_estimated_cost = _ceo_decimal(profit_totals.get("cost"))
+            total_estimated_profit = _ceo_decimal(profit_totals.get("profit"))
+            low_margin_source = list(
+                lifecycle_qs.filter(estimated_revenue__gt=0, estimated_margin__lt=Decimal("15"))
+                .order_by("estimated_margin", "-estimated_revenue")[:5]
+            )
+            for lifecycle in low_margin_source:
+                customer = lifecycle.customer
+                low_margin_orders.append(
+                    {
+                        "label": (
+                            getattr(customer, "account_brand", "")
+                            or getattr(customer, "contact_name", "")
+                            or getattr(getattr(lifecycle, "invoice", None), "invoice_number", "")
+                            or getattr(getattr(lifecycle, "production_order", None), "order_code", "")
+                            or f"Lifecycle {lifecycle.pk}"
+                        ),
+                        "profit": lifecycle.estimated_profit,
+                        "margin": lifecycle.estimated_margin,
+                    }
+                )
+            top_profit_customers = list(
+                lifecycle_qs.filter(customer__isnull=False, estimated_profit__gt=0)
+                .values("customer__account_brand", "customer__contact_name")
+                .annotate(
+                    revenue=Sum("estimated_revenue"),
+                    profit=Sum("estimated_profit"),
+                    order_count=Count("id"),
+                )
+                .order_by("-profit")[:6]
+            )
+            profit_month_map = {
+                _ceo_month_key(row.get("month")): _ceo_decimal(row.get("profit"))
+                for row in lifecycle_qs.filter(updated_at__date__gte=ceo_month_keys[0])
+                .annotate(month=TruncMonth("updated_at"))
+                .values("month")
+                .annotate(profit=Sum("estimated_profit"))
+            }
+            for month_key in ceo_month_keys:
+                profit_month_labels.append(month_key.strftime("%b"))
+                profit_month_values.append(_to_float(profit_month_map.get(month_key, Decimal("0"))))
+            profit_overview = {
+                "estimated_revenue": total_estimated_revenue,
+                "estimated_cost": total_estimated_cost,
+                "estimated_gross_profit": total_estimated_profit,
+                "average_margin": _ceo_percent(total_estimated_profit, total_estimated_revenue),
+                "low_margin_orders": low_margin_orders,
+                "top_profit_customers": top_profit_customers,
+            }
+        except (OperationalError, ProgrammingError):
+            logger.exception("ceo_dashboard: profit overview unavailable")
+            profit_overview = None
+
+    ai_insight_cards = []
+    if production_delayed:
+        ai_insight_cards.append(
+            {"title": "Production delay risk", "detail": f"{production_delayed} production order(s) are delayed.", "tone": "bad"}
+        )
+    else:
+        ai_insight_cards.append({"title": "Production flow", "detail": "No active production delays are showing.", "tone": "good"})
+    if can_view_executive_financials and top_profit_customers:
+        row = top_profit_customers[0]
+        label = row.get("customer__account_brand") or row.get("customer__contact_name") or "Top customer"
+        ai_insight_cards.append(
+            {"title": "Profit concentration", "detail": f"{label} currently leads estimated profit.", "tone": "blue"}
+        )
+    if inventory_intelligence["low_fabric"]:
+        ai_insight_cards.append(
+            {"title": "Fabric stock watch", "detail": f"{inventory_intelligence['low_fabric']} fabric item(s) are below reorder level.", "tone": "warn"}
+        )
+    if quotation_count and quotation_approval_rate < Decimal("40"):
+        ai_insight_cards.append(
+            {"title": "Quotation conversion watch", "detail": f"Quote-to-invoice rate is {quotation_approval_rate}%.", "tone": "warn"}
+        )
+    else:
+        ai_insight_cards.append(
+            {"title": "Quotation movement", "detail": f"{quote_to_invoice_count} quoted costing(s) have moved to invoice.", "tone": "blue"}
+        )
+
+    executive_alert_cards = []
+    if can_view_executive_financials and overdue_invoice_count:
+        executive_alert_cards.append(
+            {"title": "Overdue invoices", "detail": f"{overdue_invoice_count} open invoice(s) are past due.", "tone": "bad"}
+        )
+    if inventory_intelligence["low_stock_count"]:
+        executive_alert_cards.append(
+            {"title": "Low inventory", "detail": f"{inventory_intelligence['low_stock_count']} material item(s) need reorder review.", "tone": "warn"}
+        )
+    if shipments_delayed:
+        executive_alert_cards.append(
+            {"title": "Delayed shipment", "detail": f"{shipments_delayed} shipment(s) are past ship date.", "tone": "warn"}
+        )
+    if can_view_executive_financials and inventory_intelligence["waste_material_count"]:
+        executive_alert_cards.append(
+            {"title": "Waste material", "detail": f"{inventory_intelligence['waste_material_count']} material item(s) have recorded waste or damage.", "tone": "warn"}
+        )
+    if can_view_executive_financials and low_margin_orders:
+        executive_alert_cards.append(
+            {"title": "Low margin order", "detail": f"{len(low_margin_orders)} order(s) are below 15% estimated margin.", "tone": "bad"}
+        )
+    if urgent_production:
+        executive_alert_cards.append(
+            {"title": "Urgent production", "detail": f"{urgent_production} production order(s) need immediate attention.", "tone": "bad"}
+        )
+    if not executive_alert_cards:
+        executive_alert_cards.append(
+            {"title": "Executive alerts clear", "detail": "No high-priority executive alerts are active for this period.", "tone": "good"}
+        )
+
     alerts = []
     if overdue_followups:
         alerts.append({"title": f"{overdue_followups} overdue follow-up(s)", "detail": "Sales follow-up dates are past due.", "tone": "bad"})
-    if overdue_invoice_count:
+    if can_view_executive_financials and overdue_invoice_count:
         alerts.append({"title": f"{overdue_invoice_count} overdue invoice(s)", "detail": "Open receivables need collection attention.", "tone": "bad"})
     if production_delayed:
         alerts.append({"title": f"{production_delayed} delayed production order(s)", "detail": "Bulk deadlines have passed on active orders.", "tone": "warn"})
     if shipments_delayed:
         alerts.append({"title": f"{shipments_delayed} delayed shipment(s)", "detail": "Ship dates have passed without delivery.", "tone": "warn"})
-    if finance_totals["net"] < 0:
+    if can_view_executive_financials and finance_totals["net"] < 0:
         alerts.append({"title": "Negative net cash movement", "detail": f"{period_label} outflows exceed inflows.", "tone": "bad"})
     if open_insights:
         alerts.append({"title": f"{open_insights} open marketing insight(s)", "detail": "Marketing recommendations are waiting for review.", "tone": "blue"})
@@ -9959,6 +10402,8 @@ def ceo_dashboard(request):
             "detail": f"{conversion_rate:.1f}% lead-to-opportunity rate.",
         },
     ]
+    if not can_view_executive_financials:
+        key_trends = [trend for trend in key_trends if trend["label"] != "Revenue"]
 
     kpi_cards = [
         {"label": "Revenue", "value": _format_money(finance_totals["revenue"]), "note": f"{period_label} accounting inflow.", "tone": "good"},
@@ -9970,6 +10415,42 @@ def ceo_dashboard(request):
         {"label": "Website Visitors", "value": _format_count(website_totals.get("visitors")), "note": f"{_format_count(website_totals.get('page_views'))} page views.", "tone": "blue"},
         {"label": "Receivables", "value": _format_money(invoice_open_total), "note": f"{overdue_invoice_count:,} overdue invoice(s).", "tone": "warn" if overdue_invoice_count else "blue"},
     ]
+    if not can_view_executive_financials:
+        kpi_cards = [
+            card
+            for card in kpi_cards
+            if card["label"] not in {"Revenue", "Net Cash", "Receivables"}
+        ]
+        for card in kpi_cards:
+            if card["label"] == "Open Pipeline":
+                card["value"] = _format_count(open_opps)
+                card["note"] = "Open opportunity rows. Pipeline value is restricted."
+        kpi_cards.append(
+            {
+                "label": "Financials",
+                "value": "Restricted",
+                "note": "Internal financial metrics require costing permission.",
+                "tone": "warn",
+            }
+        )
+
+    ceo_chart_data = {
+        "production_status_labels": production_status_labels,
+        "production_status_values": production_status_values,
+        "inventory_usage_labels": inventory_intelligence["category_usage_labels"],
+        "inventory_usage_values": inventory_intelligence["category_usage_values"],
+        "quotation_funnel_labels": quotation_funnel_labels,
+        "quotation_funnel_values": quotation_funnel_values,
+    }
+    if can_view_executive_financials:
+        ceo_chart_data.update(
+            {
+                "invoice_month_labels": invoice_month_labels,
+                "invoice_month_values": invoice_month_values,
+                "profit_month_labels": profit_month_labels,
+                "profit_month_values": profit_month_values,
+            }
+        )
 
     context = {
         "today": today,
@@ -9977,8 +10458,18 @@ def ceo_dashboard(request):
         "period_label": period_label,
         "filter_values": filter_values,
         "side_options": [("", "All sides"), ("CA", "Canada"), ("BD", "Bangladesh")],
+        "can_view_executive_financials": can_view_executive_financials,
         "kpi_cards": kpi_cards,
         "alerts": alerts,
+        "executive_alert_cards": executive_alert_cards,
+        "ai_insight_cards": ai_insight_cards,
+        "revenue_overview": revenue_overview,
+        "profit_overview": profit_overview,
+        "production_intelligence": production_intelligence,
+        "inventory_intelligence": inventory_intelligence,
+        "sales_intelligence": sales_intelligence,
+        "operations_snapshot": operations_snapshot,
+        "ceo_chart_data": ceo_chart_data,
         "key_trends": key_trends,
         "month_rows": month_rows,
         "lead_source_rows": lead_source_rows,
@@ -10010,11 +10501,11 @@ def ceo_dashboard(request):
             "shipments_delayed": shipments_delayed,
         },
         "finance_summary": {
-            "revenue": finance_totals["revenue"],
-            "expenses": finance_totals["expenses"],
-            "net": finance_totals["net"],
-            "invoice_open_total": invoice_open_total,
-            "overdue_invoice_count": overdue_invoice_count,
+            "revenue": finance_totals["revenue"] if can_view_executive_financials else None,
+            "expenses": finance_totals["expenses"] if can_view_executive_financials else None,
+            "net": finance_totals["net"] if can_view_executive_financials else None,
+            "invoice_open_total": invoice_open_total if can_view_executive_financials else None,
+            "overdue_invoice_count": overdue_invoice_count if can_view_executive_financials else None,
         },
         "sales_summary": {
             "leads_period": leads_period,

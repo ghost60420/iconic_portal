@@ -253,16 +253,106 @@
 
   .ceo-empty{ padding:22px; color:var(--ceo-muted); font-size:13px; font-weight:800; text-align:center; }
 
+  .ceo-exec-grid{
+    display:grid;
+    grid-template-columns:repeat(3, minmax(0,1fr));
+    gap:12px;
+    margin-bottom:16px;
+  }
+
+  .ceo-exec-card{
+    border:1px solid var(--ceo-line);
+    border-radius:18px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.94), rgba(2,6,23,0.94));
+    padding:14px;
+    min-height:100%;
+  }
+
+  .ceo-exec-card h2{
+    margin:0 0 10px;
+    color:var(--ceo-text);
+    font-size:15px;
+    font-weight:950;
+  }
+
+  .ceo-exec-note{
+    margin:0 0 12px;
+    color:var(--ceo-muted);
+    font-size:12px;
+    line-height:1.45;
+    font-weight:750;
+  }
+
+  .ceo-stat-list{ display:grid; gap:8px; margin:0; padding:0; list-style:none; }
+  .ceo-stat{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:12px;
+    padding:9px 0;
+    border-top:1px solid rgba(148,163,184,0.11);
+    color:#e5e7eb;
+    font-size:12px;
+    font-weight:850;
+  }
+  .ceo-stat:first-child{ border-top:0; }
+  .ceo-stat span{ color:var(--ceo-muted); }
+  .ceo-stat strong{ text-align:right; font-size:13px; font-weight:950; }
+
+  .ceo-protected{
+    border:1px dashed rgba(251,191,36,0.36);
+    border-radius:16px;
+    padding:14px;
+    color:#fde68a;
+    background:rgba(251,191,36,0.08);
+    font-size:12px;
+    line-height:1.45;
+    font-weight:850;
+  }
+
+  .ceo-alert-grid,
+  .ceo-insight-grid{
+    display:grid;
+    grid-template-columns:repeat(3, minmax(0,1fr));
+    gap:12px;
+    margin-bottom:16px;
+  }
+
+  .ceo-chart-grid{
+    display:grid;
+    grid-template-columns:repeat(2, minmax(0,1fr));
+    gap:12px;
+    padding:14px;
+  }
+
+  .ceo-chart-card{
+    border:1px solid rgba(148,163,184,0.17);
+    border-radius:16px;
+    background:rgba(3,7,18,0.72);
+    padding:12px;
+  }
+
+  .ceo-chart-card h3{ margin:0 0 10px; font-size:13px; font-weight:950; }
+  .ceo-chart-shell{ position:relative; min-height:230px; }
+  .ceo-chart-shell canvas{ width:100% !important; height:230px !important; }
+
   @media (max-width:1180px){
     .ceo-kpis{ grid-template-columns:repeat(2, minmax(0,1fr)); }
     .ceo-layout{ grid-template-columns:1fr; }
+    .ceo-exec-grid,
+    .ceo-alert-grid,
+    .ceo-insight-grid{ grid-template-columns:repeat(2, minmax(0,1fr)); }
   }
   @media (max-width:760px){
     .ceo-hero{ padding:16px; border-radius:18px; }
     .ceo-title{ font-size:24px; }
     .ceo-filter,
     .ceo-kpis,
-    .ceo-mini-grid{ grid-template-columns:1fr; }
+    .ceo-mini-grid,
+    .ceo-exec-grid,
+    .ceo-alert-grid,
+    .ceo-insight-grid,
+    .ceo-chart-grid{ grid-template-columns:1fr; }
     .ceo-filter-actions{ align-items:stretch; flex-direction:column; }
     .ceo-btn{ width:100%; }
   }
@@ -319,13 +409,178 @@
     {% endfor %}
   </div>
 
+  <section class="ceo-section">
+    <div class="ceo-section-head">
+      <div>
+        <h2 class="ceo-section-title">Executive Intelligence</h2>
+        <div class="ceo-section-note">
+          {% if can_view_executive_financials %}
+            Management view of revenue, profit, production, inventory, sales, and lifecycle operations.
+          {% else %}
+            Management view of production, inventory, sales, and lifecycle operations. Protected financial metrics are hidden.
+          {% endif %}
+        </div>
+      </div>
+      {% if not can_view_executive_financials %}
+        <span class="ceo-badge ceo-badge--warn">Financials restricted</span>
+      {% endif %}
+    </div>
+    <div class="ceo-exec-grid">
+      {% if can_view_executive_financials and revenue_overview %}
+        <article class="ceo-exec-card">
+          <h2>Revenue Overview</h2>
+          <ul class="ceo-stat-list">
+            <li class="ceo-stat"><span>Total invoiced</span><strong>{{ revenue_overview.total_invoiced|floatformat:2|intcomma }}</strong></li>
+            <li class="ceo-stat"><span>Total paid</span><strong>{{ revenue_overview.total_paid|floatformat:2|intcomma }}</strong></li>
+            <li class="ceo-stat"><span>Outstanding balance</span><strong>{{ revenue_overview.outstanding_balance|floatformat:2|intcomma }}</strong></li>
+            <li class="ceo-stat"><span>Overdue invoices</span><strong>{{ revenue_overview.overdue_invoice_count|intcomma }}</strong></li>
+          </ul>
+        </article>
+      {% elif not can_view_executive_financials %}
+        <article class="ceo-exec-card">
+          <h2>Protected Financial Metrics</h2>
+          <div class="ceo-protected">Internal financial metrics require approved costing access.</div>
+        </article>
+      {% endif %}
+
+      {% if can_view_executive_financials and profit_overview %}
+        <article class="ceo-exec-card">
+          <h2>Profit Overview</h2>
+          <ul class="ceo-stat-list">
+            <li class="ceo-stat"><span>Estimated revenue</span><strong>{{ profit_overview.estimated_revenue|floatformat:2|intcomma }}</strong></li>
+            <li class="ceo-stat"><span>Estimated gross profit</span><strong>{{ profit_overview.estimated_gross_profit|floatformat:2|intcomma }}</strong></li>
+            <li class="ceo-stat"><span>Average margin</span><strong>{{ profit_overview.average_margin|floatformat:2 }}%</strong></li>
+            <li class="ceo-stat"><span>Low margin orders</span><strong>{{ profit_overview.low_margin_orders|length|intcomma }}</strong></li>
+          </ul>
+          <p class="ceo-exec-note" style="margin-top:12px;">Highest profit customers</p>
+          <ul class="ceo-stat-list">
+            {% for row in profit_overview.top_profit_customers|slice:":3" %}
+              <li class="ceo-stat">
+                <span>{{ row.customer__account_brand|default:row.customer__contact_name|default:"Customer" }}</span>
+                <strong>{{ row.profit|floatformat:2|intcomma }}</strong>
+              </li>
+            {% empty %}
+              <li class="ceo-stat"><span>No profit customer data yet</span><strong>0</strong></li>
+            {% endfor %}
+          </ul>
+        </article>
+      {% endif %}
+
+      <article class="ceo-exec-card">
+        <h2>Production Intelligence</h2>
+        <ul class="ceo-stat-list">
+          <li class="ceo-stat"><span>Active production</span><strong>{{ production_intelligence.active_production|intcomma }}</strong></li>
+          <li class="ceo-stat"><span>Delayed orders</span><strong>{{ production_intelligence.delayed_orders|intcomma }}</strong></li>
+          <li class="ceo-stat"><span>Urgent production</span><strong>{{ production_intelligence.urgent_production|intcomma }}</strong></li>
+          <li class="ceo-stat"><span>Shipment pending</span><strong>{{ production_intelligence.shipment_pending|intcomma }}</strong></li>
+        </ul>
+      </article>
+
+      <article class="ceo-exec-card">
+        <h2>Inventory Intelligence</h2>
+        <ul class="ceo-stat-list">
+          <li class="ceo-stat"><span>Low stock alerts</span><strong>{{ inventory_intelligence.low_stock_count|intcomma }}</strong></li>
+          <li class="ceo-stat"><span>Low fabric / trims / packaging</span><strong>{{ inventory_intelligence.low_fabric|intcomma }} / {{ inventory_intelligence.low_trims|intcomma }} / {{ inventory_intelligence.low_packaging|intcomma }}</strong></li>
+          <li class="ceo-stat"><span>Reserved stock</span><strong>{{ inventory_intelligence.reserved_stock|floatformat:2|intcomma }}</strong></li>
+          <li class="ceo-stat"><span>Consumed material</span><strong>{{ inventory_intelligence.consumed_qty|floatformat:2|intcomma }}</strong></li>
+          {% if can_view_executive_financials %}
+            <li class="ceo-stat"><span>Inventory value</span><strong>{{ inventory_intelligence.total_value|floatformat:2|intcomma }}</strong></li>
+            <li class="ceo-stat"><span>Dead stock / waste estimate</span><strong>{{ inventory_intelligence.dead_stock_value|floatformat:2|intcomma }} / {{ inventory_intelligence.waste_estimate|floatformat:2|intcomma }}</strong></li>
+          {% endif %}
+        </ul>
+        <p class="ceo-exec-note" style="margin-top:12px;">Highest usage materials</p>
+        <ul class="ceo-stat-list">
+          {% for row in inventory_intelligence.highest_usage_materials|slice:":3" %}
+            <li class="ceo-stat"><span>{{ row.label }} · {{ row.group }}</span><strong>{{ row.used|floatformat:2|intcomma }}</strong></li>
+          {% empty %}
+            <li class="ceo-stat"><span>No production usage recorded</span><strong>0</strong></li>
+          {% endfor %}
+        </ul>
+      </article>
+
+      <article class="ceo-exec-card">
+        <h2>Sales Intelligence</h2>
+        <ul class="ceo-stat-list">
+          <li class="ceo-stat"><span>Lead conversion rate</span><strong>{{ sales_intelligence.lead_conversion_rate|floatformat:1 }}%</strong></li>
+          <li class="ceo-stat"><span>Quotation approval rate</span><strong>{{ sales_intelligence.quotation_approval_rate|floatformat:2 }}%</strong></li>
+          <li class="ceo-stat"><span>Repeat customer rate</span><strong>{{ sales_intelligence.repeat_customer_rate|floatformat:2 }}%</strong></li>
+          <li class="ceo-stat"><span>Quoted to invoiced</span><strong>{{ sales_intelligence.quote_to_invoice_count|intcomma }} / {{ sales_intelligence.quotation_count|intcomma }}</strong></li>
+        </ul>
+      </article>
+
+      <article class="ceo-exec-card">
+        <h2>Operations Snapshot</h2>
+        <ul class="ceo-stat-list">
+          <li class="ceo-stat"><span>Active lifecycle orders</span><strong>{{ operations_snapshot.active_lifecycle_orders|intcomma }}</strong></li>
+          <li class="ceo-stat"><span>Shipped this month</span><strong>{{ operations_snapshot.shipped_this_month|intcomma }}</strong></li>
+          <li class="ceo-stat"><span>Production completion rate</span><strong>{{ operations_snapshot.production_completion_rate|floatformat:2 }}%</strong></li>
+          <li class="ceo-stat"><span>Lifecycle in production / shipping</span><strong>{{ operations_snapshot.in_production|intcomma }} / {{ operations_snapshot.shipping|intcomma }}</strong></li>
+          {% if can_view_executive_financials %}
+            <li class="ceo-stat"><span>Waiting payment / overdue invoices</span><strong>{{ operations_snapshot.waiting_for_payment|intcomma }} / {{ operations_snapshot.overdue_invoices|intcomma }}</strong></li>
+          {% endif %}
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <section class="ceo-section">
+    <div class="ceo-section-head">
+      <div>
+        <h2 class="ceo-section-title">Visual Analytics</h2>
+        <div class="ceo-section-note">Lightweight trend charts using the same Chart.js stack as the CRM dashboard.</div>
+      </div>
+    </div>
+    <div class="ceo-chart-grid">
+      {% if can_view_executive_financials %}
+        <div class="ceo-chart-card">
+          <h3>Monthly Revenue</h3>
+          <div class="ceo-chart-shell"><canvas data-ceo-chart="monthly-revenue"></canvas></div>
+        </div>
+        <div class="ceo-chart-card">
+          <h3>Profit Trend</h3>
+          <div class="ceo-chart-shell"><canvas data-ceo-chart="profit-trend"></canvas></div>
+        </div>
+      {% endif %}
+      <div class="ceo-chart-card">
+        <h3>Production Status</h3>
+        <div class="ceo-chart-shell"><canvas data-ceo-chart="production-status"></canvas></div>
+      </div>
+      <div class="ceo-chart-card">
+        <h3>Inventory Category Usage</h3>
+        <div class="ceo-chart-shell"><canvas data-ceo-chart="inventory-usage"></canvas></div>
+      </div>
+      <div class="ceo-chart-card">
+        <h3>Quotation Conversion Funnel</h3>
+        <div class="ceo-chart-shell"><canvas data-ceo-chart="quotation-funnel"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="ceo-insight-grid">
+    {% for insight in ai_insight_cards %}
+      <div class="ceo-alert ceo-alert--{{ insight.tone }}">
+        <strong>{{ insight.title }}</strong>
+        <p>{{ insight.detail }}</p>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="ceo-alert-grid">
+    {% for alert in executive_alert_cards %}
+      <div class="ceo-alert ceo-alert--{{ alert.tone }}">
+        <strong>{{ alert.title }}</strong>
+        <p>{{ alert.detail }}</p>
+      </div>
+    {% endfor %}
+  </div>
+
   <div class="ceo-layout">
     <div>
       <section class="ceo-section">
         <div class="ceo-section-head">
           <div>
             <h2 class="ceo-section-title">Key trends</h2>
-            <div class="ceo-section-note">Monthly sales and finance movement.</div>
+            <div class="ceo-section-note">{% if can_view_executive_financials %}Monthly sales and finance movement.{% else %}Monthly sales movement. Financial trend bars are restricted.{% endif %}</div>
           </div>
         </div>
         {% if month_rows %}
@@ -335,12 +590,18 @@
               <div class="ceo-bars">
                 <div class="ceo-bar ceo-bar-leads"><span style="width:{{ row.leads_bar }}%"></span></div>
                 <div class="ceo-bar ceo-bar-opps"><span style="width:{{ row.opportunities_bar }}%"></span></div>
-                <div class="ceo-bar ceo-bar-revenue"><span style="width:{{ row.revenue_bar }}%"></span></div>
-                <div class="ceo-bar ceo-bar-expense"><span style="width:{{ row.expenses_bar }}%"></span></div>
-                <div class="ceo-bar ceo-bar-net"><span style="width:{{ row.net_bar }}%"></span></div>
+                {% if can_view_executive_financials %}
+                  <div class="ceo-bar ceo-bar-revenue"><span style="width:{{ row.revenue_bar }}%"></span></div>
+                  <div class="ceo-bar ceo-bar-expense"><span style="width:{{ row.expenses_bar }}%"></span></div>
+                  <div class="ceo-bar ceo-bar-net"><span style="width:{{ row.net_bar }}%"></span></div>
+                {% endif %}
               </div>
               <div class="ceo-right">
-                <span class="ceo-badge {% if row.net >= 0 %}ceo-badge--good{% else %}ceo-badge--bad{% endif %}">CAD {{ row.net|floatformat:0|intcomma }}</span>
+                {% if can_view_executive_financials %}
+                  <span class="ceo-badge {% if row.net >= 0 %}ceo-badge--good{% else %}ceo-badge--bad{% endif %}">CAD {{ row.net|floatformat:0|intcomma }}</span>
+                {% else %}
+                  <span class="ceo-badge ceo-badge--blue">{{ row.leads|intcomma }} leads / {{ row.opportunities|intcomma }} opps</span>
+                {% endif %}
               </div>
             </div>
           {% endfor %}
@@ -492,10 +753,19 @@
         </div>
         <div class="ceo-table-wrap">
           <table class="ceo-table ceo-table--compact">
-            <thead><tr><th>Customer</th><th class="ceo-right">Pipeline</th></tr></thead>
+            <thead><tr><th>Customer</th><th class="ceo-right">{% if can_view_executive_financials %}Pipeline{% else %}Activity{% endif %}</th></tr></thead>
             <tbody>
               {% for row in top_customers %}
-                <tr><td>{{ row.label }}<br><span class="ceo-muted">{{ row.count }} opportunity row(s)</span></td><td class="ceo-right">CAD {{ row.value|floatformat:2|intcomma }}</td></tr>
+                <tr>
+                  <td>{{ row.label }}<br><span class="ceo-muted">{{ row.count }} opportunity row(s)</span></td>
+                  <td class="ceo-right">
+                    {% if can_view_executive_financials %}
+                      CAD {{ row.value|floatformat:2|intcomma }}
+                    {% else %}
+                      {{ row.count|intcomma }} row(s)
+                    {% endif %}
+                  </td>
+                </tr>
               {% empty %}
                 <tr><td colspan="2"><div class="ceo-empty">No customer pipeline in period.</div></td></tr>
               {% endfor %}
@@ -519,9 +789,13 @@
               <tr><td>Won / Lost</td><td class="ceo-right">{{ sales_summary.won_period|intcomma }} / {{ sales_summary.lost_period|intcomma }}</td></tr>
               <tr><td>Production delayed</td><td class="ceo-right">{{ operations_summary.production_delayed|intcomma }}</td></tr>
               <tr><td>Shipments delayed</td><td class="ceo-right">{{ operations_summary.shipments_delayed|intcomma }}</td></tr>
-              <tr><td>Accounting revenue</td><td class="ceo-right">CAD {{ finance_summary.revenue|floatformat:2|intcomma }}</td></tr>
-              <tr><td>Accounting expenses</td><td class="ceo-right">CAD {{ finance_summary.expenses|floatformat:2|intcomma }}</td></tr>
-              <tr><td>Open receivables</td><td class="ceo-right">CAD {{ finance_summary.invoice_open_total|floatformat:2|intcomma }}</td></tr>
+              {% if can_view_executive_financials %}
+                <tr><td>Accounting revenue</td><td class="ceo-right">CAD {{ finance_summary.revenue|floatformat:2|intcomma }}</td></tr>
+                <tr><td>Accounting expenses</td><td class="ceo-right">CAD {{ finance_summary.expenses|floatformat:2|intcomma }}</td></tr>
+                <tr><td>Open receivables</td><td class="ceo-right">CAD {{ finance_summary.invoice_open_total|floatformat:2|intcomma }}</td></tr>
+              {% else %}
+                <tr><td>Financial summary</td><td class="ceo-right"><span class="ceo-badge ceo-badge--warn">Restricted</span></td></tr>
+              {% endif %}
             </tbody>
           </table>
         </div>
@@ -529,5 +803,90 @@
     </div>
   </div>
 </div>
+
+{{ ceo_chart_data|json_script:"ceo-dashboard-data" }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+  (function(){
+    var raw = document.getElementById("ceo-dashboard-data");
+    if (!raw || !window.Chart) return;
+    var data = JSON.parse(raw.textContent || "{}");
+    var palette = ["#60a5fa", "#4ade80", "#fbbf24", "#fb7185", "#a78bfa", "#2dd4bf", "#f5c451"];
+
+    function labels(key, fallback){
+      return data[key] && data[key].length ? data[key] : fallback;
+    }
+
+    function values(key, length){
+      return data[key] && data[key].length ? data[key] : Array(length || 1).fill(0);
+    }
+
+    function baseOptions(){
+      return {
+        responsive:true,
+        maintainAspectRatio:false,
+        plugins:{
+          legend:{labels:{color:"#dbe5f3", boxWidth:10, boxHeight:10, usePointStyle:true}},
+          tooltip:{backgroundColor:"rgba(7,13,24,.96)", titleColor:"#f8fafc", bodyColor:"#dbe5f3"}
+        },
+        scales:{
+          x:{ticks:{color:"#94a3b8"}, grid:{color:"rgba(148,163,184,.08)"}},
+          y:{ticks:{color:"#94a3b8"}, grid:{color:"rgba(148,163,184,.08)"}}
+        }
+      };
+    }
+
+    function buildConfig(key){
+      {% if can_view_executive_financials %}
+      if (key === "monthly-revenue") {
+        var revenueLabels = labels("invoice_month_labels", ["Month"]);
+        return {
+          type:"line",
+          data:{labels:revenueLabels, datasets:[{label:"Invoiced", data:values("invoice_month_values", revenueLabels.length), borderColor:"#4ade80", backgroundColor:"rgba(74,222,128,.10)", tension:.35, fill:true}]},
+          options:baseOptions()
+        };
+      }
+      if (key === "profit-trend") {
+        var profitLabels = labels("profit_month_labels", ["Month"]);
+        return {
+          type:"bar",
+          data:{labels:profitLabels, datasets:[{label:"Estimated profit", data:values("profit_month_values", profitLabels.length), backgroundColor:"rgba(167,139,250,.82)", borderRadius:10}]},
+          options:baseOptions()
+        };
+      }
+      {% endif %}
+      if (key === "production-status") {
+        var prodLabels = labels("production_status_labels", ["No data"]);
+        return {
+          type:"doughnut",
+          data:{labels:prodLabels, datasets:[{data:values("production_status_values", prodLabels.length), backgroundColor:palette}]},
+          options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:"bottom", labels:{color:"#dbe5f3", boxWidth:10, boxHeight:10, usePointStyle:true}}}}
+        };
+      }
+      if (key === "inventory-usage") {
+        var invLabels = labels("inventory_usage_labels", ["No usage"]);
+        return {
+          type:"bar",
+          data:{labels:invLabels, datasets:[{label:"Used", data:values("inventory_usage_values", invLabels.length), backgroundColor:"rgba(45,212,191,.78)", borderRadius:10}]},
+          options:Object.assign(baseOptions(), {indexAxis:"y"})
+        };
+      }
+      if (key === "quotation-funnel") {
+        var quoteLabels = labels("quotation_funnel_labels", ["Costings", "Approved", "Quoted", "Invoiced"]);
+        return {
+          type:"bar",
+          data:{labels:quoteLabels, datasets:[{label:"Records", data:values("quotation_funnel_values", quoteLabels.length), backgroundColor:palette, borderRadius:10}]},
+          options:baseOptions()
+        };
+      }
+      return null;
+    }
+
+    document.querySelectorAll("canvas[data-ceo-chart]").forEach(function(canvas){
+      var config = buildConfig(canvas.dataset.ceoChart);
+      if (config) new window.Chart(canvas, config);
+    });
+  })();
+</script>
 
 {% endblock %}
