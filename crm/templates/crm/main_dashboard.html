@@ -16,6 +16,7 @@
 {% url 'production_profit_report' as production_profit_url %}
 {% url 'ai_hub' as ai_url %}
 {% url 'ai_assistant' as ai_assistant_url %}
+{% url 'ai_operations_assistant' as ai_operations_url %}
 {% url 'lead_add' as lead_add_url %}
 {% url 'cost_sheet_create' as cost_create_url %}
 {% url 'add_opportunity' as opportunity_add_url %}
@@ -216,7 +217,12 @@
             </div>
           </details>
 
-          {% if ai_url %}
+          {% if request.user|can_access:"can_ai" and ai_operations_url %}
+            <a class="dashboard-ai-link" href="{{ ai_operations_url }}">
+              <i data-lucide="sparkles"></i>
+              AI Operations
+            </a>
+          {% elif ai_url %}
             <a class="dashboard-ai-link" href="{{ ai_url }}">
               <i data-lucide="sparkles"></i>
               AI Assistant
@@ -300,7 +306,12 @@
                       <span><strong>Start Discovery Job</strong><small>Launch lead discovery</small></span>
                     </a>
                   {% endif %}
-                  {% if request.user|can_access:"can_ai" and ai_assistant_url or request.user|can_access:"can_ai" and ai_url %}
+                  {% if request.user|can_access:"can_ai" and ai_operations_url %}
+                    <a class="dashboard-action-link" href="{{ ai_operations_url }}">
+                      <span class="dashboard-action-link-icon"><i data-lucide="sparkles"></i></span>
+                      <span><strong>Open AI Operations</strong><small>Review recommendations and risks</small></span>
+                    </a>
+                  {% elif request.user|can_access:"can_ai" and ai_assistant_url or request.user|can_access:"can_ai" and ai_url %}
                     <a class="dashboard-action-link" href="{{ ai_assistant_url|default:ai_url }}">
                       <span class="dashboard-action-link-icon"><i data-lucide="sparkles"></i></span>
                       <span><strong>Open AI Assistant</strong><small>Ask for CRM support</small></span>

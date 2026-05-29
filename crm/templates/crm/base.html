@@ -376,6 +376,7 @@
     {% url 'shipment_add' as ship_add_url %}
     {% url 'main_dashboard' as main_dash_url %}
     {% url 'ceo_dashboard' as ceo_dash_url %}
+    {% url 'ai_operations_assistant' as ai_operations_url %}
     {% url 'ai_executive_advisor' as ai_executive_advisor_url %}
     {% url 'daily_ceo_briefing' as daily_ceo_briefing_url %}
     {% url 'leadbrain_home' as leadbrain_home_url %}
@@ -515,12 +516,13 @@
 
         {% if can_ai_tools or leadbrain_home_url or can_ceo_tools %}
           <div class="crm-dropdown" id="aiToolsDropdown">
-            <a href="{% if can_ai_tools and ai_hub_url %}{{ ai_hub_url }}{% elif leadbrain_home_url %}{{ leadbrain_home_url }}{% elif ceo_dash_url %}{{ ceo_dash_url }}{% else %}#{% endif %}" class="crm-nav-item {% if current_url == 'ai_hub' or current_url == 'leadbrain_home' or current_url == 'ceo_dashboard' or current_url == 'ai_executive_advisor' or current_url == 'daily_ceo_briefing' %}active{% endif %}" id="aiToolsBtn" aria-haspopup="true" aria-expanded="false">
+            <a href="{% if can_ai_tools and ai_hub_url %}{{ ai_hub_url }}{% elif leadbrain_home_url %}{{ leadbrain_home_url }}{% elif ceo_dash_url %}{{ ceo_dash_url }}{% else %}#{% endif %}" class="crm-nav-item {% if current_url == 'ai_hub' or current_url == 'leadbrain_home' or current_url == 'ceo_dashboard' or current_url == 'ai_operations_assistant' or current_url == 'ai_executive_advisor' or current_url == 'daily_ceo_briefing' %}active{% endif %}" id="aiToolsBtn" aria-haspopup="true" aria-expanded="false">
               <span>🤖</span><strong>AI Tools</strong>
             </a>
             <div class="crm-dropdown-menu" role="menu">
               <div class="crm-dd-title">AI Tools</div>
               {% if can_ai_tools and ai_hub_url %}<a class="crm-dd-item" href="{{ ai_hub_url }}">AI Brain</a>{% endif %}
+              {% if can_ai_tools and ai_operations_url or can_ceo_tools and ai_operations_url %}<a class="crm-dd-item" href="{{ ai_operations_url }}">AI Operations Assistant</a>{% endif %}
               {% if leadbrain_home_url %}<a class="crm-dd-item" href="{{ leadbrain_home_url }}">Lead Brain</a>{% endif %}
               {% if can_ceo_tools and ai_executive_advisor_url %}<a class="crm-dd-item" href="{{ ai_executive_advisor_url }}">AI Executive Advisor</a>{% endif %}
               {% if can_ceo_tools and daily_ceo_briefing_url %}<a class="crm-dd-item" href="{{ daily_ceo_briefing_url }}">AM Daily Briefing</a>{% endif %}

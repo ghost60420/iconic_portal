@@ -1,0 +1,335 @@
+{% extends "crm/base.html" %}
+{% load humanize %}
+{% block content %}
+
+<style>
+  :root{
+    --ops-bg:#030712;
+    --ops-panel:#0b1220;
+    --ops-line:#263348;
+    --ops-text:#f8fafc;
+    --ops-muted:#94a3b8;
+    --ops-blue:#60a5fa;
+    --ops-good:#4ade80;
+    --ops-warn:#fbbf24;
+    --ops-bad:#fb7185;
+    --ops-gold:#f5c451;
+  }
+
+  .ops-wrap{ max-width:1420px; margin:0 auto; color:var(--ops-text); }
+  .ops-hero{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:18px;
+    flex-wrap:wrap;
+    padding:22px;
+    border:1px solid rgba(96,165,250,0.30);
+    border-radius:22px;
+    background:
+      linear-gradient(135deg, rgba(96,165,250,0.16), transparent 36%),
+      linear-gradient(180deg, rgba(15,23,42,0.96), rgba(2,6,23,0.96));
+    box-shadow:0 24px 60px rgba(0,0,0,0.42);
+    margin-bottom:16px;
+  }
+  .ops-kicker{ color:var(--ops-gold); font-size:12px; font-weight:900; text-transform:uppercase; letter-spacing:.08em; margin-bottom:6px; }
+  .ops-title{ margin:0; font-size:30px; line-height:1.1; font-weight:950; }
+  .ops-sub{ margin-top:8px; max-width:860px; color:var(--ops-muted); font-size:13px; line-height:1.5; font-weight:750; }
+  .ops-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+  .ops-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-height:38px;
+    padding:9px 13px;
+    border-radius:14px;
+    border:1px solid rgba(148,163,184,0.25);
+    background:rgba(15,23,42,0.82);
+    color:var(--ops-text);
+    text-decoration:none;
+    font-size:12px;
+    font-weight:900;
+  }
+  .ops-btn:hover{ color:var(--ops-text); border-color:rgba(245,196,81,0.55); }
+  .ops-btn--gold{ background:linear-gradient(135deg, #f6d365, #d9a622); color:#111827; border-color:rgba(245,196,81,0.55); }
+  .ops-btn--gold:hover{ color:#111827; }
+
+  .ops-summary{
+    display:grid;
+    grid-template-columns:repeat(6, minmax(0,1fr));
+    gap:12px;
+    margin-bottom:16px;
+  }
+  .ops-card{
+    padding:14px;
+    border:1px solid var(--ops-line);
+    border-radius:18px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.94), rgba(2,6,23,0.94));
+    box-shadow:0 18px 44px rgba(0,0,0,0.30);
+  }
+  .ops-card span{ display:block; color:var(--ops-muted); font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.07em; }
+  .ops-card strong{ display:block; margin-top:8px; color:var(--ops-text); font-size:20px; line-height:1.12; font-weight:950; }
+  .ops-card small{ display:block; margin-top:7px; color:var(--ops-muted); font-size:11px; line-height:1.45; font-weight:800; }
+  .ops-card--good{ border-color:rgba(74,222,128,0.28); }
+  .ops-card--warn{ border-color:rgba(251,191,36,0.30); }
+  .ops-card--bad{ border-color:rgba(251,113,133,0.34); }
+  .ops-card--blue{ border-color:rgba(96,165,250,0.30); }
+
+  .ops-grid{
+    display:grid;
+    grid-template-columns:minmax(0,1.32fr) minmax(380px,.98fr);
+    gap:14px;
+    align-items:start;
+  }
+  .ops-section{
+    border:1px solid var(--ops-line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.94), rgba(2,6,23,0.94));
+    overflow:hidden;
+    margin-bottom:14px;
+  }
+  .ops-section-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    flex-wrap:wrap;
+    padding:14px 16px;
+    border-bottom:1px solid rgba(148,163,184,0.16);
+  }
+  .ops-section-title{ margin:0; font-size:15px; font-weight:900; }
+  .ops-section-note{ color:var(--ops-muted); font-size:12px; font-weight:800; }
+  .ops-list{ display:grid; gap:10px; padding:14px; }
+  .ops-item{
+    display:flex;
+    justify-content:space-between;
+    gap:14px;
+    border:1px solid rgba(148,163,184,0.17);
+    border-radius:16px;
+    background:rgba(3,7,18,0.72);
+    padding:12px;
+    color:var(--ops-text);
+    text-decoration:none;
+  }
+  .ops-item:hover{ color:var(--ops-text); border-color:rgba(96,165,250,0.45); }
+  .ops-item strong{ display:block; font-size:13px; font-weight:900; }
+  .ops-item p{ margin:5px 0 0; color:var(--ops-muted); font-size:12px; line-height:1.45; font-weight:750; }
+  .ops-empty{ padding:20px; color:var(--ops-muted); font-size:13px; font-weight:800; text-align:center; }
+  .ops-badge{
+    display:inline-flex;
+    align-items:center;
+    min-height:24px;
+    border-radius:999px;
+    padding:4px 9px;
+    border:1px solid rgba(148,163,184,0.26);
+    color:#e2e8f0;
+    background:rgba(148,163,184,0.10);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    white-space:nowrap;
+  }
+  .ops-badge--good{ color:#bbf7d0; background:rgba(74,222,128,0.12); border-color:rgba(74,222,128,0.34); }
+  .ops-badge--warn{ color:#fde68a; background:rgba(251,191,36,0.12); border-color:rgba(251,191,36,0.34); }
+  .ops-badge--bad{ color:#fecdd3; background:rgba(251,113,133,0.12); border-color:rgba(251,113,133,0.36); }
+  .ops-badge--blue{ color:#bfdbfe; background:rgba(96,165,250,0.12); border-color:rgba(96,165,250,0.34); }
+
+  .ops-question{ padding:14px; display:grid; gap:12px; }
+  .ops-question textarea{
+    width:100%;
+    min-height:92px;
+    border:1px solid rgba(148,163,184,0.26);
+    border-radius:16px;
+    background:#030712;
+    color:var(--ops-text);
+    padding:11px 12px;
+    font-size:13px;
+    font-weight:800;
+    line-height:1.5;
+    resize:vertical;
+  }
+  .ops-question-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+  .ops-chip-row{ display:flex; gap:8px; flex-wrap:wrap; padding:0 14px 14px; }
+  .ops-chip{ border:1px solid rgba(148,163,184,0.22); color:#dbeafe; background:rgba(96,165,250,0.10); border-radius:999px; padding:7px 10px; font-size:12px; font-weight:850; text-decoration:none; }
+  .ops-answer{ padding:14px; border-top:1px solid rgba(148,163,184,0.14); }
+  .ops-answer h3{ margin:0 0 6px; font-size:15px; font-weight:950; }
+  .ops-answer p{ margin:0; color:var(--ops-muted); font-size:12px; line-height:1.5; font-weight:800; }
+
+  @media (max-width:1180px){
+    .ops-summary{ grid-template-columns:repeat(3, minmax(0,1fr)); }
+    .ops-grid{ grid-template-columns:1fr; }
+  }
+  @media (max-width:760px){
+    .ops-hero{ padding:16px; border-radius:18px; }
+    .ops-title{ font-size:24px; }
+    .ops-summary{ grid-template-columns:1fr; }
+    .ops-actions,.ops-question-actions{ flex-direction:column; align-items:stretch; }
+    .ops-btn{ width:100%; }
+    .ops-item{ flex-direction:column; }
+  }
+</style>
+
+<div class="ops-wrap">
+  <section class="ops-hero">
+    <div>
+      <div class="ops-kicker">AI Operations Assistant</div>
+      <h1 class="ops-title">Rule-based business intelligence</h1>
+      <p class="ops-sub">Internal recommendations, risks, and operational answers from CRM data only. No emails are sent and no external AI model is used in this phase.</p>
+    </div>
+    <div class="ops-actions">
+      <a class="ops-btn" href="{% url 'main_dashboard' %}">CRM Dashboard</a>
+      {% if request.user.is_superuser or access_flags.can_view_ceo_tools %}
+        <a class="ops-btn" href="{% url 'ceo_dashboard' %}">CEO Dashboard</a>
+      {% endif %}
+      <span class="ops-badge ops-badge--{{ risk_tone }}">Risk score {{ risk_score }}/100</span>
+    </div>
+  </section>
+
+  <section class="ops-summary">
+    {% for card in daily_summary %}
+      <article class="ops-card ops-card--{{ card.tone }}">
+        <span>{{ card.label }}</span>
+        <strong>{{ card.value }}</strong>
+        <small>{{ card.note }}</small>
+      </article>
+    {% endfor %}
+  </section>
+
+  <div class="ops-grid">
+    <div>
+      <section class="ops-section">
+        <div class="ops-section-head">
+          <div>
+            <h2 class="ops-section-title">Recommendations</h2>
+            <div class="ops-section-note">Ranked by urgency from invoices, production, inventory, shipments, and quotations.</div>
+          </div>
+        </div>
+        <div class="ops-list">
+          {% for item in recommendations %}
+            <a class="ops-item" href="{{ item.url|default:'#' }}">
+              <div>
+                <strong>{{ item.title }}</strong>
+                <p>{{ item.detail }}</p>
+              </div>
+              <span class="ops-badge ops-badge--{{ item.tone }}">{{ item.priority }}</span>
+            </a>
+          {% empty %}
+            <div class="ops-empty">No urgent recommendations found.</div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="ops-section">
+        <div class="ops-section-head">
+          <div>
+            <h2 class="ops-section-title">Questions</h2>
+            <div class="ops-section-note">Ask a supported business question. Answers are generated from CRM queries.</div>
+          </div>
+        </div>
+        <form class="ops-question" method="get">
+          <textarea name="question" placeholder="Example: Which invoices are overdue?">{{ question_answer.question }}</textarea>
+          <div class="ops-question-actions">
+            <button class="ops-btn ops-btn--gold" type="submit">Ask</button>
+            <a class="ops-btn" href="{% url 'ai_operations_assistant' %}">Reset</a>
+          </div>
+        </form>
+        <div class="ops-chip-row">
+          {% for q in suggested_questions %}
+            <a class="ops-chip" href="{% url 'ai_operations_assistant' %}?question={{ q|urlencode }}">{{ q }}</a>
+          {% endfor %}
+        </div>
+        <div class="ops-answer">
+          <h3>{{ question_answer.title }}</h3>
+          <p>{{ question_answer.answer }}</p>
+          {% if question_answer.restricted %}
+            <p style="margin-top:8px;"><span class="ops-badge ops-badge--warn">Restricted</span></p>
+          {% endif %}
+        </div>
+        <div class="ops-list">
+          {% for row in question_answer.rows %}
+            <a class="ops-item" href="{{ row.url|default:'#' }}">
+              <div>
+                <strong>{{ row.label }}</strong>
+                <p>{{ row.detail }}</p>
+              </div>
+              <span class="ops-badge ops-badge--{{ row.tone }}">{{ row.metric }}</span>
+            </a>
+          {% empty %}
+            <div class="ops-empty">No rows found for this answer.</div>
+          {% endfor %}
+        </div>
+      </section>
+    </div>
+
+    <div>
+      <section class="ops-section">
+        <div class="ops-section-head">
+          <div>
+            <h2 class="ops-section-title">Risks</h2>
+            <div class="ops-section-note">Overdue invoices, production delays, shortages, shipments, and stale quotations.</div>
+          </div>
+        </div>
+        <div class="ops-list">
+          {% for row in risk_cards %}
+            <a class="ops-item" href="{{ row.url|default:'#' }}">
+              <div>
+                <strong>{{ row.title }}: {{ row.label }}</strong>
+                <p>{{ row.detail }}</p>
+              </div>
+              <span class="ops-badge ops-badge--{{ row.tone }}">{{ row.metric }}</span>
+            </a>
+          {% empty %}
+            <div class="ops-empty">No active risk rows found.</div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="ops-section">
+        <div class="ops-section-head">
+          <div>
+            <h2 class="ops-section-title">Executive Insights</h2>
+            <div class="ops-section-note">Sanitized by permission. Profit insights require internal costing access.</div>
+          </div>
+        </div>
+        <div class="ops-list">
+          {% for item in executive_insights %}
+            <a class="ops-item" href="{{ item.url|default:'#' }}">
+              <div>
+                <strong>{{ item.title }}</strong>
+                <p>{{ item.label }} · {{ item.detail }}</p>
+              </div>
+              <span class="ops-badge ops-badge--{{ item.tone }}">{{ item.metric }}</span>
+            </a>
+          {% empty %}
+            <div class="ops-empty">No executive insight data available for your permissions.</div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="ops-section">
+        <div class="ops-section-head">
+          <div>
+            <h2 class="ops-section-title">Automation Alerts</h2>
+            <div class="ops-section-note">Open alerts from the CRM automation engine.</div>
+          </div>
+        </div>
+        <div class="ops-list">
+          {% for alert in automation_alerts %}
+            <a class="ops-item" href="{{ alert.target_url|default:'#' }}">
+              <div>
+                <strong>{{ alert.title }}</strong>
+                <p>{{ alert.message }}</p>
+              </div>
+              <span class="ops-badge {% if alert.priority == 'critical' %}ops-badge--bad{% elif alert.priority == 'high' %}ops-badge--warn{% else %}ops-badge--blue{% endif %}">{{ alert.priority|title }}</span>
+            </a>
+          {% empty %}
+            <div class="ops-empty">No automation alerts available.</div>
+          {% endfor %}
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
