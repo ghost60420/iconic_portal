@@ -195,8 +195,10 @@ class SystemActivityLog(models.Model):
     def __str__(self):
         return f"{self.created_at} {self.level} {self.area} {self.action} {self.message}"
 # crm/models.py
+import os
 import string
 import secrets
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
@@ -205,12 +207,41 @@ from django.utils import timezone
 # Helpers
 # ----------------------------
 
-def generate_lead_id():
-    chars = string.ascii_uppercase + string.digits
-    while True:
-        lead_id = "L" + "".join(secrets.choice(chars) for _ in range(9))
-        if not Lead.objects.filter(lead_id=lead_id).exists():
-            return lead_id
+def _lead_code_prefix(source="", lead_type=""):
+    source_text = (source or "").strip().lower()
+    lead_type_text = (lead_type or "").strip().lower()
+
+    if lead_type_text == "inbound":
+        return "IN"
+    if lead_type_text == "outbound":
+        return "OUT"
+
+    inbound_markers = ("website", "inbound", "inquiry", "form", "contact")
+    outbound_markers = ("outbound", "campaign", "manual", "cold", "research")
+    if any(marker in source_text for marker in inbound_markers):
+        return "IN"
+    if any(marker in source_text for marker in outbound_markers):
+        return "OUT"
+    return "LEAD"
+
+
+def generate_lead_id(source="", lead_type=""):
+    prefix = _lead_code_prefix(source=source, lead_type=lead_type)
+    existing_ids = Lead.objects.filter(lead_id__startswith=f"{prefix}-").values_list("lead_id", flat=True)
+    highest_number = 1000
+    for lead_id in existing_ids:
+        try:
+            number = int(str(lead_id).split("-", 1)[1])
+        except (IndexError, TypeError, ValueError):
+            continue
+        highest_number = max(highest_number, number)
+
+    for offset in range(1, 1000):
+        candidate = f"{prefix}-{highest_number + offset}"
+        if not Lead.objects.filter(lead_id=candidate).exists():
+            return candidate
+
+    return f"{prefix}-{timezone.now().strftime('%y%m%d%H%M%S')}"
 
 
 def generate_customer_code():
@@ -497,7 +528,7 @@ class Lead(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.lead_id:
-            self.lead_id = generate_lead_id()
+            self.lead_id = generate_lead_id(source=self.source, lead_type=self.lead_type)
 
         if not self.created_date:
             self.created_date = timezone.localdate()
@@ -568,6 +599,78 @@ class Lead(models.Model):
 
     def __str__(self):
         return f"{self.account_brand} ({self.lead_id})"
+
+
+class ProductReferenceImage(models.Model):
+    ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+
+    lead = models.ForeignKey(
+        Lead,
+        related_name="product_reference_images",
+        on_delete=models.CASCADE,
+    )
+    opportunity = models.ForeignKey(
+        "Opportunity",
+        related_name="product_reference_images",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    production_order = models.ForeignKey(
+        "ProductionOrder",
+        related_name="product_reference_images",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    image = models.ImageField(upload_to="product_reference_images/%Y/%m/")
+    caption = models.CharField(max_length=160, blank=True, default="")
+    slot = models.PositiveSmallIntegerField(default=1)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="product_reference_images",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["slot", "uploaded_at", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=["lead", "slot"], name="uniq_product_reference_image_lead_slot"),
+        ]
+        indexes = [
+            models.Index(fields=["lead", "slot"]),
+            models.Index(fields=["opportunity"]),
+            models.Index(fields=["production_order"]),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.slot not in (1, 2, 3):
+            raise ValidationError({"slot": "Only three product reference images are allowed."})
+
+        if self.image:
+            extension = os.path.splitext(self.image.name or "")[1].lower()
+            if extension not in self.ALLOWED_EXTENSIONS:
+                raise ValidationError({"image": "Upload a JPG, PNG, or WEBP image."})
+
+        if self.opportunity_id and self.lead_id and self.opportunity.lead_id != self.lead_id:
+            raise ValidationError({"opportunity": "Reference image opportunity must belong to the same lead."})
+
+        if self.production_order_id and self.lead_id:
+            order_lead_id = getattr(self.production_order, "lead_id", None)
+            if order_lead_id and order_lead_id != self.lead_id:
+                raise ValidationError({"production_order": "Reference image production order must belong to the same lead."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        label = self.caption or f"Reference image {self.slot}"
+        return f"{label} for {self.lead}"
 
 
 # ----------------------------

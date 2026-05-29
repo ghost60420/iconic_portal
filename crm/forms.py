@@ -13,6 +13,7 @@
 
 from decimal import Decimal
 from django import forms
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 
@@ -31,6 +32,7 @@ from .models import (
     Opportunity,
     Shipment,
     Product,
+    ProductReferenceImage,
     Fabric,
     Accessory,
     Trim,
@@ -64,6 +66,40 @@ class MultipleFileField(forms.FileField):
 # Lead form
 # --------------------------------------------------
 class LeadForm(forms.ModelForm):
+    reference_image_1 = forms.ImageField(
+        required=False,
+        label="Image 1",
+        widget=forms.ClearableFileInput(attrs={"accept": ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"}),
+    )
+    reference_caption_1 = forms.CharField(
+        required=False,
+        label="Caption / style name 1",
+        max_length=160,
+        widget=forms.TextInput(attrs={"placeholder": "Style 1 Hoodie"}),
+    )
+    reference_image_2 = forms.ImageField(
+        required=False,
+        label="Image 2",
+        widget=forms.ClearableFileInput(attrs={"accept": ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"}),
+    )
+    reference_caption_2 = forms.CharField(
+        required=False,
+        label="Caption / style name 2",
+        max_length=160,
+        widget=forms.TextInput(attrs={"placeholder": "Style 2 T Shirt"}),
+    )
+    reference_image_3 = forms.ImageField(
+        required=False,
+        label="Image 3",
+        widget=forms.ClearableFileInput(attrs={"accept": ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"}),
+    )
+    reference_caption_3 = forms.CharField(
+        required=False,
+        label="Caption / style name 3",
+        max_length=160,
+        widget=forms.TextInput(attrs={"placeholder": "Style 3 Sweatpant"}),
+    )
+
     class Meta:
         model = Lead
         fields = [
@@ -156,6 +192,27 @@ class LeadForm(forms.ModelForm):
 
         if "assigned_to" in self.fields:
             self.fields["assigned_to"].queryset = get_user_model().objects.all().order_by("first_name", "last_name", "username")
+
+        if not self.instance.pk and not self.is_bound and "lead_type" in self.fields:
+            self.fields["lead_type"].initial = "outbound"
+
+    def _clean_reference_image(self, field_name):
+        image = self.cleaned_data.get(field_name)
+        if not image:
+            return image
+        extension = "." + image.name.rsplit(".", 1)[-1].lower() if "." in image.name else ""
+        if extension not in ProductReferenceImage.ALLOWED_EXTENSIONS:
+            raise ValidationError("Upload a JPG, PNG, or WEBP image.")
+        return image
+
+    def clean_reference_image_1(self):
+        return self._clean_reference_image("reference_image_1")
+
+    def clean_reference_image_2(self):
+        return self._clean_reference_image("reference_image_2")
+
+    def clean_reference_image_3(self):
+        return self._clean_reference_image("reference_image_3")
 
 
 # --------------------------------------------------

@@ -1,0 +1,105 @@
+<section class="product-reference-panel" aria-label="Product Reference Images">
+  <style>
+    .product-reference-panel {
+      margin: 14px 0;
+      padding: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      border-radius: 12px;
+      background: rgba(2, 6, 23, 0.72);
+      color: #f8fafc;
+    }
+    .product-reference-panel-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .product-reference-panel h2 {
+      margin: 0;
+      font-size: 17px;
+      color: #fefce8;
+    }
+    .product-reference-panel p {
+      margin: 4px 0 0;
+      color: #94a3b8;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .product-reference-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+    }
+    .product-reference-card {
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      border-radius: 10px;
+      overflow: hidden;
+      background: rgba(15, 23, 42, 0.88);
+    }
+    .product-reference-card a {
+      display: block;
+      aspect-ratio: 4 / 3;
+      background: #020617;
+    }
+    .product-reference-card img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .product-reference-meta {
+      padding: 9px 10px;
+    }
+    .product-reference-meta strong {
+      display: block;
+      font-size: 13px;
+      color: #f8fafc;
+    }
+    .product-reference-meta span {
+      display: block;
+      margin-top: 3px;
+      font-size: 11px;
+      color: #94a3b8;
+    }
+    .product-reference-empty {
+      border: 1px dashed rgba(148, 163, 184, 0.32);
+      border-radius: 10px;
+      padding: 14px;
+      color: #cbd5e1;
+      background: rgba(15, 23, 42, 0.42);
+      font-size: 13px;
+      font-weight: 700;
+    }
+  </style>
+  <div class="product-reference-panel-head">
+    <div>
+      <h2>Product Reference Images</h2>
+      <p>Client-facing style references used by sales, quoting, and production.</p>
+    </div>
+  </div>
+
+  {% if reference_images %}
+    <div class="product-reference-grid">
+      {% for reference in reference_images %}
+        <article class="product-reference-card">
+          <a href="{{ reference.image.url }}" target="_blank" rel="noopener">
+            <img src="{{ reference.image.url }}" alt="{{ reference.caption|default:'Product reference image' }}">
+          </a>
+          <div class="product-reference-meta">
+            <strong>{{ reference.caption|default:"Reference image" }}</strong>
+            <span>
+              Uploaded {{ reference.uploaded_at|date:"M j, Y" }}
+              {% if reference.uploaded_by %}
+                by {% if reference.uploaded_by.get_full_name %}{{ reference.uploaded_by.get_full_name }}{% else %}{{ reference.uploaded_by.username }}{% endif %}
+              {% endif %}
+            </span>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="product-reference-empty">No reference images uploaded yet.</div>
+  {% endif %}
+</section>

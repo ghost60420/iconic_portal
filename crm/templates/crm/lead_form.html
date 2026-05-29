@@ -498,6 +498,46 @@
             </div>
           </article>
 
+          {% if not lead %}
+            <article class="card lead-form-card">
+              <div class="card-title">Product Reference Images</div>
+              <p class="help">Upload up to 3 JPG, PNG, or WEBP references for sales, quotation, and production.</p>
+
+              <div class="lead-field">
+                <label for="{{ form.reference_image_1.id_for_label }}">{{ form.reference_image_1.label }}</label>
+                {{ form.reference_image_1 }}
+                {{ form.reference_image_1.errors }}
+              </div>
+              <div class="lead-field">
+                <label for="{{ form.reference_caption_1.id_for_label }}">{{ form.reference_caption_1.label }}</label>
+                {{ form.reference_caption_1 }}
+                {{ form.reference_caption_1.errors }}
+              </div>
+
+              <div class="lead-field">
+                <label for="{{ form.reference_image_2.id_for_label }}">{{ form.reference_image_2.label }}</label>
+                {{ form.reference_image_2 }}
+                {{ form.reference_image_2.errors }}
+              </div>
+              <div class="lead-field">
+                <label for="{{ form.reference_caption_2.id_for_label }}">{{ form.reference_caption_2.label }}</label>
+                {{ form.reference_caption_2 }}
+                {{ form.reference_caption_2.errors }}
+              </div>
+
+              <div class="lead-field">
+                <label for="{{ form.reference_image_3.id_for_label }}">{{ form.reference_image_3.label }}</label>
+                {{ form.reference_image_3 }}
+                {{ form.reference_image_3.errors }}
+              </div>
+              <div class="lead-field">
+                <label for="{{ form.reference_caption_3.id_for_label }}">{{ form.reference_caption_3.label }}</label>
+                {{ form.reference_caption_3 }}
+                {{ form.reference_caption_3.errors }}
+              </div>
+            </article>
+          {% endif %}
+
           <article class="card lead-form-card lead-notes-card">
             <div class="card-title">Sales notes</div>
             <div class="lead-field">

@@ -78,6 +78,8 @@
     <a href="{% url 'shipping_add_for_order' order.pk %}" class="production-btn production-btn--ghost">Shipment</a>
   </nav>
 
+  {% include "crm/partials/product_reference_images.html" %}
+
   <section class="production-snapshot-grid" aria-label="Production snapshot">
     <article class="production-snapshot-card">
       <span>Total quantity</span>

@@ -96,6 +96,7 @@ urlpatterns = [
         name="lead_iconic_ai_brain_email_draft",
     ),
     path("leads/<int:pk>/merge/", perm("can_leads", views.lead_merge), name="lead_merge"),
+    path("leads/<int:pk>/reference-images/", perm("can_leads", views.lead_reference_images_update), name="lead_reference_images_update"),
     path("leads/<int:pk>/auto-score/", perm("can_leads", views.lead_auto_score), name="lead_auto_score"),
     path("leads/<int:pk>/edit/", perm("can_leads", views.edit_lead), name="lead_edit"),
     path("leads/<int:pk>/convert/", perm("can_leads", views.convert_lead_to_opportunity), name="convert_lead_to_opportunity"),

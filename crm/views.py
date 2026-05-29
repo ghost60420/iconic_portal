@@ -20,7 +20,7 @@ except Exception:
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.mail import send_mail
-from django.core.exceptions import ObjectDoesNotExist
+from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db import transaction, IntegrityError, connection
 from django.db.utils import DataError, OperationalError, ProgrammingError
 from django.db.models import Case, Count, IntegerField, Q, When
@@ -43,6 +43,16 @@ from .services.order_lifecycle import (
     create_lifecycle_from_production,
     create_lifecycle_from_shipping,
     lifecycle_dashboard_metrics,
+)
+from .services.product_reference_images import (
+    link_reference_images_to_opportunity,
+    link_reference_images_to_production,
+    reference_image_payload_from_cleaned_data,
+    reference_image_payload_from_request,
+    reference_images_for_lead,
+    reference_images_for_opportunity,
+    reference_images_for_production,
+    save_reference_images_for_lead,
 )
 from .services.automation_engine import automation_dashboard_context
 
@@ -1352,6 +1362,11 @@ def add_lead(request):
             customer = _find_or_create_customer_for_lead(lead)
             lead.customer = customer
             lead.save()
+            reference_images, reference_upload_count = save_reference_images_for_lead(
+                lead,
+                reference_image_payload_from_cleaned_data(form.cleaned_data),
+                request.user,
+            )
 
             LeadActivity.objects.create(
                 lead=lead,
@@ -1373,6 +1388,13 @@ def add_lead(request):
                     description=f"File uploaded: {lead.attachment.name}",
                 )
 
+            if reference_upload_count:
+                LeadActivity.objects.create(
+                    lead=lead,
+                    activity_type="file_uploaded",
+                    description=f"{reference_upload_count} product reference image(s) uploaded.",
+                )
+
             messages.success(request, "Lead saved successfully.")
             return redirect(f"{redirect('lead_detail', pk=lead.pk).url}?saved=1")
         else:
@@ -1382,6 +1404,32 @@ def add_lead(request):
         form = LeadForm()
 
     return render(request, "crm/lead_form.html", {"form": form})
+
+
+@require_POST
+def lead_reference_images_update(request, pk):
+    lead = get_object_or_404(Lead, pk=pk)
+    try:
+        _saved_images, upload_count = save_reference_images_for_lead(
+            lead,
+            reference_image_payload_from_request(request),
+            request.user,
+        )
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages) if hasattr(exc, "messages") else str(exc))
+        return redirect("lead_detail", pk=lead.pk)
+
+    if upload_count:
+        LeadActivity.objects.create(
+            lead=lead,
+            activity_type="file_uploaded",
+            description=f"{upload_count} product reference image(s) updated.",
+            user=request.user if request.user.is_authenticated else None,
+        )
+        messages.success(request, "Product reference images updated.")
+    else:
+        messages.success(request, "Product reference captions updated.")
+    return redirect("lead_detail", pk=lead.pk)
 
 
 def quick_add_outbound_lead(request):
@@ -1542,6 +1590,7 @@ def opportunity_create_manual(request):
             order_value_usd=order_value_usd,
             fx_rate_bdt_per_usd=fx_rate,
         )
+        link_reference_images_to_opportunity(lead, opp)
         if lead:
             lead.lead_status = "Converted"
             lead.save(update_fields=["lead_status"])
@@ -2590,6 +2639,13 @@ def _lead_detail_impl(request, pk):
         logger.exception("lead_detail: failed to load iconic_ai_brain")
         iconic_ai_brain = {}
 
+    reference_images = list(reference_images_for_lead(lead))
+    reference_images_by_slot = {image.slot: image for image in reference_images}
+    reference_image_slots = [
+        {"slot": slot, "reference": reference_images_by_slot.get(slot)}
+        for slot in (1, 2, 3)
+    ]
+
     context = {
         "lead": lead,
         "opportunities": opportunities,
@@ -2603,6 +2659,8 @@ def _lead_detail_impl(request, pk):
         "agents": agents,
         "selected_agent": selected_agent,
         "messages": chat_messages,
+        "reference_images": reference_images,
+        "reference_image_slots": reference_image_slots,
         # new
         "budget_cad": budget_cad,
         "budget_bdt": budget_bdt,
@@ -2936,13 +2994,14 @@ def opportunity_detail(request, pk):
                     po_title = f"{lead.account_brand} production for {opportunity.opportunity_id}"
                     qty_guess = opportunity.moq_units or lead.order_quantity or 0
                     try:
-                        ProductionOrder.objects.create(
+                        po = ProductionOrder.objects.create(
                             opportunity=opportunity,
                             title=po_title,
                             qty_total=qty_guess or 0,
                             cost_sheet_active=active_cost_sheet,
                             costing_header=costing_header if costing_header and costing_header.status == "approved" else None,
                         )
+                        link_reference_images_to_production(opportunity=opportunity, production_order=po)
                         LeadActivity.objects.create(
                             lead=lead,
                             activity_type="production_created",
@@ -3115,6 +3174,7 @@ def opportunity_detail(request, pk):
         "opportunity": opportunity,
         "lead": lead,
         "customer": customer,
+        "reference_images": reference_images_for_opportunity(opportunity),
 
         "opp_tasks": opp_tasks,
         "comments": comments,
@@ -8005,6 +8065,7 @@ def production_detail(request, pk):
         "lead": lead,
         "customer": customer,
         "product": product,
+        "reference_images": reference_images_for_production(order),
         "comments": comments,
         **inventory_context,
         "cost_sheet_active": cost_sheet_active,
@@ -8149,6 +8210,8 @@ def production_from_opportunity(request, pk):
     elif approved_costing and not po.costing_header_id:
         po.costing_header = approved_costing
         po.save(update_fields=["costing_header"])
+
+    link_reference_images_to_production(opportunity=opportunity, production_order=po)
 
     stage_changed = False
     if opportunity.stage != "Production":
@@ -12647,6 +12710,7 @@ def convert_lead_to_opportunity(request, pk):
             converted_from_source_channel=getattr(lead, "source_channel", ""),
             converted_from_outbound_status=getattr(lead, "outbound_status", ""),
         )
+        link_reference_images_to_opportunity(lead, opp)
         lead.lead_status = "Converted"
         if lead.lead_type == "outbound":
             lead.outbound_status = "Converted to Opportunity"
