@@ -138,3 +138,174 @@ def reference_images_for_production(production_order):
         .distinct()
         .order_by("slot", "uploaded_at", "id")[:MAX_REFERENCE_IMAGES]
     )
+
+
+def _first_images_by_key(queryset, key_name):
+    images = {}
+    for image in queryset.order_by(key_name, "slot", "uploaded_at", "id"):
+        key = getattr(image, key_name)
+        if key and key not in images:
+            images[key] = image
+    return images
+
+
+def attach_primary_reference_images_to_leads(leads):
+    lead_list = list(leads)
+    lead_ids = [lead.id for lead in lead_list if getattr(lead, "id", None)]
+    images_by_lead = _first_images_by_key(
+        ProductReferenceImage.objects.filter(lead_id__in=lead_ids),
+        "lead_id",
+    )
+    for lead in lead_list:
+        lead.primary_reference_image = images_by_lead.get(lead.id)
+    return lead_list
+
+
+def attach_primary_reference_images_to_opportunities(opportunities):
+    opportunity_list = list(opportunities)
+    opportunity_ids = [opportunity.id for opportunity in opportunity_list if getattr(opportunity, "id", None)]
+    lead_ids = [
+        opportunity.lead_id
+        for opportunity in opportunity_list
+        if getattr(opportunity, "lead_id", None)
+    ]
+    images_by_opportunity = _first_images_by_key(
+        ProductReferenceImage.objects.filter(opportunity_id__in=opportunity_ids),
+        "opportunity_id",
+    )
+    images_by_lead = _first_images_by_key(
+        ProductReferenceImage.objects.filter(lead_id__in=lead_ids),
+        "lead_id",
+    )
+    for opportunity in opportunity_list:
+        opportunity.primary_reference_image = (
+            images_by_opportunity.get(opportunity.id)
+            or images_by_lead.get(getattr(opportunity, "lead_id", None))
+        )
+    return opportunity_list
+
+
+def attach_primary_reference_images_to_production_orders(orders):
+    order_list = list(orders)
+    order_ids = [order.id for order in order_list if getattr(order, "id", None)]
+    opportunity_ids = [
+        order.opportunity_id
+        for order in order_list
+        if getattr(order, "opportunity_id", None)
+    ]
+    lead_ids = [
+        order.lead_id
+        for order in order_list
+        if getattr(order, "lead_id", None)
+    ]
+    images_by_order = _first_images_by_key(
+        ProductReferenceImage.objects.filter(production_order_id__in=order_ids),
+        "production_order_id",
+    )
+    images_by_opportunity = _first_images_by_key(
+        ProductReferenceImage.objects.filter(opportunity_id__in=opportunity_ids),
+        "opportunity_id",
+    )
+    images_by_lead = _first_images_by_key(
+        ProductReferenceImage.objects.filter(lead_id__in=lead_ids),
+        "lead_id",
+    )
+    for order in order_list:
+        order.primary_reference_image = (
+            images_by_order.get(order.id)
+            or images_by_opportunity.get(getattr(order, "opportunity_id", None))
+            or images_by_lead.get(getattr(order, "lead_id", None))
+        )
+    return order_list
+
+
+def _lead_quantity_text(lead):
+    if not lead:
+        return ""
+    if getattr(lead, "order_quantity", ""):
+        return lead.order_quantity
+    min_qty = getattr(lead, "target_order_volume_min", None)
+    max_qty = getattr(lead, "target_order_volume_max", None)
+    if min_qty and max_qty:
+        return f"{min_qty} - {max_qty} pcs"
+    if min_qty:
+        return f"{min_qty}+ pcs"
+    if max_qty:
+        return f"Up to {max_qty} pcs"
+    return ""
+
+
+def _reference_image_file(reference_image):
+    return reference_image.image if reference_image and reference_image.image else None
+
+
+def product_snapshot_for_lead(lead, reference_image=None):
+    image_file = _reference_image_file(reference_image)
+    product_type = getattr(lead, "primary_product_type", "") or ""
+    category = getattr(lead, "product_category", "") or ""
+    product = getattr(lead, "product_interest", "") or ""
+    return {
+        "image_file": image_file,
+        "image_alt": getattr(reference_image, "caption", "") or product or "Product reference image",
+        "title": product or category or product_type or "Product not set",
+        "primary_type": product_type or "Type not set",
+        "category": category or "Category not set",
+        "quantity": _lead_quantity_text(lead) or "Quantity not set",
+        "caption": getattr(reference_image, "caption", "") or "",
+    }
+
+
+def product_snapshot_for_opportunity(opportunity, reference_image=None):
+    lead = getattr(opportunity, "lead", None)
+    image_file = _reference_image_file(reference_image)
+    product_type = (
+        getattr(opportunity, "product_type", "")
+        or getattr(lead, "primary_product_type", "")
+        or ""
+    )
+    category = getattr(opportunity, "product_category", "") or getattr(lead, "product_category", "") or ""
+    product = getattr(lead, "product_interest", "") or category or product_type
+    quantity = getattr(opportunity, "moq_units", None)
+    return {
+        "image_file": image_file,
+        "image_alt": getattr(reference_image, "caption", "") or product or "Product reference image",
+        "title": product or "Product not set",
+        "primary_type": product_type or "Type not set",
+        "category": category or "Category not set",
+        "quantity": f"{quantity} units" if quantity else _lead_quantity_text(lead) or "Quantity not set",
+        "caption": getattr(reference_image, "caption", "") or "",
+    }
+
+
+def product_snapshot_for_production(order, reference_image=None):
+    lead = getattr(order, "lead", None)
+    opportunity = getattr(order, "opportunity", None)
+    product = getattr(order, "product", None)
+    image_file = _reference_image_file(reference_image)
+    if not image_file and product and getattr(product, "image", None):
+        image_file = product.image
+    if not image_file and getattr(order, "style_image", None):
+        image_file = order.style_image
+
+    product_type = (
+        getattr(opportunity, "product_type", "")
+        or getattr(lead, "primary_product_type", "")
+        or ""
+    )
+    category = getattr(opportunity, "product_category", "") or getattr(lead, "product_category", "") or ""
+    title = (
+        getattr(product, "name", "")
+        or getattr(order, "style_name", "")
+        or getattr(lead, "product_interest", "")
+        or category
+        or getattr(order, "title", "")
+    )
+    return {
+        "image_file": image_file,
+        "image_alt": getattr(reference_image, "caption", "") or title or "Product reference image",
+        "title": title or "Product not set",
+        "primary_type": product_type or "Type not set",
+        "category": category or getattr(order, "color_info", "") or "Category not set",
+        "quantity": f"{getattr(order, 'qty_total', 0) or 0} units",
+        "caption": getattr(reference_image, "caption", "") or "",
+    }

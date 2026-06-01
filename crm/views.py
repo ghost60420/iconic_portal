@@ -45,8 +45,14 @@ from .services.order_lifecycle import (
     lifecycle_dashboard_metrics,
 )
 from .services.product_reference_images import (
+    attach_primary_reference_images_to_leads,
+    attach_primary_reference_images_to_opportunities,
+    attach_primary_reference_images_to_production_orders,
     link_reference_images_to_opportunity,
     link_reference_images_to_production,
+    product_snapshot_for_lead,
+    product_snapshot_for_opportunity,
+    product_snapshot_for_production,
     reference_image_payload_from_cleaned_data,
     reference_image_payload_from_request,
     reference_images_for_lead,
@@ -803,6 +809,7 @@ def leads_list(request):
             | Q(website__icontains=q)
             | Q(instagram_handle__icontains=q)
             | Q(linkedin_url__icontains=q)
+            | Q(primary_product_type__icontains=q)
             | Q(product_interest__icontains=q)
             | Q(product_category__icontains=q)
             | Q(order_quantity__icontains=q)
@@ -1016,6 +1023,7 @@ def leads_list(request):
     paginator = Paginator(qs, per_page)
     page_number = request.GET.get("page") or 1
     page_obj = paginator.get_page(page_number)
+    page_obj.object_list = attach_primary_reference_images_to_leads(page_obj.object_list)
 
     context = {
         "page_obj": page_obj,
@@ -2640,6 +2648,7 @@ def _lead_detail_impl(request, pk):
         iconic_ai_brain = {}
 
     reference_images = list(reference_images_for_lead(lead))
+    primary_reference_image = reference_images[0] if reference_images else None
     reference_images_by_slot = {image.slot: image for image in reference_images}
     reference_image_slots = [
         {"slot": slot, "reference": reference_images_by_slot.get(slot)}
@@ -2660,6 +2669,8 @@ def _lead_detail_impl(request, pk):
         "selected_agent": selected_agent,
         "messages": chat_messages,
         "reference_images": reference_images,
+        "primary_reference_image": primary_reference_image,
+        "product_snapshot": product_snapshot_for_lead(lead, primary_reference_image),
         "reference_image_slots": reference_image_slots,
         # new
         "budget_cad": budget_cad,
@@ -3170,11 +3181,16 @@ def opportunity_detail(request, pk):
         except Exception:
             bdt_per_piece = None
 
+    reference_images = list(reference_images_for_opportunity(opportunity))
+    primary_reference_image = reference_images[0] if reference_images else None
+
     context = {
         "opportunity": opportunity,
         "lead": lead,
         "customer": customer,
-        "reference_images": reference_images_for_opportunity(opportunity),
+        "reference_images": reference_images,
+        "primary_reference_image": primary_reference_image,
+        "product_snapshot": product_snapshot_for_opportunity(opportunity, primary_reference_image),
 
         "opp_tasks": opp_tasks,
         "comments": comments,
@@ -7354,6 +7370,9 @@ def production_list(request):
             | Q(customer__contact_name__icontains=search_query)
             | Q(product__name__icontains=search_query)
             | Q(lead__account_brand__icontains=search_query)
+            | Q(lead__primary_product_type__icontains=search_query)
+            | Q(opportunity__product_type__icontains=search_query)
+            | Q(opportunity__product_category__icontains=search_query)
         )
 
     if status_filter == "completed":
@@ -7438,6 +7457,7 @@ def production_list(request):
         if shipment_filter == "late" and not row["late_shipment"]:
             continue
         orders_data.append(row)
+    attach_primary_reference_images_to_production_orders([row["order"] for row in orders_data])
 
     total_orders = len(orders_data)
     active_orders = len([row for row in orders_data if row["order"].status in active_statuses])
@@ -7857,6 +7877,8 @@ def production_detail(request, pk):
         lifecycle if getattr(lifecycle, "pk", None) else None,
         comments,
     )
+    reference_images = list(reference_images_for_production(order))
+    primary_reference_image = reference_images[0] if reference_images else None
 
     if request.method == "POST":
         action = (request.POST.get("action") or "").strip()
@@ -8065,7 +8087,9 @@ def production_detail(request, pk):
         "lead": lead,
         "customer": customer,
         "product": product,
-        "reference_images": reference_images_for_production(order),
+        "reference_images": reference_images,
+        "primary_reference_image": primary_reference_image,
+        "product_snapshot": product_snapshot_for_production(order, primary_reference_image),
         "comments": comments,
         **inventory_context,
         "cost_sheet_active": cost_sheet_active,
@@ -12961,6 +12985,7 @@ def opportunities_list(request):
             | Q(stage__icontains=q)
             | Q(product_type__icontains=q)
             | Q(product_category__icontains=q)
+            | Q(lead__primary_product_type__icontains=q)
             | Q(lead__lead_id__icontains=q)
             | Q(lead__account_brand__icontains=q)
             | Q(lead__contact_name__icontains=q)
@@ -13008,6 +13033,7 @@ def opportunities_list(request):
     paginator = Paginator(qs, per_page)
     page_number = request.GET.get("page") or 1
     page_obj = paginator.get_page(page_number)
+    page_obj.object_list = attach_primary_reference_images_to_opportunities(page_obj.object_list)
 
     context = {
         "page_obj": page_obj,

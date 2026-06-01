@@ -468,6 +468,12 @@
             </div>
 
             <div class="lead-field">
+              <label for="{{ form.primary_product_type.id_for_label }}">{{ form.primary_product_type.label }}{% if form.primary_product_type.field.required %}<span class="req">*</span>{% endif %}</label>
+              {{ form.primary_product_type }}
+              {{ form.primary_product_type.errors }}
+            </div>
+
+            <div class="lead-field">
               <label for="{{ form.product_interest.id_for_label }}">{{ form.product_interest.label }}{% if form.product_interest.field.required %}<span class="req">*</span>{% endif %}</label>
               {{ form.product_interest }}
               {{ form.product_interest.errors }}

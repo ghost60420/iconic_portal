@@ -802,6 +802,7 @@
         <thead>
           <tr>
             <th class="lead-select-cell"><input type="checkbox" id="select-all" aria-label="Select all leads"></th>
+            <th>Image</th>
             <th>Lead</th>
             <th>Contact</th>
             <th>Lead type</th>
@@ -826,6 +827,15 @@
             <tr>
               <td class="lead-select-cell" data-label="Select">
                 <input type="checkbox" name="lead_ids" value="{{ lead.pk }}" aria-label="Select {{ lead.lead_id }}">
+              </td>
+              <td class="lead-image-cell" data-label="Image">
+                <a class="lead-product-thumb" href="{% url 'lead_detail' lead.pk %}" aria-label="Open {{ lead.lead_id }}">
+                  {% if lead.primary_reference_image %}
+                    <img src="{{ lead.primary_reference_image.image.url }}" alt="{{ lead.primary_reference_image.caption|default:'Product reference image' }}">
+                  {% else %}
+                    <span>No img</span>
+                  {% endif %}
+                </a>
               </td>
               <td class="lead-primary" data-label="Lead">
                 <div class="lead-company-name">
@@ -915,6 +925,9 @@
               <td data-label="Product">
                 <div class="lead-product-stack">
                   <strong>{{ lead.get_product_interest_display|default:lead.product_interest|default:"—" }}</strong>
+                  {% if lead.primary_product_type %}
+                    <span class="lead-compact-meta">{{ lead.get_primary_product_type_display|default:lead.primary_product_type }}</span>
+                  {% endif %}
                   {% if lead.product_category %}
                     <span class="muted">{{ lead.get_product_category_display|default:lead.product_category }}</span>
                   {% endif %}
@@ -1001,6 +1014,7 @@
                       <div><span>Outbound</span><strong>{{ lead.outbound_status|default:"—" }}</strong></div>
                       <div><span>Assigned</span><strong>{% if lead.assigned_to %}{% if lead.assigned_to.get_full_name %}{{ lead.assigned_to.get_full_name }}{% else %}{{ lead.assigned_to.username }}{% endif %}{% elif lead.owner %}{{ lead.owner }}{% else %}Unassigned{% endif %}</strong></div>
                       <div><span>Country</span><strong>{{ lead.country|default:"—" }}</strong></div>
+                      <div><span>Primary type</span><strong>{{ lead.get_primary_product_type_display|default:lead.primary_product_type|default:"—" }}</strong></div>
                       <div><span>Product</span><strong>{{ lead.get_product_interest_display|default:lead.product_interest|default:"—" }}</strong></div>
                       <div><span>Target volume</span><strong>{% if lead.target_order_volume_min or lead.target_order_volume_max %}{% if lead.target_order_volume_min and lead.target_order_volume_max %}{{ lead.target_order_volume_min }} - {{ lead.target_order_volume_max }}{% elif lead.target_order_volume_min %}{{ lead.target_order_volume_min }}+{% else %}Up to {{ lead.target_order_volume_max }}{% endif %}{% else %}—{% endif %}</strong></div>
                       <div><span>Fit score</span><strong>{% if lead.brand_fit_score or lead.brand_fit_score == 0 %}{{ lead.brand_fit_score }}{% else %}—{% endif %}</strong></div>
@@ -1014,7 +1028,7 @@
             </tr>
           {% empty %}
             <tr>
-              <td colspan="17">
+              <td colspan="18">
                 <div class="lead-empty-state">
                   <strong>No leads found</strong>
                   <span>Try clearing filters or add a new lead to start building the pipeline.</span>

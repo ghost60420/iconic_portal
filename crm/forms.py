@@ -119,6 +119,7 @@ class LeadForm(forms.ModelForm):
             "priority",
             "priority_level",
             "product_category",
+            "primary_product_type",
             "product_interest",
             "order_quantity",
             "budget",
@@ -180,6 +181,11 @@ class LeadForm(forms.ModelForm):
             current_value = getattr(self.instance, "product_category", "") or ""
             if current_value and current_value not in dict(Opportunity.PRODUCT_CATEGORY_CHOICES):
                 self.fields["product_category"].choices.append((current_value, current_value))
+
+        if "primary_product_type" in self.fields:
+            self.fields["primary_product_type"].choices = [("", "Select a product type")] + list(Opportunity.PRODUCT_TYPE_CHOICES)
+            self.fields["primary_product_type"].required = False
+            self.fields["primary_product_type"].widget.attrs.update({"class": "form-control"})
 
         if "product_interest" in self.fields:
             self.fields["product_interest"].choices = interest_choices

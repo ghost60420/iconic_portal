@@ -167,6 +167,7 @@
       <table class="opp-table">
         <thead>
           <tr>
+            <th>Image</th>
             <th>Opportunity</th>
             <th>Value</th>
             <th>Product</th>
@@ -181,6 +182,15 @@
         <tbody>
           {% for opp in page_obj %}
             <tr>
+              <td class="opp-image-cell" data-label="Image">
+                <a class="opp-product-thumb" href="{% url 'opportunity_detail' opp.pk %}" aria-label="Open {{ opp.opportunity_id }}">
+                  {% if opp.primary_reference_image %}
+                    <img src="{{ opp.primary_reference_image.image.url }}" alt="{{ opp.primary_reference_image.caption|default:'Product reference image' }}">
+                  {% else %}
+                    <span>No img</span>
+                  {% endif %}
+                </a>
+              </td>
               <td data-label="Opportunity" class="opp-primary-cell">
                 <div class="opp-primary">
                   <a href="{% url 'opportunity_detail' opp.pk %}" class="opp-link">{{ opp.opportunity_id }}</a>
@@ -215,6 +225,9 @@
                 <div class="opp-product-stack">
                   <strong>{{ opp.product_category|default:"Other" }}</strong>
                   <span>{{ opp.product_type|default:"Other" }}</span>
+                  {% if opp.lead and opp.lead.primary_product_type %}
+                    <span>Lead type: {{ opp.lead.get_primary_product_type_display|default:opp.lead.primary_product_type }}</span>
+                  {% endif %}
                 </div>
               </td>
 
@@ -265,7 +278,7 @@
             </tr>
           {% empty %}
             <tr>
-              <td colspan="8">
+              <td colspan="9">
                 <div class="opp-empty-state">
                   <strong>No opportunities found</strong>
                   <span>Try clearing filters, widening the date range, or creating a new opportunity from a qualified lead.</span>

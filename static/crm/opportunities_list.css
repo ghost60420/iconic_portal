@@ -385,6 +385,32 @@
   min-width: 280px;
 }
 
+.opp-image-cell {
+  width: 68px;
+}
+
+.opp-product-thumb {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.72);
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.opp-product-thumb img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
 .opp-primary,
 .opp-value-stack,
 .opp-product-stack,

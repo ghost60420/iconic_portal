@@ -200,6 +200,7 @@
         <table class="production-table">
           <thead>
             <tr>
+              <th>Image</th>
               <th>Order</th>
               <th>Client / Opportunity</th>
               <th>Product</th>
@@ -216,17 +217,21 @@
             {% for row in orders_data %}
               {% with order=row.order stages=row.stages percent=row.percent_done has_delay=row.has_delay %}
                 <tr class="{% if has_delay %}is-delayed{% endif %}">
+                  <td data-label="Image">
+                    <a class="production-thumb" href="{% url 'production_detail' order.pk %}" aria-label="Open {{ order.order_code|default:order.title }}">
+                      {% if order.primary_reference_image %}
+                        <img src="{{ order.primary_reference_image.image.url }}" alt="{{ order.primary_reference_image.caption|default:'Product reference image' }}">
+                      {% elif order.product and order.product.image %}
+                        <img src="{{ order.product.image.url }}" alt="{{ order.product.name }}">
+                      {% elif order.style_image %}
+                        <img src="{{ order.style_image.url }}" alt="{{ order.title }}">
+                      {% else %}
+                        <span>PO</span>
+                      {% endif %}
+                    </a>
+                  </td>
                   <td data-label="Order">
                     <div class="production-order-cell">
-                      <div class="production-thumb">
-                        {% if order.product and order.product.image %}
-                          <img src="{{ order.product.image.url }}" alt="{{ order.product.name }}">
-                        {% elif order.style_image %}
-                          <img src="{{ order.style_image.url }}" alt="{{ order.title }}">
-                        {% else %}
-                          <span>PO</span>
-                        {% endif %}
-                      </div>
                       <div class="production-stack">
                         <a href="{% url 'production_detail' order.pk %}" class="production-primary-link">{{ order.order_code|default:"No code" }}</a>
                         <strong>{{ order.title }}</strong>

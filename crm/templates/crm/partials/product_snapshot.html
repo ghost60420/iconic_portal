@@ -1,0 +1,112 @@
+{% if product_snapshot %}
+  <section class="product-snapshot-panel" aria-label="Product Snapshot">
+    <style>
+      .product-snapshot-panel {
+        display: grid;
+        grid-template-columns: 96px minmax(0, 1fr);
+        gap: 14px;
+        align-items: center;
+        margin: 14px 0;
+        padding: 14px;
+        border: 1px solid rgba(148, 163, 184, 0.26);
+        border-radius: 14px;
+        background: linear-gradient(135deg, rgba(15, 23, 42, 0.88), rgba(2, 6, 23, 0.8));
+        color: #f8fafc;
+      }
+      .product-snapshot-thumb {
+        width: 96px;
+        aspect-ratio: 1;
+        overflow: hidden;
+        display: grid;
+        place-items: center;
+        border: 1px solid rgba(148, 163, 184, 0.24);
+        border-radius: 12px;
+        background: rgba(2, 6, 23, 0.72);
+        color: #94a3b8;
+        font-size: 12px;
+        font-weight: 900;
+      }
+      .product-snapshot-thumb img {
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: cover;
+      }
+      .product-snapshot-kicker {
+        margin: 0 0 5px;
+        color: #facc15;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+      .product-snapshot-panel h2 {
+        margin: 0;
+        color: #fefce8;
+        font-size: 18px;
+        line-height: 1.2;
+      }
+      .product-snapshot-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(120px, 1fr));
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .product-snapshot-grid span {
+        display: block;
+        color: #94a3b8;
+        font-size: 11px;
+        font-weight: 800;
+      }
+      .product-snapshot-grid strong {
+        display: block;
+        margin-top: 2px;
+        color: #f8fafc;
+        font-size: 13px;
+        font-weight: 900;
+      }
+      .product-snapshot-caption {
+        margin-top: 8px;
+        color: #94a3b8;
+        font-size: 12px;
+        font-weight: 800;
+      }
+      @media (max-width: 640px) {
+        .product-snapshot-panel {
+          grid-template-columns: 1fr;
+        }
+        .product-snapshot-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+    <div class="product-snapshot-thumb">
+      {% if product_snapshot.image_file %}
+        <img src="{{ product_snapshot.image_file.url }}" alt="{{ product_snapshot.image_alt }}">
+      {% else %}
+        <span>No image</span>
+      {% endif %}
+    </div>
+    <div>
+      <p class="product-snapshot-kicker">Product Snapshot</p>
+      <h2>{{ product_snapshot.title }}</h2>
+      <div class="product-snapshot-grid">
+        <div>
+          <span>Primary type</span>
+          <strong>{{ product_snapshot.primary_type }}</strong>
+        </div>
+        <div>
+          <span>Category</span>
+          <strong>{{ product_snapshot.category }}</strong>
+        </div>
+        <div>
+          <span>Quantity</span>
+          <strong>{{ product_snapshot.quantity }}</strong>
+        </div>
+      </div>
+      {% if product_snapshot.caption %}
+        <div class="product-snapshot-caption">{{ product_snapshot.caption }}</div>
+      {% endif %}
+    </div>
+  </section>
+{% endif %}

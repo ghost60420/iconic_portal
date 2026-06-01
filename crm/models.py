@@ -370,6 +370,10 @@ def lead_product_category_choices():
     return Opportunity.PRODUCT_CATEGORY_CHOICES
 
 
+def lead_product_type_choices():
+    return Opportunity.PRODUCT_TYPE_CHOICES
+
+
 def lead_product_interest_choices():
     return _extend_choices(Opportunity.PRODUCT_TYPE_CHOICES, SPORTS_PRODUCT_CATEGORY_CHOICES)
 
@@ -422,6 +426,13 @@ class Lead(models.Model):
         max_length=100,
         choices=lead_product_category_choices,
         blank=True,
+    )
+    primary_product_type = models.CharField(
+        max_length=100,
+        choices=lead_product_type_choices,
+        blank=True,
+        default="",
+        db_index=True,
     )
     product_interest = models.CharField(
         max_length=200,
