@@ -29,6 +29,7 @@ from .forms import InvoiceForm, InvoicePaymentForm
 from .permissions import can_view_internal_costing
 from .services.costing_workflow import CostingWorkflowError, create_or_link_production_order_from_invoice
 from .services.order_lifecycle import build_lifecycle_profit_breakdown, create_lifecycle_from_invoice
+from .services.workflow_visibility import build_workflow_visibility_context
 
 
 DEFAULT_INVOICE_TERMS = """For bulk orders, 50% advance confirms the order and 50% is due before shipment.
@@ -916,7 +917,7 @@ def invoice_edit(request, pk):
 @login_required
 @user_passes_test(superuser_only)
 def invoice_view(request, pk):
-    inv = get_object_or_404(Invoice.objects.select_related("order", "customer"), pk=pk)
+    inv = get_object_or_404(Invoice.objects.select_related("order", "customer", "costing_header"), pk=pk)
     payment_history = list(
         inv.payments.select_related("production_order", "accounting_entry", "created_by").order_by("-payment_date", "-id")
     )
@@ -930,6 +931,14 @@ def invoice_view(request, pk):
     if lifecycle and can_view_invoice_costing:
         lifecycle_profit = build_lifecycle_profit_breakdown(lifecycle)
     display_invoice = inv if can_view_invoice_costing else _sanitize_invoice_internal_fields(inv)
+    workflow_visibility = build_workflow_visibility_context(
+        "invoice",
+        user=request.user,
+        invoice=inv,
+        costing=getattr(inv, "costing_header", None),
+        production_order=getattr(inv, "order", None),
+        lifecycle=lifecycle,
+    )
 
     initial = {
         "payment_date": timezone.localdate(),
@@ -952,6 +961,7 @@ def invoice_view(request, pk):
             "can_manage_invoice_costing": can_view_invoice_costing,
             "lifecycle": lifecycle,
             "lifecycle_profit": lifecycle_profit,
+            **workflow_visibility,
         },
     )
 

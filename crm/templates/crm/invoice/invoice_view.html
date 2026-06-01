@@ -448,6 +448,10 @@
       </div>
     </div>
 
+    {% include "crm/partials/workflow_quick_nav.html" %}
+    {% include "crm/partials/workflow_order_summary.html" %}
+    {% include "crm/partials/workflow_activity_timeline.html" %}
+
     {% with pay_key=invoice.payment_status_key %}
       <div class="pay-hero">
         <div class="pay-kpi">

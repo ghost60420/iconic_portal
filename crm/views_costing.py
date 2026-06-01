@@ -35,6 +35,7 @@ from .services.costing_workflow import (
     get_costing_quote_amounts,
 )
 from .services.order_lifecycle import create_lifecycle_from_costing
+from .services.workflow_visibility import build_workflow_visibility_context
 from .permissions import can_view_internal_costing
 
 
@@ -633,6 +634,17 @@ def cost_sheet_detail(request, pk):
         form.fields["opportunity"].disabled = True
     if "customer" in form.fields:
         form.fields["customer"].disabled = True
+    workflow = _workflow_context(costing, request.user)
+    workflow_visibility = build_workflow_visibility_context(
+        "costing",
+        user=request.user,
+        opportunity=costing.opportunity,
+        costing=costing,
+        quotation=costing if workflow["is_quotation"] else None,
+        invoice=workflow["invoice"],
+        production_order=workflow["production_order"],
+        lifecycle=workflow["lifecycle"],
+    )
 
     context = {
         "costing": costing,
@@ -650,8 +662,9 @@ def cost_sheet_detail(request, pk):
         "uom_choices": NEW_COSTING_UOM_CHOICES,
         "can_approve": can_approve,
         "is_locked": is_locked,
-        "workflow": _workflow_context(costing, request.user),
+        "workflow": workflow,
         "can_view_internal_costing": can_view_costing_profit,
+        **workflow_visibility,
     }
     return render(request, "crm/costing/costsheet_detail.html", context)
 
@@ -693,6 +706,19 @@ def cost_sheet_client_quotation(request, pk):
     except CostingWorkflowError as exc:
         messages.error(request, str(exc))
         return redirect("cost_sheet_detail", pk=pk)
+    workflow = _workflow_context(costing, request.user)
+    context.update(
+        build_workflow_visibility_context(
+            "quotation",
+            user=request.user,
+            opportunity=costing.opportunity,
+            costing=costing,
+            quotation=costing,
+            invoice=workflow["invoice"],
+            production_order=workflow["production_order"],
+            lifecycle=workflow["lifecycle"],
+        )
+    )
 
     return render(request, "crm/costing/quotation_client.html", context)
 

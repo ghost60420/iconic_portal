@@ -60,6 +60,7 @@ from .services.product_reference_images import (
     reference_images_for_production,
     save_reference_images_for_lead,
 )
+from .services.workflow_visibility import build_workflow_visibility_context
 from .services.automation_engine import automation_dashboard_context
 
 def _parse_decimal(value):
@@ -135,6 +136,7 @@ from .models import (
     HandfeelMaster,
     LibraryAttachment,
     ProductionOrder,
+    ProductionProgressPhoto,
     ProductionStage,
     Shipment,
 )
@@ -2654,6 +2656,11 @@ def _lead_detail_impl(request, pk):
         {"slot": slot, "reference": reference_images_by_slot.get(slot)}
         for slot in (1, 2, 3)
     ]
+    workflow_visibility = build_workflow_visibility_context(
+        "lead",
+        user=request.user,
+        lead=lead,
+    )
 
     context = {
         "lead": lead,
@@ -2678,6 +2685,7 @@ def _lead_detail_impl(request, pk):
         "cad_to_bdt": cad_to_bdt,
         "wa_inbox_url": wa_inbox_url,
         "iconic_ai_brain": iconic_ai_brain,
+        **workflow_visibility,
     }
 
     return render(request, "crm/lead_detail.html", context)
@@ -3183,6 +3191,13 @@ def opportunity_detail(request, pk):
 
     reference_images = list(reference_images_for_opportunity(opportunity))
     primary_reference_image = reference_images[0] if reference_images else None
+    workflow_visibility = build_workflow_visibility_context(
+        "opportunity",
+        user=request.user,
+        lead=lead,
+        opportunity=opportunity,
+        costing=costing_header,
+    )
 
     context = {
         "opportunity": opportunity,
@@ -3230,6 +3245,7 @@ def opportunity_detail(request, pk):
         # Shipping for the template
         "ship": ship,
         "ship_locked": ship_has_any_data(),
+        **workflow_visibility,
     }
 
     return render(request, "crm/opportunity_detail.html", context)
@@ -6863,6 +6879,7 @@ from django.views.decorators.http import require_POST
 from .models import (
     ProductionOrder,
     ProductionOrderAttachment,
+    ProductionProgressPhoto,
     ProductionStage,
     Opportunity,
 )
@@ -7748,6 +7765,7 @@ def production_detail(request, pk):
             "stages",
             "shipments",
             "attachments",
+            "progress_photos",
             "fabrics",
             "accessories",
             "trims",
@@ -7775,6 +7793,10 @@ def production_detail(request, pk):
         attachments = list(order.attachments.all().order_by("-created_at"))
     except (OperationalError, ProgrammingError):
         attachments = []
+    try:
+        progress_photos = list(order.progress_photos.select_related("uploaded_by").order_by("stage", "-uploaded_at", "-id"))
+    except (OperationalError, ProgrammingError):
+        progress_photos = []
 
     # shipments for this order
     try:
@@ -7879,12 +7901,59 @@ def production_detail(request, pk):
     )
     reference_images = list(reference_images_for_production(order))
     primary_reference_image = reference_images[0] if reference_images else None
+    progress_photos_by_stage = defaultdict(list)
+    for photo in progress_photos:
+        progress_photos_by_stage[photo.stage].append(photo)
+    progress_photo_sections = [
+        {
+            "key": key,
+            "label": label,
+            "photos": progress_photos_by_stage.get(key, []),
+        }
+        for key, label in ProductionProgressPhoto.STAGE_CHOICES
+    ]
+    workflow_visibility = build_workflow_visibility_context(
+        "production",
+        user=request.user,
+        lead=lead,
+        opportunity=opportunity,
+        costing=getattr(order, "costing_header", None),
+        invoice=order.invoices.order_by("-created_at", "-id").first(),
+        production_order=order,
+        shipment=latest_shipment,
+        lifecycle=lifecycle if getattr(lifecycle, "pk", None) else None,
+    )
 
     if request.method == "POST":
         action = (request.POST.get("action") or "").strip()
 
         if action in {"add_actual", "update_actual", "delete_actual"} and not can_view_profit:
             return HttpResponseForbidden("No access")
+
+        if action == "add_progress_photo":
+            stage = (request.POST.get("progress_stage") or "").strip()
+            caption = (request.POST.get("progress_caption") or "").strip()
+            image = request.FILES.get("progress_photo")
+            valid_stages = {key for key, _label in ProductionProgressPhoto.STAGE_CHOICES}
+            if stage not in valid_stages:
+                messages.error(request, "Choose a valid production stage.")
+                return redirect("production_detail", pk=pk)
+            if not image:
+                messages.error(request, "Please choose a progress photo.")
+                return redirect("production_detail", pk=pk)
+            try:
+                ProductionProgressPhoto.objects.create(
+                    order=order,
+                    stage=stage,
+                    image=image,
+                    caption=caption,
+                    uploaded_by=request.user if request.user.is_authenticated else None,
+                )
+                messages.success(request, "Production progress photo added.")
+            except ValidationError as exc:
+                message = "; ".join(exc.messages) if hasattr(exc, "messages") else str(exc)
+                messages.error(request, message)
+            return redirect("production_detail", pk=pk)
 
         if action == "add_line":
             if not can_add_lines:
@@ -8081,6 +8150,8 @@ def production_detail(request, pk):
         "production_activity": production_activity,
         "order_lines": order_lines,
         "attachments": attachments,
+        "progress_photo_stage_choices": ProductionProgressPhoto.STAGE_CHOICES,
+        "progress_photo_sections": progress_photo_sections,
         "shipments": shipments,
         "reject_percent": reject_percent,
         "opportunity": opportunity,
@@ -8100,6 +8171,7 @@ def production_detail(request, pk):
         "lifecycle_profit": lifecycle_profit,
         "can_view_lifecycle_profit": can_view_profit,
         "can_add_lines": can_add_lines,
+        **workflow_visibility,
     }
 
     return render(request, "crm/production_detail.html", context)
@@ -9291,6 +9363,14 @@ def shipment_detail(request, pk):
     shipment = get_object_or_404(qs, pk=pk)
     lifecycle = shipment.order_lifecycles.order_by("-updated_at", "-id").first()
     can_view_shipping_costs = can_view_lifecycle_profit(request.user)
+    workflow_visibility = build_workflow_visibility_context(
+        "shipping",
+        user=request.user,
+        shipment=shipment,
+        production_order=getattr(shipment, "order", None),
+        opportunity=getattr(shipment, "opportunity", None),
+        lifecycle=lifecycle,
+    )
     if request.method == "POST":
         action = (request.POST.get("action") or "").strip()
         if action == "update_status":
@@ -9319,6 +9399,7 @@ def shipment_detail(request, pk):
             "shipment": shipment,
             "lifecycle": lifecycle,
             "can_view_shipping_costs": can_view_shipping_costs,
+            **workflow_visibility,
         },
     )
 

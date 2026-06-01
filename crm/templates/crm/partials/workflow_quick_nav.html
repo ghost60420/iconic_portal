@@ -1,0 +1,67 @@
+{% if workflow_nav_items %}
+  <nav class="workflow-quick-nav" aria-label="Workflow quick navigation">
+    <style>
+      .workflow-quick-nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 14px 0;
+        padding: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.24);
+        border-radius: 12px;
+        background: rgba(15, 23, 42, 0.78);
+      }
+      .workflow-quick-nav a {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 36px;
+        padding: 7px 11px;
+        border: 1px solid rgba(148, 163, 184, 0.26);
+        border-radius: 999px;
+        background: rgba(2, 6, 23, 0.66);
+        color: #f8fafc;
+        font-size: 12px;
+        font-weight: 900;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      .workflow-quick-nav a:hover {
+        border-color: rgba(250, 204, 21, 0.6);
+        color: #fef3c7;
+        text-decoration: none;
+      }
+      .workflow-quick-nav a.is-active {
+        background: linear-gradient(135deg, #facc15, #f97316);
+        color: #111827;
+        border-color: #fbbf24;
+      }
+      .workflow-quick-nav span {
+        color: inherit;
+        opacity: 0.78;
+        font-weight: 800;
+      }
+      @media (max-width: 640px) {
+        .workflow-quick-nav {
+          overflow-x: auto;
+          flex-wrap: nowrap;
+          -webkit-overflow-scrolling: touch;
+        }
+        .workflow-quick-nav a {
+          flex: 0 0 auto;
+        }
+      }
+      @media print {
+        .workflow-quick-nav {
+          display: none !important;
+        }
+      }
+    </style>
+    {% for item in workflow_nav_items %}
+      <a href="{{ item.url }}" class="{% if item.is_active %}is-active{% endif %}">
+        {{ item.label }}
+        {% if item.record_label %}<span>{{ item.record_label }}</span>{% endif %}
+      </a>
+    {% endfor %}
+  </nav>
+{% endif %}

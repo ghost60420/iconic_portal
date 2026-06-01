@@ -78,9 +78,15 @@
     <a href="{% url 'shipping_add_for_order' order.pk %}" class="production-btn production-btn--ghost">Shipment</a>
   </nav>
 
+  {% include "crm/partials/workflow_quick_nav.html" %}
+  {% include "crm/partials/workflow_order_summary.html" %}
+  {% include "crm/partials/workflow_activity_timeline.html" %}
+
   {% include "crm/partials/product_snapshot.html" %}
 
   {% include "crm/partials/product_reference_images.html" %}
+
+  {% include "crm/partials/production_progress_photos.html" %}
 
   <section class="production-snapshot-grid" aria-label="Production snapshot">
     <article class="production-snapshot-card">

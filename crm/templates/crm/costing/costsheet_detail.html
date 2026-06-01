@@ -393,6 +393,10 @@
     </div>
   </section>
 
+  {% include "crm/partials/workflow_quick_nav.html" %}
+  {% include "crm/partials/workflow_order_summary.html" %}
+  {% include "crm/partials/workflow_activity_timeline.html" %}
+
   <section class="costing-workflow-strip" aria-label="Costing approval workflow">
     <div class="workflow-step {% if costing.status == 'draft' %}active{% endif %}">
       <span>Draft</span>

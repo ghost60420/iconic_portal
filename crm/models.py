@@ -4003,6 +4003,55 @@ class InvoicePayment(models.Model):
 # PRODUCTION ATTACHMENT
 ## ==============================
 
+class ProductionProgressPhoto(models.Model):
+    STAGE_CHOICES = [
+        ("cutting", "Cutting"),
+        ("printing", "Printing"),
+        ("sewing", "Sewing"),
+        ("qc", "QC"),
+        ("packing", "Packing"),
+    ]
+    ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+
+    order = models.ForeignKey(
+        "ProductionOrder",
+        on_delete=models.CASCADE,
+        related_name="progress_photos",
+    )
+    stage = models.CharField(max_length=20, choices=STAGE_CHOICES, db_index=True)
+    image = models.ImageField(upload_to="production_progress/%Y/%m/")
+    caption = models.CharField(max_length=160, blank=True, default="")
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="production_progress_photos",
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["stage", "-uploaded_at", "-id"]
+        indexes = [
+            models.Index(fields=["order", "stage"]),
+            models.Index(fields=["uploaded_at"]),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.image:
+            extension = os.path.splitext(self.image.name or "")[1].lower()
+            if extension not in self.ALLOWED_EXTENSIONS:
+                raise ValidationError({"image": "Upload a JPG, PNG, or WEBP image."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.get_stage_display()} photo for {self.order}"
+
+
 class ProductionOrderAttachment(models.Model):
     order = models.ForeignKey(
         "ProductionOrder",

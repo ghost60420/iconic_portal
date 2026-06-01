@@ -1,0 +1,162 @@
+<article class="production-panel" id="production-progress-photos">
+  <style>
+    .production-progress-photo-form {
+      display: grid;
+      grid-template-columns: 160px minmax(160px, 1fr) minmax(160px, 1fr) auto;
+      gap: 10px;
+      align-items: end;
+      margin-bottom: 14px;
+    }
+    .production-progress-photo-form label {
+      display: grid;
+      gap: 6px;
+      color: #94a3b8;
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+    .production-progress-photo-form select,
+    .production-progress-photo-form input {
+      width: 100%;
+      min-height: 40px;
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      border-radius: 12px;
+      background: #020617;
+      color: #f8fafc;
+      padding: 8px 10px;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .production-progress-photo-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
+    }
+    .production-progress-photo-stage {
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.72);
+      overflow: hidden;
+    }
+    .production-progress-photo-stage-head {
+      padding: 9px 10px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+      color: #fef3c7;
+      font-size: 12px;
+      font-weight: 900;
+    }
+    .production-progress-photo-list {
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+    }
+    .production-progress-photo-card {
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 10px;
+      overflow: hidden;
+      background: rgba(2, 6, 23, 0.84);
+    }
+    .production-progress-photo-card a {
+      display: block;
+      aspect-ratio: 4 / 3;
+      background: #020617;
+    }
+    .production-progress-photo-card img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
+    }
+    .production-progress-photo-meta {
+      padding: 8px 9px;
+    }
+    .production-progress-photo-meta strong,
+    .production-progress-photo-meta span {
+      display: block;
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    .production-progress-photo-meta strong {
+      color: #f8fafc;
+      font-weight: 900;
+    }
+    .production-progress-photo-meta span {
+      margin-top: 3px;
+      color: #94a3b8;
+      font-weight: 800;
+    }
+    .production-progress-photo-empty {
+      padding: 10px;
+      color: #94a3b8;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    @media (max-width: 760px) {
+      .production-progress-photo-form {
+        grid-template-columns: 1fr;
+      }
+      .production-progress-photo-form button {
+        width: 100%;
+      }
+    }
+  </style>
+
+  <div class="production-panel-head">
+    <div>
+      <h2>Production Progress Photos</h2>
+      <p>Optional factory progress photos for cutting, printing, sewing, QC, and packing.</p>
+    </div>
+  </div>
+
+  <form method="post" enctype="multipart/form-data" class="production-progress-photo-form">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="add_progress_photo">
+    <label>
+      <span>Stage</span>
+      <select name="progress_stage" required>
+        {% for value, label in progress_photo_stage_choices %}
+          <option value="{{ value }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      <span>Photo</span>
+      <input type="file" name="progress_photo" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" required>
+    </label>
+    <label>
+      <span>Caption</span>
+      <input type="text" name="progress_caption" maxlength="160" placeholder="Optional note">
+    </label>
+    <button type="submit" class="production-btn production-btn--primary">Add Photo</button>
+  </form>
+
+  <div class="production-progress-photo-grid">
+    {% for stage in progress_photo_sections %}
+      <section class="production-progress-photo-stage" aria-label="{{ stage.label }} photos">
+        <div class="production-progress-photo-stage-head">{{ stage.label }}</div>
+        {% if stage.photos %}
+          <div class="production-progress-photo-list">
+            {% for photo in stage.photos %}
+              <article class="production-progress-photo-card">
+                <a href="{{ photo.image.url }}" target="_blank" rel="noopener">
+                  <img src="{{ photo.image.url }}" alt="{{ photo.caption|default:stage.label }}">
+                </a>
+                <div class="production-progress-photo-meta">
+                  <strong>{{ photo.caption|default:"Progress photo" }}</strong>
+                  <span>
+                    {{ photo.uploaded_at|date:"M j, Y H:i" }}
+                    {% if photo.uploaded_by %}
+                      by {% if photo.uploaded_by.get_full_name %}{{ photo.uploaded_by.get_full_name }}{% else %}{{ photo.uploaded_by.username }}{% endif %}
+                    {% endif %}
+                  </span>
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="production-progress-photo-empty">No photos yet.</div>
+        {% endif %}
+      </section>
+    {% endfor %}
+  </div>
+</article>
