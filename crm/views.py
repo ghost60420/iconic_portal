@@ -573,6 +573,194 @@ def _parse_money_value(raw_value):
     except Exception:
         return None
 
+LEAD_LIST_STATUS_CHOICES = [
+    ("new", "New"),
+    ("contacted", "Contacted"),
+    ("follow_up", "Follow Up"),
+    ("converted", "Converted"),
+    ("lost", "Lost"),
+]
+
+_LEAD_FOLLOW_UP_OUTBOUND_STATUSES = {
+    "Follow Up 1 Sent",
+    "Follow Up 2 Sent",
+    "Follow Up 3 Sent",
+}
+_LEAD_CONTACTED_OUTBOUND_STATUSES = {
+    "First Contact Sent",
+    "Follow Up 1 Sent",
+    "Follow Up 2 Sent",
+    "Follow Up 3 Sent",
+    "Replied",
+    "Interested",
+    "Meeting Booked",
+    "Quote Requested",
+    "Sample Discussion",
+    "No Response",
+}
+_LEAD_LOST_OUTBOUND_STATUSES = {"Bad Fit", "Archived"}
+_LEAD_CONVERTED_OUTBOUND_STATUSES = {"Converted to Opportunity"}
+
+def _normalize_lead_list_status_filter(value):
+    raw = (value or "").strip()
+    key = raw.lower().replace("-", "_").replace(" ", "_")
+    return {
+        "new": "new",
+        "contacted": "contacted",
+        "working": "contacted",
+        "qualified": "contacted",
+        "follow_up": "follow_up",
+        "followup": "follow_up",
+        "nurturing": "follow_up",
+        "on_hold": "follow_up",
+        "converted": "converted",
+        "lost": "lost",
+        "unqualified": "lost",
+    }.get(key, "")
+
+def _lead_opportunity_count(lead):
+    count = getattr(lead, "opportunity_count", None)
+    if count is not None:
+        return count
+    try:
+        return lead.opportunities.count()
+    except Exception:
+        return 0
+
+def _lead_has_contact_activity(lead):
+    status = getattr(lead, "lead_status", "") or ""
+    outbound_status = getattr(lead, "outbound_status", "") or ""
+    return any(
+        [
+            getattr(lead, "last_outreach_date", None),
+            getattr(lead, "last_reply_date", None),
+            outbound_status in _LEAD_CONTACTED_OUTBOUND_STATUSES,
+            status in {"Working", "Qualified"},
+        ]
+    )
+
+def _lead_follow_up_needed(lead, today):
+    status = getattr(lead, "lead_status", "") or ""
+    outbound_status = getattr(lead, "outbound_status", "") or ""
+    next_follow_up = getattr(lead, "next_follow_up_date", None)
+    next_followup = getattr(lead, "next_followup", None)
+    return any(
+        [
+            next_follow_up and next_follow_up <= today,
+            next_followup and next_followup <= today,
+            outbound_status in _LEAD_FOLLOW_UP_OUTBOUND_STATUSES,
+            status in {"Nurturing", "On Hold"},
+        ]
+    )
+
+def _lead_list_status_payload(lead, today=None):
+    today = today or timezone.localdate()
+    status = getattr(lead, "lead_status", "") or ""
+    outbound_status = getattr(lead, "outbound_status", "") or ""
+
+    if (
+        status == "Converted"
+        or outbound_status in _LEAD_CONVERTED_OUTBOUND_STATUSES
+        or _lead_opportunity_count(lead) > 0
+    ):
+        return "converted", "Converted"
+
+    if status in {"Lost", "Unqualified"} or outbound_status in _LEAD_LOST_OUTBOUND_STATUSES:
+        return "lost", "Lost"
+
+    if _lead_follow_up_needed(lead, today):
+        return "follow_up", "Follow Up"
+
+    if _lead_has_contact_activity(lead):
+        return "contacted", "Contacted"
+
+    if getattr(lead, "assigned_to_id", None):
+        return "follow_up", "Follow Up"
+
+    return "new", "New"
+
+def _lead_assigned_to_label(lead):
+    user = getattr(lead, "assigned_to", None)
+    if user:
+        return user.get_full_name() or user.first_name or user.username or user.email or f"User {user.pk}"
+    return "Unassigned"
+
+def _decorate_leads_for_list(leads, today=None):
+    today = today or timezone.localdate()
+    for lead in leads:
+        key, label = _lead_list_status_payload(lead, today=today)
+        lead.display_lead_status_key = key
+        lead.display_lead_status = label
+        lead.assigned_to_display = _lead_assigned_to_label(lead)
+    return leads
+
+def _lead_list_converted_q():
+    return (
+        Q(lead_status="Converted")
+        | Q(outbound_status__in=_LEAD_CONVERTED_OUTBOUND_STATUSES)
+        | Q(opportunity_count__gt=0)
+    )
+
+def _lead_list_lost_q():
+    return (
+        Q(lead_status__in=["Lost", "Unqualified"])
+        | Q(outbound_status__in=_LEAD_LOST_OUTBOUND_STATUSES)
+    )
+
+def _lead_list_follow_up_q(today):
+    assigned_untouched_q = (
+        Q(assigned_to__isnull=False)
+        & Q(last_outreach_date__isnull=True)
+        & Q(last_reply_date__isnull=True)
+        & Q(next_follow_up_date__isnull=True)
+        & Q(next_followup__isnull=True)
+        & (Q(outbound_status="") | Q(outbound_status="Not Contacted"))
+        & Q(lead_status__in=["", "New"])
+    )
+    return (
+        Q(next_follow_up_date__lte=today)
+        | Q(next_followup__lte=today)
+        | Q(outbound_status__in=_LEAD_FOLLOW_UP_OUTBOUND_STATUSES)
+        | Q(lead_status__in=["Nurturing", "On Hold"])
+        | assigned_untouched_q
+    )
+
+def _lead_list_contacted_q():
+    return (
+        Q(last_outreach_date__isnull=False)
+        | Q(last_reply_date__isnull=False)
+        | Q(outbound_status__in=_LEAD_CONTACTED_OUTBOUND_STATUSES)
+        | Q(lead_status__in=["Working", "Qualified"])
+    )
+
+def _filter_leads_by_list_status(qs, status_key, today):
+    converted_q = _lead_list_converted_q()
+    lost_q = _lead_list_lost_q()
+    follow_up_q = _lead_list_follow_up_q(today)
+    contacted_q = _lead_list_contacted_q()
+
+    if status_key == "converted":
+        return qs.filter(converted_q).distinct()
+    if status_key == "lost":
+        return qs.filter(lost_q).exclude(converted_q).distinct()
+    if status_key == "follow_up":
+        return qs.filter(follow_up_q).exclude(converted_q | lost_q).distinct()
+    if status_key == "contacted":
+        return qs.filter(contacted_q).exclude(converted_q | lost_q | follow_up_q).distinct()
+    if status_key == "new":
+        return qs.filter(
+            assigned_to__isnull=True,
+            last_outreach_date__isnull=True,
+            last_reply_date__isnull=True,
+            next_follow_up_date__isnull=True,
+            next_followup__isnull=True,
+            opportunity_count=0,
+        ).filter(
+            Q(lead_status="") | Q(lead_status="New"),
+            Q(outbound_status="") | Q(outbound_status="Not Contacted"),
+        ).exclude(lost_q | converted_q).distinct()
+    return qs
+
 def _normalize_phone(value):
     if not value:
         return ""
@@ -722,7 +910,8 @@ def _merge_leads(primary, duplicate, user=None):
 def leads_list(request):
     lead_id = (request.GET.get("lead_id") or "").strip()
     q = (request.GET.get("q") or "").strip()
-    status = (request.GET.get("status") or "").strip()
+    status = (request.GET.get("lead_status") or request.GET.get("status") or "").strip()
+    selected_lead_status = _normalize_lead_list_status_filter(status)
     market = (request.GET.get("market") or "").strip()
     owner = (request.GET.get("owner") or "").strip()
     assigned_to = (request.GET.get("assigned_to") or "").strip()
@@ -758,15 +947,7 @@ def leads_list(request):
     if per_page not in (20, 50, 100):
         per_page = 50
 
-    qs = Lead.objects.all()
-
-    if status:
-        if status.lower() == "converted":
-            qs = qs.filter(
-                Q(lead_status__iexact="Converted") | Q(opportunities__isnull=False)
-            ).distinct()
-        else:
-            qs = qs.filter(lead_status__iexact=status)
+    qs = Lead.objects.select_related("assigned_to")
 
     if view == "inbound":
         qs = qs.filter(lead_type="inbound")
@@ -890,6 +1071,11 @@ def leads_list(request):
 
     if contact_join:
         qs = qs.distinct()
+
+    today = timezone.localdate()
+    qs = qs.annotate(opportunity_count=Count("opportunities", distinct=True))
+    if selected_lead_status:
+        qs = _filter_leads_by_list_status(qs, selected_lead_status, today)
 
     if sort == "old":
         qs = qs.order_by("created_date", "id")
@@ -1026,10 +1212,13 @@ def leads_list(request):
     page_number = request.GET.get("page") or 1
     page_obj = paginator.get_page(page_number)
     page_obj.object_list = attach_primary_reference_images_to_leads(page_obj.object_list)
+    page_obj.object_list = _decorate_leads_for_list(page_obj.object_list, today=today)
 
     context = {
         "page_obj": page_obj,
         "per_page": per_page,
+        "lead_status_filter_choices": LEAD_LIST_STATUS_CHOICES,
+        "selected_lead_status": selected_lead_status,
         "status_choices": LEAD_STATUS_CHOICES,
         "market_choices": Lead.MARKET_CHOICES,
         "outbound_status_choices": OUTBOUND_STATUS_CHOICES,

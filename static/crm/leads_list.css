@@ -493,7 +493,7 @@
 
 .lead-page table {
   width: 100%;
-  min-width: 1040px;
+  min-width: 1120px;
   border-collapse: separate;
   border-spacing: 0;
   font-size: 13px;
@@ -507,27 +507,6 @@
   text-align: left;
   vertical-align: top;
   overflow-wrap: anywhere;
-}
-
-.lead-page th:nth-child(4),
-.lead-page td:nth-child(4),
-.lead-page th:nth-child(6),
-.lead-page td:nth-child(6),
-.lead-page th:nth-child(7),
-.lead-page td:nth-child(7),
-.lead-page th:nth-child(9),
-.lead-page td:nth-child(9),
-.lead-page th:nth-child(11),
-.lead-page td:nth-child(11),
-.lead-page th:nth-child(12),
-.lead-page td:nth-child(12),
-.lead-page th:nth-child(13),
-.lead-page td:nth-child(13),
-.lead-page th:nth-child(14),
-.lead-page td:nth-child(14),
-.lead-page th:nth-child(16),
-.lead-page td:nth-child(16) {
-  display: none;
 }
 
 .lead-page th {
@@ -558,7 +537,24 @@
 }
 
 .lead-image-cell {
-  width: 62px;
+  width: 86px;
+}
+
+.lead-image-heading,
+.lead-image-with-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lead-image-with-select {
+  align-items: flex-start;
+}
+
+.lead-image-heading input,
+.lead-image-with-select input {
+  flex: 0 0 auto;
+  margin-top: 2px;
 }
 
 .lead-product-thumb {
@@ -695,6 +691,12 @@
 .lead-page .badge[data-status="Lost"] { border-color: rgba(248, 113, 113, 0.42); color: #fee2e2; background: rgba(248, 113, 113, 0.13); }
 .lead-page .badge[data-status="On Hold"] { border-color: rgba(148, 163, 184, 0.34); color: #e2e8f0; background: rgba(148, 163, 184, 0.13); }
 .lead-page .badge[data-status="Converted"] { border-color: rgba(34, 211, 238, 0.42); color: #cffafe; background: rgba(34, 211, 238, 0.13); }
+
+.lead-page .badge[data-list-status="new"] { border-color: rgba(34, 197, 94, 0.38); color: #bbf7d0; background: rgba(34, 197, 94, 0.13); }
+.lead-page .badge[data-list-status="contacted"] { border-color: rgba(96, 165, 250, 0.42); color: #dbeafe; background: rgba(59, 130, 246, 0.13); }
+.lead-page .badge[data-list-status="follow_up"] { border-color: rgba(250, 204, 21, 0.42); color: #fef3c7; background: rgba(250, 204, 21, 0.13); }
+.lead-page .badge[data-list-status="converted"] { border-color: rgba(34, 211, 238, 0.42); color: #cffafe; background: rgba(34, 211, 238, 0.13); }
+.lead-page .badge[data-list-status="lost"] { border-color: rgba(248, 113, 113, 0.42); color: #fee2e2; background: rgba(248, 113, 113, 0.13); }
 
 .lead-page .badge[data-outbound],
 .lead-page .badge[data-qual] {

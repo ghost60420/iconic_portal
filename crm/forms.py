@@ -198,6 +198,9 @@ class LeadForm(forms.ModelForm):
 
         if "assigned_to" in self.fields:
             self.fields["assigned_to"].queryset = get_user_model().objects.all().order_by("first_name", "last_name", "username")
+            self.fields["assigned_to"].required = False
+            self.fields["assigned_to"].empty_label = "Unassigned"
+            self.fields["assigned_to"].widget.attrs.update({"class": "form-control"})
 
         if not self.instance.pk and not self.is_bound and "lead_type" in self.fields:
             self.fields["lead_type"].initial = "outbound"
