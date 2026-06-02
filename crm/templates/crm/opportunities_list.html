@@ -2,7 +2,7 @@
 {% load static %}
 
 {% block content %}
-<link rel="stylesheet" href="{% static 'crm/opportunities_list.css' %}?v=opps-modern-20260506">
+<link rel="stylesheet" href="{% static 'crm/opportunities_list.css' %}?v=workflow-thumbs-20260602">
 
 <div class="opp-page">
   <section class="opp-hero">
@@ -167,7 +167,7 @@
       <table class="opp-table">
         <thead>
           <tr>
-            <th>Image</th>
+            <th class="opp-image-cell">Image</th>
             <th>Opportunity</th>
             <th>Value</th>
             <th>Product</th>
@@ -185,7 +185,7 @@
               <td class="opp-image-cell" data-label="Image">
                 <a class="opp-product-thumb" href="{% url 'opportunity_detail' opp.pk %}" aria-label="Open {{ opp.opportunity_id }}">
                   {% if opp.primary_reference_image %}
-                    <img src="{{ opp.primary_reference_image.image.url }}" alt="{{ opp.primary_reference_image.caption|default:'Product reference image' }}">
+                    <img class="lead-thumb" src="{{ opp.primary_reference_image.image.url }}" alt="{{ opp.primary_reference_image.caption|default:'Product reference image' }}">
                   {% else %}
                     <span>No img</span>
                   {% endif %}

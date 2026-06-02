@@ -452,7 +452,7 @@
   }
 </style>
 
-<link rel="stylesheet" href="{% static 'crm/leads_list.css' %}?v=compact-assignees-20260509">
+<link rel="stylesheet" href="{% static 'crm/leads_list.css' %}?v=workflow-thumbs-20260602">
 
 <div class="lead-page">
   <div class="lead-shell">
@@ -827,7 +827,7 @@
                   <input type="checkbox" name="lead_ids" value="{{ lead.pk }}" aria-label="Select {{ lead.lead_id }}">
                   <a class="lead-product-thumb" href="{% url 'lead_detail' lead.pk %}" aria-label="Open {{ lead.lead_id }}">
                     {% if lead.primary_reference_image %}
-                      <img src="{{ lead.primary_reference_image.image.url }}" alt="{{ lead.primary_reference_image.caption|default:'Product reference image' }}">
+                      <img class="lead-thumb" src="{{ lead.primary_reference_image.image.url }}" alt="{{ lead.primary_reference_image.caption|default:'Product reference image' }}">
                     {% else %}
                       <span>No img</span>
                     {% endif %}

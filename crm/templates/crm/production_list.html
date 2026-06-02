@@ -1,7 +1,7 @@
 {% extends "crm/base.html" %}
 {% load static %}
 {% block content %}
-<link rel="stylesheet" href="{% static 'crm/production_list.css' %}?v=production-list-modern-20260507">
+<link rel="stylesheet" href="{% static 'crm/production_list.css' %}?v=workflow-thumbs-20260602">
 
 <div class="production-page">
   <section class="production-hero">
@@ -200,7 +200,7 @@
         <table class="production-table">
           <thead>
             <tr>
-              <th>Image</th>
+              <th class="production-image-cell">Image</th>
               <th>Order</th>
               <th>Client / Opportunity</th>
               <th>Product</th>
@@ -217,16 +217,16 @@
             {% for row in orders_data %}
               {% with order=row.order stages=row.stages percent=row.percent_done has_delay=row.has_delay %}
                 <tr class="{% if has_delay %}is-delayed{% endif %}">
-                  <td data-label="Image">
+                  <td class="production-image-cell" data-label="Image">
                     <a class="production-thumb" href="{% url 'production_detail' order.pk %}" aria-label="Open {{ order.order_code|default:order.title }}">
                       {% if order.primary_reference_image %}
-                        <img src="{{ order.primary_reference_image.image.url }}" alt="{{ order.primary_reference_image.caption|default:'Product reference image' }}">
+                        <img class="lead-thumb" src="{{ order.primary_reference_image.image.url }}" alt="{{ order.primary_reference_image.caption|default:'Product reference image' }}">
                       {% elif order.product and order.product.image %}
-                        <img src="{{ order.product.image.url }}" alt="{{ order.product.name }}">
+                        <img class="lead-thumb" src="{{ order.product.image.url }}" alt="{{ order.product.name }}">
                       {% elif order.style_image %}
-                        <img src="{{ order.style_image.url }}" alt="{{ order.title }}">
+                        <img class="lead-thumb" src="{{ order.style_image.url }}" alt="{{ order.title }}">
                       {% else %}
-                        <span>PO</span>
+                        <span>No img</span>
                       {% endif %}
                     </a>
                   </td>
