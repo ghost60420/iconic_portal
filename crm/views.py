@@ -7581,6 +7581,8 @@ def production_list(request):
             | Q(opportunity__product_category__icontains=search_query)
         )
 
+    orders_for_kpis = orders
+
     if status_filter == "completed":
         orders = orders.filter(status__in=completed_statuses)
     elif status_filter == "all":
@@ -7667,28 +7669,31 @@ def production_list(request):
 
     total_orders = len(orders_data)
     active_rows = [row for row in orders_data if row["order"].status in active_statuses]
-    sample_development_rows = [
-        row for row in active_rows
-        if row["order"].production_order_type == "sampling"
-    ]
-    bulk_production_rows = [
-        row for row in active_rows
-        if row["order"].production_order_type == "bulk"
-    ]
     active_orders = len(active_rows)
     completed_orders = len([row for row in orders_data if row["order"].status in completed_statuses])
     delayed_orders = len([row for row in orders_data if row["has_delay"]])
-    sample_development_orders_count = len(sample_development_rows)
-    sample_development_units_count = sum((row["order"].qty_total or 0) for row in sample_development_rows)
-    bulk_production_orders_count = len(bulk_production_rows)
-    bulk_production_units_count = sum((row["order"].qty_total or 0) for row in bulk_production_rows)
-    active_units_count = sum((row["order"].qty_total or 0) for row in active_rows)
     total_pieces = sum((row["order"].qty_total or 0) for row in orders_data)
     total_reject = sum((row["order"].qty_reject or 0) for row in orders_data)
     reject_percent = int((total_reject / total_pieces) * 100) if total_pieces else 0
     late_shipment_count = len([row for row in orders_data if row["late_shipment"]])
     overdue_approval_count = len([row for row in orders_data if row["order"].status == "hold"])
     shipment_pending_count = len([row for row in orders_data if row["shipment_pending"]])
+    production_kpi_active_qs = orders_for_kpis.filter(status__in=active_statuses)
+    sample_development_qs = production_kpi_active_qs.filter(production_order_type="sampling")
+    bulk_production_qs = production_kpi_active_qs.filter(production_order_type="bulk")
+    total_active_orders_count = production_kpi_active_qs.count()
+    total_active_units_count = production_kpi_active_qs.aggregate(total_units=Sum("qty_total"))["total_units"] or 0
+    sample_development_orders_count = sample_development_qs.count()
+    sample_development_units_count = sample_development_qs.aggregate(total_units=Sum("qty_total"))["total_units"] or 0
+    bulk_production_orders_count = bulk_production_qs.count()
+    bulk_production_units_count = bulk_production_qs.aggregate(total_units=Sum("qty_total"))["total_units"] or 0
+    production_completed_count = orders_for_kpis.filter(status__in=completed_statuses).count()
+    production_completion_denominator = total_active_orders_count + production_completed_count
+    production_completion_percent = (
+        round((production_completed_count / production_completion_denominator) * 100)
+        if production_completion_denominator
+        else 0
+    )
 
     pipeline_counts = [
         {
@@ -7752,13 +7757,15 @@ def production_list(request):
             "orders_data": orders_data,
             "total_orders": total_orders,
             "active_orders": active_orders,
-            "active_units_count": active_units_count,
+            "total_active_orders_count": total_active_orders_count,
+            "total_active_units_count": total_active_units_count,
             "completed_orders": completed_orders,
             "delayed_orders": delayed_orders,
             "sample_development_orders_count": sample_development_orders_count,
             "sample_development_units_count": sample_development_units_count,
             "bulk_production_orders_count": bulk_production_orders_count,
             "bulk_production_units_count": bulk_production_units_count,
+            "production_completion_percent": production_completion_percent,
             "total_pieces": total_pieces,
             "total_reject": total_reject,
             "reject_percent": reject_percent,
@@ -12514,10 +12521,12 @@ def main_dashboard(request):
     bulk_production_count = 0
     bulk_production_units_count = 0
     active_production_units_count = 0
+    completed_production_count = 0
+    production_completion_percent = 0
     shipped_this_month_count = 0
     if ProductionOrder is not None:
         try:
-            active_production_qs = ProductionOrder.objects.filter(status__in=["planning", "in_progress", "hold"])
+            active_production_qs = ProductionOrder.objects.filter(status__in=_production_active_statuses())
             active_production_count = active_production_qs.count()
             active_production_units_count = active_production_qs.aggregate(total_units=Sum("qty_total"))["total_units"] or 0
             delayed_production_count = active_production_qs.filter(bulk_deadline__lt=today).count()
@@ -12527,6 +12536,13 @@ def main_dashboard(request):
             sampling_production_units_count = sampling_production_qs.aggregate(total_units=Sum("qty_total"))["total_units"] or 0
             bulk_production_count = bulk_production_qs.count()
             bulk_production_units_count = bulk_production_qs.aggregate(total_units=Sum("qty_total"))["total_units"] or 0
+            completed_production_count = ProductionOrder.objects.filter(status__in=_production_completed_statuses()).count()
+            production_completion_denominator = active_production_count + completed_production_count
+            production_completion_percent = (
+                round((completed_production_count / production_completion_denominator) * 100)
+                if production_completion_denominator
+                else 0
+            )
             ready_to_ship_count = (
                 ProductionOrder.objects.filter(status__in=["done", "closed_won"])
                 .exclude(shipments__status__in=["shipped", "out_for_delivery", "delivered"])
@@ -12542,6 +12558,8 @@ def main_dashboard(request):
             bulk_production_count = 0
             bulk_production_units_count = 0
             active_production_units_count = 0
+            completed_production_count = 0
+            production_completion_percent = 0
     if Shipment is not None:
         try:
             shipped_this_month_count = Shipment.objects.filter(
@@ -12978,6 +12996,8 @@ def main_dashboard(request):
         "production_hold_count": production_hold_count,
         "active_production_count": active_production_count,
         "active_production_units_count": active_production_units_count,
+        "completed_production_count": completed_production_count,
+        "production_completion_percent": production_completion_percent,
         "delayed_production_count": delayed_production_count,
         "ready_to_ship_count": ready_to_ship_count,
         "sampling_production_count": sampling_production_count,

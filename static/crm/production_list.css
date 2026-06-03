@@ -586,14 +586,14 @@
 }
 
 .production-type-badge--sampling {
-  border-color: rgba(56, 189, 248, 0.38);
-  background: rgba(8, 47, 73, 0.72);
-  color: #bae6fd;
+  border-color: rgba(245, 158, 11, 0.45);
+  background: rgba(120, 53, 15, 0.72);
+  color: #fde68a;
 }
 
 .production-type-badge--bulk {
-  border-color: rgba(52, 211, 153, 0.35);
-  background: rgba(6, 78, 59, 0.62);
+  border-color: rgba(34, 197, 94, 0.42);
+  background: rgba(20, 83, 45, 0.68);
   color: #bbf7d0;
 }
 

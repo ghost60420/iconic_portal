@@ -1,7 +1,7 @@
 {% extends "crm/base.html" %}
 {% load static %}
 {% block content %}
-<link rel="stylesheet" href="{% static 'crm/production_list.css' %}?v=production-kpi-20260603">
+<link rel="stylesheet" href="{% static 'crm/production_list.css' %}?v=production-kpi-badges-20260603">
 
 <div class="production-page">
   <section class="production-hero">
@@ -28,13 +28,18 @@
   <section class="production-summary-grid" aria-label="Production summary">
     <article class="production-stat">
       <span>Total Active Production Orders</span>
-      <strong>{{ active_orders }}</strong>
+      <strong>{{ total_active_orders_count }}</strong>
       <small>Planning, in progress, or on hold</small>
     </article>
     <article class="production-stat">
       <span>Total Active Units</span>
-      <strong>{{ active_units_count }}</strong>
+      <strong>{{ total_active_units_count }}</strong>
       <small>Units across active orders</small>
+    </article>
+    <article class="production-stat">
+      <span>Production Completion %</span>
+      <strong>{{ production_completion_percent }}%</strong>
+      <small>Completed vs active plus completed orders</small>
     </article>
     <article class="production-stat">
       <span>Sample Development Orders</span>
