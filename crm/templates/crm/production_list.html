@@ -42,6 +42,21 @@
       <small>Completed vs active plus completed orders</small>
     </article>
     <article class="production-stat">
+      <span>Ready To Ship</span>
+      <strong>{{ ready_to_ship_operations_count }}</strong>
+      <small>Packing complete or ready-to-ship orders</small>
+    </article>
+    <article class="production-stat production-stat--risk">
+      <span>Delayed Orders</span>
+      <strong>{{ delayed_operations_count }}</strong>
+      <small>Target ship date passed and not finished</small>
+    </article>
+    <article class="production-stat">
+      <span>Awaiting Approval Samples</span>
+      <strong>{{ awaiting_approval_samples_count }}</strong>
+      <small>Sample development orders marked sample sent</small>
+    </article>
+    <article class="production-stat">
       <span>Sample Development Orders</span>
       <strong>{{ sample_development_orders_count }}</strong>
       <small>Active sample development orders</small>
@@ -60,11 +75,6 @@
       <span>Bulk Production Units</span>
       <strong>{{ bulk_production_units_count }}</strong>
       <small>Units in active bulk production</small>
-    </article>
-    <article class="production-stat production-stat--risk">
-      <span>Delayed Orders</span>
-      <strong>{{ delayed_orders }}</strong>
-      <small>Stage delay or overdue timeline signals</small>
     </article>
     <article class="production-stat">
       <span>Completed Orders</span>

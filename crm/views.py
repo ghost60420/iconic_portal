@@ -1906,6 +1906,29 @@ def _production_active_statuses():
     return {"planning", "in_progress", "hold"}
 
 
+def _production_finished_statuses_for_operations():
+    return _production_completed_statuses() | {"closed_lost", "cancelled", "shipped"}
+
+
+PRODUCTION_READY_TO_SHIP_STATUS_VALUES = {
+    "Packing Complete",
+    "Ready To Ship",
+}
+
+
+PRODUCTION_AWAITING_APPROVAL_SAMPLE_STATUS_VALUES = {
+    "Sample Sent",
+}
+
+
+def _production_status_value_query(values):
+    return Q(status__in=values)
+
+
+def _production_ready_to_ship_query():
+    return _production_status_value_query(PRODUCTION_READY_TO_SHIP_STATUS_VALUES)
+
+
 PRODUCTION_CONTROL_BUCKET_LABELS = {
     "sampling": "Sampling",
     "fabric": "Fabric sourcing",
@@ -7678,6 +7701,7 @@ def production_list(request):
     overdue_approval_count = len([row for row in orders_data if row["order"].status == "hold"])
     shipment_pending_count = len([row for row in orders_data if row["shipment_pending"]])
     production_kpi_active_qs = orders_for_kpis.filter(status__in=active_statuses)
+    production_operations_open_qs = orders_for_kpis.exclude(status__in=_production_finished_statuses_for_operations())
     sample_development_qs = production_kpi_active_qs.filter(production_order_type="sampling")
     bulk_production_qs = production_kpi_active_qs.filter(production_order_type="bulk")
     total_active_orders_count = production_kpi_active_qs.count()
@@ -7692,6 +7716,28 @@ def production_list(request):
         round((production_completed_count / production_completion_denominator) * 100)
         if production_completion_denominator
         else 0
+    )
+    ready_to_ship_operations_count = (
+        production_operations_open_qs
+        .filter(_production_ready_to_ship_query())
+        .exclude(shipments__status__in=["shipped", "out_for_delivery", "delivered"])
+        .distinct()
+        .count()
+    )
+    delayed_operations_count = (
+        production_operations_open_qs
+        .filter(bulk_deadline__lt=today)
+        .distinct()
+        .count()
+    )
+    awaiting_approval_samples_count = (
+        production_operations_open_qs
+        .filter(
+            production_order_type="sampling",
+        )
+        .filter(_production_status_value_query(PRODUCTION_AWAITING_APPROVAL_SAMPLE_STATUS_VALUES))
+        .distinct()
+        .count()
     )
 
     pipeline_counts = [
@@ -7765,6 +7811,9 @@ def production_list(request):
             "bulk_production_orders_count": bulk_production_orders_count,
             "bulk_production_units_count": bulk_production_units_count,
             "production_completion_percent": production_completion_percent,
+            "ready_to_ship_operations_count": ready_to_ship_operations_count,
+            "delayed_operations_count": delayed_operations_count,
+            "awaiting_approval_samples_count": awaiting_approval_samples_count,
             "total_pieces": total_pieces,
             "total_reject": total_reject,
             "reject_percent": reject_percent,
@@ -12482,6 +12531,7 @@ def main_dashboard(request):
     active_production_count = 0
     delayed_production_count = 0
     ready_to_ship_count = 0
+    awaiting_approval_samples_count = 0
     sampling_production_count = 0
     sampling_production_units_count = 0
     bulk_production_count = 0
@@ -12493,9 +12543,12 @@ def main_dashboard(request):
     if ProductionOrder is not None:
         try:
             active_production_qs = ProductionOrder.objects.filter(status__in=_production_active_statuses())
+            operations_open_production_qs = ProductionOrder.objects.exclude(
+                status__in=_production_finished_statuses_for_operations()
+            )
             active_production_count = active_production_qs.count()
             active_production_units_count = active_production_qs.aggregate(total_units=Sum("qty_total"))["total_units"] or 0
-            delayed_production_count = active_production_qs.filter(bulk_deadline__lt=today).count()
+            delayed_production_count = operations_open_production_qs.filter(bulk_deadline__lt=today).distinct().count()
             sampling_production_qs = active_production_qs.filter(production_order_type="sampling")
             bulk_production_qs = active_production_qs.filter(production_order_type="bulk")
             sampling_production_count = sampling_production_qs.count()
@@ -12510,8 +12563,16 @@ def main_dashboard(request):
                 else 0
             )
             ready_to_ship_count = (
-                ProductionOrder.objects.filter(status__in=["done", "closed_won"])
+                operations_open_production_qs
+                .filter(_production_ready_to_ship_query())
                 .exclude(shipments__status__in=["shipped", "out_for_delivery", "delivered"])
+                .distinct()
+                .count()
+            )
+            awaiting_approval_samples_count = (
+                operations_open_production_qs
+                .filter(production_order_type="sampling")
+                .filter(_production_status_value_query(PRODUCTION_AWAITING_APPROVAL_SAMPLE_STATUS_VALUES))
                 .distinct()
                 .count()
             )
@@ -12519,6 +12580,7 @@ def main_dashboard(request):
             active_production_count = 0
             delayed_production_count = 0
             ready_to_ship_count = 0
+            awaiting_approval_samples_count = 0
             sampling_production_count = 0
             sampling_production_units_count = 0
             bulk_production_count = 0
@@ -12966,6 +13028,7 @@ def main_dashboard(request):
         "production_completion_percent": production_completion_percent,
         "delayed_production_count": delayed_production_count,
         "ready_to_ship_count": ready_to_ship_count,
+        "awaiting_approval_samples_count": awaiting_approval_samples_count,
         "sampling_production_count": sampling_production_count,
         "sampling_production_units_count": sampling_production_units_count,
         "bulk_production_count": bulk_production_count,
