@@ -2976,8 +2976,8 @@ class ProductionOrder(models.Model):
     ]
 
     PRODUCTION_ORDER_TYPE_CHOICES = [
-        ("sampling", "Sampling"),
-        ("bulk", "Bulk"),
+        ("sampling", "Sample Development"),
+        ("bulk", "Bulk Production"),
     ]
 
     FACTORY_CHOICES = [
