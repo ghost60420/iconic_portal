@@ -81,25 +81,6 @@ def _next_invoice_number():
     return f"{prefix}{timezone.now():%y%m%d%H%M%S}"
 
 
-def _next_order_code():
-    prefix = "PO"
-    latest = ProductionOrder.objects.filter(order_code__startswith=prefix).order_by("-order_code").first()
-    next_num = 1
-    if latest and latest.order_code:
-        raw = latest.order_code.replace(prefix, "").strip()
-        try:
-            next_num = int(raw) + 1
-        except ValueError:
-            next_num = 1
-
-    for offset in range(1000):
-        candidate = f"{prefix}{next_num + offset:04}"
-        if not ProductionOrder.objects.filter(order_code=candidate).exists():
-            return candidate
-
-    return f"{prefix}{timezone.now():%y%m%d%H%M%S}"
-
-
 def _invoice_region_for_costing(costing):
     currency = (costing.currency or "").upper()
     if currency == "BDT" or costing.factory_location == "bd":
@@ -227,28 +208,23 @@ def create_or_link_production_order_from_invoice(invoice, user=None):
         created = False
         if not order:
             title = costing.style_name or costing.style_code or f"{costing.opportunity.opportunity_id} production"
-            for _attempt in range(5):
-                try:
-                    order = ProductionOrder.objects.create(
-                        opportunity=costing.opportunity,
-                        lead=costing.opportunity.lead if costing.opportunity_id else None,
-                        customer=invoice.customer or costing.customer,
-                        costing_header=costing,
-                        title=title,
-                        order_code=_next_order_code(),
-                        factory_location="ca" if costing.factory_location == "ca" else "bd",
-                        order_type="fob",
-                        qty_total=costing.order_quantity or 0,
-                        style_name=costing.style_name or "",
-                        color_info="",
-                        notes=f"Created from invoice {invoice.invoice_number} and quotation {costing.quotation_number or 'COST-' + str(costing.pk)}.",
-                    )
-                    created = True
-                    break
-                except IntegrityError:
-                    continue
-            if not order:
-                raise CostingWorkflowError("Could not create a unique production order number.")
+            try:
+                order = ProductionOrder.objects.create(
+                    opportunity=costing.opportunity,
+                    lead=costing.opportunity.lead if costing.opportunity_id else None,
+                    customer=invoice.customer or costing.customer,
+                    costing_header=costing,
+                    title=title,
+                    factory_location="ca" if costing.factory_location == "ca" else "bd",
+                    order_type="fob",
+                    qty_total=costing.order_quantity or 0,
+                    style_name=costing.style_name or "",
+                    color_info="",
+                    notes=f"Created from invoice {invoice.invoice_number} and quotation {costing.quotation_number or 'COST-' + str(costing.pk)}.",
+                )
+                created = True
+            except IntegrityError as exc:
+                raise CostingWorkflowError("Could not create a unique production order number.") from exc
         elif not order.costing_header_id:
             order.costing_header = costing
             order.save(update_fields=["costing_header", "updated_at"])

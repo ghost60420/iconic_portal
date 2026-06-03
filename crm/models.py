@@ -1,4 +1,6 @@
-from django.db import models
+import uuid
+
+from django.db import IntegrityError, models, transaction
 from django.db.utils import OperationalError, ProgrammingError
 from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
@@ -2980,6 +2982,9 @@ class ProductionOrder(models.Model):
         ("bulk", "Bulk Production"),
     ]
 
+    ORDER_CODE_PREFIX = "PO"
+    ORDER_CODE_GENERATION_ATTEMPTS = 8
+
     FACTORY_CHOICES = [
         ("bd", "Bangladesh"),
         ("ca", "Canada"),
@@ -3191,6 +3196,38 @@ class ProductionOrder(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+    @classmethod
+    def generate_order_code(cls):
+        timestamp = timezone.now().strftime("%y%m%d%H%M%S")
+        suffix = uuid.uuid4().hex[:6].upper()
+        return f"{cls.ORDER_CODE_PREFIX}{timestamp}{suffix}"
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            if self.order_code:
+                self.order_code = self.order_code.strip()
+            return super().save(*args, **kwargs)
+
+        supplied_order_code = (self.order_code or "").strip()
+        if supplied_order_code:
+            self.order_code = supplied_order_code
+            return super().save(*args, **kwargs)
+
+        last_error = None
+        for _attempt in range(self.ORDER_CODE_GENERATION_ATTEMPTS):
+            self.order_code = self.generate_order_code()
+            if self.__class__.objects.filter(order_code=self.order_code).exists():
+                continue
+            try:
+                with transaction.atomic():
+                    return super().save(*args, **kwargs)
+            except IntegrityError as exc:
+                last_error = exc
+                self.pk = None
+                self._state.adding = True
+
+        raise last_error or IntegrityError("Could not generate a unique production order code.")
 
     def __str__(self):
         if self.order_code:

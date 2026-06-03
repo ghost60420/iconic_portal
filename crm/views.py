@@ -4,7 +4,6 @@ import json
 import logging
 import re
 import os
-import uuid
 from collections import defaultdict
 from datetime import timedelta, date
 from decimal import Decimal
@@ -8453,61 +8452,28 @@ def production_from_opportunity(request, pk):
     if not po:
         title = f"{opportunity.lead.account_brand} order for {opportunity.opportunity_id}"
         qty_guess = opportunity.moq_units or 0
-        def _next_order_code():
-            prefix = "PO"
-            last = (
-                ProductionOrder.objects
-                .filter(order_code__startswith=prefix)
-                .order_by("-order_code")
-                .first()
+        try:
+            po = ProductionOrder.objects.create(
+                opportunity=opportunity,
+                lead=opportunity.lead,
+                customer=customer,
+                title=title,
+                qty_total=qty_guess,
+                cost_sheet_active=active_cost_sheet,
+                costing_header=approved_costing,
             )
-            if last and last.order_code and last.order_code.startswith(prefix):
-                try:
-                    last_num = int(last.order_code.replace(prefix, ""))
-                except ValueError:
-                    last_num = 0
-            else:
-                last_num = 0
-
-            for i in range(1, 1000):
-                code = f"{prefix}{last_num + i:04}"
-                if not ProductionOrder.objects.filter(order_code=code).exists():
-                    return code
-
-            return f"{prefix}{timezone.now().strftime('%y%m%d%H%M%S')}"
-
-        def _fallback_order_code():
-            prefix = "PO"
-            return f"{prefix}{timezone.now().strftime('%y%m%d%H%M%S')}{uuid.uuid4().hex[:4].upper()}"
-
-        created = False
-        for attempt in range(5):
-            try:
-                order_code = _next_order_code()
-                if ProductionOrder.objects.filter(order_code=order_code).exists():
-                    order_code = _fallback_order_code()
-                po = ProductionOrder.objects.create(
-                    opportunity=opportunity,
-                    lead=opportunity.lead,
-                    customer=customer,
-                    title=title,
-                    qty_total=qty_guess,
-                    cost_sheet_active=active_cost_sheet,
-                    costing_header=approved_costing,
-                    order_code=order_code,
-                )
-                created = True
-                break
-            except IntegrityError:
-                logger.exception(
-                    "Order code collision while creating production order for opportunity %s",
-                    opportunity.pk,
-                )
-                continue
-            except Exception:
-                logger.exception("Failed to create production order for opportunity %s", opportunity.pk)
-                messages.error(request, "Unable to create production order right now.")
-                return redirect("opportunity_detail", pk=opportunity.pk)
+            created = True
+        except IntegrityError:
+            logger.exception(
+                "Order code collision while creating production order for opportunity %s",
+                opportunity.pk,
+            )
+            messages.error(request, "Unable to create production order right now.")
+            return redirect("opportunity_detail", pk=opportunity.pk)
+        except Exception:
+            logger.exception("Failed to create production order for opportunity %s", opportunity.pk)
+            messages.error(request, "Unable to create production order right now.")
+            return redirect("opportunity_detail", pk=opportunity.pk)
 
         if not created:
             messages.error(request, "Unable to create production order right now.")
