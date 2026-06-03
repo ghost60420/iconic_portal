@@ -26,6 +26,7 @@ class ProductionOrderForm(forms.ModelForm):
             # basic info
             "title",
             "factory_location",
+            "production_order_type",
             "order_type",
             "lead",
             "opportunity",
@@ -116,6 +117,11 @@ class ProductionOrderForm(forms.ModelForm):
             self.fields["status"].required = False
             if not self.instance.pk:
                 self.fields["status"].initial = "planning"
+
+        if "production_order_type" in self.fields:
+            self.fields["production_order_type"].required = True
+            if not self.instance.pk:
+                self.fields["production_order_type"].initial = "bulk"
 
         if "size_group" in self.fields:
             self.fields["size_group"].required = False

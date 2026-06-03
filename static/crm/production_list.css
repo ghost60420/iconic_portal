@@ -568,6 +568,35 @@
   line-height: 1.35;
 }
 
+.production-type-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px 9px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.76);
+  color: #dbeafe;
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.production-type-badge--sampling {
+  border-color: rgba(56, 189, 248, 0.38);
+  background: rgba(8, 47, 73, 0.72);
+  color: #bae6fd;
+}
+
+.production-type-badge--bulk {
+  border-color: rgba(52, 211, 153, 0.35);
+  background: rgba(6, 78, 59, 0.62);
+  color: #bbf7d0;
+}
+
 .production-primary-link,
 .production-inline-link {
   color: #bae6fd;

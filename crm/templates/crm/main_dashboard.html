@@ -397,6 +397,8 @@
         </div>
         <ul class="dashboard-list">
           <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Active production</strong><span>{{ active_production_count|intcomma }}</span></div></li>
+          <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Sampling Orders</strong><span>{{ sampling_production_count|intcomma }}</span></div></li>
+          <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Bulk Orders</strong><span>{{ bulk_production_count|intcomma }}</span></div></li>
           <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Delayed production</strong><span>{{ delayed_production_count|intcomma }}</span></div></li>
           <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Ready to ship</strong><span>{{ ready_to_ship_count|intcomma }}</span></div></li>
           <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Shipped this month</strong><span>{{ shipped_this_month_count|intcomma }}</span></div></li>

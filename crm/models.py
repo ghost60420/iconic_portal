@@ -2975,6 +2975,11 @@ class ProductionOrder(models.Model):
         ("canada_full", "Canada door to door"),
     ]
 
+    PRODUCTION_ORDER_TYPE_CHOICES = [
+        ("sampling", "Sampling"),
+        ("bulk", "Bulk"),
+    ]
+
     FACTORY_CHOICES = [
         ("bd", "Bangladesh"),
         ("ca", "Canada"),
@@ -3055,6 +3060,12 @@ class ProductionOrder(models.Model):
     )
     order_type = models.CharField(
         max_length=20, choices=ORDER_TYPE_CHOICES, default="fob"
+    )
+    production_order_type = models.CharField(
+        max_length=20,
+        choices=PRODUCTION_ORDER_TYPE_CHOICES,
+        default="bulk",
+        db_index=True,
     )
 
     sample_deadline = models.DateField(null=True, blank=True)

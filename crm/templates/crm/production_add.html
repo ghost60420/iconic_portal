@@ -522,7 +522,15 @@
         </div>
 
         <div class="prod-add-field">
-          <div class="prod-add-label">Order type</div>
+          <div class="prod-add-label">Order Type</div>
+          {{ form.production_order_type }}
+          {% if form.production_order_type.errors %}
+            <div class="prod-add-errors">{{ form.production_order_type.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
+          <div class="prod-add-label">Service Type</div>
           {{ form.order_type }}
           {% if form.order_type.errors %}
             <div class="prod-add-errors">{{ form.order_type.errors|striptags }}</div>

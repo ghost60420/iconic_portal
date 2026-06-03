@@ -7669,6 +7669,14 @@ def production_list(request):
     active_orders = len([row for row in orders_data if row["order"].status in active_statuses])
     completed_orders = len([row for row in orders_data if row["order"].status in completed_statuses])
     delayed_orders = len([row for row in orders_data if row["has_delay"]])
+    sampling_orders_count = len([
+        row for row in orders_data
+        if row["order"].production_order_type == "sampling"
+    ])
+    bulk_orders_count = len([
+        row for row in orders_data
+        if row["order"].production_order_type == "bulk"
+    ])
     total_pieces = sum(row["order"].qty_total for row in orders_data)
     total_reject = sum(row["order"].qty_reject for row in orders_data)
     reject_percent = int((total_reject / total_pieces) * 100) if total_pieces else 0
@@ -7740,6 +7748,8 @@ def production_list(request):
             "active_orders": active_orders,
             "completed_orders": completed_orders,
             "delayed_orders": delayed_orders,
+            "sampling_orders_count": sampling_orders_count,
+            "bulk_orders_count": bulk_orders_count,
             "total_pieces": total_pieces,
             "total_reject": total_reject,
             "reject_percent": reject_percent,
@@ -12490,12 +12500,16 @@ def main_dashboard(request):
     active_production_count = 0
     delayed_production_count = 0
     ready_to_ship_count = 0
+    sampling_production_count = 0
+    bulk_production_count = 0
     shipped_this_month_count = 0
     if ProductionOrder is not None:
         try:
             active_production_qs = ProductionOrder.objects.filter(status__in=["planning", "in_progress", "hold"])
             active_production_count = active_production_qs.count()
             delayed_production_count = active_production_qs.filter(bulk_deadline__lt=today).count()
+            sampling_production_count = active_production_qs.filter(production_order_type="sampling").count()
+            bulk_production_count = active_production_qs.filter(production_order_type="bulk").count()
             ready_to_ship_count = (
                 ProductionOrder.objects.filter(status__in=["done", "closed_won"])
                 .exclude(shipments__status__in=["shipped", "out_for_delivery", "delivered"])
@@ -12506,6 +12520,8 @@ def main_dashboard(request):
             active_production_count = 0
             delayed_production_count = 0
             ready_to_ship_count = 0
+            sampling_production_count = 0
+            bulk_production_count = 0
     if Shipment is not None:
         try:
             shipped_this_month_count = Shipment.objects.filter(
@@ -12943,6 +12959,8 @@ def main_dashboard(request):
         "active_production_count": active_production_count,
         "delayed_production_count": delayed_production_count,
         "ready_to_ship_count": ready_to_ship_count,
+        "sampling_production_count": sampling_production_count,
+        "bulk_production_count": bulk_production_count,
         "ship_pending_total": ship_pending_total,
         "ship_delayed_total": ship_delayed_total,
         "shipped_this_month_count": shipped_this_month_count,

@@ -1,7 +1,7 @@
 {% extends "crm/base.html" %}
 {% load static %}
 {% block content %}
-<link rel="stylesheet" href="{% static 'crm/production_list.css' %}?v=workflow-thumbs-20260602">
+<link rel="stylesheet" href="{% static 'crm/production_list.css' %}?v=production-order-type-20260603">
 
 <div class="production-page">
   <section class="production-hero">
@@ -35,6 +35,16 @@
       <span>Running Orders</span>
       <strong>{{ active_orders }}</strong>
       <small>Planning, in progress, or on hold</small>
+    </article>
+    <article class="production-stat">
+      <span>Sampling Orders</span>
+      <strong>{{ sampling_orders_count }}</strong>
+      <small>Sampling work in the current view</small>
+    </article>
+    <article class="production-stat">
+      <span>Bulk Orders</span>
+      <strong>{{ bulk_orders_count }}</strong>
+      <small>Bulk production in the current view</small>
     </article>
     <article class="production-stat production-stat--risk">
       <span>Delayed Orders</span>
@@ -235,6 +245,9 @@
                       <div class="production-stack">
                         <a href="{% url 'production_detail' order.pk %}" class="production-primary-link">{{ order.order_code|default:"No code" }}</a>
                         <strong>{{ order.title }}</strong>
+                        <span class="production-type-badge production-type-badge--{{ order.production_order_type }}">
+                          {{ order.get_production_order_type_display|default:"Bulk" }}
+                        </span>
                         <span>{{ order.get_factory_location_display|default:"Factory not set" }} / {{ order.get_order_type_display|default:"Order type not set" }}</span>
                       </div>
                     </div>

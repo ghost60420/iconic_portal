@@ -238,7 +238,13 @@
         </div>
 
         <div class="prod-edit-field">
-          <label for="{{ form.order_type.id_for_label }}">Order type</label>
+          <label for="{{ form.production_order_type.id_for_label }}">Order Type</label>
+          {{ form.production_order_type }}
+          {% for e in form.production_order_type.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="prod-edit-field">
+          <label for="{{ form.order_type.id_for_label }}">Service Type</label>
           {{ form.order_type }}
           {% for e in form.order_type.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
         </div>
