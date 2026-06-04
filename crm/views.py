@@ -4,7 +4,7 @@ import json
 import logging
 import re
 import os
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import timedelta, date
 from decimal import Decimal
 from types import SimpleNamespace
@@ -42,6 +42,15 @@ from .services.order_lifecycle import (
     create_lifecycle_from_production,
     create_lifecycle_from_shipping,
     lifecycle_dashboard_metrics,
+)
+from .services.production_operational_status import (
+    OPERATIONAL_ACTIVE_STATUSES,
+    OPERATIONAL_FINISHED_STATUSES,
+    OPERATIONAL_STATUS_LABELS,
+    OPERATIONAL_STATUS_READY_TO_SHIP,
+    OPERATIONAL_STATUS_SAMPLE_SENT,
+    OPERATIONAL_STATUS_SHIPPED,
+    get_production_operational_status,
 )
 from .services.product_reference_images import (
     attach_primary_reference_images_to_leads,
@@ -1904,29 +1913,6 @@ def _production_completed_statuses():
 
 def _production_active_statuses():
     return {"planning", "in_progress", "hold"}
-
-
-def _production_finished_statuses_for_operations():
-    return _production_completed_statuses() | {"closed_lost", "cancelled", "shipped"}
-
-
-PRODUCTION_READY_TO_SHIP_STATUS_VALUES = {
-    "Packing Complete",
-    "Ready To Ship",
-}
-
-
-PRODUCTION_AWAITING_APPROVAL_SAMPLE_STATUS_VALUES = {
-    "Sample Sent",
-}
-
-
-def _production_status_value_query(values):
-    return Q(status__in=values)
-
-
-def _production_ready_to_ship_query():
-    return _production_status_value_query(PRODUCTION_READY_TO_SHIP_STATUS_VALUES)
 
 
 PRODUCTION_CONTROL_BUCKET_LABELS = {
@@ -7604,6 +7590,13 @@ def production_list(request):
         )
 
     orders_for_kpis = orders
+    production_kpi_rows = [
+        {
+            "order": order,
+            "operational_status": get_production_operational_status(order),
+        }
+        for order in orders_for_kpis
+    ]
 
     if status_filter == "completed":
         orders = orders.filter(status__in=completed_statuses)
@@ -7700,45 +7693,49 @@ def production_list(request):
     late_shipment_count = len([row for row in orders_data if row["late_shipment"]])
     overdue_approval_count = len([row for row in orders_data if row["order"].status == "hold"])
     shipment_pending_count = len([row for row in orders_data if row["shipment_pending"]])
-    production_kpi_active_qs = orders_for_kpis.filter(status__in=active_statuses)
-    production_operations_open_qs = orders_for_kpis.exclude(status__in=_production_finished_statuses_for_operations())
-    sample_development_qs = production_kpi_active_qs.filter(production_order_type="sampling")
-    bulk_production_qs = production_kpi_active_qs.filter(production_order_type="bulk")
-    total_active_orders_count = production_kpi_active_qs.count()
-    total_active_units_count = production_kpi_active_qs.aggregate(total_units=Sum("qty_total"))["total_units"] or 0
-    sample_development_orders_count = sample_development_qs.count()
-    sample_development_units_count = sample_development_qs.aggregate(total_units=Sum("qty_total"))["total_units"] or 0
-    bulk_production_orders_count = bulk_production_qs.count()
-    bulk_production_units_count = bulk_production_qs.aggregate(total_units=Sum("qty_total"))["total_units"] or 0
-    production_completed_count = orders_for_kpis.filter(status__in=completed_statuses).count()
+    production_kpi_active_rows = [
+        row for row in production_kpi_rows
+        if row["operational_status"] in OPERATIONAL_ACTIVE_STATUSES
+    ]
+    sample_development_rows = [
+        row for row in production_kpi_active_rows
+        if row["order"].production_order_type == "sampling"
+    ]
+    bulk_production_rows = [
+        row for row in production_kpi_active_rows
+        if row["order"].production_order_type == "bulk"
+    ]
+    total_active_orders_count = len(production_kpi_active_rows)
+    total_active_units_count = sum((row["order"].qty_total or 0) for row in production_kpi_active_rows)
+    sample_development_orders_count = len(sample_development_rows)
+    sample_development_units_count = sum((row["order"].qty_total or 0) for row in sample_development_rows)
+    bulk_production_orders_count = len(bulk_production_rows)
+    bulk_production_units_count = sum((row["order"].qty_total or 0) for row in bulk_production_rows)
+    production_completed_count = len([
+        row for row in production_kpi_rows
+        if row["operational_status"] == OPERATIONAL_STATUS_SHIPPED
+    ])
+    completed_orders = production_completed_count
     production_completion_denominator = total_active_orders_count + production_completed_count
     production_completion_percent = (
         round((production_completed_count / production_completion_denominator) * 100)
         if production_completion_denominator
         else 0
     )
-    ready_to_ship_operations_count = (
-        production_operations_open_qs
-        .filter(_production_ready_to_ship_query())
-        .exclude(shipments__status__in=["shipped", "out_for_delivery", "delivered"])
-        .distinct()
-        .count()
-    )
-    delayed_operations_count = (
-        production_operations_open_qs
-        .filter(bulk_deadline__lt=today)
-        .distinct()
-        .count()
-    )
-    awaiting_approval_samples_count = (
-        production_operations_open_qs
-        .filter(
-            production_order_type="sampling",
-        )
-        .filter(_production_status_value_query(PRODUCTION_AWAITING_APPROVAL_SAMPLE_STATUS_VALUES))
-        .distinct()
-        .count()
-    )
+    ready_to_ship_operations_count = len([
+        row for row in production_kpi_rows
+        if row["operational_status"] == OPERATIONAL_STATUS_READY_TO_SHIP
+    ])
+    delayed_operations_count = len([
+        row for row in production_kpi_rows
+        if row["order"].bulk_deadline
+        and row["order"].bulk_deadline < today
+        and row["operational_status"] not in OPERATIONAL_FINISHED_STATUSES
+    ])
+    awaiting_approval_samples_count = len([
+        row for row in production_kpi_rows
+        if row["operational_status"] == OPERATIONAL_STATUS_SAMPLE_SENT
+    ])
 
     pipeline_counts = [
         {
@@ -10292,17 +10289,53 @@ def ceo_dashboard(request):
         production_qs = production_qs.filter(factory_location="ca")
     elif side == "BD":
         production_qs = production_qs.filter(factory_location="bd")
-    production_active = production_qs.filter(status__in=["planning", "in_progress", "hold"])
-    production_running = production_qs.filter(status="in_progress").count()
-    production_hold = production_qs.filter(status="hold").count()
-    production_done_period = production_qs.filter(
-        status__in=["done", "closed_won"], updated_at__date__range=(start_period, today)
-    ).count()
-    production_delayed = production_active.filter(bulk_deadline__lt=today).count()
-    production_quantity = production_active.aggregate(total=Sum("qty_total")).get("total") or 0
-    production_rows = list(
-        production_qs.values("status").annotate(count=Count("id")).order_by("-count")
+    production_orders_for_ceo = list(production_qs.prefetch_related("stages", "shipments"))
+    production_operational_rows_ceo = [
+        {
+            "order": order,
+            "operational_status": get_production_operational_status(order),
+        }
+        for order in production_orders_for_ceo
+    ]
+    production_operational_counts_ceo = Counter(
+        row["operational_status"] for row in production_operational_rows_ceo
     )
+    production_active_rows_ceo = [
+        row for row in production_operational_rows_ceo
+        if row["operational_status"] in OPERATIONAL_ACTIVE_STATUSES
+    ]
+    production_running_statuses = {
+        "sample_development",
+        "fabric_sourcing",
+        "cutting",
+        "printing",
+        "sewing",
+        "qc",
+        "packing",
+    }
+    production_running = len([
+        row for row in production_operational_rows_ceo
+        if row["operational_status"] in production_running_statuses
+    ])
+    production_hold = 0
+    production_done_period = len([
+        row for row in production_operational_rows_ceo
+        if row["operational_status"] == OPERATIONAL_STATUS_SHIPPED
+        and row["order"].updated_at.date() >= start_period
+        and row["order"].updated_at.date() <= today
+    ])
+    production_delayed = len([
+        row for row in production_operational_rows_ceo
+        if row["order"].bulk_deadline
+        and row["order"].bulk_deadline < today
+        and row["operational_status"] not in OPERATIONAL_FINISHED_STATUSES
+    ])
+    production_quantity = sum((row["order"].qty_total or 0) for row in production_active_rows_ceo)
+    production_rows = [
+        {"status": label, "count": production_operational_counts_ceo[status]}
+        for status, label in OPERATIONAL_STATUS_LABELS.items()
+        if production_operational_counts_ceo.get(status)
+    ]
 
     shipping_qs = Shipment.objects.all()
     if side == "CA":
@@ -10494,19 +10527,18 @@ def ceo_dashboard(request):
 
     production_status_labels = [row.get("status") or "Unknown" for row in production_rows]
     production_status_values = [int(row.get("count") or 0) for row in production_rows]
-    active_production_count = production_active.count()
-    production_due_soon = production_active.filter(
-        bulk_deadline__range=(today, today + timedelta(days=7))
-    ).count()
-    urgent_production = production_active.filter(
-        Q(status="hold") | Q(bulk_deadline__lte=today + timedelta(days=2))
-    ).count()
-    shipment_pending_count = (
-        production_qs.filter(status__in=["done", "closed_won"])
-        .exclude(shipments__status__in=["shipped", "out_for_delivery", "delivered"])
-        .distinct()
-        .count()
-    )
+    active_production_count = len(production_active_rows_ceo)
+    production_due_soon = len([
+        row for row in production_active_rows_ceo
+        if row["order"].bulk_deadline
+        and today <= row["order"].bulk_deadline <= today + timedelta(days=7)
+    ])
+    urgent_production = len([
+        row for row in production_active_rows_ceo
+        if row["order"].bulk_deadline
+        and row["order"].bulk_deadline <= today + timedelta(days=2)
+    ])
+    shipment_pending_count = production_operational_counts_ceo.get(OPERATIONAL_STATUS_READY_TO_SHIP, 0)
     production_completion_rate = _ceo_percent(
         production_done_period,
         production_done_period + active_production_count,
@@ -11058,16 +11090,42 @@ def ai_executive_advisor(request):
         production_qs = production_qs.filter(factory_location="ca")
     elif side == "BD":
         production_qs = production_qs.filter(factory_location="bd")
-    production_running = production_qs.filter(status="in_progress").count()
-    production_hold = production_qs.filter(status="hold").count()
-    production_delayed = production_qs.filter(
-        status__in=["planning", "in_progress", "hold"],
-        bulk_deadline__lt=today,
-    ).count()
-    production_due_soon = production_qs.filter(
-        status__in=["planning", "in_progress", "hold"],
-        bulk_deadline__range=(today, today + timedelta(days=14)),
-    ).count()
+    advisor_production_rows = [
+        {
+            "order": order,
+            "operational_status": get_production_operational_status(order),
+        }
+        for order in production_qs.prefetch_related("stages", "shipments")
+    ]
+    advisor_running_statuses = {
+        "sample_development",
+        "fabric_sourcing",
+        "cutting",
+        "printing",
+        "sewing",
+        "qc",
+        "packing",
+    }
+    advisor_active_rows = [
+        row for row in advisor_production_rows
+        if row["operational_status"] in OPERATIONAL_ACTIVE_STATUSES
+    ]
+    production_running = len([
+        row for row in advisor_production_rows
+        if row["operational_status"] in advisor_running_statuses
+    ])
+    production_hold = 0
+    production_delayed = len([
+        row for row in advisor_production_rows
+        if row["order"].bulk_deadline
+        and row["order"].bulk_deadline < today
+        and row["operational_status"] not in OPERATIONAL_FINISHED_STATUSES
+    ])
+    production_due_soon = len([
+        row for row in advisor_active_rows
+        if row["order"].bulk_deadline
+        and today <= row["order"].bulk_deadline <= today + timedelta(days=14)
+    ])
 
     shipping_qs = Shipment.objects.all()
     if side == "CA":
@@ -11608,15 +11666,59 @@ def _build_daily_ceo_briefing_context(request):
         production_qs = production_qs.filter(factory_location="ca")
     elif side == "BD":
         production_qs = production_qs.filter(factory_location="bd")
-    production_active = production_qs.filter(status__in=["planning", "in_progress", "hold"])
-    production_delays = production_active.filter(bulk_deadline__lt=today).count()
-    production_due_soon = production_active.filter(bulk_deadline__range=(today, today + timedelta(days=7))).count()
-    production_alert_rows = list(
-        production_active.select_related("customer", "opportunity", "product")
-        .filter(Q(bulk_deadline__lt=today) | Q(bulk_deadline__range=(today, today + timedelta(days=7))) | Q(status="hold"))
-        .only("order_code", "title", "status", "bulk_deadline", "qty_total", "factory_location", "customer__account_brand", "customer__contact_name", "opportunity__opportunity_id", "product__name")
-        .order_by("bulk_deadline", "-updated_at")[:10]
-    )
+    briefing_production_rows = [
+        {
+            "order": order,
+            "operational_status": get_production_operational_status(order),
+        }
+        for order in production_qs.select_related("customer", "opportunity", "product")
+        .prefetch_related("stages", "shipments")
+        .only(
+            "order_code",
+            "title",
+            "status",
+            "bulk_deadline",
+            "qty_total",
+            "factory_location",
+            "production_order_type",
+            "style_name",
+            "notes",
+            "accessories_note",
+            "extra_order_note",
+            "fabric_required_kg",
+            "fabric_received_kg",
+            "updated_at",
+            "customer__account_brand",
+            "customer__contact_name",
+            "opportunity__opportunity_id",
+            "product__name",
+        )
+    ]
+    briefing_active_rows = [
+        row for row in briefing_production_rows
+        if row["operational_status"] in OPERATIONAL_ACTIVE_STATUSES
+    ]
+    production_delays = len([
+        row for row in briefing_production_rows
+        if row["order"].bulk_deadline
+        and row["order"].bulk_deadline < today
+        and row["operational_status"] not in OPERATIONAL_FINISHED_STATUSES
+    ])
+    production_due_soon = len([
+        row for row in briefing_active_rows
+        if row["order"].bulk_deadline
+        and today <= row["order"].bulk_deadline <= today + timedelta(days=7)
+    ])
+    production_alert_rows = [
+        row["order"] for row in sorted(
+            [
+                row for row in briefing_active_rows
+                if row["order"].bulk_deadline
+                and row["order"].bulk_deadline <= today + timedelta(days=7)
+            ],
+            key=lambda row: (row["order"].bulk_deadline or date.max, row["order"].updated_at),
+        )[:10]
+    ]
 
     shipping_qs = Shipment.objects.all()
     if side == "CA":
@@ -12220,36 +12322,20 @@ def main_dashboard(request):
             orders_created_map = {
                 row["d"]: int(row["c"]) for row in orders_created_qs if row.get("d")
             }
-            orders_processed_period = ProductionOrder.objects.filter(
-                status__in=["done", "closed_won"],
-                updated_at__date__range=(start_period, today),
-            ).count()
-            orders_processed_qs = (
-                ProductionOrder.objects.filter(
-                    status__in=["done", "closed_won"],
-                    updated_at__date__range=(start_period, today),
-                )
-                .annotate(d=TruncDate("updated_at"))
-                .values("d")
-                .annotate(c=Count("id"))
-                .order_by("d")
-            )
-            orders_processed_map = {
-                row["d"]: int(row["c"]) for row in orders_processed_qs if row.get("d")
-            }
-            cost_qs = ProductionOrder.objects.filter(
-                status__in=["done", "closed_won"],
-                updated_at__date__range=(start_period, today),
-            ).values(
-                "actual_total_cost_bdt",
-                "production_total_cost_bdt",
-                "production_sewing_cost_bdt",
-            )
-            for row in cost_qs.iterator():
+            processed_orders = [
+                order for order in ProductionOrder.objects.prefetch_related("stages", "shipments")
+                if get_production_operational_status(order) == OPERATIONAL_STATUS_SHIPPED
+                and order.updated_at.date() >= start_period
+                and order.updated_at.date() <= today
+            ]
+            orders_processed_period = len(processed_orders)
+            for order in processed_orders:
+                processed_day = order.updated_at.date()
+                orders_processed_map[processed_day] = int(orders_processed_map.get(processed_day, 0)) + 1
                 cost = (
-                    row.get("actual_total_cost_bdt")
-                    or row.get("production_total_cost_bdt")
-                    or row.get("production_sewing_cost_bdt")
+                    order.actual_total_cost_bdt
+                    or order.production_total_cost_bdt
+                    or order.production_sewing_cost_bdt
                     or Decimal("0")
                 )
                 if cost:
@@ -12310,16 +12396,33 @@ def main_dashboard(request):
     payroll_unpaid = pm.filter(is_paid=False).count()
 
     # Production status (optional)
-    prod_labels = ["Planning", "In progress", "On hold", "Done"]
-    prod_counts = [0, 0, 0, 0]
+    production_operational_rows = []
+    production_operational_counts = Counter()
+    prod_labels = []
+    prod_counts = []
     if ProductionOrder is not None:
         try:
-            planning = ProductionOrder.objects.filter(status="planning").count()
-            in_progress = ProductionOrder.objects.filter(status="in_progress").count()
-            hold = ProductionOrder.objects.filter(status="hold").count()
-            done = ProductionOrder.objects.filter(status__in=["done", "closed_won"]).count()
-            prod_counts = [int(planning), int(in_progress), int(hold), int(done)]
+            production_orders_for_status = list(
+                ProductionOrder.objects.prefetch_related("stages", "shipments")
+            )
+            production_operational_rows = [
+                {
+                    "order": order,
+                    "operational_status": get_production_operational_status(order),
+                }
+                for order in production_orders_for_status
+            ]
+            production_operational_counts = Counter(
+                row["operational_status"] for row in production_operational_rows
+            )
+            for status, label in OPERATIONAL_STATUS_LABELS.items():
+                count = production_operational_counts.get(status, 0)
+                if count:
+                    prod_labels.append(label)
+                    prod_counts.append(int(count))
         except Exception:
+            production_operational_rows = []
+            production_operational_counts = Counter()
             pass
 
     # Shipping status (optional)
@@ -12443,21 +12546,31 @@ def main_dashboard(request):
     ]
     if ProductionOrder is not None:
         try:
-            production_running_count = ProductionOrder.objects.filter(status="in_progress").count()
-            production_hold_count = ProductionOrder.objects.filter(status="hold").count()
-            workload_rows = list(
-                ProductionOrder.objects.filter(status__in=["planning", "in_progress", "hold"])
-                .values("factory_location")
-                .annotate(order_count=Count("id"), unit_total=Sum("qty_total"))
-                .order_by("-order_count")
-            )
-            workload_map = {
-                (row.get("factory_location") or "").lower(): {
-                    "orders": int(row.get("order_count") or 0),
-                    "units": int(row.get("unit_total") or 0),
-                }
-                for row in workload_rows
+            running_operational_statuses = {
+                "sample_development",
+                "fabric_sourcing",
+                "cutting",
+                "printing",
+                "sewing",
+                "qc",
+                "packing",
             }
+            active_workload_rows = [
+                row for row in production_operational_rows
+                if row["operational_status"] in OPERATIONAL_ACTIVE_STATUSES
+            ]
+            production_running_count = len([
+                row for row in production_operational_rows
+                if row["operational_status"] in running_operational_statuses
+            ])
+            production_hold_count = 0
+            workload_map = {}
+            for row in active_workload_rows:
+                order = row["order"]
+                code = (order.factory_location or "").lower()
+                workload_map.setdefault(code, {"orders": 0, "units": 0})
+                workload_map[code]["orders"] += 1
+                workload_map[code]["units"] += int(order.qty_total or 0)
             max_orders = max([row["orders"] for row in workload_map.values()] or [0])
             factory_workload = []
             for code, label in (("bd", "Bangladesh"), ("ca", "Canada")):
@@ -12542,40 +12655,43 @@ def main_dashboard(request):
     shipped_this_month_count = 0
     if ProductionOrder is not None:
         try:
-            active_production_qs = ProductionOrder.objects.filter(status__in=_production_active_statuses())
-            operations_open_production_qs = ProductionOrder.objects.exclude(
-                status__in=_production_finished_statuses_for_operations()
-            )
-            active_production_count = active_production_qs.count()
-            active_production_units_count = active_production_qs.aggregate(total_units=Sum("qty_total"))["total_units"] or 0
-            delayed_production_count = operations_open_production_qs.filter(bulk_deadline__lt=today).distinct().count()
-            sampling_production_qs = active_production_qs.filter(production_order_type="sampling")
-            bulk_production_qs = active_production_qs.filter(production_order_type="bulk")
-            sampling_production_count = sampling_production_qs.count()
-            sampling_production_units_count = sampling_production_qs.aggregate(total_units=Sum("qty_total"))["total_units"] or 0
-            bulk_production_count = bulk_production_qs.count()
-            bulk_production_units_count = bulk_production_qs.aggregate(total_units=Sum("qty_total"))["total_units"] or 0
-            completed_production_count = ProductionOrder.objects.filter(status__in=_production_completed_statuses()).count()
+            active_production_rows = [
+                row for row in production_operational_rows
+                if row["operational_status"] in OPERATIONAL_ACTIVE_STATUSES
+            ]
+            completed_production_rows = [
+                row for row in production_operational_rows
+                if row["operational_status"] == OPERATIONAL_STATUS_SHIPPED
+            ]
+            active_production_count = len(active_production_rows)
+            active_production_units_count = sum((row["order"].qty_total or 0) for row in active_production_rows)
+            delayed_production_count = len([
+                row for row in production_operational_rows
+                if row["order"].bulk_deadline
+                and row["order"].bulk_deadline < today
+                and row["operational_status"] not in OPERATIONAL_FINISHED_STATUSES
+            ])
+            sampling_production_rows = [
+                row for row in active_production_rows
+                if row["order"].production_order_type == "sampling"
+            ]
+            bulk_production_rows = [
+                row for row in active_production_rows
+                if row["order"].production_order_type == "bulk"
+            ]
+            sampling_production_count = len(sampling_production_rows)
+            sampling_production_units_count = sum((row["order"].qty_total or 0) for row in sampling_production_rows)
+            bulk_production_count = len(bulk_production_rows)
+            bulk_production_units_count = sum((row["order"].qty_total or 0) for row in bulk_production_rows)
+            completed_production_count = len(completed_production_rows)
             production_completion_denominator = active_production_count + completed_production_count
             production_completion_percent = (
                 round((completed_production_count / production_completion_denominator) * 100)
                 if production_completion_denominator
                 else 0
             )
-            ready_to_ship_count = (
-                operations_open_production_qs
-                .filter(_production_ready_to_ship_query())
-                .exclude(shipments__status__in=["shipped", "out_for_delivery", "delivered"])
-                .distinct()
-                .count()
-            )
-            awaiting_approval_samples_count = (
-                operations_open_production_qs
-                .filter(production_order_type="sampling")
-                .filter(_production_status_value_query(PRODUCTION_AWAITING_APPROVAL_SAMPLE_STATUS_VALUES))
-                .distinct()
-                .count()
-            )
+            ready_to_ship_count = production_operational_counts.get(OPERATIONAL_STATUS_READY_TO_SHIP, 0)
+            awaiting_approval_samples_count = production_operational_counts.get(OPERATIONAL_STATUS_SAMPLE_SENT, 0)
         except Exception:
             active_production_count = 0
             delayed_production_count = 0

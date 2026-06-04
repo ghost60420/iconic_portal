@@ -16,9 +16,10 @@ from crm.models import (
     Shipment,
 )
 from crm.permissions import get_access
-
-
-DONE_PRODUCTION_STATUSES = ["done", "closed_won", "closed_lost"]
+from crm.services.production_operational_status import (
+    OPERATIONAL_FINISHED_STATUSES,
+    get_production_operational_status,
+)
 
 
 def _decimal(value):
@@ -191,12 +192,21 @@ def _production_metrics(flags, today):
     if not flags["can_view_production"]:
         return {"delayed_count": 0, "attention_rows": [], "qc_delayed_count": 0}
     try:
-        delayed_qs = (
-            ProductionOrder.objects.select_related("customer")
-            .exclude(status__in=DONE_PRODUCTION_STATUSES)
-            .filter(bulk_deadline__lt=today)
+        production_rows = [
+            {
+                "order": order,
+                "operational_status": get_production_operational_status(order),
+            }
+            for order in ProductionOrder.objects.select_related("customer")
+            .prefetch_related("stages", "shipments")
             .order_by("bulk_deadline", "-updated_at")
-        )
+        ]
+        delayed_rows = [
+            row for row in production_rows
+            if row["order"].bulk_deadline
+            and row["order"].bulk_deadline < today
+            and row["operational_status"] not in OPERATIONAL_FINISHED_STATUSES
+        ]
         rows = [
             {
                 "label": _production_label(order),
@@ -205,20 +215,10 @@ def _production_metrics(flags, today):
                 "url": _safe_reverse("production_detail", order.pk),
                 "tone": "bad",
             }
-            for order in delayed_qs[:8]
-        ]
-        hold_rows = [
-            {
-                "label": _production_label(order),
-                "metric": "On hold",
-                "detail": _customer_label(order.customer),
-                "url": _safe_reverse("production_detail", order.pk),
-                "tone": "warn",
-            }
-            for order in ProductionOrder.objects.select_related("customer").filter(status="hold").order_by("-updated_at")[:4]
+            for order in [row["order"] for row in delayed_rows[:8]]
         ]
         qc_delayed_count = ProductionStage.objects.filter(stage_key="qc", planned_end__lt=today).exclude(status="done").count()
-        return {"delayed_count": delayed_qs.count(), "attention_rows": rows + hold_rows, "qc_delayed_count": qc_delayed_count}
+        return {"delayed_count": len(delayed_rows), "attention_rows": rows, "qc_delayed_count": qc_delayed_count}
     except (OperationalError, ProgrammingError):
         return {"delayed_count": 0, "attention_rows": [], "qc_delayed_count": 0}
 

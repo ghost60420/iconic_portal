@@ -6,6 +6,10 @@ from django.utils import timezone
 from crm.models import ActualCostEntry, Invoice, OrderLifecycle, Shipment
 from crm.permissions import can_view_internal_costing
 from crm.services.costing_engine import compute_costing
+from crm.services.production_operational_status import (
+    OPERATIONAL_STATUS_READY_TO_SHIP,
+    get_production_operational_status,
+)
 
 
 MONEY = Decimal("0.01")
@@ -445,6 +449,15 @@ def lifecycle_dashboard_metrics():
     active = lifecycles.exclude(status__in=["completed", "cancelled"])
     today = timezone.localdate()
     month_start = today.replace(day=1)
+    ready_to_ship_count = 0
+    ready_lifecycles = (
+        active.filter(status="production", production_order__isnull=False)
+        .select_related("production_order")
+        .prefetch_related("production_order__stages", "production_order__shipments")
+    )
+    for lifecycle in ready_lifecycles:
+        if get_production_operational_status(lifecycle.production_order) == OPERATIONAL_STATUS_READY_TO_SHIP:
+            ready_to_ship_count += 1
 
     total_invoice_value = Decimal("0")
     estimated_profit = Decimal("0")
@@ -467,7 +480,7 @@ def lifecycle_dashboard_metrics():
         "orders_waiting_quotation": active.filter(status="quotation").count(),
         "orders_waiting_payment": active.filter(invoice__total_amount__gt=F("invoice__paid_amount")).count(),
         "orders_in_production": active.filter(status="production").count(),
-        "orders_ready_to_ship": active.filter(status="production", production_order__status__in=["done", "closed_won"]).count(),
+        "orders_ready_to_ship": ready_to_ship_count,
         "completed_this_month": lifecycles.filter(status="completed", updated_at__date__gte=month_start).count(),
         "total_invoice_value": _money(total_invoice_value),
         "estimated_profit": _money(estimated_profit),
