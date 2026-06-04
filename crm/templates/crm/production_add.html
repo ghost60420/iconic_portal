@@ -578,10 +578,10 @@
         </div>
 
         <div class="prod-add-field">
-          <div class="prod-add-label">Status</div>
-          {{ form.status }}
-          {% if form.status.errors %}
-            <div class="prod-add-errors">{{ form.status.errors|striptags }}</div>
+          <div class="prod-add-label">Workflow Status</div>
+          {{ form.operational_status }}
+          {% if form.operational_status.errors %}
+            <div class="prod-add-errors">{{ form.operational_status.errors|striptags }}</div>
           {% endif %}
         </div>
 

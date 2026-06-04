@@ -2982,6 +2982,22 @@ class ProductionOrder(models.Model):
         ("bulk", "Bulk Production"),
     ]
 
+    OPERATIONAL_STATUS_CHOICES = [
+        ("planning", "Planning"),
+        ("sample_development", "Sample Development"),
+        ("sample_sent", "Sample Sent"),
+        ("approved", "Approved"),
+        ("fabric_sourcing", "Fabric Sourcing"),
+        ("cutting", "Cutting"),
+        ("printing", "Printing"),
+        ("sewing", "Sewing"),
+        ("qc", "QC"),
+        ("packing", "Packing"),
+        ("ready_to_ship", "Ready To Ship"),
+        ("shipped", "Shipped"),
+        ("cancelled", "Cancelled"),
+    ]
+
     ORDER_CODE_PREFIX = "PO"
     ORDER_CODE_GENERATION_ATTEMPTS = 8
 
@@ -3102,6 +3118,13 @@ class ProductionOrder(models.Model):
 
     status = models.CharField(
         max_length=20, choices=STATUS_CHOICES, default="planning"
+    )
+    operational_status = models.CharField(
+        max_length=32,
+        choices=OPERATIONAL_STATUS_CHOICES,
+        default="planning",
+        blank=True,
+        db_index=True,
     )
 
     created_at = models.DateTimeField(auto_now_add=True)

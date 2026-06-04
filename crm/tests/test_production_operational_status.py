@@ -107,3 +107,11 @@ class ProductionOperationalStatusTests(SimpleTestCase):
         order = self._order(status="closed_lost")
 
         self.assertEqual(get_production_operational_status(order), "cancelled")
+
+    def test_stored_operational_status_overrides_derived_status(self):
+        order = self._order(
+            operational_status="ready_to_ship",
+            shipments=[self._shipment("delivered")],
+        )
+
+        self.assertEqual(get_production_operational_status(order), "ready_to_ship")

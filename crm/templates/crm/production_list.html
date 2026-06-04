@@ -174,8 +174,13 @@
     <label class="production-field">
       <span>Status view</span>
       <select name="status">
-        <option value="active" {% if status_filter != "completed" and status_filter != "all" %}selected{% endif %}>Active production</option>
-        <option value="completed" {% if status_filter == "completed" %}selected{% endif %}>Completed</option>
+        <option value="active" {% if status_filter == "active" %}selected{% endif %}>Active production</option>
+        <option value="sample_development" {% if status_filter == "sample_development" %}selected{% endif %}>Sample Development</option>
+        <option value="bulk_production" {% if status_filter == "bulk_production" %}selected{% endif %}>Bulk Production</option>
+        <option value="delayed" {% if status_filter == "delayed" %}selected{% endif %}>Delayed</option>
+        <option value="ready_to_ship" {% if status_filter == "ready_to_ship" %}selected{% endif %}>Ready To Ship</option>
+        <option value="shipped" {% if status_filter == "shipped" or status_filter == "completed" %}selected{% endif %}>Shipped</option>
+        <option value="cancelled" {% if status_filter == "cancelled" %}selected{% endif %}>Cancelled</option>
         <option value="all" {% if status_filter == "all" %}selected{% endif %}>All orders</option>
       </select>
     </label>
@@ -211,8 +216,13 @@
     </label>
 
     <div class="production-filter-tabs" aria-label="Quick status filters">
-      <a class="{% if status_filter != 'completed' and status_filter != 'all' %}active{% endif %}" href="?status=active{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Active</a>
-      <a class="{% if status_filter == 'completed' %}active{% endif %}" href="?status=completed{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Completed</a>
+      <a class="{% if status_filter == 'active' %}active{% endif %}" href="?status=active{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Active</a>
+      <a class="{% if status_filter == 'sample_development' %}active{% endif %}" href="?status=sample_development{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Sample Development</a>
+      <a class="{% if status_filter == 'bulk_production' %}active{% endif %}" href="?status=bulk_production{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Bulk Production</a>
+      <a class="{% if status_filter == 'delayed' %}active{% endif %}" href="?status=delayed{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Delayed</a>
+      <a class="{% if status_filter == 'ready_to_ship' %}active{% endif %}" href="?status=ready_to_ship{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Ready To Ship</a>
+      <a class="{% if status_filter == 'shipped' or status_filter == 'completed' %}active{% endif %}" href="?status=shipped{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Shipped</a>
+      <a class="{% if status_filter == 'cancelled' %}active{% endif %}" href="?status=cancelled{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Cancelled</a>
       <a class="{% if status_filter == 'all' %}active{% endif %}" href="?status=all{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">All</a>
     </div>
 
@@ -347,7 +357,7 @@
 
                   <td data-label="Status">
                     <div class="production-status-stack">
-                      <span class="production-status-badge {{ order.status }}">{{ order.get_status_display }}</span>
+                      <span class="production-status-badge {{ row.operational_status }}">{{ row.operational_status_label }}</span>
                       <span class="production-priority-badge {{ row.priority.tone }}">{{ row.priority.label }} priority</span>
                       {% if has_delay %}
                         <span class="production-priority-badge risk">Delayed</span>
@@ -355,8 +365,10 @@
                         <span class="production-priority-badge risk">Late shipment</span>
                       {% elif row.shipment_pending %}
                         <span class="production-priority-badge warning">Shipment pending</span>
-                      {% elif order.status == "done" or order.status == "closed_won" %}
+                      {% elif row.operational_status == "shipped" %}
                         <span class="production-priority-badge good">Complete</span>
+                      {% elif row.operational_status == "cancelled" %}
+                        <span class="production-priority-badge neutral">Cancelled</span>
                       {% else %}
                         <span class="production-priority-badge good">On track</span>
                       {% endif %}
@@ -364,9 +376,9 @@
                         {% csrf_token %}
                         <input type="hidden" name="order_id" value="{{ order.pk }}">
                         <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                        <select name="status" onchange="this.form.submit()" aria-label="Update status for {{ order.order_code|default:order.title }}">
-                          {% for key, label in status_choices %}
-                            <option value="{{ key }}" {% if order.status == key %}selected{% endif %}>{{ label }}</option>
+                        <select name="operational_status" onchange="this.form.submit()" aria-label="Update workflow status for {{ order.order_code|default:order.title }}">
+                          {% for key, label in operational_status_choices %}
+                            <option value="{{ key }}" {% if row.operational_status == key %}selected{% endif %}>{{ label }}</option>
                           {% endfor %}
                         </select>
                       </form>

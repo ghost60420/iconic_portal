@@ -27,6 +27,7 @@ class ProductionOrderForm(forms.ModelForm):
             "title",
             "factory_location",
             "production_order_type",
+            "operational_status",
             "order_type",
             "lead",
             "opportunity",
@@ -72,8 +73,6 @@ class ProductionOrderForm(forms.ModelForm):
             "remake_qty",
             "remake_cost_bdt",
 
-            # other
-            "status",
             "style_image",
             "notes",
         ]
@@ -113,10 +112,10 @@ class ProductionOrderForm(forms.ModelForm):
             if not self.instance.pk:
                 self.fields["qty_reject"].initial = 0
 
-        if "status" in self.fields:
-            self.fields["status"].required = False
+        if "operational_status" in self.fields:
+            self.fields["operational_status"].required = False
             if not self.instance.pk:
-                self.fields["status"].initial = "planning"
+                self.fields["operational_status"].initial = "planning"
 
         if "production_order_type" in self.fields:
             self.fields["production_order_type"].required = True

@@ -47,15 +47,20 @@ from .services.production_operational_status import (
     OPERATIONAL_ACTIVE_STATUSES,
     OPERATIONAL_FINISHED_STATUSES,
     OPERATIONAL_STATUS_APPROVED,
+    OPERATIONAL_STATUS_CANCELLED,
+    OPERATIONAL_STATUS_CUTTING,
+    OPERATIONAL_STATUS_FABRIC_SOURCING,
     OPERATIONAL_STATUS_LABELS,
     OPERATIONAL_STATUS_PACKING,
     OPERATIONAL_STATUS_PLANNING,
+    OPERATIONAL_STATUS_PRINTING,
     OPERATIONAL_STATUS_QC,
     OPERATIONAL_STATUS_READY_TO_SHIP,
     OPERATIONAL_STATUS_SAMPLE_SENT,
     OPERATIONAL_STATUS_SAMPLE_DEVELOPMENT,
     OPERATIONAL_STATUS_SEWING,
     OPERATIONAL_STATUS_SHIPPED,
+    OPERATIONAL_STATUS_VALUES,
     get_production_operational_status,
 )
 from .services.product_reference_images import (
@@ -2145,23 +2150,82 @@ def _production_stage_bucket(order, stages, shipments=None):
     return "shipped"
 
 
-def _production_priority(order, percent_done, has_delay, late_shipment, shipment_pending, today):
+PRODUCTION_WORKFLOW_STEP_STATUSES = [
+    OPERATIONAL_STATUS_PLANNING,
+    OPERATIONAL_STATUS_SAMPLE_DEVELOPMENT,
+    OPERATIONAL_STATUS_SAMPLE_SENT,
+    OPERATIONAL_STATUS_APPROVED,
+    OPERATIONAL_STATUS_FABRIC_SOURCING,
+    OPERATIONAL_STATUS_CUTTING,
+    OPERATIONAL_STATUS_PRINTING,
+    OPERATIONAL_STATUS_SEWING,
+    OPERATIONAL_STATUS_QC,
+    OPERATIONAL_STATUS_PACKING,
+    OPERATIONAL_STATUS_READY_TO_SHIP,
+    OPERATIONAL_STATUS_SHIPPED,
+]
+
+
+def _production_workflow_steps(current_status):
+    current_status = current_status if current_status in OPERATIONAL_STATUS_VALUES else OPERATIONAL_STATUS_PLANNING
+    if current_status == OPERATIONAL_STATUS_CANCELLED:
+        return [
+            SimpleNamespace(
+                key=status,
+                label=OPERATIONAL_STATUS_LABELS[status],
+                state="cancelled",
+            )
+            for status in PRODUCTION_WORKFLOW_STEP_STATUSES
+        ]
+
+    try:
+        current_index = PRODUCTION_WORKFLOW_STEP_STATUSES.index(current_status)
+    except ValueError:
+        current_index = 0
+
+    steps = []
+    for index, status in enumerate(PRODUCTION_WORKFLOW_STEP_STATUSES):
+        if index < current_index:
+            state = "done"
+        elif index == current_index:
+            state = "current"
+        else:
+            state = "planned"
+        steps.append(
+            SimpleNamespace(
+                key=status,
+                label=OPERATIONAL_STATUS_LABELS[status],
+                state=state,
+            )
+        )
+    return steps
+
+
+def _production_priority(order, percent_done, has_delay, late_shipment, shipment_pending, today, operational_status=None):
     completed_statuses = _production_completed_statuses()
-    if order.status in completed_statuses:
+    if operational_status == OPERATIONAL_STATUS_CANCELLED:
+        return {"key": "low", "label": "Low", "tone": "neutral", "reason": "Cancelled"}
+    if operational_status == OPERATIONAL_STATUS_SHIPPED:
+        return {"key": "low", "label": "Low", "tone": "good", "reason": "Completed"}
+    if not operational_status and order.status in completed_statuses:
         return {"key": "low", "label": "Low", "tone": "good", "reason": "Completed"}
 
     deadline = getattr(order, "bulk_deadline", None)
     if has_delay or late_shipment:
         return {"key": "urgent", "label": "Urgent", "tone": "risk", "reason": "Delayed"}
+    if operational_status == OPERATIONAL_STATUS_READY_TO_SHIP:
+        return {"key": "high", "label": "High", "tone": "warning", "reason": "Ready to ship"}
+    if operational_status == OPERATIONAL_STATUS_SAMPLE_SENT:
+        return {"key": "high", "label": "High", "tone": "warning", "reason": "Sample approval"}
     if deadline and deadline <= today + timedelta(days=2):
         return {"key": "urgent", "label": "Urgent", "tone": "risk", "reason": "Deadline close"}
-    if order.status == "hold":
+    if not operational_status and order.status == "hold":
         return {"key": "high", "label": "High", "tone": "warning", "reason": "On hold"}
     if shipment_pending:
         return {"key": "high", "label": "High", "tone": "warning", "reason": "Shipment pending"}
     if deadline and deadline <= today + timedelta(days=7):
         return {"key": "high", "label": "High", "tone": "warning", "reason": "Due this week"}
-    if percent_done == 0 and order.status == "planning":
+    if percent_done == 0 and (operational_status == OPERATIONAL_STATUS_PLANNING or order.status == "planning"):
         return {"key": "normal", "label": "Normal", "tone": "neutral", "reason": "Planning"}
     return {"key": "normal", "label": "Normal", "tone": "neutral", "reason": "On track"}
 
@@ -7553,10 +7617,21 @@ def production_list(request):
     today = timezone.localdate()
     if request.method == "POST":
         order_id = request.POST.get("order_id")
+        new_operational_status = request.POST.get("operational_status")
         new_status = request.POST.get("status")
+        valid_operational_statuses = {key for key, _ in ProductionOrder.OPERATIONAL_STATUS_CHOICES}
         valid_statuses = {key for key, _ in ProductionOrder.STATUS_CHOICES}
 
-        if order_id and new_status in valid_statuses:
+        if order_id and new_operational_status in valid_operational_statuses:
+            order = get_object_or_404(ProductionOrder, pk=order_id)
+            if new_operational_status != order.operational_status:
+                order.operational_status = new_operational_status
+                order.save(update_fields=["operational_status"])
+                messages.success(
+                    request,
+                    f"Workflow status updated to {order.get_operational_status_display()}.",
+                )
+        elif order_id and new_status in valid_statuses:
             order = get_object_or_404(ProductionOrder, pk=order_id)
             old_status = order.status
             if new_status != old_status:
@@ -7568,7 +7643,6 @@ def production_list(request):
         return redirect(request.POST.get("next") or "production_list")
 
     status_filter = (request.GET.get("status") or "active").strip().lower()
-    completed_statuses = _production_completed_statuses()
     search_query = (request.GET.get("q") or "").strip()
     priority_filter = (request.GET.get("priority") or "all").strip().lower()
     delayed_filter = (request.GET.get("delayed") or "all").strip().lower()
@@ -7603,16 +7677,10 @@ def production_list(request):
         for order in orders_for_kpis
     ]
 
-    if status_filter == "completed":
-        orders = orders.filter(status__in=completed_statuses)
-    elif status_filter == "all":
-        pass
-    else:
-        orders = orders.exclude(status__in=completed_statuses)
-
     orders_data_all = []
 
     for order in orders:
+        operational_status = get_production_operational_status(order)
         stages = get_sorted_stages(order)
         shipments = list(order.shipments.all())
 
@@ -7623,7 +7691,7 @@ def production_list(request):
         bulk_overdue = bool(
             order.bulk_deadline
             and today > order.bulk_deadline
-            and order.status not in completed_statuses
+            and operational_status not in OPERATIONAL_FINISHED_STATUSES
         )
         stage_delay = any(s.status == "delay" or s.is_late for s in stages)
         late_shipment = any(
@@ -7635,7 +7703,7 @@ def production_list(request):
         has_delay = bulk_overdue or stage_delay
         shipment_pending = (
             not shipments
-            and order.status not in completed_statuses
+            and operational_status in OPERATIONAL_ACTIVE_STATUSES
             and (percent_done >= 80 or _production_any_stage_started(_production_stage_lookup(stages), ["shipping"]))
         )
         priority = _production_priority(
@@ -7645,6 +7713,7 @@ def production_list(request):
             late_shipment,
             shipment_pending,
             today,
+            operational_status,
         )
         lifecycle = None
         try:
@@ -7664,6 +7733,11 @@ def production_list(request):
                 "late_shipment": late_shipment,
                 "shipment_pending": shipment_pending,
                 "priority": priority,
+                "operational_status": operational_status,
+                "operational_status_label": OPERATIONAL_STATUS_LABELS.get(
+                    operational_status,
+                    OPERATIONAL_STATUS_LABELS[OPERATIONAL_STATUS_PLANNING],
+                ),
                 "latest_shipment": shipments[0] if shipments else None,
                 "lifecycle": lifecycle,
             }
@@ -7671,6 +7745,36 @@ def production_list(request):
 
     orders_data = []
     for row in orders_data_all:
+        operational_status = row["operational_status"]
+        if status_filter == "active" and operational_status not in OPERATIONAL_ACTIVE_STATUSES:
+            continue
+        if status_filter == "sample_development" and operational_status != OPERATIONAL_STATUS_SAMPLE_DEVELOPMENT:
+            continue
+        if status_filter == "bulk_production" and (
+            row["order"].production_order_type != "bulk"
+            or operational_status not in OPERATIONAL_ACTIVE_STATUSES
+        ):
+            continue
+        if status_filter == "delayed" and not row["has_delay"]:
+            continue
+        if status_filter == "ready_to_ship" and operational_status != OPERATIONAL_STATUS_READY_TO_SHIP:
+            continue
+        if status_filter in {"shipped", "completed"} and operational_status != OPERATIONAL_STATUS_SHIPPED:
+            continue
+        if status_filter == "cancelled" and operational_status != OPERATIONAL_STATUS_CANCELLED:
+            continue
+        if status_filter not in {
+            "active",
+            "sample_development",
+            "bulk_production",
+            "delayed",
+            "ready_to_ship",
+            "shipped",
+            "completed",
+            "cancelled",
+            "all",
+        } and operational_status not in OPERATIONAL_ACTIVE_STATUSES:
+            continue
         if priority_filter != "all" and row["priority"]["key"] != priority_filter:
             continue
         if delayed_filter == "delayed" and not row["has_delay"]:
@@ -7859,6 +7963,7 @@ def production_list(request):
             "delayed_filter": delayed_filter,
             "shipment_filter": shipment_filter,
             "status_choices": ProductionOrder.STATUS_CHOICES,
+            "operational_status_choices": ProductionOrder.OPERATIONAL_STATUS_CHOICES,
             "pipeline_counts": pipeline_counts,
             "pipeline_total_count": pipeline_total_count,
             "urgent_orders": urgent_orders,
@@ -8081,6 +8186,12 @@ def production_detail(request, pk):
 
     # sorted stages
     stages = get_sorted_stages(order)
+    operational_status = get_production_operational_status(order)
+    operational_status_label = OPERATIONAL_STATUS_LABELS.get(
+        operational_status,
+        OPERATIONAL_STATUS_LABELS[OPERATIONAL_STATUS_PLANNING],
+    )
+    production_workflow_steps = _production_workflow_steps(operational_status)
 
     # order lines for sheet details
     order_lines = _production_order_lines(order)
@@ -8103,7 +8214,14 @@ def production_detail(request, pk):
 
     # progress and delay
     percent_done = order.percent_done
-    order_delayed = order.is_delayed
+    stage_delay = any(s.status == "delay" or s.is_late for s in stages)
+    order_delayed = bool(
+        operational_status not in OPERATIONAL_FINISHED_STATUSES
+        and (
+            stage_delay
+            or (order.bulk_deadline and order.bulk_deadline < today)
+        )
+    )
     late_shipment = any(
         s.ship_date
         and s.ship_date < today
@@ -8112,7 +8230,7 @@ def production_detail(request, pk):
     )
     shipment_pending = (
         not shipments
-        and order.status not in _production_completed_statuses()
+        and operational_status in OPERATIONAL_ACTIVE_STATUSES
         and (percent_done >= 80 or _production_any_stage_started(_production_stage_lookup(stages), ["shipping"]))
     )
     priority_badge = _production_priority(
@@ -8122,6 +8240,7 @@ def production_detail(request, pk):
         late_shipment,
         shipment_pending,
         today,
+        operational_status,
     )
     production_visual_stages = _production_visual_stages(order, stages, shipments)
     latest_shipment = shipments[0] if shipments else None
@@ -8440,6 +8559,9 @@ def production_detail(request, pk):
         "percent_done": percent_done,
         "order_delayed": order_delayed,
         "priority_badge": priority_badge,
+        "operational_status": operational_status,
+        "operational_status_label": operational_status_label,
+        "production_workflow_steps": production_workflow_steps,
         "production_visual_stages": production_visual_stages,
         "late_shipment": late_shipment,
         "shipment_pending": shipment_pending,

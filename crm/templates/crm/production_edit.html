@@ -250,9 +250,9 @@
         </div>
 
         <div class="prod-edit-field">
-          <label for="{{ form.status.id_for_label }}">Status</label>
-          {{ form.status }}
-          {% for e in form.status.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
+          <label for="{{ form.operational_status.id_for_label }}">Workflow Status</label>
+          {{ form.operational_status }}
+          {% for e in form.operational_status.errors %}<div class="prod-edit-error">{{ e }}</div>{% endfor %}
         </div>
 
       </div>

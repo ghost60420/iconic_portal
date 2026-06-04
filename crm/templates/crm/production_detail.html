@@ -38,7 +38,7 @@
           <span>{{ order.get_factory_location_display|default:"Factory not set" }}</span>
         </div>
         <div class="production-hero-badges">
-          <span class="production-status-badge {{ order.status }}">{{ order.get_status_display }}</span>
+          <span class="production-status-badge {{ operational_status }}">{{ operational_status_label }}</span>
           <span class="production-priority-badge {{ priority_badge.tone }}">{{ priority_badge.label }} priority</span>
           {% if order_delayed %}
             <span class="production-priority-badge risk">Delayed</span>
@@ -46,8 +46,10 @@
             <span class="production-priority-badge risk">Late shipment</span>
           {% elif shipment_pending %}
             <span class="production-priority-badge warning">Shipment pending</span>
-          {% elif order.status == "done" or order.status == "closed_won" %}
+          {% elif operational_status == "shipped" %}
             <span class="production-priority-badge good">Complete</span>
+          {% elif operational_status == "cancelled" %}
+            <span class="production-priority-badge neutral">Cancelled</span>
           {% else %}
             <span class="production-priority-badge good">On track</span>
           {% endif %}
@@ -87,6 +89,36 @@
   {% include "crm/partials/product_reference_images.html" %}
 
   {% include "crm/partials/production_progress_photos.html" %}
+
+  <section class="production-panel" aria-label="Production workflow status">
+    <div class="production-panel-head">
+      <div>
+        <h2>Workflow Status</h2>
+        <p>Operational production status used for dashboards, filters, and management reporting.</p>
+      </div>
+      <span class="production-status-badge {{ operational_status }}">{{ operational_status_label }}</span>
+    </div>
+
+    {% if operational_status == "cancelled" %}
+      <div class="production-empty-inline">This production order is cancelled.</div>
+    {% else %}
+      <div class="production-control-tracker" aria-label="Production workflow progress">
+        {% for step in production_workflow_steps %}
+          <article class="production-control-stage {{ step.state }}">
+            <div class="production-control-stage-top">
+              <span class="production-stage-dot"></span>
+              <strong>{{ step.label }}</strong>
+            </div>
+            <small>
+              {% if step.state == "done" %}Completed
+              {% elif step.state == "current" %}Current
+              {% else %}Upcoming{% endif %}
+            </small>
+          </article>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </section>
 
   <section class="production-snapshot-grid" aria-label="Production snapshot">
     <article class="production-snapshot-card">

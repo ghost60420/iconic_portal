@@ -50,6 +50,8 @@ OPERATIONAL_STATUS_LABELS = {
     OPERATIONAL_STATUS_CANCELLED: "Cancelled",
 }
 
+OPERATIONAL_STATUS_VALUES = set(OPERATIONAL_STATUS_LABELS.keys())
+
 SHIPMENT_SENT_STATUSES = {"shipped", "out_for_delivery", "delivered"}
 SHIPMENT_READY_STATUSES = {"planned", "booked"}
 STAGE_ACTIVE_STATUSES = {"in_progress", "hold", "delay"}
@@ -107,7 +109,7 @@ def _sample_shipment_sent(shipments):
     )
 
 
-def get_production_operational_status(order):
+def derive_production_operational_status(order):
     """
     Read-only operational status derived from existing stages and shipments.
 
@@ -186,3 +188,16 @@ def get_production_operational_status(order):
         return OPERATIONAL_STATUS_SAMPLE_DEVELOPMENT
 
     return OPERATIONAL_STATUS_PLANNING
+
+
+def get_production_operational_status(order):
+    """
+    Return the stored workflow status when available, with derived fallback.
+
+    The fallback keeps older environments and unsaved/incomplete objects safe.
+    It does not write to ProductionOrder.status or shipment/stage records.
+    """
+    stored_status = getattr(order, "operational_status", None)
+    if stored_status in OPERATIONAL_STATUS_VALUES:
+        return stored_status
+    return derive_production_operational_status(order)
