@@ -12,7 +12,7 @@
         Track production status, factory progress, delivery timelines, pending actions, and linked sales context from one cleaner workspace.
       </p>
       <div class="production-hero-meta">
-        <span>{{ total_orders }} order{{ total_orders|pluralize }} in current view</span>
+        <span>{{ total_orders }} active operational order{{ total_orders|pluralize }}</span>
         <span>{{ active_orders }} running</span>
         <span>{{ delayed_orders }} delayed</span>
       </div>
@@ -29,22 +29,22 @@
     <article class="production-stat">
       <span>Total Active Production Orders</span>
       <strong>{{ total_active_orders_count }}</strong>
-      <small>Planning, in progress, or on hold</small>
+      <small>Operationally active orders</small>
     </article>
     <article class="production-stat">
       <span>Total Active Units</span>
       <strong>{{ total_active_units_count }}</strong>
-      <small>Units across active orders</small>
+      <small>Units across operationally active orders</small>
     </article>
     <article class="production-stat">
       <span>Production Completion %</span>
       <strong>{{ production_completion_percent }}%</strong>
-      <small>Completed vs active plus completed orders</small>
+      <small>Shipped vs active plus shipped orders</small>
     </article>
     <article class="production-stat">
       <span>Ready To Ship</span>
       <strong>{{ ready_to_ship_operations_count }}</strong>
-      <small>Packing complete or ready-to-ship orders</small>
+      <small>Operationally ready for shipment</small>
     </article>
     <article class="production-stat production-stat--risk">
       <span>Delayed Orders</span>
@@ -79,12 +79,12 @@
     <article class="production-stat">
       <span>Completed Orders</span>
       <strong>{{ completed_orders }}</strong>
-      <small>Done, closed won, or closed lost</small>
+      <small>Shipped or delivered operational orders</small>
     </article>
     <article class="production-stat">
       <span>Total Quantity in View</span>
       <strong>{{ total_pieces }}</strong>
-      <small>{{ total_reject }} rejected / {{ reject_percent }} percent</small>
+      <small>Active operational units / {{ total_reject }} rejected / {{ reject_percent }} percent</small>
     </article>
   </section>
 
@@ -112,7 +112,7 @@
     <article class="production-control-panel">
       <div class="production-control-head">
         <h2>Production Pipeline</h2>
-        <span>{{ total_orders }}</span>
+        <span>{{ pipeline_total_count }}</span>
       </div>
       <div class="production-pipeline-grid">
         {% for item in pipeline_counts %}
@@ -127,13 +127,13 @@
     <article class="production-control-panel">
       <div class="production-control-head">
         <h2>Factory Summary</h2>
-        <span>Today</span>
+        <span>Operational</span>
       </div>
       <div class="production-factory-grid">
         <div><span>Active orders</span><strong>{{ factory_summary.active_orders }}</strong></div>
         <div><span>Units in production</span><strong>{{ factory_summary.units_in_production }}</strong></div>
-        <div><span>Completed today</span><strong>{{ factory_summary.completed_today }}</strong></div>
-        <div><span>Shipped today</span><strong>{{ factory_summary.shipped_today }}</strong></div>
+        <div><span>Completed orders</span><strong>{{ factory_summary.completed_orders }}</strong></div>
+        <div><span>Ready To Ship</span><strong>{{ factory_summary.ready_to_ship }}</strong></div>
       </div>
     </article>
 

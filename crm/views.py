@@ -46,9 +46,15 @@ from .services.order_lifecycle import (
 from .services.production_operational_status import (
     OPERATIONAL_ACTIVE_STATUSES,
     OPERATIONAL_FINISHED_STATUSES,
+    OPERATIONAL_STATUS_APPROVED,
     OPERATIONAL_STATUS_LABELS,
+    OPERATIONAL_STATUS_PACKING,
+    OPERATIONAL_STATUS_PLANNING,
+    OPERATIONAL_STATUS_QC,
     OPERATIONAL_STATUS_READY_TO_SHIP,
     OPERATIONAL_STATUS_SAMPLE_SENT,
+    OPERATIONAL_STATUS_SAMPLE_DEVELOPMENT,
+    OPERATIONAL_STATUS_SEWING,
     OPERATIONAL_STATUS_SHIPPED,
     get_production_operational_status,
 )
@@ -7563,7 +7569,6 @@ def production_list(request):
 
     status_filter = (request.GET.get("status") or "active").strip().lower()
     completed_statuses = _production_completed_statuses()
-    active_statuses = _production_active_statuses()
     search_query = (request.GET.get("q") or "").strip()
     priority_filter = (request.GET.get("priority") or "all").strip().lower()
     delayed_filter = (request.GET.get("delayed") or "all").strip().lower()
@@ -7659,7 +7664,6 @@ def production_list(request):
                 "late_shipment": late_shipment,
                 "shipment_pending": shipment_pending,
                 "priority": priority,
-                "pipeline_bucket": _production_stage_bucket(order, stages, shipments),
                 "latest_shipment": shipments[0] if shipments else None,
                 "lifecycle": lifecycle,
             }
@@ -7682,17 +7686,9 @@ def production_list(request):
         orders_data.append(row)
     attach_primary_reference_images_to_production_orders([row["order"] for row in orders_data])
 
-    total_orders = len(orders_data)
-    active_rows = [row for row in orders_data if row["order"].status in active_statuses]
-    active_orders = len(active_rows)
-    completed_orders = len([row for row in orders_data if row["order"].status in completed_statuses])
-    delayed_orders = len([row for row in orders_data if row["has_delay"]])
-    total_pieces = sum((row["order"].qty_total or 0) for row in orders_data)
-    total_reject = sum((row["order"].qty_reject or 0) for row in orders_data)
-    reject_percent = int((total_reject / total_pieces) * 100) if total_pieces else 0
-    late_shipment_count = len([row for row in orders_data if row["late_shipment"]])
-    overdue_approval_count = len([row for row in orders_data if row["order"].status == "hold"])
-    shipment_pending_count = len([row for row in orders_data if row["shipment_pending"]])
+    production_operational_counts = Counter(
+        row["operational_status"] for row in production_kpi_rows
+    )
     production_kpi_active_rows = [
         row for row in production_kpi_rows
         if row["operational_status"] in OPERATIONAL_ACTIVE_STATUSES
@@ -7707,6 +7703,11 @@ def production_list(request):
     ]
     total_active_orders_count = len(production_kpi_active_rows)
     total_active_units_count = sum((row["order"].qty_total or 0) for row in production_kpi_active_rows)
+    total_orders = total_active_orders_count
+    active_orders = total_active_orders_count
+    total_pieces = total_active_units_count
+    total_reject = sum((row["order"].qty_reject or 0) for row in production_kpi_active_rows)
+    reject_percent = int((total_reject / total_pieces) * 100) if total_pieces else 0
     sample_development_orders_count = len(sample_development_rows)
     sample_development_units_count = sum((row["order"].qty_total or 0) for row in sample_development_rows)
     bulk_production_orders_count = len(bulk_production_rows)
@@ -7732,44 +7733,82 @@ def production_list(request):
         and row["order"].bulk_deadline < today
         and row["operational_status"] not in OPERATIONAL_FINISHED_STATUSES
     ])
+    delayed_orders = delayed_operations_count
     awaiting_approval_samples_count = len([
         row for row in production_kpi_rows
         if row["operational_status"] == OPERATIONAL_STATUS_SAMPLE_SENT
     ])
 
+    pipeline_statuses = [
+        OPERATIONAL_STATUS_PLANNING,
+        OPERATIONAL_STATUS_SAMPLE_DEVELOPMENT,
+        OPERATIONAL_STATUS_APPROVED,
+        OPERATIONAL_STATUS_SEWING,
+        OPERATIONAL_STATUS_QC,
+        OPERATIONAL_STATUS_PACKING,
+        OPERATIONAL_STATUS_READY_TO_SHIP,
+        OPERATIONAL_STATUS_SHIPPED,
+    ]
     pipeline_counts = [
         {
-            "key": key,
-            "label": label,
-            "count": len([row for row in orders_data if row["pipeline_bucket"] == key]),
+            "key": status,
+            "label": OPERATIONAL_STATUS_LABELS[status],
+            "count": production_operational_counts.get(status, 0),
         }
-        for key, label in PRODUCTION_CONTROL_BUCKET_LABELS.items()
+        for status in pipeline_statuses
     ]
-    urgent_orders = sorted(
+    pipeline_total_count = sum(item["count"] for item in pipeline_counts)
+    delayed_operation_rows = sorted(
         [
-            row for row in orders_data
-            if row["priority"]["key"] in {"urgent", "high"} or row["has_delay"] or row["shipment_pending"]
+            {
+                "order": row["order"],
+                "operational_status": row["operational_status"],
+                "priority": SimpleNamespace(
+                    key="urgent",
+                    label="Urgent",
+                    reason="Delayed",
+                    tone="risk",
+                ),
+            }
+            for row in production_kpi_rows
+            if row["order"].bulk_deadline
+            and row["order"].bulk_deadline < today
+            and row["operational_status"] not in OPERATIONAL_FINISHED_STATUSES
         ],
-        key=lambda row: (
-            0 if row["priority"]["key"] == "urgent" else 1 if row["priority"]["key"] == "high" else 2,
-            row["order"].bulk_deadline or date.max,
-        ),
-    )[:6]
-    shipped_today = sum(
-        1
-        for row in orders_data
-        for shipment in row["shipments"]
-        if shipment.ship_date == today and shipment.status in {"shipped", "out_for_delivery", "delivered"}
+        key=lambda row: (row["order"].bulk_deadline or date.max, row["order"].order_code or ""),
     )
-    completed_today = len([
-        row for row in orders_data
-        if row["order"].status in completed_statuses and row["order"].updated_at.date() == today
-    ])
+    delayed_operation_ids = {row["order"].pk for row in delayed_operation_rows}
+    ready_to_ship_operation_rows = sorted(
+        [
+            {
+                "order": row["order"],
+                "operational_status": row["operational_status"],
+                "priority": SimpleNamespace(
+                    key="high",
+                    label="High",
+                    reason="Ready to ship",
+                    tone="warning",
+                ),
+            }
+            for row in production_kpi_rows
+            if row["operational_status"] == OPERATIONAL_STATUS_READY_TO_SHIP
+            and row["order"].pk not in delayed_operation_ids
+        ],
+        key=lambda row: (row["order"].bulk_deadline or date.max, row["order"].order_code or ""),
+    )
+    urgent_orders = sorted(
+        delayed_operation_rows + ready_to_ship_operation_rows,
+        key=lambda row: (
+            0 if row["priority"].key == "urgent" else 1,
+            row["order"].bulk_deadline or date.max,
+            row["order"].order_code or "",
+        ),
+    )[:10]
     factory_summary = {
-        "active_orders": active_orders,
-        "units_in_production": sum(row["order"].qty_total for row in orders_data if row["order"].status in active_statuses),
-        "completed_today": completed_today,
-        "shipped_today": shipped_today,
+        "active_orders": total_active_orders_count,
+        "units_in_production": total_active_units_count,
+        "completed_orders": production_completed_count,
+        "ready_to_ship": ready_to_ship_operations_count,
     }
     can_view_profit = can_view_lifecycle_profit(request.user)
     low_margin_orders = []
@@ -7821,10 +7860,8 @@ def production_list(request):
             "shipment_filter": shipment_filter,
             "status_choices": ProductionOrder.STATUS_CHOICES,
             "pipeline_counts": pipeline_counts,
+            "pipeline_total_count": pipeline_total_count,
             "urgent_orders": urgent_orders,
-            "late_shipment_count": late_shipment_count,
-            "overdue_approval_count": overdue_approval_count,
-            "shipment_pending_count": shipment_pending_count,
             "factory_summary": factory_summary,
             "can_view_lifecycle_profit": can_view_profit,
             "low_margin_orders": low_margin_orders,
