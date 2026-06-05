@@ -6,8 +6,8 @@ from decimal import Decimal
 from django.db import migrations, models
 
 
-SENT_SHIPMENT_STATUSES = {"shipped", "out_for_delivery", "delivered"}
-READY_SHIPMENT_STATUSES = {"planned", "booked"}
+SENT_SHIPMENT_STATUSES = {"booked", "shipped", "out_for_delivery", "delivered"}
+READY_SHIPMENT_STATUSES = {"planned"}
 ACTIVE_STAGE_STATUSES = {"in_progress", "hold", "delay"}
 
 

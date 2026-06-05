@@ -62,6 +62,7 @@ from .services.production_operational_status import (
     OPERATIONAL_STATUS_SHIPPED,
     OPERATIONAL_STATUS_VALUES,
     get_production_operational_status,
+    sync_operational_status,
 )
 from .services.product_reference_images import (
     attach_primary_reference_images_to_leads,
@@ -307,6 +308,7 @@ def production_stage_click(request, stage_id):
         if not stage.actual_start:
             stage.actual_start = today
         stage.save(update_fields=["status", "actual_start"])
+        sync_operational_status(stage.order)
         messages.success(request, "Stage started and date saved.")
 
     elif stage.status == "in_progress":
@@ -316,6 +318,7 @@ def production_stage_click(request, stage_id):
         if not stage.actual_end:
             stage.actual_end = today
         stage.save(update_fields=["status", "actual_start", "actual_end"])
+        sync_operational_status(stage.order)
         messages.success(request, "Stage completed and date saved.")
 
     else:
@@ -7185,6 +7188,8 @@ def _apply_production_status_change(order, old_status):
     if order.status == old_status:
         return
 
+    sync_operational_status(order)
+
     customer = order.customer or (order.opportunity.customer if order.opportunity else None)
     _record_customer_event(
         customer=customer,
@@ -7625,8 +7630,7 @@ def production_list(request):
         if order_id and new_operational_status in valid_operational_statuses:
             order = get_object_or_404(ProductionOrder, pk=order_id)
             if new_operational_status != order.operational_status:
-                order.operational_status = new_operational_status
-                order.save(update_fields=["operational_status"])
+                sync_operational_status(order, explicit_status=new_operational_status)
                 messages.success(
                     request,
                     f"Workflow status updated to {order.get_operational_status_display()}.",
@@ -8758,6 +8762,7 @@ def production_next_stage(request, pk):
     order.current_stage = next_stage
     order.status = "done" if next_stage.stage_key == "shipping" else "in_progress"
     order.save()
+    sync_operational_status(order)
 
     messages.success(request, f"Moved to stage: {next_stage.get_stage_key_display()}")
     return redirect("production_detail", pk=pk)
@@ -8773,6 +8778,7 @@ def production_stage_edit(request, stage_id):
         form = ProductionStageForm(request.POST, instance=stage)
         if form.is_valid():
             form.save()
+            sync_operational_status(stage.order)
             messages.success(request, "Stage updated.")
             return redirect("production_detail", pk=stage.order_id)
     else:

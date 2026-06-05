@@ -3551,6 +3551,11 @@ class Shipment(models.Model):
 
         super().save(*args, **kwargs)
 
+        if self.order_id:
+            from .services.production_operational_status import sync_operational_status
+
+            sync_operational_status(self.order)
+
 
 class OrderLifecycle(models.Model):
     STATUS_CHOICES = [
@@ -4232,6 +4237,14 @@ class ProductionStage(models.Model):
         if self.planned_end and timezone.now().date() > self.planned_end:
             return True
         return False
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+
+        if self.order_id:
+            from .services.production_operational_status import sync_operational_status
+
+            sync_operational_status(self.order)
 
 
 # default stages for every new production order

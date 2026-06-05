@@ -52,8 +52,11 @@ OPERATIONAL_STATUS_LABELS = {
 
 OPERATIONAL_STATUS_VALUES = set(OPERATIONAL_STATUS_LABELS.keys())
 
-SHIPMENT_SENT_STATUSES = {"shipped", "out_for_delivery", "delivered"}
-SHIPMENT_READY_STATUSES = {"planned", "booked"}
+# A real shipment booking means the order has left production control for
+# reporting purposes. Sample shipments are handled first so they remain in the
+# sample approval workflow instead of becoming a completed bulk shipment.
+SHIPMENT_SENT_STATUSES = {"booked", "shipped", "out_for_delivery", "delivered"}
+SHIPMENT_READY_STATUSES = {"planned"}
 STAGE_ACTIVE_STATUSES = {"in_progress", "hold", "delay"}
 
 
@@ -201,3 +204,29 @@ def get_production_operational_status(order):
     if stored_status in OPERATIONAL_STATUS_VALUES:
         return stored_status
     return derive_production_operational_status(order)
+
+
+def sync_operational_status(order, explicit_status=None):
+    """
+    Persist the production workflow status from one central place.
+
+    Use explicit_status for user-recorded workflow events such as sample sent,
+    sample approved, or cancelled. Otherwise the status is derived from saved
+    ProductionStage and Shipment activity. This function intentionally does not
+    write to legacy ProductionOrder.status, stages, or shipments.
+    """
+    if order is None:
+        return None
+
+    target_status = explicit_status if explicit_status in OPERATIONAL_STATUS_VALUES else derive_production_operational_status(order)
+    current_status = getattr(order, "operational_status", None)
+
+    if current_status != target_status:
+        order.operational_status = target_status
+        if getattr(order, "pk", None) and hasattr(order, "save"):
+            update_fields = ["operational_status"]
+            if hasattr(order, "updated_at"):
+                update_fields.append("updated_at")
+            order.save(update_fields=update_fields)
+
+    return target_status

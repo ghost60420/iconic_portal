@@ -139,6 +139,19 @@ class ProductionOrderForm(forms.ModelForm):
         valid_values = {key for key, _ in ProductionOrder.SIZE_GROUP_CHOICES}
         return value if value in valid_values else "unisex"
 
+    def save(self, commit=True):
+        was_adding = self.instance._state.adding
+        order = super().save(commit=commit)
+        if commit:
+            from .services.production_operational_status import sync_operational_status
+
+            explicit_status = self.cleaned_data.get("operational_status")
+            if was_adding and explicit_status == "planning":
+                sync_operational_status(order)
+            else:
+                sync_operational_status(order, explicit_status=explicit_status)
+        return order
+
 
 class ProductionStageForm(forms.ModelForm):
     class Meta:
