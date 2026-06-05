@@ -133,6 +133,73 @@
   white-space: nowrap;
 }
 
+.calendar-reminder-panel {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(113, 63, 18, 0.42), rgba(15, 23, 42, 0.94));
+  box-shadow: 0 18px 42px rgba(2, 6, 23, 0.34);
+}
+
+.calendar-reminder-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.calendar-reminder-head strong {
+  display: block;
+  color: #fef9c3;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.calendar-reminder-head span,
+.calendar-reminder-card small {
+  color: #cbd5e1;
+  font-size: 12px;
+}
+
+.calendar-reminder-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.calendar-reminder-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px;
+  border: 1px solid rgba(250, 204, 21, 0.25);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.74);
+}
+
+.calendar-reminder-card strong,
+.calendar-reminder-card small {
+  display: block;
+  margin-top: 5px;
+}
+
+.calendar-reminder-card strong {
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.calendar-reminder-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+  min-width: 150px;
+}
+
 .calendar-btn:hover,
 .calendar-btn:focus-visible,
 .calendar-chip-link:hover,

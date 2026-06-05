@@ -29,6 +29,43 @@
     </div>
   </section>
 
+  {% if upcoming_reminders %}
+    <section class="calendar-reminder-panel" id="calendar-reminder-panel" aria-label="Upcoming meeting reminders">
+      <div class="calendar-reminder-head">
+        <div>
+          <strong>Upcoming Meetings</strong>
+          <span>Today and next 24 hours</span>
+        </div>
+      </div>
+      <div class="calendar-reminder-list">
+        {% for e in upcoming_reminders %}
+          <article class="calendar-reminder-card" data-reminder-id="{{ e.pk }}">
+            <div>
+              <span class="calendar-type-badge type-{{ e.event_type }}">{{ e.get_event_type_display }}</span>
+              <strong>{{ e.title }}</strong>
+              <small>
+                {{ e.start_datetime|date:"D, M j" }} at {{ e.start_datetime|time:"h:i A" }}
+                {% if e.end_datetime %} - {{ e.end_datetime|time:"h:i A" }}{% endif %}
+              </small>
+              <small>
+                Attendees:
+                {% for attendee in e.attendees.all %}
+                  {{ attendee.get_full_name|default:attendee.username }}{% if not forloop.last %}, {% endif %}
+                {% empty %}
+                  {% if e.assigned_to_name %}{{ e.assigned_to_name }}{% else %}No internal attendees{% endif %}
+                {% endfor %}
+              </small>
+            </div>
+            <div class="calendar-reminder-actions">
+              <a href="{% url 'calendar_event_detail' e.pk %}" class="calendar-btn calendar-btn--tiny calendar-btn--primary">View Meeting</a>
+              <button type="button" class="calendar-btn calendar-btn--tiny calendar-btn--ghost" data-dismiss-url="{% url 'calendar_dismiss_reminder' e.pk %}">Dismiss</button>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
   <section class="calendar-summary-grid" aria-label="Calendar summary">
     <article class="calendar-stat">
       <span>Today events</span>
@@ -562,6 +599,29 @@
 
 <script>
   document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll("[data-dismiss-url]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var url = btn.getAttribute("data-dismiss-url");
+        if (!url) return;
+        fetch(url, {
+          method: "POST",
+          headers: {
+            "X-CSRFToken": getCookie("csrftoken")
+          }
+        }).then(function (res) {
+          if (!res.ok) return;
+          var card = btn.closest("[data-reminder-id]");
+          if (card) {
+            card.remove();
+          }
+          var panel = document.getElementById("calendar-reminder-panel");
+          if (panel && !panel.querySelector("[data-reminder-id]")) {
+            panel.remove();
+          }
+        });
+      });
+    });
+
     document.querySelectorAll("input[data-toggle-done-id]").forEach(function (cb) {
       cb.addEventListener("change", function () {
         var eventId = this.getAttribute("data-toggle-done-id");

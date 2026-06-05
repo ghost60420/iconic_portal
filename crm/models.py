@@ -2788,6 +2788,13 @@ class Event(models.Model):
 
     start_datetime = models.DateTimeField()
     end_datetime = models.DateTimeField(blank=True, null=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="created_calendar_events",
+    )
 
     event_type = models.CharField(
         max_length=50,
@@ -2808,6 +2815,8 @@ class Event(models.Model):
     )
 
     note = models.TextField(blank=True, default="")
+    location = models.CharField(max_length=255, blank=True, default="")
+    meeting_link = models.URLField(blank=True, default="")
 
     # links into CRM
     lead = models.ForeignKey(
@@ -2843,6 +2852,16 @@ class Event(models.Model):
         blank=True,
         null=True,
         help_text="Their email for alerts",
+    )
+    attendees = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name="calendar_events_invited",
+    )
+    external_attendees = models.TextField(
+        blank=True,
+        default="",
+        help_text="External attendee emails, separated by comma or new line",
     )
     reminder_minutes_before = models.PositiveIntegerField(
         blank=True,
@@ -2881,6 +2900,30 @@ class Event(models.Model):
         if self.status == "done":
             return False
         return self.start_datetime < timezone.now()
+
+
+class EventReminderDismissal(models.Model):
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        related_name="reminder_dismissals",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="dismissed_calendar_reminders",
+    )
+    dismissed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("event", "user")
+        indexes = [
+            models.Index(fields=["user", "event"]),
+            models.Index(fields=["dismissed_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user_id} dismissed event {self.event_id}"
 
 
 # ==============================

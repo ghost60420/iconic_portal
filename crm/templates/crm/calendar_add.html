@@ -160,6 +160,20 @@
           </div>
 
           <div class="mb-2">
+            <div class="field-label">Location or meeting link</div>
+            <div class="calendar-add-row">
+              <div>
+                {{ form.location.label_tag }}
+                {{ form.location }}
+              </div>
+              <div>
+                {{ form.meeting_link.label_tag }}
+                {{ form.meeting_link }}
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-2">
             <div class="field-label">Priority and status</div>
             <div class="calendar-add-row">
               <div>
@@ -220,6 +234,17 @@
                 {{ form.assigned_to_email }}
               </div>
             </div>
+          </div>
+
+          <div class="mb-2">
+            <div class="field-label">Attendees</div>
+            <div class="field-help">Internal users see this event on their own calendar. External emails receive the invite.</div>
+            {{ form.attendees }}
+          </div>
+
+          <div class="mb-2">
+            <div class="field-label">External attendee emails</div>
+            {{ form.external_attendees }}
           </div>
 
           <div class="mb-2">

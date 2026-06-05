@@ -82,6 +82,10 @@ from .services.product_reference_images import (
 )
 from .services.workflow_visibility import build_workflow_visibility_context
 from .services.automation_engine import automation_dashboard_context
+from .services.calendar_notifications import (
+    calendar_event_signature,
+    queue_calendar_invite_email,
+)
 
 def _parse_decimal(value):
     try:
@@ -6065,11 +6069,48 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .models import Event, Lead
+from .models import Event, EventReminderDismissal, Lead
 from .forms import EventForm
 
 # Optional OpenAI client (safe if package not installed)
 _ai_client = client
+
+
+def _calendar_user_name_values(user):
+    names = []
+    full_name = (user.get_full_name() or "").strip() if user else ""
+    username = (getattr(user, "username", "") or "").strip() if user else ""
+    for value in (full_name, username):
+        if value and value not in names:
+            names.append(value)
+    return names
+
+
+def _calendar_events_for_user(user):
+    if not user or not getattr(user, "is_authenticated", False):
+        return Event.objects.none()
+    if user.is_superuser:
+        return Event.objects.all()
+
+    visibility = Q(created_by=user) | Q(attendees=user)
+    email = (getattr(user, "email", "") or "").strip()
+    if email:
+        visibility |= Q(assigned_to_email__iexact=email)
+    for name in _calendar_user_name_values(user):
+        visibility |= Q(assigned_to_name__iexact=name)
+    return Event.objects.filter(visibility).distinct()
+
+
+def _get_calendar_event_for_user(request, pk):
+    return get_object_or_404(_calendar_events_for_user(request.user), pk=pk)
+
+
+def _queue_calendar_email_after_commit(event, action):
+    if not event or not event.pk:
+        return
+    transaction.on_commit(lambda event_id=event.pk, action_name=action: queue_calendar_invite_email(event_id, action=action_name))
+
+
 # ==============================
 # EMAIL REMINDER HELPER
 # ==============================
@@ -6139,7 +6180,11 @@ def calendar_add(request):
     if request.method == "POST":
         form = EventForm(request.POST)
         if form.is_valid():
-            event = form.save()
+            event = form.save(commit=False)
+            event.created_by = request.user
+            event.save()
+            form.save_m2m()
+            _queue_calendar_email_after_commit(event, "created")
 
             repeat = (request.POST.get("repeat") or "none").strip()
             extra_dates = []
@@ -6153,7 +6198,8 @@ def calendar_add(request):
                         extra_dates.append(event.start_datetime + timedelta(weeks=i))
 
             for dt_value in extra_dates:
-                Event.objects.create(
+                extra_event = Event.objects.create(
+                    created_by=request.user,
                     title=event.title,
                     start_datetime=dt_value,
                     end_datetime=event.end_datetime,
@@ -6161,14 +6207,19 @@ def calendar_add(request):
                     priority=event.priority,
                     status=event.status,
                     note=event.note,
+                    location=event.location,
+                    meeting_link=event.meeting_link,
                     lead=event.lead,
                     opportunity=event.opportunity,
                     customer=event.customer,
                     assigned_to_name=event.assigned_to_name,
                     assigned_to_email=event.assigned_to_email,
+                    external_attendees=event.external_attendees,
                     reminder_minutes_before=event.reminder_minutes_before,
                     production_stage=event.production_stage,
                 )
+                extra_event.attendees.set(event.attendees.all())
+                _queue_calendar_email_after_commit(extra_event, "created")
 
             # AI note for first event only
             if _ai_client and not event.ai_note:
@@ -6195,12 +6246,20 @@ def calendar_add(request):
 # CALENDAR EDIT
 # ==============================
 def calendar_edit(request, pk):
-    event = get_object_or_404(Event, pk=pk)
+    event = _get_calendar_event_for_user(request, pk)
+    old_signature = calendar_event_signature(event)
+    old_start = event.start_datetime
+    old_reminder = event.reminder_minutes_before
 
     if request.method == "POST":
         form = EventForm(request.POST, instance=event)
         if form.is_valid():
             event = form.save()
+            if old_start != event.start_datetime or old_reminder != event.reminder_minutes_before:
+                event.reminder_sent = False
+                event.save(update_fields=["reminder_sent"])
+            if calendar_event_signature(event) != old_signature:
+                _queue_calendar_email_after_commit(event, "updated")
 
             if _ai_client and event.status == "done" and not event.ai_note:
                 try:
@@ -6226,12 +6285,12 @@ def calendar_edit(request, pk):
 # CALENDAR EVENT DETAIL
 # ==============================
 def calendar_event_detail(request, pk):
-    event = get_object_or_404(Event, pk=pk)
+    event = _get_calendar_event_for_user(request, pk)
 
     upcoming_for_lead = []
     if getattr(event, "lead", None):
         upcoming_for_lead = (
-            Event.objects.filter(
+            _calendar_events_for_user(request.user).filter(
                 lead=event.lead,
                 start_datetime__gte=timezone.now(),
             )
@@ -6254,7 +6313,7 @@ def calendar_event_ai(request, pk):
     if not _ai_client:
         return JsonResponse({"ok": False, "error": "AI is not configured."}, status=500)
 
-    event = get_object_or_404(Event, pk=pk)
+    event = _get_calendar_event_for_user(request, pk)
 
     mode = (request.POST.get("mode") or "summary").strip()
     user_text = (request.POST.get("user_text") or "").strip()
@@ -6391,7 +6450,9 @@ def calendar_list(request):
         range_start = display_week_dates[0]
         range_end = display_week_dates[-1] + timedelta(days=1)
 
-    events_qs = Event.objects.filter(
+    base_events_qs = _calendar_events_for_user(request.user)
+
+    events_qs = base_events_qs.filter(
         start_datetime__date__gte=range_start,
         start_datetime__date__lt=range_end,
     ).order_by("start_datetime")
@@ -6414,7 +6475,7 @@ def calendar_list(request):
         events_qs = events_qs.filter(lead__id=lead_filter)
 
     events_by_day = {}
-    for ev in events_qs.select_related("lead"):
+    for ev in events_qs.select_related("lead", "customer", "created_by").prefetch_related("attendees"):
         key = timezone.localtime(ev.start_datetime).date()
         events_by_day.setdefault(key, []).append(ev)
 
@@ -6491,18 +6552,18 @@ def calendar_list(request):
             week_hour_rows.append({"hour": h, "cells": cells})
 
     now = timezone.now()
-    today_events_count = Event.objects.filter(start_datetime__date=today).count()
-    week_events_count = Event.objects.filter(
+    today_events_count = base_events_qs.filter(start_datetime__date=today).count()
+    week_events_count = base_events_qs.filter(
         start_datetime__date__gte=today,
         start_datetime__date__lte=today + timedelta(days=7),
     ).count()
-    overdue_events_count = Event.objects.filter(
+    overdue_events_count = base_events_qs.filter(
         status__in=["planned", "in_work"],
         start_datetime__lt=now,
     ).count()
 
     assigned_choices = (
-        Event.objects.exclude(assigned_to_name__isnull=True)
+        base_events_qs.exclude(assigned_to_name__isnull=True)
         .exclude(assigned_to_name="")
         .values_list("assigned_to_name", flat=True)
         .distinct()
@@ -6510,10 +6571,23 @@ def calendar_list(request):
     )
 
     lead_choices = (
-        Event.objects.filter(lead__isnull=False)
+        base_events_qs.filter(lead__isnull=False)
         .values_list("lead_id", "lead__account_brand")
         .distinct()
         .order_by("lead_id")
+    )
+
+    dismissed_event_ids = EventReminderDismissal.objects.filter(user=request.user).values_list("event_id", flat=True)
+    upcoming_reminders = (
+        base_events_qs.filter(
+            start_datetime__gte=now,
+            start_datetime__lte=now + timedelta(hours=24),
+        )
+        .exclude(status="done")
+        .exclude(pk__in=dismissed_event_ids)
+        .select_related("lead", "customer", "created_by")
+        .prefetch_related("attendees")
+        .order_by("start_datetime")[:5]
     )
 
     context = {
@@ -6539,6 +6613,7 @@ def calendar_list(request):
         "day_overflow_events": day_overflow_events,
         "week_dates": week_dates,
         "week_hour_rows": week_hour_rows,
+        "upcoming_reminders": upcoming_reminders,
     }
 
     return render(request, "crm/calendar_list.html", context)
@@ -6549,9 +6624,16 @@ def calendar_list(request):
 # ==============================
 @require_POST
 def calendar_toggle_done(request, pk):
-    event = get_object_or_404(Event, pk=pk)
+    event = _get_calendar_event_for_user(request, pk)
     event.status = "done"
     event.save(update_fields=["status"])
+    return JsonResponse({"ok": True})
+
+
+@require_POST
+def calendar_dismiss_reminder(request, pk):
+    event = _get_calendar_event_for_user(request, pk)
+    EventReminderDismissal.objects.get_or_create(user=request.user, event=event)
     return JsonResponse({"ok": True})
 
 
@@ -6572,7 +6654,7 @@ def calendar_drag_update(request):
     if not event_id or not new_date_str:
         return JsonResponse({"ok": False, "error": "Missing data"}, status=400)
 
-    event = get_object_or_404(Event, pk=event_id)
+    event = _get_calendar_event_for_user(request, event_id)
 
     try:
         new_date = datetime.strptime(new_date_str, "%Y-%m-%d").date()
@@ -6604,6 +6686,7 @@ def calendar_drag_update(request):
         event.end_datetime = new_start + duration
 
     event.save(update_fields=["start_datetime", "end_datetime"])
+    _queue_calendar_email_after_commit(event, "updated")
     return JsonResponse({"ok": True})
 
     # ---------- PRODUCTION VIEWS ----------

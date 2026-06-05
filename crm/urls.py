@@ -207,6 +207,7 @@ urlpatterns = [
     path("calendar/event/<int:pk>/ai/", perm("can_ai", views.calendar_event_ai), name="calendar_event_ai"),
     path("calendar/drag-update/", perm("can_calendar", views.calendar_drag_update), name="calendar_drag_update"),
     path("calendar/toggle-done/<int:pk>/", perm("can_calendar", views.calendar_toggle_done), name="calendar_toggle_done"),
+    path("calendar/dismiss-reminder/<int:pk>/", perm("can_calendar", views.calendar_dismiss_reminder), name="calendar_dismiss_reminder"),
 
     path("production/", perm("can_production", views.production_list), name="production_list"),
     path("production/add/", perm("can_production", views.production_add), name="production_add"),

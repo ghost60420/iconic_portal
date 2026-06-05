@@ -276,8 +276,26 @@
             <div class="info-value">{% if event.assigned_to_name %}{{ event.assigned_to_name }}{% else %}Not set{% endif %}</div>
           </div>
           <div>
+            <div class="info-label">Organizer</div>
+            <div class="info-value">{% if event.created_by %}{{ event.created_by.get_full_name|default:event.created_by.username }}{% else %}Not set{% endif %}</div>
+          </div>
+          <div>
             <div class="info-label">Reminder</div>
             <div class="info-value">{% if event.reminder_minutes_before %}{{ event.reminder_minutes_before }} minutes before{% else %}None{% endif %}</div>
+          </div>
+          <div>
+            <div class="info-label">Location</div>
+            <div class="info-value">{{ event.location|default:"Not set" }}</div>
+          </div>
+          <div>
+            <div class="info-label">Meeting link</div>
+            <div class="info-value">
+              {% if event.meeting_link %}
+                <a href="{{ event.meeting_link }}" target="_blank" rel="noopener">{{ event.meeting_link }}</a>
+              {% else %}
+                Not set
+              {% endif %}
+            </div>
           </div>
           <div>
             <div class="info-label">Production stage</div>
@@ -286,6 +304,31 @@
           <div>
             <div class="info-label">Note</div>
             <div class="info-value">{{ event.note|default:"-" }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Attendees</div>
+        <div class="small-muted">Internal attendees can see this meeting on their calendar. External attendees are stored as invitees.</div>
+        <div style="margin-top:10px;">
+          <div class="info-label">Internal users</div>
+          <div class="info-value">
+            {% for attendee in event.attendees.all %}
+              <span class="badge">{{ attendee.get_full_name|default:attendee.username }}</span>
+            {% empty %}
+              <span class="small-muted">No internal attendees.</span>
+            {% endfor %}
+          </div>
+        </div>
+        <div style="margin-top:10px;">
+          <div class="info-label">External emails</div>
+          <div class="info-value">
+            {% if event.external_attendees %}
+              {{ event.external_attendees|linebreaksbr }}
+            {% else %}
+              <span class="small-muted">No external attendees.</span>
+            {% endif %}
           </div>
         </div>
       </div>

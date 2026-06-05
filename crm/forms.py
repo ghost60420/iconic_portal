@@ -888,6 +888,19 @@ class InventoryItemForm(forms.ModelForm):
 # Event form
 # --------------------------------------------------
 class EventForm(forms.ModelForm):
+    reminder_minutes_before = forms.TypedChoiceField(
+        required=False,
+        coerce=int,
+        empty_value=None,
+        choices=[
+            ("", "No CRM reminder"),
+            (15, "15 minutes before"),
+            (60, "1 hour before"),
+            (1440, "1 day before"),
+        ],
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+
     class Meta:
         model = Event
         fields = [
@@ -897,12 +910,16 @@ class EventForm(forms.ModelForm):
             "event_type",
             "priority",
             "status",
+            "location",
+            "meeting_link",
             "lead",
             "opportunity",
             "customer",
             "production_stage",
             "assigned_to_name",
             "assigned_to_email",
+            "attendees",
+            "external_attendees",
             "reminder_minutes_before",
             "note",
         ]
@@ -913,13 +930,16 @@ class EventForm(forms.ModelForm):
             "event_type": forms.Select(attrs={"class": "form-select"}),
             "priority": forms.Select(attrs={"class": "form-select"}),
             "status": forms.Select(attrs={"class": "form-select"}),
+            "location": forms.TextInput(attrs={"class": "form-control", "placeholder": "Office, showroom, Zoom, Google Meet"}),
+            "meeting_link": forms.URLInput(attrs={"class": "form-control", "placeholder": "https://..."}),
             "lead": forms.Select(attrs={"class": "form-select"}),
             "opportunity": forms.Select(attrs={"class": "form-select"}),
             "customer": forms.Select(attrs={"class": "form-select"}),
             "production_stage": forms.Select(attrs={"class": "form-select"}),
             "assigned_to_name": forms.TextInput(attrs={"class": "form-control"}),
             "assigned_to_email": forms.EmailInput(attrs={"class": "form-control"}),
-            "reminder_minutes_before": forms.NumberInput(attrs={"class": "form-control", "min": 0}),
+            "attendees": forms.SelectMultiple(attrs={"class": "form-select", "size": 6}),
+            "external_attendees": forms.Textarea(attrs={"class": "form-control", "rows": 3, "placeholder": "client@example.com, buyer@example.com"}),
             "note": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
         }
 
@@ -935,7 +955,11 @@ class EventForm(forms.ModelForm):
             "production_stage",
             "assigned_to_name",
             "assigned_to_email",
+            "attendees",
+            "external_attendees",
             "reminder_minutes_before",
+            "location",
+            "meeting_link",
         ]
         for k in optional_fields:
             if k in self.fields:
@@ -947,6 +971,20 @@ class EventForm(forms.ModelForm):
             self.fields["opportunity"].queryset = Opportunity.objects.order_by("-id")
         if "customer" in self.fields:
             self.fields["customer"].queryset = Customer.objects.order_by("id")
+        if "attendees" in self.fields:
+            self.fields["attendees"].queryset = get_user_model().objects.filter(is_active=True).order_by("first_name", "last_name", "username")
+            self.fields["attendees"].label = "Internal attendees"
+            self.fields["attendees"].help_text = "CRM users who should see this meeting on their calendar."
+        if "external_attendees" in self.fields:
+            self.fields["external_attendees"].label = "External attendee emails"
+        if "reminder_minutes_before" in self.fields:
+            current_minutes = getattr(self.instance, "reminder_minutes_before", None)
+            preset_values = {"", 15, 60, 1440}
+            if current_minutes not in preset_values and current_minutes is not None:
+                self.fields["reminder_minutes_before"].choices = [
+                    *self.fields["reminder_minutes_before"].choices,
+                    (current_minutes, f"{current_minutes} minutes before"),
+                ]
 
 
 # --------------------------------------------------
