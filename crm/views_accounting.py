@@ -3,6 +3,7 @@
 import csv
 import io
 from datetime import date, timedelta
+from functools import wraps
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -18,7 +19,6 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Sum
 from django.db.models.functions import Coalesce
 from django.shortcuts import render
-from .decorators import bd_required
 from .models import AccountingEntry
 from openpyxl import Workbook
 import csv
@@ -27,10 +27,11 @@ from django.http import HttpResponse
 from django.db.models import Q
 from django import forms
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Q, Sum
 from django.db.models.functions import Coalesce
+from django.db.utils import OperationalError, ProgrammingError
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -60,7 +61,7 @@ from .forms import (
     BDStaffForm,
     BDStaffMonthForm,
 )
-from .permissions import can_view_internal_costing
+from .permissions import can_view_internal_costing, get_access
 
 try:
     from .models import AccountingMonthLock
@@ -71,24 +72,57 @@ except Exception:
 # --------------------
 # PERMISSIONS
 # --------------------
-def _in_group(user, name: str) -> bool:
-    return bool(user and user.is_authenticated and user.groups.filter(name=name).exists())
+def _accounting_access(user):
+    if not user or not user.is_authenticated:
+        return None
+    if user.is_superuser:
+        return None
+    try:
+        return get_access(user)
+    except (OperationalError, ProgrammingError):
+        return None
 
 
 def is_ca_user(user) -> bool:
     if not user or not user.is_authenticated:
         return False
-    return user.is_superuser or _in_group(user, "CA") or _in_group(user, "Canada")
+    if user.is_superuser:
+        return True
+    access = _accounting_access(user)
+    return bool(
+        access
+        and getattr(access, "can_accounting_ca", False)
+        and not getattr(access, "is_bd", False)
+    )
 
 
 def is_bd_user(user) -> bool:
     if not user or not user.is_authenticated:
         return False
-    return user.is_superuser or _in_group(user, "BD") or _in_group(user, "Bangladesh")
+    if user.is_superuser:
+        return True
+    access = _accounting_access(user)
+    return bool(access and getattr(access, "can_accounting_bd", False))
 
 
-ca_required = user_passes_test(is_ca_user, login_url="/login/")
-bd_required = user_passes_test(is_bd_user, login_url="/login/")
+def _accounting_permission_required(test_func):
+    def decorator(view_func):
+        @wraps(view_func)
+        def wrapper(request, *args, **kwargs):
+            if not request.user.is_authenticated:
+                return HttpResponseForbidden("Login required")
+            if not test_func(request.user):
+                return HttpResponseForbidden("No access")
+            return view_func(request, *args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
+ca_required = _accounting_permission_required(is_ca_user)
+bd_required = _accounting_permission_required(is_bd_user)
+accounting_required = _accounting_permission_required(lambda user: is_ca_user(user) or is_bd_user(user))
 
 
 def user_is_bd_only(user) -> bool:
@@ -96,9 +130,7 @@ def user_is_bd_only(user) -> bool:
         return False
     if user.is_superuser:
         return False
-    return user.groups.filter(name__in=["BD", "Bangladesh"]).exists() and not user.groups.filter(
-        name__in=["CA", "Canada"]
-    ).exists()
+    return is_bd_user(user) and not is_ca_user(user)
 
 
 def can_edit_entry(user, entry) -> bool:
@@ -3062,9 +3094,6 @@ from django.shortcuts import render
 from django.db.models import Q
 
 from .models import AccountingEntry
-from .views_accounting import ca_required  # if your decorator lives elsewhere, keep your current import
-
-
 @login_required
 @ca_required
 def accounting_ca_grid(request):
@@ -3671,7 +3700,6 @@ from django.db.models.functions import Coalesce
 from django.shortcuts import redirect, render
 from django.utils import timezone
 
-from .decorators import bd_required
 from .models import AccountingEntry
 
 
