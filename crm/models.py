@@ -4391,7 +4391,9 @@ class AccountingEntryAudit(models.Model):
 
     entry = models.ForeignKey(
         "crm.AccountingEntry",   # safer than direct reference
-        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="entry_audits",          # keep this, your views expect it
         related_query_name="entry_audit",
     )

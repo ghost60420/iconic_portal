@@ -3281,12 +3281,30 @@ def opportunity_detail(request, pk):
                 has_po = ProductionOrder.objects.filter(opportunity=opportunity).exists()
                 if not has_po:
                     po_title = f"{lead.account_brand} production for {opportunity.opportunity_id}"
-                    qty_guess = opportunity.moq_units or lead.order_quantity or 0
+                    qty_guess = opportunity.moq_units
+                    if not qty_guess and lead.order_quantity:
+                        raw_qty = str(lead.order_quantity or "").strip()
+                        qty_match = re.search(r"\d+(?:\.\d+)?", raw_qty.replace(",", ""))
+                        if qty_match:
+                            qty_guess = int(Decimal(qty_match.group(0)))
+                        else:
+                            message = (
+                                "Production order was not created because the lead order "
+                                f"quantity is invalid: {raw_qty}."
+                            )
+                            messages.error(request, message)
+                            LeadActivity.objects.create(
+                                lead=lead,
+                                activity_type="production_error",
+                                description=message,
+                            )
+                            return redirect("opportunity_detail", pk=opportunity.pk)
+                    qty_guess = qty_guess or 0
                     try:
                         po = ProductionOrder.objects.create(
                             opportunity=opportunity,
                             title=po_title,
-                            qty_total=qty_guess or 0,
+                            qty_total=qty_guess,
                             cost_sheet_active=active_cost_sheet,
                             costing_header=costing_header if costing_header and costing_header.status == "approved" else None,
                         )
@@ -13377,54 +13395,11 @@ def convert_lead_to_opportunity(request, pk):
         )
         link_reference_images_to_opportunity(lead, opp)
         lead.lead_status = "Converted"
+        update_fields = ["lead_status"]
         if lead.lead_type == "outbound":
             lead.outbound_status = "Converted to Opportunity"
-        lead.save(update_fields=["lead_status"])
-        messages.success(request, "Lead converted to opportunity.")
-
-        _record_customer_event(
-            customer=customer,
-            event_type="opportunity_created",
-            title="Opportunity created",
-            details=f"Opportunity {opp.opportunity_id} created from lead.",
-            opportunity=opp,
-        )
-
-        return redirect("opportunity_detail", pk=opp.pk)
-
-    return redirect("lead_detail", pk=pk)
-
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib import messages
-
-from .models import Lead, Customer, Opportunity
-
-
-def convert_lead_to_opportunity(request, pk):
-    lead = get_object_or_404(Lead, pk=pk)
-
-    if request.method == "POST":
-        customer = lead.customer if lead.customer_id else _find_or_create_customer_for_lead(lead)
-        if not lead.customer_id and customer:
-            lead.customer = customer
-            lead.save(update_fields=["customer"])
-
-        opp = Opportunity.objects.create(
-            lead=lead,
-            customer=customer,
-            stage="Prospecting",
-            product_category="Other",
-            product_type="Other",
-            converted_from_lead_type=getattr(lead, "lead_type", ""),
-            converted_from_source_channel=getattr(lead, "source_channel", ""),
-            converted_from_outbound_status=getattr(lead, "outbound_status", ""),
-        )
-        lead.lead_status = "Converted"
-        if lead.lead_type == "outbound":
-            lead.outbound_status = "Converted to Opportunity"
-            lead.save(update_fields=["lead_status", "outbound_status"])
-        else:
-            lead.save(update_fields=["lead_status"])
+            update_fields.append("outbound_status")
+        lead.save(update_fields=update_fields)
         messages.success(request, "Lead converted to opportunity.")
 
         _record_customer_event(

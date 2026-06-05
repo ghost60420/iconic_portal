@@ -479,6 +479,7 @@ def accounting_entry_delete(request, pk):
     if not can_delete_entry(request.user, entry):
         return HttpResponseForbidden("You do not have permission to delete this entry.")
 
+    _audit(entry, "DELETE", request.user, before=_entry_snapshot(entry), note="Delete")
     entry.delete()
     messages.success(request, "Deleted.")
     return redirect("accounting_entry_list")
