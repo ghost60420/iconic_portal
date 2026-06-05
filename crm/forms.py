@@ -57,9 +57,10 @@ class MultipleFileField(forms.FileField):
     def clean(self, data, initial=None):
         if not data:
             return []
+        parent_clean = super(MultipleFileField, self).clean
         if isinstance(data, (list, tuple)):
-            return [super().clean(f, initial) for f in data]
-        return [super().clean(data, initial)]
+            return [parent_clean(f, initial) for f in data]
+        return [parent_clean(data, initial)]
 
 
 # --------------------------------------------------
