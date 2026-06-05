@@ -13,6 +13,9 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.DeleteModel(
+            name='AIHealthCheck',
+        ),
         migrations.CreateModel(
             name='AIHealthIssue',
             fields=[
@@ -46,8 +49,5 @@ class Migration(migrations.Migration):
                 'db_table': 'crm_aihealthruncheck',
                 'ordering': ('id',),
             },
-        ),
-        migrations.DeleteModel(
-            name='AIHealthCheck',
         ),
     ]

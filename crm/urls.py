@@ -39,6 +39,11 @@ def ca_only(view_func):
 def acc_any(view_func):
     return login_required(require_any_access("can_accounting_ca", "can_accounting_bd")(view_func))
 
+
+def accounting_reports_redirect(request):
+    return redirect("profit_loss_dashboard")
+
+
 def wa_perm(view_func):
     return login_required(require_any_access("can_whatsapp", "can_leads")(view_func))
 
@@ -246,6 +251,7 @@ urlpatterns = [
 
     # Shared accounting pages (CA or BD)
     path("accounting/accounts-payable/", acc_any(acc.accounts_payable_dashboard), name="accounts_payable_dashboard"),
+    path("accounting/reports/", acc_any(accounting_reports_redirect), name="accounting_reports"),
     path("accounting/profit-loss/", acc_any(acc.profit_loss_dashboard), name="profit_loss_dashboard"),
     path("accounting/executive-dashboard/", acc_any(acc.executive_financial_dashboard), name="executive_financial_dashboard"),
     path("accounting/balance-sheet/", acc_any(acc.balance_sheet_dashboard), name="balance_sheet_dashboard"),

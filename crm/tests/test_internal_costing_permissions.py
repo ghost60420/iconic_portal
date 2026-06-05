@@ -305,6 +305,8 @@ class InternalCostingPermissionTests(TestCase):
             {
                 "title": self.production_order.title,
                 "factory_location": self.production_order.factory_location,
+                "production_order_type": self.production_order.production_order_type or "bulk",
+                "operational_status": self.production_order.operational_status or "planning",
                 "order_type": self.production_order.order_type,
                 "lead": self.lead.pk,
                 "opportunity": self.opportunity.pk,

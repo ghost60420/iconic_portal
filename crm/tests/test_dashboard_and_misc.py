@@ -77,7 +77,8 @@ class MainDashboardTests(TestCase):
         self.assertTemplateUsed(response, "crm/main_dashboard.html")
         self.assertContains(response, "CRM Dashboard")
         self.assertIn("primary_kpis", response.context)
-        self.assertEqual(len(response.context["primary_kpis"]), 6)
+        self.assertEqual(len(response.context["primary_kpis"]), 5)
+        self.assertNotIn("Monthly Profit", [card["title"] for card in response.context["primary_kpis"]])
         self.assertIn("finance_summary_cards", response.context)
         self.assertIn("dashboard_alerts", response.context)
         self.assertIn("recent_leads", response.context)
@@ -85,5 +86,5 @@ class MainDashboardTests(TestCase):
 
         chart_data = response.context["chart_data"]
         self.assertIn("lead_fit_labels", chart_data)
-        self.assertIn("monthly_profit_labels", chart_data)
+        self.assertNotIn("monthly_profit_labels", chart_data)
         self.assertIn("invoice_status_labels", chart_data)

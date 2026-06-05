@@ -48,6 +48,7 @@ class AccountingRBACTests(TestCase):
         self.assertEqual(self.client.get(reverse("accounting_entry_add_bd")).status_code, 200)
         self.assertEqual(self.client.get(reverse("accounting_bd_dashboard")).status_code, 200)
         self.assertEqual(self.client.get(reverse("accounting_entry_list")).status_code, 200)
+        self.assertEqual(self.client.get(reverse("accounting_reports")).status_code, 302)
 
         home_response = self.client.get(reverse("accounting_home"))
         self.assertEqual(home_response.status_code, 302)
@@ -77,4 +78,5 @@ class AccountingRBACTests(TestCase):
                 self.assertEqual(self.client.get(reverse("accounting_entry_add_bd")).status_code, 403)
                 self.assertEqual(self.client.get(reverse("accounting_bd_dashboard")).status_code, 403)
                 self.assertEqual(self.client.get(reverse("accounting_entry_list")).status_code, 403)
+                self.assertEqual(self.client.get(reverse("accounting_reports")).status_code, 403)
                 self.assertEqual(self.client.get(reverse("accounting_home")).status_code, 403)

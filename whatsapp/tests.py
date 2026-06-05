@@ -3,6 +3,7 @@ import json
 from django.test import TestCase, Client, override_settings
 from django.urls import reverse
 
+from crm.models import Lead
 from whatsapp.models import WhatsAppThread, WhatsAppMessage
 
 
@@ -19,6 +20,12 @@ class WhatsAppWebhookTests(TestCase):
 
     @override_settings(WHATSAPP_ENABLED=True, WHATSAPP_WEBHOOK_SECRET="secret")
     def test_webhook_creates_thread_and_message(self):
+        lead = Lead.objects.create(
+            account_brand="Test User",
+            contact_name="Test User",
+            phone="16045551234",
+            source="WhatsApp",
+        )
         payload = {
             "event": "message",
             "chat_id": "16045551234@c.us",
@@ -39,4 +46,4 @@ class WhatsAppWebhookTests(TestCase):
         self.assertEqual(WhatsAppMessage.objects.count(), 1)
         thread = WhatsAppThread.objects.first()
         self.assertEqual(thread.contact_phone, "16045551234")
-        self.assertIsNotNone(thread.linked_lead)
+        self.assertEqual(thread.linked_lead, lead)
