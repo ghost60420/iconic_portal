@@ -110,6 +110,7 @@ from .forms import (
     EventForm,
     LeadForm,
     ShipmentForm,
+    InventoryItemForm,
     ProductForm,
     FabricForm,
     AccessoryForm,
