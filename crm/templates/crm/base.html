@@ -293,6 +293,85 @@
 
     .crm-dd-item:last-child{ margin-bottom:0; }
 
+    .crm-nested-submenu{
+      position:relative;
+      margin-bottom:8px;
+    }
+
+    .crm-nested-submenu:last-child{ margin-bottom:0; }
+
+    .crm-submenu-toggle{
+      width:100%;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding:11px 12px;
+      border-radius:12px;
+      border:1px solid rgba(148,163,184,0.20);
+      background:rgba(255,255,255,0.05);
+      color:#ffffff;
+      font-size:13px;
+      font-weight:900;
+      line-height:1.1;
+      text-align:left;
+      cursor:pointer;
+    }
+
+    .crm-submenu-toggle:hover,
+    .crm-nested-submenu.is-open .crm-submenu-toggle{
+      border-color:rgba(245,213,128,0.34);
+      background:rgba(245,213,128,0.12);
+      color:#ffe9a8;
+    }
+
+    .crm-submenu-caret{
+      color:#facc15;
+      font-size:14px;
+      transition:transform .15s ease;
+    }
+
+    .crm-nested-submenu.is-open .crm-submenu-caret,
+    .crm-nested-submenu:hover .crm-submenu-caret{
+      transform:rotate(90deg);
+    }
+
+    .crm-submenu-panel{
+      position:absolute;
+      top:0;
+      left:calc(100% + 10px);
+      min-width:230px;
+      padding:10px;
+      border-radius:14px;
+      background:linear-gradient(145deg, #111827, #020617);
+      border:1px solid #334155;
+      box-shadow:0 16px 30px rgba(0,0,0,0.68);
+      opacity:0;
+      visibility:hidden;
+      pointer-events:none;
+      transform:translateX(-4px);
+      transition:opacity .15s ease, transform .15s ease, visibility .15s ease;
+      z-index:30010;
+    }
+
+    .crm-submenu-panel::before{
+      content:"";
+      position:absolute;
+      top:0;
+      left:-14px;
+      width:14px;
+      height:100%;
+    }
+
+    .crm-nested-submenu:hover .crm-submenu-panel,
+    .crm-nested-submenu:focus-within .crm-submenu-panel,
+    .crm-nested-submenu.is-open .crm-submenu-panel{
+      opacity:1;
+      visibility:visible;
+      pointer-events:auto;
+      transform:translateX(0);
+    }
+
     .crm-dd-hint{
       font-size:11px;
       color:#e5e7eb;
@@ -329,6 +408,37 @@
         left:auto;
         right:0;
         min-width:240px;
+      }
+      .crm-submenu-panel{
+        position:static;
+        min-width:0;
+        width:100%;
+        margin-top:8px;
+        padding:8px;
+        max-height:0;
+        overflow:hidden;
+        opacity:1;
+        visibility:visible;
+        pointer-events:none;
+        transform:none;
+        box-shadow:none;
+        border-color:rgba(148,163,184,0.22);
+        background:rgba(2,6,23,0.72);
+      }
+      .crm-submenu-panel::before{
+        display:none;
+      }
+      .crm-nested-submenu:hover .crm-submenu-panel,
+      .crm-nested-submenu:focus-within .crm-submenu-panel{
+        max-height:0;
+        pointer-events:none;
+      }
+      .crm-nested-submenu.is-open .crm-submenu-panel{
+        max-height:420px;
+        pointer-events:auto;
+      }
+      .crm-nested-submenu:hover .crm-submenu-caret{
+        transform:none;
       }
       .crm-topbar{
         padding: 10px 10px;
@@ -399,7 +509,14 @@
     {% url 'kpi_scorecard_dashboard' as kpi_scorecard_url %}
     {% url 'financial_forecast_dashboard' as financial_forecast_url %}
     {% url 'invoice_list' as invoice_list_url %}
+    {% url 'invoice_list_ca' as invoice_list_ca_url %}
     {% url 'invoice_add' as invoice_add_url %}
+    {% url 'accounting_entry_list' as acc_all_entries_url %}
+    {% url 'accounting_ca_master' as acc_ca_master_url %}
+    {% url 'accounting_bd_dashboard' as acc_bd_dash_url %}
+    {% url 'accounting_bd_grid' as acc_bd_grid_url %}
+    {% url 'accounting_bd_daily' as acc_bd_daily_url %}
+    {% url 'accounting_reports' as acc_reports_url %}
     {% url 'logout' as logout_url %}
     {% url 'access_list' as access_url %}
     {% url 'admin:index' as admin_url %}
@@ -437,50 +554,68 @@
 
         {% if can_costing and can_internal or can_acc_ca or can_acc_bd %}
           <div class="crm-dropdown" id="financialDropdown">
-            <a href="{% if can_acc_ca and acc_home_url or can_acc_bd and acc_home_url %}{{ acc_home_url }}{% elif can_acc_ca and invoice_list_url or can_acc_bd and invoice_list_url %}{{ invoice_list_url }}{% elif can_costing and can_internal and cost_url %}{{ cost_url }}{% else %}#{% endif %}" class="crm-nav-item hot {% if current_url == 'cost_sheet_list' or current_url == 'cost_sheet_dashboard' or current_url == 'invoice_list' or current_url == 'invoice_add' or current_url == 'accounting_home' %}active{% endif %}" id="financialBtn" aria-haspopup="true" aria-expanded="false">
+            <a href="{% if can_acc_ca and acc_home_url or can_acc_bd and acc_home_url %}{{ acc_home_url }}{% elif can_acc_ca and invoice_list_url or can_acc_bd and invoice_list_url %}{{ invoice_list_url }}{% elif can_costing and can_internal and cost_url %}{{ cost_url }}{% else %}#{% endif %}" class="crm-nav-item hot {% if current_url == 'cost_sheet_list' or current_url == 'cost_sheet_dashboard' or current_url == 'invoice_list' or current_url == 'invoice_list_ca' or current_url == 'invoice_add' or current_url == 'accounting_home' or current_url == 'accounting_bd_daily' or current_url == 'accounting_bd_grid' or current_url == 'accounting_bd_dashboard' or current_url == 'accounting_ca_master' or current_url == 'accounting_entry_list' or current_url == 'profit_loss_dashboard' or current_url == 'accounts_receivable_dashboard' or current_url == 'accounts_payable_dashboard' or current_url == 'executive_financial_dashboard' or current_url == 'accounting_reports' %}active{% endif %}" id="financialBtn" aria-haspopup="true" aria-expanded="false">
               <span>💰</span><strong>Financial</strong>
             </a>
             <div class="crm-dropdown-menu" role="menu">
               <div class="crm-dd-title">Financial</div>
-              {% if can_costing and can_internal and cost_url %}<a class="crm-dd-item" href="{{ cost_url }}">Costing</a>{% endif %}
-              {% if can_costing and can_internal and cost_url %}<a class="crm-dd-item" href="{{ cost_url }}">Quotations</a>{% endif %}
-              {% if invoice_list_url and can_acc_ca or invoice_list_url and can_acc_bd %}<a class="crm-dd-item" href="{{ invoice_list_url }}">Invoices</a>{% endif %}
-              {% if acc_home_url and can_acc_ca or acc_home_url and can_acc_bd %}<a class="crm-dd-item" href="{{ acc_home_url }}">Accounting</a>{% endif %}
-              {% if ar_dashboard_url and can_acc_ca or ar_dashboard_url and can_acc_bd %}<a class="crm-dd-item" href="{{ ar_dashboard_url }}">Accounts receivable</a>{% endif %}
-              {% if ap_dashboard_url and can_acc_ca or ap_dashboard_url and can_acc_bd %}<a class="crm-dd-item" href="{{ ap_dashboard_url }}">Accounts payable</a>{% endif %}
-              {% if can_internal and profit_loss_url %}<a class="crm-dd-item" href="{{ profit_loss_url }}">Profit and Loss</a>{% endif %}
-              {% if can_internal and executive_dashboard_url %}<a class="crm-dd-item" href="{{ executive_dashboard_url }}">Executive dashboard</a>{% endif %}
-              {% if can_internal and balance_sheet_url %}<a class="crm-dd-item" href="{{ balance_sheet_url }}">Balance Sheet</a>{% endif %}
-              {% if can_internal and cash_flow_url %}<a class="crm-dd-item" href="{{ cash_flow_url }}">Cash Flow</a>{% endif %}
-              {% if can_internal and budget_vs_actual_url %}<a class="crm-dd-item" href="{{ budget_vs_actual_url }}">Budget vs Actual</a>{% endif %}
-              {% if can_internal and kpi_scorecard_url %}<a class="crm-dd-item" href="{{ kpi_scorecard_url }}">KPI Scorecard</a>{% endif %}
-              {% if can_internal and financial_forecast_url %}<a class="crm-dd-item" href="{{ financial_forecast_url }}">Financial Forecast</a>{% endif %}
-
-              {% if user|is_ca %}
-                {% url 'accounting_entry_list' as acc_all_entries_url %}
-                {% url 'accounting_ca_master' as acc_ca_master_url %}
-                {% url 'accounting_ca_grid' as acc_ca_grid_url %}
-                {% if acc_all_entries_url %}<a class="crm-dd-item" href="{{ acc_all_entries_url }}">All entries</a>{% endif %}
-                {% if acc_ca_master_url %}<a class="crm-dd-item" href="{{ acc_ca_master_url }}">Money transfer</a>{% endif %}
-                {% if acc_ca_grid_url %}<a class="crm-dd-item" href="{{ acc_ca_grid_url }}">Canada grid</a>{% endif %}
+              {% if can_acc_bd %}
+                <div class="crm-nested-submenu">
+                  <button type="button" class="crm-submenu-toggle" aria-expanded="false">
+                    <span>Bangladesh Accounting</span>
+                    <span class="crm-submenu-caret">›</span>
+                  </button>
+                  <div class="crm-submenu-panel" role="menu">
+                    {% if acc_bd_daily_url %}<a class="crm-dd-item" href="{{ acc_bd_daily_url }}">BD Daily</a>{% endif %}
+                    {% if acc_bd_grid_url %}<a class="crm-dd-item" href="{{ acc_bd_grid_url }}">BD Entries</a>{% endif %}
+                    {% if acc_bd_dash_url %}<a class="crm-dd-item" href="{{ acc_bd_dash_url }}">BD Dashboard</a>{% endif %}
+                    {% if acc_reports_url %}<a class="crm-dd-item" href="{{ acc_reports_url }}">BD Reports</a>{% endif %}
+                  </div>
+                </div>
               {% endif %}
 
-              {% url 'accounting_bd_dashboard' as acc_bd_dash_url %}
-              {% url 'accounting_bd_grid' as acc_bd_grid_url %}
-              {% url 'accounting_bd_daily' as acc_bd_daily_url %}
-              {% url 'accounting_entry_add_bd' as acc_add_bd_url %}
-              {% url 'accounting_entry_add_ca' as acc_add_ca_url %}
-              {% url 'bd_staff_list' as bd_staff_list_url %}
-              {% url 'bd_staff_month_list' as bd_payroll_months_url %}
-              {% url 'bd_staff_add' as bd_staff_add_url %}
-              {% if can_acc_bd and acc_bd_dash_url %}<a class="crm-dd-item" href="{{ acc_bd_dash_url }}">Bangladesh dashboard</a>{% endif %}
-              {% if can_acc_bd and acc_bd_grid_url %}<a class="crm-dd-item" href="{{ acc_bd_grid_url }}">Bangladesh grid</a>{% endif %}
-              {% if can_acc_bd and acc_bd_daily_url %}<a class="crm-dd-item" href="{{ acc_bd_daily_url }}">Bangladesh daily sheet</a>{% endif %}
-              {% if can_acc_bd and acc_add_bd_url %}<a class="crm-dd-item" href="{{ acc_add_bd_url }}">Add Bangladesh entry</a>{% endif %}
-              {% if can_acc_ca and acc_add_ca_url %}<a class="crm-dd-item" href="{{ acc_add_ca_url }}">Add Canada entry</a>{% endif %}
-              {% if can_acc_bd and bd_staff_list_url %}<a class="crm-dd-item" href="{{ bd_staff_list_url }}">Bangladesh staff</a>{% endif %}
-              {% if can_acc_bd and bd_payroll_months_url %}<a class="crm-dd-item" href="{{ bd_payroll_months_url }}">BD payroll months</a>{% endif %}
-              {% if can_acc_bd and bd_staff_add_url %}<a class="crm-dd-item" href="{{ bd_staff_add_url }}">Add BD staff</a>{% endif %}
+              {% if can_acc_ca %}
+                <div class="crm-nested-submenu">
+                  <button type="button" class="crm-submenu-toggle" aria-expanded="false">
+                    <span>Canada Accounting</span>
+                    <span class="crm-submenu-caret">›</span>
+                  </button>
+                  <div class="crm-submenu-panel" role="menu">
+                    {% if acc_ca_master_url %}<a class="crm-dd-item" href="{{ acc_ca_master_url }}">CA Master</a>{% endif %}
+                    {% if acc_all_entries_url %}<a class="crm-dd-item" href="{{ acc_all_entries_url }}?side=CA">CA Entries</a>{% endif %}
+                    {% if profit_loss_url %}<a class="crm-dd-item" href="{{ profit_loss_url }}">Profit Loss</a>{% endif %}
+                    {% if invoice_list_ca_url %}<a class="crm-dd-item" href="{{ invoice_list_ca_url }}">Invoices</a>{% elif invoice_list_url %}<a class="crm-dd-item" href="{{ invoice_list_url }}">Invoices</a>{% endif %}
+                  </div>
+                </div>
+              {% endif %}
+
+              {% if can_acc_ca or can_acc_bd %}
+                <div class="crm-nested-submenu">
+                  <button type="button" class="crm-submenu-toggle" aria-expanded="false">
+                    <span>KPI</span>
+                    <span class="crm-submenu-caret">›</span>
+                  </button>
+                  <div class="crm-submenu-panel" role="menu">
+                    {% if executive_dashboard_url %}<a class="crm-dd-item" href="{{ executive_dashboard_url }}">Financial Dashboard</a>{% endif %}
+                    {% if ar_dashboard_url %}<a class="crm-dd-item" href="{{ ar_dashboard_url }}">AR Aging</a>{% endif %}
+                    {% if ap_dashboard_url %}<a class="crm-dd-item" href="{{ ap_dashboard_url }}">AP Aging</a>{% endif %}
+                    {% if acc_home_url %}<a class="crm-dd-item" href="{{ acc_home_url }}">Accounting Summary</a>{% endif %}
+                  </div>
+                </div>
+              {% endif %}
+
+              {% if can_costing and can_internal and cost_url %}
+                <div class="crm-nested-submenu">
+                  <button type="button" class="crm-submenu-toggle" aria-expanded="false">
+                    <span>Commercial</span>
+                    <span class="crm-submenu-caret">›</span>
+                  </button>
+                  <div class="crm-submenu-panel" role="menu">
+                    <a class="crm-dd-item" href="{{ cost_url }}">Costing</a>
+                    <a class="crm-dd-item" href="{{ cost_url }}">Quotations</a>
+                  </div>
+                </div>
+              {% endif %}
             </div>
           </div>
         {% endif %}
@@ -631,6 +766,11 @@
           if (closeTimer) clearTimeout(closeTimer);
           dd.classList.remove("is-open");
           btn.setAttribute("aria-expanded", "false");
+          dd.querySelectorAll(".crm-nested-submenu.is-open").forEach((submenu) => {
+            submenu.classList.remove("is-open");
+            const toggle = submenu.querySelector(".crm-submenu-toggle");
+            if (toggle) toggle.setAttribute("aria-expanded", "false");
+          });
         }
 
         dd.addEventListener("mouseenter", openMenu);
@@ -652,6 +792,30 @@
           if (e.key === "Escape") closeMenuNow();
         });
       }
+
+      document.querySelectorAll(".crm-nested-submenu").forEach((submenu) => {
+        const toggle = submenu.querySelector(".crm-submenu-toggle");
+        if (!toggle) return;
+
+        toggle.addEventListener("click", function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+
+          const parentMenu = submenu.closest(".crm-dropdown-menu");
+          if (parentMenu) {
+            parentMenu.querySelectorAll(".crm-nested-submenu.is-open").forEach((openSubmenu) => {
+              if (openSubmenu === submenu) return;
+              openSubmenu.classList.remove("is-open");
+              const openToggle = openSubmenu.querySelector(".crm-submenu-toggle");
+              if (openToggle) openToggle.setAttribute("aria-expanded", "false");
+            });
+          }
+
+          const willOpen = !submenu.classList.contains("is-open");
+          submenu.classList.toggle("is-open", willOpen);
+          toggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
+        });
+      });
 
       setupDropdown("salesDropdown", "salesBtn");
       setupDropdown("financialDropdown", "financialBtn");
