@@ -2,7 +2,7 @@
 {% load static %}
 
 {% block content %}
-<link rel="stylesheet" href="{% static 'crm/costing_list.css' %}?v=costing-modern-20260506">
+<link rel="stylesheet" href="{% static 'crm/costing_list.css' %}?v=quick-costing-20260608">
 
 <div class="costing-page">
   <section class="costing-hero">
@@ -15,7 +15,8 @@
     </div>
 
     <div class="costing-hero-actions">
-      <a href="{% url 'cost_sheet_create' %}" class="costing-btn costing-btn--primary">Create costing</a>
+      <a href="{% url 'cost_sheet_create' %}?costing_type=advanced" class="costing-btn costing-btn--primary">Advanced Costing</a>
+      <a href="{% url 'cost_sheet_create' %}?costing_type=quick" class="costing-btn costing-btn--ghost">Quick Costing</a>
       <a href="{% url 'cost_sheet_dashboard' %}" class="costing-btn costing-btn--ghost">Dashboard</a>
       <a href="{% url 'cost_sheet_reports' %}" class="costing-btn costing-btn--ghost">Reports</a>
       <a href="{% url 'cost_sheet_guide' %}" class="costing-btn costing-btn--ghost">Guide</a>
@@ -26,7 +27,7 @@
     <article class="costing-stat">
       <span>Total costings</span>
       <strong>{{ summary.count }}</strong>
-      <small>{{ summary.approved_count }} approved · {{ summary.draft_count }} draft</small>
+      <small>{{ summary.advanced_count }} advanced · {{ summary.quick_count }} quick · {{ summary.approved_count }} approved</small>
     </article>
     {% if can_view_internal_costing %}
       <article class="costing-stat">
@@ -75,6 +76,15 @@
       <label class="costing-field costing-field--wide">
         <span>Search</span>
         <input type="text" name="q" placeholder="Opportunity, client, style" value="{{ selected.q }}">
+      </label>
+
+      <label class="costing-field">
+        <span>Costing type</span>
+        <select name="costing_type">
+          {% for key,label in costing_type_choices %}
+            <option value="{{ key }}" {% if selected.costing_type == key %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
       </label>
 
       <label class="costing-field">
@@ -128,6 +138,7 @@
         <thead>
           <tr>
             <th>Opportunity / Client</th>
+            <th>Costing Type</th>
             <th>Product / Style</th>
             {% if can_view_internal_costing %}
               <th>Total cost</th>
@@ -143,49 +154,70 @@
         </thead>
         <tbody>
           {% for row in rows %}
-            {% with sheet=row.sheet calc=row.calc %}
+            {% with sheet=row.sheet quick=row.quick calc=row.calc %}
               <tr>
                 <td data-label="Opportunity / Client" class="costing-primary-cell">
                   <div class="costing-primary">
-                    <a href="{% url 'cost_sheet_detail' sheet.pk %}" class="costing-link">COST-{{ sheet.pk }}</a>
-                    <strong>
-                      {% if sheet.opportunity %}
-                        {{ sheet.opportunity.opportunity_id }}
-                      {% else %}
-                        Opportunity not set
-                      {% endif %}
-                    </strong>
-                    <span>
-                      {% if sheet.customer %}
-                        {{ sheet.customer.account_brand|default:sheet.customer.contact_name|default:"Client not set" }}
-                      {% elif sheet.brand %}
-                        {{ sheet.brand }}
-                      {% else %}
-                        Client not set
-                      {% endif %}
-                    </span>
+                    {% if row.costing_type == "quick" %}
+                      <a href="{% url 'quick_costing_detail' quick.pk %}" class="costing-link">QC-{{ quick.pk }}</a>
+                      <strong>{{ quick.project_name }}</strong>
+                      <span>{{ quick.buyer_name }}</span>
+                    {% else %}
+                      <a href="{% url 'cost_sheet_detail' sheet.pk %}" class="costing-link">COST-{{ sheet.pk }}</a>
+                      <strong>
+                        {% if sheet.opportunity %}
+                          {{ sheet.opportunity.opportunity_id }}
+                        {% else %}
+                          Opportunity not set
+                        {% endif %}
+                      </strong>
+                      <span>
+                        {% if sheet.customer %}
+                          {{ sheet.customer.account_brand|default:sheet.customer.contact_name|default:"Client not set" }}
+                        {% elif sheet.brand %}
+                          {{ sheet.brand }}
+                        {% else %}
+                          Client not set
+                        {% endif %}
+                      </span>
+                    {% endif %}
                   </div>
+                </td>
+
+                <td data-label="Costing Type">
+                  <span class="costing-type-badge {{ row.costing_type }}">{{ row.type_label }}</span>
                 </td>
 
                 <td data-label="Product / Style">
                   <div class="costing-product">
-                    <strong>{{ sheet.get_product_type_display }}</strong>
-                    <span>{% if sheet.opportunity %}{{ sheet.opportunity.product_category }}{% else %}Category not set{% endif %}</span>
-                    <span>{{ sheet.style_name|default:sheet.style_code|default:"Style not set" }}</span>
+                    <strong>
+                      {% if row.costing_type == "quick" %}
+                        {{ quick.get_product_type_display }}
+                      {% else %}
+                        {{ sheet.get_product_type_display }}
+                      {% endif %}
+                    </strong>
+                    {% if row.costing_type == "quick" %}
+                      <span>Quantity {{ quick.quantity }}</span>
+                      <span>{{ quick.project_name }}</span>
+                    {% else %}
+                      <span>{% if sheet.opportunity %}{{ sheet.opportunity.product_category }}{% else %}Category not set{% endif %}</span>
+                      <span>{{ sheet.style_name|default:sheet.style_code|default:"Style not set" }}</span>
+                    {% endif %}
                   </div>
                 </td>
 
                 {% if can_view_internal_costing %}
                   <td data-label="Total cost">
                     <div class="costing-money">
-                      <strong>{{ sheet.currency }} {{ calc.display.total_cost_order }}</strong>
+                      <strong>{% if row.currency_label != "—" %}{{ row.currency_label }} {% endif %}{{ calc.display.total_cost_order }}</strong>
                       <span>Total order cost</span>
                     </div>
                   </td>
 
                   <td data-label="Cost / pc">
                     <div class="costing-money">
-                      <strong>{{ sheet.currency }} {{ calc.display.total_cost_per_piece }}</strong>
+                      <strong>{% if row.currency_label != "—" %}{{ row.currency_label }} {% endif %}{{ calc.display.total_cost_per_piece }}</strong>
                       <span>Per piece</span>
                     </div>
                   </td>
@@ -193,8 +225,8 @@
                   <td data-label="Selling price">
                     <div class="costing-money">
                       {% if calc.fob_per_piece %}
-                        <strong>{{ sheet.currency }} {{ calc.display.fob_per_piece }}</strong>
-                        <span>FOB / pc</span>
+                        <strong>{% if row.currency_label != "—" %}{{ row.currency_label }} {% endif %}{{ calc.display.fob_per_piece }}</strong>
+                        <span>{% if row.costing_type == "quick" %}Selling / pc{% else %}FOB / pc{% endif %}</span>
                       {% else %}
                         <strong class="costing-muted">Not set</strong>
                         <span>Needs target margin or manual FOB</span>
@@ -207,35 +239,43 @@
                       <span class="costing-margin-badge {{ row.margin_tone }}">
                         {{ calc.display.margin_percent }}%
                       </span>
-                      <strong>{{ sheet.currency }} {{ calc.display.profit_per_piece }} / pc</strong>
-                      <span>{{ sheet.currency }} {{ calc.display.total_profit_order }} total profit</span>
+                      <strong>{% if row.currency_label != "—" %}{{ row.currency_label }} {% endif %}{{ calc.display.profit_per_piece }} / pc</strong>
+                      <span>{% if row.currency_label != "—" %}{{ row.currency_label }} {% endif %}{{ calc.display.total_profit_order }} total profit</span>
                     </div>
                   </td>
                 {% endif %}
 
                 <td data-label="Currency">
-                  <span class="costing-currency">{{ sheet.currency }}</span>
+                  <span class="costing-currency">{{ row.currency_label }}</span>
                 </td>
 
                 <td data-label="Status">
-                  <span class="costing-status-badge {{ sheet.status }}">{{ sheet.get_status_display }}</span>
+                  {% if row.costing_type == "quick" %}
+                    <span class="costing-status-badge quick">Saved</span>
+                  {% else %}
+                    <span class="costing-status-badge {{ sheet.status }}">{{ sheet.get_status_display }}</span>
+                  {% endif %}
                 </td>
 
                 <td data-label="Created">
                   <div class="costing-date">
-                    <strong>{{ sheet.created_at|date:"M j, Y" }}</strong>
-                    <span>Updated {{ sheet.updated_at|date:"M j" }}</span>
+                    <strong>{{ row.created_at|date:"M j, Y" }}</strong>
+                    <span>Updated {{ row.updated_at|date:"M j" }}</span>
                   </div>
                 </td>
 
                 <td data-label="Actions">
                   <div class="costing-row-actions">
-                    <a class="costing-btn costing-btn--tiny costing-btn--primary" href="{% url 'cost_sheet_detail' sheet.pk %}">Open</a>
-                    <a class="costing-btn costing-btn--tiny costing-btn--ghost" href="{% url 'cost_sheet_detail' sheet.pk %}">Edit</a>
-                    <a class="costing-btn costing-btn--tiny costing-btn--ghost" href="{% url 'cost_sheet_export_excel' sheet.pk %}">Export</a>
-                    <a class="costing-btn costing-btn--tiny costing-btn--ghost" href="{% url 'cost_sheet_export_pdf' sheet.pk %}">PDF</a>
-                    {% if sheet.opportunity %}
-                      <a class="costing-btn costing-btn--tiny costing-btn--ghost" href="{% url 'opportunity_detail' sheet.opportunity.pk %}">Opportunity</a>
+                    {% if row.costing_type == "quick" %}
+                      <a class="costing-btn costing-btn--tiny costing-btn--primary" href="{% url 'quick_costing_detail' quick.pk %}">Open</a>
+                    {% else %}
+                      <a class="costing-btn costing-btn--tiny costing-btn--primary" href="{% url 'cost_sheet_detail' sheet.pk %}">Open</a>
+                      <a class="costing-btn costing-btn--tiny costing-btn--ghost" href="{% url 'cost_sheet_detail' sheet.pk %}">Edit</a>
+                      <a class="costing-btn costing-btn--tiny costing-btn--ghost" href="{% url 'cost_sheet_export_excel' sheet.pk %}">Export</a>
+                      <a class="costing-btn costing-btn--tiny costing-btn--ghost" href="{% url 'cost_sheet_export_pdf' sheet.pk %}">PDF</a>
+                      {% if sheet.opportunity %}
+                        <a class="costing-btn costing-btn--tiny costing-btn--ghost" href="{% url 'opportunity_detail' sheet.opportunity.pk %}">Opportunity</a>
+                      {% endif %}
                     {% endif %}
                   </div>
                 </td>

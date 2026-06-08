@@ -92,10 +92,182 @@
     font-size: 11px;
     line-height: 1.35;
   }
+
+  .costing-type-switch {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 12px 0;
+  }
+
+  .costing-type-option {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 38px;
+    padding: 0 14px;
+    border-radius: 999px;
+    border: 1px solid #374151;
+    color: #e5e7eb;
+    background: rgba(15, 23, 42, 0.7);
+    font-size: 12px;
+    font-weight: 800;
+    text-decoration: none;
+  }
+
+  .costing-type-option.active {
+    background: linear-gradient(135deg, #facc15, #f97316);
+    border-color: #fbbf24;
+    color: #111827;
+  }
+
+  .quick-costing-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+    gap: 12px;
+    align-items: start;
+  }
+
+  .quick-summary-card {
+    position: sticky;
+    top: 90px;
+  }
+
+  .quick-summary-grid {
+    display: grid;
+    gap: 8px;
+  }
+
+  .quick-summary-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 9px 0;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+    color: #d1d5db;
+    font-size: 12px;
+  }
+
+  .quick-summary-row strong {
+    color: #f8fafc;
+    font-size: 13px;
+    text-align: right;
+  }
+
+  .quick-profit-positive {
+    color: #86efac !important;
+  }
+
+  .quick-profit-negative {
+    color: #fca5a5 !important;
+  }
+
+  .quick-error {
+    margin-top: 4px;
+    color: #fca5a5;
+    font-size: 11px;
+  }
+
+  @media (max-width: 860px) {
+    .quick-costing-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .quick-summary-card {
+      position: static;
+    }
+  }
 </style>
 
 <div class="costing-form-page">
-  <div style="font-size:20px; font-weight:800; margin-bottom:10px;">Create costing header</div>
+  <div style="font-size:20px; font-weight:800; margin-bottom:10px;">Create costing</div>
+
+  <div class="costing-type-switch" aria-label="Costing type">
+    <a class="costing-type-option {% if costing_type != 'quick' %}active{% endif %}" href="?costing_type=advanced">Advanced Costing</a>
+    <a class="costing-type-option {% if costing_type == 'quick' %}active{% endif %}" href="?costing_type=quick">Quick Costing</a>
+  </div>
+
+  {% if costing_type == "quick" %}
+    <div class="card intro-card">
+      <div class="intro-title">Quick Costing</div>
+      <div class="muted">Use this when the team needs a fast price check from material cost, production cost, other expenses, and selling price.</div>
+    </div>
+
+    <div class="quick-costing-layout">
+      <div class="card">
+        <form method="post" id="quickCostingForm">
+          {% csrf_token %}
+          <input type="hidden" name="costing_type" value="quick">
+          <div class="section-title">Quick costing details</div>
+          <div class="grid">
+            <div>
+              <label>Buyer Name</label>
+              {{ quick_form.buyer_name }}
+              {% for error in quick_form.buyer_name.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+            </div>
+            <div>
+              <label>Project Name</label>
+              {{ quick_form.project_name }}
+              {% for error in quick_form.project_name.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+            </div>
+            <div>
+              <label>Product Type</label>
+              {{ quick_form.product_type }}
+              {% for error in quick_form.product_type.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+            </div>
+            <div>
+              <label>Quantity</label>
+              {{ quick_form.quantity }}
+              {% for error in quick_form.quantity.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+            </div>
+            <div>
+              <label>Material Cost</label>
+              {{ quick_form.material_cost }}
+              {% for error in quick_form.material_cost.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+            </div>
+            <div>
+              <label>Production Cost</label>
+              {{ quick_form.production_cost }}
+              {% for error in quick_form.production_cost.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+            </div>
+            <div>
+              <label>Other Expenses</label>
+              {{ quick_form.other_expenses }}
+              {% for error in quick_form.other_expenses.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+            </div>
+            <div>
+              <label>Selling Price Per Piece</label>
+              {{ quick_form.selling_price_per_piece }}
+              {% for error in quick_form.selling_price_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+            </div>
+          </div>
+
+          {% if quick_form.non_field_errors %}
+            <div class="quick-error" style="margin-top:10px;">{{ quick_form.non_field_errors }}</div>
+          {% endif %}
+
+          <div style="margin-top:12px; display:flex; gap:8px;">
+            <button type="submit" class="btnx btnx-primary">Save Quick Costing</button>
+            <a href="{% url 'cost_sheet_list' %}" class="btnx">Cancel</a>
+          </div>
+        </form>
+      </div>
+
+      <aside class="card quick-summary-card" aria-label="Quick costing summary">
+        <div class="section-title">Summary</div>
+        <div class="quick-summary-grid">
+          <div class="quick-summary-row"><span>Quantity</span><strong data-quick-summary="quantity">0</strong></div>
+          <div class="quick-summary-row"><span>Total Cost</span><strong data-quick-summary="totalCost">0.00</strong></div>
+          <div class="quick-summary-row"><span>Cost Per Piece</span><strong data-quick-summary="costPerPiece">0.00</strong></div>
+          <div class="quick-summary-row"><span>Selling Price Per Piece</span><strong data-quick-summary="sellingPrice">0.00</strong></div>
+          <div class="quick-summary-row"><span>Revenue</span><strong data-quick-summary="revenue">0.00</strong></div>
+          <div class="quick-summary-row"><span>Profit Per Piece</span><strong data-quick-summary="profitPerPiece">0.00</strong></div>
+          <div class="quick-summary-row"><span>Total Profit</span><strong data-quick-summary="totalProfit">0.00</strong></div>
+          <div class="quick-summary-row"><span>Profit Margin %</span><strong data-quick-summary="margin">0.00%</strong></div>
+        </div>
+      </aside>
+    </div>
+  {% else %}
 
   <div class="card intro-card">
     <div class="intro-title">How to use this sheet</div>
@@ -105,6 +277,7 @@
   <div class="card">
     <form method="post">
       {% csrf_token %}
+      <input type="hidden" name="costing_type" value="advanced">
       <div class="section-title">Commercial header</div>
       <div class="grid">
         <div>
@@ -288,6 +461,7 @@
       </div>
     </form>
   </div>
+  {% endif %}
 </div>
 
 <datalist id="costing-buyer-options">
@@ -413,5 +587,69 @@
   <option value="Velcro"></option>
   <option value="Badge"></option>
 </datalist>
+
+{% if costing_type == "quick" %}
+<script>
+  (function () {
+    const fields = {
+      quantity: document.getElementById("id_quantity"),
+      material: document.getElementById("id_material_cost"),
+      production: document.getElementById("id_production_cost"),
+      other: document.getElementById("id_other_expenses"),
+      selling: document.getElementById("id_selling_price_per_piece")
+    };
+
+    function numberValue(input) {
+      const value = parseFloat(input && input.value ? input.value : "0");
+      return Number.isFinite(value) ? value : 0;
+    }
+
+    function formatMoney(value) {
+      return value.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+    }
+
+    function setSummary(name, value, isMoney) {
+      const node = document.querySelector('[data-quick-summary="' + name + '"]');
+      if (!node) return;
+      node.textContent = isMoney ? formatMoney(value) : value;
+      if (["profitPerPiece", "totalProfit", "margin"].includes(name)) {
+        node.classList.toggle("quick-profit-negative", value < 0);
+        node.classList.toggle("quick-profit-positive", value >= 0);
+      }
+    }
+
+    function updateSummary() {
+      const quantity = Math.max(0, numberValue(fields.quantity));
+      const material = numberValue(fields.material);
+      const production = numberValue(fields.production);
+      const other = numberValue(fields.other);
+      const selling = numberValue(fields.selling);
+      const totalCost = material + production + other;
+      const costPerPiece = quantity > 0 ? totalCost / quantity : 0;
+      const revenue = selling * quantity;
+      const profitPerPiece = selling - costPerPiece;
+      const totalProfit = revenue - totalCost;
+      const margin = revenue > 0 ? (totalProfit / revenue) * 100 : 0;
+
+      setSummary("quantity", quantity.toLocaleString(), false);
+      setSummary("totalCost", totalCost, true);
+      setSummary("costPerPiece", costPerPiece, true);
+      setSummary("sellingPrice", selling, true);
+      setSummary("revenue", revenue, true);
+      setSummary("profitPerPiece", profitPerPiece, true);
+      setSummary("totalProfit", totalProfit, true);
+      setSummary("margin", margin.toFixed(2) + "%", false);
+    }
+
+    Object.values(fields).forEach((field) => {
+      if (field) field.addEventListener("input", updateSummary);
+    });
+    updateSummary();
+  })();
+</script>
+{% endif %}
 
 {% endblock %}

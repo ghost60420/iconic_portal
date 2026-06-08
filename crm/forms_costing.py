@@ -9,6 +9,7 @@ from .models import (
     CostingSMV,
     Opportunity,
     OpportunityDocument,
+    QuickCosting,
 )
 
 
@@ -407,6 +408,66 @@ class CostingSMVForm(forms.ModelForm):
             "cpm": forms.NumberInput(attrs={"step": "0.01", "placeholder": "0.25"}),
             "efficiency_costing": forms.NumberInput(attrs={"step": "0.1", "placeholder": "70"}),
             "efficiency_planned": forms.NumberInput(attrs={"step": "0.1", "placeholder": "75"}),
+        }
+
+
+class QuickCostingForm(forms.ModelForm):
+    money_fields = [
+        "material_cost",
+        "production_cost",
+        "other_expenses",
+        "selling_price_per_piece",
+    ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            css = field.widget.attrs.get("class", "")
+            field.widget.attrs["class"] = (css + " costing-input").strip()
+
+    def clean_quantity(self):
+        quantity = self.cleaned_data.get("quantity")
+        if not quantity or quantity < 1:
+            raise forms.ValidationError("Quantity must be at least 1.")
+        return quantity
+
+    def clean(self):
+        cleaned = super().clean()
+        for field_name in self.money_fields:
+            value = cleaned.get(field_name)
+            if value is not None and value < 0:
+                self.add_error(field_name, "Enter a zero or positive amount.")
+        return cleaned
+
+    class Meta:
+        model = QuickCosting
+        fields = [
+            "buyer_name",
+            "project_name",
+            "product_type",
+            "quantity",
+            "material_cost",
+            "production_cost",
+            "other_expenses",
+            "selling_price_per_piece",
+        ]
+        widgets = {
+            "buyer_name": forms.TextInput(attrs={"placeholder": "Buyer or company name"}),
+            "project_name": forms.TextInput(attrs={"placeholder": "Project or style name"}),
+            "quantity": forms.NumberInput(attrs={"min": 1, "step": "1", "placeholder": "300"}),
+            "material_cost": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
+            "production_cost": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
+            "other_expenses": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
+            "selling_price_per_piece": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
+        }
+        labels = {
+            "buyer_name": "Buyer Name",
+            "project_name": "Project Name",
+            "product_type": "Product Type",
+            "material_cost": "Material Cost",
+            "production_cost": "Production Cost",
+            "other_expenses": "Other Expenses",
+            "selling_price_per_piece": "Selling Price Per Piece",
         }
 
 

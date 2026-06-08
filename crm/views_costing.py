@@ -13,7 +13,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .forms_costing import CostingHeaderForm, CostingSMVForm, OpportunityDocumentForm
+from .forms_costing import CostingHeaderForm, CostingSMVForm, OpportunityDocumentForm, QuickCostingForm
 from .models import (
     CostingHeader,
     CostingLineItem,
@@ -25,6 +25,7 @@ from .models import (
     NEW_COSTING_UOM_CHOICES,
     Opportunity,
     OpportunityDocument,
+    QuickCosting,
 )
 from .services.costing_currency import format_costing_money, normalize_costing_currency
 from .services.costing_engine import compute_costing, validate_costing
@@ -78,6 +79,35 @@ def _costing_currency(costing):
 
 def _format_costing_money(costing, value):
     return format_costing_money(value, _costing_currency(costing))
+
+
+def _format_quick_decimal(value):
+    value = value or Decimal("0")
+    return f"{value.quantize(Decimal('0.01')):,.2f}"
+
+
+def _quick_costing_calc(quick_costing):
+    summary = quick_costing.calculation_summary()
+    calc = {
+        "total_cost_order": summary["total_cost"],
+        "total_sales_order": summary["revenue"],
+        "total_profit_order": summary["total_profit"],
+        "total_cost_per_piece": summary["cost_per_piece"],
+        "fob_per_piece": quick_costing.selling_price_per_piece or Decimal("0"),
+        "profit_per_piece": summary["profit_per_piece"],
+        "margin_percent": summary["profit_margin_percent"],
+        "quantity": summary["quantity"],
+    }
+    calc["display"] = {
+        "total_cost_order": _format_quick_decimal(calc["total_cost_order"]),
+        "total_sales_order": _format_quick_decimal(calc["total_sales_order"]),
+        "total_profit_order": _format_quick_decimal(calc["total_profit_order"]),
+        "total_cost_per_piece": _format_quick_decimal(calc["total_cost_per_piece"]),
+        "fob_per_piece": _format_quick_decimal(calc["fob_per_piece"]),
+        "profit_per_piece": _format_quick_decimal(calc["profit_per_piece"]),
+        "margin_percent": _format_quick_decimal(calc["margin_percent"]),
+    }
+    return calc
 
 
 def _deny_without_internal_costing(request):
@@ -296,17 +326,24 @@ def cost_sheet_list(request):
         return denied
     can_view_costing_profit = can_view_internal_costing(request.user)
     qs = CostingHeader.objects.select_related("opportunity", "customer").order_by("-updated_at")
+    quick_qs = QuickCosting.objects.select_related("created_by").order_by("-updated_at")
 
     customer_id = (request.GET.get("customer") or "").strip()
     product_type = (request.GET.get("product_type") or "").strip()
     status = (request.GET.get("status") or "").strip()
+    costing_type = (request.GET.get("costing_type") or "all").strip()
+    if costing_type not in {"all", "advanced", "quick"}:
+        costing_type = "all"
     search = (request.GET.get("q") or "").strip()
     if customer_id:
         qs = qs.filter(customer_id=customer_id)
+        quick_qs = quick_qs.none()
     if product_type:
         qs = qs.filter(product_type=product_type)
+        quick_qs = quick_qs.filter(product_type=product_type)
     if status:
         qs = qs.filter(status=status)
+        quick_qs = quick_qs.none()
     if search:
         qs = qs.filter(
             Q(opportunity__opportunity_id__icontains=search)
@@ -314,8 +351,18 @@ def cost_sheet_list(request):
             | Q(style_name__icontains=search)
             | Q(style_code__icontains=search)
         )
+        quick_qs = quick_qs.filter(
+            Q(buyer_name__icontains=search)
+            | Q(project_name__icontains=search)
+            | Q(product_type__icontains=search)
+        )
+    if costing_type == "advanced":
+        quick_qs = quick_qs.none()
+    elif costing_type == "quick":
+        qs = qs.none()
 
     rows = []
+    advanced_rows = []
     for sheet in qs:
         calc = compute_costing(sheet.id)
         if calc:
@@ -326,17 +373,54 @@ def cost_sheet_list(request):
                 margin_tone = "watch"
             else:
                 margin_tone = "risk"
-            rows.append({"sheet": sheet, "calc": calc, "margin_tone": margin_tone})
+            row = {
+                "id": sheet.id,
+                "sheet": sheet,
+                "quick": None,
+                "calc": calc,
+                "margin_tone": margin_tone,
+                "costing_type": "advanced",
+                "type_label": "Advanced",
+                "currency_label": sheet.currency,
+                "created_at": sheet.created_at,
+                "updated_at": sheet.updated_at,
+            }
+            rows.append(row)
+            advanced_rows.append(row)
 
-    total_cost_order = sum((row["calc"].get("total_cost_order") or Decimal("0")) for row in rows)
-    total_sales_order = sum((row["calc"].get("total_sales_order") or Decimal("0")) for row in rows)
-    total_profit_order = sum((row["calc"].get("total_profit_order") or Decimal("0")) for row in rows)
+    for quick in quick_qs:
+        calc = _quick_costing_calc(quick)
+        margin_percent = calc.get("margin_percent") or Decimal("0")
+        if calc.get("total_profit_order", Decimal("0")) >= Decimal("0") and margin_percent >= Decimal("0"):
+            margin_tone = "good"
+        else:
+            margin_tone = "risk"
+        rows.append(
+            {
+                "id": quick.id,
+                "sheet": None,
+                "quick": quick,
+                "calc": calc,
+                "margin_tone": margin_tone,
+                "costing_type": "quick",
+                "type_label": "Quick",
+                "currency_label": "—",
+                "created_at": quick.created_at,
+                "updated_at": quick.updated_at,
+            }
+        )
+
+    rows.sort(key=lambda row: (row["updated_at"], row["id"]), reverse=True)
+
+    total_cost_order = sum((row["calc"].get("total_cost_order") or Decimal("0")) for row in advanced_rows)
+    total_sales_order = sum((row["calc"].get("total_sales_order") or Decimal("0")) for row in advanced_rows)
+    total_profit_order = sum((row["calc"].get("total_profit_order") or Decimal("0")) for row in advanced_rows)
     summary_by_currency = defaultdict(lambda: {
         "total_cost_order": Decimal("0"),
         "total_sales_order": Decimal("0"),
         "total_profit_order": Decimal("0"),
     })
-    for row in rows:
+    for row in advanced_rows:
         currency = _costing_currency(row["sheet"])
         summary_by_currency[currency]["total_cost_order"] += row["calc"].get("total_cost_order") or Decimal("0")
         summary_by_currency[currency]["total_sales_order"] += row["calc"].get("total_sales_order") or Decimal("0")
@@ -350,11 +434,11 @@ def cost_sheet_list(request):
         }
         for currency, values in sorted(summary_by_currency.items())
     ]
-    margin_values = [row["calc"].get("margin_percent") or Decimal("0") for row in rows]
+    margin_values = [row["calc"].get("margin_percent") or Decimal("0") for row in advanced_rows]
     average_margin = (sum(margin_values) / Decimal(len(margin_values))) if margin_values else Decimal("0")
     customers_by_id = {
         row["sheet"].customer_id: row["sheet"].customer
-        for row in rows
+        for row in advanced_rows
         if row["sheet"].customer_id and row["sheet"].customer
     }
 
@@ -366,10 +450,17 @@ def cost_sheet_list(request):
         ),
         "status_choices": [("draft", "Draft"), ("approved", "Approved")],
         "product_types": Opportunity.PRODUCT_TYPE_CHOICES,
+        "costing_type_choices": [
+            ("all", "All"),
+            ("advanced", "Advanced"),
+            ("quick", "Quick"),
+        ],
         "summary": {
             "count": len(rows),
-            "approved_count": sum(1 for row in rows if row["sheet"].status == "approved"),
-            "draft_count": sum(1 for row in rows if row["sheet"].status == "draft"),
+            "advanced_count": len(advanced_rows),
+            "quick_count": sum(1 for row in rows if row["costing_type"] == "quick"),
+            "approved_count": sum(1 for row in advanced_rows if row["sheet"].status == "approved"),
+            "draft_count": sum(1 for row in advanced_rows if row["sheet"].status == "draft"),
             "total_cost_order": total_cost_order,
             "total_sales_order": total_sales_order,
             "total_profit_order": total_profit_order,
@@ -380,6 +471,7 @@ def cost_sheet_list(request):
             "customer": customer_id,
             "product_type": product_type,
             "status": status,
+            "costing_type": costing_type,
             "q": search,
         },
         "can_view_internal_costing": can_view_costing_profit,
@@ -394,6 +486,31 @@ def cost_sheet_create(request, opportunity_id=None):
     opportunity = None
     if opportunity_id:
         opportunity = get_object_or_404(Opportunity, pk=opportunity_id)
+
+    costing_type = (request.POST.get("costing_type") if request.method == "POST" else request.GET.get("costing_type")) or "advanced"
+    if costing_type not in {"advanced", "quick"}:
+        costing_type = "advanced"
+
+    if costing_type == "quick":
+        if request.method == "POST":
+            quick_form = QuickCostingForm(request.POST)
+            if quick_form.is_valid():
+                quick_costing = quick_form.save(commit=False)
+                quick_costing.created_by = request.user if request.user.is_authenticated else None
+                quick_costing.save()
+                messages.success(request, "Quick costing saved.")
+                return redirect("quick_costing_detail", pk=quick_costing.pk)
+            messages.error(request, "Please fix the errors below.")
+        else:
+            quick_form = QuickCostingForm()
+
+        context = {
+            "quick_form": quick_form,
+            "opportunity": opportunity,
+            "mode": "create",
+            "costing_type": "quick",
+        }
+        return render(request, "crm/costing/costsheet_form.html", context)
 
     if request.method == "POST":
         data = request.POST.copy()
@@ -430,8 +547,24 @@ def cost_sheet_create(request, opportunity_id=None):
         "form": form,
         "opportunity": opportunity,
         "mode": "create",
+        "costing_type": "advanced",
     }
     return render(request, "crm/costing/costsheet_form.html", context)
+
+
+def quick_costing_detail(request, pk):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
+    quick_costing = get_object_or_404(QuickCosting.objects.select_related("created_by"), pk=pk)
+    calc = _quick_costing_calc(quick_costing)
+    margin_tone = "positive" if calc.get("total_profit_order", Decimal("0")) >= Decimal("0") else "negative"
+    context = {
+        "quick_costing": quick_costing,
+        "calc": calc,
+        "margin_tone": margin_tone,
+    }
+    return render(request, "crm/costing/quick_costing_detail.html", context)
 
 
 def cost_sheet_detail(request, pk):

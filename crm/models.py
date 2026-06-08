@@ -1832,6 +1832,65 @@ class CostingHeader(models.Model):
         super().save(*args, **kwargs)
 
 
+class QuickCosting(models.Model):
+    COSTING_TYPE_CHOICES = [
+        ("quick", "Quick"),
+    ]
+
+    costing_type = models.CharField(
+        max_length=20,
+        choices=COSTING_TYPE_CHOICES,
+        default="quick",
+        editable=False,
+        db_index=True,
+    )
+    buyer_name = models.CharField(max_length=200)
+    project_name = models.CharField(max_length=200)
+    product_type = models.CharField(
+        max_length=50,
+        choices=Opportunity.PRODUCT_TYPE_CHOICES,
+        default="Other",
+    )
+    quantity = models.PositiveIntegerField(default=1)
+    material_cost = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
+    production_cost = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
+    other_expenses = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
+    selling_price_per_piece = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="quick_costings",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-id"]
+
+    def __str__(self):
+        return f"Quick Costing {self.pk} - {self.project_name}"
+
+    def calculation_summary(self):
+        quantity = Decimal(self.quantity or 0)
+        total_cost = (self.material_cost or Decimal("0")) + (self.production_cost or Decimal("0")) + (self.other_expenses or Decimal("0"))
+        cost_per_piece = (total_cost / quantity) if quantity else Decimal("0")
+        revenue = (self.selling_price_per_piece or Decimal("0")) * quantity
+        profit_per_piece = (self.selling_price_per_piece or Decimal("0")) - cost_per_piece
+        total_profit = revenue - total_cost
+        profit_margin_percent = ((total_profit / revenue) * Decimal("100")) if revenue else Decimal("0")
+        return {
+            "quantity": quantity,
+            "total_cost": total_cost,
+            "cost_per_piece": cost_per_piece,
+            "revenue": revenue,
+            "profit_per_piece": profit_per_piece,
+            "total_profit": total_profit,
+            "profit_margin_percent": profit_margin_percent,
+        }
+
+
 class CostingLineItem(models.Model):
     costing = models.ForeignKey(
         CostingHeader,

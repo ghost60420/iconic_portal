@@ -125,6 +125,7 @@ urlpatterns = [
     path("costing/", costing_perm(costing.cost_sheet_list), name="cost_sheet_list"),
     path("costing/add/", costing_perm(costing.cost_sheet_create), name="cost_sheet_create"),
     path("costing/add/opportunity/<int:opportunity_id>/", costing_perm(costing.cost_sheet_create), name="cost_sheet_create_for_opportunity"),
+    path("costing/quick/<int:pk>/", costing_perm(costing.quick_costing_detail), name="quick_costing_detail"),
     path("costing/<int:pk>/", costing_perm(costing.cost_sheet_detail), name="cost_sheet_detail"),
     path("costing/<int:pk>/convert/quotation/", costing_perm(costing.cost_sheet_convert_to_quotation), name="cost_sheet_convert_to_quotation"),
     path("costing/<int:pk>/quotation/", costing_perm(costing.cost_sheet_client_quotation), name="cost_sheet_client_quotation"),

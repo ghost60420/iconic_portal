@@ -219,7 +219,7 @@
 
 .costing-filters {
   display: grid;
-  grid-template-columns: minmax(260px, 1.4fr) repeat(3, minmax(170px, 0.75fr)) auto;
+  grid-template-columns: minmax(240px, 1.3fr) repeat(4, minmax(150px, 0.75fr)) auto;
   gap: 12px;
   align-items: end;
   margin-top: 16px;
@@ -375,6 +375,7 @@
 
 .costing-margin-badge,
 .costing-currency,
+.costing-type-badge,
 .costing-status-badge {
   display: inline-flex;
   align-items: center;
@@ -388,6 +389,18 @@
   font-weight: 850;
   line-height: 1;
   white-space: nowrap;
+}
+
+.costing-type-badge.advanced {
+  color: #bfdbfe;
+  border-color: rgba(96, 165, 250, 0.34);
+  background: rgba(96, 165, 250, 0.11);
+}
+
+.costing-type-badge.quick {
+  color: #99f6e4;
+  border-color: rgba(45, 212, 191, 0.36);
+  background: rgba(45, 212, 191, 0.12);
 }
 
 .costing-margin-badge.good {
@@ -424,6 +437,12 @@
   color: #bbf7d0;
   border-color: rgba(34, 197, 94, 0.34);
   background: rgba(34, 197, 94, 0.11);
+}
+
+.costing-status-badge.quick {
+  color: #99f6e4;
+  border-color: rgba(45, 212, 191, 0.36);
+  background: rgba(45, 212, 191, 0.12);
 }
 
 .costing-row-actions {

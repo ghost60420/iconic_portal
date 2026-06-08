@@ -1,0 +1,195 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+<style>
+  .quick-detail-page {
+    max-width: 1120px;
+    margin: 18px auto 44px auto;
+    padding: 0 10px;
+    color: #e5e7eb;
+  }
+
+  .quick-detail-hero,
+  .quick-detail-card {
+    background: #0b1020;
+    border: 1px solid #1f2937;
+    border-radius: 14px;
+    padding: 16px;
+  }
+
+  .quick-detail-hero {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: flex-start;
+    margin-bottom: 14px;
+    background: linear-gradient(135deg, rgba(250, 204, 21, 0.12), rgba(14, 165, 233, 0.08));
+  }
+
+  .quick-eyebrow {
+    margin: 0 0 6px 0;
+    color: #fde68a;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  .quick-title {
+    margin: 0;
+    color: #f8fafc;
+    font-size: 24px;
+    font-weight: 900;
+    line-height: 1.1;
+  }
+
+  .quick-subtitle {
+    margin: 8px 0 0 0;
+    color: #94a3b8;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .quick-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+
+  .quick-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    padding: 0 12px;
+    border-radius: 999px;
+    border: 1px solid #374151;
+    color: #e5e7eb;
+    background: rgba(15, 23, 42, 0.7);
+    font-size: 12px;
+    font-weight: 800;
+    text-decoration: none;
+  }
+
+  .quick-btn-primary {
+    background: linear-gradient(135deg, #facc15, #f97316);
+    border-color: #fbbf24;
+    color: #111827;
+  }
+
+  .quick-detail-grid {
+    display: grid;
+    grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+    gap: 14px;
+  }
+
+  .quick-section-title {
+    margin: 0 0 12px 0;
+    color: #fde68a;
+    font-size: 14px;
+    font-weight: 900;
+  }
+
+  .quick-meta-grid,
+  .quick-summary-grid {
+    display: grid;
+    gap: 9px;
+  }
+
+  .quick-meta-row,
+  .quick-summary-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    padding-bottom: 9px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+    color: #cbd5e1;
+    font-size: 13px;
+  }
+
+  .quick-meta-row strong,
+  .quick-summary-row strong {
+    color: #f8fafc;
+    text-align: right;
+  }
+
+  .quick-profit-positive {
+    color: #86efac !important;
+  }
+
+  .quick-profit-negative {
+    color: #fca5a5 !important;
+  }
+
+  .quick-type-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    padding: 0 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(45, 212, 191, 0.36);
+    background: rgba(45, 212, 191, 0.12);
+    color: #99f6e4;
+    font-size: 11px;
+    font-weight: 900;
+  }
+
+  @media (max-width: 820px) {
+    .quick-detail-hero,
+    .quick-detail-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+    }
+
+    .quick-actions {
+      justify-content: flex-start;
+    }
+  }
+</style>
+
+<div class="quick-detail-page">
+  <section class="quick-detail-hero">
+    <div>
+      <p class="quick-eyebrow">Quick Costing</p>
+      <h1 class="quick-title">{{ quick_costing.project_name }}</h1>
+      <p class="quick-subtitle">{{ quick_costing.buyer_name }} · {{ quick_costing.get_product_type_display }} · QC-{{ quick_costing.pk }}</p>
+    </div>
+    <div class="quick-actions">
+      <a class="quick-btn quick-btn-primary" href="{% url 'cost_sheet_create' %}?costing_type=quick">New Quick Costing</a>
+      <a class="quick-btn" href="{% url 'cost_sheet_list' %}?costing_type=quick">Quick Costing List</a>
+      <a class="quick-btn" href="{% url 'cost_sheet_list' %}">All Costings</a>
+    </div>
+  </section>
+
+  <section class="quick-detail-grid">
+    <article class="quick-detail-card">
+      <h2 class="quick-section-title">Costing Details</h2>
+      <div class="quick-meta-grid">
+        <div class="quick-meta-row"><span>Costing Type</span><strong><span class="quick-type-badge">Quick</span></strong></div>
+        <div class="quick-meta-row"><span>Buyer Name</span><strong>{{ quick_costing.buyer_name }}</strong></div>
+        <div class="quick-meta-row"><span>Project Name</span><strong>{{ quick_costing.project_name }}</strong></div>
+        <div class="quick-meta-row"><span>Product Type</span><strong>{{ quick_costing.get_product_type_display }}</strong></div>
+        <div class="quick-meta-row"><span>Quantity</span><strong>{{ quick_costing.quantity }}</strong></div>
+        <div class="quick-meta-row"><span>Created</span><strong>{{ quick_costing.created_at|date:"M j, Y" }}</strong></div>
+        <div class="quick-meta-row"><span>Created By</span><strong>{{ quick_costing.created_by.get_full_name|default:quick_costing.created_by.username|default:"Not set" }}</strong></div>
+      </div>
+    </article>
+
+    <article class="quick-detail-card">
+      <h2 class="quick-section-title">Summary</h2>
+      <div class="quick-summary-grid">
+        <div class="quick-summary-row"><span>Quantity</span><strong>{{ quick_costing.quantity }}</strong></div>
+        <div class="quick-summary-row"><span>Total Cost</span><strong>{{ calc.display.total_cost_order }}</strong></div>
+        <div class="quick-summary-row"><span>Cost Per Piece</span><strong>{{ calc.display.total_cost_per_piece }}</strong></div>
+        <div class="quick-summary-row"><span>Selling Price Per Piece</span><strong>{{ calc.display.fob_per_piece }}</strong></div>
+        <div class="quick-summary-row"><span>Revenue</span><strong>{{ calc.display.total_sales_order }}</strong></div>
+        <div class="quick-summary-row"><span>Profit Per Piece</span><strong class="quick-profit-{{ margin_tone }}">{{ calc.display.profit_per_piece }}</strong></div>
+        <div class="quick-summary-row"><span>Total Profit</span><strong class="quick-profit-{{ margin_tone }}">{{ calc.display.total_profit_order }}</strong></div>
+        <div class="quick-summary-row"><span>Profit Margin %</span><strong class="quick-profit-{{ margin_tone }}">{{ calc.display.margin_percent }}%</strong></div>
+      </div>
+    </article>
+  </section>
+</div>
+{% endblock %}
