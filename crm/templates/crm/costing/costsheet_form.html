@@ -236,6 +236,11 @@
               {% for error in quick_form.other_expenses.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
             </div>
             <div>
+              <label>Shipping Cost</label>
+              {{ quick_form.shipping_cost }}
+              {% for error in quick_form.shipping_cost.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+            </div>
+            <div>
               <label>Selling Price Per Piece</label>
               {{ quick_form.selling_price_per_piece }}
               {% for error in quick_form.selling_price_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
@@ -393,6 +398,11 @@
           <label>Manual FOB per piece</label>
           {{ form.manual_fob_per_piece }}
           <div class="field-help">{{ form.manual_fob_per_piece.help_text }}</div>
+        </div>
+        <div>
+          <label>Shipping Cost</label>
+          {{ form.shipping_cost }}
+          <div class="field-help">{{ form.shipping_cost.help_text }}</div>
         </div>
       </div>
 
@@ -596,6 +606,7 @@
       material: document.getElementById("id_material_cost"),
       production: document.getElementById("id_production_cost"),
       other: document.getElementById("id_other_expenses"),
+      shipping: document.getElementById("id_shipping_cost"),
       selling: document.getElementById("id_selling_price_per_piece")
     };
 
@@ -626,8 +637,9 @@
       const material = numberValue(fields.material);
       const production = numberValue(fields.production);
       const other = numberValue(fields.other);
+      const shipping = numberValue(fields.shipping);
       const selling = numberValue(fields.selling);
-      const totalCost = material + production + other;
+      const totalCost = material + production + other + shipping;
       const costPerPiece = quantity > 0 ? totalCost / quantity : 0;
       const revenue = selling * quantity;
       const profitPerPiece = selling - costPerPiece;

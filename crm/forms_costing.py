@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django import forms
 
 from .models import (
@@ -252,6 +254,7 @@ HEADER_HELP_TEXTS = {
     "commission_percent": "Sales or agent commission percentage added on top of FOB.",
     "target_margin_percent": "If manual FOB is blank, system can back-calculate FOB from this margin target.",
     "manual_fob_per_piece": "Optional manual selling FOB per piece. Leave blank to auto-calculate from margin target.",
+    "shipping_cost": "Order-level shipping cost. Leave blank to treat shipping as 0.",
     "fabric_type": "Main body fabric construction used for the garment.",
     "fabric_gsm": "Fabric weight reference from tech pack or supplier quote.",
     "fabric_composition": "Fiber content used for costing and supplier matching.",
@@ -330,6 +333,7 @@ class CostingHeaderForm(forms.ModelForm):
             "commission_percent",
             "target_margin_percent",
             "manual_fob_per_piece",
+            "shipping_cost",
             "fabric_type",
             "fabric_gsm",
             "fabric_composition",
@@ -360,6 +364,7 @@ class CostingHeaderForm(forms.ModelForm):
             "commission_percent": forms.NumberInput(attrs={"step": "0.01", "placeholder": "3"}),
             "target_margin_percent": forms.NumberInput(attrs={"step": "0.01", "placeholder": "35"}),
             "manual_fob_per_piece": forms.NumberInput(attrs={"step": "0.01", "placeholder": "0.00"}),
+            "shipping_cost": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
             "fabric_type": forms.TextInput(attrs={"placeholder": "Single jersey, fleece, rib"}),
             "fabric_gsm": forms.TextInput(attrs={"placeholder": "220 GSM"}),
             "fabric_composition": forms.TextInput(attrs={"placeholder": "95% cotton / 5% spandex"}),
@@ -378,7 +383,16 @@ class CostingHeaderForm(forms.ModelForm):
             "fabric_gsm": "Fabric GSM",
             "embroidery": "Embroidery detail",
             "fit_remarks": "Fit / construction remarks",
+            "shipping_cost": "Shipping Cost",
         }
+
+    def clean_shipping_cost(self):
+        value = self.cleaned_data.get("shipping_cost")
+        if value in (None, ""):
+            return Decimal("0")
+        if value < 0:
+            raise forms.ValidationError("Enter a zero or positive amount.")
+        return value
 
 
 class CostingSMVForm(forms.ModelForm):
@@ -416,6 +430,7 @@ class QuickCostingForm(forms.ModelForm):
         "material_cost",
         "production_cost",
         "other_expenses",
+        "shipping_cost",
         "selling_price_per_piece",
     ]
 
@@ -435,6 +450,9 @@ class QuickCostingForm(forms.ModelForm):
         cleaned = super().clean()
         for field_name in self.money_fields:
             value = cleaned.get(field_name)
+            if field_name == "shipping_cost" and value in (None, ""):
+                cleaned[field_name] = Decimal("0")
+                continue
             if value is not None and value < 0:
                 self.add_error(field_name, "Enter a zero or positive amount.")
         return cleaned
@@ -449,6 +467,7 @@ class QuickCostingForm(forms.ModelForm):
             "material_cost",
             "production_cost",
             "other_expenses",
+            "shipping_cost",
             "selling_price_per_piece",
         ]
         widgets = {
@@ -458,6 +477,7 @@ class QuickCostingForm(forms.ModelForm):
             "material_cost": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
             "production_cost": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
             "other_expenses": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
+            "shipping_cost": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
             "selling_price_per_piece": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
         }
         labels = {
@@ -467,6 +487,7 @@ class QuickCostingForm(forms.ModelForm):
             "material_cost": "Material Cost",
             "production_cost": "Production Cost",
             "other_expenses": "Other Expenses",
+            "shipping_cost": "Shipping Cost",
             "selling_price_per_piece": "Selling Price Per Piece",
         }
 

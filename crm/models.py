@@ -1781,6 +1781,12 @@ class CostingHeader(models.Model):
         null=True,
         blank=True,
     )
+    shipping_cost = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        default=Decimal("0"),
+    )
     merchandiser = models.CharField(max_length=200, blank=True, default="")
     # Product specification snapshot
     fabric_type = models.CharField(max_length=200, blank=True, default="")
@@ -1855,6 +1861,7 @@ class QuickCosting(models.Model):
     material_cost = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
     production_cost = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
     other_expenses = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
+    shipping_cost = models.DecimalField(max_digits=12, decimal_places=2, blank=True, default=Decimal("0"))
     selling_price_per_piece = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -1874,7 +1881,12 @@ class QuickCosting(models.Model):
 
     def calculation_summary(self):
         quantity = Decimal(self.quantity or 0)
-        total_cost = (self.material_cost or Decimal("0")) + (self.production_cost or Decimal("0")) + (self.other_expenses or Decimal("0"))
+        total_cost = (
+            (self.material_cost or Decimal("0"))
+            + (self.production_cost or Decimal("0"))
+            + (self.other_expenses or Decimal("0"))
+            + (self.shipping_cost or Decimal("0"))
+        )
         cost_per_piece = (total_cost / quantity) if quantity else Decimal("0")
         revenue = (self.selling_price_per_piece or Decimal("0")) * quantity
         profit_per_piece = (self.selling_price_per_piece or Decimal("0")) - cost_per_piece

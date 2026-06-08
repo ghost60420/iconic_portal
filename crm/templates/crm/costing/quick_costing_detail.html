@@ -172,6 +172,7 @@
         <div class="quick-meta-row"><span>Project Name</span><strong>{{ quick_costing.project_name }}</strong></div>
         <div class="quick-meta-row"><span>Product Type</span><strong>{{ quick_costing.get_product_type_display }}</strong></div>
         <div class="quick-meta-row"><span>Quantity</span><strong>{{ quick_costing.quantity }}</strong></div>
+        <div class="quick-meta-row"><span>Shipping Cost</span><strong>{{ calc.display.shipping_cost }}</strong></div>
         <div class="quick-meta-row"><span>Created</span><strong>{{ quick_costing.created_at|date:"M j, Y" }}</strong></div>
         <div class="quick-meta-row"><span>Created By</span><strong>{{ quick_costing.created_by.get_full_name|default:quick_costing.created_by.username|default:"Not set" }}</strong></div>
       </div>
@@ -181,6 +182,7 @@
       <h2 class="quick-section-title">Summary</h2>
       <div class="quick-summary-grid">
         <div class="quick-summary-row"><span>Quantity</span><strong>{{ quick_costing.quantity }}</strong></div>
+        <div class="quick-summary-row"><span>Shipping Cost</span><strong>{{ calc.display.shipping_cost }}</strong></div>
         <div class="quick-summary-row"><span>Total Cost</span><strong>{{ calc.display.total_cost_order }}</strong></div>
         <div class="quick-summary-row"><span>Cost Per Piece</span><strong>{{ calc.display.total_cost_per_piece }}</strong></div>
         <div class="quick-summary-row"><span>Selling Price Per Piece</span><strong>{{ calc.display.fob_per_piece }}</strong></div>

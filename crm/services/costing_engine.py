@@ -207,6 +207,12 @@ def compute_costing(costing_id):
 
     fabric_finance = _round_internal(fabric_base * _pct(costing.finance_percent_fabric))
     trims_finance = _round_internal(trims_base * _pct(costing.finance_percent_trims))
+    shipping_cost_order = _round_internal(_to_decimal(getattr(costing, "shipping_cost", Decimal("0"))))
+    shipping_cost_per_piece = (
+        _round_internal(shipping_cost_order / Decimal(order_qty))
+        if order_qty
+        else Decimal("0")
+    )
 
     total_cost_per_piece = _round_internal(
         fabric_base
@@ -215,6 +221,7 @@ def compute_costing(costing_id):
         + labor_cost_per_piece
         + fabric_finance
         + trims_finance
+        + shipping_cost_per_piece
     )
 
     fob_per_piece = _to_decimal(costing.manual_fob_per_piece)
@@ -260,6 +267,7 @@ def compute_costing(costing_id):
         "labor": labor_cost_per_piece,
         "fabric_finance": fabric_finance,
         "trims_finance": trims_finance,
+        "shipping_cost": shipping_cost_per_piece,
     }
 
     breakdown_order = {k: _round_internal(v * Decimal(order_qty)) for k, v in breakdown.items()}
@@ -290,6 +298,8 @@ def compute_costing(costing_id):
         "labor_cost_per_piece": labor_cost_per_piece,
         "fabric_finance": fabric_finance,
         "trims_finance": trims_finance,
+        "shipping_cost_order": shipping_cost_order,
+        "shipping_cost_per_piece": shipping_cost_per_piece,
         "total_cost_per_piece": total_cost_per_piece,
         "fob_per_piece": fob_per_piece,
         "profit_per_piece": profit_per_piece,
@@ -309,6 +319,8 @@ def compute_costing(costing_id):
             "labor_cost_per_piece": _round_display(labor_cost_per_piece),
             "fabric_finance": _round_display(fabric_finance),
             "trims_finance": _round_display(trims_finance),
+            "shipping_cost_order": _round_display(shipping_cost_order),
+            "shipping_cost_per_piece": _round_display(shipping_cost_per_piece),
             "total_cost_per_piece": _round_display(total_cost_per_piece),
             "fob_per_piece": _round_display(fob_per_piece),
             "profit_per_piece": _round_display(profit_per_piece),

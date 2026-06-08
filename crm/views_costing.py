@@ -97,6 +97,7 @@ def _quick_costing_calc(quick_costing):
         "profit_per_piece": summary["profit_per_piece"],
         "margin_percent": summary["profit_margin_percent"],
         "quantity": summary["quantity"],
+        "shipping_cost": quick_costing.shipping_cost or Decimal("0"),
     }
     calc["display"] = {
         "total_cost_order": _format_quick_decimal(calc["total_cost_order"]),
@@ -106,6 +107,7 @@ def _quick_costing_calc(quick_costing):
         "fob_per_piece": _format_quick_decimal(calc["fob_per_piece"]),
         "profit_per_piece": _format_quick_decimal(calc["profit_per_piece"]),
         "margin_percent": _format_quick_decimal(calc["margin_percent"]),
+        "shipping_cost": _format_quick_decimal(calc["shipping_cost"]),
     }
     return calc
 
@@ -604,6 +606,7 @@ def cost_sheet_detail(request, pk):
                     "commission_percent": str(costing.commission_percent),
                     "target_margin_percent": str(costing.target_margin_percent or ""),
                     "manual_fob_per_piece": str(costing.manual_fob_per_piece or ""),
+                    "shipping_cost": str(costing.shipping_cost or ""),
                 }
                 header = form.save()
                 smv = smv_form.save(commit=False)
@@ -632,6 +635,7 @@ def cost_sheet_detail(request, pk):
                         "commission_percent": str(header.commission_percent),
                         "target_margin_percent": str(header.target_margin_percent or ""),
                         "manual_fob_per_piece": str(header.manual_fob_per_piece or ""),
+                        "shipping_cost": str(header.shipping_cost or ""),
                     },
                 )
 
@@ -1061,6 +1065,7 @@ def cost_sheet_duplicate(request, pk):
         commission_percent=costing.commission_percent,
         target_margin_percent=costing.target_margin_percent,
         manual_fob_per_piece=costing.manual_fob_per_piece,
+        shipping_cost=costing.shipping_cost,
         merchandiser=costing.merchandiser,
         fabric_type=costing.fabric_type,
         fabric_gsm=costing.fabric_gsm,
@@ -1133,7 +1138,7 @@ def cost_sheet_export_pdf(request, pk):
 
     try:
         from reportlab.lib import colors
-        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.pagesizes import A4
         from reportlab.pdfgen import canvas
     except ImportError:
         messages.error(request, "PDF export is unavailable. Please install ReportLab.")
@@ -1142,91 +1147,223 @@ def cost_sheet_export_pdf(request, pk):
     try:
         calc = compute_costing(costing.id)
         buffer = io.BytesIO()
-        p = canvas.Canvas(buffer, pagesize=letter)
-        width, height = letter
-        y = height - 50
+        p = canvas.Canvas(buffer, pagesize=A4, pageCompression=0)
+        width, height = A4
+        left = 36
+        right = width - 36
+        black = colors.HexColor("#111111")
+        gold = colors.HexColor("#c89b3c")
+        pink = colors.HexColor("#ec4899")
+        pale = colors.HexColor("#f8f3f6")
+        border = colors.HexColor("#e5e7eb")
+        muted = colors.HexColor("#6b7280")
+        currency = _costing_currency(costing)
 
-        p.setFillColor(colors.HexColor("#111827"))
-        p.rect(0, height - 88, width, 88, fill=1, stroke=0)
-        p.setFillColor(colors.white)
-        p.setFont("Helvetica-Bold", 18)
-        p.drawString(50, height - 44, "ICONIC CRM")
-        p.setFont("Helvetica", 11)
-        p.drawString(50, height - 62, "Professional FOB Quotation")
-        p.setFont("Helvetica-Bold", 12)
-        p.drawRightString(width - 50, height - 44, f"COST-{costing.pk}")
-        p.setFont("Helvetica", 9)
-        p.drawRightString(width - 50, height - 62, timezone.now().strftime("%Y-%m-%d"))
-        p.setFillColor(colors.black)
-        y = height - 116
+        def money(value):
+            value = value or Decimal("0")
+            return f"{currency} {Decimal(value).quantize(Decimal('0.01')):,.2f}"
 
-        p.setFont("Helvetica", 10)
-        header_lines = [
-            f"Customer: {(costing.customer.account_brand if costing.customer else '') or 'Not set'}",
-            f"Opportunity: {costing.opportunity.opportunity_id}",
-            f"Style: {costing.style_name or costing.style_code or '-'}",
-            f"Product type: {costing.get_product_type_display()}",
-            f"Quantity: {costing.order_quantity}",
-            f"Factory location: {costing.get_factory_location_display()}",
-            f"Approval status: {costing.get_status_display()}",
-            f"Currency: {costing.currency}",
-        ]
-        for line in header_lines:
-            p.drawString(50, y, line)
-            y -= 14
+        def text(value, fallback="-"):
+            value = value if value not in (None, "") else fallback
+            return str(value)
 
-        y -= 10
-        p.setFillColor(colors.HexColor("#f3f4f6"))
-        p.rect(45, y - 76, width - 90, 92, fill=1, stroke=0)
-        p.setFillColor(colors.black)
-        p.setFont("Helvetica-Bold", 12)
-        p.drawString(55, y, "FOB Summary")
-        y -= 16
-        p.setFont("Helvetica", 10)
-        summary_lines = [
-            f"Total cost per piece: {_format_costing_money(costing, calc['display']['total_cost_per_piece'])}",
-            f"FOB per piece: {_format_costing_money(costing, calc['display']['fob_per_piece'])}",
-            f"Profit per piece: {_format_costing_money(costing, calc['display']['profit_per_piece'])}",
-            f"Margin %: {calc['display']['margin_percent']}",
-            f"Total cost order: {_format_costing_money(costing, calc['display']['total_cost_order'])}",
-            f"Final offer total: {_format_costing_money(costing, calc['display']['total_final_offer_order'])}",
-        ]
-        for line in summary_lines:
-            p.drawString(55, y, line)
-            y -= 14
+        def draw_logo(x, y):
+            try:
+                from django.contrib.staticfiles import finders
 
-        y -= 6
-        p.setFont("Helvetica-Bold", 11)
-        p.drawString(50, y, "Line items")
-        y -= 14
-        p.setFont("Helvetica", 9)
-
-        for category, _ in NEW_COSTING_CATEGORY_CHOICES:
-            items = [row for row in calc["line_rows"] if row["category"] == category]
-            if not items:
-                continue
+                logo_path = finders.find("img/image.png")
+            except Exception:
+                logo_path = None
+            if logo_path:
+                p.drawImage(logo_path, x, y - 34, width=42, height=42, preserveAspectRatio=True, mask="auto")
+                return
+            p.setFillColor(gold)
+            p.circle(x + 18, y - 14, 20, fill=1, stroke=0)
+            p.setFillColor(black)
             p.setFont("Helvetica-Bold", 10)
-            p.drawString(50, y, category.replace("_", " ").title())
-            y -= 12
-            p.setFont("Helvetica", 9)
-            for item in items:
-                line = f"{item['item_name']} | {item['uom']} | {_format_costing_money(costing, item['cost_per_piece'])}"
-                p.drawString(60, y, line[:110])
-                y -= 12
-                if y < 80:
-                    p.showPage()
-                    y = height - 50
-                    p.setFont("Helvetica", 9)
-            y -= 6
+            p.drawCentredString(x + 18, y - 18, "IAH")
 
-        y -= 6
+        def draw_page_brand_header():
+            p.setFillColor(black)
+            p.rect(0, height - 102, width, 102, fill=1, stroke=0)
+            p.setFillColor(pink)
+            p.circle(width - 26, height - 98, 84, fill=1, stroke=0)
+            p.setFillColor(gold)
+            p.rect(0, height - 102, width, 5, fill=1, stroke=0)
+            draw_logo(left, height - 25)
+            p.setFillColor(colors.white)
+            p.setFont("Helvetica-Bold", 15)
+            p.drawString(left + 52, height - 38, "Iconic Apparel House")
+            p.setFont("Helvetica", 8.8)
+            p.drawString(left + 52, height - 54, "Premium apparel sourcing, development, and production")
+            p.setFont("Helvetica-Bold", 10)
+            p.drawRightString(right, height - 38, f"COST-{costing.pk}")
+            p.setFont("Helvetica", 8.5)
+            p.drawRightString(right, height - 54, timezone.localdate().strftime("%Y-%m-%d"))
+
+        def draw_table_header(y_pos):
+            p.setFillColor(black)
+            p.rect(left, y_pos - 22, right - left, 22, fill=1, stroke=0)
+            p.setFillColor(colors.white)
+            p.setFont("Helvetica-Bold", 8.5)
+            p.drawString(left + 8, y_pos - 14, "SL")
+            p.drawString(left + 40, y_pos - 14, "Description")
+            p.drawString(left + 220, y_pos - 14, "Calculation")
+            p.drawRightString(right - 8, y_pos - 14, "Amount")
+            return y_pos - 22
+
+        def draw_wrapped(lines, x, y_pos, max_width, font="Helvetica", size=8.2, line_gap=10):
+            p.setFont(font, size)
+            current_y = y_pos
+            for line in lines:
+                for wrapped in _pdf_lines(p, line, max_width, font, size):
+                    p.drawString(x, current_y, wrapped)
+                    current_y -= line_gap
+            return current_y
+
+        draw_page_brand_header()
+        y = height - 132
+
+        project_name = costing.style_name or costing.style_code or (
+            costing.opportunity.opportunity_id if costing.opportunity_id else f"Costing {costing.pk}"
+        )
+        item_name = costing.get_product_type_display()
+        buyer_name = costing.buyer or costing.brand or (
+            getattr(costing.customer, "account_brand", "") if costing.customer else ""
+        ) or "Buyer not set"
+        prepared_by = costing.merchandiser or (
+            request.user.get_full_name() or request.user.get_username()
+            if request.user.is_authenticated
+            else "Iconic Team"
+        )
+
+        p.setFillColor(black)
+        p.setFont("Helvetica-Bold", 24)
+        p.drawCentredString(width / 2, y, "COSTING SHEET")
+        y -= 26
+        p.setFillColor(gold)
+        p.setFont("Helvetica-Bold", 13)
+        p.drawCentredString(width / 2, y, text(project_name, "Project"))
+        y -= 18
+        p.setFillColor(black)
+        p.setFont("Helvetica-Bold", 10)
+        p.drawCentredString(width / 2, y, f"{costing.order_quantity or 0} PCS {item_name}".upper())
+        y -= 24
+
+        box_width = (right - left - 12) / 2
+        p.setFillColor(pale)
+        p.roundRect(left, y - 42, box_width, 42, 6, fill=1, stroke=0)
+        p.roundRect(left + box_width + 12, y - 42, box_width, 42, 6, fill=1, stroke=0)
+        p.setFillColor(muted)
+        p.setFont("Helvetica-Bold", 8)
+        p.drawString(left + 10, y - 15, "BUYER NAME")
+        p.drawString(left + box_width + 22, y - 15, "DATE")
+        p.setFillColor(black)
         p.setFont("Helvetica-Bold", 11)
-        p.drawString(50, y, "Notes")
-        y -= 14
-        p.setFont("Helvetica", 9)
-        p.drawString(50, y, (costing.notes or "-")[:120])
+        p.drawString(left + 10, y - 31, text(buyer_name))
+        p.drawString(left + box_width + 22, y - 31, (costing.costing_date or timezone.localdate()).strftime("%Y-%m-%d"))
+        y -= 62
 
-        p.showPage()
+        rows = []
+        for row in calc["line_rows"]:
+            row_amount = (row["cost_per_piece"] or Decimal("0")) * Decimal(calc["order_quantity"] or 0)
+            calc_bits = [
+                f"UOM: {row['uom']}",
+                f"Cons: {row['consumption_value']}",
+                f"Rate: {money(row['unit_price'])}",
+            ]
+            if row.get("freight"):
+                calc_bits.append(f"Freight: {money(row['freight'])}")
+            if row.get("wastage_percent"):
+                calc_bits.append(f"Wastage: {row['wastage_percent']}%")
+            rows.append(
+                {
+                    "description": row["item_name"] or row["category"].replace("_", " ").title(),
+                    "calculation": " | ".join(calc_bits),
+                    "amount": row_amount,
+                }
+            )
+
+        rows.append(
+            {
+                "description": "Shipping Cost",
+                "calculation": "Order-level shipping cost",
+                "amount": calc.get("shipping_cost_order", Decimal("0")),
+            }
+        )
+
+        y = draw_table_header(y)
+        for index, row in enumerate(rows, start=1):
+            desc_lines = _pdf_lines(p, row["description"], 162, "Helvetica", 8.2)
+            calc_lines = _pdf_lines(p, row["calculation"], 200, "Helvetica", 8.2)
+            row_height = max(30, (max(len(desc_lines), len(calc_lines), 1) * 10) + 14)
+            if y - row_height < 125:
+                p.showPage()
+                draw_page_brand_header()
+                y = draw_table_header(height - 132)
+            p.setFillColor(colors.white if index % 2 else colors.HexColor("#fcfcfd"))
+            p.rect(left, y - row_height, right - left, row_height, fill=1, stroke=0)
+            p.setStrokeColor(border)
+            p.line(left, y - row_height, right, y - row_height)
+            p.setFillColor(black)
+            p.setFont("Helvetica", 8.4)
+            p.drawString(left + 8, y - 18, str(index))
+            draw_wrapped(desc_lines, left + 40, y - 16, 162)
+            draw_wrapped(calc_lines, left + 220, y - 16, 200)
+            p.setFont("Helvetica-Bold", 8.6)
+            p.drawRightString(right - 8, y - 18, money(row["amount"]))
+            y -= row_height
+
+        p.setFillColor(black)
+        p.rect(left, y - 28, right - left, 28, fill=1, stroke=0)
+        p.setFillColor(colors.white)
+        p.setFont("Helvetica-Bold", 11)
+        p.drawString(left + 8, y - 18, "Total Amount")
+        p.drawRightString(right - 8, y - 18, money(calc["total_cost_order"]))
+        y -= 48
+
+        if y < 168:
+            p.showPage()
+            draw_page_brand_header()
+            y = height - 132
+
+        p.setFillColor(pale)
+        p.roundRect(left, y - 112, right - left, 112, 8, fill=1, stroke=0)
+        p.setFillColor(black)
+        p.setFont("Helvetica-Bold", 12)
+        p.drawString(left + 12, y - 18, "Summary")
+        summary_rows = [
+            ("Total Amount", money(calc["total_cost_order"])),
+            ("Total Pieces", text(costing.order_quantity or 0)),
+            ("Buyer Name", text(buyer_name)),
+            ("Project", text(project_name)),
+            ("Item", text(item_name)),
+            ("Prepared By", text(prepared_by)),
+        ]
+        summary_y = y - 40
+        col_x = [left + 12, left + 286]
+        for idx, (label, value) in enumerate(summary_rows):
+            x = col_x[idx % 2]
+            if idx and idx % 2 == 0:
+                summary_y -= 24
+            p.setFillColor(muted)
+            p.setFont("Helvetica-Bold", 7.8)
+            p.drawString(x, summary_y, label.upper())
+            p.setFillColor(black)
+            p.setFont("Helvetica-Bold", 9.2)
+            p.drawString(x, summary_y - 13, value[:42])
+
+        footer_y = 62
+        p.setStrokeColor(gold)
+        p.setLineWidth(1.2)
+        p.line(left, footer_y + 32, right, footer_y + 32)
+        p.setFillColor(pink)
+        p.setFont("Helvetica-Bold", 16)
+        p.drawCentredString(width / 2, footer_y + 10, "Thank You!")
+        p.setFillColor(black)
+        p.setFont("Helvetica", 10)
+        p.drawCentredString(width / 2, footer_y - 5, "For Your Business")
+
         p.save()
         pdf_bytes = buffer.getvalue()
     except Exception:

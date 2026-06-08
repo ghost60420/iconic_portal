@@ -681,6 +681,11 @@
             {{ form.manual_fob_per_piece }}
             <div class="field-help">{{ form.manual_fob_per_piece.help_text }}</div>
           </div>
+          <div>
+            <label>Shipping Cost</label>
+            {{ form.shipping_cost }}
+            <div class="field-help">{{ form.shipping_cost.help_text }}</div>
+          </div>
         </div>
       </div>
 
@@ -969,6 +974,7 @@
           <div><span>CM Cost</span><strong data-smart-summary="cm">{{ costing.currency|default:"BDT" }} 0.00</strong></div>
           <div><span>Logistics</span><strong data-smart-summary="logistics">{{ costing.currency|default:"BDT" }} 0.00</strong></div>
           <div><span>Other</span><strong data-smart-summary="other">{{ costing.currency|default:"BDT" }} 0.00</strong></div>
+          <div><span>Shipping Cost / Pc</span><strong data-smart-summary="shipping">{{ costing.currency|default:"BDT" }} 0.00</strong></div>
           <div class="smart-summary-total"><span>Total FOB Cost</span><strong data-smart-summary="total">{{ costing.currency|default:"BDT" }} 0.00</strong></div>
         </div>
 
@@ -1049,6 +1055,10 @@
         <div class="summary-card">
           <div class="summary-label">Margin %</div>
           <div class="summary-value">{{ calc.display.margin_percent }}%</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Shipping Cost</div>
+          <div class="summary-value">{{ calc.display.shipping_cost_order }} <span class="unit-badge">{{ costing.currency|default:"BDT" }} total order</span></div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Total cost order</div>
@@ -1826,13 +1836,16 @@
     const trimFinance = (sewingTrim + packagingTrim + labels) * (formNumber('finance_percent_trims', 0) / 100);
     const material = fabric + sewingTrim + packagingTrim + labels + wash + fabricFinance + trimFinance;
     const labor = calculateSmvLabor();
-    const total = material + labor + cm + logistics + other;
+    const orderQty = Math.max(0, formNumber('order_quantity', 0));
+    const shipping = orderQty > 0 ? formNumber('shipping_cost', 0) / orderQty : 0;
+    const total = material + labor + cm + logistics + other + shipping;
 
     setSummaryValue('material', material);
     setSummaryValue('labor', labor);
     setSummaryValue('cm', cm);
     setSummaryValue('logistics', logistics);
     setSummaryValue('other', other);
+    setSummaryValue('shipping', shipping);
     setSummaryValue('total', total);
 
     const usdRate = formNumberFromSelector('[data-smart-rate="USD"]', 120);
