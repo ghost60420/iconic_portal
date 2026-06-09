@@ -1153,8 +1153,7 @@ def cost_sheet_export_pdf(request, pk):
         right = width - 36
         black = colors.HexColor("#111111")
         gold = colors.HexColor("#c89b3c")
-        pink = colors.HexColor("#ec4899")
-        pale = colors.HexColor("#f8f3f6")
+        pale = colors.HexColor("#f6f6f4")
         border = colors.HexColor("#e5e7eb")
         muted = colors.HexColor("#6b7280")
         currency = _costing_currency(costing)
@@ -1177,19 +1176,19 @@ def cost_sheet_export_pdf(request, pk):
             if logo_path:
                 p.drawImage(logo_path, x, y - 34, width=42, height=42, preserveAspectRatio=True, mask="auto")
                 return
-            p.setFillColor(gold)
-            p.circle(x + 18, y - 14, 20, fill=1, stroke=0)
-            p.setFillColor(black)
+            p.setStrokeColor(gold)
+            p.setLineWidth(1.2)
+            p.circle(x + 18, y - 14, 20, fill=0, stroke=1)
+            p.setFillColor(colors.white)
             p.setFont("Helvetica-Bold", 10)
             p.drawCentredString(x + 18, y - 18, "IAH")
 
         def draw_page_brand_header():
             p.setFillColor(black)
             p.rect(0, height - 102, width, 102, fill=1, stroke=0)
-            p.setFillColor(pink)
-            p.circle(width - 26, height - 98, 84, fill=1, stroke=0)
             p.setFillColor(gold)
             p.rect(0, height - 102, width, 5, fill=1, stroke=0)
+            p.rect(right - 148, height - 66, 148, 1.4, fill=1, stroke=0)
             draw_logo(left, height - 25)
             p.setFillColor(colors.white)
             p.setFont("Helvetica-Bold", 15)
@@ -1202,9 +1201,9 @@ def cost_sheet_export_pdf(request, pk):
             p.drawRightString(right, height - 54, timezone.localdate().strftime("%Y-%m-%d"))
 
         def draw_table_header(y_pos):
-            p.setFillColor(black)
+            p.setFillColor(gold)
             p.rect(left, y_pos - 22, right - left, 22, fill=1, stroke=0)
-            p.setFillColor(colors.white)
+            p.setFillColor(black)
             p.setFont("Helvetica-Bold", 8.5)
             p.drawString(left + 8, y_pos - 14, "SL")
             p.drawString(left + 40, y_pos - 14, "Description")
@@ -1327,9 +1326,11 @@ def cost_sheet_export_pdf(request, pk):
             draw_page_brand_header()
             y = height - 132
 
-        p.setFillColor(pale)
-        p.roundRect(left, y - 112, right - left, 112, 8, fill=1, stroke=0)
         p.setFillColor(black)
+        p.roundRect(left, y - 112, right - left, 112, 8, fill=1, stroke=0)
+        p.setFillColor(gold)
+        p.rect(left, y - 4, right - left, 4, fill=1, stroke=0)
+        p.setFillColor(colors.white)
         p.setFont("Helvetica-Bold", 12)
         p.drawString(left + 12, y - 18, "Summary")
         summary_rows = [
@@ -1346,21 +1347,22 @@ def cost_sheet_export_pdf(request, pk):
             x = col_x[idx % 2]
             if idx and idx % 2 == 0:
                 summary_y -= 24
-            p.setFillColor(muted)
+            p.setFillColor(gold)
             p.setFont("Helvetica-Bold", 7.8)
             p.drawString(x, summary_y, label.upper())
-            p.setFillColor(black)
+            p.setFillColor(colors.white)
             p.setFont("Helvetica-Bold", 9.2)
             p.drawString(x, summary_y - 13, value[:42])
 
         footer_y = 62
-        p.setStrokeColor(gold)
-        p.setLineWidth(1.2)
-        p.line(left, footer_y + 32, right, footer_y + 32)
-        p.setFillColor(pink)
+        p.setFillColor(black)
+        p.rect(0, 0, width, footer_y + 30, fill=1, stroke=0)
+        p.setFillColor(gold)
+        p.rect(0, footer_y + 28, width, 3, fill=1, stroke=0)
+        p.setFillColor(colors.white)
         p.setFont("Helvetica-Bold", 16)
         p.drawCentredString(width / 2, footer_y + 10, "Thank You!")
-        p.setFillColor(black)
+        p.setFillColor(gold)
         p.setFont("Helvetica", 10)
         p.drawCentredString(width / 2, footer_y - 5, "For Your Business")
 
