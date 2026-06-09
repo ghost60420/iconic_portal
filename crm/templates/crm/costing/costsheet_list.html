@@ -210,14 +210,22 @@
                 {% if can_view_internal_costing %}
                   <td data-label="Total cost">
                     <div class="costing-money">
-                      <strong>{% if row.currency_label != "—" %}{{ row.currency_label }} {% endif %}{{ calc.display.total_cost_order }}</strong>
+                      {% if row.costing_type == "quick" %}
+                        <strong>{{ calc.display.total_cost_order_pair }}</strong>
+                      {% else %}
+                        <strong>{% if row.currency_label != "—" %}{{ row.currency_label }} {% endif %}{{ calc.display.total_cost_order }}</strong>
+                      {% endif %}
                       <span>Total order cost</span>
                     </div>
                   </td>
 
                   <td data-label="Cost / pc">
                     <div class="costing-money">
-                      <strong>{% if row.currency_label != "—" %}{{ row.currency_label }} {% endif %}{{ calc.display.total_cost_per_piece }}</strong>
+                      {% if row.costing_type == "quick" %}
+                        <strong>{{ calc.display.total_cost_per_piece_pair }}</strong>
+                      {% else %}
+                        <strong>{% if row.currency_label != "—" %}{{ row.currency_label }} {% endif %}{{ calc.display.total_cost_per_piece }}</strong>
+                      {% endif %}
                       <span>Per piece</span>
                     </div>
                   </td>
@@ -225,7 +233,11 @@
                   <td data-label="Selling price">
                     <div class="costing-money">
                       {% if calc.fob_per_piece %}
-                        <strong>{% if row.currency_label != "—" %}{{ row.currency_label }} {% endif %}{{ calc.display.fob_per_piece }}</strong>
+                        {% if row.costing_type == "quick" %}
+                          <strong>{{ calc.display.fob_per_piece_pair }}</strong>
+                        {% else %}
+                          <strong>{% if row.currency_label != "—" %}{{ row.currency_label }} {% endif %}{{ calc.display.fob_per_piece }}</strong>
+                        {% endif %}
                         <span>{% if row.costing_type == "quick" %}Selling / pc{% else %}FOB / pc{% endif %}</span>
                       {% else %}
                         <strong class="costing-muted">Not set</strong>
@@ -237,16 +249,21 @@
                   <td data-label="Margin / profit">
                     <div class="costing-margin-stack">
                       <span class="costing-margin-badge {{ row.margin_tone }}">
-                        {{ calc.display.margin_percent }}%
+                        {% if row.costing_type == "quick" %}{{ calc.display.net_profit_margin_percent }}%{% else %}{{ calc.display.margin_percent }}%{% endif %}
                       </span>
-                      <strong>{% if row.currency_label != "—" %}{{ row.currency_label }} {% endif %}{{ calc.display.profit_per_piece }} / pc</strong>
-                      <span>{% if row.currency_label != "—" %}{{ row.currency_label }} {% endif %}{{ calc.display.total_profit_order }} total profit</span>
+                      {% if row.costing_type == "quick" %}
+                        <strong>{{ calc.display.net_profit_per_piece_pair }} / pc</strong>
+                        <span>{{ calc.display.net_profit_total_pair }} net profit</span>
+                      {% else %}
+                        <strong>{% if row.currency_label != "—" %}{{ row.currency_label }} {% endif %}{{ calc.display.profit_per_piece }} / pc</strong>
+                        <span>{% if row.currency_label != "—" %}{{ row.currency_label }} {% endif %}{{ calc.display.total_profit_order }} total profit</span>
+                      {% endif %}
                     </div>
                   </td>
                 {% endif %}
 
                 <td data-label="Currency">
-                  <span class="costing-currency">{{ row.currency_label }}</span>
+                  <span class="costing-currency">{% if row.costing_type == "quick" %}BDT / CAD{% else %}{{ row.currency_label }}{% endif %}</span>
                 </td>
 
                 <td data-label="Status">

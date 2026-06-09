@@ -45,9 +45,11 @@
         {% if costing_header %}
           <a href="{% url 'cost_sheet_export_pdf' costing_header.pk %}" class="opp-btn opp-btn--ghost">Open Quote</a>
           <a href="{% url 'cost_sheet_detail' costing_header.pk %}" class="opp-btn opp-btn--ghost">Open Costing</a>
+          <a href="{% url 'cost_sheet_create_for_opportunity' opportunity.pk %}?costing_type=quick" class="opp-btn opp-btn--ghost">Quick Costing</a>
         {% else %}
           <a href="{% url 'cost_sheet_create_for_opportunity' opportunity.pk %}" class="opp-btn opp-btn--ghost">Create Quote</a>
           <a href="{% url 'cost_sheet_create_for_opportunity' opportunity.pk %}" class="opp-btn opp-btn--ghost">Create Costing</a>
+          <a href="{% url 'cost_sheet_create_for_opportunity' opportunity.pk %}?costing_type=quick" class="opp-btn opp-btn--ghost">Quick Costing</a>
         {% endif %}
       {% endif %}
       <a href="{% url 'invoice_add' %}" class="opp-btn opp-btn--ghost">Create Invoice</a>
@@ -318,14 +320,21 @@
               <a href="{% url 'cost_sheet_detail' costing_header.pk %}" class="opp-btn opp-btn--tiny opp-btn--primary">Open costing</a>
               <a href="{% url 'cost_sheet_export_pdf' costing_header.pk %}" class="opp-btn opp-btn--tiny opp-btn--ghost">Export PDF</a>
               <a href="{% url 'cost_sheet_export_excel' costing_header.pk %}" class="opp-btn opp-btn--tiny opp-btn--ghost">Export Excel</a>
+              <a href="{% url 'cost_sheet_create_for_opportunity' opportunity.pk %}?costing_type=quick" class="opp-btn opp-btn--tiny opp-btn--ghost">New quick costing</a>
             {% else %}
               <a href="{% url 'cost_sheet_create_for_opportunity' opportunity.pk %}" class="opp-btn opp-btn--tiny opp-btn--primary">Create costing</a>
+              <a href="{% url 'cost_sheet_create_for_opportunity' opportunity.pk %}?costing_type=quick" class="opp-btn opp-btn--tiny opp-btn--ghost">Create quick costing</a>
             {% endif %}
           </div>
           {% endif %}
         </div>
 
         <div class="opp-costing-grid">
+          <article>
+            <span>Costing status</span>
+            <strong>{{ opportunity_costing_status }}</strong>
+            <small>{{ advanced_costing_count }} advanced · {{ quick_costing_count }} quick</small>
+          </article>
           <article>
             <span>Latest quote status</span>
             <strong>{% if costing_header %}{{ costing_header.get_status_display }}{% else %}No quote yet{% endif %}</strong>
@@ -348,6 +357,51 @@
         </div>
 
         {% if can_view_internal_financials %}
+        <div class="opp-quick-costing-block">
+          <div class="opp-quick-costing-head">
+            <div>
+              <h3>Quick Costings</h3>
+              <p class="opp-muted">Simple BDT/CAD costing snapshots linked to this opportunity.</p>
+            </div>
+            <a href="{% url 'cost_sheet_create_for_opportunity' opportunity.pk %}?costing_type=quick" class="opp-btn opp-btn--tiny opp-btn--ghost">Add quick costing</a>
+          </div>
+
+          {% if quick_costing_rows %}
+            <div class="opp-quick-costing-table-wrap">
+              <table class="opp-quick-costing-table">
+                <thead>
+                  <tr>
+                    <th>Costing Number</th>
+                    <th>Costing Type</th>
+                    <th>Date</th>
+                    <th>Quantity</th>
+                    <th>Total Cost</th>
+                    <th>Revenue</th>
+                    <th>Net Profit</th>
+                    <th>Margin %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in quick_costing_rows %}
+                    <tr>
+                      <td><a href="{% url 'quick_costing_detail' row.record.pk %}">{{ row.number }}</a></td>
+                      <td>{{ row.costing_type }}</td>
+                      <td>{{ row.date|date:"Y-m-d" }}</td>
+                      <td>{{ row.quantity }}</td>
+                      <td>{{ row.total_cost }}</td>
+                      <td>{{ row.revenue }}</td>
+                      <td>{{ row.net_profit }}</td>
+                      <td>{{ row.margin_percent }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <p class="opp-muted">No quick costings linked to this opportunity yet.</p>
+          {% endif %}
+        </div>
+
         <div class="opp-document-row">
           <div>
             <h3>Linked costing records and files</h3>

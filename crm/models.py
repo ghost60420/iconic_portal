@@ -1850,6 +1850,15 @@ class QuickCosting(models.Model):
         editable=False,
         db_index=True,
     )
+    opportunity = models.ForeignKey(
+        Opportunity,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="quick_costings",
+    )
+    account_brand = models.CharField(max_length=200, blank=True, default="")
+    contact_name = models.CharField(max_length=200, blank=True, default="")
     buyer_name = models.CharField(max_length=200)
     project_name = models.CharField(max_length=200)
     product_type = models.CharField(
@@ -1858,11 +1867,24 @@ class QuickCosting(models.Model):
         default="Other",
     )
     quantity = models.PositiveIntegerField(default=1)
+    exchange_rate_bdt_per_cad = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        null=True,
+        blank=True,
+    )
     material_cost = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
     production_cost = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
     other_expenses = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
     shipping_cost = models.DecimalField(max_digits=12, decimal_places=2, blank=True, default=Decimal("0"))
     selling_price_per_piece = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
+    commission_per_piece = models.DecimalField(max_digits=12, decimal_places=2, blank=True, default=Decimal("0"))
+    target_margin_percent = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
@@ -1881,25 +1903,64 @@ class QuickCosting(models.Model):
 
     def calculation_summary(self):
         quantity = Decimal(self.quantity or 0)
+        exchange_rate = self.exchange_rate_bdt_per_cad or None
+        material_cost = self.material_cost or Decimal("0")
+        production_cost = self.production_cost or Decimal("0")
+        other_expenses = self.other_expenses or Decimal("0")
+        shipping_cost = self.shipping_cost or Decimal("0")
+        selling_price_per_piece = self.selling_price_per_piece or Decimal("0")
+        commission_per_piece = self.commission_per_piece or Decimal("0")
         total_cost = (
-            (self.material_cost or Decimal("0"))
-            + (self.production_cost or Decimal("0"))
-            + (self.other_expenses or Decimal("0"))
-            + (self.shipping_cost or Decimal("0"))
+            material_cost
+            + production_cost
+            + other_expenses
+            + shipping_cost
         )
         cost_per_piece = (total_cost / quantity) if quantity else Decimal("0")
-        revenue = (self.selling_price_per_piece or Decimal("0")) * quantity
-        profit_per_piece = (self.selling_price_per_piece or Decimal("0")) - cost_per_piece
-        total_profit = revenue - total_cost
-        profit_margin_percent = ((total_profit / revenue) * Decimal("100")) if revenue else Decimal("0")
+        revenue = selling_price_per_piece * quantity
+        gross_profit_per_piece = selling_price_per_piece - cost_per_piece
+        gross_profit_total = revenue - total_cost
+        commission_total = commission_per_piece * quantity
+        net_profit_per_piece = gross_profit_per_piece - commission_per_piece
+        net_profit_total = gross_profit_total - commission_total
+        gross_profit_margin_percent = ((gross_profit_total / revenue) * Decimal("100")) if revenue else Decimal("0")
+        net_profit_margin_percent = ((net_profit_total / revenue) * Decimal("100")) if revenue else Decimal("0")
+        target_margin_percent = self.target_margin_percent
+        if target_margin_percent is None:
+            margin_status = "No target set"
+        elif net_profit_margin_percent >= target_margin_percent:
+            margin_status = "Meets target"
+        else:
+            margin_status = "Below target"
         return {
             "quantity": quantity,
+            "exchange_rate": exchange_rate,
+            "material_cost_total": material_cost,
+            "material_cost_per_piece": (material_cost / quantity) if quantity else Decimal("0"),
+            "production_cost_total": production_cost,
+            "production_cost_per_piece": (production_cost / quantity) if quantity else Decimal("0"),
+            "other_expenses_total": other_expenses,
+            "other_expenses_per_piece": (other_expenses / quantity) if quantity else Decimal("0"),
+            "shipping_cost_total": shipping_cost,
+            "shipping_cost_per_piece": (shipping_cost / quantity) if quantity else Decimal("0"),
             "total_cost": total_cost,
             "cost_per_piece": cost_per_piece,
+            "selling_price_per_piece": selling_price_per_piece,
+            "selling_price_total": revenue,
             "revenue": revenue,
-            "profit_per_piece": profit_per_piece,
-            "total_profit": total_profit,
-            "profit_margin_percent": profit_margin_percent,
+            "gross_profit_per_piece": gross_profit_per_piece,
+            "gross_profit_total": gross_profit_total,
+            "commission_per_piece": commission_per_piece,
+            "commission_total": commission_total,
+            "net_profit_per_piece": net_profit_per_piece,
+            "net_profit_total": net_profit_total,
+            "gross_profit_margin_percent": gross_profit_margin_percent,
+            "net_profit_margin_percent": net_profit_margin_percent,
+            "target_margin_percent": target_margin_percent,
+            "margin_status": margin_status,
+            "profit_per_piece": gross_profit_per_piece,
+            "total_profit": gross_profit_total,
+            "profit_margin_percent": gross_profit_margin_percent,
         }
 
 

@@ -143,6 +143,7 @@ from .models import (
     CostingHeader,
     CostSheet,
     CostSheetSimple,
+    QuickCosting,
     Opportunity,
     OpportunityDocument,
     OpportunityFile,
@@ -3050,6 +3051,52 @@ from django.db.models import Sum
 from django.shortcuts import get_object_or_404, render, redirect
 from django.utils import timezone
 
+
+def _format_quick_opportunity_money(value, exchange_rate):
+    amount = Decimal(value or 0)
+    bdt = f"৳{amount:,.2f}"
+    if not exchange_rate:
+        return f"{bdt} / N/A"
+    rate = Decimal(exchange_rate)
+    if rate <= 0:
+        return f"{bdt} / N/A"
+    cad = (amount / rate).quantize(Decimal("0.01"))
+    return f"{bdt} / ${cad:,.2f}"
+
+
+def _format_quick_opportunity_percent(value):
+    if value is None:
+        return "0.00%"
+    return f"{Decimal(value).quantize(Decimal('0.01'))}%"
+
+
+def _quick_costing_opportunity_row(quick_costing):
+    summary = quick_costing.calculation_summary()
+    exchange_rate = summary.get("exchange_rate")
+    return {
+        "record": quick_costing,
+        "number": f"QC-{quick_costing.pk}",
+        "costing_type": quick_costing.get_costing_type_display(),
+        "date": quick_costing.created_at,
+        "quantity": summary["quantity"],
+        "total_cost": _format_quick_opportunity_money(summary["total_cost"], exchange_rate),
+        "revenue": _format_quick_opportunity_money(summary["revenue"], exchange_rate),
+        "net_profit": _format_quick_opportunity_money(summary["net_profit_total"], exchange_rate),
+        "margin_percent": _format_quick_opportunity_percent(summary["net_profit_margin_percent"]),
+    }
+
+
+def _opportunity_costing_status(advanced_count, quick_count):
+    total = advanced_count + quick_count
+    if total == 0:
+        return "No Costing"
+    if total > 1:
+        return "Multiple Costings"
+    if advanced_count:
+        return "Advanced Costing"
+    return "Quick Costing"
+
+
 def opportunity_detail(request, pk):
     opportunity = get_object_or_404(Opportunity, pk=pk)
     lead = opportunity.lead
@@ -3082,6 +3129,21 @@ def opportunity_detail(request, pk):
     costing_header = CostingHeader.objects.filter(opportunity=opportunity).order_by(
         "-updated_at", "-id"
     ).first()
+    quick_costings = list(
+        QuickCosting.objects.filter(opportunity=opportunity)
+        .select_related("created_by")
+        .order_by("-updated_at", "-id")
+    )
+    quick_costing_rows = [
+        _quick_costing_opportunity_row(quick_costing)
+        for quick_costing in quick_costings
+    ] if can_view_internal_financials else []
+    advanced_costing_count = CostingHeader.objects.filter(opportunity=opportunity).count()
+    quick_costing_count = len(quick_costings)
+    opportunity_costing_status = _opportunity_costing_status(
+        advanced_costing_count,
+        quick_costing_count,
+    )
 
     # Comments and activity
     comments = _chatter_for_opportunity(opportunity)
@@ -3513,6 +3575,10 @@ def opportunity_detail(request, pk):
         "opportunity_documents": opportunity_documents,
         "costing_header": costing_header,
         "costing_calc": costing_calc,
+        "advanced_costing_count": advanced_costing_count,
+        "quick_costing_count": quick_costing_count,
+        "quick_costing_rows": quick_costing_rows,
+        "opportunity_costing_status": opportunity_costing_status,
         "variance_placeholder": variance_placeholder,
         "variance_display": variance_display,
 

@@ -86,28 +86,113 @@ def _format_quick_decimal(value):
     return f"{value.quantize(Decimal('0.01')):,.2f}"
 
 
+def _format_quick_percent(value):
+    value = value or Decimal("0")
+    return f"{value.quantize(Decimal('0.01')):,.2f}"
+
+
+def _format_quick_bdt(value):
+    return f"৳{_format_quick_decimal(value)}"
+
+
+def _format_quick_cad_from_bdt(value, exchange_rate):
+    if not exchange_rate:
+        return "N/A"
+    try:
+        cad_value = (value or Decimal("0")) / exchange_rate
+    except Exception:
+        return "N/A"
+    return f"${_format_quick_decimal(cad_value)}"
+
+
+def _format_quick_money_pair(value, exchange_rate):
+    return f"{_format_quick_bdt(value)} / {_format_quick_cad_from_bdt(value, exchange_rate)}"
+
+
 def _quick_costing_calc(quick_costing):
     summary = quick_costing.calculation_summary()
+    exchange_rate = summary.get("exchange_rate")
     calc = {
         "total_cost_order": summary["total_cost"],
         "total_sales_order": summary["revenue"],
         "total_profit_order": summary["total_profit"],
         "total_cost_per_piece": summary["cost_per_piece"],
-        "fob_per_piece": quick_costing.selling_price_per_piece or Decimal("0"),
+        "fob_per_piece": summary["selling_price_per_piece"],
         "profit_per_piece": summary["profit_per_piece"],
         "margin_percent": summary["profit_margin_percent"],
         "quantity": summary["quantity"],
-        "shipping_cost": quick_costing.shipping_cost or Decimal("0"),
+        "exchange_rate": exchange_rate,
+        "material_cost": summary["material_cost_total"],
+        "material_cost_per_piece": summary["material_cost_per_piece"],
+        "material_cost_total": summary["material_cost_total"],
+        "production_cost": summary["production_cost_total"],
+        "production_cost_per_piece": summary["production_cost_per_piece"],
+        "production_cost_total": summary["production_cost_total"],
+        "other_expenses": summary["other_expenses_total"],
+        "other_expenses_per_piece": summary["other_expenses_per_piece"],
+        "other_expenses_total": summary["other_expenses_total"],
+        "shipping_cost": summary["shipping_cost_total"],
+        "shipping_cost_per_piece": summary["shipping_cost_per_piece"],
+        "shipping_cost_total": summary["shipping_cost_total"],
+        "selling_price_per_piece": summary["selling_price_per_piece"],
+        "selling_price_total": summary["selling_price_total"],
+        "gross_profit_per_piece": summary["gross_profit_per_piece"],
+        "gross_profit_total": summary["gross_profit_total"],
+        "commission_per_piece": summary["commission_per_piece"],
+        "commission_total": summary["commission_total"],
+        "net_profit_per_piece": summary["net_profit_per_piece"],
+        "net_profit_total": summary["net_profit_total"],
+        "gross_profit_margin_percent": summary["gross_profit_margin_percent"],
+        "net_profit_margin_percent": summary["net_profit_margin_percent"],
+        "target_margin_percent": summary["target_margin_percent"],
+        "margin_status": summary["margin_status"],
     }
     calc["display"] = {
         "total_cost_order": _format_quick_decimal(calc["total_cost_order"]),
+        "total_cost_order_pair": _format_quick_money_pair(calc["total_cost_order"], exchange_rate),
         "total_sales_order": _format_quick_decimal(calc["total_sales_order"]),
+        "total_sales_order_pair": _format_quick_money_pair(calc["total_sales_order"], exchange_rate),
         "total_profit_order": _format_quick_decimal(calc["total_profit_order"]),
+        "total_profit_order_pair": _format_quick_money_pair(calc["total_profit_order"], exchange_rate),
         "total_cost_per_piece": _format_quick_decimal(calc["total_cost_per_piece"]),
+        "total_cost_per_piece_pair": _format_quick_money_pair(calc["total_cost_per_piece"], exchange_rate),
         "fob_per_piece": _format_quick_decimal(calc["fob_per_piece"]),
+        "fob_per_piece_pair": _format_quick_money_pair(calc["fob_per_piece"], exchange_rate),
         "profit_per_piece": _format_quick_decimal(calc["profit_per_piece"]),
+        "profit_per_piece_pair": _format_quick_money_pair(calc["profit_per_piece"], exchange_rate),
         "margin_percent": _format_quick_decimal(calc["margin_percent"]),
+        "material_cost": _format_quick_decimal(calc["material_cost"]),
+        "material_cost_per_piece_pair": _format_quick_money_pair(calc["material_cost_per_piece"], exchange_rate),
+        "material_cost_total_pair": _format_quick_money_pair(calc["material_cost_total"], exchange_rate),
+        "production_cost": _format_quick_decimal(calc["production_cost"]),
+        "production_cost_per_piece_pair": _format_quick_money_pair(calc["production_cost_per_piece"], exchange_rate),
+        "production_cost_total_pair": _format_quick_money_pair(calc["production_cost_total"], exchange_rate),
+        "other_expenses": _format_quick_decimal(calc["other_expenses"]),
+        "other_expenses_per_piece_pair": _format_quick_money_pair(calc["other_expenses_per_piece"], exchange_rate),
+        "other_expenses_total_pair": _format_quick_money_pair(calc["other_expenses_total"], exchange_rate),
         "shipping_cost": _format_quick_decimal(calc["shipping_cost"]),
+        "shipping_cost_per_piece_pair": _format_quick_money_pair(calc["shipping_cost_per_piece"], exchange_rate),
+        "shipping_cost_total_pair": _format_quick_money_pair(calc["shipping_cost_total"], exchange_rate),
+        "selling_price_per_piece_pair": _format_quick_money_pair(calc["selling_price_per_piece"], exchange_rate),
+        "selling_price_total_pair": _format_quick_money_pair(calc["selling_price_total"], exchange_rate),
+        "gross_profit_per_piece": _format_quick_decimal(calc["gross_profit_per_piece"]),
+        "gross_profit_per_piece_pair": _format_quick_money_pair(calc["gross_profit_per_piece"], exchange_rate),
+        "gross_profit_total": _format_quick_decimal(calc["gross_profit_total"]),
+        "gross_profit_total_pair": _format_quick_money_pair(calc["gross_profit_total"], exchange_rate),
+        "commission_per_piece": _format_quick_decimal(calc["commission_per_piece"]),
+        "commission_per_piece_pair": _format_quick_money_pair(calc["commission_per_piece"], exchange_rate),
+        "commission_total": _format_quick_decimal(calc["commission_total"]),
+        "commission_total_pair": _format_quick_money_pair(calc["commission_total"], exchange_rate),
+        "net_profit_per_piece": _format_quick_decimal(calc["net_profit_per_piece"]),
+        "net_profit_per_piece_pair": _format_quick_money_pair(calc["net_profit_per_piece"], exchange_rate),
+        "net_profit_total": _format_quick_decimal(calc["net_profit_total"]),
+        "net_profit_total_pair": _format_quick_money_pair(calc["net_profit_total"], exchange_rate),
+        "gross_profit_margin_percent": _format_quick_percent(calc["gross_profit_margin_percent"]),
+        "net_profit_margin_percent": _format_quick_percent(calc["net_profit_margin_percent"]),
+        "target_margin_percent": _format_quick_percent(calc["target_margin_percent"]) if calc["target_margin_percent"] is not None else "N/A",
+        "target_margin_percent_label": f"{_format_quick_percent(calc['target_margin_percent'])}%" if calc["target_margin_percent"] is not None else "N/A",
+        "margin_status": calc["margin_status"],
+        "exchange_rate": f"1 CAD = {_format_quick_decimal(exchange_rate)} BDT" if exchange_rate else "N/A",
     }
     return calc
 
@@ -322,6 +407,44 @@ def _costing_header_initial(opportunity=None):
     return initial
 
 
+def _opportunity_account_snapshot(opportunity):
+    if not opportunity:
+        return "", ""
+    customer = getattr(opportunity, "customer", None)
+    lead = getattr(opportunity, "lead", None)
+    account_brand = (
+        getattr(customer, "account_brand", "")
+        or getattr(lead, "account_brand", "")
+        or ""
+    )
+    contact_name = (
+        getattr(customer, "contact_name", "")
+        or getattr(lead, "contact_name", "")
+        or ""
+    )
+    return account_brand, contact_name
+
+
+def _quick_costing_initial(opportunity=None):
+    if not opportunity:
+        return {}
+    account_brand, _contact_name = _opportunity_account_snapshot(opportunity)
+    quantity = opportunity.moq_units or 1
+    if quantity < 1:
+        quantity = 1
+    project_name = (
+        opportunity.product_category
+        or opportunity.opportunity_id
+        or "Quick Costing"
+    )
+    return {
+        "buyer_name": account_brand,
+        "project_name": project_name,
+        "product_type": opportunity.product_type or "Other",
+        "quantity": quantity,
+    }
+
+
 def cost_sheet_list(request):
     denied = _deny_without_internal_costing(request)
     if denied:
@@ -392,8 +515,8 @@ def cost_sheet_list(request):
 
     for quick in quick_qs:
         calc = _quick_costing_calc(quick)
-        margin_percent = calc.get("margin_percent") or Decimal("0")
-        if calc.get("total_profit_order", Decimal("0")) >= Decimal("0") and margin_percent >= Decimal("0"):
+        margin_percent = calc.get("net_profit_margin_percent") or Decimal("0")
+        if calc.get("net_profit_total", Decimal("0")) >= Decimal("0") and margin_percent >= Decimal("0"):
             margin_tone = "good"
         else:
             margin_tone = "risk"
@@ -498,13 +621,18 @@ def cost_sheet_create(request, opportunity_id=None):
             quick_form = QuickCostingForm(request.POST)
             if quick_form.is_valid():
                 quick_costing = quick_form.save(commit=False)
+                if opportunity:
+                    account_brand, contact_name = _opportunity_account_snapshot(opportunity)
+                    quick_costing.opportunity = opportunity
+                    quick_costing.account_brand = account_brand
+                    quick_costing.contact_name = contact_name
                 quick_costing.created_by = request.user if request.user.is_authenticated else None
                 quick_costing.save()
                 messages.success(request, "Quick costing saved.")
                 return redirect("quick_costing_detail", pk=quick_costing.pk)
             messages.error(request, "Please fix the errors below.")
         else:
-            quick_form = QuickCostingForm()
+            quick_form = QuickCostingForm(initial=_quick_costing_initial(opportunity))
 
         context = {
             "quick_form": quick_form,
@@ -558,15 +686,245 @@ def quick_costing_detail(request, pk):
     denied = _deny_without_internal_costing(request)
     if denied:
         return denied
-    quick_costing = get_object_or_404(QuickCosting.objects.select_related("created_by"), pk=pk)
+    quick_costing = get_object_or_404(
+        QuickCosting.objects.select_related("created_by", "opportunity"),
+        pk=pk,
+    )
     calc = _quick_costing_calc(quick_costing)
-    margin_tone = "positive" if calc.get("total_profit_order", Decimal("0")) >= Decimal("0") else "negative"
+    margin_tone = "positive" if calc.get("net_profit_total", Decimal("0")) >= Decimal("0") else "negative"
     context = {
         "quick_costing": quick_costing,
         "calc": calc,
         "margin_tone": margin_tone,
     }
     return render(request, "crm/costing/quick_costing_detail.html", context)
+
+
+def quick_costing_export_pdf(request, pk):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
+    quick_costing = get_object_or_404(
+        QuickCosting.objects.select_related("created_by", "opportunity"),
+        pk=pk,
+    )
+
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+    except ImportError:
+        messages.error(request, "PDF export is unavailable. Please install ReportLab.")
+        return redirect("quick_costing_detail", pk=pk)
+
+    try:
+        calc = _quick_costing_calc(quick_costing)
+        buffer = io.BytesIO()
+        pdf = canvas.Canvas(buffer, pagesize=A4, pageCompression=0)
+        width, height = A4
+        left = 36
+        right = width - 36
+        black = colors.HexColor("#111111")
+        gold = colors.HexColor("#c89b3c")
+        pale = colors.HexColor("#f6f6f4")
+        border = colors.HexColor("#e5e7eb")
+        muted = colors.HexColor("#6b7280")
+
+        def text(value, fallback="-"):
+            value = value if value not in (None, "") else fallback
+            return str(value)
+
+        def draw_logo(x, y):
+            try:
+                from django.contrib.staticfiles import finders
+
+                logo_path = finders.find("img/image.png")
+            except Exception:
+                logo_path = None
+            if logo_path:
+                pdf.drawImage(logo_path, x, y - 34, width=42, height=42, preserveAspectRatio=True, mask="auto")
+                return
+            pdf.setStrokeColor(gold)
+            pdf.setLineWidth(1.2)
+            pdf.circle(x + 18, y - 14, 20, fill=0, stroke=1)
+            pdf.setFillColor(colors.white)
+            pdf.setFont("Helvetica-Bold", 10)
+            pdf.drawCentredString(x + 18, y - 18, "IAH")
+
+        def draw_page_brand_header():
+            pdf.setFillColor(black)
+            pdf.rect(0, height - 102, width, 102, fill=1, stroke=0)
+            pdf.setFillColor(gold)
+            pdf.rect(0, height - 102, width, 5, fill=1, stroke=0)
+            pdf.rect(right - 148, height - 66, 148, 1.4, fill=1, stroke=0)
+            draw_logo(left, height - 25)
+            pdf.setFillColor(colors.white)
+            pdf.setFont("Helvetica-Bold", 15)
+            pdf.drawString(left + 52, height - 38, "Iconic Apparel House")
+            pdf.setFont("Helvetica", 8.8)
+            pdf.drawString(left + 52, height - 54, "Premium apparel sourcing, development, and production")
+            pdf.setFont("Helvetica-Bold", 10)
+            pdf.drawRightString(right, height - 38, f"QC-{quick_costing.pk}")
+            pdf.setFont("Helvetica", 8.5)
+            pdf.drawRightString(right, height - 54, timezone.localdate().strftime("%Y-%m-%d"))
+
+        def draw_table_header(y_pos):
+            pdf.setFillColor(gold)
+            pdf.rect(left, y_pos - 22, right - left, 22, fill=1, stroke=0)
+            pdf.setFillColor(black)
+            pdf.setFont("Helvetica-Bold", 8.5)
+            pdf.drawString(left + 8, y_pos - 14, "SL")
+            pdf.drawString(left + 40, y_pos - 14, "Metric")
+            pdf.drawRightString(right - 170, y_pos - 14, "Per Piece - BDT / CAD")
+            pdf.drawRightString(right - 8, y_pos - 14, "Total Order - BDT / CAD")
+            return y_pos - 22
+
+        prepared_by = "Iconic Team"
+        if quick_costing.created_by_id:
+            prepared_by = quick_costing.created_by.get_full_name() or quick_costing.created_by.get_username()
+
+        draw_page_brand_header()
+        y = height - 132
+
+        pdf.setFillColor(black)
+        pdf.setFont("Helvetica-Bold", 24)
+        pdf.drawCentredString(width / 2, y, "COSTING SHEET")
+        y -= 26
+        pdf.setFillColor(gold)
+        pdf.setFont("Helvetica-Bold", 13)
+        pdf.drawCentredString(width / 2, y, text(quick_costing.project_name, "Project"))
+        y -= 18
+        pdf.setFillColor(black)
+        pdf.setFont("Helvetica-Bold", 10)
+        pdf.drawCentredString(
+            width / 2,
+            y,
+            f"{quick_costing.quantity or 0} PCS {quick_costing.get_product_type_display()}".upper(),
+        )
+        y -= 24
+
+        box_width = (right - left - 12) / 2
+        pdf.setFillColor(pale)
+        pdf.roundRect(left, y - 42, box_width, 42, 6, fill=1, stroke=0)
+        pdf.roundRect(left + box_width + 12, y - 42, box_width, 42, 6, fill=1, stroke=0)
+        pdf.setFillColor(muted)
+        pdf.setFont("Helvetica-Bold", 8)
+        pdf.drawString(left + 10, y - 15, "BUYER NAME")
+        pdf.drawString(left + box_width + 22, y - 15, "DATE")
+        pdf.setFillColor(black)
+        pdf.setFont("Helvetica-Bold", 11)
+        pdf.drawString(left + 10, y - 31, text(quick_costing.buyer_name))
+        pdf.drawString(left + box_width + 22, y - 31, quick_costing.created_at.strftime("%Y-%m-%d"))
+        y -= 62
+
+        rows = [
+            ("Material Cost", calc["display"]["material_cost_per_piece_pair"], calc["display"]["material_cost_total_pair"]),
+            ("Production Cost", calc["display"]["production_cost_per_piece_pair"], calc["display"]["production_cost_total_pair"]),
+            ("Other Expenses", calc["display"]["other_expenses_per_piece_pair"], calc["display"]["other_expenses_total_pair"]),
+            ("Shipping Cost", calc["display"]["shipping_cost_per_piece_pair"], calc["display"]["shipping_cost_total_pair"]),
+            ("Total Cost", calc["display"]["total_cost_per_piece_pair"], calc["display"]["total_cost_order_pair"]),
+            ("Selling Price", calc["display"]["selling_price_per_piece_pair"], calc["display"]["selling_price_total_pair"]),
+            ("Gross Profit", calc["display"]["gross_profit_per_piece_pair"], calc["display"]["gross_profit_total_pair"]),
+            ("Commission", calc["display"]["commission_per_piece_pair"], calc["display"]["commission_total_pair"]),
+            ("Net Profit After Commission", calc["display"]["net_profit_per_piece_pair"], calc["display"]["net_profit_total_pair"]),
+        ]
+
+        y = draw_table_header(y)
+        for index, (label, per_piece, total_order) in enumerate(rows, start=1):
+            row_height = 30
+            if y - row_height < 125:
+                pdf.showPage()
+                draw_page_brand_header()
+                y = draw_table_header(height - 132)
+            pdf.setFillColor(colors.white if index % 2 else colors.HexColor("#fcfcfd"))
+            pdf.rect(left, y - row_height, right - left, row_height, fill=1, stroke=0)
+            pdf.setStrokeColor(border)
+            pdf.line(left, y - row_height, right, y - row_height)
+            pdf.setFillColor(black)
+            pdf.setFont("Helvetica", 8.4)
+            pdf.drawString(left + 8, y - 18, str(index))
+            pdf.setFont("Helvetica-Bold", 8.8)
+            pdf.drawString(left + 40, y - 18, label)
+            pdf.setFont("Helvetica", 8.8)
+            pdf.drawRightString(right - 170, y - 18, text(per_piece))
+            pdf.drawRightString(right - 8, y - 18, text(total_order))
+            y -= row_height
+
+        summary_rows = [
+            ("Buyer Name", text(quick_costing.buyer_name)),
+            ("Project Name", text(quick_costing.project_name)),
+            ("Product Type", text(quick_costing.get_product_type_display())),
+            ("Date", quick_costing.created_at.strftime("%Y-%m-%d")),
+            ("Quantity", text(quick_costing.quantity)),
+            ("Exchange Rate", calc["display"]["exchange_rate"]),
+            ("Total Order Value", calc["display"]["total_sales_order_pair"]),
+            ("Total Cost", calc["display"]["total_cost_order_pair"]),
+            ("Cost Per Piece", calc["display"]["total_cost_per_piece_pair"]),
+            ("Selling Price Per Piece", calc["display"]["fob_per_piece_pair"]),
+            ("Gross Profit Per Piece", calc["display"]["gross_profit_per_piece_pair"]),
+            ("Gross Profit Total", calc["display"]["gross_profit_total_pair"]),
+            ("Commission Per Piece", calc["display"]["commission_per_piece_pair"]),
+            ("Commission Total", calc["display"]["commission_total_pair"]),
+            ("Net Profit Per Piece", calc["display"]["net_profit_per_piece_pair"]),
+            ("Net Profit Total", calc["display"]["net_profit_total_pair"]),
+            ("Gross Profit Margin", f"{calc['display']['gross_profit_margin_percent']}%"),
+            ("Net Profit Margin", f"{calc['display']['net_profit_margin_percent']}%"),
+            ("Target Margin", calc["display"]["target_margin_percent_label"]),
+            ("Margin Status", calc["display"]["margin_status"]),
+            ("Prepared By", text(prepared_by)),
+        ]
+
+        y -= 20
+        summary_box_height = 52 + (((len(summary_rows) + 1) // 2) * 23)
+        if y < summary_box_height + 110:
+            pdf.showPage()
+            draw_page_brand_header()
+            y = height - 132
+
+        pdf.setFillColor(black)
+        pdf.roundRect(left, y - summary_box_height, right - left, summary_box_height, 8, fill=1, stroke=0)
+        pdf.setFillColor(gold)
+        pdf.rect(left, y - 4, right - left, 4, fill=1, stroke=0)
+        pdf.setFillColor(colors.white)
+        pdf.setFont("Helvetica-Bold", 12)
+        pdf.drawString(left + 12, y - 18, "Summary")
+        summary_y = y - 42
+        col_x = [left + 12, left + 286]
+        for idx, (label, value) in enumerate(summary_rows):
+            x = col_x[idx % 2]
+            if idx and idx % 2 == 0:
+                summary_y -= 23
+            pdf.setFillColor(gold)
+            pdf.setFont("Helvetica-Bold", 7.8)
+            pdf.drawString(x, summary_y, label.upper())
+            pdf.setFillColor(colors.white)
+            pdf.setFont("Helvetica-Bold", 8.6)
+            pdf.drawString(x, summary_y - 13, text(value)[:48])
+
+        footer_y = 62
+        pdf.setFillColor(black)
+        pdf.rect(0, 0, width, footer_y + 30, fill=1, stroke=0)
+        pdf.setFillColor(gold)
+        pdf.rect(0, footer_y + 28, width, 3, fill=1, stroke=0)
+        pdf.setFillColor(colors.white)
+        pdf.setFont("Helvetica-Bold", 16)
+        pdf.drawCentredString(width / 2, footer_y + 10, "Thank You!")
+        pdf.setFillColor(gold)
+        pdf.setFont("Helvetica", 10)
+        pdf.drawCentredString(width / 2, footer_y - 5, "For Your Business")
+
+        pdf.save()
+        pdf_bytes = buffer.getvalue()
+    except Exception:
+        logger.exception("Failed to generate quick costing PDF", extra={"quick_costing": quick_costing.pk})
+        messages.error(request, "Could not generate the PDF. Please try again.")
+        return redirect("quick_costing_detail", pk=pk)
+
+    filename = f"quick_costing_{quick_costing.pk}.pdf"
+    response = HttpResponse(content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response.write(pdf_bytes)
+    return response
 
 
 def cost_sheet_detail(request, pk):

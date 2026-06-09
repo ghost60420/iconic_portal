@@ -526,6 +526,66 @@
   line-height: 1.45;
 }
 
+.opp-quick-costing-block {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 18px;
+  background: rgba(2, 8, 23, 0.34);
+}
+
+.opp-quick-costing-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.opp-quick-costing-head h3 {
+  margin: 0 0 4px;
+  color: var(--opp-text);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.opp-quick-costing-table-wrap {
+  overflow-x: auto;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 16px;
+}
+
+.opp-quick-costing-table {
+  width: 100%;
+  min-width: 820px;
+  border-collapse: collapse;
+  color: var(--opp-soft);
+  font-size: 12px;
+}
+
+.opp-quick-costing-table th,
+.opp-quick-costing-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.opp-quick-costing-table th {
+  color: #fde68a;
+  background: rgba(15, 23, 42, 0.86);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.opp-quick-costing-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
 .opp-production-list {
   margin-top: 14px;
 }

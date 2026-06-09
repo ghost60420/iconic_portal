@@ -154,6 +154,19 @@
     text-align: right;
   }
 
+  .quick-summary-dual {
+    display: grid;
+    gap: 4px;
+    min-width: 170px;
+    text-align: right;
+  }
+
+  .quick-summary-dual span {
+    color: #cbd5e1;
+    font-size: 11px;
+    line-height: 1.25;
+  }
+
   .quick-profit-positive {
     color: #86efac !important;
   }
@@ -190,7 +203,14 @@
   {% if costing_type == "quick" %}
     <div class="card intro-card">
       <div class="intro-title">Quick Costing</div>
-      <div class="muted">Use this when the team needs a fast price check from material cost, production cost, other expenses, and selling price.</div>
+      <div class="muted">Use this when the team needs a fast price check from material, production, shipping, commission, and selling price in BDT and CAD.</div>
+      {% if opportunity %}
+        <div class="muted" style="margin-top:8px;">
+          Linked opportunity:
+          <a href="{% url 'opportunity_detail' opportunity.pk %}">{{ opportunity.opportunity_id }}</a>
+          {% if opportunity.lead and opportunity.lead.account_brand %} · {{ opportunity.lead.account_brand }}{% endif %}
+        </div>
+      {% endif %}
     </div>
 
     <div class="quick-costing-layout">
@@ -221,6 +241,12 @@
               {% for error in quick_form.quantity.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
             </div>
             <div>
+              <label>Exchange Rate</label>
+              {{ quick_form.exchange_rate_bdt_per_cad }}
+              <div class="field-help">BDT per 1 CAD. Example: 90</div>
+              {% for error in quick_form.exchange_rate_bdt_per_cad.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+            </div>
+            <div>
               <label>Material Cost</label>
               {{ quick_form.material_cost }}
               {% for error in quick_form.material_cost.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
@@ -245,6 +271,16 @@
               {{ quick_form.selling_price_per_piece }}
               {% for error in quick_form.selling_price_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
             </div>
+            <div>
+              <label>Commission Per Piece</label>
+              {{ quick_form.commission_per_piece }}
+              {% for error in quick_form.commission_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+            </div>
+            <div>
+              <label>Target Margin %</label>
+              {{ quick_form.target_margin_percent }}
+              {% for error in quick_form.target_margin_percent.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+            </div>
           </div>
 
           {% if quick_form.non_field_errors %}
@@ -262,13 +298,19 @@
         <div class="section-title">Summary</div>
         <div class="quick-summary-grid">
           <div class="quick-summary-row"><span>Quantity</span><strong data-quick-summary="quantity">0</strong></div>
-          <div class="quick-summary-row"><span>Total Cost</span><strong data-quick-summary="totalCost">0.00</strong></div>
-          <div class="quick-summary-row"><span>Cost Per Piece</span><strong data-quick-summary="costPerPiece">0.00</strong></div>
-          <div class="quick-summary-row"><span>Selling Price Per Piece</span><strong data-quick-summary="sellingPrice">0.00</strong></div>
-          <div class="quick-summary-row"><span>Revenue</span><strong data-quick-summary="revenue">0.00</strong></div>
-          <div class="quick-summary-row"><span>Profit Per Piece</span><strong data-quick-summary="profitPerPiece">0.00</strong></div>
-          <div class="quick-summary-row"><span>Total Profit</span><strong data-quick-summary="totalProfit">0.00</strong></div>
-          <div class="quick-summary-row"><span>Profit Margin %</span><strong data-quick-summary="margin">0.00%</strong></div>
+          <div class="quick-summary-row"><span>Exchange Rate</span><strong data-quick-summary="exchangeRate">N/A</strong></div>
+          <div class="quick-summary-row"><span>Material Cost</span><strong class="quick-summary-dual"><span data-quick-summary="materialPiece">Per Piece: ৳0.00 / N/A</span><span data-quick-summary="materialTotal">Total Order: ৳0.00 / N/A</span></strong></div>
+          <div class="quick-summary-row"><span>Production Cost</span><strong class="quick-summary-dual"><span data-quick-summary="productionPiece">Per Piece: ৳0.00 / N/A</span><span data-quick-summary="productionTotal">Total Order: ৳0.00 / N/A</span></strong></div>
+          <div class="quick-summary-row"><span>Shipping Cost</span><strong class="quick-summary-dual"><span data-quick-summary="shippingPiece">Per Piece: ৳0.00 / N/A</span><span data-quick-summary="shippingTotal">Total Order: ৳0.00 / N/A</span></strong></div>
+          <div class="quick-summary-row"><span>Total Cost</span><strong class="quick-summary-dual"><span data-quick-summary="costPerPiece">Per Piece: ৳0.00 / N/A</span><span data-quick-summary="totalCost">Total Order: ৳0.00 / N/A</span></strong></div>
+          <div class="quick-summary-row"><span>Selling Price</span><strong class="quick-summary-dual"><span data-quick-summary="sellingPrice">Per Piece: ৳0.00 / N/A</span><span data-quick-summary="revenue">Total Order: ৳0.00 / N/A</span></strong></div>
+          <div class="quick-summary-row"><span>Gross Profit</span><strong class="quick-summary-dual"><span data-quick-summary="grossProfitPerPiece">Per Piece: ৳0.00 / N/A</span><span data-quick-summary="grossProfitTotal">Total Order: ৳0.00 / N/A</span></strong></div>
+          <div class="quick-summary-row"><span>Commission</span><strong class="quick-summary-dual"><span data-quick-summary="commissionPerPiece">Per Piece: ৳0.00 / N/A</span><span data-quick-summary="commissionTotal">Total Order: ৳0.00 / N/A</span></strong></div>
+          <div class="quick-summary-row"><span>Net Profit After Commission</span><strong class="quick-summary-dual"><span data-quick-summary="netProfitPerPiece">Per Piece: ৳0.00 / N/A</span><span data-quick-summary="netProfitTotal">Total Order: ৳0.00 / N/A</span></strong></div>
+          <div class="quick-summary-row"><span>Gross Profit Margin %</span><strong data-quick-summary="grossMargin">0.00%</strong></div>
+          <div class="quick-summary-row"><span>Net Profit Margin %</span><strong data-quick-summary="netMargin">0.00%</strong></div>
+          <div class="quick-summary-row"><span>Target Margin %</span><strong data-quick-summary="targetMargin">N/A</strong></div>
+          <div class="quick-summary-row"><span>Margin Status</span><strong data-quick-summary="marginStatus">No target set</strong></div>
         </div>
       </aside>
     </div>
@@ -603,11 +645,14 @@
   (function () {
     const fields = {
       quantity: document.getElementById("id_quantity"),
+      exchangeRate: document.getElementById("id_exchange_rate_bdt_per_cad"),
       material: document.getElementById("id_material_cost"),
       production: document.getElementById("id_production_cost"),
       other: document.getElementById("id_other_expenses"),
       shipping: document.getElementById("id_shipping_cost"),
-      selling: document.getElementById("id_selling_price_per_piece")
+      selling: document.getElementById("id_selling_price_per_piece"),
+      commission: document.getElementById("id_commission_per_piece"),
+      targetMargin: document.getElementById("id_target_margin_percent")
     };
 
     function numberValue(input) {
@@ -615,45 +660,76 @@
       return Number.isFinite(value) ? value : 0;
     }
 
-    function formatMoney(value) {
+    function formatNumber(value) {
       return value.toLocaleString(undefined, {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
       });
     }
 
-    function setSummary(name, value, isMoney) {
+    function formatMoneyPair(value, exchangeRate) {
+      const bdt = "৳" + formatNumber(value);
+      const cad = exchangeRate > 0 ? "$" + formatNumber(value / exchangeRate) : "N/A";
+      return bdt + " / " + cad;
+    }
+
+    function setSummary(name, value, toneValue) {
       const node = document.querySelector('[data-quick-summary="' + name + '"]');
       if (!node) return;
-      node.textContent = isMoney ? formatMoney(value) : value;
-      if (["profitPerPiece", "totalProfit", "margin"].includes(name)) {
-        node.classList.toggle("quick-profit-negative", value < 0);
-        node.classList.toggle("quick-profit-positive", value >= 0);
+      node.textContent = value;
+      if (toneValue !== undefined) {
+        node.classList.toggle("quick-profit-negative", toneValue < 0 || value === "Below target");
+        node.classList.toggle("quick-profit-positive", toneValue >= 0 || value === "Meets target");
       }
     }
 
     function updateSummary() {
       const quantity = Math.max(0, numberValue(fields.quantity));
+      const exchangeRate = numberValue(fields.exchangeRate);
       const material = numberValue(fields.material);
       const production = numberValue(fields.production);
       const other = numberValue(fields.other);
       const shipping = numberValue(fields.shipping);
       const selling = numberValue(fields.selling);
+      const commission = numberValue(fields.commission);
+      const targetMargin = fields.targetMargin && fields.targetMargin.value !== "" ? numberValue(fields.targetMargin) : null;
       const totalCost = material + production + other + shipping;
       const costPerPiece = quantity > 0 ? totalCost / quantity : 0;
       const revenue = selling * quantity;
-      const profitPerPiece = selling - costPerPiece;
-      const totalProfit = revenue - totalCost;
-      const margin = revenue > 0 ? (totalProfit / revenue) * 100 : 0;
+      const grossProfitPerPiece = selling - costPerPiece;
+      const grossProfitTotal = revenue - totalCost;
+      const commissionTotal = commission * quantity;
+      const netProfitPerPiece = grossProfitPerPiece - commission;
+      const netProfitTotal = grossProfitTotal - commissionTotal;
+      const grossMargin = revenue > 0 ? (grossProfitTotal / revenue) * 100 : 0;
+      const netMargin = revenue > 0 ? (netProfitTotal / revenue) * 100 : 0;
+      let marginStatus = "No target set";
+      if (targetMargin !== null) {
+        marginStatus = netMargin >= targetMargin ? "Meets target" : "Below target";
+      }
 
-      setSummary("quantity", quantity.toLocaleString(), false);
-      setSummary("totalCost", totalCost, true);
-      setSummary("costPerPiece", costPerPiece, true);
-      setSummary("sellingPrice", selling, true);
-      setSummary("revenue", revenue, true);
-      setSummary("profitPerPiece", profitPerPiece, true);
-      setSummary("totalProfit", totalProfit, true);
-      setSummary("margin", margin.toFixed(2) + "%", false);
+      setSummary("quantity", quantity.toLocaleString());
+      setSummary("exchangeRate", exchangeRate > 0 ? "1 CAD = " + formatNumber(exchangeRate) + " BDT" : "N/A");
+      setSummary("materialPiece", "Per Piece: " + formatMoneyPair(quantity > 0 ? material / quantity : 0, exchangeRate));
+      setSummary("materialTotal", "Total Order: " + formatMoneyPair(material, exchangeRate));
+      setSummary("productionPiece", "Per Piece: " + formatMoneyPair(quantity > 0 ? production / quantity : 0, exchangeRate));
+      setSummary("productionTotal", "Total Order: " + formatMoneyPair(production, exchangeRate));
+      setSummary("shippingPiece", "Per Piece: " + formatMoneyPair(quantity > 0 ? shipping / quantity : 0, exchangeRate));
+      setSummary("shippingTotal", "Total Order: " + formatMoneyPair(shipping, exchangeRate));
+      setSummary("costPerPiece", "Per Piece: " + formatMoneyPair(costPerPiece, exchangeRate));
+      setSummary("totalCost", "Total Order: " + formatMoneyPair(totalCost, exchangeRate));
+      setSummary("sellingPrice", "Per Piece: " + formatMoneyPair(selling, exchangeRate));
+      setSummary("revenue", "Total Order: " + formatMoneyPair(revenue, exchangeRate));
+      setSummary("grossProfitPerPiece", "Per Piece: " + formatMoneyPair(grossProfitPerPiece, exchangeRate), grossProfitPerPiece);
+      setSummary("grossProfitTotal", "Total Order: " + formatMoneyPair(grossProfitTotal, exchangeRate), grossProfitTotal);
+      setSummary("commissionPerPiece", "Per Piece: " + formatMoneyPair(commission, exchangeRate));
+      setSummary("commissionTotal", "Total Order: " + formatMoneyPair(commissionTotal, exchangeRate));
+      setSummary("netProfitPerPiece", "Per Piece: " + formatMoneyPair(netProfitPerPiece, exchangeRate), netProfitPerPiece);
+      setSummary("netProfitTotal", "Total Order: " + formatMoneyPair(netProfitTotal, exchangeRate), netProfitTotal);
+      setSummary("grossMargin", grossMargin.toFixed(2) + "%", grossMargin);
+      setSummary("netMargin", netMargin.toFixed(2) + "%", netMargin);
+      setSummary("targetMargin", targetMargin === null ? "N/A" : targetMargin.toFixed(2) + "%");
+      setSummary("marginStatus", marginStatus, marginStatus === "Below target" ? -1 : 1);
     }
 
     Object.values(fields).forEach((field) => {

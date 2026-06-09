@@ -432,6 +432,7 @@ class QuickCostingForm(forms.ModelForm):
         "other_expenses",
         "shipping_cost",
         "selling_price_per_piece",
+        "commission_per_piece",
     ]
 
     def __init__(self, *args, **kwargs):
@@ -450,11 +451,17 @@ class QuickCostingForm(forms.ModelForm):
         cleaned = super().clean()
         for field_name in self.money_fields:
             value = cleaned.get(field_name)
-            if field_name == "shipping_cost" and value in (None, ""):
+            if field_name in {"shipping_cost", "commission_per_piece"} and value in (None, ""):
                 cleaned[field_name] = Decimal("0")
                 continue
             if value is not None and value < 0:
                 self.add_error(field_name, "Enter a zero or positive amount.")
+        exchange_rate = cleaned.get("exchange_rate_bdt_per_cad")
+        if exchange_rate is not None and exchange_rate <= 0:
+            self.add_error("exchange_rate_bdt_per_cad", "Enter an exchange rate greater than 0.")
+        target_margin = cleaned.get("target_margin_percent")
+        if target_margin is not None and target_margin < 0:
+            self.add_error("target_margin_percent", "Enter a zero or positive margin.")
         return cleaned
 
     class Meta:
@@ -464,31 +471,40 @@ class QuickCostingForm(forms.ModelForm):
             "project_name",
             "product_type",
             "quantity",
+            "exchange_rate_bdt_per_cad",
             "material_cost",
             "production_cost",
             "other_expenses",
             "shipping_cost",
             "selling_price_per_piece",
+            "commission_per_piece",
+            "target_margin_percent",
         ]
         widgets = {
             "buyer_name": forms.TextInput(attrs={"placeholder": "Buyer or company name"}),
             "project_name": forms.TextInput(attrs={"placeholder": "Project or style name"}),
             "quantity": forms.NumberInput(attrs={"min": 1, "step": "1", "placeholder": "300"}),
+            "exchange_rate_bdt_per_cad": forms.NumberInput(attrs={"min": 0, "step": "0.0001", "placeholder": "90"}),
             "material_cost": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
             "production_cost": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
             "other_expenses": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
             "shipping_cost": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
             "selling_price_per_piece": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
+            "commission_per_piece": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
+            "target_margin_percent": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "30"}),
         }
         labels = {
             "buyer_name": "Buyer Name",
             "project_name": "Project Name",
             "product_type": "Product Type",
+            "exchange_rate_bdt_per_cad": "Exchange Rate",
             "material_cost": "Material Cost",
             "production_cost": "Production Cost",
             "other_expenses": "Other Expenses",
             "shipping_cost": "Shipping Cost",
             "selling_price_per_piece": "Selling Price Per Piece",
+            "commission_per_piece": "Commission Per Piece",
+            "target_margin_percent": "Target Margin %",
         }
 
 
