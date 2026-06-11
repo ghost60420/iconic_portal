@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from crm.forms_costing import QuickCostingForm
-from crm.models import Lead, Opportunity, QuickCosting
+from crm.models import CostingHeader, Lead, Opportunity, QuickCosting
 
 
 class QuickCostingTests(TestCase):
@@ -286,6 +286,8 @@ class QuickCostingTests(TestCase):
         )
 
         response = self.client.get(reverse("opportunity_detail", args=[opportunity.pk]))
+        html = response.content.decode("utf-8")
+        timeline_html = html.split("Workflow Activity Timeline", 1)[1].split("</section>", 1)[0]
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Quick Costings")
@@ -296,3 +298,45 @@ class QuickCostingTests(TestCase):
         self.assertContains(response, "৳180,000.00 / $2,000.00")
         self.assertContains(response, "৳124,000.00 / $1,377.78")
         self.assertContains(response, "68.89%")
+        self.assertIn(f"QC-{quick.pk}", timeline_html)
+        self.assertIn("Quick Costing", timeline_html)
+        self.assertIn(reverse("quick_costing_detail", args=[quick.pk]), timeline_html)
+
+    def test_opportunity_timeline_uses_latest_costing_when_advanced_and_quick_exist(self):
+        admin = self._admin_user("quick-costing-multiple-timeline-admin")
+        opportunity = self._opportunity()
+        self.client.force_login(admin)
+        CostingHeader.objects.create(
+            opportunity=opportunity,
+            buyer="Test Streetwear Co",
+            brand="Test Streetwear Co",
+            product_type="Streetwear",
+            order_quantity=300,
+            moq=300,
+        )
+        quick = QuickCosting.objects.create(
+            opportunity=opportunity,
+            account_brand="Test Streetwear Co",
+            contact_name="Taylor Buyer",
+            buyer_name="Test Streetwear Co",
+            project_name="Latest Hoodie Quick",
+            product_type="Streetwear",
+            quantity=300,
+            material_cost=Decimal("25000.00"),
+            production_cost=Decimal("15000.00"),
+            other_expenses=Decimal("2000.00"),
+            shipping_cost=Decimal("5000.00"),
+            selling_price_per_piece=Decimal("600.00"),
+            created_by=admin,
+        )
+
+        response = self.client.get(reverse("opportunity_detail", args=[opportunity.pk]))
+        html = response.content.decode("utf-8")
+        timeline_html = html.split("Workflow Activity Timeline", 1)[1].split("</section>", 1)[0]
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Multiple Costings")
+        self.assertContains(response, "1 advanced · 1 quick")
+        self.assertIn(f"QC-{quick.pk}", timeline_html)
+        self.assertIn("Quick Costing · 2 total costings", timeline_html)
+        self.assertIn(reverse("quick_costing_detail", args=[quick.pk]), timeline_html)

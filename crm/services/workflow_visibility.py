@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.db.models import Q
 from django.urls import NoReverseMatch, reverse
 
-from crm.models import CostingHeader, Invoice, OrderLifecycle, ProductionOrder, Shipment
+from crm.models import CostingHeader, Invoice, OrderLifecycle, ProductionOrder, QuickCosting, Shipment
 from crm.permissions import can_view_internal_costing
 from crm.services.order_lifecycle import lifecycle_timeline_steps
 
@@ -69,6 +69,43 @@ def _is_quotation(costing):
         and getattr(costing, "quotation_number", "")
         and getattr(costing, "quoted_at", None)
     )
+
+
+def _is_quick_costing(costing):
+    return bool(costing and getattr(costing, "costing_type", "") == "quick")
+
+
+def _costing_url_name(costing):
+    return "quick_costing_detail" if _is_quick_costing(costing) else "cost_sheet_detail"
+
+
+def _costing_type_label(costing):
+    return "Quick Costing" if _is_quick_costing(costing) else "Advanced Costing"
+
+
+def _latest_by_updated_at(*records):
+    records = [record for record in records if record]
+    if not records:
+        return None
+    return max(records, key=lambda record: getattr(record, "updated_at", None) or getattr(record, "created_at", None))
+
+
+def _workflow_costing_record(links):
+    return _latest_by_updated_at(links.get("costing"), links.get("quick_costing"))
+
+
+def _workflow_costing_count(links):
+    return int(links.get("advanced_costing_count") or 0) + int(links.get("quick_costing_count") or 0)
+
+
+def _workflow_costing_notes(costing, links):
+    if not costing:
+        return ""
+    count = _workflow_costing_count(links)
+    label = _costing_type_label(costing)
+    if count > 1:
+        return f"{label} · {count} total costings"
+    return label
 
 
 def _first_or_none(queryset):
@@ -152,10 +189,14 @@ def _hydrate_links(
     opportunity=None,
     costing=None,
     quotation=None,
+    quick_costing=None,
     invoice=None,
     production_order=None,
     shipment=None,
 ):
+    advanced_costing_count = 1 if costing else 0
+    quick_costing_count = 1 if quick_costing else 0
+
     if lifecycle:
         lead = lead or lifecycle.lead
         opportunity = opportunity or lifecycle.opportunity
@@ -170,6 +211,8 @@ def _hydrate_links(
     if costing:
         opportunity = opportunity or getattr(costing, "opportunity", None)
         quotation = quotation or (costing if _is_quotation(costing) else None)
+    if quick_costing:
+        opportunity = opportunity or getattr(quick_costing, "opportunity", None)
     if invoice:
         production_order = production_order or getattr(invoice, "order", None)
         costing = costing or getattr(invoice, "costing_header", None)
@@ -192,6 +235,15 @@ def _hydrate_links(
             .order_by("-updated_at", "-id")
         )
         quotation = quotation or (costing if _is_quotation(costing) else None)
+    if opportunity:
+        advanced_costing_count = CostingHeader.objects.filter(opportunity=opportunity).count()
+        if not quick_costing:
+            quick_costing = _first_or_none(
+                QuickCosting.objects.select_related("opportunity", "created_by")
+                .filter(opportunity=opportunity)
+                .order_by("-updated_at", "-id")
+            )
+        quick_costing_count = QuickCosting.objects.filter(opportunity=opportunity).count()
     if costing and not invoice:
         invoice = _first_or_none(
             costing.invoices.select_related("order", "customer", "costing_header")
@@ -226,6 +278,9 @@ def _hydrate_links(
         "lead": lead,
         "opportunity": opportunity,
         "costing": costing,
+        "quick_costing": quick_costing,
+        "advanced_costing_count": advanced_costing_count,
+        "quick_costing_count": quick_costing_count,
         "quotation": quotation,
         "invoice": invoice,
         "production_order": production_order,
@@ -241,6 +296,8 @@ def _record_label(key, record):
     if key == "opportunity":
         return getattr(record, "opportunity_id", "") or f"Opportunity {record.pk}"
     if key == "costing":
+        if _is_quick_costing(record):
+            return f"QC-{record.pk}"
         return f"COST-{record.pk}"
     if key == "quotation":
         return getattr(record, "quotation_number", "") or f"Quote {record.pk}"
@@ -365,38 +422,51 @@ def _summary_money(links, can_view_costing=False):
     return "Value not set"
 
 
-def _timeline_from_lifecycle(lifecycle, active_key):
+def _timeline_from_lifecycle(lifecycle, active_key, links=None):
     if not lifecycle:
         return []
+    links = links or {}
+    workflow_costing = _workflow_costing_record(links)
     rows = []
     for step in lifecycle_timeline_steps(lifecycle, include_amounts=False):
         record = step.get("record")
+        url_name = step.get("url_name")
+        step_date = step.get("date")
+        notes = step.get("notes", "")
+        if step.get("key") == "costing" and workflow_costing:
+            record = workflow_costing
+            url_name = _costing_url_name(workflow_costing)
+            step_date = getattr(workflow_costing, "updated_at", None) or getattr(workflow_costing, "created_at", None)
+            notes = _workflow_costing_notes(workflow_costing, links)
         url = _safe_url(step.get("url_name"), record) if record else ""
+        if step.get("key") == "costing":
+            url = _safe_url(url_name, record) if record else ""
         rows.append(
             {
                 "key": step.get("key", ""),
                 "label": step.get("label", ""),
-                "date": step.get("date"),
-                "is_done": step.get("is_done", False),
+                "date": step_date,
+                "is_done": bool(record) if step.get("key") == "costing" else step.get("is_done", False),
                 "is_active": step.get("key") == active_key,
                 "url": url,
                 "record_label": _record_label(step.get("key", ""), record) if record else "",
-                "notes": step.get("notes", ""),
+                "notes": notes,
             }
         )
     return rows
 
 
 def _fallback_timeline(links, active_key):
+    workflow_costing = _workflow_costing_record(links)
     stages = [
         ("lead", "Lead", links["lead"], "lead_detail", getattr(links["lead"], "created_date", None), _status_label(links["lead"])),
         (
             "costing",
             "Costing",
-            links["costing"],
-            "cost_sheet_detail",
-            getattr(links["costing"], "updated_at", None),
-            _status_label(links["costing"]),
+            workflow_costing,
+            _costing_url_name(workflow_costing) if workflow_costing else "cost_sheet_detail",
+            getattr(workflow_costing, "updated_at", None) or getattr(workflow_costing, "created_at", None),
+            _workflow_costing_notes(workflow_costing, links),
         ),
         (
             "quotation",
@@ -485,6 +555,7 @@ def build_workflow_visibility_context(
         shipment=shipment,
     )
     can_view_costing = can_view_internal_costing(user)
+    workflow_costing = _workflow_costing_record(links)
 
     customer = (
         getattr(links["invoice"], "customer", None)
@@ -498,7 +569,7 @@ def build_workflow_visibility_context(
     nav_records = [
         ("lead", "Lead", links["lead"], "lead_detail"),
         ("opportunity", "Opportunity", links["opportunity"], "opportunity_detail"),
-        ("costing", "Costing", links["costing"], "cost_sheet_detail"),
+        ("costing", "Costing", workflow_costing, _costing_url_name(workflow_costing) if workflow_costing else "cost_sheet_detail"),
         ("quotation", "Quotation", links["quotation"], "cost_sheet_client_quotation"),
         ("invoice", "Invoice", links["invoice"], "invoice_view"),
         ("production", "Production", links["production_order"], "production_detail"),
@@ -535,7 +606,7 @@ def build_workflow_visibility_context(
             }
         )
 
-    timeline = _timeline_from_lifecycle(lifecycle, record_type) or _fallback_timeline(links, record_type)
+    timeline = _timeline_from_lifecycle(lifecycle, record_type, links) or _fallback_timeline(links, record_type)
     if not can_view_costing:
         timeline = [step for step in timeline if step.get("key") not in {"costing", "quotation"}]
     current_owner = (
