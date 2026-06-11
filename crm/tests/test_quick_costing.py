@@ -1,4 +1,5 @@
 import re
+from io import BytesIO
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -33,6 +34,38 @@ class QuickCostingTests(TestCase):
             product_type="Streetwear",
             moq_units=300,
         )
+
+    def _quick_costing(self, **overrides):
+        data = {
+            "buyer_name": "Test Buyer",
+            "project_name": "Fast Hoodie",
+            "product_type": "Streetwear",
+            "quantity": 100,
+            "exchange_rate_bdt_per_cad": Decimal("90.00"),
+            "material_cost": Decimal("500.00"),
+            "production_cost": Decimal("300.00"),
+            "other_expenses": Decimal("200.00"),
+            "shipping_cost": Decimal("100.00"),
+            "selling_price_per_piece": Decimal("15.00"),
+            "commission_per_piece": Decimal("1.00"),
+            "target_margin_percent": Decimal("20.00"),
+        }
+        data.update(overrides)
+        return QuickCosting.objects.create(**data)
+
+    def _costing_user(self, username="quick-costing-staff", approve=False):
+        user_model = get_user_model()
+        user = user_model.objects.create_user(
+            username=username,
+            email=f"{username}@example.com",
+            password="test-pass",
+        )
+        access = user.access
+        access.can_costing = True
+        access.can_view_internal_costing = True
+        access.can_costing_approve = approve
+        access.save()
+        return user
 
     def test_calculation_summary(self):
         quick = QuickCosting(
@@ -163,6 +196,10 @@ class QuickCostingTests(TestCase):
         self.assertEqual(detail_response.status_code, 200)
         self.assertContains(detail_response, "Quick Costing")
         self.assertContains(detail_response, reverse("quick_costing_export_pdf", args=[quick.pk]))
+        self.assertContains(detail_response, reverse("quick_costing_export_excel", args=[quick.pk]))
+        self.assertContains(detail_response, reverse("quick_costing_edit", args=[quick.pk]))
+        self.assertContains(detail_response, "Draft")
+        self.assertContains(detail_response, "Approve costing before creating quotation.")
         self.assertContains(detail_response, "Shipping Cost")
         self.assertContains(detail_response, "Exchange Rate")
         self.assertContains(detail_response, "1 CAD = 90.00 BDT")
@@ -219,6 +256,10 @@ class QuickCostingTests(TestCase):
         list_response = self.client.get(reverse("cost_sheet_list") + "?costing_type=quick")
         self.assertEqual(list_response.status_code, 200)
         self.assertContains(list_response, "Quick")
+        self.assertContains(list_response, "Draft")
+        self.assertContains(list_response, "Edit")
+        self.assertContains(list_response, "Excel")
+        self.assertContains(list_response, "PDF")
         self.assertContains(list_response, "Fast Hoodie")
         self.assertContains(list_response, "BDT / CAD")
         self.assertContains(list_response, "৳1,100.00 / $12.22")
@@ -292,6 +333,10 @@ class QuickCostingTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Quick Costings")
         self.assertContains(response, "Quick Costing")
+        self.assertContains(response, "Draft")
+        self.assertContains(response, "68.89%")
+        self.assertContains(response, "20.00%")
+        self.assertContains(response, "Meets target")
         self.assertContains(response, f"QC-{quick.pk}")
         self.assertContains(response, reverse("quick_costing_detail", args=[quick.pk]))
         self.assertContains(response, "৳47,000.00 / $522.22")
@@ -340,3 +385,155 @@ class QuickCostingTests(TestCase):
         self.assertIn(f"QC-{quick.pk}", timeline_html)
         self.assertIn("Quick Costing · 2 total costings", timeline_html)
         self.assertIn(reverse("quick_costing_detail", args=[quick.pk]), timeline_html)
+
+    def test_quick_costing_edit_recalculates(self):
+        admin = self._admin_user("quick-costing-edit-admin")
+        quick = self._quick_costing()
+        self.client.force_login(admin)
+
+        response = self.client.post(
+            reverse("quick_costing_edit", args=[quick.pk]),
+            data={
+                "buyer_name": "Updated Buyer",
+                "project_name": "Updated Hoodie",
+                "product_type": "Streetwear",
+                "quantity": 200,
+                "exchange_rate_bdt_per_cad": "100.00",
+                "material_cost": "1000.00",
+                "production_cost": "500.00",
+                "other_expenses": "200.00",
+                "shipping_cost": "300.00",
+                "selling_price_per_piece": "20.00",
+                "commission_per_piece": "2.00",
+                "target_margin_percent": "25.00",
+            },
+        )
+
+        quick.refresh_from_db()
+        summary = quick.calculation_summary()
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(quick.project_name, "Updated Hoodie")
+        self.assertEqual(summary["total_cost"], Decimal("2000.00"))
+        self.assertEqual(summary["revenue"], Decimal("4000.00"))
+        self.assertEqual(summary["net_profit_total"], Decimal("1600.00"))
+
+    def test_approval_rejection_and_locked_edit_behavior(self):
+        admin = self._admin_user("quick-costing-approval-admin")
+        staff = self._costing_user("quick-costing-no-approve", approve=False)
+        quick = self._quick_costing(created_by=staff)
+        self.client.force_login(admin)
+
+        approve_response = self.client.post(reverse("quick_costing_approve", args=[quick.pk]))
+        quick.refresh_from_db()
+        self.assertEqual(approve_response.status_code, 302)
+        self.assertEqual(quick.status, QuickCosting.STATUS_APPROVED)
+        self.assertEqual(quick.approved_by, admin)
+        self.assertIsNotNone(quick.approved_at)
+        self.assertTrue(quick.is_locked)
+
+        self.client.force_login(staff)
+        locked_response = self.client.get(reverse("quick_costing_edit", args=[quick.pk]))
+        self.assertEqual(locked_response.status_code, 302)
+        self.assertEqual(locked_response["Location"], reverse("quick_costing_detail", args=[quick.pk]))
+
+        self.client.force_login(admin)
+        reject_response = self.client.post(reverse("quick_costing_reject", args=[quick.pk]))
+        quick.refresh_from_db()
+        self.assertEqual(reject_response.status_code, 302)
+        self.assertEqual(quick.status, QuickCosting.STATUS_REJECTED)
+        self.assertEqual(quick.rejected_by, admin)
+        self.assertIsNotNone(quick.rejected_at)
+        self.assertIsNone(quick.approved_by)
+        self.assertIsNone(quick.approved_at)
+
+    def test_unapproved_quick_costing_cannot_create_quotation(self):
+        admin = self._admin_user("quick-costing-unapproved-quote-admin")
+        quick = self._quick_costing(created_by=admin)
+        self.client.force_login(admin)
+
+        response = self.client.post(reverse("quick_costing_convert_to_quotation", args=[quick.pk]))
+
+        quick.refresh_from_db()
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], reverse("quick_costing_detail", args=[quick.pk]))
+        self.assertEqual(quick.status, QuickCosting.STATUS_DRAFT)
+        self.assertEqual(quick.quotation_number, "")
+        self.assertIsNone(quick.quoted_at)
+
+    def test_approved_quick_costing_creates_customer_facing_quotation(self):
+        admin = self._admin_user("quick-costing-quote-admin")
+        opportunity = self._opportunity()
+        quick = self._quick_costing(opportunity=opportunity, created_by=admin)
+        self.client.force_login(admin)
+        self.client.post(reverse("quick_costing_approve", args=[quick.pk]))
+
+        response = self.client.post(reverse("quick_costing_convert_to_quotation", args=[quick.pk]))
+        quick.refresh_from_db()
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], reverse("quick_costing_client_quotation", args=[quick.pk]))
+        self.assertEqual(quick.status, QuickCosting.STATUS_QUOTED)
+        self.assertTrue(quick.quotation_number.startswith("QQT"))
+        self.assertEqual(quick.quoted_by, admin)
+        self.assertIsNotNone(quick.quoted_at)
+
+        quote_response = self.client.get(reverse("quick_costing_client_quotation", args=[quick.pk]))
+        quote_html = quote_response.content.decode("utf-8")
+        self.assertEqual(quote_response.status_code, 200)
+        self.assertContains(quote_response, "Quotation")
+        self.assertContains(quote_response, quick.quotation_number)
+        self.assertContains(quote_response, "Selling Price")
+        self.assertContains(quote_response, "Shipping Cost")
+        self.assertContains(quote_response, "Total Price")
+        self.assertContains(quote_response, "Thank You!")
+        self.assertIn("Quotation", quote_html.split("Workflow Activity Timeline", 1)[1])
+        self.assertIn(quick.quotation_number, quote_html)
+        self.assertNotContains(quote_response, "Material Cost")
+        self.assertNotContains(quote_response, "Production Cost")
+        self.assertNotContains(quote_response, "Other Expenses")
+        self.assertNotContains(quote_response, "Commission")
+        self.assertNotContains(quote_response, "Net Profit")
+        self.assertNotContains(quote_response, "Margin Status")
+
+    def test_quick_costing_excel_export(self):
+        admin = self._admin_user("quick-costing-excel-admin")
+        quick = self._quick_costing(created_by=admin)
+        self.client.force_login(admin)
+
+        response = self.client.get(reverse("quick_costing_export_excel", args=[quick.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response["Content-Type"],
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        from openpyxl import load_workbook
+
+        workbook = load_workbook(BytesIO(response.content), read_only=True)
+        sheet = workbook.active
+        labels = [row[0].value for row in sheet.iter_rows(min_col=1, max_col=1)]
+        self.assertIn("Buyer Name", labels)
+        self.assertIn("Total Cost", labels)
+        self.assertIn("Net Profit After Commission", labels)
+        self.assertIn("Status", labels)
+        self.assertIn("Approved Date", labels)
+
+    def test_costing_list_shows_quick_workflow_actions_and_status_filter(self):
+        admin = self._admin_user("quick-costing-list-actions-admin")
+        opportunity = self._opportunity()
+        quick = self._quick_costing(
+            opportunity=opportunity,
+            status=QuickCosting.STATUS_APPROVED,
+            created_by=admin,
+        )
+        self.client.force_login(admin)
+
+        response = self.client.get(reverse("cost_sheet_list") + "?costing_type=quick&status=approved")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f"QC-{quick.pk}")
+        self.assertContains(response, "Approved")
+        self.assertContains(response, "Meets target")
+        self.assertContains(response, reverse("quick_costing_edit", args=[quick.pk]))
+        self.assertContains(response, reverse("quick_costing_export_pdf", args=[quick.pk]))
+        self.assertContains(response, reverse("quick_costing_export_excel", args=[quick.pk]))
+        self.assertContains(response, reverse("opportunity_detail", args=[opportunity.pk]))

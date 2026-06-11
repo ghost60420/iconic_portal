@@ -79,6 +79,10 @@ def _costing_url_name(costing):
     return "quick_costing_detail" if _is_quick_costing(costing) else "cost_sheet_detail"
 
 
+def _quotation_url_name(quotation):
+    return "quick_costing_client_quotation" if _is_quick_costing(quotation) else "cost_sheet_client_quotation"
+
+
 def _costing_type_label(costing):
     return "Quick Costing" if _is_quick_costing(costing) else "Advanced Costing"
 
@@ -213,6 +217,7 @@ def _hydrate_links(
         quotation = quotation or (costing if _is_quotation(costing) else None)
     if quick_costing:
         opportunity = opportunity or getattr(quick_costing, "opportunity", None)
+        quotation = quotation or (quick_costing if _is_quotation(quick_costing) else None)
     if invoice:
         production_order = production_order or getattr(invoice, "order", None)
         costing = costing or getattr(invoice, "costing_header", None)
@@ -244,6 +249,8 @@ def _hydrate_links(
                 .order_by("-updated_at", "-id")
             )
         quick_costing_count = QuickCosting.objects.filter(opportunity=opportunity).count()
+        if _is_quotation(quick_costing):
+            quotation = _latest_by_updated_at(quotation, quick_costing)
     if costing and not invoice:
         invoice = _first_or_none(
             costing.invoices.select_related("order", "customer", "costing_header")
@@ -396,6 +403,10 @@ def _summary_status(record_type, links, lifecycle):
     if record_type == "opportunity":
         return _status_label(links["opportunity"], "Opportunity")
     if record_type in {"costing", "quotation"}:
+        if links.get("quick_costing") and record_type == "costing":
+            return _status_label(links["quick_costing"], "Costing")
+        if _is_quick_costing(links.get("quotation")):
+            return _status_label(links["quotation"], "Quotation")
         return _status_label(links["costing"], "Costing")
     if record_type == "invoice":
         invoice = links["invoice"]
@@ -438,15 +449,25 @@ def _timeline_from_lifecycle(lifecycle, active_key, links=None):
             url_name = _costing_url_name(workflow_costing)
             step_date = getattr(workflow_costing, "updated_at", None) or getattr(workflow_costing, "created_at", None)
             notes = _workflow_costing_notes(workflow_costing, links)
+        if step.get("key") == "quotation" and links.get("quotation"):
+            record = links["quotation"]
+            url_name = _quotation_url_name(record)
+            step_date = getattr(record, "quoted_at", None)
+            notes = getattr(record, "quotation_number", "")
         url = _safe_url(step.get("url_name"), record) if record else ""
-        if step.get("key") == "costing":
+        if step.get("key") in {"costing", "quotation"}:
             url = _safe_url(url_name, record) if record else ""
+        is_done = step.get("is_done", False)
+        if step.get("key") == "costing":
+            is_done = bool(record)
+        elif step.get("key") == "quotation":
+            is_done = _is_quotation(record)
         rows.append(
             {
                 "key": step.get("key", ""),
                 "label": step.get("label", ""),
                 "date": step_date,
-                "is_done": bool(record) if step.get("key") == "costing" else step.get("is_done", False),
+                "is_done": is_done,
                 "is_active": step.get("key") == active_key,
                 "url": url,
                 "record_label": _record_label(step.get("key", ""), record) if record else "",
@@ -458,8 +479,17 @@ def _timeline_from_lifecycle(lifecycle, active_key, links=None):
 
 def _fallback_timeline(links, active_key):
     workflow_costing = _workflow_costing_record(links)
+    is_completed = getattr(links["shipment"], "status", "") == "delivered"
     stages = [
         ("lead", "Lead", links["lead"], "lead_detail", getattr(links["lead"], "created_date", None), _status_label(links["lead"])),
+        (
+            "opportunity",
+            "Opportunity",
+            links["opportunity"],
+            "opportunity_detail",
+            getattr(links["opportunity"], "created_date", None),
+            _status_label(links["opportunity"]),
+        ),
         (
             "costing",
             "Costing",
@@ -472,7 +502,7 @@ def _fallback_timeline(links, active_key):
             "quotation",
             "Quotation",
             links["quotation"],
-            "cost_sheet_client_quotation",
+            _quotation_url_name(links["quotation"]) if links["quotation"] else "cost_sheet_client_quotation",
             getattr(links["quotation"], "quoted_at", None),
             getattr(links["quotation"], "quotation_number", ""),
         ),
@@ -499,6 +529,14 @@ def _fallback_timeline(links, active_key):
             "shipment_detail",
             getattr(links["shipment"], "ship_date", None),
             _status_label(links["shipment"]),
+        ),
+        (
+            "completed",
+            "Completed",
+            links["shipment"] if is_completed else None,
+            "shipment_detail",
+            getattr(links["shipment"], "delivered_at", None),
+            "Delivered" if is_completed else "",
         ),
     ]
     rows = []
@@ -528,6 +566,7 @@ def build_workflow_visibility_context(
     opportunity=None,
     costing=None,
     quotation=None,
+    quick_costing=None,
     invoice=None,
     production_order=None,
     shipment=None,
@@ -537,8 +576,8 @@ def build_workflow_visibility_context(
         lifecycle = find_workflow_lifecycle(
             lead=lead,
             opportunity=opportunity,
-            costing=costing,
-            quotation=quotation,
+            costing=None if _is_quick_costing(costing) else costing,
+            quotation=None if _is_quick_costing(quotation) else quotation,
             invoice=invoice,
             production_order=production_order,
             shipment=shipment,
@@ -550,6 +589,7 @@ def build_workflow_visibility_context(
         opportunity=opportunity,
         costing=costing,
         quotation=quotation,
+        quick_costing=quick_costing,
         invoice=invoice,
         production_order=production_order,
         shipment=shipment,
@@ -570,7 +610,7 @@ def build_workflow_visibility_context(
         ("lead", "Lead", links["lead"], "lead_detail"),
         ("opportunity", "Opportunity", links["opportunity"], "opportunity_detail"),
         ("costing", "Costing", workflow_costing, _costing_url_name(workflow_costing) if workflow_costing else "cost_sheet_detail"),
-        ("quotation", "Quotation", links["quotation"], "cost_sheet_client_quotation"),
+        ("quotation", "Quotation", links["quotation"], _quotation_url_name(links["quotation"]) if links["quotation"] else "cost_sheet_client_quotation"),
         ("invoice", "Invoice", links["invoice"], "invoice_view"),
         ("production", "Production", links["production_order"], "production_detail"),
         ("shipping", "Shipping", links["shipment"], "shipment_detail"),

@@ -373,12 +373,15 @@
                   <tr>
                     <th>Costing Number</th>
                     <th>Costing Type</th>
+                    <th>Status</th>
                     <th>Date</th>
                     <th>Quantity</th>
                     <th>Total Cost</th>
                     <th>Revenue</th>
                     <th>Net Profit</th>
-                    <th>Margin %</th>
+                    <th>Net Margin %</th>
+                    <th>Target Margin %</th>
+                    <th>Margin Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -386,12 +389,15 @@
                     <tr>
                       <td><a href="{% url 'quick_costing_detail' row.record.pk %}">{{ row.number }}</a></td>
                       <td>{{ row.costing_type }}</td>
+                      <td>{{ row.status }}</td>
                       <td>{{ row.date|date:"Y-m-d" }}</td>
                       <td>{{ row.quantity }}</td>
                       <td>{{ row.total_cost }}</td>
                       <td>{{ row.revenue }}</td>
                       <td>{{ row.net_profit }}</td>
                       <td>{{ row.margin_percent }}</td>
+                      <td>{{ row.target_margin_percent }}</td>
+                      <td>{{ row.margin_status }}</td>
                     </tr>
                   {% endfor %}
                 </tbody>

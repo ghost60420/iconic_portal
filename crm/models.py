@@ -1842,6 +1842,24 @@ class QuickCosting(models.Model):
     COSTING_TYPE_CHOICES = [
         ("quick", "Quick"),
     ]
+    STATUS_DRAFT = "draft"
+    STATUS_APPROVED = "approved"
+    STATUS_REJECTED = "rejected"
+    STATUS_QUOTED = "quoted"
+    STATUS_INVOICED = "invoiced"
+    STATUS_PRODUCTION = "production"
+    STATUS_SHIPPED = "shipped"
+    STATUS_CLOSED = "closed"
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, "Draft"),
+        (STATUS_APPROVED, "Approved"),
+        (STATUS_REJECTED, "Rejected"),
+        (STATUS_QUOTED, "Quoted"),
+        (STATUS_INVOICED, "Invoiced"),
+        (STATUS_PRODUCTION, "Production"),
+        (STATUS_SHIPPED, "Shipped"),
+        (STATUS_CLOSED, "Closed"),
+    ]
 
     costing_type = models.CharField(
         max_length=20,
@@ -1885,6 +1903,37 @@ class QuickCosting(models.Model):
         null=True,
         blank=True,
     )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_DRAFT,
+        db_index=True,
+    )
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="approved_quick_costings",
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    rejected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="rejected_quick_costings",
+    )
+    rejected_at = models.DateTimeField(null=True, blank=True)
+    quotation_number = models.CharField(max_length=50, blank=True, default="", db_index=True)
+    quoted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="quoted_quick_costings",
+    )
+    quoted_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
@@ -1900,6 +1949,17 @@ class QuickCosting(models.Model):
 
     def __str__(self):
         return f"Quick Costing {self.pk} - {self.project_name}"
+
+    @property
+    def is_locked(self):
+        return self.status in {
+            self.STATUS_APPROVED,
+            self.STATUS_QUOTED,
+            self.STATUS_INVOICED,
+            self.STATUS_PRODUCTION,
+            self.STATUS_SHIPPED,
+            self.STATUS_CLOSED,
+        }
 
     def calculation_summary(self):
         quantity = Decimal(self.quantity or 0)

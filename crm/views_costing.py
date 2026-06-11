@@ -73,6 +73,33 @@ def _can_convert_to_invoice(user):
     return bool(user and user.is_authenticated and user.is_superuser)
 
 
+def _user_or_none(user):
+    return user if user and getattr(user, "is_authenticated", False) else None
+
+
+def _next_quick_quotation_number():
+    prefix = f"QQT{timezone.now():%Y}"
+    latest = (
+        QuickCosting.objects.filter(quotation_number__startswith=prefix)
+        .exclude(quotation_number="")
+        .order_by("-quotation_number")
+        .first()
+    )
+    next_num = 1
+    if latest and latest.quotation_number:
+        try:
+            next_num = int(latest.quotation_number.replace(prefix, "")) + 1
+        except ValueError:
+            next_num = 1
+
+    for offset in range(1000):
+        candidate = f"{prefix}{next_num + offset:04}"
+        if not QuickCosting.objects.filter(quotation_number=candidate).exists():
+            return candidate
+
+    return f"{prefix}{timezone.now():%m%d%H%M%S}"
+
+
 def _costing_currency(costing):
     return normalize_costing_currency(getattr(costing, "currency", None))
 
@@ -211,6 +238,12 @@ def _quotation_company():
         "website": getattr(settings, "INVOICE_COMPANY_WEBSITE", "iconicapparelhouse.com"),
         "address": getattr(settings, "INVOICE_ADDRESS_CA", ""),
     }
+
+
+def _display_user(user):
+    if not user:
+        return ""
+    return user.get_full_name() or user.get_username()
 
 
 def _quotation_context(costing, user=None):
@@ -451,7 +484,7 @@ def cost_sheet_list(request):
         return denied
     can_view_costing_profit = can_view_internal_costing(request.user)
     qs = CostingHeader.objects.select_related("opportunity", "customer").order_by("-updated_at")
-    quick_qs = QuickCosting.objects.select_related("created_by").order_by("-updated_at")
+    quick_qs = QuickCosting.objects.select_related("created_by", "opportunity").order_by("-updated_at")
 
     customer_id = (request.GET.get("customer") or "").strip()
     product_type = (request.GET.get("product_type") or "").strip()
@@ -468,7 +501,7 @@ def cost_sheet_list(request):
         quick_qs = quick_qs.filter(product_type=product_type)
     if status:
         qs = qs.filter(status=status)
-        quick_qs = quick_qs.none()
+        quick_qs = quick_qs.filter(status=status)
     if search:
         qs = qs.filter(
             Q(opportunity__opportunity_id__icontains=search)
@@ -573,7 +606,12 @@ def cost_sheet_list(request):
             customers_by_id.values(),
             key=lambda customer: (customer.account_brand or customer.contact_name or "").lower(),
         ),
-        "status_choices": [("draft", "Draft"), ("approved", "Approved")],
+        "status_choices": [
+            ("draft", "Draft"),
+            ("approved", "Approved"),
+            ("rejected", "Rejected"),
+            ("quoted", "Quoted"),
+        ],
         "product_types": Opportunity.PRODUCT_TYPE_CHOICES,
         "costing_type_choices": [
             ("all", "All"),
@@ -687,17 +725,229 @@ def quick_costing_detail(request, pk):
     if denied:
         return denied
     quick_costing = get_object_or_404(
-        QuickCosting.objects.select_related("created_by", "opportunity"),
+        QuickCosting.objects.select_related("created_by", "opportunity", "opportunity__lead", "approved_by", "rejected_by", "quoted_by"),
         pk=pk,
     )
     calc = _quick_costing_calc(quick_costing)
     margin_tone = "positive" if calc.get("net_profit_total", Decimal("0")) >= Decimal("0") else "negative"
+    workflow_visibility = build_workflow_visibility_context(
+        "costing",
+        user=request.user,
+        opportunity=quick_costing.opportunity,
+        quick_costing=quick_costing,
+    )
     context = {
         "quick_costing": quick_costing,
         "calc": calc,
         "margin_tone": margin_tone,
+        "can_approve": _can_approve(request.user),
+        "can_edit_quick_costing": (not quick_costing.is_locked) or _can_approve(request.user),
+        **workflow_visibility,
     }
     return render(request, "crm/costing/quick_costing_detail.html", context)
+
+
+def quick_costing_edit(request, pk):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
+    quick_costing = get_object_or_404(
+        QuickCosting.objects.select_related("opportunity", "opportunity__lead"),
+        pk=pk,
+    )
+    if quick_costing.is_locked and not _can_approve(request.user):
+        messages.error(request, "Approved quick costing is locked.")
+        return redirect("quick_costing_detail", pk=pk)
+
+    if request.method == "POST":
+        form = QuickCostingForm(request.POST, instance=quick_costing)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Quick costing updated.")
+            return redirect("quick_costing_detail", pk=pk)
+        messages.error(request, "Please fix the errors below.")
+    else:
+        form = QuickCostingForm(instance=quick_costing)
+
+    context = {
+        "quick_form": form,
+        "quick_costing": quick_costing,
+        "opportunity": quick_costing.opportunity,
+        "mode": "edit",
+        "costing_type": "quick",
+    }
+    return render(request, "crm/costing/costsheet_form.html", context)
+
+
+@require_POST
+def quick_costing_approve(request, pk):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
+    quick_costing = get_object_or_404(QuickCosting, pk=pk)
+    if not _can_approve(request.user):
+        messages.error(request, "You do not have permission to approve.")
+        return redirect("quick_costing_detail", pk=pk)
+    quick_costing.status = QuickCosting.STATUS_APPROVED
+    quick_costing.approved_by = _user_or_none(request.user)
+    quick_costing.approved_at = timezone.now()
+    quick_costing.rejected_by = None
+    quick_costing.rejected_at = None
+    quick_costing.save(update_fields=["status", "approved_by", "approved_at", "rejected_by", "rejected_at", "updated_at"])
+    messages.success(request, "Quick costing approved and locked.")
+    return redirect("quick_costing_detail", pk=pk)
+
+
+@require_POST
+def quick_costing_reject(request, pk):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
+    quick_costing = get_object_or_404(QuickCosting, pk=pk)
+    if not _can_approve(request.user):
+        messages.error(request, "You do not have permission to reject.")
+        return redirect("quick_costing_detail", pk=pk)
+    quick_costing.status = QuickCosting.STATUS_REJECTED
+    quick_costing.rejected_by = _user_or_none(request.user)
+    quick_costing.rejected_at = timezone.now()
+    quick_costing.approved_by = None
+    quick_costing.approved_at = None
+    quick_costing.quotation_number = ""
+    quick_costing.quoted_by = None
+    quick_costing.quoted_at = None
+    quick_costing.save(
+        update_fields=[
+            "status",
+            "rejected_by",
+            "rejected_at",
+            "approved_by",
+            "approved_at",
+            "quotation_number",
+            "quoted_by",
+            "quoted_at",
+            "updated_at",
+        ]
+    )
+    messages.success(request, "Quick costing rejected.")
+    return redirect("quick_costing_detail", pk=pk)
+
+
+@require_POST
+def quick_costing_convert_to_quotation(request, pk):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
+    quick_costing = get_object_or_404(QuickCosting, pk=pk)
+    if not _can_approve(request.user):
+        messages.error(request, "You do not have permission to create a quotation.")
+        return redirect("quick_costing_detail", pk=pk)
+    if quick_costing.status != QuickCosting.STATUS_APPROVED and not quick_costing.quotation_number:
+        messages.error(request, "Approve costing before creating quotation.")
+        return redirect("quick_costing_detail", pk=pk)
+    if not quick_costing.quotation_number:
+        quick_costing.quotation_number = _next_quick_quotation_number()
+        quick_costing.quoted_by = _user_or_none(request.user)
+        quick_costing.quoted_at = timezone.now()
+    quick_costing.status = QuickCosting.STATUS_QUOTED
+    quick_costing.save(update_fields=["status", "quotation_number", "quoted_by", "quoted_at", "updated_at"])
+    messages.success(request, f"Quick quotation {quick_costing.quotation_number} is ready.")
+    return redirect("quick_costing_client_quotation", pk=pk)
+
+
+def quick_costing_client_quotation(request, pk):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
+    quick_costing = get_object_or_404(
+        QuickCosting.objects.select_related("created_by", "quoted_by", "opportunity", "opportunity__lead"),
+        pk=pk,
+    )
+    if not quick_costing.quotation_number or not quick_costing.quoted_at:
+        messages.error(request, "Approve and create a quotation before viewing it.")
+        return redirect("quick_costing_detail", pk=pk)
+    calc = _quick_costing_calc(quick_costing)
+    quotation_total = (calc.get("total_sales_order") or Decimal("0")) + (calc.get("shipping_cost_total") or Decimal("0"))
+    quotation_total_pair = _format_quick_money_pair(quotation_total, calc.get("exchange_rate"))
+    workflow_visibility = build_workflow_visibility_context(
+        "quotation",
+        user=request.user,
+        opportunity=quick_costing.opportunity,
+        quick_costing=quick_costing,
+        quotation=quick_costing,
+    )
+    context = {
+        "quick_costing": quick_costing,
+        "calc": calc,
+        "company": _quotation_company(),
+        "prepared_by": _display_user(quick_costing.quoted_by or quick_costing.created_by),
+        "quotation_total_pair": quotation_total_pair,
+        **workflow_visibility,
+    }
+    return render(request, "crm/costing/quick_quotation_client.html", context)
+
+
+def quick_costing_export_excel(request, pk):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
+    quick_costing = get_object_or_404(
+        QuickCosting.objects.select_related("created_by", "approved_by", "opportunity"),
+        pk=pk,
+    )
+    try:
+        from openpyxl import Workbook
+    except Exception:
+        messages.error(request, "Excel export is unavailable. Please install openpyxl.")
+        return redirect("quick_costing_detail", pk=pk)
+
+    try:
+        calc = _quick_costing_calc(quick_costing)
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Quick Costing"
+        rows = [
+            ("Buyer Name", quick_costing.buyer_name),
+            ("Project Name", quick_costing.project_name),
+            ("Product Type", quick_costing.get_product_type_display()),
+            ("Quantity", quick_costing.quantity),
+            ("Exchange Rate", quick_costing.exchange_rate_bdt_per_cad or ""),
+            ("Material Cost", quick_costing.material_cost),
+            ("Production Cost", quick_costing.production_cost),
+            ("Other Expenses", quick_costing.other_expenses),
+            ("Shipping Cost", quick_costing.shipping_cost),
+            ("Total Cost", calc["total_cost_order"]),
+            ("Cost Per Piece", calc["total_cost_per_piece"]),
+            ("Selling Price Per Piece", calc["fob_per_piece"]),
+            ("Revenue", calc["total_sales_order"]),
+            ("Gross Profit", calc["gross_profit_total"]),
+            ("Commission", calc["commission_total"]),
+            ("Net Profit After Commission", calc["net_profit_total"]),
+            ("Gross Profit Margin %", calc["gross_profit_margin_percent"]),
+            ("Net Profit Margin %", calc["net_profit_margin_percent"]),
+            ("Target Margin %", quick_costing.target_margin_percent or ""),
+            ("Margin Status", calc["margin_status"]),
+            ("Status", quick_costing.get_status_display()),
+            ("Created By", _display_user(quick_costing.created_by)),
+            ("Created Date", quick_costing.created_at.strftime("%Y-%m-%d %H:%M")),
+            ("Approved By", _display_user(quick_costing.approved_by)),
+            ("Approved Date", quick_costing.approved_at.strftime("%Y-%m-%d %H:%M") if quick_costing.approved_at else ""),
+        ]
+        for label, value in rows:
+            ws.append([label, value])
+
+        output = io.BytesIO()
+        wb.save(output)
+        data = output.getvalue()
+    except Exception:
+        logger.exception("Failed to generate quick costing Excel", extra={"quick_costing": quick_costing.pk})
+        messages.error(request, "Could not generate the Excel file. Please try again.")
+        return redirect("quick_costing_detail", pk=pk)
+
+    filename = f"quick_costing_{quick_costing.pk}.xlsx"
+    resp = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+    resp.write(data)
+    return resp
 
 
 def quick_costing_export_pdf(request, pk):

@@ -193,17 +193,24 @@
 </style>
 
 <div class="costing-form-page">
-  <div style="font-size:20px; font-weight:800; margin-bottom:10px;">Create costing</div>
-
-  <div class="costing-type-switch" aria-label="Costing type">
-    <a class="costing-type-option {% if costing_type != 'quick' %}active{% endif %}" href="?costing_type=advanced">Advanced Costing</a>
-    <a class="costing-type-option {% if costing_type == 'quick' %}active{% endif %}" href="?costing_type=quick">Quick Costing</a>
+  <div style="font-size:20px; font-weight:800; margin-bottom:10px;">
+    {% if mode == "edit" and costing_type == "quick" %}Edit quick costing{% else %}Create costing{% endif %}
   </div>
+
+  {% if mode != "edit" %}
+    <div class="costing-type-switch" aria-label="Costing type">
+      <a class="costing-type-option {% if costing_type != 'quick' %}active{% endif %}" href="?costing_type=advanced">Advanced Costing</a>
+      <a class="costing-type-option {% if costing_type == 'quick' %}active{% endif %}" href="?costing_type=quick">Quick Costing</a>
+    </div>
+  {% endif %}
 
   {% if costing_type == "quick" %}
     <div class="card intro-card">
-      <div class="intro-title">Quick Costing</div>
+      <div class="intro-title">{% if mode == "edit" %}Edit Quick Costing{% else %}Quick Costing{% endif %}</div>
       <div class="muted">Use this when the team needs a fast price check from material, production, shipping, commission, and selling price in BDT and CAD.</div>
+      {% if quick_costing %}
+        <div class="muted" style="margin-top:8px;">Status: {{ quick_costing.get_status_display }}</div>
+      {% endif %}
       {% if opportunity %}
         <div class="muted" style="margin-top:8px;">
           Linked opportunity:
@@ -288,8 +295,12 @@
           {% endif %}
 
           <div style="margin-top:12px; display:flex; gap:8px;">
-            <button type="submit" class="btnx btnx-primary">Save Quick Costing</button>
-            <a href="{% url 'cost_sheet_list' %}" class="btnx">Cancel</a>
+            <button type="submit" class="btnx btnx-primary">{% if mode == "edit" %}Update Quick Costing{% else %}Save Quick Costing{% endif %}</button>
+            {% if quick_costing %}
+              <a href="{% url 'quick_costing_detail' quick_costing.pk %}" class="btnx">Cancel</a>
+            {% else %}
+              <a href="{% url 'cost_sheet_list' %}" class="btnx">Cancel</a>
+            {% endif %}
           </div>
         </form>
       </div>

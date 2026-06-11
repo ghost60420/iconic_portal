@@ -254,6 +254,7 @@
                       {% if row.costing_type == "quick" %}
                         <strong>{{ calc.display.net_profit_per_piece_pair }} / pc</strong>
                         <span>{{ calc.display.net_profit_total_pair }} net profit</span>
+                        <span>{{ calc.display.margin_status }}</span>
                       {% else %}
                         <strong>{% if row.currency_label != "—" %}{{ row.currency_label }} {% endif %}{{ calc.display.profit_per_piece }} / pc</strong>
                         <span>{% if row.currency_label != "—" %}{{ row.currency_label }} {% endif %}{{ calc.display.total_profit_order }} total profit</span>
@@ -268,7 +269,7 @@
 
                 <td data-label="Status">
                   {% if row.costing_type == "quick" %}
-                    <span class="costing-status-badge quick">Saved</span>
+                    <span class="costing-status-badge {{ quick.status }}">{{ quick.get_status_display }}</span>
                   {% else %}
                     <span class="costing-status-badge {{ sheet.status }}">{{ sheet.get_status_display }}</span>
                   {% endif %}
@@ -285,6 +286,12 @@
                   <div class="costing-row-actions">
                     {% if row.costing_type == "quick" %}
                       <a class="costing-btn costing-btn--tiny costing-btn--primary" href="{% url 'quick_costing_detail' quick.pk %}">Open</a>
+                      <a class="costing-btn costing-btn--tiny costing-btn--ghost" href="{% url 'quick_costing_edit' quick.pk %}">Edit</a>
+                      <a class="costing-btn costing-btn--tiny costing-btn--ghost" href="{% url 'quick_costing_export_excel' quick.pk %}">Excel</a>
+                      <a class="costing-btn costing-btn--tiny costing-btn--ghost" href="{% url 'quick_costing_export_pdf' quick.pk %}">PDF</a>
+                      {% if quick.opportunity %}
+                        <a class="costing-btn costing-btn--tiny costing-btn--ghost" href="{% url 'opportunity_detail' quick.opportunity.pk %}">Opportunity</a>
+                      {% endif %}
                     {% else %}
                       <a class="costing-btn costing-btn--tiny costing-btn--primary" href="{% url 'cost_sheet_detail' sheet.pk %}">Open</a>
                       <a class="costing-btn costing-btn--tiny costing-btn--ghost" href="{% url 'cost_sheet_detail' sheet.pk %}">Edit</a>

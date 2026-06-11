@@ -3076,13 +3076,20 @@ def _quick_costing_opportunity_row(quick_costing):
     return {
         "record": quick_costing,
         "number": f"QC-{quick_costing.pk}",
-        "costing_type": quick_costing.get_costing_type_display(),
+        "costing_type": "Quick Costing",
         "date": quick_costing.created_at,
         "quantity": summary["quantity"],
         "total_cost": _format_quick_opportunity_money(summary["total_cost"], exchange_rate),
         "revenue": _format_quick_opportunity_money(summary["revenue"], exchange_rate),
         "net_profit": _format_quick_opportunity_money(summary["net_profit_total"], exchange_rate),
         "margin_percent": _format_quick_opportunity_percent(summary["net_profit_margin_percent"]),
+        "status": quick_costing.get_status_display(),
+        "target_margin_percent": (
+            _format_quick_opportunity_percent(summary["target_margin_percent"])
+            if summary["target_margin_percent"] is not None
+            else "N/A"
+        ),
+        "margin_status": summary["margin_status"],
     }
 
 

@@ -1,0 +1,310 @@
+{% extends "crm/base.html" %}
+{% block content %}
+
+<style>
+  .quick-quote-topbar {
+    max-width: 1040px;
+    margin: 0 auto 12px;
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .quick-quote-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    padding: 8px 13px;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #0f172a;
+    font-size: 13px;
+    font-weight: 800;
+    text-decoration: none;
+  }
+
+  .quick-quote-btn.primary {
+    background: #111827;
+    color: #ffffff;
+    border-color: #111827;
+  }
+
+  .quick-quote-wrap {
+    max-width: 1040px;
+    margin: 0 auto 36px;
+    color: #111827;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 18px 48px rgba(15, 23, 42, 0.12);
+  }
+
+  .quick-quote-head {
+    display: grid;
+    grid-template-columns: 1.25fr 0.75fr;
+    gap: 22px;
+    padding: 30px;
+    background: #111827;
+    color: #ffffff;
+    border-bottom: 5px solid #d4af37;
+  }
+
+  .quick-quote-logo {
+    width: 56px;
+    height: 56px;
+    border-radius: 10px;
+    background: #ffffff;
+    color: #111827;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    margin-bottom: 12px;
+  }
+
+  .quick-quote-title {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 900;
+    letter-spacing: 0;
+  }
+
+  .quick-quote-meta {
+    text-align: right;
+    font-size: 13px;
+    line-height: 1.7;
+    color: #e5e7eb;
+  }
+
+  .quick-quote-meta strong {
+    display: block;
+    color: #ffffff;
+    font-size: 20px;
+  }
+
+  .quick-quote-section {
+    padding: 26px 30px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .quick-quote-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+  }
+
+  .quick-quote-label {
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .08em;
+    color: #64748b;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .quick-quote-text {
+    font-size: 14px;
+    line-height: 1.6;
+    color: #111827;
+  }
+
+  .quick-quote-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+
+  .quick-quote-table th {
+    background: #d4af37;
+    color: #111827;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-align: left;
+    padding: 12px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .quick-quote-table td {
+    padding: 14px 12px;
+    border-bottom: 1px solid #e5e7eb;
+    vertical-align: top;
+  }
+
+  .quick-quote-table tr:nth-child(even) td {
+    background: #f8fafc;
+  }
+
+  .quick-quote-table .num {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .quick-quote-total {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 18px;
+  }
+
+  .quick-quote-total-box {
+    min-width: 280px;
+    border: 1px solid #111827;
+    background: #111827;
+    color: #ffffff;
+    padding: 16px;
+  }
+
+  .quick-quote-total-box span {
+    display: block;
+    color: #d4af37;
+    font-size: 12px;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+
+  .quick-quote-total-box strong {
+    display: block;
+    margin-top: 6px;
+    color: #ffffff;
+    font-size: 24px;
+  }
+
+  .quick-quote-footer {
+    padding: 24px 30px;
+    text-align: center;
+    background: #111827;
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 900;
+  }
+
+  .quick-quote-footer span {
+    display: block;
+    margin-top: 4px;
+    color: #d4af37;
+    font-size: 13px;
+  }
+
+  @media (max-width: 760px) {
+    .quick-quote-head,
+    .quick-quote-grid {
+      grid-template-columns: 1fr;
+    }
+    .quick-quote-meta {
+      text-align: left;
+    }
+    .quick-quote-section,
+    .quick-quote-head {
+      padding: 20px;
+    }
+  }
+
+  @media print {
+    .quick-quote-topbar, .navbar, .sidebar, .messages {
+      display: none !important;
+    }
+    body {
+      background: #ffffff !important;
+    }
+    .quick-quote-wrap {
+      box-shadow: none;
+      border: 0;
+    }
+  }
+</style>
+
+<div class="quick-quote-topbar">
+  <a class="quick-quote-btn" href="{% url 'quick_costing_detail' quick_costing.pk %}">Back</a>
+  <a class="quick-quote-btn primary" href="#" onclick="window.print();return false;">Print</a>
+</div>
+
+{% include "crm/partials/workflow_quick_nav.html" %}
+{% include "crm/partials/workflow_order_summary.html" %}
+{% include "crm/partials/workflow_activity_timeline.html" %}
+
+<article class="quick-quote-wrap">
+  <header class="quick-quote-head">
+    <div>
+      <div class="quick-quote-logo">IAH</div>
+      <h1 class="quick-quote-title">{{ company.name }}</h1>
+      <div class="quick-quote-text" style="color:#e5e7eb;">
+        {{ company.address }}<br>
+        {{ company.phone }}{% if company.email %} | {{ company.email }}{% endif %}<br>
+        {{ company.website }}
+      </div>
+    </div>
+    <div class="quick-quote-meta">
+      <strong>Quotation</strong>
+      Quote # {{ quick_costing.quotation_number }}<br>
+      Date {% if quick_costing.quoted_at %}{{ quick_costing.quoted_at|date:"Y-m-d" }}{% else %}{% now "Y-m-d" %}{% endif %}<br>
+      Prepared By {{ prepared_by|default:"Iconic Apparel House" }}
+    </div>
+  </header>
+
+  <section class="quick-quote-section quick-quote-grid">
+    <div>
+      <div class="quick-quote-label">Buyer</div>
+      <div class="quick-quote-text">
+        <strong>{{ quick_costing.buyer_name }}</strong><br>
+        {% if quick_costing.account_brand %}{{ quick_costing.account_brand }}<br>{% endif %}
+        {% if quick_costing.contact_name %}{{ quick_costing.contact_name }}{% endif %}
+      </div>
+    </div>
+    <div>
+      <div class="quick-quote-label">Project Details</div>
+      <div class="quick-quote-text">
+        Project: {{ quick_costing.project_name }}<br>
+        Product: {{ quick_costing.get_product_type_display }}<br>
+        Quantity: {{ quick_costing.quantity }}<br>
+        {% if quick_costing.opportunity %}Opportunity: {{ quick_costing.opportunity.opportunity_id }}{% endif %}
+      </div>
+    </div>
+  </section>
+
+  <section class="quick-quote-section">
+    <table class="quick-quote-table">
+      <thead>
+        <tr>
+          <th>Description</th>
+          <th class="num">Qty</th>
+          <th class="num">Selling Price / PC</th>
+          <th class="num">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <strong>{{ quick_costing.project_name }}</strong>
+            <div class="quick-quote-text">{{ quick_costing.get_product_type_display }}</div>
+          </td>
+          <td class="num">{{ quick_costing.quantity }}</td>
+          <td class="num">{{ calc.display.fob_per_piece_pair }}</td>
+          <td class="num">{{ calc.display.total_sales_order_pair }}</td>
+        </tr>
+        {% if quick_costing.shipping_cost %}
+          <tr>
+            <td><strong>Shipping Cost</strong></td>
+            <td class="num">1</td>
+            <td class="num">{{ calc.display.shipping_cost_total_pair }}</td>
+            <td class="num">{{ calc.display.shipping_cost_total_pair }}</td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+    <div class="quick-quote-total">
+      <div class="quick-quote-total-box">
+        <span>Total Price</span>
+        <strong>{{ quotation_total_pair }}</strong>
+      </div>
+    </div>
+  </section>
+
+  <footer class="quick-quote-footer">
+    Thank You!
+    <span>For Your Business</span>
+  </footer>
+</article>
+
+{% endblock %}
