@@ -5,6 +5,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from crm.forms_costing import QuickCostingForm
 from crm.models import CostingHeader, Lead, Opportunity, QuickCosting
@@ -366,6 +367,45 @@ class QuickCostingTests(TestCase):
         self.assertIn(f"QC-{quick.pk}", timeline_html)
         self.assertIn("Quick Costing", timeline_html)
         self.assertIn(reverse("quick_costing_detail", args=[quick.pk]), timeline_html)
+
+    def test_opportunity_order_summary_uses_preferred_quick_costing_display_only(self):
+        admin = self._admin_user("quick-costing-opportunity-summary-admin")
+        opportunity = self._opportunity()
+        opportunity.order_value = Decimal("999999.00")
+        opportunity.order_value_usd = Decimal("9999.00")
+        opportunity.save(update_fields=["order_value", "order_value_usd"])
+        self.client.force_login(admin)
+        draft = self._quick_costing(
+            opportunity=opportunity,
+            project_name="Newer Draft Bulk",
+            costing_purpose=QuickCosting.PURPOSE_BULK,
+            selling_price_per_piece=Decimal("25.00"),
+            status=QuickCosting.STATUS_DRAFT,
+            created_by=admin,
+        )
+        approved = self._quick_costing(
+            opportunity=opportunity,
+            project_name="Approved Sample",
+            costing_purpose=QuickCosting.PURPOSE_SAMPLE,
+            selling_price_per_piece=Decimal("15.00"),
+            status=QuickCosting.STATUS_APPROVED,
+            created_by=admin,
+        )
+        draft.updated_at = timezone.now()
+        draft.save(update_fields=["updated_at"])
+
+        response = self.client.get(reverse("opportunity_detail", args=[opportunity.pk]))
+        html = response.content.decode("utf-8")
+        summary_html = html.split("Order Summary", 1)[1].split("</section>", 1)[0]
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(f"QC-{approved.pk}", html)
+        self.assertIn("BDT 1,500.00", summary_html)
+        self.assertIn("CAD $16.67", summary_html)
+        self.assertIn("Sample Costing", summary_html)
+        self.assertNotIn("BDT 999,999.00", summary_html)
+        opportunity.refresh_from_db()
+        self.assertEqual(opportunity.order_value, Decimal("999999.00"))
 
     def test_opportunity_timeline_uses_latest_costing_when_advanced_and_quick_exist(self):
         admin = self._admin_user("quick-costing-multiple-timeline-admin")

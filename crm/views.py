@@ -3111,6 +3111,16 @@ def _quick_costing_opportunity_row(quick_costing):
     }
 
 
+def _preferred_quick_costing_opportunity_row(rows):
+    if not rows:
+        return None
+    approved = [
+        row for row in rows
+        if getattr(row.get("record"), "status", "") == QuickCosting.STATUS_APPROVED
+    ]
+    return approved[0] if approved else rows[0]
+
+
 def _opportunity_costing_status(advanced_count, quick_count):
     total = advanced_count + quick_count
     if total == 0:
@@ -3163,7 +3173,7 @@ def opportunity_detail(request, pk):
         _quick_costing_opportunity_row(quick_costing)
         for quick_costing in quick_costings
     ] if can_view_internal_financials else []
-    latest_quick_costing_row = quick_costing_rows[0] if quick_costing_rows else None
+    latest_quick_costing_row = _preferred_quick_costing_opportunity_row(quick_costing_rows)
     advanced_costing_count = CostingHeader.objects.filter(opportunity=opportunity).count()
     quick_costing_count = len(quick_costings)
     opportunity_costing_status = _opportunity_costing_status(
@@ -3579,6 +3589,18 @@ def opportunity_detail(request, pk):
         opportunity=opportunity,
         costing=costing_header,
     )
+    if latest_quick_costing_row and workflow_visibility.get("workflow_order_summary"):
+        workflow_order_summary = dict(workflow_visibility["workflow_order_summary"])
+        workflow_order_summary.update(
+            {
+                "value": "",
+                "value_lines": latest_quick_costing_row["revenue_lines"],
+                "costing_purpose": latest_quick_costing_row["purpose_label"],
+                "costing_purpose_key": latest_quick_costing_row["purpose_key"],
+                "costing_reference": latest_quick_costing_row["number"],
+            }
+        )
+        workflow_visibility["workflow_order_summary"] = workflow_order_summary
 
     context = {
         "opportunity": opportunity,
