@@ -136,6 +136,13 @@ def _format_quick_money_pair(value, exchange_rate):
     return f"{_format_quick_bdt(value)} / {_format_quick_cad_from_bdt(value, exchange_rate)}"
 
 
+def _format_quick_money_lines(value, exchange_rate):
+    return {
+        "bdt": f"BDT {_format_quick_decimal(value)}",
+        "cad": f"CAD {_format_quick_cad_from_bdt(value, exchange_rate)}",
+    }
+
+
 def _quick_costing_calc(quick_costing):
     summary = quick_costing.calculation_summary()
     exchange_rate = summary.get("exchange_rate")
@@ -177,14 +184,19 @@ def _quick_costing_calc(quick_costing):
     calc["display"] = {
         "total_cost_order": _format_quick_decimal(calc["total_cost_order"]),
         "total_cost_order_pair": _format_quick_money_pair(calc["total_cost_order"], exchange_rate),
+        "total_cost_order_lines": _format_quick_money_lines(calc["total_cost_order"], exchange_rate),
         "total_sales_order": _format_quick_decimal(calc["total_sales_order"]),
         "total_sales_order_pair": _format_quick_money_pair(calc["total_sales_order"], exchange_rate),
+        "total_sales_order_lines": _format_quick_money_lines(calc["total_sales_order"], exchange_rate),
         "total_profit_order": _format_quick_decimal(calc["total_profit_order"]),
         "total_profit_order_pair": _format_quick_money_pair(calc["total_profit_order"], exchange_rate),
+        "total_profit_order_lines": _format_quick_money_lines(calc["total_profit_order"], exchange_rate),
         "total_cost_per_piece": _format_quick_decimal(calc["total_cost_per_piece"]),
         "total_cost_per_piece_pair": _format_quick_money_pair(calc["total_cost_per_piece"], exchange_rate),
+        "total_cost_per_piece_lines": _format_quick_money_lines(calc["total_cost_per_piece"], exchange_rate),
         "fob_per_piece": _format_quick_decimal(calc["fob_per_piece"]),
         "fob_per_piece_pair": _format_quick_money_pair(calc["fob_per_piece"], exchange_rate),
+        "fob_per_piece_lines": _format_quick_money_lines(calc["fob_per_piece"], exchange_rate),
         "profit_per_piece": _format_quick_decimal(calc["profit_per_piece"]),
         "profit_per_piece_pair": _format_quick_money_pair(calc["profit_per_piece"], exchange_rate),
         "margin_percent": _format_quick_decimal(calc["margin_percent"]),
@@ -214,6 +226,7 @@ def _quick_costing_calc(quick_costing):
         "net_profit_per_piece_pair": _format_quick_money_pair(calc["net_profit_per_piece"], exchange_rate),
         "net_profit_total": _format_quick_decimal(calc["net_profit_total"]),
         "net_profit_total_pair": _format_quick_money_pair(calc["net_profit_total"], exchange_rate),
+        "net_profit_total_lines": _format_quick_money_lines(calc["net_profit_total"], exchange_rate),
         "gross_profit_margin_percent": _format_quick_percent(calc["gross_profit_margin_percent"]),
         "net_profit_margin_percent": _format_quick_percent(calc["net_profit_margin_percent"]),
         "target_margin_percent": _format_quick_percent(calc["target_margin_percent"]) if calc["target_margin_percent"] is not None else "N/A",
@@ -490,6 +503,7 @@ def cost_sheet_list(request):
     product_type = (request.GET.get("product_type") or "").strip()
     status = (request.GET.get("status") or "").strip()
     costing_type = (request.GET.get("costing_type") or "all").strip()
+    purpose = (request.GET.get("purpose") or "").strip()
     if costing_type not in {"all", "advanced", "quick"}:
         costing_type = "all"
     search = (request.GET.get("q") or "").strip()
@@ -499,6 +513,9 @@ def cost_sheet_list(request):
     if product_type:
         qs = qs.filter(product_type=product_type)
         quick_qs = quick_qs.filter(product_type=product_type)
+    if purpose:
+        qs = qs.none()
+        quick_qs = quick_qs.filter(costing_purpose=purpose)
     if status:
         qs = qs.filter(status=status)
         quick_qs = quick_qs.filter(status=status)
@@ -613,6 +630,7 @@ def cost_sheet_list(request):
             ("quoted", "Quoted"),
         ],
         "product_types": Opportunity.PRODUCT_TYPE_CHOICES,
+        "purpose_choices": QuickCosting.PURPOSE_CHOICES,
         "costing_type_choices": [
             ("all", "All"),
             ("advanced", "Advanced"),
@@ -635,6 +653,7 @@ def cost_sheet_list(request):
             "product_type": product_type,
             "status": status,
             "costing_type": costing_type,
+            "purpose": purpose,
             "q": search,
         },
         "can_view_internal_costing": can_view_costing_profit,

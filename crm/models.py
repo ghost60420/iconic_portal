@@ -1842,6 +1842,12 @@ class QuickCosting(models.Model):
     COSTING_TYPE_CHOICES = [
         ("quick", "Quick"),
     ]
+    PURPOSE_SAMPLE = "sample"
+    PURPOSE_BULK = "bulk"
+    PURPOSE_CHOICES = [
+        (PURPOSE_SAMPLE, "Sample"),
+        (PURPOSE_BULK, "Bulk Production"),
+    ]
     STATUS_DRAFT = "draft"
     STATUS_APPROVED = "approved"
     STATUS_REJECTED = "rejected"
@@ -1883,6 +1889,12 @@ class QuickCosting(models.Model):
         max_length=50,
         choices=Opportunity.PRODUCT_TYPE_CHOICES,
         default="Other",
+    )
+    costing_purpose = models.CharField(
+        max_length=20,
+        choices=PURPOSE_CHOICES,
+        default=PURPOSE_BULK,
+        db_index=True,
     )
     quantity = models.PositiveIntegerField(default=1)
     exchange_rate_bdt_per_cad = models.DecimalField(
@@ -1949,6 +1961,12 @@ class QuickCosting(models.Model):
 
     def __str__(self):
         return f"Quick Costing {self.pk} - {self.project_name}"
+
+    @property
+    def purpose_label(self):
+        if self.costing_purpose == self.PURPOSE_SAMPLE:
+            return "Sample Costing"
+        return "Bulk Production Costing"
 
     @property
     def is_locked(self):

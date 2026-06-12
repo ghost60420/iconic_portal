@@ -162,7 +162,9 @@ class QuickCostingTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Exchange Rate")
         self.assertContains(response, "N/A")
-        self.assertContains(response, "৳1,100.00 / N/A")
+        self.assertContains(response, "Bulk Production Costing")
+        self.assertContains(response, "BDT 1,500.00")
+        self.assertContains(response, "CAD N/A")
 
     def test_quick_costing_create_detail_and_list(self):
         admin = self._admin_user()
@@ -175,6 +177,7 @@ class QuickCostingTests(TestCase):
                 "buyer_name": "Test Buyer",
                 "project_name": "Fast Hoodie",
                 "product_type": "Streetwear",
+                "costing_purpose": "bulk",
                 "quantity": 100,
                 "exchange_rate_bdt_per_cad": "90.00",
                 "material_cost": "500.00",
@@ -191,10 +194,13 @@ class QuickCostingTests(TestCase):
         self.assertEqual(create_response.status_code, 302)
         self.assertEqual(create_response["Location"], reverse("quick_costing_detail", args=[quick.pk]))
         self.assertEqual(quick.costing_type, "quick")
+        self.assertEqual(quick.costing_purpose, QuickCosting.PURPOSE_BULK)
 
         detail_response = self.client.get(reverse("quick_costing_detail", args=[quick.pk]))
         self.assertEqual(detail_response.status_code, 200)
         self.assertContains(detail_response, "Quick Costing")
+        self.assertContains(detail_response, "Costing Purpose")
+        self.assertContains(detail_response, "Bulk Production Costing")
         self.assertContains(detail_response, reverse("quick_costing_export_pdf", args=[quick.pk]))
         self.assertContains(detail_response, reverse("quick_costing_export_excel", args=[quick.pk]))
         self.assertContains(detail_response, reverse("quick_costing_edit", args=[quick.pk]))
@@ -207,7 +213,10 @@ class QuickCostingTests(TestCase):
         self.assertContains(detail_response, "Net Profit After Commission")
         self.assertContains(detail_response, "Commission")
         self.assertContains(detail_response, "Meets target")
-        self.assertContains(detail_response, "৳1,100.00 / $12.22")
+        self.assertContains(detail_response, "BDT 1,500.00")
+        self.assertContains(detail_response, "CAD $16.67")
+        self.assertContains(detail_response, "BDT 1,100.00")
+        self.assertContains(detail_response, "CAD $12.22")
         self.assertContains(detail_response, "৳300.00 / $3.33")
 
         pdf_response = self.client.get(reverse("quick_costing_export_pdf", args=[quick.pk]))
@@ -261,8 +270,10 @@ class QuickCostingTests(TestCase):
         self.assertContains(list_response, "Excel")
         self.assertContains(list_response, "PDF")
         self.assertContains(list_response, "Fast Hoodie")
+        self.assertContains(list_response, "Bulk Production")
         self.assertContains(list_response, "BDT / CAD")
-        self.assertContains(list_response, "৳1,100.00 / $12.22")
+        self.assertContains(list_response, "BDT 1,100.00")
+        self.assertContains(list_response, "CAD $12.22")
 
     def test_quick_costing_can_be_created_from_opportunity(self):
         admin = self._admin_user("quick-costing-opportunity-admin")
@@ -276,6 +287,7 @@ class QuickCostingTests(TestCase):
                 "buyer_name": "Test Streetwear Co",
                 "project_name": "Oversized Hoodie",
                 "product_type": "Streetwear",
+                "costing_purpose": "sample",
                 "quantity": 300,
                 "exchange_rate_bdt_per_cad": "90.00",
                 "material_cost": "25000.00",
@@ -294,6 +306,7 @@ class QuickCostingTests(TestCase):
         self.assertEqual(quick.opportunity, opportunity)
         self.assertEqual(quick.account_brand, "Test Streetwear Co")
         self.assertEqual(quick.contact_name, "Taylor Buyer")
+        self.assertEqual(quick.costing_purpose, QuickCosting.PURPOSE_SAMPLE)
 
         detail_response = self.client.get(reverse("quick_costing_detail", args=[quick.pk]))
         self.assertEqual(detail_response.status_code, 200)
@@ -302,6 +315,7 @@ class QuickCostingTests(TestCase):
         self.assertContains(detail_response, "Account / Brand")
         self.assertContains(detail_response, "Test Streetwear Co")
         self.assertContains(detail_response, "Taylor Buyer")
+        self.assertContains(detail_response, "Sample Costing")
 
     def test_opportunity_detail_lists_quick_costings_and_status(self):
         admin = self._admin_user("quick-costing-opportunity-list-admin")
@@ -314,6 +328,7 @@ class QuickCostingTests(TestCase):
             buyer_name="Test Streetwear Co",
             project_name="Oversized Hoodie",
             product_type="Streetwear",
+            costing_purpose=QuickCosting.PURPOSE_SAMPLE,
             quantity=300,
             exchange_rate_bdt_per_cad=Decimal("90.00"),
             material_cost=Decimal("25000.00"),
@@ -332,16 +347,21 @@ class QuickCostingTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Quick Costings")
+        self.assertContains(response, "Latest Costing")
         self.assertContains(response, "Quick Costing")
+        self.assertContains(response, "Sample Costing")
         self.assertContains(response, "Draft")
         self.assertContains(response, "68.89%")
         self.assertContains(response, "20.00%")
         self.assertContains(response, "Meets target")
         self.assertContains(response, f"QC-{quick.pk}")
         self.assertContains(response, reverse("quick_costing_detail", args=[quick.pk]))
-        self.assertContains(response, "৳47,000.00 / $522.22")
-        self.assertContains(response, "৳180,000.00 / $2,000.00")
-        self.assertContains(response, "৳124,000.00 / $1,377.78")
+        self.assertContains(response, "BDT 47,000.00")
+        self.assertContains(response, "CAD $522.22")
+        self.assertContains(response, "BDT 180,000.00")
+        self.assertContains(response, "CAD $2,000.00")
+        self.assertContains(response, "BDT 124,000.00")
+        self.assertContains(response, "CAD $1,377.78")
         self.assertContains(response, "68.89%")
         self.assertIn(f"QC-{quick.pk}", timeline_html)
         self.assertIn("Quick Costing", timeline_html)
@@ -397,6 +417,7 @@ class QuickCostingTests(TestCase):
                 "buyer_name": "Updated Buyer",
                 "project_name": "Updated Hoodie",
                 "product_type": "Streetwear",
+                "costing_purpose": "sample",
                 "quantity": 200,
                 "exchange_rate_bdt_per_cad": "100.00",
                 "material_cost": "1000.00",
@@ -413,6 +434,7 @@ class QuickCostingTests(TestCase):
         summary = quick.calculation_summary()
         self.assertEqual(response.status_code, 302)
         self.assertEqual(quick.project_name, "Updated Hoodie")
+        self.assertEqual(quick.costing_purpose, QuickCosting.PURPOSE_SAMPLE)
         self.assertEqual(summary["total_cost"], Decimal("2000.00"))
         self.assertEqual(summary["revenue"], Decimal("4000.00"))
         self.assertEqual(summary["net_profit_total"], Decimal("1600.00"))
@@ -523,17 +545,32 @@ class QuickCostingTests(TestCase):
         quick = self._quick_costing(
             opportunity=opportunity,
             status=QuickCosting.STATUS_APPROVED,
+            costing_purpose=QuickCosting.PURPOSE_SAMPLE,
+            created_by=admin,
+        )
+        bulk = self._quick_costing(
+            project_name="Bulk Hoodie",
+            opportunity=opportunity,
+            status=QuickCosting.STATUS_APPROVED,
+            costing_purpose=QuickCosting.PURPOSE_BULK,
             created_by=admin,
         )
         self.client.force_login(admin)
 
-        response = self.client.get(reverse("cost_sheet_list") + "?costing_type=quick&status=approved")
+        response = self.client.get(reverse("cost_sheet_list") + "?costing_type=quick&status=approved&purpose=sample")
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, f"QC-{quick.pk}")
+        self.assertNotContains(response, f"QC-{bulk.pk}")
         self.assertContains(response, "Approved")
+        self.assertContains(response, "Sample")
         self.assertContains(response, "Meets target")
         self.assertContains(response, reverse("quick_costing_edit", args=[quick.pk]))
         self.assertContains(response, reverse("quick_costing_export_pdf", args=[quick.pk]))
         self.assertContains(response, reverse("quick_costing_export_excel", args=[quick.pk]))
         self.assertContains(response, reverse("opportunity_detail", args=[opportunity.pk]))
+
+        dashboard_response = self.client.get(reverse("cost_sheet_dashboard"))
+        reports_response = self.client.get(reverse("cost_sheet_reports"))
+        self.assertEqual(dashboard_response.status_code, 200)
+        self.assertEqual(reports_response.status_code, 200)

@@ -171,6 +171,18 @@
     color: #fecaca;
   }
 
+  .quick-type-badge.purpose-sample {
+    border-color: rgba(96, 165, 250, 0.38);
+    background: rgba(96, 165, 250, 0.13);
+    color: #bfdbfe;
+  }
+
+  .quick-type-badge.purpose-bulk {
+    border-color: rgba(34, 197, 94, 0.38);
+    background: rgba(34, 197, 94, 0.13);
+    color: #bbf7d0;
+  }
+
   .quick-inline-form {
     display: inline-flex;
     margin: 0;
@@ -207,7 +219,7 @@
     <div>
       <p class="quick-eyebrow">Quick Costing</p>
       <h1 class="quick-title">{{ quick_costing.project_name }}</h1>
-      <p class="quick-subtitle">{{ quick_costing.buyer_name }} · {{ quick_costing.get_product_type_display }} · QC-{{ quick_costing.pk }}</p>
+      <p class="quick-subtitle">{{ quick_costing.buyer_name }} · {{ quick_costing.get_product_type_display }} · {{ quick_costing.purpose_label }} · QC-{{ quick_costing.pk }}</p>
     </div>
     <div class="quick-actions">
       {% if can_edit_quick_costing %}
@@ -239,6 +251,7 @@
       <h2 class="quick-section-title">Costing Details</h2>
       <div class="quick-meta-grid">
         <div class="quick-meta-row"><span>Costing Type</span><strong><span class="quick-type-badge">Quick</span></strong></div>
+        <div class="quick-meta-row"><span>Costing Purpose</span><strong><span class="quick-type-badge purpose-{{ quick_costing.costing_purpose }}">{{ quick_costing.purpose_label }}</span></strong></div>
         <div class="quick-meta-row"><span>Status</span><strong><span class="quick-type-badge status-{{ quick_costing.status }}">{{ quick_costing.get_status_display }}</span></strong></div>
         {% if quick_costing.approved_at %}
           <div class="quick-meta-row"><span>Approved</span><strong>{{ quick_costing.approved_at|date:"M j, Y H:i" }}{% if quick_costing.approved_by %} · {{ quick_costing.approved_by.username }}{% endif %}</strong></div>
@@ -289,10 +302,34 @@
       <div class="quick-summary-grid">
         <div class="quick-summary-row"><span>Quantity</span><strong>{{ quick_costing.quantity }}</strong></div>
         <div class="quick-summary-row"><span>Exchange Rate</span><strong>{{ calc.display.exchange_rate }}</strong></div>
-        <div class="quick-summary-row"><span>Total Order Value</span><strong>{{ calc.display.total_sales_order_pair }}</strong></div>
-        <div class="quick-summary-row"><span>Total Cost</span><strong>{{ calc.display.total_cost_order_pair }}</strong></div>
-        <div class="quick-summary-row"><span>Cost Per Piece</span><strong>{{ calc.display.total_cost_per_piece_pair }}</strong></div>
-        <div class="quick-summary-row"><span>Selling Price Per Piece</span><strong>{{ calc.display.fob_per_piece_pair }}</strong></div>
+        <div class="quick-summary-row">
+          <span>Total Order Value</span>
+          <strong class="quick-money-pair">
+            <span>{{ calc.display.total_sales_order_lines.bdt }}</span>
+            <span>{{ calc.display.total_sales_order_lines.cad }}</span>
+          </strong>
+        </div>
+        <div class="quick-summary-row">
+          <span>Total Cost</span>
+          <strong class="quick-money-pair">
+            <span>{{ calc.display.total_cost_order_lines.bdt }}</span>
+            <span>{{ calc.display.total_cost_order_lines.cad }}</span>
+          </strong>
+        </div>
+        <div class="quick-summary-row">
+          <span>Cost Per Piece</span>
+          <strong class="quick-money-pair">
+            <span>{{ calc.display.total_cost_per_piece_lines.bdt }}</span>
+            <span>{{ calc.display.total_cost_per_piece_lines.cad }}</span>
+          </strong>
+        </div>
+        <div class="quick-summary-row">
+          <span>Selling Price Per Piece</span>
+          <strong class="quick-money-pair">
+            <span>{{ calc.display.fob_per_piece_lines.bdt }}</span>
+            <span>{{ calc.display.fob_per_piece_lines.cad }}</span>
+          </strong>
+        </div>
         <div class="quick-summary-row">
           <span>Gross Profit</span>
           <strong class="quick-money-pair quick-profit-{{ margin_tone }}">

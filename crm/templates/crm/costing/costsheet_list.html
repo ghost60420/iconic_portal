@@ -2,7 +2,7 @@
 {% load static %}
 
 {% block content %}
-<link rel="stylesheet" href="{% static 'crm/costing_list.css' %}?v=quick-costing-20260608">
+<link rel="stylesheet" href="{% static 'crm/costing_list.css' %}?v=quick-costing-purpose-20260611">
 
 <div class="costing-page">
   <section class="costing-hero">
@@ -119,6 +119,16 @@
         </select>
       </label>
 
+      <label class="costing-field">
+        <span>Purpose</span>
+        <select name="purpose">
+          <option value="">All purposes</option>
+          {% for key,label in purpose_choices %}
+            <option value="{{ key }}" {% if selected.purpose == key %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
       <div class="costing-filter-actions">
         <button class="costing-btn costing-btn--primary" type="submit">Apply filters</button>
       </div>
@@ -139,6 +149,7 @@
           <tr>
             <th>Opportunity / Client</th>
             <th>Costing Type</th>
+            <th>Purpose</th>
             <th>Product / Style</th>
             {% if can_view_internal_costing %}
               <th>Total cost</th>
@@ -188,6 +199,14 @@
                   <span class="costing-type-badge {{ row.costing_type }}">{{ row.type_label }}</span>
                 </td>
 
+                <td data-label="Purpose">
+                  {% if row.costing_type == "quick" %}
+                    <span class="costing-purpose-badge {{ quick.costing_purpose }}">{{ quick.get_costing_purpose_display }}</span>
+                  {% else %}
+                    <span class="costing-muted">—</span>
+                  {% endif %}
+                </td>
+
                 <td data-label="Product / Style">
                   <div class="costing-product">
                     <strong>
@@ -211,7 +230,10 @@
                   <td data-label="Total cost">
                     <div class="costing-money">
                       {% if row.costing_type == "quick" %}
-                        <strong>{{ calc.display.total_cost_order_pair }}</strong>
+                        <strong class="costing-money-lines">
+                          <span>{{ calc.display.total_cost_order_lines.bdt }}</span>
+                          <span>{{ calc.display.total_cost_order_lines.cad }}</span>
+                        </strong>
                       {% else %}
                         <strong>{% if row.currency_label != "—" %}{{ row.currency_label }} {% endif %}{{ calc.display.total_cost_order }}</strong>
                       {% endif %}
@@ -222,7 +244,10 @@
                   <td data-label="Cost / pc">
                     <div class="costing-money">
                       {% if row.costing_type == "quick" %}
-                        <strong>{{ calc.display.total_cost_per_piece_pair }}</strong>
+                        <strong class="costing-money-lines">
+                          <span>{{ calc.display.total_cost_per_piece_lines.bdt }}</span>
+                          <span>{{ calc.display.total_cost_per_piece_lines.cad }}</span>
+                        </strong>
                       {% else %}
                         <strong>{% if row.currency_label != "—" %}{{ row.currency_label }} {% endif %}{{ calc.display.total_cost_per_piece }}</strong>
                       {% endif %}
@@ -234,7 +259,10 @@
                     <div class="costing-money">
                       {% if calc.fob_per_piece %}
                         {% if row.costing_type == "quick" %}
-                          <strong>{{ calc.display.fob_per_piece_pair }}</strong>
+                          <strong class="costing-money-lines">
+                            <span>{{ calc.display.fob_per_piece_lines.bdt }}</span>
+                            <span>{{ calc.display.fob_per_piece_lines.cad }}</span>
+                          </strong>
                         {% else %}
                           <strong>{% if row.currency_label != "—" %}{{ row.currency_label }} {% endif %}{{ calc.display.fob_per_piece }}</strong>
                         {% endif %}
@@ -253,7 +281,7 @@
                       </span>
                       {% if row.costing_type == "quick" %}
                         <strong>{{ calc.display.net_profit_per_piece_pair }} / pc</strong>
-                        <span>{{ calc.display.net_profit_total_pair }} net profit</span>
+                        <span class="costing-money-lines">{{ calc.display.net_profit_total_lines.bdt }}<br>{{ calc.display.net_profit_total_lines.cad }} net profit</span>
                         <span>{{ calc.display.margin_status }}</span>
                       {% else %}
                         <strong>{% if row.currency_label != "—" %}{{ row.currency_label }} {% endif %}{{ calc.display.profit_per_piece }} / pc</strong>
@@ -307,7 +335,7 @@
             {% endwith %}
           {% empty %}
             <tr>
-              <td colspan="10">
+              <td colspan="11">
                 <div class="costing-empty-state">
                   <strong>No cost sheets found</strong>
                   <span>Try clearing filters or create a new costing from an opportunity.</span>

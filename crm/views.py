@@ -3064,6 +3064,18 @@ def _format_quick_opportunity_money(value, exchange_rate):
     return f"{bdt} / ${cad:,.2f}"
 
 
+def _format_quick_opportunity_money_lines(value, exchange_rate):
+    amount = Decimal(value or 0)
+    bdt = f"BDT {amount:,.2f}"
+    if not exchange_rate:
+        return {"bdt": bdt, "cad": "CAD N/A"}
+    rate = Decimal(exchange_rate)
+    if rate <= 0:
+        return {"bdt": bdt, "cad": "CAD N/A"}
+    cad = (amount / rate).quantize(Decimal("0.01"))
+    return {"bdt": bdt, "cad": f"CAD ${cad:,.2f}"}
+
+
 def _format_quick_opportunity_percent(value):
     if value is None:
         return "0.00%"
@@ -3077,11 +3089,17 @@ def _quick_costing_opportunity_row(quick_costing):
         "record": quick_costing,
         "number": f"QC-{quick_costing.pk}",
         "costing_type": "Quick Costing",
+        "purpose": quick_costing.get_costing_purpose_display(),
+        "purpose_label": quick_costing.purpose_label,
+        "purpose_key": quick_costing.costing_purpose,
         "date": quick_costing.created_at,
         "quantity": summary["quantity"],
         "total_cost": _format_quick_opportunity_money(summary["total_cost"], exchange_rate),
+        "total_cost_lines": _format_quick_opportunity_money_lines(summary["total_cost"], exchange_rate),
         "revenue": _format_quick_opportunity_money(summary["revenue"], exchange_rate),
+        "revenue_lines": _format_quick_opportunity_money_lines(summary["revenue"], exchange_rate),
         "net_profit": _format_quick_opportunity_money(summary["net_profit_total"], exchange_rate),
+        "net_profit_lines": _format_quick_opportunity_money_lines(summary["net_profit_total"], exchange_rate),
         "margin_percent": _format_quick_opportunity_percent(summary["net_profit_margin_percent"]),
         "status": quick_costing.get_status_display(),
         "target_margin_percent": (
@@ -3145,6 +3163,7 @@ def opportunity_detail(request, pk):
         _quick_costing_opportunity_row(quick_costing)
         for quick_costing in quick_costings
     ] if can_view_internal_financials else []
+    latest_quick_costing_row = quick_costing_rows[0] if quick_costing_rows else None
     advanced_costing_count = CostingHeader.objects.filter(opportunity=opportunity).count()
     quick_costing_count = len(quick_costings)
     opportunity_costing_status = _opportunity_costing_status(
@@ -3585,6 +3604,7 @@ def opportunity_detail(request, pk):
         "advanced_costing_count": advanced_costing_count,
         "quick_costing_count": quick_costing_count,
         "quick_costing_rows": quick_costing_rows,
+        "latest_quick_costing_row": latest_quick_costing_row,
         "opportunity_costing_status": opportunity_costing_status,
         "variance_placeholder": variance_placeholder,
         "variance_display": variance_display,

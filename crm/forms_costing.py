@@ -437,6 +437,7 @@ class QuickCostingForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["costing_purpose"].required = False
         for field in self.fields.values():
             css = field.widget.attrs.get("class", "")
             field.widget.attrs["class"] = (css + " costing-input").strip()
@@ -446,6 +447,9 @@ class QuickCostingForm(forms.ModelForm):
         if not quantity or quantity < 1:
             raise forms.ValidationError("Quantity must be at least 1.")
         return quantity
+
+    def clean_costing_purpose(self):
+        return self.cleaned_data.get("costing_purpose") or QuickCosting.PURPOSE_BULK
 
     def clean(self):
         cleaned = super().clean()
@@ -470,6 +474,7 @@ class QuickCostingForm(forms.ModelForm):
             "buyer_name",
             "project_name",
             "product_type",
+            "costing_purpose",
             "quantity",
             "exchange_rate_bdt_per_cad",
             "material_cost",
@@ -483,6 +488,7 @@ class QuickCostingForm(forms.ModelForm):
         widgets = {
             "buyer_name": forms.TextInput(attrs={"placeholder": "Buyer or company name"}),
             "project_name": forms.TextInput(attrs={"placeholder": "Project or style name"}),
+            "costing_purpose": forms.Select(),
             "quantity": forms.NumberInput(attrs={"min": 1, "step": "1", "placeholder": "300"}),
             "exchange_rate_bdt_per_cad": forms.NumberInput(attrs={"min": 0, "step": "0.0001", "placeholder": "90"}),
             "material_cost": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
@@ -497,6 +503,7 @@ class QuickCostingForm(forms.ModelForm):
             "buyer_name": "Buyer Name",
             "project_name": "Project Name",
             "product_type": "Product Type",
+            "costing_purpose": "Costing Purpose",
             "exchange_rate_bdt_per_cad": "Exchange Rate",
             "material_cost": "Material Cost",
             "production_cost": "Production Cost",

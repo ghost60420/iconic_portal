@@ -2,7 +2,7 @@
 {% load static %}
 
 {% block content %}
-<link rel="stylesheet" href="{% static 'crm/opportunity_detail.css' %}?v=detail-modern-20260506">
+<link rel="stylesheet" href="{% static 'crm/opportunity_detail.css' %}?v=detail-purpose-20260611">
 
 <div class="opp-detail-page">
   <section class="opp-detail-hero">
@@ -335,6 +335,15 @@
             <strong>{{ opportunity_costing_status }}</strong>
             <small>{{ advanced_costing_count }} advanced · {{ quick_costing_count }} quick</small>
           </article>
+          {% if latest_quick_costing_row %}
+            <article>
+              <span>Latest Costing</span>
+              <strong>
+                <a href="{% url 'quick_costing_detail' latest_quick_costing_row.record.pk %}">{{ latest_quick_costing_row.number }}</a>
+              </strong>
+              <small><span class="opp-purpose-badge {{ latest_quick_costing_row.purpose_key }}">{{ latest_quick_costing_row.purpose_label }}</span></small>
+            </article>
+          {% endif %}
           <article>
             <span>Latest quote status</span>
             <strong>{% if costing_header %}{{ costing_header.get_status_display }}{% else %}No quote yet{% endif %}</strong>
@@ -373,6 +382,7 @@
                   <tr>
                     <th>Costing Number</th>
                     <th>Costing Type</th>
+                    <th>Purpose</th>
                     <th>Status</th>
                     <th>Date</th>
                     <th>Quantity</th>
@@ -389,12 +399,13 @@
                     <tr>
                       <td><a href="{% url 'quick_costing_detail' row.record.pk %}">{{ row.number }}</a></td>
                       <td>{{ row.costing_type }}</td>
+                      <td><span class="opp-purpose-badge {{ row.purpose_key }}">{{ row.purpose_label }}</span></td>
                       <td>{{ row.status }}</td>
                       <td>{{ row.date|date:"Y-m-d" }}</td>
                       <td>{{ row.quantity }}</td>
-                      <td>{{ row.total_cost }}</td>
-                      <td>{{ row.revenue }}</td>
-                      <td>{{ row.net_profit }}</td>
+                      <td><span class="opp-money-lines">{{ row.total_cost_lines.bdt }}<br>{{ row.total_cost_lines.cad }}</span></td>
+                      <td><span class="opp-money-lines">{{ row.revenue_lines.bdt }}<br>{{ row.revenue_lines.cad }}</span></td>
+                      <td><span class="opp-money-lines">{{ row.net_profit_lines.bdt }}<br>{{ row.net_profit_lines.cad }}</span></td>
                       <td>{{ row.margin_percent }}</td>
                       <td>{{ row.target_margin_percent }}</td>
                       <td>{{ row.margin_status }}</td>
