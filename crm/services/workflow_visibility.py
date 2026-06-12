@@ -64,6 +64,12 @@ def _customer_label(customer, lead=None):
 
 
 def _is_quotation(costing):
+    if costing and hasattr(costing, "quotation_status"):
+        return bool(
+            getattr(costing, "quotation_number", "")
+            and getattr(costing, "quoted_at", None)
+            and getattr(costing, "quotation_status", "") == CostingHeader.QUOTATION_STATUS_APPROVED
+        )
     return bool(
         costing
         and getattr(costing, "quotation_number", "")
@@ -454,6 +460,9 @@ def _timeline_from_lifecycle(lifecycle, active_key, links=None):
             url_name = _quotation_url_name(record)
             step_date = getattr(record, "quoted_at", None)
             notes = getattr(record, "quotation_number", "")
+            if hasattr(record, "get_quotation_status_display"):
+                status_label = record.get_quotation_status_display()
+                notes = f"{notes} · {status_label}".strip(" ·")
         url = _safe_url(step.get("url_name"), record) if record else ""
         if step.get("key") in {"costing", "quotation"}:
             url = _safe_url(url_name, record) if record else ""
@@ -541,14 +550,18 @@ def _fallback_timeline(links, active_key):
     ]
     rows = []
     for key, label, record, url_name, step_date, notes in stages:
-        if key == "quotation" and not _is_quotation(record):
-            record = None
+        is_done = bool(record)
+        if key == "quotation":
+            is_done = _is_quotation(record)
+            if record and hasattr(record, "get_quotation_status_display"):
+                status_label = record.get_quotation_status_display()
+                notes = f"{getattr(record, 'quotation_number', '')} · {status_label}".strip(" ·")
         rows.append(
             {
                 "key": key,
                 "label": label,
                 "date": step_date,
-                "is_done": bool(record),
+                "is_done": is_done,
                 "is_active": key == active_key,
                 "url": _safe_url(url_name, record) if record else "",
                 "record_label": _record_label(key, record) if record else "",

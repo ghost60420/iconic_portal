@@ -382,6 +382,32 @@ def is_canada_user(user):
 
 canada_required = user_passes_test(is_canada_user, login_url="login")
 
+
+def _can_archive_workflow_record(user):
+    return bool(user and user.is_authenticated and (user.is_staff or user.is_superuser))
+
+
+def _active_crm_user_options():
+    User = get_user_model()
+    return (
+        User.objects.filter(is_active=True)
+        .order_by("first_name", "last_name", "username")
+    )
+
+
+def _user_display_name(user):
+    if not user:
+        return ""
+    full_name = user.get_full_name()
+    return full_name or user.get_username()
+
+
+def _archive_workflow_record(record, user):
+    record.is_archived = True
+    record.archived_at = timezone.now()
+    record.archived_by = user if user and user.is_authenticated else None
+    record.save(update_fields=["is_archived", "archived_at", "archived_by"])
+
 # ------------------------------------------
 # Shipment email helper (non accounting)
 # ------------------------------------------
@@ -964,6 +990,7 @@ def leads_list(request):
     has_social = (request.GET.get("has_social") or "").strip().lower()
     outreach_ready = (request.GET.get("outreach_ready") or "").strip().lower()
     view = (request.GET.get("view") or "all").strip().lower()
+    archive_filter = (request.GET.get("archive") or ("archived" if view == "archived" else "active")).strip().lower()
 
     sort = (request.GET.get("sort") or "new").strip().lower()
 
@@ -1004,7 +1031,12 @@ def leads_list(request):
     elif view == "no_response":
         qs = qs.filter(lead_type="outbound", outbound_status="No Response")
     elif view == "archived":
-        qs = qs.filter(lead_type="outbound", outbound_status="Archived")
+        qs = qs.filter(Q(is_archived=True) | Q(lead_type="outbound", outbound_status="Archived"))
+
+    if archive_filter == "archived" and view != "archived":
+        qs = qs.filter(is_archived=True)
+    elif archive_filter == "active":
+        qs = qs.filter(is_archived=False)
 
     if lead_id:
         qs = qs.filter(lead_id__icontains=lead_id)
@@ -1252,6 +1284,8 @@ def leads_list(request):
         "outbound_status_choices": OUTBOUND_STATUS_CHOICES,
         "qual_status_choices": LEAD_QUAL_STATUS_CHOICES,
         "active_view": view,
+        "archive_filter": archive_filter,
+        "can_archive_records": _can_archive_workflow_record(request.user),
         "users": users,
         "assigned_to_filter": assigned_to,
         "assignee_summary": assignee_summary,
@@ -1297,13 +1331,45 @@ def lead_bulk_update(request):
             messages.error(request, "Choose a follow up date.")
 
     elif action == "archive":
-        qs.filter(lead_type="outbound").update(outbound_status="Archived")
-        messages.success(request, "Outbound leads archived.")
+        if not _can_archive_workflow_record(request.user):
+            messages.error(request, "You do not have permission to archive leads.")
+        else:
+            now = timezone.now()
+            qs.update(
+                is_archived=True,
+                archived_at=now,
+                archived_by=request.user if request.user.is_authenticated else None,
+            )
+            qs.filter(lead_type="outbound").update(outbound_status="Archived")
+            messages.success(request, "Selected leads archived.")
 
     else:
         messages.error(request, "Select a bulk action.")
 
     return redirect(return_url)
+
+
+@require_POST
+def lead_archive(request, pk):
+    lead = get_object_or_404(Lead, pk=pk)
+    if not _can_archive_workflow_record(request.user):
+        messages.error(request, "You do not have permission to archive leads.")
+        return redirect("lead_detail", pk=lead.pk)
+
+    had_opportunities = lead.opportunities.exists()
+    _archive_workflow_record(lead, request.user)
+    if lead.lead_type == "outbound" and lead.outbound_status != "Archived":
+        lead.outbound_status = "Archived"
+        lead.save(update_fields=["outbound_status"])
+
+    if had_opportunities:
+        messages.warning(
+            request,
+            "Lead archived. This lead has linked opportunity records, so linked records were preserved.",
+        )
+    else:
+        messages.success(request, "Lead archived. History is preserved.")
+    return redirect(request.POST.get("next") or request.POST.get("return_url") or "leads_list")
 
 
 def leads_dashboard(request):
@@ -2961,6 +3027,7 @@ def _lead_detail_impl(request, pk):
         "cad_to_bdt": cad_to_bdt,
         "wa_inbox_url": wa_inbox_url,
         "iconic_ai_brain": iconic_ai_brain,
+        "can_archive_records": _can_archive_workflow_record(request.user),
         **workflow_visibility,
     }
 
@@ -3180,6 +3247,13 @@ def opportunity_detail(request, pk):
         advanced_costing_count,
         quick_costing_count,
     )
+    task_assignee_options = [
+        {
+            "value": _user_display_name(user),
+            "label": _user_display_name(user),
+        }
+        for user in _active_crm_user_options()
+    ]
 
     # Comments and activity
     comments = _chatter_for_opportunity(opportunity)
@@ -3628,6 +3702,8 @@ def opportunity_detail(request, pk):
         "quick_costing_rows": quick_costing_rows,
         "latest_quick_costing_row": latest_quick_costing_row,
         "opportunity_costing_status": opportunity_costing_status,
+        "task_assignee_options": task_assignee_options,
+        "can_archive_records": _can_archive_workflow_record(request.user),
         "variance_placeholder": variance_placeholder,
         "variance_display": variance_display,
 
@@ -7343,14 +7419,27 @@ def opportunity_edit(request, pk):
 @require_POST
 def opportunity_delete(request, pk):
     opportunity = get_object_or_404(Opportunity, pk=pk)
-    if ProductionOrder.objects.filter(opportunity=opportunity).exists():
-        messages.error(request, "Cannot delete this opportunity because a production order exists.")
+    if not _can_archive_workflow_record(request.user):
+        messages.error(request, "You do not have permission to archive opportunities.")
         return redirect("opportunity_detail", pk=pk)
 
+    has_linked_records = (
+        ProductionOrder.objects.filter(opportunity=opportunity).exists()
+        or CostingHeader.objects.filter(opportunity=opportunity).exists()
+        or CostSheet.objects.filter(opportunity=opportunity).exists()
+        or QuickCosting.objects.filter(opportunity=opportunity).exists()
+        or Shipment.objects.filter(opportunity=opportunity).exists()
+    )
     opp_id = opportunity.opportunity_id
-    opportunity.delete()
-    messages.success(request, f"Opportunity {opp_id} deleted.")
-    return redirect("opportunities_list")
+    _archive_workflow_record(opportunity, request.user)
+    if has_linked_records:
+        messages.warning(
+            request,
+            f"Opportunity {opp_id} archived. Linked records were preserved.",
+        )
+    else:
+        messages.success(request, f"Opportunity {opp_id} archived. History is preserved.")
+    return redirect(request.POST.get("next") or "opportunities_list")
 # ==============================
 # PRODUCTION VIEWS
 # ==============================
@@ -7863,7 +7952,11 @@ def production_list(request):
 
         return redirect(request.POST.get("next") or "production_list")
 
-    status_filter = (request.GET.get("status") or "active").strip().lower()
+    archive_filter = (request.GET.get("archive") or "active").strip().lower()
+    status_filter = (
+        request.GET.get("status")
+        or ("all" if archive_filter == "archived" else "active")
+    ).strip().lower()
     search_query = (request.GET.get("q") or "").strip()
     priority_filter = (request.GET.get("priority") or "all").strip().lower()
     delayed_filter = (request.GET.get("delayed") or "all").strip().lower()
@@ -7875,6 +7968,11 @@ def production_list(request):
         .prefetch_related("stages", "shipments", "order_lifecycles")
         .order_by("-created_at")
     )
+
+    if archive_filter == "archived":
+        orders = orders.filter(is_archived=True)
+    elif archive_filter != "all":
+        orders = orders.filter(is_archived=False)
 
     if search_query:
         orders = orders.filter(
@@ -8179,6 +8277,7 @@ def production_list(request):
             "total_reject": total_reject,
             "reject_percent": reject_percent,
             "status_filter": status_filter,
+            "archive_filter": archive_filter,
             "search_query": search_query,
             "priority_filter": priority_filter,
             "delayed_filter": delayed_filter,
@@ -8192,6 +8291,7 @@ def production_list(request):
             "can_view_lifecycle_profit": can_view_profit,
             "low_margin_orders": low_margin_orders,
             "high_profit_orders": high_profit_orders,
+            "can_archive_records": _can_archive_workflow_record(request.user),
         },
     )
 
@@ -8811,10 +8911,34 @@ def production_detail(request, pk):
         "lifecycle_profit": lifecycle_profit,
         "can_view_lifecycle_profit": can_view_profit,
         "can_add_lines": can_add_lines,
+        "can_archive_records": _can_archive_workflow_record(request.user),
         **workflow_visibility,
     }
 
     return render(request, "crm/production_detail.html", context)
+
+
+@require_POST
+def production_archive(request, pk):
+    order = get_object_or_404(ProductionOrder, pk=pk)
+    if not _can_archive_workflow_record(request.user):
+        messages.error(request, "You do not have permission to archive production orders.")
+        return redirect("production_detail", pk=order.pk)
+
+    operational_status = get_production_operational_status(order)
+    if operational_status in {OPERATIONAL_STATUS_READY_TO_SHIP, OPERATIONAL_STATUS_SHIPPED}:
+        confirmation = (request.POST.get("confirm_archive") or "").strip().lower()
+        if confirmation not in {"archive", "yes", "1"}:
+            messages.error(
+                request,
+                "Ready to ship or shipped production orders require confirmation before archiving.",
+            )
+            return redirect("production_detail", pk=order.pk)
+
+    _archive_workflow_record(order, request.user)
+    messages.success(request, f"Production order {order.order_code or order.pk} archived. Linked records were preserved.")
+    return redirect(request.POST.get("next") or "production_list")
+
 
 @require_POST
 def production_attachment_add(request, pk):
@@ -13770,11 +13894,12 @@ from .models import Opportunity
 def opportunities_list(request):
     q = (request.GET.get("q") or "").strip()
     stage = (request.GET.get("stage") or "").strip()
-    status = (request.GET.get("status") or "").strip()
     created_from_raw = (request.GET.get("created_from") or "").strip()
     created_to_raw = (request.GET.get("created_to") or "").strip()
     value_min_raw = (request.GET.get("value_min") or "").strip()
     value_max_raw = (request.GET.get("value_max") or "").strip()
+    archive_filter = (request.GET.get("archive") or "active").strip().lower()
+    status = (request.GET.get("status") or ("all" if archive_filter == "archived" else "")).strip()
 
     sort = (request.GET.get("sort") or "new").strip().lower()
 
@@ -13793,6 +13918,11 @@ def opportunities_list(request):
         .exclude(stage="Production")
         .exclude(productionorder__isnull=False)
     )
+
+    if archive_filter == "archived":
+        qs = qs.filter(is_archived=True)
+    elif archive_filter != "all":
+        qs = qs.filter(is_archived=False)
 
     if q:
         qs = qs.filter(
@@ -13857,5 +13987,7 @@ def opportunities_list(request):
         "pipeline_value": summary.get("pipeline_value") or 0,
         "due_followups": due_followups,
         "visible_count": len(page_obj.object_list),
+        "archive_filter": archive_filter,
+        "can_archive_records": _can_archive_workflow_record(request.user),
     }
     return render(request, "crm/opportunities_list.html", context)

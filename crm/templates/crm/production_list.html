@@ -215,6 +215,15 @@
       </select>
     </label>
 
+    <label class="production-field">
+      <span>Archive</span>
+      <select name="archive">
+        <option value="active" {% if archive_filter == "active" %}selected{% endif %}>Active</option>
+        <option value="archived" {% if archive_filter == "archived" %}selected{% endif %}>Archived</option>
+        <option value="all" {% if archive_filter == "all" %}selected{% endif %}>All</option>
+      </select>
+    </label>
+
     <div class="production-filter-tabs" aria-label="Quick status filters">
       <a class="{% if status_filter == 'active' %}active{% endif %}" href="?status=active{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Active</a>
       <a class="{% if status_filter == 'sample_development' %}active{% endif %}" href="?status=sample_development{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Sample Development</a>
@@ -432,6 +441,20 @@
                       <a href="{% url 'shipping_add_for_order' order.pk %}" class="production-btn production-btn--tiny production-btn--ghost">Shipping</a>
                       {% if order.opportunity %}
                         <a href="{% url 'opportunity_detail' order.opportunity.pk %}" class="production-btn production-btn--tiny production-btn--ghost">Back to Opportunity</a>
+                      {% endif %}
+                      {% if can_archive_records and not order.is_archived %}
+                        <form method="post" action="{% url 'production_archive' order.pk %}" style="display:inline;">
+                          {% csrf_token %}
+                          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                          <input type="hidden" name="confirm_archive" value="archive">
+                          <button
+                            type="submit"
+                            class="production-btn production-btn--tiny production-btn--ghost"
+                            onclick="return confirm('{% if row.operational_status == "ready_to_ship" or row.operational_status == "shipped" %}This production order is {{ row.operational_status_label }}. Archive only if management has confirmed. Continue?{% else %}Are you sure you want to archive this record? This action will hide it from active lists but keep the history.{% endif %}');"
+                          >Archive</button>
+                        </form>
+                      {% elif order.is_archived %}
+                        <span class="production-btn production-btn--tiny production-btn--ghost">Archived</span>
                       {% endif %}
                     </div>
                   </td>

@@ -69,6 +69,19 @@
       {% endif %}
       <a href="{% url 'production_ai_help' order.pk %}" class="production-btn production-btn--ghost">AI Help</a>
       <a href="{% url 'production_list' %}" class="production-btn production-btn--ghost">Back to Production</a>
+      {% if can_archive_records and not order.is_archived %}
+        <form method="post" action="{% url 'production_archive' order.pk %}" style="display:inline;">
+          {% csrf_token %}
+          <input type="hidden" name="confirm_archive" value="archive">
+          <button
+            type="submit"
+            class="production-btn production-btn--ghost"
+            onclick="return confirm('{% if operational_status == "ready_to_ship" or operational_status == "shipped" %}This production order is {{ operational_status_label }}. Archive only if management has confirmed. Continue?{% else %}Are you sure you want to archive this record? This action will hide it from active lists but keep the history.{% endif %}');"
+          >Archive</button>
+        </form>
+      {% elif order.is_archived %}
+        <span class="production-btn production-btn--ghost">Archived</span>
+      {% endif %}
     </div>
   </section>
 
@@ -79,6 +92,26 @@
     {% endif %}
     <a href="{% url 'shipping_add_for_order' order.pk %}" class="production-btn production-btn--ghost">Shipment</a>
   </nav>
+
+  {% if order.is_archived %}
+    <section class="production-panel" aria-label="Archive status">
+      <div class="production-panel-head">
+        <div>
+          <h2>Archive Status</h2>
+          <p>
+            Archived by
+            {% if order.archived_by %}
+              {% if order.archived_by.get_full_name %}{{ order.archived_by.get_full_name }}{% else %}{{ order.archived_by.username }}{% endif %}
+            {% else %}
+              Unknown
+            {% endif %}
+            on {% if order.archived_at %}{{ order.archived_at|date:"Y-m-d H:i" }}{% else %}—{% endif %}
+          </p>
+        </div>
+        <span class="production-status-badge cancelled">Archived</span>
+      </div>
+    </section>
+  {% endif %}
 
   {% include "crm/partials/workflow_quick_nav.html" %}
   {% include "crm/partials/workflow_order_summary.html" %}

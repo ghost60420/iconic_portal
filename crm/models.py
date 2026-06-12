@@ -527,6 +527,15 @@ class Lead(models.Model):
         on_delete=models.SET_NULL,
         related_name="assigned_leads",
     )
+    is_archived = models.BooleanField(default=False, db_index=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="archived_leads",
+    )
     created_date = models.DateField(default=timezone.localdate)
     next_followup = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
@@ -1233,6 +1242,15 @@ class Opportunity(models.Model):
     next_followup = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
     is_open = models.BooleanField(default=True)
+    is_archived = models.BooleanField(default=False, db_index=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="archived_opportunities",
+    )
 
     @property
     def status_key(self):
@@ -1711,6 +1729,21 @@ class CostSheetSimple(models.Model):
 
 
 class CostingHeader(models.Model):
+    QUOTATION_STATUS_DRAFT = "draft"
+    QUOTATION_STATUS_APPROVED = "approved"
+    QUOTATION_STATUS_REJECTED = "rejected"
+    QUOTATION_STATUS_SENT = "sent"
+    QUOTATION_STATUS_ACCEPTED = "accepted"
+    QUOTATION_STATUS_DECLINED = "declined"
+    QUOTATION_STATUS_CHOICES = [
+        (QUOTATION_STATUS_DRAFT, "Draft"),
+        (QUOTATION_STATUS_APPROVED, "Approved"),
+        (QUOTATION_STATUS_REJECTED, "Rejected"),
+        (QUOTATION_STATUS_SENT, "Sent"),
+        (QUOTATION_STATUS_ACCEPTED, "Accepted"),
+        (QUOTATION_STATUS_DECLINED, "Declined"),
+    ]
+
     opportunity = models.ForeignKey(
         Opportunity,
         on_delete=models.CASCADE,
@@ -1813,6 +1846,12 @@ class CostingHeader(models.Model):
     )
     approved_at = models.DateTimeField(null=True, blank=True)
     quotation_number = models.CharField(max_length=50, blank=True, default="", db_index=True)
+    quotation_status = models.CharField(
+        max_length=20,
+        choices=QUOTATION_STATUS_CHOICES,
+        default=QUOTATION_STATUS_DRAFT,
+        db_index=True,
+    )
     quoted_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
@@ -1821,6 +1860,22 @@ class CostingHeader(models.Model):
         related_name="quoted_costing_headers",
     )
     quoted_at = models.DateTimeField(null=True, blank=True)
+    quotation_approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="approved_client_quotations",
+    )
+    quotation_approved_at = models.DateTimeField(null=True, blank=True)
+    quotation_rejected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="rejected_client_quotations",
+    )
+    quotation_rejected_at = models.DateTimeField(null=True, blank=True)
     notes = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -3378,6 +3433,15 @@ class ProductionOrder(models.Model):
         default="planning",
         blank=True,
         db_index=True,
+    )
+    is_archived = models.BooleanField(default=False, db_index=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="archived_production_orders",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)

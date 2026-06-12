@@ -38,6 +38,64 @@
     color:#ffffff;
     border-color:#111827;
   }
+  .quote-btn.danger{
+    background:#991b1b;
+    color:#ffffff;
+    border-color:#991b1b;
+  }
+  .quote-status-panel{
+    max-width:1040px;
+    margin:0 auto 12px;
+    padding:14px 16px;
+    border:1px solid #e5e7eb;
+    background:#ffffff;
+    color:#111827;
+    display:flex;
+    justify-content:space-between;
+    gap:14px;
+    flex-wrap:wrap;
+    box-shadow:0 10px 28px rgba(15,23,42,0.08);
+  }
+  .quote-status-badge{
+    display:inline-flex;
+    align-items:center;
+    border-radius:999px;
+    padding:5px 10px;
+    font-size:12px;
+    font-weight:900;
+    border:1px solid #cbd5e1;
+    background:#f8fafc;
+    color:#334155;
+  }
+  .quote-status-badge.approved{ border-color:#16a34a; color:#166534; background:#dcfce7; }
+  .quote-status-badge.rejected{ border-color:#dc2626; color:#991b1b; background:#fee2e2; }
+  .quote-status-meta{
+    margin-top:6px;
+    color:#64748b;
+    font-size:12px;
+    line-height:1.5;
+  }
+  .quote-status-details{
+    margin-top:10px;
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+    gap:8px;
+    color:#334155;
+    font-size:12px;
+  }
+  .quote-status-details span{
+    display:block;
+    color:#64748b;
+    font-size:10px;
+    font-weight:900;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    margin-bottom:3px;
+  }
+  .quote-status-details strong{
+    color:#111827;
+    font-size:12px;
+  }
   .quote-head{
     display:grid;
     grid-template-columns:1.25fr 0.75fr;
@@ -174,10 +232,68 @@
         {% csrf_token %}
         <button type="submit" class="quote-btn primary" style="cursor:pointer;">Convert to Invoice</button>
       </form>
+    {% elif user_can_convert_to_invoice %}
+      <span class="quote-btn" title="Approve the quotation before creating an invoice.">Invoice locked until approved</span>
     {% endif %}
     <a class="quote-btn primary" href="#" onclick="window.print();return false;">Print</a>
   </div>
 </div>
+
+<section class="quote-status-panel" aria-label="Quotation approval status">
+  <div>
+    <div class="quote-label">Quotation Status</div>
+    <span class="quote-status-badge {{ costing.quotation_status }}">{{ costing.get_quotation_status_display }}</span>
+    <div class="quote-status-meta">
+      Draft quotations cannot be converted to invoices until approved.
+    </div>
+    <div class="quote-status-details">
+      <div>
+        <span>Status</span>
+        <strong>{{ costing.get_quotation_status_display }}</strong>
+      </div>
+      <div>
+        <span>Approved By</span>
+        <strong>
+          {% if costing.quotation_approved_by %}
+            {% firstof costing.quotation_approved_by.get_full_name costing.quotation_approved_by.username %}
+          {% else %}
+            —
+          {% endif %}
+        </strong>
+      </div>
+      <div>
+        <span>Approved Date</span>
+        <strong>{% if costing.quotation_approved_at %}{{ costing.quotation_approved_at|date:"Y-m-d H:i" }}{% else %}—{% endif %}</strong>
+      </div>
+      <div>
+        <span>Rejected By</span>
+        <strong>
+          {% if costing.quotation_rejected_by %}
+            {% firstof costing.quotation_rejected_by.get_full_name costing.quotation_rejected_by.username %}
+          {% else %}
+            —
+          {% endif %}
+        </strong>
+      </div>
+      <div>
+        <span>Rejected Date</span>
+        <strong>{% if costing.quotation_rejected_at %}{{ costing.quotation_rejected_at|date:"Y-m-d H:i" }}{% else %}—{% endif %}</strong>
+      </div>
+    </div>
+  </div>
+  {% if can_approve_quotation %}
+    <div>
+      <form method="post" action="{% url 'cost_sheet_quotation_approve' costing.pk %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="quote-btn primary" onclick="return confirm('Approve this quotation?');">Approve Quote</button>
+      </form>
+      <form method="post" action="{% url 'cost_sheet_quotation_reject' costing.pk %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="quote-btn danger" onclick="return confirm('Reject this quotation?');">Reject Quote</button>
+      </form>
+    </div>
+  {% endif %}
+</section>
 
 {% include "crm/partials/workflow_quick_nav.html" %}
 {% include "crm/partials/workflow_order_summary.html" %}

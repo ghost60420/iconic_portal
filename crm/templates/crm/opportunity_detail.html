@@ -59,12 +59,16 @@
         <a href="{% url 'production_from_opportunity' opportunity.pk %}" class="opp-btn opp-btn--ghost">Move to Production</a>
       {% endif %}
       <a href="{% url 'opportunities_list' %}" class="opp-btn opp-btn--ghost">Back</a>
-      <form method="post" action="{% url 'opportunity_delete' opportunity.pk %}" class="opp-inline-form">
-        {% csrf_token %}
-        <button type="submit" class="opp-btn opp-btn--danger" onclick="return confirm('Delete this opportunity? This cannot be undone.');">
-          Delete
-        </button>
-      </form>
+      {% if can_archive_records and not opportunity.is_archived %}
+        <form method="post" action="{% url 'opportunity_delete' opportunity.pk %}" class="opp-inline-form">
+          {% csrf_token %}
+          <button type="submit" class="opp-btn opp-btn--danger" onclick="return confirm('Are you sure you want to archive this record? This action will hide it from active lists but keep the history.');">
+            Archive
+          </button>
+        </form>
+      {% elif opportunity.is_archived %}
+        <span class="opp-btn opp-btn--ghost">Archived</span>
+      {% endif %}
     </div>
   </section>
 
@@ -103,6 +107,21 @@
       <strong>Not tracked</strong>
       <small>Use stage and follow-up quality as the current signal.</small>
     </article>
+    {% if opportunity.is_archived %}
+      <article class="opp-snapshot-card">
+        <span>Archive Status</span>
+        <strong>Archived</strong>
+        <small>
+          Archived by:
+          {% if opportunity.archived_by %}
+            {% if opportunity.archived_by.get_full_name %}{{ opportunity.archived_by.get_full_name }}{% else %}{{ opportunity.archived_by.username }}{% endif %}
+          {% else %}
+            Unknown
+          {% endif %}
+        </small>
+        <small>Archived at: {% if opportunity.archived_at %}{{ opportunity.archived_at|date:"Y-m-d H:i" }}{% else %}—{% endif %}</small>
+      </article>
+    {% endif %}
   </section>
 
   {% include "crm/partials/product_reference_images.html" %}
@@ -297,7 +316,12 @@
             </div>
             <label>
               <span>Assigned to</span>
-              <input type="text" name="task_assigned_to" placeholder="Rep name">
+              <select name="task_assigned_to">
+                <option value="">Unassigned</option>
+                {% for option in task_assignee_options %}
+                  <option value="{{ option.value }}">{{ option.label }}</option>
+                {% endfor %}
+              </select>
             </label>
             <label>
               <span>Description</span>

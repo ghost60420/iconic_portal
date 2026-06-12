@@ -261,12 +261,16 @@ def _display_user(user):
 
 def _quotation_context(costing, user=None):
     amounts = get_costing_quote_amounts(costing)
+    quote_is_approved = costing.quotation_status == CostingHeader.QUOTATION_STATUS_APPROVED
     return {
         "costing": costing,
         "amounts": amounts,
         "company": _quotation_company(),
         "terms": DEFAULT_QUOTATION_TERMS,
-        "can_convert_to_invoice": _can_convert_to_invoice(user),
+        "can_approve_quotation": _can_approve(user),
+        "can_convert_to_invoice": _can_convert_to_invoice(user) and quote_is_approved,
+        "user_can_convert_to_invoice": _can_convert_to_invoice(user),
+        "quote_is_approved": quote_is_approved,
     }
 
 
@@ -281,7 +285,11 @@ def _workflow_context(costing, user=None):
     if not lifecycle:
         lifecycle = costing.order_lifecycles_as_costing.order_by("-updated_at", "-id").first()
     return {
-        "is_quotation": bool(costing.quotation_number and costing.quoted_at),
+        "is_quotation": bool(
+            costing.quotation_number
+            and costing.quoted_at
+            and costing.quotation_status == CostingHeader.QUOTATION_STATUS_APPROVED
+        ),
         "invoice": invoice,
         "production_order": production_order,
         "lifecycle": lifecycle,
@@ -1445,6 +1453,21 @@ def cost_sheet_convert_to_quotation(request, pk):
 
     try:
         convert_costing_to_quotation(costing, user=request.user)
+        costing.quotation_status = CostingHeader.QUOTATION_STATUS_DRAFT
+        costing.quotation_approved_by = None
+        costing.quotation_approved_at = None
+        costing.quotation_rejected_by = None
+        costing.quotation_rejected_at = None
+        costing.save(
+            update_fields=[
+                "quotation_status",
+                "quotation_approved_by",
+                "quotation_approved_at",
+                "quotation_rejected_by",
+                "quotation_rejected_at",
+                "updated_at",
+            ]
+        )
     except CostingWorkflowError as exc:
         messages.error(request, str(exc))
         return redirect("cost_sheet_detail", pk=pk)
@@ -1485,6 +1508,80 @@ def cost_sheet_client_quotation(request, pk):
     )
 
     return render(request, "crm/costing/quotation_client.html", context)
+
+
+@require_POST
+def cost_sheet_quotation_approve(request, pk):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
+    costing = get_object_or_404(CostingHeader.objects.select_related("opportunity", "customer"), pk=pk)
+    if not _can_approve(request.user):
+        messages.error(request, "You do not have permission to approve quotations.")
+        return redirect("cost_sheet_client_quotation", pk=pk)
+    if costing.status != "approved" or not costing.quotation_number:
+        messages.error(request, "Convert an approved costing to a quotation before approval.")
+        return redirect("cost_sheet_detail", pk=pk)
+
+    costing.quotation_status = CostingHeader.QUOTATION_STATUS_APPROVED
+    costing.quotation_approved_by = _user_or_none(request.user)
+    costing.quotation_approved_at = timezone.now()
+    costing.quotation_rejected_by = None
+    costing.quotation_rejected_at = None
+    costing.save(
+        update_fields=[
+            "quotation_status",
+            "quotation_approved_by",
+            "quotation_approved_at",
+            "quotation_rejected_by",
+            "quotation_rejected_at",
+            "updated_at",
+        ]
+    )
+    CostingAuditLog.objects.create(
+        costing=costing,
+        action="quotation_approved",
+        changed_by=_user_or_none(request.user),
+    )
+    messages.success(request, f"Quotation {costing.quotation_number} approved.")
+    return redirect("cost_sheet_client_quotation", pk=pk)
+
+
+@require_POST
+def cost_sheet_quotation_reject(request, pk):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
+    costing = get_object_or_404(CostingHeader.objects.select_related("opportunity", "customer"), pk=pk)
+    if not _can_approve(request.user):
+        messages.error(request, "You do not have permission to reject quotations.")
+        return redirect("cost_sheet_client_quotation", pk=pk)
+    if costing.status != "approved" or not costing.quotation_number:
+        messages.error(request, "Convert an approved costing to a quotation before rejection.")
+        return redirect("cost_sheet_detail", pk=pk)
+
+    costing.quotation_status = CostingHeader.QUOTATION_STATUS_REJECTED
+    costing.quotation_rejected_by = _user_or_none(request.user)
+    costing.quotation_rejected_at = timezone.now()
+    costing.quotation_approved_by = None
+    costing.quotation_approved_at = None
+    costing.save(
+        update_fields=[
+            "quotation_status",
+            "quotation_rejected_by",
+            "quotation_rejected_at",
+            "quotation_approved_by",
+            "quotation_approved_at",
+            "updated_at",
+        ]
+    )
+    CostingAuditLog.objects.create(
+        costing=costing,
+        action="quotation_rejected",
+        changed_by=_user_or_none(request.user),
+    )
+    messages.success(request, f"Quotation {costing.quotation_number} rejected.")
+    return redirect("cost_sheet_client_quotation", pk=pk)
 
 
 def cost_sheet_quotation_pdf(request, pk):
@@ -1648,6 +1745,9 @@ def cost_sheet_convert_to_invoice(request, pk):
     if not _can_convert_to_invoice(request.user):
         messages.error(request, "Only invoice managers can convert quotations to invoices.")
         return redirect("cost_sheet_detail", pk=pk)
+    if costing.quotation_status != CostingHeader.QUOTATION_STATUS_APPROVED:
+        messages.error(request, "Approve the quotation before creating an invoice.")
+        return redirect("cost_sheet_client_quotation", pk=pk)
 
     try:
         invoice, created = create_invoice_from_costing(costing, user=request.user)

@@ -103,6 +103,15 @@
       </div>
 
       <div class="opp-field">
+        <label class="opp-label">Archive</label>
+        <select class="opp-input" name="archive">
+          <option value="active" {% if archive_filter == "active" %}selected{% endif %}>Active</option>
+          <option value="archived" {% if archive_filter == "archived" %}selected{% endif %}>Archived</option>
+          <option value="all" {% if archive_filter == "all" %}selected{% endif %}>All</option>
+        </select>
+      </div>
+
+      <div class="opp-field">
         <label class="opp-label">Created from</label>
         <input class="opp-input" type="date" name="created_from" value="{{ request.GET.created_from|default:'' }}">
       </div>
@@ -273,6 +282,15 @@
                   <a class="opp-btn opp-btn--tiny opp-btn--ghost" href="{% url 'opportunity_edit' opp.pk %}">Edit</a>
                   <a class="opp-btn opp-btn--tiny opp-btn--ghost" href="{% url 'cost_sheet_create_for_opportunity' opp.pk %}">Create quote</a>
                   <a class="opp-btn opp-btn--tiny opp-btn--ghost" href="{% url 'opportunity_detail' opp.pk %}#opportunity-stage">Move stage</a>
+                  {% if can_archive_records and not opp.is_archived %}
+                    <form method="post" action="{% url 'opportunity_delete' opp.pk %}" style="display:inline;">
+                      {% csrf_token %}
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                      <button type="submit" class="opp-btn opp-btn--tiny opp-btn--ghost" onclick="return confirm('Are you sure you want to archive this record? This action will hide it from active lists but keep the history.');">Archive</button>
+                    </form>
+                  {% elif opp.is_archived %}
+                    <span class="opp-btn opp-btn--tiny opp-btn--ghost">Archived</span>
+                  {% endif %}
                 </div>
               </td>
             </tr>
