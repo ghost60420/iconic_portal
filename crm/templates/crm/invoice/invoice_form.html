@@ -328,6 +328,20 @@
 
               <div class="row2">
                 <div class="mb-3">
+                  <label for="{{ form.invoice_market.id_for_label }}">Market</label>
+                  {{ form.invoice_market }}
+                  {% if form.invoice_market.errors %}<div class="err">{{ form.invoice_market.errors }}</div>{% endif %}
+                </div>
+
+                <div class="mb-3">
+                  <label for="{{ form.invoice_type.id_for_label }}">Invoice type</label>
+                  {{ form.invoice_type }}
+                  {% if form.invoice_type.errors %}<div class="err">{{ form.invoice_type.errors }}</div>{% endif %}
+                </div>
+              </div>
+
+              <div class="row2">
+                <div class="mb-3">
                   <label for="{{ form.currency.id_for_label }}">Currency</label>
                   {{ form.currency }}
                   {% if form.currency.errors %}<div class="err">{{ form.currency.errors }}</div>{% endif %}
@@ -338,6 +352,13 @@
                   {{ form.status }}
                   {% if form.status.errors %}<div class="err">{{ form.status.errors }}</div>{% endif %}
                 </div>
+              </div>
+
+              <div class="mb-3">
+                <label for="{{ form.deposit_percentage.id_for_label }}">Deposit / advance percentage</label>
+                {{ form.deposit_percentage }}
+                {% if form.deposit_percentage.errors %}<div class="err">{{ form.deposit_percentage.errors }}</div>{% endif %}
+                <div class="help">Sample invoices normally use 100%. Bulk invoices normally use 50%, but you can enter any agreed percentage.</div>
               </div>
             </div>
 
@@ -394,6 +415,14 @@
                 <div class="previewRight">
                   <span class="mono" id="curPreview"></span>
                   <div class="mono" id="balancePreview">0.00</div>
+                </div>
+              </div>
+
+              <div class="previewBox">
+                <div><span>Deposit terms preview</span></div>
+                <div class="previewRight">
+                  <span class="mono" id="depositPreview">Deposit 0.00</span>
+                  <span class="mono" id="depositBalancePreview">Balance 0.00</span>
                 </div>
               </div>
 
@@ -477,9 +506,13 @@
     var total = byId("id_total_amount");
     var paid = byId("id_paid_amount");
     var currency = byId("id_currency");
+    var invoiceType = byId("id_invoice_type");
+    var depositPercent = byId("id_deposit_percentage");
 
     var balancePreview = byId("balancePreview");
     var curPreview = byId("curPreview");
+    var depositPreview = byId("depositPreview");
+    var depositBalancePreview = byId("depositBalancePreview");
     var ruleWarn = byId("ruleWarn");
     var calcBtn = byId("calcBtn");
 
@@ -509,6 +542,19 @@
       var b = t - p;
       if(b < 0) b = 0;
       if(balancePreview) balancePreview.textContent = fmt2(b);
+      refreshDepositPreview();
+    }
+
+    function refreshDepositPreview(){
+      var t = n(total && total.value);
+      var pct = n(depositPercent && depositPercent.value);
+      var dep = t * pct / 100;
+      var bal = t - dep;
+      if(dep < 0) dep = 0;
+      if(bal < 0) bal = 0;
+      var cur = currency ? ((currency.value || "").toString().trim()) : "";
+      if(depositPreview) depositPreview.textContent = "Deposit " + (cur ? cur + " " : "") + fmt2(dep);
+      if(depositBalancePreview) depositBalancePreview.textContent = "Balance " + (cur ? cur + " " : "") + fmt2(bal);
     }
 
     function checkRuleWarn(){
@@ -551,7 +597,24 @@
     if(currency){
       currency.addEventListener("change", function(){
         refreshCurrency();
+        refreshDepositPreview();
       });
+    }
+
+    if(invoiceType && depositPercent){
+      invoiceType.addEventListener("change", function(){
+        if(invoiceType.value === "sample"){
+          depositPercent.value = "100.00";
+        } else if(!depositPercent.value || depositPercent.value === "100.00"){
+          depositPercent.value = "50.00";
+        }
+        refreshDepositPreview();
+      });
+    }
+
+    if(depositPercent){
+      depositPercent.setAttribute("inputmode","decimal");
+      depositPercent.addEventListener("input", refreshDepositPreview);
     }
 
     if(calcBtn){
@@ -574,6 +637,7 @@
     refreshCurrency();
     autoTotal();
     refreshBalance();
+    refreshDepositPreview();
     checkRuleWarn();
   })();
 </script>

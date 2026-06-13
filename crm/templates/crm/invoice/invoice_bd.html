@@ -316,7 +316,7 @@
         </div>
 
         <div class="invoice-meta">
-          <div class="badge">Bangladesh Invoice</div>
+          <div class="badge">{{ invoice_layout_title }}</div>
           {% if invoice.invoice_status == "APPROVED" %}
             <div class="badge approved">Approved</div>
             <div class="approve-meta">
@@ -329,6 +329,11 @@
           <div class="meta-row"><span>Issue date</span><span>{{ invoice.issue_date|date:"Y-m-d"|default:"" }}</span></div>
           <div class="meta-row"><span>Due date</span><span>{% if invoice.due_date %}{{ invoice.due_date|date:"Y-m-d" }}{% else %}-{% endif %}</span></div>
           <div class="meta-row"><span>Currency</span><span>{{ cur|default:"-" }}</span></div>
+          <div class="meta-row"><span>Market</span><span>{{ invoice_market_label }}</span></div>
+          <div class="meta-row"><span>Invoice type</span><span>{{ invoice_type_label }}</span></div>
+          <div class="meta-row"><span>Lead ID</span><span>{{ crm_refs.lead_id|default:"N/A" }}</span></div>
+          <div class="meta-row"><span>Opportunity ID</span><span>{{ crm_refs.opportunity_id|default:"N/A" }}</span></div>
+          <div class="meta-row"><span>Production ID</span><span>{{ crm_refs.production_id|default:"N/A" }}</span></div>
           <div class="meta-row"><span>Invoice status</span><span>{{ invoice.get_invoice_status_display }}</span></div>
           <div class="meta-row"><span>Payment status</span><span class="status-pill status-{{ payment_status.key }}">{{ payment_status.label }}</span></div>
         </div>
@@ -361,7 +366,7 @@
           </div>
 
           <div class="box">
-            <div class="box-title">Order Details</div>
+            <div class="box-title">{% if is_sample_invoice %}Sample Development{% elif is_bd_sewing_charge_invoice %}Sewing Charge Details{% else %}Order Details{% endif %}</div>
             {% if invoice.order %}
               <div class="stack">
                 <div class="value">{{ invoice.order.title|default:invoice.order.order_code }}</div>
@@ -369,9 +374,11 @@
                 {% if invoice.order.qty_total %}<div class="muted">Quantity: {{ invoice.order.qty_total|intcomma }}</div>{% endif %}
                 {% if invoice.order.factory_location %}<div class="muted">Factory: {{ invoice.order.get_factory_location_display }}</div>{% endif %}
                 {% if invoice.order.style_name %}<div class="muted">Style: {{ invoice.order.style_name }}</div>{% endif %}
+                <div class="muted">Account Manager: {{ crm_refs.account_manager }}</div>
               </div>
             {% else %}
               <div class="muted">No production order linked.</div>
+              <div class="muted">Account Manager: {{ crm_refs.account_manager }}</div>
             {% endif %}
           </div>
         </div>
@@ -381,10 +388,10 @@
           <table class="items">
             <thead>
               <tr>
-                <th style="width:48%;">Description</th>
-                <th style="width:16%;" class="num">Qty</th>
-                <th style="width:18%;" class="num">Rate</th>
-                <th style="width:18%;" class="num">Amount</th>
+                <th style="width:48%;">{% if is_bd_sewing_charge_invoice %}Style{% else %}Description{% endif %}</th>
+                <th style="width:16%;" class="num">Quantity</th>
+                <th style="width:18%;" class="num">{% if is_bd_sewing_charge_invoice %}Sewing Charge Per Piece{% else %}Rate{% endif %}</th>
+                <th style="width:18%;" class="num">{% if is_bd_sewing_charge_invoice %}Total Sewing Charge{% else %}Amount{% endif %}</th>
               </tr>
             </thead>
             <tbody>
@@ -433,6 +440,14 @@
               <td class="total">{{ cur }} {{ invoice.total_amount|default_if_none:0|floatformat:2|intcomma }}</td>
             </tr>
             <tr>
+              <td class="label">{{ deposit_terms.deposit_label }} ({{ deposit_terms.percentage|floatformat:2 }}%)</td>
+              <td>{{ cur }} {{ deposit_terms.deposit_amount|floatformat:2|intcomma }}</td>
+            </tr>
+            <tr>
+              <td class="label">{{ deposit_terms.balance_label }}</td>
+              <td>{{ cur }} {{ deposit_terms.balance_due|floatformat:2|intcomma }}</td>
+            </tr>
+            <tr>
               <td class="label">Amount paid</td>
               <td>{{ cur }} {{ invoice.paid_amount|default_if_none:0|floatformat:2|intcomma }}</td>
             </tr>
@@ -449,6 +464,11 @@
           Paid: {{ cur }} {{ payment_status.paid|floatformat:2|intcomma }} · Balance: {{ cur }} {{ payment_status.balance|floatformat:2|intcomma }}
         </div>
 
+        <div class="notes">
+          <strong>Payment terms</strong><br>
+          {{ deposit_terms.percentage|floatformat:2 }}% advance is required before work begins. Remaining balance is due before delivery or shipment.
+        </div>
+
         {% if invoice.notes %}
           <div class="notes">
             <strong>Notes</strong><br>
@@ -456,7 +476,29 @@
           </div>
         {% endif %}
 
-        <div class="foot-note">Remittance details will be shared separately by our accounts team.</div>
+        <div class="notes">
+          <strong>{{ payment_info.title }}</strong><br>
+          {% if payment_info.bank_name %}Bank: {{ payment_info.bank_name }}<br>{% endif %}
+          {% if payment_info.account_name %}Account name: {{ payment_info.account_name }}<br>{% endif %}
+          {% if payment_info.account_number %}Account number: {{ payment_info.account_number }}<br>{% endif %}
+          {% if payment_info.branch %}Branch: {{ payment_info.branch }}<br>{% endif %}
+          {% if payment_info.routing_number %}Routing number: {{ payment_info.routing_number }}<br>{% endif %}
+          {% if payment_info.swift %}SWIFT: {{ payment_info.swift }}<br>{% endif %}
+          {% if payment_info.bkash_number %}bKash: {{ payment_info.bkash_number }}<br>{% endif %}
+          {% if payment_info.nagad_number %}Nagad: {{ payment_info.nagad_number }}<br>{% endif %}
+          {% if payment_info.rocket_number %}Rocket: {{ payment_info.rocket_number }}<br>{% endif %}
+          {% if payment_info.note %}{{ payment_info.note|linebreaksbr }}{% endif %}
+          {% if not payment_info.bank_name and not payment_info.bkash_number and not payment_info.nagad_number and not payment_info.rocket_number and not payment_info.note %}
+            Remittance details will be shared separately by our accounts team.
+          {% endif %}
+          {% if payment_info.bkash_qr_path or payment_info.nagad_qr_path or payment_info.rocket_qr_path %}
+            <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:12px;">
+              {% if payment_info.bkash_qr_path %}<img src="{% static payment_info.bkash_qr_path %}" alt="bKash QR code" style="width:120px; height:120px; object-fit:contain; border:1px solid var(--line); border-radius:12px;">{% endif %}
+              {% if payment_info.nagad_qr_path %}<img src="{% static payment_info.nagad_qr_path %}" alt="Nagad QR code" style="width:120px; height:120px; object-fit:contain; border:1px solid var(--line); border-radius:12px;">{% endif %}
+              {% if payment_info.rocket_qr_path %}<img src="{% static payment_info.rocket_qr_path %}" alt="Rocket QR code" style="width:120px; height:120px; object-fit:contain; border:1px solid var(--line); border-radius:12px;">{% endif %}
+            </div>
+          {% endif %}
+        </div>
 
         {% if policy_text %}
           <div class="notes">
@@ -464,6 +506,12 @@
             {{ policy_text|linebreaksbr }}
           </div>
         {% endif %}
+
+        <div class="notes">
+          <strong>Thank you.</strong><br>
+          From Concept to Creation<br>
+          Iconic Apparel House Inc. Your Trusted Manufacturing Partner for Growth.
+        </div>
       </div>
     </div>
   </div>

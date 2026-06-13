@@ -59,3 +59,67 @@ class InvoiceInternalCostingTests(TestCase):
         self.assertNotIn(b"Factory costing note should stay internal.", body)
         self.assertNotIn(b"Estimated Gross Profit", body)
         self.assertNotIn(b"Estimated Profit Margin", body)
+
+    def test_deposit_terms_are_calculated_from_new_percentage(self):
+        self.invoice.deposit_percentage = Decimal("60.00")
+        self.invoice.total_amount = Decimal("500.00")
+
+        self.assertEqual(self.invoice.deposit_amount, Decimal("300.00"))
+        self.assertEqual(self.invoice.deposit_balance_due, Decimal("200.00"))
+
+    def test_bangladesh_sewing_charge_invoice_shows_only_client_sewing_charge(self):
+        invoice = Invoice.objects.create(
+            invoice_number="INV-BD-SEWING",
+            currency="BDT",
+            invoice_region="BD",
+            invoice_market="bangladesh",
+            invoice_type="sewing_charge",
+            deposit_percentage=Decimal("70.00"),
+            subtotal=Decimal("12000.00"),
+            shipping_amount=Decimal("0.00"),
+            discount_amount=Decimal("0.00"),
+            tax_amount=Decimal("0.00"),
+            total_amount=Decimal("12000.00"),
+            sewing_charge=Decimal("8000.00"),
+            other_internal_cost=Decimal("5000.00"),
+            internal_cost_note="Hidden BD factory note.",
+            status="sent",
+        )
+
+        response = self.client.get(reverse("invoice_client_view", args=[invoice.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Bangladesh Sewing Charge Invoice")
+        self.assertContains(response, "Sewing Charge Per Piece")
+        self.assertContains(response, "Total Sewing Charge")
+        self.assertContains(response, "Advance Required")
+        self.assertNotContains(response, "Other Internal Cost")
+        self.assertNotContains(response, "Hidden BD factory note.")
+        self.assertNotContains(response, "Estimated Gross Profit")
+        self.assertNotContains(response, "Estimated Profit Margin")
+
+    def test_bangladesh_sewing_charge_pdf_hides_internal_profit_fields(self):
+        invoice = Invoice.objects.create(
+            invoice_number="INV-BD-SEWING-PDF",
+            currency="BDT",
+            invoice_region="BD",
+            invoice_market="bangladesh",
+            invoice_type="sewing_charge",
+            subtotal=Decimal("9000.00"),
+            total_amount=Decimal("9000.00"),
+            sewing_charge=Decimal("6000.00"),
+            other_internal_cost=Decimal("3000.00"),
+            internal_cost_note="Hidden PDF internal note.",
+            status="sent",
+        )
+
+        response = self.client.get(reverse("invoice_pdf", args=[invoice.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        body = response.content
+        self.assertIn(b"Bangladesh Sewing Charge Invoice", body)
+        self.assertIn(b"Total Sewing", body)
+        self.assertNotIn(b"Other Internal Cost", body)
+        self.assertNotIn(b"Hidden PDF internal note.", body)
+        self.assertNotIn(b"Estimated Gross Profit", body)

@@ -1059,6 +1059,9 @@ class InvoiceForm(forms.ModelForm):
             "issue_date",
             "due_date",
             "currency",
+            "invoice_market",
+            "invoice_type",
+            "deposit_percentage",
             "subtotal",
             "shipping_amount",
             "discount_amount",
@@ -1075,6 +1078,9 @@ class InvoiceForm(forms.ModelForm):
             "invoice_number": forms.TextInput(attrs={"class": "form-control", "placeholder": "Auto if blank"}),
             "issue_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
             "due_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "invoice_market": forms.Select(attrs={"class": "form-select"}),
+            "invoice_type": forms.Select(attrs={"class": "form-select"}),
+            "deposit_percentage": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0", "max": "100"}),
             "subtotal": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0"}),
             "shipping_amount": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0"}),
             "discount_amount": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0"}),
@@ -1100,6 +1106,19 @@ class InvoiceForm(forms.ModelForm):
 
         if "status" in self.fields:
             self.fields["status"].required = False
+
+        for field_name in ("invoice_market", "invoice_type"):
+            if field_name in self.fields:
+                self.fields[field_name].required = False
+
+        if "deposit_percentage" in self.fields:
+            self.fields["deposit_percentage"].required = False
+
+        if "invoice_type" in self.fields and not can_edit_internal_costs:
+            choices = [choice for choice in self.fields["invoice_type"].choices if choice[0] != "sewing_charge"]
+            if getattr(self.instance, "invoice_type", "") == "sewing_charge":
+                choices.append(("sewing_charge", "Client charge invoice"))
+            self.fields["invoice_type"].choices = choices
 
         if can_edit_internal_costs:
             for field_name in ("sewing_charge", "other_internal_cost", "internal_cost_note"):
@@ -1129,6 +1148,25 @@ class InvoiceForm(forms.ModelForm):
 
     def clean_tax_amount(self):
         return self._clean_money("tax_amount")
+
+    def clean_invoice_market(self):
+        return self.cleaned_data.get("invoice_market") or "north_america"
+
+    def clean_invoice_type(self):
+        return self.cleaned_data.get("invoice_type") or "bulk"
+
+    def clean_deposit_percentage(self):
+        value = self.cleaned_data.get("deposit_percentage")
+        if value in ("", None):
+            invoice_type = (self.cleaned_data.get("invoice_type") or "").strip()
+            return Decimal("100") if invoice_type == "sample" else Decimal("50")
+        try:
+            value = Decimal(str(value))
+        except Exception:
+            return Decimal("50")
+        if value < 0:
+            return Decimal("0")
+        return value
 
     def clean_paid_amount(self):
         return self._clean_money("paid_amount")

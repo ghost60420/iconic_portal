@@ -729,6 +729,24 @@
               {% if invoice.order %}{{ invoice.order }}{% else %}Not linked{% endif %}
             </div>
 
+            <div class="k">Market</div>
+            <div class="v">{{ invoice_market_label }}</div>
+
+            <div class="k">Invoice Type</div>
+            <div class="v">{{ invoice_type_label }}</div>
+
+            <div class="k">Lead ID</div>
+            <div class="v">{{ crm_refs.lead_id|default:"N/A" }}</div>
+
+            <div class="k">Opportunity ID</div>
+            <div class="v">{{ crm_refs.opportunity_id|default:"N/A" }}</div>
+
+            <div class="k">Production ID</div>
+            <div class="v">{{ crm_refs.production_id|default:"N/A" }}</div>
+
+            <div class="k">Account Manager</div>
+            <div class="v">{{ crm_refs.account_manager|default:"N/A" }}</div>
+
             <div class="k">Issue date</div>
             <div class="v">{{ invoice.issue_date|date:"Y-m-d"|default:"" }}</div>
 
@@ -788,6 +806,14 @@
                 {% if cur %}{{ cur }} {% endif %}
                 {{ invoice.total_amount|default_if_none:0|floatformat:2|intcomma }}
               </td>
+            </tr>
+            <tr>
+              <td>{{ deposit_terms.deposit_label }} ({{ deposit_terms.percentage|floatformat:2 }}%)</td>
+              <td>{% if cur %}{{ cur }} {% endif %}{{ deposit_terms.deposit_amount|floatformat:2|intcomma }}</td>
+            </tr>
+            <tr>
+              <td>{{ deposit_terms.balance_label }}</td>
+              <td>{% if cur %}{{ cur }} {% endif %}{{ deposit_terms.balance_due|floatformat:2|intcomma }}</td>
             </tr>
           </table>
 

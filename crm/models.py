@@ -4134,6 +4134,15 @@ class Invoice(models.Model):
         ("paid", "Paid"),
         ("cancelled", "Cancelled"),
     ]
+    INVOICE_MARKET_CHOICES = [
+        ("north_america", "North America"),
+        ("bangladesh", "Bangladesh"),
+    ]
+    INVOICE_TYPE_CHOICES = [
+        ("sample", "Sample"),
+        ("bulk", "Bulk Production"),
+        ("sewing_charge", "Sewing Charge"),
+    ]
 
     order = models.ForeignKey(
         "ProductionOrder",
@@ -4176,6 +4185,18 @@ class Invoice(models.Model):
         default="",
         blank=True,
     )
+    invoice_market = models.CharField(
+        max_length=20,
+        choices=INVOICE_MARKET_CHOICES,
+        default="north_america",
+        db_index=True,
+    )
+    invoice_type = models.CharField(
+        max_length=20,
+        choices=INVOICE_TYPE_CHOICES,
+        default="bulk",
+        db_index=True,
+    )
     invoice_status = models.CharField(
         max_length=12,
         choices=[("DRAFT", "Draft"), ("APPROVED", "Approved")],
@@ -4194,6 +4215,12 @@ class Invoice(models.Model):
         max_digits=5,
         decimal_places=2,
         default=Decimal("70.00"),
+    )
+    deposit_percentage = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=Decimal("50.00"),
+        blank=True,
     )
     terms_override = models.TextField(blank=True, default="")
 
@@ -4227,6 +4254,21 @@ class Invoice(models.Model):
     @property
     def balance(self):
         return (self.total_amount or Decimal("0")) - (self.paid_amount or Decimal("0"))
+
+    @property
+    def deposit_amount(self):
+        total = self._decimal_or_zero(self.total_amount)
+        percentage = self._decimal_or_zero(getattr(self, "deposit_percentage", Decimal("0")))
+        if total <= 0 or percentage <= 0:
+            return Decimal("0")
+        return (total * percentage / Decimal("100")).quantize(Decimal("0.01"))
+
+    @property
+    def deposit_balance_due(self):
+        balance = self._decimal_or_zero(self.total_amount) - self.deposit_amount
+        if balance < 0:
+            return Decimal("0")
+        return balance.quantize(Decimal("0.01"))
 
     @staticmethod
     def _decimal_or_zero(value):
