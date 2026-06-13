@@ -886,7 +886,14 @@ def quick_costing_client_quotation(request, pk):
     if denied:
         return denied
     quick_costing = get_object_or_404(
-        QuickCosting.objects.select_related("created_by", "quoted_by", "opportunity", "opportunity__lead"),
+        QuickCosting.objects.select_related(
+            "created_by",
+            "quoted_by",
+            "approved_by",
+            "rejected_by",
+            "opportunity",
+            "opportunity__lead",
+        ),
         pk=pk,
     )
     if not quick_costing.quotation_number or not quick_costing.quoted_at:
@@ -907,6 +914,8 @@ def quick_costing_client_quotation(request, pk):
         "calc": calc,
         "company": _quotation_company(),
         "prepared_by": _display_user(quick_costing.quoted_by or quick_costing.created_by),
+        "approval_status_label": "Approved" if quick_costing.approved_at else quick_costing.get_status_display(),
+        "approval_user": _display_user(quick_costing.approved_by),
         "quotation_total_pair": quotation_total_pair,
         **workflow_visibility,
     }

@@ -32,6 +32,52 @@
     border-color: #111827;
   }
 
+  .quick-quote-status-banner {
+    max-width: 1040px;
+    margin: 0 auto 14px;
+    padding: 18px 20px;
+    border: 1px solid #d4af37;
+    border-radius: 10px;
+    background: #fffdf5;
+    color: #111827;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .quick-quote-status-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
+    gap: 14px;
+    min-width: min(100%, 620px);
+  }
+
+  .quick-quote-status-item span {
+    display: block;
+    margin-bottom: 5px;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+
+  .quick-quote-status-item strong {
+    display: block;
+    color: #111827;
+    font-size: 14px;
+    font-weight: 900;
+  }
+
+  .quick-quote-status-note {
+    margin: 12px 0 0;
+    color: #475569;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
   .quick-quote-wrap {
     max-width: 1040px;
     margin: 0 auto 36px;
@@ -189,7 +235,8 @@
 
   @media (max-width: 760px) {
     .quick-quote-head,
-    .quick-quote-grid {
+    .quick-quote-grid,
+    .quick-quote-status-grid {
       grid-template-columns: 1fr;
     }
     .quick-quote-meta {
@@ -219,6 +266,27 @@
   <a class="quick-quote-btn" href="{% url 'quick_costing_detail' quick_costing.pk %}">Back</a>
   <a class="quick-quote-btn primary" href="#" onclick="window.print();return false;">Print</a>
 </div>
+
+<section class="quick-quote-status-banner" aria-label="Quick costing quotation approval status">
+  <div>
+    <div class="quick-quote-status-grid">
+      <div class="quick-quote-status-item">
+        <span>Quotation Status</span>
+        <strong>{{ approval_status_label }}</strong>
+      </div>
+      <div class="quick-quote-status-item">
+        <span>Approved By</span>
+        <strong>{{ approval_user|default:"Not recorded" }}</strong>
+      </div>
+      <div class="quick-quote-status-item">
+        <span>Approved Date</span>
+        <strong>{% if quick_costing.approved_at %}{{ quick_costing.approved_at|date:"Y-m-d H:i" }}{% else %}Not recorded{% endif %}</strong>
+      </div>
+    </div>
+    <p class="quick-quote-status-note">This quotation was approved through the Quick Costing Approval Workflow.</p>
+  </div>
+  <a class="quick-quote-btn primary" href="{% url 'quick_costing_detail' quick_costing.pk %}">Open Quick Costing</a>
+</section>
 
 {% include "crm/partials/workflow_quick_nav.html" %}
 {% include "crm/partials/workflow_order_summary.html" %}
