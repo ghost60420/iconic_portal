@@ -4158,6 +4158,13 @@ class Invoice(models.Model):
         blank=True,
         related_name="invoices",
     )
+    quick_costing = models.ForeignKey(
+        "QuickCosting",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="invoices",
+    )
     customer = models.ForeignKey(
         "Customer",
         on_delete=models.SET_NULL,

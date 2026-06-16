@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from crm.forms_costing import QuickCostingForm
-from crm.models import CostingHeader, Lead, Opportunity, QuickCosting
+from crm.models import CostingHeader, Invoice, Lead, Opportunity, QuickCosting
 
 
 class QuickCostingTests(TestCase):
@@ -202,6 +202,8 @@ class QuickCostingTests(TestCase):
         self.assertContains(detail_response, "Quick Costing")
         self.assertContains(detail_response, "Costing Purpose")
         self.assertContains(detail_response, "Bulk Production Costing")
+        self.assertContains(detail_response, "Approval Status")
+        self.assertContains(detail_response, "Pending")
         self.assertContains(detail_response, reverse("quick_costing_export_pdf", args=[quick.pk]))
         self.assertContains(detail_response, reverse("quick_costing_export_excel", args=[quick.pk]))
         self.assertContains(detail_response, reverse("quick_costing_edit", args=[quick.pk]))
@@ -551,6 +553,8 @@ class QuickCostingTests(TestCase):
         self.assertContains(quote_response, "Approved By")
         self.assertContains(quote_response, admin.username)
         self.assertContains(quote_response, "This quotation was approved through the Quick Costing Approval Workflow.")
+        self.assertContains(quote_response, reverse("quick_costing_convert_to_invoice", args=[quick.pk]))
+        self.assertContains(quote_response, "Create Invoice")
         self.assertContains(quote_response, "Open Quick Costing")
         self.assertContains(quote_response, reverse("quick_costing_detail", args=[quick.pk]))
         self.assertIn("Quotation", quote_html.split("Workflow Activity Timeline", 1)[1])
@@ -561,6 +565,62 @@ class QuickCostingTests(TestCase):
         self.assertNotContains(quote_response, "Commission")
         self.assertNotContains(quote_response, "Net Profit")
         self.assertNotContains(quote_response, "Margin Status")
+
+    def test_quick_costing_quotation_rejection_status(self):
+        admin = self._admin_user("quick-costing-quote-reject-admin")
+        quick = self._quick_costing(created_by=admin)
+        self.client.force_login(admin)
+
+        self.client.post(reverse("quick_costing_approve", args=[quick.pk]))
+        self.client.post(reverse("quick_costing_convert_to_quotation", args=[quick.pk]))
+        self.client.post(reverse("quick_costing_reject", args=[quick.pk]))
+        quick.refresh_from_db()
+
+        self.assertEqual(quick.status, QuickCosting.STATUS_REJECTED)
+        self.assertEqual(quick.quotation_number, "")
+        response = self.client.get(reverse("quick_costing_detail", args=[quick.pk]))
+        self.assertContains(response, "Approval Status")
+        self.assertContains(response, "Rejected")
+
+    def test_approved_quick_quotation_creates_invoice_and_pdf(self):
+        admin = self._admin_user("quick-costing-invoice-admin")
+        opportunity = self._opportunity()
+        quick = self._quick_costing(opportunity=opportunity, created_by=admin)
+        self.client.force_login(admin)
+
+        self.client.post(reverse("quick_costing_approve", args=[quick.pk]))
+        self.client.post(reverse("quick_costing_convert_to_quotation", args=[quick.pk]))
+        response = self.client.post(reverse("quick_costing_convert_to_invoice", args=[quick.pk]))
+        quick.refresh_from_db()
+
+        invoice = Invoice.objects.get(quick_costing=quick)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], reverse("invoice_view", args=[invoice.pk]))
+        self.assertEqual(quick.status, QuickCosting.STATUS_INVOICED)
+        self.assertEqual(invoice.customer, opportunity.customer)
+        self.assertEqual(invoice.invoice_market, "north_america")
+        self.assertEqual(invoice.invoice_type, "bulk")
+        self.assertEqual(invoice.currency, "CAD")
+        self.assertEqual(invoice.subtotal, Decimal("16.67"))
+        self.assertEqual(invoice.shipping_amount, Decimal("1.11"))
+        self.assertEqual(invoice.total_amount, Decimal("17.78"))
+        self.assertEqual(invoice.sewing_charge, Decimal("0"))
+        self.assertEqual(invoice.other_internal_cost, Decimal("0"))
+
+        invoice_response = self.client.get(reverse("invoice_view", args=[invoice.pk]))
+        self.assertContains(invoice_response, invoice.invoice_number)
+        self.assertContains(invoice_response, "Quick Costing")
+        self.assertContains(invoice_response, opportunity.opportunity_id)
+        timeline_html = invoice_response.content.decode("utf-8").split("Workflow Activity Timeline", 1)[1]
+        self.assertIn(invoice.invoice_number, timeline_html)
+
+        pdf_response = self.client.get(reverse("invoice_pdf", args=[invoice.pk]))
+        self.assertEqual(pdf_response.status_code, 200)
+        self.assertEqual(pdf_response["Content-Type"], "application/pdf")
+
+        quote_response = self.client.get(reverse("quick_costing_client_quotation", args=[quick.pk]))
+        self.assertContains(quote_response, "Open Invoice")
+        self.assertContains(quote_response, reverse("invoice_view", args=[invoice.pk]))
 
     def test_quick_costing_excel_export(self):
         admin = self._admin_user("quick-costing-excel-admin")

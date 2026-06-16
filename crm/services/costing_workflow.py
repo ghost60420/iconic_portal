@@ -4,7 +4,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Sum
 from django.utils import timezone
 
-from crm.models import ActualCostEntry, CostingAuditLog, CostingHeader, Invoice, ProductionOrder
+from crm.models import ActualCostEntry, CostingAuditLog, CostingHeader, Invoice, ProductionOrder, QuickCosting
 from crm.services.costing_engine import compute_costing
 from crm.services.order_lifecycle import (
     create_lifecycle_from_invoice,
@@ -86,6 +86,30 @@ def _invoice_region_for_costing(costing):
     if currency == "BDT" or costing.factory_location == "bd":
         return "BD"
     return "CA"
+
+
+def _quick_costing_market_and_currency(quick_costing):
+    opportunity = getattr(quick_costing, "opportunity", None)
+    lead = getattr(opportunity, "lead", None) if opportunity else None
+    customer = None
+    if opportunity:
+        customer = getattr(opportunity, "customer", None)
+    if not customer and lead:
+        customer = getattr(lead, "customer", None)
+    market_hint = (getattr(lead, "market", "") or "").upper()
+    country = (getattr(customer, "country", "") or "").lower().strip() if customer else ""
+    if market_hint == "BD" or "bangladesh" in country:
+        return "bangladesh", "BDT"
+    if quick_costing.exchange_rate_bdt_per_cad:
+        return "north_america", "CAD"
+    return "bangladesh", "BDT"
+
+
+def _quick_money_for_invoice(value, currency, exchange_rate):
+    value = _d(value)
+    if currency == "CAD" and exchange_rate:
+        return _money(value / _d(exchange_rate))
+    return _money(value)
 
 
 def get_costing_quote_amounts(costing):
@@ -187,6 +211,71 @@ def create_invoice_from_costing(costing, user=None):
             changed_by=_user_or_none(user),
             note=invoice.invoice_number,
         )
+        create_lifecycle_from_invoice(invoice, user=user)
+        return invoice, True
+
+
+def create_invoice_from_quick_costing(quick_costing, user=None):
+    if quick_costing.status not in {QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_QUOTED}:
+        raise CostingWorkflowError("Approve the quick costing quotation before creating an invoice.")
+    if not quick_costing.quotation_number or not quick_costing.quoted_at:
+        raise CostingWorkflowError("Create a quotation before creating an invoice.")
+
+    with transaction.atomic():
+        quick_costing = (
+            QuickCosting.objects.select_for_update()
+            .select_related("opportunity", "opportunity__lead", "opportunity__customer", "opportunity__lead__customer")
+            .get(pk=quick_costing.pk)
+        )
+
+        existing = Invoice.objects.filter(quick_costing=quick_costing).order_by("-created_at", "-id").first()
+        if existing:
+            create_lifecycle_from_invoice(existing, user=user)
+            return existing, False
+
+        summary = quick_costing.calculation_summary()
+        market, currency = _quick_costing_market_and_currency(quick_costing)
+        region = "BD" if market == "bangladesh" else "CA"
+        exchange_rate = summary.get("exchange_rate")
+        subtotal = _quick_money_for_invoice(summary.get("revenue"), currency, exchange_rate)
+        shipping = _quick_money_for_invoice(summary.get("shipping_cost_total"), currency, exchange_rate)
+        total = _money(subtotal + shipping)
+        invoice_type = "sample" if quick_costing.costing_purpose == QuickCosting.PURPOSE_SAMPLE else "bulk"
+        deposit_percentage = Decimal("100.00") if invoice_type == "sample" else Decimal("50.00")
+        opportunity = quick_costing.opportunity
+        lead = getattr(opportunity, "lead", None) if opportunity else None
+        customer = None
+        if opportunity:
+            customer = getattr(opportunity, "customer", None)
+        if not customer and lead:
+            customer = getattr(lead, "customer", None)
+
+        today = timezone.localdate()
+        invoice = Invoice.objects.create(
+            quick_costing=quick_costing,
+            customer=customer,
+            invoice_number=_next_invoice_number(),
+            issue_date=today,
+            due_date=today + timezone.timedelta(days=14),
+            currency=currency,
+            invoice_region=region,
+            invoice_market=market,
+            invoice_type=invoice_type,
+            deposit_percentage=deposit_percentage,
+            subtotal=subtotal,
+            shipping_amount=shipping,
+            discount_amount=Decimal("0"),
+            tax_amount=Decimal("0"),
+            total_amount=total,
+            paid_amount=Decimal("0"),
+            status="sent",
+            notes=f"Converted from quick quotation {quick_costing.quotation_number or 'QC-' + str(quick_costing.pk)}.",
+            sewing_charge=Decimal("0"),
+            other_internal_cost=Decimal("0"),
+            internal_cost_note="",
+        )
+        quick_costing.status = QuickCosting.STATUS_INVOICED
+        quick_costing.save(update_fields=["status", "updated_at"])
         create_lifecycle_from_invoice(invoice, user=user)
         return invoice, True
 

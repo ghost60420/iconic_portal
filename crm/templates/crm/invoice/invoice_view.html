@@ -440,6 +440,10 @@
               </form>
             {% endif %}
           {% endif %}
+          {% if invoice.quick_costing %}
+            <a class="pill" href="{% url 'quick_costing_detail' invoice.quick_costing.pk %}">Quick Costing</a>
+            <a class="pill" href="{% url 'quick_costing_client_quotation' invoice.quick_costing.pk %}">Quick Quotation</a>
+          {% endif %}
           {% if lifecycle %}
             <a class="pill" href="{% url 'order_lifecycle_detail' lifecycle.pk %}">Lifecycle</a>
           {% endif %}
@@ -499,6 +503,15 @@
             {% if invoice.order %}
               | Production
               <a href="{% url 'production_detail' invoice.order.pk %}" style="color:#fde68a; font-weight:900;">{{ invoice.order.order_code|default:invoice.order.pk }}</a>
+            {% endif %}
+          </div>
+        {% elif invoice.quick_costing %}
+          <div class="note" style="margin-bottom:12px;">
+            Source quick costing:
+            <a href="{% url 'quick_costing_detail' invoice.quick_costing.pk %}" style="color:#fde68a; font-weight:900;">QC-{{ invoice.quick_costing.pk }}</a>
+            {% if invoice.quick_costing.quotation_number %}
+              | Quotation
+              <a href="{% url 'quick_costing_client_quotation' invoice.quick_costing.pk %}" style="color:#fde68a; font-weight:900;">{{ invoice.quick_costing.quotation_number }}</a>
             {% endif %}
           </div>
         {% endif %}

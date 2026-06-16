@@ -264,6 +264,14 @@
 
 <div class="quick-quote-topbar">
   <a class="quick-quote-btn" href="{% url 'quick_costing_detail' quick_costing.pk %}">Back</a>
+  {% if invoice %}
+    <a class="quick-quote-btn primary" href="{% url 'invoice_view' invoice.pk %}">Open Invoice</a>
+  {% elif can_convert_to_invoice %}
+    <form method="post" action="{% url 'quick_costing_convert_to_invoice' quick_costing.pk %}" style="display:inline;">
+      {% csrf_token %}
+      <button type="submit" class="quick-quote-btn primary" style="cursor:pointer;">Create Invoice</button>
+    </form>
+  {% endif %}
   <a class="quick-quote-btn primary" href="#" onclick="window.print();return false;">Print</a>
 </div>
 
@@ -283,9 +291,25 @@
         <strong>{% if quick_costing.approved_at %}{{ quick_costing.approved_at|date:"Y-m-d H:i" }}{% else %}Not recorded{% endif %}</strong>
       </div>
     </div>
-    <p class="quick-quote-status-note">This quotation was approved through the Quick Costing Approval Workflow.</p>
+    {% if approval_status_label == "Approved" %}
+      <p class="quick-quote-status-note">This quotation was approved through the Quick Costing Approval Workflow.</p>
+    {% elif approval_status_label == "Rejected" %}
+      <p class="quick-quote-status-note">This quotation was rejected through the Quick Costing Approval Workflow.</p>
+    {% else %}
+      <p class="quick-quote-status-note">Approve this quick costing before creating an invoice.</p>
+    {% endif %}
   </div>
-  <a class="quick-quote-btn primary" href="{% url 'quick_costing_detail' quick_costing.pk %}">Open Quick Costing</a>
+  <div>
+    <a class="quick-quote-btn primary" href="{% url 'quick_costing_detail' quick_costing.pk %}">Open Quick Costing</a>
+    {% if invoice %}
+      <a class="quick-quote-btn primary" href="{% url 'invoice_view' invoice.pk %}">Open Invoice</a>
+    {% elif can_convert_to_invoice %}
+      <form method="post" action="{% url 'quick_costing_convert_to_invoice' quick_costing.pk %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="quick-quote-btn primary" style="cursor:pointer;">Create Invoice</button>
+      </form>
+    {% endif %}
+  </div>
 </section>
 
 {% include "crm/partials/workflow_quick_nav.html" %}

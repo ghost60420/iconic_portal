@@ -11069,15 +11069,32 @@ def ceo_dashboard(request):
     quotation_funnel_labels = ["Costings", "Approved", "Quoted", "Invoiced"]
     quotation_funnel_values = [0, 0, 0, 0]
     try:
-        costings_total = CostingHeader.objects.count()
-        approved_costings = CostingHeader.objects.filter(status="approved").count()
-        quotation_count = CostingHeader.objects.exclude(quotation_number="").count()
-        quote_to_invoice_count = (
+        advanced_costings_total = CostingHeader.objects.count()
+        advanced_approved_costings = CostingHeader.objects.filter(status="approved").count()
+        advanced_quotation_count = CostingHeader.objects.exclude(quotation_number="").count()
+        advanced_quote_to_invoice_count = (
             CostingHeader.objects.exclude(quotation_number="")
             .filter(invoices__isnull=False)
             .distinct()
             .count()
         )
+        quick_costings_total = QuickCosting.objects.count()
+        quick_approved_costings = QuickCosting.objects.filter(
+            status__in=[
+                QuickCosting.STATUS_APPROVED,
+                QuickCosting.STATUS_QUOTED,
+                QuickCosting.STATUS_INVOICED,
+                QuickCosting.STATUS_PRODUCTION,
+                QuickCosting.STATUS_SHIPPED,
+                QuickCosting.STATUS_CLOSED,
+            ]
+        ).count()
+        quick_quotation_count = QuickCosting.objects.exclude(quotation_number="").count()
+        quick_quote_to_invoice_count = QuickCosting.objects.exclude(quotation_number="").filter(invoices__isnull=False).distinct().count()
+        costings_total = advanced_costings_total + quick_costings_total
+        approved_costings = advanced_approved_costings + quick_approved_costings
+        quotation_count = advanced_quotation_count + quick_quotation_count
+        quote_to_invoice_count = advanced_quote_to_invoice_count + quick_quote_to_invoice_count
         quotation_approval_rate = _ceo_percent(quote_to_invoice_count, quotation_count)
         quotation_funnel_values = [
             int(costings_total),

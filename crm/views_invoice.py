@@ -476,6 +476,7 @@ def _display_user(user) -> str:
 def _invoice_crm_references(inv: Invoice) -> dict:
     order = getattr(inv, "order", None)
     costing = getattr(inv, "costing_header", None)
+    quick_costing = getattr(inv, "quick_costing", None)
     opportunity = None
     lead = None
 
@@ -484,6 +485,8 @@ def _invoice_crm_references(inv: Invoice) -> dict:
         lead = getattr(order, "lead", None)
     if not opportunity and costing:
         opportunity = getattr(costing, "opportunity", None)
+    if not opportunity and quick_costing:
+        opportunity = getattr(quick_costing, "opportunity", None)
     if not lead and opportunity:
         lead = getattr(opportunity, "lead", None)
 
@@ -563,8 +566,14 @@ def _invoice_payment_info(inv: Invoice) -> dict:
 
 def _invoice_line_items(inv: Invoice) -> list[dict]:
     order = getattr(inv, "order", None)
+    quick_costing = getattr(inv, "quick_costing", None)
     subtotal = _d(getattr(inv, "subtotal", Decimal("0")))
-    qty = _d(getattr(order, "qty_total", Decimal("0"))) if order else Decimal("0")
+    if order:
+        qty = _d(getattr(order, "qty_total", Decimal("0")))
+    elif quick_costing:
+        qty = _d(getattr(quick_costing, "quantity", Decimal("0")))
+    else:
+        qty = Decimal("0")
     rate = Decimal("0")
 
     if _invoice_market(inv) == "bangladesh" and _invoice_type(inv) == "sewing_charge":
@@ -599,6 +608,18 @@ def _invoice_line_items(inv: Invoice) -> list[dict]:
     else:
         description = "Bulk Production"
     detail_parts = []
+    if quick_costing and not order:
+        description = (
+            getattr(quick_costing, "project_name", "")
+            or getattr(quick_costing, "get_product_type_display", lambda: "")()
+            or description
+        )
+        if getattr(quick_costing, "buyer_name", ""):
+            detail_parts.append(f"Buyer: {quick_costing.buyer_name}")
+        if getattr(quick_costing, "quotation_number", ""):
+            detail_parts.append(f"Quotation: {quick_costing.quotation_number}")
+        if getattr(quick_costing, "costing_purpose", ""):
+            detail_parts.append(f"Purpose: {quick_costing.purpose_label}")
     if order:
         description = getattr(order, "title", "") or getattr(order, "style_name", "") or getattr(order, "order_code", "") or description
         if getattr(order, "style_name", ""):
@@ -1170,7 +1191,17 @@ def invoice_edit(request, pk):
 @login_required
 @user_passes_test(superuser_only)
 def invoice_view(request, pk):
-    inv = get_object_or_404(Invoice.objects.select_related("order", "customer", "costing_header"), pk=pk)
+    inv = get_object_or_404(
+        Invoice.objects.select_related(
+            "order",
+            "customer",
+            "costing_header",
+            "quick_costing",
+            "quick_costing__opportunity",
+            "quick_costing__opportunity__lead",
+        ),
+        pk=pk,
+    )
     payment_history = list(
         inv.payments.select_related("production_order", "accounting_entry", "created_by").order_by("-payment_date", "-id")
     )
@@ -1189,6 +1220,7 @@ def invoice_view(request, pk):
         user=request.user,
         invoice=inv,
         costing=getattr(inv, "costing_header", None),
+        quick_costing=getattr(inv, "quick_costing", None),
         production_order=getattr(inv, "order", None),
         lifecycle=lifecycle,
     )
@@ -1229,7 +1261,16 @@ def invoice_view(request, pk):
 @login_required
 @user_passes_test(superuser_only)
 def invoice_client_view(request, pk):
-    inv = get_object_or_404(Invoice.objects.select_related("order", "customer"), pk=pk)
+    inv = get_object_or_404(
+        Invoice.objects.select_related(
+            "order",
+            "customer",
+            "quick_costing",
+            "quick_costing__opportunity",
+            "quick_costing__opportunity__lead",
+        ),
+        pk=pk,
+    )
     return render(request, _invoice_client_template(inv), _invoice_client_context(inv, request.user))
 
 
@@ -1260,7 +1301,16 @@ def _pdf_text_lines(pdf, text: str, max_width: int, font_name: str, font_size: i
 @login_required
 @user_passes_test(superuser_only)
 def invoice_pdf(request, pk):
-    inv = get_object_or_404(Invoice.objects.select_related("order", "customer"), pk=pk)
+    inv = get_object_or_404(
+        Invoice.objects.select_related(
+            "order",
+            "customer",
+            "quick_costing",
+            "quick_costing__opportunity",
+            "quick_costing__opportunity__lead",
+        ),
+        pk=pk,
+    )
 
     try:
         from reportlab.lib import colors

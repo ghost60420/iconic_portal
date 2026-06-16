@@ -33,6 +33,7 @@ from .services.costing_workflow import (
     CostingWorkflowError,
     convert_costing_to_quotation,
     create_invoice_from_costing,
+    create_invoice_from_quick_costing,
     get_costing_quote_amounts,
 )
 from .services.order_lifecycle import create_lifecycle_from_costing
@@ -257,6 +258,21 @@ def _display_user(user):
     if not user:
         return ""
     return user.get_full_name() or user.get_username()
+
+
+def _quick_approval_status_label(quick_costing):
+    if getattr(quick_costing, "rejected_at", None) or quick_costing.status == QuickCosting.STATUS_REJECTED:
+        return "Rejected"
+    if getattr(quick_costing, "approved_at", None) or quick_costing.status in {
+        QuickCosting.STATUS_APPROVED,
+        QuickCosting.STATUS_QUOTED,
+        QuickCosting.STATUS_INVOICED,
+        QuickCosting.STATUS_PRODUCTION,
+        QuickCosting.STATUS_SHIPPED,
+        QuickCosting.STATUS_CLOSED,
+    }:
+        return "Approved"
+    return "Pending"
 
 
 def _quotation_context(costing, user=None):
@@ -756,18 +772,23 @@ def quick_costing_detail(request, pk):
         pk=pk,
     )
     calc = _quick_costing_calc(quick_costing)
+    invoice = quick_costing.invoices.select_related("customer", "order").order_by("-created_at", "-id").first()
     margin_tone = "positive" if calc.get("net_profit_total", Decimal("0")) >= Decimal("0") else "negative"
     workflow_visibility = build_workflow_visibility_context(
         "costing",
         user=request.user,
         opportunity=quick_costing.opportunity,
         quick_costing=quick_costing,
+        invoice=invoice,
     )
     context = {
         "quick_costing": quick_costing,
         "calc": calc,
+        "invoice": invoice,
         "margin_tone": margin_tone,
         "can_approve": _can_approve(request.user),
+        "can_convert_to_invoice": _can_convert_to_invoice(request.user) and _quick_approval_status_label(quick_costing) == "Approved",
+        "approval_status_label": _quick_approval_status_label(quick_costing),
         "can_edit_quick_costing": (not quick_costing.is_locked) or _can_approve(request.user),
         **workflow_visibility,
     }
@@ -833,6 +854,9 @@ def quick_costing_reject(request, pk):
     quick_costing = get_object_or_404(QuickCosting, pk=pk)
     if not _can_approve(request.user):
         messages.error(request, "You do not have permission to reject.")
+        return redirect("quick_costing_detail", pk=pk)
+    if quick_costing.invoices.exists():
+        messages.error(request, "This quick costing already has an invoice and cannot be rejected.")
         return redirect("quick_costing_detail", pk=pk)
     quick_costing.status = QuickCosting.STATUS_REJECTED
     quick_costing.rejected_by = _user_or_none(request.user)
@@ -900,6 +924,7 @@ def quick_costing_client_quotation(request, pk):
         messages.error(request, "Approve and create a quotation before viewing it.")
         return redirect("quick_costing_detail", pk=pk)
     calc = _quick_costing_calc(quick_costing)
+    invoice = quick_costing.invoices.select_related("customer", "order").order_by("-created_at", "-id").first()
     quotation_total = (calc.get("total_sales_order") or Decimal("0")) + (calc.get("shipping_cost_total") or Decimal("0"))
     quotation_total_pair = _format_quick_money_pair(quotation_total, calc.get("exchange_rate"))
     workflow_visibility = build_workflow_visibility_context(
@@ -908,18 +933,53 @@ def quick_costing_client_quotation(request, pk):
         opportunity=quick_costing.opportunity,
         quick_costing=quick_costing,
         quotation=quick_costing,
+        invoice=invoice,
     )
     context = {
         "quick_costing": quick_costing,
         "calc": calc,
+        "invoice": invoice,
         "company": _quotation_company(),
         "prepared_by": _display_user(quick_costing.quoted_by or quick_costing.created_by),
-        "approval_status_label": "Approved" if quick_costing.approved_at else quick_costing.get_status_display(),
+        "approval_status_label": _quick_approval_status_label(quick_costing),
         "approval_user": _display_user(quick_costing.approved_by),
+        "can_convert_to_invoice": _can_convert_to_invoice(request.user) and _quick_approval_status_label(quick_costing) == "Approved",
         "quotation_total_pair": quotation_total_pair,
         **workflow_visibility,
     }
     return render(request, "crm/costing/quick_quotation_client.html", context)
+
+
+@require_POST
+def quick_costing_convert_to_invoice(request, pk):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
+    quick_costing = get_object_or_404(
+        QuickCosting.objects.select_related("opportunity", "opportunity__lead"),
+        pk=pk,
+    )
+    if not _can_convert_to_invoice(request.user):
+        messages.error(request, "Only invoice managers can create invoices.")
+        return redirect("quick_costing_client_quotation", pk=pk)
+    if _quick_approval_status_label(quick_costing) != "Approved":
+        messages.error(request, "Approve the quick costing quotation before creating an invoice.")
+        return redirect("quick_costing_client_quotation", pk=pk)
+    if not quick_costing.quotation_number or not quick_costing.quoted_at:
+        messages.error(request, "Create a quick quotation before creating an invoice.")
+        return redirect("quick_costing_detail", pk=pk)
+
+    try:
+        invoice, created = create_invoice_from_quick_costing(quick_costing, user=request.user)
+    except CostingWorkflowError as exc:
+        messages.error(request, str(exc))
+        return redirect("quick_costing_client_quotation", pk=pk)
+
+    if created:
+        messages.success(request, f"Invoice {invoice.invoice_number} created from quick quotation.")
+    else:
+        messages.info(request, f"Invoice {invoice.invoice_number} already exists for this quick quotation.")
+    return redirect("invoice_view", pk=invoice.pk)
 
 
 def quick_costing_export_excel(request, pk):

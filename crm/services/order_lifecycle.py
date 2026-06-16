@@ -303,6 +303,11 @@ def _upsert_lifecycle(user=None, **links):
         production_order = production_order or getattr(invoice, "order", None)
         customer = customer or getattr(invoice, "customer", None)
         costing = costing or getattr(invoice, "costing_header", None)
+        quick_costing = getattr(invoice, "quick_costing", None)
+        if quick_costing:
+            opportunity = opportunity or getattr(quick_costing, "opportunity", None)
+            if opportunity:
+                lead = lead or getattr(opportunity, "lead", None)
     if quotation:
         lifecycle.quotation = quotation
         costing = costing or quotation
@@ -338,11 +343,16 @@ def create_lifecycle_from_quotation(quotation, user=None):
 
 
 def create_lifecycle_from_invoice(invoice, user=None):
+    quick_costing = getattr(invoice, "quick_costing", None)
+    opportunity = getattr(quick_costing, "opportunity", None) if quick_costing else None
+    lead = getattr(opportunity, "lead", None) if opportunity else None
     return _upsert_lifecycle(
         user=user,
         invoice=invoice,
         costing=getattr(invoice, "costing_header", None),
         production_order=getattr(invoice, "order", None),
+        opportunity=opportunity,
+        lead=lead,
         customer=getattr(invoice, "customer", None),
     )
 

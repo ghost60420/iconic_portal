@@ -229,6 +229,14 @@
       <a class="quick-btn" href="{% url 'quick_costing_export_excel' quick_costing.pk %}">Export Excel</a>
       {% if quick_costing.quotation_number and quick_costing.quoted_at %}
         <a class="quick-btn quick-btn-primary" href="{% url 'quick_costing_client_quotation' quick_costing.pk %}">Open Quotation</a>
+        {% if invoice %}
+          <a class="quick-btn quick-btn-primary" href="{% url 'invoice_view' invoice.pk %}">Open Invoice</a>
+        {% elif can_convert_to_invoice %}
+          <form method="post" action="{% url 'quick_costing_convert_to_invoice' quick_costing.pk %}" class="quick-inline-form">
+            {% csrf_token %}
+            <button type="submit" class="quick-btn quick-btn-primary" style="cursor:pointer;">Create Invoice</button>
+          </form>
+        {% endif %}
       {% elif quick_costing.status == "approved" and can_approve %}
         <form method="post" action="{% url 'quick_costing_convert_to_quotation' quick_costing.pk %}" class="quick-inline-form">
           {% csrf_token %}
@@ -253,6 +261,7 @@
         <div class="quick-meta-row"><span>Costing Type</span><strong><span class="quick-type-badge">Quick</span></strong></div>
         <div class="quick-meta-row"><span>Costing Purpose</span><strong><span class="quick-type-badge purpose-{{ quick_costing.costing_purpose }}">{{ quick_costing.purpose_label }}</span></strong></div>
         <div class="quick-meta-row"><span>Status</span><strong><span class="quick-type-badge status-{{ quick_costing.status }}">{{ quick_costing.get_status_display }}</span></strong></div>
+        <div class="quick-meta-row"><span>Approval Status</span><strong><span class="quick-type-badge status-{{ approval_status_label|lower }}">{{ approval_status_label }}</span></strong></div>
         {% if quick_costing.approved_at %}
           <div class="quick-meta-row"><span>Approved</span><strong>{{ quick_costing.approved_at|date:"M j, Y H:i" }}{% if quick_costing.approved_by %} · {{ quick_costing.approved_by.username }}{% endif %}</strong></div>
         {% endif %}
@@ -261,6 +270,9 @@
         {% endif %}
         {% if quick_costing.quotation_number %}
           <div class="quick-meta-row"><span>Quotation</span><strong><a href="{% url 'quick_costing_client_quotation' quick_costing.pk %}">{{ quick_costing.quotation_number }}</a></strong></div>
+        {% endif %}
+        {% if invoice %}
+          <div class="quick-meta-row"><span>Invoice</span><strong><a href="{% url 'invoice_view' invoice.pk %}">{{ invoice.invoice_number }}</a></strong></div>
         {% endif %}
         {% if quick_costing.opportunity %}
           <div class="quick-meta-row">
@@ -362,15 +374,21 @@
   {% if can_approve %}
     <section class="quick-detail-card" style="margin-top:14px;">
       <h2 class="quick-section-title">Approval Workflow</h2>
+      <div class="quick-meta-row" style="margin-bottom:12px;">
+        <span>Approval Status</span>
+        <strong><span class="quick-type-badge status-{{ approval_status_label|lower }}">{{ approval_status_label }}</span></strong>
+      </div>
       <div class="quick-actions" style="justify-content:flex-start;">
         <form method="post" action="{% url 'quick_costing_approve' quick_costing.pk %}" class="quick-inline-form">
           {% csrf_token %}
           <button type="submit" class="quick-btn quick-btn-primary" style="cursor:pointer;">Approve</button>
         </form>
-        <form method="post" action="{% url 'quick_costing_reject' quick_costing.pk %}" class="quick-inline-form">
-          {% csrf_token %}
-          <button type="submit" class="quick-btn" style="cursor:pointer;">Reject</button>
-        </form>
+        {% if not invoice %}
+          <form method="post" action="{% url 'quick_costing_reject' quick_costing.pk %}" class="quick-inline-form">
+            {% csrf_token %}
+            <button type="submit" class="quick-btn" style="cursor:pointer;">Reject</button>
+          </form>
+        {% endif %}
       </div>
     </section>
   {% endif %}

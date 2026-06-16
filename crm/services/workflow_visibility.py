@@ -227,7 +227,11 @@ def _hydrate_links(
     if invoice:
         production_order = production_order or getattr(invoice, "order", None)
         costing = costing or getattr(invoice, "costing_header", None)
+        quick_costing = quick_costing or getattr(invoice, "quick_costing", None)
+        if quick_costing:
+            opportunity = opportunity or getattr(quick_costing, "opportunity", None)
         quotation = quotation or (costing if _is_quotation(costing) else None)
+        quotation = quotation or (quick_costing if _is_quotation(quick_costing) else None)
     if production_order:
         lead = lead or getattr(production_order, "lead", None)
         opportunity = opportunity or getattr(production_order, "opportunity", None)
@@ -257,6 +261,11 @@ def _hydrate_links(
         quick_costing_count = QuickCosting.objects.filter(opportunity=opportunity).count()
         if _is_quotation(quick_costing):
             quotation = _latest_by_updated_at(quotation, quick_costing)
+    if quick_costing and not invoice:
+        invoice = _first_or_none(
+            quick_costing.invoices.select_related("order", "customer", "costing_header", "quick_costing")
+            .order_by("-created_at", "-id")
+        )
     if costing and not invoice:
         invoice = _first_or_none(
             costing.invoices.select_related("order", "customer", "costing_header")

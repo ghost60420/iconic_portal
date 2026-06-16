@@ -131,6 +131,7 @@ urlpatterns = [
     path("costing/quick/<int:pk>/approve/", costing_perm(costing.quick_costing_approve), name="quick_costing_approve"),
     path("costing/quick/<int:pk>/reject/", costing_perm(costing.quick_costing_reject), name="quick_costing_reject"),
     path("costing/quick/<int:pk>/convert/quotation/", costing_perm(costing.quick_costing_convert_to_quotation), name="quick_costing_convert_to_quotation"),
+    path("costing/quick/<int:pk>/convert/invoice/", costing_perm(costing.quick_costing_convert_to_invoice), name="quick_costing_convert_to_invoice"),
     path("costing/quick/<int:pk>/quotation/", costing_perm(costing.quick_costing_client_quotation), name="quick_costing_client_quotation"),
     path("costing/quick/<int:pk>/export/pdf/", costing_perm(costing.quick_costing_export_pdf), name="quick_costing_export_pdf"),
     path("costing/quick/<int:pk>/export/excel/", costing_perm(costing.quick_costing_export_excel), name="quick_costing_export_excel"),
