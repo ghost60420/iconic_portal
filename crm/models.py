@@ -4353,6 +4353,83 @@ class Invoice(models.Model):
         }.get(self.payment_status_key, "Unpaid")
 
 
+class InvoiceSettings(models.Model):
+    company_name = models.CharField(max_length=200, blank=True, default="Iconic Apparel House Inc.")
+    company_email = models.EmailField(blank=True, default="info@iconicapparelhouse.com")
+    company_phone = models.CharField(max_length=80, blank=True, default="604-500-6009")
+    website = models.CharField(max_length=160, blank=True, default="iconicapparelhouse.com")
+    slogan = models.CharField(max_length=255, blank=True, default="From Concept to Creation")
+    invoice_footer_note = models.CharField(
+        max_length=255,
+        blank=True,
+        default="Iconic Apparel House Inc. Your Trusted Manufacturing Partner for Growth.",
+    )
+    authorized_by_name = models.CharField(max_length=160, blank=True, default="")
+    authorized_by_title = models.CharField(max_length=160, blank=True, default="")
+
+    paypal_email_or_id = models.CharField(max_length=160, blank=True, default="iconicapparelhouse")
+    paypal_qr_image = models.ImageField(upload_to="invoice_settings/qr/", blank=True, null=True)
+    etransfer_email = models.EmailField(blank=True, default="accounts@iconicapparelhouse.com")
+    canada_bank_name = models.CharField(max_length=160, blank=True, default="")
+    canada_account_name = models.CharField(max_length=160, blank=True, default="")
+    canada_account_number = models.CharField(max_length=120, blank=True, default="")
+    canada_transit_number = models.CharField(max_length=80, blank=True, default="")
+    canada_institution_number = models.CharField(max_length=80, blank=True, default="")
+    canada_wire_note = models.TextField(blank=True, default="")
+    canada_payment_terms = models.TextField(blank=True, default="")
+
+    bd_bank_name = models.CharField(max_length=160, blank=True, default="")
+    bd_account_name = models.CharField(max_length=160, blank=True, default="")
+    bd_account_number = models.CharField(max_length=120, blank=True, default="")
+    bd_branch = models.CharField(max_length=160, blank=True, default="")
+    bd_routing_number = models.CharField(max_length=80, blank=True, default="")
+    bd_swift = models.CharField(max_length=80, blank=True, default="")
+    bkash_number = models.CharField(max_length=80, blank=True, default="")
+    bkash_qr_image = models.ImageField(upload_to="invoice_settings/qr/", blank=True, null=True)
+    nagad_number = models.CharField(max_length=80, blank=True, default="")
+    nagad_qr_image = models.ImageField(upload_to="invoice_settings/qr/", blank=True, null=True)
+    rocket_number = models.CharField(max_length=80, blank=True, default="")
+    rocket_qr_image = models.ImageField(upload_to="invoice_settings/qr/", blank=True, null=True)
+    bd_payment_terms = models.TextField(blank=True, default="")
+
+    default_sample_deposit_percentage = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal("100.00"))
+    default_bulk_deposit_percentage = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal("50.00"))
+    default_bd_sewing_deposit_percentage = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal("50.00"))
+    default_currency_na = models.CharField(max_length=10, blank=True, default="CAD")
+    default_currency_bd = models.CharField(max_length=10, blank=True, default="BDT")
+    default_tax_note = models.CharField(max_length=255, blank=True, default="")
+    terms_and_conditions_na = models.TextField(blank=True, default="")
+    terms_and_conditions_bd = models.TextField(blank=True, default="")
+
+    is_active = models.BooleanField(default=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="updated_invoice_settings",
+    )
+
+    class Meta:
+        ordering = ["-is_active", "-updated_at", "-id"]
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.is_active:
+            InvoiceSettings.objects.exclude(pk=self.pk).filter(is_active=True).update(is_active=False)
+
+    @classmethod
+    def active(cls):
+        try:
+            return cls.objects.filter(is_active=True).order_by("-updated_at", "-id").first()
+        except Exception:
+            return None
+
+    def __str__(self):
+        return self.company_name or "Invoice Settings"
+
+
 class InvoiceAudit(models.Model):
     ACTION_CHOICES = [
         ("approved", "Approved"),

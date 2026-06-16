@@ -28,6 +28,7 @@ from .models import (
     InventoryItem,
     Invoice,
     InvoicePayment,
+    InvoiceSettings,
     Lead,
     Opportunity,
     ProductionOrder,
@@ -1176,7 +1177,13 @@ class InvoiceForm(forms.ModelForm):
         value = self.cleaned_data.get("deposit_percentage")
         if value in ("", None):
             invoice_type = (self.cleaned_data.get("invoice_type") or "").strip()
-            return Decimal("100") if invoice_type == "sample" else Decimal("50")
+            invoice_market = (self.cleaned_data.get("invoice_market") or "").strip()
+            settings_obj = InvoiceSettings.active()
+            if invoice_type == "sample":
+                return getattr(settings_obj, "default_sample_deposit_percentage", None) or Decimal("100")
+            if invoice_market == "bangladesh" and invoice_type == "sewing_charge":
+                return getattr(settings_obj, "default_bd_sewing_deposit_percentage", None) or Decimal("50")
+            return getattr(settings_obj, "default_bulk_deposit_percentage", None) or Decimal("50")
         try:
             value = Decimal(str(value))
         except Exception:
@@ -1193,6 +1200,121 @@ class InvoiceForm(forms.ModelForm):
 
     def clean_other_internal_cost(self):
         return self._clean_money("other_internal_cost")
+
+
+class InvoiceSettingsForm(forms.ModelForm):
+    class Meta:
+        model = InvoiceSettings
+        fields = [
+            "company_name",
+            "company_email",
+            "company_phone",
+            "website",
+            "slogan",
+            "invoice_footer_note",
+            "authorized_by_name",
+            "authorized_by_title",
+            "paypal_email_or_id",
+            "paypal_qr_image",
+            "etransfer_email",
+            "canada_bank_name",
+            "canada_account_name",
+            "canada_account_number",
+            "canada_transit_number",
+            "canada_institution_number",
+            "canada_wire_note",
+            "canada_payment_terms",
+            "bd_bank_name",
+            "bd_account_name",
+            "bd_account_number",
+            "bd_branch",
+            "bd_routing_number",
+            "bd_swift",
+            "bkash_number",
+            "bkash_qr_image",
+            "nagad_number",
+            "nagad_qr_image",
+            "rocket_number",
+            "rocket_qr_image",
+            "bd_payment_terms",
+            "default_sample_deposit_percentage",
+            "default_bulk_deposit_percentage",
+            "default_bd_sewing_deposit_percentage",
+            "default_currency_na",
+            "default_currency_bd",
+            "default_tax_note",
+            "terms_and_conditions_na",
+            "terms_and_conditions_bd",
+            "is_active",
+        ]
+        widgets = {
+            "company_name": forms.TextInput(attrs={"class": "form-control"}),
+            "company_email": forms.EmailInput(attrs={"class": "form-control"}),
+            "company_phone": forms.TextInput(attrs={"class": "form-control"}),
+            "website": forms.TextInput(attrs={"class": "form-control"}),
+            "slogan": forms.TextInput(attrs={"class": "form-control"}),
+            "invoice_footer_note": forms.TextInput(attrs={"class": "form-control"}),
+            "authorized_by_name": forms.TextInput(attrs={"class": "form-control"}),
+            "authorized_by_title": forms.TextInput(attrs={"class": "form-control"}),
+            "paypal_email_or_id": forms.TextInput(attrs={"class": "form-control"}),
+            "paypal_qr_image": forms.ClearableFileInput(attrs={"class": "form-control", "accept": "image/*"}),
+            "etransfer_email": forms.EmailInput(attrs={"class": "form-control"}),
+            "canada_bank_name": forms.TextInput(attrs={"class": "form-control"}),
+            "canada_account_name": forms.TextInput(attrs={"class": "form-control"}),
+            "canada_account_number": forms.TextInput(attrs={"class": "form-control"}),
+            "canada_transit_number": forms.TextInput(attrs={"class": "form-control"}),
+            "canada_institution_number": forms.TextInput(attrs={"class": "form-control"}),
+            "canada_wire_note": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+            "canada_payment_terms": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
+            "bd_bank_name": forms.TextInput(attrs={"class": "form-control"}),
+            "bd_account_name": forms.TextInput(attrs={"class": "form-control"}),
+            "bd_account_number": forms.TextInput(attrs={"class": "form-control"}),
+            "bd_branch": forms.TextInput(attrs={"class": "form-control"}),
+            "bd_routing_number": forms.TextInput(attrs={"class": "form-control"}),
+            "bd_swift": forms.TextInput(attrs={"class": "form-control"}),
+            "bkash_number": forms.TextInput(attrs={"class": "form-control"}),
+            "bkash_qr_image": forms.ClearableFileInput(attrs={"class": "form-control", "accept": "image/*"}),
+            "nagad_number": forms.TextInput(attrs={"class": "form-control"}),
+            "nagad_qr_image": forms.ClearableFileInput(attrs={"class": "form-control", "accept": "image/*"}),
+            "rocket_number": forms.TextInput(attrs={"class": "form-control"}),
+            "rocket_qr_image": forms.ClearableFileInput(attrs={"class": "form-control", "accept": "image/*"}),
+            "bd_payment_terms": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
+            "default_sample_deposit_percentage": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0", "max": "100"}),
+            "default_bulk_deposit_percentage": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0", "max": "100"}),
+            "default_bd_sewing_deposit_percentage": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0", "max": "100"}),
+            "default_currency_na": forms.TextInput(attrs={"class": "form-control"}),
+            "default_currency_bd": forms.TextInput(attrs={"class": "form-control"}),
+            "default_tax_note": forms.TextInput(attrs={"class": "form-control"}),
+            "terms_and_conditions_na": forms.Textarea(attrs={"class": "form-control", "rows": 8}),
+            "terms_and_conditions_bd": forms.Textarea(attrs={"class": "form-control", "rows": 8}),
+            "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        }
+
+    def clean_default_currency_na(self):
+        return (self.cleaned_data.get("default_currency_na") or "CAD").upper().strip()
+
+    def clean_default_currency_bd(self):
+        return (self.cleaned_data.get("default_currency_bd") or "BDT").upper().strip()
+
+    def _clean_percentage(self, field_name, fallback):
+        value = self.cleaned_data.get(field_name)
+        if value in ("", None):
+            return Decimal(fallback)
+        value = Decimal(str(value))
+        if value < 0:
+            return Decimal("0")
+        if value > 100:
+            return Decimal("100")
+        return value
+
+    def clean_default_sample_deposit_percentage(self):
+        return self._clean_percentage("default_sample_deposit_percentage", "100.00")
+
+    def clean_default_bulk_deposit_percentage(self):
+        return self._clean_percentage("default_bulk_deposit_percentage", "50.00")
+
+    def clean_default_bd_sewing_deposit_percentage(self):
+        return self._clean_percentage("default_bd_sewing_deposit_percentage", "50.00")
 
 
 class InvoicePaymentForm(forms.ModelForm):

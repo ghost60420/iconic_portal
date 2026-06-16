@@ -310,18 +310,23 @@
   <div class="invoice-wrap">
 
     <div class="actions noPrint">
-      <a class="pill" href="{% url 'invoice_list' %}">Back to invoices</a>
-      {% if invoice.invoice_status != "APPROVED" %}
-        <a class="pill gold" href="{% url 'invoice_edit' invoice.pk %}">Edit</a>
+      {% if is_preview %}
+        <a class="pill" href="{% url 'invoice_settings' %}">Back to settings</a>
+        <a class="pill" href="#" onclick="window.print();return false;">Print Preview</a>
+      {% else %}
+        <a class="pill" href="{% url 'invoice_list' %}">Back to invoices</a>
+        {% if invoice.invoice_status != "APPROVED" %}
+          <a class="pill gold" href="{% url 'invoice_edit' invoice.pk %}">Edit</a>
+        {% endif %}
+        <a class="pill" href="{% url 'invoice_pdf' invoice.pk %}">Download PDF</a>
+        {% if invoice.invoice_status == "DRAFT" and can_approve_invoice %}
+          <form method="post" action="{% url 'invoice_approve' invoice.pk %}">
+            {% csrf_token %}
+            <button class="pill approve" type="submit">Approve</button>
+          </form>
+        {% endif %}
+        <a class="pill" href="#" onclick="window.print();return false;">Print</a>
       {% endif %}
-      <a class="pill" href="{% url 'invoice_pdf' invoice.pk %}">Download PDF</a>
-      {% if invoice.invoice_status == "DRAFT" and can_approve_invoice %}
-        <form method="post" action="{% url 'invoice_approve' invoice.pk %}">
-          {% csrf_token %}
-          <button class="pill approve" type="submit">Approve</button>
-        </form>
-      {% endif %}
-      <a class="pill" href="#" onclick="window.print();return false;">Print</a>
     </div>
 
     <div class="invoice-shell">
@@ -350,6 +355,9 @@
 
         <div class="invoice-meta">
           <div class="badge">{{ invoice_layout_title }}</div>
+          {% if is_preview %}
+            <div class="badge">Settings Preview</div>
+          {% endif %}
           {% if invoice.invoice_status == "APPROVED" %}
             <div class="badge approved">Approved</div>
             <div class="approve-meta">
@@ -468,6 +476,12 @@
               <td class="label">Tax</td>
               <td>{{ cur }} {{ invoice.tax_amount|default_if_none:0|floatformat:2|intcomma }}</td>
             </tr>
+            {% if tax_note %}
+              <tr>
+                <td class="label">Tax note</td>
+                <td>{{ tax_note }}</td>
+              </tr>
+            {% endif %}
             <tr>
               <td class="label total">Grand total</td>
               <td class="total">{{ cur }} {{ invoice.total_amount|default_if_none:0|floatformat:2|intcomma }}</td>
@@ -499,7 +513,9 @@
 
         <div class="notes">
           <strong>Payment terms</strong><br>
-          {% if is_sample_invoice %}
+          {% if payment_info.payment_terms %}
+            {{ payment_info.payment_terms|linebreaksbr }}
+          {% elif is_sample_invoice %}
             100% payment is required before sample development begins.
           {% else %}
             {{ deposit_terms.percentage|floatformat:2 }}% deposit confirms the order. The remaining balance is due before shipment.
@@ -536,9 +552,13 @@
             Currency: CAD<br>
             PayPal fees: Paid by sender
           </div>
-          {% if payment_info.paypal_qr_path %}
+          {% if payment_info.paypal_qr_url or payment_info.paypal_qr_path %}
             <div style="margin-top:12px;">
-              <img src="{% static payment_info.paypal_qr_path %}" alt="PayPal QR code" style="width:120px; height:120px; object-fit:contain; border:1px solid var(--line); border-radius:12px;">
+              {% if payment_info.paypal_qr_url %}
+                <img src="{{ payment_info.paypal_qr_url }}" alt="PayPal QR code" style="width:120px; height:120px; object-fit:contain; border:1px solid var(--line); border-radius:12px;">
+              {% else %}
+                <img src="{% static payment_info.paypal_qr_path %}" alt="PayPal QR code" style="width:120px; height:120px; object-fit:contain; border:1px solid var(--line); border-radius:12px;">
+              {% endif %}
             </div>
           {% endif %}
 
@@ -551,6 +571,7 @@
               {% if payment_info.institution %}Institution: {{ payment_info.institution }}<br>{% endif %}
               {% if payment_info.transit %}Transit: {{ payment_info.transit }}<br>{% endif %}
               {% if payment_info.swift %}SWIFT: {{ payment_info.swift }}<br>{% endif %}
+              {% if payment_info.wire_note %}{{ payment_info.wire_note|linebreaksbr }}{% endif %}
             </div>
           {% endif %}
           {% if payment_info.note %}
@@ -567,8 +588,11 @@
 
         <div class="policy">
           <strong>Thank you.</strong><br>
-          From Concept to Creation<br>
-          Iconic Apparel House Inc. Your Trusted Manufacturing Partner for Growth.
+          {% if company.slogan %}{{ company.slogan }}<br>{% endif %}
+          {% if company.footer_note %}{{ company.footer_note }}{% endif %}
+          {% if company.authorized_by_name %}
+            <br><br>Authorized by: {{ company.authorized_by_name }}{% if company.authorized_by_title %}, {{ company.authorized_by_title }}{% endif %}
+          {% endif %}
         </div>
       </div>
     </div>

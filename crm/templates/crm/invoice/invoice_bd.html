@@ -277,18 +277,23 @@
   <div class="invoice-wrap">
 
     <div class="actions noPrint">
-      <a class="pill" href="{% url 'invoice_list' %}">Back to invoices</a>
-      {% if invoice.invoice_status != "APPROVED" %}
-        <a class="pill gold" href="{% url 'invoice_edit' invoice.pk %}">Edit</a>
+      {% if is_preview %}
+        <a class="pill" href="{% url 'invoice_settings' %}">Back to settings</a>
+        <a class="pill" href="#" onclick="window.print();return false;">Print Preview</a>
+      {% else %}
+        <a class="pill" href="{% url 'invoice_list' %}">Back to invoices</a>
+        {% if invoice.invoice_status != "APPROVED" %}
+          <a class="pill gold" href="{% url 'invoice_edit' invoice.pk %}">Edit</a>
+        {% endif %}
+        <a class="pill" href="{% url 'invoice_pdf' invoice.pk %}">Download PDF</a>
+        {% if invoice.invoice_status == "DRAFT" and can_approve_invoice %}
+          <form method="post" action="{% url 'invoice_approve' invoice.pk %}">
+            {% csrf_token %}
+            <button class="pill approve" type="submit">Approve</button>
+          </form>
+        {% endif %}
+        <a class="pill" href="#" onclick="window.print();return false;">Print</a>
       {% endif %}
-      <a class="pill" href="{% url 'invoice_pdf' invoice.pk %}">Download PDF</a>
-      {% if invoice.invoice_status == "DRAFT" and can_approve_invoice %}
-        <form method="post" action="{% url 'invoice_approve' invoice.pk %}">
-          {% csrf_token %}
-          <button class="pill approve" type="submit">Approve</button>
-        </form>
-      {% endif %}
-      <a class="pill" href="#" onclick="window.print();return false;">Print</a>
     </div>
 
     <div class="invoice-shell">
@@ -317,6 +322,9 @@
 
         <div class="invoice-meta">
           <div class="badge">{{ invoice_layout_title }}</div>
+          {% if is_preview %}
+            <div class="badge">Settings Preview</div>
+          {% endif %}
           {% if invoice.invoice_status == "APPROVED" %}
             <div class="badge approved">Approved</div>
             <div class="approve-meta">
@@ -383,6 +391,19 @@
           </div>
         </div>
 
+        {% if is_bd_sewing_charge_invoice and sewing_summary %}
+          <div class="box" style="margin-bottom:16px;">
+            <div class="box-title">Sewing Charge Summary</div>
+            <div class="stack">
+              <div class="muted">Total quantity: <strong>{{ sewing_summary.total_quantity|floatformat:0|intcomma }}</strong></div>
+              <div class="muted">Number of styles: <strong>{{ sewing_summary.style_count|default:0 }}</strong></div>
+              <div class="muted">Grand total sewing charge: <strong>{{ cur }} {{ sewing_summary.grand_total|floatformat:2|intcomma }}</strong></div>
+              <div class="muted">{{ deposit_terms.deposit_label }}: {{ deposit_terms.percentage|floatformat:2 }}% · {{ cur }} {{ deposit_terms.deposit_amount|floatformat:2|intcomma }}</div>
+              <div class="muted">Remaining balance: {{ cur }} {{ deposit_terms.balance_due|floatformat:2|intcomma }}</div>
+            </div>
+          </div>
+        {% endif %}
+
         <div class="box" style="margin-bottom:16px;">
           <div class="box-title">Itemized List</div>
           <table class="items">
@@ -435,6 +456,12 @@
               <td class="label">Tax</td>
               <td>{{ cur }} {{ invoice.tax_amount|default_if_none:0|floatformat:2|intcomma }}</td>
             </tr>
+            {% if tax_note %}
+              <tr>
+                <td class="label">Tax note</td>
+                <td>{{ tax_note }}</td>
+              </tr>
+            {% endif %}
             <tr>
               <td class="label total">Grand total</td>
               <td class="total">{{ cur }} {{ invoice.total_amount|default_if_none:0|floatformat:2|intcomma }}</td>
@@ -466,7 +493,11 @@
 
         <div class="notes">
           <strong>Payment terms</strong><br>
-          {{ deposit_terms.percentage|floatformat:2 }}% advance is required before work begins. Remaining balance is due before delivery or shipment.
+          {% if payment_info.payment_terms %}
+            {{ payment_info.payment_terms|linebreaksbr }}
+          {% else %}
+            {{ deposit_terms.percentage|floatformat:2 }}% advance is required before work begins. Remaining balance is due before delivery or shipment.
+          {% endif %}
         </div>
 
         {% if invoice.notes %}
@@ -491,11 +522,23 @@
           {% if not payment_info.bank_name and not payment_info.bkash_number and not payment_info.nagad_number and not payment_info.rocket_number and not payment_info.note %}
             Remittance details will be shared separately by our accounts team.
           {% endif %}
-          {% if payment_info.bkash_qr_path or payment_info.nagad_qr_path or payment_info.rocket_qr_path %}
+          {% if payment_info.bkash_qr_url or payment_info.nagad_qr_url or payment_info.rocket_qr_url or payment_info.bkash_qr_path or payment_info.nagad_qr_path or payment_info.rocket_qr_path %}
             <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:12px;">
-              {% if payment_info.bkash_qr_path %}<img src="{% static payment_info.bkash_qr_path %}" alt="bKash QR code" style="width:120px; height:120px; object-fit:contain; border:1px solid var(--line); border-radius:12px;">{% endif %}
-              {% if payment_info.nagad_qr_path %}<img src="{% static payment_info.nagad_qr_path %}" alt="Nagad QR code" style="width:120px; height:120px; object-fit:contain; border:1px solid var(--line); border-radius:12px;">{% endif %}
-              {% if payment_info.rocket_qr_path %}<img src="{% static payment_info.rocket_qr_path %}" alt="Rocket QR code" style="width:120px; height:120px; object-fit:contain; border:1px solid var(--line); border-radius:12px;">{% endif %}
+              {% if payment_info.bkash_qr_url %}
+                <img src="{{ payment_info.bkash_qr_url }}" alt="bKash QR code" style="width:120px; height:120px; object-fit:contain; border:1px solid var(--line); border-radius:12px;">
+              {% elif payment_info.bkash_qr_path %}
+                <img src="{% static payment_info.bkash_qr_path %}" alt="bKash QR code" style="width:120px; height:120px; object-fit:contain; border:1px solid var(--line); border-radius:12px;">
+              {% endif %}
+              {% if payment_info.nagad_qr_url %}
+                <img src="{{ payment_info.nagad_qr_url }}" alt="Nagad QR code" style="width:120px; height:120px; object-fit:contain; border:1px solid var(--line); border-radius:12px;">
+              {% elif payment_info.nagad_qr_path %}
+                <img src="{% static payment_info.nagad_qr_path %}" alt="Nagad QR code" style="width:120px; height:120px; object-fit:contain; border:1px solid var(--line); border-radius:12px;">
+              {% endif %}
+              {% if payment_info.rocket_qr_url %}
+                <img src="{{ payment_info.rocket_qr_url }}" alt="Rocket QR code" style="width:120px; height:120px; object-fit:contain; border:1px solid var(--line); border-radius:12px;">
+              {% elif payment_info.rocket_qr_path %}
+                <img src="{% static payment_info.rocket_qr_path %}" alt="Rocket QR code" style="width:120px; height:120px; object-fit:contain; border:1px solid var(--line); border-radius:12px;">
+              {% endif %}
             </div>
           {% endif %}
         </div>
@@ -509,8 +552,11 @@
 
         <div class="notes">
           <strong>Thank you.</strong><br>
-          From Concept to Creation<br>
-          Iconic Apparel House Inc. Your Trusted Manufacturing Partner for Growth.
+          {% if company.slogan %}{{ company.slogan }}<br>{% endif %}
+          {% if company.footer_note %}{{ company.footer_note }}{% endif %}
+          {% if company.authorized_by_name %}
+            <br><br>Authorized by: {{ company.authorized_by_name }}{% if company.authorized_by_title %}, {{ company.authorized_by_title }}{% endif %}
+          {% endif %}
         </div>
       </div>
     </div>

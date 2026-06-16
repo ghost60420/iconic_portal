@@ -1,0 +1,393 @@
+{% extends "crm/base.html" %}
+{% block content %}
+
+<style>
+  .invoice-settings-wrap{
+    max-width:1180px;
+    margin:0 auto;
+    color:#f9fafb;
+  }
+  .invoice-settings-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:14px;
+    flex-wrap:wrap;
+    margin-bottom:16px;
+  }
+  .invoice-settings-title{
+    margin:0;
+    font-weight:900;
+    letter-spacing:.2px;
+  }
+  .invoice-settings-sub{
+    margin-top:5px;
+    color:#9ca3af;
+    font-size:12px;
+    font-weight:800;
+  }
+  .invoice-settings-actions{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  .invoice-settings-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:9px 14px;
+    border-radius:999px;
+    border:1px solid rgba(255,255,255,.14);
+    background:#0f172a;
+    color:#f9fafb;
+    font-size:12px;
+    font-weight:900;
+    text-decoration:none;
+    cursor:pointer;
+  }
+  .invoice-settings-btn.gold{
+    background:linear-gradient(145deg,#f5d580,#d4b35f);
+    color:#111827;
+    border-color:rgba(255,215,128,.55);
+  }
+  .invoice-settings-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:14px;
+  }
+  @media(max-width:900px){
+    .invoice-settings-grid{ grid-template-columns:1fr; }
+  }
+  .invoice-settings-card{
+    background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));
+    border:1px solid #334155;
+    border-radius:18px;
+    padding:16px;
+    box-shadow:0 16px 34px rgba(0,0,0,.42);
+  }
+  .invoice-settings-card.full{ grid-column:1 / -1; }
+  .invoice-settings-card h3{
+    margin:0 0 12px;
+    font-size:14px;
+    font-weight:900;
+  }
+  .settings-row{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+  }
+  @media(max-width:700px){
+    .settings-row{ grid-template-columns:1fr; }
+  }
+  .field-block{ margin-bottom:12px; }
+  .field-block label{
+    display:block;
+    margin-bottom:6px;
+    color:#e5e7eb;
+    font-size:12px;
+    font-weight:900;
+  }
+  .field-block .form-control,
+  .field-block input,
+  .field-block textarea{
+    width:100% !important;
+    background:#030712 !important;
+    border:1px solid rgba(148,163,184,.35) !important;
+    color:#f9fafb !important;
+    border-radius:12px !important;
+    padding:10px 12px !important;
+    font-weight:800 !important;
+  }
+  .field-error{
+    margin-top:6px;
+    padding:8px 10px;
+    border-radius:10px;
+    background:rgba(251,113,133,.12);
+    color:#fecdd3;
+    font-size:12px;
+    font-weight:800;
+  }
+  .qr-note{
+    color:#9ca3af;
+    font-size:11px;
+    font-weight:800;
+    margin-top:6px;
+  }
+</style>
+
+<div class="container-fluid">
+  <div class="invoice-settings-wrap">
+    <div class="invoice-settings-head">
+      <div>
+        <h2 class="invoice-settings-title">Invoice Settings</h2>
+        <div class="invoice-settings-sub">Manage payment details, QR codes, terms, deposits, and invoice footer text.</div>
+      </div>
+      <div class="invoice-settings-actions">
+        <a class="invoice-settings-btn" href="{% url 'invoice_settings_preview' 'north-america' %}">Preview North America Invoice</a>
+        <a class="invoice-settings-btn" href="{% url 'invoice_settings_preview' 'bangladesh' %}">Preview Bangladesh Invoice</a>
+        <a class="invoice-settings-btn" href="{% url 'invoice_settings_preview' 'sewing-charge' %}">Preview Sewing Charge Invoice</a>
+        <a class="invoice-settings-btn" href="{% url 'invoice_list' %}">Back to invoices</a>
+      </div>
+    </div>
+
+    {% if form.non_field_errors %}
+      <div class="field-error">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" novalidate>
+      {% csrf_token %}
+      <div class="invoice-settings-grid">
+        <section class="invoice-settings-card">
+          <h3>Company Info</h3>
+          <div class="settings-row">
+            <div class="field-block">
+              <label for="{{ form.company_name.id_for_label }}">{{ form.company_name.label }}</label>
+              {{ form.company_name }}
+              {% if form.company_name.errors %}<div class="field-error">{{ form.company_name.errors }}</div>{% endif %}
+            </div>
+            <div class="field-block">
+              <label for="{{ form.company_email.id_for_label }}">{{ form.company_email.label }}</label>
+              {{ form.company_email }}
+              {% if form.company_email.errors %}<div class="field-error">{{ form.company_email.errors }}</div>{% endif %}
+            </div>
+            <div class="field-block">
+              <label for="{{ form.company_phone.id_for_label }}">{{ form.company_phone.label }}</label>
+              {{ form.company_phone }}
+              {% if form.company_phone.errors %}<div class="field-error">{{ form.company_phone.errors }}</div>{% endif %}
+            </div>
+            <div class="field-block">
+              <label for="{{ form.website.id_for_label }}">{{ form.website.label }}</label>
+              {{ form.website }}
+              {% if form.website.errors %}<div class="field-error">{{ form.website.errors }}</div>{% endif %}
+            </div>
+            <div class="field-block">
+              <label for="{{ form.slogan.id_for_label }}">{{ form.slogan.label }}</label>
+              {{ form.slogan }}
+              {% if form.slogan.errors %}<div class="field-error">{{ form.slogan.errors }}</div>{% endif %}
+            </div>
+            <div class="field-block">
+              <label for="{{ form.invoice_footer_note.id_for_label }}">{{ form.invoice_footer_note.label }}</label>
+              {{ form.invoice_footer_note }}
+              {% if form.invoice_footer_note.errors %}<div class="field-error">{{ form.invoice_footer_note.errors }}</div>{% endif %}
+            </div>
+          </div>
+        </section>
+
+        <section class="invoice-settings-card">
+          <h3>Footer and Signature</h3>
+          <div class="settings-row">
+            <div class="field-block">
+              <label for="{{ form.authorized_by_name.id_for_label }}">{{ form.authorized_by_name.label }}</label>
+              {{ form.authorized_by_name }}
+              {% if form.authorized_by_name.errors %}<div class="field-error">{{ form.authorized_by_name.errors }}</div>{% endif %}
+            </div>
+            <div class="field-block">
+              <label for="{{ form.authorized_by_title.id_for_label }}">{{ form.authorized_by_title.label }}</label>
+              {{ form.authorized_by_title }}
+              {% if form.authorized_by_title.errors %}<div class="field-error">{{ form.authorized_by_title.errors }}</div>{% endif %}
+            </div>
+            <div class="field-block">
+              <label for="{{ form.is_active.id_for_label }}">{{ form.is_active.label }}</label>
+              {{ form.is_active }}
+              {% if form.is_active.errors %}<div class="field-error">{{ form.is_active.errors }}</div>{% endif %}
+              <div class="qr-note">Only one active settings record is used for invoices.</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="invoice-settings-card">
+          <h3>North America Payment</h3>
+          <div class="settings-row">
+            <div class="field-block">
+              <label for="{{ form.paypal_email_or_id.id_for_label }}">{{ form.paypal_email_or_id.label }}</label>
+              {{ form.paypal_email_or_id }}
+              {% if form.paypal_email_or_id.errors %}<div class="field-error">{{ form.paypal_email_or_id.errors }}</div>{% endif %}
+            </div>
+            <div class="field-block">
+              <label for="{{ form.etransfer_email.id_for_label }}">{{ form.etransfer_email.label }}</label>
+              {{ form.etransfer_email }}
+              {% if form.etransfer_email.errors %}<div class="field-error">{{ form.etransfer_email.errors }}</div>{% endif %}
+            </div>
+            <div class="field-block">
+              <label for="{{ form.canada_bank_name.id_for_label }}">{{ form.canada_bank_name.label }}</label>
+              {{ form.canada_bank_name }}
+              {% if form.canada_bank_name.errors %}<div class="field-error">{{ form.canada_bank_name.errors }}</div>{% endif %}
+            </div>
+            <div class="field-block">
+              <label for="{{ form.canada_account_name.id_for_label }}">{{ form.canada_account_name.label }}</label>
+              {{ form.canada_account_name }}
+              {% if form.canada_account_name.errors %}<div class="field-error">{{ form.canada_account_name.errors }}</div>{% endif %}
+            </div>
+            <div class="field-block">
+              <label for="{{ form.canada_account_number.id_for_label }}">{{ form.canada_account_number.label }}</label>
+              {{ form.canada_account_number }}
+              {% if form.canada_account_number.errors %}<div class="field-error">{{ form.canada_account_number.errors }}</div>{% endif %}
+            </div>
+            <div class="field-block">
+              <label for="{{ form.canada_transit_number.id_for_label }}">{{ form.canada_transit_number.label }}</label>
+              {{ form.canada_transit_number }}
+              {% if form.canada_transit_number.errors %}<div class="field-error">{{ form.canada_transit_number.errors }}</div>{% endif %}
+            </div>
+            <div class="field-block">
+              <label for="{{ form.canada_institution_number.id_for_label }}">{{ form.canada_institution_number.label }}</label>
+              {{ form.canada_institution_number }}
+              {% if form.canada_institution_number.errors %}<div class="field-error">{{ form.canada_institution_number.errors }}</div>{% endif %}
+            </div>
+          </div>
+          <div class="field-block">
+            <label for="{{ form.canada_wire_note.id_for_label }}">{{ form.canada_wire_note.label }}</label>
+            {{ form.canada_wire_note }}
+            {% if form.canada_wire_note.errors %}<div class="field-error">{{ form.canada_wire_note.errors }}</div>{% endif %}
+          </div>
+          <div class="field-block">
+            <label for="{{ form.canada_payment_terms.id_for_label }}">{{ form.canada_payment_terms.label }}</label>
+            {{ form.canada_payment_terms }}
+            {% if form.canada_payment_terms.errors %}<div class="field-error">{{ form.canada_payment_terms.errors }}</div>{% endif %}
+          </div>
+        </section>
+
+        <section class="invoice-settings-card">
+          <h3>Bangladesh Payment</h3>
+          <div class="settings-row">
+            <div class="field-block">
+              <label for="{{ form.bd_bank_name.id_for_label }}">{{ form.bd_bank_name.label }}</label>
+              {{ form.bd_bank_name }}
+              {% if form.bd_bank_name.errors %}<div class="field-error">{{ form.bd_bank_name.errors }}</div>{% endif %}
+            </div>
+            <div class="field-block">
+              <label for="{{ form.bd_account_name.id_for_label }}">{{ form.bd_account_name.label }}</label>
+              {{ form.bd_account_name }}
+              {% if form.bd_account_name.errors %}<div class="field-error">{{ form.bd_account_name.errors }}</div>{% endif %}
+            </div>
+            <div class="field-block">
+              <label for="{{ form.bd_account_number.id_for_label }}">{{ form.bd_account_number.label }}</label>
+              {{ form.bd_account_number }}
+              {% if form.bd_account_number.errors %}<div class="field-error">{{ form.bd_account_number.errors }}</div>{% endif %}
+            </div>
+            <div class="field-block">
+              <label for="{{ form.bd_branch.id_for_label }}">{{ form.bd_branch.label }}</label>
+              {{ form.bd_branch }}
+              {% if form.bd_branch.errors %}<div class="field-error">{{ form.bd_branch.errors }}</div>{% endif %}
+            </div>
+            <div class="field-block">
+              <label for="{{ form.bd_routing_number.id_for_label }}">{{ form.bd_routing_number.label }}</label>
+              {{ form.bd_routing_number }}
+              {% if form.bd_routing_number.errors %}<div class="field-error">{{ form.bd_routing_number.errors }}</div>{% endif %}
+            </div>
+            <div class="field-block">
+              <label for="{{ form.bd_swift.id_for_label }}">{{ form.bd_swift.label }}</label>
+              {{ form.bd_swift }}
+              {% if form.bd_swift.errors %}<div class="field-error">{{ form.bd_swift.errors }}</div>{% endif %}
+            </div>
+            <div class="field-block">
+              <label for="{{ form.bkash_number.id_for_label }}">{{ form.bkash_number.label }}</label>
+              {{ form.bkash_number }}
+              {% if form.bkash_number.errors %}<div class="field-error">{{ form.bkash_number.errors }}</div>{% endif %}
+            </div>
+            <div class="field-block">
+              <label for="{{ form.nagad_number.id_for_label }}">{{ form.nagad_number.label }}</label>
+              {{ form.nagad_number }}
+              {% if form.nagad_number.errors %}<div class="field-error">{{ form.nagad_number.errors }}</div>{% endif %}
+            </div>
+            <div class="field-block">
+              <label for="{{ form.rocket_number.id_for_label }}">{{ form.rocket_number.label }}</label>
+              {{ form.rocket_number }}
+              {% if form.rocket_number.errors %}<div class="field-error">{{ form.rocket_number.errors }}</div>{% endif %}
+            </div>
+          </div>
+          <div class="field-block">
+            <label for="{{ form.bd_payment_terms.id_for_label }}">{{ form.bd_payment_terms.label }}</label>
+            {{ form.bd_payment_terms }}
+            {% if form.bd_payment_terms.errors %}<div class="field-error">{{ form.bd_payment_terms.errors }}</div>{% endif %}
+          </div>
+        </section>
+
+        <section class="invoice-settings-card">
+          <h3>QR Codes</h3>
+          <div class="field-block">
+            <label for="{{ form.paypal_qr_image.id_for_label }}">{{ form.paypal_qr_image.label }}</label>
+            {{ form.paypal_qr_image }}
+            {% if form.paypal_qr_image.errors %}<div class="field-error">{{ form.paypal_qr_image.errors }}</div>{% endif %}
+            <div class="qr-note">If this image is missing, the QR block is hidden on invoices and PDFs.</div>
+          </div>
+          <div class="field-block">
+            <label for="{{ form.bkash_qr_image.id_for_label }}">{{ form.bkash_qr_image.label }}</label>
+            {{ form.bkash_qr_image }}
+            {% if form.bkash_qr_image.errors %}<div class="field-error">{{ form.bkash_qr_image.errors }}</div>{% endif %}
+            <div class="qr-note">If this image is missing, the QR block is hidden on invoices and PDFs.</div>
+          </div>
+          <div class="field-block">
+            <label for="{{ form.nagad_qr_image.id_for_label }}">{{ form.nagad_qr_image.label }}</label>
+            {{ form.nagad_qr_image }}
+            {% if form.nagad_qr_image.errors %}<div class="field-error">{{ form.nagad_qr_image.errors }}</div>{% endif %}
+            <div class="qr-note">If this image is missing, the QR block is hidden on invoices and PDFs.</div>
+          </div>
+          <div class="field-block">
+            <label for="{{ form.rocket_qr_image.id_for_label }}">{{ form.rocket_qr_image.label }}</label>
+            {{ form.rocket_qr_image }}
+            {% if form.rocket_qr_image.errors %}<div class="field-error">{{ form.rocket_qr_image.errors }}</div>{% endif %}
+            <div class="qr-note">If this image is missing, the QR block is hidden on invoices and PDFs.</div>
+          </div>
+        </section>
+
+        <section class="invoice-settings-card">
+          <h3>Deposit Defaults</h3>
+          <div class="settings-row">
+            <div class="field-block">
+              <label for="{{ form.default_sample_deposit_percentage.id_for_label }}">{{ form.default_sample_deposit_percentage.label }}</label>
+              {{ form.default_sample_deposit_percentage }}
+              {% if form.default_sample_deposit_percentage.errors %}<div class="field-error">{{ form.default_sample_deposit_percentage.errors }}</div>{% endif %}
+            </div>
+            <div class="field-block">
+              <label for="{{ form.default_bulk_deposit_percentage.id_for_label }}">{{ form.default_bulk_deposit_percentage.label }}</label>
+              {{ form.default_bulk_deposit_percentage }}
+              {% if form.default_bulk_deposit_percentage.errors %}<div class="field-error">{{ form.default_bulk_deposit_percentage.errors }}</div>{% endif %}
+            </div>
+            <div class="field-block">
+              <label for="{{ form.default_bd_sewing_deposit_percentage.id_for_label }}">{{ form.default_bd_sewing_deposit_percentage.label }}</label>
+              {{ form.default_bd_sewing_deposit_percentage }}
+              {% if form.default_bd_sewing_deposit_percentage.errors %}<div class="field-error">{{ form.default_bd_sewing_deposit_percentage.errors }}</div>{% endif %}
+            </div>
+            <div class="field-block">
+              <label for="{{ form.default_currency_na.id_for_label }}">{{ form.default_currency_na.label }}</label>
+              {{ form.default_currency_na }}
+              {% if form.default_currency_na.errors %}<div class="field-error">{{ form.default_currency_na.errors }}</div>{% endif %}
+            </div>
+            <div class="field-block">
+              <label for="{{ form.default_currency_bd.id_for_label }}">{{ form.default_currency_bd.label }}</label>
+              {{ form.default_currency_bd }}
+              {% if form.default_currency_bd.errors %}<div class="field-error">{{ form.default_currency_bd.errors }}</div>{% endif %}
+            </div>
+            <div class="field-block">
+              <label for="{{ form.default_tax_note.id_for_label }}">{{ form.default_tax_note.label }}</label>
+              {{ form.default_tax_note }}
+              {% if form.default_tax_note.errors %}<div class="field-error">{{ form.default_tax_note.errors }}</div>{% endif %}
+            </div>
+          </div>
+        </section>
+
+        <section class="invoice-settings-card full">
+          <h3>Terms and Conditions</h3>
+          <div class="settings-row">
+            <div class="field-block">
+              <label for="{{ form.terms_and_conditions_na.id_for_label }}">{{ form.terms_and_conditions_na.label }}</label>
+              {{ form.terms_and_conditions_na }}
+              {% if form.terms_and_conditions_na.errors %}<div class="field-error">{{ form.terms_and_conditions_na.errors }}</div>{% endif %}
+            </div>
+            <div class="field-block">
+              <label for="{{ form.terms_and_conditions_bd.id_for_label }}">{{ form.terms_and_conditions_bd.label }}</label>
+              {{ form.terms_and_conditions_bd }}
+              {% if form.terms_and_conditions_bd.errors %}<div class="field-error">{{ form.terms_and_conditions_bd.errors }}</div>{% endif %}
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="invoice-settings-actions" style="justify-content:flex-end; margin-top:16px;">
+        <button class="invoice-settings-btn gold" type="submit">Save Settings</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

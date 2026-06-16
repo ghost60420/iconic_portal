@@ -481,6 +481,7 @@
   </div>
 </div>
 
+{{ invoice_default_deposits|json_script:"invoice-default-deposits" }}
 <script>
   (function(){
     function byId(id){ return document.getElementById(id); }
@@ -506,6 +507,7 @@
     var total = byId("id_total_amount");
     var paid = byId("id_paid_amount");
     var currency = byId("id_currency");
+    var invoiceMarket = byId("id_invoice_market");
     var invoiceType = byId("id_invoice_type");
     var depositPercent = byId("id_deposit_percentage");
 
@@ -515,6 +517,16 @@
     var depositBalancePreview = byId("depositBalancePreview");
     var ruleWarn = byId("ruleWarn");
     var calcBtn = byId("calcBtn");
+    var depositDefaults = {sample:"100.00", bulk:"50.00", bd_sewing:"50.00"};
+    var depositDefaultsEl = byId("invoice-default-deposits");
+    if(depositDefaultsEl){
+      try{
+        var parsedDefaults = JSON.parse(depositDefaultsEl.textContent || "{}");
+        depositDefaults.sample = parsedDefaults.sample || depositDefaults.sample;
+        depositDefaults.bulk = parsedDefaults.bulk || depositDefaults.bulk;
+        depositDefaults.bd_sewing = parsedDefaults.bd_sewing || depositDefaults.bd_sewing;
+      } catch(e){}
+    }
 
     function refreshCurrency(){
       if(!curPreview) return;
@@ -601,14 +613,43 @@
       });
     }
 
+    function defaultDepositForSelection(){
+      var typeValue = invoiceType ? invoiceType.value : "";
+      var marketValue = invoiceMarket ? invoiceMarket.value : "";
+      if(typeValue === "sample"){
+        return depositDefaults.sample;
+      }
+      if(marketValue === "bangladesh" && typeValue === "sewing_charge"){
+        return depositDefaults.bd_sewing;
+      }
+      return depositDefaults.bulk;
+    }
+
+    function applyDefaultDeposit(){
+      if(!depositPercent) return;
+      var current = depositPercent.value || "";
+      var standardDefaults = [
+        "50", "50.0", "50.00",
+        "100", "100.0", "100.00",
+        depositDefaults.sample,
+        depositDefaults.bulk,
+        depositDefaults.bd_sewing
+      ];
+      if(!current || standardDefaults.indexOf(current) !== -1){
+        depositPercent.value = defaultDepositForSelection();
+      }
+      refreshDepositPreview();
+    }
+
     if(invoiceType && depositPercent){
       invoiceType.addEventListener("change", function(){
-        if(invoiceType.value === "sample"){
-          depositPercent.value = "100.00";
-        } else if(!depositPercent.value || depositPercent.value === "100.00"){
-          depositPercent.value = "50.00";
-        }
-        refreshDepositPreview();
+        applyDefaultDeposit();
+      });
+    }
+
+    if(invoiceMarket && depositPercent){
+      invoiceMarket.addEventListener("change", function(){
+        applyDefaultDeposit();
       });
     }
 

@@ -1,6 +1,7 @@
 # crm/views_invoice.py
 
 import io
+from datetime import timedelta
 from decimal import Decimal
 from django.conf import settings
 from django.contrib import messages
@@ -23,10 +24,11 @@ from .models import (
     ExchangeRate,
     Invoice,
     InvoicePayment,
+    InvoiceSettings,
     ProductionOrder,
 )
-from .forms import InvoiceForm, InvoicePaymentForm
-from .permissions import can_view_internal_costing
+from .forms import InvoiceForm, InvoicePaymentForm, InvoiceSettingsForm
+from .permissions import can_view_internal_costing, get_access
 from .services.costing_workflow import CostingWorkflowError, create_or_link_production_order_from_invoice
 from .services.order_lifecycle import build_lifecycle_profit_breakdown, create_lifecycle_from_invoice
 from .services.workflow_visibility import build_workflow_visibility_context
@@ -122,6 +124,46 @@ def superuser_only(user):
 
 def can_manage_invoice_internal_costing(user):
     return can_view_internal_costing(user)
+
+
+def can_manage_invoice_settings(user):
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    try:
+        access = get_access(user)
+    except Exception:
+        return False
+    return bool(getattr(access, "can_accounting_ca", False) or getattr(access, "can_accounting_bd", False))
+
+
+def _invoice_settings():
+    return InvoiceSettings.active()
+
+
+def _settings_file_url(settings_obj, field_name: str) -> str:
+    if not settings_obj:
+        return ""
+    image = getattr(settings_obj, field_name, None)
+    if not image:
+        return ""
+    try:
+        return image.url
+    except Exception:
+        return ""
+
+
+def _settings_file_path(settings_obj, field_name: str) -> str:
+    if not settings_obj:
+        return ""
+    image = getattr(settings_obj, field_name, None)
+    if not image:
+        return ""
+    try:
+        return image.path
+    except Exception:
+        return ""
 
 
 def _sanitize_invoice_internal_fields(inv: Invoice) -> Invoice:
@@ -413,24 +455,34 @@ def _sync_invoice_market_region(inv: Invoice) -> None:
     market = _invoice_market(inv)
     inv.invoice_market = market
     inv.invoice_region = INVOICE_MARKET_TO_REGION.get(market, "CA")
+    invoice_settings = _invoice_settings()
+    default_currency_bd = getattr(invoice_settings, "default_currency_bd", "") or "BDT"
+    default_currency_na = getattr(invoice_settings, "default_currency_na", "") or "CAD"
     if market == "bangladesh" and not inv.currency:
-        inv.currency = "BDT"
+        inv.currency = default_currency_bd
     elif market == "north_america" and not inv.currency:
-        inv.currency = "CAD"
+        inv.currency = default_currency_na
     if _invoice_type(inv) == "sample" and _d(getattr(inv, "deposit_percentage", None)) <= 0:
-        inv.deposit_percentage = Decimal("100")
+        inv.deposit_percentage = getattr(invoice_settings, "default_sample_deposit_percentage", None) or Decimal("100")
+    elif market == "bangladesh" and _invoice_type(inv) == "sewing_charge" and _d(getattr(inv, "deposit_percentage", None)) <= 0:
+        inv.deposit_percentage = getattr(invoice_settings, "default_bd_sewing_deposit_percentage", None) or Decimal("50")
     elif _d(getattr(inv, "deposit_percentage", None)) <= 0:
-        inv.deposit_percentage = Decimal("50")
+        inv.deposit_percentage = getattr(invoice_settings, "default_bulk_deposit_percentage", None) or Decimal("50")
 
 
 def _invoice_company(region: str) -> dict:
     region = "BD" if region == "BD" else "CA"
+    invoice_settings = _invoice_settings()
     return {
-        "name": getattr(settings, "INVOICE_COMPANY_NAME", "Iconic Apparel House Inc."),
-        "email": getattr(settings, "INVOICE_COMPANY_EMAIL", "info@iconicapparelhouse.com"),
-        "phone": getattr(settings, "INVOICE_COMPANY_PHONE", "604-500-6009"),
-        "website": getattr(settings, "INVOICE_COMPANY_WEBSITE", "iconicapparelhouse.com"),
+        "name": getattr(invoice_settings, "company_name", "") or getattr(settings, "INVOICE_COMPANY_NAME", "Iconic Apparel House Inc."),
+        "email": getattr(invoice_settings, "company_email", "") or getattr(settings, "INVOICE_COMPANY_EMAIL", "info@iconicapparelhouse.com"),
+        "phone": getattr(invoice_settings, "company_phone", "") or getattr(settings, "INVOICE_COMPANY_PHONE", "604-500-6009"),
+        "website": getattr(invoice_settings, "website", "") or getattr(settings, "INVOICE_COMPANY_WEBSITE", "iconicapparelhouse.com"),
         "logo_path": getattr(settings, "INVOICE_LOGO_PATH", "img/image.png"),
+        "slogan": getattr(invoice_settings, "slogan", "") or "From Concept to Creation",
+        "footer_note": getattr(invoice_settings, "invoice_footer_note", "") or "Iconic Apparel House Inc. Your Trusted Manufacturing Partner for Growth.",
+        "authorized_by_name": getattr(invoice_settings, "authorized_by_name", "") or "",
+        "authorized_by_title": getattr(invoice_settings, "authorized_by_title", "") or "",
         "office_label": "Bangladesh" if region == "BD" else "Canada",
         "address": getattr(settings, f"INVOICE_ADDRESS_{region}", ""),
         "tax_label": getattr(settings, f"INVOICE_TAX_LABEL_{region}", ""),
@@ -442,7 +494,15 @@ def _invoice_policy_text(inv: Invoice) -> str:
     override = (getattr(inv, "terms_override", "") or "").strip()
     if override:
         return override
-    return BANGLADESH_INVOICE_TERMS if _invoice_market(inv) == "bangladesh" else NORTH_AMERICA_INVOICE_TERMS
+    invoice_settings = _invoice_settings()
+    if _invoice_market(inv) == "bangladesh":
+        return getattr(invoice_settings, "terms_and_conditions_bd", "") or BANGLADESH_INVOICE_TERMS
+    return getattr(invoice_settings, "terms_and_conditions_na", "") or NORTH_AMERICA_INVOICE_TERMS
+
+
+def _invoice_tax_note() -> str:
+    invoice_settings = _invoice_settings()
+    return getattr(invoice_settings, "default_tax_note", "") or ""
 
 
 def _invoice_payment_status(inv: Invoice) -> dict:
@@ -528,40 +588,142 @@ def _static_if_exists(path: str) -> str:
     return path if finders.find(path) else ""
 
 
+def _invoice_default_deposit_values() -> dict:
+    invoice_settings = _invoice_settings()
+    return {
+        "sample": getattr(invoice_settings, "default_sample_deposit_percentage", None) or Decimal("100.00"),
+        "bulk": getattr(invoice_settings, "default_bulk_deposit_percentage", None) or Decimal("50.00"),
+        "bd_sewing": getattr(invoice_settings, "default_bd_sewing_deposit_percentage", None) or Decimal("50.00"),
+    }
+
+
+def _default_deposit_for(market: str, invoice_type: str) -> Decimal:
+    defaults = _invoice_default_deposit_values()
+    if invoice_type == "sample":
+        return defaults["sample"]
+    if market == "bangladesh" and invoice_type == "sewing_charge":
+        return defaults["bd_sewing"]
+    return defaults["bulk"]
+
+
+def _invoice_form_extra_context() -> dict:
+    defaults = _invoice_default_deposit_values()
+    return {
+        "invoice_default_deposits": {
+            "sample": f"{defaults['sample']:.2f}",
+            "bulk": f"{defaults['bulk']:.2f}",
+            "bd_sewing": f"{defaults['bd_sewing']:.2f}",
+        }
+    }
+
+
 def _invoice_payment_info(inv: Invoice) -> dict:
     market = _invoice_market(inv)
+    invoice_settings = _invoice_settings()
     if market == "bangladesh":
         return {
             "title": "Bangladesh Payment Information",
-            "bank_name": getattr(settings, "INVOICE_BD_BANK_NAME", ""),
-            "account_name": getattr(settings, "INVOICE_BD_BANK_ACCOUNT_NAME", ""),
-            "account_number": getattr(settings, "INVOICE_BD_BANK_ACCOUNT_NUMBER", ""),
-            "branch": getattr(settings, "INVOICE_BD_BANK_BRANCH", ""),
-            "routing_number": getattr(settings, "INVOICE_BD_BANK_ROUTING", ""),
-            "swift": getattr(settings, "INVOICE_BD_BANK_SWIFT", ""),
-            "bkash_number": getattr(settings, "INVOICE_BD_BKASH_NUMBER", ""),
-            "nagad_number": getattr(settings, "INVOICE_BD_NAGAD_NUMBER", ""),
-            "rocket_number": getattr(settings, "INVOICE_BD_ROCKET_NUMBER", ""),
+            "bank_name": getattr(invoice_settings, "bd_bank_name", "") or getattr(settings, "INVOICE_BD_BANK_NAME", ""),
+            "account_name": getattr(invoice_settings, "bd_account_name", "") or getattr(settings, "INVOICE_BD_BANK_ACCOUNT_NAME", ""),
+            "account_number": getattr(invoice_settings, "bd_account_number", "") or getattr(settings, "INVOICE_BD_BANK_ACCOUNT_NUMBER", ""),
+            "branch": getattr(invoice_settings, "bd_branch", "") or getattr(settings, "INVOICE_BD_BANK_BRANCH", ""),
+            "routing_number": getattr(invoice_settings, "bd_routing_number", "") or getattr(settings, "INVOICE_BD_BANK_ROUTING", ""),
+            "swift": getattr(invoice_settings, "bd_swift", "") or getattr(settings, "INVOICE_BD_BANK_SWIFT", ""),
+            "bkash_number": getattr(invoice_settings, "bkash_number", "") or getattr(settings, "INVOICE_BD_BKASH_NUMBER", ""),
+            "nagad_number": getattr(invoice_settings, "nagad_number", "") or getattr(settings, "INVOICE_BD_NAGAD_NUMBER", ""),
+            "rocket_number": getattr(invoice_settings, "rocket_number", "") or getattr(settings, "INVOICE_BD_ROCKET_NUMBER", ""),
             "bkash_qr_path": _static_if_exists(getattr(settings, "INVOICE_BD_BKASH_QR_PATH", "")),
             "nagad_qr_path": _static_if_exists(getattr(settings, "INVOICE_BD_NAGAD_QR_PATH", "")),
             "rocket_qr_path": _static_if_exists(getattr(settings, "INVOICE_BD_ROCKET_QR_PATH", "")),
-            "note": getattr(settings, "INVOICE_BD_PAYMENT_NOTE", ""),
+            "bkash_qr_url": _settings_file_url(invoice_settings, "bkash_qr_image"),
+            "nagad_qr_url": _settings_file_url(invoice_settings, "nagad_qr_image"),
+            "rocket_qr_url": _settings_file_url(invoice_settings, "rocket_qr_image"),
+            "bkash_qr_file": _settings_file_path(invoice_settings, "bkash_qr_image"),
+            "nagad_qr_file": _settings_file_path(invoice_settings, "nagad_qr_image"),
+            "rocket_qr_file": _settings_file_path(invoice_settings, "rocket_qr_image"),
+            "payment_terms": getattr(invoice_settings, "bd_payment_terms", "") or "",
+            "note": getattr(invoice_settings, "bd_payment_terms", "") or getattr(settings, "INVOICE_BD_PAYMENT_NOTE", ""),
         }
 
     return {
         "title": "North America Payment Information",
-        "etransfer_email": getattr(settings, "INVOICE_CA_ETRANSFER_EMAIL", "") or "accounts@iconicapparelhouse.com",
+        "etransfer_email": getattr(invoice_settings, "etransfer_email", "") or getattr(settings, "INVOICE_CA_ETRANSFER_EMAIL", "") or "accounts@iconicapparelhouse.com",
         "etransfer_name": getattr(settings, "INVOICE_CA_ETRANSFER_NAME", ""),
-        "paypal_id": getattr(settings, "INVOICE_CA_PAYPAL_EMAIL", "") or getattr(settings, "INVOICE_PAYPAL_EMAIL", "") or "iconicapparelhouse",
+        "paypal_id": getattr(invoice_settings, "paypal_email_or_id", "") or getattr(settings, "INVOICE_CA_PAYPAL_EMAIL", "") or getattr(settings, "INVOICE_PAYPAL_EMAIL", "") or "iconicapparelhouse",
         "paypal_qr_path": _static_if_exists(getattr(settings, "INVOICE_CA_PAYPAL_QR_PATH", "")),
-        "bank_name": getattr(settings, "INVOICE_CA_BANK_NAME", ""),
-        "account_name": getattr(settings, "INVOICE_CA_BANK_ACCOUNT_NAME", ""),
-        "account_number": getattr(settings, "INVOICE_CA_BANK_ACCOUNT_NUMBER", ""),
-        "institution": getattr(settings, "INVOICE_CA_BANK_INSTITUTION", ""),
-        "transit": getattr(settings, "INVOICE_CA_BANK_TRANSIT", ""),
+        "paypal_qr_url": _settings_file_url(invoice_settings, "paypal_qr_image"),
+        "paypal_qr_file": _settings_file_path(invoice_settings, "paypal_qr_image"),
+        "bank_name": getattr(invoice_settings, "canada_bank_name", "") or getattr(settings, "INVOICE_CA_BANK_NAME", ""),
+        "account_name": getattr(invoice_settings, "canada_account_name", "") or getattr(settings, "INVOICE_CA_BANK_ACCOUNT_NAME", ""),
+        "account_number": getattr(invoice_settings, "canada_account_number", "") or getattr(settings, "INVOICE_CA_BANK_ACCOUNT_NUMBER", ""),
+        "institution": getattr(invoice_settings, "canada_institution_number", "") or getattr(settings, "INVOICE_CA_BANK_INSTITUTION", ""),
+        "transit": getattr(invoice_settings, "canada_transit_number", "") or getattr(settings, "INVOICE_CA_BANK_TRANSIT", ""),
         "swift": getattr(settings, "INVOICE_CA_BANK_SWIFT", ""),
-        "note": getattr(settings, "INVOICE_CA_PAYMENT_NOTE", ""),
+        "wire_note": getattr(invoice_settings, "canada_wire_note", "") or "",
+        "payment_terms": getattr(invoice_settings, "canada_payment_terms", "") or "",
+        "note": getattr(invoice_settings, "canada_wire_note", "") or getattr(settings, "INVOICE_CA_PAYMENT_NOTE", ""),
     }
+
+
+def _invoice_sewing_charge_line_items(inv: Invoice, qty: Decimal, sewing_total: Decimal) -> list[dict]:
+    order = getattr(inv, "order", None)
+    quick_costing = getattr(inv, "quick_costing", None)
+    if qty <= 0 and quick_costing:
+        qty = _d(getattr(quick_costing, "quantity", Decimal("0")))
+    rate = (sewing_total / qty).quantize(Decimal("0.01")) if qty > 0 and sewing_total > 0 else Decimal("0")
+
+    style_names = []
+    if order and hasattr(order, "lines"):
+        style_names = [
+            (line.style_name or "").strip()
+            for line in order.lines.all()
+            if (line.style_name or "").strip()
+        ]
+    if not style_names and order:
+        style_names = [
+            (getattr(order, "style_name", "") or getattr(order, "title", "") or getattr(order, "order_code", "") or "Sewing Charge").strip()
+        ]
+    if not style_names and quick_costing:
+        style_names = [
+            (getattr(quick_costing, "project_name", "") or getattr(quick_costing, "product_type", "") or "Sewing Charge").strip()
+        ]
+    if not style_names:
+        style_names = ["Sewing Charge"]
+
+    rows = []
+    count = max(len(style_names), 1)
+    allocated_total = Decimal("0")
+    allocated_qty = Decimal("0")
+    for index, style_name in enumerate(style_names, start=1):
+        is_last = index == count
+        if qty > 0:
+            row_qty = (qty / Decimal(count)).quantize(Decimal("0.01"))
+            if is_last:
+                row_qty = qty - allocated_qty
+        else:
+            row_qty = Decimal("0")
+        if sewing_total > 0:
+            row_amount = (rate * row_qty).quantize(Decimal("0.01")) if row_qty > 0 else (sewing_total / Decimal(count)).quantize(Decimal("0.01"))
+            if is_last:
+                row_amount = sewing_total - allocated_total
+        else:
+            row_amount = Decimal("0")
+        rows.append(
+            {
+                "description": style_name or "Sewing Charge",
+                "qty": row_qty,
+                "rate": rate,
+                "amount": row_amount,
+                "has_qty": row_qty > 0,
+                "has_rate": rate > 0,
+                "has_amount": row_amount > 0,
+                "is_detail": False,
+                "is_sewing_charge": True,
+            }
+        )
+        allocated_total += row_amount
+        allocated_qty += row_qty
+    return rows
 
 
 def _invoice_line_items(inv: Invoice) -> list[dict]:
@@ -578,24 +740,7 @@ def _invoice_line_items(inv: Invoice) -> list[dict]:
 
     if _invoice_market(inv) == "bangladesh" and _invoice_type(inv) == "sewing_charge":
         sewing_total = subtotal if subtotal > 0 else _d(getattr(inv, "sewing_charge", Decimal("0")))
-        if qty > 0 and sewing_total > 0:
-            rate = (sewing_total / qty).quantize(Decimal("0.01"))
-        description = "Sewing Charge"
-        if order:
-            description = getattr(order, "style_name", "") or getattr(order, "title", "") or description
-        return [
-            {
-                "description": description,
-                "qty": qty,
-                "rate": rate,
-                "amount": sewing_total,
-                "has_qty": qty > 0,
-                "has_rate": rate > 0,
-                "has_amount": sewing_total > 0,
-                "is_detail": False,
-                "is_sewing_charge": True,
-            }
-        ]
+        return _invoice_sewing_charge_line_items(inv, qty, sewing_total)
 
     if qty > 0 and subtotal > 0:
         rate = (subtotal / qty).quantize(Decimal("0.01"))
@@ -658,18 +803,32 @@ def _invoice_line_items(inv: Invoice) -> list[dict]:
     return rows
 
 
+def _invoice_sewing_summary(line_items: list[dict]) -> dict:
+    style_rows = [item for item in line_items if item.get("is_sewing_charge") and not item.get("is_detail")]
+    total_quantity = sum((_d(item.get("qty")) for item in style_rows), Decimal("0"))
+    grand_total = sum((_d(item.get("amount")) for item in style_rows), Decimal("0"))
+    return {
+        "style_count": len(style_rows),
+        "total_quantity": total_quantity,
+        "grand_total": grand_total,
+    }
+
+
 def _invoice_client_context(inv: Invoice, user=None) -> dict:
     market = _invoice_market(inv)
     invoice_type = _invoice_type(inv)
     region = _invoice_region(inv)
     line_items = _invoice_line_items(inv)
+    is_bd_sewing_charge_invoice = market == "bangladesh" and invoice_type == "sewing_charge"
     inv = _sanitize_invoice_internal_fields(inv)
     return {
         "invoice": inv,
         "company": _invoice_company(region),
         "line_items": line_items,
+        "sewing_summary": _invoice_sewing_summary(line_items) if is_bd_sewing_charge_invoice else None,
         "payment_status": _invoice_payment_status(inv),
         "policy_text": _invoice_policy_text(inv),
+        "tax_note": _invoice_tax_note(),
         "can_approve_invoice": can_manage_invoices(user),
         "invoice_market": market,
         "invoice_market_label": dict(Invoice.INVOICE_MARKET_CHOICES).get(market, "North America"),
@@ -681,12 +840,89 @@ def _invoice_client_context(inv: Invoice, user=None) -> dict:
         "payment_info": _invoice_payment_info(inv),
         "is_sample_invoice": invoice_type == "sample",
         "is_bulk_invoice": invoice_type == "bulk",
-        "is_bd_sewing_charge_invoice": market == "bangladesh" and invoice_type == "sewing_charge",
+        "is_bd_sewing_charge_invoice": is_bd_sewing_charge_invoice,
     }
 
 
 def _invoice_client_template(inv: Invoice) -> str:
     return "crm/invoice/invoice_bd.html" if _invoice_market(inv) == "bangladesh" else "crm/invoice/invoice_ca.html"
+
+
+@login_required
+@user_passes_test(can_manage_invoice_settings)
+def invoice_settings(request):
+    settings_obj = _invoice_settings() or InvoiceSettings(is_active=True)
+    if request.method == "POST":
+        form = InvoiceSettingsForm(request.POST, request.FILES, instance=settings_obj)
+        if form.is_valid():
+            obj = form.save(commit=False)
+            obj.updated_by = request.user
+            if not obj.pk:
+                obj.is_active = True
+            obj.save()
+            messages.success(request, "Invoice settings saved.")
+            return redirect("invoice_settings")
+    else:
+        form = InvoiceSettingsForm(instance=settings_obj)
+
+    return render(
+        request,
+        "crm/invoice/invoice_settings.html",
+        {
+            "form": form,
+            "settings_obj": settings_obj if settings_obj.pk else None,
+        },
+    )
+
+
+def _preview_invoice(preview_type: str) -> Invoice:
+    today = timezone.localdate()
+    invoice_settings = _invoice_settings()
+    currency_na = getattr(invoice_settings, "default_currency_na", "") or "CAD"
+    currency_bd = getattr(invoice_settings, "default_currency_bd", "") or "BDT"
+    mapping = {
+        "north-america": ("north_america", "bulk", currency_na, Decimal("12500.00"), Decimal("450.00"), "North America Bulk Preview"),
+        "bangladesh": ("bangladesh", "bulk", currency_bd, Decimal("960000.00"), Decimal("0.00"), "Bangladesh Bulk Preview"),
+        "sewing-charge": ("bangladesh", "sewing_charge", currency_bd, Decimal("180000.00"), Decimal("0.00"), "Bangladesh Sewing Charge Preview"),
+    }
+    market, invoice_type, currency, subtotal, shipping, title = mapping.get(preview_type, mapping["north-america"])
+    inv = Invoice(
+        invoice_number=f"PREVIEW-{preview_type.upper()}",
+        issue_date=today,
+        due_date=today + timedelta(days=7),
+        invoice_market=market,
+        invoice_region=INVOICE_MARKET_TO_REGION.get(market, "CA"),
+        invoice_type=invoice_type,
+        currency=currency,
+        subtotal=subtotal,
+        shipping_amount=shipping,
+        discount_amount=Decimal("0.00"),
+        tax_amount=Decimal("0.00"),
+        total_amount=subtotal + shipping,
+        paid_amount=Decimal("0.00"),
+        deposit_percentage=_default_deposit_for(market, invoice_type),
+        status="sent",
+    )
+    inv.customer = Customer(
+        account_brand="Preview Client",
+        contact_name="Preview Buyer",
+        email="buyer@example.com",
+        country="Canada" if market == "north_america" else "Bangladesh",
+    )
+    if invoice_type == "sewing_charge":
+        inv.sewing_charge = subtotal
+    inv.preview_title = title
+    return inv
+
+
+@login_required
+@user_passes_test(can_manage_invoice_settings)
+def invoice_settings_preview(request, preview_type):
+    inv = _preview_invoice(preview_type)
+    context = _invoice_client_context(inv, request.user)
+    context["is_preview"] = True
+    context["preview_title"] = getattr(inv, "preview_title", "Invoice Preview")
+    return render(request, _invoice_client_template(inv), context)
 
 
 @login_required
@@ -1015,7 +1251,7 @@ def invoice_list_bd(request):
 def invoice_add(request):
     # optional prefill from order
     order_id = request.GET.get("order_id")
-    initial = {}
+    initial = {"deposit_percentage": _default_deposit_for("north_america", "bulk")}
     can_edit_internal_costs = can_manage_invoice_internal_costing(request.user)
 
     if order_id:
@@ -1062,7 +1298,7 @@ def invoice_add(request):
     return render(
         request,
         "crm/invoice/invoice_form.html",
-        {"form": form, "mode": "add", "can_manage_invoice_costing": can_edit_internal_costs},
+        {"form": form, "mode": "add", "can_manage_invoice_costing": can_edit_internal_costs, **_invoice_form_extra_context()},
     )
 
 
@@ -1097,13 +1333,18 @@ def invoice_add_ca(request):
             return redirect("invoice_view", pk=inv.pk)
     else:
         form = InvoiceForm(
-            initial={"currency": "CAD", "invoice_market": "north_america", "invoice_region": "CA"},
+            initial={
+                "currency": "CAD",
+                "invoice_market": "north_america",
+                "invoice_region": "CA",
+                "deposit_percentage": _default_deposit_for("north_america", "bulk"),
+            },
             can_edit_internal_costs=can_edit_internal_costs,
         )
     return render(
         request,
         "crm/invoice/invoice_form.html",
-        {"form": form, "mode": "add", "can_manage_invoice_costing": can_edit_internal_costs},
+        {"form": form, "mode": "add", "can_manage_invoice_costing": can_edit_internal_costs, **_invoice_form_extra_context()},
     )
 
 
@@ -1138,13 +1379,18 @@ def invoice_add_bd(request):
             return redirect("invoice_view", pk=inv.pk)
     else:
         form = InvoiceForm(
-            initial={"currency": "BDT", "invoice_market": "bangladesh", "invoice_region": "BD"},
+            initial={
+                "currency": "BDT",
+                "invoice_market": "bangladesh",
+                "invoice_region": "BD",
+                "deposit_percentage": _default_deposit_for("bangladesh", "bulk"),
+            },
             can_edit_internal_costs=can_edit_internal_costs,
         )
     return render(
         request,
         "crm/invoice/invoice_form.html",
-        {"form": form, "mode": "add", "can_manage_invoice_costing": can_edit_internal_costs},
+        {"form": form, "mode": "add", "can_manage_invoice_costing": can_edit_internal_costs, **_invoice_form_extra_context()},
     )
 
 
@@ -1184,7 +1430,13 @@ def invoice_edit(request, pk):
     return render(
         request,
         "crm/invoice/invoice_form.html",
-        {"form": form, "mode": "edit", "invoice": display_invoice, "can_manage_invoice_costing": can_edit_internal_costs},
+        {
+            "form": form,
+            "mode": "edit",
+            "invoice": display_invoice,
+            "can_manage_invoice_costing": can_edit_internal_costs,
+            **_invoice_form_extra_context(),
+        },
     )
 
 
@@ -1328,6 +1580,7 @@ def invoice_pdf(request, pk):
     crm_refs = context["crm_refs"]
     deposit_terms = context["deposit_terms"]
     payment_info = context["payment_info"]
+    tax_note = context["tax_note"]
     layout_title = context["invoice_layout_title"]
     is_bd_sewing_charge_invoice = context["is_bd_sewing_charge_invoice"]
     is_sample_invoice = context["is_sample_invoice"]
@@ -1504,6 +1757,12 @@ def invoice_pdf(request, pk):
         pdf.drawString(summary_x, y, label)
         pdf.drawRightString(right, y, _pdf_money(currency, amount))
         y -= 15
+    if tax_note:
+        ensure_space(50)
+        pdf.setFont("Helvetica", 8)
+        for line in _pdf_text_lines(pdf, tax_note, int(right - summary_x), "Helvetica", 8):
+            pdf.drawString(summary_x, y, line)
+            y -= 10
 
     y -= 8
     ensure_space(130)
@@ -1521,7 +1780,9 @@ def invoice_pdf(request, pk):
     pdf.drawString(left, y, "Payment Terms")
     y -= 14
     pdf.setFont("Helvetica", 9)
-    if is_sample_invoice:
+    if payment_info.get("payment_terms"):
+        term_line = payment_info["payment_terms"]
+    elif is_sample_invoice:
         term_line = "100% payment is required before sample development begins."
     else:
         term_line = (
@@ -1574,6 +1835,12 @@ def invoice_pdf(request, pk):
             pdf.drawString(left, y, line)
             y -= 11
             rendered_payment = True
+    if payment_info.get("wire_note") and payment_info.get("wire_note") != payment_info.get("note"):
+        for line in _pdf_text_lines(pdf, payment_info["wire_note"], int(right - left), "Helvetica", 8):
+            ensure_space(50)
+            pdf.drawString(left, y, line)
+            y -= 11
+            rendered_payment = True
     if not rendered_payment:
         pdf.drawString(left, y, "Payment details will be provided by our accounts team.")
         y -= 11
@@ -1583,7 +1850,13 @@ def invoice_pdf(request, pk):
         payment_info.get("nagad_qr_path"),
         payment_info.get("rocket_qr_path"),
     ]
-    qr_files = [finders.find(path) for path in qr_paths if path]
+    qr_files = [
+        payment_info.get("paypal_qr_file"),
+        payment_info.get("bkash_qr_file"),
+        payment_info.get("nagad_qr_file"),
+        payment_info.get("rocket_qr_file"),
+    ]
+    qr_files.extend(finders.find(path) for path in qr_paths if path)
     qr_files = [path for path in qr_files if path]
     if qr_files:
         ensure_space(130)
@@ -1633,14 +1906,29 @@ def invoice_pdf(request, pk):
     pdf.setStrokeColor(colors.HexColor("#94a3b8"))
     pdf.line(left, y, left + 190, y)
     pdf.line(width / 2 + 12, y, right, y)
+    y -= 12
+    authorized_by = company.get("authorized_by_name") or ""
+    authorized_title = company.get("authorized_by_title") or ""
+    if authorized_by:
+        pdf.setFont("Helvetica-Bold", 8)
+        pdf.drawString(left, y, authorized_by[:42])
+        y -= 10
+        if authorized_title:
+            pdf.setFont("Helvetica", 8)
+            pdf.drawString(left, y, authorized_title[:42])
+            y -= 10
+    else:
+        y -= 10
     y -= 22
     pdf.setFont("Helvetica-Bold", 9)
     pdf.drawCentredString(width / 2, y, "Thank You! For Your Business")
     y -= 14
     pdf.setFont("Helvetica", 8)
-    pdf.drawCentredString(width / 2, y, "From Concept to Creation")
-    y -= 11
-    pdf.drawCentredString(width / 2, y, "Iconic Apparel House Inc. Your Trusted Manufacturing Partner for Growth.")
+    if company.get("slogan"):
+        pdf.drawCentredString(width / 2, y, company["slogan"][:90])
+        y -= 11
+    if company.get("footer_note"):
+        pdf.drawCentredString(width / 2, y, company["footer_note"][:100])
 
     pdf.showPage()
     pdf.save()
