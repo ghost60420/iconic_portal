@@ -622,6 +622,11 @@ class QuickCostingTests(TestCase):
         self.assertContains(quote_response, "Open Invoice")
         self.assertContains(quote_response, reverse("invoice_view", args=[invoice.pk]))
 
+        duplicate_response = self.client.post(reverse("quick_costing_convert_to_invoice", args=[quick.pk]))
+        self.assertEqual(duplicate_response.status_code, 302)
+        self.assertEqual(duplicate_response["Location"], reverse("invoice_view", args=[invoice.pk]))
+        self.assertEqual(Invoice.objects.filter(quick_costing=quick).count(), 1)
+
     def test_quick_costing_excel_export(self):
         admin = self._admin_user("quick-costing-excel-admin")
         quick = self._quick_costing(created_by=admin)

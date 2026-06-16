@@ -216,11 +216,6 @@ def create_invoice_from_costing(costing, user=None):
 
 
 def create_invoice_from_quick_costing(quick_costing, user=None):
-    if quick_costing.status not in {QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_QUOTED}:
-        raise CostingWorkflowError("Approve the quick costing quotation before creating an invoice.")
-    if not quick_costing.quotation_number or not quick_costing.quoted_at:
-        raise CostingWorkflowError("Create a quotation before creating an invoice.")
-
     with transaction.atomic():
         quick_costing = (
             QuickCosting.objects.select_for_update()
@@ -232,6 +227,10 @@ def create_invoice_from_quick_costing(quick_costing, user=None):
         if existing:
             create_lifecycle_from_invoice(existing, user=user)
             return existing, False
+        if quick_costing.status not in {QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_QUOTED}:
+            raise CostingWorkflowError("Approve the quick costing quotation before creating an invoice.")
+        if not quick_costing.quotation_number or not quick_costing.quoted_at:
+            raise CostingWorkflowError("Create a quotation before creating an invoice.")
 
         summary = quick_costing.calculation_summary()
         market, currency = _quick_costing_market_and_currency(quick_costing)
