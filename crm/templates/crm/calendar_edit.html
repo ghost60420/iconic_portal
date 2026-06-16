@@ -155,6 +155,21 @@
     <form method="post" class="event-form">
       {% csrf_token %}
       {{ form.non_field_errors }}
+      <div style="margin-bottom:12px;">
+        <label for="calendar-workflow-search">Search Lead / Customer / Opportunity / Production</label>
+        <input
+          type="search"
+          id="calendar-workflow-search"
+          list="calendar-link-options"
+          placeholder="Type a lead ID, customer, opportunity, or production number"
+          autocomplete="off"
+        >
+        <datalist id="calendar-link-options">
+          {% for item in calendar_link_payload %}
+            <option value="{{ item.label }}"></option>
+          {% endfor %}
+        </datalist>
+      </div>
       {{ form.as_p }}
 
       <div class="event-form-actions">
@@ -164,4 +179,45 @@
     </form>
   </div>
 </div>
+{{ calendar_link_payload|json_script:"calendar-link-payload" }}
+<script>
+  (function () {
+    const payloadEl = document.getElementById("calendar-link-payload");
+    const searchInput = document.getElementById("calendar-workflow-search");
+    if (!payloadEl || !searchInput) return;
+
+    let records = [];
+    try {
+      records = JSON.parse(payloadEl.textContent || "[]");
+    } catch (error) {
+      records = [];
+    }
+
+    function setSelectValue(id, value) {
+      if (!value) return;
+      const field = document.getElementById(id);
+      if (!field) return;
+      const option = Array.from(field.options || []).find((item) => String(item.value) === String(value));
+      if (!option) return;
+      field.value = String(value);
+      field.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+
+    function applyRecord(record) {
+      if (!record) return;
+      setSelectValue("id_lead", record.lead_id);
+      setSelectValue("id_opportunity", record.opportunity_id);
+      setSelectValue("id_customer", record.customer_id);
+      setSelectValue("id_production", record.production_id);
+    }
+
+    searchInput.addEventListener("change", function () {
+      const query = searchInput.value.trim().toLowerCase();
+      if (!query) return;
+      const exact = records.find((record) => (record.label || "").toLowerCase() === query);
+      const partial = records.find((record) => (record.search || "").includes(query));
+      applyRecord(exact || partial);
+    });
+  })();
+</script>
 {% endblock %}

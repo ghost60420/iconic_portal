@@ -30,6 +30,7 @@ from .models import (
     InvoicePayment,
     Lead,
     Opportunity,
+    ProductionOrder,
     Shipment,
     Product,
     ProductReferenceImage,
@@ -813,6 +814,16 @@ class ShipmentForm(forms.ModelForm):
             ordered = [ORDER_FIELD] + [k for k in self.fields.keys() if k != ORDER_FIELD]
             self.order_fields(ordered)
 
+        for field_name, placeholder in {
+            "opportunity": "Search opportunity ID or brand",
+            "customer": "Search customer or contact",
+            ORDER_FIELD: "Search production order or style",
+        }.items():
+            if field_name and field_name in self.fields:
+                css = self.fields[field_name].widget.attrs.get("class", "form-select")
+                self.fields[field_name].widget.attrs["class"] = f"{css} crm-searchable-select".strip()
+                self.fields[field_name].widget.attrs["data-search-placeholder"] = placeholder
+
         for f in ["box_count", "total_weight_kg", "cost_bdt", "cost_cad"]:
             if f in self.fields:
                 self.fields[f].required = False
@@ -915,6 +926,7 @@ class EventForm(forms.ModelForm):
             "lead",
             "opportunity",
             "customer",
+            "production",
             "production_stage",
             "assigned_to_name",
             "assigned_to_email",
@@ -932,9 +944,10 @@ class EventForm(forms.ModelForm):
             "status": forms.Select(attrs={"class": "form-select"}),
             "location": forms.TextInput(attrs={"class": "form-control", "placeholder": "Office, showroom, Zoom, Google Meet"}),
             "meeting_link": forms.URLInput(attrs={"class": "form-control", "placeholder": "https://..."}),
-            "lead": forms.Select(attrs={"class": "form-select"}),
-            "opportunity": forms.Select(attrs={"class": "form-select"}),
-            "customer": forms.Select(attrs={"class": "form-select"}),
+            "lead": forms.Select(attrs={"class": "form-select crm-searchable-select", "data-search-placeholder": "Search lead ID, brand, or contact"}),
+            "opportunity": forms.Select(attrs={"class": "form-select crm-searchable-select", "data-search-placeholder": "Search opportunity ID or brand"}),
+            "customer": forms.Select(attrs={"class": "form-select crm-searchable-select", "data-search-placeholder": "Search customer or contact"}),
+            "production": forms.Select(attrs={"class": "form-select crm-searchable-select", "data-search-placeholder": "Search production order or style"}),
             "production_stage": forms.Select(attrs={"class": "form-select"}),
             "assigned_to_name": forms.TextInput(attrs={"class": "form-control"}),
             "assigned_to_email": forms.EmailInput(attrs={"class": "form-control"}),
@@ -952,6 +965,7 @@ class EventForm(forms.ModelForm):
             "lead",
             "opportunity",
             "customer",
+            "production",
             "production_stage",
             "assigned_to_name",
             "assigned_to_email",
@@ -971,6 +985,9 @@ class EventForm(forms.ModelForm):
             self.fields["opportunity"].queryset = Opportunity.objects.order_by("-id")
         if "customer" in self.fields:
             self.fields["customer"].queryset = Customer.objects.order_by("id")
+        if "production" in self.fields:
+            self.fields["production"].queryset = ProductionOrder.objects.select_related("customer", "opportunity").order_by("-created_at", "-id")
+            self.fields["production"].label = "Production order"
         if "attendees" in self.fields:
             self.fields["attendees"].queryset = get_user_model().objects.filter(is_active=True).order_by("first_name", "last_name", "username")
             self.fields["attendees"].label = "Internal attendees"

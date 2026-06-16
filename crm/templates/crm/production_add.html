@@ -614,6 +614,11 @@
           </div>
 
           <input type="hidden" name="line_payload" id="line-payload">
+          <datalist id="production-style-suggestions">
+            {% for p in library_products %}
+              <option value="{{ p.name }}">{{ p.product_code }}{% if p.product_type %} · {{ p.product_type }}{% endif %}</option>
+            {% endfor %}
+          </datalist>
 
           <div id="prod-line-list">
             {% for line in order_lines %}
@@ -628,7 +633,7 @@
 
                 <div class="prod-add-field">
                   <div class="prod-add-label">Style name</div>
-                  <input type="text" data-field="style_name" value="{{ line.style_name|default_if_none:'' }}">
+                  <input type="text" data-field="style_name" list="production-style-suggestions" value="{{ line.style_name|default_if_none:'' }}">
                   <div class="prod-add-help">
                     Main style name or code. You can list more than one if needed.
                   </div>
@@ -739,7 +744,7 @@
             <div class="prod-lib-field">
               <div class="prod-lib-label">Product defaults</div>
               <div class="prod-lib-control">
-                <select id="lib-product-picker">
+                <select id="lib-product-picker" class="crm-searchable-select" data-search-placeholder="Search product code or style">
                   <option value="">Select product</option>
                   {% for p in library_products %}
                     <option value="{{ p.pk }}"
@@ -1232,7 +1237,7 @@
       <div class="modal-grid">
         <div>
           <div class="prod-add-label">Style name</div>
-          <input type="text" id="line-modal-style" class="inputx" placeholder="Style name">
+          <input type="text" id="line-modal-style" class="inputx" list="production-style-suggestions" placeholder="Style name">
         </div>
         <div>
           <div class="prod-add-label">Color info</div>
@@ -1718,6 +1723,22 @@
       var productField = document.getElementById("id_product");
       var qtyField = document.getElementById("id_qty_total");
 
+      function syncProductToActiveLine(selectEl) {
+        if (!selectEl || !selectEl.value) return;
+        var opt = selectEl.options[selectEl.selectedIndex];
+        if (!opt) return;
+        var styleField = getActiveLineField("style_name");
+        if (styleField && !(styleField.value || "").trim()) {
+          styleField.value = opt.dataset.name || opt.textContent.replace(/^\s*[^-]+-\s*/, "").trim();
+        }
+      }
+
+      if (productField) {
+        productField.addEventListener("change", function () {
+          syncProductToActiveLine(productField);
+        });
+      }
+
       if (applyBtn && productPicker) {
         applyBtn.addEventListener("click", function () {
           var opt = productPicker.options[productPicker.selectedIndex];
@@ -1727,10 +1748,7 @@
             productField.value = opt.value;
           }
 
-          var styleField = getActiveLineField("style_name");
-          if (styleField && !(styleField.value || "").trim()) {
-            styleField.value = opt.dataset.name || "";
-          }
+          syncProductToActiveLine(productPicker);
 
           if (qtyField && !(qtyField.value || "").trim() && opt.dataset.moq) {
             qtyField.value = opt.dataset.moq;

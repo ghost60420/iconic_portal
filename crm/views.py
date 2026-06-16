@@ -138,18 +138,21 @@ from .models import (
     LeadAIInsight,
     LeadImportJob,
     LeadResearchJob,
+    LeadTask,
     LEAD_QUAL_STATUS_CHOICES,
     LeadComment,
     CostingHeader,
     CostSheet,
     CostSheetSimple,
     QuickCosting,
+    Invoice,
     Opportunity,
     OpportunityDocument,
     OpportunityFile,
     OpportunityTask,
     OrderLifecycle,
     Product,
+    ProductReferenceImage,
     ProductTypeMaster,
     ProductCategoryMaster,
     FabricNameMaster,
@@ -165,6 +168,8 @@ from .models import (
     ProductionProgressPhoto,
     ProductionStage,
     Shipment,
+    AccountingEntry,
+    SystemActivityLog,
 )
 try:
     from .models import ProductionOrderLine
@@ -407,6 +412,231 @@ def _archive_workflow_record(record, user):
     record.archived_at = timezone.now()
     record.archived_by = user if user and user.is_authenticated else None
     record.save(update_fields=["is_archived", "archived_at", "archived_by"])
+
+
+def _workflow_object_label(record):
+    for attr in ("lead_id", "opportunity_id", "order_code", "invoice_number", "customer_code"):
+        value = getattr(record, attr, None)
+        if value:
+            return str(value)
+    return str(getattr(record, "pk", "") or record)
+
+
+def _log_workflow_safety_action(request, *, action, record, message, meta=None):
+    try:
+        SystemActivityLog.objects.create(
+            actor=request.user if request and request.user.is_authenticated else None,
+            area="workflow",
+            action=action,
+            level="info",
+            path=request.get_full_path()[:255] if request else "",
+            method=request.method if request else "",
+            model_label=record.__class__.__name__,
+            object_id=str(getattr(record, "pk", "") or ""),
+            message=message[:255],
+            meta_json=json.dumps(meta or {}, default=str),
+        )
+    except Exception:
+        logger.exception("Failed to write workflow safety log for %s", record)
+
+
+def _log_lead_workflow_note(lead, user, description):
+    if not lead:
+        return
+    try:
+        LeadActivity.objects.create(
+            lead=lead,
+            activity_type="note_added",
+            description=description,
+            user=user if user and user.is_authenticated else None,
+        )
+    except Exception:
+        logger.exception("Failed to write lead workflow activity for lead %s", getattr(lead, "pk", None))
+
+
+def _lead_linked_record_labels(lead):
+    labels = []
+    if lead.opportunities.exists():
+        labels.append("opportunities")
+    if ProductionOrder.objects.filter(Q(lead=lead) | Q(opportunity__lead=lead)).exists():
+        labels.append("production orders")
+    if Invoice.objects.filter(
+        Q(order__lead=lead)
+        | Q(order__opportunity__lead=lead)
+        | Q(costing_header__opportunity__lead=lead)
+        | Q(quick_costing__opportunity__lead=lead)
+    ).exists():
+        labels.append("invoices")
+    if LeadActivity.objects.filter(lead=lead).exists():
+        labels.append("activity history")
+    if LeadTask.objects.filter(lead=lead).exists():
+        labels.append("tasks")
+    if LeadComment.objects.filter(lead=lead).exists():
+        labels.append("comments")
+    if Event.objects.filter(lead=lead).exists():
+        labels.append("calendar events")
+    if ProductReferenceImage.objects.filter(lead=lead).exists():
+        labels.append("reference images")
+    return labels
+
+
+def _hydrate_calendar_event_links(event):
+    production = getattr(event, "production", None)
+    opportunity = getattr(event, "opportunity", None)
+    lead = getattr(event, "lead", None)
+
+    if production:
+        if not event.opportunity_id and getattr(production, "opportunity_id", None):
+            event.opportunity = production.opportunity
+            opportunity = event.opportunity
+        if not event.lead_id and getattr(production, "lead_id", None):
+            event.lead = production.lead
+            lead = event.lead
+        if not event.customer_id and getattr(production, "customer_id", None):
+            event.customer = production.customer
+
+    if opportunity:
+        if not event.lead_id and getattr(opportunity, "lead_id", None):
+            event.lead = opportunity.lead
+            lead = event.lead
+        if not event.customer_id and getattr(opportunity, "customer_id", None):
+            event.customer = opportunity.customer
+
+    if lead and not event.customer_id and getattr(lead, "customer_id", None):
+        event.customer = lead.customer
+
+
+def _calendar_related_opportunities(event):
+    seen = set()
+    related = []
+
+    def add(opp):
+        if opp and opp.pk not in seen:
+            seen.add(opp.pk)
+            related.append(opp)
+
+    add(getattr(event, "opportunity", None))
+    production = getattr(event, "production", None)
+    if production:
+        add(getattr(production, "opportunity", None))
+    lead = getattr(event, "lead", None)
+    if lead:
+        for opp in lead.opportunities.select_related("customer").order_by("-updated_at", "-id")[:5]:
+            add(opp)
+    return related
+
+
+def _calendar_related_productions(event):
+    seen = set()
+    related = []
+
+    def add(order):
+        if order and order.pk not in seen:
+            seen.add(order.pk)
+            related.append(order)
+
+    add(getattr(event, "production", None))
+    opportunity = getattr(event, "opportunity", None)
+    if opportunity:
+        for order in ProductionOrder.objects.filter(opportunity=opportunity).select_related("customer", "opportunity").order_by("-created_at", "-id")[:5]:
+            add(order)
+    lead = getattr(event, "lead", None)
+    if lead:
+        for order in ProductionOrder.objects.filter(Q(lead=lead) | Q(opportunity__lead=lead)).select_related("customer", "opportunity").order_by("-created_at", "-id")[:5]:
+            add(order)
+    return related
+
+
+def _calendar_link_payload():
+    payload = []
+
+    def add(record_type, record, label, *, lead_id=None, opportunity_id=None, customer_id=None, production_id=None):
+        payload.append(
+            {
+                "type": record_type,
+                "id": record.pk,
+                "label": label,
+                "search": f"{record_type} {label}".lower(),
+                "lead_id": lead_id or "",
+                "opportunity_id": opportunity_id or "",
+                "customer_id": customer_id or "",
+                "production_id": production_id or "",
+            }
+        )
+
+    for lead in Lead.objects.select_related("customer").order_by("-id")[:400]:
+        add(
+            "lead",
+            lead,
+            f"{lead.lead_id} - {lead.account_brand or lead.contact_name or 'Lead'}",
+            lead_id=lead.pk,
+            customer_id=lead.customer_id,
+        )
+    for opp in Opportunity.objects.select_related("lead", "customer").order_by("-id")[:400]:
+        add(
+            "opportunity",
+            opp,
+            f"{opp.opportunity_id} - {getattr(opp.lead, 'account_brand', '') or getattr(opp.customer, 'account_brand', '') or 'Opportunity'}",
+            lead_id=opp.lead_id,
+            opportunity_id=opp.pk,
+            customer_id=opp.customer_id,
+        )
+    for customer in Customer.objects.order_by("-id")[:400]:
+        add(
+            "customer",
+            customer,
+            f"{customer.account_brand or customer.contact_name or 'Customer'} [{customer.customer_code}]",
+            customer_id=customer.pk,
+        )
+    for order in ProductionOrder.objects.select_related("lead", "opportunity", "customer").order_by("-created_at", "-id")[:400]:
+        add(
+            "production",
+            order,
+            f"{order.short_order_code or order.order_code} - {order.title}",
+            lead_id=order.lead_id,
+            opportunity_id=order.opportunity_id,
+            customer_id=order.customer_id,
+            production_id=order.pk,
+        )
+    return payload
+
+
+def _opportunity_linked_record_labels(opportunity):
+    labels = []
+    if ProductionOrder.objects.filter(opportunity=opportunity).exists():
+        labels.append("production orders")
+    if Invoice.objects.filter(
+        Q(order__opportunity=opportunity)
+        | Q(costing_header__opportunity=opportunity)
+        | Q(quick_costing__opportunity=opportunity)
+    ).exists():
+        labels.append("invoices")
+    if CostingHeader.objects.filter(opportunity=opportunity).exists() or CostSheet.objects.filter(opportunity=opportunity).exists() or QuickCosting.objects.filter(opportunity=opportunity).exists():
+        labels.append("costings")
+    if Shipment.objects.filter(opportunity=opportunity).exists():
+        labels.append("shipments")
+    if OpportunityTask.objects.filter(opportunity=opportunity).exists():
+        labels.append("tasks")
+    if OpportunityFile.objects.filter(opportunity=opportunity).exists() or OpportunityDocument.objects.filter(opportunity=opportunity).exists():
+        labels.append("files")
+    if LeadComment.objects.filter(opportunity=opportunity).exists():
+        labels.append("comments")
+    if Event.objects.filter(opportunity=opportunity).exists():
+        labels.append("calendar events")
+    return labels
+
+
+def _production_linked_record_labels(order):
+    labels = []
+    if Shipment.objects.filter(order=order).exists():
+        labels.append("shipments")
+    if ProductionOrderMaterial.objects.filter(order=order).exists():
+        labels.append("inventory allocations")
+    if Invoice.objects.filter(order=order).exists():
+        labels.append("invoices")
+    if AccountingEntry.objects.filter(production_order=order).exists():
+        labels.append("accounting records")
+    return labels
 
 # ------------------------------------------
 # Shipment email helper (non accounting)
@@ -1273,6 +1503,11 @@ def leads_list(request):
     page_obj = paginator.get_page(page_number)
     page_obj.object_list = attach_primary_reference_images_to_leads(page_obj.object_list)
     page_obj.object_list = _decorate_leads_for_list(page_obj.object_list, today=today)
+    for lead in page_obj.object_list:
+        try:
+            lead.can_hard_delete = not _lead_linked_record_labels(lead)
+        except Exception:
+            lead.can_hard_delete = False
 
     context = {
         "page_obj": page_obj,
@@ -1358,6 +1593,15 @@ def lead_archive(request, pk):
 
     had_opportunities = lead.opportunities.exists()
     _archive_workflow_record(lead, request.user)
+    label = _workflow_object_label(lead)
+    _log_lead_workflow_note(lead, request.user, f"Lead archived by {_user_display_name(request.user)}.")
+    _log_workflow_safety_action(
+        request,
+        action="archive",
+        record=lead,
+        message=f"Lead {label} archived.",
+        meta={"linked_records": _lead_linked_record_labels(lead)},
+    )
     if lead.lead_type == "outbound" and lead.outbound_status != "Archived":
         lead.outbound_status = "Archived"
         lead.save(update_fields=["outbound_status"])
@@ -1370,6 +1614,36 @@ def lead_archive(request, pk):
     else:
         messages.success(request, "Lead archived. History is preserved.")
     return redirect(request.POST.get("next") or request.POST.get("return_url") or "leads_list")
+
+
+@require_POST
+def lead_delete(request, pk):
+    lead = get_object_or_404(Lead, pk=pk)
+    if not _can_archive_workflow_record(request.user):
+        messages.error(request, "You do not have permission to delete leads.")
+        return redirect("lead_detail", pk=lead.pk)
+
+    linked_labels = _lead_linked_record_labels(lead)
+    if linked_labels:
+        messages.warning(
+            request,
+            "This lead has linked records. Archive / Mark Not Viable instead: "
+            + ", ".join(linked_labels)
+            + ".",
+        )
+        return redirect("lead_detail", pk=lead.pk)
+
+    label = _workflow_object_label(lead)
+    _log_workflow_safety_action(
+        request,
+        action="delete",
+        record=lead,
+        message=f"Lead {label} deleted.",
+        meta={"account_brand": lead.account_brand, "email": lead.email},
+    )
+    lead.delete()
+    messages.success(request, f"Lead {label} deleted.")
+    return redirect(request.POST.get("next") or "leads_list")
 
 
 def leads_dashboard(request):
@@ -3028,6 +3302,7 @@ def _lead_detail_impl(request, pk):
         "wa_inbox_url": wa_inbox_url,
         "iconic_ai_brain": iconic_ai_brain,
         "can_archive_records": _can_archive_workflow_record(request.user),
+        "lead_can_hard_delete": not _lead_linked_record_labels(lead),
         **workflow_visibility,
     }
 
@@ -3247,6 +3522,7 @@ def opportunity_detail(request, pk):
         advanced_costing_count,
         quick_costing_count,
     )
+    opportunity_can_hard_delete = not _opportunity_linked_record_labels(opportunity)
     task_assignee_options = [
         {
             "value": _user_display_name(user),
@@ -3704,6 +3980,7 @@ def opportunity_detail(request, pk):
         "opportunity_costing_status": opportunity_costing_status,
         "task_assignee_options": task_assignee_options,
         "can_archive_records": _can_archive_workflow_record(request.user),
+        "opportunity_can_hard_delete": opportunity_can_hard_delete,
         "variance_placeholder": variance_placeholder,
         "variance_display": variance_display,
 
@@ -6367,12 +6644,19 @@ def calendar_add(request):
             initial_data["lead"] = Lead.objects.get(pk=lead_id)
         except Lead.DoesNotExist:
             pass
+    production_id = request.GET.get("production")
+    if production_id:
+        try:
+            initial_data["production"] = ProductionOrder.objects.get(pk=production_id)
+        except ProductionOrder.DoesNotExist:
+            pass
 
     if request.method == "POST":
         form = EventForm(request.POST)
         if form.is_valid():
             event = form.save(commit=False)
             event.created_by = request.user
+            _hydrate_calendar_event_links(event)
             event.save()
             form.save_m2m()
             _queue_calendar_email_after_commit(event, "created")
@@ -6403,6 +6687,7 @@ def calendar_add(request):
                     lead=event.lead,
                     opportunity=event.opportunity,
                     customer=event.customer,
+                    production=event.production,
                     assigned_to_name=event.assigned_to_name,
                     assigned_to_email=event.assigned_to_email,
                     external_attendees=event.external_attendees,
@@ -6430,7 +6715,7 @@ def calendar_add(request):
     else:
         form = EventForm(initial=initial_data)
 
-    return render(request, "crm/calendar_add.html", {"form": form})
+    return render(request, "crm/calendar_add.html", {"form": form, "calendar_link_payload": _calendar_link_payload()})
 
 
 # ==============================
@@ -6445,7 +6730,10 @@ def calendar_edit(request, pk):
     if request.method == "POST":
         form = EventForm(request.POST, instance=event)
         if form.is_valid():
-            event = form.save()
+            event = form.save(commit=False)
+            _hydrate_calendar_event_links(event)
+            event.save()
+            form.save_m2m()
             if old_start != event.start_datetime or old_reminder != event.reminder_minutes_before:
                 event.reminder_sent = False
                 event.save(update_fields=["reminder_sent"])
@@ -6469,7 +6757,7 @@ def calendar_edit(request, pk):
     else:
         form = EventForm(instance=event)
 
-    return render(request, "crm/calendar_edit.html", {"form": form, "event": event})
+    return render(request, "crm/calendar_edit.html", {"form": form, "event": event, "calendar_link_payload": _calendar_link_payload()})
 
 
 # ==============================
@@ -6492,7 +6780,12 @@ def calendar_event_detail(request, pk):
     return render(
         request,
         "crm/calendar_event_detail.html",
-        {"event": event, "upcoming_for_lead": upcoming_for_lead},
+        {
+            "event": event,
+            "upcoming_for_lead": upcoming_for_lead,
+            "related_opportunities": _calendar_related_opportunities(event),
+            "related_productions": _calendar_related_productions(event),
+        },
     )
 
 
@@ -7420,22 +7713,55 @@ def opportunity_edit(request, pk):
 def opportunity_delete(request, pk):
     opportunity = get_object_or_404(Opportunity, pk=pk)
     if not _can_archive_workflow_record(request.user):
-        messages.error(request, "You do not have permission to archive opportunities.")
+        messages.error(request, "You do not have permission to archive or delete opportunities.")
         return redirect("opportunity_detail", pk=pk)
 
-    has_linked_records = (
-        ProductionOrder.objects.filter(opportunity=opportunity).exists()
-        or CostingHeader.objects.filter(opportunity=opportunity).exists()
-        or CostSheet.objects.filter(opportunity=opportunity).exists()
-        or QuickCosting.objects.filter(opportunity=opportunity).exists()
-        or Shipment.objects.filter(opportunity=opportunity).exists()
-    )
+    requested_action = (request.POST.get("workflow_action") or "archive").strip().lower()
+    linked_labels = _opportunity_linked_record_labels(opportunity)
     opp_id = opportunity.opportunity_id
+
+    if requested_action == "delete":
+        if linked_labels:
+            messages.warning(
+                request,
+                f"Opportunity {opp_id} has linked records. Archive / Mark Lost instead: "
+                + ", ".join(linked_labels)
+                + ".",
+            )
+            return redirect("opportunity_detail", pk=pk)
+        lead = opportunity.lead
+        _log_workflow_safety_action(
+            request,
+            action="delete",
+            record=opportunity,
+            message=f"Opportunity {opp_id} deleted.",
+            meta={"lead": getattr(lead, "lead_id", ""), "customer_id": opportunity.customer_id},
+        )
+        _log_lead_workflow_note(lead, request.user, f"Opportunity {opp_id} deleted by {_user_display_name(request.user)}.")
+        opportunity.delete()
+        messages.success(request, f"Opportunity {opp_id} deleted.")
+        return redirect(request.POST.get("next") or "opportunities_list")
+
     _archive_workflow_record(opportunity, request.user)
-    if has_linked_records:
+    _log_workflow_safety_action(
+        request,
+        action="archive",
+        record=opportunity,
+        message=f"Opportunity {opp_id} archived.",
+        meta={"linked_records": linked_labels},
+    )
+    _log_lead_workflow_note(opportunity.lead, request.user, f"Opportunity {opp_id} archived by {_user_display_name(request.user)}.")
+    _record_customer_event(
+        customer=opportunity.customer or getattr(opportunity.lead, "customer", None),
+        event_type="opportunity_created",
+        title="Opportunity archived",
+        details=f"Opportunity {opp_id} archived by {_user_display_name(request.user)}.",
+        opportunity=opportunity,
+    )
+    if linked_labels:
         messages.warning(
             request,
-            f"Opportunity {opp_id} archived. Linked records were preserved.",
+            f"Opportunity {opp_id} archived. Linked records were preserved: {', '.join(linked_labels)}.",
         )
     else:
         messages.success(request, f"Opportunity {opp_id} archived. History is preserved.")
@@ -8059,6 +8385,7 @@ def production_list(request):
                 ),
                 "latest_shipment": shipments[0] if shipments else None,
                 "lifecycle": lifecycle,
+                "can_hard_delete": not _production_linked_record_labels(order),
             }
         )
 
@@ -8912,6 +9239,7 @@ def production_detail(request, pk):
         "can_view_lifecycle_profit": can_view_profit,
         "can_add_lines": can_add_lines,
         "can_archive_records": _can_archive_workflow_record(request.user),
+        "production_can_hard_delete": not _production_linked_record_labels(order),
         **workflow_visibility,
     }
 
@@ -8936,7 +9264,77 @@ def production_archive(request, pk):
             return redirect("production_detail", pk=order.pk)
 
     _archive_workflow_record(order, request.user)
-    messages.success(request, f"Production order {order.order_code or order.pk} archived. Linked records were preserved.")
+    linked_labels = _production_linked_record_labels(order)
+    label = _workflow_object_label(order)
+    _log_workflow_safety_action(
+        request,
+        action="archive",
+        record=order,
+        message=f"Production order {label} archived.",
+        meta={"linked_records": linked_labels, "operational_status": operational_status},
+    )
+    _log_lead_workflow_note(order.lead, request.user, f"Production order {label} archived by {_user_display_name(request.user)}.")
+    _record_customer_event(
+        customer=order.customer or getattr(order.opportunity, "customer", None) or getattr(order.lead, "customer", None),
+        event_type="production_status",
+        title="Production archived",
+        details=f"Production order {label} archived by {_user_display_name(request.user)}.",
+        opportunity=order.opportunity,
+        production=order,
+    )
+    if linked_labels:
+        messages.warning(request, f"Production order {label} archived. Linked records were preserved: {', '.join(linked_labels)}.")
+    else:
+        messages.success(request, f"Production order {label} archived. History is preserved.")
+    return redirect(request.POST.get("next") or "production_list")
+
+
+@require_POST
+def production_delete(request, pk):
+    order = get_object_or_404(ProductionOrder, pk=pk)
+    if not _can_archive_workflow_record(request.user):
+        messages.error(request, "You do not have permission to delete production orders.")
+        return redirect("production_detail", pk=order.pk)
+
+    linked_labels = _production_linked_record_labels(order)
+    label = _workflow_object_label(order)
+    if linked_labels:
+        messages.warning(
+            request,
+            f"Production order {label} has linked records. Archive / Cancel Production instead: "
+            + ", ".join(linked_labels)
+            + ".",
+        )
+        return redirect("production_detail", pk=order.pk)
+
+    operational_status = get_production_operational_status(order)
+    if operational_status in {OPERATIONAL_STATUS_READY_TO_SHIP, OPERATIONAL_STATUS_SHIPPED}:
+        confirmation = (request.POST.get("confirm_delete") or "").strip().lower()
+        if confirmation not in {"delete", "yes", "1"}:
+            messages.error(request, "Ready to ship or shipped production orders require confirmation before deletion.")
+            return redirect("production_detail", pk=order.pk)
+
+    lead = order.lead
+    customer = order.customer or getattr(order.opportunity, "customer", None) or getattr(order.lead, "customer", None)
+    opportunity = order.opportunity
+    _log_workflow_safety_action(
+        request,
+        action="delete",
+        record=order,
+        message=f"Production order {label} deleted.",
+        meta={"lead": getattr(lead, "lead_id", ""), "opportunity": getattr(opportunity, "opportunity_id", "")},
+    )
+    _log_lead_workflow_note(lead, request.user, f"Production order {label} deleted by {_user_display_name(request.user)}.")
+    _record_customer_event(
+        customer=customer,
+        event_type="production_status",
+        title="Production deleted",
+        details=f"Production order {label} deleted by {_user_display_name(request.user)}.",
+        opportunity=opportunity,
+        production=None,
+    )
+    order.delete()
+    messages.success(request, f"Production order {label} deleted.")
     return redirect(request.POST.get("next") or "production_list")
 
 
@@ -13996,6 +14394,11 @@ def opportunities_list(request):
     page_number = request.GET.get("page") or 1
     page_obj = paginator.get_page(page_number)
     page_obj.object_list = attach_primary_reference_images_to_opportunities(page_obj.object_list)
+    for opp in page_obj.object_list:
+        try:
+            opp.can_hard_delete = not _opportunity_linked_record_labels(opp)
+        except Exception:
+            opp.can_hard_delete = False
 
     context = {
         "page_obj": page_obj,

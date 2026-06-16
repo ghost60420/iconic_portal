@@ -935,16 +935,25 @@
                   <a class="lead-btn lead-btn--primary lead-btn--tiny" href="{% url 'lead_detail' lead.pk %}">Open</a>
                   <a class="lead-btn lead-btn--ghost lead-btn--tiny" href="{% url 'lead_edit' lead.pk %}">Edit</a>
                   {% if can_archive_records and not lead.is_archived %}
-                    <button
-                      class="lead-btn lead-btn--ghost lead-btn--tiny"
-                      type="submit"
-                      formaction="{% url 'lead_archive' lead.pk %}"
-                      formmethod="post"
-                      onclick="return confirm('Are you sure you want to archive this record? This action will hide it from active lists but keep the history.');"
-                    >Archive</button>
-                  {% elif lead.is_archived %}
-                    <span class="lead-btn lead-btn--ghost lead-btn--tiny">Archived</span>
-                  {% endif %}
+	                    <button
+	                      class="lead-btn lead-btn--ghost lead-btn--tiny"
+	                      type="submit"
+	                      formaction="{% url 'lead_archive' lead.pk %}"
+	                      formmethod="post"
+	                      onclick="return confirm('Are you sure you want to archive this record? This action will hide it from active lists but keep the history.');"
+	                    >Archive</button>
+                    {% if lead.can_hard_delete %}
+                      <button
+                        class="lead-btn lead-btn--ghost lead-btn--tiny"
+                        type="submit"
+                        formaction="{% url 'lead_delete' lead.pk %}"
+                        formmethod="post"
+                        onclick="return confirm('Are you sure? This action cannot be undone.');"
+                      >Delete</button>
+                    {% endif %}
+	                  {% elif lead.is_archived %}
+	                    <span class="lead-btn lead-btn--ghost lead-btn--tiny">Archived</span>
+	                  {% endif %}
                 </div>
               </td>
             </tr>

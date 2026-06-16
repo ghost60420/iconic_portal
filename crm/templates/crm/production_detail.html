@@ -18,7 +18,7 @@
 
       <div class="production-hero-copy">
         <p class="production-eyebrow">Factory order workspace</p>
-        <h1>{{ order.order_code|default:"Production Order" }}</h1>
+        <h1 title="{{ order.order_code|default:'Production Order' }}">{{ order.short_order_code|default:order.order_code|default:"Production Order" }}</h1>
         <div class="production-hero-title">{{ order.title }}</div>
         <div class="production-hero-meta">
           <span>
@@ -73,15 +73,26 @@
         <form method="post" action="{% url 'production_archive' order.pk %}" style="display:inline;">
           {% csrf_token %}
           <input type="hidden" name="confirm_archive" value="archive">
-          <button
-            type="submit"
-            class="production-btn production-btn--ghost"
-            onclick="return confirm('{% if operational_status == "ready_to_ship" or operational_status == "shipped" %}This production order is {{ operational_status_label }}. Archive only if management has confirmed. Continue?{% else %}Are you sure you want to archive this record? This action will hide it from active lists but keep the history.{% endif %}');"
-          >Archive</button>
-        </form>
-      {% elif order.is_archived %}
-        <span class="production-btn production-btn--ghost">Archived</span>
-      {% endif %}
+	          <button
+	            type="submit"
+	            class="production-btn production-btn--ghost"
+	            onclick="return confirm('{% if operational_status == "ready_to_ship" or operational_status == "shipped" %}This production order is {{ operational_status_label }}. Archive only if management has confirmed. Continue?{% else %}Are you sure you want to archive this record? This action will hide it from active lists but keep the history.{% endif %}');"
+	          >Archive / Cancel Production</button>
+	        </form>
+        {% if production_can_hard_delete %}
+          <form method="post" action="{% url 'production_delete' order.pk %}" style="display:inline;">
+            {% csrf_token %}
+            <input type="hidden" name="confirm_delete" value="delete">
+            <button
+              type="submit"
+              class="production-btn production-btn--ghost"
+              onclick="return confirm('Are you sure? This action cannot be undone.');"
+            >Delete</button>
+          </form>
+        {% endif %}
+	      {% elif order.is_archived %}
+	        <span class="production-btn production-btn--ghost">Archived</span>
+	      {% endif %}
     </div>
   </section>
 
@@ -1073,7 +1084,8 @@
           <small>Advanced production cost and internal fields</small>
         </summary>
         <div class="production-raw-grid">
-          <div><span>Order code</span><strong>{{ order.order_code|default:"Not set" }}</strong></div>
+          <div><span>Short PO</span><strong title="{{ order.order_code|default:'Not set' }}">{{ order.short_order_code|default:order.order_code|default:"Not set" }}</strong></div>
+          <div><span>Full order code</span><strong>{{ order.order_code|default:"Not set" }}</strong></div>
           <div><span>Created</span><strong>{{ order.created_at|date:"Y-m-d H:i" }}</strong></div>
           <div><span>Updated</span><strong>{{ order.updated_at|date:"Y-m-d H:i" }}</strong></div>
           <div><span>Fabric required kg</span><strong>{{ order.fabric_required_kg|default:"not set" }}</strong></div>

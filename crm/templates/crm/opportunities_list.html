@@ -282,15 +282,24 @@
                   <a class="opp-btn opp-btn--tiny opp-btn--ghost" href="{% url 'opportunity_edit' opp.pk %}">Edit</a>
                   <a class="opp-btn opp-btn--tiny opp-btn--ghost" href="{% url 'cost_sheet_create_for_opportunity' opp.pk %}">Create quote</a>
                   <a class="opp-btn opp-btn--tiny opp-btn--ghost" href="{% url 'opportunity_detail' opp.pk %}#opportunity-stage">Move stage</a>
-                  {% if can_archive_records and not opp.is_archived %}
-                    <form method="post" action="{% url 'opportunity_delete' opp.pk %}" style="display:inline;">
-                      {% csrf_token %}
-                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                      <button type="submit" class="opp-btn opp-btn--tiny opp-btn--ghost" onclick="return confirm('Are you sure you want to archive this record? This action will hide it from active lists but keep the history.');">Archive</button>
-                    </form>
-                  {% elif opp.is_archived %}
-                    <span class="opp-btn opp-btn--tiny opp-btn--ghost">Archived</span>
-                  {% endif %}
+	                  {% if can_archive_records and not opp.is_archived %}
+	                    <form method="post" action="{% url 'opportunity_delete' opp.pk %}" style="display:inline;">
+	                      {% csrf_token %}
+	                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <input type="hidden" name="workflow_action" value="archive">
+	                      <button type="submit" class="opp-btn opp-btn--tiny opp-btn--ghost" onclick="return confirm('Are you sure you want to archive this record? This action will hide it from active lists but keep the history.');">Archive</button>
+	                    </form>
+                      {% if opp.can_hard_delete %}
+                        <form method="post" action="{% url 'opportunity_delete' opp.pk %}" style="display:inline;">
+                          {% csrf_token %}
+                          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                          <input type="hidden" name="workflow_action" value="delete">
+                          <button type="submit" class="opp-btn opp-btn--tiny opp-btn--ghost" onclick="return confirm('Are you sure? This action cannot be undone.');">Delete</button>
+                        </form>
+                      {% endif %}
+	                  {% elif opp.is_archived %}
+	                    <span class="opp-btn opp-btn--tiny opp-btn--ghost">Archived</span>
+	                  {% endif %}
                 </div>
               </td>
             </tr>

@@ -3105,6 +3105,13 @@ class Event(models.Model):
         null=True,
         related_name="events",
     )
+    production = models.ForeignKey(
+        "ProductionOrder",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="events",
+    )
 
     # assignment and reminders
     assigned_to_name = models.CharField(
@@ -3573,6 +3580,27 @@ class ProductionOrder(models.Model):
         if self.order_code:
             return f"{self.order_code} - {self.title}"
         return self.title
+
+    @property
+    def short_order_code(self):
+        code = (self.order_code or "").strip()
+        if not code:
+            return ""
+
+        index = 0
+        while index < len(code) and code[index].isalpha():
+            index += 1
+
+        digit_start = index
+        while index < len(code) and code[index].isdigit():
+            index += 1
+
+        timestamp_digits = code[digit_start:index]
+        if len(timestamp_digits) >= 6:
+            return f"PO-{timestamp_digits[-6:]}"
+        if len(code) <= 10:
+            return code
+        return f"PO-{code[-6:]}"
 
     @property
     def percent_done(self):

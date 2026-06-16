@@ -59,16 +59,26 @@
         <a href="{% url 'production_from_opportunity' opportunity.pk %}" class="opp-btn opp-btn--ghost">Move to Production</a>
       {% endif %}
       <a href="{% url 'opportunities_list' %}" class="opp-btn opp-btn--ghost">Back</a>
-      {% if can_archive_records and not opportunity.is_archived %}
-        <form method="post" action="{% url 'opportunity_delete' opportunity.pk %}" class="opp-inline-form">
-          {% csrf_token %}
-          <button type="submit" class="opp-btn opp-btn--danger" onclick="return confirm('Are you sure you want to archive this record? This action will hide it from active lists but keep the history.');">
-            Archive
-          </button>
-        </form>
-      {% elif opportunity.is_archived %}
-        <span class="opp-btn opp-btn--ghost">Archived</span>
-      {% endif %}
+	      {% if can_archive_records and not opportunity.is_archived %}
+	        <form method="post" action="{% url 'opportunity_delete' opportunity.pk %}" class="opp-inline-form">
+	          {% csrf_token %}
+            <input type="hidden" name="workflow_action" value="archive">
+	          <button type="submit" class="opp-btn opp-btn--danger" onclick="return confirm('Are you sure you want to archive this record? This action will hide it from active lists but keep the history.');">
+	            Archive / Mark Lost
+	          </button>
+	        </form>
+          {% if opportunity_can_hard_delete %}
+            <form method="post" action="{% url 'opportunity_delete' opportunity.pk %}" class="opp-inline-form">
+              {% csrf_token %}
+              <input type="hidden" name="workflow_action" value="delete">
+              <button type="submit" class="opp-btn opp-btn--danger" onclick="return confirm('Are you sure? This action cannot be undone.');">
+                Delete
+              </button>
+            </form>
+          {% endif %}
+	      {% elif opportunity.is_archived %}
+	        <span class="opp-btn opp-btn--ghost">Archived</span>
+	      {% endif %}
     </div>
   </section>
 

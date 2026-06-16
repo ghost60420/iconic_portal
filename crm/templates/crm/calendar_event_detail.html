@@ -333,20 +333,30 @@
         </div>
       </div>
 
-      <div class="card">
-        <div class="card-title">Linked records</div>
-        <div style="display:flex; flex-wrap:wrap; gap:8px;">
-          {% if event.lead %}
-            <a class="tag-link" href="{% url 'lead_detail' event.lead.pk %}">Lead: {{ event.lead.account_brand }} ({{ event.lead.lead_id }})</a>
-          {% endif %}
-          {% if event.customer %}
-            <a class="tag-link" href="{% url 'customer_detail' event.customer.pk %}">Customer: {{ event.customer.account_brand }}</a>
-          {% endif %}
-          {% if event.opportunity %}
-            <a class="tag-link" href="{% url 'opportunity_detail' event.opportunity.pk %}">Opportunity</a>
-          {% endif %}
-        </div>
-      </div>
+	      <div class="card">
+	        <div class="card-title">Linked records</div>
+	        <div style="display:flex; flex-wrap:wrap; gap:8px;">
+	          {% if event.lead %}
+	            <a class="tag-link" href="{% url 'lead_detail' event.lead.pk %}">Lead: {{ event.lead.account_brand }} ({{ event.lead.lead_id }})</a>
+	          {% endif %}
+	          {% if event.customer %}
+	            <a class="tag-link" href="{% url 'customer_detail' event.customer.pk %}">Customer: {{ event.customer.account_brand }}</a>
+	          {% endif %}
+            {% for opportunity in related_opportunities %}
+              <a class="tag-link" href="{% url 'opportunity_detail' opportunity.pk %}">
+                Opportunity: {{ opportunity.opportunity_id }}
+              </a>
+            {% endfor %}
+            {% for production in related_productions %}
+              <a class="tag-link" href="{% url 'production_detail' production.pk %}" title="{{ production.order_code }}">
+                Production: {{ production.short_order_code|default:production.order_code }}
+              </a>
+            {% endfor %}
+            {% if not event.lead and not event.customer and not related_opportunities and not related_productions %}
+              <span class="small-muted">No CRM records linked.</span>
+            {% endif %}
+	        </div>
+	      </div>
 
       <div class="card">
         <div class="card-title">Upcoming events for same lead</div>

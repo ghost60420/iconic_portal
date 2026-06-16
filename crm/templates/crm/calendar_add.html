@@ -249,10 +249,24 @@
 
           <div class="mb-2">
             <div class="field-label">Linked records</div>
-            <div class="field-help">Connect to a lead, opportunity, or customer.</div>
+            <div class="field-help">Search by lead ID, customer, opportunity, or production order. Related records are filled when available.</div>
+            <input
+              type="search"
+              id="calendar-workflow-search"
+              class="form-control"
+              list="calendar-link-options"
+              placeholder="Search Lead / Customer / Opportunity / Production"
+              autocomplete="off"
+            >
+            <datalist id="calendar-link-options">
+              {% for item in calendar_link_payload %}
+                <option value="{{ item.label }}"></option>
+              {% endfor %}
+            </datalist>
             {{ form.lead }}
             {{ form.opportunity }}
             {{ form.customer }}
+            {{ form.production }}
           </div>
 
           <div class="mb-2">
@@ -269,4 +283,45 @@
     </form>
   </div>
 </div>
+{{ calendar_link_payload|json_script:"calendar-link-payload" }}
+<script>
+  (function () {
+    const payloadEl = document.getElementById("calendar-link-payload");
+    const searchInput = document.getElementById("calendar-workflow-search");
+    if (!payloadEl || !searchInput) return;
+
+    let records = [];
+    try {
+      records = JSON.parse(payloadEl.textContent || "[]");
+    } catch (error) {
+      records = [];
+    }
+
+    function setSelectValue(id, value) {
+      if (!value) return;
+      const field = document.getElementById(id);
+      if (!field) return;
+      const option = Array.from(field.options || []).find((item) => String(item.value) === String(value));
+      if (!option) return;
+      field.value = String(value);
+      field.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+
+    function applyRecord(record) {
+      if (!record) return;
+      setSelectValue("id_lead", record.lead_id);
+      setSelectValue("id_opportunity", record.opportunity_id);
+      setSelectValue("id_customer", record.customer_id);
+      setSelectValue("id_production", record.production_id);
+    }
+
+    searchInput.addEventListener("change", function () {
+      const query = searchInput.value.trim().toLowerCase();
+      if (!query) return;
+      const exact = records.find((record) => (record.label || "").toLowerCase() === query);
+      const partial = records.find((record) => (record.search || "").includes(query));
+      applyRecord(exact || partial);
+    });
+  })();
+</script>
 {% endblock %}

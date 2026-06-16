@@ -122,12 +122,24 @@ class ProductionOrderForm(forms.ModelForm):
             if not self.instance.pk:
                 self.fields["production_order_type"].initial = "bulk"
 
+        for field_name, placeholder in {
+            "lead": "Search lead ID, brand, or contact",
+            "opportunity": "Search opportunity ID or brand",
+            "customer": "Search customer or contact",
+            "product": "Search product code or style",
+        }.items():
+            if field_name in self.fields:
+                css = self.fields[field_name].widget.attrs.get("class", "")
+                self.fields[field_name].widget.attrs["class"] = f"{css} crm-searchable-select".strip()
+                self.fields[field_name].widget.attrs["data-search-placeholder"] = placeholder
+
         if "size_group" in self.fields:
             self.fields["size_group"].required = False
             self.fields["size_group"].initial = self.instance.size_group or "unisex"
 
         # helper text for middle section
         self.fields["style_name"].widget.attrs["placeholder"] = "Internal style name"
+        self.fields["style_name"].widget.attrs["list"] = "production-style-suggestions"
         self.fields["color_info"].widget.attrs["placeholder"] = "Color list or code"
         self.fields["size_ratio_note"].widget.attrs["placeholder"] = "Size breakdown and ratio"
         self.fields["accessories_note"].widget.attrs["placeholder"] = "Zipper, buttons, drawcord, label plan"

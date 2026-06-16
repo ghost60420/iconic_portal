@@ -43,6 +43,30 @@
       content: "" !important;
     }
 
+    .crm-searchable-select-wrap{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      width:100%;
+    }
+
+    .crm-select-search-input{
+      width:100%;
+      background:#020617;
+      color:#e5e7eb;
+      border:1px solid rgba(148,163,184,0.35);
+      border-radius:8px;
+      padding:7px 9px;
+      font-size:12px;
+      font-weight:700;
+    }
+
+    .crm-select-search-input:focus{
+      outline:none;
+      border-color:rgba(245,213,128,0.75);
+      box-shadow:0 0 0 2px rgba(245,213,128,0.14);
+    }
+
     a{ color:#f5d580; text-decoration:none; }
     a:hover{ color:#ffe9a8; }
 
@@ -823,6 +847,47 @@
       setupDropdown("marketingDropdown", "marketingBtn");
       setupDropdown("aiToolsDropdown", "aiToolsBtn");
       setupDropdown("adminDropdown", "adminBtn");
+
+      function enhanceSearchableSelect(select) {
+        if (!select || select.dataset.searchEnhanced === "1" || select.multiple) return;
+        select.dataset.searchEnhanced = "1";
+
+        const wrapper = document.createElement("div");
+        wrapper.className = "crm-searchable-select-wrap";
+        select.parentNode.insertBefore(wrapper, select);
+        wrapper.appendChild(select);
+
+        const search = document.createElement("input");
+        search.type = "search";
+        search.className = "crm-select-search-input";
+        search.placeholder = select.getAttribute("data-search-placeholder") || "Type to filter options";
+        search.setAttribute("aria-label", search.placeholder);
+        wrapper.insertBefore(search, select);
+
+        const options = Array.from(select.options || []);
+
+        function applyFilter() {
+          const query = search.value.trim().toLowerCase();
+          options.forEach((option) => {
+            if (!option.value) {
+              option.hidden = false;
+              return;
+            }
+            const text = option.textContent.toLowerCase();
+            const match = !query || text.includes(query);
+            option.hidden = !match;
+          });
+        }
+
+        search.addEventListener("input", applyFilter);
+        search.addEventListener("keydown", function (event) {
+          if (event.key === "ArrowDown") {
+            select.focus();
+          }
+        });
+      }
+
+      document.querySelectorAll("select.crm-searchable-select").forEach(enhanceSearchableSelect);
     })();
   </script>
 
