@@ -216,8 +216,8 @@
 
               <td data-label="Value">
                 <div class="opp-value-stack">
-                  {% if opp.order_value %}
-                    <strong>BDT {{ opp.order_value|floatformat:0 }}</strong>
+                  {% if opp.kpi_order_value %}
+                    <strong>BDT {{ opp.kpi_order_value|floatformat:0 }}</strong>
                   {% else %}
                     <strong class="opp-muted">Value not set</strong>
                   {% endif %}

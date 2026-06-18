@@ -696,10 +696,10 @@ def accounts_payable_dashboard(request):
         .exclude(status__iexact="CANCELLED")
         .select_related("customer", "opportunity", "production_order", "shipment", "created_by")
     )
-    supplier_choices = sorted({_ap_supplier_label(entry) for entry in base_qs[:1000]})
+    supplier_choices = sorted({_ap_supplier_label(entry) for entry in base_qs.iterator()})
 
     qs = _ap_apply_db_filters(base_qs, filters).order_by("date", "-id")
-    rows = [_ap_row(entry, today) for entry in qs[:1000]]
+    rows = [_ap_row(entry, today) for entry in qs.iterator()]
     if filters["supplier"]:
         rows = [row for row in rows if row["supplier"] == filters["supplier"]]
     if filters["status"]:
@@ -839,9 +839,17 @@ def _pl_amount_cad(entry):
     amount_cad = _pl_decimal(getattr(entry, "amount_cad", None))
     if amount_cad:
         return amount_cad
+    amount = _pl_decimal(getattr(entry, "amount_original", None))
     currency = (entry.currency or "").upper().strip()
     if currency == "CAD":
-        return _pl_decimal(entry.amount_original)
+        return amount
+    rate_to_cad = _pl_decimal(getattr(entry, "rate_to_cad", None))
+    if rate_to_cad > 0:
+        return (amount * rate_to_cad).quantize(Decimal("0.01"))
+    if currency == "BDT":
+        cad_to_bdt = _bs_latest_cad_to_bdt()
+        if cad_to_bdt > 0:
+            return (amount / cad_to_bdt).quantize(Decimal("0.01"))
     return Decimal("0")
 
 
@@ -1015,7 +1023,7 @@ def profit_loss_dashboard(request):
     if filters["currency"]:
         qs = qs.filter(currency=filters["currency"])
 
-    rows = [_pl_row(entry) for entry in qs.order_by("date", "id")[:1500]]
+    rows = [_pl_row(entry) for entry in qs.order_by("date", "id").iterator()]
     if filters["product_category"]:
         rows = [row for row in rows if row["product_category"] == filters["product_category"]]
 
@@ -1085,8 +1093,17 @@ def _exec_payment_amount_cad(payment):
     amount_cad = _pl_decimal(getattr(payment, "amount_cad", None))
     if amount_cad:
         return amount_cad
-    if (payment.currency or "").upper().strip() == "CAD":
-        return _pl_decimal(payment.amount)
+    amount = _pl_decimal(getattr(payment, "amount", None))
+    currency = (payment.currency or "").upper().strip()
+    if currency == "CAD":
+        return amount
+    rate_to_cad = _pl_decimal(getattr(payment, "rate_to_cad", None))
+    if rate_to_cad > 0:
+        return (amount * rate_to_cad).quantize(Decimal("0.01"))
+    if currency == "BDT":
+        cad_to_bdt = _bs_latest_cad_to_bdt()
+        if cad_to_bdt > 0:
+            return (amount / cad_to_bdt).quantize(Decimal("0.01"))
     return Decimal("0")
 
 
@@ -1209,7 +1226,7 @@ def executive_financial_dashboard(request):
     if filters["currency"]:
         accounting_qs = accounting_qs.filter(currency=filters["currency"])
 
-    entries = list(accounting_qs.order_by("date", "id")[:2000])
+    entries = list(accounting_qs.order_by("date", "id"))
     pl_rows = [_pl_row(entry) for entry in entries]
     revenue_rows = [
         row for row in pl_rows
@@ -1245,7 +1262,7 @@ def executive_financial_dashboard(request):
         invoice_qs = invoice_qs.filter(issue_date__lte=filters["date_to"])
     if filters["currency"]:
         invoice_qs = invoice_qs.filter(currency=filters["currency"])
-    invoices = list(invoice_qs.order_by("due_date", "-issue_date", "-created_at")[:1500])
+    invoices = list(invoice_qs.order_by("due_date", "-issue_date", "-created_at"))
     if filters["side"]:
         invoices = [invoice for invoice in invoices if _exec_invoice_side(invoice) == filters["side"]]
 
@@ -1258,11 +1275,12 @@ def executive_financial_dashboard(request):
         payment_qs = payment_qs.filter(currency=filters["currency"])
     if filters["side"]:
         payment_qs = payment_qs.filter(side=filters["side"])
-    payments = list(payment_qs.order_by("-payment_date", "-id")[:1500])
+    payments = list(payment_qs.order_by("-payment_date", "-id"))
 
     open_invoices = [invoice for invoice in invoices if _pl_decimal(invoice.balance) > 0]
     overdue_invoices = [invoice for invoice in open_invoices if invoice.due_date and invoice.due_date < today]
-    total_receivables = sum((_pl_decimal(invoice.balance) for invoice in open_invoices), Decimal("0"))
+    cad_to_bdt = _bs_latest_cad_to_bdt()
+    total_receivables = sum((_bs_invoice_balance_cad(invoice, cad_to_bdt) for invoice in open_invoices), Decimal("0"))
     total_received = sum((_exec_payment_amount_cad(payment) for payment in payments), Decimal("0"))
 
     payable_rows = [
@@ -1288,7 +1306,7 @@ def executive_financial_dashboard(request):
         label = _exec_customer_label(invoice.customer or getattr(invoice.order, "customer", None))
         if label not in customer_map:
             customer_map[label] = {"label": label, "revenue": Decimal("0"), "receivable": Decimal("0"), "count": 0}
-        customer_map[label]["receivable"] += _pl_decimal(invoice.balance)
+        customer_map[label]["receivable"] += _bs_invoice_balance_cad(invoice, cad_to_bdt)
     top_customer_rows = sorted(
         customer_map.values(),
         key=lambda row: (row["revenue"], row["receivable"]),
@@ -1325,7 +1343,7 @@ def executive_financial_dashboard(request):
             Decimal("0"),
         )
         side_received = sum((_exec_payment_amount_cad(payment) for payment in payments if payment.side == side), Decimal("0"))
-        side_receivables = sum((_pl_decimal(invoice.balance) for invoice in open_invoices if _exec_invoice_side(invoice) == side), Decimal("0"))
+        side_receivables = sum((_bs_invoice_balance_cad(invoice, cad_to_bdt) for invoice in open_invoices if _exec_invoice_side(invoice) == side), Decimal("0"))
         side_rows.append(
             {
                 "side": side,
@@ -1540,7 +1558,7 @@ def balance_sheet_dashboard(request):
     if filters["currency"]:
         accounting_qs = accounting_qs.filter(currency=filters["currency"])
 
-    entries = list(accounting_qs.order_by("date", "id")[:2500])
+    entries = list(accounting_qs.order_by("date", "id"))
     non_transfer_entries = [entry for entry in entries if (entry.main_type or "").upper().strip() != "TRANSFER"]
     cad_to_bdt = _bs_latest_cad_to_bdt()
 
@@ -1576,7 +1594,7 @@ def balance_sheet_dashboard(request):
         invoice_qs = invoice_qs.filter(issue_date__lte=filters["date_to"])
     if filters["currency"]:
         invoice_qs = invoice_qs.filter(currency=filters["currency"])
-    invoices = list(invoice_qs.order_by("due_date", "-issue_date", "-created_at")[:2000])
+    invoices = list(invoice_qs.order_by("due_date", "-issue_date", "-created_at"))
     if filters["side"]:
         invoices = [invoice for invoice in invoices if _exec_invoice_side(invoice) == filters["side"]]
     open_invoices = [invoice for invoice in invoices if _pl_decimal(invoice.balance) > 0]
@@ -1611,7 +1629,7 @@ def balance_sheet_dashboard(request):
             retained_qs = retained_qs.filter(side=filters["side"])
         if filters["currency"]:
             retained_qs = retained_qs.filter(currency=filters["currency"])
-        retained_entries = list(retained_qs.order_by("date", "id")[:2500])
+        retained_entries = list(retained_qs.order_by("date", "id"))
 
     owner_capital = _bs_owner_capital(non_transfer_entries)
     retained_earnings = _bs_profit_from_entries(retained_entries)
@@ -1807,19 +1825,19 @@ def cash_flow_dashboard(request):
     if filters["customer_id"]:
         base_qs = base_qs.filter(Q(customer_id=filters["customer_id"]) | Q(production_order__customer_id=filters["customer_id"]))
 
-    supplier_source = list(base_qs.filter(direction=AccountingEntry.DIR_OUT).order_by("-date", "-id")[:1500])
+    supplier_source = list(base_qs.filter(direction=AccountingEntry.DIR_OUT).order_by("-date", "-id"))
     supplier_choices = sorted({_ap_supplier_label(entry) for entry in supplier_source})
 
     opening_entries = []
     if filters["date_from"]:
-        opening_entries = list(base_qs.filter(date__lt=filters["date_from"]).order_by("date", "id")[:2500])
+        opening_entries = list(base_qs.filter(date__lt=filters["date_from"]).order_by("date", "id"))
 
     period_qs = base_qs
     if filters["date_from"]:
         period_qs = period_qs.filter(date__gte=filters["date_from"])
     if filters["date_to"]:
         period_qs = period_qs.filter(date__lte=filters["date_to"])
-    period_entries = list(period_qs.order_by("date", "id")[:2500])
+    period_entries = list(period_qs.order_by("date", "id"))
 
     if filters["supplier"]:
         opening_entries = [entry for entry in opening_entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_OUT and _ap_supplier_label(entry) == filters["supplier"]]
@@ -1859,14 +1877,14 @@ def cash_flow_dashboard(request):
         invoice_qs = invoice_qs.filter(currency=filters["currency"])
     if filters["customer_id"]:
         invoice_qs = invoice_qs.filter(Q(customer_id=filters["customer_id"]) | Q(order__customer_id=filters["customer_id"]))
-    forecast_invoices = list(invoice_qs.order_by("due_date", "-issue_date")[:500])
+    forecast_invoices = list(invoice_qs.order_by("due_date", "-issue_date"))
     if filters["side"]:
         forecast_invoices = [invoice for invoice in forecast_invoices if _exec_invoice_side(invoice) == filters["side"]]
     cad_to_bdt = _bs_latest_cad_to_bdt()
     forecast_receivables = sum((_bs_invoice_balance_cad(invoice, cad_to_bdt) for invoice in forecast_invoices if _pl_decimal(invoice.balance) > 0), Decimal("0"))
 
     forecast_payable_qs = base_qs.filter(direction=AccountingEntry.DIR_OUT, date__gte=today, date__lte=forecast_end)
-    forecast_payable_entries = list(forecast_payable_qs.order_by("date", "id")[:500])
+    forecast_payable_entries = list(forecast_payable_qs.order_by("date", "id"))
     forecast_payable_rows = [_ap_row(entry, today) for entry in forecast_payable_entries]
     forecast_payable_rows = [row for row in forecast_payable_rows if row["status_key"] != "paid"]
     if filters["supplier"]:
@@ -2138,7 +2156,7 @@ def budget_vs_actual_dashboard(request):
     if filters["currency"]:
         qs = qs.filter(currency=filters["currency"])
 
-    rows = [_pl_row(entry) for entry in qs.order_by("date", "id")[:2500]]
+    rows = [_pl_row(entry) for entry in qs.order_by("date", "id").iterator()]
     if filters["product_category"]:
         rows = [row for row in rows if row["product_category"] == filters["product_category"]]
 
@@ -2316,7 +2334,7 @@ def _kpi_base_entries(filters, date_from=None, date_to=None):
         qs = qs.filter(side=filters["side"])
     if filters["currency"]:
         qs = qs.filter(currency=filters["currency"])
-    rows = [_pl_row(entry) for entry in qs.order_by("date", "id")[:3000]]
+    rows = [_pl_row(entry) for entry in qs.order_by("date", "id").iterator()]
     if filters["product_category"]:
         rows = [row for row in rows if row["product_category"] == filters["product_category"]]
     return rows
@@ -2363,7 +2381,7 @@ def _kpi_ar_open(filters, date_to):
         qs = qs.filter(currency=filters["currency"])
     if filters["customer_id"]:
         qs = qs.filter(Q(customer_id=filters["customer_id"]) | Q(order__customer_id=filters["customer_id"]))
-    invoices = list(qs.order_by("due_date", "-issue_date")[:2000])
+    invoices = list(qs.order_by("due_date", "-issue_date"))
     if filters["side"]:
         invoices = [invoice for invoice in invoices if _exec_invoice_side(invoice) == filters["side"]]
     open_invoices = [invoice for invoice in invoices if _pl_decimal(invoice.balance) > 0]
@@ -2383,7 +2401,7 @@ def _kpi_average_collection_days(filters, date_from, date_to):
     if filters["customer_id"]:
         qs = qs.filter(Q(invoice__customer_id=filters["customer_id"]) | Q(production_order__customer_id=filters["customer_id"]))
     days = []
-    for payment in qs[:1000]:
+    for payment in qs.iterator():
         issue_date = getattr(payment.invoice, "issue_date", None)
         if issue_date and payment.payment_date:
             days.append(max((payment.payment_date - issue_date).days, 0))
@@ -2682,7 +2700,7 @@ def _ff_open_invoice_rows(filters, today, horizon_days):
         qs = qs.filter(Q(customer_id=filters["customer_id"]) | Q(order__customer_id=filters["customer_id"]))
 
     rows = []
-    for invoice in qs.order_by("due_date", "issue_date", "id")[:1500]:
+    for invoice in qs.order_by("due_date", "issue_date", "id").iterator():
         if filters["side"] and _exec_invoice_side(invoice) != filters["side"]:
             continue
         product_category = _ff_product_category_from_order(invoice.order)
@@ -2727,7 +2745,7 @@ def _ff_open_payable_rows(filters, today, horizon_days):
         qs = qs.filter(Q(customer_id=filters["customer_id"]) | Q(production_order__customer_id=filters["customer_id"]))
 
     rows = []
-    for entry in qs.order_by("date", "id")[:1500]:
+    for entry in qs.order_by("date", "id").iterator():
         ap_row = _ap_row(entry, today)
         if ap_row["status_key"] == "paid":
             continue
