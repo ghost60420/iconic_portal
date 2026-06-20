@@ -164,7 +164,7 @@ class QuickCostingTests(TestCase):
         self.assertContains(response, "Exchange Rate")
         self.assertContains(response, "N/A")
         self.assertContains(response, "Bulk Production Costing")
-        self.assertContains(response, "BDT 1,500.00")
+        self.assertContains(response, "৳1,500.00 BDT")
         self.assertContains(response, "CAD N/A")
 
     def test_quick_costing_create_detail_and_list(self):
@@ -216,11 +216,11 @@ class QuickCostingTests(TestCase):
         self.assertContains(detail_response, "Net Profit After Commission")
         self.assertContains(detail_response, "Commission")
         self.assertContains(detail_response, "Meets target")
-        self.assertContains(detail_response, "BDT 1,500.00")
+        self.assertContains(detail_response, "৳1,500.00 BDT")
         self.assertContains(detail_response, "CAD $16.67")
-        self.assertContains(detail_response, "BDT 1,100.00")
+        self.assertContains(detail_response, "৳1,100.00 BDT")
         self.assertContains(detail_response, "CAD $12.22")
-        self.assertContains(detail_response, "৳300.00 / $3.33")
+        self.assertContains(detail_response, "৳300.00 BDT / CAD $3.33")
 
         pdf_response = self.client.get(reverse("quick_costing_export_pdf", args=[quick.pk]))
         self.assertEqual(pdf_response.status_code, 200)
@@ -275,7 +275,7 @@ class QuickCostingTests(TestCase):
         self.assertContains(list_response, "Fast Hoodie")
         self.assertContains(list_response, "Bulk Production")
         self.assertContains(list_response, "BDT / CAD")
-        self.assertContains(list_response, "BDT 1,100.00")
+        self.assertContains(list_response, "৳1,100.00 BDT")
         self.assertContains(list_response, "CAD $12.22")
 
     def test_quick_costing_can_be_created_from_opportunity(self):
@@ -359,11 +359,11 @@ class QuickCostingTests(TestCase):
         self.assertContains(response, "Meets target")
         self.assertContains(response, f"QC-{quick.pk}")
         self.assertContains(response, reverse("quick_costing_detail", args=[quick.pk]))
-        self.assertContains(response, "BDT 47,000.00")
+        self.assertContains(response, "৳47,000.00 BDT")
         self.assertContains(response, "CAD $522.22")
-        self.assertContains(response, "BDT 180,000.00")
+        self.assertContains(response, "৳180,000.00 BDT")
         self.assertContains(response, "CAD $2,000.00")
-        self.assertContains(response, "BDT 124,000.00")
+        self.assertContains(response, "৳124,000.00 BDT")
         self.assertContains(response, "CAD $1,377.78")
         self.assertContains(response, "68.89%")
         self.assertIn(f"QC-{quick.pk}", timeline_html)
@@ -402,10 +402,10 @@ class QuickCostingTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(f"QC-{approved.pk}", html)
-        self.assertIn("BDT 1,500.00", summary_html)
+        self.assertIn("৳1,500.00 BDT", summary_html)
         self.assertIn("CAD $16.67", summary_html)
         self.assertIn("Sample Costing", summary_html)
-        self.assertNotIn("BDT 999,999.00", summary_html)
+        self.assertNotIn("৳999,999.00 BDT", summary_html)
         opportunity.refresh_from_db()
         self.assertEqual(opportunity.order_value, Decimal("999999.00"))
 

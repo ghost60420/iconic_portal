@@ -1,0 +1,238 @@
+{% extends "crm/base.html" %}
+{% load humanize crm_extras %}
+
+{% block content %}
+<style>
+  :root{
+    --cq-bg:#020617;
+    --cq-panel:#07111f;
+    --cq-line:#263348;
+    --cq-text:#f8fafc;
+    --cq-muted:#94a3b8;
+    --cq-gold:#f5c451;
+    --cq-good:#4ade80;
+    --cq-bad:#fb7185;
+    --cq-blue:#60a5fa;
+  }
+  .cq-wrap{ max-width:1380px; margin:0 auto; color:var(--cq-text); }
+  .cq-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:14px;
+    flex-wrap:wrap;
+    padding:20px;
+    border:1px solid var(--cq-line);
+    background:linear-gradient(135deg, #050b14, #101827);
+    border-radius:8px;
+    margin-bottom:14px;
+  }
+  .cq-title{ margin:0; font-size:28px; font-weight:950; letter-spacing:0; }
+  .cq-sub{ margin:6px 0 0; color:var(--cq-muted); font-size:13px; font-weight:800; line-height:1.45; max-width:840px; }
+  .cq-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  .cq-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-height:34px;
+    padding:7px 12px;
+    border-radius:999px;
+    border:1px solid rgba(148,163,184,0.35);
+    background:rgba(15,23,42,0.82);
+    color:var(--cq-text);
+    font-size:12px;
+    font-weight:900;
+    text-decoration:none;
+    cursor:pointer;
+  }
+  .cq-btn:hover{ color:var(--cq-text); border-color:rgba(245,196,81,0.62); }
+  .cq-btn--gold{ background:linear-gradient(135deg, #f6d365, #d9a622); color:#111827; border-color:rgba(245,196,81,0.7); }
+  .cq-btn--gold:hover{ color:#111827; }
+  .cq-btn--bad{ border-color:rgba(251,113,133,0.5); color:#fecdd3; }
+  .cq-filters{
+    display:grid;
+    grid-template-columns:1.6fr repeat(4, minmax(140px, 1fr)) auto auto;
+    gap:10px;
+    padding:14px;
+    border:1px solid var(--cq-line);
+    background:var(--cq-panel);
+    border-radius:8px;
+    margin-bottom:14px;
+  }
+  .cq-field label{ display:block; margin-bottom:5px; color:var(--cq-muted); font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.08em; }
+  .cq-field input,
+  .cq-field select{
+    width:100%;
+    min-height:38px;
+    border-radius:7px;
+    border:1px solid rgba(148,163,184,0.28);
+    background:#020617;
+    color:var(--cq-text);
+    padding:8px 10px;
+    font-weight:800;
+    font-size:13px;
+  }
+  .cq-filter-action{ display:flex; align-items:end; }
+  .cq-table-wrap{
+    overflow-x:auto;
+    border:1px solid var(--cq-line);
+    border-radius:8px;
+    background:var(--cq-panel);
+  }
+  .cq-table{ width:100%; min-width:1180px; border-collapse:collapse; }
+  .cq-table th,
+  .cq-table td{ padding:11px 10px; border-bottom:1px solid rgba(148,163,184,0.15); vertical-align:top; }
+  .cq-table th{ color:var(--cq-muted); font-size:10px; font-weight:950; text-transform:uppercase; letter-spacing:.06em; text-align:left; }
+  .cq-table td{ color:var(--cq-text); font-size:13px; font-weight:750; }
+  .cq-right{ text-align:right !important; white-space:nowrap; }
+  .cq-muted{ color:var(--cq-muted); font-size:12px; font-weight:800; }
+  .cq-status{
+    display:inline-flex;
+    padding:5px 8px;
+    border-radius:999px;
+    border:1px solid rgba(96,165,250,0.34);
+    background:rgba(96,165,250,0.1);
+    color:#bfdbfe;
+    font-size:11px;
+    font-weight:950;
+    white-space:nowrap;
+  }
+  .cq-empty{ padding:28px; color:var(--cq-muted); text-align:center; font-weight:850; }
+  .cq-row-actions{ display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap; }
+  @media (max-width: 980px){
+    .cq-filters{ grid-template-columns:1fr 1fr; }
+    .cq-filter-action{ align-items:stretch; }
+    .cq-filter-action .cq-btn{ width:100%; }
+  }
+  @media print{
+    .crm-topbar,
+    .cq-actions,
+    .cq-filters,
+    .cq-row-actions{ display:none !important; }
+    body{ background:#fff !important; }
+    .cq-wrap{ color:#111827; }
+    .cq-head,
+    .cq-table-wrap{ border-color:#e5e7eb; background:#fff; box-shadow:none; }
+    .cq-title,
+    .cq-table td{ color:#111827; }
+  }
+</style>
+
+<div class="cq-wrap">
+  <section class="cq-head">
+    <div>
+      <h1 class="cq-title">CEO Quotation Approval Queue</h1>
+      <p class="cq-sub">
+        Advanced quotations with a quotation number appear here. Draft quotations are shown as Submitted for CEO Approval without changing database status values.
+      </p>
+    </div>
+    <div class="cq-actions">
+      <button type="button" class="cq-btn" onclick="window.print()">Print</button>
+      <a class="cq-btn" href="{% url 'ceo_dashboard' %}">CEO Dashboard</a>
+      <a class="cq-btn cq-btn--gold" href="{% url 'cost_sheet_list' %}">Quotation List</a>
+    </div>
+  </section>
+
+  <form class="cq-filters" method="get">
+    <div class="cq-field">
+      <label for="q">Search</label>
+      <input id="q" name="q" value="{{ q }}" placeholder="Quotation, lead, opportunity, client, style">
+    </div>
+    <div class="cq-field">
+      <label for="status">Status</label>
+      <select id="status" name="status">
+        {% for value, label in status_options %}
+          <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="cq-field">
+      <label for="currency">Currency</label>
+      <select id="currency" name="currency">
+        <option value="">All currencies</option>
+        {% for option in currency_options %}
+          <option value="{{ option }}" {% if currency == option %}selected{% endif %}>{{ option }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="cq-field">
+      <label for="date_from">Submitted From</label>
+      <input id="date_from" type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}">
+    </div>
+    <div class="cq-field">
+      <label for="date_to">Submitted To</label>
+      <input id="date_to" type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}">
+    </div>
+    <div class="cq-filter-action">
+      <button class="cq-btn cq-btn--gold" type="submit">Apply</button>
+    </div>
+    <div class="cq-filter-action">
+      <a class="cq-btn" href="{% url 'ceo_quotation_approval_queue' %}">Reset</a>
+    </div>
+  </form>
+
+  <div class="cq-table-wrap">
+    <table class="cq-table">
+      <thead>
+        <tr>
+          <th>Quotation</th>
+          <th>Lead</th>
+          <th>Opportunity</th>
+          <th>Client</th>
+          <th>Salesperson</th>
+          <th>Currency</th>
+          <th class="cq-right">Total</th>
+          <th class="cq-right">Profit</th>
+          <th class="cq-right">Margin</th>
+          <th>Type</th>
+          <th>Submitted</th>
+          <th>Status</th>
+          <th class="cq-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td>
+              <strong>{{ row.costing.quotation_number }}</strong>
+              <div class="cq-muted">COST-{{ row.costing.pk }}</div>
+            </td>
+            <td>{{ row.lead_id|default:"-" }}</td>
+            <td>{{ row.opportunity_id|default:"-" }}</td>
+            <td>{{ row.client_name }}</td>
+            <td>{{ row.salesperson }}</td>
+            <td>{{ row.currency }}</td>
+            <td class="cq-right">{{ row.total_amount|finance_money:row.currency }}</td>
+            <td class="cq-right">{{ row.profit_amount|finance_money:row.currency }}</td>
+            <td class="cq-right">{{ row.profit_margin|floatformat:2 }}%</td>
+            <td>{{ row.purpose }}</td>
+            <td>{{ row.submitted_at|date:"Y-m-d H:i" }}</td>
+            <td><span class="cq-status">{{ row.status_label }}</span></td>
+            <td class="cq-right">
+              <div class="cq-row-actions">
+                <a class="cq-btn" href="{% url 'cost_sheet_client_quotation' row.costing.pk %}">View</a>
+                {% if can_use_existing_approval %}
+                  <form method="post" action="{% url 'cost_sheet_quotation_approve' row.costing.pk %}">
+                    {% csrf_token %}
+                    <button class="cq-btn cq-btn--gold" type="submit" onclick="return confirm('Approve this quotation using the existing approval action?');">Approve</button>
+                  </form>
+                  <form method="post" action="{% url 'cost_sheet_quotation_reject' row.costing.pk %}">
+                    {% csrf_token %}
+                    <button class="cq-btn cq-btn--bad" type="submit" onclick="return confirm('Reject this quotation using the existing rejection action?');">Reject</button>
+                  </form>
+                {% else %}
+                  <span class="cq-muted">Approval permission required</span>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="13"><div class="cq-empty">No quotations match the current queue filters.</div></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

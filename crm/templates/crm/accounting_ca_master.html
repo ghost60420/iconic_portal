@@ -1,19 +1,221 @@
 {% extends "crm/base.html" %}
 {% block content %}
 
-<div class="container-fluid" style="color:#f9fafb; max-width:1100px;">
+<style>
+  .ca-master{
+    max-width:1180px;
+    margin:0 auto;
+    color:#f8fafc;
+  }
 
-  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  .ca-master-hero{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:16px;
+    flex-wrap:wrap;
+    padding:22px;
+    border:1px solid rgba(245,196,81,0.22);
+    border-radius:22px;
+    background:
+      linear-gradient(135deg, rgba(245,196,81,0.16), transparent 38%),
+      linear-gradient(180deg, rgba(15,23,42,0.96), rgba(2,6,23,0.96));
+    box-shadow:0 24px 60px rgba(0,0,0,0.42);
+    margin-bottom:16px;
+  }
+
+  .ca-master-kicker{
+    color:#f5c451;
+    font-size:12px;
+    font-weight:900;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    margin-bottom:6px;
+  }
+
+  .ca-master-title{
+    margin:0;
+    color:#fff;
+    font-size:30px;
+    line-height:1.1;
+    font-weight:900;
+  }
+
+  .ca-master-sub{
+    margin-top:8px;
+    max-width:720px;
+    color:#cbd5e1;
+    font-size:13px;
+    line-height:1.5;
+    font-weight:800;
+  }
+
+  .ca-master-actions{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+
+  .ca-master-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-height:38px;
+    padding:9px 13px;
+    border-radius:14px;
+    border:1px solid rgba(148,163,184,0.25);
+    background:rgba(15,23,42,0.82);
+    color:#f8fafc;
+    text-decoration:none;
+    font-size:12px;
+    font-weight:900;
+  }
+
+  .ca-master-btn:hover{ color:#f8fafc; border-color:rgba(245,196,81,0.55); }
+  .ca-master-btn--gold{
+    background:linear-gradient(135deg, #f6d365, #d9a622);
+    color:#111827;
+    border-color:rgba(245,196,81,0.55);
+  }
+  .ca-master-btn--gold:hover{ color:#111827; }
+
+  .ca-master-grid{
+    display:grid;
+    grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr);
+    gap:14px;
+    align-items:start;
+  }
+
+  .ca-master-panel{
+    border:1px solid #334155;
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.96), rgba(2,6,23,0.96));
+    box-shadow:0 18px 44px rgba(0,0,0,0.32);
+    overflow:hidden;
+  }
+
+  .ca-master-panel-head{
+    padding:15px 16px;
+    border-bottom:1px solid rgba(148,163,184,0.16);
+  }
+
+  .ca-master-panel-head h2{
+    margin:0;
+    color:#fff;
+    font-size:16px;
+    font-weight:900;
+  }
+
+  .ca-master-panel-head p{
+    margin:6px 0 0;
+    color:#94a3b8;
+    font-size:12px;
+    line-height:1.45;
+    font-weight:800;
+  }
+
+  .ca-master-panel-body{ padding:16px; }
+
+  .ca-master label{
+    color:#cbd5e1;
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.07em;
+  }
+
+  .ca-master input,
+  .ca-master select,
+  .ca-master textarea{
+    width:100%;
+    min-height:42px;
+    border:1px solid rgba(148,163,184,0.26);
+    border-radius:14px;
+    background:#030712;
+    color:#f8fafc;
+    padding:9px 11px;
+    font-size:13px;
+    font-weight:800;
+  }
+
+  .ca-master textarea{ min-height:42px; }
+
+  .ca-master-stat{
+    border:1px solid rgba(245,196,81,0.24);
+    border-radius:16px;
+    background:rgba(245,196,81,0.08);
+    padding:13px;
+    margin-top:12px;
+  }
+
+  .ca-master-stat span{
+    display:block;
+    color:#f5c451;
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.07em;
+  }
+
+  .ca-master-stat strong{
+    display:block;
+    margin-top:7px;
+    color:#fff;
+    font-size:24px;
+    line-height:1.15;
+    font-weight:900;
+  }
+
+  .ca-master-note{
+    margin-top:12px;
+    border:1px solid rgba(148,163,184,0.18);
+    border-radius:16px;
+    background:rgba(148,163,184,0.08);
+    padding:12px;
+    color:#cbd5e1;
+    font-size:12px;
+    line-height:1.5;
+    font-weight:800;
+  }
+
+  .ca-master-errors{
+    border:1px solid rgba(251,113,133,0.34);
+    border-radius:16px;
+    background:rgba(251,113,133,0.10);
+    color:#fecdd3;
+    padding:12px;
+    font-size:13px;
+    font-weight:800;
+    margin-bottom:14px;
+  }
+
+  @media (max-width:900px){
+    .ca-master-grid{ grid-template-columns:1fr; }
+  }
+
+  @media (max-width:640px){
+    .ca-master-hero{ padding:16px; border-radius:18px; }
+    .ca-master-title{ font-size:24px; }
+    .ca-master-actions,
+    .ca-master-actions .ca-master-btn,
+    .ca-master button{ width:100%; }
+  }
+</style>
+
+<div class="container-fluid ca-master">
+
+  <div class="ca-master-hero">
     <div>
-      <h2 class="mb-1">Money transfer</h2>
-      <div style="font-size:12px; color:#9ca3af;">
-        Update exchange rate and record transfers to Bangladesh.
+      <div class="ca-master-kicker">Canada Accounting</div>
+      <h1 class="ca-master-title">Money transfer</h1>
+      <div class="ca-master-sub">
+        Update the CAD to BDT display rate and record Canada-to-Bangladesh transfers. Transfers keep the existing accounting workflow: one Canada money-out entry and one Bangladesh money-in entry.
       </div>
     </div>
 
-    <div class="d-flex gap-2 flex-wrap">
-      <a href="{% url 'accounting_entry_list' %}" class="btn btn-sm btn-outline-light">All entries</a>
-      <a href="{% url 'accounting_bd_dashboard' %}" class="btn btn-sm btn-outline-light">BD dashboard</a>
+    <div class="ca-master-actions">
+      <a href="{% url 'accounting_entry_list' %}" class="ca-master-btn">All entries</a>
+      <a href="{% url 'accounting_bd_dashboard' %}" class="ca-master-btn">BD dashboard</a>
     </div>
   </div>
 
@@ -25,85 +227,97 @@
     </div>
   {% endif %}
 
-  <div class="card mb-3" style="background:#020617; border:1px solid #334155;">
-    <div class="card-body">
-      <h5 class="mb-2">Exchange rate</h5>
-
-      <form method="post" class="row g-2 align-items-end">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="update_rate">
-
-        <div class="col-sm-4">
-          <label class="form-label mb-1" style="color:#9ca3af;">1 CAD equals BDT</label>
-          <input class="form-control form-control-sm" name="cad_to_bdt" value="{{ rate_row.cad_to_bdt }}" required>
-        </div>
-
-        <div class="col-sm-4">
-          <button type="submit" class="btn btn-sm btn-warning">Save rate</button>
-        </div>
-      </form>
-
-      <div style="font-size:12px; color:#9ca3af; margin-top:6px;">
-        Current: 1 CAD = {{ rate_row.cad_to_bdt }} BDT
+  <div class="ca-master-grid">
+    <section class="ca-master-panel">
+      <div class="ca-master-panel-head">
+        <h2>Exchange rate</h2>
+        <p>Used for transfer display and dashboard conversion where existing logic asks for the latest rate.</p>
       </div>
-    </div>
-  </div>
+      <div class="ca-master-panel-body">
+        <form method="post" class="row g-3 align-items-end">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="update_rate">
 
-  <div class="card" style="background:#020617; border:1px solid #334155;">
-    <div class="card-body">
-      <h5 class="mb-2">Send money to Bangladesh</h5>
+          <div class="col-12">
+            <label class="form-label mb-1">1 CAD equals BDT</label>
+            <input name="cad_to_bdt" value="{{ rate_row.cad_to_bdt }}" required>
+          </div>
 
-      {% if send_form.errors %}
-        <div class="alert alert-danger mb-3">
-          Please fix the form errors below and try again.
-        </div>
-      {% endif %}
+          <div class="col-12">
+            <button type="submit" class="ca-master-btn ca-master-btn--gold">Save rate</button>
+          </div>
+        </form>
 
-      <form method="post" class="row g-2">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="send_to_bd">
-
-        <div class="col-md-3">
-          <label class="form-label mb-1" style="color:#9ca3af;">Date</label>
-          {{ send_form.date }}
-          {% if send_form.date.errors %}
-            <div class="text-danger small">{{ send_form.date.errors }}</div>
-          {% endif %}
+        <div class="ca-master-stat">
+          <span>Current rate</span>
+          <strong>1 CAD = {{ rate_row.cad_to_bdt }} BDT</strong>
         </div>
 
-        <div class="col-md-3">
-          <label class="form-label mb-1" style="color:#9ca3af;">Amount CAD</label>
-          {{ send_form.cad_amount }}
-          {% if send_form.cad_amount.errors %}
-            <div class="text-danger small">{{ send_form.cad_amount.errors }}</div>
-          {% endif %}
+        <div class="ca-master-note">
+          This does not rewrite historical accounting entries. Existing entries keep their saved rates and amounts.
         </div>
-
-        <div class="col-md-3">
-          <label class="form-label mb-1" style="color:#9ca3af;">Sent method</label>
-          {{ send_form.sent_method }}
-          {% if send_form.sent_method.errors %}
-            <div class="text-danger small">{{ send_form.sent_method.errors }}</div>
-          {% endif %}
-        </div>
-
-        <div class="col-md-3">
-          <label class="form-label mb-1" style="color:#9ca3af;">Note</label>
-          {{ send_form.note }}
-          {% if send_form.note.errors %}
-            <div class="text-danger small">{{ send_form.note.errors }}</div>
-          {% endif %}
-        </div>
-
-        <div class="col-md-3 d-flex align-items-end">
-          <button type="submit" class="btn btn-warning w-100">Save transfer</button>
-        </div>
-      </form>
-
-      <div style="font-size:12px; color:#9ca3af; margin-top:6px;">
-        This will create one CA OUT entry in CAD and one BD IN entry in BDT.
       </div>
-    </div>
+    </section>
+
+    <section class="ca-master-panel">
+      <div class="ca-master-panel-head">
+        <h2>Send money to Bangladesh</h2>
+        <p>Creates the paired transfer entries used by the existing Canada and Bangladesh accounting dashboards.</p>
+      </div>
+      <div class="ca-master-panel-body">
+
+        {% if send_form.errors %}
+          <div class="ca-master-errors">
+            Please fix the form errors below and try again.
+          </div>
+        {% endif %}
+
+        <form method="post" class="row g-3">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="send_to_bd">
+
+          <div class="col-md-6">
+            <label class="form-label mb-1">Date</label>
+            {{ send_form.date }}
+            {% if send_form.date.errors %}
+              <div class="text-danger small">{{ send_form.date.errors }}</div>
+            {% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label mb-1">Amount CAD</label>
+            {{ send_form.cad_amount }}
+            {% if send_form.cad_amount.errors %}
+              <div class="text-danger small">{{ send_form.cad_amount.errors }}</div>
+            {% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label mb-1">Sent method</label>
+            {{ send_form.sent_method }}
+            {% if send_form.sent_method.errors %}
+              <div class="text-danger small">{{ send_form.sent_method.errors }}</div>
+            {% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label mb-1">Note</label>
+            {{ send_form.note }}
+            {% if send_form.note.errors %}
+              <div class="text-danger small">{{ send_form.note.errors }}</div>
+            {% endif %}
+          </div>
+
+          <div class="col-12">
+            <button type="submit" class="ca-master-btn ca-master-btn--gold">Save transfer</button>
+          </div>
+        </form>
+
+        <div class="ca-master-note">
+          This will create one CA OUT entry in CAD and one BD IN entry in BDT. No invoice, quotation, costing, production, or payment record is changed from this UI.
+        </div>
+      </div>
+    </section>
   </div>
 
 </div>

@@ -1,11 +1,14 @@
 from unittest.mock import Mock, patch
+from datetime import timedelta
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.db.utils import OperationalError
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
-from crm.models import Lead, Opportunity
+from crm.models import AccountingEntry, Customer, Invoice, Lead, Opportunity
 from crm.views import _production_library_context
 
 
@@ -88,3 +91,64 @@ class MainDashboardTests(TestCase):
         self.assertIn("lead_fit_labels", chart_data)
         self.assertNotIn("monthly_profit_labels", chart_data)
         self.assertIn("invoice_status_labels", chart_data)
+
+
+class FinancialDashboardUiTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_superuser(
+            username="finance-admin",
+            email="finance-admin@example.com",
+            password="pass1234",
+        )
+        self.client.force_login(self.user)
+
+    def test_accounts_receivable_dashboard_shows_aging_buckets(self):
+        today = timezone.localdate()
+        customer = Customer.objects.create(account_brand="Aging Client")
+        Invoice.objects.create(
+            invoice_number="INV-AGING-001",
+            customer=customer,
+            issue_date=today - timedelta(days=70),
+            due_date=today - timedelta(days=40),
+            currency="CAD",
+            invoice_region="CA",
+            invoice_market="north_america",
+            subtotal=Decimal("1000.00"),
+            total_amount=Decimal("1000.00"),
+            paid_amount=Decimal("100.00"),
+            status="partial",
+        )
+
+        response = self.client.get(reverse("accounts_receivable_dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "AR aging buckets")
+        aging_rows = response.context["aging_rows"]
+        bucket = next(row for row in aging_rows if row["label"] == "31-60 days")
+        self.assertEqual(bucket["invoice_count"], 1)
+        self.assertEqual(bucket["currency_totals"][0]["amount"], Decimal("900.00"))
+
+    def test_accounts_payable_dashboard_shows_aging_buckets(self):
+        today = timezone.localdate()
+        AccountingEntry.objects.create(
+            date=today - timedelta(days=40),
+            side=AccountingEntry.SIDE_CA,
+            direction=AccountingEntry.DIR_OUT,
+            status="",
+            main_type="EXPENSE",
+            sub_type="Rent",
+            currency="CAD",
+            amount_original=Decimal("250.00"),
+            rate_to_cad=Decimal("1"),
+            rate_to_bdt=Decimal("90"),
+        )
+
+        response = self.client.get(reverse("accounts_payable_dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "AP aging buckets")
+        aging_rows = response.context["aging_rows"]
+        bucket = next(row for row in aging_rows if row["label"] == "31-60 days")
+        self.assertEqual(bucket["bill_count"], 1)
+        self.assertEqual(bucket["currency_totals"][0]["amount"], Decimal("250.00"))

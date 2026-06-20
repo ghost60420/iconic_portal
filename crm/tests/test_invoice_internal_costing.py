@@ -328,8 +328,8 @@ class InvoiceInternalCostingTests(TestCase):
 
     def test_bangladesh_sewing_charge_invoice_shows_multiple_style_summary(self):
         order = ProductionOrder.objects.create(title="Multi Style Order", qty_total=200)
-        ProductionOrderLine.objects.create(order=order, line_no=1, style_name="Training Tee")
-        ProductionOrderLine.objects.create(order=order, line_no=2, style_name="Match Short")
+        ProductionOrderLine.objects.create(order=order, line_no=1, style_name="Training Tee", quantity=50)
+        ProductionOrderLine.objects.create(order=order, line_no=2, style_name="Match Short", quantity=150)
         invoice = Invoice.objects.create(
             invoice_number="INV-BD-SEWING-MULTI",
             order=order,
@@ -353,5 +353,80 @@ class InvoiceInternalCostingTests(TestCase):
         self.assertContains(response, "Number of styles")
         self.assertContains(response, "Training Tee")
         self.assertContains(response, "Match Short")
+        self.assertContains(response, "50")
+        self.assertContains(response, "150")
         self.assertContains(response, "Grand total sewing charge")
         self.assertNotContains(response, "Internal cost remains hidden.")
+
+    def test_bangladesh_sewing_charge_invoice_does_not_split_when_style_quantities_missing(self):
+        order = ProductionOrder.objects.create(title="Legacy Multi Style Order", qty_total=200)
+        ProductionOrderLine.objects.create(order=order, line_no=1, style_name="Training Tee", quantity=50)
+        ProductionOrderLine.objects.create(order=order, line_no=2, style_name="Match Short")
+        invoice = Invoice.objects.create(
+            invoice_number="INV-BD-SEWING-MISSING-QTY",
+            order=order,
+            currency="BDT",
+            invoice_region="BD",
+            invoice_market="bangladesh",
+            invoice_type="sewing_charge",
+            subtotal=Decimal("10000.00"),
+            total_amount=Decimal("10000.00"),
+            sewing_charge=Decimal("7000.00"),
+            status="sent",
+        )
+
+        response = self.client.get(reverse("invoice_client_view", args=[invoice.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Consolidated Sewing Charge")
+        self.assertContains(response, "style quantities unavailable")
+        self.assertNotContains(response, "Training Tee")
+        self.assertNotContains(response, "Match Short")
+
+    def test_bangladesh_sewing_charge_invoice_marks_unavailable_when_no_quantity_exists(self):
+        order = ProductionOrder.objects.create(title="No Quantity Sewing Order")
+        ProductionOrderLine.objects.create(order=order, line_no=1, style_name="Training Tee")
+        invoice = Invoice.objects.create(
+            invoice_number="INV-BD-SEWING-NO-QTY",
+            order=order,
+            currency="BDT",
+            invoice_region="BD",
+            invoice_market="bangladesh",
+            invoice_type="sewing_charge",
+            subtotal=Decimal("5000.00"),
+            total_amount=Decimal("5000.00"),
+            sewing_charge=Decimal("5000.00"),
+            status="sent",
+        )
+
+        response = self.client.get(reverse("invoice_client_view", args=[invoice.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Quantity unavailable")
+
+    def test_bangladesh_sewing_charge_pdf_uses_real_style_quantities(self):
+        order = ProductionOrder.objects.create(title="PDF Multi Style Order", qty_total=200)
+        ProductionOrderLine.objects.create(order=order, line_no=1, style_name="Training Tee", quantity=50)
+        ProductionOrderLine.objects.create(order=order, line_no=2, style_name="Match Short", quantity=150)
+        invoice = Invoice.objects.create(
+            invoice_number="INV-BD-SEWING-REAL-QTY-PDF",
+            order=order,
+            currency="BDT",
+            invoice_region="BD",
+            invoice_market="bangladesh",
+            invoice_type="sewing_charge",
+            subtotal=Decimal("10000.00"),
+            total_amount=Decimal("10000.00"),
+            sewing_charge=Decimal("10000.00"),
+            status="sent",
+        )
+
+        response = self.client.get(reverse("invoice_pdf", args=[invoice.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        body = response.content
+        self.assertIn(b"Training Tee", body)
+        self.assertIn(b"Match Short", body)
+        self.assertIn(b"50", body)
+        self.assertIn(b"150", body)

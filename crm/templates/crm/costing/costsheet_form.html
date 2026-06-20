@@ -315,14 +315,14 @@
         <div class="quick-summary-grid">
           <div class="quick-summary-row"><span>Quantity</span><strong data-quick-summary="quantity">0</strong></div>
           <div class="quick-summary-row"><span>Exchange Rate</span><strong data-quick-summary="exchangeRate">N/A</strong></div>
-          <div class="quick-summary-row"><span>Material Cost</span><strong class="quick-summary-dual"><span data-quick-summary="materialPiece">Per Piece: BDT 0.00 / CAD N/A</span><span data-quick-summary="materialTotal">Total Order: BDT 0.00 / CAD N/A</span></strong></div>
-          <div class="quick-summary-row"><span>Production Cost</span><strong class="quick-summary-dual"><span data-quick-summary="productionPiece">Per Piece: BDT 0.00 / CAD N/A</span><span data-quick-summary="productionTotal">Total Order: BDT 0.00 / CAD N/A</span></strong></div>
-          <div class="quick-summary-row"><span>Shipping Cost</span><strong class="quick-summary-dual"><span data-quick-summary="shippingPiece">Per Piece: BDT 0.00 / CAD N/A</span><span data-quick-summary="shippingTotal">Total Order: BDT 0.00 / CAD N/A</span></strong></div>
-          <div class="quick-summary-row"><span>Total Cost</span><strong class="quick-summary-dual"><span data-quick-summary="costPerPiece">Per Piece: BDT 0.00 / CAD N/A</span><span data-quick-summary="totalCost">Total Order: BDT 0.00 / CAD N/A</span></strong></div>
-          <div class="quick-summary-row"><span>Selling Price</span><strong class="quick-summary-dual"><span data-quick-summary="sellingPrice">Per Piece: BDT 0.00 / CAD N/A</span><span data-quick-summary="revenue">Total Order: BDT 0.00 / CAD N/A</span></strong></div>
-          <div class="quick-summary-row"><span>Gross Profit</span><strong class="quick-summary-dual"><span data-quick-summary="grossProfitPerPiece">Per Piece: BDT 0.00 / CAD N/A</span><span data-quick-summary="grossProfitTotal">Total Order: BDT 0.00 / CAD N/A</span></strong></div>
-          <div class="quick-summary-row"><span>Commission</span><strong class="quick-summary-dual"><span data-quick-summary="commissionPerPiece">Per Piece: BDT 0.00 / CAD N/A</span><span data-quick-summary="commissionTotal">Total Order: BDT 0.00 / CAD N/A</span></strong></div>
-          <div class="quick-summary-row"><span>Net Profit After Commission</span><strong class="quick-summary-dual"><span data-quick-summary="netProfitPerPiece">Per Piece: BDT 0.00 / CAD N/A</span><span data-quick-summary="netProfitTotal">Total Order: BDT 0.00 / CAD N/A</span></strong></div>
+          <div class="quick-summary-row"><span>Material Cost</span><strong class="quick-summary-dual"><span data-quick-summary="materialPiece">Per Piece: ৳0.00 BDT / CAD N/A</span><span data-quick-summary="materialTotal">Total Order: ৳0.00 BDT / CAD N/A</span></strong></div>
+          <div class="quick-summary-row"><span>Production Cost</span><strong class="quick-summary-dual"><span data-quick-summary="productionPiece">Per Piece: ৳0.00 BDT / CAD N/A</span><span data-quick-summary="productionTotal">Total Order: ৳0.00 BDT / CAD N/A</span></strong></div>
+          <div class="quick-summary-row"><span>Shipping Cost</span><strong class="quick-summary-dual"><span data-quick-summary="shippingPiece">Per Piece: ৳0.00 BDT / CAD N/A</span><span data-quick-summary="shippingTotal">Total Order: ৳0.00 BDT / CAD N/A</span></strong></div>
+          <div class="quick-summary-row"><span>Total Cost</span><strong class="quick-summary-dual"><span data-quick-summary="costPerPiece">Per Piece: ৳0.00 BDT / CAD N/A</span><span data-quick-summary="totalCost">Total Order: ৳0.00 BDT / CAD N/A</span></strong></div>
+          <div class="quick-summary-row"><span>Selling Price</span><strong class="quick-summary-dual"><span data-quick-summary="sellingPrice">Per Piece: ৳0.00 BDT / CAD N/A</span><span data-quick-summary="revenue">Total Order: ৳0.00 BDT / CAD N/A</span></strong></div>
+          <div class="quick-summary-row"><span>Gross Profit</span><strong class="quick-summary-dual"><span data-quick-summary="grossProfitPerPiece">Per Piece: ৳0.00 BDT / CAD N/A</span><span data-quick-summary="grossProfitTotal">Total Order: ৳0.00 BDT / CAD N/A</span></strong></div>
+          <div class="quick-summary-row"><span>Commission</span><strong class="quick-summary-dual"><span data-quick-summary="commissionPerPiece">Per Piece: ৳0.00 BDT / CAD N/A</span><span data-quick-summary="commissionTotal">Total Order: ৳0.00 BDT / CAD N/A</span></strong></div>
+          <div class="quick-summary-row"><span>Net Profit After Commission</span><strong class="quick-summary-dual"><span data-quick-summary="netProfitPerPiece">Per Piece: ৳0.00 BDT / CAD N/A</span><span data-quick-summary="netProfitTotal">Total Order: ৳0.00 BDT / CAD N/A</span></strong></div>
           <div class="quick-summary-row"><span>Gross Profit Margin %</span><strong data-quick-summary="grossMargin">0.00%</strong></div>
           <div class="quick-summary-row"><span>Net Profit Margin %</span><strong data-quick-summary="netMargin">0.00%</strong></div>
           <div class="quick-summary-row"><span>Target Margin %</span><strong data-quick-summary="targetMargin">N/A</strong></div>
@@ -684,7 +684,7 @@
     }
 
     function formatMoneyPair(value, exchangeRate) {
-      const bdt = "BDT " + formatNumber(value);
+      const bdt = "৳" + formatNumber(value) + " BDT";
       const cad = exchangeRate > 0 ? "CAD $" + formatNumber(value / exchangeRate) : "CAD N/A";
       return bdt + " / " + cad;
     }

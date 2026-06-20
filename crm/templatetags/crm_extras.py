@@ -4,6 +4,7 @@ from crm.services.costing_currency import (
     format_bdt,
     format_cad,
     format_cad_from_bdt,
+    format_finance_money,
 )
 
 register = template.Library()
@@ -30,3 +31,8 @@ def format_cad_filter(value):
 def format_cad_from_bdt_filter(value, exchange_rate):
     formatted = format_cad_from_bdt(value, exchange_rate)
     return formatted or ""
+
+
+@register.filter(name="finance_money")
+def finance_money_filter(value, currency):
+    return format_finance_money(value, currency)

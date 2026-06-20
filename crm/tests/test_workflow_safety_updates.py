@@ -220,3 +220,18 @@ class WorkflowSafetyUpdateTests(TestCase):
             response = self.client.post(reverse("cost_sheet_convert_to_invoice", args=[costing.pk]))
         self.assertEqual(response.status_code, 302)
         self.assertTrue(create_invoice.called)
+
+    def test_ceo_quotation_queue_reuses_existing_advanced_quotation_status(self):
+        self.client.force_login(self.admin)
+        costing = self._quotation_costing()
+
+        response = self.client.get(reverse("ceo_quotation_approval_queue"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, costing.quotation_number)
+        self.assertContains(response, self.lead.lead_id)
+        self.assertContains(response, self.opportunity.opportunity_id)
+        self.assertContains(response, "Submitted for CEO Approval")
+        self.assertContains(response, "CAD $1,200.00")
+        self.assertContains(response, reverse("cost_sheet_quotation_approve", args=[costing.pk]))
+        self.assertContains(response, reverse("cost_sheet_quotation_reject", args=[costing.pk]))

@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from crm.models import CostingHeader, CostingLineItem, Customer, Lead, Opportunity
-from crm.services.costing_currency import format_costing_money
+from crm.services.costing_currency import format_costing_money, format_finance_money
 
 
 class CostingCurrencyLabelTests(TestCase):
@@ -73,18 +73,18 @@ class CostingCurrencyLabelTests(TestCase):
 
         list_response = self.client.get(reverse("cost_sheet_list"))
         self.assertEqual(list_response.status_code, 200)
-        self.assertContains(list_response, "CAD 20.00")
+        self.assertContains(list_response, "CAD $20.00")
         self.assertContains(list_response, "CAD")
 
         dashboard_response = self.client.get(reverse("cost_sheet_dashboard") + "?currency=CAD")
         self.assertEqual(dashboard_response.status_code, 200)
         self.assertContains(dashboard_response, "Avg cost per piece (CAD)")
-        self.assertContains(dashboard_response, "CAD 1000.00")
+        self.assertContains(dashboard_response, "CAD $1,000.00")
 
         report_response = self.client.get(reverse("cost_sheet_reports"))
         self.assertEqual(report_response.status_code, 200)
-        self.assertContains(report_response, "CAD 10.00")
-        self.assertContains(report_response, "CAD 20.00")
+        self.assertContains(report_response, "CAD $10.00")
+        self.assertContains(report_response, "CAD $20.00")
 
         csv_response = self.client.get(reverse("cost_sheet_reports") + "?export=list")
         self.assertEqual(csv_response.status_code, 200)
@@ -95,3 +95,8 @@ class CostingCurrencyLabelTests(TestCase):
         self.assertEqual(format_costing_money(Decimal("12.345"), "USD"), "USD 12.35")
         self.assertEqual(format_costing_money(Decimal("12.345"), "CAD"), "CAD 12.35")
         self.assertEqual(format_costing_money(Decimal("12.345"), "BDT"), "BDT 12.35")
+
+    def test_finance_money_formatter_uses_symbol_and_code_standard(self):
+        self.assertEqual(format_finance_money(Decimal("1250"), "CAD"), "CAD $1,250.00")
+        self.assertEqual(format_finance_money(Decimal("950"), "USD"), "USD $950.00")
+        self.assertEqual(format_finance_money(Decimal("125000"), "BDT"), "৳125,000.00 BDT")

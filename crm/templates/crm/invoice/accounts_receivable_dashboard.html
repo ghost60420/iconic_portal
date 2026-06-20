@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load humanize %}
+{% load humanize crm_extras %}
 {% block content %}
 
 <style>
@@ -202,6 +202,42 @@
     font-weight:900;
   }
 
+  .ar-aging{
+    display:grid;
+    grid-template-columns:repeat(5, minmax(0,1fr));
+    gap:10px;
+    padding:14px;
+  }
+
+  .ar-aging-card{
+    border:1px solid rgba(148,163,184,0.18);
+    border-radius:16px;
+    background:rgba(3,7,18,0.76);
+    padding:12px;
+    min-width:0;
+  }
+
+  .ar-aging-card--good{ border-color:rgba(74,222,128,0.28); }
+  .ar-aging-card--warn{ border-color:rgba(251,191,36,0.34); }
+  .ar-aging-card--bad{ border-color:rgba(251,113,133,0.34); }
+
+  .ar-aging-card span{
+    display:block;
+    color:var(--ar-muted);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+  }
+
+  .ar-aging-card strong{
+    display:block;
+    margin-top:7px;
+    font-size:18px;
+    line-height:1.15;
+    font-weight:900;
+  }
+
   .ar-grid{
     display:grid;
     grid-template-columns:minmax(0, 1.6fr) minmax(320px, .9fr);
@@ -339,6 +375,7 @@
   @media (max-width:1100px){
     .ar-filter{ grid-template-columns:repeat(3, minmax(0,1fr)); }
     .ar-summary{ grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .ar-aging{ grid-template-columns:repeat(3, minmax(0,1fr)); }
     .ar-grid{ grid-template-columns:1fr; }
   }
 
@@ -347,10 +384,28 @@
     .ar-title{ font-size:24px; }
     .ar-filter{ grid-template-columns:1fr; }
     .ar-summary{ grid-template-columns:1fr; }
+    .ar-aging{ grid-template-columns:1fr; }
     .ar-filter-actions{ align-items:stretch; flex-direction:column; }
     .ar-btn{ width:100%; }
     .ar-table-wrap{ display:none; }
     .ar-mobile-list{ display:block; }
+  }
+
+  @media print{
+    .crm-topbar,
+    .crm-dropdown-menu,
+    .ar-actions,
+    .ar-filter{
+      display:none !important;
+    }
+    .ar-hero,
+    .ar-card,
+    .ar-section,
+    .ar-aging-card{
+      box-shadow:none !important;
+    }
+    .ar-table-wrap{ display:block !important; overflow:visible !important; }
+    .ar-mobile-list{ display:none !important; }
   }
 </style>
 
@@ -360,10 +415,11 @@
       <div class="ar-kicker">Accounting Phase 2</div>
       <h1 class="ar-title">Accounts Receivable Dashboard</h1>
       <div class="ar-sub">
-        Track unpaid invoices, received payments, balances due, Bangladesh production receipts, customer exposure, and monthly cash flow.
+        Track unpaid invoices, received payments, balances due, Bangladesh production receipts, customer exposure, and monthly cash flow. Canada and Bangladesh are separated by side and currency filters without changing invoice records.
       </div>
     </div>
     <div class="ar-actions">
+      <button class="ar-btn" type="button" onclick="window.print()">Print</button>
       <a class="ar-btn" href="{% url 'invoice_list' %}">Invoice list</a>
       <a class="ar-btn ar-btn--gold" href="{% url 'invoice_add' %}">Create invoice</a>
     </div>
@@ -430,11 +486,11 @@
   <div class="ar-summary">
     <div class="ar-card">
       <span>Total invoiced</span>
-      <strong>{{ total_invoiced|floatformat:2|intcomma }}</strong>
+      <strong>{% if filter_values.currency %}{{ total_invoiced|finance_money:filter_values.currency }}{% else %}By currency{% endif %}</strong>
       <small>{{ invoice_count }} invoice(s) in the current filter.</small>
       <div class="ar-currency-list">
         {% for item in invoiced_by_currency %}
-          <span class="ar-mini">{{ item.currency }} {{ item.amount|floatformat:2|intcomma }}</span>
+          <span class="ar-mini">{{ item.amount|finance_money:item.currency }}</span>
         {% empty %}
           <span class="ar-mini">No invoices</span>
         {% endfor %}
@@ -442,11 +498,11 @@
     </div>
     <div class="ar-card">
       <span>Total received</span>
-      <strong>{{ total_received|floatformat:2|intcomma }}</strong>
-      <small>Invoice received totals. Payment history total: {{ visible_payment_total|floatformat:2|intcomma }}.</small>
+      <strong>{% if filter_values.currency %}{{ total_received|finance_money:filter_values.currency }}{% else %}By currency{% endif %}</strong>
+      <small>Invoice received totals. Payment history stays grouped by original currency.</small>
       <div class="ar-currency-list">
         {% for item in received_by_currency %}
-          <span class="ar-mini">{{ item.currency }} {{ item.amount|floatformat:2|intcomma }}</span>
+          <span class="ar-mini">{{ item.amount|finance_money:item.currency }}</span>
         {% empty %}
           <span class="ar-mini">No receipts</span>
         {% endfor %}
@@ -454,11 +510,11 @@
     </div>
     <div class="ar-card">
       <span>Total balance due</span>
-      <strong>{{ total_balance_due|floatformat:2|intcomma }}</strong>
+      <strong>{% if filter_values.currency %}{{ total_balance_due|finance_money:filter_values.currency }}{% else %}By currency{% endif %}</strong>
       <small>{{ overdue_count }} overdue, {{ partial_count }} partially paid.</small>
       <div class="ar-currency-list">
         {% for item in balance_by_currency %}
-          <span class="ar-mini">{{ item.currency }} {{ item.amount|floatformat:2|intcomma }}</span>
+          <span class="ar-mini">{{ item.amount|finance_money:item.currency }}</span>
         {% empty %}
           <span class="ar-mini">No open balance</span>
         {% endfor %}
@@ -466,10 +522,34 @@
     </div>
     <div class="ar-card">
       <span>Bangladesh production received</span>
-      <strong>BDT {{ bd_production_received_total|floatformat:2|intcomma }}</strong>
+      <strong>{{ bd_production_received_total|finance_money:"BDT" }}</strong>
       <small>{{ paid_count }} paid invoice(s). BD total comes from production-linked payment history.</small>
     </div>
   </div>
+
+  <section class="ar-section">
+    <div class="ar-section-head">
+      <div>
+        <h2 class="ar-section-title">AR aging buckets</h2>
+        <div class="ar-section-note">Read-only aging from open invoice balance and due date. Amounts stay in their original invoice currency.</div>
+      </div>
+    </div>
+    <div class="ar-aging">
+      {% for row in aging_rows %}
+        <div class="ar-aging-card ar-aging-card--{{ row.tone }}">
+          <span>{{ row.label }}</span>
+          <strong>{{ row.invoice_count }} invoice(s)</strong>
+          <div class="ar-currency-list">
+            {% for item in row.currency_totals %}
+              <span class="ar-mini">{{ item.amount|finance_money:item.currency }}</span>
+            {% empty %}
+              <span class="ar-mini">No balance</span>
+            {% endfor %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
 
   <div class="ar-grid">
     <div>
@@ -525,9 +605,9 @@
                       {% endif %}
                     </td>
                     <td>{{ row.invoice.due_date|date:"Y-m-d"|default:"-" }}</td>
-                    <td class="ar-right">{{ row.invoice.currency }} {{ row.invoice.total_amount|floatformat:2|intcomma }}</td>
-                    <td class="ar-right">{{ row.invoice.currency }} {{ row.invoice.paid_amount|floatformat:2|intcomma }}</td>
-                    <td class="ar-right">{{ row.invoice.currency }} {{ row.balance|floatformat:2|intcomma }}</td>
+                    <td class="ar-right">{{ row.invoice.total_amount|finance_money:row.invoice.currency }}</td>
+                    <td class="ar-right">{{ row.invoice.paid_amount|finance_money:row.invoice.currency }}</td>
+                    <td class="ar-right">{{ row.balance|finance_money:row.invoice.currency }}</td>
                   </tr>
                 {% endfor %}
               </tbody>
@@ -551,7 +631,7 @@
                     <span class="ar-badge ar-badge--blue">{{ row.invoice.payment_status_label }}</span>
                   {% endif %}
                 </div>
-                <div class="ar-muted" style="margin-top:8px;">Balance: {{ row.invoice.currency }} {{ row.balance|floatformat:2|intcomma }}</div>
+                <div class="ar-muted" style="margin-top:8px;">Balance: {{ row.balance|finance_money:row.invoice.currency }}</div>
               </div>
             {% endfor %}
           </div>
@@ -568,7 +648,7 @@
           </div>
           <div class="ar-currency-list">
             {% for item in payment_history_by_currency %}
-              <span class="ar-mini">{{ item.currency }} {{ item.amount|floatformat:2|intcomma }}</span>
+              <span class="ar-mini">{{ item.amount|finance_money:item.currency }}</span>
             {% endfor %}
           </div>
         </div>
@@ -601,8 +681,8 @@
                     </td>
                     <td>{{ payment.get_payment_method_display }}</td>
                     <td><span class="ar-badge {% if payment.side == 'BD' %}ar-badge--good{% else %}ar-badge--blue{% endif %}">{{ payment.get_side_display }}</span></td>
-                    <td class="ar-right">{{ payment.currency }} {{ payment.amount|floatformat:2|intcomma }}</td>
-                    <td class="ar-right">BDT {{ payment.amount_bdt|floatformat:2|intcomma }}</td>
+                    <td class="ar-right">Original: {{ payment.amount|finance_money:payment.currency }}</td>
+                    <td class="ar-right">Converted: {{ payment.amount_bdt|finance_money:"BDT" }}</td>
                     <td>
                       {% if payment.accounting_entry %}
                         <a class="ar-link" href="{% url 'accounting_entry_edit' payment.accounting_entry.pk %}">Entry #{{ payment.accounting_entry.pk }}</a>
@@ -620,7 +700,7 @@
               <div class="ar-mobile-card">
                 <a class="ar-link" href="{% url 'invoice_view' payment.invoice.pk %}">{{ payment.invoice.invoice_number }}</a>
                 <div class="ar-muted">{{ payment.payment_date|date:"Y-m-d" }} · {{ payment.get_payment_method_display }}</div>
-                <div class="ar-muted" style="margin-top:8px;">{{ payment.currency }} {{ payment.amount|floatformat:2|intcomma }} · BDT {{ payment.amount_bdt|floatformat:2|intcomma }}</div>
+                <div class="ar-muted" style="margin-top:8px;">Original: {{ payment.amount|finance_money:payment.currency }} · Converted: {{ payment.amount_bdt|finance_money:"BDT" }}</div>
               </div>
             {% endfor %}
           </div>
@@ -660,7 +740,7 @@
                       {% endif %}
                     </td>
                     <td class="ar-right">{{ row.payments }}</td>
-                    <td class="ar-right">BDT {{ row.received_bdt|floatformat:2|intcomma }}</td>
+                    <td class="ar-right">{{ row.received_bdt|finance_money:"BDT" }}</td>
                   </tr>
                 {% endfor %}
               </tbody>
@@ -694,11 +774,11 @@
                   <tr>
                     <td>
                       {{ row.name }}
-                      <div class="ar-muted">{{ row.currency }} invoiced {{ row.invoiced|floatformat:2|intcomma }}</div>
+                      <div class="ar-muted">Invoiced {{ row.invoiced|finance_money:row.currency }}</div>
                     </td>
                     <td class="ar-right">{{ row.invoice_count }}</td>
                     <td class="ar-right">{{ row.overdue_count }}</td>
-                    <td class="ar-right">{{ row.currency }} {{ row.balance|floatformat:2|intcomma }}</td>
+                    <td class="ar-right">{{ row.balance|finance_money:row.currency }}</td>
                   </tr>
                 {% endfor %}
               </tbody>

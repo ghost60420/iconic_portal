@@ -647,6 +647,50 @@ def _ap_currency_totals(rows, amount_key):
     ]
 
 
+def _ap_aging_bucket(days_overdue):
+    if days_overdue <= 0:
+        return "current"
+    if days_overdue <= 30:
+        return "1_30"
+    if days_overdue <= 60:
+        return "31_60"
+    if days_overdue <= 90:
+        return "61_90"
+    return "90_plus"
+
+
+def _ap_aging_rows(open_rows):
+    buckets = {
+        "current": {"label": "Current", "bill_count": 0, "total": Decimal("0"), "currency_map": {}, "tone": "good"},
+        "1_30": {"label": "1-30 days", "bill_count": 0, "total": Decimal("0"), "currency_map": {}, "tone": "warn"},
+        "31_60": {"label": "31-60 days", "bill_count": 0, "total": Decimal("0"), "currency_map": {}, "tone": "bad"},
+        "61_90": {"label": "61-90 days", "bill_count": 0, "total": Decimal("0"), "currency_map": {}, "tone": "bad"},
+        "90_plus": {"label": "90+ days", "bill_count": 0, "total": Decimal("0"), "currency_map": {}, "tone": "bad"},
+    }
+    order = ["current", "1_30", "31_60", "61_90", "90_plus"]
+
+    for row in open_rows:
+        outstanding = _ap_decimal(row.get("outstanding"))
+        if outstanding <= 0:
+            continue
+        bucket = buckets[_ap_aging_bucket(row.get("days_overdue") or 0)]
+        currency = row.get("currency") or "Unknown"
+        bucket["bill_count"] += 1
+        bucket["total"] += outstanding
+        bucket["currency_map"][currency] = bucket["currency_map"].get(currency, Decimal("0")) + outstanding
+
+    rows = []
+    for key in order:
+        row = buckets[key]
+        row["currency_totals"] = [
+            {"currency": currency, "amount": amount}
+            for currency, amount in sorted(row["currency_map"].items())
+            if amount != 0
+        ]
+        rows.append(row)
+    return rows
+
+
 def _ap_row(entry, today):
     category_key, category_label = _ap_category(entry)
     status_key = _ap_status_key(entry, today)
@@ -810,6 +854,7 @@ def accounts_payable_dashboard(request):
             "overdue_total": overdue_total,
             "due_week_total": due_week_total,
             "due_month_total": due_month_total,
+            "aging_rows": _ap_aging_rows(open_rows),
             "outstanding_rows": open_rows[:75],
             "payment_rows": paid_rows[:75],
             "due_soon_rows": sorted(due_week_rows + overdue_rows, key=lambda row: row["entry"].date or today)[:40],
@@ -4015,6 +4060,22 @@ def production_profit_report(request):
     m = _parse_int(request.GET.get("month") or str(today.month)) or today.month
 
     rows = production_profit_rows(year=y, month=m)
+    profit_summary = {
+        "order_count": len(rows),
+        "profitable_count": sum(1 for row in rows if row.get("profit_cad", Decimal("0")) >= 0),
+        "loss_count": sum(1 for row in rows if row.get("profit_cad", Decimal("0")) < 0),
+        "total_revenue_cad": sum((row.get("revenue_cad", Decimal("0")) for row in rows), Decimal("0")),
+        "total_cost_cad": sum((row.get("cost_cad", Decimal("0")) for row in rows), Decimal("0")),
+        "total_profit_cad": sum((row.get("profit_cad", Decimal("0")) for row in rows), Decimal("0")),
+        "total_swing_bdt": sum((row.get("swing_bdt", Decimal("0")) for row in rows), Decimal("0")),
+        "total_bd_cost_bdt": sum((row.get("bd_total_cost_bdt", Decimal("0")) for row in rows), Decimal("0")),
+    }
+    profit_summary["margin_pct"] = (
+        profit_summary["total_profit_cad"] / profit_summary["total_revenue_cad"] * Decimal("100")
+        if profit_summary["total_revenue_cad"]
+        else Decimal("0")
+    )
+    rate_row = _get_rate_row()
 
     return render(
         request,
@@ -4024,6 +4085,8 @@ def production_profit_report(request):
             "filter_year": str(y),
             "filter_month": str(m),
             "SWING_SUB_TYPE": SWING_SUB_TYPE,
+            "profit_summary": profit_summary,
+            "cad_to_bdt": rate_row.cad_to_bdt or Decimal("0"),
         },
     )
 

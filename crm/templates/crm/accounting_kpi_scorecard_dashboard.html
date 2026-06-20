@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load humanize %}
+{% load humanize crm_extras %}
 {% block content %}
 
 <style>
@@ -304,15 +304,15 @@
   </form>
 
   <div class="kpi-cards">
-    <div class="kpi-card"><span>Revenue This Month</span><strong>CAD {{ revenue_this_month|floatformat:2|intcomma }}</strong><small>Income through selected end date month.</small></div>
-    <div class="kpi-card"><span>Revenue Year to Date</span><strong>CAD {{ revenue_ytd|floatformat:2|intcomma }}</strong><small>Income from Jan 1 through selected end date.</small></div>
+    <div class="kpi-card"><span>Revenue This Month</span><strong>{{ revenue_this_month|finance_money:"CAD" }}</strong><small>CAD-normalized income through selected end date month.</small></div>
+    <div class="kpi-card"><span>Revenue Year to Date</span><strong>{{ revenue_ytd|finance_money:"CAD" }}</strong><small>CAD-normalized income from Jan 1 through selected end date.</small></div>
     <div class="kpi-card"><span>Gross Margin %</span><strong>{{ gross_margin_percent|floatformat:2 }}%</strong><small>Gross profit divided by revenue.</small></div>
     <div class="kpi-card"><span>Net Profit %</span><strong>{{ net_profit_percent|floatformat:2 }}%</strong><small>Net profit divided by revenue.</small></div>
-    <div class="kpi-card"><span>Accounts Receivable Outstanding</span><strong>CAD {{ ar_outstanding|floatformat:2|intcomma }}</strong><small>{{ ar_invoice_count }} open invoice(s).</small></div>
+    <div class="kpi-card"><span>Accounts Receivable Outstanding</span><strong>{{ ar_outstanding|finance_money:"CAD" }}</strong><small>CAD-normalized. {{ ar_invoice_count }} open invoice(s).</small></div>
     <div class="kpi-card"><span>Average Collection Days</span><strong>{{ average_collection_days|floatformat:2 }}</strong><small>Average days from invoice issue to payment.</small></div>
-    <div class="kpi-card"><span>Accounts Payable Outstanding</span><strong>CAD {{ ap_outstanding|floatformat:2|intcomma }}</strong><small>{{ ap_row_count }} open payable row(s).</small></div>
-    <div class="kpi-card"><span>Inventory Value</span><strong>CAD {{ inventory_value|floatformat:2|intcomma }}</strong><small>Current inventory quantity times unit cost.</small></div>
-    <div class="kpi-card"><span>Cash Balance</span><strong>CAD {{ cash_balance|floatformat:2|intcomma }}</strong><small>Signed cash movement through selected end date.</small></div>
+    <div class="kpi-card"><span>Accounts Payable Outstanding</span><strong>{{ ap_outstanding|finance_money:"CAD" }}</strong><small>CAD-normalized. {{ ap_row_count }} open payable row(s).</small></div>
+    <div class="kpi-card"><span>Inventory Value</span><strong>{{ inventory_value|finance_money:"CAD" }}</strong><small>CAD-normalized current inventory quantity times unit cost.</small></div>
+    <div class="kpi-card"><span>Cash Balance</span><strong>{{ cash_balance|finance_money:"CAD" }}</strong><small>CAD-normalized signed cash movement through selected end date.</small></div>
     <div class="kpi-card"><span>Current Ratio</span><strong>{{ current_ratio|floatformat:2 }}x</strong><small>Current assets divided by current liabilities.</small></div>
     <div class="kpi-card"><span>Debt to Equity Ratio</span><strong>{{ debt_to_equity_ratio|floatformat:2 }}x</strong><small>Liabilities divided by equity basis.</small></div>
     <div class="kpi-card"><span>Budget Achievement %</span><strong>{{ budget_achievement_percent|floatformat:2 }}%</strong><small>This month revenue versus configured budget.</small></div>
@@ -338,7 +338,7 @@
                 <div class="kpi-bar kpi-bar-expense"><span style="width:{{ row.expense_bar }}%"></span></div>
                 <div class="kpi-bar kpi-bar-profit"><span style="width:{{ row.profit_bar }}%"></span></div>
               </div>
-              <div class="kpi-right"><span class="kpi-badge {% if row.net_profit >= 0 %}kpi-badge--good{% else %}kpi-badge--bad{% endif %}">CAD {{ row.net_profit|floatformat:0|intcomma }}</span></div>
+              <div class="kpi-right"><span class="kpi-badge {% if row.net_profit >= 0 %}kpi-badge--good{% else %}kpi-badge--bad{% endif %}">{{ row.net_profit|finance_money:"CAD" }}</span></div>
             </div>
           {% endfor %}
         {% else %}
@@ -359,7 +359,7 @@
               <thead><tr><th>Customer</th><th class="kpi-right">Rows</th><th class="kpi-right">Revenue</th></tr></thead>
               <tbody>
                 {% for row in top_customer_rows %}
-                  <tr><td>{{ row.label }}</td><td class="kpi-right">{{ row.count }}</td><td class="kpi-right">CAD {{ row.amount|floatformat:2|intcomma }}</td></tr>
+                  <tr><td>{{ row.label }}</td><td class="kpi-right">{{ row.count }}</td><td class="kpi-right">{{ row.amount|finance_money:"CAD" }}</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -382,7 +382,7 @@
               <thead><tr><th>Category</th><th class="kpi-right">Rows</th><th class="kpi-right">Expense</th></tr></thead>
               <tbody>
                 {% for row in top_expense_rows %}
-                  <tr><td>{{ row.label }}</td><td class="kpi-right">{{ row.count }}</td><td class="kpi-right">CAD {{ row.amount|floatformat:2|intcomma }}</td></tr>
+                  <tr><td>{{ row.label }}</td><td class="kpi-right">{{ row.count }}</td><td class="kpi-right">{{ row.amount|finance_money:"CAD" }}</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -423,9 +423,9 @@
           {% for row in side_rows %}
             <div class="kpi-side-card">
               <h3>{{ row.label }}</h3>
-              <div class="kpi-side-line"><span>Revenue</span><strong>CAD {{ row.revenue|floatformat:2|intcomma }}</strong></div>
+              <div class="kpi-side-line"><span>Revenue</span><strong>{{ row.revenue|finance_money:"CAD" }}</strong></div>
               <div class="kpi-side-line"><span>Gross Margin</span><strong>{{ row.gross_margin_percent|floatformat:2 }}%</strong></div>
-              <div class="kpi-side-line"><span>Net Profit</span><strong>CAD {{ row.net_profit|floatformat:2|intcomma }}</strong></div>
+              <div class="kpi-side-line"><span>Net Profit</span><strong>{{ row.net_profit|finance_money:"CAD" }}</strong></div>
               <div class="kpi-side-line"><span>Net Profit %</span><strong>{{ row.net_profit_percent|floatformat:2 }}%</strong></div>
               <div class="kpi-side-line"><span>Opex Ratio</span><strong>{{ row.opex_ratio|floatformat:2 }}%</strong></div>
             </div>
@@ -443,7 +443,7 @@
         <div class="kpi-table-wrap">
           <table class="kpi-table kpi-table--compact">
             <tbody>
-              <tr><td>Total top customer revenue</td><td class="kpi-right">CAD {{ total_customer_revenue|floatformat:2|intcomma }}</td></tr>
+              <tr><td>Total top customer revenue</td><td class="kpi-right">{{ total_customer_revenue|finance_money:"CAD" }}</td></tr>
               <tr><td>Top customer concentration</td><td class="kpi-right">{{ customer_concentration_percent|floatformat:2 }}%</td></tr>
               <tr><td>Top 3 concentration</td><td class="kpi-right">{{ top_three_concentration_percent|floatformat:2 }}%</td></tr>
             </tbody>
@@ -461,9 +461,9 @@
         <div class="kpi-table-wrap">
           <table class="kpi-table kpi-table--compact">
             <tbody>
-              <tr><td>Current Assets</td><td class="kpi-right">CAD {{ current_assets|floatformat:2|intcomma }}</td></tr>
-              <tr><td>Current Liabilities</td><td class="kpi-right">CAD {{ current_liabilities|floatformat:2|intcomma }}</td></tr>
-              <tr><td>Working Capital</td><td class="kpi-right">CAD {{ working_capital|floatformat:2|intcomma }}</td></tr>
+              <tr><td>Current Assets</td><td class="kpi-right">{{ current_assets|finance_money:"CAD" }}</td></tr>
+              <tr><td>Current Liabilities</td><td class="kpi-right">{{ current_liabilities|finance_money:"CAD" }}</td></tr>
+              <tr><td>Working Capital</td><td class="kpi-right">{{ working_capital|finance_money:"CAD" }}</td></tr>
               <tr><td>Rows included</td><td class="kpi-right">{{ entry_count|intcomma }}</td></tr>
             </tbody>
           </table>

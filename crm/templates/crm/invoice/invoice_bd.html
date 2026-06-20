@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load humanize static %}
+{% load humanize static crm_extras %}
 {% block content %}
 
 <style>
@@ -272,7 +272,7 @@
   }
 </style>
 
-{% with cur=invoice.currency|default:"" invno=invoice.invoice_number|default:"" %}
+{% with cur=invoice.currency|default:"BDT" invno=invoice.invoice_number|default:"" %}
 <div class="container-fluid">
   <div class="invoice-wrap">
 
@@ -395,11 +395,16 @@
           <div class="box" style="margin-bottom:16px;">
             <div class="box-title">Sewing Charge Summary</div>
             <div class="stack">
-              <div class="muted">Total quantity: <strong>{{ sewing_summary.total_quantity|floatformat:0|intcomma }}</strong></div>
+              <div class="muted">
+                Total quantity:
+                <strong>
+                  {% if sewing_summary.quantity_unavailable %}Quantity unavailable{% else %}{{ sewing_summary.total_quantity|floatformat:0|intcomma }}{% endif %}
+                </strong>
+              </div>
               <div class="muted">Number of styles: <strong>{{ sewing_summary.style_count|default:0 }}</strong></div>
-              <div class="muted">Grand total sewing charge: <strong>{{ cur }} {{ sewing_summary.grand_total|floatformat:2|intcomma }}</strong></div>
-              <div class="muted">{{ deposit_terms.deposit_label }}: {{ deposit_terms.percentage|floatformat:2 }}% · {{ cur }} {{ deposit_terms.deposit_amount|floatformat:2|intcomma }}</div>
-              <div class="muted">Remaining balance: {{ cur }} {{ deposit_terms.balance_due|floatformat:2|intcomma }}</div>
+              <div class="muted">Grand total sewing charge: <strong>{{ sewing_summary.grand_total|finance_money:cur }}</strong></div>
+              <div class="muted">{{ deposit_terms.deposit_label }}: {{ deposit_terms.percentage|floatformat:2 }}% · {{ deposit_terms.deposit_amount|finance_money:cur }}</div>
+              <div class="muted">Remaining balance: {{ deposit_terms.balance_due|finance_money:cur }}</div>
             </div>
           </div>
         {% endif %}
@@ -420,13 +425,13 @@
                 <tr class="{% if item.is_detail %}item-detail{% endif %}">
                   <td>{{ item.description }}</td>
                   <td class="num">
-                    {% if item.has_qty %}{{ item.qty|intcomma }}{% else %}-{% endif %}
+                    {% if item.quantity_unavailable %}Quantity unavailable{% elif item.has_qty %}{{ item.qty|intcomma }}{% else %}-{% endif %}
                   </td>
                   <td class="num">
-                    {% if item.has_rate %}{{ cur }} {{ item.rate|floatformat:2|intcomma }}{% else %}-{% endif %}
+                    {% if item.has_rate %}{{ item.rate|finance_money:cur }}{% else %}-{% endif %}
                   </td>
                   <td class="num">
-                    {% if item.has_amount %}{{ cur }} {{ item.amount|floatformat:2|intcomma }}{% else %}{% if item.is_detail %}&nbsp;{% else %}-{% endif %}{% endif %}
+                    {% if item.has_amount %}{{ item.amount|finance_money:cur }}{% else %}{% if item.is_detail %}&nbsp;{% else %}-{% endif %}{% endif %}
                   </td>
                 </tr>
               {% empty %}
@@ -442,19 +447,19 @@
           <table>
             <tr>
               <td class="label">Subtotal</td>
-              <td>{{ cur }} {{ invoice.subtotal|default_if_none:0|floatformat:2|intcomma }}</td>
+              <td>{{ invoice.subtotal|default_if_none:0|finance_money:cur }}</td>
             </tr>
             <tr>
               <td class="label">Shipping</td>
-              <td>{{ cur }} {{ invoice.shipping_amount|default_if_none:0|floatformat:2|intcomma }}</td>
+              <td>{{ invoice.shipping_amount|default_if_none:0|finance_money:cur }}</td>
             </tr>
             <tr>
               <td class="label">Discount</td>
-              <td>{{ cur }} {{ invoice.discount_amount|default_if_none:0|floatformat:2|intcomma }}</td>
+              <td>{{ invoice.discount_amount|default_if_none:0|finance_money:cur }}</td>
             </tr>
             <tr>
               <td class="label">Tax</td>
-              <td>{{ cur }} {{ invoice.tax_amount|default_if_none:0|floatformat:2|intcomma }}</td>
+              <td>{{ invoice.tax_amount|default_if_none:0|finance_money:cur }}</td>
             </tr>
             {% if tax_note %}
               <tr>
@@ -464,23 +469,23 @@
             {% endif %}
             <tr>
               <td class="label total">Grand total</td>
-              <td class="total">{{ cur }} {{ invoice.total_amount|default_if_none:0|floatformat:2|intcomma }}</td>
+              <td class="total">{{ invoice.total_amount|default_if_none:0|finance_money:cur }}</td>
             </tr>
             <tr>
               <td class="label">{{ deposit_terms.deposit_label }} ({{ deposit_terms.percentage|floatformat:2 }}%)</td>
-              <td>{{ cur }} {{ deposit_terms.deposit_amount|floatformat:2|intcomma }}</td>
+              <td>{{ deposit_terms.deposit_amount|finance_money:cur }}</td>
             </tr>
             <tr>
               <td class="label">{{ deposit_terms.balance_label }}</td>
-              <td>{{ cur }} {{ deposit_terms.balance_due|floatformat:2|intcomma }}</td>
+              <td>{{ deposit_terms.balance_due|finance_money:cur }}</td>
             </tr>
             <tr>
               <td class="label">Amount paid</td>
-              <td>{{ cur }} {{ invoice.paid_amount|default_if_none:0|floatformat:2|intcomma }}</td>
+              <td>{{ invoice.paid_amount|default_if_none:0|finance_money:cur }}</td>
             </tr>
             <tr>
               <td class="label">Balance due</td>
-              <td>{{ cur }} {{ invoice.balance|default_if_none:0|floatformat:2|intcomma }}</td>
+              <td>{{ invoice.balance|default_if_none:0|finance_money:cur }}</td>
             </tr>
           </table>
         </div>
@@ -488,7 +493,7 @@
         <div class="notes">
           <strong>Payment status</strong><br>
           {{ payment_status.label }} — {{ payment_status.note }}<br>
-          Paid: {{ cur }} {{ payment_status.paid|floatformat:2|intcomma }} · Balance: {{ cur }} {{ payment_status.balance|floatformat:2|intcomma }}
+          Paid: {{ payment_status.paid|finance_money:cur }} · Balance: {{ payment_status.balance|finance_money:cur }}
         </div>
 
         <div class="notes">

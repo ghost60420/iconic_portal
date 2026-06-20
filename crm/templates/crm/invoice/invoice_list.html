@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load humanize %}
+{% load humanize crm_extras %}
 {% block content %}
 
 <style>
@@ -237,6 +237,7 @@
       </div>
 
       <div class="topbar">
+        <button type="button" class="pill" onclick="window.print()">Print</button>
         <a href="{% url 'invoice_add' %}" class="pill gold">Add invoice</a>
       </div>
     </div>
@@ -244,23 +245,42 @@
     <div class="summary-grid">
       <div class="summary-card">
         <span>Total invoice amount</span>
-        <strong>{{ total_amount|default_if_none:0|floatformat:2|intcomma }}</strong>
-        <small>Filtered invoice total across visible records.</small>
+        <strong>{% if currency %}{{ total_amount|default_if_none:0|finance_money:currency }}{% else %}By currency{% endif %}</strong>
+        <small>
+          {% for item in total_by_currency %}
+            {{ item.amount|finance_money:item.currency }}{% if not forloop.last %} · {% endif %}
+          {% empty %}
+            No invoice total.
+          {% endfor %}
+        </small>
       </div>
       <div class="summary-card">
         <span>Amount received</span>
-        <strong>{{ received_amount|default_if_none:0|floatformat:2|intcomma }}</strong>
-        <small>This month received: {{ monthly_received|default_if_none:0|floatformat:2|intcomma }}.</small>
+        <strong>{% if currency %}{{ received_amount|default_if_none:0|finance_money:currency }}{% else %}By currency{% endif %}</strong>
+        <small>
+          {% for item in received_by_currency %}
+            {{ item.amount|finance_money:item.currency }}{% if not forloop.last %} · {% endif %}
+          {% empty %}
+            No received amount.
+          {% endfor %}
+        </small>
       </div>
       <div class="summary-card">
         <span>Unpaid balance</span>
-        <strong>{{ unpaid_balance|default_if_none:0|floatformat:2|intcomma }}</strong>
-        <small>{{ open_count }} invoice(s) need payment review.</small>
+        <strong>{% if currency %}{{ unpaid_balance|default_if_none:0|finance_money:currency }}{% else %}By currency{% endif %}</strong>
+        <small>
+          {{ open_count }} invoice(s) need payment review.
+          {% for item in balance_by_currency %}
+            {{ item.amount|finance_money:item.currency }}{% if not forloop.last %} · {% endif %}
+          {% empty %}
+            No open balance.
+          {% endfor %}
+        </small>
       </div>
       <div class="summary-card">
         <span>Bangladesh received</span>
-        <strong>BDT {{ bd_received_total|default_if_none:0|floatformat:2|intcomma }}</strong>
-        <small>BD unpaid balance: BDT {{ bd_unpaid_balance|default_if_none:0|floatformat:2|intcomma }}</small>
+        <strong>{{ bd_received_total|default_if_none:0|finance_money:"BDT" }}</strong>
+        <small>BD unpaid balance: {{ bd_unpaid_balance|default_if_none:0|finance_money:"BDT" }}</small>
       </div>
     </div>
 
@@ -276,9 +296,27 @@
           <option value="paid" {% if status == "paid" %}selected{% endif %}>Paid</option>
           <option value="cancelled" {% if status == "cancelled" %}selected{% endif %}>Cancelled</option>
         </select>
-        {% if currency %}
-          <input type="hidden" name="currency" value="{{ currency }}">
-        {% endif %}
+        <select class="ctrl sm" name="currency">
+          <option value="">All currencies</option>
+          {% for option in currency_options %}
+            <option value="{{ option }}" {% if currency == option %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
+        <select class="ctrl sm" name="customer">
+          <option value="">All clients</option>
+          {% for option in customers %}
+            <option value="{{ option.pk }}" {% if customer == option.pk|stringformat:"s" %}selected{% endif %}>
+              {% firstof option.account_brand option.contact_name option.email "Client" %}
+            </option>
+          {% endfor %}
+        </select>
+        <select class="ctrl sm" name="paid">
+          <option value="">Paid + unpaid</option>
+          <option value="paid" {% if paid == "paid" %}selected{% endif %}>Paid only</option>
+          <option value="unpaid" {% if paid == "unpaid" %}selected{% endif %}>Unpaid only</option>
+        </select>
+        <input class="ctrl sm" type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}" aria-label="Issue date from">
+        <input class="ctrl sm" type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}" aria-label="Issue date to">
         <button class="pill gold" type="submit">Apply</button>
         <a class="pill" href="{% url 'invoice_list' %}">Reset</a>
       </form>
@@ -300,7 +338,7 @@
 
           <tbody>
             {% for inv in invoices %}
-              {% with st=inv.payment_status_key cur=inv.currency|default:"" %}
+              {% with st=inv.payment_status_key cur=inv.currency|default:"USD" %}
               <tr class="invRow"
                   data-status="{{ st }}"
                   data-db-status="{{ inv.status|default:'unknown'|lower }}"
@@ -325,18 +363,15 @@
                 </td>
 
                 <td class="right">
-                  {% if cur %}{{ cur }} {% endif %}
-                  {{ inv.total_amount|default_if_none:0|floatformat:2|intcomma }}
+                  {{ inv.total_amount|default_if_none:0|finance_money:cur }}
                 </td>
 
                 <td class="right">
-                  {% if cur %}{{ cur }} {% endif %}
-                  {{ inv.paid_amount|default_if_none:0|floatformat:2|intcomma }}
+                  {{ inv.paid_amount|default_if_none:0|finance_money:cur }}
                 </td>
 
                 <td class="right">
-                  {% if cur %}{{ cur }} {% endif %}
-                  {{ inv.balance|default_if_none:0|floatformat:2|intcomma }}
+                  {{ inv.balance|default_if_none:0|finance_money:cur }}
                 </td>
 
                 <td class="right" onclick="event.stopPropagation();">
@@ -382,7 +417,7 @@
                 <tr>
                   <td class="mono">{{ row.production_order__order_code|default:"-" }}</td>
                   <td>{{ row.production_order__title|default:"-" }}</td>
-                  <td class="right">BDT {{ row.received_bdt|default_if_none:0|floatformat:2|intcomma }}</td>
+                  <td class="right">{{ row.received_bdt|default_if_none:0|finance_money:"BDT" }}</td>
                 </tr>
               {% endfor %}
             </tbody>

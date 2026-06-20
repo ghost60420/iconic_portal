@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load static %}
+{% load static crm_extras %}
 {% block content %}
 
 <style>
@@ -148,7 +148,7 @@
           {% for row in top_profit %}
             <tr>
               <td>{{ row.costing.style_name|default:row.costing.style_code|default:"-" }}</td>
-              <td>{{ row.costing.currency }} {{ row.display.total_profit_order }}</td>
+              <td>{{ row.total_profit_order|finance_money:row.costing.currency }}</td>
             </tr>
           {% empty %}
             <tr><td colspan="2" class="muted">No data</td></tr>

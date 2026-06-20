@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load humanize %}
+{% load humanize crm_extras %}
 {% block content %}
 
 <style>
@@ -249,7 +249,7 @@
     <div class="quote-status-details">
       <div>
         <span>Status</span>
-        <strong>{{ costing.get_quotation_status_display }}</strong>
+        <strong>{{ quotation_ceo_status_label }}</strong>
       </div>
       <div>
         <span>Approved By</span>
@@ -372,15 +372,15 @@
             </div>
           </td>
           <td class="num">{{ amounts.quantity|intcomma }}</td>
-          <td class="num">{{ costing.currency }} {{ amounts.unit_price|floatformat:2|intcomma }}</td>
-          <td class="num">{{ costing.currency }} {{ amounts.order_total|floatformat:2|intcomma }}</td>
+          <td class="num">{{ amounts.unit_price|finance_money:costing.currency }}</td>
+          <td class="num">{{ amounts.order_total|finance_money:costing.currency }}</td>
         </tr>
       </tbody>
     </table>
     <div class="quote-total">
       <div class="quote-total-box">
         <span>Total Quote</span>
-        <strong>{{ costing.currency }} {{ amounts.order_total|floatformat:2|intcomma }}</strong>
+        <strong>{{ amounts.order_total|finance_money:costing.currency }}</strong>
       </div>
     </div>
   </section>

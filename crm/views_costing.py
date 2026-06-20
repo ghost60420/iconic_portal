@@ -11,6 +11,7 @@ from django.db.models import Q
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_POST
 
 from .forms_costing import CostingHeaderForm, CostingSMVForm, OpportunityDocumentForm, QuickCostingForm
@@ -120,17 +121,17 @@ def _format_quick_percent(value):
 
 
 def _format_quick_bdt(value):
-    return f"৳{_format_quick_decimal(value)}"
+    return f"৳{_format_quick_decimal(value)} BDT"
 
 
 def _format_quick_cad_from_bdt(value, exchange_rate):
     if not exchange_rate:
-        return "N/A"
+        return "CAD N/A"
     try:
         cad_value = (value or Decimal("0")) / exchange_rate
     except Exception:
-        return "N/A"
-    return f"${_format_quick_decimal(cad_value)}"
+        return "CAD N/A"
+    return f"CAD ${_format_quick_decimal(cad_value)}"
 
 
 def _format_quick_money_pair(value, exchange_rate):
@@ -139,8 +140,8 @@ def _format_quick_money_pair(value, exchange_rate):
 
 def _format_quick_money_lines(value, exchange_rate):
     return {
-        "bdt": f"BDT {_format_quick_decimal(value)}",
-        "cad": f"CAD {_format_quick_cad_from_bdt(value, exchange_rate)}",
+        "bdt": _format_quick_bdt(value),
+        "cad": _format_quick_cad_from_bdt(value, exchange_rate),
     }
 
 
@@ -260,6 +261,33 @@ def _display_user(user):
     return user.get_full_name() or user.get_username()
 
 
+def _quotation_ceo_status_label(costing, converted=False):
+    if converted:
+        return "Converted"
+    if costing.quotation_status == CostingHeader.QUOTATION_STATUS_APPROVED:
+        return "CEO Approved"
+    if costing.quotation_status == CostingHeader.QUOTATION_STATUS_REJECTED:
+        return "CEO Rejected"
+    if costing.quotation_status == CostingHeader.QUOTATION_STATUS_SENT:
+        return "Sent to Client"
+    if costing.quotation_number:
+        return "Submitted for CEO Approval"
+    return "Draft"
+
+
+def _quotation_salesperson_label(costing):
+    if costing.quoted_by:
+        return _display_user(costing.quoted_by)
+    if costing.approved_by:
+        return _display_user(costing.approved_by)
+    lead = getattr(getattr(costing, "opportunity", None), "lead", None)
+    if getattr(lead, "assigned_to", None):
+        return _display_user(lead.assigned_to)
+    if getattr(lead, "owner", ""):
+        return lead.owner
+    return ""
+
+
 def _quick_approval_status_label(quick_costing):
     if getattr(quick_costing, "rejected_at", None) or quick_costing.status == QuickCosting.STATUS_REJECTED:
         return "Rejected"
@@ -278,6 +306,7 @@ def _quick_approval_status_label(quick_costing):
 def _quotation_context(costing, user=None):
     amounts = get_costing_quote_amounts(costing)
     quote_is_approved = costing.quotation_status == CostingHeader.QUOTATION_STATUS_APPROVED
+    converted = costing.invoices.exists()
     return {
         "costing": costing,
         "amounts": amounts,
@@ -287,6 +316,7 @@ def _quotation_context(costing, user=None):
         "can_convert_to_invoice": _can_convert_to_invoice(user) and quote_is_approved,
         "user_can_convert_to_invoice": _can_convert_to_invoice(user),
         "quote_is_approved": quote_is_approved,
+        "quotation_ceo_status_label": _quotation_ceo_status_label(costing, converted=converted),
     }
 
 
@@ -515,6 +545,121 @@ def _quick_costing_initial(opportunity=None):
     }
 
 
+def ceo_quotation_approval_queue(request):
+    status_filter = (request.GET.get("status") or "pending").strip()
+    currency = (request.GET.get("currency") or "").strip().upper()
+    search = (request.GET.get("q") or "").strip()
+    date_from = parse_date((request.GET.get("date_from") or "").strip())
+    date_to = parse_date((request.GET.get("date_to") or "").strip())
+
+    qs = (
+        CostingHeader.objects.select_related(
+            "opportunity",
+            "opportunity__lead",
+            "customer",
+            "quoted_by",
+            "approved_by",
+            "quotation_approved_by",
+            "quotation_rejected_by",
+        )
+        .prefetch_related("invoices")
+        .exclude(quotation_number="")
+        .order_by("-quoted_at", "-updated_at", "-id")
+    )
+
+    if currency in {"CAD", "USD", "BDT"}:
+        qs = qs.filter(currency=currency)
+    else:
+        currency = ""
+
+    if date_from:
+        qs = qs.filter(quoted_at__date__gte=date_from)
+    if date_to:
+        qs = qs.filter(quoted_at__date__lte=date_to)
+
+    if status_filter == "pending":
+        qs = qs.filter(quotation_status=CostingHeader.QUOTATION_STATUS_DRAFT)
+    elif status_filter == "approved":
+        qs = qs.filter(quotation_status=CostingHeader.QUOTATION_STATUS_APPROVED)
+    elif status_filter == "rejected":
+        qs = qs.filter(quotation_status=CostingHeader.QUOTATION_STATUS_REJECTED)
+    elif status_filter == "sent":
+        qs = qs.filter(quotation_status=CostingHeader.QUOTATION_STATUS_SENT)
+    elif status_filter == "converted":
+        qs = qs.filter(invoices__isnull=False).distinct()
+    elif status_filter != "all":
+        status_filter = "pending"
+        qs = qs.filter(quotation_status=CostingHeader.QUOTATION_STATUS_DRAFT)
+
+    if search:
+        qs = qs.filter(
+            Q(quotation_number__icontains=search)
+            | Q(opportunity__opportunity_id__icontains=search)
+            | Q(opportunity__lead__lead_id__icontains=search)
+            | Q(customer__account_brand__icontains=search)
+            | Q(customer__contact_name__icontains=search)
+            | Q(style_name__icontains=search)
+        )
+
+    rows = []
+    for costing in qs[:200]:
+        try:
+            amounts = get_costing_quote_amounts(costing)
+        except CostingWorkflowError:
+            amounts = {
+                "order_total": Decimal("0"),
+                "standard_cost_total": Decimal("0"),
+            }
+        total_amount = amounts["order_total"]
+        profit_amount = total_amount - amounts["standard_cost_total"]
+        profit_margin = (profit_amount / total_amount * Decimal("100")) if total_amount else Decimal("0")
+        converted = bool(list(costing.invoices.all()))
+        opportunity = getattr(costing, "opportunity", None)
+        lead = getattr(opportunity, "lead", None)
+        rows.append(
+            {
+                "costing": costing,
+                "lead_id": getattr(lead, "lead_id", "") or "",
+                "opportunity_id": getattr(opportunity, "opportunity_id", "") or "",
+                "client_name": (
+                    getattr(costing.customer, "account_brand", "")
+                    or getattr(costing.customer, "contact_name", "")
+                    or getattr(lead, "account_brand", "")
+                    or "Client"
+                ),
+                "salesperson": _quotation_salesperson_label(costing) or "Not assigned",
+                "currency": costing.currency or "BDT",
+                "total_amount": total_amount,
+                "profit_amount": profit_amount,
+                "profit_margin": profit_margin,
+                "purpose": "Sample" if costing.order_quantity and costing.order_quantity <= 5 else "Bulk",
+                "submitted_at": costing.quoted_at or costing.created_at,
+                "status_label": _quotation_ceo_status_label(costing, converted=converted),
+                "converted": converted,
+            }
+        )
+
+    context = {
+        "rows": rows,
+        "status_filter": status_filter,
+        "currency": currency,
+        "q": search,
+        "date_from": date_from,
+        "date_to": date_to,
+        "currency_options": ["CAD", "USD", "BDT"],
+        "status_options": [
+            ("pending", "Submitted for CEO Approval"),
+            ("approved", "CEO Approved"),
+            ("rejected", "CEO Rejected"),
+            ("sent", "Sent to Client"),
+            ("converted", "Converted"),
+            ("all", "All statuses"),
+        ],
+        "can_use_existing_approval": _can_approve(request.user) and can_view_internal_costing(request.user),
+    }
+    return render(request, "crm/costing/ceo_quotation_approval_queue.html", context)
+
+
 def cost_sheet_list(request):
     denied = _deny_without_internal_costing(request)
     if denied:
@@ -528,6 +673,9 @@ def cost_sheet_list(request):
     status = (request.GET.get("status") or "").strip()
     costing_type = (request.GET.get("costing_type") or "all").strip()
     purpose = (request.GET.get("purpose") or "").strip()
+    currency = (request.GET.get("currency") or "").strip().upper()
+    date_from = parse_date((request.GET.get("date_from") or "").strip())
+    date_to = parse_date((request.GET.get("date_to") or "").strip())
     if costing_type not in {"all", "advanced", "quick"}:
         costing_type = "all"
     search = (request.GET.get("q") or "").strip()
@@ -543,6 +691,17 @@ def cost_sheet_list(request):
     if status:
         qs = qs.filter(status=status)
         quick_qs = quick_qs.filter(status=status)
+    if currency in {"CAD", "USD", "BDT"}:
+        qs = qs.filter(currency=currency)
+        quick_qs = quick_qs.none()
+    else:
+        currency = ""
+    if date_from:
+        qs = qs.filter(created_at__date__gte=date_from)
+        quick_qs = quick_qs.filter(created_at__date__gte=date_from)
+    if date_to:
+        qs = qs.filter(created_at__date__lte=date_to)
+        quick_qs = quick_qs.filter(created_at__date__lte=date_to)
     if search:
         qs = qs.filter(
             Q(opportunity__opportunity_id__icontains=search)
@@ -655,6 +814,7 @@ def cost_sheet_list(request):
         ],
         "product_types": Opportunity.PRODUCT_TYPE_CHOICES,
         "purpose_choices": QuickCosting.PURPOSE_CHOICES,
+        "currency_choices": NEW_COSTING_CURRENCY_CHOICES,
         "costing_type_choices": [
             ("all", "All"),
             ("advanced", "Advanced"),
@@ -678,6 +838,9 @@ def cost_sheet_list(request):
             "status": status,
             "costing_type": costing_type,
             "purpose": purpose,
+            "currency": currency,
+            "date_from": date_from,
+            "date_to": date_to,
             "q": search,
         },
         "can_view_internal_costing": can_view_costing_profit,

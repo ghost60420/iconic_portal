@@ -3396,19 +3396,19 @@ from django.utils import timezone
 
 def _format_quick_opportunity_money(value, exchange_rate):
     amount = Decimal(value or 0)
-    bdt = f"৳{amount:,.2f}"
+    bdt = f"৳{amount:,.2f} BDT"
     if not exchange_rate:
-        return f"{bdt} / N/A"
+        return f"{bdt} / CAD N/A"
     rate = Decimal(exchange_rate)
     if rate <= 0:
-        return f"{bdt} / N/A"
+        return f"{bdt} / CAD N/A"
     cad = (amount / rate).quantize(Decimal("0.01"))
-    return f"{bdt} / ${cad:,.2f}"
+    return f"{bdt} / CAD ${cad:,.2f}"
 
 
 def _format_quick_opportunity_money_lines(value, exchange_rate):
     amount = Decimal(value or 0)
-    bdt = f"BDT {amount:,.2f}"
+    bdt = f"৳{amount:,.2f} BDT"
     if not exchange_rate:
         return {"bdt": bdt, "cad": "CAD N/A"}
     rate = Decimal(exchange_rate)
@@ -7958,9 +7958,28 @@ def build_size_grid(order):
     return build_size_grid_from_text(order.size_ratio_note)
 
 
+def _production_line_quantity_from_text(size_ratio_note):
+    _, size_total = build_size_grid_from_text(size_ratio_note)
+    return size_total
+
+
+def _clean_production_line_quantity(value, size_ratio_note=""):
+    size_total = _production_line_quantity_from_text(size_ratio_note)
+    if size_total is not None:
+        return int(size_total)
+    if value in ("", None):
+        return None
+    try:
+        quantity = int(value)
+    except (TypeError, ValueError):
+        return None
+    return quantity if quantity >= 0 else None
+
+
 def _build_order_line_dict(
     style_name="",
     color_info="",
+    quantity=None,
     size_group=DEFAULT_SIZE_GROUP,
     size_ratio_note="",
     accessories_note="",
@@ -7970,9 +7989,11 @@ def _build_order_line_dict(
     size_group = normalize_size_group(size_group)
     size_grid, size_total = build_size_grid_from_text(size_ratio_note)
     size_items = [item for item in size_grid if item.get("qty")]
+    normalized_quantity = quantity if quantity is not None else size_total
     return {
         "style_name": style_name,
         "color_info": color_info,
+        "quantity": normalized_quantity,
         "size_group": size_group,
         "size_group_display": SIZE_GROUP_LABELS.get(size_group, "Unisex"),
         "size_ratio_note": size_ratio_note,
@@ -7999,6 +8020,7 @@ def _production_order_lines(order):
             _build_order_line_dict(
                 style_name=line.style_name,
                 color_info=line.color_info,
+                quantity=line.quantity,
                 size_group=line.size_group,
                 size_ratio_note=line.size_ratio_note,
                 accessories_note=line.accessories_note,
@@ -8012,6 +8034,7 @@ def _production_order_lines(order):
         _build_order_line_dict(
             style_name=order.style_name,
             color_info=order.color_info,
+            quantity=order.qty_total or None,
             size_group=order.size_group,
             size_ratio_note=order.size_ratio_note,
             accessories_note=order.accessories_note,
@@ -8035,6 +8058,7 @@ def _production_order_lines_from_payload(raw):
         _build_order_line_dict(
             style_name=line.get("style_name", ""),
             color_info=line.get("color_info", ""),
+            quantity=line.get("quantity"),
             size_group=line.get("size_group", DEFAULT_SIZE_GROUP),
             size_ratio_note=line.get("size_ratio_note", ""),
             accessories_note=line.get("accessories_note", ""),
@@ -8105,15 +8129,17 @@ def _parse_production_lines_payload(raw):
         color_info = (item.get("color_info") or "").strip()[:200]
         size_group = normalize_size_group(item.get("size_group"))
         size_ratio_note = (item.get("size_ratio_note") or "").strip()
+        quantity = _clean_production_line_quantity(item.get("quantity"), size_ratio_note)
         accessories_note = (item.get("accessories_note") or "").strip()
         packaging_note = (item.get("packaging_note") or "").strip()
         extra_order_note = (item.get("extra_order_note") or "").strip()
-        if not any([style_name, color_info, size_ratio_note, accessories_note, packaging_note, extra_order_note]):
+        if not any([style_name, color_info, quantity, size_ratio_note, accessories_note, packaging_note, extra_order_note]):
             continue
         cleaned.append(
             {
                 "style_name": style_name,
                 "color_info": color_info,
+                "quantity": quantity,
                 "size_group": size_group,
                 "size_ratio_note": size_ratio_note,
                 "accessories_note": accessories_note,
@@ -9027,11 +9053,12 @@ def production_detail(request, pk):
             style_name = (request.POST.get("line_style_name") or "").strip()
             color_info = (request.POST.get("line_color_info") or "").strip()
             size_ratio_note = (request.POST.get("line_size_ratio_note") or "").strip()
+            quantity = _clean_production_line_quantity(request.POST.get("line_quantity"), size_ratio_note)
             accessories_note = (request.POST.get("line_accessories_note") or "").strip()
             packaging_note = (request.POST.get("line_packaging_note") or "").strip()
             extra_order_note = (request.POST.get("line_extra_order_note") or "").strip()
 
-            if not any([style_name, color_info, size_ratio_note, accessories_note, packaging_note, extra_order_note]):
+            if not any([style_name, color_info, quantity, size_ratio_note, accessories_note, packaging_note, extra_order_note]):
                 messages.error(request, "Please add at least one detail before saving a new line.")
                 return redirect("production_detail", pk=pk)
 
@@ -9045,6 +9072,7 @@ def production_detail(request, pk):
                 line_no=max_no + 1,
                 style_name=style_name,
                 color_info=color_info,
+                quantity=quantity,
                 size_ratio_note=size_ratio_note,
                 accessories_note=accessories_note,
                 packaging_note=packaging_note,

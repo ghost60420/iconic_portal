@@ -36,6 +36,28 @@ def format_costing_money(value, currency):
     return f"{normalize_costing_currency(currency)} {_format_decimal(value)}"
 
 
+def normalize_finance_currency(currency):
+    code = (currency or "").upper().strip()
+    if code in {"CAD", "USD", "BDT"}:
+        return code
+    return code or ""
+
+
+def format_finance_money(value, currency):
+    code = normalize_finance_currency(currency)
+    rounded = _to_decimal(value).quantize(MONEY_QUANT, rounding=ROUND_HALF_UP)
+    amount = f"{rounded:,.2f}"
+    if code == "CAD":
+        return f"CAD ${amount}"
+    if code == "USD":
+        return f"USD ${amount}"
+    if code == "BDT":
+        return f"\u09F3{amount} BDT"
+    if code:
+        return f"{code} {amount}"
+    return amount
+
+
 def format_bdt(value):
     return format_money(value, "\u09F3")
 

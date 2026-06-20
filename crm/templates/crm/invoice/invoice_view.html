@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load humanize %}
+{% load humanize crm_extras %}
 {% block content %}
 
 <style>
@@ -399,7 +399,7 @@
   }
 </style>
 
-{% with cur=invoice.currency|default:"" invno=invoice.invoice_number|default:"" %}
+{% with cur=invoice.currency|default:"USD" invno=invoice.invoice_number|default:"" %}
 <div class="container-fluid">
   <div class="wrap">
 
@@ -460,19 +460,19 @@
       <div class="pay-hero">
         <div class="pay-kpi">
           <span>Invoice amount</span>
-          <strong>{% if cur %}{{ cur }} {% endif %}{{ invoice.total_amount|default_if_none:0|floatformat:2|intcomma }}</strong>
+          <strong>{{ invoice.total_amount|default_if_none:0|finance_money:cur }}</strong>
           <small>Approved invoice value for payment tracking.</small>
         </div>
 
         <div class="pay-kpi">
           <span>Amount received</span>
-          <strong>{% if cur %}{{ cur }} {% endif %}{{ invoice.paid_amount|default_if_none:0|floatformat:2|intcomma }}</strong>
-          <small>{% if legacy_paid_amount %}Includes legacy received amount: {{ cur }} {{ legacy_paid_amount|floatformat:2|intcomma }}.{% else %}From recorded payment entries.{% endif %}</small>
+          <strong>{{ invoice.paid_amount|default_if_none:0|finance_money:cur }}</strong>
+          <small>{% if legacy_paid_amount %}Includes legacy received amount: {{ legacy_paid_amount|finance_money:cur }}.{% else %}From recorded payment entries.{% endif %}</small>
         </div>
 
         <div class="pay-kpi">
           <span>Balance due</span>
-          <strong>{% if cur %}{{ cur }} {% endif %}{{ invoice.balance|default_if_none:0|floatformat:2|intcomma }}</strong>
+          <strong>{{ invoice.balance|default_if_none:0|finance_money:cur }}</strong>
           <small>{% if pay_key == "overpaid" %}Overpayment needs finance review.{% else %}Remaining unpaid invoice balance.{% endif %}</small>
         </div>
 
@@ -518,23 +518,23 @@
         <div class="internal-profit-grid">
           <div class="internal-profit-cell">
             <span>Invoice Total</span>
-            <strong>{% if cur %}{{ cur }} {% endif %}{{ invoice.total_amount|default_if_none:0|floatformat:2|intcomma }}</strong>
+            <strong>{{ invoice.total_amount|default_if_none:0|finance_money:cur }}</strong>
           </div>
           <div class="internal-profit-cell">
             <span>Sewing Charge</span>
-            <strong>{% if cur %}{{ cur }} {% endif %}{{ invoice.sewing_charge|default_if_none:0|floatformat:2|intcomma }}</strong>
+            <strong>{{ invoice.sewing_charge|default_if_none:0|finance_money:cur }}</strong>
           </div>
           <div class="internal-profit-cell">
             <span>Other Internal Cost</span>
-            <strong>{% if cur %}{{ cur }} {% endif %}{{ invoice.other_internal_cost|default_if_none:0|floatformat:2|intcomma }}</strong>
+            <strong>{{ invoice.other_internal_cost|default_if_none:0|finance_money:cur }}</strong>
           </div>
           <div class="internal-profit-cell">
             <span>Total Internal Cost</span>
-            <strong>{% if cur %}{{ cur }} {% endif %}{{ invoice.total_internal_cost|default_if_none:0|floatformat:2|intcomma }}</strong>
+            <strong>{{ invoice.total_internal_cost|default_if_none:0|finance_money:cur }}</strong>
           </div>
           <div class="internal-profit-cell">
             <span>Estimated Gross Profit</span>
-            <strong>{% if cur %}{{ cur }} {% endif %}{{ invoice.estimated_gross_profit|default_if_none:0|floatformat:2|intcomma }}</strong>
+            <strong>{{ invoice.estimated_gross_profit|default_if_none:0|finance_money:cur }}</strong>
           </div>
           <div class="internal-profit-cell">
             <span>Estimated Profit Margin</span>
@@ -544,14 +544,14 @@
         {% if lifecycle_profit %}
           <div class="note" style="margin-top:12px;">
             <div style="margin-bottom:8px; color:#fde68a; font-weight:900;">Net profit formula</div>
-            Invoice Total {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.invoice_total|floatformat:2|intcomma }}
-            - Sewing Cost {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.sewing_cost|floatformat:2|intcomma }}
-            - Fabric Cost {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.fabric_cost|floatformat:2|intcomma }}
-            - Print Cost {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.print_cost|floatformat:2|intcomma }}
-            - Shipping {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.shipping_cost|floatformat:2|intcomma }}
-            - Trim Cost {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.trim_cost|floatformat:2|intcomma }}
-            - Sampling {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.sampling_cost|floatformat:2|intcomma }}
-            = Net Profit {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.net_profit|floatformat:2|intcomma }}
+            Invoice Total {{ lifecycle_profit.display.invoice_total|finance_money:lifecycle_profit.currency }}
+            - Sewing Cost {{ lifecycle_profit.display.sewing_cost|finance_money:lifecycle_profit.currency }}
+            - Fabric Cost {{ lifecycle_profit.display.fabric_cost|finance_money:lifecycle_profit.currency }}
+            - Print Cost {{ lifecycle_profit.display.print_cost|finance_money:lifecycle_profit.currency }}
+            - Shipping {{ lifecycle_profit.display.shipping_cost|finance_money:lifecycle_profit.currency }}
+            - Trim Cost {{ lifecycle_profit.display.trim_cost|finance_money:lifecycle_profit.currency }}
+            - Sampling {{ lifecycle_profit.display.sampling_cost|finance_money:lifecycle_profit.currency }}
+            = Net Profit {{ lifecycle_profit.display.net_profit|finance_money:lifecycle_profit.currency }}
           </div>
         {% endif %}
         {% if invoice.internal_cost_note %}
@@ -657,7 +657,7 @@
 
         {% if legacy_paid_amount %}
           <div class="pay-alert pay-alert--warn">
-            This invoice has {{ cur }} {{ legacy_paid_amount|floatformat:2|intcomma }} recorded before payment history was enabled.
+            This invoice has {{ legacy_paid_amount|finance_money:cur }} recorded before payment history was enabled.
           </div>
         {% endif %}
 
@@ -694,8 +694,8 @@
                         —
                       {% endif %}
                     </td>
-                    <td class="right">{{ payment.currency }} {{ payment.amount|floatformat:2|intcomma }}</td>
-                    <td class="right">BDT {{ payment.amount_bdt|floatformat:2|intcomma }}</td>
+                    <td class="right">Original: {{ payment.amount|finance_money:payment.currency }}</td>
+                    <td class="right">Converted: {{ payment.amount_bdt|finance_money:"BDT" }}</td>
                     <td>{{ payment.notes|default:"—" }}</td>
                   </tr>
                 {% endfor %}
@@ -770,14 +770,12 @@
 
             <div class="k">Paid amount</div>
             <div class="v">
-              {% if cur %}{{ cur }} {% endif %}
-              {{ invoice.paid_amount|default_if_none:0|floatformat:2|intcomma }}
+              {{ invoice.paid_amount|default_if_none:0|finance_money:cur }}
             </div>
 
             <div class="k">Balance</div>
             <div class="v">
-              {% if cur %}{{ cur }} {% endif %}
-              {{ invoice.balance|default_if_none:0|floatformat:2|intcomma }}
+              {{ invoice.balance|default_if_none:0|finance_money:cur }}
             </div>
           </div>
 
@@ -799,34 +797,31 @@
           <table class="totals">
             <tr>
               <td>Subtotal</td>
-              <td>{% if cur %}{{ cur }} {% endif %}{{ invoice.subtotal|default_if_none:0|floatformat:2|intcomma }}</td>
+              <td>{{ invoice.subtotal|default_if_none:0|finance_money:cur }}</td>
             </tr>
             <tr>
               <td>Shipping</td>
-              <td>{% if cur %}{{ cur }} {% endif %}{{ invoice.shipping_amount|default_if_none:0|floatformat:2|intcomma }}</td>
+              <td>{{ invoice.shipping_amount|default_if_none:0|finance_money:cur }}</td>
             </tr>
             <tr>
               <td>Discount</td>
-              <td>{% if cur %}{{ cur }} {% endif %}{{ invoice.discount_amount|default_if_none:0|floatformat:2|intcomma }}</td>
+              <td>{{ invoice.discount_amount|default_if_none:0|finance_money:cur }}</td>
             </tr>
             <tr>
               <td>Tax</td>
-              <td>{% if cur %}{{ cur }} {% endif %}{{ invoice.tax_amount|default_if_none:0|floatformat:2|intcomma }}</td>
+              <td>{{ invoice.tax_amount|default_if_none:0|finance_money:cur }}</td>
             </tr>
             <tr>
               <td class="bigTotal">Total</td>
-              <td class="bigTotal">
-                {% if cur %}{{ cur }} {% endif %}
-                {{ invoice.total_amount|default_if_none:0|floatformat:2|intcomma }}
-              </td>
+              <td class="bigTotal">{{ invoice.total_amount|default_if_none:0|finance_money:cur }}</td>
             </tr>
             <tr>
               <td>{{ deposit_terms.deposit_label }} ({{ deposit_terms.percentage|floatformat:2 }}%)</td>
-              <td>{% if cur %}{{ cur }} {% endif %}{{ deposit_terms.deposit_amount|floatformat:2|intcomma }}</td>
+              <td>{{ deposit_terms.deposit_amount|finance_money:cur }}</td>
             </tr>
             <tr>
               <td>{{ deposit_terms.balance_label }}</td>
-              <td>{% if cur %}{{ cur }} {% endif %}{{ deposit_terms.balance_due|floatformat:2|intcomma }}</td>
+              <td>{{ deposit_terms.balance_due|finance_money:cur }}</td>
             </tr>
           </table>
 

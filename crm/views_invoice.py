@@ -1,6 +1,7 @@
 # crm/views_invoice.py
 
 import io
+from collections import defaultdict
 from datetime import timedelta
 from decimal import Decimal
 from django.conf import settings
@@ -385,6 +386,51 @@ def _ar_currency_totals(rows, value_func):
     ]
 
 
+def _ar_aging_bucket(days_overdue):
+    if days_overdue <= 0:
+        return "current"
+    if days_overdue <= 30:
+        return "1_30"
+    if days_overdue <= 60:
+        return "31_60"
+    if days_overdue <= 90:
+        return "61_90"
+    return "90_plus"
+
+
+def _ar_aging_rows(open_invoices, today):
+    buckets = {
+        "current": {"label": "Current", "invoice_count": 0, "total": Decimal("0"), "currency_map": {}, "tone": "good"},
+        "1_30": {"label": "1-30 days", "invoice_count": 0, "total": Decimal("0"), "currency_map": {}, "tone": "warn"},
+        "31_60": {"label": "31-60 days", "invoice_count": 0, "total": Decimal("0"), "currency_map": {}, "tone": "bad"},
+        "61_90": {"label": "61-90 days", "invoice_count": 0, "total": Decimal("0"), "currency_map": {}, "tone": "bad"},
+        "90_plus": {"label": "90+ days", "invoice_count": 0, "total": Decimal("0"), "currency_map": {}, "tone": "bad"},
+    }
+    order = ["current", "1_30", "31_60", "61_90", "90_plus"]
+
+    for inv in open_invoices:
+        balance = _d(inv.balance)
+        if balance <= 0:
+            continue
+        days_overdue = (today - inv.due_date).days if inv.due_date and inv.due_date < today else 0
+        bucket = buckets[_ar_aging_bucket(days_overdue)]
+        currency = (inv.currency or "Unknown").upper()
+        bucket["invoice_count"] += 1
+        bucket["total"] += balance
+        bucket["currency_map"][currency] = bucket["currency_map"].get(currency, Decimal("0")) + balance
+
+    rows = []
+    for key in order:
+        row = buckets[key]
+        row["currency_totals"] = [
+            {"currency": currency, "amount": amount}
+            for currency, amount in sorted(row["currency_map"].items())
+            if amount != 0
+        ]
+        rows.append(row)
+    return rows
+
+
 def _next_invoice_number() -> str:
     prefix = "INV"
     latest = Invoice.objects.filter(invoice_number__startswith=prefix).order_by("-invoice_number").first()
@@ -670,60 +716,93 @@ def _invoice_sewing_charge_line_items(inv: Invoice, qty: Decimal, sewing_total: 
     quick_costing = getattr(inv, "quick_costing", None)
     if qty <= 0 and quick_costing:
         qty = _d(getattr(quick_costing, "quantity", Decimal("0")))
-    rate = (sewing_total / qty).quantize(Decimal("0.01")) if qty > 0 and sewing_total > 0 else Decimal("0")
 
-    style_names = []
+    def _line_label(line):
+        label = (getattr(line, "style_name", "") or "").strip()
+        color = (getattr(line, "color_info", "") or "").strip()
+        if label and color:
+            return f"{label} - {color}"
+        return label or color or "Sewing Charge"
+
+    def _row(description, row_qty, row_rate, row_amount, *, quantity_unavailable=False, style_count=1):
+        row_qty = _d(row_qty)
+        row_rate = _d(row_rate)
+        row_amount = _d(row_amount)
+        return {
+            "description": description or "Sewing Charge",
+            "qty": row_qty,
+            "rate": row_rate,
+            "amount": row_amount,
+            "has_qty": row_qty > 0 and not quantity_unavailable,
+            "has_rate": row_rate > 0 and not quantity_unavailable,
+            "has_amount": row_amount > 0,
+            "is_detail": False,
+            "is_sewing_charge": True,
+            "quantity_unavailable": quantity_unavailable,
+            "style_count": max(int(style_count or 1), 1),
+        }
+
     if order and hasattr(order, "lines"):
-        style_names = [
-            (line.style_name or "").strip()
-            for line in order.lines.all()
-            if (line.style_name or "").strip()
-        ]
-    if not style_names and order:
-        style_names = [
-            (getattr(order, "style_name", "") or getattr(order, "title", "") or getattr(order, "order_code", "") or "Sewing Charge").strip()
-        ]
-    if not style_names and quick_costing:
-        style_names = [
-            (getattr(quick_costing, "project_name", "") or getattr(quick_costing, "product_type", "") or "Sewing Charge").strip()
-        ]
-    if not style_names:
-        style_names = ["Sewing Charge"]
+        try:
+            production_lines = list(order.lines.all().order_by("line_no", "id"))
+        except Exception:
+            production_lines = []
+        if production_lines:
+            line_quantities = []
+            for line in production_lines:
+                line_qty = _d(getattr(line, "quantity", None))
+                line_quantities.append((_line_label(line), line_qty if line_qty > 0 else None))
 
-    rows = []
-    count = max(len(style_names), 1)
-    allocated_total = Decimal("0")
-    allocated_qty = Decimal("0")
-    for index, style_name in enumerate(style_names, start=1):
-        is_last = index == count
-        if qty > 0:
-            row_qty = (qty / Decimal(count)).quantize(Decimal("0.01"))
-            if is_last:
-                row_qty = qty - allocated_qty
-        else:
-            row_qty = Decimal("0")
-        if sewing_total > 0:
-            row_amount = (rate * row_qty).quantize(Decimal("0.01")) if row_qty > 0 else (sewing_total / Decimal(count)).quantize(Decimal("0.01"))
-            if is_last:
-                row_amount = sewing_total - allocated_total
-        else:
-            row_amount = Decimal("0")
-        rows.append(
-            {
-                "description": style_name or "Sewing Charge",
-                "qty": row_qty,
-                "rate": rate,
-                "amount": row_amount,
-                "has_qty": row_qty > 0,
-                "has_rate": rate > 0,
-                "has_amount": row_amount > 0,
-                "is_detail": False,
-                "is_sewing_charge": True,
-            }
-        )
-        allocated_total += row_amount
-        allocated_qty += row_qty
-    return rows
+            if all(line_qty is not None for _, line_qty in line_quantities):
+                total_line_qty = sum((line_qty for _, line_qty in line_quantities), Decimal("0"))
+                if total_line_qty > 0:
+                    rate = (sewing_total / total_line_qty).quantize(Decimal("0.01")) if sewing_total > 0 else Decimal("0")
+                    rows = []
+                    allocated_total = Decimal("0")
+                    for index, (style_name, line_qty) in enumerate(line_quantities, start=1):
+                        is_last = index == len(line_quantities)
+                        row_amount = (rate * line_qty).quantize(Decimal("0.01")) if sewing_total > 0 else Decimal("0")
+                        if is_last and sewing_total > 0:
+                            row_amount = sewing_total - allocated_total
+                        rows.append(_row(style_name, line_qty, rate, row_amount))
+                        allocated_total += row_amount
+                    return rows
+
+            description = "Consolidated Sewing Charge"
+            if len(production_lines) > 1:
+                description += " (style quantities unavailable)"
+            consolidated_rate = (sewing_total / qty).quantize(Decimal("0.01")) if qty > 0 and sewing_total > 0 else Decimal("0")
+            return [
+                _row(
+                    description,
+                    qty,
+                    consolidated_rate,
+                    sewing_total,
+                    quantity_unavailable=qty <= 0,
+                    style_count=len(production_lines),
+                )
+            ]
+
+    if order:
+        description = (
+            getattr(order, "style_name", "")
+            or getattr(order, "title", "")
+            or getattr(order, "order_code", "")
+            or "Sewing Charge"
+        ).strip()
+        rate = (sewing_total / qty).quantize(Decimal("0.01")) if qty > 0 and sewing_total > 0 else Decimal("0")
+        return [_row(description, qty, rate, sewing_total, quantity_unavailable=qty <= 0)]
+
+    if quick_costing:
+        description = (
+            getattr(quick_costing, "project_name", "")
+            or getattr(quick_costing, "product_type", "")
+            or "Sewing Charge"
+        ).strip()
+        rate = (sewing_total / qty).quantize(Decimal("0.01")) if qty > 0 and sewing_total > 0 else Decimal("0")
+        return [_row(description, qty, rate, sewing_total, quantity_unavailable=qty <= 0)]
+
+    return [_row("Sewing Charge", qty, Decimal("0"), sewing_total, quantity_unavailable=True)]
 
 
 def _invoice_line_items(inv: Invoice) -> list[dict]:
@@ -807,10 +886,13 @@ def _invoice_sewing_summary(line_items: list[dict]) -> dict:
     style_rows = [item for item in line_items if item.get("is_sewing_charge") and not item.get("is_detail")]
     total_quantity = sum((_d(item.get("qty")) for item in style_rows), Decimal("0"))
     grand_total = sum((_d(item.get("amount")) for item in style_rows), Decimal("0"))
+    quantity_unavailable = any(item.get("quantity_unavailable") for item in style_rows)
+    style_count = sum((int(item.get("style_count") or 1) for item in style_rows), 0)
     return {
-        "style_count": len(style_rows),
+        "style_count": style_count or len(style_rows),
         "total_quantity": total_quantity,
         "grand_total": grand_total,
+        "quantity_unavailable": quantity_unavailable,
     }
 
 
@@ -1097,6 +1179,7 @@ def accounts_receivable_dashboard(request):
             "invoice_count": len(invoice_rows),
             "payment_count": len(payment_rows),
             "bd_production_received_total": bd_production_received_total,
+            "aging_rows": _ar_aging_rows(open_invoices, today),
             "outstanding_rows": outstanding_rows,
             "payment_rows": payment_rows[:75],
             "bd_receipt_rows": bd_receipt_rows,
@@ -1112,6 +1195,10 @@ def invoice_list(request):
     q = (request.GET.get("q") or "").strip()
     status = (request.GET.get("status") or "").strip()
     currency = (request.GET.get("currency") or "").strip()
+    customer_id = (request.GET.get("customer") or "").strip()
+    paid_filter = (request.GET.get("paid") or "").strip()
+    date_from = parse_date((request.GET.get("date_from") or "").strip())
+    date_to = parse_date((request.GET.get("date_to") or "").strip())
 
     invoices = Invoice.objects.select_related("order", "customer")
 
@@ -1131,12 +1218,44 @@ def invoice_list(request):
     if currency:
         invoices = invoices.filter(currency=currency)
 
+    if customer_id:
+        invoices = invoices.filter(customer_id=customer_id)
+
+    if date_from:
+        invoices = invoices.filter(issue_date__gte=date_from)
+
+    if date_to:
+        invoices = invoices.filter(issue_date__lte=date_to)
+
+    if paid_filter == "paid":
+        invoices = invoices.filter(status="paid")
+    elif paid_filter == "unpaid":
+        invoices = invoices.exclude(status="paid")
+
     invoices = invoices.order_by("-issue_date", "-created_at")
     invoice_rows = list(invoices)
     total_amount = sum((_d(inv.total_amount) for inv in invoice_rows), Decimal("0"))
     received_amount = sum((_d(inv.paid_amount) for inv in invoice_rows), Decimal("0"))
     unpaid_balance = sum((_d(inv.balance) for inv in invoice_rows), Decimal("0"))
     open_count = sum(1 for inv in invoice_rows if inv.payment_status_key in {"unpaid", "partial", "overpaid"})
+    totals_by_currency = defaultdict(lambda: {"total": Decimal("0"), "received": Decimal("0"), "balance": Decimal("0")})
+    for inv in invoice_rows:
+        code = inv.currency or "USD"
+        totals_by_currency[code]["total"] += _d(inv.total_amount)
+        totals_by_currency[code]["received"] += _d(inv.paid_amount)
+        totals_by_currency[code]["balance"] += _d(inv.balance)
+    total_by_currency = [
+        {"currency": code, "amount": values["total"]}
+        for code, values in sorted(totals_by_currency.items())
+    ]
+    received_by_currency = [
+        {"currency": code, "amount": values["received"]}
+        for code, values in sorted(totals_by_currency.items())
+    ]
+    balance_by_currency = [
+        {"currency": code, "amount": values["balance"]}
+        for code, values in sorted(totals_by_currency.items())
+    ]
 
     today = timezone.localdate()
     monthly_received = (
@@ -1167,9 +1286,18 @@ def invoice_list(request):
             "q": q,
             "status": status,
             "currency": currency,
+            "customer": customer_id,
+            "paid": paid_filter,
+            "date_from": date_from,
+            "date_to": date_to,
+            "customers": Customer.objects.order_by("account_brand", "contact_name", "id"),
+            "currency_options": [choice[0] for choice in Invoice._meta.get_field("currency").choices],
             "total_amount": total_amount,
             "received_amount": received_amount,
             "unpaid_balance": unpaid_balance,
+            "total_by_currency": total_by_currency,
+            "received_by_currency": received_by_currency,
+            "balance_by_currency": balance_by_currency,
             "open_count": open_count,
             "monthly_received": monthly_received,
             "bd_received_total": bd_received_total,
@@ -1730,7 +1858,11 @@ def invoice_pdf(request, pk):
             pdf.drawString(left + 8, y, desc_line)
             y -= 11
         if not item.get("is_detail"):
-            pdf.drawRightString(right - 198, start_y, f"{item['qty']:,.0f}" if item.get("has_qty") else "-")
+            if item.get("quantity_unavailable"):
+                qty_text = "Unavailable"
+            else:
+                qty_text = f"{item['qty']:,.0f}" if item.get("has_qty") else "-"
+            pdf.drawRightString(right - 198, start_y, qty_text)
             pdf.drawRightString(right - 112, start_y, _pdf_money(currency, item["rate"]) if item.get("has_rate") else "-")
             pdf.drawRightString(right - 8, start_y, _pdf_money(currency, item["amount"]) if item.get("has_amount") else "-")
         pdf.setStrokeColor(colors.HexColor("#e2e8f0"))

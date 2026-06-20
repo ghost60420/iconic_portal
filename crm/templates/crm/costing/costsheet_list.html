@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load static %}
+{% load static crm_extras %}
 
 {% block content %}
 <link rel="stylesheet" href="{% static 'crm/costing_list.css' %}?v=quick-costing-purpose-20260611">
@@ -33,30 +33,30 @@
       <article class="costing-stat">
         <span>Total cost</span>
         {% if summary.by_currency %}
-          <strong>{% if summary.by_currency|length == 1 %}{{ summary.by_currency.0.currency }} {{ summary.by_currency.0.total_cost_order|floatformat:0 }}{% else %}{{ summary.by_currency|length }} currencies{% endif %}</strong>
-          <small>{% for row in summary.by_currency %}{{ row.currency }} {{ row.total_cost_order|floatformat:0 }}{% if not forloop.last %} · {% endif %}{% endfor %}</small>
+          <strong>{% if summary.by_currency|length == 1 %}{{ summary.by_currency.0.total_cost_order|finance_money:summary.by_currency.0.currency }}{% else %}{{ summary.by_currency|length }} currencies{% endif %}</strong>
+          <small>{% for row in summary.by_currency %}{{ row.total_cost_order|finance_money:row.currency }}{% if not forloop.last %} · {% endif %}{% endfor %}</small>
         {% else %}
-          <strong>0</strong>
+          <strong>No values</strong>
           <small>Order-level production cost for current filters.</small>
         {% endif %}
       </article>
       <article class="costing-stat">
         <span>Quoted value</span>
         {% if summary.by_currency %}
-          <strong>{% if summary.by_currency|length == 1 %}{{ summary.by_currency.0.currency }} {{ summary.by_currency.0.total_sales_order|floatformat:0 }}{% else %}{{ summary.by_currency|length }} currencies{% endif %}</strong>
-          <small>{% for row in summary.by_currency %}{{ row.currency }} {{ row.total_sales_order|floatformat:0 }}{% if not forloop.last %} · {% endif %}{% endfor %}</small>
+          <strong>{% if summary.by_currency|length == 1 %}{{ summary.by_currency.0.total_sales_order|finance_money:summary.by_currency.0.currency }}{% else %}{{ summary.by_currency|length }} currencies{% endif %}</strong>
+          <small>{% for row in summary.by_currency %}{{ row.total_sales_order|finance_money:row.currency }}{% if not forloop.last %} · {% endif %}{% endfor %}</small>
         {% else %}
-          <strong>0</strong>
+          <strong>No values</strong>
           <small>Total FOB value for current filters.</small>
         {% endif %}
       </article>
       <article class="costing-stat">
         <span>Profit / margin</span>
         {% if summary.by_currency %}
-          <strong>{% if summary.by_currency|length == 1 %}{{ summary.by_currency.0.currency }} {{ summary.by_currency.0.total_profit_order|floatformat:0 }}{% else %}{{ summary.by_currency|length }} currencies{% endif %}</strong>
-          <small>{% for row in summary.by_currency %}{{ row.currency }} {{ row.total_profit_order|floatformat:0 }}{% if not forloop.last %} · {% endif %}{% endfor %} · Avg margin {{ summary.average_margin|floatformat:1 }}%</small>
+          <strong>{% if summary.by_currency|length == 1 %}{{ summary.by_currency.0.total_profit_order|finance_money:summary.by_currency.0.currency }}{% else %}{{ summary.by_currency|length }} currencies{% endif %}</strong>
+          <small>{% for row in summary.by_currency %}{{ row.total_profit_order|finance_money:row.currency }}{% if not forloop.last %} · {% endif %}{% endfor %} · Avg margin {{ summary.average_margin|floatformat:1 }}%</small>
         {% else %}
-          <strong>0</strong>
+          <strong>No values</strong>
           <small>Average margin {{ summary.average_margin|floatformat:1 }}%</small>
         {% endif %}
       </article>
@@ -127,6 +127,26 @@
             <option value="{{ key }}" {% if selected.purpose == key %}selected{% endif %}>{{ label }}</option>
           {% endfor %}
         </select>
+      </label>
+
+      <label class="costing-field">
+        <span>Currency</span>
+        <select name="currency">
+          <option value="">All currencies</option>
+          {% for key,label in currency_choices %}
+            <option value="{{ key }}" {% if selected.currency == key %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label class="costing-field">
+        <span>Created from</span>
+        <input type="date" name="date_from" value="{{ selected.date_from|date:'Y-m-d' }}">
+      </label>
+
+      <label class="costing-field">
+        <span>Created to</span>
+        <input type="date" name="date_to" value="{{ selected.date_to|date:'Y-m-d' }}">
       </label>
 
       <div class="costing-filter-actions">
@@ -235,7 +255,7 @@
                           <span>{{ calc.display.total_cost_order_lines.cad }}</span>
                         </strong>
                       {% else %}
-                        <strong>{% if row.currency_label != "—" %}{{ row.currency_label }} {% endif %}{{ calc.display.total_cost_order }}</strong>
+                        <strong>{{ calc.total_cost_order|finance_money:row.currency_label }}</strong>
                       {% endif %}
                       <span>Total order cost</span>
                     </div>
@@ -249,7 +269,7 @@
                           <span>{{ calc.display.total_cost_per_piece_lines.cad }}</span>
                         </strong>
                       {% else %}
-                        <strong>{% if row.currency_label != "—" %}{{ row.currency_label }} {% endif %}{{ calc.display.total_cost_per_piece }}</strong>
+                        <strong>{{ calc.total_cost_per_piece|finance_money:row.currency_label }}</strong>
                       {% endif %}
                       <span>Per piece</span>
                     </div>
@@ -264,7 +284,7 @@
                             <span>{{ calc.display.fob_per_piece_lines.cad }}</span>
                           </strong>
                         {% else %}
-                          <strong>{% if row.currency_label != "—" %}{{ row.currency_label }} {% endif %}{{ calc.display.fob_per_piece }}</strong>
+                          <strong>{{ calc.fob_per_piece|finance_money:row.currency_label }}</strong>
                         {% endif %}
                         <span>{% if row.costing_type == "quick" %}Selling / pc{% else %}FOB / pc{% endif %}</span>
                       {% else %}
@@ -284,8 +304,8 @@
                         <span class="costing-money-lines">{{ calc.display.net_profit_total_lines.bdt }}<br>{{ calc.display.net_profit_total_lines.cad }} net profit</span>
                         <span>{{ calc.display.margin_status }}</span>
                       {% else %}
-                        <strong>{% if row.currency_label != "—" %}{{ row.currency_label }} {% endif %}{{ calc.display.profit_per_piece }} / pc</strong>
-                        <span>{% if row.currency_label != "—" %}{{ row.currency_label }} {% endif %}{{ calc.display.total_profit_order }} total profit</span>
+                        <strong>{{ calc.profit_per_piece|finance_money:row.currency_label }} / pc</strong>
+                        <span>{{ calc.total_profit_order|finance_money:row.currency_label }} total profit</span>
                       {% endif %}
                     </div>
                   </td>

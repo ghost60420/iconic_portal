@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load humanize %}
+{% load humanize crm_extras %}
 {% block content %}
 
 <style>
@@ -163,6 +163,42 @@
     font-weight:900;
   }
 
+  .ap-aging{
+    display:grid;
+    grid-template-columns:repeat(5, minmax(0,1fr));
+    gap:10px;
+    padding:14px;
+  }
+
+  .ap-aging-card{
+    border:1px solid rgba(148,163,184,0.18);
+    border-radius:16px;
+    background:rgba(3,7,18,0.76);
+    padding:12px;
+    min-width:0;
+  }
+
+  .ap-aging-card--good{ border-color:rgba(74,222,128,0.28); }
+  .ap-aging-card--warn{ border-color:rgba(251,191,36,0.34); }
+  .ap-aging-card--bad{ border-color:rgba(251,113,133,0.34); }
+
+  .ap-aging-card span{
+    display:block;
+    color:var(--ap-muted);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+  }
+
+  .ap-aging-card strong{
+    display:block;
+    margin-top:7px;
+    font-size:18px;
+    line-height:1.15;
+    font-weight:900;
+  }
+
   .ap-grid{
     display:grid;
     grid-template-columns:minmax(0, 1.55fr) minmax(330px, .95fr);
@@ -301,6 +337,7 @@
   @media (max-width:1120px){
     .ap-filter{ grid-template-columns:repeat(3, minmax(0,1fr)); }
     .ap-summary{ grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .ap-aging{ grid-template-columns:repeat(3, minmax(0,1fr)); }
     .ap-grid{ grid-template-columns:1fr; }
   }
 
@@ -309,11 +346,29 @@
     .ap-title{ font-size:24px; }
     .ap-filter{ grid-template-columns:1fr; }
     .ap-summary{ grid-template-columns:1fr; }
+    .ap-aging{ grid-template-columns:1fr; }
     .ap-cash{ grid-template-columns:1fr; }
     .ap-filter-actions{ align-items:stretch; flex-direction:column; }
     .ap-btn{ width:100%; }
     .ap-table-wrap{ display:none; }
     .ap-mobile-list{ display:block; }
+  }
+
+  @media print{
+    .crm-topbar,
+    .crm-dropdown-menu,
+    .ap-actions,
+    .ap-filter{
+      display:none !important;
+    }
+    .ap-hero,
+    .ap-card,
+    .ap-section,
+    .ap-aging-card{
+      box-shadow:none !important;
+    }
+    .ap-table-wrap{ display:block !important; overflow:visible !important; }
+    .ap-mobile-list{ display:none !important; }
   }
 </style>
 
@@ -323,10 +378,11 @@
       <div class="ap-kicker">Accounting Phase 3</div>
       <h1 class="ap-title">Accounts Payable Dashboard</h1>
       <div class="ap-sub">
-        Track money-out bills, open balances, due dates, vendor categories, supplier exposure, and cash required from existing accounting entries.
+        Track money-out bills, open balances, due dates, vendor categories, supplier exposure, and cash required from existing accounting entries. Canada and Bangladesh remain separated by side and currency filters.
       </div>
     </div>
     <div class="ap-actions">
+      <button class="ap-btn" type="button" onclick="window.print()">Print</button>
       <a class="ap-btn" href="{% url 'accounting_entry_list' %}">Accounting entries</a>
       <a class="ap-btn ap-btn--gold" href="{% url 'accounting_entry_add' %}">Add entry</a>
     </div>
@@ -393,11 +449,11 @@
   <div class="ap-summary">
     <div class="ap-card">
       <span>Total bills</span>
-      <strong>{{ total_bills|floatformat:2|intcomma }}</strong>
+      <strong>{% if filter_values.currency %}{{ total_bills|finance_money:filter_values.currency }}{% else %}By currency{% endif %}</strong>
       <small>{{ bill_count }} money-out bill row(s) in the current filter.</small>
       <div class="ap-chip-list">
         {% for item in total_by_currency %}
-          <span class="ap-chip">{{ item.currency }} {{ item.amount|floatformat:2|intcomma }}</span>
+          <span class="ap-chip">{{ item.amount|finance_money:item.currency }}</span>
         {% empty %}
           <span class="ap-chip">No bills</span>
         {% endfor %}
@@ -405,11 +461,11 @@
     </div>
     <div class="ap-card">
       <span>Total paid</span>
-      <strong>{{ total_paid|floatformat:2|intcomma }}</strong>
+      <strong>{% if filter_values.currency %}{{ total_paid|finance_money:filter_values.currency }}{% else %}By currency{% endif %}</strong>
       <small>{{ paid_count }} paid bill row(s).</small>
       <div class="ap-chip-list">
         {% for item in paid_by_currency %}
-          <span class="ap-chip">{{ item.currency }} {{ item.amount|floatformat:2|intcomma }}</span>
+          <span class="ap-chip">{{ item.amount|finance_money:item.currency }}</span>
         {% empty %}
           <span class="ap-chip">No paid bills</span>
         {% endfor %}
@@ -417,11 +473,11 @@
     </div>
     <div class="ap-card">
       <span>Total outstanding</span>
-      <strong>{{ total_outstanding|floatformat:2|intcomma }}</strong>
+      <strong>{% if filter_values.currency %}{{ total_outstanding|finance_money:filter_values.currency }}{% else %}By currency{% endif %}</strong>
       <small>{{ open_count }} open bill row(s), {{ overdue_count }} overdue.</small>
       <div class="ap-chip-list">
         {% for item in outstanding_by_currency %}
-          <span class="ap-chip">{{ item.currency }} {{ item.amount|floatformat:2|intcomma }}</span>
+          <span class="ap-chip">{{ item.amount|finance_money:item.currency }}</span>
         {% empty %}
           <span class="ap-chip">No open balance</span>
         {% endfor %}
@@ -430,9 +486,33 @@
     <div class="ap-card">
       <span>Due pressure</span>
       <strong>{{ due_week_count }} this week</strong>
-      <small>{{ due_month_count }} due this month. Overdue total: {{ overdue_total|floatformat:2|intcomma }}.</small>
+      <small>{{ due_month_count }} due this month. Overdue amount is shown by currency below.</small>
     </div>
   </div>
+
+  <section class="ap-section">
+    <div class="ap-section-head">
+      <div>
+        <h2 class="ap-section-title">AP aging buckets</h2>
+        <div class="ap-section-note">Read-only aging from open money-out entry date and status. Amounts stay in their original accounting currency.</div>
+      </div>
+    </div>
+    <div class="ap-aging">
+      {% for row in aging_rows %}
+        <div class="ap-aging-card ap-aging-card--{{ row.tone }}">
+          <span>{{ row.label }}</span>
+          <strong>{{ row.bill_count }} bill(s)</strong>
+          <div class="ap-chip-list">
+            {% for item in row.currency_totals %}
+              <span class="ap-chip">{{ item.amount|finance_money:item.currency }}</span>
+            {% empty %}
+              <span class="ap-chip">No balance</span>
+            {% endfor %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
 
   <section class="ap-section">
     <div class="ap-section-head">
@@ -444,15 +524,15 @@
     <div class="ap-cash">
       <div class="ap-cash-card">
         <span>Overdue cash required</span>
-        <strong>{{ overdue_total|floatformat:2|intcomma }}</strong>
+        <strong>{% if filter_values.currency %}{{ overdue_total|finance_money:filter_values.currency }}{% else %}By currency{% endif %}</strong>
       </div>
       <div class="ap-cash-card">
         <span>Due this week</span>
-        <strong>{{ due_week_total|floatformat:2|intcomma }}</strong>
+        <strong>{% if filter_values.currency %}{{ due_week_total|finance_money:filter_values.currency }}{% else %}By currency{% endif %}</strong>
       </div>
       <div class="ap-cash-card">
         <span>Due this month</span>
-        <strong>{{ due_month_total|floatformat:2|intcomma }}</strong>
+        <strong>{% if filter_values.currency %}{{ due_month_total|finance_money:filter_values.currency }}{% else %}By currency{% endif %}</strong>
       </div>
     </div>
   </section>
@@ -502,8 +582,8 @@
                     </td>
                     <td><span class="ap-badge {% if row.entry.side == 'BD' %}ap-badge--good{% else %}ap-badge--blue{% endif %}">{{ row.entry.get_side_display }}</span></td>
                     <td>{{ row.entry.date|date:"Y-m-d" }}</td>
-                    <td class="ap-right">{{ row.currency }} {{ row.amount|floatformat:2|intcomma }}</td>
-                    <td class="ap-right">{{ row.currency }} {{ row.outstanding|floatformat:2|intcomma }}</td>
+                    <td class="ap-right">{{ row.amount|finance_money:row.currency }}</td>
+                    <td class="ap-right">{{ row.outstanding|finance_money:row.currency }}</td>
                   </tr>
                 {% endfor %}
               </tbody>
@@ -517,7 +597,7 @@
                 <div style="margin-top:8px;">
                   <span class="ap-badge {% if row.status_key == 'overdue' %}ap-badge--bad{% else %}ap-badge--blue{% endif %}">{{ row.status_label }}</span>
                 </div>
-                <div class="ap-muted" style="margin-top:8px;">Outstanding: {{ row.currency }} {{ row.outstanding|floatformat:2|intcomma }}</div>
+                <div class="ap-muted" style="margin-top:8px;">Outstanding: {{ row.outstanding|finance_money:row.currency }}</div>
               </div>
             {% endfor %}
           </div>
@@ -556,7 +636,7 @@
                     <td>{{ row.supplier }}</td>
                     <td>{{ row.category_label }}</td>
                     <td><span class="ap-badge {% if row.entry.side == 'BD' %}ap-badge--good{% else %}ap-badge--blue{% endif %}">{{ row.entry.get_side_display }}</span></td>
-                    <td class="ap-right">{{ row.currency }} {{ row.paid_amount|floatformat:2|intcomma }}</td>
+                    <td class="ap-right">{{ row.paid_amount|finance_money:row.currency }}</td>
                     <td>{{ row.entry.description|default:"No description"|truncatechars:80 }}</td>
                   </tr>
                 {% endfor %}
@@ -594,7 +674,7 @@
                     <td>{{ row.supplier }}</td>
                     <td class="ap-right">{{ row.bill_count }}</td>
                     <td class="ap-right">{{ row.overdue_count }}</td>
-                    <td class="ap-right">{{ row.currency }} {{ row.outstanding|floatformat:2|intcomma }}</td>
+                    <td class="ap-right">{{ row.outstanding|finance_money:row.currency }}</td>
                   </tr>
                 {% endfor %}
               </tbody>
@@ -630,7 +710,7 @@
                       <div class="ap-muted">{{ row.supplier }}</div>
                     </td>
                     <td>{{ row.entry.date|date:"Y-m-d" }}</td>
-                    <td class="ap-right">{{ row.currency }} {{ row.outstanding|floatformat:2|intcomma }}</td>
+                    <td class="ap-right">{{ row.outstanding|finance_money:row.currency }}</td>
                   </tr>
                 {% endfor %}
               </tbody>
@@ -653,7 +733,7 @@
             <div class="ap-chart-row">
               <div class="ap-muted">{{ row.label }}</div>
               <div class="ap-bar"><span style="width:{{ row.bar_percent }}%;"></span></div>
-              <div class="ap-right ap-muted">{{ row.total|floatformat:0|intcomma }}</div>
+              <div class="ap-right ap-muted">{% if filter_values.currency %}{{ row.total|finance_money:filter_values.currency }}{% else %}By currency{% endif %}</div>
             </div>
           {% endfor %}
         {% else %}
@@ -683,7 +763,7 @@
                   <tr>
                     <td>{{ row.category }}</td>
                     <td class="ap-right">{{ row.bill_count }}</td>
-                    <td class="ap-right">{{ row.currency }} {{ row.outstanding|floatformat:2|intcomma }}</td>
+                    <td class="ap-right">{{ row.outstanding|finance_money:row.currency }}</td>
                   </tr>
                 {% endfor %}
               </tbody>

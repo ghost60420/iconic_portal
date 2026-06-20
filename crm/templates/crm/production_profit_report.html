@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load humanize %}
+{% load humanize crm_extras %}
 {% block content %}
 
 <style>
@@ -82,6 +82,54 @@
     line-height:1.5;
   }
 
+  .pp-actions{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+
+  .pp-summary{
+    display:grid;
+    grid-template-columns:repeat(4, minmax(0,1fr));
+    gap:12px;
+    margin-bottom:16px;
+  }
+
+  .pp-summary-card{
+    background:linear-gradient(180deg, rgba(15,23,42,0.96), rgba(2,6,23,0.96));
+    border:1px solid #475569;
+    border-radius:16px;
+    padding:14px;
+    box-shadow:0 12px 28px rgba(0,0,0,0.45);
+  }
+
+  .pp-summary-card span{
+    display:block;
+    color:#cbd5e1;
+    font-size:11px;
+    font-weight:900;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+  }
+
+  .pp-summary-card strong{
+    display:block;
+    margin-top:7px;
+    color:#ffffff;
+    font-size:22px;
+    line-height:1.15;
+    font-weight:900;
+  }
+
+  .pp-summary-card small{
+    display:block;
+    margin-top:7px;
+    color:#cbd5e1;
+    font-size:12px;
+    line-height:1.4;
+    font-weight:800;
+  }
+
   .pp-badge{
     font-weight:900;
     padding:6px 10px;
@@ -95,6 +143,28 @@
   .pp-sort .pp-arrow{ opacity:0.6; margin-left:6px; font-size:12px; }
   .pp-sort[data-sort="asc"] .pp-arrow{ opacity:1; }
   .pp-sort[data-sort="desc"] .pp-arrow{ opacity:1; }
+
+  @media (max-width:1100px){
+    .pp-summary{ grid-template-columns:repeat(2, minmax(0,1fr)); }
+  }
+
+  @media (max-width:720px){
+    .pp-summary{ grid-template-columns:1fr; }
+    .pp-actions .btn{ width:100%; }
+  }
+
+  @media print{
+    .crm-topbar,
+    .crm-dropdown-menu,
+    .pp-actions,
+    .pp-filter{
+      display:none !important;
+    }
+    .pp-card,
+    .pp-summary-card{
+      box-shadow:none !important;
+    }
+  }
 </style>
 
 <div class="container-fluid pp-wrap">
@@ -109,14 +179,40 @@
           Revenue from Canada IN. Cost from Bangladesh OUT.
           Swing sub type is
           <span style="color:#facc15;">{{ SWING_SUB_TYPE|default:"Swing Charge" }}</span>.
-          Bangladesh swing is shown in BDT.
+          Bangladesh swing is shown in BDT. Current display conversion: 1 CAD = {{ cad_to_bdt|floatformat:2|intcomma }} BDT.
         </div>
       </div>
 
-      <a class="btn btn-outline-light btn-sm rounded-pill fw-bold"
-         href="{% url 'accounting_entry_list' %}">
-        Back
-      </a>
+      <div class="pp-actions">
+        <button class="btn btn-outline-light btn-sm rounded-pill fw-bold" type="button" onclick="window.print()">Print</button>
+        <a class="btn btn-outline-light btn-sm rounded-pill fw-bold"
+           href="{% url 'accounting_entry_list' %}">
+          Back
+        </a>
+      </div>
+    </div>
+
+    <div class="pp-summary">
+      <div class="pp-summary-card">
+        <span>Total revenue</span>
+        <strong>{{ profit_summary.total_revenue_cad|finance_money:"CAD" }}</strong>
+        <small>{{ profit_summary.order_count }} order row(s) in this period.</small>
+      </div>
+      <div class="pp-summary-card">
+        <span>Total cost</span>
+        <strong>{{ profit_summary.total_cost_cad|finance_money:"CAD" }}</strong>
+        <small>Converted CAD display. Original BD total cost: {{ profit_summary.total_bd_cost_bdt|finance_money:"BDT" }}.</small>
+      </div>
+      <div class="pp-summary-card">
+        <span>Profit</span>
+        <strong>{{ profit_summary.total_profit_cad|finance_money:"CAD" }}</strong>
+        <small>Margin {{ profit_summary.margin_pct|floatformat:1 }}% across visible rows.</small>
+      </div>
+      <div class="pp-summary-card">
+        <span>Swing / risk</span>
+        <strong>{{ profit_summary.total_swing_bdt|finance_money:"BDT" }}</strong>
+        <small>{{ profit_summary.loss_count }} loss row(s), {{ profit_summary.profitable_count }} non-loss row(s).</small>
+      </div>
     </div>
 
     <!-- Filter -->
@@ -205,32 +301,32 @@
                 </td>
 
                 <td class="text-end pp-money">
-                  {{ r.revenue_cad|default:0|floatformat:2|intcomma }}
+                  {{ r.revenue_cad|default:0|finance_money:"CAD" }}
                 </td>
 
                 <td class="text-end pp-money">
-                  {{ r.swing_cad|default:0|floatformat:2|intcomma }}
+                  {{ r.swing_cad|default:0|finance_money:"CAD" }}
                 </td>
 
                 <td class="text-end pp-money">
-                  {{ r.swing_bdt|default:0|floatformat:2|intcomma }}
+                  {{ r.swing_bdt|default:0|finance_money:"BDT" }}
                 </td>
 
                 <td class="text-end pp-money">
-                  {{ r.bd_sewing_bdt|default:0|floatformat:2|intcomma }}
+                  {{ r.bd_sewing_bdt|default:0|finance_money:"BDT" }}
                 </td>
 
                 <td class="text-end pp-money">
-                  {{ r.bd_total_cost_bdt|default:0|floatformat:2|intcomma }}
+                  {{ r.bd_total_cost_bdt|default:0|finance_money:"BDT" }}
                 </td>
 
                 <td class="text-end pp-money">
-                  {{ r.cost_cad|default:0|floatformat:2|intcomma }}
+                  {{ r.cost_cad|default:0|finance_money:"CAD" }}
                 </td>
 
                 <td class="text-end fw-bold pp-money"
                     style="color:{% if r.profit_cad|default:0 < 0 %}#ff6b6b{% else %}#4ade80{% endif %};">
-                  {{ r.profit_cad|default:0|floatformat:2|intcomma }}
+                  {{ r.profit_cad|default:0|finance_money:"CAD" }}
                 </td>
 
                 <td class="text-end fw-bold pp-money">
@@ -252,7 +348,7 @@
           Swing BDT comes from Bangladesh OUT entries with sub type
           <span style="color:#facc15;">{{ SWING_SUB_TYPE|default:"Swing Charge" }}</span>.
           BD sewing BDT comes from Production Order sewing cost.
-          BD total cost BDT comes from Production Order total cost fields.
+          BD total cost BDT comes from Production Order total cost fields. This summary preserves the existing formula and does not write back to production, invoice, or accounting records.
         </div>
       </div>
     </div>

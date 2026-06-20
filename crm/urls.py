@@ -67,6 +67,7 @@ urlpatterns = [
 
     path("main-dashboard/", login_required(views.main_dashboard), name="main_dashboard"),
     path("ceo-dashboard/", ceo_perm(views.ceo_dashboard), name="ceo_dashboard"),
+    path("ceo/quotation-approvals/", ceo_perm(costing.ceo_quotation_approval_queue), name="ceo_quotation_approval_queue"),
     path("ai-operations-assistant/", ai_ops_perm(ai_ops.ai_operations_assistant), name="ai_operations_assistant"),
     path("ai-executive-advisor/", ceo_perm(views.ai_executive_advisor), name="ai_executive_advisor"),
     path("daily-ceo-briefing/", ceo_perm(views.daily_ceo_briefing), name="daily_ceo_briefing"),
