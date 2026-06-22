@@ -4,7 +4,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from marketing.models import OAuthCredential, SocialAccount, SocialContent
+from marketing.models import SocialAccount, SocialContent
 from marketing.services.youtube import (
     fetch_youtube_content,
     fetch_youtube_metrics,
@@ -17,6 +17,7 @@ from marketing.services.upsert import (
     upsert_social_audience_daily,
 )
 from marketing.services.errors import MarketingServiceError
+from marketing.services.oauth_connections import token_for_social_account
 from marketing.services.social_connections import update_connection_sync_state
 
 
@@ -27,11 +28,7 @@ class Command(BaseCommand):
         parser.add_argument("--account-id", default="")
 
     def _token_for_account(self, account):
-        cred = OAuthCredential.objects.filter(platform_account=account).first()
-        if cred and cred.get_access_token():
-            return cred.get_access_token()
-        cred = OAuthCredential.objects.filter(platform="youtube").first()
-        return cred.get_access_token() if cred else ""
+        return token_for_social_account(account)
 
     def handle(self, *args, **options):
         if not getattr(settings, "MARKETING_SOCIAL_ENABLED", False):

@@ -13,20 +13,31 @@
   .mk-token-pill{padding:4px 9px;border-radius:999px;border:1px solid #334155;background:#0f172a;color:#cbd5e1;font-size:11px;font-weight:900;}
   .mk-token-pill.ok{border-color:#22c55e;color:#22c55e;background:rgba(34,197,94,0.12);}
   .mk-token-pill.warn{border-color:#f59e0b;color:#f59e0b;background:rgba(245,158,11,0.12);}
+  .mk-oauth-note{padding:10px 12px;border:1px solid rgba(245,196,81,0.26);border-radius:12px;background:rgba(245,196,81,0.08);color:#fde68a;font-size:12px;font-weight:800;}
+  .mk-google-integration{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(240px,.7fr);gap:14px;align-items:start;}
+  .mk-google-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;}
+  .mk-google-detail{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px;}
+  .mk-google-oauth-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px;}
+  .mk-manual-fallback summary{cursor:pointer;list-style:none;}
+  .mk-manual-fallback summary::-webkit-details-marker{display:none;}
   @media (max-width: 1100px){
     .mk-connection-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+    .mk-google-integration{grid-template-columns:1fr;}
+    .mk-google-actions{justify-content:flex-start;}
+    .mk-google-oauth-grid{grid-template-columns:1fr;}
   }
   @media (max-width: 700px){
     .mk-connection-grid{grid-template-columns:repeat(1,minmax(0,1fr));}
     .mk-connection-meta{grid-template-columns:repeat(1,minmax(0,1fr));}
+    .mk-google-detail{grid-template-columns:1fr;}
   }
 </style>
 
 <div class="mk-container">
   <div class="mk-header">
     <div>
-      <div class="mk-title">Connection Settings</div>
-      <div class="mk-sub">Admin-managed read-only connections for website, search, and social analytics.</div>
+      <div class="mk-title">Social Connections</div>
+      <div class="mk-sub">OAuth based connections for social, search, website, ads, and business profile reporting.</div>
     </div>
     <div class="d-flex gap-2 flex-wrap">
       <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_dashboard' %}">Dashboard</a>
@@ -38,10 +49,77 @@
   <div class="mk-card mk-span-12" style="margin-bottom:14px;">
     <div class="mk-section-title">Connection Scope</div>
     <div class="mk-hint">
-      This page stores API credentials for analytics reads only. Tokens are encrypted using the marketing encryption key or Django secret key fallback.
+      Connect each platform with OAuth. Access and refresh tokens are encrypted at rest and used by manual or scheduled background sync jobs.
     </div>
     <div class="mk-hint" style="margin-top:8px;">
-      Manual sync uses background management commands and keeps page loads fast.
+      Dashboard widgets read stored sync data for followers, reach, impressions, engagement, ad spend, website traffic, leads, conversions, top posts, and top keywords. Page loads do not call provider APIs directly.
+    </div>
+  </div>
+
+  <div class="mk-card mk-span-12" style="margin-bottom:14px;">
+    <div class="mk-google-integration">
+      <div>
+        <div class="mk-section-title">Marketing Integrations</div>
+        <div class="mk-sub">Google OAuth connection for Google Analytics 4, Search Console, YouTube, and Google Business Profile reporting.</div>
+        <div class="mk-token-state" style="margin-top:10px;">
+          <span class="mk-pill {% if google_status.tone == 'good' %}mk-pill-good{% else %}mk-pill-warn{% endif %}">
+            {{ google_status.label }}
+          </span>
+          {% if google_connection %}
+            <span class="mk-token-pill {% if google_connection.has_refresh_token %}ok{% else %}warn{% endif %}">
+              {% if google_connection.has_refresh_token %}Auto refresh ready{% else %}Reconnect for refresh token{% endif %}
+            </span>
+          {% endif %}
+        </div>
+        <div class="mk-hint" style="margin-top:8px;">{{ google_status.message }}</div>
+
+        <div class="mk-google-oauth-grid">
+          {% if google_configured %}
+            <a class="btn btn-warning mk-btn" href="{{ google_oauth_start_url }}">Connect Google Analytics 4</a>
+            <a class="btn btn-warning mk-btn" href="{{ google_oauth_start_url }}">Connect Search Console</a>
+            <a class="btn btn-warning mk-btn" href="{{ google_oauth_start_url }}">Connect YouTube</a>
+            <a class="btn btn-warning mk-btn" href="{{ google_oauth_start_url }}">Connect Google Business Profile</a>
+          {% else %}
+            <button class="btn btn-outline-light mk-btn" type="button" disabled>Connect Google Analytics 4</button>
+            <button class="btn btn-outline-light mk-btn" type="button" disabled>Connect Search Console</button>
+            <button class="btn btn-outline-light mk-btn" type="button" disabled>Connect YouTube</button>
+            <button class="btn btn-outline-light mk-btn" type="button" disabled>Connect Google Business Profile</button>
+          {% endif %}
+        </div>
+
+        <div class="mk-google-detail">
+          <div>
+            <div class="mk-label">Connected Account</div>
+            <div class="mk-mini-stat">{{ google_connection.account_name|default:"Not connected" }}</div>
+          </div>
+          <div>
+            <div class="mk-label">Last Sync</div>
+            <div class="mk-mini-stat">{{ google_connection.last_synced_at|date:"Y-m-d H:i"|default:"Never synced" }}</div>
+          </div>
+          <div>
+            <div class="mk-label">Redirect URI</div>
+            <div class="mk-mini-stat" style="word-break:break-word;">{{ google_redirect_uri }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mk-google-actions">
+        {% if google_configured %}
+          <a class="btn btn-warning mk-btn" href="{{ google_oauth_start_url }}">
+            Connect Google
+          </a>
+        {% else %}
+          <button class="btn btn-outline-light mk-btn" type="button" disabled>Connect Google</button>
+          <span class="mk-hint">Add Google client ID, secret, and redirect URI in the environment.</span>
+        {% endif %}
+        <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_google_oauth_callback_test' %}">Test Callback</a>
+        {% if google_connection %}
+          <form method="post" action="{% url 'marketing_social_connection_sync' google_connection.pk %}">
+            {% csrf_token %}
+            <button class="btn btn-warning mk-btn" type="submit">Sync Google Now</button>
+          </form>
+        {% endif %}
+      </div>
     </div>
   </div>
 
@@ -52,10 +130,10 @@
           <div>
             <div class="mk-platform-name">{{ card.config.label }}</div>
             <div class="mk-hint">{{ card.config.api_name }}</div>
-            {% if card.config.phase %}<div class="mk-hint">{{ card.config.phase }}</div>{% endif %}
+            <div class="mk-hint">OAuth provider: {{ card.config.provider|title }}</div>
           </div>
           {% if card.connection %}
-            {% if card.last_sync_status == "ok" %}
+            {% if card.last_sync_status == "ok" or card.last_sync_status == "connected" %}
               <span class="mk-pill mk-pill-good">Connected</span>
             {% elif card.last_sync_status == "error" %}
               <span class="mk-pill mk-pill-warn">Needs Attention</span>
@@ -83,10 +161,10 @@
 
         <div class="mk-token-state">
           <span class="mk-token-pill {% if card.has_access_token %}ok{% else %}warn{% endif %}">
-            {% if card.has_access_token %}Access token saved{% else %}Access token missing{% endif %}
+            {% if card.has_access_token %}OAuth token saved{% else %}OAuth token missing{% endif %}
           </span>
           <span class="mk-token-pill {% if card.has_refresh_token %}ok{% else %}warn{% endif %}">
-            {% if card.has_refresh_token %}Refresh token saved{% else %}Refresh token optional{% endif %}
+            {% if card.has_refresh_token %}Auto refresh ready{% else %}Provider refresh varies{% endif %}
           </span>
         </div>
 
@@ -107,27 +185,31 @@
           </div>
         {% endif %}
 
-        <div class="mk-hint">
-          Manual command: <code>{{ card.config.command_hint }}</code>
+        <div class="mk-oauth-note">
+          Daily sync command: <code>{{ card.config.command_hint }}</code>
         </div>
 
         <div class="mk-connection-actions">
-          <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_connect' %}?platform={{ card.config.key }}#connection-form">
-            {% if card.connection %}Add another{% else %}Add connection{% endif %}
-          </a>
+          {% if card.oauth_configured %}
+            {% if card.config.provider == "google" %}
+              <a class="btn btn-warning mk-btn" href="{{ google_oauth_start_url }}">
+                {% if card.connection %}Reconnect{% else %}{{ card.config.oauth_label }}{% endif %}
+              </a>
+            {% else %}
+              <a class="btn btn-warning mk-btn" href="{% url 'marketing_oauth_start' card.config.key %}">
+                {% if card.connection %}Reconnect{% else %}{{ card.config.oauth_label }}{% endif %}
+              </a>
+            {% endif %}
+          {% else %}
+            <button class="btn btn-outline-light mk-btn" type="button" disabled>{{ card.config.oauth_label }}</button>
+            <span class="mk-hint">{{ card.config.label }} OAuth is not configured.</span>
+          {% endif %}
           {% if card.connection %}
-            <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_connect' %}?edit={{ card.connection.pk }}#connection-form">Edit</a>
-            <form method="post" action="{% url 'marketing_social_connection_sync' card.connection.pk %}">
+            <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_connect' %}?edit={{ card.connection.pk }}&manual_setup=1#connection-form">Advanced</a>
+            <form method="post" action="{% url 'marketing_social_platform_sync' card.config.key %}">
               {% csrf_token %}
               <button class="btn btn-warning mk-btn" type="submit">Sync Now</button>
             </form>
-          {% endif %}
-          {% if card.config.oauth_supported %}
-            {% if meta_configured %}
-              <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_meta_oauth_start' %}">{{ card.config.oauth_label }}</a>
-            {% else %}
-              <span class="mk-hint">Meta OAuth requires app ID, secret, and redirect URI.</span>
-            {% endif %}
           {% endif %}
         </div>
       </div>
@@ -139,7 +221,7 @@
       <div class="mk-section-head">
         <div>
           <div class="mk-section-title mb-0">Saved Connections</div>
-          <div class="mk-sub">Read-only analytics credentials by platform account.</div>
+          <div class="mk-sub">OAuth credentials and discovered platform accounts. Raw tokens are never displayed.</div>
         </div>
       </div>
 
@@ -180,7 +262,7 @@
                   </td>
                   <td>
                     <div class="d-flex gap-2 flex-wrap">
-                      <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_connect' %}?edit={{ connection.pk }}#connection-form">Edit</a>
+                      <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_connect' %}?edit={{ connection.pk }}&manual_setup=1#connection-form">Advanced</a>
                       <form method="post" action="{% url 'marketing_social_connection_sync' connection.pk %}">
                         {% csrf_token %}
                         <button class="btn btn-warning mk-btn" type="submit">Sync Now</button>
@@ -197,11 +279,20 @@
       {% endif %}
     </div>
 
-    <div class="mk-card" id="connection-form" style="grid-column: span 5;">
+    <details class="mk-card mk-manual-fallback" id="connection-form" style="grid-column: span 5;" {% if manual_setup_open %}open{% endif %}>
+      <summary>
+        <div class="mk-section-head">
+          <div>
+            <div class="mk-section-title mb-0">Advanced Manual Setup</div>
+            <div class="mk-sub">Use only when OAuth is unavailable or a provider support team gives a temporary analytics token.</div>
+          </div>
+          <span class="mk-pill mk-pill-warn">Not Primary</span>
+        </div>
+      </summary>
       <div class="mk-section-head">
         <div>
           <div class="mk-section-title mb-0">{% if editable_connection %}Edit Connection{% else %}Add Connection{% endif %}</div>
-          <div class="mk-sub">Store read-only API credentials without exposing raw tokens in the UI.</div>
+          <div class="mk-sub">OAuth buttons above are the primary workflow. This fallback preserves existing records and support-only token entry.</div>
         </div>
       </div>
 
@@ -260,7 +351,7 @@
         </div>
 
         <div class="mk-hint" style="margin-top:12px;">
-          Facebook and Instagram can use the Meta OAuth button above. Other platforms use official developer portal credentials pasted here for analytics-only access.
+          Manual token entry is a fallback only. Prefer the Connect button on each platform card so refresh tokens and scopes are handled through OAuth.
         </div>
         <div class="mk-hint" style="margin-top:8px;">
           {% if meta_configured %}
@@ -275,7 +366,7 @@
           <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_connect' %}">Reset</a>
         </div>
       </form>
-    </div>
+    </details>
   </div>
 </div>
 {% endblock %}

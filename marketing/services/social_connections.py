@@ -6,92 +6,117 @@ from django.utils import timezone
 
 from marketing.models import OAuthCredential, SocialAccount
 from marketing.services.errors import MarketingServiceError
+from marketing.services.oauth_connections import (
+    GOOGLE_OAUTH_PLATFORMS,
+    META_OAUTH_PLATFORMS,
+    get_valid_oauth_access_token,
+    oauth_configured,
+    oauth_storage_platform,
+)
+from marketing.utils.activity import log_marketing_sync_failure
 
 
 SOCIAL_CONNECTION_CONFIG = [
     {
-        "key": "ga4",
-        "label": "Google Analytics 4",
-        "api_name": "Google Analytics Data API",
-        "command": "marketing_sync_ga4_daily",
-        "oauth_supported": False,
-        "oauth_label": "",
-        "command_hint": "python manage.py marketing_sync_ga4_daily",
-        "phase": "Phase 2",
-    },
-    {
-        "key": "gsc",
-        "label": "Google Search Console",
-        "api_name": "Search Console API",
-        "command": "marketing_sync_gsc_daily",
-        "oauth_supported": False,
-        "oauth_label": "",
-        "command_hint": "python manage.py marketing_sync_gsc_daily",
-        "phase": "Phase 2",
-    },
-    {
         "key": "facebook",
-        "label": "Facebook",
+        "label": "Facebook Pages",
         "api_name": "Meta Graph API",
         "command": "marketing_sync_meta_daily",
         "oauth_supported": True,
-        "oauth_label": "Connect with Meta",
+        "oauth_label": "Connect Facebook",
         "command_hint": "python manage.py sync_meta_marketing --platform facebook",
+        "provider": "meta",
     },
     {
         "key": "instagram",
-        "label": "Instagram",
+        "label": "Instagram Business",
         "api_name": "Instagram Graph API",
         "command": "marketing_sync_meta_daily",
         "oauth_supported": True,
-        "oauth_label": "Connect with Meta",
+        "oauth_label": "Connect Instagram",
         "command_hint": "python manage.py sync_meta_marketing --platform instagram",
+        "provider": "meta",
     },
     {
-        "key": "linkedin",
-        "label": "LinkedIn",
-        "api_name": "LinkedIn Marketing API",
-        "command": "marketing_sync_linkedin_daily",
-        "oauth_supported": False,
-        "oauth_label": "",
-        "command_hint": "python manage.py sync_linkedin_marketing",
-    },
-    {
-        "key": "tiktok",
-        "label": "TikTok Business",
-        "api_name": "TikTok Business API",
-        "command": "marketing_sync_tiktok_daily",
-        "oauth_supported": False,
-        "oauth_label": "",
-        "command_hint": "python manage.py sync_tiktok_marketing",
+        "key": "meta_ads",
+        "label": "Meta Ads",
+        "api_name": "Meta Marketing API",
+        "command": "marketing_sync_meta_daily",
+        "oauth_supported": True,
+        "oauth_label": "Connect Meta Ads",
+        "command_hint": "python manage.py marketing_sync_meta_daily",
+        "provider": "meta",
     },
     {
         "key": "youtube",
         "label": "YouTube",
         "api_name": "YouTube Data API",
         "command": "marketing_sync_youtube_daily",
-        "oauth_supported": False,
-        "oauth_label": "",
-        "command_hint": "python manage.py sync_youtube_marketing",
+        "oauth_supported": True,
+        "oauth_label": "Connect YouTube",
+        "command_hint": "python manage.py marketing_sync_youtube_daily",
+        "provider": "google",
+    },
+    {
+        "key": "ga4",
+        "label": "Google Analytics 4",
+        "api_name": "Google Analytics Data API",
+        "command": "marketing_sync_ga4_daily",
+        "oauth_supported": True,
+        "oauth_label": "Connect GA4",
+        "command_hint": "python manage.py marketing_sync_ga4_daily",
+        "provider": "google",
+    },
+    {
+        "key": "gsc",
+        "label": "Google Search Console",
+        "api_name": "Search Console API",
+        "command": "marketing_sync_gsc_daily",
+        "oauth_supported": True,
+        "oauth_label": "Connect Search Console",
+        "command_hint": "python manage.py marketing_sync_gsc_daily",
+        "provider": "google",
     },
     {
         "key": "google_business",
         "label": "Google Business Profile",
         "api_name": "Business Profile APIs",
         "command": "marketing_sync_google_business_daily",
-        "oauth_supported": False,
-        "oauth_label": "",
-        "command_hint": "python manage.py sync_google_business_marketing",
+        "oauth_supported": True,
+        "oauth_label": "Connect Business Profile",
+        "command_hint": "python manage.py marketing_sync_google_business_daily",
+        "provider": "google",
+    },
+    {
+        "key": "linkedin",
+        "label": "LinkedIn Company Pages",
+        "api_name": "LinkedIn Marketing API",
+        "command": "marketing_sync_linkedin_daily",
+        "oauth_supported": True,
+        "oauth_label": "Connect LinkedIn",
+        "command_hint": "python manage.py sync_linkedin_marketing",
+        "provider": "linkedin",
+    },
+    {
+        "key": "tiktok",
+        "label": "TikTok Business",
+        "api_name": "TikTok Business API",
+        "command": "marketing_sync_tiktok_daily",
+        "oauth_supported": True,
+        "oauth_label": "Connect TikTok",
+        "command_hint": "python manage.py sync_tiktok_marketing",
+        "provider": "tiktok",
     },
 ]
 
 SOCIAL_CONNECTION_PLATFORM_KEYS = [item["key"] for item in SOCIAL_CONNECTION_CONFIG]
 SOCIAL_CONNECTION_CONFIG_BY_KEY = {item["key"]: item for item in SOCIAL_CONNECTION_CONFIG}
 SOCIAL_ACCOUNT_PLATFORM_KEYS = {item[0] for item in SocialAccount.PLATFORM_CHOICES}
+SOCIAL_CONNECTION_CREDENTIAL_PLATFORMS = set(SOCIAL_CONNECTION_PLATFORM_KEYS) | {"google", "meta", "facebook", "instagram"}
 
 
 def social_connection_queryset():
-    return OAuthCredential.objects.filter(platform__in=SOCIAL_CONNECTION_PLATFORM_KEYS).select_related("platform_account")
+    return OAuthCredential.objects.filter(platform__in=SOCIAL_CONNECTION_CREDENTIAL_PLATFORMS).select_related("platform_account")
 
 
 def _resolved_last_synced_at(connection: OAuthCredential):
@@ -110,18 +135,31 @@ def build_connection_cards():
     cards = []
     base_qs = social_connection_queryset().order_by("platform", "-is_active", "-updated_at", "-created_at")
     for config in SOCIAL_CONNECTION_CONFIG:
-        matches = [item for item in base_qs if item.platform == config["key"]]
+        storage_platform = oauth_storage_platform(config["key"])
+        if config["key"] in GOOGLE_OAUTH_PLATFORMS:
+            matches = [item for item in base_qs if item.platform == "google"]
+        elif config["key"] in META_OAUTH_PLATFORMS:
+            matches = [
+                item
+                for item in base_qs
+                if item.platform in {config["key"], "meta"}
+                or (item.platform_account and item.platform_account.platform == config["key"])
+            ]
+        else:
+            matches = [item for item in base_qs if item.platform == config["key"]]
         primary = matches[0] if matches else None
         cards.append(
             {
                 "config": config,
                 "connection": primary,
+                "storage_platform": storage_platform,
                 "connection_count": len(matches),
                 "has_access_token": bool(primary and primary.has_access_token),
                 "has_refresh_token": bool(primary and primary.has_refresh_token),
                 "last_synced_at": _resolved_last_synced_at(primary) if primary else None,
                 "last_sync_status": _resolved_last_sync_status(primary) if primary else "",
                 "last_error": _resolved_last_error(primary) if primary else "",
+                "oauth_configured": oauth_configured(config["key"]),
             }
         )
     return cards
@@ -178,6 +216,14 @@ def update_connection_sync_state(account: SocialAccount, *, status: str, error: 
                 "last_error",
                 "updated_at",
             ]
+        )
+    if status == "error" and error:
+        log_marketing_sync_failure(
+            platform=account.platform,
+            message=error,
+            model_label="marketing.SocialAccount",
+            object_id=account.pk,
+            meta={"external_account_id": account.external_account_id},
         )
 
 
@@ -258,14 +304,21 @@ def save_social_connection(*, cleaned_data: dict, existing: OAuthCredential | No
 
 def run_social_connection_sync(connection: OAuthCredential):
     config = SOCIAL_CONNECTION_CONFIG_BY_KEY.get(connection.platform)
+    if not config and connection.platform == "google":
+        config = {
+            "command": "marketing_sync_google_daily",
+        }
+    if not config and connection.platform == "meta":
+        config = {
+            "command": "marketing_sync_meta_daily",
+        }
     if not config:
         raise MarketingServiceError("Unsupported social platform.")
     if not connection.is_active:
         raise MarketingServiceError("Connection is inactive.")
-    if not connection.account_id:
+    if connection.platform != "google" and not connection.account_id:
         raise MarketingServiceError("Account ID is required before syncing.")
-    if not connection.has_access_token:
-        raise MarketingServiceError("Access token is required before syncing.")
+    get_valid_oauth_access_token(connection)
 
     kwargs = {}
     if connection.platform in {"facebook", "instagram"}:
@@ -299,4 +352,37 @@ def run_social_connection_sync(connection: OAuthCredential):
         connection.last_error = ""
         connection.last_synced_at = timezone.now()
         connection.save(update_fields=["last_sync_status", "last_error", "last_synced_at", "updated_at"])
+    return buffer.getvalue().strip()
+
+
+def run_social_platform_sync(platform: str):
+    config = SOCIAL_CONNECTION_CONFIG_BY_KEY.get(platform)
+    if not config:
+        raise MarketingServiceError("Unsupported social platform.")
+
+    storage_platform = oauth_storage_platform(platform)
+    credential = OAuthCredential.objects.filter(platform=storage_platform, is_active=True).order_by("-updated_at").first()
+    if not credential and platform in {"facebook", "instagram", "meta_ads"}:
+        credential = OAuthCredential.objects.filter(platform="meta", is_active=True).order_by("-updated_at").first()
+    if not credential:
+        raise MarketingServiceError("Connect this platform before syncing.")
+    get_valid_oauth_access_token(credential)
+
+    kwargs = {}
+    if platform in {"facebook", "instagram"}:
+        kwargs["platform"] = platform
+
+    buffer = StringIO()
+    try:
+        call_command(config["command"], stdout=buffer, stderr=buffer, **kwargs)
+    except Exception as exc:
+        credential.last_sync_status = "error"
+        credential.last_error = str(exc)
+        credential.save(update_fields=["last_sync_status", "last_error", "updated_at"])
+        raise MarketingServiceError(str(exc)) from exc
+
+    credential.last_sync_status = "ok"
+    credential.last_error = ""
+    credential.last_synced_at = timezone.now()
+    credential.save(update_fields=["last_sync_status", "last_error", "last_synced_at", "updated_at"])
     return buffer.getvalue().strip()

@@ -2,10 +2,12 @@ from django import forms
 
 
 SOCIAL_CONNECTION_CHOICES = [
+    ("google", "Google"),
     ("ga4", "Google Analytics 4"),
     ("gsc", "Google Search Console"),
     ("facebook", "Facebook"),
     ("instagram", "Instagram"),
+    ("meta_ads", "Meta Ads"),
     ("linkedin", "LinkedIn"),
     ("tiktok", "TikTok Business"),
     ("youtube", "YouTube"),

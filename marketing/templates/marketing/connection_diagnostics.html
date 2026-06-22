@@ -1,0 +1,133 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+{% include "marketing/_style.html" %}
+
+<style>
+  .mk-diagnostics-grid{display:grid;grid-template-columns:1fr;gap:14px;}
+  .mk-diagnostics-table{overflow-x:auto;}
+  .mk-diagnostics-table table{min-width:1080px;}
+  .mk-metric-list{display:flex;flex-wrap:wrap;gap:6px;}
+  .mk-metric-chip{border:1px solid #334155;background:#0f172a;border-radius:999px;padding:4px 8px;font-size:11px;font-weight:800;color:#e2e8f0;}
+  .mk-error-box{padding:8px 10px;border-radius:10px;border:1px solid rgba(248,113,113,0.32);background:rgba(127,29,29,0.22);color:#fecaca;font-size:12px;}
+  .mk-log-list{display:grid;gap:8px;}
+  .mk-log-row{border:1px solid rgba(248,113,113,.28);background:rgba(127,29,29,.16);border-radius:10px;padding:10px 12px;}
+  @media (max-width: 720px){
+    .mk-diagnostics-table table{min-width:900px;}
+  }
+</style>
+
+<div class="mk-container">
+  <div class="mk-header">
+    <div>
+      <div class="mk-title">Platform Connection Diagnostics</div>
+      <div class="mk-sub">OAuth status, token expiry, last sync, latest stored metrics, and recent API failure logs.</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_connection_settings' %}">Connection Settings</a>
+      <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_dashboard' %}">Dashboard</a>
+    </div>
+  </div>
+
+  {% include "marketing/_control_nav.html" %}
+
+  <div class="mk-diagnostics-grid">
+    <div class="mk-card">
+      <div class="mk-section-head">
+        <div>
+          <div class="mk-section-title mb-0">Connection Health</div>
+          <div class="mk-sub">Manual sync uses the same commands as the scheduled sync jobs.</div>
+        </div>
+      </div>
+
+      <div class="mk-diagnostics-table">
+        <table class="table table-dark table-hover align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Platform</th>
+              <th>Status</th>
+              <th>Account Email</th>
+              <th>Last Sync</th>
+              <th>Token Expiry</th>
+              <th>Latest Data</th>
+              <th>API Errors</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+              <tr>
+                <td>
+                  <strong>{{ row.platform }}</strong>
+                  <div class="mk-hint">{{ row.key }}</div>
+                </td>
+                <td>
+                  <span class="mk-pill {% if row.status.tone == 'good' %}mk-pill-good{% else %}mk-pill-warn{% endif %}">
+                    {{ row.status.label }}
+                  </span>
+                </td>
+                <td>{{ row.account_email|default:"-" }}</td>
+                <td>{{ row.last_sync|date:"Y-m-d H:i"|default:"Never" }}</td>
+                <td>{{ row.token_expiry|date:"Y-m-d H:i"|default:"-" }}</td>
+                <td>
+                  <div class="mk-metric-list">
+                    {% for metric in row.metrics %}
+                      <span class="mk-metric-chip">{{ metric.label }}: {{ metric.value }}</span>
+                    {% empty %}
+                      <span class="mk-hint">No stored metrics yet.</span>
+                    {% endfor %}
+                  </div>
+                </td>
+                <td>
+                  {% if row.api_error %}
+                    <div class="mk-error-box">{{ row.api_error|truncatechars:220 }}</div>
+                  {% else %}
+                    <span class="mk-hint">None</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if row.sync_url %}
+                    <form method="post" action="{{ row.sync_url }}">
+                      {% csrf_token %}
+                      <button class="btn btn-warning mk-btn" type="submit">Sync Now</button>
+                    </form>
+                  {% else %}
+                    <span class="mk-hint">Connect first</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="mk-card">
+      <div class="mk-section-head">
+        <div>
+          <div class="mk-section-title mb-0">Recent API Failure Logs</div>
+          <div class="mk-sub">Error-level marketing sync failures from the existing system activity log.</div>
+        </div>
+      </div>
+      {% if recent_logs %}
+        <div class="mk-log-list">
+          {% for log in recent_logs %}
+            <div class="mk-log-row">
+              <div class="d-flex justify-content-between gap-2 flex-wrap">
+                <strong>{{ log.created_at|date:"Y-m-d H:i" }}</strong>
+                <span class="mk-pill mk-pill-warn">{{ log.level }}</span>
+              </div>
+              <div style="margin-top:6px;">{{ log.message }}</div>
+              {% if log.model_label or log.object_id %}
+                <div class="mk-hint" style="margin-top:4px;">{{ log.model_label }} {{ log.object_id }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="mk-empty-state">No API failures have been logged yet.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

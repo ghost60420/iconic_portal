@@ -218,9 +218,78 @@ MARKETING_META_REDIRECT_URI = os.getenv(
 )
 _meta_scopes_raw = os.getenv(
     "MARKETING_META_SCOPES",
-    "pages_show_list,pages_read_engagement,read_insights,instagram_basic,instagram_manage_insights,business_management",
+    "pages_show_list,pages_read_engagement,read_insights,instagram_basic,instagram_manage_insights,business_management,ads_read",
 )
 MARKETING_META_SCOPES = [scope.strip() for scope in _meta_scopes_raw.split(",") if scope.strip()]
+
+# ======================
+# Google Marketing OAuth
+# ======================
+
+MARKETING_GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID") or os.getenv("MARKETING_GOOGLE_CLIENT_ID", "")
+MARKETING_GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET") or os.getenv("MARKETING_GOOGLE_CLIENT_SECRET", "")
+MARKETING_GOOGLE_REDIRECT_URI = (
+    os.getenv("GOOGLE_REDIRECT_URI")
+    or os.getenv("MARKETING_GOOGLE_REDIRECT_URI")
+    or f"{SITE_BASE_URL}/api/auth/google/callback"
+)
+GOOGLE_CLIENT_ID = MARKETING_GOOGLE_CLIENT_ID
+GOOGLE_CLIENT_SECRET = MARKETING_GOOGLE_CLIENT_SECRET
+GOOGLE_REDIRECT_URI = MARKETING_GOOGLE_REDIRECT_URI
+_google_scopes_raw = os.getenv(
+    "MARKETING_GOOGLE_SCOPES",
+    "openid,email,profile,https://www.googleapis.com/auth/analytics.readonly,https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/youtube.readonly,https://www.googleapis.com/auth/business.manage",
+)
+MARKETING_GOOGLE_SCOPES = [scope.strip() for scope in _google_scopes_raw.split(",") if scope.strip()]
+
+# ======================
+# LinkedIn Marketing OAuth
+# ======================
+
+MARKETING_LINKEDIN_CLIENT_ID = os.getenv("MARKETING_LINKEDIN_CLIENT_ID", "")
+MARKETING_LINKEDIN_CLIENT_SECRET = os.getenv("MARKETING_LINKEDIN_CLIENT_SECRET", "")
+MARKETING_LINKEDIN_REDIRECT_URI = os.getenv(
+    "MARKETING_LINKEDIN_REDIRECT_URI",
+    f"{SITE_BASE_URL}/marketing/oauth/linkedin/callback/",
+)
+MARKETING_LINKEDIN_AUTHORIZE_URL = os.getenv(
+    "MARKETING_LINKEDIN_AUTHORIZE_URL",
+    "https://www.linkedin.com/oauth/v2/authorization",
+)
+MARKETING_LINKEDIN_TOKEN_URL = os.getenv(
+    "MARKETING_LINKEDIN_TOKEN_URL",
+    "https://www.linkedin.com/oauth/v2/accessToken",
+)
+MARKETING_LINKEDIN_USERINFO_URL = os.getenv(
+    "MARKETING_LINKEDIN_USERINFO_URL",
+    "https://api.linkedin.com/v2/userinfo",
+)
+_linkedin_scopes_raw = os.getenv(
+    "MARKETING_LINKEDIN_SCOPES",
+    "openid,profile,email,w_organization_social,r_organization_social,r_organization_admin",
+)
+MARKETING_LINKEDIN_SCOPES = [scope.strip() for scope in _linkedin_scopes_raw.split(",") if scope.strip()]
+
+# ======================
+# TikTok OAuth
+# ======================
+
+MARKETING_TIKTOK_CLIENT_KEY = os.getenv("MARKETING_TIKTOK_CLIENT_KEY", "")
+MARKETING_TIKTOK_CLIENT_SECRET = os.getenv("MARKETING_TIKTOK_CLIENT_SECRET", "")
+MARKETING_TIKTOK_REDIRECT_URI = os.getenv(
+    "MARKETING_TIKTOK_REDIRECT_URI",
+    f"{SITE_BASE_URL}/marketing/oauth/tiktok/callback/",
+)
+MARKETING_TIKTOK_AUTHORIZE_URL = os.getenv(
+    "MARKETING_TIKTOK_AUTHORIZE_URL",
+    "https://www.tiktok.com/v2/auth/authorize/",
+)
+MARKETING_TIKTOK_TOKEN_URL = os.getenv(
+    "MARKETING_TIKTOK_TOKEN_URL",
+    "https://open.tiktokapis.com/v2/oauth/token/",
+)
+_tiktok_scopes_raw = os.getenv("MARKETING_TIKTOK_SCOPES", "user.info.basic")
+MARKETING_TIKTOK_SCOPES = [scope.strip() for scope in _tiktok_scopes_raw.split(",") if scope.strip()]
 
 # ======================
 # Email settings (SMTP)
