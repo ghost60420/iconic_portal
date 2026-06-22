@@ -9,13 +9,16 @@ from django.utils import timezone
 
 from marketing.models import OAuthCredential, SeoProperty, SocialAccount
 from marketing.services.errors import MarketingServiceError
-from marketing.utils.activity import log_marketing_sync_failure
+from marketing.utils.activity import log_marketing_activity, log_marketing_sync_failure
 
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
-GA4_ACCOUNT_SUMMARIES_URL = "https://analyticsadmin.googleapis.com/v1alpha/accountSummaries"
+ANALYTICS_READONLY_SCOPE = "https://www.googleapis.com/auth/analytics.readonly"
+GA4_ACCOUNT_SUMMARIES_URL = "https://analyticsadmin.googleapis.com/v1beta/accountSummaries"
+GA4_ACCOUNTS_URL = "https://analyticsadmin.googleapis.com/v1beta/accounts"
+GA4_PROPERTIES_URL = "https://analyticsadmin.googleapis.com/v1beta/properties"
 GSC_SITES_URL = "https://www.googleapis.com/webmasters/v3/sites"
 YOUTUBE_CHANNELS_URL = "https://www.googleapis.com/youtube/v3/channels"
 GBP_ACCOUNTS_URL = "https://mybusinessaccountmanagement.googleapis.com/v1/accounts"
@@ -76,6 +79,99 @@ def _request_json(url: str, *, method: str = "GET", payload: dict | None = None,
 
 def google_api_request_json(url: str, *, method: str = "GET", payload: dict | None = None, access_token: str = "") -> dict:
     return _request_json(url, method=method, payload=payload, access_token=access_token)
+
+
+def _resource_id(resource_name: str, prefix: str) -> str:
+    if not resource_name:
+        return ""
+    if resource_name.startswith(prefix):
+        return resource_name.replace(prefix, "", 1)
+    return resource_name
+
+
+def _scopes_as_set(scopes: str) -> set[str]:
+    return {scope.strip() for scope in (scopes or "").replace(",", " ").split() if scope.strip()}
+
+
+def credential_has_analytics_readonly_scope(credential: OAuthCredential) -> bool:
+    return ANALYTICS_READONLY_SCOPE in _scopes_as_set(getattr(credential, "scopes", ""))
+
+
+def _paged_google_request(
+    base_url: str,
+    *,
+    collection_key: str,
+    access_token: str,
+    params: dict | None = None,
+    raw_pages: list | None = None,
+) -> list[dict]:
+    items = []
+    page_token = ""
+    base_params = {**(params or {}), "pageSize": "200"}
+    while True:
+        query = {**base_params}
+        if page_token:
+            query["pageToken"] = page_token
+        url = f"{base_url}?{urlencode(query)}"
+        payload = _request_json(url, access_token=access_token)
+        if raw_pages is not None:
+            raw_pages.append(
+                {
+                    "url": base_url,
+                    "params": query,
+                    "response": payload,
+                }
+            )
+        items.extend(payload.get(collection_key, []))
+        page_token = payload.get("nextPageToken") or ""
+        if not page_token:
+            break
+    return items
+
+
+def _merge_by_key(rows: list[dict], key: str) -> list[dict]:
+    merged = {}
+    order = []
+    for row in rows:
+        value = row.get(key) or ""
+        if not value:
+            continue
+        if value not in merged:
+            merged[value] = {}
+            order.append(value)
+        merged[value].update({field: field_value for field, field_value in row.items() if field_value not in ("", None)})
+    return [merged[value] for value in order]
+
+
+def _normalize_ga4_account(account: dict) -> dict:
+    account_resource = account.get("name") or account.get("account") or ""
+    account_id = _resource_id(account_resource, "accounts/")
+    return {
+        "account_id": account_id,
+        "account_resource": account_resource,
+        "display_name": account.get("displayName") or account_id,
+        "deleted": account.get("deleted", False),
+    }
+
+
+def _normalize_ga4_property(prop: dict, *, account: dict | None = None) -> dict:
+    property_resource = prop.get("name") or prop.get("property") or ""
+    property_id = _resource_id(property_resource, "properties/")
+    parent_resource = prop.get("parent") or (account or {}).get("account_resource") or (account or {}).get("account") or ""
+    account_resource = parent_resource if parent_resource.startswith("accounts/") else ""
+    account_id = _resource_id(account_resource, "accounts/")
+    account_name = (account or {}).get("display_name") or (account or {}).get("displayName") or account_id
+    return {
+        "property_id": property_id,
+        "display_name": prop.get("displayName") or property_id,
+        "account_id": account_id,
+        "account_name": account_name,
+        "account_resource": account_resource,
+        "property_resource": property_resource,
+        "property_type": prop.get("propertyType") or "",
+        "currency_code": prop.get("currencyCode") or "",
+        "time_zone": prop.get("timeZone") or "",
+    }
 
 
 def _post_form(url: str, payload: dict) -> dict:
@@ -197,32 +293,155 @@ def save_google_credential(*, token_payload: dict, userinfo: dict) -> OAuthCrede
     return credential
 
 
-def list_ga4_properties(access_token: str) -> list[dict]:
+def list_ga4_account_summaries(access_token: str, *, raw_pages: list | None = None) -> tuple[list[dict], list[dict]]:
+    accounts = []
     properties = []
-    page_token = ""
-    while True:
-        url = GA4_ACCOUNT_SUMMARIES_URL
-        if page_token:
-            url = f"{url}?{urlencode({'pageToken': page_token})}"
-        payload = _request_json(url, access_token=access_token)
-        for account in payload.get("accountSummaries", []):
-            account_name = account.get("displayName") or account.get("account") or ""
-            for prop in account.get("propertySummaries", []):
-                raw_property = prop.get("property") or ""
-                property_id = raw_property.replace("properties/", "")
-                if property_id:
-                    properties.append(
-                        {
-                            "property_id": property_id,
-                            "display_name": prop.get("displayName") or property_id,
-                            "account_name": account_name,
-                            "property_resource": raw_property,
-                        }
-                    )
-        page_token = payload.get("nextPageToken") or ""
-        if not page_token:
-            break
-    return properties
+    summaries = _paged_google_request(
+        GA4_ACCOUNT_SUMMARIES_URL,
+        collection_key="accountSummaries",
+        access_token=access_token,
+        raw_pages=raw_pages,
+    )
+    for summary in summaries:
+        account = _normalize_ga4_account(
+            {
+                "name": summary.get("account") or "",
+                "displayName": summary.get("displayName") or "",
+            }
+        )
+        if account["account_id"]:
+            accounts.append(account)
+        for prop in summary.get("propertySummaries", []):
+            normalized = _normalize_ga4_property(prop, account=account)
+            if normalized["property_id"]:
+                properties.append(normalized)
+    return _merge_by_key(accounts, "account_id"), _merge_by_key(properties, "property_id")
+
+
+def list_ga4_accounts(access_token: str, *, raw_pages: list | None = None) -> list[dict]:
+    accounts = _paged_google_request(
+        GA4_ACCOUNTS_URL,
+        collection_key="accounts",
+        access_token=access_token,
+        raw_pages=raw_pages,
+    )
+    return _merge_by_key([_normalize_ga4_account(account) for account in accounts], "account_id")
+
+
+def list_ga4_properties_for_account(
+    access_token: str,
+    *,
+    account: dict,
+    raw_pages: list | None = None,
+) -> list[dict]:
+    account_resource = account.get("account_resource") or ""
+    if not account_resource:
+        return []
+    properties = _paged_google_request(
+        GA4_PROPERTIES_URL,
+        collection_key="properties",
+        access_token=access_token,
+        params={"filter": f"parent:{account_resource}"},
+        raw_pages=raw_pages,
+    )
+    return _merge_by_key([_normalize_ga4_property(prop, account=account) for prop in properties], "property_id")
+
+
+def list_ga4_admin_inventory(access_token: str, *, include_raw: bool = False) -> dict:
+    raw = {
+        "account_summaries": [],
+        "accounts": [],
+        "properties": [],
+    }
+    errors = []
+    accounts = []
+    properties = []
+
+    try:
+        summary_accounts, summary_properties = list_ga4_account_summaries(
+            access_token,
+            raw_pages=raw["account_summaries"] if include_raw else None,
+        )
+        accounts.extend(summary_accounts)
+        properties.extend(summary_properties)
+    except MarketingServiceError as exc:
+        errors.append(f"accountSummaries.list: {exc}")
+
+    try:
+        account_rows = list_ga4_accounts(access_token, raw_pages=raw["accounts"] if include_raw else None)
+        accounts.extend(account_rows)
+    except MarketingServiceError as exc:
+        account_rows = []
+        errors.append(f"accounts.list: {exc}")
+
+    for account in account_rows:
+        try:
+            properties.extend(
+                list_ga4_properties_for_account(
+                    access_token,
+                    account=account,
+                    raw_pages=raw["properties"] if include_raw else None,
+                )
+            )
+        except MarketingServiceError as exc:
+            account_label = account.get("account_resource") or account.get("account_id") or "unknown account"
+            errors.append(f"properties.list {account_label}: {exc}")
+
+    accounts = _merge_by_key(accounts, "account_id")
+    properties = _merge_by_key(properties, "property_id")
+    if errors:
+        log_marketing_sync_failure(
+            platform="google",
+            message="Analytics Admin discovery partial failure",
+            meta={"errors": errors},
+        )
+    if not accounts and not properties and errors:
+        raise MarketingServiceError("Analytics Admin API discovery failed: " + " | ".join(errors))
+
+    return {
+        "accounts": accounts,
+        "properties": properties,
+        "errors": errors,
+        "raw": raw if include_raw else {},
+    }
+
+
+def log_ga4_admin_inventory(*, credential: OAuthCredential, inventory: dict) -> None:
+    log_marketing_activity(
+        action="google_admin_inventory",
+        message=(
+            "Google Analytics Admin inventory: "
+            f"{len(inventory.get('accounts', []))} accounts, "
+            f"{len(inventory.get('properties', []))} properties"
+        ),
+        model_label="marketing.OAuthCredential",
+        object_id=credential.pk,
+        meta={
+            "account_email": credential.account_name,
+            "accounts": inventory.get("accounts", []),
+            "properties": inventory.get("properties", []),
+            "errors": inventory.get("errors", []),
+            "raw": inventory.get("raw", {}),
+        },
+    )
+
+
+def list_ga4_properties(access_token: str) -> list[dict]:
+    return list_ga4_admin_inventory(access_token)["properties"]
+
+
+def upsert_ga4_properties(ga4_properties: list[dict]) -> list[SeoProperty]:
+    updated_properties = []
+    for item in ga4_properties:
+        prop, _ = SeoProperty.objects.update_or_create(
+            ga4_property_id=item["property_id"],
+            defaults={
+                "name": item["display_name"],
+                "is_active": True,
+            },
+        )
+        updated_properties.append(prop)
+    return updated_properties
 
 
 def list_gsc_sites(access_token: str) -> list[dict]:
@@ -313,17 +532,7 @@ def sync_google_properties(*, credential: OAuthCredential) -> dict:
     if error:
         discovery_errors.append(error)
 
-    updated_properties = []
-
-    for item in ga4_properties:
-        prop, _ = SeoProperty.objects.update_or_create(
-            ga4_property_id=item["property_id"],
-            defaults={
-                "name": item["display_name"],
-                "is_active": True,
-            },
-        )
-        updated_properties.append(prop)
+    updated_properties = upsert_ga4_properties(ga4_properties)
 
     for item in gsc_sites:
         prop = SeoProperty.objects.filter(gsc_site_url=item["site_url"]).first()
@@ -378,5 +587,6 @@ def sync_google_properties(*, credential: OAuthCredential) -> dict:
         "youtube_count": len(youtube_accounts),
         "google_business_count": len(google_business_accounts),
         "property_count": len({prop.pk for prop in updated_properties if prop.pk}),
+        "selected_ga4_property_id": ga4_properties[0]["property_id"] if len(ga4_properties) == 1 else "",
         "errors": discovery_errors,
     }

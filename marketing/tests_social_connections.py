@@ -8,7 +8,7 @@ from django.urls import reverse
 
 from crm.models import SystemActivityLog
 from crm.models_access import UserAccess
-from marketing.models import AccountMetricDaily, OAuthConnectionRequest, OAuthCredential, SocialAccount
+from marketing.models import AccountMetricDaily, OAuthConnectionRequest, OAuthCredential, SeoProperty, SocialAccount
 from marketing.services.google_business import fetch_google_business_account_metrics
 from marketing.services.social_connections import run_social_connection_sync, save_social_connection
 from marketing.utils.activity import log_marketing_sync_failure
@@ -346,3 +346,108 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertEqual(log.area, "marketing")
         self.assertEqual(log.level, "error")
         self.assertIn("ga4", log.message)
+
+    def test_google_analytics_admin_inventory_lists_accounts_and_properties(self):
+        from marketing.services.google_oauth import (
+            ANALYTICS_READONLY_SCOPE,
+            credential_has_analytics_readonly_scope,
+            list_ga4_admin_inventory,
+        )
+
+        credential = OAuthCredential.objects.create(
+            platform="google",
+            account_name="iconicapparelhouse@gmail.com",
+            account_id="google-user-1",
+            scopes=f"openid email {ANALYTICS_READONLY_SCOPE}",
+            is_active=True,
+        )
+
+        def fake_request(url, **kwargs):
+            if "accountSummaries" in url:
+                return {
+                    "accountSummaries": [
+                        {
+                            "account": "accounts/123",
+                            "displayName": "Iconic Apparel House",
+                            "propertySummaries": [
+                                {
+                                    "property": "properties/456",
+                                    "displayName": "Iconic Web",
+                                    "parent": "accounts/123",
+                                    "propertyType": "PROPERTY_TYPE_ORDINARY",
+                                }
+                            ],
+                        }
+                    ]
+                }
+            if url.startswith("https://analyticsadmin.googleapis.com/v1beta/accounts"):
+                return {
+                    "accounts": [
+                        {
+                            "name": "accounts/123",
+                            "displayName": "Iconic Apparel House",
+                        }
+                    ]
+                }
+            if url.startswith("https://analyticsadmin.googleapis.com/v1beta/properties"):
+                return {
+                    "properties": [
+                        {
+                            "name": "properties/456",
+                            "parent": "accounts/123",
+                            "displayName": "Iconic Web",
+                            "propertyType": "PROPERTY_TYPE_ORDINARY",
+                            "currencyCode": "CAD",
+                            "timeZone": "America/Toronto",
+                        }
+                    ]
+                }
+            return {}
+
+        with patch("marketing.services.google_oauth._request_json", side_effect=fake_request):
+            inventory = list_ga4_admin_inventory("access-token", include_raw=True)
+
+        self.assertTrue(credential_has_analytics_readonly_scope(credential))
+        self.assertEqual(inventory["accounts"][0]["account_id"], "123")
+        self.assertEqual(inventory["accounts"][0]["display_name"], "Iconic Apparel House")
+        self.assertEqual(inventory["properties"][0]["property_id"], "456")
+        self.assertEqual(inventory["properties"][0]["account_id"], "123")
+        self.assertEqual(inventory["properties"][0]["currency_code"], "CAD")
+        self.assertEqual(len(inventory["raw"]["account_summaries"]), 1)
+        self.assertEqual(len(inventory["raw"]["accounts"]), 1)
+        self.assertEqual(len(inventory["raw"]["properties"]), 1)
+
+    def test_google_discovery_saves_single_ga4_property(self):
+        from marketing.services.google_oauth import sync_google_properties
+
+        credential = OAuthCredential.objects.create(
+            platform="google",
+            account_name="iconicapparelhouse@gmail.com",
+            account_id="google-user-1",
+            scopes="https://www.googleapis.com/auth/analytics.readonly",
+            is_active=True,
+        )
+        credential.set_tokens(access_token="access-token", refresh_token="refresh-token")
+        credential.save()
+
+        ga4_properties = [
+            {
+                "property_id": "456",
+                "display_name": "Iconic Web",
+                "account_id": "123",
+                "account_name": "Iconic Apparel House",
+                "property_resource": "properties/456",
+            }
+        ]
+
+        with patch("marketing.services.google_oauth.list_ga4_properties", return_value=ga4_properties), patch(
+            "marketing.services.google_oauth.list_gsc_sites", return_value=[]
+        ), patch("marketing.services.google_oauth.list_youtube_channels", return_value=[]), patch(
+            "marketing.services.google_oauth.list_google_business_locations", return_value=[]
+        ):
+            result = sync_google_properties(credential=credential)
+
+        prop = SeoProperty.objects.get(ga4_property_id="456")
+        self.assertEqual(prop.name, "Iconic Web")
+        self.assertEqual(result["ga4_count"], 1)
+        self.assertEqual(result["selected_ga4_property_id"], "456")
