@@ -23,6 +23,7 @@ from marketing.services.oauth_meta import (
     build_meta_oauth_url,
     exchange_code_for_token,
     exchange_long_lived_token,
+    fetch_meta_ad_accounts,
     fetch_meta_pages,
 )
 
@@ -223,7 +224,81 @@ def _save_direct_credential(*, platform: str, token_payload: dict) -> OAuthCrede
         expires_at=_token_expiry(token_payload),
     )
     credential.save()
+    if platform == "linkedin":
+        _discover_and_save_linkedin_accounts(credential=credential)
+    elif platform == "tiktok":
+        _discover_and_save_tiktok_account(credential=credential)
     return credential
+
+
+def _clone_tokens(source: OAuthCredential, target: OAuthCredential):
+    target.set_tokens(
+        access_token=source.get_access_token(),
+        refresh_token=source.get_refresh_token(),
+        expires_at=source.expires_at,
+    )
+    target.scopes = source.scopes
+    target.is_active = True
+    target.last_sync_status = "connected"
+    target.last_error = ""
+
+
+def _discover_and_save_linkedin_accounts(*, credential: OAuthCredential) -> int:
+    try:
+        from marketing.services.linkedin import discover_linkedin_organizations
+
+        organizations = discover_linkedin_organizations(access_token=credential.get_access_token())
+    except MarketingServiceError as exc:
+        credential.last_sync_status = "connected"
+        credential.last_error = str(exc)
+        credential.save(update_fields=["last_sync_status", "last_error", "updated_at"])
+        return 0
+
+    count = 0
+    for org in organizations:
+        account, _ = SocialAccount.objects.update_or_create(
+            platform="linkedin",
+            external_account_id=org["urn"],
+            defaults={"display_name": org.get("name") or org["urn"], "is_active": True},
+        )
+        org_cred = (
+            OAuthCredential.objects.filter(platform="linkedin", platform_account=account).first()
+            or OAuthCredential.objects.filter(platform="linkedin", account_id=org["urn"]).first()
+            or OAuthCredential(platform="linkedin", platform_account=account)
+        )
+        _clone_tokens(credential, org_cred)
+        org_cred.platform_account = account
+        org_cred.account_name = account.display_name
+        org_cred.account_id = org["urn"]
+        org_cred.save()
+        count += 1
+    return count
+
+
+def _discover_and_save_tiktok_account(*, credential: OAuthCredential) -> int:
+    try:
+        from marketing.services.tiktok import fetch_tiktok_profile
+
+        profile = fetch_tiktok_profile(access_token=credential.get_access_token())
+    except MarketingServiceError as exc:
+        credential.last_sync_status = "connected"
+        credential.last_error = str(exc)
+        credential.save(update_fields=["last_sync_status", "last_error", "updated_at"])
+        return 0
+
+    account_id = profile.get("open_id") or credential.account_id
+    account_name = profile.get("display_name") or profile.get("username") or credential.account_name or "TikTok"
+    account, _ = SocialAccount.objects.update_or_create(
+        platform="tiktok",
+        external_account_id=account_id,
+        defaults={"display_name": account_name, "is_active": True},
+    )
+    credential.account_id = account_id
+    credential.account_name = account_name
+    credential.platform_account = account
+    credential.last_error = ""
+    credential.save(update_fields=["account_id", "account_name", "platform_account", "last_error", "updated_at"])
+    return 1
 
 
 def _direct_scopes(platform: str) -> list[str]:
@@ -314,7 +389,8 @@ def complete_meta_oauth_request(conn: OAuthConnectionRequest) -> dict:
             defaults={"display_name": name, "timezone": timezone_name, "is_active": True},
         )
         fb_cred, _ = OAuthCredential.objects.get_or_create(platform="facebook", platform_account=fb_account)
-        fb_cred.set_tokens(access_token=access_token, refresh_token="", expires_at=expires_at)
+        page_token = page.get("access_token") or access_token
+        fb_cred.set_tokens(access_token=page_token, refresh_token="", expires_at=expires_at)
         fb_cred.account_name = name
         fb_cred.account_id = page_id
         fb_cred.is_active = True
@@ -333,7 +409,7 @@ def complete_meta_oauth_request(conn: OAuthConnectionRequest) -> dict:
                 defaults={"display_name": f"{name} (Instagram)", "timezone": timezone_name, "is_active": True},
             )
             ig_cred, _ = OAuthCredential.objects.get_or_create(platform="instagram", platform_account=ig_account)
-            ig_cred.set_tokens(access_token=access_token, refresh_token="", expires_at=expires_at)
+            ig_cred.set_tokens(access_token=page_token, refresh_token="", expires_at=expires_at)
             ig_cred.account_name = f"{name} (Instagram)"
             ig_cred.account_id = ig_id
             ig_cred.is_active = True
@@ -343,10 +419,35 @@ def complete_meta_oauth_request(conn: OAuthConnectionRequest) -> dict:
             ig_cred.save()
             instagram_count += 1
 
+    meta_ads_count = 0
+    try:
+        ad_accounts = fetch_meta_ad_accounts(access_token=access_token)
+    except MarketingServiceError:
+        ad_accounts = []
+    for ad_account in ad_accounts:
+        ad_id = ad_account.get("id") or ad_account.get("account_id")
+        if not ad_id:
+            continue
+        account, _ = SocialAccount.objects.update_or_create(
+            platform="meta_business",
+            external_account_id=ad_id,
+            defaults={"display_name": ad_account.get("name") or "Meta Ad Account", "is_active": True},
+        )
+        meta_cred, _ = OAuthCredential.objects.get_or_create(platform="meta_business", platform_account=account)
+        meta_cred.set_tokens(access_token=access_token, refresh_token="", expires_at=expires_at)
+        meta_cred.account_name = account.display_name
+        meta_cred.account_id = ad_id
+        meta_cred.is_active = True
+        meta_cred.scopes = ",".join(settings.MARKETING_META_SCOPES)
+        meta_cred.last_sync_status = "connected"
+        meta_cred.last_error = ""
+        meta_cred.save()
+        meta_ads_count += 1
+
     conn.status = "completed"
     conn.error_message = ""
     conn.save(update_fields=["status", "error_message", "updated_at"])
-    return {"facebook_count": facebook_count, "instagram_count": instagram_count}
+    return {"facebook_count": facebook_count, "instagram_count": instagram_count, "meta_ads_count": meta_ads_count}
 
 
 def complete_google_oauth(*, conn: OAuthConnectionRequest, token_payload: dict) -> dict:
@@ -365,6 +466,9 @@ def get_valid_oauth_access_token(credential: OAuthCredential) -> str:
     if credential.platform == "google":
         token = credential.get_access_token()
         return refresh_google_access_token(credential) if _needs_refresh(credential) or not token else token
+    if credential.platform in META_OAUTH_PLATFORMS | {"meta_business"}:
+        token = credential.get_access_token()
+        return _refresh_meta_access_token(credential) if _needs_refresh(credential) or not token else token
     if credential.platform in DIRECT_OAUTH_PLATFORMS:
         token = credential.get_access_token()
         return _refresh_direct_access_token(credential) if _needs_refresh(credential) or not token else token
@@ -415,6 +519,28 @@ def _refresh_direct_access_token(credential: OAuthCredential) -> str:
     )
     credential.save(update_fields=["encrypted_access_token", "encrypted_refresh_token", "expires_at", "updated_at"])
     return access_token
+
+
+def _refresh_meta_access_token(credential: OAuthCredential) -> str:
+    access_token = credential.get_access_token()
+    if not access_token:
+        raise MarketingServiceError("Meta access token is missing. Reconnect this platform.")
+    payload = exchange_long_lived_token(
+        app_id=settings.MARKETING_META_APP_ID,
+        app_secret=settings.MARKETING_META_APP_SECRET,
+        access_token=access_token,
+    )
+    refreshed = payload.get("access_token") or ""
+    if not refreshed:
+        raise MarketingServiceError("Meta token refresh did not return an access token. Reconnect.")
+    credential.set_tokens(
+        access_token=refreshed,
+        refresh_token=credential.get_refresh_token(),
+        expires_at=_token_expiry(payload),
+    )
+    credential.last_error = ""
+    credential.save(update_fields=["encrypted_access_token", "encrypted_refresh_token", "expires_at", "last_error", "updated_at"])
+    return refreshed
 
 
 def token_for_social_account(account: SocialAccount) -> str:

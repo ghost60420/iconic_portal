@@ -17,6 +17,7 @@ from marketing.services.upsert import (
     upsert_social_audience_daily,
 )
 from marketing.services.errors import MarketingServiceError
+from marketing.services.oauth_connections import get_valid_oauth_access_token
 from marketing.services.social_connections import update_connection_sync_state
 
 
@@ -29,9 +30,9 @@ class Command(BaseCommand):
     def _token_for_account(self, account):
         cred = OAuthCredential.objects.filter(platform_account=account).first()
         if cred and cred.get_access_token():
-            return cred.get_access_token()
+            return get_valid_oauth_access_token(cred)
         cred = OAuthCredential.objects.filter(platform="linkedin").first()
-        return cred.get_access_token() if cred else ""
+        return get_valid_oauth_access_token(cred) if cred else ""
 
     def handle(self, *args, **options):
         if not getattr(settings, "MARKETING_SOCIAL_ENABLED", False):
@@ -64,6 +65,8 @@ class Command(BaseCommand):
                     end_date=end,
                 )
                 for row in content_rows:
+                    if not row.get("external_content_id"):
+                        continue
                     content, _ = SocialContent.objects.update_or_create(
                         platform=acct.platform,
                         external_content_id=row.get("external_content_id"),
@@ -76,6 +79,8 @@ class Command(BaseCommand):
                             "published_at": row.get("published_at"),
                         },
                     )
+                    if row.get("metric_payload"):
+                        upsert_social_metric_daily(content_obj=content, payload=row["metric_payload"])
 
                     metric_rows = fetch_linkedin_metrics(
                         access_token=token,
@@ -84,7 +89,8 @@ class Command(BaseCommand):
                         end_date=end,
                     )
                     for metric in metric_rows:
-                        upsert_social_metric_daily(content_obj=content, payload=metric)
+                        if metric:
+                            upsert_social_metric_daily(content_obj=content, payload=metric)
 
                 account_metric_rows = fetch_linkedin_account_metrics(
                     access_token=token,

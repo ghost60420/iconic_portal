@@ -56,9 +56,31 @@ def exchange_long_lived_token(*, app_id: str, app_secret: str, access_token: str
 
 def fetch_meta_pages(*, access_token: str) -> list[dict]:
     pages: list[dict] = []
-    url = f"{GRAPH_BASE}/me/accounts?fields=id,name,instagram_business_account,timezone&access_token={urllib.parse.quote(access_token)}"
+    fields = ",".join(
+        [
+            "id",
+            "name",
+            "access_token",
+            "fan_count",
+            "followers_count",
+            "instagram_business_account{id,username,name}",
+            "timezone",
+        ]
+    )
+    url = f"{GRAPH_BASE}/me/accounts?fields={urllib.parse.quote(fields)}&access_token={urllib.parse.quote(access_token)}"
     while url:
         payload = _fetch_json(url)
         pages.extend(payload.get("data") or [])
         url = payload.get("paging", {}).get("next")
     return pages
+
+
+def fetch_meta_ad_accounts(*, access_token: str) -> list[dict]:
+    accounts: list[dict] = []
+    fields = "id,account_id,name,currency,account_status"
+    url = f"{GRAPH_BASE}/me/adaccounts?fields={fields}&access_token={urllib.parse.quote(access_token)}"
+    while url:
+        payload = _fetch_json(url)
+        accounts.extend(payload.get("data") or [])
+        url = payload.get("paging", {}).get("next")
+    return accounts

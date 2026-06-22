@@ -255,7 +255,7 @@
                 {% if card.connection %}Reconnect{% else %}{{ card.config.oauth_label }}{% endif %}
               </a>
             {% else %}
-              <a class="btn btn-warning mk-btn" href="{% url 'marketing_oauth_start' card.config.key %}">
+              <a class="btn btn-warning mk-btn" href="{{ card.oauth_start_url|default:'#' }}">
                 {% if card.connection %}Reconnect{% else %}{{ card.config.oauth_label }}{% endif %}
               </a>
             {% endif %}

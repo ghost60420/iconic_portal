@@ -8,17 +8,21 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST
 from datetime import timedelta
+from decimal import Decimal
 import uuid
 
 from marketing.forms_social_connections import MarketingSocialConnectionForm
 from crm.models import SystemActivityLog
 from marketing.models import (
+    AdAccount,
+    AdMetricDaily,
     AccountMetricDaily,
     OAuthCredential,
     OAuthConnectionRequest,
     SeoProperty,
     SeoQueryDaily,
     SocialAccount,
+    SocialContent,
     WebsiteTrafficDaily,
 )
 from marketing.services.errors import MarketingServiceError
@@ -198,12 +202,28 @@ def _diagnostic_metric_snapshot(platform: str) -> list[dict]:
             {"label": "Directions", "value": totals["direction_requests"]},
             {"label": "Profile Views", "value": totals["profile_views"]},
         ]
+    if platform == "meta_ads":
+        totals = AdMetricDaily.objects.filter(date__gte=since).aggregate(
+            spend=Coalesce(Sum("spend"), Decimal("0")),
+            impressions=Coalesce(Sum("impressions"), 0),
+            clicks=Coalesce(Sum("clicks"), 0),
+            conversions=Coalesce(Sum("conversions"), 0),
+        )
+        return [
+            {"label": "Ad Accounts", "value": AdAccount.objects.filter(is_active=True).count()},
+            {"label": "Spend", "value": f"{float(totals['spend'] or 0):,.2f}"},
+            {"label": "Impressions", "value": totals["impressions"]},
+            {"label": "Clicks", "value": totals["clicks"]},
+            {"label": "Conversions", "value": totals["conversions"]},
+        ]
     totals = AccountMetricDaily.objects.filter(account__platform=platform, date__gte=since).aggregate(
         impressions=Coalesce(Sum("impressions"), 0),
         reach=Coalesce(Sum("reach"), 0),
         clicks=Coalesce(Sum("clicks"), 0),
     )
     return [
+        {"label": "Accounts", "value": SocialAccount.objects.filter(platform=platform, is_active=True).count()},
+        {"label": "Posts", "value": SocialContent.objects.filter(platform=platform).count()},
         {"label": "Impressions", "value": totals["impressions"]},
         {"label": "Reach", "value": totals["reach"]},
         {"label": "Clicks", "value": totals["clicks"]},
@@ -211,6 +231,9 @@ def _diagnostic_metric_snapshot(platform: str) -> list[dict]:
 
 
 def _google_api_error_for(platform: str) -> str:
+    if platform == "meta_ads":
+        credential = OAuthCredential.objects.filter(platform="meta", last_sync_status="error").order_by("-updated_at").first()
+        return credential.last_error if credential else ""
     if platform in {"ga4", "gsc"}:
         filters = {"last_sync_status": "error"}
         if platform == "ga4":
@@ -312,6 +335,15 @@ def social_connections(request):
 
     connections = list(social_connection_queryset().order_by("platform", "-is_active", "account_name", "account_id"))
     cards = build_connection_cards()
+    oauth_start_urls = {
+        "facebook": reverse("marketing_meta_oauth_start_api_slash"),
+        "instagram": reverse("marketing_meta_oauth_start_api_slash"),
+        "meta_ads": reverse("marketing_meta_oauth_start_api_slash"),
+        "linkedin": reverse("marketing_linkedin_oauth_start_api_slash"),
+        "tiktok": reverse("marketing_tiktok_oauth_start_api_slash"),
+    }
+    for card in cards:
+        card["oauth_start_url"] = oauth_start_urls.get(card["config"]["key"], "")
     meta_app_id = getattr(settings, "MARKETING_META_APP_ID", "")
     meta_app_secret = getattr(settings, "MARKETING_META_APP_SECRET", "")
     meta_redirect_uri = getattr(settings, "MARKETING_META_REDIRECT_URI", "")
@@ -477,7 +509,8 @@ def oauth_callback(request, platform: str):
                 (
                     "Meta connected. "
                     f"Facebook pages: {result['facebook_count']} | "
-                    f"Instagram accounts: {result['instagram_count']}."
+                    f"Instagram accounts: {result['instagram_count']} | "
+                    f"Meta ad accounts: {result.get('meta_ads_count', 0)}."
                 ),
             )
             return redirect("marketing_connection_settings")

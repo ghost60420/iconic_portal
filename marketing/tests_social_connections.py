@@ -8,7 +8,16 @@ from django.urls import reverse
 
 from crm.models import SystemActivityLog
 from crm.models_access import UserAccess
-from marketing.models import AccountMetricDaily, OAuthConnectionRequest, OAuthCredential, SeoProperty, SocialAccount
+from marketing.models import (
+    AccountMetricDaily,
+    AdAccount,
+    AdCampaign,
+    AdMetricDaily,
+    OAuthConnectionRequest,
+    OAuthCredential,
+    SeoProperty,
+    SocialAccount,
+)
 from marketing.services.google_business import fetch_google_business_account_metrics
 from marketing.services.social_connections import run_social_connection_sync, save_social_connection
 from marketing.utils.activity import log_marketing_sync_failure
@@ -190,6 +199,20 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertTrue(OAuthConnectionRequest.objects.filter(platform="meta", status="initiated").exists())
 
     @override_settings(
+        MARKETING_META_APP_ID="meta-client",
+        MARKETING_META_APP_SECRET="meta-secret",
+        MARKETING_META_REDIRECT_URI="https://femline.ca/api/auth/meta/callback/",
+        MARKETING_META_SCOPES=["pages_show_list", "ads_read"],
+    )
+    def test_meta_api_oauth_start_uses_required_callback_route(self):
+        response = self.client.get(reverse("marketing_meta_oauth_start_api_slash"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("facebook.com", response["Location"])
+        self.assertIn("redirect_uri=https%3A%2F%2Ffemline.ca%2Fapi%2Fauth%2Fmeta%2Fcallback%2F", response["Location"])
+        self.assertTrue(OAuthConnectionRequest.objects.filter(platform="meta", status="initiated").exists())
+
+    @override_settings(
         MARKETING_GOOGLE_CLIENT_ID="google-client",
         MARKETING_GOOGLE_CLIENT_SECRET="google-secret",
         MARKETING_GOOGLE_REDIRECT_URI="https://example.com/marketing/oauth/google/callback/",
@@ -224,6 +247,80 @@ class MarketingSocialConnectionsTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertIn(reverse("marketing_connect"), response.url)
+
+    def test_meta_oauth_completion_saves_pages_instagram_and_ad_accounts(self):
+        from marketing.services.oauth_connections import complete_meta_oauth_request
+
+        conn = OAuthConnectionRequest.objects.create(platform="meta", user=self.user, state="state-1", code="code")
+        with patch(
+            "marketing.services.oauth_connections.exchange_code_for_token",
+            return_value={"access_token": "short", "expires_in": 3600},
+        ), patch(
+            "marketing.services.oauth_connections.exchange_long_lived_token",
+            return_value={"access_token": "long", "expires_in": 3600},
+        ), patch(
+            "marketing.services.oauth_connections.fetch_meta_pages",
+            return_value=[
+                {
+                    "id": "page-1",
+                    "name": "Iconic Page",
+                    "access_token": "page-token",
+                    "instagram_business_account": {"id": "ig-1", "username": "iconic"},
+                }
+            ],
+        ), patch(
+            "marketing.services.oauth_connections.fetch_meta_ad_accounts",
+            return_value=[{"id": "act_1", "name": "Iconic Ads", "currency": "CAD"}],
+        ):
+            result = complete_meta_oauth_request(conn)
+
+        self.assertEqual(result["facebook_count"], 1)
+        self.assertEqual(result["instagram_count"], 1)
+        self.assertEqual(result["meta_ads_count"], 1)
+        self.assertTrue(SocialAccount.objects.filter(platform="facebook", external_account_id="page-1").exists())
+        self.assertTrue(SocialAccount.objects.filter(platform="instagram", external_account_id="ig-1").exists())
+        self.assertTrue(SocialAccount.objects.filter(platform="meta_business", external_account_id="act_1").exists())
+        self.assertEqual(
+            OAuthCredential.objects.get(platform="facebook", account_id="page-1").get_access_token(),
+            "page-token",
+        )
+
+    def test_linkedin_oauth_discovers_company_pages(self):
+        from marketing.services.oauth_connections import exchange_direct_oauth_code
+
+        with patch(
+            "marketing.services.oauth_connections._post_form",
+            return_value={"access_token": "li-access", "refresh_token": "li-refresh", "expires_in": 3600},
+        ), patch(
+            "marketing.services.oauth_connections._request_json",
+            return_value={"sub": "person-1", "email": "admin@example.com", "name": "Admin"},
+        ), patch(
+            "marketing.services.linkedin.discover_linkedin_organizations",
+            return_value=[{"id": "42", "urn": "urn:li:organization:42", "name": "Iconic Company"}],
+        ):
+            credential = exchange_direct_oauth_code(platform="linkedin", code="code")
+
+        self.assertEqual(credential.account_name, "admin@example.com")
+        account = SocialAccount.objects.get(platform="linkedin", external_account_id="urn:li:organization:42")
+        self.assertEqual(account.display_name, "Iconic Company")
+        org_credential = OAuthCredential.objects.get(platform="linkedin", platform_account=account)
+        self.assertEqual(org_credential.get_access_token(), "li-access")
+
+    def test_tiktok_oauth_discovers_profile(self):
+        from marketing.services.oauth_connections import exchange_direct_oauth_code
+
+        with patch(
+            "marketing.services.oauth_connections._post_form",
+            return_value={"access_token": "tt-access", "refresh_token": "tt-refresh", "open_id": "open-1", "expires_in": 3600},
+        ), patch(
+            "marketing.services.tiktok.fetch_tiktok_profile",
+            return_value={"open_id": "open-1", "display_name": "Iconic TikTok", "follower_count": 25},
+        ):
+            credential = exchange_direct_oauth_code(platform="tiktok", code="code")
+
+        self.assertEqual(credential.account_id, "open-1")
+        self.assertEqual(credential.account_name, "Iconic TikTok")
+        self.assertTrue(SocialAccount.objects.filter(platform="tiktok", external_account_id="open-1").exists())
 
     def test_youtube_account_metrics_parse_channel_statistics(self):
         with patch(
@@ -333,6 +430,128 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertEqual(platform_cards["google_business"]["reach"], 5)
         self.assertEqual(platform_cards["google_business"]["clicks"], 7)
         self.assertEqual(platform_cards["google_business"]["engagement_total"], 3)
+
+    def test_meta_ads_metrics_feed_dashboard_platform_card(self):
+        account = SocialAccount.objects.create(
+            platform="meta_business",
+            external_account_id="act_1",
+            display_name="Iconic Ads",
+            is_active=True,
+        )
+        ad_account = AdAccount.objects.create(platform_account=account, external_ad_account_id="act_1", currency="CAD")
+        campaign = AdCampaign.objects.create(ad_account=ad_account, external_campaign_id="cmp-1", name="Lead Campaign")
+        AdMetricDaily.objects.create(
+            ad_campaign=campaign,
+            date=date(2026, 6, 20),
+            impressions=1000,
+            clicks=50,
+            conversions=4,
+        )
+
+        platform_cards = {item["key"]: item for item in _platform_comparison(date(2026, 6, 1), date(2026, 6, 21))}
+
+        self.assertEqual(platform_cards["meta_ads"]["impressions"], 1000)
+        self.assertEqual(platform_cards["meta_ads"]["clicks"], 50)
+        self.assertEqual(platform_cards["meta_ads"]["engagement_total"], 4)
+        self.assertTrue(platform_cards["meta_ads"]["has_activity"])
+
+    def test_meta_ad_insights_parse_campaign_metrics(self):
+        from marketing.services.meta import fetch_meta_ad_insights
+
+        payload = {
+            "data": [
+                {
+                    "campaign_id": "cmp-1",
+                    "campaign_name": "Lead Campaign",
+                    "date_start": "2026-06-20",
+                    "spend": "120.50",
+                    "impressions": "1000",
+                    "reach": "750",
+                    "clicks": "50",
+                    "ctr": "5",
+                    "cpc": "2.41",
+                    "cpm": "120.5",
+                    "actions": [{"action_type": "lead", "value": "4"}],
+                }
+            ]
+        }
+        with patch("marketing.services.meta._request_json", return_value=payload):
+            rows = fetch_meta_ad_insights(
+                access_token="token",
+                ad_account_id="act_1",
+                start_date=date(2026, 6, 1),
+                end_date=date(2026, 6, 21),
+            )
+
+        self.assertEqual(rows[0]["external_campaign_id"], "cmp-1")
+        self.assertEqual(rows[0]["date"], date(2026, 6, 20))
+        self.assertEqual(rows[0]["impressions"], 1000)
+        self.assertEqual(rows[0]["conversions"], 4)
+
+    def test_linkedin_account_metrics_parse_share_stats(self):
+        from marketing.services.linkedin import fetch_linkedin_account_metrics
+
+        def fake_request(path, **kwargs):
+            if "Follower" in path:
+                return {"elements": []}
+            return {
+                "elements": [
+                    {
+                        "timeRange": {"start": 1781913600000},
+                        "totalShareStatistics": {
+                            "impressionCount": 500,
+                            "clickCount": 20,
+                            "likeCount": 9,
+                            "commentCount": 2,
+                            "shareCount": 1,
+                        },
+                    }
+                ]
+            }
+
+        with patch("marketing.services.linkedin._request_json", side_effect=fake_request):
+            rows = fetch_linkedin_account_metrics(
+                access_token="token",
+                account_id="urn:li:organization:42",
+                start_date=date(2026, 6, 1),
+                end_date=date(2026, 6, 21),
+            )
+
+        self.assertEqual(rows[0]["impressions"], 500)
+        self.assertEqual(rows[0]["clicks"], 20)
+        self.assertEqual(rows[0]["engagement_total"], 32)
+
+    def test_tiktok_content_parse_video_metrics(self):
+        from marketing.services.tiktok import fetch_tiktok_content
+
+        payload = {
+            "data": {
+                "videos": [
+                    {
+                        "id": "video-1",
+                        "title": "Top video",
+                        "create_time": 1782000000,
+                        "share_url": "https://www.tiktok.com/@iconic/video/1",
+                        "view_count": 1000,
+                        "like_count": 80,
+                        "comment_count": 6,
+                        "share_count": 3,
+                    }
+                ]
+            },
+            "error": {"code": "ok"},
+        }
+        with patch("marketing.services.tiktok._request_json", return_value=payload):
+            rows = fetch_tiktok_content(
+                access_token="token",
+                account_id="open-1",
+                start_date=date(2026, 6, 1),
+                end_date=date(2026, 6, 30),
+            )
+
+        self.assertEqual(rows[0]["external_content_id"], "video-1")
+        self.assertEqual(rows[0]["metric_payload"]["views"], 1000)
+        self.assertEqual(rows[0]["metric_payload"]["likes"], 80)
 
     def test_sync_failure_logger_writes_system_activity_log(self):
         log_marketing_sync_failure(

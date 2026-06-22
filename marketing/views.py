@@ -66,6 +66,7 @@ from marketing.utils.templates import seed_default_templates
 PLATFORM_CARD_CONFIG = [
     {"key": "instagram", "label": "Instagram", "platforms": ["instagram"]},
     {"key": "facebook", "label": "Facebook", "platforms": ["facebook", "meta_business"]},
+    {"key": "meta_ads", "label": "Meta Ads", "platforms": []},
     {"key": "linkedin", "label": "LinkedIn", "platforms": ["linkedin"]},
     {"key": "tiktok", "label": "TikTok", "platforms": ["tiktok"]},
     {"key": "youtube", "label": "YouTube", "platforms": ["youtube"]},
@@ -788,9 +789,43 @@ def _platform_comparison(start_date, end_date):
         )
     )
     follower_map = {row["account__platform"]: row for row in follower_rows}
+    ad_totals = AdMetricDaily.objects.filter(date__gte=start_date, date__lte=end_date).aggregate(
+        impressions=Coalesce(Sum("impressions"), 0),
+        clicks=Coalesce(Sum("clicks"), 0),
+        conversions=Coalesce(Sum("conversions"), 0),
+    )
 
     cards = []
     for config in PLATFORM_CARD_CONFIG:
+        if config["key"] == "meta_ads":
+            impressions = ad_totals.get("impressions") or 0
+            clicks = ad_totals.get("clicks") or 0
+            conversions = ad_totals.get("conversions") or 0
+            engagement_rate = calc_engagement_rate(
+                impressions=impressions,
+                reach=0,
+                views=0,
+                engagement_total=clicks + conversions,
+            ) * 100
+            cards.append(
+                {
+                    "key": config["key"],
+                    "label": config["label"],
+                    "platform": config["key"],
+                    "impressions": impressions,
+                    "reach": 0,
+                    "views": 0,
+                    "clicks": clicks,
+                    "engagement_total": conversions,
+                    "engagement_score": clicks + conversions,
+                    "engagement_rate": engagement_rate,
+                    "followers_change": 0,
+                    "follower_change_available": False,
+                    "has_activity": bool(impressions or clicks or conversions),
+                }
+            )
+            continue
+
         totals = {
             "impressions": 0,
             "reach": 0,

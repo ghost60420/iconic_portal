@@ -371,6 +371,8 @@ def run_social_platform_sync(platform: str):
     kwargs = {}
     if platform in {"facebook", "instagram"}:
         kwargs["platform"] = platform
+    elif platform == "meta_ads":
+        kwargs["platform"] = "meta_ads"
 
     buffer = StringIO()
     try:
