@@ -437,7 +437,6 @@ def upsert_ga4_properties(ga4_properties: list[dict]) -> list[SeoProperty]:
             ga4_property_id=item["property_id"],
             defaults={
                 "name": item["display_name"],
-                "is_active": True,
             },
         )
         updated_properties.append(prop)

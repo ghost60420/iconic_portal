@@ -4,8 +4,8 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from marketing.models import SeoProperty
 from marketing.services.ga4 import fetch_ga4_daily
+from marketing.services.ga4_default import ga4_reporting_queryset, get_default_ga4_property
 from marketing.services.upsert import upsert_website_traffic_daily, upsert_website_page_daily
 from marketing.services.errors import MarketingServiceError
 from marketing.services.google_oauth import get_google_credential, get_valid_access_token
@@ -39,7 +39,11 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR(str(exc)))
             return
 
-        for prop in SeoProperty.objects.filter(is_active=True):
+        default_property = get_default_ga4_property()
+        if default_property:
+            self.stdout.write(f"Using default GA4 property {default_property.ga4_property_id} - {default_property.name}.")
+
+        for prop in ga4_reporting_queryset():
             if not prop.ga4_property_id:
                 continue
             try:

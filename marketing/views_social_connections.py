@@ -22,6 +22,12 @@ from marketing.models import (
     WebsiteTrafficDaily,
 )
 from marketing.services.errors import MarketingServiceError
+from marketing.services.ga4_default import (
+    ga4_property_queryset,
+    ga4_reporting_queryset,
+    get_default_ga4_property,
+    set_default_ga4_property,
+)
 from marketing.services.google_oauth import (
     exchange_code_for_tokens,
     get_valid_access_token,
@@ -144,7 +150,7 @@ def _latest_account_metrics(platform: str) -> dict:
 def _diagnostic_metric_snapshot(platform: str) -> list[dict]:
     since = timezone.localdate() - timedelta(days=30)
     if platform == "ga4":
-        totals = WebsiteTrafficDaily.objects.filter(date__gte=since).aggregate(
+        totals = WebsiteTrafficDaily.objects.filter(date__gte=since, property__in=ga4_reporting_queryset()).aggregate(
             users=Coalesce(Sum("visitors"), 0),
             sessions=Coalesce(Sum("sessions"), 0),
             pageviews=Coalesce(Sum("page_views"), 0),
@@ -281,6 +287,17 @@ def social_connections(request):
         selected_platform = ""
 
     if request.method == "POST":
+        if request.POST.get("form_name") == "default_ga4_property":
+            if not _can_connect_marketing_oauth(request.user):
+                return HttpResponseForbidden("Only marketing admins can update the default GA4 property.")
+            try:
+                prop = set_default_ga4_property(request.POST.get("default_ga4_property_id", ""))
+            except SeoProperty.DoesNotExist:
+                messages.error(request, "Select a discovered GA4 property before saving.")
+            else:
+                messages.success(request, f"Default GA4 property saved: {prop.name} ({prop.ga4_property_id}).")
+            return redirect("marketing_connection_settings")
+
         form = MarketingSocialConnectionForm(request.POST, connection=editable)
         if form.is_valid():
             connection = save_social_connection(cleaned_data=form.cleaned_data, existing=editable)
@@ -301,6 +318,8 @@ def social_connections(request):
     google_redirect_uri = getattr(settings, "MARKETING_GOOGLE_REDIRECT_URI", "")
     google_status = _google_connection_status()
     manual_setup_open = bool(request.method == "POST" or request.GET.get("manual_setup") == "1")
+    ga4_properties = list(ga4_property_queryset())
+    default_ga4_property = get_default_ga4_property()
 
     return render(
         request,
@@ -320,6 +339,8 @@ def social_connections(request):
             "google_oauth_start_url": reverse("marketing_google_oauth_start_api_slash"),
             "manual_setup_open": manual_setup_open,
             "seo_properties": SeoProperty.objects.filter(is_active=True).order_by("name"),
+            "ga4_properties": ga4_properties,
+            "default_ga4_property": default_ga4_property,
         },
     )
 

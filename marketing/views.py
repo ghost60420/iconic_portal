@@ -56,6 +56,7 @@ from marketing.models import (
     MarketingCompetitorInsight,
 )
 from marketing.services.metrics import calc_engagement_total, calc_engagement_rate, calc_engagement_score
+from marketing.services.ga4_default import ga4_reporting_queryset
 from marketing.services.oauth_meta import build_meta_oauth_url
 from marketing.utils.importer import import_contacts_from_csv
 from marketing.utils.activity import log_marketing_activity
@@ -296,12 +297,27 @@ def _metric_totals(start_date, end_date):
     comments = totals.get("comments") or 0
     shares = totals.get("shares") or 0
     saves = totals.get("saves") or 0
+    account_totals = AccountMetricDaily.objects.filter(
+        account__platform="google_business",
+        date__gte=start_date,
+        date__lte=end_date,
+    ).aggregate(
+        impressions=Coalesce(Sum("impressions"), 0),
+        reach=Coalesce(Sum("reach"), 0),
+        views=Coalesce(Sum("views"), 0),
+        clicks=Coalesce(Sum("clicks"), 0),
+        engagement_total=Coalesce(Sum("engagement_total"), 0),
+    )
+    impressions += account_totals.get("impressions") or 0
+    reach += account_totals.get("reach") or 0
+    views += account_totals.get("views") or 0
+    clicks += account_totals.get("clicks") or 0
     engagement_total = calc_engagement_total(
         likes=likes,
         comments=comments,
         shares=shares,
         saves=saves,
-    )
+    ) + (account_totals.get("engagement_total") or 0)
     engagement_score = calc_engagement_score(
         likes=likes,
         comments=comments,
@@ -406,7 +422,11 @@ def _ad_conversions_count(start_date, end_date):
 
 
 def _website_totals(start_date, end_date):
-    qs = WebsiteTrafficDaily.objects.filter(date__gte=start_date, date__lte=end_date)
+    qs = WebsiteTrafficDaily.objects.filter(
+        date__gte=start_date,
+        date__lte=end_date,
+        property__in=ga4_reporting_queryset(),
+    )
     totals = qs.aggregate(
         visitors=Coalesce(Sum("visitors"), 0),
         sessions=Coalesce(Sum("sessions"), 0),
@@ -440,8 +460,13 @@ def _lead_channel_rows(start_date, end_date):
 def _website_analytics_summary(period):
     current = _website_totals(period["start"], period["end"])
     previous = _website_totals(period["previous_start"], period["previous_end"])
+    reporting_properties = ga4_reporting_queryset()
     top_pages = (
-        WebsitePageDaily.objects.filter(date__gte=period["start"], date__lte=period["end"])
+        WebsitePageDaily.objects.filter(
+            date__gte=period["start"],
+            date__lte=period["end"],
+            property__in=reporting_properties,
+        )
         .values("page_path", "page_title")
         .annotate(
             visitors=Coalesce(Sum("visitors"), 0),
@@ -453,7 +478,11 @@ def _website_analytics_summary(period):
         .order_by("-visitors", "-page_views")[:12]
     )
     channel_rows = (
-        WebsiteTrafficDaily.objects.filter(date__gte=period["start"], date__lte=period["end"])
+        WebsiteTrafficDaily.objects.filter(
+            date__gte=period["start"],
+            date__lte=period["end"],
+            property__in=reporting_properties,
+        )
         .values("channel", "source", "medium")
         .annotate(
             visitors=Coalesce(Sum("visitors"), 0),
@@ -501,7 +530,7 @@ def _website_analytics_summary(period):
         "top_pages": list(top_pages),
         "channel_rows": prepared_channels,
         "lead_channel_rows": _lead_channel_rows(period["start"], period["end"]),
-        "properties": SeoProperty.objects.filter(is_active=True).order_by("name"),
+        "properties": reporting_properties,
     }
 
 
@@ -653,6 +682,11 @@ def _platform_comparison(start_date, end_date):
         .values("account__platform")
         .annotate(
             followers_change=Coalesce(Sum("followers_change"), 0),
+            impressions=Coalesce(Sum("impressions"), 0),
+            reach=Coalesce(Sum("reach"), 0),
+            views=Coalesce(Sum("views"), 0),
+            clicks=Coalesce(Sum("clicks"), 0),
+            engagement_total=Coalesce(Sum("engagement_total"), 0),
             row_count=Count("id"),
         )
     )
@@ -672,6 +706,7 @@ def _platform_comparison(start_date, end_date):
         }
         followers_change = 0
         follower_data_points = 0
+        account_engagement_total = 0
 
         for platform_key in config["platforms"]:
             row = metric_map.get(platform_key)
@@ -682,13 +717,19 @@ def _platform_comparison(start_date, end_date):
             if follower_row:
                 followers_change += follower_row.get("followers_change") or 0
                 follower_data_points += follower_row.get("row_count") or 0
+                if platform_key == "google_business":
+                    totals["impressions"] += follower_row.get("impressions") or 0
+                    totals["reach"] += follower_row.get("reach") or 0
+                    totals["views"] += follower_row.get("views") or 0
+                    totals["clicks"] += follower_row.get("clicks") or 0
+                    account_engagement_total += follower_row.get("engagement_total") or 0
 
         engagement_total = calc_engagement_total(
             likes=totals["likes"],
             comments=totals["comments"],
             shares=totals["shares"],
             saves=totals["saves"],
-        )
+        ) + account_engagement_total
         engagement_score = calc_engagement_score(
             likes=totals["likes"],
             comments=totals["comments"],

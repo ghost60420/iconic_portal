@@ -451,3 +451,42 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertEqual(prop.name, "Iconic Web")
         self.assertEqual(result["ga4_count"], 1)
         self.assertEqual(result["selected_ga4_property_id"], "456")
+
+    def test_default_ga4_property_selector_updates_active_property(self):
+        from marketing.services.ga4_default import ga4_reporting_queryset, get_default_ga4_property
+
+        SeoProperty.objects.create(name="Old GA4", ga4_property_id="273987172", is_active=True)
+        selected = SeoProperty.objects.create(name="Active Website", ga4_property_id="274062046", is_active=True)
+        SeoProperty.objects.create(name="Empty GA4", ga4_property_id="375285480", is_active=True)
+
+        response = self.client.post(
+            reverse("marketing_connection_settings"),
+            {
+                "form_name": "default_ga4_property",
+                "default_ga4_property_id": "274062046",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        selected.refresh_from_db()
+        self.assertTrue(selected.is_active)
+        self.assertEqual(get_default_ga4_property().ga4_property_id, "274062046")
+        self.assertEqual(list(ga4_reporting_queryset().values_list("ga4_property_id", flat=True)), ["274062046"])
+        self.assertFalse(SeoProperty.objects.get(ga4_property_id="273987172").is_active)
+        self.assertFalse(SeoProperty.objects.get(ga4_property_id="375285480").is_active)
+
+    def test_google_discovery_preserves_selected_default_ga4_property(self):
+        from marketing.services.google_oauth import upsert_ga4_properties
+
+        SeoProperty.objects.create(name="Default GA4", ga4_property_id="274062046", is_active=True)
+        SeoProperty.objects.create(name="Inactive GA4", ga4_property_id="375285480", is_active=False)
+
+        upsert_ga4_properties(
+            [
+                {"property_id": "274062046", "display_name": "Default GA4 Renamed"},
+                {"property_id": "375285480", "display_name": "Inactive GA4 Renamed"},
+            ]
+        )
+
+        self.assertTrue(SeoProperty.objects.get(ga4_property_id="274062046").is_active)
+        self.assertFalse(SeoProperty.objects.get(ga4_property_id="375285480").is_active)

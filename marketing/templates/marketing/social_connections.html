@@ -18,6 +18,8 @@
   .mk-google-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;}
   .mk-google-detail{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px;}
   .mk-google-oauth-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px;}
+  .mk-ga4-default{margin-top:14px;padding:12px;border:1px solid rgba(245,196,81,0.26);border-radius:12px;background:rgba(245,196,81,0.06);}
+  .mk-ga4-default-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end;}
   .mk-manual-fallback summary{cursor:pointer;list-style:none;}
   .mk-manual-fallback summary::-webkit-details-marker{display:none;}
   @media (max-width: 1100px){
@@ -30,6 +32,7 @@
     .mk-connection-grid{grid-template-columns:repeat(1,minmax(0,1fr));}
     .mk-connection-meta{grid-template-columns:repeat(1,minmax(0,1fr));}
     .mk-google-detail{grid-template-columns:1fr;}
+    .mk-ga4-default-form{grid-template-columns:1fr;}
   }
 </style>
 
@@ -100,6 +103,62 @@
             <div class="mk-label">Redirect URI</div>
             <div class="mk-mini-stat" style="word-break:break-word;">{{ google_redirect_uri }}</div>
           </div>
+        </div>
+
+        <div class="mk-ga4-default">
+          <form method="post" class="mk-ga4-default-form">
+            {% csrf_token %}
+            <input type="hidden" name="form_name" value="default_ga4_property">
+            <div>
+              <label class="mk-label" for="default-ga4-property">Default GA4 Property</label>
+              {% if ga4_properties %}
+                <select id="default-ga4-property" name="default_ga4_property_id" class="form-select">
+                  {% for prop in ga4_properties %}
+                    <option value="{{ prop.ga4_property_id }}" {% if default_ga4_property and prop.pk == default_ga4_property.pk %}selected{% endif %}>
+                      {{ prop.name }} - {{ prop.ga4_property_id }}
+                    </option>
+                  {% endfor %}
+                </select>
+              {% else %}
+                <div class="mk-empty-state" style="padding:10px;">No GA4 properties discovered yet.</div>
+              {% endif %}
+            </div>
+            <button class="btn btn-warning mk-btn" type="submit" {% if not ga4_properties %}disabled{% endif %}>Save Default</button>
+          </form>
+          <div class="mk-google-detail">
+            <div>
+              <div class="mk-label">Selected Property</div>
+              <div class="mk-mini-stat">
+                {% if default_ga4_property %}
+                  {{ default_ga4_property.name }} - {{ default_ga4_property.ga4_property_id }}
+                {% else %}
+                  Not selected
+                {% endif %}
+              </div>
+            </div>
+            <div>
+              <div class="mk-label">Last Sync</div>
+              <div class="mk-mini-stat">{{ default_ga4_property.last_sync_at|date:"Y-m-d H:i"|default:"Never synced" }}</div>
+            </div>
+            <div>
+              <div class="mk-label">Sync Status</div>
+              <div class="mk-mini-stat">
+                {% if default_ga4_property.last_sync_status == "ok" %}
+                  <span class="mk-pill mk-pill-good">OK</span>
+                {% elif default_ga4_property.last_sync_status == "error" %}
+                  <span class="mk-pill mk-pill-warn">Error</span>
+                {% else %}
+                  <span class="mk-pill">{{ default_ga4_property.last_sync_status|default:"Not synced" }}</span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          {% if not default_ga4_property and ga4_properties|length > 1 %}
+            <div class="mk-hint" style="margin-top:8px;">Multiple GA4 properties are available. Select one default so production reporting uses a single property.</div>
+          {% endif %}
+          {% if default_ga4_property.last_sync_message %}
+            <div class="mk-error-box" style="margin-top:10px;">{{ default_ga4_property.last_sync_message }}</div>
+          {% endif %}
         </div>
       </div>
 
