@@ -1,4 +1,6 @@
 from datetime import date
+from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
@@ -92,6 +94,61 @@ class MarketingPermissionTests(TestCase):
         self.client.login(username="mark", password="pass1234")
         resp = self.client.get(reverse("marketing_dashboard"))
         self.assertEqual(resp.status_code, 403)
+
+
+class MarketingDashboardKpiTests(TestCase):
+    def test_ad_spend_total_defaults_to_zero(self):
+        from marketing.views import _ad_spend_total
+
+        self.assertEqual(_ad_spend_total(date(2026, 6, 1), date(2026, 6, 30)), Decimal("0"))
+
+    def test_executive_kpis_include_requested_labels(self):
+        from marketing.views import _build_executive_kpis
+
+        period = {"start": date(2026, 6, 1), "end": date(2026, 6, 30)}
+        period_summary = {
+            "current_leads": 6,
+            "current_metrics": {"reach": 500},
+        }
+        website_summary = {"current": {"visitors": 1200}}
+        google_search_summary = {"current": {"clicks": 90}}
+        performance_drivers = {
+            "best_platform": {
+                "label": "YouTube",
+                "reach": 500,
+                "clicks": 12,
+            }
+        }
+        top_posts = [{"display_title": "Best post", "engagement_score": 42}]
+
+        with patch("marketing.views._ad_spend_total", return_value=Decimal("120")), patch(
+            "marketing.views._monthly_growth_percent",
+            return_value=12.3,
+        ):
+            rows = _build_executive_kpis(
+                period,
+                period_summary,
+                website_summary,
+                google_search_summary,
+                performance_drivers,
+                top_posts,
+            )
+
+        self.assertEqual(
+            [row["label"] for row in rows],
+            [
+                "Leads Generated",
+                "Website Visitors",
+                "Social Reach",
+                "Search Clicks",
+                "Top Performing Channel",
+                "Top Performing Post",
+                "Cost Per Lead",
+                "Monthly Growth %",
+            ],
+        )
+        self.assertEqual(rows[6]["value"], "$20.00")
+        self.assertEqual(rows[7]["value"], "+12%")
 
 
 class MarketingInsightTests(TestCase):

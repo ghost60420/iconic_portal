@@ -421,6 +421,18 @@ def _ad_conversions_count(start_date, end_date):
     return int(total)
 
 
+def _ad_spend_total(start_date, end_date):
+    return (
+        AdMetricDaily.objects.filter(date__gte=start_date, date__lte=end_date).aggregate(
+            spend=Coalesce(Sum("spend"), Decimal("0"))
+        )
+    ).get("spend") or Decimal("0")
+
+
+def _format_money(value):
+    return f"${float(value or 0):,.2f}"
+
+
 def _website_totals(start_date, end_date):
     qs = WebsiteTrafficDaily.objects.filter(
         date__gte=start_date,
@@ -439,6 +451,25 @@ def _website_totals(start_date, end_date):
     totals["engagement_rate"] = _conversion_rate(engaged_sessions, sessions)
     totals["avg_engagement_seconds"] = qs.aggregate(avg=Avg("avg_engagement_seconds")).get("avg") or 0
     return totals
+
+
+def _growth_signal_total(start_date, end_date):
+    website = _website_totals(start_date, end_date)
+    search = _search_totals(start_date, end_date)
+    metrics = _metric_totals(start_date, end_date)
+    return (
+        _marketing_lead_count(start_date, end_date)
+        + int(website.get("visitors") or 0)
+        + int(search.get("clicks") or 0)
+        + int(metrics.get("reach") or 0)
+    )
+
+
+def _monthly_growth_percent():
+    monthly_period = _date_window("30")
+    current = _growth_signal_total(monthly_period["start"], monthly_period["end"])
+    previous = _growth_signal_total(monthly_period["previous_start"], monthly_period["previous_end"])
+    return _percent_change(current, previous)
 
 
 def _lead_channel_rows(start_date, end_date):
@@ -658,6 +689,72 @@ def _build_kpi_cards(period):
         "current_leads": current_leads,
         "current_conversions": current_conversions,
     }
+
+
+def _build_executive_kpis(
+    period,
+    period_summary,
+    website_summary,
+    google_search_summary,
+    performance_drivers,
+    top_posts,
+):
+    leads_generated = period_summary["current_leads"]
+    website_visitors = website_summary["current"].get("visitors") or 0
+    social_reach = period_summary["current_metrics"].get("reach") or 0
+    search_clicks = google_search_summary["current"].get("clicks") or 0
+    top_channel = performance_drivers.get("best_platform") or {}
+    top_post = top_posts[0] if top_posts else {}
+    ad_spend = _ad_spend_total(period["start"], period["end"])
+    cost_per_lead = (ad_spend / leads_generated) if leads_generated else None
+    monthly_growth = _monthly_growth_percent()
+
+    return [
+        {
+            "label": "Leads Generated",
+            "value": leads_generated,
+            "detail": "UTM-attributed leads",
+        },
+        {
+            "label": "Website Visitors",
+            "value": website_visitors,
+            "detail": "Default GA4 property",
+        },
+        {
+            "label": "Social Reach",
+            "value": social_reach,
+            "detail": "Synced social reach",
+        },
+        {
+            "label": "Search Clicks",
+            "value": search_clicks,
+            "detail": "Search Console clicks",
+        },
+        {
+            "label": "Top Performing Channel",
+            "value": top_channel.get("label") or "Not enough data",
+            "detail": (
+                f"{top_channel.get('reach', 0)} reach, {top_channel.get('clicks', 0)} clicks"
+                if top_channel
+                else ""
+            ),
+        },
+        {
+            "label": "Top Performing Post",
+            "value": top_post.get("display_title") or "No posts yet",
+            "detail": f"Score {top_post.get('engagement_score', 0)}" if top_post else "",
+        },
+        {
+            "label": "Cost Per Lead",
+            "value": _format_money(cost_per_lead) if cost_per_lead is not None else "N/A",
+            "detail": "Ad spend / leads",
+        },
+        {
+            "label": "Monthly Growth %",
+            "value": f"{monthly_growth:+.0f}%",
+            "detail": "Last 30 days vs previous 30",
+        },
+    ]
 
 
 def _platform_comparison(start_date, end_date):
@@ -1554,12 +1651,21 @@ def dashboard(request):
     competitor_snapshot = _competitor_dashboard_snapshot()
     website_summary = _website_analytics_summary(period)
     google_search_summary = _google_search_summary(period)
+    executive_kpis = _build_executive_kpis(
+        period,
+        period_summary,
+        website_summary,
+        google_search_summary,
+        performance_drivers,
+        top_posts,
+    )
 
     context = {
         "page_title": "Marketing Control Center",
         "page_subtitle": "Website traffic, Google search, social content, campaigns, and lead impact in one place.",
         "period": period,
         "range_key": period["key"],
+        "executive_kpis": executive_kpis,
         "kpi_cards": period_summary["cards"],
         "website_summary": website_summary,
         "google_search_summary": google_search_summary,

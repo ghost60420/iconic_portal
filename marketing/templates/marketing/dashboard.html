@@ -26,6 +26,26 @@
 
   {% include "marketing/_control_nav.html" %}
 
+  <div class="mk-card mk-span-12" style="margin-bottom:14px;">
+    <div class="mk-section-head">
+      <div>
+        <div class="mk-section-title mb-0">Marketing Snapshot</div>
+        <div class="mk-sub">Current performance signals for the selected dashboard period.</div>
+      </div>
+    </div>
+    <div class="mk-metric-grid">
+      {% for item in executive_kpis %}
+        <div class="mk-metric-card">
+          <div class="mk-label">{{ item.label }}</div>
+          <div class="mk-metric-value">{{ item.value }}</div>
+          {% if item.detail %}
+            <div class="mk-hint" style="margin-top:6px;">{{ item.detail }}</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
   <div class="mk-grid mk-kpi-grid">
     {% for card in kpi_cards %}
       <div class="mk-card mk-kpi-card">
