@@ -219,12 +219,16 @@ MARKETING_META_REDIRECT_URI = os.getenv(
 
 
 def _meta_scope_list(scopes_raw: str) -> list[str]:
-    return [scope.strip() for scope in scopes_raw.split(",") if scope.strip() and scope.strip() != "email"]
+    return [
+        scope.strip()
+        for scope in scopes_raw.split(",")
+        if scope.strip() and scope.strip() == "public_profile"
+    ]
 
 
 _meta_scopes_raw = os.getenv(
     "MARKETING_META_SCOPES",
-    "public_profile,pages_show_list,pages_read_engagement,pages_manage_metadata,instagram_basic,instagram_manage_insights,ads_read,business_management",
+    "public_profile",
 )
 MARKETING_META_SCOPES = _meta_scope_list(_meta_scopes_raw)
 _meta_basic_scopes_raw = os.getenv(
@@ -234,14 +238,10 @@ _meta_basic_scopes_raw = os.getenv(
 MARKETING_META_BASIC_SCOPES = _meta_scope_list(_meta_basic_scopes_raw)
 _meta_fallback_scopes_raw = os.getenv(
     "MARKETING_META_FALLBACK_SCOPES",
-    "public_profile,pages_show_list,pages_read_engagement,instagram_basic,ads_read",
+    "public_profile",
 )
 MARKETING_META_FALLBACK_SCOPES = _meta_scope_list(_meta_fallback_scopes_raw)
-MARKETING_META_SCOPE_TEST_MODES = {
-    "pages": ["public_profile", "pages_show_list", "pages_read_engagement"],
-    "instagram": ["public_profile", "pages_show_list", "pages_read_engagement", "instagram_basic"],
-    "ads": ["public_profile", "pages_show_list", "pages_read_engagement", "instagram_basic", "ads_read"],
-}
+MARKETING_META_SCOPE_TEST_MODES = {}
 
 # ======================
 # Google Marketing OAuth
