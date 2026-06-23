@@ -223,6 +223,25 @@ class MarketingSocialConnectionsTests(TestCase):
             "instagram_basic",
             "ads_read",
         ],
+        MARKETING_META_SCOPE_TEST_MODES={
+            "email": ["public_profile", "email"],
+            "pages": ["public_profile", "email", "pages_show_list", "pages_read_engagement"],
+            "instagram": [
+                "public_profile",
+                "email",
+                "pages_show_list",
+                "pages_read_engagement",
+                "instagram_basic",
+            ],
+            "ads": [
+                "public_profile",
+                "email",
+                "pages_show_list",
+                "pages_read_engagement",
+                "instagram_basic",
+                "ads_read",
+            ],
+        },
     )
     def test_meta_api_oauth_start_uses_required_callback_route(self):
         response = self.client.get(reverse("marketing_meta_oauth_start_api_slash"))
@@ -250,6 +269,31 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertIn("scope=public_profile", basic["Location"])
         self.assertNotIn("email", basic["Location"])
         self.assertNotIn("pages_show_list", basic["Location"])
+
+        scope_mode_expectations = {
+            "email": "scope=public_profile%2Cemail",
+            "pages": "scope=public_profile%2Cemail%2Cpages_show_list%2Cpages_read_engagement",
+            "instagram": (
+                "scope=public_profile%2Cemail%2Cpages_show_list%2Cpages_read_engagement%2Cinstagram_basic"
+            ),
+            "ads": (
+                "scope=public_profile%2Cemail%2Cpages_show_list%2Cpages_read_engagement%2Cinstagram_basic%2Cads_read"
+            ),
+        }
+        for scope_mode, expected_scope in scope_mode_expectations.items():
+            with self.subTest(scope_mode=scope_mode):
+                mode_response = self.client.get(
+                    f"{reverse('marketing_meta_oauth_start_api_slash')}?scope_mode={scope_mode}"
+                )
+                self.assertEqual(mode_response.status_code, 302)
+                self.assertIn(expected_scope, mode_response["Location"])
+                self.assertTrue(
+                    OAuthConnectionRequest.objects.filter(
+                        platform="meta",
+                        status="initiated",
+                        error_message=f"scope_mode={scope_mode}",
+                    ).exists()
+                )
 
     @override_settings(
         MARKETING_GOOGLE_CLIENT_ID="google-client",

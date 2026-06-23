@@ -45,6 +45,7 @@ from marketing.services.oauth_connections import (
     complete_google_oauth,
     complete_meta_oauth_request,
     exchange_direct_oauth_code,
+    meta_scope_modes,
     normalize_oauth_platform,
 )
 from marketing.services.social_connections import (
@@ -433,7 +434,7 @@ def oauth_start(request, platform: str):
         platform = normalize_oauth_platform(platform)
         request_platform = "meta" if platform in META_OAUTH_PLATFORMS else platform
         requested_scope_mode = request.GET.get("scope_mode")
-        scope_mode = requested_scope_mode if requested_scope_mode in {"basic", "fallback"} else ""
+        scope_mode = requested_scope_mode if requested_scope_mode in meta_scope_modes() else ""
         state = uuid.uuid4().hex
         conn = OAuthConnectionRequest.objects.create(
             platform=request_platform,

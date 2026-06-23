@@ -85,6 +85,22 @@ def oauth_configured(platform: str) -> bool:
     return False
 
 
+def meta_scopes_for_mode(scope_mode: str = "") -> list[str]:
+    scope_mode = (scope_mode or "").strip()
+    if scope_mode == "basic":
+        return list(settings.MARKETING_META_BASIC_SCOPES)
+    if scope_mode == "fallback":
+        return list(settings.MARKETING_META_FALLBACK_SCOPES)
+    test_scopes = getattr(settings, "MARKETING_META_SCOPE_TEST_MODES", {}).get(scope_mode)
+    if test_scopes:
+        return list(test_scopes)
+    return list(settings.MARKETING_META_SCOPES)
+
+
+def meta_scope_modes() -> set[str]:
+    return {"basic", "fallback", *getattr(settings, "MARKETING_META_SCOPE_TEST_MODES", {}).keys()}
+
+
 def build_oauth_authorization_url(*, platform: str, state: str, scope_mode: str = "") -> str:
     platform = normalize_oauth_platform(platform)
     if not oauth_configured(platform):
@@ -94,17 +110,11 @@ def build_oauth_authorization_url(*, platform: str, state: str, scope_mode: str 
         return build_google_oauth_url(state=state)
 
     if platform in META_OAUTH_PLATFORMS:
-        if scope_mode == "basic":
-            scopes = settings.MARKETING_META_BASIC_SCOPES
-        elif scope_mode == "fallback":
-            scopes = settings.MARKETING_META_FALLBACK_SCOPES
-        else:
-            scopes = settings.MARKETING_META_SCOPES
         return build_meta_oauth_url(
             app_id=settings.MARKETING_META_APP_ID,
             redirect_uri=settings.MARKETING_META_REDIRECT_URI,
             state=state,
-            scopes=scopes,
+            scopes=meta_scopes_for_mode(scope_mode),
         )
 
     if platform == "linkedin":
@@ -350,20 +360,14 @@ def exchange_direct_oauth_code(*, platform: str, code: str) -> OAuthCredential:
 
 def _meta_scope_mode_from_connection(conn: OAuthConnectionRequest) -> str:
     marker = conn.error_message or ""
-    if "scope_mode=basic" in marker:
-        return "basic"
-    if "scope_mode=fallback" in marker:
-        return "fallback"
+    for scope_mode in meta_scope_modes():
+        if f"scope_mode={scope_mode}" in marker:
+            return scope_mode
     return ""
 
 
 def _requested_meta_scopes(conn: OAuthConnectionRequest) -> list[str]:
-    scope_mode = _meta_scope_mode_from_connection(conn)
-    if scope_mode == "basic":
-        return list(settings.MARKETING_META_BASIC_SCOPES)
-    if scope_mode == "fallback":
-        return list(settings.MARKETING_META_FALLBACK_SCOPES)
-    return list(settings.MARKETING_META_SCOPES)
+    return meta_scopes_for_mode(_meta_scope_mode_from_connection(conn))
 
 
 def complete_meta_oauth_request(conn: OAuthConnectionRequest) -> dict:

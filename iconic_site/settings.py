@@ -231,6 +231,12 @@ _meta_fallback_scopes_raw = os.getenv(
     "public_profile,email,pages_show_list,pages_read_engagement,instagram_basic,ads_read",
 )
 MARKETING_META_FALLBACK_SCOPES = [scope.strip() for scope in _meta_fallback_scopes_raw.split(",") if scope.strip()]
+MARKETING_META_SCOPE_TEST_MODES = {
+    "email": ["public_profile", "email"],
+    "pages": ["public_profile", "email", "pages_show_list", "pages_read_engagement"],
+    "instagram": ["public_profile", "email", "pages_show_list", "pages_read_engagement", "instagram_basic"],
+    "ads": ["public_profile", "email", "pages_show_list", "pages_read_engagement", "instagram_basic", "ads_read"],
+}
 
 # ======================
 # Google Marketing OAuth
