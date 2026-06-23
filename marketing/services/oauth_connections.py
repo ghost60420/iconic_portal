@@ -24,6 +24,7 @@ from marketing.services.oauth_meta import (
     exchange_code_for_token,
     exchange_long_lived_token,
     fetch_meta_ad_accounts,
+    fetch_meta_businesses,
     fetch_meta_pages,
     fetch_meta_permissions,
 )
@@ -110,11 +111,13 @@ def build_oauth_authorization_url(*, platform: str, state: str, scope_mode: str 
         return build_google_oauth_url(state=state)
 
     if platform in META_OAUTH_PLATFORMS:
+        login_config_id = "" if scope_mode == "basic" else getattr(settings, "MARKETING_META_LOGIN_CONFIG_ID", "")
         return build_meta_oauth_url(
             app_id=settings.MARKETING_META_APP_ID,
             redirect_uri=settings.MARKETING_META_REDIRECT_URI,
             state=state,
             scopes=meta_scopes_for_mode(scope_mode),
+            login_config_id=login_config_id,
         )
 
     if platform == "linkedin":
@@ -463,6 +466,35 @@ def complete_meta_oauth_request(conn: OAuthConnectionRequest) -> dict:
             ig_cred.save()
             instagram_count += 1
 
+    meta_business_count = 0
+    try:
+        businesses = fetch_meta_businesses(access_token=access_token)
+    except MarketingServiceError as exc:
+        businesses = []
+        discovery_errors.append(f"businesses: {exc}")
+    for business in businesses:
+        business_id = business.get("id")
+        if not business_id:
+            continue
+        business_account, _ = SocialAccount.objects.update_or_create(
+            platform="meta_business",
+            external_account_id=business_id,
+            defaults={"display_name": business.get("name") or "Meta Business", "is_active": True},
+        )
+        business_cred, _ = OAuthCredential.objects.get_or_create(
+            platform="meta_business",
+            platform_account=business_account,
+        )
+        business_cred.set_tokens(access_token=access_token, refresh_token="", expires_at=expires_at)
+        business_cred.account_name = business_account.display_name
+        business_cred.account_id = business_id
+        business_cred.is_active = True
+        business_cred.scopes = saved_scope_string
+        business_cred.last_sync_status = "connected"
+        business_cred.last_error = ""
+        business_cred.save()
+        meta_business_count += 1
+
     meta_ads_count = 0
     try:
         ad_accounts = fetch_meta_ad_accounts(access_token=access_token)
@@ -503,11 +535,13 @@ def complete_meta_oauth_request(conn: OAuthConnectionRequest) -> dict:
             "declined_scopes": declined_scopes,
             "requested_scopes": requested_scopes,
             "discovery_errors": discovery_errors,
+            "meta_business_count": meta_business_count,
         },
     )
     return {
         "facebook_count": facebook_count,
         "instagram_count": instagram_count,
+        "meta_business_count": meta_business_count,
         "meta_ads_count": meta_ads_count,
         "granted_scopes": granted_scopes,
         "declined_scopes": declined_scopes,

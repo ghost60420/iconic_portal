@@ -190,28 +190,36 @@ class MarketingSocialConnectionsTests(TestCase):
         MARKETING_META_APP_ID="meta-client",
         MARKETING_META_APP_SECRET="meta-secret",
         MARKETING_META_REDIRECT_URI="https://example.com/marketing/oauth/meta/callback/",
-        MARKETING_META_SCOPES=["public_profile"],
+        MARKETING_META_SCOPES=["pages_show_list", "pages_read_engagement", "business_management", "ads_read"],
+        MARKETING_META_LOGIN_CONFIG_ID="business-config",
     )
     def test_meta_oauth_start_creates_request_and_redirects(self):
         response = self.client.get(reverse("marketing_oauth_start", args=["facebook"]))
 
         self.assertEqual(response.status_code, 302)
         self.assertIn("facebook.com", response["Location"])
-        self.assertIn("scope=public_profile", response["Location"])
-        self.assertNotIn("pages_show_list", response["Location"])
-        self.assertNotIn("ads_read", response["Location"])
+        self.assertIn("config_id=business-config", response["Location"])
+        self.assertIn("override_default_response_type=true", response["Location"])
+        self.assertNotIn("scope=", response["Location"])
         self.assertTrue(OAuthConnectionRequest.objects.filter(platform="meta", status="initiated").exists())
 
     @override_settings(
-        MARKETING_META_APP_ID="meta-client",
+        MARKETING_META_APP_ID="996441839765056",
         MARKETING_META_APP_SECRET="meta-secret",
         MARKETING_META_REDIRECT_URI="https://femline.ca/api/auth/meta/callback/",
+        MARKETING_META_LOGIN_CONFIG_ID="991769216888588",
         MARKETING_META_SCOPES=[
-            "public_profile",
+            "pages_show_list",
+            "pages_read_engagement",
+            "business_management",
+            "ads_read",
         ],
         MARKETING_META_BASIC_SCOPES=["public_profile"],
         MARKETING_META_FALLBACK_SCOPES=[
-            "public_profile",
+            "pages_show_list",
+            "pages_read_engagement",
+            "business_management",
+            "ads_read",
         ],
         MARKETING_META_SCOPE_TEST_MODES={},
     )
@@ -220,25 +228,31 @@ class MarketingSocialConnectionsTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertIn("facebook.com", response["Location"])
+        self.assertIn("client_id=996441839765056", response["Location"])
         self.assertIn("redirect_uri=https%3A%2F%2Ffemline.ca%2Fapi%2Fauth%2Fmeta%2Fcallback%2F", response["Location"])
-        self.assertIn("scope=public_profile", response["Location"])
+        self.assertIn("config_id=991769216888588", response["Location"])
+        self.assertIn("override_default_response_type=true", response["Location"])
+        self.assertIn("auth_type=rerequest", response["Location"])
+        self.assertNotIn("scope=", response["Location"])
         self.assertNotIn("email", response["Location"])
-        self.assertNotIn("pages_show_list", response["Location"])
-        self.assertNotIn("pages_read_engagement", response["Location"])
         self.assertNotIn("instagram_basic", response["Location"])
+        self.assertNotIn("instagram_manage_insights", response["Location"])
+        self.assertNotIn("pages_manage_metadata", response["Location"])
         self.assertNotIn("ads_read", response["Location"])
         self.assertNotIn("pages_read_user_content", response["Location"])
         self.assertNotIn("read_insights", response["Location"])
         self.assertTrue(OAuthConnectionRequest.objects.filter(platform="meta", status="initiated").exists())
 
         fallback = self.client.get(f"{reverse('marketing_meta_oauth_start_api_slash')}?scope_mode=fallback")
-        self.assertIn("scope=public_profile", fallback["Location"])
+        self.assertIn("config_id=991769216888588", fallback["Location"])
+        self.assertNotIn("scope=", fallback["Location"])
         self.assertNotIn("email", fallback["Location"])
         self.assertNotIn("pages_manage_metadata", fallback["Location"])
         self.assertNotIn("instagram_manage_insights", fallback["Location"])
 
         basic = self.client.get(f"{reverse('marketing_meta_oauth_start_api_slash')}?scope_mode=basic")
         self.assertIn("scope=public_profile", basic["Location"])
+        self.assertNotIn("config_id=", basic["Location"])
         self.assertNotIn("email", basic["Location"])
         self.assertNotIn("pages_show_list", basic["Location"])
 
@@ -248,11 +262,10 @@ class MarketingSocialConnectionsTests(TestCase):
                     f"{reverse('marketing_meta_oauth_start_api_slash')}?scope_mode={scope_mode}"
                 )
                 self.assertEqual(mode_response.status_code, 302)
-                self.assertIn("scope=public_profile", mode_response["Location"])
+                self.assertIn("config_id=991769216888588", mode_response["Location"])
+                self.assertNotIn("scope=", mode_response["Location"])
                 self.assertNotIn("email", mode_response["Location"])
-                self.assertNotIn("pages_show_list", mode_response["Location"])
                 self.assertNotIn("instagram_basic", mode_response["Location"])
-                self.assertNotIn("ads_read", mode_response["Location"])
 
     @override_settings(
         MARKETING_GOOGLE_CLIENT_ID="google-client",
@@ -314,9 +327,12 @@ class MarketingSocialConnectionsTests(TestCase):
             "marketing.services.oauth_connections.fetch_meta_ad_accounts",
             return_value=[{"id": "act_1", "name": "Iconic Ads", "currency": "CAD"}],
         ), patch(
+            "marketing.services.oauth_connections.fetch_meta_businesses",
+            return_value=[{"id": "business-1", "name": "Iconic Apparel House Inc"}],
+        ), patch(
             "marketing.services.oauth_connections.fetch_meta_permissions",
             return_value={
-                "granted": ["public_profile", "pages_show_list", "pages_read_engagement", "ads_read"],
+                "granted": ["pages_show_list", "pages_read_engagement", "business_management", "ads_read"],
                 "declined": ["instagram_manage_insights"],
             },
         ):
@@ -324,19 +340,21 @@ class MarketingSocialConnectionsTests(TestCase):
 
         self.assertEqual(result["facebook_count"], 1)
         self.assertEqual(result["instagram_count"], 1)
+        self.assertEqual(result["meta_business_count"], 1)
         self.assertEqual(result["meta_ads_count"], 1)
         self.assertTrue(SocialAccount.objects.filter(platform="facebook", external_account_id="page-1").exists())
         self.assertTrue(SocialAccount.objects.filter(platform="instagram", external_account_id="ig-1").exists())
+        self.assertTrue(SocialAccount.objects.filter(platform="meta_business", external_account_id="business-1").exists())
         self.assertTrue(SocialAccount.objects.filter(platform="meta_business", external_account_id="act_1").exists())
         self.assertEqual(
             OAuthCredential.objects.get(platform="facebook", account_id="page-1").get_access_token(),
             "page-token",
         )
-        self.assertEqual(result["granted_scopes"], ["public_profile", "pages_show_list", "pages_read_engagement", "ads_read"])
+        self.assertEqual(result["granted_scopes"], ["pages_show_list", "pages_read_engagement", "business_management", "ads_read"])
         self.assertEqual(result["declined_scopes"], ["instagram_manage_insights"])
         self.assertEqual(
             OAuthCredential.objects.get(platform="meta", account_id="meta").scopes,
-            "public_profile,pages_show_list,pages_read_engagement,ads_read",
+            "pages_show_list,pages_read_engagement,business_management,ads_read",
         )
         self.assertTrue(SystemActivityLog.objects.filter(action="meta_oauth_scopes").exists())
 
@@ -363,6 +381,9 @@ class MarketingSocialConnectionsTests(TestCase):
             "marketing.services.oauth_connections.fetch_meta_pages",
             side_effect=MarketingServiceError("Missing pages permission"),
         ), patch(
+            "marketing.services.oauth_connections.fetch_meta_businesses",
+            side_effect=MarketingServiceError("Missing business permission"),
+        ), patch(
             "marketing.services.oauth_connections.fetch_meta_ad_accounts",
             side_effect=MarketingServiceError("Missing ads permission"),
         ):
@@ -375,9 +396,10 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertEqual(credential.scopes, "public_profile")
         self.assertEqual(result["facebook_count"], 0)
         self.assertEqual(result["instagram_count"], 0)
+        self.assertEqual(result["meta_business_count"], 0)
         self.assertEqual(result["meta_ads_count"], 0)
         self.assertEqual(result["granted_scopes"], ["public_profile"])
-        self.assertEqual(len(result["discovery_errors"]), 2)
+        self.assertEqual(len(result["discovery_errors"]), 3)
 
     def test_linkedin_oauth_discovers_company_pages(self):
         from marketing.services.oauth_connections import exchange_direct_oauth_code

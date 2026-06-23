@@ -184,15 +184,10 @@ def meta_oauth_start(request):
         settings,
         "MARKETING_META_SCOPES",
         [
-            "public_profile",
-            "email",
             "pages_show_list",
             "pages_read_engagement",
-            "pages_manage_metadata",
-            "instagram_basic",
-            "instagram_manage_insights",
-            "ads_read",
             "business_management",
+            "ads_read",
         ],
     )
     state = uuid.uuid4().hex
@@ -202,7 +197,13 @@ def meta_oauth_start(request):
         state=state,
         status="initiated",
     )
-    url = build_meta_oauth_url(app_id=app_id, redirect_uri=redirect_uri, state=state, scopes=scopes)
+    url = build_meta_oauth_url(
+        app_id=app_id,
+        redirect_uri=redirect_uri,
+        state=state,
+        scopes=scopes,
+        login_config_id=getattr(settings, "MARKETING_META_LOGIN_CONFIG_ID", ""),
+    )
     return redirect(url)
 
 

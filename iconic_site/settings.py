@@ -212,23 +212,36 @@ SITE_BASE_URL = os.getenv("SITE_BASE_URL", "https://femline.ca")
 
 MARKETING_META_APP_ID = os.getenv("META_APP_ID") or os.getenv("MARKETING_META_APP_ID", "")
 MARKETING_META_APP_SECRET = os.getenv("META_APP_SECRET") or os.getenv("MARKETING_META_APP_SECRET", "")
+MARKETING_META_LOGIN_CONFIG_ID = (
+    os.getenv("META_LOGIN_CONFIG_ID")
+    or os.getenv("FACEBOOK_LOGIN_FOR_BUSINESS_CONFIG_ID")
+    or os.getenv("MARKETING_META_LOGIN_CONFIG_ID", "")
+)
 MARKETING_META_REDIRECT_URI = os.getenv(
     "META_REDIRECT_URI",
     os.getenv("MARKETING_META_REDIRECT_URI", f"{SITE_BASE_URL}/api/auth/meta/callback/"),
 )
+
+_meta_allowed_scopes = {
+    "public_profile",
+    "pages_show_list",
+    "pages_read_engagement",
+    "business_management",
+    "ads_read",
+}
 
 
 def _meta_scope_list(scopes_raw: str) -> list[str]:
     return [
         scope.strip()
         for scope in scopes_raw.split(",")
-        if scope.strip() and scope.strip() == "public_profile"
+        if scope.strip() and scope.strip() in _meta_allowed_scopes
     ]
 
 
 _meta_scopes_raw = os.getenv(
     "MARKETING_META_SCOPES",
-    "public_profile",
+    "pages_show_list,pages_read_engagement,business_management,ads_read",
 )
 MARKETING_META_SCOPES = _meta_scope_list(_meta_scopes_raw)
 _meta_basic_scopes_raw = os.getenv(
@@ -238,7 +251,7 @@ _meta_basic_scopes_raw = os.getenv(
 MARKETING_META_BASIC_SCOPES = _meta_scope_list(_meta_basic_scopes_raw)
 _meta_fallback_scopes_raw = os.getenv(
     "MARKETING_META_FALLBACK_SCOPES",
-    "public_profile",
+    "pages_show_list,pages_read_engagement,business_management,ads_read",
 )
 MARKETING_META_FALLBACK_SCOPES = _meta_scope_list(_meta_fallback_scopes_raw)
 MARKETING_META_SCOPE_TEST_MODES = {}

@@ -9,14 +9,26 @@ GRAPH_BASE = "https://graph.facebook.com/v20.0"
 DIALOG_BASE = "https://www.facebook.com/v20.0/dialog/oauth"
 
 
-def build_meta_oauth_url(*, app_id: str, redirect_uri: str, state: str, scopes: list[str]) -> str:
+def build_meta_oauth_url(
+    *,
+    app_id: str,
+    redirect_uri: str,
+    state: str,
+    scopes: list[str],
+    login_config_id: str = "",
+) -> str:
     query = {
         "client_id": app_id,
         "redirect_uri": redirect_uri,
         "state": state,
         "response_type": "code",
-        "scope": ",".join(scopes),
     }
+    if login_config_id:
+        query["config_id"] = login_config_id
+        query["override_default_response_type"] = "true"
+        query["auth_type"] = "rerequest"
+    elif scopes:
+        query["scope"] = ",".join(scopes)
     return f"{DIALOG_BASE}?{urllib.parse.urlencode(query)}"
 
 
@@ -84,6 +96,17 @@ def fetch_meta_ad_accounts(*, access_token: str) -> list[dict]:
         accounts.extend(payload.get("data") or [])
         url = payload.get("paging", {}).get("next")
     return accounts
+
+
+def fetch_meta_businesses(*, access_token: str) -> list[dict]:
+    businesses: list[dict] = []
+    fields = "id,name,created_time,verification_status"
+    url = f"{GRAPH_BASE}/me/businesses?fields={fields}&access_token={urllib.parse.quote(access_token)}"
+    while url:
+        payload = _fetch_json(url)
+        businesses.extend(payload.get("data") or [])
+        url = payload.get("paging", {}).get("next")
+    return businesses
 
 
 def fetch_meta_permissions(*, access_token: str) -> dict:
