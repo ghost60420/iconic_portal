@@ -205,7 +205,6 @@ class MarketingSocialConnectionsTests(TestCase):
         MARKETING_META_REDIRECT_URI="https://femline.ca/api/auth/meta/callback/",
         MARKETING_META_SCOPES=[
             "public_profile",
-            "email",
             "pages_show_list",
             "pages_read_engagement",
             "pages_manage_metadata",
@@ -217,25 +216,21 @@ class MarketingSocialConnectionsTests(TestCase):
         MARKETING_META_BASIC_SCOPES=["public_profile"],
         MARKETING_META_FALLBACK_SCOPES=[
             "public_profile",
-            "email",
             "pages_show_list",
             "pages_read_engagement",
             "instagram_basic",
             "ads_read",
         ],
         MARKETING_META_SCOPE_TEST_MODES={
-            "email": ["public_profile", "email"],
-            "pages": ["public_profile", "email", "pages_show_list", "pages_read_engagement"],
+            "pages": ["public_profile", "pages_show_list", "pages_read_engagement"],
             "instagram": [
                 "public_profile",
-                "email",
                 "pages_show_list",
                 "pages_read_engagement",
                 "instagram_basic",
             ],
             "ads": [
                 "public_profile",
-                "email",
                 "pages_show_list",
                 "pages_read_engagement",
                 "instagram_basic",
@@ -250,18 +245,20 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertIn("facebook.com", response["Location"])
         self.assertIn("redirect_uri=https%3A%2F%2Ffemline.ca%2Fapi%2Fauth%2Fmeta%2Fcallback%2F", response["Location"])
         self.assertIn(
-            "scope=public_profile%2Cemail%2Cpages_show_list%2Cpages_read_engagement%2Cpages_manage_metadata%2Cinstagram_basic%2Cinstagram_manage_insights%2Cads_read%2Cbusiness_management",
+            "scope=public_profile%2Cpages_show_list%2Cpages_read_engagement%2Cpages_manage_metadata%2Cinstagram_basic%2Cinstagram_manage_insights%2Cads_read%2Cbusiness_management",
             response["Location"],
         )
+        self.assertNotIn("email", response["Location"])
         self.assertNotIn("pages_read_user_content", response["Location"])
         self.assertNotIn("read_insights", response["Location"])
         self.assertTrue(OAuthConnectionRequest.objects.filter(platform="meta", status="initiated").exists())
 
         fallback = self.client.get(f"{reverse('marketing_meta_oauth_start_api_slash')}?scope_mode=fallback")
         self.assertIn(
-            "scope=public_profile%2Cemail%2Cpages_show_list%2Cpages_read_engagement%2Cinstagram_basic%2Cads_read",
+            "scope=public_profile%2Cpages_show_list%2Cpages_read_engagement%2Cinstagram_basic%2Cads_read",
             fallback["Location"],
         )
+        self.assertNotIn("email", fallback["Location"])
         self.assertNotIn("pages_manage_metadata", fallback["Location"])
         self.assertNotIn("instagram_manage_insights", fallback["Location"])
 
@@ -271,13 +268,12 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertNotIn("pages_show_list", basic["Location"])
 
         scope_mode_expectations = {
-            "email": "scope=public_profile%2Cemail",
-            "pages": "scope=public_profile%2Cemail%2Cpages_show_list%2Cpages_read_engagement",
+            "pages": "scope=public_profile%2Cpages_show_list%2Cpages_read_engagement",
             "instagram": (
-                "scope=public_profile%2Cemail%2Cpages_show_list%2Cpages_read_engagement%2Cinstagram_basic"
+                "scope=public_profile%2Cpages_show_list%2Cpages_read_engagement%2Cinstagram_basic"
             ),
             "ads": (
-                "scope=public_profile%2Cemail%2Cpages_show_list%2Cpages_read_engagement%2Cinstagram_basic%2Cads_read"
+                "scope=public_profile%2Cpages_show_list%2Cpages_read_engagement%2Cinstagram_basic%2Cads_read"
             ),
         }
         for scope_mode, expected_scope in scope_mode_expectations.items():
@@ -287,6 +283,7 @@ class MarketingSocialConnectionsTests(TestCase):
                 )
                 self.assertEqual(mode_response.status_code, 302)
                 self.assertIn(expected_scope, mode_response["Location"])
+                self.assertNotIn("email", mode_response["Location"])
                 self.assertTrue(
                     OAuthConnectionRequest.objects.filter(
                         platform="meta",

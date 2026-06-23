@@ -216,26 +216,31 @@ MARKETING_META_REDIRECT_URI = os.getenv(
     "META_REDIRECT_URI",
     os.getenv("MARKETING_META_REDIRECT_URI", f"{SITE_BASE_URL}/api/auth/meta/callback/"),
 )
+
+
+def _meta_scope_list(scopes_raw: str) -> list[str]:
+    return [scope.strip() for scope in scopes_raw.split(",") if scope.strip() and scope.strip() != "email"]
+
+
 _meta_scopes_raw = os.getenv(
     "MARKETING_META_SCOPES",
-    "public_profile,email,pages_show_list,pages_read_engagement,pages_manage_metadata,instagram_basic,instagram_manage_insights,ads_read,business_management",
+    "public_profile,pages_show_list,pages_read_engagement,pages_manage_metadata,instagram_basic,instagram_manage_insights,ads_read,business_management",
 )
-MARKETING_META_SCOPES = [scope.strip() for scope in _meta_scopes_raw.split(",") if scope.strip()]
+MARKETING_META_SCOPES = _meta_scope_list(_meta_scopes_raw)
 _meta_basic_scopes_raw = os.getenv(
     "MARKETING_META_BASIC_SCOPES",
     "public_profile",
 )
-MARKETING_META_BASIC_SCOPES = [scope.strip() for scope in _meta_basic_scopes_raw.split(",") if scope.strip()]
+MARKETING_META_BASIC_SCOPES = _meta_scope_list(_meta_basic_scopes_raw)
 _meta_fallback_scopes_raw = os.getenv(
     "MARKETING_META_FALLBACK_SCOPES",
-    "public_profile,email,pages_show_list,pages_read_engagement,instagram_basic,ads_read",
+    "public_profile,pages_show_list,pages_read_engagement,instagram_basic,ads_read",
 )
-MARKETING_META_FALLBACK_SCOPES = [scope.strip() for scope in _meta_fallback_scopes_raw.split(",") if scope.strip()]
+MARKETING_META_FALLBACK_SCOPES = _meta_scope_list(_meta_fallback_scopes_raw)
 MARKETING_META_SCOPE_TEST_MODES = {
-    "email": ["public_profile", "email"],
-    "pages": ["public_profile", "email", "pages_show_list", "pages_read_engagement"],
-    "instagram": ["public_profile", "email", "pages_show_list", "pages_read_engagement", "instagram_basic"],
-    "ads": ["public_profile", "email", "pages_show_list", "pages_read_engagement", "instagram_basic", "ads_read"],
+    "pages": ["public_profile", "pages_show_list", "pages_read_engagement"],
+    "instagram": ["public_profile", "pages_show_list", "pages_read_engagement", "instagram_basic"],
+    "ads": ["public_profile", "pages_show_list", "pages_read_engagement", "instagram_basic", "ads_read"],
 }
 
 # ======================
