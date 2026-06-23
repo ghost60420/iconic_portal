@@ -184,11 +184,14 @@ def meta_oauth_start(request):
         settings,
         "MARKETING_META_SCOPES",
         [
+            "public_profile",
+            "email",
             "pages_show_list",
             "pages_read_engagement",
-            "read_insights",
+            "pages_manage_metadata",
             "instagram_basic",
             "instagram_manage_insights",
+            "ads_read",
             "business_management",
         ],
     )

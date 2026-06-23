@@ -25,7 +25,9 @@ from marketing.services.oauth_meta import (
     exchange_long_lived_token,
     fetch_meta_ad_accounts,
     fetch_meta_pages,
+    fetch_meta_permissions,
 )
+from marketing.utils.activity import log_marketing_activity
 
 
 GOOGLE_OAUTH_PLATFORMS = {"google", "ga4", "gsc", "youtube", "google_business"}
@@ -83,7 +85,7 @@ def oauth_configured(platform: str) -> bool:
     return False
 
 
-def build_oauth_authorization_url(*, platform: str, state: str) -> str:
+def build_oauth_authorization_url(*, platform: str, state: str, scope_mode: str = "") -> str:
     platform = normalize_oauth_platform(platform)
     if not oauth_configured(platform):
         raise MarketingServiceError(f"{platform} OAuth is not configured.")
@@ -92,11 +94,12 @@ def build_oauth_authorization_url(*, platform: str, state: str) -> str:
         return build_google_oauth_url(state=state)
 
     if platform in META_OAUTH_PLATFORMS:
+        scopes = settings.MARKETING_META_FALLBACK_SCOPES if scope_mode == "fallback" else settings.MARKETING_META_SCOPES
         return build_meta_oauth_url(
             app_id=settings.MARKETING_META_APP_ID,
             redirect_uri=settings.MARKETING_META_REDIRECT_URI,
             state=state,
-            scopes=settings.MARKETING_META_SCOPES,
+            scopes=scopes,
         )
 
     if platform == "linkedin":
@@ -363,13 +366,21 @@ def complete_meta_oauth_request(conn: OAuthConnectionRequest) -> dict:
     )
     access_token = long_payload.get("access_token") or short_token
     expires_at = _token_expiry(long_payload) or _token_expiry(token_payload)
+    permissions = {"granted": [], "declined": []}
+    try:
+        permissions = fetch_meta_permissions(access_token=access_token)
+    except MarketingServiceError:
+        permissions = {"granted": [], "declined": []}
+    granted_scopes = permissions.get("granted") or list(settings.MARKETING_META_SCOPES)
+    declined_scopes = permissions.get("declined") or []
+    saved_scope_string = ",".join(granted_scopes)
 
     platform_cred, _ = OAuthCredential.objects.get_or_create(platform="meta", platform_account=None)
     platform_cred.set_tokens(access_token=access_token, refresh_token="", expires_at=expires_at)
     platform_cred.account_name = "Meta Platform Token"
     platform_cred.account_id = "meta"
     platform_cred.is_active = True
-    platform_cred.scopes = ",".join(settings.MARKETING_META_SCOPES)
+    platform_cred.scopes = saved_scope_string
     platform_cred.last_sync_status = "connected"
     platform_cred.last_error = ""
     platform_cred.save()
@@ -394,7 +405,7 @@ def complete_meta_oauth_request(conn: OAuthConnectionRequest) -> dict:
         fb_cred.account_name = name
         fb_cred.account_id = page_id
         fb_cred.is_active = True
-        fb_cred.scopes = ",".join(settings.MARKETING_META_SCOPES)
+        fb_cred.scopes = saved_scope_string
         fb_cred.last_sync_status = "connected"
         fb_cred.last_error = ""
         fb_cred.save()
@@ -413,7 +424,7 @@ def complete_meta_oauth_request(conn: OAuthConnectionRequest) -> dict:
             ig_cred.account_name = f"{name} (Instagram)"
             ig_cred.account_id = ig_id
             ig_cred.is_active = True
-            ig_cred.scopes = ",".join(settings.MARKETING_META_SCOPES)
+            ig_cred.scopes = saved_scope_string
             ig_cred.last_sync_status = "connected"
             ig_cred.last_error = ""
             ig_cred.save()
@@ -438,7 +449,7 @@ def complete_meta_oauth_request(conn: OAuthConnectionRequest) -> dict:
         meta_cred.account_name = account.display_name
         meta_cred.account_id = ad_id
         meta_cred.is_active = True
-        meta_cred.scopes = ",".join(settings.MARKETING_META_SCOPES)
+        meta_cred.scopes = saved_scope_string
         meta_cred.last_sync_status = "connected"
         meta_cred.last_error = ""
         meta_cred.save()
@@ -447,7 +458,25 @@ def complete_meta_oauth_request(conn: OAuthConnectionRequest) -> dict:
     conn.status = "completed"
     conn.error_message = ""
     conn.save(update_fields=["status", "error_message", "updated_at"])
-    return {"facebook_count": facebook_count, "instagram_count": instagram_count, "meta_ads_count": meta_ads_count}
+    log_marketing_activity(
+        user=conn.user,
+        action="meta_oauth_scopes",
+        message="Meta OAuth scopes received.",
+        model_label="marketing.OAuthCredential",
+        object_id=platform_cred.pk,
+        meta={
+            "granted_scopes": granted_scopes,
+            "declined_scopes": declined_scopes,
+            "requested_scopes": list(settings.MARKETING_META_SCOPES),
+        },
+    )
+    return {
+        "facebook_count": facebook_count,
+        "instagram_count": instagram_count,
+        "meta_ads_count": meta_ads_count,
+        "granted_scopes": granted_scopes,
+        "declined_scopes": declined_scopes,
+    }
 
 
 def complete_google_oauth(*, conn: OAuthConnectionRequest, token_payload: dict) -> dict:

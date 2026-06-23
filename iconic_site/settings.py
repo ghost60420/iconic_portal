@@ -218,9 +218,14 @@ MARKETING_META_REDIRECT_URI = os.getenv(
 )
 _meta_scopes_raw = os.getenv(
     "MARKETING_META_SCOPES",
-    "pages_show_list,pages_read_engagement,pages_manage_metadata,pages_read_user_content,read_insights,instagram_basic,instagram_manage_insights,business_management,ads_read",
+    "public_profile,email,pages_show_list,pages_read_engagement,pages_manage_metadata,instagram_basic,instagram_manage_insights,ads_read,business_management",
 )
 MARKETING_META_SCOPES = [scope.strip() for scope in _meta_scopes_raw.split(",") if scope.strip()]
+_meta_fallback_scopes_raw = os.getenv(
+    "MARKETING_META_FALLBACK_SCOPES",
+    "public_profile,email,pages_show_list,pages_read_engagement,instagram_basic,ads_read",
+)
+MARKETING_META_FALLBACK_SCOPES = [scope.strip() for scope in _meta_fallback_scopes_raw.split(",") if scope.strip()]
 
 # ======================
 # Google Marketing OAuth

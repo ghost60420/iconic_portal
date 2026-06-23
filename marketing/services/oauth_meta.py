@@ -84,3 +84,22 @@ def fetch_meta_ad_accounts(*, access_token: str) -> list[dict]:
         accounts.extend(payload.get("data") or [])
         url = payload.get("paging", {}).get("next")
     return accounts
+
+
+def fetch_meta_permissions(*, access_token: str) -> dict:
+    payload = _fetch_json(f"{GRAPH_BASE}/me/permissions?access_token={urllib.parse.quote(access_token)}")
+    granted = []
+    declined = []
+    for item in payload.get("data") or []:
+        permission = item.get("permission") or ""
+        status = item.get("status") or ""
+        if not permission:
+            continue
+        if status == "granted":
+            granted.append(permission)
+        else:
+            declined.append(permission)
+    return {
+        "granted": sorted(set(granted)),
+        "declined": sorted(set(declined)),
+    }

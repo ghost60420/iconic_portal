@@ -432,14 +432,18 @@ def oauth_start(request, platform: str):
     try:
         platform = normalize_oauth_platform(platform)
         request_platform = "meta" if platform in META_OAUTH_PLATFORMS else platform
+        scope_mode = "fallback" if request.GET.get("scope_mode") == "fallback" else ""
         state = uuid.uuid4().hex
-        OAuthConnectionRequest.objects.create(
+        conn = OAuthConnectionRequest.objects.create(
             platform=request_platform,
             user=request.user,
             state=state,
             status="initiated",
         )
-        return redirect(build_oauth_authorization_url(platform=platform, state=state))
+        if scope_mode:
+            conn.error_message = f"scope_mode={scope_mode}"
+            conn.save(update_fields=["error_message", "updated_at"])
+        return redirect(build_oauth_authorization_url(platform=platform, state=state, scope_mode=scope_mode))
     except MarketingServiceError as exc:
         messages.error(request, str(exc))
         return redirect("marketing_connection_settings")
