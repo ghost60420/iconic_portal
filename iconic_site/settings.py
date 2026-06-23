@@ -221,6 +221,11 @@ _meta_scopes_raw = os.getenv(
     "public_profile,email,pages_show_list,pages_read_engagement,pages_manage_metadata,instagram_basic,instagram_manage_insights,ads_read,business_management",
 )
 MARKETING_META_SCOPES = [scope.strip() for scope in _meta_scopes_raw.split(",") if scope.strip()]
+_meta_basic_scopes_raw = os.getenv(
+    "MARKETING_META_BASIC_SCOPES",
+    "public_profile",
+)
+MARKETING_META_BASIC_SCOPES = [scope.strip() for scope in _meta_basic_scopes_raw.split(",") if scope.strip()]
 _meta_fallback_scopes_raw = os.getenv(
     "MARKETING_META_FALLBACK_SCOPES",
     "public_profile,email,pages_show_list,pages_read_engagement,instagram_basic,ads_read",

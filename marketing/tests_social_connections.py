@@ -18,6 +18,7 @@ from marketing.models import (
     SeoProperty,
     SocialAccount,
 )
+from marketing.services.errors import MarketingServiceError
 from marketing.services.google_business import fetch_google_business_account_metrics
 from marketing.services.social_connections import run_social_connection_sync, save_social_connection
 from marketing.utils.activity import log_marketing_sync_failure
@@ -213,6 +214,7 @@ class MarketingSocialConnectionsTests(TestCase):
             "ads_read",
             "business_management",
         ],
+        MARKETING_META_BASIC_SCOPES=["public_profile"],
         MARKETING_META_FALLBACK_SCOPES=[
             "public_profile",
             "email",
@@ -243,6 +245,11 @@ class MarketingSocialConnectionsTests(TestCase):
         )
         self.assertNotIn("pages_manage_metadata", fallback["Location"])
         self.assertNotIn("instagram_manage_insights", fallback["Location"])
+
+        basic = self.client.get(f"{reverse('marketing_meta_oauth_start_api_slash')}?scope_mode=basic")
+        self.assertIn("scope=public_profile", basic["Location"])
+        self.assertNotIn("email", basic["Location"])
+        self.assertNotIn("pages_show_list", basic["Location"])
 
     @override_settings(
         MARKETING_GOOGLE_CLIENT_ID="google-client",
@@ -329,6 +336,45 @@ class MarketingSocialConnectionsTests(TestCase):
             "public_profile,pages_show_list,pages_read_engagement,ads_read",
         )
         self.assertTrue(SystemActivityLog.objects.filter(action="meta_oauth_scopes").exists())
+
+    def test_basic_meta_oauth_saves_token_when_asset_discovery_is_unavailable(self):
+        from marketing.services.oauth_connections import complete_meta_oauth_request
+
+        conn = OAuthConnectionRequest.objects.create(
+            platform="meta",
+            user=self.user,
+            state="state-basic",
+            code="code",
+            error_message="scope_mode=basic",
+        )
+        with patch(
+            "marketing.services.oauth_connections.exchange_code_for_token",
+            return_value={"access_token": "short", "expires_in": 3600},
+        ), patch(
+            "marketing.services.oauth_connections.exchange_long_lived_token",
+            return_value={"access_token": "long", "expires_in": 3600},
+        ), patch(
+            "marketing.services.oauth_connections.fetch_meta_permissions",
+            return_value={"granted": ["public_profile"], "declined": []},
+        ), patch(
+            "marketing.services.oauth_connections.fetch_meta_pages",
+            side_effect=MarketingServiceError("Missing pages permission"),
+        ), patch(
+            "marketing.services.oauth_connections.fetch_meta_ad_accounts",
+            side_effect=MarketingServiceError("Missing ads permission"),
+        ):
+            result = complete_meta_oauth_request(conn)
+
+        credential = OAuthCredential.objects.get(platform="meta", account_id="meta")
+        conn.refresh_from_db()
+        self.assertEqual(conn.status, "completed")
+        self.assertEqual(credential.get_access_token(), "long")
+        self.assertEqual(credential.scopes, "public_profile")
+        self.assertEqual(result["facebook_count"], 0)
+        self.assertEqual(result["instagram_count"], 0)
+        self.assertEqual(result["meta_ads_count"], 0)
+        self.assertEqual(result["granted_scopes"], ["public_profile"])
+        self.assertEqual(len(result["discovery_errors"]), 2)
 
     def test_linkedin_oauth_discovers_company_pages(self):
         from marketing.services.oauth_connections import exchange_direct_oauth_code

@@ -94,7 +94,12 @@ def build_oauth_authorization_url(*, platform: str, state: str, scope_mode: str 
         return build_google_oauth_url(state=state)
 
     if platform in META_OAUTH_PLATFORMS:
-        scopes = settings.MARKETING_META_FALLBACK_SCOPES if scope_mode == "fallback" else settings.MARKETING_META_SCOPES
+        if scope_mode == "basic":
+            scopes = settings.MARKETING_META_BASIC_SCOPES
+        elif scope_mode == "fallback":
+            scopes = settings.MARKETING_META_FALLBACK_SCOPES
+        else:
+            scopes = settings.MARKETING_META_SCOPES
         return build_meta_oauth_url(
             app_id=settings.MARKETING_META_APP_ID,
             redirect_uri=settings.MARKETING_META_REDIRECT_URI,
@@ -343,6 +348,24 @@ def exchange_direct_oauth_code(*, platform: str, code: str) -> OAuthCredential:
     raise MarketingServiceError("Unsupported direct OAuth platform.")
 
 
+def _meta_scope_mode_from_connection(conn: OAuthConnectionRequest) -> str:
+    marker = conn.error_message or ""
+    if "scope_mode=basic" in marker:
+        return "basic"
+    if "scope_mode=fallback" in marker:
+        return "fallback"
+    return ""
+
+
+def _requested_meta_scopes(conn: OAuthConnectionRequest) -> list[str]:
+    scope_mode = _meta_scope_mode_from_connection(conn)
+    if scope_mode == "basic":
+        return list(settings.MARKETING_META_BASIC_SCOPES)
+    if scope_mode == "fallback":
+        return list(settings.MARKETING_META_FALLBACK_SCOPES)
+    return list(settings.MARKETING_META_SCOPES)
+
+
 def complete_meta_oauth_request(conn: OAuthConnectionRequest) -> dict:
     if conn.platform not in META_OAUTH_PLATFORMS:
         raise MarketingServiceError("OAuth request is not a Meta request.")
@@ -371,7 +394,8 @@ def complete_meta_oauth_request(conn: OAuthConnectionRequest) -> dict:
         permissions = fetch_meta_permissions(access_token=access_token)
     except MarketingServiceError:
         permissions = {"granted": [], "declined": []}
-    granted_scopes = permissions.get("granted") or list(settings.MARKETING_META_SCOPES)
+    requested_scopes = _requested_meta_scopes(conn)
+    granted_scopes = permissions.get("granted") or requested_scopes
     declined_scopes = permissions.get("declined") or []
     saved_scope_string = ",".join(granted_scopes)
 
@@ -385,7 +409,12 @@ def complete_meta_oauth_request(conn: OAuthConnectionRequest) -> dict:
     platform_cred.last_error = ""
     platform_cred.save()
 
-    pages = fetch_meta_pages(access_token=access_token)
+    discovery_errors = []
+    try:
+        pages = fetch_meta_pages(access_token=access_token)
+    except MarketingServiceError as exc:
+        pages = []
+        discovery_errors.append(f"pages: {exc}")
     facebook_count = 0
     instagram_count = 0
     for page in pages:
@@ -433,8 +462,9 @@ def complete_meta_oauth_request(conn: OAuthConnectionRequest) -> dict:
     meta_ads_count = 0
     try:
         ad_accounts = fetch_meta_ad_accounts(access_token=access_token)
-    except MarketingServiceError:
+    except MarketingServiceError as exc:
         ad_accounts = []
+        discovery_errors.append(f"ad_accounts: {exc}")
     for ad_account in ad_accounts:
         ad_id = ad_account.get("id") or ad_account.get("account_id")
         if not ad_id:
@@ -467,7 +497,8 @@ def complete_meta_oauth_request(conn: OAuthConnectionRequest) -> dict:
         meta={
             "granted_scopes": granted_scopes,
             "declined_scopes": declined_scopes,
-            "requested_scopes": list(settings.MARKETING_META_SCOPES),
+            "requested_scopes": requested_scopes,
+            "discovery_errors": discovery_errors,
         },
     )
     return {
@@ -476,6 +507,7 @@ def complete_meta_oauth_request(conn: OAuthConnectionRequest) -> dict:
         "meta_ads_count": meta_ads_count,
         "granted_scopes": granted_scopes,
         "declined_scopes": declined_scopes,
+        "discovery_errors": discovery_errors,
     }
 
 

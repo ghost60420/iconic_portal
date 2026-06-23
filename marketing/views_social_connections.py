@@ -432,7 +432,8 @@ def oauth_start(request, platform: str):
     try:
         platform = normalize_oauth_platform(platform)
         request_platform = "meta" if platform in META_OAUTH_PLATFORMS else platform
-        scope_mode = "fallback" if request.GET.get("scope_mode") == "fallback" else ""
+        requested_scope_mode = request.GET.get("scope_mode")
+        scope_mode = requested_scope_mode if requested_scope_mode in {"basic", "fallback"} else ""
         state = uuid.uuid4().hex
         conn = OAuthConnectionRequest.objects.create(
             platform=request_platform,
