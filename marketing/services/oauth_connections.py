@@ -28,13 +28,22 @@ from marketing.services.oauth_meta import (
     fetch_meta_pages,
     fetch_meta_permissions,
 )
+from marketing.services.oauth_instagram import (
+    build_instagram_oauth_url,
+    exchange_instagram_code_for_token,
+    exchange_instagram_long_lived_token,
+    fetch_instagram_business_accounts,
+    fetch_instagram_permissions,
+    instagram_oauth_configured,
+)
 from marketing.utils.activity import log_marketing_activity
 
 
 GOOGLE_OAUTH_PLATFORMS = {"google", "ga4", "gsc", "youtube", "google_business"}
-META_OAUTH_PLATFORMS = {"meta", "facebook", "instagram", "meta_ads"}
+META_OAUTH_PLATFORMS = {"meta", "facebook", "meta_ads"}
+INSTAGRAM_OAUTH_PLATFORMS = {"instagram"}
 DIRECT_OAUTH_PLATFORMS = {"linkedin", "tiktok"}
-OAUTH_START_PLATFORMS = GOOGLE_OAUTH_PLATFORMS | META_OAUTH_PLATFORMS | DIRECT_OAUTH_PLATFORMS
+OAUTH_START_PLATFORMS = GOOGLE_OAUTH_PLATFORMS | META_OAUTH_PLATFORMS | INSTAGRAM_OAUTH_PLATFORMS | DIRECT_OAUTH_PLATFORMS
 
 
 def normalize_oauth_platform(platform: str) -> str:
@@ -54,6 +63,8 @@ def oauth_storage_platform(platform: str) -> str:
         return "google"
     if platform in META_OAUTH_PLATFORMS:
         return "meta"
+    if platform in INSTAGRAM_OAUTH_PLATFORMS:
+        return "instagram"
     return platform
 
 
@@ -71,6 +82,8 @@ def oauth_configured(platform: str) -> bool:
             and settings.MARKETING_META_APP_SECRET
             and settings.MARKETING_META_REDIRECT_URI
         )
+    if platform in INSTAGRAM_OAUTH_PLATFORMS:
+        return instagram_oauth_configured()
     if platform == "linkedin":
         return bool(
             getattr(settings, "MARKETING_LINKEDIN_CLIENT_ID", "")
@@ -119,6 +132,9 @@ def build_oauth_authorization_url(*, platform: str, state: str, scope_mode: str 
             scopes=meta_scopes_for_mode(scope_mode),
             login_config_id=login_config_id,
         )
+
+    if platform in INSTAGRAM_OAUTH_PLATFORMS:
+        return build_instagram_oauth_url(state=state)
 
     if platform == "linkedin":
         params = {
@@ -450,14 +466,15 @@ def complete_meta_oauth_request(conn: OAuthConnectionRequest) -> dict:
         ig_info = page.get("instagram_business_account") or {}
         ig_id = ig_info.get("id")
         if ig_id:
+            ig_name = ig_info.get("username") or ig_info.get("name") or f"{name} (Instagram)"
             ig_account, _ = SocialAccount.objects.update_or_create(
                 platform="instagram",
                 external_account_id=ig_id,
-                defaults={"display_name": f"{name} (Instagram)", "timezone": timezone_name, "is_active": True},
+                defaults={"display_name": ig_name, "timezone": timezone_name, "is_active": True},
             )
             ig_cred, _ = OAuthCredential.objects.get_or_create(platform="instagram", platform_account=ig_account)
             ig_cred.set_tokens(access_token=page_token, refresh_token="", expires_at=expires_at)
-            ig_cred.account_name = f"{name} (Instagram)"
+            ig_cred.account_name = ig_name
             ig_cred.account_id = ig_id
             ig_cred.is_active = True
             ig_cred.scopes = saved_scope_string
@@ -549,6 +566,111 @@ def complete_meta_oauth_request(conn: OAuthConnectionRequest) -> dict:
     }
 
 
+def complete_instagram_oauth_request(conn: OAuthConnectionRequest) -> dict:
+    if conn.platform != "instagram":
+        raise MarketingServiceError("OAuth request is not an Instagram request.")
+    if not conn.code:
+        raise MarketingServiceError("Missing Instagram authorization code.")
+
+    token_payload = exchange_instagram_code_for_token(code=conn.code)
+    short_token = token_payload.get("access_token")
+    if not short_token:
+        raise MarketingServiceError("Instagram token exchange failed.")
+
+    long_payload = exchange_instagram_long_lived_token(access_token=short_token)
+    access_token = long_payload.get("access_token") or short_token
+    expires_at = _token_expiry(long_payload) or _token_expiry(token_payload)
+    permissions = {"granted": [], "declined": []}
+    try:
+        permissions = fetch_instagram_permissions(access_token=access_token)
+    except MarketingServiceError:
+        permissions = {"granted": [], "declined": []}
+    requested_scopes = list(getattr(settings, "MARKETING_INSTAGRAM_SCOPES", []))
+    granted_scopes = permissions.get("granted") or requested_scopes
+    declined_scopes = permissions.get("declined") or []
+    saved_scope_string = ",".join(granted_scopes)
+
+    platform_cred = (
+        OAuthCredential.objects.filter(platform="instagram", platform_account__isnull=True, account_id="instagram").first()
+        or OAuthCredential.objects.filter(platform="instagram", platform_account__isnull=True).first()
+        or OAuthCredential(platform="instagram")
+    )
+    platform_cred.set_tokens(access_token=access_token, refresh_token="", expires_at=expires_at)
+    platform_cred.account_name = "Instagram Platform Token"
+    platform_cred.account_id = "instagram"
+    platform_cred.is_active = True
+    platform_cred.scopes = saved_scope_string
+    platform_cred.last_sync_status = "connected"
+    platform_cred.last_error = ""
+    platform_cred.save()
+
+    discovery_errors = []
+    try:
+        accounts = fetch_instagram_business_accounts(access_token=access_token)
+    except MarketingServiceError as exc:
+        accounts = []
+        discovery_errors.append(f"instagram_accounts: {exc}")
+
+    instagram_count = 0
+    for account_info in accounts:
+        account_id = account_info.get("id")
+        if not account_id:
+            continue
+        account_name = (
+            account_info.get("username")
+            or account_info.get("name")
+            or account_info.get("page_name")
+            or "Instagram Business"
+        )
+        account, _ = SocialAccount.objects.update_or_create(
+            platform="instagram",
+            external_account_id=account_id,
+            defaults={
+                "display_name": account_name,
+                "timezone": account_info.get("timezone") or "",
+                "is_active": True,
+            },
+        )
+        credential, _ = OAuthCredential.objects.get_or_create(platform="instagram", platform_account=account)
+        credential.set_tokens(
+            access_token=account_info.get("page_access_token") or access_token,
+            refresh_token="",
+            expires_at=expires_at,
+        )
+        credential.account_name = account_name
+        credential.account_id = account_id
+        credential.is_active = True
+        credential.scopes = saved_scope_string
+        credential.last_sync_status = "connected"
+        credential.last_error = ""
+        credential.save()
+        instagram_count += 1
+
+    conn.status = "completed"
+    conn.error_message = ""
+    conn.save(update_fields=["status", "error_message", "updated_at"])
+    log_marketing_activity(
+        user=conn.user,
+        action="instagram_oauth_scopes",
+        message="Instagram OAuth scopes received.",
+        model_label="marketing.OAuthCredential",
+        object_id=platform_cred.pk,
+        meta={
+            "granted_scopes": granted_scopes,
+            "declined_scopes": declined_scopes,
+            "requested_scopes": requested_scopes,
+            "discovery_errors": discovery_errors,
+            "instagram_count": instagram_count,
+        },
+    )
+    return {
+        "instagram_count": instagram_count,
+        "granted_scopes": granted_scopes,
+        "declined_scopes": declined_scopes,
+        "discovery_errors": discovery_errors,
+    }
+
+
 def complete_google_oauth(*, conn: OAuthConnectionRequest, token_payload: dict) -> dict:
     userinfo = fetch_google_userinfo(token_payload.get("access_token", ""))
     credential = save_google_credential(token_payload=token_payload, userinfo=userinfo)
@@ -565,6 +687,9 @@ def get_valid_oauth_access_token(credential: OAuthCredential) -> str:
     if credential.platform == "google":
         token = credential.get_access_token()
         return refresh_google_access_token(credential) if _needs_refresh(credential) or not token else token
+    if credential.platform in INSTAGRAM_OAUTH_PLATFORMS:
+        token = credential.get_access_token()
+        return _refresh_instagram_access_token(credential) if _needs_refresh(credential) or not token else token
     if credential.platform in META_OAUTH_PLATFORMS | {"meta_business"}:
         token = credential.get_access_token()
         return _refresh_meta_access_token(credential) if _needs_refresh(credential) or not token else token
@@ -642,6 +767,24 @@ def _refresh_meta_access_token(credential: OAuthCredential) -> str:
     return refreshed
 
 
+def _refresh_instagram_access_token(credential: OAuthCredential) -> str:
+    access_token = credential.get_access_token()
+    if not access_token:
+        raise MarketingServiceError("Instagram access token is missing. Reconnect this platform.")
+    payload = exchange_instagram_long_lived_token(access_token=access_token)
+    refreshed = payload.get("access_token") or ""
+    if not refreshed:
+        raise MarketingServiceError("Instagram token refresh did not return an access token. Reconnect.")
+    credential.set_tokens(
+        access_token=refreshed,
+        refresh_token=credential.get_refresh_token(),
+        expires_at=_token_expiry(payload),
+    )
+    credential.last_error = ""
+    credential.save(update_fields=["encrypted_access_token", "encrypted_refresh_token", "expires_at", "last_error", "updated_at"])
+    return refreshed
+
+
 def token_for_social_account(account: SocialAccount) -> str:
     credential = OAuthCredential.objects.filter(platform_account=account, is_active=True).first()
     if credential:
@@ -649,7 +792,7 @@ def token_for_social_account(account: SocialAccount) -> str:
     credential = OAuthCredential.objects.filter(platform=account.platform, is_active=True).order_by("-updated_at").first()
     if credential:
         return get_valid_oauth_access_token(credential)
-    if account.platform in {"facebook", "instagram", "meta_ads", "meta_business"}:
+    if account.platform in {"facebook", "meta_ads", "meta_business"}:
         credential = OAuthCredential.objects.filter(platform="meta", is_active=True).order_by("-updated_at").first()
         if credential:
             return get_valid_oauth_access_token(credential)

@@ -179,7 +179,14 @@
           <div class="mk-platform-card">
             <div class="mk-platform-top">
               <div class="d-flex gap-2 align-items-center flex-wrap">
-                <div class="mk-platform-name">{{ card.label }}</div>
+                <div>
+                  <div class="mk-platform-name">{{ card.label }}</div>
+                  {% if card.connected_account_name %}
+                    <div class="mk-muted" style="font-size:12px;font-weight:700;margin-top:2px;">
+                      {{ card.connected_account_name }}{% if card.connected_account_more_count %} +{{ card.connected_account_more_count }}{% endif %}
+                    </div>
+                  {% endif %}
+                </div>
                 {% if card.is_best_platform %}
                   <span class="mk-pill mk-pill-best">Best Platform</span>
                 {% endif %}
@@ -223,6 +230,10 @@
                   <div class="mk-mini-stat">{{ card.reach|default:0 }}</div>
                 </div>
                 <div>
+                  <div class="mk-label">Impressions</div>
+                  <div class="mk-mini-stat">{{ card.impressions|default:0 }}</div>
+                </div>
+                <div>
                   <div class="mk-label">Views</div>
                   <div class="mk-mini-stat">{{ card.views|default:0 }}</div>
                 </div>
@@ -250,6 +261,16 @@
               </div>
             {% else %}
               <div class="mk-platform-footer">
+                <div>
+                  <div class="mk-label">Followers</div>
+                  <div class="mk-mini-stat">
+                    {% if card.follower_change_available %}
+                      {{ card.followers_total|default:0 }}
+                    {% else %}
+                      <span class="mk-muted">Unavailable</span>
+                    {% endif %}
+                  </div>
+                </div>
                 <div>
                   <div class="mk-label">Follower Change</div>
                   <div class="mk-mini-stat">

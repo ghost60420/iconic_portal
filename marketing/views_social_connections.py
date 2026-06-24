@@ -40,9 +40,11 @@ from marketing.services.google_oauth import (
 )
 from marketing.services.oauth_connections import (
     GOOGLE_OAUTH_PLATFORMS,
+    INSTAGRAM_OAUTH_PLATFORMS,
     META_OAUTH_PLATFORMS,
     build_oauth_authorization_url,
     complete_google_oauth,
+    complete_instagram_oauth_request,
     complete_meta_oauth_request,
     exchange_direct_oauth_code,
     meta_scope_modes,
@@ -338,7 +340,7 @@ def social_connections(request):
     cards = build_connection_cards()
     oauth_start_urls = {
         "facebook": reverse("marketing_meta_oauth_start_api_slash"),
-        "instagram": reverse("marketing_meta_oauth_start_api_slash"),
+        "instagram": reverse("marketing_instagram_oauth_start_api_slash"),
         "meta_ads": reverse("marketing_meta_oauth_start_api_slash"),
         "linkedin": reverse("marketing_linkedin_oauth_start_api_slash"),
         "tiktok": reverse("marketing_tiktok_oauth_start_api_slash"),
@@ -434,7 +436,7 @@ def oauth_start(request, platform: str):
         platform = normalize_oauth_platform(platform)
         request_platform = "meta" if platform in META_OAUTH_PLATFORMS else platform
         requested_scope_mode = request.GET.get("scope_mode")
-        scope_mode = requested_scope_mode if requested_scope_mode in meta_scope_modes() else ""
+        scope_mode = requested_scope_mode if platform in META_OAUTH_PLATFORMS and requested_scope_mode in meta_scope_modes() else ""
         state = uuid.uuid4().hex
         conn = OAuthConnectionRequest.objects.create(
             platform=request_platform,
@@ -518,6 +520,17 @@ def oauth_callback(request, platform: str):
                     f"Instagram accounts: {result['instagram_count']} | "
                     f"Meta ad accounts: {result.get('meta_ads_count', 0)}."
                 ),
+            )
+            return redirect("marketing_connection_settings")
+        if platform in INSTAGRAM_OAUTH_PLATFORMS:
+            conn.code = code
+            conn.status = "received"
+            conn.error_message = ""
+            conn.save(update_fields=["code", "status", "error_message", "updated_at"])
+            result = complete_instagram_oauth_request(conn)
+            messages.success(
+                request,
+                f"Instagram connected. Instagram accounts: {result['instagram_count']}.",
             )
             return redirect("marketing_connection_settings")
         credential = exchange_direct_oauth_code(platform=platform, code=code)

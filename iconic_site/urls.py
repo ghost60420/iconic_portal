@@ -63,6 +63,30 @@ urlpatterns = [
         name="marketing_meta_oauth_callback_api_slash",
     ),
     path(
+        "api/auth/instagram/start",
+        login_required(marketing_social_views.oauth_start),
+        {"platform": "instagram"},
+        name="marketing_instagram_oauth_start_api",
+    ),
+    path(
+        "api/auth/instagram/start/",
+        login_required(marketing_social_views.oauth_start),
+        {"platform": "instagram"},
+        name="marketing_instagram_oauth_start_api_slash",
+    ),
+    path(
+        "api/auth/instagram/callback",
+        login_required(marketing_social_views.oauth_callback),
+        {"platform": "instagram"},
+        name="marketing_instagram_oauth_callback_api",
+    ),
+    path(
+        "api/auth/instagram/callback/",
+        login_required(marketing_social_views.oauth_callback),
+        {"platform": "instagram"},
+        name="marketing_instagram_oauth_callback_api_slash",
+    ),
+    path(
         "api/auth/linkedin/start",
         login_required(marketing_social_views.oauth_start),
         {"platform": "linkedin"},

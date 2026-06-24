@@ -228,6 +228,11 @@ _meta_allowed_scopes = {
     "pages_read_engagement",
     "business_management",
     "ads_read",
+    "instagram_basic",
+    "instagram_manage_insights",
+    "pages_manage_metadata",
+    "instagram_business_basic",
+    "instagram_business_manage_insights",
 }
 
 
@@ -243,7 +248,10 @@ _meta_scopes_raw = os.getenv(
     "MARKETING_META_SCOPES",
     "pages_show_list,pages_read_engagement,business_management,ads_read",
 )
-MARKETING_META_SCOPES = _meta_scope_list(_meta_scopes_raw)
+_meta_instagram_scopes_raw = os.getenv("MARKETING_META_INSTAGRAM_SCOPES", "")
+MARKETING_META_SCOPES = _meta_scope_list(
+    ",".join([_meta_scopes_raw, _meta_instagram_scopes_raw])
+)
 _meta_basic_scopes_raw = os.getenv(
     "MARKETING_META_BASIC_SCOPES",
     "public_profile",
@@ -253,8 +261,31 @@ _meta_fallback_scopes_raw = os.getenv(
     "MARKETING_META_FALLBACK_SCOPES",
     "pages_show_list,pages_read_engagement,business_management,ads_read",
 )
-MARKETING_META_FALLBACK_SCOPES = _meta_scope_list(_meta_fallback_scopes_raw)
+MARKETING_META_FALLBACK_SCOPES = _meta_scope_list(
+    ",".join([_meta_fallback_scopes_raw, _meta_instagram_scopes_raw])
+)
 MARKETING_META_SCOPE_TEST_MODES = {}
+
+# ======================
+# Instagram Business OAuth
+# ======================
+
+MARKETING_INSTAGRAM_APP_ID = os.getenv("INSTAGRAM_APP_ID") or os.getenv("MARKETING_INSTAGRAM_APP_ID", "")
+MARKETING_INSTAGRAM_APP_SECRET = os.getenv("INSTAGRAM_APP_SECRET") or os.getenv("MARKETING_INSTAGRAM_APP_SECRET", "")
+MARKETING_INSTAGRAM_LOGIN_CONFIG_ID = (
+    os.getenv("INSTAGRAM_LOGIN_CONFIG_ID")
+    or os.getenv("MARKETING_INSTAGRAM_LOGIN_CONFIG_ID", "")
+)
+MARKETING_INSTAGRAM_REDIRECT_URI = os.getenv(
+    "INSTAGRAM_REDIRECT_URI",
+    os.getenv("MARKETING_INSTAGRAM_REDIRECT_URI", f"{SITE_BASE_URL}/api/auth/instagram/callback/"),
+)
+MARKETING_INSTAGRAM_SCOPES = [
+    "instagram_basic",
+    "instagram_manage_insights",
+    "pages_show_list",
+    "pages_read_engagement",
+]
 
 # ======================
 # Google Marketing OAuth

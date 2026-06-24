@@ -780,20 +780,49 @@ def _platform_comparison(start_date, end_date):
     )
     metric_map = {row["content__platform"]: row for row in metric_rows}
 
-    follower_rows = (
+    account_metric_rows = (
         AccountMetricDaily.objects.filter(date__gte=start_date, date__lte=end_date)
-        .values("account__platform")
-        .annotate(
-            followers_change=Coalesce(Sum("followers_change"), 0),
-            impressions=Coalesce(Sum("impressions"), 0),
-            reach=Coalesce(Sum("reach"), 0),
-            views=Coalesce(Sum("views"), 0),
-            clicks=Coalesce(Sum("clicks"), 0),
-            engagement_total=Coalesce(Sum("engagement_total"), 0),
-            row_count=Count("id"),
-        )
+        .select_related("account")
+        .order_by("account_id", "-date", "-id")
     )
-    follower_map = {row["account__platform"]: row for row in follower_rows}
+    follower_map = {}
+    latest_followers_seen = set()
+    for metric in account_metric_rows:
+        platform_key = metric.account.platform
+        row = follower_map.setdefault(
+            platform_key,
+            {
+                "followers_total": 0,
+                "followers_change": 0,
+                "impressions": 0,
+                "reach": 0,
+                "views": 0,
+                "clicks": 0,
+                "engagement_total": 0,
+                "row_count": 0,
+            },
+        )
+        row["followers_change"] += metric.followers_change or 0
+        row["impressions"] += metric.impressions or 0
+        row["reach"] += metric.reach or 0
+        row["views"] += metric.views or 0
+        row["clicks"] += metric.clicks or 0
+        row["engagement_total"] += metric.engagement_total or 0
+        row["row_count"] += 1
+        if metric.account_id not in latest_followers_seen:
+            row["followers_total"] += metric.followers_total or 0
+            latest_followers_seen.add(metric.account_id)
+
+    active_account_rows = SocialAccount.objects.filter(is_active=True).values(
+        "platform",
+        "display_name",
+        "external_account_id",
+    )
+    active_account_map = {}
+    for account in active_account_rows:
+        active_account_map.setdefault(account["platform"], []).append(
+            account["display_name"] or account["external_account_id"]
+        )
     ad_metric_qs = AdMetricDaily.objects.filter(date__gte=start_date, date__lte=end_date)
     ad_totals = ad_metric_qs.aggregate(
         spend=Coalesce(Sum("spend"), Decimal("0")),
@@ -869,9 +898,16 @@ def _platform_comparison(start_date, end_date):
             "shares": 0,
             "saves": 0,
         }
+        followers_total = 0
         followers_change = 0
         follower_data_points = 0
         account_engagement_total = 0
+        connected_account_names = []
+        account_name_platforms = [
+            platform_key
+            for platform_key in config["platforms"]
+            if not (config["key"] == "facebook" and platform_key == "meta_business")
+        ]
 
         for platform_key in config["platforms"]:
             row = metric_map.get(platform_key)
@@ -880,21 +916,24 @@ def _platform_comparison(start_date, end_date):
                     totals[key] += row.get(key) or 0
             follower_row = follower_map.get(platform_key)
             if follower_row:
+                followers_total += follower_row.get("followers_total") or 0
                 followers_change += follower_row.get("followers_change") or 0
                 follower_data_points += follower_row.get("row_count") or 0
-                if platform_key == "google_business":
-                    totals["impressions"] += follower_row.get("impressions") or 0
-                    totals["reach"] += follower_row.get("reach") or 0
-                    totals["views"] += follower_row.get("views") or 0
-                    totals["clicks"] += follower_row.get("clicks") or 0
+                for key in ("impressions", "reach", "views", "clicks"):
+                    if not totals[key]:
+                        totals[key] += follower_row.get(key) or 0
+                if not any(totals[key] for key in ("likes", "comments", "shares", "saves")):
                     account_engagement_total += follower_row.get("engagement_total") or 0
+            if platform_key in account_name_platforms:
+                connected_account_names.extend(active_account_map.get(platform_key, []))
 
-        engagement_total = calc_engagement_total(
+        content_engagement_total = calc_engagement_total(
             likes=totals["likes"],
             comments=totals["comments"],
             shares=totals["shares"],
             saves=totals["saves"],
-        ) + account_engagement_total
+        )
+        engagement_total = content_engagement_total or account_engagement_total
         engagement_score = calc_engagement_score(
             likes=totals["likes"],
             comments=totals["comments"],
@@ -922,9 +961,12 @@ def _platform_comparison(start_date, end_date):
                 "engagement_total": engagement_total,
                 "engagement_score": engagement_score,
                 "engagement_rate": engagement_rate,
+                "followers_total": followers_total,
                 "followers_change": followers_change,
                 "follower_change_available": follower_data_points > 0,
                 "has_activity": has_activity,
+                "connected_account_name": ", ".join(connected_account_names[:2]),
+                "connected_account_more_count": max(len(connected_account_names) - 2, 0),
             }
         )
 

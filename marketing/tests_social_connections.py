@@ -1,6 +1,7 @@
 from unittest.mock import patch
 from datetime import date
 from io import StringIO
+from urllib.parse import parse_qs, urlparse
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -44,6 +45,9 @@ class MarketingSocialConnectionsTests(TestCase):
         MARKETING_GOOGLE_CLIENT_ID="google-client",
         MARKETING_GOOGLE_CLIENT_SECRET="google-secret",
         MARKETING_GOOGLE_REDIRECT_URI="https://femline.ca/api/auth/google/callback/",
+        MARKETING_INSTAGRAM_APP_ID="2014837702467423",
+        MARKETING_INSTAGRAM_APP_SECRET="instagram-secret",
+        MARKETING_INSTAGRAM_REDIRECT_URI="https://femline.ca/api/auth/instagram/callback/",
     )
     def test_social_connections_page_renders(self):
         response = self.client.get(reverse("marketing_connect"))
@@ -63,6 +67,7 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertContains(response, "Connect Google Analytics 4")
         self.assertContains(response, "Test Callback")
         self.assertContains(response, "/api/auth/google/start/")
+        self.assertContains(response, "/api/auth/instagram/start/")
         self.assertContains(response, "Advanced Manual Setup")
         self.assertNotContains(response, "Advanced Manual Fallback")
 
@@ -270,6 +275,76 @@ class MarketingSocialConnectionsTests(TestCase):
                 self.assertNotIn("instagram_basic", mode_response["Location"])
 
     @override_settings(
+        MARKETING_META_APP_ID="996441839765056",
+        MARKETING_META_APP_SECRET="meta-secret",
+        MARKETING_META_REDIRECT_URI="https://femline.ca/api/auth/meta/callback/",
+        MARKETING_META_LOGIN_CONFIG_ID="991769216888588",
+        MARKETING_INSTAGRAM_APP_ID="2014837702467423",
+        MARKETING_INSTAGRAM_APP_SECRET="instagram-secret",
+        MARKETING_INSTAGRAM_REDIRECT_URI="https://femline.ca/api/auth/instagram/callback/",
+        MARKETING_INSTAGRAM_LOGIN_CONFIG_ID="instagram-config",
+    )
+    def test_instagram_api_oauth_start_uses_dedicated_app_and_callback_route(self):
+        response = self.client.get(reverse("marketing_instagram_oauth_start_api_slash"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("facebook.com", response["Location"])
+        self.assertIn("client_id=2014837702467423", response["Location"])
+        self.assertIn("redirect_uri=https%3A%2F%2Ffemline.ca%2Fapi%2Fauth%2Finstagram%2Fcallback%2F", response["Location"])
+        self.assertIn("config_id=instagram-config", response["Location"])
+        self.assertIn("override_default_response_type=true", response["Location"])
+        self.assertIn("auth_type=rerequest", response["Location"])
+        self.assertNotIn("client_id=996441839765056", response["Location"])
+        self.assertTrue(OAuthConnectionRequest.objects.filter(platform="instagram", status="initiated").exists())
+
+    @override_settings(
+        MARKETING_META_APP_ID="996441839765056",
+        MARKETING_META_APP_SECRET="meta-secret",
+        MARKETING_META_REDIRECT_URI="https://femline.ca/api/auth/meta/callback/",
+        MARKETING_META_LOGIN_CONFIG_ID="",
+        MARKETING_META_SCOPES=[
+            "pages_show_list",
+            "pages_read_engagement",
+            "business_management",
+            "ads_read",
+            "instagram_basic",
+            "instagram_manage_insights",
+        ],
+        MARKETING_META_BASIC_SCOPES=["public_profile"],
+        MARKETING_META_FALLBACK_SCOPES=[
+            "pages_show_list",
+            "pages_read_engagement",
+            "business_management",
+            "ads_read",
+            "instagram_basic",
+        ],
+        MARKETING_META_SCOPE_TEST_MODES={},
+    )
+    def test_meta_oauth_start_can_request_optional_instagram_scopes_without_business_config(self):
+        response = self.client.get(reverse("marketing_meta_oauth_start_api_slash"))
+
+        self.assertEqual(response.status_code, 302)
+        parsed = urlparse(response["Location"])
+        params = parse_qs(parsed.query)
+        scopes = params["scope"][0].split(",")
+        self.assertEqual(
+            scopes,
+            [
+                "pages_show_list",
+                "pages_read_engagement",
+                "business_management",
+                "ads_read",
+                "instagram_basic",
+                "instagram_manage_insights",
+            ],
+        )
+        self.assertEqual(params["redirect_uri"][0], "https://femline.ca/api/auth/meta/callback/")
+        self.assertNotIn("config_id", params)
+        self.assertNotIn("email", scopes)
+        self.assertNotIn("pages_read_user_content", scopes)
+        self.assertNotIn("read_insights", scopes)
+
+    @override_settings(
         MARKETING_GOOGLE_CLIENT_ID="google-client",
         MARKETING_GOOGLE_CLIENT_SECRET="google-secret",
         MARKETING_GOOGLE_REDIRECT_URI="https://example.com/marketing/oauth/google/callback/",
@@ -334,7 +409,13 @@ class MarketingSocialConnectionsTests(TestCase):
         ), patch(
             "marketing.services.oauth_connections.fetch_meta_permissions",
             return_value={
-                "granted": ["pages_show_list", "pages_read_engagement", "business_management", "ads_read"],
+                "granted": [
+                    "pages_show_list",
+                    "pages_read_engagement",
+                    "business_management",
+                    "ads_read",
+                    "instagram_basic",
+                ],
                 "declined": ["instagram_manage_insights"],
             },
         ):
@@ -346,17 +427,25 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertEqual(result["meta_ads_count"], 1)
         self.assertTrue(SocialAccount.objects.filter(platform="facebook", external_account_id="page-1").exists())
         self.assertTrue(SocialAccount.objects.filter(platform="instagram", external_account_id="ig-1").exists())
+        self.assertEqual(SocialAccount.objects.get(platform="instagram", external_account_id="ig-1").display_name, "iconic")
         self.assertTrue(SocialAccount.objects.filter(platform="meta_business", external_account_id="business-1").exists())
         self.assertTrue(SocialAccount.objects.filter(platform="meta_business", external_account_id="act_1").exists())
         self.assertEqual(
             OAuthCredential.objects.get(platform="facebook", account_id="page-1").get_access_token(),
             "page-token",
         )
-        self.assertEqual(result["granted_scopes"], ["pages_show_list", "pages_read_engagement", "business_management", "ads_read"])
+        self.assertEqual(
+            OAuthCredential.objects.get(platform="instagram", account_id="ig-1").account_name,
+            "iconic",
+        )
+        self.assertEqual(
+            result["granted_scopes"],
+            ["pages_show_list", "pages_read_engagement", "business_management", "ads_read", "instagram_basic"],
+        )
         self.assertEqual(result["declined_scopes"], ["instagram_manage_insights"])
         self.assertEqual(
             OAuthCredential.objects.get(platform="meta", account_id="meta").scopes,
-            "pages_show_list,pages_read_engagement,business_management,ads_read",
+            "pages_show_list,pages_read_engagement,business_management,ads_read,instagram_basic",
         )
         self.assertTrue(SystemActivityLog.objects.filter(action="meta_oauth_scopes").exists())
 
@@ -402,6 +491,53 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertEqual(result["meta_ads_count"], 0)
         self.assertEqual(result["granted_scopes"], ["public_profile"])
         self.assertEqual(len(result["discovery_errors"]), 3)
+
+    def test_instagram_oauth_completion_saves_instagram_accounts_only(self):
+        from marketing.services.oauth_connections import complete_instagram_oauth_request
+
+        conn = OAuthConnectionRequest.objects.create(platform="instagram", user=self.user, state="ig-state", code="code")
+        with patch(
+            "marketing.services.oauth_connections.exchange_instagram_code_for_token",
+            return_value={"access_token": "ig-short", "expires_in": 3600},
+        ), patch(
+            "marketing.services.oauth_connections.exchange_instagram_long_lived_token",
+            return_value={"access_token": "ig-long", "expires_in": 3600},
+        ), patch(
+            "marketing.services.oauth_connections.fetch_instagram_permissions",
+            return_value={
+                "granted": ["instagram_basic", "instagram_manage_insights", "pages_show_list", "pages_read_engagement"],
+                "declined": [],
+            },
+        ), patch(
+            "marketing.services.oauth_connections.fetch_instagram_business_accounts",
+            return_value=[
+                {
+                    "id": "ig-1",
+                    "username": "iconicapparelhouse",
+                    "name": "Iconic Apparel House",
+                    "page_id": "page-1",
+                    "page_name": "Iconic Page",
+                    "page_access_token": "page-token",
+                    "timezone": "America/Toronto",
+                }
+            ],
+        ):
+            result = complete_instagram_oauth_request(conn)
+
+        self.assertEqual(result["instagram_count"], 1)
+        account = SocialAccount.objects.get(platform="instagram", external_account_id="ig-1")
+        self.assertEqual(account.display_name, "iconicapparelhouse")
+        self.assertEqual(account.timezone, "America/Toronto")
+        credential = OAuthCredential.objects.get(platform="instagram", platform_account=account)
+        self.assertEqual(credential.account_name, "iconicapparelhouse")
+        self.assertEqual(credential.account_id, "ig-1")
+        self.assertEqual(credential.get_access_token(), "page-token")
+        platform_credential = OAuthCredential.objects.get(platform="instagram", platform_account__isnull=True)
+        self.assertEqual(platform_credential.account_id, "instagram")
+        self.assertEqual(platform_credential.get_access_token(), "ig-long")
+        self.assertFalse(SocialAccount.objects.filter(platform="facebook", external_account_id="page-1").exists())
+        self.assertFalse(SocialAccount.objects.filter(platform="meta_business").exists())
+        self.assertTrue(SystemActivityLog.objects.filter(action="instagram_oauth_scopes").exists())
 
     def test_linkedin_oauth_discovers_company_pages(self):
         from marketing.services.oauth_connections import exchange_direct_oauth_code
@@ -548,6 +684,73 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertEqual(platform_cards["google_business"]["reach"], 5)
         self.assertEqual(platform_cards["google_business"]["clicks"], 7)
         self.assertEqual(platform_cards["google_business"]["engagement_total"], 3)
+
+    def test_instagram_account_metrics_parse_profile_and_insights(self):
+        from marketing.services.meta import fetch_meta_account_metrics
+
+        def fake_request(path, **kwargs):
+            if path == "/ig-1":
+                return {"followers_count": "1250", "media_count": "42", "username": "iconicapparelhouse"}
+            return {
+                "data": [
+                    {
+                        "name": "impressions",
+                        "values": [{"end_time": "2026-06-20T07:00:00+0000", "value": 3000}],
+                    },
+                    {
+                        "name": "reach",
+                        "values": [{"end_time": "2026-06-20T07:00:00+0000", "value": 2100}],
+                    },
+                    {
+                        "name": "profile_views",
+                        "values": [{"end_time": "2026-06-20T07:00:00+0000", "value": 75}],
+                    },
+                ]
+            }
+
+        with patch("marketing.services.meta._request_json", side_effect=fake_request):
+            rows = fetch_meta_account_metrics(
+                access_token="token",
+                account_id="ig-1",
+                start_date=date(2026, 6, 1),
+                end_date=date(2026, 6, 21),
+                platform="instagram",
+            )
+
+        self.assertEqual(rows[0]["date"], date(2026, 6, 20))
+        self.assertEqual(rows[0]["followers_total"], 1250)
+        self.assertEqual(rows[0]["impressions"], 3000)
+        self.assertEqual(rows[0]["reach"], 2100)
+        self.assertEqual(rows[0]["views"], 75)
+
+    def test_instagram_account_metrics_feed_dashboard_platform_card(self):
+        account = SocialAccount.objects.create(
+            platform="instagram",
+            external_account_id="ig-1",
+            display_name="iconicapparelhouse",
+            is_active=True,
+        )
+        AccountMetricDaily.objects.create(
+            account=account,
+            date=date(2026, 6, 20),
+            followers_total=1250,
+            followers_change=12,
+            impressions=3000,
+            reach=2100,
+            views=75,
+            engagement_total=36,
+        )
+
+        platform_cards = {item["key"]: item for item in _platform_comparison(date(2026, 6, 1), date(2026, 6, 21))}
+
+        self.assertEqual(platform_cards["instagram"]["connected_account_name"], "iconicapparelhouse")
+        self.assertEqual(platform_cards["instagram"]["followers_total"], 1250)
+        self.assertEqual(platform_cards["instagram"]["followers_change"], 12)
+        self.assertEqual(platform_cards["instagram"]["impressions"], 3000)
+        self.assertEqual(platform_cards["instagram"]["reach"], 2100)
+        self.assertEqual(platform_cards["instagram"]["views"], 75)
+        self.assertEqual(platform_cards["instagram"]["engagement_total"], 36)
+        self.assertTrue(platform_cards["instagram"]["has_activity"])
 
     def test_meta_ads_metrics_feed_dashboard_platform_card(self):
         account = SocialAccount.objects.create(

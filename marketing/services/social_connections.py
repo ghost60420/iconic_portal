@@ -8,6 +8,7 @@ from marketing.models import OAuthCredential, SocialAccount
 from marketing.services.errors import MarketingServiceError
 from marketing.services.oauth_connections import (
     GOOGLE_OAUTH_PLATFORMS,
+    INSTAGRAM_OAUTH_PLATFORMS,
     META_OAUTH_PLATFORMS,
     get_valid_oauth_access_token,
     oauth_configured,
@@ -35,7 +36,7 @@ SOCIAL_CONNECTION_CONFIG = [
         "oauth_supported": True,
         "oauth_label": "Connect Instagram",
         "command_hint": "python manage.py sync_meta_marketing --platform instagram",
-        "provider": "meta",
+        "provider": "instagram",
     },
     {
         "key": "meta_ads",
@@ -143,6 +144,13 @@ def build_connection_cards():
                 item
                 for item in base_qs
                 if item.platform in {config["key"], "meta"}
+                or (item.platform_account and item.platform_account.platform == config["key"])
+            ]
+        elif config["key"] in INSTAGRAM_OAUTH_PLATFORMS:
+            matches = [
+                item
+                for item in base_qs
+                if item.platform == config["key"]
                 or (item.platform_account and item.platform_account.platform == config["key"])
             ]
         else:
@@ -362,7 +370,7 @@ def run_social_platform_sync(platform: str):
 
     storage_platform = oauth_storage_platform(platform)
     credential = OAuthCredential.objects.filter(platform=storage_platform, is_active=True).order_by("-updated_at").first()
-    if not credential and platform in {"facebook", "instagram", "meta_ads"}:
+    if not credential and platform in {"facebook", "meta_ads"}:
         credential = OAuthCredential.objects.filter(platform="meta", is_active=True).order_by("-updated_at").first()
     if not credential:
         raise MarketingServiceError("Connect this platform before syncing.")
