@@ -924,6 +924,117 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertEqual(calls[0], "/fb-1")
         self.assertEqual(calls[1], "/fb-1/insights")
 
+    def test_facebook_account_metrics_skip_invalid_insight_metrics(self):
+        from marketing.services.meta import fetch_meta_account_metrics
+
+        def fake_request(path, **kwargs):
+            if path == "/fb-1":
+                return {"followers_count": "1043", "fan_count": "1043"}
+            metric = kwargs.get("params", {}).get("metric", "")
+            if metric in {"page_impressions", "page_impressions_unique", "page_consumptions"}:
+                raise MarketingServiceError("invalid metric")
+            values_by_metric = {
+                "page_posts_impressions_organic": 120,
+                "page_post_engagements": 15,
+                "page_views_total": 9,
+                "page_daily_follows": 2,
+            }
+            return {
+                "data": [
+                    {
+                        "name": metric,
+                        "values": [{"end_time": "2026-06-20T07:00:00+0000", "value": values_by_metric.get(metric, 0)}],
+                    }
+                ]
+            }
+
+        with patch("marketing.services.meta._request_json", side_effect=fake_request):
+            rows = fetch_meta_account_metrics(
+                access_token="fb-token",
+                account_id="fb-1",
+                start_date=date(2026, 6, 1),
+                end_date=date(2026, 6, 21),
+                platform="facebook",
+            )
+
+        self.assertEqual(rows[0]["followers_total"], 1043)
+        self.assertEqual(rows[0]["followers_change"], 2)
+        self.assertEqual(rows[0]["impressions"], 120)
+        self.assertEqual(rows[0]["views"], 9)
+        self.assertEqual(rows[0]["engagement_total"], 15)
+
+    def test_facebook_content_falls_back_to_safe_post_fields(self):
+        from marketing.services.meta import fetch_meta_content
+
+        calls = []
+
+        def fake_request(path, **kwargs):
+            fields = kwargs.get("params", {}).get("fields", "")
+            calls.append(fields)
+            if "shares" in fields:
+                raise MarketingServiceError("missing pages_read_user_content")
+            return {
+                "data": [
+                    {
+                        "id": "post-1",
+                        "message": "New collection",
+                        "permalink_url": "https://www.facebook.com/post-1",
+                        "created_time": "2026-06-20T07:00:00+0000",
+                    }
+                ]
+            }
+
+        with patch("marketing.services.meta._request_json", side_effect=fake_request):
+            rows = fetch_meta_content(
+                access_token="fb-token",
+                account_id="fb-1",
+                start_date=date(2026, 6, 1),
+                end_date=date(2026, 6, 21),
+                platform="facebook",
+            )
+
+        self.assertIn("shares", calls[0])
+        self.assertEqual(calls[1], "id,message,permalink_url,created_time")
+        self.assertEqual(rows[0]["external_content_id"], "post-1")
+        self.assertEqual(rows[0]["metric_payload"]["likes"], 0)
+        self.assertEqual(rows[0]["metric_payload"]["comments"], 0)
+
+    def test_facebook_post_metrics_skip_invalid_insight_metrics(self):
+        from marketing.services.meta import fetch_meta_metrics
+
+        def fake_request(path, **kwargs):
+            metric = kwargs.get("params", {}).get("metric", "")
+            if metric in {"post_impressions", "post_impressions_unique", "post_engaged_users"}:
+                raise MarketingServiceError("invalid metric")
+            values_by_metric = {
+                "post_clicks": 3,
+                "post_reactions_by_type_total": {"like": 7, "love": 2},
+                "post_activity_by_action_type": {"comment": 1, "share": 1},
+            }
+            return {
+                "data": [
+                    {
+                        "name": metric,
+                        "values": [{"end_time": "2026-06-20T07:00:00+0000", "value": values_by_metric.get(metric, 0)}],
+                    }
+                ]
+            }
+
+        with patch("marketing.services.meta._request_json", side_effect=fake_request):
+            rows = fetch_meta_metrics(
+                access_token="fb-token",
+                content_id="post-1",
+                start_date=date(2026, 6, 1),
+                end_date=date(2026, 6, 21),
+                platform="facebook",
+            )
+
+        self.assertEqual(rows[0]["impressions"], 0)
+        self.assertEqual(rows[0]["reach"], 0)
+        self.assertEqual(rows[0]["clicks"], 3)
+        self.assertEqual(rows[0]["likes"], 9)
+        self.assertEqual(rows[0]["profile_visits"], 2)
+
     def test_instagram_account_metrics_feed_dashboard_platform_card(self):
         account = SocialAccount.objects.create(
             platform="instagram",

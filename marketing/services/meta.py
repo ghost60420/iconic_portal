@@ -164,6 +164,39 @@ def _instagram_insight_series(
     return daily
 
 
+def _graph_insight_series(
+    path: str,
+    *,
+    access_token: str,
+    metrics: list[str],
+    start_date: date,
+    end_date: date,
+) -> dict[date, dict[str, int]]:
+    daily: dict[date, dict[str, int]] = {}
+    for metric in metrics:
+        try:
+            payload = _request_json(
+                path,
+                access_token=access_token,
+                params={
+                    "metric": metric,
+                    "period": "day",
+                    "since": start_date.isoformat(),
+                    "until": end_date.isoformat(),
+                },
+            )
+        except MarketingServiceError:
+            continue
+        rows = _insight_series(payload)
+        if not rows:
+            total = _metric_value(payload, metric)
+            if total:
+                rows = {end_date: {metric: total}}
+        for metric_date, values in rows.items():
+            daily.setdefault(metric_date, {}).update(values)
+    return daily
+
+
 def _date_to_unix(value: date, *, end_of_day: bool = False) -> int:
     wall_time = time.max if end_of_day else time.min
     dt = datetime.combine(value, wall_time)
@@ -269,14 +302,30 @@ def fetch_meta_content(
             )
         return rows
 
-    fields = "id,message,permalink_url,created_time,shares,comments.summary(true),likes.summary(true)"
-    params = {
-        "fields": fields,
+    rich_fields = "id,message,permalink_url,created_time,shares,comments.summary(true),likes.summary(true)"
+    safe_fields = "id,message,permalink_url,created_time"
+    base_params = {
         "since": _date_to_unix(start_date),
         "until": _date_to_unix(end_date, end_of_day=True),
         "limit": 50,
     }
-    for item in _iter_graph_data(f"/{account_id}/posts", access_token=access_token, params=params):
+    try:
+        post_rows = list(
+            _iter_graph_data(
+                f"/{account_id}/posts",
+                access_token=access_token,
+                params={**base_params, "fields": rich_fields},
+            )
+        )
+    except MarketingServiceError:
+        post_rows = list(
+            _iter_graph_data(
+                f"/{account_id}/posts",
+                access_token=access_token,
+                params={**base_params, "fields": safe_fields},
+            )
+        )
+    for item in post_rows:
         published_at = _parse_meta_datetime(item.get("created_time") or "")
         likes = _as_int((item.get("likes") or {}).get("summary", {}).get("total_count"))
         comments = _as_int((item.get("comments") or {}).get("summary", {}).get("total_count"))
@@ -339,15 +388,29 @@ def fetch_meta_metrics(
             }
         ]
 
-    metric_names = "post_impressions,post_impressions_unique,post_clicks,post_engaged_users"
-    payload = _request_json(f"/{content_id}/insights", access_token=access_token, params={"metric": metric_names})
+    metric_values: dict[str, int] = {}
+    for metric_name in [
+        "post_impressions",
+        "post_impressions_unique",
+        "post_clicks",
+        "post_engaged_users",
+        "post_reactions_by_type_total",
+        "post_activity_by_action_type",
+    ]:
+        try:
+            payload = _request_json(f"/{content_id}/insights", access_token=access_token, params={"metric": metric_name})
+        except MarketingServiceError:
+            continue
+        metric_values[metric_name] = _metric_value(payload, metric_name)
     return [
         {
             "date": end_date,
-            "impressions": _metric_value(payload, "post_impressions"),
-            "reach": _metric_value(payload, "post_impressions_unique"),
-            "clicks": _metric_value(payload, "post_clicks"),
-            "profile_visits": _metric_value(payload, "post_engaged_users"),
+            "impressions": metric_values.get("post_impressions", 0),
+            "reach": metric_values.get("post_impressions_unique", 0),
+            "clicks": metric_values.get("post_clicks", 0),
+            "likes": metric_values.get("post_reactions_by_type_total", 0),
+            "profile_visits": metric_values.get("post_engaged_users", 0)
+            or metric_values.get("post_activity_by_action_type", 0),
         }
     ]
 
@@ -392,30 +455,41 @@ def fetch_meta_account_metrics(
         ]
 
     profile = _request_json(f"/{account_id}", access_token=access_token, params={"fields": "followers_count,fan_count"})
-    metric_names = "page_impressions,page_impressions_unique,page_post_engagements,page_consumptions"
-    try:
-        payload = _request_json(
-            f"/{account_id}/insights",
-            access_token=access_token,
-            params={"metric": metric_names, "period": "day", "since": start_date.isoformat(), "until": end_date.isoformat()},
-        )
-        daily = _insight_series(payload)
-    except MarketingServiceError:
-        daily = {}
+    daily = _graph_insight_series(
+        f"/{account_id}/insights",
+        access_token=access_token,
+        metrics=[
+            "page_impressions",
+            "page_impressions_unique",
+            "page_posts_impressions_organic",
+            "page_post_engagements",
+            "page_actions_post_reactions_total",
+            "page_consumptions",
+            "page_total_actions",
+            "page_views_total",
+            "page_daily_follows",
+            "page_daily_unfollows",
+        ],
+        start_date=start_date,
+        end_date=end_date,
+    )
     if not daily:
         daily = {end_date: {}}
     followers = _as_int(profile.get("followers_count") or profile.get("fan_count"))
     return [
         {
-            "date": metric_date,
-            "followers_total": followers,
-            "impressions": values.get("page_impressions", 0),
-            "reach": values.get("page_impressions_unique", 0),
-            "clicks": values.get("page_consumptions", 0),
-            "engagement_total": values.get("page_post_engagements", 0),
-        }
-        for metric_date, values in sorted(daily.items())
-    ]
+                "date": metric_date,
+                "followers_total": followers,
+                "followers_change": values.get("page_daily_follows", 0) - values.get("page_daily_unfollows", 0),
+                "impressions": values.get("page_impressions", 0) or values.get("page_posts_impressions_organic", 0),
+                "reach": values.get("page_impressions_unique", 0),
+                "views": values.get("page_views_total", 0),
+                "clicks": values.get("page_consumptions", 0) or values.get("page_total_actions", 0),
+                "engagement_total": values.get("page_post_engagements", 0)
+                or values.get("page_actions_post_reactions_total", 0),
+            }
+            for metric_date, values in sorted(daily.items())
+        ]
 
 
 def fetch_meta_audience(*, access_token: str, account_id: str, start_date: date, end_date: date) -> list[dict]:
