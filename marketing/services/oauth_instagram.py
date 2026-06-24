@@ -10,7 +10,7 @@ from django.conf import settings
 from marketing.services.errors import MarketingServiceError
 
 GRAPH_BASE = "https://graph.facebook.com/v20.0"
-DIALOG_BASE = "https://www.facebook.com/v20.0/dialog/oauth"
+INSTAGRAM_AUTH_BASE = "https://www.instagram.com/oauth/authorize"
 
 
 def instagram_oauth_configured() -> bool:
@@ -25,19 +25,14 @@ def build_instagram_oauth_url(*, state: str) -> str:
     if not instagram_oauth_configured():
         raise MarketingServiceError("Instagram OAuth is not configured.")
     query = {
+        "force_reauth": "true",
         "client_id": settings.MARKETING_INSTAGRAM_APP_ID,
         "redirect_uri": settings.MARKETING_INSTAGRAM_REDIRECT_URI,
-        "state": state,
         "response_type": "code",
+        "scope": ",".join(settings.MARKETING_INSTAGRAM_SCOPES),
+        "state": state,
     }
-    login_config_id = getattr(settings, "MARKETING_INSTAGRAM_LOGIN_CONFIG_ID", "")
-    if login_config_id:
-        query["config_id"] = login_config_id
-        query["override_default_response_type"] = "true"
-        query["auth_type"] = "rerequest"
-    else:
-        query["scope"] = ",".join(settings.MARKETING_INSTAGRAM_SCOPES)
-    return f"{DIALOG_BASE}?{urllib.parse.urlencode(query)}"
+    return f"{INSTAGRAM_AUTH_BASE}?{urllib.parse.urlencode(query)}"
 
 
 def _fetch_json(url: str) -> dict:

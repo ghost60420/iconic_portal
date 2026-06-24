@@ -45,7 +45,7 @@ class MarketingSocialConnectionsTests(TestCase):
         MARKETING_GOOGLE_CLIENT_ID="google-client",
         MARKETING_GOOGLE_CLIENT_SECRET="google-secret",
         MARKETING_GOOGLE_REDIRECT_URI="https://femline.ca/api/auth/google/callback/",
-        MARKETING_INSTAGRAM_APP_ID="2014837702467423",
+        MARKETING_INSTAGRAM_APP_ID="1647476359669770",
         MARKETING_INSTAGRAM_APP_SECRET="instagram-secret",
         MARKETING_INSTAGRAM_REDIRECT_URI="https://femline.ca/api/auth/instagram/callback/",
     )
@@ -279,21 +279,35 @@ class MarketingSocialConnectionsTests(TestCase):
         MARKETING_META_APP_SECRET="meta-secret",
         MARKETING_META_REDIRECT_URI="https://femline.ca/api/auth/meta/callback/",
         MARKETING_META_LOGIN_CONFIG_ID="991769216888588",
-        MARKETING_INSTAGRAM_APP_ID="2014837702467423",
+        MARKETING_INSTAGRAM_APP_ID="1647476359669770",
         MARKETING_INSTAGRAM_APP_SECRET="instagram-secret",
         MARKETING_INSTAGRAM_REDIRECT_URI="https://femline.ca/api/auth/instagram/callback/",
         MARKETING_INSTAGRAM_LOGIN_CONFIG_ID="instagram-config",
+        MARKETING_INSTAGRAM_SCOPES=[
+            "instagram_business_basic",
+            "instagram_business_manage_insights",
+        ],
     )
     def test_instagram_api_oauth_start_uses_dedicated_app_and_callback_route(self):
         response = self.client.get(reverse("marketing_instagram_oauth_start_api_slash"))
 
         self.assertEqual(response.status_code, 302)
-        self.assertIn("facebook.com", response["Location"])
-        self.assertIn("client_id=2014837702467423", response["Location"])
-        self.assertIn("redirect_uri=https%3A%2F%2Ffemline.ca%2Fapi%2Fauth%2Finstagram%2Fcallback%2F", response["Location"])
-        self.assertIn("config_id=instagram-config", response["Location"])
-        self.assertIn("override_default_response_type=true", response["Location"])
-        self.assertIn("auth_type=rerequest", response["Location"])
+        parsed = urlparse(response["Location"])
+        params = parse_qs(parsed.query)
+        self.assertEqual(parsed.scheme, "https")
+        self.assertEqual(parsed.netloc, "www.instagram.com")
+        self.assertEqual(parsed.path, "/oauth/authorize")
+        self.assertEqual(params["force_reauth"], ["true"])
+        self.assertEqual(params["client_id"], ["1647476359669770"])
+        self.assertEqual(params["redirect_uri"], ["https://femline.ca/api/auth/instagram/callback/"])
+        self.assertEqual(params["response_type"], ["code"])
+        self.assertEqual(
+            params["scope"][0].split(","),
+            ["instagram_business_basic", "instagram_business_manage_insights"],
+        )
+        self.assertNotIn("config_id", params)
+        self.assertNotIn("instagram_basic", response["Location"])
+        self.assertNotIn("instagram_manage_insights", response["Location"])
         self.assertNotIn("client_id=996441839765056", response["Location"])
         self.assertTrue(OAuthConnectionRequest.objects.filter(platform="instagram", status="initiated").exists())
 
@@ -307,8 +321,6 @@ class MarketingSocialConnectionsTests(TestCase):
             "pages_read_engagement",
             "business_management",
             "ads_read",
-            "instagram_basic",
-            "instagram_manage_insights",
         ],
         MARKETING_META_BASIC_SCOPES=["public_profile"],
         MARKETING_META_FALLBACK_SCOPES=[
@@ -316,11 +328,10 @@ class MarketingSocialConnectionsTests(TestCase):
             "pages_read_engagement",
             "business_management",
             "ads_read",
-            "instagram_basic",
         ],
         MARKETING_META_SCOPE_TEST_MODES={},
     )
-    def test_meta_oauth_start_can_request_optional_instagram_scopes_without_business_config(self):
+    def test_meta_oauth_start_does_not_request_instagram_scopes_without_business_config(self):
         response = self.client.get(reverse("marketing_meta_oauth_start_api_slash"))
 
         self.assertEqual(response.status_code, 302)
@@ -334,13 +345,15 @@ class MarketingSocialConnectionsTests(TestCase):
                 "pages_read_engagement",
                 "business_management",
                 "ads_read",
-                "instagram_basic",
-                "instagram_manage_insights",
             ],
         )
         self.assertEqual(params["redirect_uri"][0], "https://femline.ca/api/auth/meta/callback/")
         self.assertNotIn("config_id", params)
         self.assertNotIn("email", scopes)
+        self.assertNotIn("instagram_basic", scopes)
+        self.assertNotIn("instagram_manage_insights", scopes)
+        self.assertNotIn("instagram_business_basic", scopes)
+        self.assertNotIn("instagram_business_manage_insights", scopes)
         self.assertNotIn("pages_read_user_content", scopes)
         self.assertNotIn("read_insights", scopes)
 
@@ -414,9 +427,8 @@ class MarketingSocialConnectionsTests(TestCase):
                     "pages_read_engagement",
                     "business_management",
                     "ads_read",
-                    "instagram_basic",
                 ],
-                "declined": ["instagram_manage_insights"],
+                "declined": [],
             },
         ):
             result = complete_meta_oauth_request(conn)
@@ -440,12 +452,12 @@ class MarketingSocialConnectionsTests(TestCase):
         )
         self.assertEqual(
             result["granted_scopes"],
-            ["pages_show_list", "pages_read_engagement", "business_management", "ads_read", "instagram_basic"],
+            ["pages_show_list", "pages_read_engagement", "business_management", "ads_read"],
         )
-        self.assertEqual(result["declined_scopes"], ["instagram_manage_insights"])
+        self.assertEqual(result["declined_scopes"], [])
         self.assertEqual(
             OAuthCredential.objects.get(platform="meta", account_id="meta").scopes,
-            "pages_show_list,pages_read_engagement,business_management,ads_read,instagram_basic",
+            "pages_show_list,pages_read_engagement,business_management,ads_read",
         )
         self.assertTrue(SystemActivityLog.objects.filter(action="meta_oauth_scopes").exists())
 
@@ -505,7 +517,7 @@ class MarketingSocialConnectionsTests(TestCase):
         ), patch(
             "marketing.services.oauth_connections.fetch_instagram_permissions",
             return_value={
-                "granted": ["instagram_basic", "instagram_manage_insights", "pages_show_list", "pages_read_engagement"],
+                "granted": ["instagram_business_basic", "instagram_business_manage_insights"],
                 "declined": [],
             },
         ), patch(
