@@ -44,6 +44,10 @@ class Command(BaseCommand):
 
     def _sync_meta_ads(self, *, access_token: str, start, end):
         synced = 0
+        ad_account_count = 0
+        campaign_count = 0
+        active_campaign_count = 0
+        connected_account_names = []
         ad_accounts = fetch_meta_ad_accounts(access_token=access_token)
         for row in ad_accounts:
             ad_account_id = row.get("external_ad_account_id")
@@ -54,15 +58,21 @@ class Command(BaseCommand):
                 external_account_id=ad_account_id,
                 defaults={"display_name": row.get("name") or "Meta Ad Account", "is_active": bool(row.get("is_active", True))},
             )
+            ad_account_count += 1
+            connected_account_names.append(platform_account.display_name or ad_account_id)
             ad_account, _ = AdAccount.objects.update_or_create(
                 platform_account=platform_account,
                 external_ad_account_id=ad_account_id,
                 defaults={"currency": row.get("currency") or "", "is_active": bool(row.get("is_active", True))},
             )
-            for campaign_row in fetch_meta_ad_campaigns(access_token=access_token, ad_account_id=ad_account_id):
+            campaign_rows = fetch_meta_ad_campaigns(access_token=access_token, ad_account_id=ad_account_id)
+            campaign_count += len(campaign_rows)
+            for campaign_row in campaign_rows:
                 campaign_id = campaign_row.get("external_campaign_id")
                 if not campaign_id:
                     continue
+                if (campaign_row.get("status") or "").upper() == "ACTIVE":
+                    active_campaign_count += 1
                 AdCampaign.objects.update_or_create(
                     ad_account=ad_account,
                     external_campaign_id=campaign_id,
@@ -88,7 +98,19 @@ class Command(BaseCommand):
             platform_account.last_sync_message = ""
             platform_account.save(update_fields=["last_sync_at", "last_successful_sync", "last_sync_status", "last_sync_message"])
             update_connection_sync_state(platform_account, status="ok", synced_at=synced_at)
-        return synced
+        message = (
+            "No Meta ad activity detected"
+            if synced == 0
+            else f"Meta Ads rows synced: {synced}"
+        )
+        return {
+            "synced_rows": synced,
+            "ad_account_count": ad_account_count,
+            "campaign_count": campaign_count,
+            "active_campaign_count": active_campaign_count,
+            "connected_account_names": connected_account_names,
+            "message": message,
+        }
 
     def handle(self, *args, **options):
         if not getattr(settings, "MARKETING_SOCIAL_ENABLED", False):
@@ -198,13 +220,18 @@ class Command(BaseCommand):
 
         if platform in {"", "meta_ads"} and meta_token:
             try:
-                synced_rows = self._sync_meta_ads(access_token=meta_token, start=start, end=end)
+                meta_ads_result = self._sync_meta_ads(access_token=meta_token, start=start, end=end)
                 if meta_credential:
                     meta_credential.last_sync_status = "ok"
                     meta_credential.last_error = ""
                     meta_credential.last_synced_at = timezone.now()
                     meta_credential.save(update_fields=["last_sync_status", "last_error", "last_synced_at", "updated_at"])
-                self.stdout.write(f"Meta Ads rows synced: {synced_rows}")
+                self.stdout.write(meta_ads_result["message"])
+                self.stdout.write(f"Connected ad accounts: {meta_ads_result['ad_account_count']}")
+                self.stdout.write(f"Campaigns: {meta_ads_result['campaign_count']}")
+                self.stdout.write(f"Active campaigns: {meta_ads_result['active_campaign_count']}")
+                if meta_ads_result["connected_account_names"]:
+                    self.stdout.write(f"Connected ad account names: {', '.join(meta_ads_result['connected_account_names'])}")
             except MarketingServiceError as exc:
                 if meta_credential:
                     meta_credential.last_sync_status = "error"

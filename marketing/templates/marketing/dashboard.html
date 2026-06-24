@@ -193,41 +193,79 @@
               {% endif %}
             </div>
 
-            <div class="mk-platform-primary">
-              <div>
-                <div class="mk-label">Reach</div>
-                <div class="mk-mini-stat">{{ card.reach|default:0 }}</div>
-              </div>
-              <div>
-                <div class="mk-label">Views</div>
-                <div class="mk-mini-stat">{{ card.views|default:0 }}</div>
-              </div>
-              <div>
-                <div class="mk-label">Clicks</div>
-                <div class="mk-mini-stat">{{ card.clicks|default:0 }}</div>
-              </div>
-              <div>
-                <div class="mk-label">Engagement Rate</div>
-                <div class="mk-mini-stat">{{ card.engagement_rate|floatformat:2 }}%</div>
-              </div>
-            </div>
-
-            <div class="mk-platform-footer">
-              <div>
-                <div class="mk-label">Follower Change</div>
-                <div class="mk-mini-stat">
-                  {% if card.follower_change_available %}
-                    {{ card.followers_change|default:0 }}
-                  {% else %}
-                    <span class="mk-muted">Unavailable</span>
+            {% if card.no_activity %}
+              <div class="mk-sub" style="margin-top:12px;">{{ card.no_activity_message }}</div>
+              <div class="mk-platform-primary">
+                <div>
+                  <div class="mk-label">Ad Account</div>
+                  <div class="mk-mini-stat">{{ card.connected_ad_account_name }}</div>
+                  {% if card.connected_ad_account_more_count %}
+                    <div class="mk-sub">+{{ card.connected_ad_account_more_count }} more</div>
                   {% endif %}
                 </div>
+                <div>
+                  <div class="mk-label">Campaigns</div>
+                  <div class="mk-mini-stat">{{ card.campaign_count }}</div>
+                </div>
+                <div>
+                  <div class="mk-label">Active Campaigns</div>
+                  <div class="mk-mini-stat">{{ card.active_campaign_count }}</div>
+                </div>
+                <div>
+                  <div class="mk-label">Spend</div>
+                  <div class="mk-mini-stat">{{ card.no_activity_message }}</div>
+                </div>
               </div>
-              <div>
-                <div class="mk-label">Engagement</div>
-                <div class="mk-mini-stat">{{ card.engagement_total|default:0 }}</div>
+            {% else %}
+              <div class="mk-platform-primary">
+                <div>
+                  <div class="mk-label">Reach</div>
+                  <div class="mk-mini-stat">{{ card.reach|default:0 }}</div>
+                </div>
+                <div>
+                  <div class="mk-label">Views</div>
+                  <div class="mk-mini-stat">{{ card.views|default:0 }}</div>
+                </div>
+                <div>
+                  <div class="mk-label">Clicks</div>
+                  <div class="mk-mini-stat">{{ card.clicks|default:0 }}</div>
+                </div>
+                <div>
+                  <div class="mk-label">Engagement Rate</div>
+                  <div class="mk-mini-stat">{{ card.engagement_rate|floatformat:2 }}%</div>
+                </div>
               </div>
-            </div>
+            {% endif %}
+
+            {% if card.no_activity %}
+              <div class="mk-platform-footer">
+                <div>
+                  <div class="mk-label">Sync Status</div>
+                  <div class="mk-mini-stat">Connected</div>
+                </div>
+                <div>
+                  <div class="mk-label">Insight Rows</div>
+                  <div class="mk-mini-stat">No activity</div>
+                </div>
+              </div>
+            {% else %}
+              <div class="mk-platform-footer">
+                <div>
+                  <div class="mk-label">Follower Change</div>
+                  <div class="mk-mini-stat">
+                    {% if card.follower_change_available %}
+                      {{ card.followers_change|default:0 }}
+                    {% else %}
+                      <span class="mk-muted">Unavailable</span>
+                    {% endif %}
+                  </div>
+                </div>
+                <div>
+                  <div class="mk-label">Engagement</div>
+                  <div class="mk-mini-stat">{{ card.engagement_total|default:0 }}</div>
+                </div>
+              </div>
+            {% endif %}
           </div>
         {% endfor %}
       </div>

@@ -31,6 +31,7 @@ from marketing.models import (
     SocialAccount,
     SocialAudienceDaily,
     AccountMetricDaily,
+    AdAccount,
     AdCampaign,
     AdMetricDaily,
     BestPracticeLibrary,
@@ -793,18 +794,36 @@ def _platform_comparison(start_date, end_date):
         )
     )
     follower_map = {row["account__platform"]: row for row in follower_rows}
-    ad_totals = AdMetricDaily.objects.filter(date__gte=start_date, date__lte=end_date).aggregate(
+    ad_metric_qs = AdMetricDaily.objects.filter(date__gte=start_date, date__lte=end_date)
+    ad_totals = ad_metric_qs.aggregate(
+        spend=Coalesce(Sum("spend"), Decimal("0")),
         impressions=Coalesce(Sum("impressions"), 0),
         clicks=Coalesce(Sum("clicks"), 0),
         conversions=Coalesce(Sum("conversions"), 0),
     )
+    meta_ad_accounts = list(
+        AdAccount.objects.filter(platform_account__platform="meta_business", platform_account__is_active=True)
+        .select_related("platform_account")
+        .order_by("platform_account__display_name", "external_ad_account_id")
+    )
+    meta_ad_account_count = len(meta_ad_accounts)
+    meta_ad_account_names = [
+        account.platform_account.display_name or account.external_ad_account_id
+        for account in meta_ad_accounts
+    ]
+    meta_ad_campaigns = AdCampaign.objects.filter(ad_account__in=meta_ad_accounts)
+    meta_ad_campaign_count = meta_ad_campaigns.count()
+    meta_ad_active_campaign_count = meta_ad_campaigns.filter(status__iexact="ACTIVE").count()
+    meta_ad_metric_count = ad_metric_qs.filter(ad_campaign__ad_account__in=meta_ad_accounts).count()
 
     cards = []
     for config in PLATFORM_CARD_CONFIG:
         if config["key"] == "meta_ads":
+            spend = ad_totals.get("spend") or Decimal("0")
             impressions = ad_totals.get("impressions") or 0
             clicks = ad_totals.get("clicks") or 0
             conversions = ad_totals.get("conversions") or 0
+            no_activity = bool(meta_ad_account_count and meta_ad_campaign_count and meta_ad_metric_count == 0)
             engagement_rate = calc_engagement_rate(
                 impressions=impressions,
                 reach=0,
@@ -817,6 +836,8 @@ def _platform_comparison(start_date, end_date):
                     "label": config["label"],
                     "platform": config["key"],
                     "impressions": impressions,
+                    "spend": spend,
+                    "spend_display": _format_money(spend),
                     "reach": 0,
                     "views": 0,
                     "clicks": clicks,
@@ -825,7 +846,15 @@ def _platform_comparison(start_date, end_date):
                     "engagement_rate": engagement_rate,
                     "followers_change": 0,
                     "follower_change_available": False,
-                    "has_activity": bool(impressions or clicks or conversions),
+                    "has_activity": bool(impressions or clicks or conversions or spend),
+                    "no_activity": no_activity,
+                    "no_activity_message": "No Meta ad activity detected" if no_activity else "",
+                    "connected_ad_account_count": meta_ad_account_count,
+                    "connected_ad_account_name": ", ".join(meta_ad_account_names[:3]),
+                    "connected_ad_account_more_count": max(meta_ad_account_count - 3, 0),
+                    "campaign_count": meta_ad_campaign_count,
+                    "active_campaign_count": meta_ad_active_campaign_count,
+                    "metric_row_count": meta_ad_metric_count,
                 }
             )
             continue

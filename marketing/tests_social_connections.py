@@ -1,8 +1,10 @@
 from unittest.mock import patch
 from datetime import date
+from io import StringIO
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
@@ -570,6 +572,77 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertEqual(platform_cards["meta_ads"]["clicks"], 50)
         self.assertEqual(platform_cards["meta_ads"]["engagement_total"], 4)
         self.assertTrue(platform_cards["meta_ads"]["has_activity"])
+
+    def test_meta_ads_dashboard_card_shows_no_activity_with_campaigns(self):
+        account = SocialAccount.objects.create(
+            platform="meta_business",
+            external_account_id="act_1",
+            display_name="Iconic Ads",
+            is_active=True,
+        )
+        ad_account = AdAccount.objects.create(platform_account=account, external_ad_account_id="act_1", currency="CAD")
+        AdCampaign.objects.create(
+            ad_account=ad_account,
+            external_campaign_id="cmp-1",
+            name="Lead Campaign",
+            status="ACTIVE",
+        )
+
+        platform_cards = {item["key"]: item for item in _platform_comparison(date(2026, 6, 1), date(2026, 6, 21))}
+
+        self.assertFalse(platform_cards["meta_ads"]["has_activity"])
+        self.assertTrue(platform_cards["meta_ads"]["no_activity"])
+        self.assertEqual(platform_cards["meta_ads"]["no_activity_message"], "No Meta ad activity detected")
+        self.assertEqual(platform_cards["meta_ads"]["connected_ad_account_name"], "Iconic Ads")
+        self.assertEqual(platform_cards["meta_ads"]["campaign_count"], 1)
+        self.assertEqual(platform_cards["meta_ads"]["active_campaign_count"], 1)
+        self.assertEqual(platform_cards["meta_ads"]["metric_row_count"], 0)
+
+    def test_meta_ads_sync_reports_no_activity_without_failure(self):
+        credential = OAuthCredential.objects.create(
+            platform="meta",
+            account_name="Meta Platform Token",
+            account_id="meta",
+            is_active=True,
+        )
+        credential.set_tokens(access_token="token", refresh_token="")
+        credential.save()
+        output = StringIO()
+
+        with patch(
+            "marketing.management.commands.marketing_sync_meta_daily.fetch_meta_ad_accounts",
+            return_value=[
+                {
+                    "external_ad_account_id": "act_1",
+                    "name": "Iconic Ads",
+                    "currency": "CAD",
+                    "is_active": True,
+                }
+            ],
+        ), patch(
+            "marketing.management.commands.marketing_sync_meta_daily.fetch_meta_ad_campaigns",
+            return_value=[
+                {
+                    "external_campaign_id": "cmp-1",
+                    "name": "Lead Campaign",
+                    "status": "ACTIVE",
+                    "objective": "OUTCOME_LEADS",
+                }
+            ],
+        ), patch(
+            "marketing.management.commands.marketing_sync_meta_daily.fetch_meta_ad_insights",
+            return_value=[],
+        ):
+            call_command("marketing_sync_meta_daily", platform="meta_ads", stdout=output)
+
+        credential.refresh_from_db()
+        self.assertEqual(credential.last_sync_status, "ok")
+        self.assertEqual(credential.last_error, "")
+        self.assertIn("No Meta ad activity detected", output.getvalue())
+        self.assertIn("Campaigns: 1", output.getvalue())
+        self.assertIn("Active campaigns: 1", output.getvalue())
+        self.assertTrue(SocialAccount.objects.filter(platform="meta_business", external_account_id="act_1").exists())
+        self.assertTrue(AdCampaign.objects.filter(external_campaign_id="cmp-1").exists())
 
     def test_meta_ad_insights_parse_campaign_metrics(self):
         from marketing.services.meta import fetch_meta_ad_insights
