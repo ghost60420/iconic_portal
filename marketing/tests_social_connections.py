@@ -790,22 +790,29 @@ class MarketingSocialConnectionsTests(TestCase):
     def test_instagram_account_metrics_parse_profile_and_insights(self):
         from marketing.services.meta import fetch_meta_account_metrics
 
+        calls = []
+
         def fake_request(path, **kwargs):
-            if path == "/ig-1":
-                return {"followers_count": "1250", "media_count": "42", "username": "iconicapparelhouse"}
+            calls.append(path)
+            if str(path).endswith("/ig-1"):
+                return {
+                    "followers_count": "1250",
+                    "media_count": "42",
+                    "username": "iconicapparelhouse",
+                    "account_type": "BUSINESS",
+                }
+            metric = kwargs.get("params", {}).get("metric", "")
+            values_by_metric = {
+                "impressions": 3000,
+                "reach": 2100,
+                "profile_views": 75,
+                "total_interactions": 36,
+            }
             return {
                 "data": [
                     {
-                        "name": "impressions",
-                        "values": [{"end_time": "2026-06-20T07:00:00+0000", "value": 3000}],
-                    },
-                    {
-                        "name": "reach",
-                        "values": [{"end_time": "2026-06-20T07:00:00+0000", "value": 2100}],
-                    },
-                    {
-                        "name": "profile_views",
-                        "values": [{"end_time": "2026-06-20T07:00:00+0000", "value": 75}],
+                        "name": metric,
+                        "values": [{"end_time": "2026-06-20T07:00:00+0000", "value": values_by_metric.get(metric, 0)}],
                     },
                 ]
             }
@@ -824,6 +831,98 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertEqual(rows[0]["impressions"], 3000)
         self.assertEqual(rows[0]["reach"], 2100)
         self.assertEqual(rows[0]["views"], 75)
+        self.assertEqual(rows[0]["engagement_total"], 36)
+        self.assertEqual(rows[0]["media_count"], 42)
+        self.assertTrue(all(str(path).startswith("https://graph.instagram.com/ig-1") for path in calls))
+
+    def test_instagram_content_uses_instagram_graph_endpoint(self):
+        from marketing.services.meta import fetch_meta_content
+
+        calls = []
+
+        def fake_request(path, **kwargs):
+            calls.append(path)
+            return {
+                "data": [
+                    {
+                        "id": "media-1",
+                        "caption": "New drop",
+                        "media_type": "IMAGE",
+                        "permalink": "https://www.instagram.com/p/media-1/",
+                        "timestamp": "2026-06-20T07:00:00+0000",
+                        "like_count": 10,
+                        "comments_count": 2,
+                    }
+                ]
+            }
+
+        with patch("marketing.services.meta._request_json", side_effect=fake_request):
+            rows = fetch_meta_content(
+                access_token="ig-token",
+                account_id="ig-1",
+                start_date=date(2026, 6, 1),
+                end_date=date(2026, 6, 21),
+                platform="instagram",
+            )
+
+        self.assertEqual(calls[0], "https://graph.instagram.com/ig-1/media")
+        self.assertEqual(rows[0]["external_content_id"], "media-1")
+        self.assertEqual(rows[0]["metric_payload"]["likes"], 10)
+        self.assertEqual(rows[0]["metric_payload"]["comments"], 2)
+
+    def test_instagram_media_metrics_use_instagram_graph_endpoint(self):
+        from marketing.services.meta import fetch_meta_metrics
+
+        calls = []
+
+        def fake_request(path, **kwargs):
+            calls.append(path)
+            return {
+                "data": [
+                    {"name": "views", "values": [{"end_time": "2026-06-20T07:00:00+0000", "value": 500}]},
+                    {"name": "reach", "values": [{"end_time": "2026-06-20T07:00:00+0000", "value": 300}]},
+                    {"name": "saved", "values": [{"end_time": "2026-06-20T07:00:00+0000", "value": 4}]},
+                    {"name": "shares", "values": [{"end_time": "2026-06-20T07:00:00+0000", "value": 3}]},
+                ]
+            }
+
+        with patch("marketing.services.meta._request_json", side_effect=fake_request):
+            rows = fetch_meta_metrics(
+                access_token="ig-token",
+                content_id="media-1",
+                start_date=date(2026, 6, 1),
+                end_date=date(2026, 6, 21),
+                platform="instagram",
+            )
+
+        self.assertEqual(calls[0], "https://graph.instagram.com/media-1/insights")
+        self.assertEqual(rows[0]["impressions"], 500)
+        self.assertEqual(rows[0]["reach"], 300)
+        self.assertEqual(rows[0]["saves"], 4)
+        self.assertEqual(rows[0]["shares"], 3)
+
+    def test_facebook_account_metrics_keep_facebook_graph_path(self):
+        from marketing.services.meta import fetch_meta_account_metrics
+
+        calls = []
+
+        def fake_request(path, **kwargs):
+            calls.append(path)
+            if path == "/fb-1":
+                return {"followers_count": "100", "fan_count": "100"}
+            return {"data": []}
+
+        with patch("marketing.services.meta._request_json", side_effect=fake_request):
+            fetch_meta_account_metrics(
+                access_token="fb-token",
+                account_id="fb-1",
+                start_date=date(2026, 6, 1),
+                end_date=date(2026, 6, 21),
+                platform="facebook",
+            )
+
+        self.assertEqual(calls[0], "/fb-1")
+        self.assertEqual(calls[1], "/fb-1/insights")
 
     def test_instagram_account_metrics_feed_dashboard_platform_card(self):
         account = SocialAccount.objects.create(

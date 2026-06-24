@@ -14,6 +14,7 @@ from .errors import MarketingServiceError
 
 
 GRAPH_BASE = "https://graph.facebook.com/v20.0"
+INSTAGRAM_GRAPH_BASE = "https://graph.instagram.com"
 
 
 def _as_int(value) -> int:
@@ -70,6 +71,99 @@ def _iter_graph_data(path_or_url: str, *, access_token: str, params: dict | None
         page_count += 1
 
 
+def _instagram_path(path: str) -> str:
+    clean_path = path if path.startswith("/") else f"/{path}"
+    return f"{INSTAGRAM_GRAPH_BASE}{clean_path}"
+
+
+def _request_instagram_account_json(
+    account_id: str,
+    suffix: str = "",
+    *,
+    access_token: str,
+    params: dict | None = None,
+) -> dict:
+    paths = [f"/{account_id}{suffix}"] if account_id else []
+    fallback = f"/me{suffix}"
+    if fallback not in paths:
+        paths.append(fallback)
+    last_error = None
+    for path in paths:
+        try:
+            return _request_json(_instagram_path(path), access_token=access_token, params=params)
+        except MarketingServiceError as exc:
+            last_error = exc
+    if last_error:
+        raise last_error
+    raise MarketingServiceError("Instagram API request failed.")
+
+
+def _iter_instagram_account_data(
+    account_id: str,
+    suffix: str,
+    *,
+    access_token: str,
+    params: dict | None = None,
+    limit_pages: int = 10,
+):
+    paths = [f"/{account_id}{suffix}"] if account_id else []
+    fallback = f"/me{suffix}"
+    if fallback not in paths:
+        paths.append(fallback)
+    last_error = None
+    for path in paths:
+        try:
+            yield from _iter_graph_data(
+                _instagram_path(path),
+                access_token=access_token,
+                params=params,
+                limit_pages=limit_pages,
+            )
+            return
+        except MarketingServiceError as exc:
+            last_error = exc
+    if last_error:
+        raise last_error
+
+
+def _instagram_insight_series(
+    *,
+    access_token: str,
+    object_id: str,
+    suffix: str = "/insights",
+    metrics: list[str],
+    start_date: date,
+    end_date: date,
+) -> dict[date, dict[str, int]]:
+    daily: dict[date, dict[str, int]] = {}
+    for metric in metrics:
+        try:
+            payload = _request_instagram_account_json(
+                object_id,
+                suffix,
+                access_token=access_token,
+                params={
+                    "metric": metric,
+                    "period": "day",
+                    "since": start_date.isoformat(),
+                    "until": end_date.isoformat(),
+                },
+            )
+        except MarketingServiceError:
+            continue
+        rows = _insight_series(payload)
+        if not rows:
+            for metric_row in payload.get("data") or []:
+                total_value = metric_row.get("total_value")
+                if not isinstance(total_value, dict):
+                    continue
+                metric_name = metric_row.get("name") or metric
+                rows.setdefault(end_date, {})[metric_name] = _as_int(total_value.get("value"))
+        for metric_date, values in rows.items():
+            daily.setdefault(metric_date, {}).update(values)
+    return daily
+
+
 def _date_to_unix(value: date, *, end_of_day: bool = False) -> int:
     wall_time = time.max if end_of_day else time.min
     dt = datetime.combine(value, wall_time)
@@ -111,6 +205,14 @@ def _metric_value(payload: dict, metric_name: str) -> int:
     total = 0
     for values in rows.values():
         total += values.get(metric_name, 0)
+    if total:
+        return total
+    for metric in payload.get("data") or []:
+        if (metric.get("name") or "") != metric_name:
+            continue
+        total_value = metric.get("total_value")
+        if isinstance(total_value, dict):
+            return _as_int(total_value.get("value"))
     return total
 
 
@@ -138,7 +240,12 @@ def fetch_meta_content(
     if platform == "instagram":
         fields = "id,caption,media_type,permalink,timestamp,like_count,comments_count"
         params = {"fields": fields, "limit": 50}
-        for item in _iter_graph_data(f"/{account_id}/media", access_token=access_token, params=params):
+        try:
+            media_rows = list(_iter_instagram_account_data(account_id, "/media", access_token=access_token, params=params))
+        except MarketingServiceError:
+            params = {"fields": "id,caption,media_type,permalink,timestamp", "limit": 50}
+            media_rows = list(_iter_instagram_account_data(account_id, "/media", access_token=access_token, params=params))
+        for item in media_rows:
             published_at = _parse_meta_datetime(item.get("timestamp") or "")
             if published_at:
                 published_date = timezone.localtime(published_at).date()
@@ -205,12 +312,27 @@ def fetch_meta_metrics(
         raise MarketingServiceError("Missing Meta content id")
 
     if platform == "instagram":
-        metric_names = "impressions,reach,saved,shares,total_interactions"
-        payload = _request_json(f"/{content_id}/insights", access_token=access_token, params={"metric": metric_names})
+        payload = {}
+        for metric_names in [
+            "impressions,reach,saved,shares,total_interactions",
+            "views,reach,saved,shares,total_interactions",
+        ]:
+            try:
+                payload = _request_json(
+                    _instagram_path(f"/{content_id}/insights"),
+                    access_token=access_token,
+                    params={"metric": metric_names},
+                )
+                break
+            except MarketingServiceError:
+                payload = {}
+        if not payload:
+            return []
+        impressions = _metric_value(payload, "impressions") or _metric_value(payload, "views")
         return [
             {
                 "date": end_date,
-                "impressions": _metric_value(payload, "impressions"),
+                "impressions": impressions,
                 "reach": _metric_value(payload, "reach"),
                 "saves": _metric_value(payload, "saved"),
                 "shares": _metric_value(payload, "shares"),
@@ -242,30 +364,29 @@ def fetch_meta_account_metrics(
         raise MarketingServiceError("Missing Meta account id")
 
     if platform == "instagram":
-        profile = _request_json(
-            f"/{account_id}",
+        profile = _request_instagram_account_json(
+            account_id,
             access_token=access_token,
-            params={"fields": "followers_count,media_count,username,name"},
+            params={"fields": "id,user_id,followers_count,media_count,username,account_type"},
         )
-        metric_names = "impressions,reach,profile_views"
-        try:
-            payload = _request_json(
-                f"/{account_id}/insights",
-                access_token=access_token,
-                params={"metric": metric_names, "period": "day", "since": start_date.isoformat(), "until": end_date.isoformat()},
-            )
-            daily = _insight_series(payload)
-        except MarketingServiceError:
-            daily = {}
+        daily = _instagram_insight_series(
+            access_token=access_token,
+            object_id=account_id,
+            metrics=["impressions", "views", "reach", "profile_views", "total_interactions"],
+            start_date=start_date,
+            end_date=end_date,
+        )
         if not daily:
             daily = {end_date: {}}
         return [
             {
                 "date": metric_date,
                 "followers_total": _as_int(profile.get("followers_count")),
-                "impressions": values.get("impressions", 0),
+                "impressions": values.get("impressions", 0) or values.get("views", 0),
                 "reach": values.get("reach", 0),
                 "views": values.get("profile_views", 0),
+                "engagement_total": values.get("total_interactions", 0),
+                "media_count": _as_int(profile.get("media_count")),
             }
             for metric_date, values in sorted(daily.items())
         ]

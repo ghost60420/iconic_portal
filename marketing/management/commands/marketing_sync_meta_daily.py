@@ -193,7 +193,9 @@ class Command(BaseCommand):
                     end_date=end,
                     platform=acct.platform,
                 )
+                media_count = 0
                 for metric in account_metric_rows:
+                    media_count = max(media_count, int(metric.get("media_count") or 0))
                     upsert_account_metric_daily(account_obj=acct, payload=metric)
 
                 audience_rows = fetch_meta_audience(
@@ -209,7 +211,7 @@ class Command(BaseCommand):
                 acct.last_sync_at = synced_at
                 acct.last_successful_sync = synced_at
                 acct.last_sync_status = "ok"
-                acct.last_sync_message = ""
+                acct.last_sync_message = f"Media count: {media_count}" if acct.platform == "instagram" and media_count else ""
                 acct.save(update_fields=["last_sync_at", "last_successful_sync", "last_sync_status", "last_sync_message"])
                 update_connection_sync_state(acct, status="ok", synced_at=synced_at)
             except MarketingServiceError as exc:
