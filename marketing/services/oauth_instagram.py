@@ -11,6 +11,8 @@ from marketing.services.errors import MarketingServiceError
 
 GRAPH_BASE = "https://graph.facebook.com/v20.0"
 INSTAGRAM_AUTH_BASE = "https://www.instagram.com/oauth/authorize"
+INSTAGRAM_TOKEN_ENDPOINT = "https://api.instagram.com/oauth/access_token"
+INSTAGRAM_GRAPH_BASE = "https://graph.instagram.com"
 
 
 def instagram_oauth_configured() -> bool:
@@ -47,25 +49,43 @@ def _fetch_json(url: str) -> dict:
         raise MarketingServiceError(str(exc)) from exc
 
 
+def _post_form_json(url: str, data: dict[str, str]) -> dict:
+    encoded = urllib.parse.urlencode(data).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=encoded,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20) as resp:
+            payload = resp.read().decode("utf-8")
+            return json.loads(payload)
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="ignore")
+        raise MarketingServiceError(f"Instagram API error: {body[:500]}") from exc
+    except Exception as exc:
+        raise MarketingServiceError(str(exc)) from exc
+
+
 def exchange_instagram_code_for_token(*, code: str) -> dict:
-    query = {
+    data = {
         "client_id": settings.MARKETING_INSTAGRAM_APP_ID,
         "client_secret": settings.MARKETING_INSTAGRAM_APP_SECRET,
+        "grant_type": "authorization_code",
         "redirect_uri": settings.MARKETING_INSTAGRAM_REDIRECT_URI,
         "code": code,
     }
-    url = f"{GRAPH_BASE}/oauth/access_token?{urllib.parse.urlencode(query)}"
-    return _fetch_json(url)
+    return _post_form_json(INSTAGRAM_TOKEN_ENDPOINT, data)
 
 
 def exchange_instagram_long_lived_token(*, access_token: str) -> dict:
     query = {
-        "grant_type": "fb_exchange_token",
-        "client_id": settings.MARKETING_INSTAGRAM_APP_ID,
+        "grant_type": "ig_exchange_token",
         "client_secret": settings.MARKETING_INSTAGRAM_APP_SECRET,
-        "fb_exchange_token": access_token,
+        "access_token": access_token,
     }
-    url = f"{GRAPH_BASE}/oauth/access_token?{urllib.parse.urlencode(query)}"
+    url = f"{INSTAGRAM_GRAPH_BASE}/access_token?{urllib.parse.urlencode(query)}"
     return _fetch_json(url)
 
 

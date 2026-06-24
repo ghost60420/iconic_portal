@@ -312,6 +312,62 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertTrue(OAuthConnectionRequest.objects.filter(platform="instagram", status="initiated").exists())
 
     @override_settings(
+        MARKETING_INSTAGRAM_APP_ID="1647476359669770",
+        MARKETING_INSTAGRAM_APP_SECRET="instagram-secret",
+        MARKETING_INSTAGRAM_REDIRECT_URI="https://femline.ca/api/auth/instagram/callback/",
+    )
+    def test_instagram_code_exchange_uses_instagram_token_endpoint(self):
+        from marketing.services.oauth_instagram import exchange_instagram_code_for_token
+
+        class DummyResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return None
+
+            def read(self):
+                return b'{"access_token":"ig-short","user_id":"123"}'
+
+        with patch("marketing.services.oauth_instagram.urllib.request.urlopen", return_value=DummyResponse()) as urlopen:
+            payload = exchange_instagram_code_for_token(code="callback-code")
+
+        request = urlopen.call_args.args[0]
+        body = parse_qs(request.data.decode("utf-8"))
+        self.assertEqual(request.full_url, "https://api.instagram.com/oauth/access_token")
+        self.assertEqual(request.get_method(), "POST")
+        self.assertEqual(body["client_id"], ["1647476359669770"])
+        self.assertEqual(body["grant_type"], ["authorization_code"])
+        self.assertEqual(body["redirect_uri"], ["https://femline.ca/api/auth/instagram/callback/"])
+        self.assertEqual(body["code"], ["callback-code"])
+        self.assertEqual(payload["access_token"], "ig-short")
+
+    @override_settings(MARKETING_INSTAGRAM_APP_SECRET="instagram-secret")
+    def test_instagram_long_lived_exchange_uses_instagram_graph_endpoint(self):
+        from marketing.services.oauth_instagram import exchange_instagram_long_lived_token
+
+        class DummyResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return None
+
+            def read(self):
+                return b'{"access_token":"ig-long","expires_in":3600}'
+
+        with patch("marketing.services.oauth_instagram.urllib.request.urlopen", return_value=DummyResponse()) as urlopen:
+            payload = exchange_instagram_long_lived_token(access_token="ig-short")
+
+        url = urlopen.call_args.args[0]
+        parsed = urlparse(url)
+        params = parse_qs(parsed.query)
+        self.assertEqual(f"{parsed.scheme}://{parsed.netloc}{parsed.path}", "https://graph.instagram.com/access_token")
+        self.assertEqual(params["grant_type"], ["ig_exchange_token"])
+        self.assertEqual(params["access_token"], ["ig-short"])
+        self.assertEqual(payload["access_token"], "ig-long")
+
+    @override_settings(
         MARKETING_META_APP_ID="996441839765056",
         MARKETING_META_APP_SECRET="meta-secret",
         MARKETING_META_REDIRECT_URI="https://femline.ca/api/auth/meta/callback/",
