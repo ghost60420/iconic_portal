@@ -629,6 +629,8 @@ def complete_instagram_oauth_request(conn: OAuthConnectionRequest) -> dict:
                 "display_name": account_name,
                 "timezone": account_info.get("timezone") or "",
                 "is_active": True,
+                "last_sync_status": "connected",
+                "last_sync_message": f"Account type: {account_info.get('account_type')}" if account_info.get("account_type") else "",
             },
         )
         credential, _ = OAuthCredential.objects.get_or_create(platform="instagram", platform_account=account)

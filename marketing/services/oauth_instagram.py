@@ -112,33 +112,25 @@ def fetch_instagram_business_accounts(*, access_token: str) -> list[dict]:
     fields = ",".join(
         [
             "id",
-            "name",
-            "access_token",
-            "instagram_business_account{id,username,name,followers_count,media_count}",
-            "timezone",
+            "user_id",
+            "username",
+            "account_type",
+            "media_count",
+            "followers_count",
         ]
     )
-    url = f"{GRAPH_BASE}/me/accounts?fields={urllib.parse.quote(fields)}&access_token={urllib.parse.quote(access_token)}"
-    accounts: list[dict] = []
-    while url:
-        payload = _fetch_json(url)
-        for page in payload.get("data") or []:
-            ig_info = page.get("instagram_business_account") or {}
-            ig_id = ig_info.get("id")
-            if not ig_id:
-                continue
-            accounts.append(
-                {
-                    "id": ig_id,
-                    "username": ig_info.get("username") or "",
-                    "name": ig_info.get("name") or "",
-                    "followers_count": ig_info.get("followers_count"),
-                    "media_count": ig_info.get("media_count"),
-                    "page_id": page.get("id") or "",
-                    "page_name": page.get("name") or "",
-                    "page_access_token": page.get("access_token") or "",
-                    "timezone": page.get("timezone") or "",
-                }
-            )
-        url = payload.get("paging", {}).get("next")
-    return accounts
+    url = f"{INSTAGRAM_GRAPH_BASE}/me?fields={urllib.parse.quote(fields)}&access_token={urllib.parse.quote(access_token)}"
+    payload = _fetch_json(url)
+    account_id = payload.get("user_id") or payload.get("id")
+    if not account_id:
+        return []
+    return [
+        {
+            "id": account_id,
+            "username": payload.get("username") or "",
+            "name": payload.get("username") or "",
+            "account_type": payload.get("account_type") or "",
+            "followers_count": payload.get("followers_count"),
+            "media_count": payload.get("media_count"),
+        }
+    ]

@@ -367,6 +367,37 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertEqual(params["access_token"], ["ig-short"])
         self.assertEqual(payload["access_token"], "ig-long")
 
+    def test_instagram_account_discovery_uses_instagram_me_endpoint(self):
+        from marketing.services.oauth_instagram import fetch_instagram_business_accounts
+
+        class DummyResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return None
+
+            def read(self):
+                return (
+                    b'{"id":"app-scoped-id","user_id":"17841400000000000",'
+                    b'"username":"iconicapparelhouse","account_type":"BUSINESS",'
+                    b'"followers_count":1200,"media_count":44}'
+                )
+
+        with patch("marketing.services.oauth_instagram.urllib.request.urlopen", return_value=DummyResponse()) as urlopen:
+            accounts = fetch_instagram_business_accounts(access_token="ig-long")
+
+        parsed = urlparse(urlopen.call_args.args[0])
+        params = parse_qs(parsed.query)
+        self.assertEqual(f"{parsed.scheme}://{parsed.netloc}{parsed.path}", "https://graph.instagram.com/me")
+        self.assertIn("user_id", params["fields"][0])
+        self.assertIn("username", params["fields"][0])
+        self.assertIn("account_type", params["fields"][0])
+        self.assertEqual(params["access_token"], ["ig-long"])
+        self.assertEqual(accounts[0]["id"], "17841400000000000")
+        self.assertEqual(accounts[0]["username"], "iconicapparelhouse")
+        self.assertEqual(accounts[0]["account_type"], "BUSINESS")
+
     @override_settings(
         MARKETING_META_APP_ID="996441839765056",
         MARKETING_META_APP_SECRET="meta-secret",
@@ -583,6 +614,7 @@ class MarketingSocialConnectionsTests(TestCase):
                     "id": "ig-1",
                     "username": "iconicapparelhouse",
                     "name": "Iconic Apparel House",
+                    "account_type": "BUSINESS",
                     "page_id": "page-1",
                     "page_name": "Iconic Page",
                     "page_access_token": "page-token",
@@ -596,6 +628,8 @@ class MarketingSocialConnectionsTests(TestCase):
         account = SocialAccount.objects.get(platform="instagram", external_account_id="ig-1")
         self.assertEqual(account.display_name, "iconicapparelhouse")
         self.assertEqual(account.timezone, "America/Toronto")
+        self.assertEqual(account.last_sync_status, "connected")
+        self.assertEqual(account.last_sync_message, "Account type: BUSINESS")
         credential = OAuthCredential.objects.get(platform="instagram", platform_account=account)
         self.assertEqual(credential.account_name, "iconicapparelhouse")
         self.assertEqual(credential.account_id, "ig-1")
