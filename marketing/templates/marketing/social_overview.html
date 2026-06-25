@@ -74,6 +74,54 @@
                 <div class="mk-mini-stat">No activity</div>
               </div>
             </div>
+          {% elif card.facebook_permission_limited %}
+            <div class="mk-sub" style="margin-top:12px;">{{ card.facebook_permission_message }}</div>
+            <div class="mk-platform-primary">
+              <div>
+                <div class="mk-label">Page</div>
+                <div class="mk-mini-stat">{{ card.connected_account_name }}</div>
+              </div>
+              <div>
+                <div class="mk-label">Followers</div>
+                <div class="mk-mini-stat">{{ card.followers_total|default:0 }}</div>
+              </div>
+              <div>
+                <div class="mk-label">Likes</div>
+                <div class="mk-mini-stat">{{ card.page_likes_total|default:0 }}</div>
+              </div>
+              <div>
+                <div class="mk-label">Recent Posts</div>
+                <div class="mk-mini-stat">{{ card.recent_posts_count|default:0 }}</div>
+              </div>
+              <div>
+                <div class="mk-label">Last Sync</div>
+                <div class="mk-mini-stat">
+                  {% if card.last_sync_at %}{{ card.last_sync_at|date:"M j, Y g:i A" }}{% else %}<span class="mk-muted">Not synced</span>{% endif %}
+                </div>
+              </div>
+              <div>
+                <div class="mk-label">Connection Status</div>
+                <div class="mk-mini-stat">{{ card.connection_status }}</div>
+              </div>
+            </div>
+            <div class="mk-platform-footer">
+              <div>
+                <div class="mk-label">Reach</div>
+                <div class="mk-mini-stat">Permission required</div>
+              </div>
+              <div>
+                <div class="mk-label">Impressions</div>
+                <div class="mk-mini-stat">Permission required</div>
+              </div>
+              <div>
+                <div class="mk-label">Engagement</div>
+                <div class="mk-mini-stat">Permission required</div>
+              </div>
+            </div>
+            <details class="mk-sub" style="margin-top:12px;">
+              <summary>Advanced details</summary>
+              <div style="margin-top:6px;">Missing permission: {{ card.facebook_missing_permission }}</div>
+            </details>
           {% else %}
             <div class="mk-platform-primary">
               <div>

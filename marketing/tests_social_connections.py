@@ -1,5 +1,5 @@
 from unittest.mock import patch
-from datetime import date
+from datetime import date, datetime
 from io import StringIO
 from urllib.parse import parse_qs, urlparse
 
@@ -8,6 +8,7 @@ from django.contrib.auth.models import Group
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from crm.models import SystemActivityLog
 from crm.models_access import UserAccess
@@ -20,6 +21,7 @@ from marketing.models import (
     OAuthCredential,
     SeoProperty,
     SocialAccount,
+    SocialContent,
 )
 from marketing.services.errors import MarketingServiceError
 from marketing.services.google_business import fetch_google_business_account_metrics
@@ -1063,6 +1065,76 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertEqual(platform_cards["instagram"]["views"], 75)
         self.assertEqual(platform_cards["instagram"]["engagement_total"], 36)
         self.assertTrue(platform_cards["instagram"]["has_activity"])
+
+    def test_facebook_permission_limited_card_state(self):
+        account = SocialAccount.objects.create(
+            platform="facebook",
+            external_account_id="fb-1",
+            display_name="Iconic Apparel House",
+            is_active=True,
+            last_successful_sync=timezone.make_aware(datetime(2026, 6, 20, 12, 0)),
+            last_sync_status="ok",
+        )
+        AccountMetricDaily.objects.create(
+            account=account,
+            date=date(2026, 6, 20),
+            followers_total=1043,
+            impressions=0,
+            reach=0,
+            engagement_total=0,
+        )
+        for idx in range(4):
+            SocialContent.objects.create(
+                account=account,
+                platform="facebook",
+                external_content_id=f"post-{idx}",
+                title=f"Post {idx}",
+            )
+
+        platform_cards = {item["key"]: item for item in _platform_comparison(date(2026, 6, 1), date(2026, 6, 21))}
+        facebook = platform_cards["facebook"]
+
+        self.assertTrue(facebook["facebook_permission_limited"])
+        self.assertEqual(
+            facebook["facebook_permission_message"],
+            "Facebook connected. Followers and posts synced. Reach and impressions require additional Meta permissions.",
+        )
+        self.assertEqual(facebook["facebook_missing_permission"], "pages_read_user_content or Page Public Content Access")
+        self.assertEqual(facebook["connected_account_name"], "Iconic Apparel House")
+        self.assertEqual(facebook["followers_total"], 1043)
+        self.assertEqual(facebook["page_likes_total"], 1043)
+        self.assertEqual(facebook["recent_posts_count"], 4)
+        self.assertEqual(facebook["connection_status"], "Connected")
+
+    def test_facebook_permission_limited_state_renders_on_dashboards(self):
+        account = SocialAccount.objects.create(
+            platform="facebook",
+            external_account_id="fb-1",
+            display_name="Iconic Apparel House",
+            is_active=True,
+            last_sync_status="ok",
+        )
+        AccountMetricDaily.objects.create(account=account, date=date(2026, 6, 20), followers_total=1043)
+        SocialContent.objects.create(
+            account=account,
+            platform="facebook",
+            external_content_id="post-1",
+            title="Post 1",
+        )
+
+        for url_name in ["marketing_dashboard", "marketing_social"]:
+            with self.subTest(url_name=url_name):
+                response = self.client.get(reverse(url_name))
+
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(
+                    response,
+                    "Facebook connected. Followers and posts synced. Reach and impressions require additional Meta permissions.",
+                )
+                self.assertContains(response, "Permission required")
+                self.assertContains(response, "pages_read_user_content or Page Public Content Access")
+                self.assertContains(response, "Iconic Apparel House")
+                self.assertContains(response, "Recent Posts")
 
     def test_meta_ads_metrics_feed_dashboard_platform_card(self):
         account = SocialAccount.objects.create(

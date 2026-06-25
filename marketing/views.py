@@ -817,12 +817,39 @@ def _platform_comparison(start_date, end_date):
         "platform",
         "display_name",
         "external_account_id",
+        "last_successful_sync",
+        "last_sync_at",
+        "last_sync_status",
     )
     active_account_map = {}
+    account_sync_map = {}
     for account in active_account_rows:
         active_account_map.setdefault(account["platform"], []).append(
             account["display_name"] or account["external_account_id"]
         )
+        sync_row = account_sync_map.setdefault(
+            account["platform"],
+            {
+                "last_sync_at": None,
+                "last_sync_status": "",
+            },
+        )
+        sync_at = account["last_successful_sync"] or account["last_sync_at"]
+        if sync_at and (not sync_row["last_sync_at"] or sync_at > sync_row["last_sync_at"]):
+            sync_row["last_sync_at"] = sync_at
+            sync_row["last_sync_status"] = account["last_sync_status"] or ""
+        elif account["last_sync_status"] and not sync_row["last_sync_status"]:
+            sync_row["last_sync_status"] = account["last_sync_status"]
+
+    content_count_rows = (
+        SocialContent.objects.filter(
+            Q(published_at__date__gte=start_date, published_at__date__lte=end_date)
+            | Q(published_at__isnull=True)
+        )
+        .values("platform")
+        .annotate(post_count=Count("id"))
+    )
+    content_count_map = {row["platform"]: row["post_count"] for row in content_count_rows}
     ad_metric_qs = AdMetricDaily.objects.filter(date__gte=start_date, date__lte=end_date)
     ad_totals = ad_metric_qs.aggregate(
         spend=Coalesce(Sum("spend"), Decimal("0")),
@@ -948,6 +975,22 @@ def _platform_comparison(start_date, end_date):
             engagement_total=engagement_total,
         ) * 100
         has_activity = any(totals.values()) or follower_data_points > 0
+        recent_posts_count = sum(content_count_map.get(platform_key, 0) for platform_key in config["platforms"])
+        last_sync_candidates = [
+            account_sync_map.get(platform_key, {}).get("last_sync_at")
+            for platform_key in config["platforms"]
+        ]
+        last_sync_candidates = [value for value in last_sync_candidates if value]
+        last_sync_at = max(last_sync_candidates) if last_sync_candidates else None
+        connection_status = "Connected" if connected_account_names else "Not connected"
+        if any(account_sync_map.get(platform_key, {}).get("last_sync_status") == "error" for platform_key in config["platforms"]):
+            connection_status = "Connected"
+        facebook_permission_limited = bool(
+            config["key"] == "facebook"
+            and connected_account_names
+            and (followers_total or recent_posts_count)
+            and not (totals["reach"] or totals["impressions"] or engagement_total)
+        )
 
         cards.append(
             {
@@ -967,6 +1010,21 @@ def _platform_comparison(start_date, end_date):
                 "has_activity": has_activity,
                 "connected_account_name": ", ".join(connected_account_names[:2]),
                 "connected_account_more_count": max(len(connected_account_names) - 2, 0),
+                "page_likes_total": followers_total if config["key"] == "facebook" else 0,
+                "recent_posts_count": recent_posts_count,
+                "last_sync_at": last_sync_at,
+                "connection_status": connection_status,
+                "facebook_permission_limited": facebook_permission_limited,
+                "facebook_permission_message": (
+                    "Facebook connected. Followers and posts synced. Reach and impressions require additional Meta permissions."
+                    if facebook_permission_limited
+                    else ""
+                ),
+                "facebook_missing_permission": (
+                    "pages_read_user_content or Page Public Content Access"
+                    if facebook_permission_limited
+                    else ""
+                ),
             }
         )
 
