@@ -1609,6 +1609,14 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertContains(response, "Desktop")
         self.assertContains(response, "Last Sync Time")
         self.assertContains(response, "Last successful GA4 sync")
+        cards = {card["label"]: card["value"] for card in response.context["website_summary"]["cards"]}
+        self.assertEqual(cards["Website visitors"], 20)
+        self.assertEqual(cards["Sessions"], 25)
+        self.assertEqual(cards["Page views"], 40)
+        self.assertEqual(cards["Website conversions"], 6)
+        self.assertEqual(cards["Key Events"], 6)
+        self.assertEqual(cards["Engagement Rate"], "60.0%")
+        self.assertEqual(cards["Engaged Sessions"], 15)
 
     def test_default_ga4_property_selector_updates_active_property(self):
         from marketing.services.ga4_default import ga4_reporting_queryset, get_default_ga4_property

@@ -450,11 +450,13 @@ def _website_card_value(current: dict, key: str, formatter=None):
 
 
 def _website_totals(start_date, end_date):
-    qs = WebsiteTrafficDaily.objects.filter(
+    base_qs = WebsiteTrafficDaily.objects.filter(
         date__gte=start_date,
         date__lte=end_date,
         property__in=ga4_reporting_queryset(),
     )
+    overall_qs = base_qs.filter(channel="All Traffic")
+    qs = overall_qs if overall_qs.exists() else base_qs.exclude(channel__in=["Country", "Device"])
     has_data = qs.exists()
     totals = qs.aggregate(
         visitors=Coalesce(Sum("visitors"), 0),
@@ -534,6 +536,7 @@ def _website_analytics_summary(period):
             date__lte=period["end"],
             property__in=reporting_properties,
         )
+        .exclude(channel="All Traffic")
         .exclude(channel__in=["Country", "Device"])
         .values("channel", "source", "medium")
         .annotate(
