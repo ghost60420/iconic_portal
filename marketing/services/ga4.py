@@ -10,7 +10,11 @@ GA4_RUN_REPORT_URL = "https://analyticsdata.googleapis.com/v1beta/properties/{pr
 COMMON_METRICS = [
     "totalUsers",
     "sessions",
+    "engagedSessions",
     "screenPageViews",
+    "eventCount",
+    "keyEvents",
+    "engagementRate",
     "bounceRate",
     "averageSessionDuration",
 ]
@@ -79,8 +83,10 @@ def _traffic_payload(*, row: dict[str, Any], dimension_names: list[str], metric_
     dimensions = _dimension_map(row, dimension_names)
     metrics = _metric_map(row, metric_names)
     sessions = _int_metric(metrics, "sessions")
+    engaged_sessions = _int_metric(metrics, "engagedSessions")
     bounce_rate = _decimal_metric(metrics, "bounceRate")
-    engaged_sessions = max(int(sessions * max(Decimal("0"), (Decimal("1") - bounce_rate))), 0)
+    if not engaged_sessions and sessions:
+        engaged_sessions = max(int(sessions * max(Decimal("0"), (Decimal("1") - bounce_rate))), 0)
     avg_session_duration = _int_metric(metrics, "averageSessionDuration")
     payload = {
         "date": _parse_ga4_date(dimensions.get("date", "")),
@@ -89,6 +95,9 @@ def _traffic_payload(*, row: dict[str, Any], dimension_names: list[str], metric_
         "sessions": sessions,
         "engaged_sessions": engaged_sessions,
         "page_views": _int_metric(metrics, "screenPageViews"),
+        "events": _int_metric(metrics, "eventCount"),
+        "conversions": _int_metric(metrics, "keyEvents"),
+        "engagement_rate": _decimal_metric(metrics, "engagementRate"),
         "bounce_rate": bounce_rate,
         "avg_session_duration_seconds": avg_session_duration,
         "avg_engagement_seconds": avg_session_duration,
@@ -105,9 +114,9 @@ def _traffic_payload(*, row: dict[str, Any], dimension_names: list[str], metric_
             }
         )
     elif row_type == "country":
-        payload.update({"channel": "Country", "country": dimensions.get("country", "")})
+        payload.update({"channel": "Country", "source": dimensions.get("country", "")})
     elif row_type == "device":
-        payload.update({"channel": "Device", "device": dimensions.get("deviceCategory", "")})
+        payload.update({"channel": "Device", "source": dimensions.get("deviceCategory", "")})
     return payload
 
 
@@ -122,6 +131,7 @@ def _page_payload(*, row: dict[str, Any], dimension_names: list[str], metric_nam
         "visitors": _int_metric(metrics, "totalUsers"),
         "sessions": _int_metric(metrics, "sessions"),
         "page_views": _int_metric(metrics, "screenPageViews"),
+        "conversions": _int_metric(metrics, "keyEvents"),
         "avg_engagement_seconds": avg_session_duration,
     }
 
@@ -136,6 +146,8 @@ def fetch_ga4_daily(*, access_token: str, property_id: str, start_date: date, en
     report_specs = [
         ("overall", ["date"]),
         ("source", ["date", "sessionDefaultChannelGroup", "sessionSource", "sessionMedium", "sessionCampaignName"]),
+        ("country", ["date", "country"]),
+        ("device", ["date", "deviceCategory"]),
     ]
     for row_type, dimensions in report_specs:
         for row in _run_report(

@@ -27,6 +27,7 @@
       <div>
         <div class="mk-section-title mb-0">Traffic Overview</div>
         <div class="mk-sub">{{ period.label }} compared with the previous period.</div>
+        <div class="mk-sub">Last Sync Time: {{ website_summary.last_ga4_sync_at|date:"Y-m-d H:i"|default:website_summary.no_data_label }}</div>
       </div>
       <span class="mk-pill">GA4 ready</span>
     </div>
@@ -35,9 +36,11 @@
         <div class="mk-metric-card">
           <div class="mk-label">{{ card.label }}</div>
           <div class="mk-metric-value">{{ card.value }}</div>
-          <div class="mk-metric-change {% if card.change_pct > 0 %}up{% elif card.change_pct < 0 %}down{% endif %}">
-            {% if card.change_pct > 0 %}+{% endif %}{{ card.change_pct|floatformat:0 }} percent vs previous
-          </div>
+          {% if card.value != website_summary.no_data_label %}
+            <div class="mk-metric-change {% if card.change_pct > 0 %}up{% elif card.change_pct < 0 %}down{% endif %}">
+              {% if card.change_pct > 0 %}+{% endif %}{{ card.change_pct|floatformat:0 }} percent vs previous
+            </div>
+          {% endif %}
         </div>
       {% endfor %}
     </div>
@@ -77,7 +80,7 @@
                 <td>{{ row.avg_engagement_seconds|floatformat:0 }}s</td>
               </tr>
             {% empty %}
-              <tr><td colspan="6" class="mk-muted">No website page data yet. Connect GA4 and run the background sync when integration is ready.</td></tr>
+              <tr><td colspan="6" class="mk-muted">{{ website_summary.no_data_label }}</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -108,8 +111,64 @@
             </div>
           </div>
         {% empty %}
-          <div class="mk-empty-state">No channel data yet.</div>
+          <div class="mk-empty-state">{{ website_summary.no_data_label }}</div>
         {% endfor %}
+      </div>
+    </div>
+
+    <div class="mk-card mk-span-6">
+      <div class="mk-section-title">Country</div>
+      <div class="mk-table table-responsive">
+        <table class="table table-dark table-sm align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Country</th>
+              <th>Visitors</th>
+              <th>Sessions</th>
+              <th>Views</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in website_summary.country_rows %}
+              <tr>
+                <td>{{ row.country }}</td>
+                <td>{{ row.visitors }}</td>
+                <td>{{ row.sessions }}</td>
+                <td>{{ row.page_views }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="4" class="mk-muted">{{ website_summary.no_data_label }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="mk-card mk-span-6">
+      <div class="mk-section-title">Device</div>
+      <div class="mk-table table-responsive">
+        <table class="table table-dark table-sm align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Device</th>
+              <th>Visitors</th>
+              <th>Sessions</th>
+              <th>Views</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in website_summary.device_rows %}
+              <tr>
+                <td>{{ row.device|title }}</td>
+                <td>{{ row.visitors }}</td>
+                <td>{{ row.sessions }}</td>
+                <td>{{ row.page_views }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="4" class="mk-muted">{{ website_summary.no_data_label }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
     </div>
 
@@ -145,10 +204,10 @@
             <div class="mk-insight-title">{{ property.name }}</div>
             <div class="mk-hint">GA4: {{ property.ga4_property_id|default:"Not set" }}</div>
             <div class="mk-hint">Search Console: {{ property.gsc_site_url|default:"Not set" }}</div>
-            <div class="mk-hint">Last sync: {{ property.last_sync_at|date:"Y-m-d H:i"|default:"Never" }}</div>
+            <div class="mk-hint">Last successful GA4 sync: {{ property.last_sync_at|date:"Y-m-d H:i"|default:website_summary.no_data_label }}</div>
           </div>
         {% empty %}
-          <div class="mk-empty-state">No active marketing properties configured yet.</div>
+          <div class="mk-empty-state">{{ website_summary.no_data_label }}</div>
         {% endfor %}
       </div>
     </div>

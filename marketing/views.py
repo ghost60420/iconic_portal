@@ -75,6 +75,7 @@ PLATFORM_CARD_CONFIG = [
 ]
 
 PLATFORM_CARD_LABELS = {item["key"]: item["label"] for item in PLATFORM_CARD_CONFIG}
+NO_DATA_AVAILABLE = "No data available"
 
 
 def _require_enabled(flag_name: str | None = None):
@@ -439,23 +440,36 @@ def _format_money(value):
     return f"${float(value or 0):,.2f}"
 
 
+def _website_card_value(current: dict, key: str, formatter=None):
+    if not current.get("has_data"):
+        return NO_DATA_AVAILABLE
+    value = current.get(key)
+    if value is None:
+        return NO_DATA_AVAILABLE
+    return formatter(value) if formatter else value
+
+
 def _website_totals(start_date, end_date):
     qs = WebsiteTrafficDaily.objects.filter(
         date__gte=start_date,
         date__lte=end_date,
         property__in=ga4_reporting_queryset(),
     )
+    has_data = qs.exists()
     totals = qs.aggregate(
         visitors=Coalesce(Sum("visitors"), 0),
         sessions=Coalesce(Sum("sessions"), 0),
         engaged_sessions=Coalesce(Sum("engaged_sessions"), 0),
         page_views=Coalesce(Sum("page_views"), 0),
+        events=Coalesce(Sum("events"), 0),
         conversions=Coalesce(Sum("conversions"), 0),
     )
     sessions = totals.get("sessions") or 0
     engaged_sessions = totals.get("engaged_sessions") or 0
     totals["engagement_rate"] = _conversion_rate(engaged_sessions, sessions)
     totals["avg_engagement_seconds"] = qs.aggregate(avg=Avg("avg_engagement_seconds")).get("avg") or 0
+    totals["key_events"] = totals.get("conversions") or 0
+    totals["has_data"] = has_data
     return totals
 
 
@@ -520,6 +534,7 @@ def _website_analytics_summary(period):
             date__lte=period["end"],
             property__in=reporting_properties,
         )
+        .exclude(channel__in=["Country", "Device"])
         .values("channel", "source", "medium")
         .annotate(
             visitors=Coalesce(Sum("visitors"), 0),
@@ -528,6 +543,45 @@ def _website_analytics_summary(period):
             conversions=Coalesce(Sum("conversions"), 0),
         )
         .order_by("-visitors", "-sessions")[:8]
+    )
+    country_rows = list(
+        WebsiteTrafficDaily.objects.filter(
+            date__gte=period["start"],
+            date__lte=period["end"],
+            property__in=reporting_properties,
+            channel="Country",
+        )
+        .exclude(source="")
+        .values("source")
+        .annotate(
+            visitors=Coalesce(Sum("visitors"), 0),
+            sessions=Coalesce(Sum("sessions"), 0),
+            page_views=Coalesce(Sum("page_views"), 0),
+        )
+        .order_by("-visitors", "-sessions")[:8]
+    )
+    device_rows = list(
+        WebsiteTrafficDaily.objects.filter(
+            date__gte=period["start"],
+            date__lte=period["end"],
+            property__in=reporting_properties,
+            channel="Device",
+        )
+        .exclude(source="")
+        .values("source")
+        .annotate(
+            visitors=Coalesce(Sum("visitors"), 0),
+            sessions=Coalesce(Sum("sessions"), 0),
+            page_views=Coalesce(Sum("page_views"), 0),
+        )
+        .order_by("-visitors", "-sessions")[:8]
+    )
+    last_ga4_sync_at = (
+        reporting_properties.filter(last_sync_status="ok")
+        .exclude(last_sync_at=None)
+        .order_by("-last_sync_at")
+        .values_list("last_sync_at", flat=True)
+        .first()
     )
     prepared_channels = []
     for row in channel_rows:
@@ -545,29 +599,48 @@ def _website_analytics_summary(period):
         "cards": [
             {
                 "label": "Website visitors",
-                "value": current["visitors"],
+                "value": _website_card_value(current, "visitors"),
                 "change_pct": _percent_change(current["visitors"], previous["visitors"]),
             },
             {
                 "label": "Sessions",
-                "value": current["sessions"],
+                "value": _website_card_value(current, "sessions"),
                 "change_pct": _percent_change(current["sessions"], previous["sessions"]),
             },
             {
                 "label": "Page views",
-                "value": current["page_views"],
+                "value": _website_card_value(current, "page_views"),
                 "change_pct": _percent_change(current["page_views"], previous["page_views"]),
             },
             {
                 "label": "Website conversions",
-                "value": current["conversions"],
+                "value": _website_card_value(current, "conversions"),
                 "change_pct": _percent_change(current["conversions"], previous["conversions"]),
+            },
+            {
+                "label": "Key Events",
+                "value": _website_card_value(current, "key_events"),
+                "change_pct": _percent_change(current["key_events"], previous["key_events"]),
+            },
+            {
+                "label": "Engagement Rate",
+                "value": _website_card_value(current, "engagement_rate", lambda value: f"{value:.1f}%"),
+                "change_pct": _percent_change(current["engagement_rate"], previous["engagement_rate"]),
+            },
+            {
+                "label": "Engaged Sessions",
+                "value": _website_card_value(current, "engaged_sessions"),
+                "change_pct": _percent_change(current["engaged_sessions"], previous["engaged_sessions"]),
             },
         ],
         "top_pages": list(top_pages),
         "channel_rows": prepared_channels,
+        "country_rows": [{"country": row["source"], **row} for row in country_rows],
+        "device_rows": [{"device": row["source"], **row} for row in device_rows],
         "lead_channel_rows": _lead_channel_rows(period["start"], period["end"]),
         "properties": reporting_properties,
+        "last_ga4_sync_at": last_ga4_sync_at,
+        "no_data_label": NO_DATA_AVAILABLE,
     }
 
 

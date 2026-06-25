@@ -1,5 +1,6 @@
 from unittest.mock import patch
 from datetime import date, datetime
+from decimal import Decimal
 from io import StringIO
 from urllib.parse import parse_qs, urlparse
 
@@ -22,8 +23,11 @@ from marketing.models import (
     SeoProperty,
     SocialAccount,
     SocialContent,
+    WebsitePageDaily,
+    WebsiteTrafficDaily,
 )
 from marketing.services.errors import MarketingServiceError
+from marketing.services.ga4 import fetch_ga4_daily
 from marketing.services.google_business import fetch_google_business_account_metrics
 from marketing.services.social_connections import run_social_connection_sync, save_social_connection
 from marketing.utils.activity import log_marketing_sync_failure
@@ -1446,6 +1450,165 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertEqual(prop.name, "Iconic Web")
         self.assertEqual(result["ga4_count"], 1)
         self.assertEqual(result["selected_ga4_property_id"], "456")
+
+    def test_ga4_daily_fetches_key_events_country_and_device_rows(self):
+        def fake_request(url, **kwargs):
+            metric_names = [item["name"] for item in kwargs["payload"]["metrics"]]
+            dimension_names = [item["name"] for item in kwargs["payload"]["dimensions"]]
+
+            def metric_values(values):
+                return [{"value": str(values.get(name, 0))} for name in metric_names]
+
+            if dimension_names == ["date"]:
+                return {
+                    "rows": [
+                        {
+                            "dimensionValues": [{"value": "20260620"}],
+                            "metricValues": metric_values(
+                                {
+                                    "totalUsers": 11,
+                                    "sessions": 12,
+                                    "engagedSessions": 9,
+                                    "screenPageViews": 21,
+                                    "eventCount": 30,
+                                    "keyEvents": 4,
+                                    "engagementRate": "0.75",
+                                    "bounceRate": "0.25",
+                                    "averageSessionDuration": 42,
+                                }
+                            ),
+                        }
+                    ]
+                }
+            if dimension_names == ["date", "country"]:
+                return {
+                    "rows": [
+                        {
+                            "dimensionValues": [{"value": "20260620"}, {"value": "Canada"}],
+                            "metricValues": metric_values({"totalUsers": 5, "sessions": 6, "screenPageViews": 8}),
+                        }
+                    ]
+                }
+            if dimension_names == ["date", "deviceCategory"]:
+                return {
+                    "rows": [
+                        {
+                            "dimensionValues": [{"value": "20260620"}, {"value": "desktop"}],
+                            "metricValues": metric_values({"totalUsers": 6, "sessions": 6, "screenPageViews": 13}),
+                        }
+                    ]
+                }
+            if "pagePathPlusQueryString" in dimension_names:
+                return {
+                    "rows": [
+                        {
+                            "dimensionValues": [
+                                {"value": "20260620"},
+                                {"value": "/"},
+                                {"value": "Home"},
+                            ],
+                            "metricValues": metric_values(
+                                {
+                                    "totalUsers": 10,
+                                    "sessions": 11,
+                                    "screenPageViews": 20,
+                                    "keyEvents": 3,
+                                    "averageSessionDuration": 50,
+                                }
+                            ),
+                        }
+                    ]
+                }
+            return {"rows": []}
+
+        with patch("marketing.services.ga4.google_api_request_json", side_effect=fake_request):
+            payload = fetch_ga4_daily(
+                access_token="token",
+                property_id="273987172",
+                start_date=date(2026, 6, 1),
+                end_date=date(2026, 6, 20),
+            )
+
+        overall = next(row for row in payload["traffic_rows"] if row["row_type"] == "overall")
+        country = next(row for row in payload["traffic_rows"] if row["row_type"] == "country")
+        device = next(row for row in payload["traffic_rows"] if row["row_type"] == "device")
+
+        self.assertEqual(overall["events"], 30)
+        self.assertEqual(overall["conversions"], 4)
+        self.assertEqual(overall["engaged_sessions"], 9)
+        self.assertEqual(overall["engagement_rate"], Decimal("0.75"))
+        self.assertEqual(country["channel"], "Country")
+        self.assertEqual(country["source"], "Canada")
+        self.assertEqual(device["channel"], "Device")
+        self.assertEqual(device["source"], "desktop")
+        self.assertEqual(payload["page_rows"][0]["conversions"], 3)
+
+    def test_website_analytics_displays_ga4_metric_cards_and_breakdowns(self):
+        prop = SeoProperty.objects.create(
+            name="Iconic Apparel House",
+            ga4_property_id="273987172",
+            is_active=True,
+            last_sync_at=timezone.now(),
+            last_sync_status="ok",
+        )
+        metric_date = timezone.localdate()
+        WebsiteTrafficDaily.objects.create(
+            property=prop,
+            date=metric_date,
+            channel="All Traffic",
+            visitors=20,
+            sessions=25,
+            engaged_sessions=15,
+            page_views=40,
+            events=50,
+            conversions=6,
+            engagement_rate=Decimal("0.6000"),
+        )
+        WebsiteTrafficDaily.objects.create(
+            property=prop,
+            date=metric_date,
+            channel="Country",
+            source="Canada",
+            visitors=12,
+            sessions=14,
+            page_views=22,
+        )
+        WebsiteTrafficDaily.objects.create(
+            property=prop,
+            date=metric_date,
+            channel="Device",
+            source="desktop",
+            visitors=9,
+            sessions=10,
+            page_views=17,
+        )
+        WebsitePageDaily.objects.create(
+            property=prop,
+            date=metric_date,
+            page_path="/",
+            page_title="Home",
+            visitors=11,
+            sessions=12,
+            page_views=18,
+            conversions=2,
+        )
+
+        response = self.client.get(reverse("marketing_website_analytics"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Website visitors")
+        self.assertContains(response, "Sessions")
+        self.assertContains(response, "Page views")
+        self.assertContains(response, "Website conversions")
+        self.assertContains(response, "Key Events")
+        self.assertContains(response, "Engagement Rate")
+        self.assertContains(response, "Engaged Sessions")
+        self.assertContains(response, "Country")
+        self.assertContains(response, "Canada")
+        self.assertContains(response, "Device")
+        self.assertContains(response, "Desktop")
+        self.assertContains(response, "Last Sync Time")
+        self.assertContains(response, "Last successful GA4 sync")
 
     def test_default_ga4_property_selector_updates_active_property(self):
         from marketing.services.ga4_default import ga4_reporting_queryset, get_default_ga4_property
