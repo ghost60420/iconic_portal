@@ -1894,6 +1894,12 @@ class CostingHeader(models.Model):
 
 
 class QuickCosting(models.Model):
+    DETAILED_PER_PIECE_COST_FIELDS = (
+        "making_cost_per_piece",
+        "print_embroidery_cost_per_piece",
+        "trims_cost_per_piece",
+        "packaging_cost_per_piece",
+    )
     COSTING_TYPE_CHOICES = [
         ("quick", "Quick"),
     ]
@@ -2064,36 +2070,30 @@ class QuickCosting(models.Model):
         detailed_values = (
             self.fabric_cost_per_kg,
             self.fabric_consumption_kg_per_piece,
-            self.making_cost_per_piece,
-            self.print_embroidery_cost_per_piece,
-            self.trims_cost_per_piece,
-            self.packaging_cost_per_piece,
+            *(getattr(self, field_name) for field_name in self.DETAILED_PER_PIECE_COST_FIELDS),
         )
         uses_detailed_costing = any(value is not None for value in detailed_values)
         fabric_cost_per_kg = self.fabric_cost_per_kg or Decimal("0")
         fabric_consumption_kg_per_piece = self.fabric_consumption_kg_per_piece or Decimal("0")
         fabric_cost_per_piece = fabric_cost_per_kg * fabric_consumption_kg_per_piece
-        making_cost_per_piece = self.making_cost_per_piece or Decimal("0")
-        print_embroidery_cost_per_piece = self.print_embroidery_cost_per_piece or Decimal("0")
-        trims_cost_per_piece = self.trims_cost_per_piece or Decimal("0")
-        packaging_cost_per_piece = self.packaging_cost_per_piece or Decimal("0")
+        per_piece_components = {
+            field_name: getattr(self, field_name) or Decimal("0")
+            for field_name in self.DETAILED_PER_PIECE_COST_FIELDS
+        }
+        making_cost_per_piece = per_piece_components["making_cost_per_piece"]
+        print_embroidery_cost_per_piece = per_piece_components["print_embroidery_cost_per_piece"]
+        trims_cost_per_piece = per_piece_components["trims_cost_per_piece"]
+        packaging_cost_per_piece = per_piece_components["packaging_cost_per_piece"]
+        detailed_component_total_per_piece = sum(per_piece_components.values(), Decimal("0"))
         other_expenses_per_piece = (other_expenses / quantity) if quantity else Decimal("0")
         shipping_cost_per_piece = (shipping_cost / quantity) if quantity else Decimal("0")
 
         if uses_detailed_costing:
             material_cost = fabric_cost_per_piece * quantity
-            production_cost = (
-                making_cost_per_piece
-                + print_embroidery_cost_per_piece
-                + trims_cost_per_piece
-                + packaging_cost_per_piece
-            ) * quantity
+            production_cost = detailed_component_total_per_piece * quantity
             cost_per_piece = (
                 fabric_cost_per_piece
-                + making_cost_per_piece
-                + print_embroidery_cost_per_piece
-                + trims_cost_per_piece
-                + packaging_cost_per_piece
+                + detailed_component_total_per_piece
                 + other_expenses_per_piece
                 + shipping_cost_per_piece
             )

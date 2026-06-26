@@ -237,6 +237,63 @@ class QuickCostingTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn("fabric_consumption_kg_per_piece", form.errors)
 
+    def test_form_validation_messages_are_user_friendly(self):
+        form = QuickCostingForm(
+            data={
+                "buyer_name": "Validation Buyer",
+                "project_name": "Validation Check",
+                "product_type": "Streetwear",
+                "costing_purpose": "bulk",
+                "quantity": "0",
+                "currency": "",
+                "exchange_rate_bdt_per_cad": "0",
+                "fabric_cost_per_kg": "10.00",
+                "fabric_consumption_kg_per_piece": "0.5000",
+                "making_cost_per_piece": "1.00",
+                "print_embroidery_cost_per_piece": "0.00",
+                "trims_cost_per_piece": "0.00",
+                "packaging_cost_per_piece": "0.00",
+                "other_expenses": "0.00",
+                "shipping_cost": "0.00",
+                "selling_price_per_piece": "-1.00",
+                "commission_percent": "101.00",
+                "target_margin_percent": "20.00",
+            }
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("Enter an order quantity of at least 1 piece.", form.errors["quantity"])
+        self.assertIn("Select BDT, CAD, or USD.", form.errors["currency"])
+        self.assertIn("Exchange rate must be greater than zero when provided.", form.errors["exchange_rate_bdt_per_cad"])
+        self.assertIn("Selling price per piece cannot be negative.", form.errors["selling_price_per_piece"])
+        self.assertIn("Commission must be between 0% and 100%.", form.errors["commission_percent"])
+
+    def test_create_page_shows_currency_cost_basis_and_live_summary_labels(self):
+        admin = self._admin_user("quick-costing-ui-admin")
+        self.client.force_login(admin)
+
+        response = self.client.get(reverse("cost_sheet_create") + "?costing_type=quick")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "BDT (৳)")
+        self.assertContains(response, "CAD ($)")
+        self.assertContains(response, "USD ($)")
+        self.assertContains(response, "Fabric Cost")
+        self.assertContains(response, "(Per KG)")
+        self.assertContains(response, "(KG Per Piece)")
+        self.assertContains(response, "(Per Piece)")
+        self.assertContains(response, "(Total Order)")
+        self.assertContains(response, "Commission")
+        self.assertContains(response, "(%)")
+        self.assertContains(response, "Live Cost Summary")
+        self.assertContains(response, "Shipping Allocation Per Piece")
+        self.assertContains(response, "Profit Before Commission")
+        self.assertContains(response, "Profit After Commission")
+        self.assertContains(response, "Total Order Revenue")
+        self.assertContains(response, "Total Order Cost")
+        self.assertContains(response, "Total Order Profit")
+        self.assertGreaterEqual(response.content.decode("utf-8").count("data-quick-currency-unit"), 8)
+
     def test_calculation_summary_handles_missing_exchange_and_zero_quantity(self):
         quick = QuickCosting(
             buyer_name="Test Buyer",

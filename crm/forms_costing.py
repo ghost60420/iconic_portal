@@ -440,12 +440,33 @@ class QuickCostingForm(forms.ModelForm):
         "trims_cost_per_piece",
         "packaging_cost_per_piece",
     ]
+    non_negative_messages = {
+        "fabric_cost_per_kg": "Fabric cost per kg cannot be negative.",
+        "fabric_consumption_kg_per_piece": "Fabric consumption cannot be negative.",
+        "making_cost_per_piece": "Making cost per piece cannot be negative.",
+        "print_embroidery_cost_per_piece": "Print or embroidery cost per piece cannot be negative.",
+        "trims_cost_per_piece": "Trims cost per piece cannot be negative.",
+        "packaging_cost_per_piece": "Packaging cost per piece cannot be negative.",
+        "material_cost": "Legacy material cost cannot be negative.",
+        "production_cost": "Legacy production cost cannot be negative.",
+        "other_expenses": "Other expenses cannot be negative.",
+        "shipping_cost": "Shipping total cannot be negative.",
+        "selling_price_per_piece": "Selling price per piece cannot be negative.",
+        "commission_per_piece": "Legacy commission per piece cannot be negative.",
+    }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["costing_purpose"].required = False
         self.show_legacy_fields = bool(self.instance.pk and self.instance.currency is None)
         self.fields["currency"].required = not self.show_legacy_fields
+        self.fields["currency"].error_messages["required"] = "Select BDT, CAD, or USD."
+        self.fields["currency"].choices = [
+            ("", "Select currency"),
+            ("BDT", "BDT (৳)"),
+            ("CAD", "CAD ($)"),
+            ("USD", "USD ($)"),
+        ]
         if not self.show_legacy_fields:
             for field_name in ("material_cost", "production_cost", "commission_per_piece"):
                 self.fields[field_name].widget = forms.HiddenInput()
@@ -457,8 +478,14 @@ class QuickCostingForm(forms.ModelForm):
     def clean_quantity(self):
         quantity = self.cleaned_data.get("quantity")
         if not quantity or quantity < 1:
-            raise forms.ValidationError("Quantity must be at least 1.")
+            raise forms.ValidationError("Enter an order quantity of at least 1 piece.")
         return quantity
+
+    def clean_currency(self):
+        currency = self.cleaned_data.get("currency")
+        if not currency and not self.show_legacy_fields:
+            raise forms.ValidationError("Select BDT, CAD, or USD.")
+        return currency
 
     def clean_costing_purpose(self):
         return self.cleaned_data.get("costing_purpose") or QuickCosting.PURPOSE_BULK
@@ -471,16 +498,16 @@ class QuickCostingForm(forms.ModelForm):
                 cleaned[field_name] = Decimal("0")
                 continue
             if value is not None and value < 0:
-                self.add_error(field_name, "Enter a zero or positive amount.")
+                self.add_error(field_name, self.non_negative_messages[field_name])
         exchange_rate = cleaned.get("exchange_rate_bdt_per_cad")
         if exchange_rate is not None and exchange_rate <= 0:
-            self.add_error("exchange_rate_bdt_per_cad", "Enter an exchange rate greater than 0.")
+            self.add_error("exchange_rate_bdt_per_cad", "Exchange rate must be greater than zero when provided.")
         target_margin = cleaned.get("target_margin_percent")
         if target_margin is not None and target_margin < 0:
             self.add_error("target_margin_percent", "Enter a zero or positive margin.")
         commission_percent = cleaned.get("commission_percent")
         if commission_percent is not None and not Decimal("0") <= commission_percent <= Decimal("100"):
-            self.add_error("commission_percent", "Enter a percentage from 0 to 100.")
+            self.add_error("commission_percent", "Commission must be between 0% and 100%.")
         fabric_cost = cleaned.get("fabric_cost_per_kg")
         fabric_consumption = cleaned.get("fabric_consumption_kg_per_piece")
         if (fabric_cost is None) != (fabric_consumption is None):
