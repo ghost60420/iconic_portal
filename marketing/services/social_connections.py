@@ -95,7 +95,7 @@ SOCIAL_CONNECTION_CONFIG = [
         "command": "marketing_sync_linkedin_daily",
         "oauth_supported": True,
         "oauth_label": "Connect LinkedIn",
-        "command_hint": "python manage.py sync_linkedin_marketing",
+        "command_hint": "python manage.py marketing_sync_linkedin_daily",
         "provider": "linkedin",
     },
     {

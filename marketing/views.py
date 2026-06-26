@@ -1050,6 +1050,7 @@ def _platform_comparison(start_date, end_date):
             views=totals["views"],
             engagement_total=engagement_total,
         ) * 100
+        ctr = _conversion_rate(totals["clicks"], totals["impressions"])
         has_activity = any(totals.values()) or follower_data_points > 0
         recent_posts_count = sum(content_count_map.get(platform_key, 0) for platform_key in config["platforms"])
         last_sync_candidates = [
@@ -1077,6 +1078,12 @@ def _platform_comparison(start_date, end_date):
                 "reach": totals["reach"],
                 "views": totals["views"],
                 "clicks": totals["clicks"],
+                "reactions": totals["likes"],
+                "comments": totals["comments"],
+                "shares": totals["shares"],
+                "ctr": ctr,
+                "profile_views": totals["views"],
+                "page_views": totals["views"],
                 "engagement_total": engagement_total,
                 "engagement_score": engagement_score,
                 "engagement_rate": engagement_rate,
@@ -2199,6 +2206,10 @@ def platform_detail(request, platform: str):
         return row["engagement_rate"]
 
     rows = sorted(rows, key=_sort_key, reverse=True)
+    lowest_rows = sorted(
+        [row for row in rows if row["impressions"] or row["views"] or row["engagement_total"] or row["clicks"]],
+        key=lambda row: (row["engagement_rate"], row["engagement_total"], row["clicks"]),
+    )
 
     audience_rows = []
     for acct in accounts:
@@ -2226,6 +2237,7 @@ def platform_detail(request, platform: str):
         "account_totals": account_totals,
         "audience_rows": audience_rows,
         "rows": rows[:50],
+        "lowest_rows": lowest_rows[:10],
         "content_type_choices": SocialContent.CONTENT_CHOICES,
         "content_type": content_type,
         "sort_by": sort_by,

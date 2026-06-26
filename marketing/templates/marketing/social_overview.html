@@ -163,6 +163,34 @@
                 <div class="mk-mini-stat">{{ card.engagement_total }}</div>
               </div>
             </div>
+            {% if card.key == "linkedin" %}
+              <div class="mk-platform-footer">
+                <div>
+                  <div class="mk-label">Reactions</div>
+                  <div class="mk-mini-stat">{{ card.reactions|default:0 }}</div>
+                </div>
+                <div>
+                  <div class="mk-label">Comments</div>
+                  <div class="mk-mini-stat">{{ card.comments|default:0 }}</div>
+                </div>
+                <div>
+                  <div class="mk-label">Shares</div>
+                  <div class="mk-mini-stat">{{ card.shares|default:0 }}</div>
+                </div>
+                <div>
+                  <div class="mk-label">CTR</div>
+                  <div class="mk-mini-stat">{{ card.ctr|floatformat:2 }}%</div>
+                </div>
+                <div>
+                  <div class="mk-label">Profile/Page Views</div>
+                  <div class="mk-mini-stat">{{ card.profile_views|default:0 }}</div>
+                </div>
+                <div>
+                  <div class="mk-label">Sync Status</div>
+                  <div class="mk-mini-stat">{{ card.connection_status }}</div>
+                </div>
+              </div>
+            {% endif %}
           {% endif %}
         </div>
       {% endfor %}

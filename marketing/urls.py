@@ -36,6 +36,11 @@ urlpatterns = [
         name="marketing_social_connection_sync",
     ),
     path(
+        "social/connections/<int:pk>/disconnect/",
+        perm(views_social_connections.social_connection_disconnect),
+        name="marketing_social_connection_disconnect",
+    ),
+    path(
         "social/connections/<str:platform>/sync/",
         perm(views_social_connections.social_platform_sync),
         name="marketing_social_platform_sync",

@@ -69,6 +69,76 @@ def _organization_urn(account_id: str) -> str:
     return account_id if account_id.startswith("urn:li:organization:") else f"urn:li:organization:{account_id}"
 
 
+def _date_from_millis(value, fallback: date) -> date:
+    millis = _as_int(value)
+    if not millis:
+        return fallback
+    return datetime.fromtimestamp(millis / 1000, tz=timezone.get_current_timezone()).date()
+
+
+def _row_for(rows: dict[date, dict], metric_date: date) -> dict:
+    return rows.setdefault(
+        metric_date,
+        {
+            "date": metric_date,
+            "followers_total": 0,
+            "followers_change": 0,
+            "impressions": 0,
+            "reach": 0,
+            "views": 0,
+            "clicks": 0,
+            "engagement_total": 0,
+        },
+    )
+
+
+def _nested_int_total(value, *, key_hints: tuple[str, ...] = ()) -> int:
+    if isinstance(value, dict):
+        total = 0
+        for key, item in value.items():
+            key_text = str(key).lower()
+            if isinstance(item, (dict, list)):
+                total += _nested_int_total(item, key_hints=key_hints)
+            elif not key_hints or any(hint in key_text for hint in key_hints):
+                total += _as_int(item)
+        return total
+    if isinstance(value, list):
+        return sum(_nested_int_total(item, key_hints=key_hints) for item in value)
+    return _as_int(value) if not key_hints else 0
+
+
+def _page_views_total(total: dict[str, Any]) -> int:
+    views = total.get("views") or {}
+    for key in ("allPageViews", "overviewPageViews"):
+        bucket = views.get(key) or {}
+        count = _as_int(bucket.get("pageViews"))
+        if count:
+            return count
+    return _nested_int_total(views, key_hints=("pageviews",))
+
+
+def _share_metric_row(item: dict[str, Any], *, fallback_date: date) -> dict:
+    stats = _total_share_stats(item)
+    metric_date = _date_from_millis((item.get("timeRange") or {}).get("start"), fallback_date)
+    likes = _as_int(stats.get("likeCount"))
+    comments = _as_int(stats.get("commentCount"))
+    shares = _as_int(stats.get("shareCount"))
+    clicks = _as_int(stats.get("clickCount"))
+    impressions = _as_int(stats.get("impressionCount"))
+    reach = _as_int(stats.get("uniqueImpressionsCount"))
+    return {
+        "date": metric_date,
+        "impressions": impressions,
+        "reach": reach,
+        "views": impressions,
+        "clicks": clicks,
+        "likes": likes,
+        "comments": comments,
+        "shares": shares,
+        "saves": 0,
+    }
+
+
 def discover_linkedin_organizations(*, access_token: str) -> list[dict]:
     if not access_token:
         raise MarketingServiceError("Missing LinkedIn access token")
@@ -141,7 +211,10 @@ def _share_statistics(*, access_token: str, account_id: str, start_date: date, e
         ),
     }
     if share_urn:
-        params["shares"] = f"List({share_urn})"
+        if share_urn.startswith("urn:li:ugcPost:"):
+            params["ugcPosts"] = f"List({share_urn})"
+        else:
+            params["shares"] = f"List({share_urn})"
     payload = _request_json("/organizationalEntityShareStatistics", access_token=access_token, params=params)
     return payload.get("elements") or []
 
@@ -153,8 +226,29 @@ def _total_share_stats(item: dict[str, Any]) -> dict:
 def fetch_linkedin_metrics(*, access_token: str, content_id: str, start_date: date, end_date: date) -> list[dict]:
     if not access_token or not content_id:
         raise MarketingServiceError("Missing LinkedIn content id")
-    # LinkedIn requires the organization for per-share stats; the daily command keeps this optional.
     return []
+
+
+def fetch_linkedin_post_metrics(
+    *,
+    access_token: str,
+    account_id: str,
+    content_id: str,
+    start_date: date,
+    end_date: date,
+) -> list[dict]:
+    if not access_token or not account_id or not content_id:
+        raise MarketingServiceError("Missing LinkedIn post analytics credentials")
+    rows = []
+    for item in _share_statistics(
+        access_token=access_token,
+        account_id=account_id,
+        start_date=start_date,
+        end_date=end_date,
+        share_urn=content_id,
+    ):
+        rows.append(_share_metric_row(item, fallback_date=end_date))
+    return rows
 
 
 def fetch_linkedin_account_metrics(*, access_token: str, account_id: str, start_date: date, end_date: date) -> list[dict]:
@@ -176,30 +270,57 @@ def fetch_linkedin_account_metrics(*, access_token: str, account_id: str, start_
             },
         )
         for item in follower_payload.get("elements") or []:
-            raw_start = (item.get("timeRange") or {}).get("start")
-            metric_date = datetime.fromtimestamp(raw_start / 1000, tz=timezone.get_current_timezone()).date() if raw_start else end_date
+            metric_date = _date_from_millis((item.get("timeRange") or {}).get("start"), end_date)
             gains = item.get("followerGains") or {}
-            rows.setdefault(metric_date, {"date": metric_date})
-            rows[metric_date]["followers_change"] = _as_int(gains.get("organicFollowerGain")) + _as_int(gains.get("paidFollowerGain"))
+            row = _row_for(rows, metric_date)
+            row["followers_change"] = _as_int(gains.get("organicFollowerGain")) + _as_int(gains.get("paidFollowerGain"))
+    except MarketingServiceError:
+        pass
+
+    try:
+        network_payload = _request_json(
+            f"https://api.linkedin.com/v2/networkSizes/{_organization_urn(account_id)}",
+            access_token=access_token,
+            params={"edgeType": "COMPANY_FOLLOWED_BY_MEMBER"},
+        )
+        _row_for(rows, end_date)["followers_total"] = _as_int(network_payload.get("firstDegreeSize"))
+    except MarketingServiceError:
+        pass
+
+    try:
+        page_payload = _request_json(
+            "/organizationPageStatistics",
+            access_token=access_token,
+            params={
+                "q": "organization",
+                "organization": _organization_urn(account_id),
+                "timeIntervals": (
+                    f"(timeRange:(start:{_date_to_millis(start_date)},end:{_date_to_millis(end_date, end_of_day=True)}),"
+                    "timeGranularityType:DAY)"
+                ),
+            },
+        )
+        for item in page_payload.get("elements") or []:
+            metric_date = _date_from_millis((item.get("timeRange") or {}).get("start"), end_date)
+            total = item.get("totalPageStatistics") or {}
+            row = _row_for(rows, metric_date)
+            row["views"] += _page_views_total(total)
+            row["clicks"] += _nested_int_total(total.get("clicks") or {}, key_hints=("click",))
     except MarketingServiceError:
         pass
 
     for item in _share_statistics(access_token=access_token, account_id=account_id, start_date=start_date, end_date=end_date):
-        raw_start = (item.get("timeRange") or {}).get("start")
-        metric_date = datetime.fromtimestamp(raw_start / 1000, tz=timezone.get_current_timezone()).date() if raw_start else end_date
+        metric_date = _date_from_millis((item.get("timeRange") or {}).get("start"), end_date)
         stats = _total_share_stats(item)
-        rows.setdefault(metric_date, {"date": metric_date})
-        rows[metric_date].update(
-            {
-                "impressions": _as_int(stats.get("impressionCount")),
-                "clicks": _as_int(stats.get("clickCount")),
-                "engagement_total": (
-                    _as_int(stats.get("likeCount"))
-                    + _as_int(stats.get("commentCount"))
-                    + _as_int(stats.get("shareCount"))
-                    + _as_int(stats.get("clickCount"))
-                ),
-            }
+        row = _row_for(rows, metric_date)
+        row["impressions"] += _as_int(stats.get("impressionCount"))
+        row["reach"] += _as_int(stats.get("uniqueImpressionsCount"))
+        row["clicks"] += _as_int(stats.get("clickCount"))
+        row["engagement_total"] += (
+            _as_int(stats.get("likeCount"))
+            + _as_int(stats.get("commentCount"))
+            + _as_int(stats.get("shareCount"))
+            + _as_int(stats.get("clickCount"))
         )
 
     if not rows:
@@ -210,4 +331,37 @@ def fetch_linkedin_account_metrics(*, access_token: str, account_id: str, start_
 def fetch_linkedin_audience(*, access_token: str, account_id: str, start_date: date, end_date: date) -> list[dict]:
     if not access_token or not account_id:
         raise MarketingServiceError("Missing LinkedIn account id")
-    return []
+    try:
+        payload = _request_json(
+            "/organizationalEntityFollowerStatistics",
+            access_token=access_token,
+            params={"q": "organizationalEntity", "organizationalEntity": _organization_urn(account_id)},
+        )
+    except MarketingServiceError:
+        return []
+
+    country_json: dict[str, int] = {}
+    city_json: dict[str, int] = {}
+    demographic_json: dict[str, int] = {}
+    for item in payload.get("elements") or []:
+        for row in item.get("followerCountsByCountry") or []:
+            label = row.get("country") or row.get("geo") or row.get("localizedName") or "Unknown"
+            country_json[str(label)] = country_json.get(str(label), 0) + _nested_int_total(row, key_hints=("count",))
+        for row in item.get("followerCountsByRegion") or []:
+            label = row.get("region") or row.get("geo") or row.get("localizedName") or "Unknown"
+            city_json[str(label)] = city_json.get(str(label), 0) + _nested_int_total(row, key_hints=("count",))
+        for key in ("followerCountsByFunction", "followerCountsByIndustry", "followerCountsBySeniority", "followerCountsByStaffCountRange"):
+            for row in item.get(key) or []:
+                label = row.get("function") or row.get("industry") or row.get("seniority") or row.get("staffCountRange") or "Unknown"
+                demographic_json[str(label)] = demographic_json.get(str(label), 0) + _nested_int_total(row, key_hints=("count",))
+
+    if not (country_json or city_json or demographic_json):
+        return []
+    return [
+        {
+            "date": end_date,
+            "country_json": country_json,
+            "city_json": city_json,
+            "gender_age_json": demographic_json,
+        }
+    ]

@@ -22,6 +22,7 @@ from marketing.models import (
     OAuthCredential,
     SeoProperty,
     SocialAccount,
+    SocialAudienceDaily,
     SocialContent,
     WebsitePageDaily,
     WebsiteTrafficDaily,
@@ -667,6 +668,36 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertEqual(account.display_name, "Iconic Company")
         org_credential = OAuthCredential.objects.get(platform="linkedin", platform_account=account)
         self.assertEqual(org_credential.get_access_token(), "li-access")
+        self.assertEqual(org_credential.account_id, "urn:li:organization:42")
+
+    def test_linkedin_disconnect_deactivates_account_and_clears_tokens(self):
+        account = SocialAccount.objects.create(
+            platform="linkedin",
+            external_account_id="urn:li:organization:42",
+            display_name="Iconic LinkedIn",
+            is_active=True,
+        )
+        credential = OAuthCredential.objects.create(
+            platform="linkedin",
+            platform_account=account,
+            account_id="urn:li:organization:42",
+            account_name="Iconic LinkedIn",
+            is_active=True,
+        )
+        credential.set_tokens(access_token="li-access", refresh_token="li-refresh")
+        credential.save()
+
+        response = self.client.post(reverse("marketing_social_connection_disconnect", args=[credential.pk]))
+
+        self.assertEqual(response.status_code, 302)
+        credential.refresh_from_db()
+        account.refresh_from_db()
+        self.assertFalse(credential.is_active)
+        self.assertFalse(account.is_active)
+        self.assertEqual(credential.get_access_token(), "")
+        self.assertEqual(credential.get_refresh_token(), "")
+        self.assertEqual(credential.last_sync_status, "disconnected")
+        self.assertEqual(account.last_sync_status, "disconnected")
 
     def test_tiktok_oauth_discovers_profile(self):
         from marketing.services.oauth_connections import exchange_direct_oauth_code
@@ -1070,6 +1101,62 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertEqual(platform_cards["instagram"]["engagement_total"], 36)
         self.assertTrue(platform_cards["instagram"]["has_activity"])
 
+    def test_linkedin_dashboard_card_shows_company_page_metrics(self):
+        account = SocialAccount.objects.create(
+            platform="linkedin",
+            external_account_id="urn:li:organization:42",
+            display_name="Iconic LinkedIn",
+            is_active=True,
+            last_successful_sync=timezone.now(),
+            last_sync_status="ok",
+        )
+        content = SocialContent.objects.create(
+            account=account,
+            platform="linkedin",
+            external_content_id="urn:li:share:1",
+            title="Top LinkedIn post",
+            published_at=timezone.now(),
+        )
+        AccountMetricDaily.objects.create(
+            account=account,
+            date=date(2026, 6, 20),
+            followers_total=1200,
+            followers_change=8,
+            impressions=700,
+            reach=410,
+            views=55,
+            clicks=25,
+            engagement_total=41,
+        )
+        content.daily_metrics.create(
+            date=date(2026, 6, 20),
+            impressions=700,
+            reach=410,
+            views=700,
+            clicks=25,
+            likes=11,
+            comments=3,
+            shares=2,
+        )
+
+        platform_cards = {item["key"]: item for item in _platform_comparison(date(2026, 6, 1), date(2026, 6, 21))}
+
+        self.assertEqual(platform_cards["linkedin"]["connected_account_name"], "Iconic LinkedIn")
+        self.assertEqual(platform_cards["linkedin"]["followers_total"], 1200)
+        self.assertEqual(platform_cards["linkedin"]["followers_change"], 8)
+        self.assertEqual(platform_cards["linkedin"]["impressions"], 700)
+        self.assertEqual(platform_cards["linkedin"]["reach"], 410)
+        self.assertEqual(platform_cards["linkedin"]["clicks"], 25)
+        self.assertEqual(platform_cards["linkedin"]["reactions"], 11)
+        self.assertEqual(platform_cards["linkedin"]["comments"], 3)
+        self.assertEqual(platform_cards["linkedin"]["shares"], 2)
+
+        response = self.client.get(reverse("marketing_social"))
+        self.assertContains(response, "Iconic LinkedIn")
+        self.assertContains(response, "Reactions")
+        self.assertContains(response, "CTR")
+        self.assertContains(response, "Profile/Page Views")
+
     def test_facebook_permission_limited_card_state(self):
         account = SocialAccount.objects.create(
             platform="facebook",
@@ -1274,6 +1361,26 @@ class MarketingSocialConnectionsTests(TestCase):
         def fake_request(path, **kwargs):
             if "Follower" in path:
                 return {"elements": []}
+            if "networkSizes" in path:
+                return {"firstDegreeSize": 1200}
+            if "organizationPageStatistics" in path:
+                return {
+                    "elements": [
+                        {
+                            "timeRange": {"start": 1781913600000},
+                            "totalPageStatistics": {
+                                "views": {
+                                    "allPageViews": {"pageViews": 55},
+                                    "overviewPageViews": {"pageViews": 50},
+                                },
+                                "clicks": {
+                                    "desktopCustomButtonClickCounts": [{"clickCount": 5}],
+                                    "mobileCustomButtonClickCounts": [{"clickCount": 2}],
+                                },
+                            },
+                        }
+                    ]
+                }
             return {
                 "elements": [
                     {
@@ -1298,8 +1405,185 @@ class MarketingSocialConnectionsTests(TestCase):
             )
 
         self.assertEqual(rows[0]["impressions"], 500)
-        self.assertEqual(rows[0]["clicks"], 20)
+        self.assertEqual(rows[0]["views"], 55)
+        self.assertEqual(rows[0]["clicks"], 27)
         self.assertEqual(rows[0]["engagement_total"], 32)
+        self.assertEqual(rows[-1]["followers_total"], 1200)
+
+    def test_linkedin_post_metrics_parse_share_stats(self):
+        from marketing.services.linkedin import fetch_linkedin_post_metrics
+
+        def fake_request(path, **kwargs):
+            self.assertEqual(kwargs["params"]["shares"], "List(urn:li:share:1)")
+            return {
+                "elements": [
+                    {
+                        "timeRange": {"start": 1781913600000},
+                        "totalShareStatistics": {
+                            "impressionCount": 700,
+                            "uniqueImpressionsCount": 410,
+                            "clickCount": 25,
+                            "likeCount": 11,
+                            "commentCount": 3,
+                            "shareCount": 2,
+                        },
+                    }
+                ]
+            }
+
+        with patch("marketing.services.linkedin._request_json", side_effect=fake_request):
+            rows = fetch_linkedin_post_metrics(
+                access_token="token",
+                account_id="urn:li:organization:42",
+                content_id="urn:li:share:1",
+                start_date=date(2026, 6, 1),
+                end_date=date(2026, 6, 21),
+            )
+
+        self.assertEqual(rows[0]["impressions"], 700)
+        self.assertEqual(rows[0]["reach"], 410)
+        self.assertEqual(rows[0]["clicks"], 25)
+        self.assertEqual(rows[0]["likes"], 11)
+        self.assertEqual(rows[0]["comments"], 3)
+        self.assertEqual(rows[0]["shares"], 2)
+
+    def test_linkedin_post_metrics_support_ugc_post_ids(self):
+        from marketing.services.linkedin import fetch_linkedin_post_metrics
+
+        def fake_request(path, **kwargs):
+            self.assertEqual(kwargs["params"]["ugcPosts"], "List(urn:li:ugcPost:1)")
+            self.assertNotIn("shares", kwargs["params"])
+            return {"elements": []}
+
+        with patch("marketing.services.linkedin._request_json", side_effect=fake_request):
+            rows = fetch_linkedin_post_metrics(
+                access_token="token",
+                account_id="urn:li:organization:42",
+                content_id="urn:li:ugcPost:1",
+                start_date=date(2026, 6, 1),
+                end_date=date(2026, 6, 21),
+            )
+
+        self.assertEqual(rows, [])
+
+    @override_settings(MARKETING_SOCIAL_ENABLED=True)
+    def test_linkedin_sync_saves_account_post_and_audience_metrics(self):
+        account = SocialAccount.objects.create(
+            platform="linkedin",
+            external_account_id="urn:li:organization:42",
+            display_name="Iconic LinkedIn",
+            is_active=True,
+        )
+        credential = OAuthCredential.objects.create(
+            platform="linkedin",
+            platform_account=account,
+            account_id="urn:li:organization:42",
+            account_name="Iconic LinkedIn",
+            is_active=True,
+        )
+        credential.set_tokens(access_token="li-access", refresh_token="li-refresh")
+        credential.save()
+
+        with patch(
+            "marketing.management.commands.marketing_sync_linkedin_daily.token_for_social_account",
+            return_value="li-access",
+        ), patch(
+            "marketing.management.commands.marketing_sync_linkedin_daily.fetch_linkedin_content",
+            return_value=[
+                {
+                    "external_content_id": "urn:li:share:1",
+                    "content_type": "post",
+                    "title": "Best content",
+                    "message_text": "Best content",
+                    "published_at": timezone.now(),
+                }
+            ],
+        ), patch(
+            "marketing.management.commands.marketing_sync_linkedin_daily.fetch_linkedin_post_metrics",
+            return_value=[
+                {
+                    "date": date(2026, 6, 20),
+                    "impressions": 700,
+                    "reach": 410,
+                    "views": 700,
+                    "clicks": 25,
+                    "likes": 11,
+                    "comments": 3,
+                    "shares": 2,
+                }
+            ],
+        ), patch(
+            "marketing.management.commands.marketing_sync_linkedin_daily.fetch_linkedin_account_metrics",
+            return_value=[
+                {
+                    "date": date(2026, 6, 20),
+                    "followers_total": 1200,
+                    "followers_change": 8,
+                    "impressions": 700,
+                    "reach": 410,
+                    "views": 55,
+                    "clicks": 25,
+                    "engagement_total": 41,
+                }
+            ],
+        ), patch(
+            "marketing.management.commands.marketing_sync_linkedin_daily.fetch_linkedin_audience",
+            return_value=[
+                {
+                    "date": date(2026, 6, 20),
+                    "country_json": {"urn:li:country:ca": 10},
+                    "city_json": {},
+                    "gender_age_json": {"urn:li:function:8": 4},
+                }
+            ],
+        ):
+            out = StringIO()
+            call_command("marketing_sync_linkedin_daily", stdout=out)
+
+        account.refresh_from_db()
+        self.assertEqual(account.last_sync_status, "ok")
+        self.assertIn("synced=1 errors=0", out.getvalue())
+        content = SocialContent.objects.get(platform="linkedin", external_content_id="urn:li:share:1")
+        metric = content.daily_metrics.get(date=date(2026, 6, 20))
+        self.assertEqual(metric.impressions, 700)
+        self.assertEqual(metric.likes, 11)
+        account_metric = AccountMetricDaily.objects.get(account=account, date=date(2026, 6, 20))
+        self.assertEqual(account_metric.followers_total, 1200)
+        self.assertEqual(account_metric.views, 55)
+        audience = SocialAudienceDaily.objects.get(account=account, date=date(2026, 6, 20))
+        self.assertEqual(audience.country_json["urn:li:country:ca"], 10)
+
+    @override_settings(MARKETING_SOCIAL_ENABLED=True)
+    def test_linkedin_sync_records_permission_error_state(self):
+        account = SocialAccount.objects.create(
+            platform="linkedin",
+            external_account_id="urn:li:organization:42",
+            display_name="Iconic LinkedIn",
+            is_active=True,
+        )
+        credential = OAuthCredential.objects.create(
+            platform="linkedin",
+            platform_account=account,
+            account_id="urn:li:organization:42",
+            account_name="Iconic LinkedIn",
+            is_active=True,
+        )
+        credential.set_tokens(access_token="li-access", refresh_token="li-refresh")
+        credential.save()
+
+        with patch(
+            "marketing.management.commands.marketing_sync_linkedin_daily.token_for_social_account",
+            side_effect=MarketingServiceError("LinkedIn API error 403: missing organization permission"),
+        ):
+            out = StringIO()
+            call_command("marketing_sync_linkedin_daily", stdout=out)
+
+        account.refresh_from_db()
+        credential.refresh_from_db()
+        self.assertEqual(account.last_sync_status, "error")
+        self.assertIn("missing organization permission", account.last_sync_message)
+        self.assertEqual(credential.last_sync_status, "error")
+        self.assertIn("errors=1", out.getvalue())
 
     def test_tiktok_content_parse_video_metrics(self):
         from marketing.services.tiktok import fetch_tiktok_content

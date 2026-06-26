@@ -413,6 +413,49 @@ def social_connection_sync(request, pk: int):
 
 
 @require_POST
+def social_connection_disconnect(request, pk: int):
+    _require_enabled()
+    connection = get_object_or_404(social_connection_queryset(), pk=pk)
+    if connection.platform != "linkedin":
+        messages.error(request, "Disconnect is currently available for LinkedIn connections only.")
+        return redirect("marketing_connection_settings")
+
+    account = connection.platform_account
+    if not account and connection.account_id:
+        account = SocialAccount.objects.filter(platform="linkedin", external_account_id=connection.account_id).first()
+
+    linked_credentials = [connection]
+    if account:
+        account.is_active = False
+        account.last_sync_status = "disconnected"
+        account.last_sync_message = "Disconnected by user."
+        account.save(update_fields=["is_active", "last_sync_status", "last_sync_message", "updated_at"])
+        linked_credentials.extend(
+            OAuthCredential.objects.filter(platform="linkedin", platform_account=account).exclude(pk=connection.pk)
+        )
+
+    for credential in linked_credentials:
+        credential.is_active = False
+        credential.last_sync_status = "disconnected"
+        credential.last_error = ""
+        credential.set_tokens(access_token="", refresh_token="", expires_at=None)
+        credential.save(
+            update_fields=[
+                "is_active",
+                "last_sync_status",
+                "last_error",
+                "encrypted_access_token",
+                "encrypted_refresh_token",
+                "expires_at",
+                "updated_at",
+            ]
+        )
+
+    messages.success(request, "LinkedIn connection disconnected.")
+    return redirect("marketing_connection_settings")
+
+
+@require_POST
 def social_platform_sync(request, platform: str):
     _require_enabled()
     try:
