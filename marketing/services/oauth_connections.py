@@ -47,6 +47,7 @@ DIRECT_OAUTH_PLATFORMS = {"linkedin", "tiktok"}
 OAUTH_START_PLATFORMS = GOOGLE_OAUTH_PLATFORMS | META_OAUTH_PLATFORMS | INSTAGRAM_OAUTH_PLATFORMS | DIRECT_OAUTH_PLATFORMS
 logger = logging.getLogger(__name__)
 LINKEDIN_REQUIRED_ORGANIZATION_SCOPES = frozenset({"rw_organization_admin", "r_organization_social"})
+TIKTOK_REQUIRED_SCOPES = frozenset({"user.info.basic", "user.info.profile", "user.info.stats", "video.list"})
 
 
 def normalize_oauth_platform(platform: str) -> str:
@@ -124,6 +125,10 @@ def oauth_scope_set(scopes: str) -> set[str]:
 
 def linkedin_has_required_organization_scopes(scopes: str) -> bool:
     return LINKEDIN_REQUIRED_ORGANIZATION_SCOPES.issubset(oauth_scope_set(scopes))
+
+
+def tiktok_has_required_scopes(scopes: str) -> bool:
+    return TIKTOK_REQUIRED_SCOPES.issubset(oauth_scope_set(scopes))
 
 
 def _format_scope_set(scopes: set[str]) -> str:
@@ -301,6 +306,8 @@ def _save_direct_credential(*, platform: str, token_payload: dict) -> OAuthCrede
     credential.account_name = account_name
     if platform == "linkedin":
         credential.scopes = token_payload.get("scope") or ""
+    elif platform == "tiktok":
+        credential.scopes = token_payload.get("scope") or ""
     else:
         credential.scopes = token_payload.get("scope") or " ".join(_direct_scopes(platform))
     credential.is_active = True
@@ -346,7 +353,29 @@ def _save_direct_credential(*, platform: str, token_payload: dict) -> OAuthCrede
             credential.last_error = ""
             credential.save(update_fields=["last_error", "updated_at"])
     elif platform == "tiktok":
-        _discover_and_save_tiktok_account(credential=credential)
+        granted_scopes = oauth_scope_set(credential.scopes)
+        missing_scopes = TIKTOK_REQUIRED_SCOPES - granted_scopes
+        if missing_scopes:
+            granted_text = _format_scope_set(granted_scopes)
+            missing_text = _format_scope_set(missing_scopes)
+            message = (
+                "TikTok OAuth token missing required analytics scopes. "
+                f"Granted scopes: {granted_text}. Missing scopes: {missing_text}."
+            )
+            credential.is_active = False
+            credential.last_sync_status = "error"
+            credential.last_error = message
+            credential.save(update_fields=["is_active", "last_sync_status", "last_error", "updated_at"])
+            logger.error(
+                "TikTok OAuth token missing required scopes credential_id=%s granted_scopes=%s missing_scopes=%s",
+                credential.pk,
+                granted_text,
+                missing_text,
+            )
+            raise MarketingServiceError(message)
+        tiktok_count = _discover_and_save_tiktok_account(credential=credential)
+        if not tiktok_count:
+            raise MarketingServiceError(credential.last_error or "TikTok profile discovery failed.")
     return credential
 
 
@@ -436,17 +465,24 @@ def _discover_and_save_tiktok_account(*, credential: OAuthCredential) -> int:
 
         profile = fetch_tiktok_profile(access_token=credential.get_access_token())
     except MarketingServiceError as exc:
-        credential.last_sync_status = "connected"
+        credential.last_sync_status = "error"
         credential.last_error = str(exc)
         credential.save(update_fields=["last_sync_status", "last_error", "updated_at"])
         return 0
 
     account_id = profile.get("open_id") or credential.account_id
     account_name = profile.get("display_name") or profile.get("username") or credential.account_name or "TikTok"
+    username = profile.get("username") or ""
+    profile_url = profile.get("profile_deep_link") or ""
     account, _ = SocialAccount.objects.update_or_create(
         platform="tiktok",
         external_account_id=account_id,
-        defaults={"display_name": account_name, "is_active": True},
+        defaults={
+            "display_name": account_name,
+            "username": username,
+            "profile_url": profile_url,
+            "is_active": True,
+        },
     )
     credential.account_id = account_id
     credential.account_name = account_name

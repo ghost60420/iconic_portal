@@ -47,9 +47,16 @@ class Command(BaseCommand):
             self.stdout.write("No matching TikTok accounts found.")
             return
 
+        synced_count = 0
+        error_count = 0
+        content_count = 0
+        content_metric_count = 0
+        account_metric_count = 0
         for acct in accounts:
             try:
                 token = self._token_for_account(acct)
+                if not token:
+                    raise MarketingServiceError("No active OAuth token found for TikTok.")
                 today = timezone.localdate()
                 if acct.last_successful_sync:
                     start = today - timedelta(days=1)
@@ -81,6 +88,8 @@ class Command(BaseCommand):
                     )
                     if row.get("metric_payload"):
                         upsert_social_metric_daily(content_obj=content, payload=row["metric_payload"])
+                        content_metric_count += 1
+                    content_count += 1
 
                     metric_rows = fetch_tiktok_metrics(
                         access_token=token,
@@ -91,6 +100,7 @@ class Command(BaseCommand):
                     for metric in metric_rows:
                         if metric:
                             upsert_social_metric_daily(content_obj=content, payload=metric)
+                            content_metric_count += 1
 
                 account_metric_rows = fetch_tiktok_account_metrics(
                     access_token=token,
@@ -100,6 +110,7 @@ class Command(BaseCommand):
                 )
                 for metric in account_metric_rows:
                     upsert_account_metric_daily(account_obj=acct, payload=metric)
+                    account_metric_count += 1
 
                 audience_rows = fetch_tiktok_audience(
                     access_token=token,
@@ -117,10 +128,19 @@ class Command(BaseCommand):
                 acct.last_sync_message = ""
                 acct.save(update_fields=["last_sync_at", "last_successful_sync", "last_sync_status", "last_sync_message"])
                 update_connection_sync_state(acct, status="ok", synced_at=synced_at)
+                synced_count += 1
             except MarketingServiceError as exc:
                 acct.last_sync_status = "error"
                 acct.last_sync_message = str(exc)
                 acct.save(update_fields=["last_sync_status", "last_sync_message"])
                 update_connection_sync_state(acct, status="error", error=str(exc))
+                error_count += 1
+                self.stdout.write(self.style.ERROR(f"{acct.display_name or acct.external_account_id} TikTok sync failed: {exc}"))
 
-        self.stdout.write(self.style.SUCCESS("TikTok sync complete."))
+        self.stdout.write(
+            self.style.SUCCESS(
+                "TikTok sync complete. "
+                f"synced={synced_count} errors={error_count} "
+                f"videos={content_count} video_metrics={content_metric_count} account_metrics={account_metric_count}"
+            )
+        )

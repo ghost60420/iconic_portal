@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 import json
+import logging
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -12,6 +13,9 @@ from .errors import MarketingServiceError
 
 
 TIKTOK_API_BASE = "https://open.tiktokapis.com/v2"
+TIKTOK_VIDEO_PAGE_SIZE = 20
+TIKTOK_VIDEO_MAX_PAGES = 5
+logger = logging.getLogger(__name__)
 
 
 def _as_int(value) -> int:
@@ -29,6 +33,7 @@ def _request_json(path: str, *, access_token: str, params: dict | None = None, b
         separator = "&" if "?" in url else "?"
         url = f"{url}{separator}{urllib.parse.urlencode(params)}"
     data = json.dumps(body or {}).encode("utf-8") if body is not None else None
+    logger.info("TikTok API request endpoint=%s method=%s", url, "POST" if body is not None else "GET")
     request = urllib.request.Request(
         url,
         data=data,
@@ -44,8 +49,10 @@ def _request_json(path: str, *, access_token: str, params: dict | None = None, b
             raw = response.read().decode("utf-8") or "{}"
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="ignore")
+        logger.error("TikTok API error endpoint=%s status=%s payload=%s", url, exc.code, detail[:2000])
         raise MarketingServiceError(f"TikTok API error {exc.code}: {detail[:500]}") from exc
     except urllib.error.URLError as exc:
+        logger.error("TikTok API request failed endpoint=%s reason=%s", url, exc.reason)
         raise MarketingServiceError(f"TikTok API request failed: {exc.reason}") from exc
     payload = json.loads(raw)
     error = payload.get("error") or {}
@@ -80,39 +87,52 @@ def fetch_tiktok_profile(*, access_token: str) -> dict:
 def fetch_tiktok_content(*, access_token: str, account_id: str, start_date: date, end_date: date) -> list[dict]:
     if not access_token or not account_id:
         raise MarketingServiceError("Missing TikTok credentials")
-    fields = "id,title,create_time,share_url,view_count,like_count,comment_count,share_count"
-    payload = _request_json(
-        "/video/list/",
-        access_token=access_token,
-        params={"fields": fields},
-        body={"max_count": 20},
+    fields = (
+        "id,title,create_time,share_url,cover_image_url,duration,"
+        "view_count,like_count,comment_count,share_count"
     )
     rows: list[dict] = []
-    for item in (payload.get("data") or {}).get("videos") or []:
-        created = _as_int(item.get("create_time"))
-        published_at = datetime.fromtimestamp(created, tz=timezone.get_current_timezone()) if created else None
-        if published_at:
-            published_date = published_at.date()
-            if published_date < start_date or published_date > end_date:
-                continue
-        metric_date = published_at.date() if published_at else end_date
-        rows.append(
-            {
-                "external_content_id": item.get("id"),
-                "content_type": "video",
-                "title": item.get("title") or item.get("id") or "TikTok video",
-                "message_text": item.get("title") or "",
-                "permalink": item.get("share_url") or "",
-                "published_at": published_at,
-                "metric_payload": {
-                    "date": metric_date,
-                    "views": _as_int(item.get("view_count")),
-                    "likes": _as_int(item.get("like_count")),
-                    "comments": _as_int(item.get("comment_count")),
-                    "shares": _as_int(item.get("share_count")),
-                },
-            }
+    cursor = None
+    for _page in range(TIKTOK_VIDEO_MAX_PAGES):
+        body = {"max_count": TIKTOK_VIDEO_PAGE_SIZE}
+        if cursor is not None:
+            body["cursor"] = cursor
+        payload = _request_json(
+            "/video/list/",
+            access_token=access_token,
+            params={"fields": fields},
+            body=body,
         )
+        data = payload.get("data") or {}
+        for item in data.get("videos") or []:
+            video_id = item.get("id")
+            if not video_id:
+                continue
+            created = _as_int(item.get("create_time"))
+            published_at = datetime.fromtimestamp(created, tz=timezone.get_current_timezone()) if created else None
+            title = item.get("title") or video_id or "TikTok video"
+            rows.append(
+                {
+                    "external_content_id": video_id,
+                    "content_type": "video",
+                    "title": title[:300],
+                    "message_text": item.get("title") or "",
+                    "permalink": item.get("share_url") or "",
+                    "published_at": published_at,
+                    "metric_payload": {
+                        "date": end_date,
+                        "views": _as_int(item.get("view_count")),
+                        "likes": _as_int(item.get("like_count")),
+                        "comments": _as_int(item.get("comment_count")),
+                        "shares": _as_int(item.get("share_count")),
+                    },
+                }
+            )
+        if not data.get("has_more"):
+            break
+        cursor = data.get("cursor")
+        if cursor in (None, ""):
+            break
     return rows
 
 
@@ -130,7 +150,7 @@ def fetch_tiktok_account_metrics(*, access_token: str, account_id: str, start_da
         {
             "date": end_date,
             "followers_total": _as_int(profile.get("follower_count")),
-            "views": _as_int(profile.get("video_count")),
+            "views": 0,
             "engagement_total": _as_int(profile.get("likes_count")),
         }
     ]

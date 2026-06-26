@@ -905,16 +905,145 @@ class MarketingSocialConnectionsTests(TestCase):
 
         with patch(
             "marketing.services.oauth_connections._post_form",
-            return_value={"access_token": "tt-access", "refresh_token": "tt-refresh", "open_id": "open-1", "expires_in": 3600},
+            return_value={
+                "access_token": "tt-access",
+                "refresh_token": "tt-refresh",
+                "open_id": "open-1",
+                "expires_in": 3600,
+                "scope": "user.info.basic,user.info.profile,user.info.stats,video.list",
+            },
         ), patch(
             "marketing.services.tiktok.fetch_tiktok_profile",
-            return_value={"open_id": "open-1", "display_name": "Iconic TikTok", "follower_count": 25},
+            return_value={
+                "open_id": "open-1",
+                "display_name": "Iconic TikTok",
+                "username": "iconicapparelhouse",
+                "profile_deep_link": "https://www.tiktok.com/@iconicapparelhouse",
+                "follower_count": 25,
+            },
         ):
             credential = exchange_direct_oauth_code(platform="tiktok", code="code")
 
         self.assertEqual(credential.account_id, "open-1")
         self.assertEqual(credential.account_name, "Iconic TikTok")
+        self.assertTrue(credential.has_access_token)
+        self.assertTrue(credential.has_refresh_token)
+        account = SocialAccount.objects.get(platform="tiktok", external_account_id="open-1")
+        self.assertEqual(account.display_name, "Iconic TikTok")
+        self.assertEqual(account.username, "iconicapparelhouse")
+        self.assertEqual(account.profile_url, "https://www.tiktok.com/@iconicapparelhouse")
+
+    @override_settings(
+        MARKETING_TIKTOK_CLIENT_KEY="tiktok-client",
+        MARKETING_TIKTOK_CLIENT_SECRET="tiktok-secret",
+        MARKETING_TIKTOK_REDIRECT_URI="https://femline.ca/api/auth/tiktok/callback/",
+        MARKETING_TIKTOK_SCOPES=["user.info.basic", "user.info.profile", "user.info.stats", "video.list"],
+    )
+    def test_tiktok_oauth_url_requests_required_scopes(self):
+        from marketing.services.oauth_connections import build_oauth_authorization_url
+
+        url = build_oauth_authorization_url(platform="tiktok", state="state-123")
+        query = parse_qs(urlparse(url).query)
+        scopes = set(query["scope"][0].split(","))
+
+        self.assertEqual(query["response_type"], ["code"])
+        self.assertEqual(query["client_key"], ["tiktok-client"])
+        self.assertEqual(query["redirect_uri"], ["https://femline.ca/api/auth/tiktok/callback/"])
+        self.assertEqual(query["state"], ["state-123"])
+        self.assertIn("user.info.basic", scopes)
+        self.assertIn("user.info.profile", scopes)
+        self.assertIn("user.info.stats", scopes)
+        self.assertIn("video.list", scopes)
+        self.assertNotIn("client_secret", url)
+
+    def test_tiktok_oauth_stops_when_required_scopes_missing(self):
+        from marketing.services.oauth_connections import exchange_direct_oauth_code
+
+        with patch(
+            "marketing.services.oauth_connections._post_form",
+            return_value={
+                "access_token": "tt-access",
+                "refresh_token": "tt-refresh",
+                "open_id": "open-1",
+                "expires_in": 3600,
+                "scope": "user.info.basic,video.list",
+            },
+        ), patch("marketing.services.tiktok.fetch_tiktok_profile") as mock_profile:
+            with self.assertRaises(MarketingServiceError) as context:
+                exchange_direct_oauth_code(platform="tiktok", code="code")
+
+        self.assertIn("Granted scopes: user.info.basic, video.list", str(context.exception))
+        credential = OAuthCredential.objects.get(platform="tiktok", account_id="open-1")
+        self.assertFalse(credential.is_active)
+        self.assertEqual(credential.last_sync_status, "error")
+        self.assertIn("Missing scopes: user.info.profile, user.info.stats", credential.last_error)
+        self.assertFalse(SocialAccount.objects.filter(platform="tiktok").exists())
+        mock_profile.assert_not_called()
+
+    def test_tiktok_oauth_callback_saves_profile_and_runs_sync(self):
+        conn = OAuthConnectionRequest.objects.create(
+            platform="tiktok",
+            user=self.user,
+            state="state-123",
+            status="initiated",
+        )
+
+        with patch(
+            "marketing.services.oauth_connections._post_form",
+            return_value={
+                "access_token": "tt-access",
+                "refresh_token": "tt-refresh",
+                "open_id": "open-1",
+                "expires_in": 3600,
+                "scope": "user.info.basic,user.info.profile,user.info.stats,video.list",
+            },
+        ), patch(
+            "marketing.services.tiktok.fetch_tiktok_profile",
+            return_value={"open_id": "open-1", "display_name": "Iconic TikTok"},
+        ), patch("marketing.views_social_connections.call_command") as mock_call_command:
+            response = self.client.get(
+                reverse("marketing_tiktok_oauth_callback_api_slash"),
+                {"state": "state-123", "code": "oauth-code"},
+            )
+
+        self.assertEqual(response.status_code, 302)
+        conn.refresh_from_db()
+        self.assertEqual(conn.status, "completed")
+        credential = OAuthCredential.objects.get(platform="tiktok", account_id="open-1")
+        self.assertTrue(credential.has_access_token)
+        self.assertTrue(credential.has_refresh_token)
         self.assertTrue(SocialAccount.objects.filter(platform="tiktok", external_account_id="open-1").exists())
+        mock_call_command.assert_called_once()
+        self.assertEqual(mock_call_command.call_args.args[0], "marketing_sync_tiktok_daily")
+
+    def test_tiktok_disconnect_deactivates_account_and_clears_tokens(self):
+        account = SocialAccount.objects.create(
+            platform="tiktok",
+            external_account_id="open-1",
+            display_name="Iconic TikTok",
+            is_active=True,
+        )
+        credential = OAuthCredential.objects.create(
+            platform="tiktok",
+            platform_account=account,
+            account_id="open-1",
+            account_name="Iconic TikTok",
+            is_active=True,
+        )
+        credential.set_tokens(access_token="tt-access", refresh_token="tt-refresh")
+        credential.save()
+
+        response = self.client.post(reverse("marketing_social_connection_disconnect", args=[credential.pk]))
+
+        self.assertEqual(response.status_code, 302)
+        credential.refresh_from_db()
+        account.refresh_from_db()
+        self.assertFalse(credential.is_active)
+        self.assertFalse(account.is_active)
+        self.assertEqual(credential.get_access_token(), "")
+        self.assertEqual(credential.get_refresh_token(), "")
+        self.assertEqual(credential.last_sync_status, "disconnected")
+        self.assertEqual(account.last_sync_status, "disconnected")
 
     def test_youtube_account_metrics_parse_channel_statistics(self):
         with patch(
@@ -1856,7 +1985,7 @@ class MarketingSocialConnectionsTests(TestCase):
     def test_tiktok_content_parse_video_metrics(self):
         from marketing.services.tiktok import fetch_tiktok_content
 
-        payload = {
+        first_payload = {
             "data": {
                 "videos": [
                     {
@@ -1869,11 +1998,14 @@ class MarketingSocialConnectionsTests(TestCase):
                         "comment_count": 6,
                         "share_count": 3,
                     }
-                ]
+                ],
+                "cursor": 1782000000,
+                "has_more": True,
             },
             "error": {"code": "ok"},
         }
-        with patch("marketing.services.tiktok._request_json", return_value=payload):
+        second_payload = {"data": {"videos": [], "has_more": False}, "error": {"code": "ok"}}
+        with patch("marketing.services.tiktok._request_json", side_effect=[first_payload, second_payload]) as mock_request:
             rows = fetch_tiktok_content(
                 access_token="token",
                 account_id="open-1",
@@ -1882,8 +2014,84 @@ class MarketingSocialConnectionsTests(TestCase):
             )
 
         self.assertEqual(rows[0]["external_content_id"], "video-1")
+        self.assertEqual(rows[0]["metric_payload"]["date"], date(2026, 6, 30))
         self.assertEqual(rows[0]["metric_payload"]["views"], 1000)
         self.assertEqual(rows[0]["metric_payload"]["likes"], 80)
+        self.assertEqual(mock_request.call_count, 2)
+
+    def test_tiktok_daily_sync_imports_profile_and_video_metrics(self):
+        account = SocialAccount.objects.create(
+            platform="tiktok",
+            external_account_id="open-1",
+            display_name="Iconic TikTok",
+            is_active=True,
+        )
+        credential = OAuthCredential.objects.create(
+            platform="tiktok",
+            platform_account=account,
+            account_id="open-1",
+            account_name="Iconic TikTok",
+            scopes="user.info.basic,user.info.profile,user.info.stats,video.list",
+            is_active=True,
+        )
+        credential.set_tokens(access_token="tt-access", refresh_token="tt-refresh")
+        credential.save()
+
+        with patch(
+            "marketing.management.commands.marketing_sync_tiktok_daily.fetch_tiktok_content",
+            return_value=[
+                {
+                    "external_content_id": "video-1",
+                    "content_type": "video",
+                    "title": "Top TikTok",
+                    "message_text": "Top TikTok",
+                    "permalink": "https://www.tiktok.com/@iconic/video/1",
+                    "published_at": timezone.make_aware(datetime(2026, 6, 20, 12, 0)),
+                    "metric_payload": {
+                        "date": date(2026, 6, 25),
+                        "views": 1000,
+                        "likes": 80,
+                        "comments": 6,
+                        "shares": 3,
+                    },
+                }
+            ],
+        ), patch(
+            "marketing.management.commands.marketing_sync_tiktok_daily.fetch_tiktok_metrics",
+            return_value=[],
+        ), patch(
+            "marketing.management.commands.marketing_sync_tiktok_daily.fetch_tiktok_account_metrics",
+            return_value=[
+                {
+                    "date": date(2026, 6, 25),
+                    "followers_total": 2500,
+                    "views": 0,
+                    "engagement_total": 12000,
+                }
+            ],
+        ), patch(
+            "marketing.management.commands.marketing_sync_tiktok_daily.fetch_tiktok_audience",
+            return_value=[],
+        ), patch("django.utils.timezone.localdate", return_value=date(2026, 6, 26)):
+            out = StringIO()
+            call_command("marketing_sync_tiktok_daily", stdout=out)
+
+        account.refresh_from_db()
+        credential.refresh_from_db()
+        self.assertEqual(account.last_sync_status, "ok")
+        self.assertEqual(credential.last_sync_status, "ok")
+        content = SocialContent.objects.get(platform="tiktok", external_content_id="video-1")
+        metric = content.daily_metrics.get(date=date(2026, 6, 25))
+        self.assertEqual(metric.views, 1000)
+        self.assertEqual(metric.likes, 80)
+        account_metric = account.account_days.get(date=date(2026, 6, 25))
+        self.assertEqual(account_metric.followers_total, 2500)
+        self.assertIn("synced=1 errors=0 videos=1 video_metrics=1 account_metrics=1", out.getvalue())
+
+    def test_social_daily_sync_includes_tiktok(self):
+        from marketing.management.commands.marketing_sync_social_connections_daily import Command
+
+        self.assertIn("marketing_sync_tiktok_daily", Command.commands)
 
     def test_sync_failure_logger_writes_system_activity_log(self):
         log_marketing_sync_failure(

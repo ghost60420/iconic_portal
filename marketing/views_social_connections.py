@@ -419,13 +419,16 @@ def social_connection_sync(request, pk: int):
 def social_connection_disconnect(request, pk: int):
     _require_enabled()
     connection = get_object_or_404(social_connection_queryset(), pk=pk)
-    if connection.platform != "linkedin":
-        messages.error(request, "Disconnect is currently available for LinkedIn connections only.")
+    if connection.platform not in {"linkedin", "tiktok"}:
+        messages.error(request, "Disconnect is currently available for LinkedIn and TikTok connections only.")
         return redirect("marketing_connection_settings")
 
     account = connection.platform_account
     if not account and connection.account_id:
-        account = SocialAccount.objects.filter(platform="linkedin", external_account_id=connection.account_id).first()
+        account = SocialAccount.objects.filter(
+            platform=connection.platform,
+            external_account_id=connection.account_id,
+        ).first()
 
     linked_credentials = [connection]
     if account:
@@ -434,7 +437,7 @@ def social_connection_disconnect(request, pk: int):
         account.last_sync_message = "Disconnected by user."
         account.save(update_fields=["is_active", "last_sync_status", "last_sync_message", "updated_at"])
         linked_credentials.extend(
-            OAuthCredential.objects.filter(platform="linkedin", platform_account=account).exclude(pk=connection.pk)
+            OAuthCredential.objects.filter(platform=connection.platform, platform_account=account).exclude(pk=connection.pk)
         )
 
     for credential in linked_credentials:
@@ -454,7 +457,7 @@ def social_connection_disconnect(request, pk: int):
             ]
         )
 
-    messages.success(request, "LinkedIn connection disconnected.")
+    messages.success(request, f"{connection.get_platform_display()} connection disconnected.")
     return redirect("marketing_connection_settings")
 
 
@@ -596,6 +599,12 @@ def oauth_callback(request, platform: str):
                 call_command("marketing_sync_linkedin_daily", stdout=sync_output)
             except Exception as sync_exc:
                 raise MarketingServiceError(f"LinkedIn sync failed after OAuth: {sync_exc}") from sync_exc
+        elif platform == "tiktok":
+            sync_output = StringIO()
+            try:
+                call_command("marketing_sync_tiktok_daily", stdout=sync_output)
+            except Exception as sync_exc:
+                raise MarketingServiceError(f"TikTok sync failed after OAuth: {sync_exc}") from sync_exc
     except MarketingServiceError as exc:
         conn.status = "error"
         conn.error_message = str(exc)
@@ -611,6 +620,10 @@ def oauth_callback(request, platform: str):
         output = sync_output.getvalue().strip()
         suffix = f" {output}" if output else ""
         messages.success(request, f"LinkedIn connected with OAuth.{suffix}")
+    elif platform == "tiktok":
+        output = sync_output.getvalue().strip()
+        suffix = f" {output}" if output else ""
+        messages.success(request, f"TikTok connected with OAuth.{suffix}")
     else:
         messages.success(request, f"{credential.get_platform_display()} connected with OAuth.")
     return redirect("marketing_connection_settings")

@@ -275,6 +275,12 @@
                 <button class="btn btn-outline-light mk-btn" type="submit">Disconnect</button>
               </form>
             {% endif %}
+            {% if card.config.key == "tiktok" %}
+              <form method="post" action="{% url 'marketing_social_connection_disconnect' card.connection.pk %}">
+                {% csrf_token %}
+                <button class="btn btn-outline-light mk-btn" type="submit">Disconnect</button>
+              </form>
+            {% endif %}
           {% endif %}
         </div>
       </div>
@@ -333,6 +339,12 @@
                         <button class="btn btn-warning mk-btn" type="submit">Sync Now</button>
                       </form>
                       {% if connection.platform == "linkedin" %}
+                        <form method="post" action="{% url 'marketing_social_connection_disconnect' connection.pk %}">
+                          {% csrf_token %}
+                          <button class="btn btn-outline-light mk-btn" type="submit">Disconnect</button>
+                        </form>
+                      {% endif %}
+                      {% if connection.platform == "tiktok" %}
                         <form method="post" action="{% url 'marketing_social_connection_disconnect' connection.pk %}">
                           {% csrf_token %}
                           <button class="btn btn-outline-light mk-btn" type="submit">Disconnect</button>
