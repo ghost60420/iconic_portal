@@ -433,11 +433,23 @@ class QuickCostingForm(forms.ModelForm):
         "shipping_cost",
         "selling_price_per_piece",
         "commission_per_piece",
+        "fabric_cost_per_kg",
+        "fabric_consumption_kg_per_piece",
+        "making_cost_per_piece",
+        "print_embroidery_cost_per_piece",
+        "trims_cost_per_piece",
+        "packaging_cost_per_piece",
     ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["costing_purpose"].required = False
+        self.show_legacy_fields = bool(self.instance.pk and self.instance.currency is None)
+        self.fields["currency"].required = not self.show_legacy_fields
+        if not self.show_legacy_fields:
+            for field_name in ("material_cost", "production_cost", "commission_per_piece"):
+                self.fields[field_name].widget = forms.HiddenInput()
+                self.fields[field_name].disabled = True
         for field in self.fields.values():
             css = field.widget.attrs.get("class", "")
             field.widget.attrs["class"] = (css + " costing-input").strip()
@@ -466,6 +478,15 @@ class QuickCostingForm(forms.ModelForm):
         target_margin = cleaned.get("target_margin_percent")
         if target_margin is not None and target_margin < 0:
             self.add_error("target_margin_percent", "Enter a zero or positive margin.")
+        commission_percent = cleaned.get("commission_percent")
+        if commission_percent is not None and not Decimal("0") <= commission_percent <= Decimal("100"):
+            self.add_error("commission_percent", "Enter a percentage from 0 to 100.")
+        fabric_cost = cleaned.get("fabric_cost_per_kg")
+        fabric_consumption = cleaned.get("fabric_consumption_kg_per_piece")
+        if (fabric_cost is None) != (fabric_consumption is None):
+            message = "Enter both fabric cost per kg and fabric consumption per piece."
+            self.add_error("fabric_cost_per_kg", message)
+            self.add_error("fabric_consumption_kg_per_piece", message)
         return cleaned
 
     class Meta:
@@ -476,12 +497,20 @@ class QuickCostingForm(forms.ModelForm):
             "product_type",
             "costing_purpose",
             "quantity",
+            "currency",
             "exchange_rate_bdt_per_cad",
+            "fabric_cost_per_kg",
+            "fabric_consumption_kg_per_piece",
+            "making_cost_per_piece",
+            "print_embroidery_cost_per_piece",
+            "trims_cost_per_piece",
+            "packaging_cost_per_piece",
             "material_cost",
             "production_cost",
             "other_expenses",
             "shipping_cost",
             "selling_price_per_piece",
+            "commission_percent",
             "commission_per_piece",
             "target_margin_percent",
         ]
@@ -490,12 +519,20 @@ class QuickCostingForm(forms.ModelForm):
             "project_name": forms.TextInput(attrs={"placeholder": "Project or style name"}),
             "costing_purpose": forms.Select(),
             "quantity": forms.NumberInput(attrs={"min": 1, "step": "1", "placeholder": "300"}),
+            "currency": forms.Select(),
             "exchange_rate_bdt_per_cad": forms.NumberInput(attrs={"min": 0, "step": "0.0001", "placeholder": "90"}),
+            "fabric_cost_per_kg": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
+            "fabric_consumption_kg_per_piece": forms.NumberInput(attrs={"min": 0, "step": "0.0001", "placeholder": "0.0000"}),
+            "making_cost_per_piece": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
+            "print_embroidery_cost_per_piece": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
+            "trims_cost_per_piece": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
+            "packaging_cost_per_piece": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
             "material_cost": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
             "production_cost": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
             "other_expenses": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
             "shipping_cost": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
             "selling_price_per_piece": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
+            "commission_percent": forms.NumberInput(attrs={"min": 0, "max": 100, "step": "0.01", "placeholder": "5.00"}),
             "commission_per_piece": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
             "target_margin_percent": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "30"}),
         }
@@ -504,14 +541,40 @@ class QuickCostingForm(forms.ModelForm):
             "project_name": "Project Name",
             "product_type": "Product Type",
             "costing_purpose": "Costing Purpose",
+            "currency": "Currency",
             "exchange_rate_bdt_per_cad": "Exchange Rate",
-            "material_cost": "Material Cost",
-            "production_cost": "Production Cost",
-            "other_expenses": "Other Expenses",
-            "shipping_cost": "Shipping Cost",
+            "fabric_cost_per_kg": "Fabric Cost Per KG",
+            "fabric_consumption_kg_per_piece": "Fabric Consumption KG Per Piece",
+            "making_cost_per_piece": "Making Cost Per Piece",
+            "print_embroidery_cost_per_piece": "Print or Embroidery Cost Per Piece",
+            "trims_cost_per_piece": "Trims Cost Per Piece",
+            "packaging_cost_per_piece": "Packaging Cost Per Piece",
+            "material_cost": "Legacy Material Cost - Total Order",
+            "production_cost": "Legacy Production Cost - Total Order",
+            "other_expenses": "Other Expenses - Total Order",
+            "shipping_cost": "Shipping Cost - Total Order",
             "selling_price_per_piece": "Selling Price Per Piece",
-            "commission_per_piece": "Commission Per Piece",
+            "commission_percent": "Commission Percent",
+            "commission_per_piece": "Legacy Commission Per Piece",
             "target_margin_percent": "Target Margin %",
+        }
+        help_texts = {
+            "currency": "Currency used for every amount in this Quick Costing.",
+            "exchange_rate_bdt_per_cad": "Optional legacy conversion: BDT per 1 CAD.",
+            "fabric_cost_per_kg": "Cost basis: per kg in the selected currency.",
+            "fabric_consumption_kg_per_piece": "Cost basis: kilograms of fabric consumed per finished piece.",
+            "making_cost_per_piece": "Cost basis: per piece in the selected currency.",
+            "print_embroidery_cost_per_piece": "Cost basis: per piece in the selected currency.",
+            "trims_cost_per_piece": "Cost basis: per piece in the selected currency.",
+            "packaging_cost_per_piece": "Cost basis: per piece in the selected currency.",
+            "material_cost": "Legacy BDT total order value. Used only when detailed per-piece costs are empty.",
+            "production_cost": "Legacy BDT total order value. Used only when detailed per-piece costs are empty.",
+            "other_expenses": "Cost basis: total order value in the selected currency.",
+            "shipping_cost": "Cost basis: total order value in the selected currency.",
+            "selling_price_per_piece": "Cost basis: per piece in the selected currency.",
+            "commission_percent": "Percentage of selling price. The calculated commission uses the selected currency.",
+            "commission_per_piece": "Legacy absolute BDT amount per piece. Used only when commission percent is empty.",
+            "target_margin_percent": "Percentage target for profit after commission.",
         }
 
 

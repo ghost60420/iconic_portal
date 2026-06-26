@@ -124,6 +124,15 @@ def _format_quick_bdt(value):
     return f"৳{_format_quick_decimal(value)} BDT"
 
 
+def _format_quick_currency(value, currency):
+    currency = (currency or "BDT").upper()
+    if currency == "CAD":
+        return f"CAD ${_format_quick_decimal(value)}"
+    if currency == "USD":
+        return f"USD ${_format_quick_decimal(value)}"
+    return _format_quick_bdt(value)
+
+
 def _format_quick_cad_from_bdt(value, exchange_rate):
     if not exchange_rate:
         return "CAD N/A"
@@ -134,11 +143,18 @@ def _format_quick_cad_from_bdt(value, exchange_rate):
     return f"CAD ${_format_quick_decimal(cad_value)}"
 
 
-def _format_quick_money_pair(value, exchange_rate):
+def _format_quick_money_pair(value, exchange_rate, currency="BDT", is_legacy_currency=True):
+    if not is_legacy_currency:
+        return _format_quick_currency(value, currency)
     return f"{_format_quick_bdt(value)} / {_format_quick_cad_from_bdt(value, exchange_rate)}"
 
 
-def _format_quick_money_lines(value, exchange_rate):
+def _format_quick_money_lines(value, exchange_rate, currency="BDT", is_legacy_currency=True):
+    if not is_legacy_currency:
+        return {
+            "bdt": _format_quick_currency(value, currency),
+            "cad": "",
+        }
     return {
         "bdt": _format_quick_bdt(value),
         "cad": _format_quick_cad_from_bdt(value, exchange_rate),
@@ -148,6 +164,8 @@ def _format_quick_money_lines(value, exchange_rate):
 def _quick_costing_calc(quick_costing):
     summary = quick_costing.calculation_summary()
     exchange_rate = summary.get("exchange_rate")
+    currency = summary["currency"]
+    is_legacy_currency = summary["is_legacy_currency"]
     calc = {
         "total_cost_order": summary["total_cost"],
         "total_sales_order": summary["revenue"],
@@ -157,7 +175,17 @@ def _quick_costing_calc(quick_costing):
         "profit_per_piece": summary["profit_per_piece"],
         "margin_percent": summary["profit_margin_percent"],
         "quantity": summary["quantity"],
+        "currency": currency,
+        "is_legacy_currency": is_legacy_currency,
         "exchange_rate": exchange_rate,
+        "uses_detailed_costing": summary["uses_detailed_costing"],
+        "fabric_cost_per_kg": summary["fabric_cost_per_kg"],
+        "fabric_consumption_kg_per_piece": summary["fabric_consumption_kg_per_piece"],
+        "fabric_cost_per_piece": summary["fabric_cost_per_piece"],
+        "making_cost_per_piece": summary["making_cost_per_piece"],
+        "print_embroidery_cost_per_piece": summary["print_embroidery_cost_per_piece"],
+        "trims_cost_per_piece": summary["trims_cost_per_piece"],
+        "packaging_cost_per_piece": summary["packaging_cost_per_piece"],
         "material_cost": summary["material_cost_total"],
         "material_cost_per_piece": summary["material_cost_per_piece"],
         "material_cost_total": summary["material_cost_total"],
@@ -176,6 +204,7 @@ def _quick_costing_calc(quick_costing):
         "gross_profit_total": summary["gross_profit_total"],
         "commission_per_piece": summary["commission_per_piece"],
         "commission_total": summary["commission_total"],
+        "commission_percent": summary["commission_percent"],
         "net_profit_per_piece": summary["net_profit_per_piece"],
         "net_profit_total": summary["net_profit_total"],
         "gross_profit_margin_percent": summary["gross_profit_margin_percent"],
@@ -183,57 +212,69 @@ def _quick_costing_calc(quick_costing):
         "target_margin_percent": summary["target_margin_percent"],
         "margin_status": summary["margin_status"],
     }
+    money_pair = lambda value: _format_quick_money_pair(value, exchange_rate, currency, is_legacy_currency)
+    money_lines = lambda value: _format_quick_money_lines(value, exchange_rate, currency, is_legacy_currency)
     calc["display"] = {
         "total_cost_order": _format_quick_decimal(calc["total_cost_order"]),
-        "total_cost_order_pair": _format_quick_money_pair(calc["total_cost_order"], exchange_rate),
-        "total_cost_order_lines": _format_quick_money_lines(calc["total_cost_order"], exchange_rate),
+        "total_cost_order_pair": money_pair(calc["total_cost_order"]),
+        "total_cost_order_lines": money_lines(calc["total_cost_order"]),
         "total_sales_order": _format_quick_decimal(calc["total_sales_order"]),
-        "total_sales_order_pair": _format_quick_money_pair(calc["total_sales_order"], exchange_rate),
-        "total_sales_order_lines": _format_quick_money_lines(calc["total_sales_order"], exchange_rate),
+        "total_sales_order_pair": money_pair(calc["total_sales_order"]),
+        "total_sales_order_lines": money_lines(calc["total_sales_order"]),
         "total_profit_order": _format_quick_decimal(calc["total_profit_order"]),
-        "total_profit_order_pair": _format_quick_money_pair(calc["total_profit_order"], exchange_rate),
-        "total_profit_order_lines": _format_quick_money_lines(calc["total_profit_order"], exchange_rate),
+        "total_profit_order_pair": money_pair(calc["total_profit_order"]),
+        "total_profit_order_lines": money_lines(calc["total_profit_order"]),
         "total_cost_per_piece": _format_quick_decimal(calc["total_cost_per_piece"]),
-        "total_cost_per_piece_pair": _format_quick_money_pair(calc["total_cost_per_piece"], exchange_rate),
-        "total_cost_per_piece_lines": _format_quick_money_lines(calc["total_cost_per_piece"], exchange_rate),
+        "total_cost_per_piece_pair": money_pair(calc["total_cost_per_piece"]),
+        "total_cost_per_piece_lines": money_lines(calc["total_cost_per_piece"]),
         "fob_per_piece": _format_quick_decimal(calc["fob_per_piece"]),
-        "fob_per_piece_pair": _format_quick_money_pair(calc["fob_per_piece"], exchange_rate),
-        "fob_per_piece_lines": _format_quick_money_lines(calc["fob_per_piece"], exchange_rate),
+        "fob_per_piece_pair": money_pair(calc["fob_per_piece"]),
+        "fob_per_piece_lines": money_lines(calc["fob_per_piece"]),
         "profit_per_piece": _format_quick_decimal(calc["profit_per_piece"]),
-        "profit_per_piece_pair": _format_quick_money_pair(calc["profit_per_piece"], exchange_rate),
+        "profit_per_piece_pair": money_pair(calc["profit_per_piece"]),
         "margin_percent": _format_quick_decimal(calc["margin_percent"]),
+        "fabric_cost_per_kg": money_pair(calc["fabric_cost_per_kg"]),
+        "fabric_consumption_kg_per_piece": f"{calc['fabric_consumption_kg_per_piece'].quantize(Decimal('0.0001'))} kg / piece",
+        "fabric_cost_per_piece": money_pair(calc["fabric_cost_per_piece"]),
+        "making_cost_per_piece": money_pair(calc["making_cost_per_piece"]),
+        "print_embroidery_cost_per_piece": money_pair(calc["print_embroidery_cost_per_piece"]),
+        "trims_cost_per_piece": money_pair(calc["trims_cost_per_piece"]),
+        "packaging_cost_per_piece": money_pair(calc["packaging_cost_per_piece"]),
         "material_cost": _format_quick_decimal(calc["material_cost"]),
-        "material_cost_per_piece_pair": _format_quick_money_pair(calc["material_cost_per_piece"], exchange_rate),
-        "material_cost_total_pair": _format_quick_money_pair(calc["material_cost_total"], exchange_rate),
+        "material_cost_per_piece_pair": money_pair(calc["material_cost_per_piece"]),
+        "material_cost_total_pair": money_pair(calc["material_cost_total"]),
         "production_cost": _format_quick_decimal(calc["production_cost"]),
-        "production_cost_per_piece_pair": _format_quick_money_pair(calc["production_cost_per_piece"], exchange_rate),
-        "production_cost_total_pair": _format_quick_money_pair(calc["production_cost_total"], exchange_rate),
+        "production_cost_per_piece_pair": money_pair(calc["production_cost_per_piece"]),
+        "production_cost_total_pair": money_pair(calc["production_cost_total"]),
         "other_expenses": _format_quick_decimal(calc["other_expenses"]),
-        "other_expenses_per_piece_pair": _format_quick_money_pair(calc["other_expenses_per_piece"], exchange_rate),
-        "other_expenses_total_pair": _format_quick_money_pair(calc["other_expenses_total"], exchange_rate),
+        "other_expenses_per_piece_pair": money_pair(calc["other_expenses_per_piece"]),
+        "other_expenses_total_pair": money_pair(calc["other_expenses_total"]),
         "shipping_cost": _format_quick_decimal(calc["shipping_cost"]),
-        "shipping_cost_per_piece_pair": _format_quick_money_pair(calc["shipping_cost_per_piece"], exchange_rate),
-        "shipping_cost_total_pair": _format_quick_money_pair(calc["shipping_cost_total"], exchange_rate),
-        "selling_price_per_piece_pair": _format_quick_money_pair(calc["selling_price_per_piece"], exchange_rate),
-        "selling_price_total_pair": _format_quick_money_pair(calc["selling_price_total"], exchange_rate),
+        "shipping_cost_per_piece_pair": money_pair(calc["shipping_cost_per_piece"]),
+        "shipping_cost_total_pair": money_pair(calc["shipping_cost_total"]),
+        "selling_price_per_piece_pair": money_pair(calc["selling_price_per_piece"]),
+        "selling_price_total_pair": money_pair(calc["selling_price_total"]),
         "gross_profit_per_piece": _format_quick_decimal(calc["gross_profit_per_piece"]),
-        "gross_profit_per_piece_pair": _format_quick_money_pair(calc["gross_profit_per_piece"], exchange_rate),
+        "gross_profit_per_piece_pair": money_pair(calc["gross_profit_per_piece"]),
         "gross_profit_total": _format_quick_decimal(calc["gross_profit_total"]),
-        "gross_profit_total_pair": _format_quick_money_pair(calc["gross_profit_total"], exchange_rate),
+        "gross_profit_total_pair": money_pair(calc["gross_profit_total"]),
         "commission_per_piece": _format_quick_decimal(calc["commission_per_piece"]),
-        "commission_per_piece_pair": _format_quick_money_pair(calc["commission_per_piece"], exchange_rate),
+        "commission_per_piece_pair": money_pair(calc["commission_per_piece"]),
         "commission_total": _format_quick_decimal(calc["commission_total"]),
-        "commission_total_pair": _format_quick_money_pair(calc["commission_total"], exchange_rate),
+        "commission_total_pair": money_pair(calc["commission_total"]),
+        "commission_percent": _format_quick_percent(calc["commission_percent"]) if calc["commission_percent"] is not None else "N/A",
+        "commission_percent_label": f"{_format_quick_percent(calc['commission_percent'])}%" if calc["commission_percent"] is not None else "Legacy absolute amount",
         "net_profit_per_piece": _format_quick_decimal(calc["net_profit_per_piece"]),
-        "net_profit_per_piece_pair": _format_quick_money_pair(calc["net_profit_per_piece"], exchange_rate),
+        "net_profit_per_piece_pair": money_pair(calc["net_profit_per_piece"]),
         "net_profit_total": _format_quick_decimal(calc["net_profit_total"]),
-        "net_profit_total_pair": _format_quick_money_pair(calc["net_profit_total"], exchange_rate),
-        "net_profit_total_lines": _format_quick_money_lines(calc["net_profit_total"], exchange_rate),
+        "net_profit_total_pair": money_pair(calc["net_profit_total"]),
+        "net_profit_total_lines": money_lines(calc["net_profit_total"]),
         "gross_profit_margin_percent": _format_quick_percent(calc["gross_profit_margin_percent"]),
         "net_profit_margin_percent": _format_quick_percent(calc["net_profit_margin_percent"]),
         "target_margin_percent": _format_quick_percent(calc["target_margin_percent"]) if calc["target_margin_percent"] is not None else "N/A",
         "target_margin_percent_label": f"{_format_quick_percent(calc['target_margin_percent'])}%" if calc["target_margin_percent"] is not None else "N/A",
         "margin_status": calc["margin_status"],
+        "currency": "Legacy BDT with CAD conversion" if is_legacy_currency else currency,
         "exchange_rate": f"1 CAD = {_format_quick_decimal(exchange_rate)} BDT" if exchange_rate else "N/A",
     }
     return calc
@@ -693,7 +734,10 @@ def cost_sheet_list(request):
         quick_qs = quick_qs.filter(status=status)
     if currency in {"CAD", "USD", "BDT"}:
         qs = qs.filter(currency=currency)
-        quick_qs = quick_qs.none()
+        if currency == "BDT":
+            quick_qs = quick_qs.filter(Q(currency="BDT") | Q(currency__isnull=True))
+        else:
+            quick_qs = quick_qs.filter(currency=currency)
     else:
         currency = ""
     if date_from:
@@ -762,7 +806,7 @@ def cost_sheet_list(request):
                 "margin_tone": margin_tone,
                 "costing_type": "quick",
                 "type_label": "Quick",
-                "currency_label": "—",
+                "currency_label": "BDT / CAD" if calc["is_legacy_currency"] else calc["currency"],
                 "created_at": quick.created_at,
                 "updated_at": quick.updated_at,
             }
@@ -1089,7 +1133,12 @@ def quick_costing_client_quotation(request, pk):
     calc = _quick_costing_calc(quick_costing)
     invoice = quick_costing.invoices.select_related("customer", "order").order_by("-created_at", "-id").first()
     quotation_total = (calc.get("total_sales_order") or Decimal("0")) + (calc.get("shipping_cost_total") or Decimal("0"))
-    quotation_total_pair = _format_quick_money_pair(quotation_total, calc.get("exchange_rate"))
+    quotation_total_pair = _format_quick_money_pair(
+        quotation_total,
+        calc.get("exchange_rate"),
+        calc.get("currency"),
+        calc.get("is_legacy_currency", True),
+    )
     workflow_visibility = build_workflow_visibility_context(
         "quotation",
         user=request.user,
@@ -1168,19 +1217,36 @@ def quick_costing_export_excel(request, pk):
             ("Buyer Name", quick_costing.buyer_name),
             ("Project Name", quick_costing.project_name),
             ("Product Type", quick_costing.get_product_type_display()),
-            ("Quantity", quick_costing.quantity),
-            ("Exchange Rate", quick_costing.exchange_rate_bdt_per_cad or ""),
-            ("Material Cost", quick_costing.material_cost),
-            ("Production Cost", quick_costing.production_cost),
-            ("Other Expenses", quick_costing.other_expenses),
-            ("Shipping Cost", quick_costing.shipping_cost),
-            ("Total Cost", calc["total_cost_order"]),
-            ("Cost Per Piece", calc["total_cost_per_piece"]),
-            ("Selling Price Per Piece", calc["fob_per_piece"]),
-            ("Revenue", calc["total_sales_order"]),
-            ("Gross Profit", calc["gross_profit_total"]),
-            ("Commission", calc["commission_total"]),
-            ("Net Profit After Commission", calc["net_profit_total"]),
+            ("Quantity", f"{quick_costing.quantity} pieces"),
+            ("Currency", calc["currency"]),
+            ("Exchange Rate", calc["display"]["exchange_rate"]),
+        ]
+        if calc["uses_detailed_costing"]:
+            rows.extend([
+                ("Fabric Cost Per KG", f"{calc['display']['fabric_cost_per_kg']} / kg"),
+                ("Fabric Consumption Per Piece", calc["display"]["fabric_consumption_kg_per_piece"]),
+                ("Fabric Cost Per Piece", calc["display"]["fabric_cost_per_piece"]),
+                ("Making Cost Per Piece", calc["display"]["making_cost_per_piece"]),
+                ("Print or Embroidery Cost Per Piece", calc["display"]["print_embroidery_cost_per_piece"]),
+                ("Trims Cost Per Piece", calc["display"]["trims_cost_per_piece"]),
+                ("Packaging Cost Per Piece", calc["display"]["packaging_cost_per_piece"]),
+            ])
+        else:
+            rows.extend([
+                ("Legacy Material Cost - Total Order", calc["display"]["material_cost_total_pair"]),
+                ("Legacy Production Cost - Total Order", calc["display"]["production_cost_total_pair"]),
+            ])
+        rows.extend([
+            ("Other Expenses - Total Order", calc["display"]["other_expenses_total_pair"]),
+            ("Shipping Cost - Total Order", calc["display"]["shipping_cost_total_pair"]),
+            ("Total Cost", calc["display"]["total_cost_order_pair"]),
+            ("Cost Per Piece", calc["display"]["total_cost_per_piece_pair"]),
+            ("Selling Price Per Piece", calc["display"]["fob_per_piece_pair"]),
+            ("Revenue", calc["display"]["total_sales_order_pair"]),
+            ("Profit Before Commission", calc["display"]["gross_profit_total_pair"]),
+            ("Commission Percent", calc["display"]["commission_percent_label"]),
+            ("Commission Total", calc["display"]["commission_total_pair"]),
+            ("Final Profit After Commission", calc["display"]["net_profit_total_pair"]),
             ("Gross Profit Margin %", calc["gross_profit_margin_percent"]),
             ("Net Profit Margin %", calc["net_profit_margin_percent"]),
             ("Target Margin %", quick_costing.target_margin_percent or ""),
@@ -1190,7 +1256,7 @@ def quick_costing_export_excel(request, pk):
             ("Created Date", quick_costing.created_at.strftime("%Y-%m-%d %H:%M")),
             ("Approved By", _display_user(quick_costing.approved_by)),
             ("Approved Date", quick_costing.approved_at.strftime("%Y-%m-%d %H:%M") if quick_costing.approved_at else ""),
-        ]
+        ])
         for label, value in rows:
             ws.append([label, value])
 
@@ -1284,8 +1350,9 @@ def quick_costing_export_pdf(request, pk):
             pdf.setFont("Helvetica-Bold", 8.5)
             pdf.drawString(left + 8, y_pos - 14, "SL")
             pdf.drawString(left + 40, y_pos - 14, "Metric")
-            pdf.drawRightString(right - 170, y_pos - 14, "Per Piece - BDT / CAD")
-            pdf.drawRightString(right - 8, y_pos - 14, "Total Order - BDT / CAD")
+            currency_label = "BDT / CAD" if calc["is_legacy_currency"] else calc["currency"]
+            pdf.drawRightString(right - 170, y_pos - 14, f"Per Piece - {currency_label}")
+            pdf.drawRightString(right - 8, y_pos - 14, f"Total Order - {currency_label}")
             return y_pos - 22
 
         prepared_by = "Iconic Team"
@@ -1326,16 +1393,24 @@ def quick_costing_export_pdf(request, pk):
         pdf.drawString(left + box_width + 22, y - 31, quick_costing.created_at.strftime("%Y-%m-%d"))
         y -= 62
 
-        rows = [
-            ("Material Cost", calc["display"]["material_cost_per_piece_pair"], calc["display"]["material_cost_total_pair"]),
-            ("Production Cost", calc["display"]["production_cost_per_piece_pair"], calc["display"]["production_cost_total_pair"]),
+        if calc["uses_detailed_costing"]:
+            cost_rows = [
+                ("Fabric Cost", calc["display"]["fabric_cost_per_piece"], calc["display"]["material_cost_total_pair"]),
+                ("Making and Finishing", calc["display"]["production_cost_per_piece_pair"], calc["display"]["production_cost_total_pair"]),
+            ]
+        else:
+            cost_rows = [
+                ("Material Cost", calc["display"]["material_cost_per_piece_pair"], calc["display"]["material_cost_total_pair"]),
+                ("Production Cost", calc["display"]["production_cost_per_piece_pair"], calc["display"]["production_cost_total_pair"]),
+            ]
+        rows = cost_rows + [
             ("Other Expenses", calc["display"]["other_expenses_per_piece_pair"], calc["display"]["other_expenses_total_pair"]),
             ("Shipping Cost", calc["display"]["shipping_cost_per_piece_pair"], calc["display"]["shipping_cost_total_pair"]),
             ("Total Cost", calc["display"]["total_cost_per_piece_pair"], calc["display"]["total_cost_order_pair"]),
             ("Selling Price", calc["display"]["selling_price_per_piece_pair"], calc["display"]["selling_price_total_pair"]),
-            ("Gross Profit", calc["display"]["gross_profit_per_piece_pair"], calc["display"]["gross_profit_total_pair"]),
+            ("Profit Before Commission", calc["display"]["gross_profit_per_piece_pair"], calc["display"]["gross_profit_total_pair"]),
             ("Commission", calc["display"]["commission_per_piece_pair"], calc["display"]["commission_total_pair"]),
-            ("Net Profit After Commission", calc["display"]["net_profit_per_piece_pair"], calc["display"]["net_profit_total_pair"]),
+            ("Final Profit After Commission", calc["display"]["net_profit_per_piece_pair"], calc["display"]["net_profit_total_pair"]),
         ]
 
         y = draw_table_header(y)
@@ -1365,6 +1440,7 @@ def quick_costing_export_pdf(request, pk):
             ("Product Type", text(quick_costing.get_product_type_display())),
             ("Date", quick_costing.created_at.strftime("%Y-%m-%d")),
             ("Quantity", text(quick_costing.quantity)),
+            ("Currency", calc["display"]["currency"]),
             ("Exchange Rate", calc["display"]["exchange_rate"]),
             ("Total Order Value", calc["display"]["total_sales_order_pair"]),
             ("Total Cost", calc["display"]["total_cost_order_pair"]),
@@ -1374,6 +1450,7 @@ def quick_costing_export_pdf(request, pk):
             ("Gross Profit Total", calc["display"]["gross_profit_total_pair"]),
             ("Commission Per Piece", calc["display"]["commission_per_piece_pair"]),
             ("Commission Total", calc["display"]["commission_total_pair"]),
+            ("Commission Percent", calc["display"]["commission_percent_label"]),
             ("Net Profit Per Piece", calc["display"]["net_profit_per_piece_pair"]),
             ("Net Profit Total", calc["display"]["net_profit_total_pair"]),
             ("Gross Profit Margin", f"{calc['display']['gross_profit_margin_percent']}%"),

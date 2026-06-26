@@ -5,7 +5,7 @@ from django.db.utils import OperationalError, ProgrammingError
 from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from .models_access import UserAccess
 
 class BDMonthlyTarget(models.Model):
@@ -1958,12 +1958,31 @@ class QuickCosting(models.Model):
         null=True,
         blank=True,
     )
+    currency = models.CharField(
+        max_length=3,
+        choices=NEW_COSTING_CURRENCY_CHOICES,
+        default="BDT",
+        null=True,
+        blank=True,
+    )
     material_cost = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
     production_cost = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
     other_expenses = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
     shipping_cost = models.DecimalField(max_digits=12, decimal_places=2, blank=True, default=Decimal("0"))
     selling_price_per_piece = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
     commission_per_piece = models.DecimalField(max_digits=12, decimal_places=2, blank=True, default=Decimal("0"))
+    commission_percent = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    fabric_cost_per_kg = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    fabric_consumption_kg_per_piece = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True)
+    making_cost_per_piece = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    print_embroidery_cost_per_piece = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    trims_cost_per_piece = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    packaging_cost_per_piece = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     target_margin_percent = models.DecimalField(
         max_digits=6,
         decimal_places=2,
@@ -2042,14 +2061,53 @@ class QuickCosting(models.Model):
         other_expenses = self.other_expenses or Decimal("0")
         shipping_cost = self.shipping_cost or Decimal("0")
         selling_price_per_piece = self.selling_price_per_piece or Decimal("0")
-        commission_per_piece = self.commission_per_piece or Decimal("0")
-        total_cost = (
-            material_cost
-            + production_cost
-            + other_expenses
-            + shipping_cost
+        detailed_values = (
+            self.fabric_cost_per_kg,
+            self.fabric_consumption_kg_per_piece,
+            self.making_cost_per_piece,
+            self.print_embroidery_cost_per_piece,
+            self.trims_cost_per_piece,
+            self.packaging_cost_per_piece,
         )
-        cost_per_piece = (total_cost / quantity) if quantity else Decimal("0")
+        uses_detailed_costing = any(value is not None for value in detailed_values)
+        fabric_cost_per_kg = self.fabric_cost_per_kg or Decimal("0")
+        fabric_consumption_kg_per_piece = self.fabric_consumption_kg_per_piece or Decimal("0")
+        fabric_cost_per_piece = fabric_cost_per_kg * fabric_consumption_kg_per_piece
+        making_cost_per_piece = self.making_cost_per_piece or Decimal("0")
+        print_embroidery_cost_per_piece = self.print_embroidery_cost_per_piece or Decimal("0")
+        trims_cost_per_piece = self.trims_cost_per_piece or Decimal("0")
+        packaging_cost_per_piece = self.packaging_cost_per_piece or Decimal("0")
+        other_expenses_per_piece = (other_expenses / quantity) if quantity else Decimal("0")
+        shipping_cost_per_piece = (shipping_cost / quantity) if quantity else Decimal("0")
+
+        if uses_detailed_costing:
+            material_cost = fabric_cost_per_piece * quantity
+            production_cost = (
+                making_cost_per_piece
+                + print_embroidery_cost_per_piece
+                + trims_cost_per_piece
+                + packaging_cost_per_piece
+            ) * quantity
+            cost_per_piece = (
+                fabric_cost_per_piece
+                + making_cost_per_piece
+                + print_embroidery_cost_per_piece
+                + trims_cost_per_piece
+                + packaging_cost_per_piece
+                + other_expenses_per_piece
+                + shipping_cost_per_piece
+            )
+            total_cost = cost_per_piece * quantity
+        else:
+            total_cost = material_cost + production_cost + other_expenses + shipping_cost
+            cost_per_piece = (total_cost / quantity) if quantity else Decimal("0")
+
+        if self.commission_percent is not None:
+            commission_per_piece = (
+                selling_price_per_piece * self.commission_percent / Decimal("100")
+            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        else:
+            commission_per_piece = self.commission_per_piece or Decimal("0")
         revenue = selling_price_per_piece * quantity
         gross_profit_per_piece = selling_price_per_piece - cost_per_piece
         gross_profit_total = revenue - total_cost
@@ -2067,15 +2125,25 @@ class QuickCosting(models.Model):
             margin_status = "Below target"
         return {
             "quantity": quantity,
+            "currency": self.currency or "BDT",
+            "is_legacy_currency": self.currency is None,
             "exchange_rate": exchange_rate,
+            "uses_detailed_costing": uses_detailed_costing,
+            "fabric_cost_per_kg": fabric_cost_per_kg,
+            "fabric_consumption_kg_per_piece": fabric_consumption_kg_per_piece,
+            "fabric_cost_per_piece": fabric_cost_per_piece,
+            "making_cost_per_piece": making_cost_per_piece,
+            "print_embroidery_cost_per_piece": print_embroidery_cost_per_piece,
+            "trims_cost_per_piece": trims_cost_per_piece,
+            "packaging_cost_per_piece": packaging_cost_per_piece,
             "material_cost_total": material_cost,
             "material_cost_per_piece": (material_cost / quantity) if quantity else Decimal("0"),
             "production_cost_total": production_cost,
             "production_cost_per_piece": (production_cost / quantity) if quantity else Decimal("0"),
             "other_expenses_total": other_expenses,
-            "other_expenses_per_piece": (other_expenses / quantity) if quantity else Decimal("0"),
+            "other_expenses_per_piece": other_expenses_per_piece,
             "shipping_cost_total": shipping_cost,
-            "shipping_cost_per_piece": (shipping_cost / quantity) if quantity else Decimal("0"),
+            "shipping_cost_per_piece": shipping_cost_per_piece,
             "total_cost": total_cost,
             "cost_per_piece": cost_per_piece,
             "selling_price_per_piece": selling_price_per_piece,
@@ -2085,6 +2153,7 @@ class QuickCosting(models.Model):
             "gross_profit_total": gross_profit_total,
             "commission_per_piece": commission_per_piece,
             "commission_total": commission_total,
+            "commission_percent": self.commission_percent,
             "net_profit_per_piece": net_profit_per_piece,
             "net_profit_total": net_profit_total,
             "gross_profit_margin_percent": gross_profit_margin_percent,

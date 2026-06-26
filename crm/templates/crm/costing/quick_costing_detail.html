@@ -289,12 +289,23 @@
         <div class="quick-meta-row"><span>Buyer Name</span><strong>{{ quick_costing.buyer_name }}</strong></div>
         <div class="quick-meta-row"><span>Project Name</span><strong>{{ quick_costing.project_name }}</strong></div>
         <div class="quick-meta-row"><span>Product Type</span><strong>{{ quick_costing.get_product_type_display }}</strong></div>
-        <div class="quick-meta-row"><span>Quantity</span><strong>{{ quick_costing.quantity }}</strong></div>
+        <div class="quick-meta-row"><span>Quantity</span><strong>{{ quick_costing.quantity }} pieces</strong></div>
+        <div class="quick-meta-row"><span>Currency</span><strong>{{ calc.display.currency }}</strong></div>
         <div class="quick-meta-row"><span>Exchange Rate</span><strong>{{ calc.display.exchange_rate }}</strong></div>
-        <div class="quick-meta-row"><span>Material Cost</span><strong>{{ calc.display.material_cost_total_pair }}</strong></div>
-        <div class="quick-meta-row"><span>Production Cost</span><strong>{{ calc.display.production_cost_total_pair }}</strong></div>
-        <div class="quick-meta-row"><span>Other Expenses</span><strong>{{ calc.display.other_expenses_total_pair }}</strong></div>
-        <div class="quick-meta-row"><span>Shipping Cost</span><strong>{{ calc.display.shipping_cost_total_pair }}</strong></div>
+        {% if calc.uses_detailed_costing %}
+          <div class="quick-meta-row"><span>Fabric Cost Per KG</span><strong>{{ calc.display.fabric_cost_per_kg }} / kg</strong></div>
+          <div class="quick-meta-row"><span>Fabric Consumption</span><strong>{{ calc.display.fabric_consumption_kg_per_piece }}</strong></div>
+          <div class="quick-meta-row"><span>Fabric Cost Per Piece</span><strong>{{ calc.display.fabric_cost_per_piece }}</strong></div>
+          <div class="quick-meta-row"><span>Making Cost Per Piece</span><strong>{{ calc.display.making_cost_per_piece }}</strong></div>
+          <div class="quick-meta-row"><span>Print or Embroidery Cost Per Piece</span><strong>{{ calc.display.print_embroidery_cost_per_piece }}</strong></div>
+          <div class="quick-meta-row"><span>Trims Cost Per Piece</span><strong>{{ calc.display.trims_cost_per_piece }}</strong></div>
+          <div class="quick-meta-row"><span>Packaging Cost Per Piece</span><strong>{{ calc.display.packaging_cost_per_piece }}</strong></div>
+        {% else %}
+          <div class="quick-meta-row"><span>Legacy Material Cost - Total Order</span><strong>{{ calc.display.material_cost_total_pair }}</strong></div>
+          <div class="quick-meta-row"><span>Legacy Production Cost - Total Order</span><strong>{{ calc.display.production_cost_total_pair }}</strong></div>
+        {% endif %}
+        <div class="quick-meta-row"><span>Other Expenses - Total Order</span><strong>{{ calc.display.other_expenses_total_pair }}</strong></div>
+        <div class="quick-meta-row"><span>Shipping Cost - Total Order</span><strong>{{ calc.display.shipping_cost_total_pair }}</strong></div>
         <div class="quick-meta-row"><span>Created</span><strong>{{ quick_costing.created_at|date:"M j, Y" }}</strong></div>
         <div class="quick-meta-row">
           <span>Created By</span>
@@ -312,52 +323,62 @@
     <article class="quick-detail-card">
       <h2 class="quick-section-title">Summary</h2>
       <div class="quick-summary-grid">
-        <div class="quick-summary-row"><span>Quantity</span><strong>{{ quick_costing.quantity }}</strong></div>
+        <div class="quick-summary-row"><span>Quantity</span><strong>{{ quick_costing.quantity }} pieces</strong></div>
+        <div class="quick-summary-row"><span>Currency</span><strong>{{ calc.display.currency }}</strong></div>
         <div class="quick-summary-row"><span>Exchange Rate</span><strong>{{ calc.display.exchange_rate }}</strong></div>
+        {% if calc.uses_detailed_costing %}
+          <div class="quick-summary-row"><span>Fabric Cost Per KG</span><strong>{{ calc.display.fabric_cost_per_kg }} / kg</strong></div>
+          <div class="quick-summary-row"><span>Consumption Per Piece</span><strong>{{ calc.display.fabric_consumption_kg_per_piece }}</strong></div>
+          <div class="quick-summary-row"><span>Fabric Cost Per Piece</span><strong>{{ calc.display.fabric_cost_per_piece }}</strong></div>
+          <div class="quick-summary-row"><span>Making Cost Per Piece</span><strong>{{ calc.display.making_cost_per_piece }}</strong></div>
+          <div class="quick-summary-row"><span>Print or Embroidery Cost Per Piece</span><strong>{{ calc.display.print_embroidery_cost_per_piece }}</strong></div>
+          <div class="quick-summary-row"><span>Trims Cost Per Piece</span><strong>{{ calc.display.trims_cost_per_piece }}</strong></div>
+          <div class="quick-summary-row"><span>Packaging Cost Per Piece</span><strong>{{ calc.display.packaging_cost_per_piece }}</strong></div>
+        {% endif %}
         <div class="quick-summary-row">
           <span>Total Order Value</span>
           <strong class="quick-money-pair">
             <span>{{ calc.display.total_sales_order_lines.bdt }}</span>
-            <span>{{ calc.display.total_sales_order_lines.cad }}</span>
+            {% if calc.display.total_sales_order_lines.cad %}<span>{{ calc.display.total_sales_order_lines.cad }}</span>{% endif %}
           </strong>
         </div>
         <div class="quick-summary-row">
           <span>Total Cost</span>
           <strong class="quick-money-pair">
             <span>{{ calc.display.total_cost_order_lines.bdt }}</span>
-            <span>{{ calc.display.total_cost_order_lines.cad }}</span>
+            {% if calc.display.total_cost_order_lines.cad %}<span>{{ calc.display.total_cost_order_lines.cad }}</span>{% endif %}
           </strong>
         </div>
         <div class="quick-summary-row">
           <span>Cost Per Piece</span>
           <strong class="quick-money-pair">
             <span>{{ calc.display.total_cost_per_piece_lines.bdt }}</span>
-            <span>{{ calc.display.total_cost_per_piece_lines.cad }}</span>
+            {% if calc.display.total_cost_per_piece_lines.cad %}<span>{{ calc.display.total_cost_per_piece_lines.cad }}</span>{% endif %}
           </strong>
         </div>
         <div class="quick-summary-row">
           <span>Selling Price Per Piece</span>
           <strong class="quick-money-pair">
             <span>{{ calc.display.fob_per_piece_lines.bdt }}</span>
-            <span>{{ calc.display.fob_per_piece_lines.cad }}</span>
+            {% if calc.display.fob_per_piece_lines.cad %}<span>{{ calc.display.fob_per_piece_lines.cad }}</span>{% endif %}
           </strong>
         </div>
         <div class="quick-summary-row">
-          <span>Gross Profit</span>
+          <span>Profit Before Commission</span>
           <strong class="quick-money-pair quick-profit-{{ margin_tone }}">
             <span>Per Piece: {{ calc.display.gross_profit_per_piece_pair }}</span>
             <span>Total Order: {{ calc.display.gross_profit_total_pair }}</span>
           </strong>
         </div>
         <div class="quick-summary-row">
-          <span>Commission</span>
+          <span>Commission ({{ calc.display.commission_percent_label }})</span>
           <strong class="quick-money-pair">
             <span>Per Piece: {{ calc.display.commission_per_piece_pair }}</span>
             <span>Total Order: {{ calc.display.commission_total_pair }}</span>
           </strong>
         </div>
         <div class="quick-summary-row">
-          <span>Net Profit After Commission</span>
+          <span>Final Profit After Commission</span>
           <strong class="quick-money-pair quick-profit-{{ margin_tone }}">
             <span>Per Piece: {{ calc.display.net_profit_per_piece_pair }}</span>
             <span>Total Order: {{ calc.display.net_profit_total_pair }}</span>

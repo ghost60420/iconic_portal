@@ -349,7 +349,8 @@
       <div class="quick-quote-text">
         Project: {{ quick_costing.project_name }}<br>
         Product: {{ quick_costing.get_product_type_display }}<br>
-        Quantity: {{ quick_costing.quantity }}<br>
+        Quantity: {{ quick_costing.quantity }} pieces<br>
+        Currency: {{ calc.display.currency }}<br>
         {% if quick_costing.opportunity %}Opportunity: {{ quick_costing.opportunity.opportunity_id }}{% endif %}
       </div>
     </div>

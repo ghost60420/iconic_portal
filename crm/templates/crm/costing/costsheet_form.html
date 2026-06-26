@@ -207,7 +207,7 @@
   {% if costing_type == "quick" %}
     <div class="card intro-card">
       <div class="intro-title">{% if mode == "edit" %}Edit Quick Costing{% else %}Quick Costing{% endif %}</div>
-      <div class="muted">Use this when the team needs a fast price check from material, production, shipping, commission, and selling price in BDT and CAD.</div>
+      <div class="muted">Use explicit per-kg, per-piece, total-order, percentage, and currency inputs for a fast price check.</div>
       {% if quick_costing %}
         <div class="muted" style="margin-top:8px;">Status: {{ quick_costing.get_status_display }}</div>
       {% endif %}
@@ -253,44 +253,103 @@
               {% for error in quick_form.quantity.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
             </div>
             <div>
-              <label>Exchange Rate</label>
+              <label>{{ quick_form.currency.label }}</label>
+              {{ quick_form.currency }}
+              <div class="field-help">{{ quick_form.currency.help_text }}</div>
+              {% for error in quick_form.currency.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+            </div>
+            <div>
+              <label>{{ quick_form.exchange_rate_bdt_per_cad.label }}</label>
               {{ quick_form.exchange_rate_bdt_per_cad }}
-              <div class="field-help">BDT per 1 CAD. Example: 90</div>
+              <div class="field-help">{{ quick_form.exchange_rate_bdt_per_cad.help_text }}</div>
               {% for error in quick_form.exchange_rate_bdt_per_cad.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
             </div>
             <div>
-              <label>Material Cost</label>
+              <label>{{ quick_form.fabric_cost_per_kg.label }}</label>
+              {{ quick_form.fabric_cost_per_kg }}
+              <div class="field-help">{{ quick_form.fabric_cost_per_kg.help_text }}</div>
+              {% for error in quick_form.fabric_cost_per_kg.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+            </div>
+            <div>
+              <label>{{ quick_form.fabric_consumption_kg_per_piece.label }}</label>
+              {{ quick_form.fabric_consumption_kg_per_piece }}
+              <div class="field-help">{{ quick_form.fabric_consumption_kg_per_piece.help_text }}</div>
+              {% for error in quick_form.fabric_consumption_kg_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+            </div>
+            <div>
+              <label>{{ quick_form.making_cost_per_piece.label }}</label>
+              {{ quick_form.making_cost_per_piece }}
+              <div class="field-help">{{ quick_form.making_cost_per_piece.help_text }}</div>
+              {% for error in quick_form.making_cost_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+            </div>
+            <div>
+              <label>{{ quick_form.print_embroidery_cost_per_piece.label }}</label>
+              {{ quick_form.print_embroidery_cost_per_piece }}
+              <div class="field-help">{{ quick_form.print_embroidery_cost_per_piece.help_text }}</div>
+              {% for error in quick_form.print_embroidery_cost_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+            </div>
+            <div>
+              <label>{{ quick_form.trims_cost_per_piece.label }}</label>
+              {{ quick_form.trims_cost_per_piece }}
+              <div class="field-help">{{ quick_form.trims_cost_per_piece.help_text }}</div>
+              {% for error in quick_form.trims_cost_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+            </div>
+            <div>
+              <label>{{ quick_form.packaging_cost_per_piece.label }}</label>
+              {{ quick_form.packaging_cost_per_piece }}
+              <div class="field-help">{{ quick_form.packaging_cost_per_piece.help_text }}</div>
+              {% for error in quick_form.packaging_cost_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+            </div>
+            {% if quick_form.show_legacy_fields %}
+            <div>
+              <label>{{ quick_form.material_cost.label }}</label>
               {{ quick_form.material_cost }}
+              <div class="field-help">{{ quick_form.material_cost.help_text }}</div>
               {% for error in quick_form.material_cost.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
             </div>
             <div>
-              <label>Production Cost</label>
+              <label>{{ quick_form.production_cost.label }}</label>
               {{ quick_form.production_cost }}
+              <div class="field-help">{{ quick_form.production_cost.help_text }}</div>
               {% for error in quick_form.production_cost.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
             </div>
+            {% endif %}
             <div>
-              <label>Other Expenses</label>
+              <label>{{ quick_form.other_expenses.label }}</label>
               {{ quick_form.other_expenses }}
+              <div class="field-help">{{ quick_form.other_expenses.help_text }}</div>
               {% for error in quick_form.other_expenses.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
             </div>
             <div>
-              <label>Shipping Cost</label>
+              <label>{{ quick_form.shipping_cost.label }}</label>
               {{ quick_form.shipping_cost }}
+              <div class="field-help">{{ quick_form.shipping_cost.help_text }}</div>
               {% for error in quick_form.shipping_cost.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
             </div>
             <div>
-              <label>Selling Price Per Piece</label>
+              <label>{{ quick_form.selling_price_per_piece.label }}</label>
               {{ quick_form.selling_price_per_piece }}
+              <div class="field-help">{{ quick_form.selling_price_per_piece.help_text }}</div>
               {% for error in quick_form.selling_price_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
             </div>
             <div>
-              <label>Commission Per Piece</label>
+              <label>{{ quick_form.commission_percent.label }}</label>
+              {{ quick_form.commission_percent }}
+              <div class="field-help">{{ quick_form.commission_percent.help_text }}</div>
+              {% for error in quick_form.commission_percent.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+            </div>
+            {% if quick_form.show_legacy_fields %}
+            <div>
+              <label>{{ quick_form.commission_per_piece.label }}</label>
               {{ quick_form.commission_per_piece }}
+              <div class="field-help">{{ quick_form.commission_per_piece.help_text }}</div>
               {% for error in quick_form.commission_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
             </div>
+            {% endif %}
             <div>
               <label>Target Margin %</label>
               {{ quick_form.target_margin_percent }}
+              <div class="field-help">{{ quick_form.target_margin_percent.help_text }}</div>
               {% for error in quick_form.target_margin_percent.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
             </div>
           </div>
@@ -314,15 +373,23 @@
         <div class="section-title">Summary</div>
         <div class="quick-summary-grid">
           <div class="quick-summary-row"><span>Quantity</span><strong data-quick-summary="quantity">0</strong></div>
+          <div class="quick-summary-row"><span>Currency</span><strong data-quick-summary="currency">BDT</strong></div>
           <div class="quick-summary-row"><span>Exchange Rate</span><strong data-quick-summary="exchangeRate">N/A</strong></div>
-          <div class="quick-summary-row"><span>Material Cost</span><strong class="quick-summary-dual"><span data-quick-summary="materialPiece">Per Piece: ৳0.00 BDT / CAD N/A</span><span data-quick-summary="materialTotal">Total Order: ৳0.00 BDT / CAD N/A</span></strong></div>
-          <div class="quick-summary-row"><span>Production Cost</span><strong class="quick-summary-dual"><span data-quick-summary="productionPiece">Per Piece: ৳0.00 BDT / CAD N/A</span><span data-quick-summary="productionTotal">Total Order: ৳0.00 BDT / CAD N/A</span></strong></div>
-          <div class="quick-summary-row"><span>Shipping Cost</span><strong class="quick-summary-dual"><span data-quick-summary="shippingPiece">Per Piece: ৳0.00 BDT / CAD N/A</span><span data-quick-summary="shippingTotal">Total Order: ৳0.00 BDT / CAD N/A</span></strong></div>
-          <div class="quick-summary-row"><span>Total Cost</span><strong class="quick-summary-dual"><span data-quick-summary="costPerPiece">Per Piece: ৳0.00 BDT / CAD N/A</span><span data-quick-summary="totalCost">Total Order: ৳0.00 BDT / CAD N/A</span></strong></div>
-          <div class="quick-summary-row"><span>Selling Price</span><strong class="quick-summary-dual"><span data-quick-summary="sellingPrice">Per Piece: ৳0.00 BDT / CAD N/A</span><span data-quick-summary="revenue">Total Order: ৳0.00 BDT / CAD N/A</span></strong></div>
-          <div class="quick-summary-row"><span>Gross Profit</span><strong class="quick-summary-dual"><span data-quick-summary="grossProfitPerPiece">Per Piece: ৳0.00 BDT / CAD N/A</span><span data-quick-summary="grossProfitTotal">Total Order: ৳0.00 BDT / CAD N/A</span></strong></div>
-          <div class="quick-summary-row"><span>Commission</span><strong class="quick-summary-dual"><span data-quick-summary="commissionPerPiece">Per Piece: ৳0.00 BDT / CAD N/A</span><span data-quick-summary="commissionTotal">Total Order: ৳0.00 BDT / CAD N/A</span></strong></div>
-          <div class="quick-summary-row"><span>Net Profit After Commission</span><strong class="quick-summary-dual"><span data-quick-summary="netProfitPerPiece">Per Piece: ৳0.00 BDT / CAD N/A</span><span data-quick-summary="netProfitTotal">Total Order: ৳0.00 BDT / CAD N/A</span></strong></div>
+          <div class="quick-summary-row"><span>Fabric Cost Per KG</span><strong data-quick-summary="fabricKg">৳0.00 BDT / kg</strong></div>
+          <div class="quick-summary-row"><span>Fabric Consumption</span><strong data-quick-summary="fabricConsumption">0.0000 kg / piece</strong></div>
+          <div class="quick-summary-row"><span>Fabric Cost Per Piece</span><strong data-quick-summary="fabricPiece">৳0.00 BDT</strong></div>
+          <div class="quick-summary-row"><span>Making Cost Per Piece</span><strong data-quick-summary="makingPiece">৳0.00 BDT</strong></div>
+          <div class="quick-summary-row"><span>Print or Embroidery Per Piece</span><strong data-quick-summary="printPiece">৳0.00 BDT</strong></div>
+          <div class="quick-summary-row"><span>Trims Cost Per Piece</span><strong data-quick-summary="trimsPiece">৳0.00 BDT</strong></div>
+          <div class="quick-summary-row"><span>Packaging Cost Per Piece</span><strong data-quick-summary="packagingPiece">৳0.00 BDT</strong></div>
+          <div class="quick-summary-row"><span>Other Expenses</span><strong class="quick-summary-dual"><span data-quick-summary="otherPiece">Per Piece: ৳0.00 BDT</span><span data-quick-summary="otherTotal">Total Order: ৳0.00 BDT</span></strong></div>
+          <div class="quick-summary-row"><span>Shipping Cost</span><strong class="quick-summary-dual"><span data-quick-summary="shippingPiece">Per Piece: ৳0.00 BDT</span><span data-quick-summary="shippingTotal">Total Order: ৳0.00 BDT</span></strong></div>
+          <div class="quick-summary-row"><span>Total Cost</span><strong class="quick-summary-dual"><span data-quick-summary="costPerPiece">Per Piece: ৳0.00 BDT</span><span data-quick-summary="totalCost">Total Order: ৳0.00 BDT</span></strong></div>
+          <div class="quick-summary-row"><span>Selling Price</span><strong class="quick-summary-dual"><span data-quick-summary="sellingPrice">Per Piece: ৳0.00 BDT</span><span data-quick-summary="revenue">Total Order: ৳0.00 BDT</span></strong></div>
+          <div class="quick-summary-row"><span>Profit Before Commission</span><strong class="quick-summary-dual"><span data-quick-summary="grossProfitPerPiece">Per Piece: ৳0.00 BDT</span><span data-quick-summary="grossProfitTotal">Total Order: ৳0.00 BDT</span></strong></div>
+          <div class="quick-summary-row"><span>Commission %</span><strong data-quick-summary="commissionPercent">0.00%</strong></div>
+          <div class="quick-summary-row"><span>Commission</span><strong class="quick-summary-dual"><span data-quick-summary="commissionPerPiece">Per Piece: ৳0.00 BDT</span><span data-quick-summary="commissionTotal">Total Order: ৳0.00 BDT</span></strong></div>
+          <div class="quick-summary-row"><span>Final Profit After Commission</span><strong class="quick-summary-dual"><span data-quick-summary="netProfitPerPiece">Per Piece: ৳0.00 BDT</span><span data-quick-summary="netProfitTotal">Total Order: ৳0.00 BDT</span></strong></div>
           <div class="quick-summary-row"><span>Gross Profit Margin %</span><strong data-quick-summary="grossMargin">0.00%</strong></div>
           <div class="quick-summary-row"><span>Net Profit Margin %</span><strong data-quick-summary="netMargin">0.00%</strong></div>
           <div class="quick-summary-row"><span>Target Margin %</span><strong data-quick-summary="targetMargin">N/A</strong></div>
@@ -661,15 +728,24 @@
   (function () {
     const fields = {
       quantity: document.getElementById("id_quantity"),
+      currency: document.getElementById("id_currency"),
       exchangeRate: document.getElementById("id_exchange_rate_bdt_per_cad"),
+      fabricKg: document.getElementById("id_fabric_cost_per_kg"),
+      fabricConsumption: document.getElementById("id_fabric_consumption_kg_per_piece"),
+      making: document.getElementById("id_making_cost_per_piece"),
+      printEmbroidery: document.getElementById("id_print_embroidery_cost_per_piece"),
+      trims: document.getElementById("id_trims_cost_per_piece"),
+      packaging: document.getElementById("id_packaging_cost_per_piece"),
       material: document.getElementById("id_material_cost"),
       production: document.getElementById("id_production_cost"),
       other: document.getElementById("id_other_expenses"),
       shipping: document.getElementById("id_shipping_cost"),
       selling: document.getElementById("id_selling_price_per_piece"),
+      commissionPercent: document.getElementById("id_commission_percent"),
       commission: document.getElementById("id_commission_per_piece"),
       targetMargin: document.getElementById("id_target_margin_percent")
     };
+    const legacyMode = {% if quick_form.show_legacy_fields %}true{% else %}false{% endif %};
 
     function numberValue(input) {
       const value = parseFloat(input && input.value ? input.value : "0");
@@ -683,7 +759,12 @@
       });
     }
 
-    function formatMoneyPair(value, exchangeRate) {
+    function formatMoney(value, currency, exchangeRate) {
+      if (!legacyMode) {
+        if (currency === "CAD") return "CAD $" + formatNumber(value);
+        if (currency === "USD") return "USD $" + formatNumber(value);
+        return "৳" + formatNumber(value) + " BDT";
+      }
       const bdt = "৳" + formatNumber(value) + " BDT";
       const cad = exchangeRate > 0 ? "CAD $" + formatNumber(value / exchangeRate) : "CAD N/A";
       return bdt + " / " + cad;
@@ -701,15 +782,29 @@
 
     function updateSummary() {
       const quantity = Math.max(0, numberValue(fields.quantity));
+      const currency = fields.currency && fields.currency.value ? fields.currency.value : "BDT";
       const exchangeRate = numberValue(fields.exchangeRate);
+      const fabricKg = numberValue(fields.fabricKg);
+      const fabricConsumption = numberValue(fields.fabricConsumption);
+      const fabricPiece = fabricKg * fabricConsumption;
+      const making = numberValue(fields.making);
+      const printEmbroidery = numberValue(fields.printEmbroidery);
+      const trims = numberValue(fields.trims);
+      const packaging = numberValue(fields.packaging);
       const material = numberValue(fields.material);
       const production = numberValue(fields.production);
       const other = numberValue(fields.other);
       const shipping = numberValue(fields.shipping);
       const selling = numberValue(fields.selling);
-      const commission = numberValue(fields.commission);
+      const hasDetailedCost = [fields.fabricKg, fields.fabricConsumption, fields.making, fields.printEmbroidery, fields.trims, fields.packaging]
+        .some((field) => field && field.value !== "");
+      const commissionPercent = fields.commissionPercent && fields.commissionPercent.value !== "" ? numberValue(fields.commissionPercent) : null;
+      const commission = commissionPercent !== null ? selling * commissionPercent / 100 : numberValue(fields.commission);
       const targetMargin = fields.targetMargin && fields.targetMargin.value !== "" ? numberValue(fields.targetMargin) : null;
-      const totalCost = material + production + other + shipping;
+      const otherPerPiece = quantity > 0 ? other / quantity : 0;
+      const shippingPerPiece = quantity > 0 ? shipping / quantity : 0;
+      const detailedCostPerPiece = fabricPiece + making + printEmbroidery + trims + packaging + otherPerPiece + shippingPerPiece;
+      const totalCost = hasDetailedCost ? detailedCostPerPiece * quantity : material + production + other + shipping;
       const costPerPiece = quantity > 0 ? totalCost / quantity : 0;
       const revenue = selling * quantity;
       const grossProfitPerPiece = selling - costPerPiece;
@@ -725,23 +820,30 @@
       }
 
       setSummary("quantity", quantity.toLocaleString());
+      setSummary("currency", legacyMode ? "Legacy BDT with CAD conversion" : currency);
       setSummary("exchangeRate", exchangeRate > 0 ? "1 CAD = " + formatNumber(exchangeRate) + " BDT" : "N/A");
-      setSummary("materialPiece", "Per Piece: " + formatMoneyPair(quantity > 0 ? material / quantity : 0, exchangeRate));
-      setSummary("materialTotal", "Total Order: " + formatMoneyPair(material, exchangeRate));
-      setSummary("productionPiece", "Per Piece: " + formatMoneyPair(quantity > 0 ? production / quantity : 0, exchangeRate));
-      setSummary("productionTotal", "Total Order: " + formatMoneyPair(production, exchangeRate));
-      setSummary("shippingPiece", "Per Piece: " + formatMoneyPair(quantity > 0 ? shipping / quantity : 0, exchangeRate));
-      setSummary("shippingTotal", "Total Order: " + formatMoneyPair(shipping, exchangeRate));
-      setSummary("costPerPiece", "Per Piece: " + formatMoneyPair(costPerPiece, exchangeRate));
-      setSummary("totalCost", "Total Order: " + formatMoneyPair(totalCost, exchangeRate));
-      setSummary("sellingPrice", "Per Piece: " + formatMoneyPair(selling, exchangeRate));
-      setSummary("revenue", "Total Order: " + formatMoneyPair(revenue, exchangeRate));
-      setSummary("grossProfitPerPiece", "Per Piece: " + formatMoneyPair(grossProfitPerPiece, exchangeRate), grossProfitPerPiece);
-      setSummary("grossProfitTotal", "Total Order: " + formatMoneyPair(grossProfitTotal, exchangeRate), grossProfitTotal);
-      setSummary("commissionPerPiece", "Per Piece: " + formatMoneyPair(commission, exchangeRate));
-      setSummary("commissionTotal", "Total Order: " + formatMoneyPair(commissionTotal, exchangeRate));
-      setSummary("netProfitPerPiece", "Per Piece: " + formatMoneyPair(netProfitPerPiece, exchangeRate), netProfitPerPiece);
-      setSummary("netProfitTotal", "Total Order: " + formatMoneyPair(netProfitTotal, exchangeRate), netProfitTotal);
+      setSummary("fabricKg", formatMoney(fabricKg, currency, exchangeRate) + " / kg");
+      setSummary("fabricConsumption", fabricConsumption.toFixed(4) + " kg / piece");
+      setSummary("fabricPiece", formatMoney(fabricPiece, currency, exchangeRate));
+      setSummary("makingPiece", formatMoney(making, currency, exchangeRate));
+      setSummary("printPiece", formatMoney(printEmbroidery, currency, exchangeRate));
+      setSummary("trimsPiece", formatMoney(trims, currency, exchangeRate));
+      setSummary("packagingPiece", formatMoney(packaging, currency, exchangeRate));
+      setSummary("otherPiece", "Per Piece: " + formatMoney(otherPerPiece, currency, exchangeRate));
+      setSummary("otherTotal", "Total Order: " + formatMoney(other, currency, exchangeRate));
+      setSummary("shippingPiece", "Per Piece: " + formatMoney(shippingPerPiece, currency, exchangeRate));
+      setSummary("shippingTotal", "Total Order: " + formatMoney(shipping, currency, exchangeRate));
+      setSummary("costPerPiece", "Per Piece: " + formatMoney(costPerPiece, currency, exchangeRate));
+      setSummary("totalCost", "Total Order: " + formatMoney(totalCost, currency, exchangeRate));
+      setSummary("sellingPrice", "Per Piece: " + formatMoney(selling, currency, exchangeRate));
+      setSummary("revenue", "Total Order: " + formatMoney(revenue, currency, exchangeRate));
+      setSummary("grossProfitPerPiece", "Per Piece: " + formatMoney(grossProfitPerPiece, currency, exchangeRate), grossProfitPerPiece);
+      setSummary("grossProfitTotal", "Total Order: " + formatMoney(grossProfitTotal, currency, exchangeRate), grossProfitTotal);
+      setSummary("commissionPercent", commissionPercent === null ? "Legacy absolute amount" : commissionPercent.toFixed(2) + "%");
+      setSummary("commissionPerPiece", "Per Piece: " + formatMoney(commission, currency, exchangeRate));
+      setSummary("commissionTotal", "Total Order: " + formatMoney(commissionTotal, currency, exchangeRate));
+      setSummary("netProfitPerPiece", "Per Piece: " + formatMoney(netProfitPerPiece, currency, exchangeRate), netProfitPerPiece);
+      setSummary("netProfitTotal", "Total Order: " + formatMoney(netProfitTotal, currency, exchangeRate), netProfitTotal);
       setSummary("grossMargin", grossMargin.toFixed(2) + "%", grossMargin);
       setSummary("netMargin", netMargin.toFixed(2) + "%", netMargin);
       setSummary("targetMargin", targetMargin === null ? "N/A" : targetMargin.toFixed(2) + "%");

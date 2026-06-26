@@ -3394,8 +3394,14 @@ from django.shortcuts import get_object_or_404, render, redirect
 from django.utils import timezone
 
 
-def _format_quick_opportunity_money(value, exchange_rate):
+def _format_quick_opportunity_money(value, exchange_rate, currency="BDT", is_legacy_currency=True):
     amount = Decimal(value or 0)
+    if not is_legacy_currency:
+        if currency == "CAD":
+            return f"CAD ${amount:,.2f}"
+        if currency == "USD":
+            return f"USD ${amount:,.2f}"
+        return f"৳{amount:,.2f} BDT"
     bdt = f"৳{amount:,.2f} BDT"
     if not exchange_rate:
         return f"{bdt} / CAD N/A"
@@ -3406,8 +3412,13 @@ def _format_quick_opportunity_money(value, exchange_rate):
     return f"{bdt} / CAD ${cad:,.2f}"
 
 
-def _format_quick_opportunity_money_lines(value, exchange_rate):
+def _format_quick_opportunity_money_lines(value, exchange_rate, currency="BDT", is_legacy_currency=True):
     amount = Decimal(value or 0)
+    if not is_legacy_currency:
+        return {
+            "bdt": _format_quick_opportunity_money(amount, exchange_rate, currency, False),
+            "cad": "",
+        }
     bdt = f"৳{amount:,.2f} BDT"
     if not exchange_rate:
         return {"bdt": bdt, "cad": "CAD N/A"}
@@ -3427,6 +3438,8 @@ def _format_quick_opportunity_percent(value):
 def _quick_costing_opportunity_row(quick_costing):
     summary = quick_costing.calculation_summary()
     exchange_rate = summary.get("exchange_rate")
+    currency = summary["currency"]
+    is_legacy_currency = summary["is_legacy_currency"]
     return {
         "record": quick_costing,
         "number": f"QC-{quick_costing.pk}",
@@ -3436,12 +3449,12 @@ def _quick_costing_opportunity_row(quick_costing):
         "purpose_key": quick_costing.costing_purpose,
         "date": quick_costing.created_at,
         "quantity": summary["quantity"],
-        "total_cost": _format_quick_opportunity_money(summary["total_cost"], exchange_rate),
-        "total_cost_lines": _format_quick_opportunity_money_lines(summary["total_cost"], exchange_rate),
-        "revenue": _format_quick_opportunity_money(summary["revenue"], exchange_rate),
-        "revenue_lines": _format_quick_opportunity_money_lines(summary["revenue"], exchange_rate),
-        "net_profit": _format_quick_opportunity_money(summary["net_profit_total"], exchange_rate),
-        "net_profit_lines": _format_quick_opportunity_money_lines(summary["net_profit_total"], exchange_rate),
+        "total_cost": _format_quick_opportunity_money(summary["total_cost"], exchange_rate, currency, is_legacy_currency),
+        "total_cost_lines": _format_quick_opportunity_money_lines(summary["total_cost"], exchange_rate, currency, is_legacy_currency),
+        "revenue": _format_quick_opportunity_money(summary["revenue"], exchange_rate, currency, is_legacy_currency),
+        "revenue_lines": _format_quick_opportunity_money_lines(summary["revenue"], exchange_rate, currency, is_legacy_currency),
+        "net_profit": _format_quick_opportunity_money(summary["net_profit_total"], exchange_rate, currency, is_legacy_currency),
+        "net_profit_lines": _format_quick_opportunity_money_lines(summary["net_profit_total"], exchange_rate, currency, is_legacy_currency),
         "margin_percent": _format_quick_opportunity_percent(summary["net_profit_margin_percent"]),
         "status": quick_costing.get_status_display(),
         "target_margin_percent": (

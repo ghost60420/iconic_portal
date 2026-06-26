@@ -252,7 +252,7 @@
                       {% if row.costing_type == "quick" %}
                         <strong class="costing-money-lines">
                           <span>{{ calc.display.total_cost_order_lines.bdt }}</span>
-                          <span>{{ calc.display.total_cost_order_lines.cad }}</span>
+                          {% if calc.display.total_cost_order_lines.cad %}<span>{{ calc.display.total_cost_order_lines.cad }}</span>{% endif %}
                         </strong>
                       {% else %}
                         <strong>{{ calc.total_cost_order|finance_money:row.currency_label }}</strong>
@@ -266,7 +266,7 @@
                       {% if row.costing_type == "quick" %}
                         <strong class="costing-money-lines">
                           <span>{{ calc.display.total_cost_per_piece_lines.bdt }}</span>
-                          <span>{{ calc.display.total_cost_per_piece_lines.cad }}</span>
+                          {% if calc.display.total_cost_per_piece_lines.cad %}<span>{{ calc.display.total_cost_per_piece_lines.cad }}</span>{% endif %}
                         </strong>
                       {% else %}
                         <strong>{{ calc.total_cost_per_piece|finance_money:row.currency_label }}</strong>
@@ -281,7 +281,7 @@
                         {% if row.costing_type == "quick" %}
                           <strong class="costing-money-lines">
                             <span>{{ calc.display.fob_per_piece_lines.bdt }}</span>
-                            <span>{{ calc.display.fob_per_piece_lines.cad }}</span>
+                            {% if calc.display.fob_per_piece_lines.cad %}<span>{{ calc.display.fob_per_piece_lines.cad }}</span>{% endif %}
                           </strong>
                         {% else %}
                           <strong>{{ calc.fob_per_piece|finance_money:row.currency_label }}</strong>
@@ -312,7 +312,7 @@
                 {% endif %}
 
                 <td data-label="Currency">
-                  <span class="costing-currency">{% if row.costing_type == "quick" %}BDT / CAD{% else %}{{ row.currency_label }}{% endif %}</span>
+                  <span class="costing-currency">{{ row.currency_label }}</span>
                 </td>
 
                 <td data-label="Status">
