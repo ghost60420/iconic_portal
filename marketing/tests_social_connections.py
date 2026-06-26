@@ -659,16 +659,97 @@ class MarketingSocialConnectionsTests(TestCase):
             return_value={"sub": "person-1", "email": "admin@example.com", "name": "Admin"},
         ), patch(
             "marketing.services.linkedin.discover_linkedin_organizations",
-            return_value=[{"id": "42", "urn": "urn:li:organization:42", "name": "Iconic Company"}],
+            return_value=[
+                {
+                    "id": "42",
+                    "urn": "urn:li:organization:42",
+                    "name": "Iconic Apparel House Inc.",
+                    "vanity_name": "iconic-apparel-house-inc",
+                    "page_url": "https://www.linkedin.com/company/iconic-apparel-house-inc/",
+                }
+            ],
         ):
             credential = exchange_direct_oauth_code(platform="linkedin", code="code")
 
         self.assertEqual(credential.account_name, "admin@example.com")
         account = SocialAccount.objects.get(platform="linkedin", external_account_id="urn:li:organization:42")
-        self.assertEqual(account.display_name, "Iconic Company")
+        self.assertEqual(account.display_name, "Iconic Apparel House Inc.")
+        self.assertEqual(account.username, "iconic-apparel-house-inc")
+        self.assertEqual(account.profile_url, "https://www.linkedin.com/company/iconic-apparel-house-inc/")
         org_credential = OAuthCredential.objects.get(platform="linkedin", platform_account=account)
         self.assertEqual(org_credential.get_access_token(), "li-access")
         self.assertEqual(org_credential.account_id, "urn:li:organization:42")
+
+    def test_linkedin_oauth_callback_saves_company_page(self):
+        conn = OAuthConnectionRequest.objects.create(
+            platform="linkedin",
+            user=self.user,
+            state="state-123",
+            status="initiated",
+        )
+
+        with patch(
+            "marketing.services.oauth_connections._post_form",
+            return_value={
+                "access_token": "li-access",
+                "refresh_token": "li-refresh",
+                "expires_in": 3600,
+                "scope": "openid profile email r_organization_social r_organization_admin",
+            },
+        ), patch(
+            "marketing.services.oauth_connections._request_json",
+            return_value={"sub": "person-1", "email": "admin@example.com", "name": "Admin"},
+        ), patch(
+            "marketing.services.linkedin.discover_linkedin_organizations",
+            return_value=[
+                {
+                    "id": "42",
+                    "urn": "urn:li:organization:42",
+                    "name": "Iconic Apparel House Inc.",
+                    "vanity_name": "iconic-apparel-house-inc",
+                    "page_url": "https://www.linkedin.com/company/iconic-apparel-house-inc/",
+                }
+            ],
+        ):
+            response = self.client.get(
+                reverse("marketing_linkedin_oauth_callback_api_slash"),
+                {"state": "state-123", "code": "oauth-code"},
+            )
+
+        self.assertEqual(response.status_code, 302)
+        conn.refresh_from_db()
+        self.assertEqual(conn.status, "completed")
+        source_credential = OAuthCredential.objects.get(platform="linkedin", account_id="person-1")
+        self.assertTrue(source_credential.has_access_token)
+        self.assertTrue(source_credential.has_refresh_token)
+        self.assertIn("r_organization_admin", source_credential.scopes)
+        self.assertEqual(source_credential.last_sync_status, "connected")
+        account = SocialAccount.objects.get(platform="linkedin", external_account_id="urn:li:organization:42")
+        self.assertEqual(account.display_name, "Iconic Apparel House Inc.")
+        self.assertEqual(account.username, "iconic-apparel-house-inc")
+        org_credential = OAuthCredential.objects.get(platform="linkedin", platform_account=account)
+        self.assertTrue(org_credential.has_access_token)
+        self.assertTrue(org_credential.has_refresh_token)
+
+    def test_linkedin_empty_company_page_discovery_records_state(self):
+        from marketing.services.oauth_connections import exchange_direct_oauth_code
+
+        with patch(
+            "marketing.services.oauth_connections._post_form",
+            return_value={"access_token": "li-access", "refresh_token": "li-refresh", "expires_in": 3600},
+        ), patch(
+            "marketing.services.oauth_connections._request_json",
+            return_value={"sub": "person-1", "email": "admin@example.com", "name": "Admin"},
+        ), patch(
+            "marketing.services.linkedin.discover_linkedin_organizations",
+            return_value=[],
+        ):
+            credential = exchange_direct_oauth_code(platform="linkedin", code="code")
+
+        credential.refresh_from_db()
+        self.assertEqual(credential.last_sync_status, "connected")
+        self.assertIn("No LinkedIn Company Pages returned", credential.last_error)
+        self.assertFalse(SocialAccount.objects.filter(platform="linkedin").exists())
 
     def test_linkedin_disconnect_deactivates_account_and_clears_tokens(self):
         account = SocialAccount.objects.create(
@@ -1409,6 +1490,44 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertEqual(rows[0]["clicks"], 27)
         self.assertEqual(rows[0]["engagement_total"], 32)
         self.assertEqual(rows[-1]["followers_total"], 1200)
+
+    def test_linkedin_company_page_discovery_parses_organization_target(self):
+        from marketing.services.linkedin import discover_linkedin_organizations
+
+        def fake_request(path, **kwargs):
+            if path == "/organizationAcls":
+                self.assertEqual(kwargs["params"]["role"], "ADMINISTRATOR")
+                self.assertEqual(kwargs["params"]["state"], "APPROVED")
+                return {
+                    "elements": [
+                        {
+                            "role": "ADMINISTRATOR",
+                            "state": "APPROVED",
+                            "organizationTarget": "urn:li:organization:42",
+                        }
+                    ]
+                }
+            self.assertEqual(path, "/organizations/42")
+            return {
+                "id": 42,
+                "localizedName": "Iconic Apparel House Inc.",
+                "vanityName": "iconic-apparel-house-inc",
+                "localizedWebsite": "https://iconicapparelhouse.com",
+                "$URN": "urn:li:organization:42",
+            }
+
+        with patch("marketing.services.linkedin._request_json", side_effect=fake_request):
+            rows = discover_linkedin_organizations(access_token="token")
+
+        self.assertEqual(rows, [
+            {
+                "id": "42",
+                "urn": "urn:li:organization:42",
+                "name": "Iconic Apparel House Inc.",
+                "vanity_name": "iconic-apparel-house-inc",
+                "page_url": "https://www.linkedin.com/company/iconic-apparel-house-inc/",
+            }
+        ])
 
     def test_linkedin_post_metrics_parse_share_stats(self):
         from marketing.services.linkedin import fetch_linkedin_post_metrics

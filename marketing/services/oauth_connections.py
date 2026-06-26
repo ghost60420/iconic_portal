@@ -262,7 +262,10 @@ def _save_direct_credential(*, platform: str, token_payload: dict) -> OAuthCrede
     )
     credential.save()
     if platform == "linkedin":
-        _discover_and_save_linkedin_accounts(credential=credential)
+        linkedin_count = _discover_and_save_linkedin_accounts(credential=credential)
+        if linkedin_count:
+            credential.last_error = ""
+            credential.save(update_fields=["last_error", "updated_at"])
     elif platform == "tiktok":
         _discover_and_save_tiktok_account(credential=credential)
     return credential
@@ -296,7 +299,12 @@ def _discover_and_save_linkedin_accounts(*, credential: OAuthCredential) -> int:
         account, _ = SocialAccount.objects.update_or_create(
             platform="linkedin",
             external_account_id=org["urn"],
-            defaults={"display_name": org.get("name") or org["urn"], "is_active": True},
+            defaults={
+                "display_name": org.get("name") or org["urn"],
+                "username": org.get("vanity_name") or "",
+                "profile_url": org.get("page_url") or "",
+                "is_active": True,
+            },
         )
         org_cred = (
             OAuthCredential.objects.filter(platform="linkedin", platform_account=account).first()
@@ -309,6 +317,10 @@ def _discover_and_save_linkedin_accounts(*, credential: OAuthCredential) -> int:
         org_cred.account_id = org["urn"]
         org_cred.save()
         count += 1
+    if not count:
+        credential.last_sync_status = "connected"
+        credential.last_error = "No LinkedIn Company Pages returned by LinkedIn organizationAcls for this user."
+        credential.save(update_fields=["last_sync_status", "last_error", "updated_at"])
     return count
 
 

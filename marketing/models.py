@@ -162,6 +162,8 @@ class SocialAccount(models.Model):
     platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES)
     external_account_id = models.CharField(max_length=120, blank=True, default="")
     display_name = models.CharField(max_length=200, blank=True, default="")
+    username = models.CharField(max_length=120, blank=True, default="")
+    profile_url = models.URLField(blank=True, default="")
     timezone = models.CharField(max_length=50, blank=True, default="")
     is_active = models.BooleanField(default=True)
 

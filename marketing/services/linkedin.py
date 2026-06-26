@@ -14,6 +14,7 @@ from .errors import MarketingServiceError
 
 
 LINKEDIN_REST_BASE = "https://api.linkedin.com/rest"
+LINKEDIN_PAGE_SIZE = 100
 
 
 def _as_int(value) -> int:
@@ -62,11 +63,50 @@ def _date_to_millis(value: date, *, end_of_day: bool = False) -> int:
 def _organization_id(account_id: str) -> str:
     if account_id.startswith("urn:li:organization:"):
         return account_id.rsplit(":", 1)[-1]
+    if account_id.startswith("urn:li:organizationBrand:"):
+        return account_id.rsplit(":", 1)[-1]
     return account_id
 
 
 def _organization_urn(account_id: str) -> str:
+    if account_id.startswith("urn:li:organizationBrand:"):
+        return f"urn:li:organization:{_organization_id(account_id)}"
     return account_id if account_id.startswith("urn:li:organization:") else f"urn:li:organization:{account_id}"
+
+
+def _organization_urn_from_acl(item: dict[str, Any]) -> str:
+    return (
+        item.get("organization")
+        or item.get("organizationTarget")
+        or item.get("organizationalTarget")
+        or item.get("organizationalEntity")
+        or ""
+    )
+
+
+def _localized_name(payload: dict[str, Any]) -> str:
+    if payload.get("localizedName"):
+        return str(payload["localizedName"])
+    name = payload.get("name") or {}
+    localized = name.get("localized") if isinstance(name, dict) else {}
+    if isinstance(localized, dict):
+        preferred = name.get("preferredLocale") or {}
+        locale_key = "_".join(
+            item for item in [preferred.get("language"), preferred.get("country")] if item
+        )
+        if locale_key and localized.get(locale_key):
+            return str(localized[locale_key])
+        for value in localized.values():
+            if value:
+                return str(value)
+    return ""
+
+
+def _page_url_from_org(payload: dict[str, Any]) -> str:
+    vanity_name = payload.get("vanityName") or ""
+    if vanity_name:
+        return f"https://www.linkedin.com/company/{vanity_name}/"
+    return payload.get("localizedWebsite") or ""
 
 
 def _date_from_millis(value, fallback: date) -> date:
@@ -142,30 +182,57 @@ def _share_metric_row(item: dict[str, Any], *, fallback_date: date) -> dict:
 def discover_linkedin_organizations(*, access_token: str) -> list[dict]:
     if not access_token:
         raise MarketingServiceError("Missing LinkedIn access token")
-    payload = _request_json(
-        "/organizationAcls",
-        access_token=access_token,
-        params={"q": "roleAssignee", "state": "APPROVED"},
-    )
     organizations: list[dict] = []
     seen: set[str] = set()
-    for item in payload.get("elements") or []:
-        urn = item.get("organization") or ""
-        if not urn or urn in seen:
-            continue
-        seen.add(urn)
-        org_id = _organization_id(urn)
-        name = urn
-        try:
-            org_payload = _request_json(
-                f"/organizations/{org_id}",
-                access_token=access_token,
-                params={"projection": "(id,localizedName,vanityName)"},
+    start = 0
+    while True:
+        payload = _request_json(
+            "/organizationAcls",
+            access_token=access_token,
+            params={
+                "q": "roleAssignee",
+                "role": "ADMINISTRATOR",
+                "state": "APPROVED",
+                "count": LINKEDIN_PAGE_SIZE,
+                "start": start,
+            },
+        )
+        elements = payload.get("elements") or []
+        for item in elements:
+            raw_urn = _organization_urn_from_acl(item)
+            if not raw_urn:
+                continue
+            urn = _organization_urn(raw_urn)
+            if urn in seen:
+                continue
+            seen.add(urn)
+            org_id = _organization_id(urn)
+            name = urn
+            vanity_name = ""
+            page_url = ""
+            try:
+                org_payload = _request_json(
+                    f"/organizations/{org_id}",
+                    access_token=access_token,
+                    params={"projection": "(id,localizedName,name,vanityName,localizedWebsite,$URN)"},
+                )
+                vanity_name = org_payload.get("vanityName") or ""
+                name = _localized_name(org_payload) or vanity_name or urn
+                page_url = _page_url_from_org(org_payload)
+            except MarketingServiceError:
+                pass
+            organizations.append(
+                {
+                    "id": org_id,
+                    "urn": urn,
+                    "name": name,
+                    "vanity_name": vanity_name,
+                    "page_url": page_url,
+                }
             )
-            name = org_payload.get("localizedName") or org_payload.get("vanityName") or urn
-        except MarketingServiceError:
-            pass
-        organizations.append({"id": org_id, "urn": urn, "name": name})
+        if len(elements) < LINKEDIN_PAGE_SIZE:
+            break
+        start += LINKEDIN_PAGE_SIZE
     return organizations
 
 
