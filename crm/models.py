@@ -3658,6 +3658,7 @@ class ProductionOrderLine(models.Model):
 
     style_name = models.CharField(max_length=200, blank=True)
     color_info = models.CharField(max_length=200, blank=True)
+    quantity = models.PositiveIntegerField(null=True, blank=True)
     size_group = models.CharField(
         max_length=20,
         choices=ProductionOrder.SIZE_GROUP_CHOICES,
