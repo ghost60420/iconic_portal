@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.contrib import messages
+from django.core.management import call_command
 from django.db.models import Sum
 from django.db.models.functions import Coalesce
 from django.http import Http404, HttpResponseForbidden, JsonResponse
@@ -9,6 +10,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST
 from datetime import timedelta
 from decimal import Decimal
+from io import StringIO
 import uuid
 
 from marketing.forms_social_connections import MarketingSocialConnectionForm
@@ -49,6 +51,7 @@ from marketing.services.oauth_connections import (
     exchange_direct_oauth_code,
     meta_scope_modes,
     normalize_oauth_platform,
+    reset_stale_linkedin_oauth_if_required,
 )
 from marketing.services.social_connections import (
     SOCIAL_CONNECTION_CONFIG,
@@ -480,6 +483,16 @@ def oauth_start(request, platform: str):
         request_platform = "meta" if platform in META_OAUTH_PLATFORMS else platform
         requested_scope_mode = request.GET.get("scope_mode")
         scope_mode = requested_scope_mode if platform in META_OAUTH_PLATFORMS and requested_scope_mode in meta_scope_modes() else ""
+        if platform == "linkedin":
+            reset_result = reset_stale_linkedin_oauth_if_required()
+            if reset_result["reset"]:
+                messages.info(
+                    request,
+                    (
+                        "Old LinkedIn OAuth credentials were cleared because they did not include "
+                        "the required organization scopes. Please complete a fresh LinkedIn authorization."
+                    ),
+                )
         state = uuid.uuid4().hex
         conn = OAuthConnectionRequest.objects.create(
             platform=request_platform,
@@ -577,6 +590,12 @@ def oauth_callback(request, platform: str):
             )
             return redirect("marketing_connection_settings")
         credential = exchange_direct_oauth_code(platform=platform, code=code)
+        if platform == "linkedin":
+            sync_output = StringIO()
+            try:
+                call_command("marketing_sync_linkedin_daily", stdout=sync_output)
+            except Exception as sync_exc:
+                raise MarketingServiceError(f"LinkedIn sync failed after OAuth: {sync_exc}") from sync_exc
     except MarketingServiceError as exc:
         conn.status = "error"
         conn.error_message = str(exc)
@@ -588,7 +607,12 @@ def oauth_callback(request, platform: str):
     conn.status = "completed"
     conn.error_message = ""
     conn.save(update_fields=["code", "status", "error_message", "updated_at"])
-    messages.success(request, f"{credential.get_platform_display()} connected with OAuth.")
+    if platform == "linkedin":
+        output = sync_output.getvalue().strip()
+        suffix = f" {output}" if output else ""
+        messages.success(request, f"LinkedIn connected with OAuth.{suffix}")
+    else:
+        messages.success(request, f"{credential.get_platform_display()} connected with OAuth.")
     return redirect("marketing_connection_settings")
 
 

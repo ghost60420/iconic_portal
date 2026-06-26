@@ -46,6 +46,7 @@ INSTAGRAM_OAUTH_PLATFORMS = {"instagram"}
 DIRECT_OAUTH_PLATFORMS = {"linkedin", "tiktok"}
 OAUTH_START_PLATFORMS = GOOGLE_OAUTH_PLATFORMS | META_OAUTH_PLATFORMS | INSTAGRAM_OAUTH_PLATFORMS | DIRECT_OAUTH_PLATFORMS
 logger = logging.getLogger(__name__)
+LINKEDIN_REQUIRED_ORGANIZATION_SCOPES = frozenset({"rw_organization_admin", "r_organization_social"})
 
 
 def normalize_oauth_platform(platform: str) -> str:
@@ -115,6 +116,44 @@ def meta_scopes_for_mode(scope_mode: str = "") -> list[str]:
 
 def meta_scope_modes() -> set[str]:
     return {"basic", "fallback", *getattr(settings, "MARKETING_META_SCOPE_TEST_MODES", {}).keys()}
+
+
+def oauth_scope_set(scopes: str) -> set[str]:
+    return {scope.strip() for scope in (scopes or "").replace(",", " ").split() if scope.strip()}
+
+
+def linkedin_has_required_organization_scopes(scopes: str) -> bool:
+    return LINKEDIN_REQUIRED_ORGANIZATION_SCOPES.issubset(oauth_scope_set(scopes))
+
+
+def _format_scope_set(scopes: set[str]) -> str:
+    return ", ".join(sorted(scopes)) if scopes else "(none)"
+
+
+def reset_stale_linkedin_oauth_if_required() -> dict:
+    credentials = list(OAuthCredential.objects.filter(platform="linkedin"))
+    stale_credentials = [
+        credential
+        for credential in credentials
+        if not linkedin_has_required_organization_scopes(credential.scopes)
+    ]
+    if not stale_credentials:
+        return {"reset": False, "deleted_credentials": 0, "deleted_accounts": 0}
+
+    stale_ids = [credential.pk for credential in stale_credentials]
+    deleted_credentials, _ = OAuthCredential.objects.filter(platform="linkedin").delete()
+    deleted_accounts, _ = SocialAccount.objects.filter(platform="linkedin").delete()
+    logger.warning(
+        "LinkedIn OAuth stale credentials cleared before authorization stale_credential_ids=%s deleted_credentials=%s deleted_accounts=%s",
+        stale_ids,
+        deleted_credentials,
+        deleted_accounts,
+    )
+    return {
+        "reset": True,
+        "deleted_credentials": deleted_credentials,
+        "deleted_accounts": deleted_accounts,
+    }
 
 
 def build_oauth_authorization_url(*, platform: str, state: str, scope_mode: str = "") -> str:
@@ -260,7 +299,10 @@ def _save_direct_credential(*, platform: str, token_payload: dict) -> OAuthCrede
     existing_refresh = credential.get_refresh_token() if credential.pk else ""
     credential.account_id = account_id
     credential.account_name = account_name
-    credential.scopes = token_payload.get("scope") or " ".join(_direct_scopes(platform))
+    if platform == "linkedin":
+        credential.scopes = token_payload.get("scope") or ""
+    else:
+        credential.scopes = token_payload.get("scope") or " ".join(_direct_scopes(platform))
     credential.is_active = True
     credential.last_sync_status = "connected"
     credential.last_error = ""
@@ -279,6 +321,26 @@ def _save_direct_credential(*, platform: str, token_payload: dict) -> OAuthCrede
             credential.scopes,
             bool(refresh_token or existing_refresh),
         )
+        granted_scopes = oauth_scope_set(credential.scopes)
+        missing_scopes = LINKEDIN_REQUIRED_ORGANIZATION_SCOPES - granted_scopes
+        if missing_scopes:
+            granted_text = _format_scope_set(granted_scopes)
+            missing_text = _format_scope_set(missing_scopes)
+            message = (
+                "LinkedIn OAuth token missing required organization scopes. "
+                f"Granted scopes: {granted_text}. Missing scopes: {missing_text}."
+            )
+            credential.is_active = False
+            credential.last_sync_status = "error"
+            credential.last_error = message
+            credential.save(update_fields=["is_active", "last_sync_status", "last_error", "updated_at"])
+            logger.error(
+                "LinkedIn OAuth token missing required organization scopes credential_id=%s granted_scopes=%s missing_scopes=%s",
+                credential.pk,
+                granted_text,
+                missing_text,
+            )
+            raise MarketingServiceError(message)
         linkedin_count = _discover_and_save_linkedin_accounts(credential=credential)
         if linkedin_count:
             credential.last_error = ""

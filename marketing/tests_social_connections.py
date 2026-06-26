@@ -653,7 +653,12 @@ class MarketingSocialConnectionsTests(TestCase):
 
         with patch(
             "marketing.services.oauth_connections._post_form",
-            return_value={"access_token": "li-access", "refresh_token": "li-refresh", "expires_in": 3600},
+            return_value={
+                "access_token": "li-access",
+                "refresh_token": "li-refresh",
+                "expires_in": 3600,
+                "scope": "openid profile email rw_organization_admin r_organization_social",
+            },
         ), patch(
             "marketing.services.oauth_connections._request_json",
             return_value={"sub": "person-1", "email": "admin@example.com", "name": "Admin"},
@@ -707,6 +712,44 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertIn("r_organization_social", scopes)
         self.assertNotIn("client_secret", url)
 
+    @override_settings(
+        MARKETING_LINKEDIN_CLIENT_ID="linkedin-client",
+        MARKETING_LINKEDIN_CLIENT_SECRET="linkedin-secret",
+        MARKETING_LINKEDIN_REDIRECT_URI="https://femline.ca/api/auth/linkedin/callback/",
+        MARKETING_LINKEDIN_SCOPES=[
+            "openid",
+            "profile",
+            "email",
+            "rw_organization_admin",
+            "r_organization_social",
+        ],
+    )
+    def test_linkedin_oauth_start_clears_stale_credentials(self):
+        account = SocialAccount.objects.create(
+            platform="linkedin",
+            external_account_id="urn:li:organization:42",
+            display_name="Old LinkedIn",
+            is_active=True,
+        )
+        credential = OAuthCredential.objects.create(
+            platform="linkedin",
+            platform_account=account,
+            account_id="person-1",
+            account_name="admin@example.com",
+            scopes="openid profile email",
+            is_active=True,
+        )
+        credential.set_tokens(access_token="old-access", refresh_token="old-refresh")
+        credential.save()
+
+        response = self.client.get(reverse("marketing_linkedin_oauth_start_api_slash"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("linkedin.com", response["Location"])
+        self.assertFalse(OAuthCredential.objects.filter(platform="linkedin").exists())
+        self.assertFalse(SocialAccount.objects.filter(platform="linkedin").exists())
+        self.assertTrue(OAuthConnectionRequest.objects.filter(platform="linkedin", status="initiated").exists())
+
     def test_linkedin_oauth_callback_saves_company_page(self):
         conn = OAuthConnectionRequest.objects.create(
             platform="linkedin",
@@ -721,7 +764,7 @@ class MarketingSocialConnectionsTests(TestCase):
                 "access_token": "li-access",
                 "refresh_token": "li-refresh",
                 "expires_in": 3600,
-                "scope": "openid profile email r_organization_social r_organization_admin",
+                "scope": "openid profile email rw_organization_admin r_organization_social",
             },
         ), patch(
             "marketing.services.oauth_connections._request_json",
@@ -737,7 +780,9 @@ class MarketingSocialConnectionsTests(TestCase):
                     "page_url": "https://www.linkedin.com/company/iconic-apparel-house-inc/",
                 }
             ],
-        ):
+        ), patch(
+            "marketing.views_social_connections.call_command",
+        ) as mock_call_command:
             response = self.client.get(
                 reverse("marketing_linkedin_oauth_callback_api_slash"),
                 {"state": "state-123", "code": "oauth-code"},
@@ -749,7 +794,7 @@ class MarketingSocialConnectionsTests(TestCase):
         source_credential = OAuthCredential.objects.get(platform="linkedin", account_id="person-1")
         self.assertTrue(source_credential.has_access_token)
         self.assertTrue(source_credential.has_refresh_token)
-        self.assertIn("r_organization_admin", source_credential.scopes)
+        self.assertIn("rw_organization_admin", source_credential.scopes)
         self.assertEqual(source_credential.last_sync_status, "connected")
         account = SocialAccount.objects.get(platform="linkedin", external_account_id="urn:li:organization:42")
         self.assertEqual(account.display_name, "Iconic Apparel House Inc.")
@@ -757,13 +802,61 @@ class MarketingSocialConnectionsTests(TestCase):
         org_credential = OAuthCredential.objects.get(platform="linkedin", platform_account=account)
         self.assertTrue(org_credential.has_access_token)
         self.assertTrue(org_credential.has_refresh_token)
+        mock_call_command.assert_called_once()
+        self.assertEqual(mock_call_command.call_args.args[0], "marketing_sync_linkedin_daily")
+
+    def test_linkedin_oauth_callback_stops_when_org_scopes_missing(self):
+        conn = OAuthConnectionRequest.objects.create(
+            platform="linkedin",
+            user=self.user,
+            state="state-123",
+            status="initiated",
+        )
+
+        with patch(
+            "marketing.services.oauth_connections._post_form",
+            return_value={
+                "access_token": "li-access",
+                "refresh_token": "li-refresh",
+                "expires_in": 3600,
+                "scope": "openid profile email w_member_social",
+            },
+        ), patch(
+            "marketing.services.oauth_connections._request_json",
+            return_value={"sub": "person-1", "email": "admin@example.com", "name": "Admin"},
+        ), patch(
+            "marketing.services.linkedin.discover_linkedin_organizations",
+        ) as mock_discover, patch(
+            "marketing.views_social_connections.call_command",
+        ) as mock_call_command:
+            response = self.client.get(
+                reverse("marketing_linkedin_oauth_callback_api_slash"),
+                {"state": "state-123", "code": "oauth-code"},
+            )
+
+        self.assertEqual(response.status_code, 302)
+        conn.refresh_from_db()
+        self.assertEqual(conn.status, "error")
+        self.assertIn("Granted scopes: email, openid, profile, w_member_social", conn.error_message)
+        credential = OAuthCredential.objects.get(platform="linkedin", account_id="person-1")
+        self.assertFalse(credential.is_active)
+        self.assertEqual(credential.last_sync_status, "error")
+        self.assertIn("Missing scopes: r_organization_social, rw_organization_admin", credential.last_error)
+        self.assertFalse(SocialAccount.objects.filter(platform="linkedin").exists())
+        mock_discover.assert_not_called()
+        mock_call_command.assert_not_called()
 
     def test_linkedin_empty_company_page_discovery_records_state(self):
         from marketing.services.oauth_connections import exchange_direct_oauth_code
 
         with patch(
             "marketing.services.oauth_connections._post_form",
-            return_value={"access_token": "li-access", "refresh_token": "li-refresh", "expires_in": 3600},
+            return_value={
+                "access_token": "li-access",
+                "refresh_token": "li-refresh",
+                "expires_in": 3600,
+                "scope": "openid profile email rw_organization_admin r_organization_social",
+            },
         ), patch(
             "marketing.services.oauth_connections._request_json",
             return_value={"sub": "person-1", "email": "admin@example.com", "name": "Admin"},
