@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import timedelta
 import base64
 import json
+import logging
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
@@ -44,6 +45,7 @@ META_OAUTH_PLATFORMS = {"meta", "facebook", "meta_ads"}
 INSTAGRAM_OAUTH_PLATFORMS = {"instagram"}
 DIRECT_OAUTH_PLATFORMS = {"linkedin", "tiktok"}
 OAUTH_START_PLATFORMS = GOOGLE_OAUTH_PLATFORMS | META_OAUTH_PLATFORMS | INSTAGRAM_OAUTH_PLATFORMS | DIRECT_OAUTH_PLATFORMS
+logger = logging.getLogger(__name__)
 
 
 def normalize_oauth_platform(platform: str) -> str:
@@ -137,12 +139,19 @@ def build_oauth_authorization_url(*, platform: str, state: str, scope_mode: str 
         return build_instagram_oauth_url(state=state)
 
     if platform == "linkedin":
+        scopes = list(settings.MARKETING_LINKEDIN_SCOPES)
+        logger.info(
+            "LinkedIn OAuth authorization request redirect_uri=%s requested_scopes=%s client_id_loaded=%s",
+            settings.MARKETING_LINKEDIN_REDIRECT_URI,
+            scopes,
+            bool(settings.MARKETING_LINKEDIN_CLIENT_ID),
+        )
         params = {
             "response_type": "code",
             "client_id": settings.MARKETING_LINKEDIN_CLIENT_ID,
             "redirect_uri": settings.MARKETING_LINKEDIN_REDIRECT_URI,
             "state": state,
-            "scope": " ".join(settings.MARKETING_LINKEDIN_SCOPES),
+            "scope": " ".join(scopes),
         }
         return f"{settings.MARKETING_LINKEDIN_AUTHORIZE_URL}?{urlencode(params)}"
 
@@ -262,6 +271,14 @@ def _save_direct_credential(*, platform: str, token_payload: dict) -> OAuthCrede
     )
     credential.save()
     if platform == "linkedin":
+        logger.info(
+            "LinkedIn OAuth token saved credential_id=%s account_id=%s account_name=%s granted_scopes=%s has_refresh_token=%s",
+            credential.pk,
+            credential.account_id,
+            credential.account_name,
+            credential.scopes,
+            bool(refresh_token or existing_refresh),
+        )
         linkedin_count = _discover_and_save_linkedin_accounts(credential=credential)
         if linkedin_count:
             credential.last_error = ""
@@ -284,11 +301,22 @@ def _clone_tokens(source: OAuthCredential, target: OAuthCredential):
 
 
 def _discover_and_save_linkedin_accounts(*, credential: OAuthCredential) -> int:
+    logger.info(
+        "LinkedIn organization discovery save started credential_id=%s account_id=%s scopes=%s",
+        credential.pk,
+        credential.account_id,
+        credential.scopes,
+    )
     try:
         from marketing.services.linkedin import discover_linkedin_organizations
 
         organizations = discover_linkedin_organizations(access_token=credential.get_access_token())
     except MarketingServiceError as exc:
+        logger.exception(
+            "LinkedIn organization discovery failed credential_id=%s account_id=%s",
+            credential.pk,
+            credential.account_id,
+        )
         credential.last_sync_status = "connected"
         credential.last_error = str(exc)
         credential.save(update_fields=["last_sync_status", "last_error", "updated_at"])
@@ -296,6 +324,11 @@ def _discover_and_save_linkedin_accounts(*, credential: OAuthCredential) -> int:
 
     count = 0
     for org in organizations:
+        logger.info(
+            "LinkedIn organization discovery saving organization_urn=%s organization_name=%s",
+            org.get("urn"),
+            org.get("name"),
+        )
         account, _ = SocialAccount.objects.update_or_create(
             platform="linkedin",
             external_account_id=org["urn"],
@@ -318,9 +351,20 @@ def _discover_and_save_linkedin_accounts(*, credential: OAuthCredential) -> int:
         org_cred.save()
         count += 1
     if not count:
+        logger.warning(
+            "LinkedIn organization discovery returned no company pages credential_id=%s account_id=%s",
+            credential.pk,
+            credential.account_id,
+        )
         credential.last_sync_status = "connected"
         credential.last_error = "No LinkedIn Company Pages returned by LinkedIn organizationAcls for this user."
         credential.save(update_fields=["last_sync_status", "last_error", "updated_at"])
+    else:
+        logger.info(
+            "LinkedIn organization discovery save completed credential_id=%s saved_count=%s",
+            credential.pk,
+            count,
+        )
     return count
 
 

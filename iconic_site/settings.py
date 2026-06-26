@@ -322,7 +322,7 @@ MARKETING_LINKEDIN_USERINFO_URL = os.getenv(
 )
 _linkedin_scopes_raw = os.getenv(
     "MARKETING_LINKEDIN_SCOPES",
-    "openid,profile,email,r_organization_social,r_organization_admin",
+    "openid,profile,email,r_profile_basicinfo,r_verify,w_member_social,rw_organization_admin,r_organization_social",
 )
 MARKETING_LINKEDIN_SCOPES = [scope.strip() for scope in _linkedin_scopes_raw.split(",") if scope.strip()]
 MARKETING_LINKEDIN_VERSION = os.getenv("MARKETING_LINKEDIN_VERSION", "202606")

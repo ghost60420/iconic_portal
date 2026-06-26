@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, time
 import json
+import logging
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -15,6 +16,7 @@ from .errors import MarketingServiceError
 
 LINKEDIN_REST_BASE = "https://api.linkedin.com/rest"
 LINKEDIN_PAGE_SIZE = 100
+logger = logging.getLogger(__name__)
 
 
 def _as_int(value) -> int:
@@ -36,19 +38,33 @@ def _headers(access_token: str) -> dict:
     }
 
 
+def _safe_headers(headers: dict) -> dict:
+    return {key: value for key, value in headers.items() if key.lower() != "authorization"}
+
+
 def _request_json(path: str, *, access_token: str, params: dict | None = None) -> dict:
     url = path if path.startswith("http") else f"{LINKEDIN_REST_BASE}{path if path.startswith('/') else '/' + path}"
     if params:
         separator = "&" if "?" in url else "?"
-        url = f"{url}{separator}{urllib.parse.urlencode(params, safe='(),:')}"
-    request = urllib.request.Request(url, headers=_headers(access_token), method="GET")
+        url = f"{url}{separator}{urllib.parse.urlencode(params, safe='(),')}"
+    headers = _headers(access_token)
+    logger.info("LinkedIn API request endpoint=%s headers=%s", url, _safe_headers(headers))
+    request = urllib.request.Request(url, headers=headers, method="GET")
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             raw = response.read().decode("utf-8") or "{}"
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="ignore")
+        logger.error(
+            "LinkedIn API error endpoint=%s headers=%s status=%s payload=%s",
+            url,
+            _safe_headers(headers),
+            exc.code,
+            detail[:2000],
+        )
         raise MarketingServiceError(f"LinkedIn API error {exc.code}: {detail[:500]}") from exc
     except urllib.error.URLError as exc:
+        logger.error("LinkedIn API request failed endpoint=%s reason=%s", url, exc.reason)
         raise MarketingServiceError(f"LinkedIn API request failed: {exc.reason}") from exc
     return json.loads(raw)
 
@@ -185,7 +201,9 @@ def discover_linkedin_organizations(*, access_token: str) -> list[dict]:
     organizations: list[dict] = []
     seen: set[str] = set()
     start = 0
+    logger.info("LinkedIn organization discovery started")
     while True:
+        logger.info("LinkedIn organization ACL lookup start=%s count=%s", start, LINKEDIN_PAGE_SIZE)
         payload = _request_json(
             "/organizationAcls",
             access_token=access_token,
@@ -198,9 +216,11 @@ def discover_linkedin_organizations(*, access_token: str) -> list[dict]:
             },
         )
         elements = payload.get("elements") or []
+        logger.info("LinkedIn organization ACL lookup returned count=%s start=%s", len(elements), start)
         for item in elements:
             raw_urn = _organization_urn_from_acl(item)
             if not raw_urn:
+                logger.warning("LinkedIn organization ACL entry missing organization urn keys=%s", sorted(item.keys()))
                 continue
             urn = _organization_urn(raw_urn)
             if urn in seen:
@@ -233,6 +253,7 @@ def discover_linkedin_organizations(*, access_token: str) -> list[dict]:
         if len(elements) < LINKEDIN_PAGE_SIZE:
             break
         start += LINKEDIN_PAGE_SIZE
+    logger.info("LinkedIn organization discovery finished organization_count=%s", len(organizations))
     return organizations
 
 
@@ -240,9 +261,11 @@ def fetch_linkedin_content(*, access_token: str, account_id: str, start_date: da
     if not access_token or not account_id:
         raise MarketingServiceError("Missing LinkedIn credentials")
     urn = _organization_urn(account_id)
+    logger.info("LinkedIn content fetch account_id=%s start=%s end=%s", urn, start_date, end_date)
     try:
         payload = _request_json("/posts", access_token=access_token, params={"q": "author", "author": urn, "count": 20})
     except MarketingServiceError:
+        logger.exception("LinkedIn content fetch failed account_id=%s", urn)
         return []
 
     rows: list[dict] = []
@@ -269,6 +292,13 @@ def fetch_linkedin_content(*, access_token: str, account_id: str, start_date: da
 
 def _share_statistics(*, access_token: str, account_id: str, start_date: date, end_date: date, share_urn: str = "") -> list[dict]:
     urn = _organization_urn(account_id)
+    logger.info(
+        "LinkedIn organization share statistics fetch account_id=%s start=%s end=%s share_urn_present=%s",
+        urn,
+        start_date,
+        end_date,
+        bool(share_urn),
+    )
     params = {
         "q": "organizationalEntity",
         "organizationalEntity": urn,
@@ -322,14 +352,17 @@ def fetch_linkedin_account_metrics(*, access_token: str, account_id: str, start_
     if not access_token or not account_id:
         raise MarketingServiceError("Missing LinkedIn account id")
     rows: dict[date, dict] = {}
+    organization_urn = _organization_urn(account_id)
+    logger.info("LinkedIn organization statistics fetch account_id=%s start=%s end=%s", organization_urn, start_date, end_date)
 
     try:
+        logger.info("LinkedIn follower statistics fetch account_id=%s", organization_urn)
         follower_payload = _request_json(
             "/organizationalEntityFollowerStatistics",
             access_token=access_token,
             params={
                 "q": "organizationalEntity",
-                "organizationalEntity": _organization_urn(account_id),
+                "organizationalEntity": organization_urn,
                 "timeIntervals": (
                     f"(timeRange:(start:{_date_to_millis(start_date)},end:{_date_to_millis(end_date, end_of_day=True)}),"
                     "timeGranularityType:DAY)"
@@ -342,25 +375,27 @@ def fetch_linkedin_account_metrics(*, access_token: str, account_id: str, start_
             row = _row_for(rows, metric_date)
             row["followers_change"] = _as_int(gains.get("organicFollowerGain")) + _as_int(gains.get("paidFollowerGain"))
     except MarketingServiceError:
-        pass
+        logger.exception("LinkedIn follower statistics fetch failed account_id=%s", organization_urn)
 
     try:
+        logger.info("LinkedIn network size fetch account_id=%s", organization_urn)
         network_payload = _request_json(
-            f"https://api.linkedin.com/v2/networkSizes/{_organization_urn(account_id)}",
+            f"/networkSizes/{organization_urn}",
             access_token=access_token,
             params={"edgeType": "COMPANY_FOLLOWED_BY_MEMBER"},
         )
         _row_for(rows, end_date)["followers_total"] = _as_int(network_payload.get("firstDegreeSize"))
     except MarketingServiceError:
-        pass
+        logger.exception("LinkedIn network size fetch failed account_id=%s", organization_urn)
 
     try:
+        logger.info("LinkedIn page statistics fetch account_id=%s", organization_urn)
         page_payload = _request_json(
             "/organizationPageStatistics",
             access_token=access_token,
             params={
                 "q": "organization",
-                "organization": _organization_urn(account_id),
+                "organization": organization_urn,
                 "timeIntervals": (
                     f"(timeRange:(start:{_date_to_millis(start_date)},end:{_date_to_millis(end_date, end_of_day=True)}),"
                     "timeGranularityType:DAY)"
@@ -374,7 +409,7 @@ def fetch_linkedin_account_metrics(*, access_token: str, account_id: str, start_
             row["views"] += _page_views_total(total)
             row["clicks"] += _nested_int_total(total.get("clicks") or {}, key_hints=("click",))
     except MarketingServiceError:
-        pass
+        logger.exception("LinkedIn page statistics fetch failed account_id=%s", organization_urn)
 
     for item in _share_statistics(access_token=access_token, account_id=account_id, start_date=start_date, end_date=end_date):
         metric_date = _date_from_millis((item.get("timeRange") or {}).get("start"), end_date)
@@ -398,13 +433,16 @@ def fetch_linkedin_account_metrics(*, access_token: str, account_id: str, start_
 def fetch_linkedin_audience(*, access_token: str, account_id: str, start_date: date, end_date: date) -> list[dict]:
     if not access_token or not account_id:
         raise MarketingServiceError("Missing LinkedIn account id")
+    organization_urn = _organization_urn(account_id)
+    logger.info("LinkedIn audience demographics fetch account_id=%s start=%s end=%s", organization_urn, start_date, end_date)
     try:
         payload = _request_json(
             "/organizationalEntityFollowerStatistics",
             access_token=access_token,
-            params={"q": "organizationalEntity", "organizationalEntity": _organization_urn(account_id)},
+            params={"q": "organizationalEntity", "organizationalEntity": organization_urn},
         )
     except MarketingServiceError:
+        logger.exception("LinkedIn audience demographics fetch failed account_id=%s", organization_urn)
         return []
 
     country_json: dict[str, int] = {}

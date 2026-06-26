@@ -1,7 +1,7 @@
 from unittest.mock import patch
 from datetime import date, datetime
 from decimal import Decimal
-from io import StringIO
+from io import BytesIO, StringIO
 from urllib.parse import parse_qs, urlparse
 
 from django.contrib.auth import get_user_model
@@ -679,6 +679,33 @@ class MarketingSocialConnectionsTests(TestCase):
         org_credential = OAuthCredential.objects.get(platform="linkedin", platform_account=account)
         self.assertEqual(org_credential.get_access_token(), "li-access")
         self.assertEqual(org_credential.account_id, "urn:li:organization:42")
+
+    @override_settings(
+        MARKETING_LINKEDIN_CLIENT_ID="linkedin-client",
+        MARKETING_LINKEDIN_CLIENT_SECRET="linkedin-secret",
+        MARKETING_LINKEDIN_REDIRECT_URI="https://femline.ca/api/auth/linkedin/callback/",
+        MARKETING_LINKEDIN_SCOPES=[
+            "openid",
+            "profile",
+            "email",
+            "rw_organization_admin",
+            "r_organization_social",
+        ],
+    )
+    def test_linkedin_oauth_url_requests_organization_scopes(self):
+        from marketing.services.oauth_connections import build_oauth_authorization_url
+
+        url = build_oauth_authorization_url(platform="linkedin", state="state-123")
+        query = parse_qs(urlparse(url).query)
+        scopes = set(query["scope"][0].split())
+
+        self.assertEqual(query["response_type"], ["code"])
+        self.assertEqual(query["client_id"], ["linkedin-client"])
+        self.assertEqual(query["redirect_uri"], ["https://femline.ca/api/auth/linkedin/callback/"])
+        self.assertEqual(query["state"], ["state-123"])
+        self.assertIn("rw_organization_admin", scopes)
+        self.assertIn("r_organization_social", scopes)
+        self.assertNotIn("client_secret", url)
 
     def test_linkedin_oauth_callback_saves_company_page(self):
         conn = OAuthConnectionRequest.objects.create(
@@ -1443,6 +1470,7 @@ class MarketingSocialConnectionsTests(TestCase):
             if "Follower" in path:
                 return {"elements": []}
             if "networkSizes" in path:
+                self.assertEqual(path, "/networkSizes/urn:li:organization:42")
                 return {"firstDegreeSize": 1200}
             if "organizationPageStatistics" in path:
                 return {
@@ -1490,6 +1518,34 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertEqual(rows[0]["clicks"], 27)
         self.assertEqual(rows[0]["engagement_total"], 32)
         self.assertEqual(rows[-1]["followers_total"], 1200)
+
+    def test_linkedin_api_error_logging_excludes_token(self):
+        from urllib.error import HTTPError
+
+        from marketing.services.linkedin import _request_json
+
+        error = HTTPError(
+            url="https://api.linkedin.com/rest/organizationAcls?q=roleAssignee",
+            code=403,
+            msg="Forbidden",
+            hdrs={},
+            fp=BytesIO(b'{"status":403,"code":"ACCESS_DENIED"}'),
+        )
+
+        with patch("marketing.services.linkedin.urllib.request.urlopen", side_effect=error):
+            with self.assertLogs("marketing.services.linkedin", level="ERROR") as logs:
+                with self.assertRaises(MarketingServiceError):
+                    _request_json(
+                        "/organizationAcls",
+                        access_token="secret-access-token",
+                        params={"q": "roleAssignee"},
+                    )
+
+        log_output = "\n".join(logs.output)
+        self.assertIn("organizationAcls", log_output)
+        self.assertIn("ACCESS_DENIED", log_output)
+        self.assertNotIn("secret-access-token", log_output)
+        self.assertNotIn("Authorization", log_output)
 
     def test_linkedin_company_page_discovery_parses_organization_target(self):
         from marketing.services.linkedin import discover_linkedin_organizations
