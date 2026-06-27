@@ -20,16 +20,30 @@ def _decimal_text(value):
     return str(value if value is not None else Decimal("0"))
 
 
-def _client_name(costing):
+def _customer_name(costing):
     customer = costing.customer
     lead = costing.opportunity.lead if costing.opportunity_id else None
     return (
-        getattr(customer, "account_brand", "")
+        costing.buyer
         or getattr(customer, "contact_name", "")
-        or getattr(lead, "account_brand", "")
         or getattr(lead, "contact_name", "")
         or "Client"
     )
+
+
+def _brand_name(costing):
+    customer = costing.customer
+    lead = costing.opportunity.lead if costing.opportunity_id else None
+    return (
+        costing.brand
+        or getattr(customer, "account_brand", "")
+        or getattr(lead, "account_brand", "")
+        or ""
+    )
+
+
+def _product_name(costing):
+    return costing.style_name or costing.style_code or costing.get_product_type_display()
 
 
 def _approved_costing_summary(amounts):
@@ -53,7 +67,9 @@ def _snapshot_values(costing, amounts, user):
         "source_quotation": costing,
         "costing_header": costing,
         "quotation_number_snapshot": costing.quotation_number,
-        "client_name_snapshot": _client_name(costing),
+        "client_name_snapshot": _customer_name(costing),
+        "brand_name_snapshot": _brand_name(costing),
+        "product_name_snapshot": _product_name(costing),
         "product_type_snapshot": costing.product_type or "",
         "approved_currency": costing.currency or "BDT",
         "approved_selling_price": amounts["unit_price"],

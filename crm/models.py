@@ -3389,6 +3389,8 @@ class ProductionOrder(models.Model):
         "source_quotation_id",
         "quotation_number_snapshot",
         "client_name_snapshot",
+        "brand_name_snapshot",
+        "product_name_snapshot",
         "product_type_snapshot",
         "approved_currency",
         "approved_selling_price",
@@ -3459,6 +3461,18 @@ class ProductionOrder(models.Model):
         editable=False,
     )
     client_name_snapshot = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        editable=False,
+    )
+    brand_name_snapshot = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        editable=False,
+    )
+    product_name_snapshot = models.CharField(
         max_length=200,
         blank=True,
         default="",

@@ -51,6 +51,8 @@ class ProductionOrderFromQuotationTests(TestCase):
             opportunity=self.opportunity,
             customer=self.customer,
             style_name="Approved Hoodie",
+            buyer="Client Buyer",
+            brand="Production Client",
             product_type="Activewear",
             factory_location="bd",
             order_quantity=100,
@@ -94,7 +96,9 @@ class ProductionOrderFromQuotationTests(TestCase):
         self.assertEqual(order.lead, self.lead)
         self.assertEqual(order.opportunity, self.opportunity)
         self.assertEqual(order.customer, self.customer)
-        self.assertEqual(order.client_name_snapshot, "Production Client")
+        self.assertEqual(order.client_name_snapshot, "Client Buyer")
+        self.assertEqual(order.brand_name_snapshot, "Production Client")
+        self.assertEqual(order.product_name_snapshot, "Approved Hoodie")
         self.assertEqual(order.product_type_snapshot, "Activewear")
         self.assertEqual(order.qty_total, 100)
         self.assertEqual(order.approved_currency, "CAD")
@@ -202,10 +206,18 @@ class ProductionOrderFromQuotationTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Approved Quotation Snapshot")
+        self.assertContains(response, "Production Order Source of Truth")
+        self.assertContains(response, "Client Buyer")
+        self.assertContains(response, "Production Client")
+        self.assertContains(response, "Approved Hoodie")
         self.assertContains(response, "QT20260077")
         self.assertContains(response, "CAD $25.00")
         self.assertContains(response, "CAD $2,500.00")
         self.assertContains(response, "Price locked")
+        self.assertContains(response, "Production Manager")
+        self.assertContains(response, "Not Started")
+        self.assertContains(response, "Shipping status")
+        self.assertContains(response, "Created date")
 
     def test_requested_production_statuses_are_available(self):
         labels = dict(ProductionOrder.OPERATIONAL_STATUS_CHOICES)

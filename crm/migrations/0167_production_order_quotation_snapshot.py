@@ -45,6 +45,11 @@ class Migration(migrations.Migration):
         ),
         migrations.AddField(
             model_name='productionorder',
+            name='brand_name_snapshot',
+            field=models.CharField(blank=True, default='', editable=False, max_length=200),
+        ),
+        migrations.AddField(
+            model_name='productionorder',
             name='client_name_snapshot',
             field=models.CharField(blank=True, default='', editable=False, max_length=200),
         ),
@@ -52,6 +57,11 @@ class Migration(migrations.Migration):
             model_name='productionorder',
             name='created_by',
             field=models.ForeignKey(blank=True, editable=False, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='created_production_orders', to=settings.AUTH_USER_MODEL),
+        ),
+        migrations.AddField(
+            model_name='productionorder',
+            name='product_name_snapshot',
+            field=models.CharField(blank=True, default='', editable=False, max_length=200),
         ),
         migrations.AddField(
             model_name='productionorder',
