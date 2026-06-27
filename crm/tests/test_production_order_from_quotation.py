@@ -2,13 +2,17 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.db import connection
 from django.test import TestCase
+from django.test.client import RequestFactory
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
 from crm.models import CostingHeader, CostingLineItem, Customer, Invoice, Lead, Opportunity, ProductionOrder
 from crm.production_forms import ProductionOrderForm
 from crm.services.costing_workflow import create_invoice_from_costing, create_or_link_production_order_from_invoice
+from crm.views import production_list
 
 
 class ProductionOrderFromQuotationTests(TestCase):
@@ -235,3 +239,21 @@ class ProductionOrderFromQuotationTests(TestCase):
         self.assertEqual(labels["shipped"], "Shipped")
         self.assertEqual(labels["on_hold"], "On Hold")
         self.assertEqual(labels["cancelled"], "Cancelled")
+
+    def test_production_list_link_checks_do_not_add_queries_per_order(self):
+        for index in range(8):
+            ProductionOrder.objects.create(
+                title=f"Query budget order {index}",
+                customer=self.customer,
+                opportunity=self.opportunity,
+                lead=self.lead,
+                qty_total=100,
+            )
+        request = RequestFactory().get("/production/")
+        request.user = self.ceo
+
+        with CaptureQueriesContext(connection) as captured:
+            response = production_list(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertLessEqual(len(captured), 15)

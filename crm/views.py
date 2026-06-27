@@ -9,7 +9,7 @@ from datetime import timedelta, date
 from decimal import Decimal
 from types import SimpleNamespace
 from django.apps import apps
-from django.db.models import Count, F, Sum, Q, Max, OuterRef, Subquery
+from django.db.models import Count, Exists, F, Sum, Q, Max, OuterRef, Subquery
 from django.db import models
 from django.conf import settings
 try:
@@ -8337,6 +8337,17 @@ def production_list(request):
             "lead",
             "assigned_production_manager",
         )
+        .annotate(
+            list_has_inventory_allocations=Exists(
+                ProductionOrderMaterial.objects.filter(order_id=OuterRef("pk"))
+            ),
+            list_has_invoices=Exists(
+                Invoice.objects.filter(order_id=OuterRef("pk"))
+            ),
+            list_has_accounting_records=Exists(
+                AccountingEntry.objects.filter(production_order_id=OuterRef("pk"))
+            ),
+        )
         .prefetch_related("stages", "shipments", "order_lifecycles")
         .order_by("-created_at")
     )
@@ -8431,7 +8442,12 @@ def production_list(request):
                 ),
                 "latest_shipment": shipments[0] if shipments else None,
                 "lifecycle": lifecycle,
-                "can_hard_delete": not _production_linked_record_labels(order),
+                "can_hard_delete": not (
+                    shipments
+                    or order.list_has_inventory_allocations
+                    or order.list_has_invoices
+                    or order.list_has_accounting_records
+                ),
             }
         )
 
