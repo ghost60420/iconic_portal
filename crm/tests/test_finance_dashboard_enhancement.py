@@ -139,3 +139,39 @@ class ExecutiveFinanceDashboardEnhancementTests(TestCase):
         ]:
             with self.subTest(url_name=url_name):
                 self.assertContains(response, reverse(url_name))
+
+    def test_monthly_receivable_and_payable_rows_keep_currencies_separate(self):
+        receivables = self.client.get(reverse("accounts_receivable_dashboard"))
+        payables = self.client.get(reverse("accounts_payable_dashboard"))
+
+        self.assertEqual(receivables.status_code, 200)
+        self.assertEqual(payables.status_code, 200)
+        ar_totals = {
+            row["currency"]: row["amount"]
+            for row in receivables.context["monthly_rows"][0]["currency_totals"]
+        }
+        ap_totals = {
+            row["currency"]: row["amount"]
+            for row in payables.context["monthly_rows"][0]["currency_totals"]
+        }
+        self.assertEqual(ar_totals, {"BDT": Decimal("5000"), "CAD": Decimal("50"), "USD": Decimal("40")})
+        self.assertEqual(ap_totals, {"BDT": Decimal("2500"), "CAD": Decimal("25"), "USD": Decimal("30")})
+        self.assertContains(receivables, "CAD $50.00")
+        self.assertContains(receivables, "USD $40.00")
+        self.assertContains(receivables, "\u09F35,000.00 BDT")
+        self.assertContains(payables, "CAD $25.00")
+        self.assertContains(payables, "USD $30.00")
+        self.assertContains(payables, "\u09F32,500.00 BDT")
+
+    def test_finance_report_suite_uses_explicit_cad_symbol(self):
+        for url_name in [
+            "profit_loss_dashboard",
+            "balance_sheet_dashboard",
+            "cash_flow_dashboard",
+            "budget_vs_actual_dashboard",
+            "financial_forecast_dashboard",
+        ]:
+            with self.subTest(url_name=url_name):
+                response = self.client.get(reverse(url_name))
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, "CAD $")

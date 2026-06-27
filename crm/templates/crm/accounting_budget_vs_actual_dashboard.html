@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load humanize %}
+{% load humanize crm_extras %}
 {% block content %}
 
 <style>
@@ -309,43 +309,43 @@
   <div class="bva-summary">
     <div class="bva-card">
       <span>Budget Revenue</span>
-      <strong>CAD {{ budget_revenue|floatformat:2|intcomma }}</strong>
+      <strong>{{ budget_revenue|finance_money:"CAD" }}</strong>
       <small>Configured revenue target.</small>
     </div>
     <div class="bva-card">
       <span>Actual Revenue</span>
-      <strong>CAD {{ actual_revenue|floatformat:2|intcomma }}</strong>
+      <strong>{{ actual_revenue|finance_money:"CAD" }}</strong>
       <small>Income entries for selected filters.</small>
     </div>
     <div class="bva-card">
       <span>Revenue Variance</span>
-      <strong>CAD {{ revenue_variance|floatformat:2|intcomma }}</strong>
+      <strong>{{ revenue_variance|finance_money:"CAD" }}</strong>
       <small>Revenue Variance % {{ revenue_variance_percent|floatformat:2 }}%</small>
     </div>
     <div class="bva-card">
       <span>Budget Expenses</span>
-      <strong>CAD {{ budget_expenses|floatformat:2|intcomma }}</strong>
+      <strong>{{ budget_expenses|finance_money:"CAD" }}</strong>
       <small>Configured expense target.</small>
     </div>
     <div class="bva-card">
       <span>Actual Expenses</span>
-      <strong>CAD {{ actual_expenses|floatformat:2|intcomma }}</strong>
+      <strong>{{ actual_expenses|finance_money:"CAD" }}</strong>
       <small>COGS, expenses, taxes, and other outgoing entries.</small>
     </div>
     <div class="bva-card">
       <span>Expense Variance</span>
-      <strong>CAD {{ expense_variance|floatformat:2|intcomma }}</strong>
+      <strong>{{ expense_variance|finance_money:"CAD" }}</strong>
       <small>Expense Variance % {{ expense_variance_percent|floatformat:2 }}%</small>
     </div>
     <div class="bva-card">
       <span>Budget Net Profit</span>
-      <strong>CAD {{ budget_net_profit|floatformat:2|intcomma }}</strong>
+      <strong>{{ budget_net_profit|finance_money:"CAD" }}</strong>
       <small>Budget revenue minus budget expenses.</small>
     </div>
     <div class="bva-card">
       <span>Actual Net Profit</span>
-      <strong>CAD {{ actual_net_profit|floatformat:2|intcomma }}</strong>
-      <small>Profit Variance CAD {{ profit_variance|floatformat:2|intcomma }} / {{ profit_variance_percent|floatformat:2 }}%</small>
+      <strong>{{ actual_net_profit|finance_money:"CAD" }}</strong>
+      <small>Profit Variance {{ profit_variance|finance_money:"CAD" }} / {{ profit_variance_percent|floatformat:2 }}%</small>
     </div>
   </div>
 
@@ -369,7 +369,7 @@
               </div>
               <div class="bva-right">
                 <span class="bva-badge {% if row.actual_net >= row.budget_net %}bva-badge--good{% else %}bva-badge--bad{% endif %}">
-                  CAD {{ row.actual_net|floatformat:0|intcomma }}
+                  {{ row.actual_net|finance_money:"CAD" }}
                 </span>
               </div>
             </div>
@@ -394,9 +394,9 @@
                 {% for row in revenue_by_customer %}
                   <tr>
                     <td>{{ row.label }}</td>
-                    <td class="bva-right">CAD {{ row.budget|floatformat:2|intcomma }}</td>
-                    <td class="bva-right">CAD {{ row.actual|floatformat:2|intcomma }}</td>
-                    <td class="bva-right">CAD {{ row.variance|floatformat:2|intcomma }}</td>
+                    <td class="bva-right">{{ row.budget|finance_money:"CAD" }}</td>
+                    <td class="bva-right">{{ row.actual|finance_money:"CAD" }}</td>
+                    <td class="bva-right">{{ row.variance|finance_money:"CAD" }}</td>
                   </tr>
                 {% endfor %}
               </tbody>
@@ -422,9 +422,9 @@
                 {% for row in expense_by_category %}
                   <tr>
                     <td>{{ row.label }}</td>
-                    <td class="bva-right">CAD {{ row.budget|floatformat:2|intcomma }}</td>
-                    <td class="bva-right">CAD {{ row.actual|floatformat:2|intcomma }}</td>
-                    <td class="bva-right">CAD {{ row.variance|floatformat:2|intcomma }}</td>
+                    <td class="bva-right">{{ row.budget|finance_money:"CAD" }}</td>
+                    <td class="bva-right">{{ row.actual|finance_money:"CAD" }}</td>
+                    <td class="bva-right">{{ row.variance|finance_money:"CAD" }}</td>
                   </tr>
                 {% endfor %}
               </tbody>
@@ -451,9 +451,9 @@
               {% for row in department_rows %}
                 <tr>
                   <td>{{ row.label }}</td>
-                  <td class="bva-right">CAD {{ row.budget_net|floatformat:2|intcomma }}</td>
-                  <td class="bva-right">CAD {{ row.actual_net|floatformat:2|intcomma }}</td>
-                  <td class="bva-right">CAD {{ row.variance|floatformat:2|intcomma }}</td>
+                  <td class="bva-right">{{ row.budget_net|finance_money:"CAD" }}</td>
+                  <td class="bva-right">{{ row.actual_net|finance_money:"CAD" }}</td>
+                  <td class="bva-right">{{ row.variance|finance_money:"CAD" }}</td>
                 </tr>
               {% endfor %}
             </tbody>
@@ -472,11 +472,11 @@
           {% for row in side_rows %}
             <div class="bva-side-card">
               <h3>{{ row.label }}</h3>
-              <div class="bva-side-line"><span>Budget revenue</span><strong>CAD {{ row.budget_revenue|floatformat:2|intcomma }}</strong></div>
-              <div class="bva-side-line"><span>Actual revenue</span><strong>CAD {{ row.actual_revenue|floatformat:2|intcomma }}</strong></div>
-              <div class="bva-side-line"><span>Budget expenses</span><strong>CAD {{ row.budget_expenses|floatformat:2|intcomma }}</strong></div>
-              <div class="bva-side-line"><span>Actual expenses</span><strong>CAD {{ row.actual_expenses|floatformat:2|intcomma }}</strong></div>
-              <div class="bva-side-line"><span>Profit variance</span><strong>CAD {{ row.variance|floatformat:2|intcomma }}</strong></div>
+              <div class="bva-side-line"><span>Budget revenue</span><strong>{{ row.budget_revenue|finance_money:"CAD" }}</strong></div>
+              <div class="bva-side-line"><span>Actual revenue</span><strong>{{ row.actual_revenue|finance_money:"CAD" }}</strong></div>
+              <div class="bva-side-line"><span>Budget expenses</span><strong>{{ row.budget_expenses|finance_money:"CAD" }}</strong></div>
+              <div class="bva-side-line"><span>Actual expenses</span><strong>{{ row.actual_expenses|finance_money:"CAD" }}</strong></div>
+              <div class="bva-side-line"><span>Profit variance</span><strong>{{ row.variance|finance_money:"CAD" }}</strong></div>
             </div>
           {% endfor %}
         </div>
@@ -495,7 +495,7 @@
               <thead><tr><th>Item</th><th>Type</th><th class="bva-right">Variance</th></tr></thead>
               <tbody>
                 {% for row in unfavorable_rows %}
-                  <tr><td>{{ row.label }}</td><td>{{ row.type }}</td><td class="bva-right">CAD {{ row.variance|floatformat:2|intcomma }}</td></tr>
+                  <tr><td>{{ row.label }}</td><td>{{ row.type }}</td><td class="bva-right">{{ row.variance|finance_money:"CAD" }}</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -518,7 +518,7 @@
               <thead><tr><th>Item</th><th>Type</th><th class="bva-right">Variance</th></tr></thead>
               <tbody>
                 {% for row in favorable_rows %}
-                  <tr><td>{{ row.label }}</td><td>{{ row.type }}</td><td class="bva-right">CAD {{ row.variance|floatformat:2|intcomma }}</td></tr>
+                  <tr><td>{{ row.label }}</td><td>{{ row.type }}</td><td class="bva-right">{{ row.variance|finance_money:"CAD" }}</td></tr>
                 {% endfor %}
               </tbody>
             </table>

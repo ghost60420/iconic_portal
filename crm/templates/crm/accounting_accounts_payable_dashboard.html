@@ -733,7 +733,9 @@
             <div class="ap-chart-row">
               <div class="ap-muted">{{ row.label }}</div>
               <div class="ap-bar"><span style="width:{{ row.bar_percent }}%;"></span></div>
-              <div class="ap-right ap-muted">{% if filter_values.currency %}{{ row.total|finance_money:filter_values.currency }}{% else %}By currency{% endif %}</div>
+              <div class="ap-right ap-muted">
+                {% for item in row.currency_totals %}{{ item.amount|finance_money:item.currency }}{% if not forloop.last %}<br>{% endif %}{% empty %}No amount{% endfor %}
+              </div>
             </div>
           {% endfor %}
         {% else %}

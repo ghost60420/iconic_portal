@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load humanize %}
+{% load humanize crm_extras %}
 {% block content %}
 
 <style>
@@ -317,23 +317,23 @@
     {% for row in horizon_rows %}
       <div class="ff-card {% if row.is_selected %}ff-card--selected{% endif %}">
         <span>Forecast Revenue {{ row.label }}</span>
-        <strong>CAD {{ row.revenue|floatformat:2|intcomma }}</strong>
-        <small>Forecast expenses: CAD {{ row.expenses|floatformat:2|intcomma }}</small>
+        <strong>{{ row.revenue|finance_money:"CAD" }}</strong>
+        <small>Forecast expenses: {{ row.expenses|finance_money:"CAD" }}</small>
         <div class="ff-card-grid">
-          <div class="ff-card-stat"><span>Net Profit</span><b>CAD {{ row.net_profit|floatformat:2|intcomma }}</b></div>
-          <div class="ff-card-stat"><span>Cash Balance</span><b>CAD {{ row.cash_balance|floatformat:2|intcomma }}</b></div>
+          <div class="ff-card-stat"><span>Net Profit</span><b>{{ row.net_profit|finance_money:"CAD" }}</b></div>
+          <div class="ff-card-stat"><span>Cash Balance</span><b>{{ row.cash_balance|finance_money:"CAD" }}</b></div>
         </div>
       </div>
     {% endfor %}
   </div>
 
   <div class="ff-focus-grid">
-    <div class="ff-card"><span>Forecast Net Profit</span><strong>CAD {{ selected_forecast.net_profit|floatformat:2|intcomma }}</strong><small>{{ selected_forecast.label }} selected forecast.</small></div>
-    <div class="ff-card"><span>Forecast Cash Balance</span><strong>CAD {{ selected_forecast.cash_balance|floatformat:2|intcomma }}</strong><small>Current cash plus expected cash movement.</small></div>
-    <div class="ff-card"><span>Expected Customer Collections</span><strong>CAD {{ selected_forecast.collections|floatformat:2|intcomma }}</strong><small>{{ collection_count }} open receivable item(s).</small></div>
-    <div class="ff-card"><span>Expected Supplier Payments</span><strong>CAD {{ selected_forecast.payments|floatformat:2|intcomma }}</strong><small>{{ payable_count }} open payable item(s).</small></div>
-    <div class="ff-card"><span>Expected Working Capital</span><strong>CAD {{ selected_forecast.working_capital|floatformat:2|intcomma }}</strong><small>Forecast cash plus expected AR minus AP.</small></div>
-    <div class="ff-card"><span>Current Cash Baseline</span><strong>CAD {{ current_cash|floatformat:2|intcomma }}</strong><small>Signed accounting cash through {{ today }}.</small></div>
+    <div class="ff-card"><span>Forecast Net Profit</span><strong>{{ selected_forecast.net_profit|finance_money:"CAD" }}</strong><small>{{ selected_forecast.label }} selected forecast.</small></div>
+    <div class="ff-card"><span>Forecast Cash Balance</span><strong>{{ selected_forecast.cash_balance|finance_money:"CAD" }}</strong><small>Current cash plus expected cash movement.</small></div>
+    <div class="ff-card"><span>Expected Customer Collections</span><strong>{{ selected_forecast.collections|finance_money:"CAD" }}</strong><small>{{ collection_count }} open receivable item(s).</small></div>
+    <div class="ff-card"><span>Expected Supplier Payments</span><strong>{{ selected_forecast.payments|finance_money:"CAD" }}</strong><small>{{ payable_count }} open payable item(s).</small></div>
+    <div class="ff-card"><span>Expected Working Capital</span><strong>{{ selected_forecast.working_capital|finance_money:"CAD" }}</strong><small>Forecast cash plus expected AR minus AP.</small></div>
+    <div class="ff-card"><span>Current Cash Baseline</span><strong>{{ current_cash|finance_money:"CAD" }}</strong><small>Signed accounting cash through {{ today }}.</small></div>
     <div class="ff-card"><span>History Window</span><strong>{{ history_days }} days</strong><small>{{ history_entry_count }} accounting row(s) from {{ history_start }}.</small></div>
     <div class="ff-card"><span>Budget Source</span><strong>{{ budget_source }}</strong><small>Used only for forecast comparison.</small></div>
   </div>
@@ -356,7 +356,7 @@
                 <div class="ff-bar ff-bar-expense"><span style="width:{{ row.expense_bar }}%"></span></div>
                 <div class="ff-bar ff-bar-cash"><span style="width:{{ row.cash_bar }}%"></span></div>
               </div>
-              <div class="ff-right"><span class="ff-badge {% if row.net_profit >= 0 %}ff-badge--good{% else %}ff-badge--bad{% endif %}">CAD {{ row.net_profit|floatformat:0|intcomma }}</span></div>
+              <div class="ff-right"><span class="ff-badge {% if row.net_profit >= 0 %}ff-badge--good{% else %}ff-badge--bad{% endif %}">{{ row.net_profit|finance_money:"CAD" }}</span></div>
             </div>
           {% endfor %}
         {% else %}
@@ -382,7 +382,7 @@
                     <td>{{ row.customer }}</td>
                     <td>{{ row.expected_date }}</td>
                     <td>{{ row.side }}</td>
-                    <td class="ff-right">CAD {{ row.amount|floatformat:2|intcomma }}</td>
+                    <td class="ff-right">{{ row.amount|finance_money:"CAD" }}</td>
                   </tr>
                 {% endfor %}
               </tbody>
@@ -411,7 +411,7 @@
                     <td><span class="ff-badge {% if row.status_label == 'Overdue' %}ff-badge--bad{% else %}ff-badge--warn{% endif %}">{{ row.status_label }}</span></td>
                     <td>{{ row.expected_date }}</td>
                     <td>{{ row.side }}</td>
-                    <td class="ff-right">CAD {{ row.amount|floatformat:2|intcomma }}</td>
+                    <td class="ff-right">{{ row.amount|finance_money:"CAD" }}</td>
                   </tr>
                 {% endfor %}
               </tbody>
@@ -436,10 +436,10 @@
             <div class="ff-scenario-card">
               <h3>{{ row.label }}</h3>
               <span class="ff-badge ff-badge--{{ row.tone }}">{{ row.tone }}</span>
-              <div class="ff-side-line"><span>Revenue</span><strong>CAD {{ row.revenue|floatformat:2|intcomma }}</strong></div>
-              <div class="ff-side-line"><span>Expenses</span><strong>CAD {{ row.expenses|floatformat:2|intcomma }}</strong></div>
-              <div class="ff-side-line"><span>Net Profit</span><strong>CAD {{ row.net_profit|floatformat:2|intcomma }}</strong></div>
-              <div class="ff-side-line"><span>Cash Balance</span><strong>CAD {{ row.cash_balance|floatformat:2|intcomma }}</strong></div>
+              <div class="ff-side-line"><span>Revenue</span><strong>{{ row.revenue|finance_money:"CAD" }}</strong></div>
+              <div class="ff-side-line"><span>Expenses</span><strong>{{ row.expenses|finance_money:"CAD" }}</strong></div>
+              <div class="ff-side-line"><span>Net Profit</span><strong>{{ row.net_profit|finance_money:"CAD" }}</strong></div>
+              <div class="ff-side-line"><span>Cash Balance</span><strong>{{ row.cash_balance|finance_money:"CAD" }}</strong></div>
             </div>
           {% endfor %}
         </div>
@@ -459,9 +459,9 @@
               {% for row in budget_rows %}
                 <tr>
                   <td>{{ row.label }}</td>
-                  <td class="ff-right">CAD {{ row.budget|floatformat:2|intcomma }}</td>
-                  <td class="ff-right">CAD {{ row.forecast|floatformat:2|intcomma }}</td>
-                  <td class="ff-right">CAD {{ row.variance|floatformat:2|intcomma }}</td>
+                  <td class="ff-right">{{ row.budget|finance_money:"CAD" }}</td>
+                  <td class="ff-right">{{ row.forecast|finance_money:"CAD" }}</td>
+                  <td class="ff-right">{{ row.variance|finance_money:"CAD" }}</td>
                 </tr>
               {% endfor %}
             </tbody>
@@ -480,12 +480,12 @@
           {% for row in side_rows %}
             <div class="ff-side-card">
               <h3>{{ row.label }}</h3>
-              <div class="ff-side-line"><span>Revenue</span><strong>CAD {{ row.revenue|floatformat:2|intcomma }}</strong></div>
-              <div class="ff-side-line"><span>Expenses</span><strong>CAD {{ row.expenses|floatformat:2|intcomma }}</strong></div>
-              <div class="ff-side-line"><span>Net Profit</span><strong>CAD {{ row.net_profit|floatformat:2|intcomma }}</strong></div>
-              <div class="ff-side-line"><span>Collections</span><strong>CAD {{ row.collections|floatformat:2|intcomma }}</strong></div>
-              <div class="ff-side-line"><span>Payments</span><strong>CAD {{ row.payments|floatformat:2|intcomma }}</strong></div>
-              <div class="ff-side-line"><span>Cash Balance</span><strong>CAD {{ row.cash_balance|floatformat:2|intcomma }}</strong></div>
+              <div class="ff-side-line"><span>Revenue</span><strong>{{ row.revenue|finance_money:"CAD" }}</strong></div>
+              <div class="ff-side-line"><span>Expenses</span><strong>{{ row.expenses|finance_money:"CAD" }}</strong></div>
+              <div class="ff-side-line"><span>Net Profit</span><strong>{{ row.net_profit|finance_money:"CAD" }}</strong></div>
+              <div class="ff-side-line"><span>Collections</span><strong>{{ row.collections|finance_money:"CAD" }}</strong></div>
+              <div class="ff-side-line"><span>Payments</span><strong>{{ row.payments|finance_money:"CAD" }}</strong></div>
+              <div class="ff-side-line"><span>Cash Balance</span><strong>{{ row.cash_balance|finance_money:"CAD" }}</strong></div>
             </div>
           {% endfor %}
         </div>

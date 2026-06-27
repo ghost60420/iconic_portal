@@ -804,15 +804,25 @@ def accounts_payable_dashboard(request):
                 "paid": Decimal("0"),
                 "outstanding": Decimal("0"),
                 "count": 0,
+                "currency_map": {},
             }
         monthly_map[key]["total"] += row["amount"]
         monthly_map[key]["paid"] += row["paid_amount"]
         monthly_map[key]["outstanding"] += row["outstanding"]
         monthly_map[key]["count"] += 1
+        currency = row["currency"]
+        monthly_map[key]["currency_map"][currency] = (
+            monthly_map[key]["currency_map"].get(currency, Decimal("0")) + row["amount"]
+        )
     monthly_rows = [monthly_map[key] for key in sorted(monthly_map.keys())][-12:]
-    max_monthly = max([row["total"] for row in monthly_rows] or [Decimal("0")])
+    max_monthly = max([row["count"] for row in monthly_rows] or [0])
     for row in monthly_rows:
-        row["bar_percent"] = int((row["total"] / max_monthly) * 100) if max_monthly > 0 else 0
+        row["currency_totals"] = [
+            {"currency": currency, "amount": amount}
+            for currency, amount in sorted(row["currency_map"].items())
+            if amount != 0
+        ]
+        row["bar_percent"] = int((row["count"] / max_monthly) * 100) if max_monthly > 0 else 0
 
     category_rows = []
     category_map = {}
