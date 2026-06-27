@@ -61,7 +61,7 @@ from .forms import (
     BDStaffForm,
     BDStaffMonthForm,
 )
-from .permissions import can_view_internal_costing, get_access
+from .permissions import can_view_internal_costing, get_access, operations_group_names, role_flag_decision
 
 try:
     from .models import AccountingMonthLock
@@ -88,6 +88,8 @@ def is_ca_user(user) -> bool:
         return False
     if user.is_superuser:
         return True
+    if "ceo" in operations_group_names(user):
+        return True
     access = _accounting_access(user)
     return bool(
         access
@@ -101,6 +103,9 @@ def is_bd_user(user) -> bool:
         return False
     if user.is_superuser:
         return True
+    role_decision = role_flag_decision(user, "can_accounting_bd")
+    if role_decision is not None:
+        return role_decision
     access = _accounting_access(user)
     return bool(access and getattr(access, "can_accounting_bd", False))
 

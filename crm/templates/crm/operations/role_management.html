@@ -1,0 +1,70 @@
+{% extends "crm/base.html" %}
+{% load static %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'crm/operations_control.css' %}">
+<main class="ops-shell">
+  <header class="ops-head">
+    <div>
+      <p class="ops-eyebrow">Management Control</p>
+      <h1 class="ops-title">Role Management</h1>
+      <p class="ops-subtitle">Create Django roles, review permission descriptions, and manage active user assignments without changing legacy access records.</p>
+    </div>
+    <a class="ops-btn" href="{% url 'crm_audit_log' %}">Audit Log</a>
+  </header>
+
+  <details class="ops-card ops-role-create">
+    <summary>Create Role</summary>
+    <form method="post" class="ops-role-form">
+      {% csrf_token %}<input type="hidden" name="action" value="create_role">
+      <label class="ops-filter">Role Name<input class="ops-input" name="role_name" maxlength="150" required></label>
+      <fieldset class="ops-permission-grid">
+        <legend>Permissions</legend>
+        {% for item in permission_catalog %}
+          <label class="ops-permission-option">
+            <input type="checkbox" name="permissions" value="{{ item.permission.pk }}">
+            <span><strong>{{ item.label }}</strong><small>{{ item.description }}</small></span>
+          </label>
+        {% endfor %}
+      </fieldset>
+      <button class="ops-btn ops-btn--gold" type="submit">Create Role</button>
+    </form>
+  </details>
+
+  <div class="ops-role-list">
+    {% for item in role_rows %}
+      <section class="ops-card ops-role-card">
+        <div class="ops-card-head">
+          <div><p class="ops-eyebrow">Role</p><h2>{{ item.role.name }}</h2></div>
+          <span class="ops-badge">{{ item.members|length }} member{{ item.members|length|pluralize }}</span>
+        </div>
+        {% if item.capabilities %}
+          <div class="ops-capability-list">
+            {% for label, description in item.capabilities %}<div><strong>{{ label }}</strong><span>{{ description }}</span></div>{% endfor %}
+          </div>
+        {% endif %}
+        <h3>Assigned Users</h3>
+        <div class="ops-member-list">
+          {% for user in item.members %}
+            <form method="post" class="ops-member-row">
+              {% csrf_token %}<input type="hidden" name="action" value="remove_user"><input type="hidden" name="role_id" value="{{ item.role.pk }}"><input type="hidden" name="user_id" value="{{ user.pk }}">
+              <span>{{ user.get_full_name|default:user.username }}</span><button class="ops-btn" type="submit">Remove</button>
+            </form>
+          {% empty %}<p class="ops-muted">No active users assigned.</p>{% endfor %}
+        </div>
+        <form method="post" class="ops-assign-form">
+          {% csrf_token %}<input type="hidden" name="action" value="assign_user"><input type="hidden" name="role_id" value="{{ item.role.pk }}">
+          <label class="ops-filter">Assign User<select class="ops-select" name="user_id" required><option value="">Select user</option>{% for user in users %}<option value="{{ user.pk }}">{{ user.get_full_name|default:user.username }}</option>{% endfor %}</select></label>
+          <button class="ops-btn ops-btn--gold" type="submit">Assign</button>
+        </form>
+        <details class="ops-permission-details">
+          <summary>View Permissions ({{ item.permissions|length }})</summary>
+          <div class="ops-capability-list">
+            {% for permission in item.permissions %}<div><strong>{{ permission.label }}</strong><span>{{ permission.description }}</span></div>{% empty %}<p class="ops-muted">No CRM model permissions assigned.</p>{% endfor %}
+          </div>
+        </details>
+      </section>
+    {% empty %}<div class="ops-card ops-empty">No roles exist yet.</div>{% endfor %}
+  </div>
+</main>
+{% endblock %}

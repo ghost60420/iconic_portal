@@ -1,0 +1,29 @@
+{% extends "crm/base.html" %}
+{% load static %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'crm/operations_control.css' %}">
+<main class="ops-shell">
+  <header class="ops-head">
+    <div>
+      <p class="ops-eyebrow">Operations Control Center</p>
+      <h1 class="ops-title">{{ queue_title }}</h1>
+      <p class="ops-subtitle">Filtered operational records requiring attention.</p>
+    </div>
+    <a class="ops-btn" href="{% url 'main_dashboard' %}#operations-control-center">Back to Dashboard</a>
+  </header>
+  <section class="ops-card">
+    {% for row in rows %}
+      <a class="ops-row" href="{{ row.url }}">
+        <span><small class="ops-row-label">Record</small><strong>{{ row.number }}</strong></span>
+        <span><small class="ops-row-label">Customer / Brand</small>{{ row.name|default:"—" }}</span>
+        <span><small class="ops-row-label">Status</small>{{ row.status }}</span>
+        <span><small class="ops-row-label">Due Date</small>{{ row.date|date:"M d, Y" }}</span>
+        <span><small class="ops-row-label">Amount</small>{{ row.amount|default:"—" }}</span>
+      </a>
+    {% empty %}
+      <div class="ops-empty">No records currently match this queue.</div>
+    {% endfor %}
+  </section>
+</main>
+{% endblock %}

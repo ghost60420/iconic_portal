@@ -45,28 +45,6 @@
     </div>
 
     <div class="dashboard-toolbar">
-      <form class="dashboard-search" action="{{ leads_url }}" data-search-form>
-        <div class="dashboard-search-field">
-          <i data-lucide="search"></i>
-          <input
-            class="dashboard-search-input"
-            type="search"
-            placeholder="Search leads, opportunities, shipments, or invoices"
-            data-search-input
-          >
-        </div>
-        <select class="dashboard-search-scope dashboard-control-select" data-search-scope>
-          <option value="leads" data-url="{{ leads_url }}">Leads</option>
-          <option value="opportunities" data-url="{{ opps_url }}">Opportunities</option>
-          <option value="shipments" data-url="{{ shipment_url }}">Shipments</option>
-          <option value="invoices" data-url="{{ invoice_url }}">Invoices</option>
-        </select>
-        <button class="dashboard-search-button" type="submit">
-          <i data-lucide="arrow-right"></i>
-          Search
-        </button>
-      </form>
-
       <div class="dashboard-toolbar-actions">
         <form method="get" class="dashboard-range-form">
           <label for="dashboard-days">Range</label>
@@ -440,6 +418,79 @@
           </ul>
         </article>
       {% endif %}
+    </div>
+  </section>
+
+  <section class="dashboard-section" id="operations-control-center">
+    <div class="dashboard-section-head">
+      <div>
+        <p class="dashboard-eyebrow">Operations Control Center</p>
+        <h2>Today’s operating picture</h2>
+        <p>Recent CRM changes, work due today, deliveries, and approvals. Each list is capped to keep the dashboard fast.</p>
+      </div>
+      <a class="dashboard-section-link" href="{% url 'notification_list' %}">
+        <i data-lucide="bell"></i>
+        Open notifications
+      </a>
+    </div>
+    <div class="dashboard-operations-metrics" aria-label="Operations status counts">
+      {% for card in operations_metric_cards %}
+        <a class="dashboard-operations-metric dashboard-operations-metric--{{ card.tone }}" href="{{ card.url }}">
+          <span>{{ card.label }}</span>
+          <strong>{{ card.count|intcomma }}</strong>
+        </a>
+      {% endfor %}
+    </div>
+    <div class="dashboard-grid dashboard-grid--activity">
+      <article class="dashboard-card">
+        <div class="dashboard-card-head">
+          <div class="dashboard-card-copy"><span class="dashboard-card-title">Recent Activity</span><span class="dashboard-card-note">Latest 25 permitted CRM changes.</span></div>
+        </div>
+        <ul class="dashboard-feed-list dashboard-ops-scroll">
+          {% for item in operations_recent_activity %}
+            <li class="dashboard-feed-item dashboard-activity-item">
+              <span class="dashboard-activity-avatar" aria-hidden="true">{{ item.actor_initials }}</span>
+              <div class="dashboard-activity-copy">
+                <strong>{% if item.target_url %}<a href="{{ item.target_url }}">{{ item.sentence }}</a>{% else %}{{ item.sentence }}{% endif %}</strong>
+                <div class="dashboard-feed-meta"><span class="dashboard-tag">{{ item.module }}</span><span class="dashboard-tag">{{ item.time_label }}</span></div>
+              </div>
+            </li>
+          {% empty %}<li class="dashboard-empty">Activity will appear as records are created and updated.</li>{% endfor %}
+        </ul>
+      </article>
+
+      <article class="dashboard-card">
+        <div class="dashboard-card-head">
+          <div class="dashboard-card-copy"><span class="dashboard-card-title">Today’s Tasks</span><span class="dashboard-card-note">Follow-ups, overdue work, production, and shipment reminders.</span></div>
+        </div>
+        <ul class="dashboard-feed-list dashboard-ops-scroll">
+          {% for item in operations_today_tasks %}
+            <li class="dashboard-feed-item"><strong><a href="{{ item.url }}">{{ item.title }}</a></strong><span>{{ item.detail }}</span><div class="dashboard-feed-meta"><span class="dashboard-tag {% if item.tone == 'urgent' %}dashboard-tag--bad{% endif %}">{{ item.type }}</span></div></li>
+          {% empty %}<li class="dashboard-empty">No tasks require attention today.</li>{% endfor %}
+        </ul>
+      </article>
+
+      <article class="dashboard-card">
+        <div class="dashboard-card-head">
+          <div class="dashboard-card-copy"><span class="dashboard-card-title">Upcoming Deliveries</span><span class="dashboard-card-note">Production orders due in the next 14 days.</span></div>
+        </div>
+        <ul class="dashboard-feed-list dashboard-ops-scroll">
+          {% for item in operations_upcoming_deliveries %}
+            <li class="dashboard-feed-item"><strong><a href="{{ item.url }}">{{ item.title }}</a></strong><span>{{ item.detail }}</span><div class="dashboard-feed-meta"><span class="dashboard-tag {% if item.tone == 'high' %}dashboard-tag--bad{% endif %}">{{ item.type }}</span></div></li>
+          {% empty %}<li class="dashboard-empty">No upcoming production deliveries.</li>{% endfor %}
+        </ul>
+      </article>
+
+      <article class="dashboard-card">
+        <div class="dashboard-card-head">
+          <div class="dashboard-card-copy"><span class="dashboard-card-title">Pending Approvals</span><span class="dashboard-card-note">CEO quotations and invoice approvals.</span></div>
+        </div>
+        <ul class="dashboard-feed-list dashboard-ops-scroll">
+          {% for item in operations_pending_approvals %}
+            <li class="dashboard-feed-item"><strong><a href="{{ item.url }}">{{ item.title }}</a></strong><span>{{ item.detail }}</span><div class="dashboard-feed-meta"><span class="dashboard-tag">{{ item.type }}</span></div></li>
+          {% empty %}<li class="dashboard-empty">No approvals are waiting.</li>{% endfor %}
+        </ul>
+      </article>
     </div>
   </section>
 

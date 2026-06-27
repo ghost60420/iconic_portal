@@ -1,0 +1,55 @@
+{% extends "crm/base.html" %}
+{% load static %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'crm/operations_control.css' %}">
+<main class="ops-shell">
+  <header class="ops-head">
+    <div>
+      <p class="ops-eyebrow">Management Control</p>
+      <h1 class="ops-title">CRM Audit Log</h1>
+      <p class="ops-subtitle">Field-level history for key sales, costing, production, invoice, payment, and finance records.</p>
+    </div>
+    <a class="ops-btn" href="{% url 'role_management' %}">Role Management</a>
+  </header>
+
+  <form method="get" class="ops-card ops-grid ops-grid--filters">
+    <label class="ops-filter">User
+      <select class="ops-select" name="user"><option value="">All users</option>{% for user in audit_users %}<option value="{{ user.pk }}" {% if filters.user == user.pk|stringformat:'s' %}selected{% endif %}>{{ user.get_full_name|default:user.username }}</option>{% endfor %}</select>
+    </label>
+    <label class="ops-filter">Module
+      <select class="ops-select" name="module"><option value="">All modules</option>{% for value in module_choices %}<option value="{{ value }}" {% if filters.module == value %}selected{% endif %}>{{ value|title }}</option>{% endfor %}</select>
+    </label>
+    <label class="ops-filter">Action
+      <select class="ops-select" name="action"><option value="">All actions</option>{% for value, label in action_choices %}<option value="{{ value }}" {% if filters.action == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+    </label>
+    <label class="ops-filter">Record ID<input class="ops-input" name="record_id" value="{{ filters.record_id }}"></label>
+    <div class="ops-actions"><label class="ops-filter">From<input class="ops-input" type="date" name="date_from" value="{{ filters.date_from|date:'Y-m-d' }}"></label><label class="ops-filter">To<input class="ops-input" type="date" name="date_to" value="{{ filters.date_to|date:'Y-m-d' }}"></label></div>
+    <button class="ops-btn ops-btn--gold" type="submit">Apply Filters</button>
+    <a class="ops-btn" href="{% url 'crm_audit_log' %}">Clear</a>
+    <button class="ops-btn" type="submit" name="export" value="csv">Export CSV</button>
+    <button class="ops-btn" type="submit" name="export" value="excel">Export Excel</button>
+  </form>
+
+  <section class="ops-card ops-audit-list">
+    {% for row in audit_rows %}
+      <article class="ops-audit-row">
+        <div><small class="ops-row-label">When / User</small><strong>{{ row.created_at|date:"M d, Y g:i A" }}</strong><br>{% if row.actor %}{{ row.actor.get_full_name|default:row.actor.username }}{% else %}System{% endif %}</div>
+        <div><small class="ops-row-label">Record</small>{% if row.target_url %}<a href="{{ row.target_url }}">{{ row.record_label|default:row.record_id }}</a>{% else %}{{ row.record_label|default:row.record_id }}{% endif %}<br>{{ row.module|title }}</div>
+        <div><small class="ops-row-label">Action</small><span class="ops-badge">{{ row.get_action_type_display }}</span></div>
+        <div><small class="ops-row-label">Field</small><strong>{{ row.field_name|title|default:"—" }}</strong></div>
+        <div class="ops-difference">
+          {% if row.field_name %}
+            <span class="ops-difference-old"><small>Old</small>{{ row.previous_value|default:"—" }}</span>
+            <span class="ops-difference-new"><small>New</small>{{ row.new_value|default:"—" }}</span>
+          {% else %}
+            <span class="ops-difference-new"><small>Result</small>{{ row.get_action_type_display }}</span>
+          {% endif %}
+        </div>
+      </article>
+    {% empty %}
+      <div class="ops-empty">No audit records match these filters.</div>
+    {% endfor %}
+  </section>
+</main>
+{% endblock %}

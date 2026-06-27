@@ -1,0 +1,47 @@
+{% extends "crm/base.html" %}
+{% load static %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'crm/operations_control.css' %}">
+<main class="ops-shell">
+  <header class="ops-head">
+    <div>
+      <p class="ops-eyebrow">Operations Control Center</p>
+      <h1 class="ops-title">Global Search</h1>
+      <p class="ops-subtitle">Search only the CRM modules and records your account is permitted to view.</p>
+    </div>
+  </header>
+  <form method="get" class="ops-card ops-search-form js-global-search" role="search" data-suggestions-url="{% url 'global_search_suggestions' %}">
+    <label class="ops-filter" for="operations-search-page">Search CRM</label>
+    <div class="ops-search-input-wrap">
+      <div class="ops-actions">
+        <input id="operations-search-page" class="ops-input js-global-search-input" type="search" name="q" minlength="2" value="{{ query }}" placeholder="Name, email, phone, record number, or brand" autocomplete="off" aria-controls="operations-search-suggestions" aria-expanded="false" required>
+        <button class="ops-btn ops-btn--gold" type="submit">Search</button>
+      </div>
+      <div id="operations-search-suggestions" class="crm-search-suggestions js-global-search-suggestions" role="listbox" hidden></div>
+    </div>
+  </form>
+
+  {% if query and query|length < 2 %}
+    <div class="ops-card ops-empty">Enter at least two characters.</div>
+  {% elif query %}
+    <p class="ops-search-summary">{{ result_count }} result{{ result_count|pluralize }} for “{{ query }}”</p>
+    {% for label, rows in result_groups %}
+      <section class="ops-card" aria-labelledby="group-{{ forloop.counter }}">
+        <h2 id="group-{{ forloop.counter }}">{{ label }}</h2>
+        {% for row in rows %}
+          <a class="ops-row" href="{{ row.url }}">
+            <span><small class="ops-row-label">Record</small><strong>{{ row.number|default:"—" }}</strong></span>
+            <span><small class="ops-row-label">Client / Brand</small>{{ row.name|default:"—" }}</span>
+            <span><small class="ops-row-label">Status</small>{{ row.status|default:"—" }}</span>
+            <span><small class="ops-row-label">Date</small>{{ row.date|date:"M d, Y" }}</span>
+            <span><small class="ops-row-label">Amount</small>{{ row.amount|default:"—" }}</span>
+          </a>
+        {% endfor %}
+      </section>
+    {% empty %}
+      <div class="ops-card ops-empty">No permitted CRM records matched this search.</div>
+    {% endfor %}
+  {% endif %}
+</main>
+{% endblock %}

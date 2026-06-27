@@ -74,8 +74,12 @@ def _safe_access(user):
         return None
     if UserAccess is None:
         return None
+    if hasattr(user, "_crm_user_access_cached"):
+        return user._crm_user_access_cached
     try:
-        return UserAccess.objects.filter(user=user).first()
+        access = UserAccess.objects.filter(user=user).first()
+        user._crm_user_access_cached = access
+        return access
     except Exception:
         return None
 
@@ -107,6 +111,21 @@ def can_access(user, flag_name):
     if getattr(user, "is_superuser", False):
         return True
     access = _safe_access(user)
+    try:
+        from crm.permissions import role_flag_decision
+
+        role_decision = role_flag_decision(user, (flag_name or "").strip())
+        if role_decision is not None:
+            if (
+                (flag_name or "").strip() == "can_accounting_ca"
+                and access
+                and getattr(access, "is_bd", False)
+                and not user.groups.filter(name="CEO").exists()
+            ):
+                return False
+            return role_decision
+    except Exception:
+        pass
     if not access:
         return False
     flag_name = (flag_name or "").strip()

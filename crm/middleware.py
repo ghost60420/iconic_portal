@@ -1,6 +1,8 @@
 import json
 import traceback
 
+from crm.audit_context import reset_current_actor, set_current_actor
+
 
 def _safe_get_user(request):
     try:
@@ -48,3 +50,17 @@ class ExceptionLoggingMiddleware:
             except Exception:
                 pass
             raise
+
+
+class AuditActorMiddleware:
+    """Expose the authenticated request actor to non-blocking audit signals."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        token = set_current_actor(getattr(request, "user", None))
+        try:
+            return self.get_response(request)
+        finally:
+            reset_current_actor(token)

@@ -14,6 +14,7 @@ from . import views_access as access
 from . import views_costing as costing
 from . import views_iconic_ai_brain as iconic_ai_brain
 from . import views_order_lifecycle as lifecycle
+from . import views_operations as operations
 
 try:
     from . import views_whatsapp as wa
@@ -66,6 +67,16 @@ urlpatterns = [
     path("lead-brain/", include("leadbrain.urls")),
 
     path("main-dashboard/", login_required(views.main_dashboard), name="main_dashboard"),
+    path("notifications/", operations.notification_list, name="notification_list"),
+    path("notifications/<int:pk>/read/", operations.notification_mark_read, name="notification_mark_read"),
+    path("notifications/read-all/", operations.notification_mark_all_read, name="notification_mark_all_read"),
+    path("notifications/read-selected/", operations.notification_mark_selected_read, name="notification_mark_selected_read"),
+    path("notifications/delete-read/", operations.notification_delete_read, name="notification_delete_read"),
+    path("search/", operations.global_search, name="global_search"),
+    path("search/suggestions/", operations.global_search_suggestions, name="global_search_suggestions"),
+    path("operations/queue/<slug:queue_key>/", operations.operations_queue, name="operations_queue"),
+    path("audit-log/", operations.audit_log, name="crm_audit_log"),
+    path("role-management/", operations.role_management, name="role_management"),
     path("ceo-dashboard/", ceo_perm(views.ceo_dashboard), name="ceo_dashboard"),
     path("ceo-dashboard/operations/", ceo_perm(views.ceo_operations_dashboard), name="ceo_operations_dashboard"),
     path("ceo/quotation-approvals/", ceo_perm(costing.ceo_quotation_approval_queue), name="ceo_quotation_approval_queue"),

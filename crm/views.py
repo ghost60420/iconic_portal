@@ -83,6 +83,9 @@ from .services.product_reference_images import (
 )
 from .services.workflow_visibility import build_workflow_visibility_context
 from .services.automation_engine import automation_dashboard_context
+from .services.operations_dashboard import operations_dashboard_context
+from .services.operations_notifications import sync_operations_notifications
+from .services.operations_permissions import scope_sales_leads, scope_sales_opportunities
 from .services.calendar_notifications import (
     calendar_event_signature,
     queue_calendar_invite_email,
@@ -170,6 +173,7 @@ from .models import (
     ProductionStage,
     Shipment,
     AccountingEntry,
+    CRMAuditLog,
     SystemActivityLog,
 )
 try:
@@ -1233,7 +1237,7 @@ def leads_list(request):
     if per_page not in (20, 50, 100):
         per_page = 50
 
-    qs = Lead.objects.select_related("assigned_to")
+    qs = scope_sales_leads(Lead.objects.select_related("assigned_to"), request.user)
 
     if view == "inbound":
         qs = qs.filter(lead_type="inbound")
@@ -8334,8 +8338,12 @@ def production_list(request):
             "customer",
             "product",
             "opportunity",
+            "opportunity__lead",
+            "opportunity__lead__assigned_to",
             "lead",
+            "lead__assigned_to",
             "assigned_production_manager",
+            "created_by",
         )
         .annotate(
             list_has_inventory_allocations=Exists(
@@ -9323,6 +9331,11 @@ def production_detail(request, pk):
         "primary_reference_image": primary_reference_image,
         "product_snapshot": product_snapshot_for_production(order, primary_reference_image),
         "comments": comments,
+        "record_audit_history": list(
+            CRMAuditLog.objects.filter(module="production", record_id=str(order.pk))
+            .select_related("actor")
+            .order_by("-created_at", "-id")[:12]
+        ),
         **inventory_context,
         "cost_sheet_active": cost_sheet_active,
         "actual_entries": actual_entries,
@@ -13907,6 +13920,8 @@ def main_dashboard(request):
         },
     ]
     automation_context = automation_dashboard_context(request.user)
+    sync_operations_notifications(today=today)
+    operations_context = operations_dashboard_context(request.user, today=today)
     if automation_context.get("automation_notification_cards"):
         dashboard_notification_items = automation_context["automation_notification_cards"]
 
@@ -14320,6 +14335,7 @@ def main_dashboard(request):
         "can_view_order_lifecycle_profit": can_view_order_lifecycle_profit,
         "lifecycle_summary": lifecycle_summary,
         **automation_context,
+        **operations_context,
     }
 
     return render(request, "crm/main_dashboard.html", ctx)
@@ -14551,6 +14567,7 @@ def opportunities_list(request):
         .exclude(stage="Production")
         .exclude(productionorder__isnull=False)
     )
+    qs = scope_sales_opportunities(qs, request.user)
 
     if archive_filter == "archived":
         qs = qs.filter(is_archived=True)

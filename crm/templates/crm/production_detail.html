@@ -807,6 +807,22 @@
         {% endif %}
       </article>
 
+      <article class="production-panel">
+        <div class="production-panel-head">
+          <div>
+            <h2>Recent Audit History</h2>
+            <p>Latest saved changes to this production order.</p>
+          </div>
+        </div>
+        <div class="production-linked-list">
+          {% for item in record_audit_history %}
+            <span><strong>{{ item.get_action_type_display }}</strong>{% if item.field_name %} · {{ item.field_name|title }}{% endif %}<br><small>{% if item.actor %}{{ item.actor.get_full_name|default:item.actor.username }}{% else %}System{% endif %} · {{ item.created_at|date:"M j, Y g:i A" }}</small></span>
+          {% empty %}
+            <span>No audit changes recorded yet.</span>
+          {% endfor %}
+        </div>
+      </article>
+
       {% if can_view_lifecycle_profit %}
       <article class="production-panel">
         <div class="production-panel-head">

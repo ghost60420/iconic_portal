@@ -72,6 +72,11 @@ def _can_approve(user):
         return False
     if user.is_superuser:
         return True
+    group_names = set(user.groups.filter(name__in=["CEO", "Sales"]).values_list("name", flat=True))
+    if "CEO" in group_names:
+        return True
+    if "Sales" in group_names:
+        return False
     access = getattr(user, "access", None)
     return bool(access and access.can_costing_approve)
 

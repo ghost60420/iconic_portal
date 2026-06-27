@@ -196,6 +196,55 @@ class SystemActivityLog(models.Model):
 
     def __str__(self):
         return f"{self.created_at} {self.level} {self.area} {self.action} {self.message}"
+
+
+class CRMAuditLog(models.Model):
+    ACTION_CREATED = "created"
+    ACTION_UPDATED = "updated"
+    ACTION_DELETED = "deleted"
+    ACTION_APPROVED = "approved"
+    ACTION_REJECTED = "rejected"
+    ACTION_CONVERTED = "converted"
+    ACTION_PAYMENT_RECORDED = "payment_recorded"
+    ACTION_STATUS_CHANGED = "status_changed"
+    ACTION_CHOICES = [
+        (ACTION_CREATED, "Created"),
+        (ACTION_UPDATED, "Updated"),
+        (ACTION_DELETED, "Deleted"),
+        (ACTION_APPROVED, "Approved"),
+        (ACTION_REJECTED, "Rejected"),
+        (ACTION_CONVERTED, "Converted"),
+        (ACTION_PAYMENT_RECORDED, "Payment Recorded"),
+        (ACTION_STATUS_CHANGED, "Status Changed"),
+    ]
+
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="crm_audit_logs",
+    )
+    module = models.CharField(max_length=40, db_index=True)
+    record_id = models.CharField(max_length=64, db_index=True)
+    record_label = models.CharField(max_length=220, blank=True, default="")
+    action_type = models.CharField(max_length=30, choices=ACTION_CHOICES, db_index=True)
+    field_name = models.CharField(max_length=100, blank=True, default="")
+    previous_value = models.TextField(blank=True, default="")
+    new_value = models.TextField(blank=True, default="")
+    target_url = models.CharField(max_length=300, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ("-created_at", "-id")
+        indexes = [
+            models.Index(fields=["module", "record_id", "-created_at"]),
+            models.Index(fields=["actor", "-created_at"]),
+            models.Index(fields=["action_type", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.get_action_type_display()} {self.module} {self.record_id}"
 # crm/models.py
 import os
 import string
@@ -4231,10 +4280,18 @@ class AutomationRule(models.Model):
 
 
 class AutomationNotification(models.Model):
+    TYPE_CHOICES = [
+        ("ceo_approval", "CEO Approval"),
+        ("production_due", "Production Due"),
+        ("shipping", "Shipping"),
+        ("invoice_overdue", "Invoice Overdue"),
+        ("general", "General"),
+    ]
     PRIORITY_CHOICES = [
         ("low", "Low"),
         ("normal", "Normal"),
         ("high", "High"),
+        ("urgent", "Urgent"),
         ("critical", "Critical"),
     ]
 
@@ -4247,6 +4304,7 @@ class AutomationNotification(models.Model):
     )
     source_key = models.CharField(max_length=220, unique=True, db_index=True)
     rule_type = models.CharField(max_length=30, choices=AutomationRule.RULE_TYPE_CHOICES, default="general", db_index=True)
+    notification_type = models.CharField(max_length=30, choices=TYPE_CHOICES, default="general", db_index=True)
     title = models.CharField(max_length=220)
     message = models.TextField(blank=True, default="")
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default="normal", db_index=True)
@@ -4260,6 +4318,15 @@ class AutomationNotification(models.Model):
     record = GenericForeignKey("record_content_type", "record_object_id")
     record_label = models.CharField(max_length=220, blank=True, default="")
     target_url = models.CharField(max_length=300, blank=True, default="")
+    assigned_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="crm_notifications",
+    )
+    assigned_role = models.CharField(max_length=40, blank=True, default="", db_index=True)
+    due_date = models.DateField(null=True, blank=True, db_index=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -4270,6 +4337,8 @@ class AutomationNotification(models.Model):
             models.Index(fields=["rule_type", "is_resolved", "is_read"]),
             models.Index(fields=["priority", "is_resolved"]),
             models.Index(fields=["record_content_type", "record_object_id"]),
+            models.Index(fields=["assigned_user", "is_resolved", "is_read"]),
+            models.Index(fields=["assigned_role", "is_resolved", "is_read"]),
         ]
 
     def __str__(self):
