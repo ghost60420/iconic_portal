@@ -261,7 +261,7 @@ def _hydrate_links(
         quick_costing_count = QuickCosting.objects.filter(opportunity=opportunity).count()
         if _is_quotation(quick_costing):
             quotation = _latest_by_updated_at(quotation, quick_costing)
-    if quick_costing and not invoice:
+    if quick_costing and not invoice and not getattr(quick_costing, "_workflow_invoice_resolved", False):
         invoice = _first_or_none(
             quick_costing.invoices.select_related("order", "customer", "costing_header", "quick_costing")
             .order_by("-created_at", "-id")

@@ -344,6 +344,58 @@ def _quick_approval_status_label(quick_costing):
     return "Pending"
 
 
+def _quick_profit_health(calc):
+    margin = calc.get("net_profit_margin_percent") or Decimal("0")
+    if margin > Decimal("30"):
+        return {"label": "Excellent", "tone": "excellent"}
+    if margin >= Decimal("20"):
+        return {"label": "Healthy", "tone": "healthy"}
+    if margin >= Decimal("10"):
+        return {"label": "Low Margin", "tone": "low"}
+    return {"label": "Loss", "tone": "loss"}
+
+
+def _quick_workflow_badges(quick_costing, invoice=None):
+    status = quick_costing.status
+    if invoice or status in {
+        QuickCosting.STATUS_INVOICED,
+        QuickCosting.STATUS_PRODUCTION,
+        QuickCosting.STATUS_SHIPPED,
+        QuickCosting.STATUS_CLOSED,
+    }:
+        current_key = "invoiced"
+    elif status == QuickCosting.STATUS_QUOTED:
+        current_key = "quoted"
+    elif status == QuickCosting.STATUS_REJECTED:
+        current_key = "rejected"
+    elif status == QuickCosting.STATUS_APPROVED:
+        current_key = "ceo-approved"
+    else:
+        current_key = "ceo-pending"
+
+    stages = [
+        ("draft", "Draft"),
+        ("submitted", "Submitted"),
+        ("ceo-pending", "CEO Pending"),
+        ("ceo-approved", "CEO Approved"),
+        ("rejected", "Rejected"),
+        ("quoted", "Quoted"),
+        ("invoiced", "Invoiced"),
+    ]
+    normal_order = ["draft", "submitted", "ceo-pending", "ceo-approved", "quoted", "invoiced"]
+    current_index = normal_order.index(current_key) if current_key in normal_order else -1
+    badges = []
+    for key, label in stages:
+        if key == current_key:
+            state = "current"
+        elif key in normal_order and current_index >= 0 and normal_order.index(key) < current_index:
+            state = "complete"
+        else:
+            state = "inactive"
+        badges.append({"key": key, "label": label, "state": state})
+    return badges
+
+
 def _quotation_context(costing, user=None):
     amounts = get_costing_quote_amounts(costing)
     quote_is_approved = costing.quotation_status == CostingHeader.QUOTATION_STATUS_APPROVED
@@ -980,6 +1032,7 @@ def quick_costing_detail(request, pk):
     )
     calc = _quick_costing_calc(quick_costing)
     invoice = quick_costing.invoices.select_related("customer", "order").order_by("-created_at", "-id").first()
+    quick_costing._workflow_invoice_resolved = True
     margin_tone = "positive" if calc.get("net_profit_total", Decimal("0")) >= Decimal("0") else "negative"
     workflow_visibility = build_workflow_visibility_context(
         "costing",
@@ -993,6 +1046,8 @@ def quick_costing_detail(request, pk):
         "calc": calc,
         "invoice": invoice,
         "margin_tone": margin_tone,
+        "profit_health": _quick_profit_health(calc),
+        "quick_workflow_badges": _quick_workflow_badges(quick_costing, invoice=invoice),
         "can_approve": _can_approve(request.user),
         "can_convert_to_invoice": _can_convert_to_invoice(request.user) and _quick_approval_status_label(quick_costing) == "Approved",
         "approval_status_label": _quick_approval_status_label(quick_costing),
@@ -1132,6 +1187,7 @@ def quick_costing_client_quotation(request, pk):
         return redirect("quick_costing_detail", pk=pk)
     calc = _quick_costing_calc(quick_costing)
     invoice = quick_costing.invoices.select_related("customer", "order").order_by("-created_at", "-id").first()
+    quick_costing._workflow_invoice_resolved = True
     quotation_total = (calc.get("total_sales_order") or Decimal("0")) + (calc.get("shipping_cost_total") or Decimal("0"))
     quotation_total_pair = _format_quick_money_pair(
         quotation_total,

@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from crm.forms_costing import QuickCostingForm
 from crm.models import CostingHeader, Invoice, Lead, Opportunity, QuickCosting
+from crm.views_costing import _quick_profit_health, _quick_workflow_badges
 
 
 class QuickCostingTests(TestCase):
@@ -326,17 +327,28 @@ class QuickCostingTests(TestCase):
         self.assertContains(response, "Percentage of selling price.")
         self.assertContains(response, "Total shipping cost for this order.")
         self.assertContains(response, "Select BDT, CAD, or USD for this costing.")
-        self.assertContains(response, "Live Cost Summary")
-        self.assertContains(response, "Costs")
+        self.assertContains(response, "1. General Information")
+        self.assertContains(response, "2. Material Cost")
+        self.assertContains(response, "3. Production Cost")
         self.assertContains(response, "Sales")
-        self.assertContains(response, "Profit")
+        self.assertContains(response, "5. Profit Summary")
+        self.assertContains(response, "6. Live Order Summary")
+        self.assertContains(response, 'class="card quick-breakdown-card"', count=6)
+        self.assertContains(response, "Calculated Fabric Cost Per Piece")
+        self.assertContains(response, "Wash Cost Per Piece")
+        self.assertContains(response, "Not configured in Quick Costing")
         self.assertContains(response, "Shipping Allocation Per Piece")
-        self.assertContains(response, "Profit Before Commission")
-        self.assertContains(response, "Profit After Commission")
+        self.assertContains(response, "Gross Profit Per Piece")
+        self.assertContains(response, "Net Profit Per Piece")
         self.assertContains(response, "Net Margin %")
         self.assertContains(response, "Total Revenue")
-        self.assertContains(response, "Total Order Cost")
-        self.assertContains(response, "Total Order Profit")
+        self.assertContains(response, "Order Cost")
+        self.assertContains(response, "Order Profit")
+        self.assertContains(response, "Profit Health")
+        self.assertContains(response, "Excellent")
+        self.assertContains(response, "Healthy")
+        self.assertContains(response, "Low Margin")
+        self.assertContains(response, "Loss")
         self.assertContains(
             response,
             "Warning: Selling price is below total cost. This costing may lose money.",
@@ -346,6 +358,40 @@ class QuickCostingTests(TestCase):
             "Changing currency may affect display and reporting. Continue?",
         )
         self.assertGreaterEqual(response.content.decode("utf-8").count("data-quick-currency-unit"), 8)
+
+    def test_profit_health_boundaries(self):
+        cases = [
+            (Decimal("30.01"), {"label": "Excellent", "tone": "excellent"}),
+            (Decimal("30.00"), {"label": "Healthy", "tone": "healthy"}),
+            (Decimal("20.00"), {"label": "Healthy", "tone": "healthy"}),
+            (Decimal("19.99"), {"label": "Low Margin", "tone": "low"}),
+            (Decimal("10.00"), {"label": "Low Margin", "tone": "low"}),
+            (Decimal("9.99"), {"label": "Loss", "tone": "loss"}),
+            (Decimal("-1.00"), {"label": "Loss", "tone": "loss"}),
+        ]
+
+        for margin, expected in cases:
+            with self.subTest(margin=margin):
+                self.assertEqual(_quick_profit_health({"net_profit_margin_percent": margin}), expected)
+
+    def test_management_badges_follow_existing_workflow_status(self):
+        cases = {
+            QuickCosting.STATUS_DRAFT: "ceo-pending",
+            QuickCosting.STATUS_APPROVED: "ceo-approved",
+            QuickCosting.STATUS_REJECTED: "rejected",
+            QuickCosting.STATUS_QUOTED: "quoted",
+            QuickCosting.STATUS_INVOICED: "invoiced",
+        }
+
+        for status, expected_current in cases.items():
+            with self.subTest(status=status):
+                badges = _quick_workflow_badges(QuickCosting(status=status))
+                current = [badge["key"] for badge in badges if badge["state"] == "current"]
+                self.assertEqual(current, [expected_current])
+                self.assertEqual(
+                    [badge["label"] for badge in badges],
+                    ["Draft", "Submitted", "CEO Pending", "CEO Approved", "Rejected", "Quoted", "Invoiced"],
+                )
 
     def test_calculation_summary_handles_missing_exchange_and_zero_quantity(self):
         quick = QuickCosting(
@@ -468,6 +514,24 @@ class QuickCostingTests(TestCase):
         self.assertContains(detail_response, reverse("quick_costing_export_pdf", args=[quick.pk]))
         self.assertContains(detail_response, reverse("quick_costing_export_excel", args=[quick.pk]))
         self.assertContains(detail_response, reverse("quick_costing_edit", args=[quick.pk]))
+        self.assertContains(detail_response, "Print Costing")
+        self.assertContains(detail_response, "Management Status")
+        self.assertContains(detail_response, "Draft")
+        self.assertContains(detail_response, "Submitted")
+        self.assertContains(detail_response, "CEO Pending")
+        self.assertContains(detail_response, "CEO Approved")
+        self.assertContains(detail_response, "Rejected")
+        self.assertContains(detail_response, "Quoted")
+        self.assertContains(detail_response, "Invoiced")
+        self.assertContains(detail_response, "workflow-ceo-pending state-current")
+        self.assertContains(detail_response, "Version Information")
+        self.assertContains(detail_response, "Last Updated By")
+        self.assertContains(detail_response, "Not tracked")
+        self.assertContains(
+            detail_response,
+            '<span class="quick-health-badge health-excellent">Excellent</span>',
+            html=True,
+        )
         self.assertContains(detail_response, "Draft")
         self.assertContains(detail_response, "Approve costing before creating quotation.")
         self.assertContains(detail_response, "Shipping Cost")
@@ -533,6 +597,16 @@ class QuickCostingTests(TestCase):
         self.assertContains(list_response, "Bulk Production")
         self.assertContains(list_response, "BDT")
         self.assertContains(list_response, "৳1,100.00 BDT")
+
+    def test_quick_costing_detail_uses_four_queries_without_invoice(self):
+        admin = self._admin_user("quick-costing-query-admin")
+        quick = self._quick_costing(created_by=admin)
+        self.client.force_login(admin)
+
+        with self.assertNumQueries(4):
+            response = self.client.get(reverse("quick_costing_detail", args=[quick.pk]))
+
+        self.assertEqual(response.status_code, 200)
 
     def test_quick_costing_can_be_created_from_opportunity(self):
         admin = self._admin_user("quick-costing-opportunity-admin")

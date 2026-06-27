@@ -84,6 +84,53 @@
     gap: 14px;
   }
 
+  .quick-breakdown-list {
+    display: grid;
+    gap: 12px;
+  }
+
+  details.quick-detail-card {
+    padding: 0;
+    overflow: hidden;
+  }
+
+  details.quick-detail-card > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 50px;
+    padding: 0 16px;
+    color: #fde68a;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 900;
+    list-style: none;
+  }
+
+  details.quick-detail-card > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  details.quick-detail-card > summary::after {
+    content: "+";
+    color: #94a3b8;
+    font-size: 18px;
+  }
+
+  details.quick-detail-card[open] > summary::after {
+    content: "−";
+  }
+
+  .quick-detail-body {
+    padding: 0 16px 16px;
+    border-top: 1px solid rgba(148, 163, 184, 0.14);
+  }
+
+  .quick-detail-body .quick-meta-grid,
+  .quick-detail-body .quick-summary-grid {
+    padding-top: 14px;
+  }
+
   .quick-section-title {
     margin: 0 0 12px 0;
     color: #fde68a;
@@ -136,6 +183,126 @@
 
   .quick-profit-negative {
     color: #fca5a5 !important;
+  }
+
+  .quick-health-badge,
+  .quick-workflow-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    padding: 0 10px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 900;
+  }
+
+  .quick-health-badge.health-excellent {
+    border-color: rgba(34, 197, 94, 0.45);
+    background: rgba(34, 197, 94, 0.14);
+    color: #86efac;
+  }
+
+  .quick-health-badge.health-healthy {
+    border-color: rgba(59, 130, 246, 0.45);
+    background: rgba(59, 130, 246, 0.14);
+    color: #93c5fd;
+  }
+
+  .quick-health-badge.health-low {
+    border-color: rgba(234, 179, 8, 0.45);
+    background: rgba(234, 179, 8, 0.14);
+    color: #fde68a;
+  }
+
+  .quick-health-badge.health-loss {
+    border-color: rgba(239, 68, 68, 0.45);
+    background: rgba(239, 68, 68, 0.14);
+    color: #fca5a5;
+  }
+
+  .quick-workflow-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .quick-workflow-badge.state-inactive {
+    border-color: rgba(100, 116, 139, 0.24);
+    background: rgba(51, 65, 85, 0.18);
+    color: #64748b;
+  }
+
+  .quick-workflow-badge.state-complete {
+    border-color: rgba(34, 197, 94, 0.34);
+    background: rgba(34, 197, 94, 0.1);
+    color: #bbf7d0;
+  }
+
+  .quick-workflow-badge.state-current.workflow-draft,
+  .quick-workflow-badge.state-current.workflow-submitted,
+  .quick-workflow-badge.state-current.workflow-quoted {
+    border-color: rgba(59, 130, 246, 0.48);
+    background: rgba(59, 130, 246, 0.16);
+    color: #bfdbfe;
+  }
+
+  .quick-workflow-badge.state-current.workflow-ceo-pending {
+    border-color: rgba(234, 179, 8, 0.48);
+    background: rgba(234, 179, 8, 0.16);
+    color: #fde68a;
+  }
+
+  .quick-workflow-badge.state-current.workflow-ceo-approved {
+    border-color: rgba(34, 197, 94, 0.48);
+    background: rgba(34, 197, 94, 0.16);
+    color: #bbf7d0;
+  }
+
+  .quick-workflow-badge.state-current.workflow-rejected {
+    border-color: rgba(239, 68, 68, 0.48);
+    background: rgba(239, 68, 68, 0.16);
+    color: #fecaca;
+  }
+
+  .quick-workflow-badge.state-current.workflow-invoiced {
+    border-color: rgba(168, 85, 247, 0.48);
+    background: rgba(168, 85, 247, 0.16);
+    color: #e9d5ff;
+  }
+
+  .quick-version-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    padding-top: 14px;
+  }
+
+  .quick-version-item {
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    border-radius: 8px;
+  }
+
+  .quick-version-item span,
+  .quick-version-item strong {
+    display: block;
+  }
+
+  .quick-version-item span {
+    margin-bottom: 4px;
+    color: #94a3b8;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  .quick-version-item strong {
+    overflow-wrap: anywhere;
+    color: #f8fafc;
+    font-size: 12px;
   }
 
   .quick-type-badge {
@@ -211,6 +378,60 @@
     .quick-actions {
       justify-content: flex-start;
     }
+
+    .quick-version-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 560px) {
+    .quick-actions,
+    .quick-actions .quick-btn,
+    .quick-actions .quick-inline-form,
+    .quick-actions .quick-disabled-note {
+      width: 100%;
+    }
+
+    .quick-version-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .quick-meta-row,
+    .quick-summary-row {
+      align-items: flex-start;
+    }
+
+    .quick-meta-row strong,
+    .quick-summary-row strong,
+    .quick-money-pair {
+      min-width: 0;
+      max-width: 56%;
+      overflow-wrap: anywhere;
+    }
+  }
+
+  @media print {
+    .quick-actions,
+    .quick-disabled-note,
+    .quick-inline-form,
+    .workflow-quick-nav,
+    .workflow-activity-timeline {
+      display: none !important;
+    }
+
+    .quick-detail-page {
+      max-width: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .quick-detail-hero,
+    .quick-detail-card {
+      break-inside: avoid;
+      border-color: #cbd5e1;
+      background: #fff;
+      color: #111827;
+    }
   }
 </style>
 
@@ -225,6 +446,7 @@
       {% if can_edit_quick_costing %}
         <a class="quick-btn" href="{% url 'quick_costing_edit' quick_costing.pk %}">Edit</a>
       {% endif %}
+      <button class="quick-btn" type="button" onclick="window.print()">Print Costing</button>
       <a class="quick-btn quick-btn-primary" href="{% url 'quick_costing_export_pdf' quick_costing.pk %}">Download PDF</a>
       <a class="quick-btn" href="{% url 'quick_costing_export_excel' quick_costing.pk %}">Export Excel</a>
       {% if quick_costing.quotation_number and quick_costing.quoted_at %}
@@ -254,142 +476,125 @@
     </div>
   </section>
 
-  <section class="quick-detail-grid">
-    <article class="quick-detail-card">
-      <h2 class="quick-section-title">Costing Details</h2>
-      <div class="quick-meta-grid">
-        <div class="quick-meta-row"><span>Costing Type</span><strong><span class="quick-type-badge">Quick</span></strong></div>
-        <div class="quick-meta-row"><span>Costing Purpose</span><strong><span class="quick-type-badge purpose-{{ quick_costing.costing_purpose }}">{{ quick_costing.purpose_label }}</span></strong></div>
-        <div class="quick-meta-row"><span>Status</span><strong><span class="quick-type-badge status-{{ quick_costing.status }}">{{ quick_costing.get_status_display }}</span></strong></div>
-        <div class="quick-meta-row"><span>Approval Status</span><strong><span class="quick-type-badge status-{{ approval_status_label|lower }}">{{ approval_status_label }}</span></strong></div>
-        {% if quick_costing.approved_at %}
-          <div class="quick-meta-row"><span>Approved</span><strong>{{ quick_costing.approved_at|date:"M j, Y H:i" }}{% if quick_costing.approved_by %} · {{ quick_costing.approved_by.username }}{% endif %}</strong></div>
-        {% endif %}
-        {% if quick_costing.rejected_at %}
-          <div class="quick-meta-row"><span>Rejected</span><strong>{{ quick_costing.rejected_at|date:"M j, Y H:i" }}{% if quick_costing.rejected_by %} · {{ quick_costing.rejected_by.username }}{% endif %}</strong></div>
-        {% endif %}
-        {% if quick_costing.quotation_number %}
-          <div class="quick-meta-row"><span>Quotation</span><strong><a href="{% url 'quick_costing_client_quotation' quick_costing.pk %}">{{ quick_costing.quotation_number }}</a></strong></div>
-        {% endif %}
-        {% if invoice %}
-          <div class="quick-meta-row"><span>Invoice</span><strong><a href="{% url 'invoice_view' invoice.pk %}">{{ invoice.invoice_number }}</a></strong></div>
-        {% endif %}
-        {% if quick_costing.opportunity %}
-          <div class="quick-meta-row">
-            <span>Opportunity</span>
-            <strong><a href="{% url 'opportunity_detail' quick_costing.opportunity.pk %}">{{ quick_costing.opportunity.opportunity_id }}</a></strong>
-          </div>
-        {% endif %}
-        {% if quick_costing.account_brand %}
-          <div class="quick-meta-row"><span>Account / Brand</span><strong>{{ quick_costing.account_brand }}</strong></div>
-        {% endif %}
-        {% if quick_costing.contact_name %}
-          <div class="quick-meta-row"><span>Contact</span><strong>{{ quick_costing.contact_name }}</strong></div>
-        {% endif %}
-        <div class="quick-meta-row"><span>Buyer Name</span><strong>{{ quick_costing.buyer_name }}</strong></div>
-        <div class="quick-meta-row"><span>Project Name</span><strong>{{ quick_costing.project_name }}</strong></div>
-        <div class="quick-meta-row"><span>Product Type</span><strong>{{ quick_costing.get_product_type_display }}</strong></div>
-        <div class="quick-meta-row"><span>Quantity</span><strong>{{ quick_costing.quantity }} pieces</strong></div>
-        <div class="quick-meta-row"><span>Currency</span><strong>{{ calc.display.currency }}</strong></div>
-        <div class="quick-meta-row"><span>Exchange Rate</span><strong>{{ calc.display.exchange_rate }}</strong></div>
-        {% if calc.uses_detailed_costing %}
-          <div class="quick-meta-row"><span>Fabric Cost Per KG</span><strong>{{ calc.display.fabric_cost_per_kg }} / kg</strong></div>
-          <div class="quick-meta-row"><span>Fabric Consumption</span><strong>{{ calc.display.fabric_consumption_kg_per_piece }}</strong></div>
-          <div class="quick-meta-row"><span>Fabric Cost Per Piece</span><strong>{{ calc.display.fabric_cost_per_piece }}</strong></div>
-          <div class="quick-meta-row"><span>Making Cost Per Piece</span><strong>{{ calc.display.making_cost_per_piece }}</strong></div>
-          <div class="quick-meta-row"><span>Print or Embroidery Cost Per Piece</span><strong>{{ calc.display.print_embroidery_cost_per_piece }}</strong></div>
-          <div class="quick-meta-row"><span>Trims Cost Per Piece</span><strong>{{ calc.display.trims_cost_per_piece }}</strong></div>
-          <div class="quick-meta-row"><span>Packaging Cost Per Piece</span><strong>{{ calc.display.packaging_cost_per_piece }}</strong></div>
-        {% else %}
-          <div class="quick-meta-row"><span>Legacy Material Cost - Total Order</span><strong>{{ calc.display.material_cost_total_pair }}</strong></div>
-          <div class="quick-meta-row"><span>Legacy Production Cost - Total Order</span><strong>{{ calc.display.production_cost_total_pair }}</strong></div>
-        {% endif %}
-        <div class="quick-meta-row"><span>Other Expenses - Total Order</span><strong>{{ calc.display.other_expenses_total_pair }}</strong></div>
-        <div class="quick-meta-row"><span>Shipping Cost - Total Order</span><strong>{{ calc.display.shipping_cost_total_pair }}</strong></div>
-        <div class="quick-meta-row"><span>Created</span><strong>{{ quick_costing.created_at|date:"M j, Y" }}</strong></div>
-        <div class="quick-meta-row">
-          <span>Created By</span>
-          <strong>
-            {% if quick_costing.created_by %}
-              {{ quick_costing.created_by.get_full_name|default:quick_costing.created_by.username }}
-            {% else %}
-              Not set
-            {% endif %}
-          </strong>
-        </div>
-      </div>
-    </article>
+  <section class="quick-detail-card" style="margin-bottom:14px;" aria-label="Costing workflow status">
+    <h2 class="quick-section-title">Management Status</h2>
+    <div class="quick-workflow-badges">
+      {% for badge in quick_workflow_badges %}
+        <span class="quick-workflow-badge workflow-{{ badge.key }} state-{{ badge.state }}">{{ badge.label }}</span>
+      {% endfor %}
+    </div>
+  </section>
 
-    <article class="quick-detail-card">
-      <h2 class="quick-section-title">Summary</h2>
-      <div class="quick-summary-grid">
-        <div class="quick-summary-row"><span>Quantity</span><strong>{{ quick_costing.quantity }} pieces</strong></div>
-        <div class="quick-summary-row"><span>Currency</span><strong>{{ calc.display.currency }}</strong></div>
-        <div class="quick-summary-row"><span>Exchange Rate</span><strong>{{ calc.display.exchange_rate }}</strong></div>
-        {% if calc.uses_detailed_costing %}
-          <div class="quick-summary-row"><span>Fabric Cost Per KG</span><strong>{{ calc.display.fabric_cost_per_kg }} / kg</strong></div>
-          <div class="quick-summary-row"><span>Consumption Per Piece</span><strong>{{ calc.display.fabric_consumption_kg_per_piece }}</strong></div>
-          <div class="quick-summary-row"><span>Fabric Cost Per Piece</span><strong>{{ calc.display.fabric_cost_per_piece }}</strong></div>
-          <div class="quick-summary-row"><span>Making Cost Per Piece</span><strong>{{ calc.display.making_cost_per_piece }}</strong></div>
-          <div class="quick-summary-row"><span>Print or Embroidery Cost Per Piece</span><strong>{{ calc.display.print_embroidery_cost_per_piece }}</strong></div>
-          <div class="quick-summary-row"><span>Trims Cost Per Piece</span><strong>{{ calc.display.trims_cost_per_piece }}</strong></div>
-          <div class="quick-summary-row"><span>Packaging Cost Per Piece</span><strong>{{ calc.display.packaging_cost_per_piece }}</strong></div>
-        {% endif %}
-        <div class="quick-summary-row">
-          <span>Total Order Value</span>
-          <strong class="quick-money-pair">
-            <span>{{ calc.display.total_sales_order_lines.bdt }}</span>
-            {% if calc.display.total_sales_order_lines.cad %}<span>{{ calc.display.total_sales_order_lines.cad }}</span>{% endif %}
-          </strong>
+  <section class="quick-breakdown-list" aria-label="Cost breakdown">
+    <details class="quick-detail-card" open>
+      <summary>1. General Information</summary>
+      <div class="quick-detail-body">
+        <div class="quick-meta-grid">
+          <div class="quick-meta-row"><span>Customer / Buyer</span><strong>{{ quick_costing.buyer_name }}</strong></div>
+          <div class="quick-meta-row"><span>Account / Brand</span><strong>{{ quick_costing.account_brand|default:"Not linked" }}</strong></div>
+          {% if quick_costing.contact_name %}<div class="quick-meta-row"><span>Contact</span><strong>{{ quick_costing.contact_name }}</strong></div>{% endif %}
+          <div class="quick-meta-row"><span>Style / Project</span><strong>{{ quick_costing.project_name }}</strong></div>
+          <div class="quick-meta-row"><span>Product</span><strong>{{ quick_costing.get_product_type_display }}</strong></div>
+          <div class="quick-meta-row"><span>Costing Purpose</span><strong><span class="quick-type-badge purpose-{{ quick_costing.costing_purpose }}">{{ quick_costing.purpose_label }}</span></strong></div>
+          <div class="quick-meta-row"><span>Status</span><strong><span class="quick-type-badge status-{{ quick_costing.status }}">{{ quick_costing.get_status_display }}</span></strong></div>
+          <div class="quick-meta-row"><span>Approval Status</span><strong><span class="quick-type-badge status-{{ approval_status_label|lower }}">{{ approval_status_label }}</span></strong></div>
+          <div class="quick-meta-row"><span>Currency</span><strong>{{ calc.display.currency }}</strong></div>
+          <div class="quick-meta-row"><span>Exchange Rate</span><strong>{{ calc.display.exchange_rate }}</strong></div>
+          <div class="quick-meta-row"><span>Quantity</span><strong>{{ quick_costing.quantity }} pieces</strong></div>
+          {% if quick_costing.opportunity %}<div class="quick-meta-row"><span>Opportunity</span><strong><a href="{% url 'opportunity_detail' quick_costing.opportunity.pk %}">{{ quick_costing.opportunity.opportunity_id }}</a></strong></div>{% endif %}
+          {% if quick_costing.quotation_number %}<div class="quick-meta-row"><span>Quotation</span><strong><a href="{% url 'quick_costing_client_quotation' quick_costing.pk %}">{{ quick_costing.quotation_number }}</a></strong></div>{% endif %}
+          {% if invoice %}<div class="quick-meta-row"><span>Invoice</span><strong><a href="{% url 'invoice_view' invoice.pk %}">{{ invoice.invoice_number }}</a></strong></div>{% endif %}
         </div>
-        <div class="quick-summary-row">
-          <span>Total Cost</span>
-          <strong class="quick-money-pair">
-            <span>{{ calc.display.total_cost_order_lines.bdt }}</span>
-            {% if calc.display.total_cost_order_lines.cad %}<span>{{ calc.display.total_cost_order_lines.cad }}</span>{% endif %}
-          </strong>
-        </div>
-        <div class="quick-summary-row">
-          <span>Cost Per Piece</span>
-          <strong class="quick-money-pair">
-            <span>{{ calc.display.total_cost_per_piece_lines.bdt }}</span>
-            {% if calc.display.total_cost_per_piece_lines.cad %}<span>{{ calc.display.total_cost_per_piece_lines.cad }}</span>{% endif %}
-          </strong>
-        </div>
-        <div class="quick-summary-row">
-          <span>Selling Price Per Piece</span>
-          <strong class="quick-money-pair">
-            <span>{{ calc.display.fob_per_piece_lines.bdt }}</span>
-            {% if calc.display.fob_per_piece_lines.cad %}<span>{{ calc.display.fob_per_piece_lines.cad }}</span>{% endif %}
-          </strong>
-        </div>
-        <div class="quick-summary-row">
-          <span>Profit Before Commission</span>
-          <strong class="quick-money-pair quick-profit-{{ margin_tone }}">
-            <span>Per Piece: {{ calc.display.gross_profit_per_piece_pair }}</span>
-            <span>Total Order: {{ calc.display.gross_profit_total_pair }}</span>
-          </strong>
-        </div>
-        <div class="quick-summary-row">
-          <span>Commission ({{ calc.display.commission_percent_label }})</span>
-          <strong class="quick-money-pair">
-            <span>Per Piece: {{ calc.display.commission_per_piece_pair }}</span>
-            <span>Total Order: {{ calc.display.commission_total_pair }}</span>
-          </strong>
-        </div>
-        <div class="quick-summary-row">
-          <span>Final Profit After Commission</span>
-          <strong class="quick-money-pair quick-profit-{{ margin_tone }}">
-            <span>Per Piece: {{ calc.display.net_profit_per_piece_pair }}</span>
-            <span>Total Order: {{ calc.display.net_profit_total_pair }}</span>
-          </strong>
-        </div>
-        <div class="quick-summary-row"><span>Gross Profit Margin %</span><strong>{{ calc.display.gross_profit_margin_percent }}%</strong></div>
-        <div class="quick-summary-row"><span>Net Profit Margin %</span><strong class="quick-profit-{{ margin_tone }}">{{ calc.display.net_profit_margin_percent }}%</strong></div>
-        <div class="quick-summary-row"><span>Target Margin %</span><strong>{{ calc.display.target_margin_percent_label }}</strong></div>
-        <div class="quick-summary-row"><span>Margin Status</span><strong class="quick-profit-{{ margin_tone }}">{{ calc.display.margin_status }}</strong></div>
       </div>
-    </article>
+    </details>
+
+    <details class="quick-detail-card" open>
+      <summary>2. Material Cost</summary>
+      <div class="quick-detail-body">
+        <div class="quick-meta-grid">
+          {% if calc.uses_detailed_costing %}
+            <div class="quick-meta-row"><span>Fabric Cost Per KG</span><strong>{{ calc.display.fabric_cost_per_kg }} / kg</strong></div>
+            <div class="quick-meta-row"><span>Fabric Consumption KG Per Piece</span><strong>{{ calc.display.fabric_consumption_kg_per_piece }}</strong></div>
+            <div class="quick-meta-row"><span>Calculated Fabric Cost Per Piece</span><strong>{{ calc.display.fabric_cost_per_piece }}</strong></div>
+          {% else %}
+            <div class="quick-meta-row"><span>Legacy Material Cost - Total Order</span><strong>{{ calc.display.material_cost_total_pair }}</strong></div>
+            <div class="quick-meta-row"><span>Legacy Material Cost Per Piece</span><strong>{{ calc.display.material_cost_per_piece_pair }}</strong></div>
+          {% endif %}
+        </div>
+      </div>
+    </details>
+
+    <details class="quick-detail-card" open>
+      <summary>3. Production Cost</summary>
+      <div class="quick-detail-body">
+        <div class="quick-meta-grid">
+          {% if calc.uses_detailed_costing %}
+            <div class="quick-meta-row"><span>Making Cost Per Piece</span><strong>{{ calc.display.making_cost_per_piece }}</strong></div>
+            <div class="quick-meta-row"><span>Printing / Embroidery Cost Per Piece</span><strong>{{ calc.display.print_embroidery_cost_per_piece }}</strong></div>
+            <div class="quick-meta-row"><span>Wash Cost Per Piece</span><strong>Not configured</strong></div>
+            <div class="quick-meta-row"><span>Trim Cost Per Piece</span><strong>{{ calc.display.trims_cost_per_piece }}</strong></div>
+            <div class="quick-meta-row"><span>Packaging Cost Per Piece</span><strong>{{ calc.display.packaging_cost_per_piece }}</strong></div>
+          {% else %}
+            <div class="quick-meta-row"><span>Legacy Production Cost - Total Order</span><strong>{{ calc.display.production_cost_total_pair }}</strong></div>
+            <div class="quick-meta-row"><span>Legacy Production Cost Per Piece</span><strong>{{ calc.display.production_cost_per_piece_pair }}</strong></div>
+          {% endif %}
+          <div class="quick-meta-row"><span>Other Expenses - Total Order</span><strong>{{ calc.display.other_expenses_total_pair }}</strong></div>
+          <div class="quick-meta-row"><span>Other Expenses Allocation Per Piece</span><strong>{{ calc.display.other_expenses_per_piece_pair }}</strong></div>
+          <div class="quick-meta-row"><span>Shipping Cost - Total Order</span><strong>{{ calc.display.shipping_cost_total_pair }}</strong></div>
+          <div class="quick-meta-row"><span>Shipping Allocation Per Piece</span><strong>{{ calc.display.shipping_cost_per_piece_pair }}</strong></div>
+        </div>
+      </div>
+    </details>
+
+    <details class="quick-detail-card" open>
+      <summary>4. Sales</summary>
+      <div class="quick-detail-body">
+        <div class="quick-summary-grid">
+          <div class="quick-summary-row"><span>Selling Price Per Piece</span><strong>{{ calc.display.selling_price_per_piece_pair }}</strong></div>
+          <div class="quick-summary-row"><span>Commission</span><strong>{{ calc.display.commission_percent_label }}</strong></div>
+          <div class="quick-summary-row"><span>Total Revenue</span><strong>{{ calc.display.total_sales_order_pair }}</strong></div>
+        </div>
+      </div>
+    </details>
+
+    <details class="quick-detail-card" open>
+      <summary>5. Profit Summary</summary>
+      <div class="quick-detail-body">
+        <div class="quick-summary-grid">
+          <div class="quick-summary-row"><span>Profit Health</span><strong><span class="quick-health-badge health-{{ profit_health.tone }}">{{ profit_health.label }}</span></strong></div>
+          <div class="quick-summary-row"><span>Total Cost Per Piece</span><strong>{{ calc.display.total_cost_per_piece_pair }}</strong></div>
+          <div class="quick-summary-row"><span>Profit Before Commission</span><strong class="quick-money-pair quick-profit-{{ margin_tone }}"><span>Per Piece: {{ calc.display.gross_profit_per_piece_pair }}</span><span>Total Order: {{ calc.display.gross_profit_total_pair }}</span></strong></div>
+          <div class="quick-summary-row"><span>Commission ({{ calc.display.commission_percent_label }})</span><strong class="quick-money-pair"><span>Per Piece: {{ calc.display.commission_per_piece_pair }}</span><span>Total Order: {{ calc.display.commission_total_pair }}</span></strong></div>
+          <div class="quick-summary-row"><span>Final Profit After Commission</span><strong class="quick-money-pair quick-profit-{{ margin_tone }}"><span>Per Piece: {{ calc.display.net_profit_per_piece_pair }}</span><span>Total Order: {{ calc.display.net_profit_total_pair }}</span></strong></div>
+          <div class="quick-summary-row"><span>Gross Profit Margin %</span><strong>{{ calc.display.gross_profit_margin_percent }}%</strong></div>
+          <div class="quick-summary-row"><span>Net Profit Margin %</span><strong class="quick-profit-{{ margin_tone }}">{{ calc.display.net_profit_margin_percent }}%</strong></div>
+          <div class="quick-summary-row"><span>Target Margin %</span><strong>{{ calc.display.target_margin_percent_label }}</strong></div>
+          <div class="quick-summary-row"><span>Margin Status</span><strong class="quick-profit-{{ margin_tone }}">{{ calc.display.margin_status }}</strong></div>
+        </div>
+      </div>
+    </details>
+
+    <details class="quick-detail-card" open>
+      <summary>6. Live Order Summary</summary>
+      <div class="quick-detail-body">
+        <div class="quick-summary-grid">
+          <div class="quick-summary-row"><span>Quantity</span><strong>{{ quick_costing.quantity }} pieces</strong></div>
+          <div class="quick-summary-row"><span>Order Cost</span><strong>{{ calc.display.total_cost_order_pair }}</strong></div>
+          <div class="quick-summary-row"><span>Order Revenue</span><strong>{{ calc.display.total_sales_order_pair }}</strong></div>
+          <div class="quick-summary-row"><span>Order Profit</span><strong class="quick-profit-{{ margin_tone }}">{{ calc.display.net_profit_total_pair }}</strong></div>
+        </div>
+      </div>
+    </details>
+
+    <section class="quick-detail-card" aria-label="Version information">
+      <h2 class="quick-section-title">Version Information</h2>
+      <div class="quick-version-grid">
+        <div class="quick-version-item"><span>Created By</span><strong>{% if quick_costing.created_by %}{{ quick_costing.created_by.get_full_name|default:quick_costing.created_by.username }}{% else %}Not set{% endif %}</strong></div>
+        <div class="quick-version-item"><span>Created Date</span><strong>{{ quick_costing.created_at|date:"M j, Y H:i" }}</strong></div>
+        <div class="quick-version-item"><span>Last Updated By</span><strong>Not tracked</strong></div>
+        <div class="quick-version-item"><span>Last Updated</span><strong>{{ quick_costing.updated_at|date:"M j, Y H:i" }}</strong></div>
+      </div>
+    </section>
   </section>
 
   {% if can_approve %}

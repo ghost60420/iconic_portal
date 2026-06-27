@@ -123,35 +123,78 @@
 
   .quick-costing-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
-    align-items: start;
   }
 
-  .quick-summary-card {
-    position: static;
-  }
-
-  .quick-summary-columns {
+  .quick-breakdown-form {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 18px;
+    gap: 12px;
   }
 
-  .quick-summary-group {
-    min-width: 0;
+  .quick-breakdown-card {
+    padding: 0;
+    overflow: hidden;
   }
 
-  .quick-summary-heading {
-    margin: 0 0 4px;
+  .quick-breakdown-card > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 48px;
+    padding: 0 14px;
+    color: #fde68a;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 900;
+    list-style: none;
+  }
+
+  .quick-breakdown-card > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .quick-breakdown-card > summary::after {
+    content: "+";
+    color: #94a3b8;
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .quick-breakdown-card[open] > summary::after {
+    content: "−";
+  }
+
+  .quick-summary-currency {
+    margin-left: 6px;
     color: #f8fafc;
-    font-size: 12px;
     font-weight: 800;
   }
 
-  .quick-field-label-basis {
-    color: #94a3b8;
+  .quick-breakdown-body {
+    padding: 0 14px 14px;
+    border-top: 1px solid rgba(148, 163, 184, 0.14);
+  }
+
+  .quick-breakdown-body .grid {
+    padding-top: 14px;
+  }
+
+  .quick-readonly-field {
+    display: flex;
+    align-items: center;
+    min-height: 38px;
+    padding: 8px 10px;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    background: rgba(15, 23, 42, 0.55);
+    color: #cbd5e1;
+    font-size: 12px;
     font-weight: 700;
+  }
+
+  .quick-readonly-note {
+    color: #94a3b8;
+    font-weight: 600;
   }
 
   .quick-input-with-unit {
@@ -206,6 +249,10 @@
     color: #86efac !important;
   }
 
+  .quick-profit-healthy {
+    color: #93c5fd !important;
+  }
+
   .quick-profit-warning {
     color: #fde68a !important;
   }
@@ -226,6 +273,79 @@
     line-height: 1.4;
   }
 
+  .quick-health-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    padding: 0 10px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 900;
+  }
+
+  .quick-health-badge.health-excellent {
+    border-color: rgba(34, 197, 94, 0.45);
+    background: rgba(34, 197, 94, 0.14);
+    color: #86efac;
+  }
+
+  .quick-health-badge.health-healthy {
+    border-color: rgba(59, 130, 246, 0.45);
+    background: rgba(59, 130, 246, 0.14);
+    color: #93c5fd;
+  }
+
+  .quick-health-badge.health-low {
+    border-color: rgba(234, 179, 8, 0.45);
+    background: rgba(234, 179, 8, 0.14);
+    color: #fde68a;
+  }
+
+  .quick-health-badge.health-loss {
+    border-color: rgba(239, 68, 68, 0.45);
+    background: rgba(239, 68, 68, 0.14);
+    color: #fca5a5;
+  }
+
+  .quick-form-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .quick-version-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .quick-version-item {
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    border-radius: 8px;
+  }
+
+  .quick-version-item span,
+  .quick-version-item strong {
+    display: block;
+  }
+
+  .quick-version-item span {
+    margin-bottom: 4px;
+    color: #94a3b8;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  .quick-version-item strong {
+    overflow-wrap: anywhere;
+    color: #f8fafc;
+    font-size: 12px;
+  }
+
   .quick-error {
     margin-top: 4px;
     color: #fca5a5;
@@ -233,16 +353,33 @@
   }
 
   @media (max-width: 860px) {
-    .quick-costing-layout {
+    .quick-version-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 560px) {
+    .quick-form-actions,
+    .quick-form-actions .btnx {
+      width: 100%;
+    }
+
+    .quick-form-actions {
+      display: grid;
       grid-template-columns: 1fr;
     }
 
-    .quick-summary-card {
-      position: static;
+    .quick-version-grid {
+      grid-template-columns: 1fr;
     }
 
-    .quick-summary-columns {
-      grid-template-columns: 1fr;
+    .quick-summary-row {
+      align-items: flex-start;
+    }
+
+    .quick-summary-row strong {
+      max-width: 52%;
+      overflow-wrap: anywhere;
     }
   }
 </style>
@@ -276,241 +413,253 @@
     </div>
 
     <div class="quick-costing-layout">
-      <div class="card">
-        <form method="post" id="quickCostingForm">
-          {% csrf_token %}
-          <input type="hidden" name="costing_type" value="quick">
-          <div class="section-title">Quick costing details</div>
-          <div class="grid">
-            <div>
-              <label>Buyer Name</label>
-              {{ quick_form.buyer_name }}
-              {% for error in quick_form.buyer_name.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
-            </div>
-            <div>
-              <label>Project Name</label>
-              {{ quick_form.project_name }}
-              {% for error in quick_form.project_name.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
-            </div>
-            <div>
-              <label>Product Type</label>
-              {{ quick_form.product_type }}
-              {% for error in quick_form.product_type.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
-            </div>
-            <div>
-              <label>Costing Purpose</label>
-              {{ quick_form.costing_purpose }}
-              {% for error in quick_form.costing_purpose.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
-            </div>
-            <div>
-              <label>Order Quantity Pieces</label>
-              <div class="quick-input-with-unit">
-                {{ quick_form.quantity }}
-                <span class="quick-input-unit">pieces</span>
+      <form method="post" id="quickCostingForm" class="quick-breakdown-form">
+        {% csrf_token %}
+        <input type="hidden" name="costing_type" value="quick">
+
+        <details class="card quick-breakdown-card" open>
+          <summary>1. General Information</summary>
+          <div class="quick-breakdown-body">
+            <div class="grid">
+              <div>
+                <label>Customer / Buyer</label>
+                {{ quick_form.buyer_name }}
+                {% for error in quick_form.buyer_name.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
               </div>
-              {% for error in quick_form.quantity.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
-            </div>
-            <div>
-              <label>{{ quick_form.currency.label }}</label>
-              {{ quick_form.currency }}
-              <div class="field-help">{{ quick_form.currency.help_text }}</div>
-              {% for error in quick_form.currency.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
-            </div>
-            {% if quick_form.show_legacy_fields %}
-            <div>
-              <label>Exchange Rate <span class="quick-field-label-basis">(BDT Per CAD)</span></label>
-              <div class="quick-input-with-unit">
-                {{ quick_form.exchange_rate_bdt_per_cad }}
-                <span class="quick-input-unit">BDT / CAD</span>
+              <div>
+                <label>Brand</label>
+                <div class="quick-readonly-field">
+                  {% if quick_costing and quick_costing.account_brand %}{{ quick_costing.account_brand }}{% elif opportunity and opportunity.lead and opportunity.lead.account_brand %}{{ opportunity.lead.account_brand }}{% else %}<span class="quick-readonly-note">Not linked</span>{% endif %}
+                </div>
+                <div class="field-help">Brand is inherited from the linked opportunity when available.</div>
               </div>
-              <div class="field-help">{{ quick_form.exchange_rate_bdt_per_cad.help_text }}</div>
-              {% for error in quick_form.exchange_rate_bdt_per_cad.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
-            </div>
-            {% endif %}
-            <div>
-              <label>Fabric Cost Per KG</label>
-              <div class="quick-input-with-unit">
-                {{ quick_form.fabric_cost_per_kg }}
-                <span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span>
+              <div>
+                <label>Style / Project</label>
+                {{ quick_form.project_name }}
+                {% for error in quick_form.project_name.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
               </div>
-              <div class="field-help">{{ quick_form.fabric_cost_per_kg.help_text }}</div>
-              {% for error in quick_form.fabric_cost_per_kg.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
-            </div>
-            <div>
-              <label>Fabric Consumption KG Per Piece</label>
-              <div class="quick-input-with-unit">
-                {{ quick_form.fabric_consumption_kg_per_piece }}
-                <span class="quick-input-unit">kg / piece</span>
+              <div>
+                <label>Product</label>
+                {{ quick_form.product_type }}
+                {% for error in quick_form.product_type.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
               </div>
-              <div class="field-help">{{ quick_form.fabric_consumption_kg_per_piece.help_text }}</div>
-              {% for error in quick_form.fabric_consumption_kg_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
-            </div>
-            <div>
-              <label>Making Cost Per Piece</label>
-              <div class="quick-input-with-unit">
-                {{ quick_form.making_cost_per_piece }}
-                <span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span>
+              <div>
+                <label>Costing Purpose</label>
+                {{ quick_form.costing_purpose }}
+                {% for error in quick_form.costing_purpose.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
               </div>
-              <div class="field-help">{{ quick_form.making_cost_per_piece.help_text }}</div>
-              {% for error in quick_form.making_cost_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
-            </div>
-            <div>
-              <label>Print / Embroidery Cost Per Piece</label>
-              <div class="quick-input-with-unit">
-                {{ quick_form.print_embroidery_cost_per_piece }}
-                <span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span>
+              <div>
+                <label>{{ quick_form.currency.label }}</label>
+                {{ quick_form.currency }}
+                <div class="field-help">{{ quick_form.currency.help_text }}</div>
+                {% for error in quick_form.currency.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
               </div>
-              <div class="field-help">{{ quick_form.print_embroidery_cost_per_piece.help_text }}</div>
-              {% for error in quick_form.print_embroidery_cost_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
-            </div>
-            <div>
-              <label>Trims Cost Per Piece</label>
-              <div class="quick-input-with-unit">
-                {{ quick_form.trims_cost_per_piece }}
-                <span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span>
+              <div>
+                <label>Exchange Rate</label>
+                {% if quick_form.show_legacy_fields %}
+                  <div class="quick-input-with-unit">
+                    {{ quick_form.exchange_rate_bdt_per_cad }}
+                    <span class="quick-input-unit">BDT / CAD</span>
+                  </div>
+                  <div class="field-help">{{ quick_form.exchange_rate_bdt_per_cad.help_text }}</div>
+                  {% for error in quick_form.exchange_rate_bdt_per_cad.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+                {% else %}
+                  <div class="quick-readonly-field"><span class="quick-readonly-note">Not required for single-currency costing</span></div>
+                {% endif %}
               </div>
-              <div class="field-help">{{ quick_form.trims_cost_per_piece.help_text }}</div>
-              {% for error in quick_form.trims_cost_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
-            </div>
-            <div>
-              <label>Packaging Cost Per Piece</label>
-              <div class="quick-input-with-unit">
-                {{ quick_form.packaging_cost_per_piece }}
-                <span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span>
+              <div>
+                <label>Quantity</label>
+                <div class="quick-input-with-unit">
+                  {{ quick_form.quantity }}
+                  <span class="quick-input-unit">pieces</span>
+                </div>
+                {% for error in quick_form.quantity.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
               </div>
-              <div class="field-help">{{ quick_form.packaging_cost_per_piece.help_text }}</div>
-              {% for error in quick_form.packaging_cost_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
-            </div>
-            {% if quick_form.show_legacy_fields %}
-            <div>
-              <label>{{ quick_form.material_cost.label }}</label>
-              <div class="quick-input-with-unit">
-                {{ quick_form.material_cost }}
-                <span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span>
-              </div>
-              <div class="field-help">{{ quick_form.material_cost.help_text }}</div>
-              {% for error in quick_form.material_cost.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
-            </div>
-            <div>
-              <label>{{ quick_form.production_cost.label }}</label>
-              <div class="quick-input-with-unit">
-                {{ quick_form.production_cost }}
-                <span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span>
-              </div>
-              <div class="field-help">{{ quick_form.production_cost.help_text }}</div>
-              {% for error in quick_form.production_cost.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
-            </div>
-            {% endif %}
-            <div>
-              <label>Other Expenses Per Order</label>
-              <div class="quick-input-with-unit">
-                {{ quick_form.other_expenses }}
-                <span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span>
-              </div>
-              <div class="field-help">{{ quick_form.other_expenses.help_text }}</div>
-              {% for error in quick_form.other_expenses.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
-            </div>
-            <div>
-              <label>Shipping Cost Per Order</label>
-              <div class="quick-input-with-unit">
-                {{ quick_form.shipping_cost }}
-                <span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span>
-              </div>
-              <div class="field-help">{{ quick_form.shipping_cost.help_text }}</div>
-              {% for error in quick_form.shipping_cost.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
-            </div>
-            <div>
-              <label>Selling Price Per Piece</label>
-              <div class="quick-input-with-unit">
-                {{ quick_form.selling_price_per_piece }}
-                <span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span>
-              </div>
-              <div class="field-help">{{ quick_form.selling_price_per_piece.help_text }}</div>
-              {% for error in quick_form.selling_price_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
-            </div>
-            <div>
-              <label>Commission Percent</label>
-              <div class="quick-input-with-unit">
-                {{ quick_form.commission_percent }}
-                <span class="quick-input-unit">%</span>
-              </div>
-              <div class="field-help">{{ quick_form.commission_percent.help_text }}</div>
-              {% for error in quick_form.commission_percent.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
-            </div>
-            {% if quick_form.show_legacy_fields %}
-            <div>
-              <label>{{ quick_form.commission_per_piece.label }}</label>
-              <div class="quick-input-with-unit">
-                {{ quick_form.commission_per_piece }}
-                <span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span>
-              </div>
-              <div class="field-help">{{ quick_form.commission_per_piece.help_text }}</div>
-              {% for error in quick_form.commission_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
-            </div>
-            {% endif %}
-            <div>
-              <label>Target Margin Percent</label>
-              <div class="quick-input-with-unit">
-                {{ quick_form.target_margin_percent }}
-                <span class="quick-input-unit">%</span>
-              </div>
-              <div class="field-help">{{ quick_form.target_margin_percent.help_text }}</div>
-              {% for error in quick_form.target_margin_percent.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
             </div>
           </div>
+        </details>
 
-          {% if quick_form.non_field_errors %}
-            <div class="quick-error" style="margin-top:10px;">{{ quick_form.non_field_errors }}</div>
-          {% endif %}
-
-          <div style="margin-top:12px; display:flex; gap:8px;">
-            <button type="submit" class="btnx btnx-primary">{% if mode == "edit" %}Update Quick Costing{% else %}Save Quick Costing{% endif %}</button>
-            {% if quick_costing %}
-              <a href="{% url 'quick_costing_detail' quick_costing.pk %}" class="btnx">Cancel</a>
-            {% else %}
-              <a href="{% url 'cost_sheet_list' %}" class="btnx">Cancel</a>
-            {% endif %}
+        <details class="card quick-breakdown-card" open>
+          <summary>2. Material Cost</summary>
+          <div class="quick-breakdown-body">
+            <div class="grid">
+              <div>
+                <label>Fabric Cost Per KG</label>
+                <div class="quick-input-with-unit">{{ quick_form.fabric_cost_per_kg }}<span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span></div>
+                <div class="field-help">{{ quick_form.fabric_cost_per_kg.help_text }}</div>
+                {% for error in quick_form.fabric_cost_per_kg.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+              </div>
+              <div>
+                <label>Fabric Consumption KG Per Piece</label>
+                <div class="quick-input-with-unit">{{ quick_form.fabric_consumption_kg_per_piece }}<span class="quick-input-unit">kg / piece</span></div>
+                <div class="field-help">{{ quick_form.fabric_consumption_kg_per_piece.help_text }}</div>
+                {% for error in quick_form.fabric_consumption_kg_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+              </div>
+              <div>
+                <label>Calculated Fabric Cost Per Piece</label>
+                <div class="quick-readonly-field" data-quick-summary="fabricPiece">৳0.00 BDT</div>
+                <div class="field-help">Calculated from fabric cost per KG × consumption per piece.</div>
+              </div>
+              {% if quick_form.show_legacy_fields %}
+                <div>
+                  <label>{{ quick_form.material_cost.label }}</label>
+                  <div class="quick-input-with-unit">{{ quick_form.material_cost }}<span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span></div>
+                  <div class="field-help">{{ quick_form.material_cost.help_text }}</div>
+                  {% for error in quick_form.material_cost.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+                </div>
+              {% endif %}
+            </div>
           </div>
-        </form>
-      </div>
+        </details>
 
-      <section class="card quick-summary-card" aria-label="Live cost summary" aria-live="polite">
-        <div class="section-title">Live Cost Summary · <span data-quick-summary="currency">BDT</span></div>
-        <div class="quick-summary-columns">
-          <div class="quick-summary-group">
-            <h3 class="quick-summary-heading">Costs</h3>
-            <div class="quick-summary-row"><span>Material Cost Per Piece</span><strong data-quick-summary="fabricPiece">৳0.00 BDT</strong></div>
-            <div class="quick-summary-row"><span>Making Cost Per Piece</span><strong data-quick-summary="makingPiece">৳0.00 BDT</strong></div>
-            <div class="quick-summary-row"><span>Print / Embroidery Cost Per Piece</span><strong data-quick-summary="printPiece">৳0.00 BDT</strong></div>
-            <div class="quick-summary-row"><span>Trim Cost Per Piece</span><strong data-quick-summary="trimsPiece">৳0.00 BDT</strong></div>
-            <div class="quick-summary-row"><span>Packaging Cost Per Piece</span><strong data-quick-summary="packagingPiece">৳0.00 BDT</strong></div>
-            <div class="quick-summary-row"><span>Other Expenses Allocation Per Piece</span><strong data-quick-summary="otherPiece">৳0.00 BDT</strong></div>
-            <div class="quick-summary-row"><span>Shipping Allocation Per Piece</span><strong data-quick-summary="shippingPiece">৳0.00 BDT</strong></div>
+        <details class="card quick-breakdown-card" open>
+          <summary>3. Production Cost</summary>
+          <div class="quick-breakdown-body">
+            <div class="grid">
+              <div>
+                <label>Making Cost Per Piece</label>
+                <div class="quick-input-with-unit">{{ quick_form.making_cost_per_piece }}<span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span></div>
+                <div class="field-help">{{ quick_form.making_cost_per_piece.help_text }}</div>
+                {% for error in quick_form.making_cost_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+              </div>
+              <div>
+                <label>Print / Embroidery Cost Per Piece</label>
+                <div class="quick-input-with-unit">{{ quick_form.print_embroidery_cost_per_piece }}<span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span></div>
+                <div class="field-help">Combined printing and embroidery field in the current Quick Costing schema.</div>
+                {% for error in quick_form.print_embroidery_cost_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+              </div>
+              <div>
+                <label>Wash Cost Per Piece</label>
+                <div class="quick-readonly-field"><span class="quick-readonly-note">Not configured in Quick Costing</span></div>
+                <div class="field-help">Wash cost is not included in the current calculation.</div>
+              </div>
+              <div>
+                <label>Trims Cost Per Piece</label>
+                <div class="quick-input-with-unit">{{ quick_form.trims_cost_per_piece }}<span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span></div>
+                <div class="field-help">{{ quick_form.trims_cost_per_piece.help_text }}</div>
+                {% for error in quick_form.trims_cost_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+              </div>
+              <div>
+                <label>Packaging Cost Per Piece</label>
+                <div class="quick-input-with-unit">{{ quick_form.packaging_cost_per_piece }}<span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span></div>
+                <div class="field-help">{{ quick_form.packaging_cost_per_piece.help_text }}</div>
+                {% for error in quick_form.packaging_cost_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+              </div>
+              {% if quick_form.show_legacy_fields %}
+                <div>
+                  <label>{{ quick_form.production_cost.label }}</label>
+                  <div class="quick-input-with-unit">{{ quick_form.production_cost }}<span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span></div>
+                  <div class="field-help">{{ quick_form.production_cost.help_text }}</div>
+                  {% for error in quick_form.production_cost.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+                </div>
+              {% endif %}
+              <div>
+                <label>Other Expenses Per Order</label>
+                <div class="quick-input-with-unit">{{ quick_form.other_expenses }}<span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span></div>
+                <div class="field-help">{{ quick_form.other_expenses.help_text }}</div>
+                {% for error in quick_form.other_expenses.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+              </div>
+              <div>
+                <label>Shipping Cost Per Order</label>
+                <div class="quick-input-with-unit">{{ quick_form.shipping_cost }}<span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span></div>
+                <div class="field-help">{{ quick_form.shipping_cost.help_text }}</div>
+                {% for error in quick_form.shipping_cost.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+              </div>
+              <div>
+                <label>Shipping Allocation Per Piece</label>
+                <div class="quick-readonly-field" data-quick-summary="shippingPiece">৳0.00 BDT</div>
+              </div>
+              <div>
+                <label>Other Expenses Allocation Per Piece</label>
+                <div class="quick-readonly-field" data-quick-summary="otherPiece">৳0.00 BDT</div>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <details class="card quick-breakdown-card" open>
+          <summary>4. Sales</summary>
+          <div class="quick-breakdown-body">
+            <div class="grid">
+              <div>
+                <label>Selling Price Per Piece</label>
+                <div class="quick-input-with-unit">{{ quick_form.selling_price_per_piece }}<span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span></div>
+                <div class="field-help">{{ quick_form.selling_price_per_piece.help_text }}</div>
+                {% for error in quick_form.selling_price_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+              </div>
+              <div>
+                <label>Commission Percent</label>
+                <div class="quick-input-with-unit">{{ quick_form.commission_percent }}<span class="quick-input-unit">%</span></div>
+                <div class="field-help">{{ quick_form.commission_percent.help_text }}</div>
+                {% for error in quick_form.commission_percent.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+              </div>
+              {% if quick_form.show_legacy_fields %}
+                <div>
+                  <label>{{ quick_form.commission_per_piece.label }}</label>
+                  <div class="quick-input-with-unit">{{ quick_form.commission_per_piece }}<span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span></div>
+                  <div class="field-help">{{ quick_form.commission_per_piece.help_text }}</div>
+                  {% for error in quick_form.commission_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+                </div>
+              {% endif %}
+              <div>
+                <label>Target Margin Percent</label>
+                <div class="quick-input-with-unit">{{ quick_form.target_margin_percent }}<span class="quick-input-unit">%</span></div>
+                <div class="field-help">{{ quick_form.target_margin_percent.help_text }}</div>
+                {% for error in quick_form.target_margin_percent.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+              </div>
+              <div>
+                <label>Total Revenue</label>
+                <div class="quick-readonly-field" data-quick-summary="revenue">৳0.00 BDT</div>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <details class="card quick-breakdown-card" open aria-label="Live cost summary" aria-live="polite">
+          <summary><span>5. Profit Summary <span class="quick-summary-currency" data-quick-summary="currency">BDT</span></span></summary>
+          <div class="quick-breakdown-body">
             <div class="quick-summary-row"><span>Total Cost Per Piece</span><strong data-quick-summary="costPerPiece">৳0.00 BDT</strong></div>
-            <div class="quick-summary-row"><span>Total Order Cost</span><strong data-quick-summary="totalCost">৳0.00 BDT</strong></div>
-          </div>
-          <div class="quick-summary-group">
-            <h3 class="quick-summary-heading">Sales</h3>
-            <div class="quick-summary-row"><span>Selling Price Per Piece</span><strong data-quick-summary="sellingPrice">৳0.00 BDT</strong></div>
-            <div class="quick-summary-row"><span>Quantity</span><strong data-quick-summary="quantity">0 pieces</strong></div>
-            <div class="quick-summary-row"><span>Total Revenue</span><strong data-quick-summary="revenue">৳0.00 BDT</strong></div>
-            <div class="quick-summary-warning" data-quick-warning="sellingBelowCost" hidden>
-              Warning: Selling price is below total cost. This costing may lose money.
-            </div>
-          </div>
-          <div class="quick-summary-group">
-            <h3 class="quick-summary-heading">Profit</h3>
-            <div class="quick-summary-row"><span>Commission</span><strong data-quick-summary="commissionPerPiece">0.00% · ৳0.00 BDT</strong></div>
-            <div class="quick-summary-row"><span>Profit Before Commission</span><strong data-quick-summary="grossProfitPerPiece">৳0.00 BDT</strong></div>
-            <div class="quick-summary-row"><span>Profit After Commission</span><strong data-quick-summary="netProfitPerPiece">৳0.00 BDT</strong></div>
+            <div class="quick-summary-row"><span>Gross Profit Per Piece</span><strong data-quick-summary="grossProfitPerPiece">৳0.00 BDT</strong></div>
+            <div class="quick-summary-row"><span>Commission Per Piece</span><strong data-quick-summary="commissionPerPiece">0.00% · ৳0.00 BDT</strong></div>
+            <div class="quick-summary-row"><span>Net Profit Per Piece</span><strong data-quick-summary="netProfitPerPiece">৳0.00 BDT</strong></div>
             <div class="quick-summary-row"><span>Net Margin %</span><strong data-quick-summary="netMargin">0.00%</strong></div>
-            <div class="quick-summary-row"><span>Total Commission</span><strong data-quick-summary="commissionTotal">৳0.00 BDT</strong></div>
-            <div class="quick-summary-row"><span>Total Order Profit</span><strong data-quick-summary="netProfitTotal">৳0.00 BDT</strong></div>
+            <div class="quick-summary-row"><span>Profit Health</span><strong><span class="quick-health-badge health-loss" data-quick-summary="profitHealth">Loss</span></strong></div>
             <div class="quick-summary-row"><span>Target Margin</span><strong data-quick-summary="targetMargin">N/A</strong></div>
             <div class="quick-summary-row"><span>Margin Status</span><strong data-quick-summary="marginStatus">No target set</strong></div>
+            <div class="quick-summary-warning" data-quick-warning="sellingBelowCost" hidden>Warning: Selling price is below total cost. This costing may lose money.</div>
           </div>
+        </details>
+
+        <details class="card quick-breakdown-card" open>
+          <summary>6. Live Order Summary</summary>
+          <div class="quick-breakdown-body">
+            <div class="quick-summary-row"><span>Quantity</span><strong data-quick-summary="quantity">0 pieces</strong></div>
+            <div class="quick-summary-row"><span>Order Cost</span><strong data-quick-summary="totalCost">৳0.00 BDT</strong></div>
+            <div class="quick-summary-row"><span>Order Revenue</span><strong data-quick-summary="revenue">৳0.00 BDT</strong></div>
+            <div class="quick-summary-row"><span>Total Commission</span><strong data-quick-summary="commissionTotal">৳0.00 BDT</strong></div>
+            <div class="quick-summary-row"><span>Order Profit</span><strong data-quick-summary="netProfitTotal">৳0.00 BDT</strong></div>
+          </div>
+        </details>
+
+        {% if quick_form.non_field_errors %}<div class="quick-error">{{ quick_form.non_field_errors }}</div>{% endif %}
+
+        <div class="quick-form-actions">
+          <button type="submit" class="btnx btnx-primary">{% if mode == "edit" %}Update Quick Costing{% else %}Save Quick Costing{% endif %}</button>
+          {% if quick_costing %}<a href="{% url 'quick_costing_detail' quick_costing.pk %}" class="btnx">Cancel</a>{% else %}<a href="{% url 'cost_sheet_list' %}" class="btnx">Cancel</a>{% endif %}
         </div>
-      </section>
+
+        {% if quick_costing %}
+          <section class="card" aria-label="Version information">
+            <div class="section-title">Version Information</div>
+            <div class="quick-version-grid">
+              <div class="quick-version-item"><span>Created By</span><strong>{% if quick_costing.created_by %}{{ quick_costing.created_by.get_full_name|default:quick_costing.created_by.username }}{% else %}Not set{% endif %}</strong></div>
+              <div class="quick-version-item"><span>Created Date</span><strong>{{ quick_costing.created_at|date:"M j, Y H:i" }}</strong></div>
+              <div class="quick-version-item"><span>Last Updated By</span><strong>Not tracked</strong></div>
+              <div class="quick-version-item"><span>Last Updated</span><strong>{{ quick_costing.updated_at|date:"M j, Y H:i" }}</strong></div>
+            </div>
+          </section>
+        {% endif %}
+      </form>
     </div>
   {% else %}
 
@@ -896,19 +1045,29 @@
     }
 
     function setSummary(name, value, tone) {
-      const node = document.querySelector('[data-quick-summary="' + name + '"]');
-      if (!node) return;
-      node.textContent = value;
-      node.classList.toggle("quick-profit-negative", tone === "negative");
-      node.classList.toggle("quick-profit-warning", tone === "warning");
-      node.classList.toggle("quick-profit-positive", tone === "positive");
+      document.querySelectorAll('[data-quick-summary="' + name + '"]').forEach((node) => {
+        node.textContent = value;
+        node.classList.toggle("quick-profit-negative", tone === "negative");
+        node.classList.toggle("quick-profit-warning", tone === "warning");
+        node.classList.toggle("quick-profit-healthy", tone === "healthy");
+        node.classList.toggle("quick-profit-positive", tone === "positive");
+      });
     }
 
-    function profitTone(profit, margin, targetMargin) {
-      if (profit < 0) return "negative";
-      if (profit === 0) return "neutral";
-      const healthyMargin = targetMargin === null ? 10 : targetMargin;
-      return margin < healthyMargin ? "warning" : "positive";
+    function profitHealth(margin) {
+      if (margin > 30) return { label: "Excellent", tone: "excellent", profitTone: "positive" };
+      if (margin >= 20) return { label: "Healthy", tone: "healthy", profitTone: "healthy" };
+      if (margin >= 10) return { label: "Low Margin", tone: "low", profitTone: "warning" };
+      return { label: "Loss", tone: "loss", profitTone: "negative" };
+    }
+
+    function setProfitHealth(health) {
+      document.querySelectorAll('[data-quick-summary="profitHealth"]').forEach((node) => {
+        node.textContent = health.label;
+        ["excellent", "healthy", "low", "loss"].forEach((tone) => {
+          node.classList.toggle("health-" + tone, tone === health.tone);
+        });
+      });
     }
 
     function updateSummary() {
@@ -945,8 +1104,8 @@
       const netProfitTotal = grossProfitTotal - commissionTotal;
       const grossMargin = revenue > 0 ? (grossProfitTotal / revenue) * 100 : 0;
       const netMargin = revenue > 0 ? (netProfitTotal / revenue) * 100 : 0;
-      const grossTone = profitTone(grossProfitPerPiece, grossMargin, targetMargin);
-      const netTone = profitTone(netProfitPerPiece, netMargin, targetMargin);
+      const grossHealth = profitHealth(grossMargin);
+      const netHealth = profitHealth(netMargin);
       let marginStatus = "No target set";
       if (targetMargin !== null) {
         marginStatus = netMargin >= targetMargin ? "Meets target" : "Below target";
@@ -968,15 +1127,16 @@
       setSummary("totalCost", formatMoney(totalCost, currency, exchangeRate));
       setSummary("sellingPrice", formatMoney(selling, currency, exchangeRate));
       setSummary("revenue", formatMoney(revenue, currency, exchangeRate));
-      setSummary("grossProfitPerPiece", formatMoney(grossProfitPerPiece, currency, exchangeRate), grossTone);
+      setSummary("grossProfitPerPiece", formatMoney(grossProfitPerPiece, currency, exchangeRate), grossHealth.profitTone);
       setSummary(
         "commissionPerPiece",
         (commissionPercent === null ? "Legacy" : commissionPercent.toFixed(2) + "%") + " · " + formatMoney(commission, currency, exchangeRate)
       );
       setSummary("commissionTotal", formatMoney(commissionTotal, currency, exchangeRate));
-      setSummary("netProfitPerPiece", formatMoney(netProfitPerPiece, currency, exchangeRate), netTone);
-      setSummary("netProfitTotal", formatMoney(netProfitTotal, currency, exchangeRate), netTone);
-      setSummary("netMargin", netMargin.toFixed(2) + "%", netTone);
+      setSummary("netProfitPerPiece", formatMoney(netProfitPerPiece, currency, exchangeRate), netHealth.profitTone);
+      setSummary("netProfitTotal", formatMoney(netProfitTotal, currency, exchangeRate), netHealth.profitTone);
+      setSummary("netMargin", netMargin.toFixed(2) + "%", netHealth.profitTone);
+      setProfitHealth(netHealth);
       setSummary("targetMargin", targetMargin === null ? "N/A" : targetMargin.toFixed(2) + "%");
       setSummary(
         "marginStatus",
