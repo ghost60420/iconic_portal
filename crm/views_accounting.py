@@ -895,7 +895,7 @@ def _pl_decimal(value):
         return Decimal("0")
 
 
-def _pl_amount_cad(entry):
+def _pl_amount_cad(entry, cad_to_bdt=None):
     amount_cad = _pl_decimal(getattr(entry, "amount_cad", None))
     if amount_cad:
         return amount_cad
@@ -907,7 +907,8 @@ def _pl_amount_cad(entry):
     if rate_to_cad > 0:
         return (amount * rate_to_cad).quantize(Decimal("0.01"))
     if currency == "BDT":
-        cad_to_bdt = _bs_latest_cad_to_bdt()
+        if cad_to_bdt is None:
+            cad_to_bdt = _bs_latest_cad_to_bdt()
         if cad_to_bdt > 0:
             return (amount / cad_to_bdt).quantize(Decimal("0.01"))
     return Decimal("0")
@@ -947,11 +948,11 @@ def _pl_side_label(side):
     return {"CA": "Canada", "BD": "Bangladesh"}.get((side or "").upper(), side or "Unknown")
 
 
-def _pl_row(entry):
+def _pl_row(entry, cad_to_bdt=None):
     return {
         "entry": entry,
         "amount": _pl_decimal(entry.amount_original),
-        "amount_cad": _pl_amount_cad(entry),
+        "amount_cad": _pl_amount_cad(entry, cad_to_bdt),
         "currency": (entry.currency or "Unknown").upper(),
         "main_type": (entry.main_type or "").upper().strip(),
         "customer": _pl_customer_label(entry),
@@ -1210,7 +1211,7 @@ def _exec_currency_exposure_rows(receivables, received, payables):
     ]
 
 
-def _exec_monthly_cash_rows(entries):
+def _exec_monthly_cash_rows(entries, cad_to_bdt=None):
     monthly = {}
     for entry in entries:
         if not entry.date:
@@ -1224,7 +1225,7 @@ def _exec_monthly_cash_rows(entries):
                 "cash_out": Decimal("0"),
                 "net": Decimal("0"),
             }
-        amount = _pl_amount_cad(entry)
+        amount = _pl_amount_cad(entry, cad_to_bdt)
         if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN:
             monthly[key]["cash_in"] += amount
         elif (entry.direction or "").upper().strip() == AccountingEntry.DIR_OUT:
@@ -1304,7 +1305,8 @@ def executive_financial_dashboard(request):
         accounting_qs = accounting_qs.filter(currency=filters["currency"])
 
     entries = list(accounting_qs.order_by("date", "id"))
-    pl_rows = [_pl_row(entry) for entry in entries]
+    cad_to_bdt = _bs_latest_cad_to_bdt()
+    pl_rows = [_pl_row(entry, cad_to_bdt) for entry in entries]
     revenue_rows = [
         row for row in pl_rows
         if (row["entry"].direction or "").upper().strip() == AccountingEntry.DIR_IN and row["main_type"] == "INCOME"
@@ -1323,11 +1325,11 @@ def executive_financial_dashboard(request):
     total_opex = sum((row["amount_cad"] for row in opex_rows), Decimal("0"))
     net_profit = total_revenue - total_cogs - total_opex
     cash_in = sum(
-        (_pl_amount_cad(entry) for entry in entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN),
+        (_pl_amount_cad(entry, cad_to_bdt) for entry in entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN),
         Decimal("0"),
     )
     cash_out = sum(
-        (_pl_amount_cad(entry) for entry in entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_OUT),
+        (_pl_amount_cad(entry, cad_to_bdt) for entry in entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_OUT),
         Decimal("0"),
     )
     cash_flow = cash_in - cash_out
@@ -1356,7 +1358,6 @@ def executive_financial_dashboard(request):
 
     open_invoices = [invoice for invoice in invoices if _pl_decimal(invoice.balance) > 0]
     overdue_invoices = [invoice for invoice in open_invoices if invoice.due_date and invoice.due_date < today]
-    cad_to_bdt = _bs_latest_cad_to_bdt()
     total_receivables = sum((_bs_invoice_balance_cad(invoice, cad_to_bdt) for invoice in open_invoices), Decimal("0"))
     total_received = sum((_exec_payment_amount_cad(payment) for payment in payments), Decimal("0"))
 
@@ -1370,7 +1371,7 @@ def executive_financial_dashboard(request):
         row for row in open_payable_rows
         if row["entry"].date and row["entry"].date <= today + timedelta(days=7)
     ]
-    total_payables = sum((_pl_amount_cad(row["entry"]) for row in open_payable_rows), Decimal("0"))
+    total_payables = sum((_pl_amount_cad(row["entry"], cad_to_bdt) for row in open_payable_rows), Decimal("0"))
 
     receivable_currency_totals = _exec_currency_totals(
         open_invoices,
@@ -1405,7 +1406,7 @@ def executive_financial_dashboard(request):
         1
         for entry in entries
         if _pl_decimal(entry.amount_original) > 0
-        and _pl_amount_cad(entry) == 0
+        and _pl_amount_cad(entry, cad_to_bdt) == 0
         and (entry.currency or "").upper().strip() != "CAD"
     )
 
@@ -1432,7 +1433,7 @@ def executive_financial_dashboard(request):
         supplier = row["supplier"]
         if supplier not in supplier_map:
             supplier_map[supplier] = {"label": supplier, "payable": Decimal("0"), "count": 0, "overdue_count": 0}
-        supplier_map[supplier]["payable"] += _pl_amount_cad(row["entry"])
+        supplier_map[supplier]["payable"] += _pl_amount_cad(row["entry"], cad_to_bdt)
         supplier_map[supplier]["count"] += 1
         supplier_map[supplier]["overdue_count"] += 1 if row["status_key"] == "overdue" else 0
     top_supplier_rows = sorted(supplier_map.values(), key=lambda row: row["payable"], reverse=True)[:12]
@@ -1441,19 +1442,19 @@ def executive_financial_dashboard(request):
     for side, label in [("CA", "Canada"), ("BD", "Bangladesh")]:
         side_entries = [entry for entry in entries if (entry.side or "").upper().strip() == side]
         side_revenue = sum(
-            (_pl_amount_cad(entry) for entry in side_entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN and (entry.main_type or "").upper().strip() == "INCOME"),
+            (_pl_amount_cad(entry, cad_to_bdt) for entry in side_entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN and (entry.main_type or "").upper().strip() == "INCOME"),
             Decimal("0"),
         )
         side_cogs = sum(
-            (_pl_amount_cad(entry) for entry in side_entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_OUT and (entry.main_type or "").upper().strip() == "COGS"),
+            (_pl_amount_cad(entry, cad_to_bdt) for entry in side_entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_OUT and (entry.main_type or "").upper().strip() == "COGS"),
             Decimal("0"),
         )
         side_opex = sum(
-            (_pl_amount_cad(entry) for entry in side_entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_OUT and (entry.main_type or "").upper().strip() in PL_OPEX_TYPES),
+            (_pl_amount_cad(entry, cad_to_bdt) for entry in side_entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_OUT and (entry.main_type or "").upper().strip() in PL_OPEX_TYPES),
             Decimal("0"),
         )
         side_payables = sum(
-            (_pl_amount_cad(row["entry"]) for row in open_payable_rows if (row["entry"].side or "").upper().strip() == side),
+            (_pl_amount_cad(row["entry"], cad_to_bdt) for row in open_payable_rows if (row["entry"].side or "").upper().strip() == side),
             Decimal("0"),
         )
         side_received = sum((_exec_payment_amount_cad(payment) for payment in payments if payment.side == side), Decimal("0"))
@@ -1516,7 +1517,7 @@ def executive_financial_dashboard(request):
             ),
             "top_customer_rows": top_customer_rows,
             "top_supplier_rows": top_supplier_rows,
-            "monthly_rows": _exec_monthly_cash_rows(entries),
+            "monthly_rows": _exec_monthly_cash_rows(entries, cad_to_bdt),
             "side_rows": side_rows,
             "health_score": health_score,
             "health_label": health_label,

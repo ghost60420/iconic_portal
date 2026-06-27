@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.core.cache import cache
 from django.core.management import call_command
 from django.db import connection
 from django.test import Client, TestCase
@@ -24,6 +25,7 @@ from crm.models import (
     Opportunity,
     ProductionOrder,
 )
+from crm.services.automation_engine import automation_dashboard_context
 from crm.services.operations_dashboard import operations_dashboard_context
 from crm.services.operations_notifications import sync_operations_notifications, visible_notifications
 from crm.views_costing import _can_approve
@@ -78,6 +80,17 @@ class OperationsControlBase(TestCase):
             order_currency="CAD",
             order_value=Decimal("2500.00"),
         )
+
+
+class DashboardPerformanceGuardTests(OperationsControlBase):
+    def test_automation_sync_runs_once_within_dashboard_freshness_window(self):
+        cache.clear()
+        with patch("crm.services.automation_engine.sync_automation_engine") as sync_engine:
+            sync_engine.return_value = {"created": 0, "error": ""}
+            automation_dashboard_context(self.ceo)
+            automation_dashboard_context(self.ceo)
+
+        sync_engine.assert_called_once_with(created_by=self.ceo)
 
 
 class NotificationCenterTests(OperationsControlBase):

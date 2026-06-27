@@ -1,7 +1,9 @@
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
@@ -139,6 +141,19 @@ class ExecutiveFinanceDashboardEnhancementTests(TestCase):
         ]:
             with self.subTest(url_name=url_name):
                 self.assertContains(response, reverse(url_name))
+
+    def test_dashboard_loads_exchange_rate_once_per_request(self):
+        AccountingEntry.objects.filter(currency="BDT").update(rate_to_cad=Decimal("0"))
+
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get(reverse("executive_financial_dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        exchange_rate_queries = [
+            query for query in queries.captured_queries
+            if "crm_exchangerate" in query["sql"].lower()
+        ]
+        self.assertEqual(len(exchange_rate_queries), 1)
 
     def test_monthly_receivable_and_payable_rows_keep_currencies_separate(self):
         receivables = self.client.get(reverse("accounts_receivable_dashboard"))

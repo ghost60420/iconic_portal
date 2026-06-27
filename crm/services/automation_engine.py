@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from django.contrib.contenttypes.models import ContentType
+from django.core.cache import cache
 from django.db import models
 from django.db.models import F, Q
 from django.db.utils import OperationalError, ProgrammingError
@@ -117,6 +118,8 @@ DEFAULT_AUTOMATION_RULES = [
         "action": {"dashboard_alert": True, "notification": True, "task": True},
     },
 ]
+
+AUTOMATION_DASHBOARD_SYNC_TIMEOUT = 300
 
 
 def _safe_reverse(name, *args):
@@ -744,7 +747,17 @@ def automation_dashboard_context(user, *, sync=True, limit=12):
         return empty_context
 
     if sync:
-        sync_automation_engine(created_by=user if getattr(user, "is_authenticated", False) else None)
+        sync_key = f"crm:automation-dashboard-sync:{timezone.localdate().isoformat()}"
+        if cache.add(sync_key, True, timeout=AUTOMATION_DASHBOARD_SYNC_TIMEOUT):
+            try:
+                result = sync_automation_engine(
+                    created_by=user if getattr(user, "is_authenticated", False) else None
+                )
+            except Exception:
+                cache.delete(sync_key)
+                raise
+            if result.get("error"):
+                cache.delete(sync_key)
 
     try:
         notifications_qs = (
