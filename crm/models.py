@@ -3367,20 +3367,35 @@ class ProductionOrder(models.Model):
     ]
 
     OPERATIONAL_STATUS_CHOICES = [
-        ("planning", "Planning"),
-        ("sample_development", "Sample Development"),
+        ("planning", "Not Started"),
+        ("pattern", "Pattern"),
+        ("sample_development", "Sample"),
         ("sample_sent", "Sample Sent"),
         ("approved", "Approved"),
         ("fabric_sourcing", "Fabric Sourcing"),
         ("cutting", "Cutting"),
-        ("printing", "Printing"),
         ("sewing", "Sewing"),
-        ("qc", "QC"),
+        ("printing", "Print / Embroidery"),
+        ("finishing", "Finishing"),
+        ("qc", "Quality Check"),
         ("packing", "Packing"),
         ("ready_to_ship", "Ready To Ship"),
         ("shipped", "Shipped"),
+        ("on_hold", "On Hold"),
         ("cancelled", "Cancelled"),
     ]
+
+    APPROVED_SNAPSHOT_FIELDS = (
+        "source_quotation_id",
+        "quotation_number_snapshot",
+        "client_name_snapshot",
+        "product_type_snapshot",
+        "approved_currency",
+        "approved_selling_price",
+        "approved_total_value",
+        "approved_costing_summary",
+        "approved_price_locked_at",
+    )
 
     ORDER_CODE_PREFIX = "PO"
     ORDER_CODE_GENERATION_ATTEMPTS = 8
@@ -3429,12 +3444,84 @@ class ProductionOrder(models.Model):
         blank=True,
         related_name="production_orders",
     )
+    source_quotation = models.OneToOneField(
+        "CostingHeader",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        editable=False,
+        related_name="auto_production_order",
+    )
+    quotation_number_snapshot = models.CharField(
+        max_length=50,
+        blank=True,
+        default="",
+        editable=False,
+    )
+    client_name_snapshot = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        editable=False,
+    )
+    product_type_snapshot = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        editable=False,
+    )
+    approved_currency = models.CharField(
+        max_length=10,
+        choices=NEW_COSTING_CURRENCY_CHOICES,
+        null=True,
+        blank=True,
+        editable=False,
+    )
+    approved_selling_price = models.DecimalField(
+        max_digits=14,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        editable=False,
+    )
+    approved_total_value = models.DecimalField(
+        max_digits=16,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        editable=False,
+    )
+    approved_costing_summary = models.JSONField(
+        blank=True,
+        default=dict,
+        editable=False,
+    )
+    approved_price_locked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        editable=False,
+    )
     customer = models.ForeignKey(
         "Customer",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="production_orders",
+    )
+    assigned_production_manager = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="managed_production_orders",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        editable=False,
+        on_delete=models.SET_NULL,
+        related_name="created_production_orders",
     )
     product = models.ForeignKey(
         "Product", on_delete=models.SET_NULL, null=True, blank=True
@@ -3621,6 +3708,24 @@ class ProductionOrder(models.Model):
 
     def save(self, *args, **kwargs):
         if not self._state.adding:
+            existing_snapshot = (
+                self.__class__.objects.filter(pk=self.pk)
+                .values(*self.APPROVED_SNAPSHOT_FIELDS)
+                .first()
+            )
+            if existing_snapshot and (
+                existing_snapshot["source_quotation_id"]
+                or existing_snapshot["approved_price_locked_at"]
+            ):
+                changed_fields = [
+                    field_name
+                    for field_name in self.APPROVED_SNAPSHOT_FIELDS
+                    if existing_snapshot[field_name] != getattr(self, field_name)
+                ]
+                if changed_fields:
+                    raise ValidationError(
+                        "Approved quotation pricing and costing snapshots are locked."
+                    )
             if self.order_code:
                 self.order_code = self.order_code.strip()
             return super().save(*args, **kwargs)

@@ -1,7 +1,7 @@
 {% extends "crm/base.html" %}
 {% load static %}
 {% block content %}
-<link rel="stylesheet" href="{% static 'crm/production_detail.css' %}?v=production-detail-modern-20260507">
+<link rel="stylesheet" href="{% static 'crm/production_detail.css' %}?v=production-order-snapshot-20260627">
 
 <div class="production-detail">
   <section class="production-detail-hero">
@@ -199,7 +199,9 @@
     <article class="production-snapshot-card">
       <span>Assigned person</span>
       <strong>
-        {% if opportunity and opportunity.assigned_to %}
+        {% if order.assigned_production_manager %}
+          {{ order.assigned_production_manager.get_full_name|default:order.assigned_production_manager.username }}
+        {% elif opportunity and opportunity.assigned_to %}
           {{ opportunity.assigned_to }}
         {% elif lead and lead.assigned_to %}
           {{ lead.assigned_to }}
@@ -209,9 +211,39 @@
           -
         {% endif %}
       </strong>
-      <small>{% if opportunity and opportunity.assigned_to %}Opportunity owner{% elif lead %}Lead owner{% else %}Not assigned{% endif %}</small>
+      <small>{% if order.assigned_production_manager %}Production manager{% elif opportunity and opportunity.assigned_to %}Opportunity owner{% elif lead %}Lead owner{% else %}Not assigned{% endif %}</small>
     </article>
   </section>
+
+  {% if order.source_quotation_id %}
+    <section class="production-panel" aria-label="Approved quotation snapshot">
+      <div class="production-panel-head">
+        <div>
+          <h2>Approved Quotation Snapshot</h2>
+          <p>Commercial values captured at CEO approval. These values are locked for production.</p>
+        </div>
+        <span class="production-status-badge approved">Price locked</span>
+      </div>
+
+      <div class="production-approved-grid">
+        <article><span>Production Order ID</span><strong>{{ order.order_code }}</strong></article>
+        <article><span>Quotation ID</span><strong><a href="{% url 'cost_sheet_client_quotation' order.source_quotation_id %}">{{ order.quotation_number_snapshot }}</a></strong></article>
+        <article><span>Lead ID</span><strong>{% if order.lead %}{{ order.lead.lead_id }}{% else %}-{% endif %}</strong></article>
+        <article><span>Opportunity ID</span><strong>{% if order.opportunity %}{{ order.opportunity.opportunity_id }}{% else %}-{% endif %}</strong></article>
+        <article><span>Client</span><strong>{{ order.client_name_snapshot|default:"-" }}</strong></article>
+        <article><span>Product type</span><strong>{{ order.product_type_snapshot|default:"-" }}</strong></article>
+        <article><span>Quantity</span><strong>{{ order.qty_total }}</strong></article>
+        <article><span>Currency</span><strong>{{ order.approved_currency }}</strong></article>
+        <article><span>Approved selling price</span><strong>{{ approved_selling_price_display }}</strong><small>Per piece</small></article>
+        <article><span>Approved total value</span><strong>{{ approved_total_value_display }}</strong></article>
+        {% for row in approved_costing_rows %}
+          <article><span>{{ row.label }}</span><strong>{{ row.value }}</strong></article>
+        {% endfor %}
+        <article><span>Locked at</span><strong>{{ order.approved_price_locked_at|date:"M j, Y H:i" }}</strong></article>
+        <article><span>Created by</span><strong>{% if order.created_by %}{{ order.created_by.get_full_name|default:order.created_by.username }}{% else %}System{% endif %}</strong></article>
+      </div>
+    </section>
+  {% endif %}
 
   <section class="production-detail-grid">
     <main class="production-main-column">
