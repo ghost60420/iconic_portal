@@ -204,10 +204,16 @@ class QuickCostingTests(TestCase):
 
         self.assertIn("currency", form.fields)
         self.assertEqual(form.fields["fabric_cost_per_kg"].label, "Fabric Cost Per KG")
-        self.assertIn("per kg", form.fields["fabric_cost_per_kg"].help_text)
+        self.assertEqual(form.fields["currency"].help_text, "Select BDT, CAD, or USD for this costing.")
+        self.assertEqual(form.fields["fabric_cost_per_kg"].help_text, "Enter fabric price per KG.")
+        self.assertEqual(
+            form.fields["fabric_consumption_kg_per_piece"].help_text,
+            "Example: 0.42 KG per garment.",
+        )
         self.assertIn("per piece", form.fields["making_cost_per_piece"].help_text)
         self.assertIn("total order", form.fields["other_expenses"].help_text)
-        self.assertIn("Percentage", form.fields["commission_percent"].help_text)
+        self.assertEqual(form.fields["shipping_cost"].help_text, "Total shipping cost for this order.")
+        self.assertEqual(form.fields["commission_percent"].help_text, "Percentage of selling price.")
         self.assertTrue(form.fields["commission_per_piece"].disabled)
         self.assertEqual(form.fields["commission_per_piece"].widget.input_type, "hidden")
 
@@ -268,6 +274,34 @@ class QuickCostingTests(TestCase):
         self.assertIn("Selling price per piece cannot be negative.", form.errors["selling_price_per_piece"])
         self.assertIn("Commission must be between 0% and 100%.", form.errors["commission_percent"])
 
+    def test_legacy_form_requires_existing_exchange_rate_to_be_preserved(self):
+        quick = self._quick_costing(exchange_rate_bdt_per_cad=Decimal("90.00"))
+        form = QuickCostingForm(
+            instance=quick,
+            data={
+                "buyer_name": quick.buyer_name,
+                "project_name": quick.project_name,
+                "product_type": quick.product_type,
+                "costing_purpose": quick.costing_purpose,
+                "quantity": quick.quantity,
+                "currency": "BDT",
+                "exchange_rate_bdt_per_cad": "",
+                "material_cost": quick.material_cost,
+                "production_cost": quick.production_cost,
+                "other_expenses": quick.other_expenses,
+                "shipping_cost": quick.shipping_cost,
+                "selling_price_per_piece": quick.selling_price_per_piece,
+                "commission_per_piece": quick.commission_per_piece,
+                "target_margin_percent": quick.target_margin_percent,
+            },
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn(
+            "Enter the BDT per CAD exchange rate to keep the existing CAD conversion.",
+            form.errors["exchange_rate_bdt_per_cad"],
+        )
+
     def test_create_page_shows_currency_cost_basis_and_live_summary_labels(self):
         admin = self._admin_user("quick-costing-ui-admin")
         self.client.force_login(admin)
@@ -278,20 +312,39 @@ class QuickCostingTests(TestCase):
         self.assertContains(response, "BDT (৳)")
         self.assertContains(response, "CAD ($)")
         self.assertContains(response, "USD ($)")
-        self.assertContains(response, "Fabric Cost")
-        self.assertContains(response, "(Per KG)")
-        self.assertContains(response, "(KG Per Piece)")
-        self.assertContains(response, "(Per Piece)")
-        self.assertContains(response, "(Total Order)")
-        self.assertContains(response, "Commission")
-        self.assertContains(response, "(%)")
+        self.assertContains(response, "Fabric Cost Per KG")
+        self.assertContains(response, "Fabric Consumption KG Per Piece")
+        self.assertContains(response, "Making Cost Per Piece")
+        self.assertContains(response, "Print / Embroidery Cost Per Piece")
+        self.assertContains(response, "Trims Cost Per Piece")
+        self.assertContains(response, "Packaging Cost Per Piece")
+        self.assertContains(response, "Shipping Cost Per Order")
+        self.assertContains(response, "Selling Price Per Piece")
+        self.assertContains(response, "Commission Percent")
+        self.assertContains(response, "Enter fabric price per KG.")
+        self.assertContains(response, "Example: 0.42 KG per garment.")
+        self.assertContains(response, "Percentage of selling price.")
+        self.assertContains(response, "Total shipping cost for this order.")
+        self.assertContains(response, "Select BDT, CAD, or USD for this costing.")
         self.assertContains(response, "Live Cost Summary")
+        self.assertContains(response, "Costs")
+        self.assertContains(response, "Sales")
+        self.assertContains(response, "Profit")
         self.assertContains(response, "Shipping Allocation Per Piece")
         self.assertContains(response, "Profit Before Commission")
         self.assertContains(response, "Profit After Commission")
-        self.assertContains(response, "Total Order Revenue")
+        self.assertContains(response, "Net Margin %")
+        self.assertContains(response, "Total Revenue")
         self.assertContains(response, "Total Order Cost")
         self.assertContains(response, "Total Order Profit")
+        self.assertContains(
+            response,
+            "Warning: Selling price is below total cost. This costing may lose money.",
+        )
+        self.assertContains(
+            response,
+            "Changing currency may affect display and reporting. Continue?",
+        )
         self.assertGreaterEqual(response.content.decode("utf-8").count("data-quick-currency-unit"), 8)
 
     def test_calculation_summary_handles_missing_exchange_and_zero_quantity(self):

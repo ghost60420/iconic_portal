@@ -502,6 +502,15 @@ class QuickCostingForm(forms.ModelForm):
         exchange_rate = cleaned.get("exchange_rate_bdt_per_cad")
         if exchange_rate is not None and exchange_rate <= 0:
             self.add_error("exchange_rate_bdt_per_cad", "Exchange rate must be greater than zero when provided.")
+        if (
+            self.show_legacy_fields
+            and self.instance.exchange_rate_bdt_per_cad is not None
+            and exchange_rate is None
+        ):
+            self.add_error(
+                "exchange_rate_bdt_per_cad",
+                "Enter the BDT per CAD exchange rate to keep the existing CAD conversion.",
+            )
         target_margin = cleaned.get("target_margin_percent")
         if target_margin is not None and target_margin < 0:
             self.add_error("target_margin_percent", "Enter a zero or positive margin.")
@@ -586,10 +595,10 @@ class QuickCostingForm(forms.ModelForm):
             "target_margin_percent": "Target Margin %",
         }
         help_texts = {
-            "currency": "Currency used for every amount in this Quick Costing.",
+            "currency": "Select BDT, CAD, or USD for this costing.",
             "exchange_rate_bdt_per_cad": "Optional legacy conversion: BDT per 1 CAD.",
-            "fabric_cost_per_kg": "Cost basis: per kg in the selected currency.",
-            "fabric_consumption_kg_per_piece": "Cost basis: kilograms of fabric consumed per finished piece.",
+            "fabric_cost_per_kg": "Enter fabric price per KG.",
+            "fabric_consumption_kg_per_piece": "Example: 0.42 KG per garment.",
             "making_cost_per_piece": "Cost basis: per piece in the selected currency.",
             "print_embroidery_cost_per_piece": "Cost basis: per piece in the selected currency.",
             "trims_cost_per_piece": "Cost basis: per piece in the selected currency.",
@@ -597,9 +606,9 @@ class QuickCostingForm(forms.ModelForm):
             "material_cost": "Legacy BDT total order value. Used only when detailed per-piece costs are empty.",
             "production_cost": "Legacy BDT total order value. Used only when detailed per-piece costs are empty.",
             "other_expenses": "Cost basis: total order value in the selected currency.",
-            "shipping_cost": "Cost basis: total order value in the selected currency.",
+            "shipping_cost": "Total shipping cost for this order.",
             "selling_price_per_piece": "Cost basis: per piece in the selected currency.",
-            "commission_percent": "Percentage of selling price. The calculated commission uses the selected currency.",
+            "commission_percent": "Percentage of selling price.",
             "commission_per_piece": "Legacy absolute BDT amount per piece. Used only when commission percent is empty.",
             "target_margin_percent": "Percentage target for profit after commission.",
         }

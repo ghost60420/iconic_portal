@@ -134,7 +134,7 @@
 
   .quick-summary-columns {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 18px;
   }
 
@@ -206,8 +206,24 @@
     color: #86efac !important;
   }
 
+  .quick-profit-warning {
+    color: #fde68a !important;
+  }
+
   .quick-profit-negative {
     color: #fca5a5 !important;
+  }
+
+  .quick-summary-warning {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border: 1px solid rgba(248, 113, 113, 0.45);
+    border-radius: 8px;
+    background: rgba(127, 29, 29, 0.22);
+    color: #fecaca;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.4;
   }
 
   .quick-error {
@@ -287,7 +303,7 @@
               {% for error in quick_form.costing_purpose.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
             </div>
             <div>
-              <label>Order Quantity <span class="quick-field-label-basis">(Pieces)</span></label>
+              <label>Order Quantity Pieces</label>
               <div class="quick-input-with-unit">
                 {{ quick_form.quantity }}
                 <span class="quick-input-unit">pieces</span>
@@ -312,7 +328,7 @@
             </div>
             {% endif %}
             <div>
-              <label>Fabric Cost <span class="quick-field-label-basis">(Per KG)</span></label>
+              <label>Fabric Cost Per KG</label>
               <div class="quick-input-with-unit">
                 {{ quick_form.fabric_cost_per_kg }}
                 <span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span>
@@ -321,7 +337,7 @@
               {% for error in quick_form.fabric_cost_per_kg.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
             </div>
             <div>
-              <label>Fabric Consumption <span class="quick-field-label-basis">(KG Per Piece)</span></label>
+              <label>Fabric Consumption KG Per Piece</label>
               <div class="quick-input-with-unit">
                 {{ quick_form.fabric_consumption_kg_per_piece }}
                 <span class="quick-input-unit">kg / piece</span>
@@ -330,7 +346,7 @@
               {% for error in quick_form.fabric_consumption_kg_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
             </div>
             <div>
-              <label>Making Cost <span class="quick-field-label-basis">(Per Piece)</span></label>
+              <label>Making Cost Per Piece</label>
               <div class="quick-input-with-unit">
                 {{ quick_form.making_cost_per_piece }}
                 <span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span>
@@ -339,7 +355,7 @@
               {% for error in quick_form.making_cost_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
             </div>
             <div>
-              <label>Print / Embroidery Cost <span class="quick-field-label-basis">(Per Piece)</span></label>
+              <label>Print / Embroidery Cost Per Piece</label>
               <div class="quick-input-with-unit">
                 {{ quick_form.print_embroidery_cost_per_piece }}
                 <span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span>
@@ -348,7 +364,7 @@
               {% for error in quick_form.print_embroidery_cost_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
             </div>
             <div>
-              <label>Trims Cost <span class="quick-field-label-basis">(Per Piece)</span></label>
+              <label>Trims Cost Per Piece</label>
               <div class="quick-input-with-unit">
                 {{ quick_form.trims_cost_per_piece }}
                 <span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span>
@@ -357,7 +373,7 @@
               {% for error in quick_form.trims_cost_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
             </div>
             <div>
-              <label>Packaging Cost <span class="quick-field-label-basis">(Per Piece)</span></label>
+              <label>Packaging Cost Per Piece</label>
               <div class="quick-input-with-unit">
                 {{ quick_form.packaging_cost_per_piece }}
                 <span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span>
@@ -386,7 +402,7 @@
             </div>
             {% endif %}
             <div>
-              <label>Other Expenses <span class="quick-field-label-basis">(Total Order)</span></label>
+              <label>Other Expenses Per Order</label>
               <div class="quick-input-with-unit">
                 {{ quick_form.other_expenses }}
                 <span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span>
@@ -395,7 +411,7 @@
               {% for error in quick_form.other_expenses.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
             </div>
             <div>
-              <label>Shipping <span class="quick-field-label-basis">(Total Order)</span></label>
+              <label>Shipping Cost Per Order</label>
               <div class="quick-input-with-unit">
                 {{ quick_form.shipping_cost }}
                 <span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span>
@@ -404,7 +420,7 @@
               {% for error in quick_form.shipping_cost.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
             </div>
             <div>
-              <label>Selling Price <span class="quick-field-label-basis">(Per Piece)</span></label>
+              <label>Selling Price Per Piece</label>
               <div class="quick-input-with-unit">
                 {{ quick_form.selling_price_per_piece }}
                 <span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span>
@@ -413,7 +429,7 @@
               {% for error in quick_form.selling_price_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
             </div>
             <div>
-              <label>Commission <span class="quick-field-label-basis">(%)</span></label>
+              <label>Commission Percent</label>
               <div class="quick-input-with-unit">
                 {{ quick_form.commission_percent }}
                 <span class="quick-input-unit">%</span>
@@ -433,7 +449,7 @@
             </div>
             {% endif %}
             <div>
-              <label>Target Margin <span class="quick-field-label-basis">(%)</span></label>
+              <label>Target Margin Percent</label>
               <div class="quick-input-with-unit">
                 {{ quick_form.target_margin_percent }}
                 <span class="quick-input-unit">%</span>
@@ -462,7 +478,7 @@
         <div class="section-title">Live Cost Summary · <span data-quick-summary="currency">BDT</span></div>
         <div class="quick-summary-columns">
           <div class="quick-summary-group">
-            <h3 class="quick-summary-heading">Per Piece</h3>
+            <h3 class="quick-summary-heading">Costs</h3>
             <div class="quick-summary-row"><span>Material Cost Per Piece</span><strong data-quick-summary="fabricPiece">৳0.00 BDT</strong></div>
             <div class="quick-summary-row"><span>Making Cost Per Piece</span><strong data-quick-summary="makingPiece">৳0.00 BDT</strong></div>
             <div class="quick-summary-row"><span>Print / Embroidery Cost Per Piece</span><strong data-quick-summary="printPiece">৳0.00 BDT</strong></div>
@@ -471,17 +487,23 @@
             <div class="quick-summary-row"><span>Other Expenses Allocation Per Piece</span><strong data-quick-summary="otherPiece">৳0.00 BDT</strong></div>
             <div class="quick-summary-row"><span>Shipping Allocation Per Piece</span><strong data-quick-summary="shippingPiece">৳0.00 BDT</strong></div>
             <div class="quick-summary-row"><span>Total Cost Per Piece</span><strong data-quick-summary="costPerPiece">৳0.00 BDT</strong></div>
+            <div class="quick-summary-row"><span>Total Order Cost</span><strong data-quick-summary="totalCost">৳0.00 BDT</strong></div>
+          </div>
+          <div class="quick-summary-group">
+            <h3 class="quick-summary-heading">Sales</h3>
             <div class="quick-summary-row"><span>Selling Price Per Piece</span><strong data-quick-summary="sellingPrice">৳0.00 BDT</strong></div>
+            <div class="quick-summary-row"><span>Quantity</span><strong data-quick-summary="quantity">0 pieces</strong></div>
+            <div class="quick-summary-row"><span>Total Revenue</span><strong data-quick-summary="revenue">৳0.00 BDT</strong></div>
+            <div class="quick-summary-warning" data-quick-warning="sellingBelowCost" hidden>
+              Warning: Selling price is below total cost. This costing may lose money.
+            </div>
+          </div>
+          <div class="quick-summary-group">
+            <h3 class="quick-summary-heading">Profit</h3>
             <div class="quick-summary-row"><span>Commission</span><strong data-quick-summary="commissionPerPiece">0.00% · ৳0.00 BDT</strong></div>
             <div class="quick-summary-row"><span>Profit Before Commission</span><strong data-quick-summary="grossProfitPerPiece">৳0.00 BDT</strong></div>
             <div class="quick-summary-row"><span>Profit After Commission</span><strong data-quick-summary="netProfitPerPiece">৳0.00 BDT</strong></div>
-            <div class="quick-summary-row"><span>Profit Margin</span><strong data-quick-summary="netMargin">0.00%</strong></div>
-          </div>
-          <div class="quick-summary-group">
-            <h3 class="quick-summary-heading">Order Totals</h3>
-            <div class="quick-summary-row"><span>Order Quantity</span><strong data-quick-summary="quantity">0 pieces</strong></div>
-            <div class="quick-summary-row"><span>Total Order Revenue</span><strong data-quick-summary="revenue">৳0.00 BDT</strong></div>
-            <div class="quick-summary-row"><span>Total Order Cost</span><strong data-quick-summary="totalCost">৳0.00 BDT</strong></div>
+            <div class="quick-summary-row"><span>Net Margin %</span><strong data-quick-summary="netMargin">0.00%</strong></div>
             <div class="quick-summary-row"><span>Total Commission</span><strong data-quick-summary="commissionTotal">৳0.00 BDT</strong></div>
             <div class="quick-summary-row"><span>Total Order Profit</span><strong data-quick-summary="netProfitTotal">৳0.00 BDT</strong></div>
             <div class="quick-summary-row"><span>Target Margin</span><strong data-quick-summary="targetMargin">N/A</strong></div>
@@ -873,14 +895,20 @@
       return Math.round((value + Number.EPSILON) * 100) / 100;
     }
 
-    function setSummary(name, value, toneValue) {
+    function setSummary(name, value, tone) {
       const node = document.querySelector('[data-quick-summary="' + name + '"]');
       if (!node) return;
       node.textContent = value;
-      if (toneValue !== undefined) {
-        node.classList.toggle("quick-profit-negative", toneValue < 0 || value === "Below target");
-        node.classList.toggle("quick-profit-positive", toneValue > 0 || value === "Meets target");
-      }
+      node.classList.toggle("quick-profit-negative", tone === "negative");
+      node.classList.toggle("quick-profit-warning", tone === "warning");
+      node.classList.toggle("quick-profit-positive", tone === "positive");
+    }
+
+    function profitTone(profit, margin, targetMargin) {
+      if (profit < 0) return "negative";
+      if (profit === 0) return "neutral";
+      const healthyMargin = targetMargin === null ? 10 : targetMargin;
+      return margin < healthyMargin ? "warning" : "positive";
     }
 
     function updateSummary() {
@@ -915,7 +943,10 @@
       const commissionTotal = commission * quantity;
       const netProfitPerPiece = grossProfitPerPiece - commission;
       const netProfitTotal = grossProfitTotal - commissionTotal;
+      const grossMargin = revenue > 0 ? (grossProfitTotal / revenue) * 100 : 0;
       const netMargin = revenue > 0 ? (netProfitTotal / revenue) * 100 : 0;
+      const grossTone = profitTone(grossProfitPerPiece, grossMargin, targetMargin);
+      const netTone = profitTone(netProfitPerPiece, netMargin, targetMargin);
       let marginStatus = "No target set";
       if (targetMargin !== null) {
         marginStatus = netMargin >= targetMargin ? "Meets target" : "Below target";
@@ -937,23 +968,58 @@
       setSummary("totalCost", formatMoney(totalCost, currency, exchangeRate));
       setSummary("sellingPrice", formatMoney(selling, currency, exchangeRate));
       setSummary("revenue", formatMoney(revenue, currency, exchangeRate));
-      setSummary("grossProfitPerPiece", formatMoney(grossProfitPerPiece, currency, exchangeRate), grossProfitPerPiece);
+      setSummary("grossProfitPerPiece", formatMoney(grossProfitPerPiece, currency, exchangeRate), grossTone);
       setSummary(
         "commissionPerPiece",
         (commissionPercent === null ? "Legacy" : commissionPercent.toFixed(2) + "%") + " · " + formatMoney(commission, currency, exchangeRate)
       );
       setSummary("commissionTotal", formatMoney(commissionTotal, currency, exchangeRate));
-      setSummary("netProfitPerPiece", formatMoney(netProfitPerPiece, currency, exchangeRate), netProfitPerPiece);
-      setSummary("netProfitTotal", formatMoney(netProfitTotal, currency, exchangeRate), netProfitTotal);
-      setSummary("netMargin", netMargin.toFixed(2) + "%", netMargin);
+      setSummary("netProfitPerPiece", formatMoney(netProfitPerPiece, currency, exchangeRate), netTone);
+      setSummary("netProfitTotal", formatMoney(netProfitTotal, currency, exchangeRate), netTone);
+      setSummary("netMargin", netMargin.toFixed(2) + "%", netTone);
       setSummary("targetMargin", targetMargin === null ? "N/A" : targetMargin.toFixed(2) + "%");
-      setSummary("marginStatus", marginStatus, marginStatus === "Below target" ? -1 : marginStatus === "Meets target" ? 1 : 0);
+      setSummary(
+        "marginStatus",
+        marginStatus,
+        marginStatus === "Below target" ? "warning" : marginStatus === "Meets target" ? "positive" : "neutral"
+      );
+
+      const sellingWarning = document.querySelector('[data-quick-warning="sellingBelowCost"]');
+      const sellingWasEntered = fields.selling && fields.selling.value.trim() !== "";
+      if (sellingWarning) sellingWarning.hidden = !(sellingWasEntered && selling < costPerPiece);
     }
 
-    Object.values(fields).forEach((field) => {
-      if (field) field.addEventListener("input", updateSummary);
+    Object.entries(fields).forEach(([name, field]) => {
+      if (field && name !== "currency") field.addEventListener("input", updateSummary);
     });
-    if (fields.currency) fields.currency.addEventListener("change", updateSummary);
+    let previousCurrency = fields.currency && fields.currency.value ? fields.currency.value : "BDT";
+    if (fields.currency) {
+      fields.currency.addEventListener("change", function () {
+        const nextCurrency = fields.currency.value || "BDT";
+        const valueFields = [
+          fields.fabricKg,
+          fields.making,
+          fields.printEmbroidery,
+          fields.trims,
+          fields.packaging,
+          fields.other,
+          fields.shipping,
+          fields.selling,
+          fields.commission
+        ];
+        const hasEnteredValues = valueFields.some((field) => field && numberValue(field) !== 0);
+        if (
+          nextCurrency !== previousCurrency
+          && hasEnteredValues
+          && !window.confirm("Changing currency may affect display and reporting. Continue?")
+        ) {
+          fields.currency.value = previousCurrency;
+        } else {
+          previousCurrency = nextCurrency;
+        }
+        updateSummary();
+      });
+    }
     updateSummary();
   })();
 </script>
