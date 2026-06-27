@@ -11262,6 +11262,27 @@ def _ceo_safe_inventory_snapshot(can_view_financials):
 
 @login_required
 def ceo_dashboard(request):
+    from time import perf_counter
+
+    from crm.services.ceo_executive import build_ceo_executive_context
+
+    started = perf_counter()
+    context = build_ceo_executive_context()
+    context["executive_money_cards"] = [
+        ("Today's Sales", context["today_sales"]),
+        ("Monthly Sales", context["monthly_sales"]),
+        ("Outstanding AR", context["outstanding_ar"]),
+        ("Outstanding AP", context["outstanding_ap"]),
+        ("Current Cash", context["current_cash"]),
+    ]
+    response = render(request, "crm/ceo_executive_dashboard.html", context)
+    elapsed_ms = (perf_counter() - started) * 1000
+    response["Server-Timing"] = f"ceo-dashboard;dur={elapsed_ms:.1f}"
+    return response
+
+
+@login_required
+def ceo_operations_dashboard(request):
     today = timezone.localdate()
     try:
         period_days = int((request.GET.get("days") or "30").strip())

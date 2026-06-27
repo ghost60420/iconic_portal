@@ -1,0 +1,66 @@
+{% extends "crm/base.html" %}
+{% load crm_extras %}
+{% block content %}
+<style>
+  .exec-ceo{max-width:1440px;margin:0 auto;color:#f8fafc}
+  .exec-ceo *{box-sizing:border-box}
+  .exec-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;padding:18px;border:1px solid #3b4250;border-left:4px solid #eab308;border-radius:8px;background:#111318;margin-bottom:12px}
+  .exec-head h1{font-size:26px;margin:0 0 5px}.exec-head p{margin:0;color:#aab0bb;font-size:13px}
+  .exec-actions{display:flex;gap:8px;flex-wrap:wrap}.exec-btn{padding:9px 12px;border:1px solid #4b5563;border-radius:6px;color:#fff;background:#1b1e25;text-decoration:none;font-weight:800;font-size:12px}
+  .exec-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px}
+  .exec-card,.exec-panel{border:1px solid #343a46;border-radius:8px;background:#111318}.exec-card{padding:13px;min-height:142px}
+  .exec-card h2,.exec-panel h2{font-size:13px;margin:0;color:#d8dce3}.exec-card .exec-number{font-size:27px;font-weight:900;margin-top:14px}
+  .exec-money{display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-top:1px solid #292e37;font-size:12px}.exec-money:first-of-type{margin-top:9px}.exec-money span{color:#9da4af}.exec-money strong{white-space:nowrap}
+  .exec-card--alert{border-color:#8b2f39}.exec-card--warn{border-color:#806613}.exec-card--good{border-color:#286241}
+  .exec-layout{display:grid;grid-template-columns:1fr 1fr;gap:10px}.exec-panel{overflow:hidden;margin-bottom:10px}.exec-panel-head{padding:12px 14px;border-bottom:1px solid #292e37;display:flex;justify-content:space-between;gap:10px}.exec-panel-head small{color:#9299a5}
+  .exec-table-wrap{overflow-x:auto}.exec-table{width:100%;border-collapse:collapse;min-width:480px}.exec-table th,.exec-table td{padding:10px 12px;border-bottom:1px solid #272c34;text-align:left;font-size:12px}.exec-table th{color:#9da4af;background:#171a20}.exec-right{text-align:right!important}.exec-muted{color:#949ba7}.exec-empty{padding:18px;color:#9299a5;text-align:center;font-size:12px}
+  .exec-money-stack{display:grid;gap:2px}.exec-money-stack span{white-space:nowrap}
+  @media screen and (max-width:1050px){.exec-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.exec-layout{display:block}.exec-table{min-width:0}}
+  @media screen and (max-width:760px){.exec-head{display:block}.exec-actions{margin-top:12px}.exec-btn{width:100%;text-align:center}.exec-grid{grid-template-columns:1fr}.exec-card{min-height:0}.exec-table th:nth-child(3),.exec-table td:nth-child(3){display:none}}
+</style>
+
+<div class="exec-ceo">
+  <header class="exec-head">
+    <div><h1>CEO Executive Dashboard</h1><p>Current business position as of {{ today|date:"M j, Y" }}. Every financial amount remains in its original currency.</p></div>
+    <div class="exec-actions">
+      <a class="exec-btn" href="{% url 'ceo_operations_dashboard' %}">Detailed Operations</a>
+      <a class="exec-btn" href="{% url 'executive_financial_dashboard' %}">Finance Dashboard</a>
+      <a class="exec-btn" href="{% url 'ceo_quotation_approval_queue' %}">Approval Queue</a>
+    </div>
+  </header>
+
+  <section class="exec-grid" aria-label="Executive KPIs">
+    {% for title, rows in executive_money_cards %}
+      <article class="exec-card"><h2>{{ title }}</h2>{% for row in rows %}<div class="exec-money"><span>{{ row.currency }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</article>
+    {% endfor %}
+    <article class="exec-card exec-card--good"><h2>Production Orders</h2><div class="exec-number">{{ production_total }}</div><div class="exec-muted">{{ production_active }} active</div></article>
+    <article class="exec-card {% if late_production_orders %}exec-card--alert{% else %}exec-card--good{% endif %}"><h2>Late Production Orders</h2><div class="exec-number">{{ late_production_orders }}</div><div class="exec-muted">Past delivery date and not shipped</div></article>
+    <article class="exec-card {% if pending_ceo_approvals %}exec-card--warn{% else %}exec-card--good{% endif %}"><h2>Pending CEO Approvals</h2><div class="exec-number">{{ pending_ceo_approvals }}</div><div class="exec-muted">Approved costings awaiting quotation decision</div></article>
+  </section>
+
+  <div class="exec-layout">
+    <div>
+      <section class="exec-panel"><div class="exec-panel-head"><h2>Revenue by Currency</h2><small>Month to date</small></div>{% for row in revenue_by_currency %}<div class="exec-money" style="padding:10px 14px"><span>{{ row.currency }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</section>
+      <section class="exec-panel"><div class="exec-panel-head"><h2>Profit by Currency</h2><small>Revenue less recorded COGS and expenses, month to date</small></div>{% for row in profit_by_currency %}<div class="exec-money" style="padding:10px 14px"><span>{{ row.currency }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</section>
+      <section class="exec-panel">
+        <div class="exec-panel-head"><h2>Top Customers</h2><small>Ranked by monthly invoice count</small></div>
+        {% if top_customers %}<div class="exec-table-wrap"><table class="exec-table"><thead><tr><th>Customer</th><th class="exec-right">Invoices</th><th class="exec-right">Revenue</th></tr></thead><tbody>{% for row in top_customers %}<tr><td>{{ row.label }}</td><td class="exec-right">{{ row.count }}</td><td class="exec-right"><div class="exec-money-stack">{% for amount in row.amounts %}{% if amount.amount %}<span>{{ amount.amount|finance_money:amount.currency }}</span>{% endif %}{% endfor %}</div></td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="exec-empty">No monthly sales data.</div>{% endif %}
+      </section>
+    </div>
+    <div>
+      <section class="exec-panel">
+        <div class="exec-panel-head"><h2>Top Salesperson</h2><small>Ranked by monthly invoiced orders</small></div>
+        {% if top_salespeople %}<div class="exec-table-wrap"><table class="exec-table"><thead><tr><th>Salesperson</th><th class="exec-right">Invoices</th><th class="exec-right">Revenue</th></tr></thead><tbody>{% for row in top_salespeople %}<tr><td>{{ row.label }}</td><td class="exec-right">{{ row.count }}</td><td class="exec-right"><div class="exec-money-stack">{% for amount in row.amounts %}{% if amount.amount %}<span>{{ amount.amount|finance_money:amount.currency }}</span>{% endif %}{% endfor %}</div></td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="exec-empty">No salesperson-linked invoices this month.</div>{% endif %}
+      </section>
+      <section class="exec-panel">
+        <div class="exec-panel-head"><h2>Top Production Manager</h2><small>Assigned production orders</small></div>
+        {% if top_production_managers %}<div class="exec-table-wrap"><table class="exec-table"><thead><tr><th>Manager</th><th class="exec-right">Orders</th></tr></thead><tbody>{% for row in top_production_managers %}<tr><td>{{ row.label }}</td><td class="exec-right">{{ row.count }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="exec-empty">No production managers assigned.</div>{% endif %}
+      </section>
+      <section class="exec-panel">
+        <div class="exec-panel-head"><h2>Upcoming Shipments</h2><small>Next 8 scheduled shipments</small></div>
+        {% if upcoming_shipments %}<div class="exec-table-wrap"><table class="exec-table"><thead><tr><th>Date</th><th>Production Order</th><th>Status</th></tr></thead><tbody>{% for shipment in upcoming_shipments %}<tr><td>{{ shipment.ship_date|date:"M j, Y" }}</td><td>{% if shipment.order %}<a href="{% url 'production_detail' shipment.order_id %}">{{ shipment.order.order_code }}</a>{% else %}-{% endif %}</td><td>{{ shipment.get_status_display }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="exec-empty">No upcoming shipments scheduled.</div>{% endif %}
+      </section>
+    </div>
+  </div>
+</div>
+{% endblock %}
