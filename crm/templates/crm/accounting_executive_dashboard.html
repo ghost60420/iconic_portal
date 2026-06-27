@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load humanize %}
+{% load humanize crm_extras %}
 {% block content %}
 
 <style>
@@ -253,6 +253,18 @@
   .exec-badge--warn{ color:#fde68a; background:rgba(251,191,36,0.12); border-color:rgba(251,191,36,0.34); }
   .exec-badge--blue{ color:#bfdbfe; background:rgba(96,165,250,0.12); border-color:rgba(96,165,250,0.34); }
 
+  .exec-warning{
+    margin-bottom:16px;
+    padding:13px 15px;
+    border:1px solid rgba(251,191,36,0.38);
+    border-radius:12px;
+    background:rgba(120,53,15,0.18);
+    color:#fde68a;
+    font-size:13px;
+    font-weight:750;
+    line-height:1.5;
+  }
+
   @media (max-width:1120px){
     .exec-filter{ grid-template-columns:repeat(3, minmax(0,1fr)); }
     .exec-summary{ grid-template-columns:repeat(2, minmax(0,1fr)); }
@@ -282,8 +294,11 @@
     </div>
     <div class="exec-actions">
       <a class="exec-btn" href="{% url 'profit_loss_dashboard' %}">Profit and Loss</a>
-      <a class="exec-btn" href="{% url 'accounts_receivable_dashboard' %}">Accounts receivable</a>
-      <a class="exec-btn exec-btn--gold" href="{% url 'accounts_payable_dashboard' %}">Accounts payable</a>
+      <a class="exec-btn" href="{% url 'balance_sheet_dashboard' %}">Balance Sheet</a>
+      <a class="exec-btn" href="{% url 'cash_flow_dashboard' %}">Cash Flow</a>
+      <a class="exec-btn" href="{% url 'accounts_receivable_dashboard' %}">Receivables</a>
+      <a class="exec-btn" href="{% url 'accounts_payable_dashboard' %}">Payables</a>
+      <a class="exec-btn exec-btn--gold" href="{% url 'kpi_scorecard_dashboard' %}">CEO KPI</a>
     </div>
   </div>
 
@@ -319,57 +334,67 @@
     </div>
   </form>
 
+  {% if conversion_warning_count %}
+    <div class="exec-warning" role="status">
+      CAD-equivalent totals exclude {{ conversion_warning_count }} record{{ conversion_warning_count|pluralize }} without a usable CAD conversion rate:
+      {{ unconverted_receivable_count }} receivable{{ unconverted_receivable_count|pluralize }},
+      {{ unconverted_payment_count }} payment{{ unconverted_payment_count|pluralize }}, and
+      {{ unconverted_entry_count }} accounting entr{{ unconverted_entry_count|pluralize:"y,ies" }}.
+      Original currency exposure remains visible below.
+    </div>
+  {% endif %}
+
   <div class="exec-summary">
     <div class="exec-card">
       <span>Total revenue</span>
-      <strong>CAD {{ total_revenue|floatformat:2|intcomma }}</strong>
+      <strong>{{ total_revenue|finance_money:"CAD" }}</strong>
       <small>Income entries, excluding transfers and cancelled rows.</small>
     </div>
     <div class="exec-card">
       <span>Total received</span>
-      <strong>CAD {{ total_received|floatformat:2|intcomma }}</strong>
+      <strong>{{ total_received|finance_money:"CAD" }}</strong>
       <small>Invoice payments received in the selected period.</small>
       {% if received_currency_totals %}
         <div class="exec-chip-list">
           {% for row in received_currency_totals %}
-            <span class="exec-chip">{{ row.currency }} {{ row.amount|floatformat:2|intcomma }}</span>
+            <span class="exec-chip">{{ row.amount|finance_money:row.currency }}</span>
           {% endfor %}
         </div>
       {% endif %}
     </div>
     <div class="exec-card">
       <span>Total receivables</span>
-      <strong>{{ total_receivables|floatformat:2|intcomma }}</strong>
-      <small>Open invoice balances in invoice currency.</small>
+      <strong>{{ total_receivables|finance_money:"CAD" }}</strong>
+      <small>CAD-equivalent open invoice balances. Original currencies are shown below.</small>
       {% if receivable_currency_totals %}
         <div class="exec-chip-list">
           {% for row in receivable_currency_totals %}
-            <span class="exec-chip">{{ row.currency }} {{ row.amount|floatformat:2|intcomma }}</span>
+            <span class="exec-chip">{{ row.amount|finance_money:row.currency }}</span>
           {% endfor %}
         </div>
       {% endif %}
     </div>
     <div class="exec-card">
       <span>Total payables</span>
-      <strong>CAD {{ total_payables|floatformat:2|intcomma }}</strong>
+      <strong>{{ total_payables|finance_money:"CAD" }}</strong>
       <small>Open vendor bills from outgoing accounting entries.</small>
       {% if payable_currency_totals %}
         <div class="exec-chip-list">
           {% for row in payable_currency_totals %}
-            <span class="exec-chip">{{ row.currency }} {{ row.amount|floatformat:2|intcomma }}</span>
+            <span class="exec-chip">{{ row.amount|finance_money:row.currency }}</span>
           {% endfor %}
         </div>
       {% endif %}
     </div>
     <div class="exec-card">
       <span>Net profit</span>
-      <strong>CAD {{ net_profit|floatformat:2|intcomma }}</strong>
+      <strong>{{ net_profit|finance_money:"CAD" }}</strong>
       <small>Revenue minus COGS and operating expenses.</small>
     </div>
     <div class="exec-card">
       <span>Cash flow</span>
-      <strong>CAD {{ cash_flow|floatformat:2|intcomma }}</strong>
-      <small>Cash in CAD {{ cash_in|floatformat:2|intcomma }} / out CAD {{ cash_out|floatformat:2|intcomma }}.</small>
+      <strong>{{ cash_flow|finance_money:"CAD" }}</strong>
+      <small>Cash in {{ cash_in|finance_money:"CAD" }} / out {{ cash_out|finance_money:"CAD" }}.</small>
     </div>
     <div class="exec-card">
       <span>Overdue invoices</span>
@@ -402,7 +427,7 @@
               </div>
               <div class="exec-right">
                 <span class="exec-badge {% if row.net >= 0 %}exec-badge--good{% else %}exec-badge--bad{% endif %}">
-                  CAD {{ row.net|floatformat:0|intcomma }}
+                  {{ row.net|finance_money:"CAD" }}
                 </span>
               </div>
             </div>
@@ -434,8 +459,8 @@
                 {% for row in top_customer_rows %}
                   <tr>
                     <td>{{ row.label }}</td>
-                    <td class="exec-right">CAD {{ row.revenue|floatformat:2|intcomma }}</td>
-                    <td class="exec-right">{{ row.receivable|floatformat:2|intcomma }}</td>
+                    <td class="exec-right">{{ row.revenue|finance_money:"CAD" }}</td>
+                    <td class="exec-right">{{ row.receivable|finance_money:"CAD" }}</td>
                     <td class="exec-right">{{ row.count }}</td>
                   </tr>
                 {% endfor %}
@@ -469,7 +494,7 @@
                 {% for row in top_supplier_rows %}
                   <tr>
                     <td>{{ row.label }}</td>
-                    <td class="exec-right">CAD {{ row.payable|floatformat:2|intcomma }}</td>
+                    <td class="exec-right">{{ row.payable|finance_money:"CAD" }}</td>
                     <td class="exec-right">{{ row.count }}</td>
                     <td class="exec-right">{{ row.overdue_count }}</td>
                   </tr>
@@ -484,6 +509,32 @@
     </div>
 
     <div>
+      <section class="exec-section">
+        <div class="exec-section-head">
+          <div>
+            <h2 class="exec-section-title">Currency exposure</h2>
+            <div class="exec-section-note">Original-currency balances are never added together. CAD-equivalent headline totals use only records with available conversion data.</div>
+          </div>
+        </div>
+        <div class="exec-table-wrap">
+          <table class="exec-table exec-table--compact">
+            <thead>
+              <tr><th>Currency</th><th class="exec-right">Receivables</th><th class="exec-right">Received</th><th class="exec-right">Payables</th></tr>
+            </thead>
+            <tbody>
+              {% for row in currency_exposure_rows %}
+                <tr>
+                  <td>{{ row.currency }}</td>
+                  <td class="exec-right">{{ row.receivables|finance_money:row.currency }}</td>
+                  <td class="exec-right">{{ row.received|finance_money:row.currency }}</td>
+                  <td class="exec-right">{{ row.payables|finance_money:row.currency }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <section class="exec-section">
         <div class="exec-section-head">
           <div>
@@ -513,11 +564,11 @@
           {% for row in side_rows %}
             <div class="exec-side-card">
               <h3>{{ row.label }}</h3>
-              <div class="exec-side-line"><span>Revenue</span><strong>CAD {{ row.revenue|floatformat:2|intcomma }}</strong></div>
-              <div class="exec-side-line"><span>Received</span><strong>CAD {{ row.received|floatformat:2|intcomma }}</strong></div>
-              <div class="exec-side-line"><span>Receivables</span><strong>{{ row.receivables|floatformat:2|intcomma }}</strong></div>
-              <div class="exec-side-line"><span>Payables</span><strong>CAD {{ row.payables|floatformat:2|intcomma }}</strong></div>
-              <div class="exec-side-line"><span>Net profit</span><strong>CAD {{ row.net_profit|floatformat:2|intcomma }}</strong></div>
+              <div class="exec-side-line"><span>Revenue</span><strong>{{ row.revenue|finance_money:"CAD" }}</strong></div>
+              <div class="exec-side-line"><span>Received</span><strong>{{ row.received|finance_money:"CAD" }}</strong></div>
+              <div class="exec-side-line"><span>Receivables</span><strong>{{ row.receivables|finance_money:"CAD" }}</strong></div>
+              <div class="exec-side-line"><span>Payables</span><strong>{{ row.payables|finance_money:"CAD" }}</strong></div>
+              <div class="exec-side-line"><span>Net profit</span><strong>{{ row.net_profit|finance_money:"CAD" }}</strong></div>
             </div>
           {% endfor %}
         </div>

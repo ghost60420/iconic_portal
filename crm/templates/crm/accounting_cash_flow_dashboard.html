@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load humanize %}
+{% load humanize crm_extras %}
 {% block content %}
 
 <style>
@@ -315,42 +315,42 @@
   <div class="cf-summary">
     <div class="cf-card">
       <span>Opening Cash Balance</span>
-      <strong>CAD {{ opening_cash_balance|floatformat:2|intcomma }}</strong>
+      <strong>{{ opening_cash_balance|finance_money:"CAD" }}</strong>
       <small>Net cash before the selected start date.</small>
     </div>
     <div class="cf-card">
       <span>Cash Received from Customers</span>
-      <strong>CAD {{ cash_received_from_customers|floatformat:2|intcomma }}</strong>
+      <strong>{{ cash_received_from_customers|finance_money:"CAD" }}</strong>
       <small>Customer-linked and income cash inflows.</small>
     </div>
     <div class="cf-card">
       <span>Cash Paid to Suppliers</span>
-      <strong>CAD {{ cash_paid_to_suppliers|floatformat:2|intcomma }}</strong>
+      <strong>{{ cash_paid_to_suppliers|finance_money:"CAD" }}</strong>
       <small>COGS and supplier-linked cash outflows.</small>
     </div>
     <div class="cf-card">
       <span>Operating Expenses Paid</span>
-      <strong>CAD {{ operating_expenses_paid|floatformat:2|intcomma }}</strong>
+      <strong>{{ operating_expenses_paid|finance_money:"CAD" }}</strong>
       <small>Expense and other operating outflows.</small>
     </div>
     <div class="cf-card">
       <span>Loan Payments</span>
-      <strong>CAD {{ loan_payments|floatformat:2|intcomma }}</strong>
+      <strong>{{ loan_payments|finance_money:"CAD" }}</strong>
       <small>Outflows mapped from loan-related labels.</small>
     </div>
     <div class="cf-card">
       <span>Tax Payments</span>
-      <strong>CAD {{ tax_payments|floatformat:2|intcomma }}</strong>
+      <strong>{{ tax_payments|finance_money:"CAD" }}</strong>
       <small>Tax-coded or tax-labeled outflows.</small>
     </div>
     <div class="cf-card">
       <span>Net Cash Flow</span>
-      <strong>CAD {{ net_cash_flow|floatformat:2|intcomma }}</strong>
+      <strong>{{ net_cash_flow|finance_money:"CAD" }}</strong>
       <small>Total inflows minus total outflows.</small>
     </div>
     <div class="cf-card">
       <span>Closing Cash Balance</span>
-      <strong>CAD {{ closing_cash_balance|floatformat:2|intcomma }}</strong>
+      <strong>{{ closing_cash_balance|finance_money:"CAD" }}</strong>
       <small>Opening cash plus net cash flow.</small>
     </div>
   </div>
@@ -374,7 +374,7 @@
               </div>
               <div class="cf-right">
                 <span class="cf-badge {% if row.net >= 0 %}cf-badge--good{% else %}cf-badge--bad{% endif %}">
-                  CAD {{ row.net|floatformat:0|intcomma }}
+                  {{ row.net|finance_money:"CAD" }}
                 </span>
               </div>
             </div>
@@ -399,9 +399,9 @@
                 {% for row in daily_rows %}
                   <tr>
                     <td>{{ row.label }}</td>
-                    <td class="cf-right">CAD {{ row.cash_in|floatformat:2|intcomma }}</td>
-                    <td class="cf-right">CAD {{ row.cash_out|floatformat:2|intcomma }}</td>
-                    <td class="cf-right">CAD {{ row.net|floatformat:2|intcomma }}</td>
+                    <td class="cf-right">{{ row.cash_in|finance_money:"CAD" }}</td>
+                    <td class="cf-right">{{ row.cash_out|finance_money:"CAD" }}</td>
+                    <td class="cf-right">{{ row.net|finance_money:"CAD" }}</td>
                   </tr>
                 {% endfor %}
               </tbody>
@@ -427,9 +427,9 @@
                 {% for row in weekly_rows %}
                   <tr>
                     <td>{{ row.label }}</td>
-                    <td class="cf-right">CAD {{ row.cash_in|floatformat:2|intcomma }}</td>
-                    <td class="cf-right">CAD {{ row.cash_out|floatformat:2|intcomma }}</td>
-                    <td class="cf-right">CAD {{ row.net|floatformat:2|intcomma }}</td>
+                    <td class="cf-right">{{ row.cash_in|finance_money:"CAD" }}</td>
+                    <td class="cf-right">{{ row.cash_out|finance_money:"CAD" }}</td>
+                    <td class="cf-right">{{ row.net|finance_money:"CAD" }}</td>
                   </tr>
                 {% endfor %}
               </tbody>
@@ -451,10 +451,10 @@
           <span class="cf-badge cf-badge--{{ low_cash_tone }}">{{ low_cash_label }}</span>
         </div>
         <div class="cf-forecast">
-          <div class="cf-forecast-row"><span>Forecast receivables</span><strong>CAD {{ forecast_receivables|floatformat:2|intcomma }}</strong></div>
-          <div class="cf-forecast-row"><span>Forecast payables</span><strong>CAD {{ forecast_payables|floatformat:2|intcomma }}</strong></div>
-          <div class="cf-forecast-row"><span>Forecast net cash</span><strong>CAD {{ forecast_net|floatformat:2|intcomma }}</strong></div>
-          <div class="cf-forecast-row"><span>Forecast closing cash</span><strong>CAD {{ forecast_closing_cash|floatformat:2|intcomma }}</strong></div>
+          <div class="cf-forecast-row"><span>Forecast receivables</span><strong>{{ forecast_receivables|finance_money:"CAD" }}</strong></div>
+          <div class="cf-forecast-row"><span>Forecast payables</span><strong>{{ forecast_payables|finance_money:"CAD" }}</strong></div>
+          <div class="cf-forecast-row"><span>Forecast net cash</span><strong>{{ forecast_net|finance_money:"CAD" }}</strong></div>
+          <div class="cf-forecast-row"><span>Forecast closing cash</span><strong>{{ forecast_closing_cash|finance_money:"CAD" }}</strong></div>
           <div class="cf-muted">{{ forecast_invoice_count }} receivable item(s), {{ forecast_payable_count }} payable item(s).</div>
         </div>
       </section>
@@ -472,7 +472,7 @@
               <thead><tr><th>Customer</th><th class="cf-right">Rows</th><th class="cf-right">Amount</th></tr></thead>
               <tbody>
                 {% for row in top_inflow_rows %}
-                  <tr><td>{{ row.label }}</td><td class="cf-right">{{ row.count }}</td><td class="cf-right">CAD {{ row.amount|floatformat:2|intcomma }}</td></tr>
+                  <tr><td>{{ row.label }}</td><td class="cf-right">{{ row.count }}</td><td class="cf-right">{{ row.amount|finance_money:"CAD" }}</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -495,7 +495,7 @@
               <thead><tr><th>Supplier</th><th class="cf-right">Rows</th><th class="cf-right">Amount</th></tr></thead>
               <tbody>
                 {% for row in top_outflow_rows %}
-                  <tr><td>{{ row.label }}</td><td class="cf-right">{{ row.count }}</td><td class="cf-right">CAD {{ row.amount|floatformat:2|intcomma }}</td></tr>
+                  <tr><td>{{ row.label }}</td><td class="cf-right">{{ row.count }}</td><td class="cf-right">{{ row.amount|finance_money:"CAD" }}</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -516,9 +516,9 @@
           {% for row in side_rows %}
             <div class="cf-side-card">
               <h3>{{ row.label }}</h3>
-              <div class="cf-side-line"><span>Cash In</span><strong>CAD {{ row.cash_in|floatformat:2|intcomma }}</strong></div>
-              <div class="cf-side-line"><span>Cash Out</span><strong>CAD {{ row.cash_out|floatformat:2|intcomma }}</strong></div>
-              <div class="cf-side-line"><span>Net</span><strong>CAD {{ row.net|floatformat:2|intcomma }}</strong></div>
+              <div class="cf-side-line"><span>Cash In</span><strong>{{ row.cash_in|finance_money:"CAD" }}</strong></div>
+              <div class="cf-side-line"><span>Cash Out</span><strong>{{ row.cash_out|finance_money:"CAD" }}</strong></div>
+              <div class="cf-side-line"><span>Net</span><strong>{{ row.net|finance_money:"CAD" }}</strong></div>
             </div>
           {% endfor %}
         </div>

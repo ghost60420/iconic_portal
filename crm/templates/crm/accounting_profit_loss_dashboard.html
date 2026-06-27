@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load humanize %}
+{% load humanize crm_extras %}
 {% block content %}
 
 <style>
@@ -308,11 +308,11 @@
   <div class="pl-summary">
     <div class="pl-card">
       <span>Total revenue</span>
-      <strong>CAD {{ total_revenue|floatformat:2|intcomma }}</strong>
+      <strong>{{ total_revenue|finance_money:"CAD" }}</strong>
       <small>{{ revenue_count }} revenue row(s), CAD-equivalent basis.</small>
       <div class="pl-chip-list">
         {% for item in revenue_currency_totals %}
-          <span class="pl-chip">{{ item.currency }} {{ item.amount|floatformat:2|intcomma }}</span>
+          <span class="pl-chip">{{ item.amount|finance_money:item.currency }}</span>
         {% empty %}
           <span class="pl-chip">No revenue</span>
         {% endfor %}
@@ -320,11 +320,11 @@
     </div>
     <div class="pl-card">
       <span>Cost of goods sold</span>
-      <strong>CAD {{ total_cogs|floatformat:2|intcomma }}</strong>
+      <strong>{{ total_cogs|finance_money:"CAD" }}</strong>
       <small>{{ cogs_count }} COGS row(s).</small>
       <div class="pl-chip-list">
         {% for item in cogs_currency_totals %}
-          <span class="pl-chip">{{ item.currency }} {{ item.amount|floatformat:2|intcomma }}</span>
+          <span class="pl-chip">{{ item.amount|finance_money:item.currency }}</span>
         {% empty %}
           <span class="pl-chip">No COGS</span>
         {% endfor %}
@@ -332,16 +332,16 @@
     </div>
     <div class="pl-card">
       <span>Gross profit</span>
-      <strong>CAD {{ gross_profit|floatformat:2|intcomma }}</strong>
+      <strong>{{ gross_profit|finance_money:"CAD" }}</strong>
       <small>Gross margin: {{ gross_margin_percent|floatformat:2 }}%.</small>
     </div>
     <div class="pl-card">
       <span>Net profit</span>
-      <strong>CAD {{ net_profit|floatformat:2|intcomma }}</strong>
-      <small>Operating expenses: CAD {{ operating_expenses|floatformat:2|intcomma }}. Net margin: {{ net_margin_percent|floatformat:2 }}%.</small>
+      <strong>{{ net_profit|finance_money:"CAD" }}</strong>
+      <small>Operating expenses: {{ operating_expenses|finance_money:"CAD" }}. Net margin: {{ net_margin_percent|floatformat:2 }}%.</small>
       <div class="pl-chip-list">
         {% for item in opex_currency_totals %}
-          <span class="pl-chip">{{ item.currency }} {{ item.amount|floatformat:2|intcomma }}</span>
+          <span class="pl-chip">{{ item.amount|finance_money:item.currency }}</span>
         {% empty %}
           <span class="pl-chip">No operating expenses</span>
         {% endfor %}
@@ -363,7 +363,7 @@
             <thead><tr><th>Customer</th><th class="pl-right">Rows</th><th class="pl-right">Revenue CAD</th></tr></thead>
             <tbody>
               {% for row in revenue_by_customer %}
-                <tr><td>{{ row.label }}</td><td class="pl-right">{{ row.count }}</td><td class="pl-right">CAD {{ row.amount|floatformat:2|intcomma }}</td></tr>
+                <tr><td>{{ row.label }}</td><td class="pl-right">{{ row.count }}</td><td class="pl-right">{{ row.amount|finance_money:"CAD" }}</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -386,7 +386,7 @@
             <thead><tr><th>Product category</th><th class="pl-right">Rows</th><th class="pl-right">Revenue CAD</th></tr></thead>
             <tbody>
               {% for row in revenue_by_product_category %}
-                <tr><td>{{ row.label }}</td><td class="pl-right">{{ row.count }}</td><td class="pl-right">CAD {{ row.amount|floatformat:2|intcomma }}</td></tr>
+                <tr><td>{{ row.label }}</td><td class="pl-right">{{ row.count }}</td><td class="pl-right">{{ row.amount|finance_money:"CAD" }}</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -409,7 +409,7 @@
             <thead><tr><th>Cost category</th><th class="pl-right">Rows</th><th class="pl-right">Cost CAD</th></tr></thead>
             <tbody>
               {% for row in cost_by_category %}
-                <tr><td>{{ row.label }}</td><td class="pl-right">{{ row.count }}</td><td class="pl-right">CAD {{ row.amount|floatformat:2|intcomma }}</td></tr>
+                <tr><td>{{ row.label }}</td><td class="pl-right">{{ row.count }}</td><td class="pl-right">{{ row.amount|finance_money:"CAD" }}</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -432,7 +432,7 @@
             <thead><tr><th>Expense category</th><th class="pl-right">Rows</th><th class="pl-right">Expense CAD</th></tr></thead>
             <tbody>
               {% for row in opex_by_category %}
-                <tr><td>{{ row.label }}</td><td class="pl-right">{{ row.count }}</td><td class="pl-right">CAD {{ row.amount|floatformat:2|intcomma }}</td></tr>
+                <tr><td>{{ row.label }}</td><td class="pl-right">{{ row.count }}</td><td class="pl-right">{{ row.amount|finance_money:"CAD" }}</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -460,9 +460,9 @@
           </div>
           <div class="pl-right">
             {% if row.net >= 0 %}
-              <span class="pl-badge pl-badge--good">CAD {{ row.net|floatformat:0|intcomma }}</span>
+              <span class="pl-badge pl-badge--good">{{ row.net|finance_money:"CAD" }}</span>
             {% else %}
-              <span class="pl-badge pl-badge--bad">CAD {{ row.net|floatformat:0|intcomma }}</span>
+              <span class="pl-badge pl-badge--bad">{{ row.net|finance_money:"CAD" }}</span>
             {% endif %}
           </div>
         </div>
@@ -483,11 +483,11 @@
       {% for row in side_rows %}
         <div class="pl-side-card">
           <h3>{{ row.label }}</h3>
-          <div class="pl-side-line"><span>Revenue</span><strong>CAD {{ row.revenue|floatformat:2|intcomma }}</strong></div>
-          <div class="pl-side-line"><span>COGS</span><strong>CAD {{ row.cogs|floatformat:2|intcomma }}</strong></div>
-          <div class="pl-side-line"><span>Gross profit</span><strong>CAD {{ row.gross_profit|floatformat:2|intcomma }}</strong></div>
-          <div class="pl-side-line"><span>Operating expenses</span><strong>CAD {{ row.opex|floatformat:2|intcomma }}</strong></div>
-          <div class="pl-side-line"><span>Net profit</span><strong>CAD {{ row.net_profit|floatformat:2|intcomma }}</strong></div>
+          <div class="pl-side-line"><span>Revenue</span><strong>{{ row.revenue|finance_money:"CAD" }}</strong></div>
+          <div class="pl-side-line"><span>COGS</span><strong>{{ row.cogs|finance_money:"CAD" }}</strong></div>
+          <div class="pl-side-line"><span>Gross profit</span><strong>{{ row.gross_profit|finance_money:"CAD" }}</strong></div>
+          <div class="pl-side-line"><span>Operating expenses</span><strong>{{ row.opex|finance_money:"CAD" }}</strong></div>
+          <div class="pl-side-line"><span>Net profit</span><strong>{{ row.net_profit|finance_money:"CAD" }}</strong></div>
         </div>
       {% endfor %}
     </div>

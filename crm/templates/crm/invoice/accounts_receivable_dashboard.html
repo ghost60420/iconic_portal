@@ -801,7 +801,9 @@
             <div class="ar-cash-row">
               <div class="ar-muted">{{ row.label }}</div>
               <div class="ar-bar"><span style="width:{{ row.bar_percent }}%;"></span></div>
-              <div class="ar-right ar-muted">{{ row.received|floatformat:0|intcomma }}</div>
+              <div class="ar-right ar-muted">
+                {% for item in row.currency_totals %}{{ item.amount|finance_money:item.currency }}{% if not forloop.last %}<br>{% endif %}{% empty %}No amount{% endfor %}
+              </div>
             </div>
           {% endfor %}
         {% else %}

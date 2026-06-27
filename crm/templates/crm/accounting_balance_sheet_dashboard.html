@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load humanize %}
+{% load humanize crm_extras %}
 {% block content %}
 
 <style>
@@ -302,23 +302,23 @@
   <div class="bs-summary">
     <div class="bs-card">
       <span>Total Assets</span>
-      <strong>CAD {{ total_assets|floatformat:2|intcomma }}</strong>
+      <strong>{{ total_assets|finance_money:"CAD" }}</strong>
       <small>Current assets plus fixed assets.</small>
     </div>
     <div class="bs-card">
       <span>Total Liabilities</span>
-      <strong>CAD {{ total_liabilities|floatformat:2|intcomma }}</strong>
+      <strong>{{ total_liabilities|finance_money:"CAD" }}</strong>
       <small>Open payables, credit cards, loans, and taxes payable.</small>
     </div>
     <div class="bs-card">
       <span>Total Equity</span>
-      <strong>CAD {{ total_equity|floatformat:2|intcomma }}</strong>
+      <strong>{{ total_equity|finance_money:"CAD" }}</strong>
       <small>Owner capital, retained earnings, and current period profit.</small>
     </div>
     <div class="bs-card">
       <span>Balance Status</span>
       <strong>{{ balance_status }}</strong>
-      <small>Difference CAD {{ balance_difference|floatformat:2|intcomma }}</small>
+      <small>Difference {{ balance_difference|finance_money:"CAD" }}</small>
     </div>
   </div>
 
@@ -334,12 +334,12 @@
       <div class="bs-equation-main">
         <div class="bs-equation-box">
           <span>Assets</span>
-          <strong>CAD {{ total_assets|floatformat:2|intcomma }}</strong>
+          <strong>{{ total_assets|finance_money:"CAD" }}</strong>
         </div>
         <div class="bs-equals">=</div>
         <div class="bs-equation-box">
           <span>Liabilities + Equity</span>
-          <strong>CAD {{ equation_right|floatformat:2|intcomma }}</strong>
+          <strong>{{ equation_right|finance_money:"CAD" }}</strong>
         </div>
       </div>
       <div class="bs-muted">
@@ -360,13 +360,13 @@
         <div class="bs-table-wrap">
           <table class="bs-table">
             <tbody>
-              <tr><td>Current Assets</td><td class="bs-right">CAD {{ current_assets|floatformat:2|intcomma }}</td></tr>
-              <tr><td>Cash and Bank</td><td class="bs-right">CAD {{ cash_and_bank|floatformat:2|intcomma }}</td></tr>
-              <tr><td>Accounts Receivable</td><td class="bs-right">CAD {{ accounts_receivable|floatformat:2|intcomma }}</td></tr>
-              <tr><td>Inventory Value</td><td class="bs-right">CAD {{ inventory_value|floatformat:2|intcomma }}</td></tr>
-              <tr><td>Prepaid Expenses</td><td class="bs-right">CAD {{ prepaid_expenses|floatformat:2|intcomma }}</td></tr>
-              <tr><td>Fixed Assets</td><td class="bs-right">CAD {{ fixed_assets|floatformat:2|intcomma }}</td></tr>
-              <tr class="bs-total-row"><td>Total Assets</td><td class="bs-right">CAD {{ total_assets|floatformat:2|intcomma }}</td></tr>
+              <tr><td>Current Assets</td><td class="bs-right">{{ current_assets|finance_money:"CAD" }}</td></tr>
+              <tr><td>Cash and Bank</td><td class="bs-right">{{ cash_and_bank|finance_money:"CAD" }}</td></tr>
+              <tr><td>Accounts Receivable</td><td class="bs-right">{{ accounts_receivable|finance_money:"CAD" }}</td></tr>
+              <tr><td>Inventory Value</td><td class="bs-right">{{ inventory_value|finance_money:"CAD" }}</td></tr>
+              <tr><td>Prepaid Expenses</td><td class="bs-right">{{ prepaid_expenses|finance_money:"CAD" }}</td></tr>
+              <tr><td>Fixed Assets</td><td class="bs-right">{{ fixed_assets|finance_money:"CAD" }}</td></tr>
+              <tr class="bs-total-row"><td>Total Assets</td><td class="bs-right">{{ total_assets|finance_money:"CAD" }}</td></tr>
             </tbody>
           </table>
         </div>
@@ -389,7 +389,7 @@
                 <div class="bs-bar bs-bar-equity"><span style="width:{{ row.equity_bar }}%"></span></div>
               </div>
               <div class="bs-right">
-                <span class="bs-badge bs-badge--blue">CAD {{ row.assets|floatformat:0|intcomma }}</span>
+                <span class="bs-badge bs-badge--blue">{{ row.assets|finance_money:"CAD" }}</span>
               </div>
             </div>
           {% endfor %}
@@ -410,11 +410,11 @@
         <div class="bs-table-wrap">
           <table class="bs-table">
             <tbody>
-              <tr><td>Accounts Payable</td><td class="bs-right">CAD {{ accounts_payable|floatformat:2|intcomma }}</td></tr>
-              <tr><td>Credit Cards</td><td class="bs-right">CAD {{ credit_cards|floatformat:2|intcomma }}</td></tr>
-              <tr><td>Loans</td><td class="bs-right">CAD {{ loans|floatformat:2|intcomma }}</td></tr>
-              <tr><td>Taxes Payable</td><td class="bs-right">CAD {{ taxes_payable|floatformat:2|intcomma }}</td></tr>
-              <tr class="bs-total-row"><td>Total Liabilities</td><td class="bs-right">CAD {{ total_liabilities|floatformat:2|intcomma }}</td></tr>
+              <tr><td>Accounts Payable</td><td class="bs-right">{{ accounts_payable|finance_money:"CAD" }}</td></tr>
+              <tr><td>Credit Cards</td><td class="bs-right">{{ credit_cards|finance_money:"CAD" }}</td></tr>
+              <tr><td>Loans</td><td class="bs-right">{{ loans|finance_money:"CAD" }}</td></tr>
+              <tr><td>Taxes Payable</td><td class="bs-right">{{ taxes_payable|finance_money:"CAD" }}</td></tr>
+              <tr class="bs-total-row"><td>Total Liabilities</td><td class="bs-right">{{ total_liabilities|finance_money:"CAD" }}</td></tr>
             </tbody>
           </table>
         </div>
@@ -430,10 +430,10 @@
         <div class="bs-table-wrap">
           <table class="bs-table">
             <tbody>
-              <tr><td>Owner Capital</td><td class="bs-right">CAD {{ owner_capital|floatformat:2|intcomma }}</td></tr>
-              <tr><td>Retained Earnings</td><td class="bs-right">CAD {{ retained_earnings|floatformat:2|intcomma }}</td></tr>
-              <tr><td>Current Period Profit</td><td class="bs-right">CAD {{ current_period_profit|floatformat:2|intcomma }}</td></tr>
-              <tr class="bs-total-row"><td>Total Equity</td><td class="bs-right">CAD {{ total_equity|floatformat:2|intcomma }}</td></tr>
+              <tr><td>Owner Capital</td><td class="bs-right">{{ owner_capital|finance_money:"CAD" }}</td></tr>
+              <tr><td>Retained Earnings</td><td class="bs-right">{{ retained_earnings|finance_money:"CAD" }}</td></tr>
+              <tr><td>Current Period Profit</td><td class="bs-right">{{ current_period_profit|finance_money:"CAD" }}</td></tr>
+              <tr class="bs-total-row"><td>Total Equity</td><td class="bs-right">{{ total_equity|finance_money:"CAD" }}</td></tr>
             </tbody>
           </table>
         </div>
@@ -452,10 +452,10 @@
           {% for row in side_rows %}
             <div class="bs-side-card">
               <h3>{{ row.label }}</h3>
-              <div class="bs-side-line"><span>Assets</span><strong>CAD {{ row.assets|floatformat:2|intcomma }}</strong></div>
-              <div class="bs-side-line"><span>Liabilities</span><strong>CAD {{ row.liabilities|floatformat:2|intcomma }}</strong></div>
-              <div class="bs-side-line"><span>Equity</span><strong>CAD {{ row.equity|floatformat:2|intcomma }}</strong></div>
-              <div class="bs-side-line"><span>Difference</span><strong>CAD {{ row.difference|floatformat:2|intcomma }}</strong></div>
+              <div class="bs-side-line"><span>Assets</span><strong>{{ row.assets|finance_money:"CAD" }}</strong></div>
+              <div class="bs-side-line"><span>Liabilities</span><strong>{{ row.liabilities|finance_money:"CAD" }}</strong></div>
+              <div class="bs-side-line"><span>Equity</span><strong>{{ row.equity|finance_money:"CAD" }}</strong></div>
+              <div class="bs-side-line"><span>Difference</span><strong>{{ row.difference|finance_money:"CAD" }}</strong></div>
             </div>
           {% endfor %}
         </div>

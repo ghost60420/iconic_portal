@@ -1135,14 +1135,24 @@ def accounts_receivable_dashboard(request):
                 "received": Decimal("0"),
                 "received_bdt": Decimal("0"),
                 "payments": 0,
+                "currency_map": {},
             }
         monthly_map[key]["received"] += _d(payment.amount)
         monthly_map[key]["received_bdt"] += _d(payment.amount_bdt)
         monthly_map[key]["payments"] += 1
+        currency = (payment.currency or "Unknown").upper()
+        monthly_map[key]["currency_map"][currency] = (
+            monthly_map[key]["currency_map"].get(currency, Decimal("0")) + _d(payment.amount)
+        )
     monthly_rows = [monthly_map[key] for key in sorted(monthly_map.keys())]
-    max_monthly = max([row["received"] for row in monthly_rows] or [Decimal("0")])
+    max_monthly = max([row["payments"] for row in monthly_rows] or [0])
     for row in monthly_rows:
-        row["bar_percent"] = int((row["received"] / max_monthly) * 100) if max_monthly > 0 else 0
+        row["currency_totals"] = [
+            {"currency": currency, "amount": amount}
+            for currency, amount in sorted(row["currency_map"].items())
+            if amount != 0
+        ]
+        row["bar_percent"] = int((row["payments"] / max_monthly) * 100) if max_monthly > 0 else 0
 
     customers = Customer.objects.filter(invoice__isnull=False).distinct().order_by("account_brand", "contact_name")
 

@@ -804,15 +804,25 @@ def accounts_payable_dashboard(request):
                 "paid": Decimal("0"),
                 "outstanding": Decimal("0"),
                 "count": 0,
+                "currency_map": {},
             }
         monthly_map[key]["total"] += row["amount"]
         monthly_map[key]["paid"] += row["paid_amount"]
         monthly_map[key]["outstanding"] += row["outstanding"]
         monthly_map[key]["count"] += 1
+        currency = row["currency"]
+        monthly_map[key]["currency_map"][currency] = (
+            monthly_map[key]["currency_map"].get(currency, Decimal("0")) + row["amount"]
+        )
     monthly_rows = [monthly_map[key] for key in sorted(monthly_map.keys())][-12:]
-    max_monthly = max([row["total"] for row in monthly_rows] or [Decimal("0")])
+    max_monthly = max([row["count"] for row in monthly_rows] or [0])
     for row in monthly_rows:
-        row["bar_percent"] = int((row["total"] / max_monthly) * 100) if max_monthly > 0 else 0
+        row["currency_totals"] = [
+            {"currency": currency, "amount": amount}
+            for currency, amount in sorted(row["currency_map"].items())
+            if amount != 0
+        ]
+        row["bar_percent"] = int((row["count"] / max_monthly) * 100) if max_monthly > 0 else 0
 
     category_rows = []
     category_map = {}
@@ -1178,6 +1188,23 @@ def _exec_currency_totals(rows, currency_getter, amount_getter):
     ]
 
 
+def _exec_currency_exposure_rows(receivables, received, payables):
+    maps = []
+    for values in (receivables, received, payables):
+        maps.append({row["currency"]: row["amount"] for row in values})
+    supported = ["CAD", "USD", "BDT"]
+    additional = sorted(set().union(*(mapping.keys() for mapping in maps)) - set(supported))
+    return [
+        {
+            "currency": currency,
+            "receivables": maps[0].get(currency, Decimal("0")),
+            "received": maps[1].get(currency, Decimal("0")),
+            "payables": maps[2].get(currency, Decimal("0")),
+        }
+        for currency in [*supported, *additional]
+    ]
+
+
 def _exec_monthly_cash_rows(entries):
     monthly = {}
     for entry in entries:
@@ -1340,6 +1367,43 @@ def executive_financial_dashboard(request):
     ]
     total_payables = sum((_pl_amount_cad(row["entry"]) for row in open_payable_rows), Decimal("0"))
 
+    receivable_currency_totals = _exec_currency_totals(
+        open_invoices,
+        lambda invoice: invoice.currency,
+        lambda invoice: invoice.balance,
+    )
+    received_currency_totals = _exec_currency_totals(
+        payments,
+        lambda payment: payment.currency,
+        lambda payment: payment.amount,
+    )
+    payable_currency_totals = _exec_currency_totals(
+        open_payable_rows,
+        lambda row: row["entry"].currency,
+        lambda row: row["amount"],
+    )
+    unconverted_receivable_count = sum(
+        1
+        for invoice in open_invoices
+        if _pl_decimal(invoice.balance) > 0
+        and _bs_invoice_balance_cad(invoice, cad_to_bdt) == 0
+        and (invoice.currency or "").upper().strip() != "CAD"
+    )
+    unconverted_payment_count = sum(
+        1
+        for payment in payments
+        if _pl_decimal(payment.amount) > 0
+        and _exec_payment_amount_cad(payment) == 0
+        and (payment.currency or "").upper().strip() != "CAD"
+    )
+    unconverted_entry_count = sum(
+        1
+        for entry in entries
+        if _pl_decimal(entry.amount_original) > 0
+        and _pl_amount_cad(entry) == 0
+        and (entry.currency or "").upper().strip() != "CAD"
+    )
+
     customer_map = {}
     for row in revenue_rows:
         label = row["customer"]
@@ -1429,9 +1493,22 @@ def executive_financial_dashboard(request):
             "cash_out": cash_out,
             "overdue_invoices": len(overdue_invoices),
             "due_vendor_bills": len(due_vendor_rows),
-            "receivable_currency_totals": _exec_currency_totals(open_invoices, lambda invoice: invoice.currency, lambda invoice: invoice.balance),
-            "received_currency_totals": _exec_currency_totals(payments, lambda payment: payment.currency, lambda payment: payment.amount),
-            "payable_currency_totals": _exec_currency_totals(open_payable_rows, lambda row: row["entry"].currency, lambda row: row["amount"]),
+            "receivable_currency_totals": receivable_currency_totals,
+            "received_currency_totals": received_currency_totals,
+            "payable_currency_totals": payable_currency_totals,
+            "currency_exposure_rows": _exec_currency_exposure_rows(
+                receivable_currency_totals,
+                received_currency_totals,
+                payable_currency_totals,
+            ),
+            "unconverted_receivable_count": unconverted_receivable_count,
+            "unconverted_payment_count": unconverted_payment_count,
+            "unconverted_entry_count": unconverted_entry_count,
+            "conversion_warning_count": (
+                unconverted_receivable_count
+                + unconverted_payment_count
+                + unconverted_entry_count
+            ),
             "top_customer_rows": top_customer_rows,
             "top_supplier_rows": top_supplier_rows,
             "monthly_rows": _exec_monthly_cash_rows(entries),
