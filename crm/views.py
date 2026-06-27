@@ -35,6 +35,7 @@ from django.shortcuts import render
 from .models import Product, Fabric, Accessory, Trim, ThreadOption, InventoryItem, InventoryMovement, InventoryReorder, ProductionOrderMaterial
 
 from .services.costing import build_variance_report, calculate_cost_sheet
+from .services.costing_currency import format_finance_money
 from .services.costing_engine import compute_costing
 from .services.order_lifecycle import (
     build_lifecycle_profit_breakdown,
@@ -8329,7 +8330,13 @@ def production_list(request):
 
     orders = (
         ProductionOrder.objects
-        .select_related("customer", "product", "opportunity", "lead")
+        .select_related(
+            "customer",
+            "product",
+            "opportunity",
+            "lead",
+            "assigned_production_manager",
+        )
         .prefetch_related("stages", "shipments", "order_lifecycles")
         .order_by("-created_at")
     )
@@ -8675,6 +8682,7 @@ def production_add(request):
             can_edit_internal_costing=can_edit_internal_costing,
         )
         if form.is_valid():
+            form.instance.created_by = request.user if request.user.is_authenticated else None
             order = form.save()
             _save_production_lines(order, request)
             _apply_production_library_links(order, request)
@@ -8849,7 +8857,15 @@ def production_edit(request, pk):
 
 def production_detail(request, pk):
     order = get_object_or_404(
-        ProductionOrder.objects.select_related("customer", "product", "opportunity", "lead")
+        ProductionOrder.objects.select_related(
+            "customer",
+            "product",
+            "opportunity",
+            "lead",
+            "source_quotation",
+            "assigned_production_manager",
+            "created_by",
+        )
         .prefetch_related(
             "stages",
             "shipments",
@@ -8932,6 +8948,18 @@ def production_detail(request, pk):
     production_visual_stages = _production_visual_stages(order, stages, shipments)
     latest_shipment = shipments[0] if shipments else None
     reject_percent = int((order.qty_reject / order.qty_total) * 100) if order.qty_total else 0
+    approved_summary = order.approved_costing_summary or {}
+    approved_currency = order.approved_currency or "BDT"
+    approved_costing_rows = [
+        {
+            "label": "Total cost per piece",
+            "value": format_finance_money(approved_summary.get("total_cost_per_piece"), approved_currency),
+        },
+        {
+            "label": "Total approved cost",
+            "value": format_finance_money(approved_summary.get("total_cost_order"), approved_currency),
+        },
+    ]
 
     try:
         inventory_context = _production_inventory_context(order)
@@ -9262,6 +9290,15 @@ def production_detail(request, pk):
         "progress_photo_sections": progress_photo_sections,
         "shipments": shipments,
         "reject_percent": reject_percent,
+        "approved_selling_price_display": format_finance_money(
+            order.approved_selling_price,
+            approved_currency,
+        ),
+        "approved_total_value_display": format_finance_money(
+            order.approved_total_value,
+            approved_currency,
+        ),
+        "approved_costing_rows": approved_costing_rows,
         "opportunity": opportunity,
         "lead": lead,
         "customer": customer,

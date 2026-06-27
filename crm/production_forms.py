@@ -32,6 +32,7 @@ class ProductionOrderForm(forms.ModelForm):
             "lead",
             "opportunity",
             "customer",
+            "assigned_production_manager",
             "product",
             "sample_deadline",
             "bulk_deadline",
@@ -122,10 +123,17 @@ class ProductionOrderForm(forms.ModelForm):
             if not self.instance.pk:
                 self.fields["production_order_type"].initial = "bulk"
 
+        if "bulk_deadline" in self.fields:
+            self.fields["bulk_deadline"].label = "Delivery date"
+
+        if "assigned_production_manager" in self.fields:
+            self.fields["assigned_production_manager"].label = "Assigned production manager"
+
         for field_name, placeholder in {
             "lead": "Search lead ID, brand, or contact",
             "opportunity": "Search opportunity ID or brand",
             "customer": "Search customer or contact",
+            "assigned_production_manager": "Search production manager",
             "product": "Search product code or style",
         }.items():
             if field_name in self.fields:

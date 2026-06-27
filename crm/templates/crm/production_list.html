@@ -404,7 +404,10 @@
 
                   <td data-label="Owner">
                     <div class="production-stack">
-                      {% if order.opportunity and order.opportunity.assigned_to %}
+                      {% if order.assigned_production_manager %}
+                        <strong>{{ order.assigned_production_manager.get_full_name|default:order.assigned_production_manager.username }}</strong>
+                        <span>Production manager</span>
+                      {% elif order.opportunity and order.opportunity.assigned_to %}
                         <strong>{{ order.opportunity.assigned_to }}</strong>
                         <span>Opportunity owner</span>
                       {% elif order.lead and order.lead.assigned_to %}

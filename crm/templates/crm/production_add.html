@@ -503,6 +503,14 @@
         </div>
 
         <div class="prod-add-field">
+          <div class="prod-add-label">Assigned production manager</div>
+          {{ form.assigned_production_manager }}
+          {% if form.assigned_production_manager.errors %}
+            <div class="prod-add-errors">{{ form.assigned_production_manager.errors|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="prod-add-field">
           <div class="prod-add-label">Product optional</div>
           {{ form.product }}
           {% if form.product.errors %}
@@ -562,7 +570,7 @@
         </div>
 
         <div class="prod-add-field">
-          <div class="prod-add-label">Bulk date</div>
+          <div class="prod-add-label">Delivery date</div>
           {{ form.bulk_deadline }}
           {% if form.bulk_deadline.errors %}
             <div class="prod-add-errors">{{ form.bulk_deadline.errors|striptags }}</div>

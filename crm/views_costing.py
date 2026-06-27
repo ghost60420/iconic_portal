@@ -7,6 +7,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.contrib import messages
 from django.core.files.base import ContentFile
+from django.db import transaction
 from django.db.models import Q
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
@@ -38,6 +39,10 @@ from .services.costing_workflow import (
     get_costing_quote_amounts,
 )
 from .services.order_lifecycle import create_lifecycle_from_costing
+from .services.production_orders import (
+    ProductionOrderCreationError,
+    create_production_order_from_approved_quotation,
+)
 from .services.workflow_visibility import build_workflow_visibility_context
 from .permissions import can_view_internal_costing
 
@@ -1888,27 +1893,46 @@ def cost_sheet_quotation_approve(request, pk):
         messages.error(request, "Convert an approved costing to a quotation before approval.")
         return redirect("cost_sheet_detail", pk=pk)
 
-    costing.quotation_status = CostingHeader.QUOTATION_STATUS_APPROVED
-    costing.quotation_approved_by = _user_or_none(request.user)
-    costing.quotation_approved_at = timezone.now()
-    costing.quotation_rejected_by = None
-    costing.quotation_rejected_at = None
-    costing.save(
-        update_fields=[
-            "quotation_status",
-            "quotation_approved_by",
-            "quotation_approved_at",
-            "quotation_rejected_by",
-            "quotation_rejected_at",
-            "updated_at",
-        ]
+    try:
+        with transaction.atomic():
+            costing = (
+                CostingHeader.objects.select_for_update()
+                .select_related("opportunity", "opportunity__lead", "customer")
+                .get(pk=costing.pk)
+            )
+            costing.quotation_status = CostingHeader.QUOTATION_STATUS_APPROVED
+            costing.quotation_approved_by = _user_or_none(request.user)
+            costing.quotation_approved_at = timezone.now()
+            costing.quotation_rejected_by = None
+            costing.quotation_rejected_at = None
+            costing.save(
+                update_fields=[
+                    "quotation_status",
+                    "quotation_approved_by",
+                    "quotation_approved_at",
+                    "quotation_rejected_by",
+                    "quotation_rejected_at",
+                    "updated_at",
+                ]
+            )
+            CostingAuditLog.objects.create(
+                costing=costing,
+                action="quotation_approved",
+                changed_by=_user_or_none(request.user),
+            )
+            production_order, created = create_production_order_from_approved_quotation(
+                costing,
+                user=request.user,
+            )
+    except ProductionOrderCreationError as exc:
+        messages.error(request, f"Quotation approval was not completed: {exc}")
+        return redirect("cost_sheet_client_quotation", pk=pk)
+
+    action = "created" if created else "linked"
+    messages.success(
+        request,
+        f"Quotation {costing.quotation_number} approved. Production order {production_order.order_code} {action}.",
     )
-    CostingAuditLog.objects.create(
-        costing=costing,
-        action="quotation_approved",
-        changed_by=_user_or_none(request.user),
-    )
-    messages.success(request, f"Quotation {costing.quotation_number} approved.")
     return redirect("cost_sheet_client_quotation", pk=pk)
 
 
