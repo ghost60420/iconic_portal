@@ -7,6 +7,17 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from decimal import Decimal, ROUND_HALF_UP
 from .models_access import UserAccess
+from .models_platform import (
+    CRMSetting,
+    Department,
+    FavoriteRecord,
+    Position,
+    RecentSearch,
+    RecentlyViewedRecord,
+    SavedFilter,
+    UserDashboardPreference,
+)
+from .models_employee import EmployeeIdSequence, EmployeeProfile
 
 class BDMonthlyTarget(models.Model):
     year = models.PositiveIntegerField()
@@ -776,6 +787,15 @@ class Customer(models.Model):
     shipping_country = models.CharField(max_length=100, blank=True)
 
     is_active = models.BooleanField(default=True)
+    is_archived = models.BooleanField(default=False, db_index=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="archived_customers",
+    )
     created_date = models.DateField(default=timezone.localdate)
     updated_at = models.DateTimeField(auto_now=True)
     notes = models.TextField(blank=True)
@@ -879,6 +899,13 @@ class LeadComment(models.Model):
     )
 
     author = models.CharField(max_length=100, blank=True, default="")
+    author_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="chatter_comments",
+    )
     content = models.TextField()
     attachment = models.FileField(
         upload_to="chatter_attachments/",
@@ -886,6 +913,7 @@ class LeadComment(models.Model):
         null=True,
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
 
     pinned = models.BooleanField(default=False)
     is_ai = models.BooleanField(default=False)
@@ -895,6 +923,12 @@ class LeadComment(models.Model):
 
     def __str__(self):
         return f"{self.author}: {self.content[:40]}"
+
+    @property
+    def was_edited(self):
+        if not self.created_at or not self.updated_at:
+            return False
+        return (self.updated_at - self.created_at).total_seconds() > 1
 
 
 class LeadTask(models.Model):
@@ -1287,6 +1321,7 @@ class Opportunity(models.Model):
     )
 
     created_date = models.DateField(auto_now_add=True)
+    closed_won_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
     next_followup = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
@@ -1327,6 +1362,12 @@ class Opportunity(models.Model):
         if not self.opportunity_id and self.lead and self.lead.lead_id:
             count_for_lead = Opportunity.objects.filter(lead=self.lead).count() + 1
             self.opportunity_id = f"OPP-{self.lead.lead_id}-{count_for_lead:03}"
+
+        if self.stage == "Closed Won" and self.closed_won_at is None:
+            self.closed_won_at = timezone.now()
+            update_fields = kwargs.get("update_fields")
+            if update_fields is not None:
+                kwargs["update_fields"] = set(update_fields) | {"closed_won_at"}
 
         super().save(*args, **kwargs)
 
@@ -1797,6 +1838,15 @@ class CostingHeader(models.Model):
         Opportunity,
         on_delete=models.CASCADE,
         related_name="costing_headers",
+    )
+    is_archived = models.BooleanField(default=False, db_index=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="archived_quotations",
     )
     customer = models.ForeignKey(
         "Customer",
@@ -4281,18 +4331,26 @@ class AutomationRule(models.Model):
 
 class AutomationNotification(models.Model):
     TYPE_CHOICES = [
-        ("ceo_approval", "CEO Approval"),
-        ("production_due", "Production Due"),
-        ("shipping", "Shipping"),
+        ("ceo_approval", "CEO Approval Required"),
+        ("ceo_approved", "CEO Approved Quotation"),
+        ("ceo_rejected", "CEO Rejected Quotation"),
+        ("production_created", "Production Order Created"),
+        ("sample_due", "Sample Due"),
+        ("production_due", "Production Overdue"),
+        ("shipment_due", "Shipment Due Today"),
+        ("shipment_delayed", "Shipment Delayed"),
         ("invoice_overdue", "Invoice Overdue"),
+        ("task_assigned", "Task Assigned"),
+        ("task_completed", "Task Completed"),
+        ("comment_added", "Comment Added"),
+        ("mention", "Mention"),
         ("general", "General"),
     ]
     PRIORITY_CHOICES = [
-        ("low", "Low"),
-        ("normal", "Normal"),
-        ("high", "High"),
-        ("urgent", "Urgent"),
         ("critical", "Critical"),
+        ("high", "High"),
+        ("normal", "Normal"),
+        ("information", "Information"),
     ]
 
     rule = models.ForeignKey(
@@ -4420,6 +4478,15 @@ class Invoice(models.Model):
         ("paid", "Paid"),
         ("cancelled", "Cancelled"),
     ]
+    is_archived = models.BooleanField(default=False, db_index=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="archived_invoices",
+    )
     INVOICE_MARKET_CHOICES = [
         ("north_america", "North America"),
         ("bangladesh", "Bangladesh"),

@@ -1,0 +1,21 @@
+{% load crm_people %}
+<div class="crm-chatter-identity">
+  {% if c.author_user.employee_profile.profile_photo %}
+    <img class="crm-chatter-avatar" src="{{ c.author_user.employee_profile.profile_photo.url }}" alt="">
+  {% else %}
+    <span class="crm-chatter-avatar" aria-hidden="true">
+      {% if c.author_user %}{{ c.author_user|employee_initials }}{% else %}{{ c.author|default:"U"|slice:":1"|upper }}{% endif %}
+    </span>
+  {% endif %}
+  <div class="crm-chatter-person">
+    <strong>{% if c.author_user %}{{ c.author_user|employee_name }}{% else %}{{ c.author|chatter_author }}{% endif %}</strong>
+    <span>
+      {% if c.author_user.employee_profile.position %}{{ c.author_user.employee_profile.get_position_display }}{% else %}Team Member{% endif %}
+    </span>
+    <small>
+      {{ c.created_at|timesince }} ago
+      {% if c.was_edited %}<b title="Edited">✎ Edited</b>{% endif %}
+      {% if c.pinned %}<b title="Pinned">📌 Pinned</b>{% endif %}
+    </small>
+  </div>
+</div>

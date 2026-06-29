@@ -1,4 +1,5 @@
 from django import template
+from crm.services.operations_permissions import has_operations_role
 try:
     from crm.models_access import UserAccess
 except Exception:
@@ -120,7 +121,7 @@ def can_access(user, flag_name):
                 (flag_name or "").strip() == "can_accounting_ca"
                 and access
                 and getattr(access, "is_bd", False)
-                and not user.groups.filter(name="CEO").exists()
+                and not has_operations_role(user, "CEO")
             ):
                 return False
             return role_decision

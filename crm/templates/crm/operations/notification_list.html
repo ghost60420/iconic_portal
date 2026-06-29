@@ -8,7 +8,7 @@
     <div>
       <p class="ops-eyebrow">Operations Control Center</p>
       <h1 class="ops-title">Notification Center</h1>
-      <p class="ops-subtitle">CRM-only alerts for approvals, production delivery, shipping, and overdue invoices.</p>
+      <p class="ops-subtitle">Important approvals, assignments, deadlines, comments, and mentions inside the CRM only.</p>
     </div>
     <div class="ops-actions">
       <span class="ops-badge ops-badge--high">{{ unread_count }} unread</span>
@@ -18,33 +18,25 @@
       </form>
       <form method="post" action="{% url 'notification_delete_read' %}">
         {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
-        <button class="ops-btn" type="submit">Delete Read Notifications</button>
+        {% for notification_id in visible_read_ids %}<input type="hidden" name="notification_ids" value="{{ notification_id }}">{% endfor %}
+        <button class="ops-btn" type="submit" {% if not visible_read_ids %}disabled{% endif %}>Delete Visible Read</button>
       </form>
+      {% if has_older_notifications and not show_older %}<a class="ops-btn" href="?older=1&filter={{ selected_filter|urlencode }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Show Older Notifications</a>{% endif %}
+      {% if show_older %}<a class="ops-btn" href="?filter={{ selected_filter|urlencode }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Show Recent Notifications</a>{% endif %}
     </div>
   </header>
 
-  <form method="get" class="ops-card ops-grid ops-grid--filters">
-    <label class="ops-filter">Type
-      <select class="ops-select" name="type">
-        <option value="">All types</option>
-        {% for value, label in type_choices %}<option value="{{ value }}" {% if notification_type == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
-      </select>
-    </label>
-    <label class="ops-filter">Priority
-      <select class="ops-select" name="priority">
-        <option value="">All priorities</option>
-        {% for value, label in priority_choices %}<option value="{{ value }}" {% if priority == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
-      </select>
-    </label>
-    <label class="ops-filter">Status
-      <select class="ops-select" name="status">
-        <option value="">Read and unread</option>
-        <option value="unread" {% if read_status == 'unread' %}selected{% endif %}>Unread</option>
-        <option value="read" {% if read_status == 'read' %}selected{% endif %}>Read</option>
-      </select>
-    </label>
-    <div class="ops-filter"><span>&nbsp;</span><button class="ops-btn ops-btn--gold" type="submit">Apply Filters</button></div>
-    <div class="ops-filter"><span>&nbsp;</span><a class="ops-btn" href="{% url 'notification_list' %}">Clear</a></div>
+  <nav class="ops-filter-chips" aria-label="Notification filters">
+    {% for value, label in notification_filters %}<a class="ops-filter-chip {% if selected_filter == value %}is-active{% endif %}" href="?filter={{ value }}{% if show_older %}&older=1{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">{{ label }}</a>{% endfor %}
+  </nav>
+
+  <form method="get" class="ops-card ops-notification-search" role="search">
+    <input type="hidden" name="filter" value="{{ selected_filter }}">
+    {% if show_older %}<input type="hidden" name="older" value="1">{% endif %}
+    <label class="visually-hidden" for="notification-search">Search notifications</label>
+    <input id="notification-search" class="ops-input" type="search" name="q" value="{{ search_query }}" placeholder="Search record number, customer, lead, quotation, order, invoice, or user">
+    <button class="ops-btn ops-btn--gold" type="submit">Search</button>
+    {% if search_query %}<a class="ops-btn" href="?filter={{ selected_filter }}{% if show_older %}&older=1{% endif %}">Clear Search</a>{% endif %}
   </form>
 
   <form method="post" action="{% url 'notification_mark_selected_read' %}" class="ops-notification-form">
@@ -64,18 +56,18 @@
                   <label class="ops-notification-select" aria-label="Select notification {{ item.pk }}">
                     <input type="checkbox" name="notification_ids" value="{{ item.pk }}" data-notification-checkbox>
                   </label>
-                  <span class="ops-notification-icon" title="{{ item.icon_label }}" aria-label="{{ item.icon_label }}"><i data-lucide="{{ item.icon_name }}"></i></span>
+                  <span class="ops-notification-icon" aria-hidden="true">{{ item.icon_symbol }}</span>
                   <div>
                     <div class="ops-actions">
                       <span class="ops-badge ops-badge--{{ item.priority }}">{{ item.get_priority_display }}</span>
                       <span class="ops-badge">{{ item.get_notification_type_display }}</span>
                       <span class="ops-age">{{ item.age_label }}</span>
                     </div>
-                    <h3>{{ item.title }}</h3>
-                    <p>{{ item.message }}</p>
+                    <h3><a class="ops-notification-link" href="{{ item.open_url }}">{{ item.title }}</a></h3>
+                    <p>{{ item.message|truncatechars:120 }}</p>
+                    {% if item.record_label %}<div class="ops-notification-record">{{ item.record_label }}</div>{% endif %}
                   </div>
                 </div>
-                {% if item.target_url %}<a class="ops-btn" href="{{ item.target_url }}">Open Record</a>{% endif %}
               </div>
               <div class="ops-meta">
                 <span>Notification #{{ item.pk }}</span>
@@ -93,7 +85,6 @@
     {% endfor %}
   </form>
 </main>
-<script defer src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js" onload="window.lucide && window.lucide.createIcons()"></script>
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     const selectAll = document.querySelector("[data-notification-select-all]");

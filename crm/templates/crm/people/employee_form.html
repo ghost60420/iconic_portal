@@ -1,0 +1,43 @@
+{% extends "crm/base.html" %}
+{% load static crm_people crm_extras %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'crm/people.css' %}">
+<main class="people-shell">
+  <header class="people-head"><div class="people-identity">{% if not creating %}{% if profile.profile_photo %}<img class="people-avatar" src="{{ profile.profile_photo.url }}" alt="">{% else %}<span class="people-avatar">{{ profile.initials }}</span>{% endif %}{% endif %}<div><p class="people-eyebrow">People & Access</p><h1 class="people-title">{% if creating %}New Employee{% else %}{{ profile.public_name }}{% endif %}</h1>{% if not creating %}<p class="people-employee-number">{{ profile.employee_id }}</p>{% endif %}<p class="people-subtitle">Positions describe company structure. Permission roles control CRM access and can be combined.</p></div></div><div class="people-actions"><a class="people-btn" href="{% url 'employee_list' %}">Employees</a>{% if target_user.is_active and target_is_sales %}<a class="people-btn" href="{% url 'salesperson_profile_user' target_user.pk %}">Sales Profile</a>{% endif %}</div></header>
+
+  {% if not creating %}
+    <section class="people-card employee-profile-card">
+      <div class="employee-profile-card__identity">{% if profile.profile_photo %}<img class="people-avatar" src="{{ profile.profile_photo.url }}" alt="">{% else %}<span class="people-avatar">{{ profile.initials }}</span>{% endif %}<div><strong>{{ profile.public_name }}</strong><span>{{ profile.employee_id }} · {{ profile.position_name }}</span><small>{{ profile.department_name }}</small></div></div>
+      <dl class="employee-profile-facts">
+        <div><dt>Full Name</dt><dd>{{ target_user.get_full_name|default:"Not set" }}</dd></div><div><dt>Manager</dt><dd>{% if profile.manager %}{{ profile.manager|employee_name }}{% else %}None{% endif %}</dd></div>
+        <div><dt>Email</dt><dd>{{ target_user.email|default:"Not set" }}</dd></div><div><dt>Phone</dt><dd>{{ profile.phone|default:"Not set" }}</dd></div>
+        <div><dt>Status</dt><dd><span class="people-badge people-badge--{{ profile.status }}">{{ profile.get_status_display }}</span></dd></div><div><dt>Roles</dt><dd><span class="people-roles">{% for role in target_user.groups.all %}<span class="people-badge">{{ role.name }}</span>{% empty %}No roles{% endfor %}</span></dd></div>
+        <div><dt>Last Login</dt><dd>{{ target_user.last_login|date:"M j, Y H:i"|default:"Never" }}</dd></div><div><dt>Date Joined</dt><dd>{{ target_user.date_joined|date:"M j, Y H:i" }}</dd></div>
+      </dl>
+    </section>
+
+    <section class="employee-stat-grid">
+      <div class="sales-metric"><span>Leads</span><strong>{{ employee_statistics.leads }}</strong></div><div class="sales-metric"><span>Open Opportunities</span><strong>{{ employee_statistics.open_opportunities }}</strong></div><div class="sales-metric"><span>Won Opportunities</span><strong>{{ employee_statistics.won_opportunities }}</strong></div><div class="sales-metric"><span>Production Orders</span><strong>{{ employee_statistics.production_orders }}</strong></div>
+      <div class="sales-metric"><span>Invoices</span><strong>{{ employee_statistics.invoices }}</strong></div><div class="sales-metric"><span>Closing Ratio</span><strong>{{ employee_statistics.closing_ratio }}%</strong></div><div class="sales-metric"><span>Last Activity</span><strong class="employee-stat-date">{{ employee_statistics.last_activity|date:"M j, Y H:i"|default:"No activity" }}</strong></div>
+    </section>
+    <section class="sales-sections employee-money-sections">
+      <div class="people-card"><h2 class="sales-section-title">Revenue</h2>{% for row in employee_statistics.revenue %}<div class="sales-money-row"><span>{{ row.currency }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
+      <div class="people-card"><h2 class="sales-section-title">Average Deal Size</h2>{% for row in employee_statistics.average_deal_size %}<div class="sales-money-row"><span>{{ row.currency }}</span><strong>{{ row.average|finance_money:row.currency }}</strong></div>{% endfor %}</div>
+    </section>
+  {% endif %}
+
+  <form method="post" enctype="multipart/form-data" class="people-card people-form">{% csrf_token %}
+    {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+    {% for field in form.visible_fields %}<div class="people-field {% if field.name == 'roles' or field.name == 'notes' %}people-field--wide{% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% for error in field.errors %}<span class="people-errors">{{ error }}</span>{% endfor %}</div>{% endfor %}
+    {% if form.non_field_errors %}<div class="people-field people-field--wide people-errors">{{ form.non_field_errors }}</div>{% endif %}
+    <div class="people-field people-field--wide"><button class="people-btn people-btn--gold" type="submit">Save Employee</button></div>
+  </form>
+
+  {% if not creating %}
+    <section class="people-detail-grid">
+      <div class="people-card"><h2 class="sales-section-title">Management Tree</h2><div class="people-management-tree">{% for member in management_chain %}<div class="people-management-node {% if member.user_id == target_user.pk %}is-current{% endif %}"><span>{{ member.position_name|default:"Employee" }}</span><strong>{{ member.public_name }}</strong></div>{% if not forloop.last %}<span class="people-management-arrow">↓</span>{% endif %}{% endfor %}</div>{% if direct_reports %}<h3 class="people-subheading">Direct Reports</h3><div class="people-direct-reports">{% for report in direct_reports %}<div><span>{{ report.position_name }}</span><strong>{{ report.public_name }}</strong></div>{% endfor %}</div>{% endif %}</div>
+      <div class="people-card"><h2 class="sales-section-title">Employee Timeline</h2><div class="people-timeline">{% for event in employee_timeline %}<div class="people-timeline-row"><span class="people-timeline-dot"></span><div><strong>{{ event.title }}</strong>{% if event.detail %}<p>{{ event.detail }}</p>{% endif %}<small>{{ event.timestamp|date:"M j, Y H:i" }} · {{ event.actor }}</small></div></div>{% empty %}<p class="people-muted">No employee changes recorded.</p>{% endfor %}</div></div>
+    </section>
+  {% endif %}
+</main>
+{% endblock %}

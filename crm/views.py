@@ -84,8 +84,15 @@ from .services.product_reference_images import (
 from .services.workflow_visibility import build_workflow_visibility_context
 from .services.automation_engine import automation_dashboard_context
 from .services.operations_dashboard import operations_dashboard_context
-from .services.operations_notifications import sync_operations_notifications
-from .services.operations_permissions import scope_sales_leads, scope_sales_opportunities
+from .services.operations_permissions import can_access_operations_module, scope_sales_leads, scope_sales_opportunities
+from .services.platform_tools import can_manage_archives, dashboard_personalization
+from .services.chatter_mentions import notify_chatter_mentions
+from .services.chatter_permissions import (
+    can_access_chatter_record,
+    resolve_chatter_target,
+    visible_chatter_comments,
+)
+from .services.employee_profiles import employee_display_name
 from .services.calendar_notifications import (
     calendar_event_signature,
     queue_calendar_invite_email,
@@ -136,6 +143,7 @@ from .models import (
     Customer,
     CustomerEvent,
     CustomerNote,
+    EmployeeProfile,
     Lead,
     LeadActivity,
     LeadContactPoint,
@@ -394,7 +402,7 @@ canada_required = user_passes_test(is_canada_user, login_url="login")
 
 
 def _can_archive_workflow_record(user):
-    return bool(user and user.is_authenticated and (user.is_staff or user.is_superuser))
+    return can_manage_archives(user)
 
 
 def _active_crm_user_options():
@@ -1628,27 +1636,7 @@ def lead_delete(request, pk):
         messages.error(request, "You do not have permission to delete leads.")
         return redirect("lead_detail", pk=lead.pk)
 
-    linked_labels = _lead_linked_record_labels(lead)
-    if linked_labels:
-        messages.warning(
-            request,
-            "This lead has linked records. Archive / Mark Not Viable instead: "
-            + ", ".join(linked_labels)
-            + ".",
-        )
-        return redirect("lead_detail", pk=lead.pk)
-
-    label = _workflow_object_label(lead)
-    _log_workflow_safety_action(
-        request,
-        action="delete",
-        record=lead,
-        message=f"Lead {label} deleted.",
-        meta={"account_brand": lead.account_brand, "email": lead.email},
-    )
-    lead.delete()
-    messages.success(request, f"Lead {label} deleted.")
-    return redirect(request.POST.get("next") or "leads_list")
+    return lead_archive(request, pk)
 
 
 def leads_dashboard(request):
@@ -2727,62 +2715,16 @@ def _record_customer_event(*, customer, event_type, title, details="", opportuni
     )
 
 
-MENTION_RE = re.compile(r"@([A-Za-z0-9._-]+)")
+def _send_chatter_mentions(request, comment):
+    if comment and request.user.is_authenticated:
+        notify_chatter_mentions(comment, request.user)
 
 
-def _send_chatter_mentions(request, text, *, lead=None, opportunity=None, production=None, author=""):
-    if not text:
-        return
-    handles = {h.strip() for h in MENTION_RE.findall(text or "") if h.strip()}
-    if not handles:
-        return
-
-    User = get_user_model()
-    recipients = set()
-    for handle in handles:
-        qs = User.objects.filter(
-            Q(username__iexact=handle)
-            | Q(first_name__iexact=handle)
-            | Q(last_name__iexact=handle)
-            | Q(email__istartswith=f"{handle}@")
-        )
-        for u in qs:
-            if u.email:
-                recipients.add(u.email)
-
-    if not recipients:
-        return
-
-    link = ""
-    if production:
-        link = request.build_absolute_uri(reverse("production_detail", args=[production.pk]))
-    elif opportunity:
-        link = request.build_absolute_uri(reverse("opportunity_detail", args=[opportunity.pk]))
-    elif lead:
-        link = request.build_absolute_uri(reverse("lead_detail", args=[lead.pk]))
-
-    subject = f"CRM mention from {author or 'Team member'}"
-    body_lines = [
-        f"You were mentioned in CRM chatter by {author or 'a team member'}.",
-        "",
-        text,
-    ]
-    if link:
-        body_lines += ["", f"Open: {link}"]
-    body = "\n".join(body_lines)
-
-    send_mail(
-        subject=subject,
-        message=body,
-        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@iconiccrm.local"),
-        recipient_list=list(recipients),
-        fail_silently=True,
-    )
-
-
-def _chatter_for_lead(lead):
+def _chatter_for_lead(lead, user=None):
+    if user is not None and not can_access_chatter_record(user, "leads", lead):
+        return LeadComment.objects.none()
     return (
-        LeadComment.objects.select_related("lead", "opportunity", "production")
+        LeadComment.objects.select_related("lead", "opportunity", "production", "author_user", "author_user__employee_profile")
         .filter(
             Q(lead=lead)
             | Q(opportunity__lead=lead)
@@ -2793,10 +2735,12 @@ def _chatter_for_lead(lead):
     )
 
 
-def _chatter_for_opportunity(opportunity):
+def _chatter_for_opportunity(opportunity, user=None):
+    if user is not None and not can_access_chatter_record(user, "opportunities", opportunity):
+        return LeadComment.objects.none()
     lead = opportunity.lead
     return (
-        LeadComment.objects.select_related("lead", "opportunity", "production")
+        LeadComment.objects.select_related("lead", "opportunity", "production", "author_user", "author_user__employee_profile")
         .filter(
             Q(opportunity=opportunity)
             | Q(production__opportunity=opportunity)
@@ -2807,7 +2751,9 @@ def _chatter_for_opportunity(opportunity):
     )
 
 
-def _chatter_for_production(order):
+def _chatter_for_production(order, user=None):
+    if user is not None and not can_access_chatter_record(user, "production", order):
+        return LeadComment.objects.none()
     lead = _safe_related_attr(order, "lead")
     opportunity = _safe_related_attr(order, "opportunity")
     filters = Q(production=order)
@@ -2816,7 +2762,7 @@ def _chatter_for_production(order):
     if lead:
         filters |= Q(lead=lead, opportunity__isnull=True, production__isnull=True)
     return (
-        LeadComment.objects.select_related("lead", "opportunity", "production")
+        LeadComment.objects.select_related("lead", "opportunity", "production", "author_user", "author_user__employee_profile")
         .filter(filters)
         .order_by("-pinned", "-created_at")
         .distinct()
@@ -2853,7 +2799,7 @@ def _lead_detail_impl(request, pk):
         [],
         "opportunities",
     )
-    comments = _safe_fetch(lambda: _chatter_for_lead(lead), [], "comments")
+    comments = _safe_fetch(lambda: _chatter_for_lead(lead, request.user), [], "comments")
     tasks = _safe_fetch(lambda: lead.tasks.all(), [], "tasks")
     activities = _safe_fetch(lambda: lead.activities.all(), [], "activities")
 
@@ -2882,33 +2828,33 @@ def _lead_detail_impl(request, pk):
 
         # comments
         if action == "add_comment":
+            if not can_access_chatter_record(request.user, "leads", lead):
+                return HttpResponseForbidden("You do not have access to this lead's chatter.")
             comment_text = (request.POST.get("comment_text") or "").strip()
             attachment = request.FILES.get("attachment")
             if not comment_text and not attachment:
                 messages.error(request, "Please write a note or attach a file first.")
             else:
-                author_name = request.user.username if request.user.is_authenticated else "User"
+                author_name = employee_display_name(request.user)
                 content = comment_text or f"Attachment: {attachment.name}"
-                LeadComment.objects.create(
+                comment = LeadComment.objects.create(
                     lead=lead,
                     author=author_name,
+                    author_user=request.user,
                     content=content,
                     attachment=attachment,
                 )
-                _send_chatter_mentions(
-                    request,
-                    comment_text,
-                    lead=lead,
-                    author=author_name,
-                )
+                _send_chatter_mentions(request, comment)
                 LeadActivity.objects.create(
                     lead=lead,
                     activity_type="note_added",
                     description=content[:200],
                 )
-            comments = _safe_fetch(lambda: _chatter_for_lead(lead), [], "comments")
+            comments = _safe_fetch(lambda: _chatter_for_lead(lead, request.user), [], "comments")
 
         elif action == "toggle_pin_comment":
+            if not can_access_chatter_record(request.user, "leads", lead):
+                return HttpResponseForbidden("You do not have access to this lead's chatter.")
             comment_id = (request.POST.get("comment_id") or "").strip()
             if comment_id:
                 c = LeadComment.objects.filter(
@@ -2919,7 +2865,7 @@ def _lead_detail_impl(request, pk):
                 if c:
                     c.pinned = not c.pinned
                     c.save(update_fields=["pinned"])
-            comments = _safe_fetch(lambda: _chatter_for_lead(lead), [], "comments")
+            comments = _safe_fetch(lambda: _chatter_for_lead(lead, request.user), [], "comments")
 
         # tasks
         elif action == "add_task":
@@ -3550,7 +3496,7 @@ def opportunity_detail(request, pk):
     ]
 
     # Comments and activity
-    comments = _chatter_for_opportunity(opportunity)
+    comments = _chatter_for_opportunity(opportunity, request.user)
 
     activities = LeadActivity.objects.filter(lead=lead).order_by("-created_at")
 
@@ -3678,27 +3624,24 @@ def opportunity_detail(request, pk):
 
         # Add comment
         if action == "add_comment":
+            if not can_access_chatter_record(request.user, "opportunities", opportunity):
+                return HttpResponseForbidden("You do not have access to this opportunity's chatter.")
             comment_text = (request.POST.get("comment_text") or "").strip()
             attachment = request.FILES.get("attachment")
             if not comment_text and not attachment:
                 messages.error(request, "Please write a note or attach a file first.")
             elif lead:
-                author_name = request.user.username if request.user.is_authenticated else "User"
+                author_name = employee_display_name(request.user)
                 content = comment_text or f"Attachment: {attachment.name}"
-                LeadComment.objects.create(
+                comment = LeadComment.objects.create(
                     lead=lead,
                     opportunity=opportunity,
                     author=author_name,
+                    author_user=request.user,
                     content=content,
                     attachment=attachment,
                 )
-                _send_chatter_mentions(
-                    request,
-                    comment_text,
-                    lead=lead,
-                    opportunity=opportunity,
-                    author=author_name,
-                )
+                _send_chatter_mentions(request, comment)
                 LeadActivity.objects.create(
                     lead=lead,
                     activity_type="note_added",
@@ -3709,6 +3652,8 @@ def opportunity_detail(request, pk):
 
         # Toggle pin comment
         if action == "toggle_pin_comment":
+            if not can_access_chatter_record(request.user, "opportunities", opportunity):
+                return HttpResponseForbidden("You do not have access to this opportunity's chatter.")
             comment_id = (request.POST.get("comment_id") or "").strip()
             if comment_id and lead:
                 c = LeadComment.objects.filter(
@@ -4208,6 +4153,7 @@ def customers_list(request):
     country = (request.GET.get("country") or "").strip()
     status = (request.GET.get("status") or "").strip().lower()
     sort = (request.GET.get("sort") or "recent").strip().lower()
+    archive_filter = (request.GET.get("archive") or "active").strip().lower()
 
     active_stages = _active_opportunity_stages()
     completed_statuses = _production_completed_statuses()
@@ -4223,6 +4169,10 @@ def customers_list(request):
     )
 
     qs = Customer.objects.all()
+    if archive_filter == "archived":
+        qs = qs.filter(is_archived=True)
+    elif archive_filter != "all":
+        qs = qs.filter(is_archived=False)
     countries = (
         Customer.objects
         .exclude(country="")
@@ -4336,6 +4286,7 @@ def customers_list(request):
         "country": country,
         "status": status,
         "sort": sort,
+        "archive_filter": archive_filter,
         "query_params": query_params.urlencode(),
     }
     return render(request, "crm/customers_list.html", context)
@@ -7738,28 +7689,6 @@ def opportunity_delete(request, pk):
     linked_labels = _opportunity_linked_record_labels(opportunity)
     opp_id = opportunity.opportunity_id
 
-    if requested_action == "delete":
-        if linked_labels:
-            messages.warning(
-                request,
-                f"Opportunity {opp_id} has linked records. Archive / Mark Lost instead: "
-                + ", ".join(linked_labels)
-                + ".",
-            )
-            return redirect("opportunity_detail", pk=pk)
-        lead = opportunity.lead
-        _log_workflow_safety_action(
-            request,
-            action="delete",
-            record=opportunity,
-            message=f"Opportunity {opp_id} deleted.",
-            meta={"lead": getattr(lead, "lead_id", ""), "customer_id": opportunity.customer_id},
-        )
-        _log_lead_workflow_note(lead, request.user, f"Opportunity {opp_id} deleted by {_user_display_name(request.user)}.")
-        opportunity.delete()
-        messages.success(request, f"Opportunity {opp_id} deleted.")
-        return redirect(request.POST.get("next") or "opportunities_list")
-
     _archive_workflow_record(opportunity, request.user)
     _log_workflow_safety_action(
         request,
@@ -8996,7 +8925,7 @@ def production_detail(request, pk):
             "inventory_items": [],
         }
     try:
-        comments = _chatter_for_production(order)
+        comments = _chatter_for_production(order, request.user)
     except Exception:
         logger.exception("production_detail: failed to load chatter for order %s", order.pk)
         comments = []
@@ -9184,29 +9113,25 @@ def production_detail(request, pk):
             return redirect("production_detail", pk=pk)
 
         if action == "add_comment":
+            if not can_access_chatter_record(request.user, "production", order):
+                return HttpResponseForbidden("You do not have access to this production order's chatter.")
             comment_text = (request.POST.get("comment_text") or "").strip()
             attachment = request.FILES.get("attachment")
             if not comment_text and not attachment:
                 messages.error(request, "Please write a note or attach a file first.")
             else:
-                author_name = request.user.username if request.user.is_authenticated else "User"
+                author_name = employee_display_name(request.user)
                 content = comment_text or f"Attachment: {attachment.name}"
-                LeadComment.objects.create(
+                comment = LeadComment.objects.create(
                     lead=lead,
                     opportunity=opportunity,
                     production=order,
                     author=author_name,
+                    author_user=request.user,
                     content=content,
                     attachment=attachment,
                 )
-                _send_chatter_mentions(
-                    request,
-                    comment_text,
-                    lead=lead,
-                    opportunity=opportunity,
-                    production=order,
-                    author=author_name,
-                )
+                _send_chatter_mentions(request, comment)
                 messages.success(request, "Chatter note added.")
             return redirect("production_detail", pk=pk)
 
@@ -9403,45 +9328,22 @@ def production_delete(request, pk):
         messages.error(request, "You do not have permission to delete production orders.")
         return redirect("production_detail", pk=order.pk)
 
-    linked_labels = _production_linked_record_labels(order)
-    label = _workflow_object_label(order)
-    if linked_labels:
-        messages.warning(
-            request,
-            f"Production order {label} has linked records. Archive / Cancel Production instead: "
-            + ", ".join(linked_labels)
-            + ".",
-        )
-        return redirect("production_detail", pk=order.pk)
-
     operational_status = get_production_operational_status(order)
     if operational_status in {OPERATIONAL_STATUS_READY_TO_SHIP, OPERATIONAL_STATUS_SHIPPED}:
         confirmation = (request.POST.get("confirm_delete") or "").strip().lower()
-        if confirmation not in {"delete", "yes", "1"}:
-            messages.error(request, "Ready to ship or shipped production orders require confirmation before deletion.")
+        if confirmation not in {"delete", "archive", "yes", "1"}:
+            messages.error(request, "Ready to ship or shipped production orders require confirmation before archiving.")
             return redirect("production_detail", pk=order.pk)
-
-    lead = order.lead
-    customer = order.customer or getattr(order.opportunity, "customer", None) or getattr(order.lead, "customer", None)
-    opportunity = order.opportunity
+    _archive_workflow_record(order, request.user)
+    label = _workflow_object_label(order)
     _log_workflow_safety_action(
         request,
-        action="delete",
+        action="archive",
         record=order,
-        message=f"Production order {label} deleted.",
-        meta={"lead": getattr(lead, "lead_id", ""), "opportunity": getattr(opportunity, "opportunity_id", "")},
+        message=f"Production order {label} archived from the legacy delete action.",
+        meta={"linked_records": _production_linked_record_labels(order), "operational_status": operational_status},
     )
-    _log_lead_workflow_note(lead, request.user, f"Production order {label} deleted by {_user_display_name(request.user)}.")
-    _record_customer_event(
-        customer=customer,
-        event_type="production_status",
-        title="Production deleted",
-        details=f"Production order {label} deleted by {_user_display_name(request.user)}.",
-        opportunity=opportunity,
-        production=None,
-    )
-    order.delete()
-    messages.success(request, f"Production order {label} deleted.")
+    messages.success(request, f"Production order {label} archived. History is preserved.")
     return redirect(request.POST.get("next") or "production_list")
 
 
@@ -10196,12 +10098,10 @@ def chatter_feed(request):
     Consolidated chatter feed for leads, opportunities, and production.
     """
     source = (request.GET.get("source") or "all").strip().lower()
-
-    comments_qs = LeadComment.objects.select_related(
-        "lead",
-        "opportunity",
-        "production",
-    ).order_by("-created_at")
+    source_modules = {"lead": "leads", "opportunity": "opportunities", "production": "production"}
+    if source in source_modules and not can_access_operations_module(request.user, source_modules[source]):
+        return HttpResponseForbidden("You do not have access to this chatter module.")
+    comments_qs = visible_chatter_comments(request.user).order_by("-created_at")
 
     if source == "lead":
         comments_qs = comments_qs.filter(opportunity__isnull=True, production__isnull=True)
@@ -10222,54 +10122,40 @@ def chatter_feed(request):
                 messages.error(request, "Please write a note or attach a file first.")
                 return redirect("chatter_feed")
 
-            author_name = request.user.username if request.user.is_authenticated else "User"
-            lead = None
-            opportunity = None
-            production = None
-
-            if link_type == "lead" and link_id.isdigit():
-                lead = Lead.objects.filter(pk=int(link_id)).first()
-            elif link_type == "opportunity" and link_id.isdigit():
-                opportunity = Opportunity.objects.filter(pk=int(link_id)).first()
-                if opportunity:
-                    lead = opportunity.lead
-            elif link_type == "production" and link_id.isdigit():
-                production = ProductionOrder.objects.filter(pk=int(link_id)).first()
-                if production:
-                    lead = production.lead
-                    opportunity = production.opportunity
-
-            if link_type and not (lead or opportunity or production):
-                messages.error(request, "Could not find the record you selected.")
-                return redirect("chatter_feed")
+            target = resolve_chatter_target(request.user, link_type, link_id)
+            if target is None:
+                return HttpResponseForbidden("You do not have access to the selected chatter record.")
+            author_name = employee_display_name(request.user)
+            lead = target["lead"]
+            opportunity = target["opportunity"]
+            production = target["production"]
 
             if note_text:
                 content = note_text
             else:
                 content = f"Attachment: {attachment.name}"
 
-            LeadComment.objects.create(
+            comment = LeadComment.objects.create(
                 lead=lead,
                 opportunity=opportunity,
                 production=production,
                 author=author_name,
+                author_user=request.user,
                 content=content,
                 attachment=attachment,
             )
-            _send_chatter_mentions(
-                request,
-                note_text,
-                lead=lead,
-                opportunity=opportunity,
-                production=production,
-                author=author_name,
-            )
+            _send_chatter_mentions(request, comment)
 
             messages.success(request, "Chatter note saved.")
             return redirect("chatter_feed")
 
     User = get_user_model()
-    team_members = User.objects.filter(is_active=True).order_by("username")
+    team_members = User.objects.filter(
+        is_active=True,
+        employee_profile__status__in=EmployeeProfile.MENTIONABLE_STATUSES,
+    ).select_related("employee_profile").order_by(
+        "employee_profile__display_name", "first_name", "username"
+    )
 
     return render(
         request,
@@ -11936,7 +11822,7 @@ def ceo_operations_dashboard(request):
         executive_alert_cards.append(
             {"title": "Executive alerts clear", "detail": "No high-priority executive alerts are active for this period.", "tone": "good"}
         )
-    automation_context = automation_dashboard_context(request.user)
+    automation_context = automation_dashboard_context(request.user, sync=False)
 
     alerts = []
     if overdue_followups:
@@ -13163,7 +13049,7 @@ def main_dashboard(request):
     prev_opp_period = opportunity_kpi_qs.filter(created_date__range=(previous_start, previous_end)).count()
 
     opp_stage_base = opportunity_kpi_qs.filter(created_date__range=(start_period, today))
-    if not opp_stage_base.exists():
+    if not opp_period:
         opp_stage_base = opportunity_kpi_qs
     opp_by_stage_qs = opp_stage_base.values("stage").annotate(c=Count("id"))
     opp_stage_map = {row.get("stage") or "Unknown": int(row.get("c") or 0) for row in opp_by_stage_qs}
@@ -13456,6 +13342,7 @@ def main_dashboard(request):
     production_cost_bdt_period = Decimal("0")
     orders_created_map = {}
     orders_processed_map = {}
+    production_orders_for_status = None
     if ProductionOrder is not None:
         try:
             orders_created_period = ProductionOrder.objects.filter(
@@ -13472,8 +13359,11 @@ def main_dashboard(request):
             orders_created_map = {
                 row["d"]: int(row["c"]) for row in orders_created_qs if row.get("d")
             }
+            production_orders_for_status = list(
+                production_kpi_qs.prefetch_related("stages", "shipments")
+            )
             processed_orders = [
-                order for order in production_kpi_qs.prefetch_related("stages", "shipments")
+                order for order in production_orders_for_status
                 if get_production_operational_status(order) == OPERATIONAL_STATUS_SHIPPED
                 and order.updated_at.date() >= start_period
                 and order.updated_at.date() <= today
@@ -13552,9 +13442,10 @@ def main_dashboard(request):
     prod_counts = []
     if ProductionOrder is not None:
         try:
-            production_orders_for_status = list(
-                production_kpi_qs.prefetch_related("stages", "shipments")
-            )
+            if production_orders_for_status is None:
+                production_orders_for_status = list(
+                    production_kpi_qs.prefetch_related("stages", "shipments")
+                )
             production_operational_rows = [
                 {
                     "order": order,
@@ -13670,7 +13561,7 @@ def main_dashboard(request):
         stage__iexact="Closed Won",
         updated_at__date__range=(start_period, today),
     )
-    if not niche_base.exists():
+    if not opp_period:
         niche_base = opportunity_kpi_qs.filter(created_date__range=(start_period, today))
     if not niche_base.exists():
         niche_base = opportunity_kpi_qs
@@ -13871,16 +13762,17 @@ def main_dashboard(request):
         "in_production": 0,
         "shipping": 0,
     }
-    try:
-        active_lifecycles = OrderLifecycle.objects.exclude(status__in=["completed", "cancelled"])
-        lifecycle_workflow_summary = {
-            "active_order_lifecycles": active_lifecycles.count(),
-            "waiting_for_payment": active_lifecycles.filter(invoice__total_amount__gt=F("invoice__paid_amount")).count(),
-            "in_production": active_lifecycles.filter(status="production").count(),
-            "shipping": active_lifecycles.filter(status="shipping").count(),
-        }
-    except Exception:
-        logger.exception("main_dashboard: failed to build public lifecycle workflow counts")
+    if not can_view_order_lifecycle_profit:
+        try:
+            active_lifecycles = OrderLifecycle.objects.exclude(status__in=["completed", "cancelled"])
+            lifecycle_workflow_summary = {
+                "active_order_lifecycles": active_lifecycles.count(),
+                "waiting_for_payment": active_lifecycles.filter(invoice__total_amount__gt=F("invoice__paid_amount")).count(),
+                "in_production": active_lifecycles.filter(status="production").count(),
+                "shipping": active_lifecycles.filter(status="shipping").count(),
+            }
+        except Exception:
+            logger.exception("main_dashboard: failed to build public lifecycle workflow counts")
 
     dashboard_notification_items = [
         {
@@ -13919,8 +13811,7 @@ def main_dashboard(request):
             "href": "#workflow-section",
         },
     ]
-    automation_context = automation_dashboard_context(request.user)
-    sync_operations_notifications(today=today)
+    automation_context = automation_dashboard_context(request.user, sync=False)
     operations_context = operations_dashboard_context(request.user, today=today)
     if automation_context.get("automation_notification_cards"):
         dashboard_notification_items = automation_context["automation_notification_cards"]
@@ -14220,6 +14111,12 @@ def main_dashboard(request):
     if can_view_order_lifecycle_profit:
         try:
             lifecycle_summary = lifecycle_dashboard_metrics()
+            lifecycle_workflow_summary = {
+                "active_order_lifecycles": lifecycle_summary["active_orders"],
+                "waiting_for_payment": lifecycle_summary["orders_waiting_payment"],
+                "in_production": lifecycle_summary["orders_in_production"],
+                "shipping": OrderLifecycle.objects.filter(status="shipping").exclude(status__in=["completed", "cancelled"]).count(),
+            }
         except Exception:
             logger.exception("main_dashboard: failed to build order lifecycle summary")
             lifecycle_summary = None
@@ -14336,6 +14233,7 @@ def main_dashboard(request):
         "lifecycle_summary": lifecycle_summary,
         **automation_context,
         **operations_context,
+        **dashboard_personalization(request.user),
     }
 
     return render(request, "crm/main_dashboard.html", ctx)

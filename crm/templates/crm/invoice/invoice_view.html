@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load humanize crm_extras %}
+{% load humanize crm_extras platform_tools %}
 {% block content %}
 
 <style>
@@ -838,4 +838,5 @@
 </div>
 {% endwith %}
 
+{% record_timeline_panel "invoices" invoice.pk %}
 {% endblock %}

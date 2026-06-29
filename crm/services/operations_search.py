@@ -3,10 +3,13 @@ from decimal import Decimal
 from django.db.models import Q
 from django.urls import reverse
 
-from crm.models import CostingHeader, Customer, Invoice, Lead, Opportunity, ProductionOrder
+from crm.models import CostingHeader, Customer, EmployeeProfile, Invoice, Lead, Opportunity, ProductionOrder
 from crm.services.costing_currency import format_finance_money
 from crm.services.operations_permissions import (
     ROLE_CEO,
+    ROLE_ADMIN,
+    ROLE_DIRECTOR,
+    ROLE_HR,
     can_access_operations_module,
     has_operations_role,
     scope_sales_leads,
@@ -28,7 +31,7 @@ def search_operations_records(user, query, *, limit=10, include_opportunities=Tr
     groups = []
 
     if can_access_operations_module(user, "customers"):
-        rows = Customer.objects.filter(
+        rows = Customer.objects.filter(is_archived=False).filter(
             Q(customer_code__icontains=query)
             | Q(account_brand__icontains=query)
             | Q(contact_name__icontains=query)
@@ -50,7 +53,7 @@ def search_operations_records(user, query, *, limit=10, include_opportunities=Tr
 
     if can_access_operations_module(user, "leads"):
         rows = scope_sales_leads(
-            Lead.objects.filter(
+            Lead.objects.filter(is_archived=False).filter(
                 Q(lead_id__icontains=query)
                 | Q(account_brand__icontains=query)
                 | Q(contact_name__icontains=query)
@@ -74,7 +77,7 @@ def search_operations_records(user, query, *, limit=10, include_opportunities=Tr
 
     if include_opportunities and can_access_operations_module(user, "opportunities"):
         rows = scope_sales_opportunities(
-            Opportunity.objects.select_related("lead", "customer").filter(
+            Opportunity.objects.select_related("lead", "customer").filter(is_archived=False).filter(
                 Q(opportunity_id__icontains=query)
                 | Q(lead__lead_id__icontains=query)
                 | Q(lead__account_brand__icontains=query)
@@ -98,7 +101,7 @@ def search_operations_records(user, query, *, limit=10, include_opportunities=Tr
         ]))
 
     if can_access_operations_module(user, "quotations"):
-        rows = CostingHeader.objects.select_related("customer", "opportunity", "opportunity__lead").filter(
+        rows = CostingHeader.objects.select_related("customer", "opportunity", "opportunity__lead").filter(is_archived=False).filter(
             Q(quotation_number__icontains=query)
             | Q(style_name__icontains=query)
             | Q(brand__icontains=query)
@@ -130,7 +133,7 @@ def search_operations_records(user, query, *, limit=10, include_opportunities=Tr
         ]))
 
     if can_access_operations_module(user, "production"):
-        rows = ProductionOrder.objects.select_related("customer").filter(
+        rows = ProductionOrder.objects.select_related("customer").filter(is_archived=False).filter(
             Q(order_code__icontains=query)
             | Q(title__icontains=query)
             | Q(client_name_snapshot__icontains=query)
@@ -152,7 +155,7 @@ def search_operations_records(user, query, *, limit=10, include_opportunities=Tr
         ]))
 
     if can_access_operations_module(user, "invoices"):
-        rows = Invoice.objects.select_related("customer").filter(
+        rows = Invoice.objects.select_related("customer").filter(is_archived=False).filter(
             Q(invoice_number__icontains=query)
             | Q(customer__account_brand__icontains=query)
             | Q(customer__contact_name__icontains=query)
@@ -168,6 +171,27 @@ def search_operations_records(user, query, *, limit=10, include_opportunities=Tr
                 "date": row.issue_date,
                 "amount": format_finance_money(row.total_amount, row.currency),
                 "url": reverse("invoice_view", args=[row.pk]),
+            }
+            for row in rows
+        ]))
+
+    if has_operations_role(user, ROLE_CEO, ROLE_DIRECTOR, ROLE_ADMIN, ROLE_HR) or user.is_superuser:
+        rows = EmployeeProfile.objects.select_related("user", "position_ref", "department_ref").filter(
+            Q(employee_id__icontains=query)
+            | Q(display_name__icontains=query)
+            | Q(user__first_name__icontains=query)
+            | Q(user__last_name__icontains=query)
+            | Q(user__email__icontains=query)
+        ).order_by("display_name", "user__username")[:limit]
+        groups.append(("Employees", [
+            {
+                "type": "Employee",
+                "number": row.employee_id,
+                "name": row.public_name,
+                "status": f"{row.position_name} · {row.department_name}",
+                "date": row.updated_at,
+                "amount": "",
+                "url": reverse("employee_edit", args=[row.user_id]),
             }
             for row in rows
         ]))

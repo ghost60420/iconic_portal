@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load static %}
+{% load static crm_people %}
 
 {% block content %}
 <link rel="stylesheet" href="{% static 'crm/operations_control.css' %}">
@@ -10,7 +10,7 @@
       <h1 class="ops-title">Role Management</h1>
       <p class="ops-subtitle">Create Django roles, review permission descriptions, and manage active user assignments without changing legacy access records.</p>
     </div>
-    <a class="ops-btn" href="{% url 'crm_audit_log' %}">Audit Log</a>
+    <div class="ops-head-actions"><a class="ops-btn" href="{% url 'employee_list' %}">Employees</a><a class="ops-btn" href="{% url 'crm_audit_log' %}">Audit Log</a></div>
   </header>
 
   <details class="ops-card ops-role-create">
@@ -48,13 +48,13 @@
           {% for user in item.members %}
             <form method="post" class="ops-member-row">
               {% csrf_token %}<input type="hidden" name="action" value="remove_user"><input type="hidden" name="role_id" value="{{ item.role.pk }}"><input type="hidden" name="user_id" value="{{ user.pk }}">
-              <span>{{ user.get_full_name|default:user.username }}</span><button class="ops-btn" type="submit">Remove</button>
+              <span>{{ user|employee_name }}</span><button class="ops-btn" type="submit">Remove</button>
             </form>
           {% empty %}<p class="ops-muted">No active users assigned.</p>{% endfor %}
         </div>
         <form method="post" class="ops-assign-form">
           {% csrf_token %}<input type="hidden" name="action" value="assign_user"><input type="hidden" name="role_id" value="{{ item.role.pk }}">
-          <label class="ops-filter">Assign User<select class="ops-select" name="user_id" required><option value="">Select user</option>{% for user in users %}<option value="{{ user.pk }}">{{ user.get_full_name|default:user.username }}</option>{% endfor %}</select></label>
+          <label class="ops-filter">Assign User<select class="ops-select" name="user_id" required><option value="">Select user</option>{% for user in users %}<option value="{{ user.pk }}">{{ user|employee_name }}</option>{% endfor %}</select></label>
           <button class="ops-btn ops-btn--gold" type="submit">Assign</button>
         </form>
         <details class="ops-permission-details">

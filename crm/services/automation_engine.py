@@ -209,23 +209,14 @@ def _upsert_notification(
     created_by=None,
 ):
     content_type, object_id = _record_content(record)
-    defaults = {
-        "rule": rule,
-        "rule_type": rule.rule_type if rule else "general",
-        "title": title,
-        "message": message,
-        "priority": priority,
-        "is_resolved": False,
-        "resolved_at": None,
-        "record_content_type": content_type,
-        "record_object_id": object_id,
-        "record_label": record_label,
-        "target_url": target_url,
-    }
-    notification, _created = AutomationNotification.objects.update_or_create(
+    AutomationNotification.objects.filter(
         source_key=source_key,
-        defaults=defaults,
+        is_resolved=False,
+    ).update(
+        is_resolved=True,
+        resolved_at=timezone.now(),
     )
+    notification = None
     if task_title:
         task_content_type, task_object_id = _record_content(record)
         task, _task_created = AutomationTask.objects.get_or_create(
@@ -245,7 +236,7 @@ def _upsert_notification(
             },
         )
         if task.status not in {"done", "cancelled"}:
-            task.notification = notification
+            task.notification = None
             task.title = task_title
             task.description = task_description
             task.priority = task_priority
@@ -678,7 +669,7 @@ def sync_automation_engine(created_by=None):
         AutomationNotification.objects.filter(
             source_key__startswith="crm-auto:",
             is_resolved=False,
-        ).exclude(source_key__in=active_keys).update(is_resolved=True, resolved_at=now)
+        ).update(is_resolved=True, resolved_at=now)
         return {"created": len(active_keys), "error": ""}
     except (OperationalError, ProgrammingError) as exc:
         return {"created": 0, "error": str(exc)}
@@ -798,7 +789,7 @@ def automation_dashboard_context(user, *, sync=True, limit=12):
         tasks_qs = (
             AutomationTask.objects.filter(status__in=["open", "in_progress"])
             .filter(rule__rule_type__in=visible_rule_types)
-            .filter(notification__is_resolved=False)
+            .filter(Q(notification__isnull=True) | Q(notification__is_resolved=False))
             .select_related("rule", "notification", "record_content_type")
             .order_by("due_date", "-updated_at")
         )

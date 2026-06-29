@@ -1,0 +1,12 @@
+{% extends "crm/base.html" %}
+{% block content %}
+<div class="platform-page">
+  <header class="platform-page-head"><div><p>Administration</p><h1>CRM Settings</h1><span>Master libraries and existing system configuration in one controlled workspace.</span></div></header>
+  <div class="platform-two-column">
+    <section class="platform-card"><h2>Positions</h2><form method="post" class="platform-inline-form">{% csrf_token %}<input type="hidden" name="action" value="add_library"><input type="hidden" name="library" value="position"><input name="name" placeholder="Position name" required><input name="code" placeholder="position_code" required><button type="submit">Add</button></form><ul>{% for item in positions %}<li><span>{{ item.name }}</span><form method="post">{% csrf_token %}<input type="hidden" name="action" value="toggle_library"><input type="hidden" name="library" value="position"><input type="hidden" name="id" value="{{ item.pk }}"><button type="submit">{% if item.is_active %}Disable{% else %}Enable{% endif %}</button></form></li>{% endfor %}</ul></section>
+    <section class="platform-card"><h2>Departments</h2><form method="post" class="platform-inline-form">{% csrf_token %}<input type="hidden" name="action" value="add_library"><input type="hidden" name="library" value="department"><input name="name" placeholder="Department name" required><input name="code" placeholder="department_code" required><button type="submit">Add</button></form><ul>{% for item in departments %}<li><span>{{ item.name }}</span><form method="post">{% csrf_token %}<input type="hidden" name="action" value="toggle_library"><input type="hidden" name="library" value="department"><input type="hidden" name="id" value="{{ item.pk }}"><button type="submit">{% if item.is_active %}Disable{% else %}Enable{% endif %}</button></form></li>{% endfor %}</ul></section>
+  </div>
+  <section class="platform-card"><h2>Roles and Permissions</h2><div class="platform-role-grid">{% for role in roles %}<article><strong>{{ role.name }}</strong><ul>{% for permission in role.permissions.all %}<li>{{ permission.name }}</li>{% empty %}<li>Capabilities are resolved by the master permission matrix.</li>{% endfor %}</ul></article>{% endfor %}</div></section>
+  {% for category, rows in settings_by_category.items %}<section class="platform-card"><h2>{{ category|title }}</h2><ul>{% for item in rows %}<li><strong>{{ item.label }}</strong>{% if item.description %}<span>{{ item.description }}</span>{% endif %}</li>{% endfor %}</ul></section>{% endfor %}
+</div>
+{% endblock %}

@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load static %}
+{% load static platform_tools %}
 {% block content %}
 <link rel="stylesheet" href="{% static 'crm/customer_detail.css' %}?v=customer-detail-modern-20260507">
 
@@ -538,4 +538,5 @@
 })();
 </script>
 
+{% record_timeline_panel "customers" customer.pk %}
 {% endblock %}

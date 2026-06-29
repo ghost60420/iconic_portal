@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load static %}
+{% load static crm_people platform_tools %}
 
 {% block content %}
 <link rel="stylesheet" href="{% static 'crm/opportunity_detail.css' %}?v=detail-purpose-20260611">
@@ -557,7 +557,7 @@
         <form method="post" enctype="multipart/form-data" class="opp-note-form">
           {% csrf_token %}
           <input type="hidden" name="action" value="add_comment">
-          <textarea name="comment_text" rows="3" placeholder="Write a note about this opportunity"></textarea>
+          <textarea name="comment_text" rows="3" placeholder="Write a note about this opportunity" data-mention-input data-mention-url="{% url 'mention_suggestions' %}"></textarea>
           <div class="opp-note-actions">
             <label>
               <span>Attachment</span>
@@ -572,15 +572,13 @@
             {% for c in comments %}
               <article class="opp-comment">
                 <div class="opp-comment-head">
-                  <strong>{{ c.author }}</strong>
+                  {% include "crm/includes/chatter_identity.html" with c=c %}
                   <span>
-                    {{ c.created_at }}
                     {% if c.production %} · Production{% elif c.opportunity %} · Opportunity{% else %} · Lead{% endif %}
-                    {% if c.pinned %} · pinned{% endif %}
                     {% if c.is_ai %} · AI{% endif %}
                   </span>
                 </div>
-                <p>{{ c.content|linebreaksbr }}</p>
+                <p>{{ c.content|highlight_mentions|linebreaksbr }}</p>
                 {% if c.attachment %}
                   <div class="opp-muted">
                     {% with c.attachment.name|cut:"chatter_attachments/" as attachment_name %}
@@ -989,4 +987,5 @@
     setShippingLocked(hasShippingData());
 })();
 </script>
+{% record_timeline_panel "opportunities" opportunity.pk %}
 {% endblock %}

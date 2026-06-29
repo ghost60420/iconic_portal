@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load static %}
+{% load static crm_people platform_tools %}
 {% block content %}
 <link rel="stylesheet" href="{% static 'crm/production_detail.css' %}?v=production-order-snapshot-20260627">
 
@@ -1040,7 +1040,7 @@
           <input type="hidden" name="action" value="add_comment">
           <label>
             <span>Internal note</span>
-            <textarea name="comment_text" rows="3" placeholder="Write a note about this production order"></textarea>
+            <textarea name="comment_text" rows="3" placeholder="Write a note about this production order" data-mention-input data-mention-url="{% url 'mention_suggestions' %}"></textarea>
           </label>
           <label>
             <span>Attachment</span>
@@ -1054,10 +1054,10 @@
             {% for c in comments %}
               <article class="production-timeline-item">
                 <div>
-                  <strong>{{ c.author|default:"User" }}</strong>
-                  <span>{{ c.created_at }} / {% if c.production %}Production{% elif c.opportunity %}Opportunity{% else %}Lead{% endif %}{% if c.pinned %} / pinned{% endif %}{% if c.is_ai %} / AI{% endif %}</span>
+                  {% include "crm/includes/chatter_identity.html" with c=c %}
+                  <span>{% if c.production %}Production{% elif c.opportunity %}Opportunity{% else %}Lead{% endif %}{% if c.is_ai %} / AI{% endif %}</span>
                 </div>
-                <p>{{ c.content|linebreaksbr }}</p>
+                <p>{{ c.content|highlight_mentions|linebreaksbr }}</p>
                 {% if c.attachment %}
                   <a href="{{ c.attachment.url }}" target="_blank" rel="noopener">Open attachment</a>
                 {% endif %}
@@ -1212,4 +1212,5 @@
   });
 </script>
 
+{% record_timeline_panel "production" order.pk %}
 {% endblock %}

@@ -1,0 +1,22 @@
+{% extends "crm/base.html" %}
+{% load static crm_extras %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'crm/people.css' %}">
+<main class="people-shell">
+  <header class="people-head"><div><p class="people-eyebrow">Sales Management</p><h1 class="people-title">Team Performance</h1><p class="people-subtitle">Read-only sales performance using existing lead, opportunity, activity, and employee data.</p></div><div class="people-actions"><a class="people-btn" href="{% url 'employee_list' %}">Employees</a></div></header>
+  <section class="team-leader-grid">
+    <div class="people-card team-leader"><span>Top Salesperson</span><strong>{{ top_salesperson.name|default:"No data" }}</strong><small>{{ top_salesperson.won|default:0 }} won opportunities</small></div>
+    <div class="people-card team-leader"><span>Highest Closing Ratio</span><strong>{{ highest_closing_ratio.name|default:"No data" }}</strong><small>{{ highest_closing_ratio.closing_ratio|default:0 }}%</small></div>
+    <div class="people-card team-leader"><span>Most Opportunities</span><strong>{{ most_opportunities.name|default:"No data" }}</strong><small>{{ most_opportunities.opportunities|default:0 }} opportunities</small></div>
+    <div class="people-card team-leader"><span>Follow Ups Completed</span><strong>{{ most_followups_completed.name|default:"No data" }}</strong><small>{{ most_followups_completed.completed_followups|default:0 }} completed</small></div>
+    <div class="people-card team-leader team-leader--warn"><span>Most Overdue Follow Ups</span><strong>{{ most_overdue_followups.name|default:"No data" }}</strong><small>{{ most_overdue_followups.overdue_followups|default:0 }} overdue</small></div>
+  </section>
+  <section class="sales-sections team-secondary-grid">
+    <div class="people-card"><h2 class="sales-section-title">Top Revenue by Currency</h2>{% for row in revenue_leaders %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.name }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
+    <div class="people-card"><h2 class="sales-section-title">Newest Employees</h2>{% for profile in newest_employees %}<div class="team-person-row"><span class="people-avatar people-avatar--small">{{ profile.initials }}</span><div><strong>{{ profile.public_name }}</strong><small>{{ profile.user.date_joined|date:"M j, Y" }} · {{ profile.position_name }}</small></div></div>{% empty %}<p class="people-muted">No sales employees.</p>{% endfor %}</div>
+    <div class="people-card"><h2 class="sales-section-title">Employees On Leave</h2>{% for profile in employees_on_leave %}<div class="team-person-row"><span class="people-avatar people-avatar--small">{{ profile.initials }}</span><div><strong>{{ profile.public_name }}</strong><small>{{ profile.department_name }} · {{ profile.position_name }}</small></div></div>{% empty %}<p class="people-muted">No employees on leave.</p>{% endfor %}</div>
+    <div class="people-card"><h2 class="sales-section-title">Suspended Employees</h2>{% for profile in suspended_employees %}<div class="team-person-row"><span class="people-avatar people-avatar--small">{{ profile.initials }}</span><div><strong>{{ profile.public_name }}</strong><small>{{ profile.department_name }} · {{ profile.position_name }}</small></div></div>{% empty %}<p class="people-muted">No suspended employees.</p>{% endfor %}</div>
+  </section>
+  <section class="people-card team-table-card"><h2 class="sales-section-title">Sales Team Detail</h2><div class="people-table-wrap"><table class="people-table"><thead><tr><th>Salesperson</th><th>Opportunities</th><th>Won</th><th>Closing Ratio</th><th>Follow Ups</th><th>Overdue</th><th>Revenue</th></tr></thead><tbody>{% for row in team_rows %}<tr><td data-label="Salesperson"><strong>{{ row.name }}</strong></td><td data-label="Opportunities">{{ row.opportunities }}</td><td data-label="Won">{{ row.won }}</td><td data-label="Closing Ratio">{{ row.closing_ratio }}%</td><td data-label="Follow Ups">{{ row.completed_followups }}</td><td data-label="Overdue">{{ row.overdue_followups }}</td><td data-label="Revenue">{% for amount in row.revenue_rows %}<span class="team-money">{{ amount.amount|finance_money:amount.currency }}</span>{% endfor %}</td></tr>{% empty %}<tr><td colspan="7">No sales team data.</td></tr>{% endfor %}</tbody></table></div></section>
+</main>
+{% endblock %}

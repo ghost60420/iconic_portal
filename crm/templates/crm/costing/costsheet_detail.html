@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load static %}
+{% load static platform_tools %}
 {% block content %}
 
 <style>
@@ -2515,4 +2515,5 @@
   <option value="0.5"></option>
 </datalist>
 
+{% record_timeline_panel "quotations" costing.pk %}
 {% endblock %}

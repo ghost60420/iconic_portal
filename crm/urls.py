@@ -15,6 +15,8 @@ from . import views_costing as costing
 from . import views_iconic_ai_brain as iconic_ai_brain
 from . import views_order_lifecycle as lifecycle
 from . import views_operations as operations
+from . import views_people as people
+from . import views_platform as platform
 
 try:
     from . import views_whatsapp as wa
@@ -68,6 +70,7 @@ urlpatterns = [
 
     path("main-dashboard/", login_required(views.main_dashboard), name="main_dashboard"),
     path("notifications/", operations.notification_list, name="notification_list"),
+    path("notifications/<int:pk>/open/", operations.notification_open, name="notification_open"),
     path("notifications/<int:pk>/read/", operations.notification_mark_read, name="notification_mark_read"),
     path("notifications/read-all/", operations.notification_mark_all_read, name="notification_mark_all_read"),
     path("notifications/read-selected/", operations.notification_mark_selected_read, name="notification_mark_selected_read"),
@@ -77,6 +80,20 @@ urlpatterns = [
     path("operations/queue/<slug:queue_key>/", operations.operations_queue, name="operations_queue"),
     path("audit-log/", operations.audit_log, name="crm_audit_log"),
     path("role-management/", operations.role_management, name="role_management"),
+    path("employees/", people.employee_list, name="employee_list"),
+    path("employees/new/", people.employee_create, name="employee_create"),
+    path("employees/<int:user_id>/edit/", people.employee_edit, name="employee_edit"),
+    path("sales/profile/", people.salesperson_profile, name="salesperson_profile"),
+    path("sales/profile/<int:user_id>/", people.salesperson_profile, name="salesperson_profile_user"),
+    path("sales/team/", people.team_performance, name="team_performance"),
+    path("chatter/mentions/", people.mention_suggestions_view, name="mention_suggestions"),
+    path("dashboard/preferences/", platform.dashboard_preferences, name="dashboard_preferences"),
+    path("filters/save/", platform.saved_filter_save, name="saved_filter_save"),
+    path("filters/<int:pk>/delete/", platform.saved_filter_delete, name="saved_filter_delete"),
+    path("favorites/<slug:record_type>/<int:object_id>/toggle/", platform.favorite_toggle, name="favorite_toggle"),
+    path("records/<slug:record_type>/<int:object_id>/archive/", platform.archive_record, name="archive_record"),
+    path("system-health/", platform.system_health, name="system_health"),
+    path("settings/", platform.crm_settings, name="crm_settings"),
     path("ceo-dashboard/", ceo_perm(views.ceo_dashboard), name="ceo_dashboard"),
     path("ceo-dashboard/operations/", ceo_perm(views.ceo_operations_dashboard), name="ceo_operations_dashboard"),
     path("ceo/quotation-approvals/", ceo_perm(costing.ceo_quotation_approval_queue), name="ceo_quotation_approval_queue"),

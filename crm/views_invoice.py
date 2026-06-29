@@ -1207,10 +1207,15 @@ def invoice_list(request):
     currency = (request.GET.get("currency") or "").strip()
     customer_id = (request.GET.get("customer") or "").strip()
     paid_filter = (request.GET.get("paid") or "").strip()
+    archive_filter = (request.GET.get("archive") or "active").strip().lower()
     date_from = parse_date((request.GET.get("date_from") or "").strip())
     date_to = parse_date((request.GET.get("date_to") or "").strip())
 
     invoices = Invoice.objects.select_related("order", "customer")
+    if archive_filter == "archived":
+        invoices = invoices.filter(is_archived=True)
+    elif archive_filter != "all":
+        invoices = invoices.filter(is_archived=False)
 
     if q:
         invoices = invoices.filter(
@@ -1298,6 +1303,7 @@ def invoice_list(request):
             "currency": currency,
             "customer": customer_id,
             "paid": paid_filter,
+            "archive_filter": archive_filter,
             "date_from": date_from,
             "date_to": date_to,
             "customers": Customer.objects.order_by("account_brand", "contact_name", "id"),
@@ -1321,7 +1327,7 @@ def _invoice_list_by_currency(request, currency_code: str):
     q = (request.GET.get("q") or "").strip()
     status = (request.GET.get("status") or "").strip()
 
-    invoices = Invoice.objects.select_related("order", "customer").filter(currency=currency_code)
+    invoices = Invoice.objects.select_related("order", "customer").filter(currency=currency_code, is_archived=False)
 
     if q:
         invoices = invoices.filter(

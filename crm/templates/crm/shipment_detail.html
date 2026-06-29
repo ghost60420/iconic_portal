@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load static %}
+{% load static platform_tools %}
 {% block content %}
 <link rel="stylesheet" href="{% static 'crm/shipment_detail.css' %}?v=shipping-detail-modern-20260508">
 
@@ -379,4 +379,5 @@
   </section>
 </div>
 
+{% record_timeline_panel "shipments" shipment.pk %}
 {% endblock %}
