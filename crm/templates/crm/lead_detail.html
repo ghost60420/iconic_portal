@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load static %}
+{% load static crm_people platform_tools %}
 
 {% block content %}
 
@@ -933,7 +933,7 @@
       {% csrf_token %}
       <input type="hidden" name="action" value="add_comment">
       <label>Add internal note</label>
-      <textarea name="comment_text"></textarea>
+      <textarea name="comment_text" data-mention-input data-mention-url="{% url 'mention_suggestions' %}"></textarea>
       <div style="margin-top:6px;">
         <label style="font-size:11px; color:#9ca3af;">Attachment (optional)</label>
         <input type="file" name="attachment">
@@ -945,12 +945,11 @@
       {% for c in comments %}
         <div class="comment {% if c.pinned %}pinned{% endif %}">
           <div class="comment-meta">
-            {{ c.created_at|date:"Y-m-d H:i" }}
-            {% if c.author %} — {{ c.author }}{% endif %}
+            {% include "crm/includes/chatter_identity.html" with c=c %}
             {% if c.production %} • Production{% elif c.opportunity %} • Opportunity{% else %} • Lead{% endif %}
             {% if c.is_ai %} (AI){% endif %}
           </div>
-          <div>{{ c.content|linebreaksbr }}</div>
+          <div>{{ c.content|highlight_mentions|linebreaksbr }}</div>
           {% if c.attachment %}
             <div class="small" style="margin-top:6px;">
               {% with c.attachment.name|cut:"chatter_attachments/" as attachment_name %}
@@ -1296,4 +1295,5 @@
   })();
   </script>
 
+{% record_timeline_panel "leads" lead.pk %}
 {% endblock %}

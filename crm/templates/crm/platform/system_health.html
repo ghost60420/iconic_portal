@@ -1,0 +1,19 @@
+{% extends "crm/base.html" %}
+{% load humanize %}
+{% block content %}
+<div class="platform-page">
+  <header class="platform-page-head"><div><p>CEO only</p><h1>System Health</h1><span>Operational counts and lightweight request telemetry. No secrets are displayed.</span></div></header>
+  <section class="platform-stat-grid">
+    <article><strong>{{ employee_count|intcomma }}</strong><span>Employees</span></article>
+    <article><strong>{{ open_lead_count|intcomma }}</strong><span>Open Leads</span></article>
+    <article><strong>{{ open_opportunity_count|intcomma }}</strong><span>Open Opportunities</span></article>
+    <article><strong>{{ pending_approval_count|intcomma }}</strong><span>Pending Approvals</span></article>
+    <article><strong>{{ production_order_count|intcomma }}</strong><span>Production Orders</span></article>
+    <article><strong>{{ invoice_count|intcomma }}</strong><span>Invoices</span></article>
+    <article><strong>{{ notification_count|intcomma }}</strong><span>Notifications</span></article>
+    <article><strong>{% if database_size %}{{ database_size|filesizeformat }}{% else %}Unavailable{% endif %}</strong><span>Database Size</span></article>
+  </section>
+  <section class="platform-card"><h2>Performance</h2><dl class="platform-definition-list"><div><dt>Average response</dt><dd>{% if performance.average_response_ms != None %}{{ performance.average_response_ms }} ms{% else %}Collecting samples{% endif %}</dd></div><div><dt>Average query count</dt><dd>{{ performance.average_query_count|default:"Unavailable outside query logging" }}</dd></div><div><dt>Samples</dt><dd>{{ performance.sample_count }}</dd></div></dl></section>
+  <section class="platform-card"><h2>Release Information</h2><dl class="platform-definition-list"><div><dt>Version</dt><dd>{{ version }}</dd></div><div><dt>Last backup</dt><dd>{{ last_backup }}</dd></div><div><dt>Last deployment</dt><dd>{{ last_deployment }}</dd></div></dl></section>
+</div>
+{% endblock %}

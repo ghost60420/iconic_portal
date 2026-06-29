@@ -1,0 +1,38 @@
+{% extends "crm/base.html" %}
+{% load static crm_people %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'crm/people.css' %}">
+<main class="people-shell">
+  <header class="people-head">
+    <div><p class="people-eyebrow">People & Access</p><h1 class="people-title">Employee Directory</h1><p class="people-subtitle">Search company structure, employment status, reporting lines, and permission roles.</p></div>
+    <div class="people-actions">
+      {% if can_view_team_performance %}<a class="people-btn" href="{% url 'team_performance' %}">Team Performance</a>{% endif %}
+      {% if can_manage_roles %}<a class="people-btn" href="{% url 'role_management' %}">Manage Roles</a>{% endif %}
+      <a class="people-btn people-btn--gold" href="{% url 'employee_create' %}">New Employee</a>
+    </div>
+  </header>
+  <section class="people-card">
+    <form class="people-directory-filters" method="get">
+      <label class="people-field people-field--search"><span>Search</span><input class="people-input" name="q" value="{{ query }}" placeholder="ID, name, email, department, position, or status"></label>
+      <label class="people-field"><span>Status</span><select class="people-input" name="status"><option value="">All statuses</option>{% for value, label in status_choices %}<option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+      <label class="people-field"><span>Sort by</span><select class="people-input" name="sort"><option value="name" {% if sort == 'name' %}selected{% endif %}>Name</option><option value="employee_id" {% if sort == 'employee_id' %}selected{% endif %}>Employee ID</option><option value="department" {% if sort == 'department' %}selected{% endif %}>Department</option><option value="position" {% if sort == 'position' %}selected{% endif %}>Position</option><option value="last_login" {% if sort == 'last_login' %}selected{% endif %}>Last Login</option><option value="date_joined" {% if sort == 'date_joined' %}selected{% endif %}>Date Joined</option></select></label>
+      <label class="people-field"><span>Order</span><select class="people-input" name="direction"><option value="asc" {% if direction == 'asc' %}selected{% endif %}>Ascending</option><option value="desc" {% if direction == 'desc' %}selected{% endif %}>Descending</option></select></label>
+      <button class="people-btn people-btn--gold" type="submit">Apply</button>
+      {% if query or status_filter or sort != 'name' or direction != 'asc' %}<a class="people-btn" href="{% url 'employee_list' %}">Clear</a>{% endif %}
+    </form>
+    <div class="people-table-wrap">
+      <table class="people-table"><thead><tr><th>Employee</th><th>Position</th><th>Department</th><th>Manager</th><th>Roles</th><th>Status</th><th></th></tr></thead><tbody>
+        {% for profile in profiles %}<tr>
+          <td data-label="Employee"><div class="people-list-identity">{% if profile.profile_photo %}<img class="people-avatar people-avatar--small" src="{{ profile.profile_photo.url }}" alt="">{% else %}<span class="people-avatar people-avatar--small">{{ profile.initials }}</span>{% endif %}<div><div class="people-name">{{ profile.public_name }}</div><div class="people-muted">{{ profile.employee_id }} · {{ profile.user.get_full_name }}</div></div></div></td>
+          <td data-label="Position">{{ profile.position_name|default:"Not assigned" }}</td><td data-label="Department">{{ profile.department_name|default:"Not assigned" }}</td>
+          <td data-label="Manager">{% if profile.manager %}{{ profile.manager|employee_name }}{% else %}<span class="people-muted">None</span>{% endif %}</td>
+          <td data-label="Roles"><div class="people-roles">{% for role in profile.user.groups.all %}<span class="people-badge">{{ role.name }}</span>{% empty %}<span class="people-muted">No roles</span>{% endfor %}</div></td>
+          <td data-label="Status"><span class="people-badge people-badge--{{ profile.status }}">{{ profile.get_status_display }}</span>{% if not profile.user.is_active %}<span class="people-badge people-badge--off">CRM access disabled</span>{% endif %}<div class="people-muted">Last login: {{ profile.user.last_login|date:"M j, Y H:i"|default:"Never" }}</div><div class="people-muted">Joined: {{ profile.user.date_joined|date:"M j, Y" }}</div></td>
+          <td data-label="Action"><a class="people-btn" href="{% url 'employee_edit' profile.user_id %}">View</a></td>
+        </tr>{% empty %}<tr><td colspan="7"><div class="people-empty">No employees match these filters.</div></td></tr>{% endfor %}
+      </tbody></table>
+    </div>
+    {% if page_obj.paginator.num_pages > 1 %}<nav class="people-pagination" aria-label="Employee pages">{% if page_obj.has_previous %}<a class="people-btn" href="?q={{ query|urlencode }}&status={{ status_filter }}&sort={{ sort }}&direction={{ direction }}&page={{ page_obj.previous_page_number }}">Previous</a>{% endif %}<span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>{% if page_obj.has_next %}<a class="people-btn" href="?q={{ query|urlencode }}&status={{ status_filter }}&sort={{ sort }}&direction={{ direction }}&page={{ page_obj.next_page_number }}">Next</a>{% endif %}</nav>{% endif %}
+  </section>
+</main>
+{% endblock %}

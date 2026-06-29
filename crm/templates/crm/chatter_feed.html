@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load static %}
+{% load static crm_people %}
 
 {% block content %}
 <style>
@@ -184,7 +184,7 @@
           {% csrf_token %}
           <input type="hidden" name="action" value="add_chatter">
           <label>Note</label>
-          <textarea name="comment_text" rows="3" placeholder="Write a note and mention @username"></textarea>
+          <textarea name="comment_text" rows="3" placeholder="Write a note and mention @Hossein" data-mention-input data-mention-url="{% url 'mention_suggestions' %}"></textarea>
 
           <div style="margin-top:10px;">
             <label>Attachment</label>
@@ -211,7 +211,7 @@
             <button type="submit" class="btn btn-warning btn-sm">Save note</button>
           </div>
           <div class="muted" style="margin-top:6px;">
-            Mentions like @hussein will email that team member automatically.
+            Mentions create an in-CRM notification. Email is not sent.
           </div>
         </form>
       </div>
@@ -224,15 +224,13 @@
             {% for c in comments %}
               <div class="note-item">
                 <div class="note-meta">
-                  <span class="note-author">{{ c.author|default:"User" }}</span>
-                  <span>{{ c.created_at }}</span>
+                  {% include "crm/includes/chatter_identity.html" with c=c %}
                   {% if c.production %}<span class="note-tag">Production</span>{% endif %}
                   {% if c.opportunity %}<span class="note-tag">Opportunity</span>{% endif %}
                   {% if c.lead and not c.opportunity and not c.production %}<span class="note-tag">Lead</span>{% endif %}
-                  {% if c.pinned %}<span class="note-tag">Pinned</span>{% endif %}
                   {% if c.is_ai %}<span class="note-tag">AI</span>{% endif %}
                 </div>
-                <div class="note-content">{{ c.content }}</div>
+                <div class="note-content">{{ c.content|highlight_mentions|linebreaksbr }}</div>
                 {% if c.attachment %}
                   <div class="muted" style="margin-top:6px;">
                     {% with c.attachment.name|cut:"chatter_attachments/" as attachment_name %}
@@ -264,12 +262,12 @@
 
     <div>
       <div class="chatter-card">
-        <div style="font-size:13px; font-weight:700; color:#fef9c3; margin-bottom:8px;">Team emails</div>
+        <div style="font-size:13px; font-weight:700; color:#fef9c3; margin-bottom:8px;">Mention directory</div>
         <div class="team-list">
           {% for member in team_members %}
             <div class="team-item">
-              <div><strong>{{ member.username }}</strong></div>
-              <div class="muted">{{ member.email|default:"(no email)" }}</div>
+              <div><strong>@{{ member|employee_name }}</strong></div>
+              <div class="muted">{% if member.employee_profile.position %}{{ member.employee_profile.get_position_display }}{% else %}Team Member{% endif %}{% if member.employee_profile.department %}, {{ member.employee_profile.get_department_display }}{% endif %}</div>
             </div>
           {% endfor %}
         </div>

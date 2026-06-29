@@ -68,6 +68,19 @@
             <option value="compact">Dense</option>
           </select>
         </div>
+        {% if not dashboard_layout_fixed %}
+          <details class="dashboard-menu" data-dashboard-layout-menu>
+            <summary class="dashboard-control-button">Customize widgets</summary>
+            <div class="dashboard-menu-panel dashboard-layout-panel">
+              <strong>Dashboard widgets</strong>
+              {% for key, label in dashboard_widgets %}
+                <label><input type="checkbox" data-widget-visibility value="{{ key }}" {% if key not in dashboard_hidden_widgets %}checked{% endif %}> {{ label }}</label>
+              {% endfor %}
+              <p class="dashboard-card-note">Drag visible sections to reorder them, then save.</p>
+              <button type="button" class="dashboard-control-button" data-save-dashboard-layout data-url="{% url 'dashboard_preferences' %}">Save layout</button>
+            </div>
+          </details>
+        {% endif %}
 
         <div class="dashboard-action-cluster" aria-label="Dashboard action center">
           <details class="dashboard-menu dashboard-menu--notifications" data-dashboard-menu>
@@ -322,13 +335,13 @@
     </div>
   </section>
 
-  <div class="dashboard-grid dashboard-grid--kpis">
+  <div class="dashboard-grid dashboard-grid--kpis" data-dashboard-widget="kpis" draggable="{% if dashboard_layout_fixed %}false{% else %}true{% endif %}">
     {% for kpi in primary_kpis %}
       {% include "crm/dashboard/_metric_card.html" with title=kpi.title value=kpi.value note=kpi.note trend_text=kpi.trend_text trend_tone=kpi.trend_tone accent=kpi.accent icon=kpi.icon href=kpi.href %}
     {% endfor %}
   </div>
 
-  <section class="dashboard-section" id="workflow-section">
+  <section class="dashboard-section" id="workflow-section" data-dashboard-widget="workflow" draggable="{% if dashboard_layout_fixed %}false{% else %}true{% endif %}">
     <div class="dashboard-section-head">
       <div>
         <p class="dashboard-eyebrow">Workflow Snapshot</p>
@@ -421,7 +434,7 @@
     </div>
   </section>
 
-  <section class="dashboard-section" id="operations-control-center">
+  <section class="dashboard-section" id="operations-control-center" data-dashboard-widget="operations" draggable="{% if dashboard_layout_fixed %}false{% else %}true{% endif %}">
     <div class="dashboard-section-head">
       <div>
         <p class="dashboard-eyebrow">Operations Control Center</p>
@@ -494,7 +507,7 @@
     </div>
   </section>
 
-  <section class="dashboard-section" id="notification-center">
+  <section class="dashboard-section" id="notification-center" data-dashboard-widget="notifications" draggable="{% if dashboard_layout_fixed %}false{% else %}true{% endif %}">
     <div class="dashboard-section-head">
       <div>
         <p class="dashboard-eyebrow">Notification Center</p>
@@ -1285,11 +1298,37 @@
       </details>
     </div>
   </section>
+
+  <section class="dashboard-section" data-dashboard-widget="favorites" draggable="{% if dashboard_layout_fixed %}false{% else %}true{% endif %}">
+    <div class="dashboard-section-head"><div><p class="dashboard-eyebrow">Personal Workspace</p><h2>Favorites</h2></div></div>
+    <div class="dashboard-grid dashboard-grid--activity">
+      <article class="dashboard-card"><ul class="dashboard-feed-list">
+        {% for item in dashboard_favorites %}<li class="dashboard-feed-item"><strong><a href="{{ item.target_url }}">{{ item.record_label }}</a></strong><span>{{ item.record_type }}</span></li>{% empty %}<li class="dashboard-empty">Star a customer, lead, opportunity, quotation, production order, or invoice to keep it here.</li>{% endfor %}
+      </ul></article>
+    </div>
+  </section>
+
+  <section class="dashboard-section" data-dashboard-widget="recent" draggable="{% if dashboard_layout_fixed %}false{% else %}true{% endif %}">
+    <div class="dashboard-section-head"><div><p class="dashboard-eyebrow">Personal Workspace</p><h2>Recently Viewed</h2></div></div>
+    <div class="dashboard-grid dashboard-grid--activity"><article class="dashboard-card"><ul class="dashboard-feed-list">
+      {% for item in dashboard_recent_records %}<li class="dashboard-feed-item"><strong><a href="{{ item.target_url }}">{{ item.record_label }}</a></strong><span>{{ item.record_type }} · {{ item.viewed_at|timesince }} ago</span></li>{% empty %}<li class="dashboard-empty">Your last 20 permitted records will appear here.</li>{% endfor %}
+    </ul></article></div>
+  </section>
+
+  <section class="dashboard-section" data-dashboard-widget="saved_filters" draggable="{% if dashboard_layout_fixed %}false{% else %}true{% endif %}">
+    <div class="dashboard-section-head"><div><p class="dashboard-eyebrow">Personal Workspace</p><h2>Saved Filters</h2></div></div>
+    <div class="dashboard-grid dashboard-grid--activity"><article class="dashboard-card"><ul class="dashboard-feed-list">
+      {% for item in dashboard_saved_filters %}<li class="dashboard-feed-item"><strong><a href="{{ item.target_url }}">{{ item.name }}</a></strong><span>{{ item.module|title }}</span></li>{% empty %}<li class="dashboard-empty">Saved list filters will appear here.</li>{% endfor %}
+    </ul></article></div>
+  </section>
 </div>
 
 {{ chart_data|json_script:"dash-data" }}
+{{ dashboard_widget_order|json_script:"dashboard-widget-order" }}
+{{ dashboard_hidden_widgets|json_script:"dashboard-hidden-widgets" }}
 
 <script defer src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="{% static 'crm/dashboard.js' %}?v=top-actions-layer-20260505"></script>
+<script src="{% static 'crm/platform_dashboard.js' %}" defer></script>
 {% endblock %}

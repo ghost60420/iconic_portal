@@ -3,6 +3,10 @@
 
   function appendHighlightedText(parent, text, query) {
     const source = String(text || "");
+    if (!query) {
+      parent.appendChild(document.createTextNode(source));
+      return;
+    }
     const index = source.toLowerCase().indexOf(query.toLowerCase());
     if (index < 0) {
       parent.appendChild(document.createTextNode(source));
@@ -105,6 +109,10 @@
       timer = window.setTimeout(function () { loadSuggestions(query); }, 160);
     });
 
+    input.addEventListener("focus", function () {
+      if (!input.value.trim()) loadSuggestions("");
+    });
+
     input.addEventListener("keydown", function (event) {
       if (event.key === "Escape") {
         closePanel();
@@ -127,5 +135,15 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     document.querySelectorAll(".js-global-search").forEach(initializeSearch);
+  });
+
+  document.addEventListener("keydown", function (event) {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+      const input = document.querySelector(".js-global-search-input");
+      if (!input) return;
+      event.preventDefault();
+      input.focus();
+      input.select();
+    }
   });
 })();

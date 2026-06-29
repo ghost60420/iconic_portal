@@ -1,5 +1,5 @@
 {% load static %}
-{% load crm_groups %}
+{% load crm_groups crm_people %}
 
 <!doctype html>
 <html lang="en">
@@ -9,6 +9,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'crm/people.css' %}">
+  <link rel="stylesheet" href="{% static 'crm/operations_control.css' %}">
 
   <style>
     :root{
@@ -199,9 +201,18 @@
     .crm-notification-count{position:absolute;right:-5px;top:-6px;min-width:19px;height:19px;border-radius:999px;background:#d6b45a;color:#080808;font-size:10px;font-weight:900;display:flex;align-items:center;justify-content:center;padding:0 5px}
     .crm-notification-panel{position:absolute;right:0;top:48px;width:min(360px,calc(100vw - 24px));background:#0d0d0d;border:1px solid #393939;border-radius:8px;box-shadow:0 18px 45px rgba(0,0,0,.65);padding:10px;z-index:2600}
     .crm-notification-panel h2{font-size:14px;font-weight:900;margin:2px 4px 8px;color:#f4df9c}
-    .crm-notification-preview{display:block;border-top:1px solid #292929;padding:9px 5px;color:#fff}
-    .crm-notification-preview strong{display:block;font-size:12px}
-    .crm-notification-preview span{display:block;color:#aaa;font-size:11px;margin-top:3px}
+    .crm-notification-preview{display:grid;grid-template-columns:28px minmax(0,1fr);gap:8px;border-top:1px solid #292929;padding:9px 5px;color:#fff}
+    .crm-notification-preview-icon{display:flex!important;align-items:flex-start;justify-content:center;color:#f4d77d;font-size:16px;line-height:1.2}
+    .crm-notification-preview-body{min-width:0}
+    .crm-notification-preview strong{display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .crm-notification-preview-description,.crm-notification-preview-meta{display:block;color:#aaa;font-size:11px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .crm-notification-preview-meta{color:#d7c783}
+    @media (max-width:1024px){.crm-notification-preview-description{display:none}}
+    @media (max-width:768px){
+      .crm-notification-preview-body{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+      .crm-notification-preview-meta{margin-top:0}
+      .crm-notification-preview-record,.crm-notification-preview-separator{display:none}
+    }
     .crm-notification-footer{display:block;text-align:center;margin-top:8px;padding:8px;border-radius:6px;background:#d6b45a;color:#080808;font-size:12px;font-weight:900}
 
     .crm-main-nav{
@@ -453,6 +464,26 @@
 
     .crm-logout-form{ margin:0; }
 
+    @media (max-width: 1024px){
+      .crm-main-nav{
+        width:100%;
+        max-width:100%;
+        min-width:0;
+        overflow-x:auto;
+        flex-wrap:nowrap;
+        scrollbar-width:none;
+      }
+      .crm-main-nav::-webkit-scrollbar{display:none}
+      .crm-dropdown-menu{
+        display:none;
+        left:auto;
+        right:0;
+      }
+      .crm-dropdown.is-open .crm-dropdown-menu{
+        display:block;
+      }
+    }
+
     @media (max-width: 768px){
       .crm-dropdown-menu{
         left:auto;
@@ -521,6 +552,10 @@
 </head>
 
 <body>
+  {% can_manage_people request.user as can_manage_people_access %}
+  {% can_manage_role_assignments request.user as can_manage_roles_access %}
+  {% has_sales_profile request.user as has_sales_profile_access %}
+  {% can_view_team_dashboard request.user as can_view_team_dashboard_access %}
 
   {% if request.user.is_authenticated %}
 
@@ -538,6 +573,7 @@
     {% url 'shipment_add' as ship_add_url %}
     {% url 'main_dashboard' as main_dash_url %}
     {% url 'ceo_dashboard' as ceo_dash_url %}
+    {% url 'ceo_operations_dashboard' as production_dashboard_url %}
     {% url 'ceo_quotation_approval_queue' as ceo_quote_queue_url %}
     {% url 'ai_operations_assistant' as ai_operations_url %}
     {% url 'ai_executive_advisor' as ai_executive_advisor_url %}
@@ -578,6 +614,9 @@
     {% url 'notification_list' as notification_list_url %}
     {% url 'crm_audit_log' as crm_audit_log_url %}
     {% url 'role_management' as role_management_url %}
+    {% url 'employee_list' as employee_list_url %}
+    {% url 'salesperson_profile' as salesperson_profile_url %}
+    {% url 'team_performance' as team_performance_url %}
 
     {% url 'library_home' as library_home_url %}
     {% url 'products_list' as products_url %}
@@ -598,13 +637,16 @@
 
         {% if can_leads or can_opps or can_customers %}
           <div class="crm-dropdown" id="salesDropdown">
-            <a href="{% if can_leads and leads_url %}{{ leads_url }}{% elif can_opps and opp_url %}{{ opp_url }}{% elif can_customers and cust_url %}{{ cust_url }}{% else %}#{% endif %}" class="crm-nav-item hot {% if current_url == 'leads_list' or current_url == 'lead_add' or current_url == 'opportunities_list' or current_url == 'add_opportunity' or current_url == 'customers_list' %}active{% endif %}" id="salesBtn" aria-haspopup="true" aria-expanded="false">
+            <a href="{% if can_leads and leads_url %}{{ leads_url }}{% elif can_opps and opp_url %}{{ opp_url }}{% elif can_customers and cust_url %}{{ cust_url }}{% else %}#{% endif %}" class="crm-nav-item hot {% if current_url == 'leads_list' or current_url == 'lead_add' or current_url == 'opportunities_list' or current_url == 'add_opportunity' or current_url == 'customers_list' or current_url == 'salesperson_profile' or current_url == 'salesperson_profile_user' or current_url == 'team_performance' %}active{% endif %}" id="salesBtn" aria-haspopup="true" aria-expanded="false">
               <span>🧲</span><strong>Sales</strong>
             </a>
             <div class="crm-dropdown-menu" role="menu">
               <div class="crm-dd-title">Sales</div>
               {% if can_leads and leads_url %}<a class="crm-dd-item" href="{{ leads_url }}">Leads</a>{% endif %}
               {% if can_opps and opp_url %}<a class="crm-dd-item" href="{{ opp_url }}">Opportunities</a>{% endif %}
+              {% if can_costing and cost_url %}<a class="crm-dd-item" href="{{ cost_url }}">Quotations</a>{% endif %}
+              {% if has_sales_profile_access and salesperson_profile_url %}<a class="crm-dd-item" href="{{ salesperson_profile_url }}">Sales Dashboard</a>{% endif %}
+              {% if can_view_team_dashboard_access and team_performance_url %}<a class="crm-dd-item" href="{{ team_performance_url }}">Team Performance</a>{% endif %}
               {% if can_customers and cust_url %}<a class="crm-dd-item" href="{{ cust_url }}">Customers</a>{% endif %}
             </div>
           </div>
@@ -616,7 +658,12 @@
               <span>💰</span><strong>Financial</strong>
             </a>
             <div class="crm-dropdown-menu" role="menu">
-              <div class="crm-dd-title">Financial</div>
+              <div class="crm-dd-title">Finance</div>
+              {% if can_acc_ca or can_acc_bd %}
+                {% if invoice_list_url %}<a class="crm-dd-item" href="{{ invoice_list_url }}">Invoices</a>{% endif %}
+                {% if acc_home_url %}<a class="crm-dd-item" href="{{ acc_home_url }}">Accounts</a>{% endif %}
+                {% if executive_dashboard_url %}<a class="crm-dd-item" href="{{ executive_dashboard_url }}">Finance Dashboard</a>{% endif %}
+              {% endif %}
               {% if can_acc_bd %}
                 <div class="crm-nested-submenu">
                   <button type="button" class="crm-submenu-toggle" aria-expanded="false">
@@ -681,11 +728,12 @@
         {% if can_production or can_shipping or can_inventory or can_calendar %}
           <div class="crm-dropdown" id="operationsDropdown">
             <a href="{% if can_production and prod_url %}{{ prod_url }}{% elif can_shipping and ship_url %}{{ ship_url }}{% elif can_inventory and inv_url %}{{ inv_url }}{% elif can_calendar and cal_url %}{{ cal_url }}{% else %}#{% endif %}" class="crm-nav-item {% if current_url == 'production_list' or current_url == 'production_add' or current_url == 'shipment_list' or current_url == 'shipment_add' or current_url == 'inventory_list' or current_url == 'calendar_list' %}active{% endif %}" id="operationsBtn" aria-haspopup="true" aria-expanded="false">
-              <span>🏭</span><strong>Operations</strong>
+              <span>🏭</span><strong>Production</strong>
             </a>
             <div class="crm-dropdown-menu" role="menu">
-              <div class="crm-dd-title">Operations</div>
-              {% if can_production and prod_url %}<a class="crm-dd-item" href="{{ prod_url }}">Production</a>{% endif %}
+              <div class="crm-dd-title">Production</div>
+              {% if can_production and prod_url %}<a class="crm-dd-item" href="{{ prod_url }}">Production Orders</a>{% endif %}
+              {% if can_ceo_tools and production_dashboard_url %}<a class="crm-dd-item" href="{{ production_dashboard_url }}">Production Dashboard</a>{% endif %}
               {% if can_shipping and ship_url %}<a class="crm-dd-item" href="{{ ship_url }}">Shipping</a>{% endif %}
               {% if can_inventory and inv_url %}<a class="crm-dd-item" href="{{ inv_url }}">Inventory</a>{% endif %}
               {% if can_calendar and cal_url %}<a class="crm-dd-item" href="{{ cal_url }}">Calendar</a>{% endif %}
@@ -727,23 +775,15 @@
 
         <div class="crm-dropdown" id="adminDropdown">
           <a href="{% if access_url %}{{ access_url }}{% elif library_home_url %}{{ library_home_url }}{% elif world_tools_url %}{{ world_tools_url }}{% else %}#{% endif %}" class="crm-nav-item {% if current_url == 'access_list' or current_url == 'crm_audit_log' or current_url == 'role_management' or current_url == 'library_home' or current_url == 'world_tools' or current_url == 'world_dashboard' %}active{% endif %}" id="adminBtn" aria-haspopup="true" aria-expanded="false">
-            <span>🛠️</span><strong>Admin</strong>
+            <span>🛠️</span><strong>Control</strong>
           </a>
           <div class="crm-dropdown-menu" role="menu">
-            <div class="crm-dd-title">Admin</div>
-            {% if access_url %}<a class="crm-dd-item" href="{{ access_url }}">Access</a>{% endif %}
-            {% if can_ceo_tools and crm_audit_log_url %}<a class="crm-dd-item" href="{{ crm_audit_log_url }}">Audit Log</a>{% endif %}
-            {% if can_ceo_tools and role_management_url %}<a class="crm-dd-item" href="{{ role_management_url }}">Role Management</a>{% endif %}
-            {% if request.user.is_superuser and admin_url %}<a class="crm-dd-item" href="{{ admin_url }}">Admin</a>{% endif %}
-            {% if library_home_url %}<a class="crm-dd-item" href="{{ library_home_url }}">Library</a>{% endif %}
-            {% if products_url %}<a class="crm-dd-item" href="{{ products_url }}">Products</a>{% endif %}
-            {% if fabrics_url %}<a class="crm-dd-item" href="{{ fabrics_url }}">Fabrics</a>{% endif %}
-            {% if accessories_url %}<a class="crm-dd-item" href="{{ accessories_url }}">Accessories</a>{% endif %}
-            {% if trims_url %}<a class="crm-dd-item" href="{{ trims_url }}">Trims</a>{% endif %}
-            {% if threads_url %}<a class="crm-dd-item" href="{{ threads_url }}">Threads</a>{% endif %}
-            {% if world_tools_url %}<a class="crm-dd-item" href="{{ world_tools_url }}">World tools</a>{% endif %}
-            {% if world_dash_url %}<a class="crm-dd-item" href="{{ world_dash_url }}">World dashboard</a>{% endif %}
-            {% if world_ai_url %}<a class="crm-dd-item" href="{{ world_ai_url }}">AI fashion notes</a>{% endif %}
+            <div class="crm-dd-title">People, Reports & Settings</div>
+            <div class="crm-nested-submenu"><button type="button" class="crm-submenu-toggle" aria-expanded="false"><span>People</span><span class="crm-submenu-caret">›</span></button><div class="crm-submenu-panel" role="menu">{% if can_manage_people_access and employee_list_url %}<a class="crm-dd-item" href="{{ employee_list_url }}">Employees</a>{% endif %}{% if can_manage_roles_access and role_management_url %}<a class="crm-dd-item" href="{{ role_management_url }}">Roles</a>{% endif %}{% if notification_list_url %}<a class="crm-dd-item" href="{{ notification_list_url }}">Notifications</a>{% endif %}{% if can_ceo_tools and crm_audit_log_url %}<a class="crm-dd-item" href="{{ crm_audit_log_url }}">Audit Log</a>{% endif %}</div></div>
+            {% if can_ceo_tools or can_acc_ca or can_acc_bd %}<div class="crm-nested-submenu"><button type="button" class="crm-submenu-toggle" aria-expanded="false"><span>Reports</span><span class="crm-submenu-caret">›</span></button><div class="crm-submenu-panel" role="menu">{% if kpi_scorecard_url %}<a class="crm-dd-item" href="{{ kpi_scorecard_url }}">KPI</a>{% endif %}{% if profit_loss_url %}<a class="crm-dd-item" href="{{ profit_loss_url }}">Profit</a>{% endif %}{% if can_ceo_tools and crm_audit_log_url %}<a class="crm-dd-item" href="{{ crm_audit_log_url }}">Activity</a>{% endif %}</div></div>{% endif %}
+            <div class="crm-nested-submenu"><button type="button" class="crm-submenu-toggle" aria-expanded="false"><span>Settings</span><span class="crm-submenu-caret">›</span></button><div class="crm-submenu-panel" role="menu">{% if library_home_url %}<a class="crm-dd-item" href="{{ library_home_url }}">Lists</a>{% endif %}{% if access_url %}<a class="crm-dd-item" href="{{ access_url }}">Users</a>{% endif %}{% if can_manage_roles_access and role_management_url %}<a class="crm-dd-item" href="{{ role_management_url }}">Permissions</a>{% endif %}{% if request.user.is_superuser and admin_url %}<a class="crm-dd-item" href="{{ admin_url }}">System Admin</a>{% endif %}{% if world_tools_url %}<a class="crm-dd-item" href="{{ world_tools_url }}">World Tools</a>{% endif %}</div></div>
+            {% if can_manage_roles_access %}<a class="crm-dd-item" href="{% url 'crm_settings' %}">CRM Settings</a>{% endif %}
+            {% if can_ceo_tools %}<a class="crm-dd-item" href="{% url 'system_health' %}">System Health</a>{% endif %}
           </div>
         </div>
       </nav>
@@ -752,21 +792,25 @@
 
       <div class="crm-operations-tools">
         <form class="crm-global-search js-global-search" method="get" action="{{ global_search_url }}" role="search" data-suggestions-url="{{ global_search_suggestions_url }}">
-          <input class="js-global-search-input" type="search" name="q" minlength="2" value="{% if current_url == 'global_search' %}{{ request.GET.q }}{% endif %}" placeholder="Search CRM" aria-label="Search customers, leads, quotations, production orders, and invoices" aria-controls="crm-header-search-suggestions" aria-expanded="false" autocomplete="off" required>
+          <input class="js-global-search-input" type="search" name="q" minlength="2" value="{% if current_url == 'global_search' %}{{ request.GET.q }}{% endif %}" placeholder="Search CRM (Ctrl+K)" aria-label="Search CRM records and employees" aria-controls="crm-header-search-suggestions" aria-expanded="false" autocomplete="off" required>
           <button type="submit" aria-label="Run global search">Search</button>
           <div id="crm-header-search-suggestions" class="crm-search-suggestions js-global-search-suggestions" role="listbox" hidden></div>
         </form>
         <details class="crm-notification-menu">
           <summary class="crm-notification-button" aria-label="Open notification center">
             <span aria-hidden="true">🔔</span>
-            {% if crm_header_unread_count %}<span class="crm-notification-count">{{ crm_header_unread_count }}</span>{% endif %}
+            {% if crm_header_unread_count %}<span class="crm-notification-count">{% if crm_header_unread_count > 99 %}99+{% else %}{{ crm_header_unread_count }}{% endif %}</span>{% endif %}
           </summary>
           <div class="crm-notification-panel">
             <h2>Notifications</h2>
             {% for item in crm_header_notifications %}
-              <a class="crm-notification-preview" href="{{ item.target_url|default:notification_list_url }}">
-                <strong>{{ item.title }}</strong>
-                <span>{{ item.message|truncatechars:90 }}</span>
+              <a class="crm-notification-preview" href="{{ item.open_url }}">
+                <span class="crm-notification-preview-icon" aria-hidden="true">{{ item.icon_symbol }}</span>
+                <span class="crm-notification-preview-body">
+                  <strong>{{ item.title }}</strong>
+                  <span class="crm-notification-preview-description">{{ item.message|truncatechars:72 }}</span>
+                  <span class="crm-notification-preview-meta">{% if item.record_label %}<span class="crm-notification-preview-record">{{ item.record_label }}</span><span class="crm-notification-preview-separator"> · </span>{% endif %}{{ item.age_label }}</span>
+                </span>
               </a>
             {% empty %}
               <div class="crm-notification-preview"><strong>No open notifications</strong><span>Your operational queue is clear.</span></div>
@@ -778,7 +822,7 @@
 
       <div class="crm-userbox">
         <div class="crm-username">
-          <span>👤</span> {{ request.user.get_username }}
+          <span>👤</span>{% if has_sales_profile_access %}<a href="{{ salesperson_profile_url }}">{{ request.user|employee_name }}</a>{% else %}{{ request.user|employee_name }}{% endif %}
         </div>
 
         {% if logout_url %}
@@ -813,6 +857,27 @@
   {% endif %}
 
   <div class="crm-wrapper">
+    {% if crm_current_record %}
+      <aside class="crm-record-tools" aria-label="Record tools">
+        <span class="crm-record-tools-label">{{ crm_current_record.label }}</span>
+        <button type="button" class="crm-record-tool-button js-favorite-toggle" data-url="{% url 'favorite_toggle' crm_current_record.type_key crm_current_record.object_id %}" aria-pressed="{% if crm_current_record.is_favorite %}true{% else %}false{% endif %}">
+          <span aria-hidden="true">{% if crm_current_record.is_favorite %}★{% else %}☆{% endif %}</span>
+          <span>{% if crm_current_record.is_favorite %}Favorited{% else %}Favorite{% endif %}</span>
+        </button>
+        {% if crm_current_record.can_archive %}
+          <form method="post" action="{% url 'archive_record' crm_current_record.type_key crm_current_record.object_id %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="{% if crm_current_record.is_archived %}restore{% else %}archive{% endif %}">
+            <button class="crm-record-tool-button" type="submit">{% if crm_current_record.is_archived %}Restore{% else %}Archive{% endif %}</button>
+          </form>
+        {% endif %}
+      </aside>
+    {% endif %}
+    {% if crm_filter_module and request.GET %}
+      <div class="crm-filter-tools">
+        <button type="button" class="crm-record-tool-button js-save-filter" data-module="{{ crm_filter_module }}" data-url="{% url 'saved_filter_save' %}">Save current filter</button>
+      </div>
+    {% endif %}
     {% if messages %}
       <div class="mb-3">
         {% for message in messages %}
@@ -827,6 +892,40 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
   <script defer src="{% static 'crm/operations_search.js' %}"></script>
+  <script src="{% static 'crm/chatter_mentions.js' %}" defer></script>
+  <script>
+    document.addEventListener("click", async function (event) {
+      const button = event.target.closest(".js-favorite-toggle");
+      if (!button) return;
+      event.preventDefault();
+      const csrf = document.querySelector("[name=csrfmiddlewaretoken]");
+      const response = await fetch(button.dataset.url, {
+        method: "POST",
+        headers: {"X-CSRFToken": csrf ? csrf.value : "", "X-Requested-With": "XMLHttpRequest"}
+      });
+      if (!response.ok) return;
+      const payload = await response.json();
+      button.setAttribute("aria-pressed", payload.favorite ? "true" : "false");
+      button.querySelector("span:first-child").textContent = payload.favorite ? "★" : "☆";
+      button.querySelector("span:last-child").textContent = payload.favorite ? "Favorited" : "Favorite";
+    });
+    document.addEventListener("click", async function (event) {
+      const button = event.target.closest(".js-save-filter");
+      if (!button) return;
+      const name = window.prompt("Filter name");
+      if (!name) return;
+      const csrfMatch = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
+      const body = new URLSearchParams(window.location.search);
+      body.set("name", name);
+      body.set("module", button.dataset.module);
+      const response = await fetch(button.dataset.url, {
+        method: "POST",
+        headers: {"X-CSRFToken": csrfMatch ? decodeURIComponent(csrfMatch[1]) : "", "X-Requested-With": "XMLHttpRequest"},
+        body: body
+      });
+      button.textContent = response.ok ? "Filter saved" : "Save failed";
+    });
+  </script>
   <script>
     (function () {
       function setupDropdown(dropdownId, btnId) {

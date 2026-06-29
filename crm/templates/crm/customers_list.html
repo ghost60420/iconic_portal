@@ -1,6 +1,7 @@
 {% extends "crm/base.html" %}
 {% load static %}
 {% block content %}
+<nav class="crm-archive-switch" aria-label="Customer archive"><a href="?archive=active">Active</a><a href="?archive=archived">Archived</a></nav>
 <link rel="stylesheet" href="{% static 'crm/customers_list.css' %}?v=customers-modern-20260507">
 
 <div class="customer-page">

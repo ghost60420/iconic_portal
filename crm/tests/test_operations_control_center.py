@@ -5,16 +5,18 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.contrib.contenttypes.models import ContentType
 from django.core.cache import cache
 from django.core.management import call_command
 from django.db import connection
-from django.test import Client, TestCase
+from django.test import Client, RequestFactory, TestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from openpyxl import load_workbook
 
 from crm.audit_context import reset_current_actor, set_current_actor
+from crm.context_processors import operations_header
 from crm.models import (
     AutomationNotification,
     CRMAuditLog,
@@ -22,8 +24,11 @@ from crm.models import (
     Customer,
     Invoice,
     Lead,
+    LeadComment,
+    LeadTask,
     Opportunity,
     ProductionOrder,
+    Shipment,
 )
 from crm.services.automation_engine import automation_dashboard_context
 from crm.services.operations_dashboard import operations_dashboard_context
@@ -34,6 +39,7 @@ from crm.views_operations import _group_notifications
 
 class OperationsControlBase(TestCase):
     def setUp(self):
+        cache.clear()
         self.User = get_user_model()
         self.ceo = self.User.objects.create_user("ops-ceo", password="test-pass")
         self.sales = self.User.objects.create_user("ops-sales", password="test-pass")
@@ -117,18 +123,38 @@ class NotificationCenterTests(OperationsControlBase):
         self.assertIn(item, visible_notifications(self.ceo))
         self.assertNotIn(item, visible_notifications(self.sales))
 
-    def test_due_shipping_and_overdue_invoice_notifications(self):
+    def test_only_approved_periodic_notifications_are_created(self):
         today = timezone.localdate()
-        order = ProductionOrder.objects.create(
-            title="Due Production",
-            order_code="PO-OPS-DUE",
+        sample_order = ProductionOrder.objects.create(
+            title="Sample Due",
+            order_code="PO-OPS-SAMPLE",
             customer=self.customer,
             qty_total=100,
+            sample_deadline=today,
+        )
+        overdue_order = ProductionOrder.objects.create(
+            title="Overdue Production",
+            order_code="PO-OPS-OVERDUE",
+            customer=self.customer,
+            qty_total=100,
+            bulk_deadline=today - timedelta(days=2),
+        )
+        future_order = ProductionOrder.objects.create(
+            title="Future Production",
+            order_code="PO-OPS-FUTURE",
             bulk_deadline=today + timedelta(days=2),
             operational_status="ready_to_ship",
         )
-        order.operational_status = "ready_to_ship"
-        order.save(update_fields=["operational_status", "updated_at"])
+        due_shipment = Shipment.objects.create(
+            order=sample_order,
+            ship_date=today,
+            status="planned",
+        )
+        delayed_shipment = Shipment.objects.create(
+            order=overdue_order,
+            ship_date=today - timedelta(days=1),
+            status="planned",
+        )
         Invoice.objects.create(
             invoice_number="INV-OPS-OVERDUE",
             customer=self.customer,
@@ -143,16 +169,30 @@ class NotificationCenterTests(OperationsControlBase):
         self.assertEqual(result["error"], "")
         self.assertTrue(
             AutomationNotification.objects.filter(
-                notification_type="production_due",
+                notification_type="sample_due",
                 assigned_user=self.production,
-                record_object_id=order.pk,
+                record_object_id=sample_order.pk,
             ).exists()
         )
         self.assertTrue(
             AutomationNotification.objects.filter(
-                notification_type="shipping",
+                notification_type="production_due",
+                assigned_user=self.production,
+                record_object_id=overdue_order.pk,
+            ).exists()
+        )
+        self.assertTrue(
+            AutomationNotification.objects.filter(
+                notification_type="shipment_due",
                 assigned_user=self.ceo,
-                record_object_id=order.pk,
+                record_object_id=due_shipment.pk,
+            ).exists()
+        )
+        self.assertTrue(
+            AutomationNotification.objects.filter(
+                notification_type="shipment_delayed",
+                assigned_user=self.production,
+                record_object_id=delayed_shipment.pk,
             ).exists()
         )
         self.assertTrue(
@@ -160,6 +200,18 @@ class NotificationCenterTests(OperationsControlBase):
                 notification_type="invoice_overdue",
                 assigned_user=self.accounts,
             ).exists()
+        )
+        self.assertFalse(
+            AutomationNotification.objects.filter(record_object_id=future_order.pk).exists()
+        )
+        self.assertFalse(
+            AutomationNotification.objects.filter(source_key__contains="ready_to_ship").exists()
+        )
+        first_count = AutomationNotification.objects.filter(source_key__startswith="operations:").count()
+        sync_operations_notifications(today=today, force=True)
+        self.assertEqual(
+            AutomationNotification.objects.filter(source_key__startswith="operations:").count(),
+            first_count,
         )
         legacy = AutomationNotification.objects.create(
             source_key="crm-auto:invoice_overdue:999",
@@ -202,7 +254,7 @@ class NotificationCenterTests(OperationsControlBase):
         fixed_now = timezone.make_aware(datetime(2026, 6, 27, 12, 0))
         items = []
         for index, (days, notification_type) in enumerate(
-            ((0, "ceo_approval"), (1, "production_due"), (3, "shipping"), (10, "invoice_overdue")),
+            ((0, "ceo_approval"), (1, "production_due"), (3, "shipment_due"), (10, "invoice_overdue")),
             start=1,
         ):
             item = AutomationNotification.objects.create(
@@ -217,10 +269,10 @@ class NotificationCenterTests(OperationsControlBase):
         with patch("crm.views_operations.timezone.localdate", return_value=date(2026, 6, 27)):
             grouped = _group_notifications(items)
         self.assertEqual([label for label, _ in grouped], ["Today", "Yesterday", "This Week", "Older"])
-        self.assertEqual(grouped[0][1][0].icon_label, "CEO Approval")
-        self.assertEqual(grouped[1][1][0].icon_label, "Production")
-        self.assertEqual(grouped[2][1][0].icon_label, "Shipping")
-        self.assertEqual(grouped[3][1][0].icon_label, "Finance")
+        self.assertEqual(grouped[0][1][0].icon_symbol, "✔")
+        self.assertEqual(grouped[1][1][0].icon_symbol, "🏭")
+        self.assertEqual(grouped[2][1][0].icon_symbol, "🚚")
+        self.assertEqual(grouped[3][1][0].icon_symbol, "💰")
 
     def test_mark_selected_and_delete_read_are_recipient_scoped(self):
         own = AutomationNotification.objects.create(
@@ -245,10 +297,246 @@ class NotificationCenterTests(OperationsControlBase):
         self.assertTrue(own.is_read)
         self.assertFalse(other.is_read)
 
-        response = client.post(reverse("notification_delete_read"))
+        response = client.post(
+            reverse("notification_delete_read"),
+            {"notification_ids": [str(own.pk), str(other.pk)]},
+        )
         self.assertEqual(response.status_code, 302)
         self.assertFalse(AutomationNotification.objects.filter(pk=own.pk).exists())
         self.assertTrue(AutomationNotification.objects.filter(pk=other.pk).exists())
+
+    def test_priority_sort_recent_window_and_older_history(self):
+        self.assertEqual(
+            [value for value, _label in AutomationNotification.PRIORITY_CHOICES],
+            ["critical", "high", "normal", "information"],
+        )
+        now = timezone.now()
+        rows = []
+        for priority in ("information", "normal", "high", "critical"):
+            row = AutomationNotification.objects.create(
+                source_key=f"test:priority:{priority}",
+                title=f"{priority.title()} notice",
+                priority=priority,
+                assigned_user=self.ceo,
+            )
+            rows.append(row)
+        old = AutomationNotification.objects.create(
+            source_key="test:priority:old",
+            title="Historical notice",
+            priority="critical",
+            assigned_user=self.ceo,
+        )
+        AutomationNotification.objects.filter(pk=old.pk).update(created_at=now - timedelta(days=40))
+        client = Client()
+        client.force_login(self.ceo)
+        response = client.get(reverse("notification_list"))
+        visible = [item for _, items in response.context["notification_groups"] for item in items]
+        self.assertEqual([item.priority for item in visible], ["critical", "high", "normal", "information"])
+        self.assertTrue(response.context["has_older_notifications"])
+
+        older_response = client.get(reverse("notification_list"), {"older": "1"})
+        self.assertContains(older_response, "Historical notice")
+        self.assertTrue(AutomationNotification.objects.filter(pk=old.pk).exists())
+
+    def test_delete_visible_read_never_deletes_unread(self):
+        read = AutomationNotification.objects.create(
+            source_key="test:delete:read",
+            title="Read",
+            assigned_user=self.sales,
+            is_read=True,
+        )
+        unread = AutomationNotification.objects.create(
+            source_key="test:delete:unread",
+            title="Unread",
+            assigned_user=self.sales,
+            is_read=False,
+        )
+        client = Client()
+        client.force_login(self.sales)
+        client.post(
+            reverse("notification_delete_read"),
+            {"notification_ids": [str(read.pk), str(unread.pk)]},
+        )
+        self.assertFalse(AutomationNotification.objects.filter(pk=read.pk).exists())
+        self.assertTrue(AutomationNotification.objects.filter(pk=unread.pk).exists())
+
+    def test_decisions_production_tasks_and_owner_comments_notify(self):
+        costing = CostingHeader.objects.create(
+            opportunity=self.opportunity,
+            customer=self.customer,
+            status="approved",
+            quotation_number="QT-EVENT-001",
+            quoted_by=self.sales,
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            costing.quotation_status = CostingHeader.QUOTATION_STATUS_APPROVED
+            costing.quotation_approved_by = self.ceo
+            costing.save(update_fields=["quotation_status", "quotation_approved_by", "updated_at"])
+        self.assertTrue(
+            AutomationNotification.objects.filter(
+                notification_type="ceo_approved", assigned_user=self.sales
+            ).exists()
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            costing.quotation_status = CostingHeader.QUOTATION_STATUS_REJECTED
+            costing.quotation_rejected_by = self.ceo
+            costing.save(update_fields=["quotation_status", "quotation_rejected_by", "updated_at"])
+        self.assertTrue(
+            AutomationNotification.objects.filter(
+                notification_type="ceo_rejected", assigned_user=self.sales
+            ).exists()
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            order = ProductionOrder.objects.create(
+                title="Event Order",
+                order_code="PO-EVENT-001",
+                lead=self.lead,
+                assigned_production_manager=self.production,
+                created_by=self.ceo,
+            )
+        self.assertTrue(
+            AutomationNotification.objects.filter(
+                notification_type="production_created",
+                assigned_user=self.production,
+                record_object_id=order.pk,
+            ).exists()
+        )
+
+        token = set_current_actor(self.ceo)
+        try:
+            self.sales_other.first_name = "Other"
+            self.sales_other.last_name = "Sales"
+            self.sales_other.save(update_fields=["first_name", "last_name"])
+            with self.captureOnCommitCallbacks(execute=True):
+                task = LeadTask.objects.create(
+                    lead=self.lead,
+                    title="Call buyer",
+                    assigned_to="Other Sales",
+                )
+        finally:
+            reset_current_actor(token)
+        self.assertTrue(
+            AutomationNotification.objects.filter(
+                notification_type="task_assigned", assigned_user=self.sales_other
+            ).exists()
+        )
+
+        token = set_current_actor(self.sales_other)
+        try:
+            with self.captureOnCommitCallbacks(execute=True):
+                task.status = "Done"
+                task.save(update_fields=["status"])
+        finally:
+            reset_current_actor(token)
+        self.assertTrue(
+            AutomationNotification.objects.filter(
+                notification_type="task_completed", assigned_user=self.sales
+            ).exists()
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            comment = LeadComment.objects.create(
+                lead=self.lead,
+                author=self.sales_other.username,
+                author_user=self.sales_other,
+                content="Buyer confirmed the revised delivery date.",
+            )
+        self.assertTrue(
+            AutomationNotification.objects.filter(
+                notification_type="comment_added",
+                assigned_user=self.sales,
+                record_object_id=self.lead.pk,
+            ).exists()
+        )
+
+    def test_notification_page_query_count_is_bounded(self):
+        for index in range(20):
+            AutomationNotification.objects.create(
+                source_key=f"test:query:{index}",
+                title=f"Notification {index}",
+                assigned_user=self.ceo,
+            )
+        client = Client()
+        client.force_login(self.ceo)
+        with CaptureQueriesContext(connection) as queries:
+            response = client.get(reverse("notification_list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertLessEqual(len(queries), 12)
+
+    def test_bell_caps_count_and_uses_cache_after_first_query(self):
+        for index in range(105):
+            AutomationNotification.objects.create(
+                source_key=f"test:bell:{index}",
+                title=f"Bell {index}",
+                assigned_user=self.ceo,
+            )
+        cache.clear()
+        request = RequestFactory().get("/main-dashboard/")
+        request.user = self.ceo
+        request.resolver_match = type("Resolver", (), {"url_name": "main_dashboard"})()
+        with CaptureQueriesContext(connection) as first_queries:
+            first = operations_header(request)
+        with CaptureQueriesContext(connection) as cached_queries:
+            second = operations_header(request)
+        self.assertEqual(first["crm_header_unread_count"], 105)
+        self.assertEqual(second["crm_header_unread_count"], 105)
+        self.assertGreater(len(first_queries), 0)
+        self.assertEqual(len(cached_queries), 0)
+
+        client = Client()
+        client.force_login(self.ceo)
+        response = client.get(reverse("notification_list"))
+        self.assertContains(response, "99+")
+
+    def test_open_marks_read_redirects_and_rechecks_permission(self):
+        item = AutomationNotification.objects.create(
+            source_key="test:open:lead",
+            title="Open lead",
+            rule_type="leads",
+            assigned_user=self.sales,
+            record_content_type=ContentType.objects.get_for_model(Lead),
+            record_object_id=self.lead.pk,
+            target_url=reverse("lead_detail", args=[self.lead.pk]),
+        )
+        client = Client()
+        client.force_login(self.sales)
+        response = client.get(reverse("notification_open", args=[item.pk]))
+        self.assertRedirects(response, reverse("lead_detail", args=[self.lead.pk]), fetch_redirect_response=False)
+        item.refresh_from_db()
+        self.assertTrue(item.is_read)
+
+        item.assigned_user = self.sales_other
+        item.is_read = False
+        item.save(update_fields=["assigned_user", "is_read"])
+        client.force_login(self.sales_other)
+        self.assertEqual(client.get(reverse("notification_open", args=[item.pk])).status_code, 404)
+
+    def test_filter_persists_in_session_and_searches_related_records(self):
+        item = AutomationNotification.objects.create(
+            source_key="test:search:lead",
+            title="Owner comment",
+            rule_type="leads",
+            notification_type="comment_added",
+            priority="information",
+            assigned_user=self.sales,
+            record_content_type=ContentType.objects.get_for_model(Lead),
+            record_object_id=self.lead.pk,
+            record_label=self.lead.lead_id,
+            target_url=reverse("lead_detail", args=[self.lead.pk]),
+        )
+        client = Client()
+        client.force_login(self.sales)
+        response = client.get(
+            reverse("notification_list"),
+            {"filter": "information", "q": self.customer.account_brand},
+        )
+        self.assertContains(response, item.title)
+        self.assertEqual(response.context["selected_filter"], "information")
+
+        remembered = client.get(reverse("notification_list"))
+        self.assertEqual(remembered.context["selected_filter"], "information")
 
 
 class AuditLogTests(OperationsControlBase):
@@ -461,6 +749,9 @@ class DashboardAndRoleTests(OperationsControlBase):
         self.assertContains(response, "Upcoming Deliveries")
         self.assertContains(response, "Pending Approvals")
         self.assertContains(response, "System")
+        self.assertFalse(
+            AutomationNotification.objects.filter(source_key__startswith="operations:").exists()
+        )
 
     def test_dashboard_has_clickable_metric_cards(self):
         today = timezone.localdate()
