@@ -68,7 +68,9 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "crm.middleware.ReadOnlyRoleMiddleware",
     "crm.middleware.AuditActorMiddleware",
+    "crm.middleware_platform.CRMPlatformMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -86,6 +88,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "crm.context_processors.operations_header",
+                "crm.context_processors.platform_record_tools",
                 "marketing.context_processors.marketing_flags",
                 "whatsapp.context_processors.whatsapp_flags",
             ],

@@ -6,6 +6,7 @@ from django.db.utils import OperationalError, ProgrammingError
 from django.shortcuts import render
 
 from .models_access import UserAccess
+from .services.operations_permissions import get_access, operations_group_names, role_flag_decision
 
 LIBRARY_FALLBACK_FLAGS = (
     "can_products",
@@ -14,60 +15,6 @@ LIBRARY_FALLBACK_FLAGS = (
     "can_trims",
     "can_threads",
 )
-
-OPERATIONS_ROLE_FLAGS = {
-    "ceo": "*",
-    "sales": {
-        "can_leads",
-        "can_opportunities",
-        "can_customers",
-        "can_costing",
-        "can_view_internal_costing",
-        "can_calendar",
-    },
-    "production": {"can_production", "can_shipping", "can_inventory", "can_calendar"},
-    "accounts": {"can_customers", "can_accounting_bd", "can_accounting_ca"},
-    "merchandising": {
-        "can_customers",
-        "can_costing",
-        "can_view_internal_costing",
-        "can_production",
-        "can_inventory",
-        "can_library",
-        "can_calendar",
-    },
-}
-
-
-def operations_group_names(user):
-    if not user or not getattr(user, "is_authenticated", False):
-        return set()
-    cached = getattr(user, "_operations_group_names", None)
-    if cached is not None:
-        return cached
-    names = set(user.groups.filter(name__in=["CEO", "Sales", "Production", "Accounts", "Merchandising"]).values_list("name", flat=True))
-    normalized = {name.lower() for name in names}
-    user._operations_group_names = normalized
-    return normalized
-
-
-def role_flag_decision(user, flag_name):
-    if not user or not getattr(user, "is_authenticated", False):
-        return False
-    if getattr(user, "is_superuser", False):
-        return True
-    roles = operations_group_names(user)
-    if not roles:
-        return None
-    if "ceo" in roles:
-        return True
-    return any(flag_name in OPERATIONS_ROLE_FLAGS.get(role, set()) for role in roles)
-
-
-def get_access(user):
-    access, _ = UserAccess.objects.get_or_create(user=user)
-    return access
-
 
 def bd_blocked(view_func):
     @wraps(view_func)

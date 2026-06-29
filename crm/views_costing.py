@@ -770,6 +770,12 @@ def cost_sheet_list(request):
     can_view_costing_profit = can_view_internal_costing(request.user)
     qs = CostingHeader.objects.select_related("opportunity", "customer").order_by("-updated_at")
     quick_qs = QuickCosting.objects.select_related("created_by", "opportunity").order_by("-updated_at")
+    archive_filter = (request.GET.get("archive") or "active").strip().lower()
+    if archive_filter == "archived":
+        qs = qs.filter(is_archived=True)
+        quick_qs = quick_qs.none()
+    elif archive_filter != "all":
+        qs = qs.filter(is_archived=False)
 
     customer_id = (request.GET.get("customer") or "").strip()
     product_type = (request.GET.get("product_type") or "").strip()
@@ -950,6 +956,7 @@ def cost_sheet_list(request):
             "q": search,
         },
         "can_view_internal_costing": can_view_costing_profit,
+        "archive_filter": archive_filter,
     }
     return render(request, "crm/costing/costsheet_list.html", context)
 

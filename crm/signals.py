@@ -1,9 +1,38 @@
 from django.db import transaction
+from django.contrib.auth import get_user_model
 from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 
-from crm.models import CostingHeader, ProductionOrder
+from crm.models import CostingHeader, LeadComment, LeadTask, OpportunityTask, ProductionOrder
 from crm.services.audit_log import is_tracked_model, model_snapshot, schedule_audit
+from crm.audit_context import get_current_actor
+from crm.services.employee_profiles import employee_audit
+
+
+User = get_user_model()
+
+
+@receiver(pre_save, sender=User)
+def capture_employee_password_change(sender, instance, raw=False, **kwargs):
+    if raw or not instance.pk:
+        return
+    previous_password = sender.objects.filter(pk=instance.pk).values_list("password", flat=True).first()
+    instance._crm_employee_password_changed = bool(
+        previous_password and previous_password != instance.password
+    )
+
+
+@receiver(post_save, sender=User)
+def audit_employee_password_change(sender, instance, created=False, raw=False, **kwargs):
+    if raw or created or not getattr(instance, "_crm_employee_password_changed", False):
+        return
+    employee_audit(
+        get_current_actor(),
+        instance,
+        "password_reset",
+        "",
+        "Password reset",
+    )
 
 
 @receiver(pre_save)
@@ -51,24 +80,106 @@ def notify_ceo_on_quotation_submission(sender, instance, created=False, raw=Fals
             # Notification failure must never roll back quotation submission.
             return
 
-    transaction.on_commit(emit)
+    transaction.on_commit(emit, robust=True)
 
 
 @receiver(post_save, sender=ProductionOrder)
-def notify_when_order_ready_to_ship(sender, instance, created=False, raw=False, **kwargs):
-    if raw or instance.operational_status != "ready_to_ship":
-        return
-    before = getattr(instance, "_crm_audit_before", {})
-    if before.get("operational_status") == "ready_to_ship":
+def notify_when_production_order_created(sender, instance, created=False, raw=False, **kwargs):
+    if raw or not created:
         return
 
     def emit():
-        try:
-            from crm.services.operations_notifications import notify_ready_to_ship
+        from crm.services.operations_notifications import notify_production_order_created
 
-            notify_ready_to_ship(instance)
-        except Exception:
-            # Operational status is authoritative even if a notification cannot be written.
-            return
+        order = ProductionOrder.objects.select_related(
+            "assigned_production_manager",
+            "created_by",
+            "lead__assigned_to",
+            "source_quotation__quoted_by",
+        ).filter(pk=instance.pk).first()
+        if order:
+            notify_production_order_created(order)
 
-    transaction.on_commit(emit)
+    transaction.on_commit(emit, robust=True)
+
+
+@receiver(post_save, sender=CostingHeader)
+def notify_quotation_status_decision(sender, instance, created=False, raw=False, **kwargs):
+    if raw or created or instance.quotation_status not in {
+        CostingHeader.QUOTATION_STATUS_APPROVED,
+        CostingHeader.QUOTATION_STATUS_REJECTED,
+    }:
+        return
+    before = getattr(instance, "_crm_audit_before", {})
+    if before.get("quotation_status") == instance.quotation_status:
+        return
+
+    decision = instance.quotation_status
+
+    def emit():
+        from crm.services.operations_notifications import notify_quotation_decision
+
+        costing = CostingHeader.objects.select_related(
+            "quoted_by",
+            "quotation_approved_by",
+            "quotation_rejected_by",
+            "opportunity__lead__assigned_to",
+        ).filter(pk=instance.pk).first()
+        if costing:
+            notify_quotation_decision(costing, decision)
+
+    transaction.on_commit(emit, robust=True)
+
+
+@receiver(pre_save, sender=LeadTask)
+@receiver(pre_save, sender=OpportunityTask)
+def capture_task_status_before_save(sender, instance, raw=False, **kwargs):
+    if raw or not instance.pk:
+        return
+    instance._notification_before_status = sender.objects.filter(pk=instance.pk).values_list(
+        "status", flat=True
+    ).first()
+
+
+@receiver(post_save, sender=LeadTask)
+@receiver(post_save, sender=OpportunityTask)
+def notify_task_change(sender, instance, created=False, raw=False, **kwargs):
+    if raw:
+        return
+    if created and instance.assigned_to:
+        event = "assigned"
+    elif instance.status == "Done" and getattr(instance, "_notification_before_status", None) != "Done":
+        event = "completed"
+    else:
+        return
+
+    def emit():
+        from crm.services.operations_notifications import notify_task_event
+
+        task = sender.objects.select_related(
+            "lead__assigned_to" if sender is LeadTask else "opportunity__lead__assigned_to"
+        ).filter(pk=instance.pk).first()
+        if task:
+            notify_task_event(task, event)
+
+    transaction.on_commit(emit, robust=True)
+
+
+@receiver(post_save, sender=LeadComment)
+def notify_record_owner_on_comment(sender, instance, created=False, raw=False, **kwargs):
+    if raw or not created or not instance.author_user_id or instance.is_ai:
+        return
+
+    def emit():
+        from crm.services.operations_notifications import notify_comment_added
+
+        comment = LeadComment.objects.select_related(
+            "author_user",
+            "lead__assigned_to__employee_profile",
+            "opportunity__lead__assigned_to__employee_profile",
+            "production__assigned_production_manager__employee_profile",
+        ).filter(pk=instance.pk).first()
+        if comment:
+            notify_comment_added(comment)
+
+    transaction.on_commit(emit, robust=True)

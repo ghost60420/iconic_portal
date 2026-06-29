@@ -20,23 +20,27 @@ EXCLUDED_FIELDS = {
 SENSITIVE_PARTS = ("password", "secret", "token", "credential", "api_key")
 
 MODEL_CONFIG = {
+    "Customer": ("customers", "customer_detail"),
     "Lead": ("leads", "lead_detail"),
     "Opportunity": ("opportunities", "opportunity_detail"),
     "CostingHeader": ("quotations", "cost_sheet_detail"),
     "ProductionOrder": ("production", "production_detail"),
     "Invoice": ("invoices", "invoice_view"),
-    "InvoicePayment": ("payments", "invoice_view"),
+    "InvoicePayment": ("invoices", "invoice_view"),
+    "Shipment": ("shipments", "shipment_detail"),
     "QuickCosting": ("quick_costing", "quick_costing_detail"),
     "AccountingEntry": ("finance", "accounting_entry_edit"),
 }
 
 MODEL_LABEL_FIELDS = {
+    "Customer": ("customer_code", "account_brand", "contact_name"),
     "Lead": ("lead_id", "account_brand", "contact_name"),
     "Opportunity": ("opportunity_id",),
     "CostingHeader": ("quotation_number", "style_code", "style_name"),
     "ProductionOrder": ("order_code", "title"),
     "Invoice": ("invoice_number",),
     "InvoicePayment": (),
+    "Shipment": ("tracking_number",),
     "QuickCosting": ("quotation_number", "project_name", "buyer_name"),
     "AccountingEntry": ("description",),
 }
@@ -124,10 +128,13 @@ def schedule_audit(instance, *, created=False, before=None, deleted=False):
         return
     module, _url_name = config
     actor = get_current_actor()
+    audit_record_id = instance.pk
+    if instance.__class__.__name__ == "InvoicePayment":
+        audit_record_id = instance.invoice_id
     common = {
         "actor": actor,
         "module": module,
-        "record_id": str(instance.pk),
+        "record_id": str(audit_record_id),
         "record_label": record_label(instance),
         "target_url": target_url(instance),
     }

@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from crm.models import CRMAuditLog, CostingHeader, Invoice, Lead, ProductionOrder, Shipment
 from crm.services.operations_formatting import activity_time_label, initials_for_name
+from crm.services.employee_profiles import employee_display_name
 from crm.services.operations_notifications import visible_notifications
 from crm.services.operations_permissions import (
     ROLE_CEO,
@@ -24,7 +25,7 @@ def operations_dashboard_context(user, *, today=None):
     ]
     activity_rows = list(
         CRMAuditLog.objects.filter(module__in=allowed_modules)
-        .select_related("actor")
+        .select_related("actor", "actor__employee_profile")
         .order_by("-created_at", "-id")[:25]
     )
     module_labels = {
@@ -39,11 +40,7 @@ def operations_dashboard_context(user, *, today=None):
     }
     recent_activity = []
     for row in activity_rows:
-        actor_name = (
-            (row.actor.get_full_name() or row.actor.get_username())
-            if row.actor
-            else "System"
-        )
+        actor_name = employee_display_name(row.actor)
         record_label = row.record_label or row.record_id
         action_label = row.get_action_type_display().lower()
         recent_activity.append(
