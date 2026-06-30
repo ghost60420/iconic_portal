@@ -151,8 +151,16 @@ def _build_advisories(costing, breakdown, line_rows, order_qty, total_cost_per_p
     return advisories
 
 
-def compute_costing(costing_id):
-    costing = CostingHeader.objects.select_related("opportunity", "customer").prefetch_related("line_items").filter(pk=costing_id).first()
+def compute_costing(costing_or_id):
+    if isinstance(costing_or_id, CostingHeader):
+        costing = costing_or_id
+    else:
+        costing = (
+            CostingHeader.objects.select_related("opportunity", "customer")
+            .prefetch_related("line_items")
+            .filter(pk=costing_or_id)
+            .first()
+        )
     if not costing:
         return None
 

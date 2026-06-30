@@ -383,6 +383,12 @@
       {% if not is_locked %}
         <button form="costing-form" type="submit" class="btnx btnx-primary">Save</button>
       {% endif %}
+      {% if can_resubmit_quotation %}
+        <form method="post" action="{% url 'cost_sheet_quotation_resubmit' costing.pk %}" style="display:inline;">
+          {% csrf_token %}
+          <button type="submit" class="btnx btnx-soft">Resubmit for CEO Approval</button>
+        </form>
+      {% endif %}
       {% if can_approve and not is_locked %}
         <button form="approve-form" type="submit" class="btnx btnx-soft">Approve</button>
       {% endif %}

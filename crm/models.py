@@ -2116,6 +2116,14 @@ class QuickCosting(models.Model):
         related_name="rejected_quick_costings",
     )
     rejected_at = models.DateTimeField(null=True, blank=True)
+    approval_submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="submitted_quick_costings",
+    )
+    approval_submitted_at = models.DateTimeField(null=True, blank=True, db_index=True)
     quotation_number = models.CharField(max_length=50, blank=True, default="", db_index=True)
     quoted_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

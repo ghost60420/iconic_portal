@@ -113,7 +113,7 @@ def _quick_money_for_invoice(value, currency, exchange_rate):
 
 
 def get_costing_quote_amounts(costing):
-    calc = compute_costing(costing.id)
+    calc = compute_costing(costing)
     if not calc:
         raise CostingWorkflowError("Costing calculation is not available.")
 

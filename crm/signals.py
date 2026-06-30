@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 
-from crm.models import CostingHeader, LeadComment, LeadTask, OpportunityTask, ProductionOrder
+from crm.models import CostingHeader, LeadComment, LeadTask, OpportunityTask, ProductionOrder, QuickCosting
 from crm.services.audit_log import is_tracked_model, model_snapshot, schedule_audit
 from crm.audit_context import get_current_actor
 from crm.services.employee_profiles import employee_audit
@@ -68,7 +68,12 @@ def notify_ceo_on_quotation_submission(sender, instance, created=False, raw=Fals
     if raw or created or not instance.quotation_number:
         return
     before = getattr(instance, "_crm_audit_before", {})
-    if before.get("quotation_number") == instance.quotation_number:
+    is_initial_submission = before.get("quotation_number") != instance.quotation_number
+    is_resubmission = (
+        before.get("quotation_status") == CostingHeader.QUOTATION_STATUS_REJECTED
+        and instance.quotation_status == CostingHeader.QUOTATION_STATUS_DRAFT
+    )
+    if not is_initial_submission and not is_resubmission:
         return
 
     def emit():
@@ -127,6 +132,48 @@ def notify_quotation_status_decision(sender, instance, created=False, raw=False,
         ).filter(pk=instance.pk).first()
         if costing:
             notify_quotation_decision(costing, decision)
+
+    transaction.on_commit(emit, robust=True)
+
+
+@receiver(post_save, sender=QuickCosting)
+def notify_ceo_on_quick_costing_submission(sender, instance, created=False, raw=False, **kwargs):
+    if raw or created or not instance.approval_submitted_at:
+        return
+    before = getattr(instance, "_crm_audit_before", {})
+    if before.get("approval_submitted_at") == str(instance.approval_submitted_at):
+        return
+
+    def emit():
+        from crm.services.operations_notifications import notify_quotation_waiting_approval
+
+        quick_costing = QuickCosting.objects.select_related("approval_submitted_by").filter(pk=instance.pk).first()
+        if quick_costing:
+            notify_quotation_waiting_approval(quick_costing)
+
+    transaction.on_commit(emit, robust=True)
+
+
+@receiver(post_save, sender=QuickCosting)
+def notify_quick_costing_decision(sender, instance, created=False, raw=False, **kwargs):
+    if raw or created or instance.status not in {QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_REJECTED}:
+        return
+    before = getattr(instance, "_crm_audit_before", {})
+    if before.get("status") == instance.status:
+        return
+    decision = "approved" if instance.status == QuickCosting.STATUS_APPROVED else "rejected"
+
+    def emit():
+        from crm.services.operations_notifications import notify_quotation_decision
+
+        quick_costing = QuickCosting.objects.select_related(
+            "approval_submitted_by",
+            "approved_by",
+            "rejected_by",
+            "opportunity__lead__assigned_to",
+        ).filter(pk=instance.pk).first()
+        if quick_costing:
+            notify_quotation_decision(quick_costing, decision)
 
     transaction.on_commit(emit, robust=True)
 

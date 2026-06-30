@@ -11,7 +11,7 @@ from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 
 from crm.audit_context import get_current_actor
-from crm.models import AutomationNotification, CostingHeader, Invoice, Lead, Opportunity, ProductionOrder, Shipment
+from crm.models import AutomationNotification, CostingHeader, Invoice, Lead, Opportunity, ProductionOrder, QuickCosting, Shipment
 from crm.services.operations_formatting import relative_time_label
 from crm.services.operations_permissions import (
     ROLE_ACCOUNTS,
@@ -210,18 +210,24 @@ def _lead_owner(lead):
 
 
 def notify_quotation_waiting_approval(costing):
-    label = costing.quotation_number or f"Quotation {costing.pk}"
+    is_quick = isinstance(costing, QuickCosting)
+    label = costing.quotation_number or (f"Quick Costing QC-{costing.pk}" if is_quick else f"Quotation {costing.pk}")
+    source_key = (
+        f"operations:ceo_approval:quick:{costing.pk}"
+        if is_quick
+        else f"operations:ceo_approval:{costing.pk}"
+    )
     return create_operations_notification(
-        source_key=f"operations:ceo_approval:{costing.pk}",
+        source_key=source_key,
         notification_type="ceo_approval",
         title="CEO approval required",
         message=f"{label} is ready for CEO review.",
-        related_module="lifecycle",
+        related_module="quick_costing" if is_quick else "lifecycle",
         record=costing,
         roles=(ROLE_CEO,),
         priority="high",
         due_date=timezone.localdate(),
-        target_url=_safe_reverse("cost_sheet_client_quotation", costing.pk),
+        target_url=_safe_reverse("quick_costing_detail" if is_quick else "cost_sheet_client_quotation", costing.pk),
         record_label=label,
     )
 
@@ -229,25 +235,51 @@ def notify_quotation_waiting_approval(costing):
 def notify_quotation_decision(costing, decision):
     if decision not in {"approved", "rejected"}:
         return set()
-    label = costing.quotation_number or f"Quotation {costing.pk}"
-    actor = costing.quotation_approved_by if decision == "approved" else costing.quotation_rejected_by
+    is_quick = isinstance(costing, QuickCosting)
+    label = costing.quotation_number or (f"Quick Costing QC-{costing.pk}" if is_quick else f"Quotation {costing.pk}")
+    actor = (
+        costing.approved_by if is_quick and decision == "approved"
+        else costing.rejected_by if is_quick
+        else costing.quotation_approved_by if decision == "approved"
+        else costing.quotation_rejected_by
+    )
     lead = costing.opportunity.lead if costing.opportunity_id else None
+    submitter = costing.approval_submitted_by if is_quick else costing.quoted_by
     recipients = _combined_recipient_rows(
-        users=(costing.quoted_by, _lead_owner(lead)),
+        users=(submitter, _lead_owner(lead)),
         exclude_user=actor,
     )
-    return create_operations_notification(
-        source_key=f"operations:ceo_{decision}:{costing.pk}",
+    source_key = (
+        f"operations:ceo_{decision}:quick:{costing.pk}"
+        if is_quick
+        else f"operations:ceo_{decision}:{costing.pk}"
+    )
+    keys = create_operations_notification(
+        source_key=source_key,
         notification_type=f"ceo_{decision}",
         title=f"Quotation {decision} by CEO",
         message=f"{label} was {decision}.",
-        related_module="lifecycle",
+        related_module="quick_costing" if is_quick else "lifecycle",
         record=costing,
         priority="normal" if decision == "approved" else "high",
-        target_url=_safe_reverse("cost_sheet_client_quotation", costing.pk),
+        target_url=_safe_reverse("quick_costing_detail" if is_quick else "cost_sheet_client_quotation", costing.pk),
         record_label=label,
         recipient_rows=recipients,
     )
+    if decision == "approved":
+        keys |= create_operations_notification(
+            source_key=f"operations:accounting_approved:{'quick' if is_quick else 'advanced'}:{costing.pk}",
+            notification_type="ceo_approved",
+            title="CEO-approved costing ready",
+            message=f"{label} is ready for Accounting.",
+            related_module="invoices",
+            record=costing,
+            roles=(ROLE_ACCOUNTS,),
+            priority="normal",
+            target_url=f"{reverse('ceo_quotation_approval_queue')}?status=approved",
+            record_label=label,
+        )
+    return keys
 
 
 def notify_production_order_created(order):

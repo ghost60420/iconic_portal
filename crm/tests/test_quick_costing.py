@@ -70,6 +70,11 @@ class QuickCostingTests(TestCase):
         access.save()
         return user
 
+    def _mark_submitted(self, quick_costing, submitter=None):
+        quick_costing.approval_submitted_by = submitter or quick_costing.created_by
+        quick_costing.approval_submitted_at = timezone.now()
+        quick_costing.save(update_fields=["approval_submitted_by", "approval_submitted_at", "updated_at"])
+
     def test_calculation_summary(self):
         quick = QuickCosting(
             buyer_name="Test Buyer",
@@ -376,7 +381,7 @@ class QuickCostingTests(TestCase):
 
     def test_management_badges_follow_existing_workflow_status(self):
         cases = {
-            QuickCosting.STATUS_DRAFT: "ceo-pending",
+            QuickCosting.STATUS_DRAFT: "draft",
             QuickCosting.STATUS_APPROVED: "ceo-approved",
             QuickCosting.STATUS_REJECTED: "rejected",
             QuickCosting.STATUS_QUOTED: "quoted",
@@ -510,7 +515,7 @@ class QuickCostingTests(TestCase):
         self.assertContains(detail_response, "Costing Purpose")
         self.assertContains(detail_response, "Bulk Production Costing")
         self.assertContains(detail_response, "Approval Status")
-        self.assertContains(detail_response, "Pending")
+        self.assertContains(detail_response, "Draft")
         self.assertContains(detail_response, reverse("quick_costing_export_pdf", args=[quick.pk]))
         self.assertContains(detail_response, reverse("quick_costing_export_excel", args=[quick.pk]))
         self.assertContains(detail_response, reverse("quick_costing_edit", args=[quick.pk]))
@@ -523,7 +528,7 @@ class QuickCostingTests(TestCase):
         self.assertContains(detail_response, "Rejected")
         self.assertContains(detail_response, "Quoted")
         self.assertContains(detail_response, "Invoiced")
-        self.assertContains(detail_response, "workflow-ceo-pending state-current")
+        self.assertContains(detail_response, "workflow-draft state-current")
         self.assertContains(detail_response, "Version Information")
         self.assertContains(detail_response, "Last Updated By")
         self.assertContains(detail_response, "Not tracked")
@@ -533,7 +538,7 @@ class QuickCostingTests(TestCase):
             html=True,
         )
         self.assertContains(detail_response, "Draft")
-        self.assertContains(detail_response, "Approve costing before creating quotation.")
+        self.assertContains(detail_response, "Only submitted Quick Costing can be approved or rejected.")
         self.assertContains(detail_response, "Shipping Cost")
         self.assertContains(detail_response, "Exchange Rate")
         self.assertContains(detail_response, "1 CAD = 90.00 BDT")
@@ -821,6 +826,7 @@ class QuickCostingTests(TestCase):
         admin = self._admin_user("quick-costing-approval-admin")
         staff = self._costing_user("quick-costing-no-approve", approve=False)
         quick = self._quick_costing(created_by=staff)
+        self._mark_submitted(quick, staff)
         self.client.force_login(admin)
 
         approve_response = self.client.post(reverse("quick_costing_approve", args=[quick.pk]))
@@ -864,6 +870,7 @@ class QuickCostingTests(TestCase):
         admin = self._admin_user("quick-costing-quote-admin")
         opportunity = self._opportunity()
         quick = self._quick_costing(opportunity=opportunity, created_by=admin)
+        self._mark_submitted(quick, admin)
         self.client.force_login(admin)
         self.client.post(reverse("quick_costing_approve", args=[quick.pk]))
 
@@ -906,6 +913,7 @@ class QuickCostingTests(TestCase):
     def test_quick_costing_quotation_rejection_status(self):
         admin = self._admin_user("quick-costing-quote-reject-admin")
         quick = self._quick_costing(created_by=admin)
+        self._mark_submitted(quick, admin)
         self.client.force_login(admin)
 
         self.client.post(reverse("quick_costing_approve", args=[quick.pk]))
@@ -923,6 +931,7 @@ class QuickCostingTests(TestCase):
         admin = self._admin_user("quick-costing-invoice-admin")
         opportunity = self._opportunity()
         quick = self._quick_costing(opportunity=opportunity, created_by=admin)
+        self._mark_submitted(quick, admin)
         self.client.force_login(admin)
 
         self.client.post(reverse("quick_costing_approve", args=[quick.pk]))

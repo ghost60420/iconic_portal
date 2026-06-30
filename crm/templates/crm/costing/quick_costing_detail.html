@@ -443,6 +443,12 @@
       <p class="quick-subtitle">{{ quick_costing.buyer_name }} · {{ quick_costing.get_product_type_display }} · {{ quick_costing.purpose_label }} · QC-{{ quick_costing.pk }}</p>
     </div>
     <div class="quick-actions">
+      {% if can_submit_for_approval %}
+        <form method="post" action="{% url 'quick_costing_submit_for_approval' quick_costing.pk %}" class="quick-inline-form">
+          {% csrf_token %}
+          <button type="submit" class="quick-btn quick-btn-primary" style="cursor:pointer;">Submit for CEO Approval</button>
+        </form>
+      {% endif %}
       {% if can_edit_quick_costing %}
         <a class="quick-btn" href="{% url 'quick_costing_edit' quick_costing.pk %}">Edit</a>
       {% endif %}
@@ -465,7 +471,7 @@
           <button type="submit" class="quick-btn quick-btn-primary" style="cursor:pointer;">Create Quotation</button>
         </form>
       {% elif quick_costing.status != "approved" %}
-        <span class="quick-disabled-note">Approve costing before creating quotation.</span>
+        <span class="quick-disabled-note">CEO approval is required before creating a quotation.</span>
       {% endif %}
       {% if quick_costing.opportunity %}
         <a class="quick-btn" href="{% url 'opportunity_detail' quick_costing.opportunity.pk %}">Open Opportunity</a>
@@ -604,18 +610,20 @@
         <span>Approval Status</span>
         <strong><span class="quick-type-badge status-{{ approval_status_label|lower }}">{{ approval_status_label }}</span></strong>
       </div>
-      <div class="quick-actions" style="justify-content:flex-start;">
-        <form method="post" action="{% url 'quick_costing_approve' quick_costing.pk %}" class="quick-inline-form">
-          {% csrf_token %}
-          <button type="submit" class="quick-btn quick-btn-primary" style="cursor:pointer;">Approve</button>
-        </form>
-        {% if not invoice %}
+      {% if quick_costing.status == "draft" and quick_costing.approval_submitted_at %}
+        <div class="quick-actions" style="justify-content:flex-start;">
+          <form method="post" action="{% url 'quick_costing_approve' quick_costing.pk %}" class="quick-inline-form">
+            {% csrf_token %}
+            <button type="submit" class="quick-btn quick-btn-primary" style="cursor:pointer;">Approve</button>
+          </form>
           <form method="post" action="{% url 'quick_costing_reject' quick_costing.pk %}" class="quick-inline-form">
             {% csrf_token %}
             <button type="submit" class="quick-btn" style="cursor:pointer;">Reject</button>
           </form>
-        {% endif %}
-      </div>
+        </div>
+      {% else %}
+        <p class="quick-disabled-note">Only submitted Quick Costing can be approved or rejected.</p>
+      {% endif %}
     </section>
   {% endif %}
 

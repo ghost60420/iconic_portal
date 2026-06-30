@@ -11,6 +11,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_POST
@@ -72,17 +73,33 @@ def _can_approve(user):
         return False
     if user.is_superuser:
         return True
-    group_names = set(user.groups.filter(name__in=["CEO", "Sales"]).values_list("name", flat=True))
+    group_names = set(user.groups.filter(name__in=["CEO", "Sales", "Accounts"]).values_list("name", flat=True))
     if "CEO" in group_names:
         return True
     if "Sales" in group_names:
+        return False
+    if "Accounts" in group_names:
         return False
     access = getattr(user, "access", None)
     return bool(access and access.can_costing_approve)
 
 
 def _can_convert_to_invoice(user):
-    return bool(user and user.is_authenticated and user.is_superuser)
+    return bool(
+        user
+        and user.is_authenticated
+        and (user.is_superuser or user.groups.filter(name="Accounts").exists())
+    )
+
+
+def _can_view_approval_queue(user):
+    return _can_approve(user) or _can_convert_to_invoice(user)
+
+
+def _deny_without_internal_costing_or_accounting(request):
+    if can_view_internal_costing(request.user) or _can_convert_to_invoice(request.user):
+        return None
+    return HttpResponseForbidden("No access")
 
 
 def _user_or_none(user):
@@ -327,16 +344,27 @@ def _quotation_ceo_status_label(costing, converted=False):
 
 
 def _quotation_salesperson_label(costing):
+    lead = getattr(getattr(costing, "opportunity", None), "lead", None)
+    if getattr(lead, "assigned_to", None):
+        return _display_user(lead.assigned_to)
     if costing.quoted_by:
         return _display_user(costing.quoted_by)
     if costing.approved_by:
         return _display_user(costing.approved_by)
-    lead = getattr(getattr(costing, "opportunity", None), "lead", None)
-    if getattr(lead, "assigned_to", None):
-        return _display_user(lead.assigned_to)
     if getattr(lead, "owner", ""):
         return lead.owner
     return ""
+
+
+def _can_revise_rejected_advanced(user, costing):
+    if not user or not user.is_authenticated or _can_approve(user):
+        return False
+    if costing.quotation_status != CostingHeader.QUOTATION_STATUS_REJECTED:
+        return False
+    lead = getattr(getattr(costing, "opportunity", None), "lead", None)
+    if getattr(lead, "assigned_to_id", None):
+        return lead.assigned_to_id == user.pk
+    return costing.quoted_by_id == user.pk
 
 
 def _quick_approval_status_label(quick_costing):
@@ -351,7 +379,9 @@ def _quick_approval_status_label(quick_costing):
         QuickCosting.STATUS_CLOSED,
     }:
         return "Approved"
-    return "Pending"
+    if quick_costing.approval_submitted_at:
+        return "Submitted for CEO Approval"
+    return "Draft"
 
 
 def _quick_profit_health(calc):
@@ -380,8 +410,10 @@ def _quick_workflow_badges(quick_costing, invoice=None):
         current_key = "rejected"
     elif status == QuickCosting.STATUS_APPROVED:
         current_key = "ceo-approved"
-    else:
+    elif quick_costing.approval_submitted_at:
         current_key = "ceo-pending"
+    else:
+        current_key = "draft"
 
     stages = [
         ("draft", "Draft"),
@@ -648,54 +680,228 @@ def _quick_costing_initial(opportunity=None):
     }
 
 
+def _advanced_queue_status(costing, converted=False):
+    if converted:
+        return "converted", "Invoice Created"
+    labels = {
+        CostingHeader.QUOTATION_STATUS_DRAFT: ("pending", "Submitted for CEO Approval"),
+        CostingHeader.QUOTATION_STATUS_APPROVED: ("approved", "CEO Approved"),
+        CostingHeader.QUOTATION_STATUS_REJECTED: ("rejected", "CEO Rejected"),
+        CostingHeader.QUOTATION_STATUS_SENT: ("sent", "Quotation Sent"),
+        CostingHeader.QUOTATION_STATUS_ACCEPTED: ("accepted", "Customer Approved"),
+        CostingHeader.QUOTATION_STATUS_DECLINED: ("rejected", "CEO Rejected"),
+    }
+    return labels.get(costing.quotation_status, ("draft", "Draft"))
+
+
+def _quick_queue_status(quick_costing, converted=False):
+    if converted or quick_costing.status in {
+        QuickCosting.STATUS_INVOICED,
+        QuickCosting.STATUS_PRODUCTION,
+        QuickCosting.STATUS_SHIPPED,
+        QuickCosting.STATUS_CLOSED,
+    }:
+        return "converted", "Invoice Created"
+    if quick_costing.status == QuickCosting.STATUS_REJECTED:
+        return "rejected", "CEO Rejected"
+    if quick_costing.status == QuickCosting.STATUS_QUOTED:
+        return "sent", "Quotation Sent"
+    if quick_costing.status == QuickCosting.STATUS_APPROVED:
+        return "approved", "CEO Approved"
+    if quick_costing.approval_submitted_at:
+        return "pending", "Submitted for CEO Approval"
+    return "draft", "Draft"
+
+
+def _advanced_approval_queue_row(costing):
+    try:
+        amounts = get_costing_quote_amounts(costing)
+    except CostingWorkflowError:
+        amounts = {"order_total": Decimal("0"), "standard_cost_total": Decimal("0")}
+    total_amount = amounts["order_total"]
+    profit_amount = total_amount - amounts["standard_cost_total"]
+    profit_margin = (profit_amount / total_amount * Decimal("100")) if total_amount else Decimal("0")
+    converted = bool(list(costing.invoices.all()))
+    status_key, status_label = _advanced_queue_status(costing, converted=converted)
+    opportunity = costing.opportunity
+    lead = getattr(opportunity, "lead", None)
+    return {
+        "record": costing,
+        "costing_type": "Advanced",
+        "quotation_number": costing.quotation_number or "-",
+        "record_label": f"COST-{costing.pk}",
+        "lead_id": getattr(lead, "lead_id", "") or "",
+        "opportunity_id": getattr(opportunity, "opportunity_id", "") or "",
+        "client_name": (
+            getattr(costing.customer, "account_brand", "")
+            or getattr(costing.customer, "contact_name", "")
+            or getattr(lead, "account_brand", "")
+            or "Client"
+        ),
+        "salesperson": _quotation_salesperson_label(costing) or "Not assigned",
+        "currency": costing.currency or "BDT",
+        "total_amount": total_amount,
+        "profit_amount": profit_amount,
+        "profit_margin": profit_margin,
+        "submitted_at": costing.quoted_at or costing.created_at,
+        "status_key": status_key,
+        "status_label": status_label,
+        "converted": converted,
+        "detail_url": reverse("cost_sheet_client_quotation", args=[costing.pk]),
+        "approve_url": reverse("cost_sheet_quotation_approve", args=[costing.pk]),
+        "reject_url": reverse("cost_sheet_quotation_reject", args=[costing.pk]),
+        "quotation_url": "",
+        "invoice_url": reverse("cost_sheet_convert_to_invoice", args=[costing.pk]),
+    }
+
+
+def _quick_approval_queue_row(quick_costing):
+    calc = _quick_costing_calc(quick_costing)
+    converted = bool(list(quick_costing.invoices.all()))
+    status_key, status_label = _quick_queue_status(quick_costing, converted=converted)
+    opportunity = quick_costing.opportunity
+    lead = getattr(opportunity, "lead", None)
+    salesperson = quick_costing.approval_submitted_by or quick_costing.created_by
+    if not salesperson and getattr(lead, "assigned_to", None):
+        salesperson = lead.assigned_to
+    return {
+        "record": quick_costing,
+        "costing_type": "Quick",
+        "quotation_number": quick_costing.quotation_number or "-",
+        "record_label": f"QC-{quick_costing.pk}",
+        "lead_id": getattr(lead, "lead_id", "") or "",
+        "opportunity_id": getattr(opportunity, "opportunity_id", "") or "",
+        "client_name": (
+            quick_costing.account_brand
+            or quick_costing.buyer_name
+            or getattr(lead, "account_brand", "")
+            or "Client"
+        ),
+        "salesperson": _display_user(salesperson) or "Not assigned",
+        "currency": quick_costing.currency or "BDT",
+        "total_amount": calc["total_sales_order"],
+        "profit_amount": calc["net_profit_total"],
+        "profit_margin": calc["net_profit_margin_percent"],
+        "submitted_at": quick_costing.approval_submitted_at or quick_costing.updated_at,
+        "status_key": status_key,
+        "status_label": status_label,
+        "converted": converted,
+        "detail_url": reverse("quick_costing_detail", args=[quick_costing.pk]),
+        "approve_url": reverse("quick_costing_approve", args=[quick_costing.pk]),
+        "reject_url": reverse("quick_costing_reject", args=[quick_costing.pk]),
+        "quotation_url": reverse("quick_costing_convert_to_quotation", args=[quick_costing.pk]),
+        "invoice_url": reverse("quick_costing_convert_to_invoice", args=[quick_costing.pk]),
+    }
+
+
 def ceo_quotation_approval_queue(request):
-    status_filter = (request.GET.get("status") or "pending").strip()
+    if not _can_view_approval_queue(request.user):
+        return HttpResponseForbidden("CEO approval or Accounting access is required.")
+    can_decide = _can_approve(request.user)
+    can_convert = _can_convert_to_invoice(request.user)
+    status_filter = (request.GET.get("status") or ("pending" if can_decide else "approved")).strip()
+    if not can_decide:
+        status_filter = "approved"
     currency = (request.GET.get("currency") or "").strip().upper()
     search = (request.GET.get("q") or "").strip()
     date_from = parse_date((request.GET.get("date_from") or "").strip())
     date_to = parse_date((request.GET.get("date_to") or "").strip())
 
-    qs = (
+    advanced_qs = (
         CostingHeader.objects.select_related(
             "opportunity",
             "opportunity__lead",
+            "opportunity__lead__assigned_to",
             "customer",
             "quoted_by",
             "approved_by",
             "quotation_approved_by",
             "quotation_rejected_by",
+            "smv",
         )
-        .prefetch_related("invoices")
+        .prefetch_related("invoices", "line_items")
+        .filter(is_archived=False)
         .exclude(quotation_number="")
         .order_by("-quoted_at", "-updated_at", "-id")
     )
+    quick_qs = (
+        QuickCosting.objects.select_related(
+            "opportunity",
+            "opportunity__lead",
+            "opportunity__lead__assigned_to",
+            "created_by",
+            "approval_submitted_by",
+            "approved_by",
+            "rejected_by",
+        )
+        .prefetch_related("invoices")
+        .filter(
+            Q(approval_submitted_at__isnull=False)
+            | ~Q(status=QuickCosting.STATUS_DRAFT)
+        )
+        .order_by("-approval_submitted_at", "-updated_at", "-id")
+    )
 
     if currency in {"CAD", "USD", "BDT"}:
-        qs = qs.filter(currency=currency)
+        advanced_qs = advanced_qs.filter(currency=currency)
+        quick_qs = quick_qs.filter(currency=currency)
     else:
         currency = ""
 
     if date_from:
-        qs = qs.filter(quoted_at__date__gte=date_from)
+        advanced_qs = advanced_qs.filter(quoted_at__date__gte=date_from)
+        quick_qs = quick_qs.filter(approval_submitted_at__date__gte=date_from)
     if date_to:
-        qs = qs.filter(quoted_at__date__lte=date_to)
+        advanced_qs = advanced_qs.filter(quoted_at__date__lte=date_to)
+        quick_qs = quick_qs.filter(approval_submitted_at__date__lte=date_to)
 
     if status_filter == "pending":
-        qs = qs.filter(quotation_status=CostingHeader.QUOTATION_STATUS_DRAFT)
+        advanced_qs = advanced_qs.filter(
+            quotation_status=CostingHeader.QUOTATION_STATUS_DRAFT,
+            invoices__isnull=True,
+        )
+        quick_qs = quick_qs.filter(
+            status=QuickCosting.STATUS_DRAFT,
+            approval_submitted_at__isnull=False,
+            invoices__isnull=True,
+        )
     elif status_filter == "approved":
-        qs = qs.filter(quotation_status=CostingHeader.QUOTATION_STATUS_APPROVED)
+        advanced_qs = advanced_qs.filter(
+            quotation_status=CostingHeader.QUOTATION_STATUS_APPROVED,
+            invoices__isnull=True,
+        )
+        quick_qs = quick_qs.filter(
+            status__in=[QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_QUOTED],
+            invoices__isnull=True,
+        )
     elif status_filter == "rejected":
-        qs = qs.filter(quotation_status=CostingHeader.QUOTATION_STATUS_REJECTED)
+        advanced_qs = advanced_qs.filter(quotation_status=CostingHeader.QUOTATION_STATUS_REJECTED)
+        quick_qs = quick_qs.filter(status=QuickCosting.STATUS_REJECTED)
     elif status_filter == "sent":
-        qs = qs.filter(quotation_status=CostingHeader.QUOTATION_STATUS_SENT)
+        advanced_qs = advanced_qs.filter(quotation_status=CostingHeader.QUOTATION_STATUS_SENT)
+        quick_qs = quick_qs.filter(status=QuickCosting.STATUS_QUOTED)
+    elif status_filter == "accepted":
+        advanced_qs = advanced_qs.filter(quotation_status=CostingHeader.QUOTATION_STATUS_ACCEPTED)
+        quick_qs = quick_qs.none()
     elif status_filter == "converted":
-        qs = qs.filter(invoices__isnull=False).distinct()
+        advanced_qs = advanced_qs.filter(invoices__isnull=False).distinct()
+        quick_qs = quick_qs.filter(
+            Q(invoices__isnull=False) | Q(status=QuickCosting.STATUS_INVOICED)
+        ).distinct()
     elif status_filter != "all":
         status_filter = "pending"
-        qs = qs.filter(quotation_status=CostingHeader.QUOTATION_STATUS_DRAFT)
+        advanced_qs = advanced_qs.filter(
+            quotation_status=CostingHeader.QUOTATION_STATUS_DRAFT,
+            invoices__isnull=True,
+        )
+        quick_qs = quick_qs.filter(
+            status=QuickCosting.STATUS_DRAFT,
+            approval_submitted_at__isnull=False,
+            invoices__isnull=True,
+        )
 
     if search:
-        qs = qs.filter(
+        advanced_qs = advanced_qs.filter(
             Q(quotation_number__icontains=search)
             | Q(opportunity__opportunity_id__icontains=search)
             | Q(opportunity__lead__lead_id__icontains=search)
@@ -703,44 +909,20 @@ def ceo_quotation_approval_queue(request):
             | Q(customer__contact_name__icontains=search)
             | Q(style_name__icontains=search)
         )
-
-    rows = []
-    for costing in qs[:200]:
-        try:
-            amounts = get_costing_quote_amounts(costing)
-        except CostingWorkflowError:
-            amounts = {
-                "order_total": Decimal("0"),
-                "standard_cost_total": Decimal("0"),
-            }
-        total_amount = amounts["order_total"]
-        profit_amount = total_amount - amounts["standard_cost_total"]
-        profit_margin = (profit_amount / total_amount * Decimal("100")) if total_amount else Decimal("0")
-        converted = bool(list(costing.invoices.all()))
-        opportunity = getattr(costing, "opportunity", None)
-        lead = getattr(opportunity, "lead", None)
-        rows.append(
-            {
-                "costing": costing,
-                "lead_id": getattr(lead, "lead_id", "") or "",
-                "opportunity_id": getattr(opportunity, "opportunity_id", "") or "",
-                "client_name": (
-                    getattr(costing.customer, "account_brand", "")
-                    or getattr(costing.customer, "contact_name", "")
-                    or getattr(lead, "account_brand", "")
-                    or "Client"
-                ),
-                "salesperson": _quotation_salesperson_label(costing) or "Not assigned",
-                "currency": costing.currency or "BDT",
-                "total_amount": total_amount,
-                "profit_amount": profit_amount,
-                "profit_margin": profit_margin,
-                "purpose": "Sample" if costing.order_quantity and costing.order_quantity <= 5 else "Bulk",
-                "submitted_at": costing.quoted_at or costing.created_at,
-                "status_label": _quotation_ceo_status_label(costing, converted=converted),
-                "converted": converted,
-            }
+        quick_qs = quick_qs.filter(
+            Q(quotation_number__icontains=search)
+            | Q(opportunity__opportunity_id__icontains=search)
+            | Q(opportunity__lead__lead_id__icontains=search)
+            | Q(account_brand__icontains=search)
+            | Q(contact_name__icontains=search)
+            | Q(buyer_name__icontains=search)
+            | Q(project_name__icontains=search)
         )
+
+    rows = [_advanced_approval_queue_row(costing) for costing in advanced_qs[:200]]
+    rows.extend(_quick_approval_queue_row(quick_costing) for quick_costing in quick_qs[:200])
+    rows.sort(key=lambda row: (row["submitted_at"], row["costing_type"], row["record"].pk), reverse=True)
+    rows = rows[:200]
 
     context = {
         "rows": rows,
@@ -755,10 +937,12 @@ def ceo_quotation_approval_queue(request):
             ("approved", "CEO Approved"),
             ("rejected", "CEO Rejected"),
             ("sent", "Sent to Client"),
+            ("accepted", "Customer Approved"),
             ("converted", "Converted"),
             ("all", "All statuses"),
         ],
-        "can_use_existing_approval": _can_approve(request.user) and can_view_internal_costing(request.user),
+        "can_use_existing_approval": can_decide and can_view_internal_costing(request.user),
+        "can_convert_approved": can_convert,
     }
     return render(request, "crm/costing/ceo_quotation_approval_queue.html", context)
 
@@ -1069,6 +1253,16 @@ def quick_costing_detail(request, pk):
         "can_convert_to_invoice": _can_convert_to_invoice(request.user) and _quick_approval_status_label(quick_costing) == "Approved",
         "approval_status_label": _quick_approval_status_label(quick_costing),
         "can_edit_quick_costing": (not quick_costing.is_locked) or _can_approve(request.user),
+        "can_submit_for_approval": (
+            not invoice
+            and quick_costing.status in {QuickCosting.STATUS_DRAFT, QuickCosting.STATUS_REJECTED}
+            and (
+                quick_costing.status == QuickCosting.STATUS_REJECTED
+                or not quick_costing.approval_submitted_at
+            )
+            and not _can_approve(request.user)
+            and not _can_convert_to_invoice(request.user)
+        ),
         **workflow_visibility,
     }
     return render(request, "crm/costing/quick_costing_detail.html", context)
@@ -1107,6 +1301,47 @@ def quick_costing_edit(request, pk):
 
 
 @require_POST
+def quick_costing_submit_for_approval(request, pk):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
+    quick_costing = get_object_or_404(QuickCosting, pk=pk)
+    if _can_approve(request.user) or _can_convert_to_invoice(request.user):
+        messages.error(request, "Sales must submit Quick Costing for CEO approval.")
+        return redirect("quick_costing_detail", pk=pk)
+    if quick_costing.invoices.exists():
+        messages.error(request, "This Quick Costing already has an invoice.")
+        return redirect("quick_costing_detail", pk=pk)
+    if quick_costing.status not in {QuickCosting.STATUS_DRAFT, QuickCosting.STATUS_REJECTED}:
+        messages.error(request, "Only draft or rejected Quick Costing can be submitted.")
+        return redirect("quick_costing_detail", pk=pk)
+    if quick_costing.status == QuickCosting.STATUS_DRAFT and quick_costing.approval_submitted_at:
+        messages.info(request, "This Quick Costing is already waiting for CEO approval.")
+        return redirect("quick_costing_detail", pk=pk)
+    quick_costing.status = QuickCosting.STATUS_DRAFT
+    quick_costing.approval_submitted_by = _user_or_none(request.user)
+    quick_costing.approval_submitted_at = timezone.now()
+    quick_costing.approved_by = None
+    quick_costing.approved_at = None
+    quick_costing.rejected_by = None
+    quick_costing.rejected_at = None
+    quick_costing.save(
+        update_fields=[
+            "status",
+            "approval_submitted_by",
+            "approval_submitted_at",
+            "approved_by",
+            "approved_at",
+            "rejected_by",
+            "rejected_at",
+            "updated_at",
+        ]
+    )
+    messages.success(request, "Quick Costing submitted for CEO approval.")
+    return redirect("quick_costing_detail", pk=pk)
+
+
+@require_POST
 def quick_costing_approve(request, pk):
     denied = _deny_without_internal_costing(request)
     if denied:
@@ -1114,6 +1349,9 @@ def quick_costing_approve(request, pk):
     quick_costing = get_object_or_404(QuickCosting, pk=pk)
     if not _can_approve(request.user):
         messages.error(request, "You do not have permission to approve.")
+        return redirect("quick_costing_detail", pk=pk)
+    if quick_costing.status != QuickCosting.STATUS_DRAFT or not quick_costing.approval_submitted_at:
+        messages.error(request, "Quick Costing must be submitted before CEO approval.")
         return redirect("quick_costing_detail", pk=pk)
     quick_costing.status = QuickCosting.STATUS_APPROVED
     quick_costing.approved_by = _user_or_none(request.user)
@@ -1133,6 +1371,9 @@ def quick_costing_reject(request, pk):
     quick_costing = get_object_or_404(QuickCosting, pk=pk)
     if not _can_approve(request.user):
         messages.error(request, "You do not have permission to reject.")
+        return redirect("quick_costing_detail", pk=pk)
+    if not quick_costing.approval_submitted_at:
+        messages.error(request, "Quick Costing must be submitted before CEO rejection.")
         return redirect("quick_costing_detail", pk=pk)
     if quick_costing.invoices.exists():
         messages.error(request, "This quick costing already has an invoice and cannot be rejected.")
@@ -1164,11 +1405,11 @@ def quick_costing_reject(request, pk):
 
 @require_POST
 def quick_costing_convert_to_quotation(request, pk):
-    denied = _deny_without_internal_costing(request)
+    denied = _deny_without_internal_costing_or_accounting(request)
     if denied:
         return denied
     quick_costing = get_object_or_404(QuickCosting, pk=pk)
-    if not _can_approve(request.user):
+    if not (_can_approve(request.user) or _can_convert_to_invoice(request.user)):
         messages.error(request, "You do not have permission to create a quotation.")
         return redirect("quick_costing_detail", pk=pk)
     if quick_costing.status != QuickCosting.STATUS_APPROVED and not quick_costing.quotation_number:
@@ -1181,6 +1422,8 @@ def quick_costing_convert_to_quotation(request, pk):
     quick_costing.status = QuickCosting.STATUS_QUOTED
     quick_costing.save(update_fields=["status", "quotation_number", "quoted_by", "quoted_at", "updated_at"])
     messages.success(request, f"Quick quotation {quick_costing.quotation_number} is ready.")
+    if _can_convert_to_invoice(request.user) and not _can_approve(request.user):
+        return redirect(f"{reverse('ceo_quotation_approval_queue')}?status=approved")
     return redirect("quick_costing_client_quotation", pk=pk)
 
 
@@ -1237,7 +1480,7 @@ def quick_costing_client_quotation(request, pk):
 
 @require_POST
 def quick_costing_convert_to_invoice(request, pk):
-    denied = _deny_without_internal_costing(request)
+    denied = _deny_without_internal_costing_or_accounting(request)
     if denied:
         return denied
     quick_costing = get_object_or_404(
@@ -1592,11 +1835,17 @@ def cost_sheet_detail(request, pk):
         return denied
     can_view_costing_profit = can_view_internal_costing(request.user)
     costing = get_object_or_404(
-        CostingHeader.objects.select_related("opportunity", "customer").prefetch_related("line_items"),
+        CostingHeader.objects.select_related(
+            "opportunity",
+            "opportunity__lead",
+            "opportunity__lead__assigned_to",
+            "customer",
+        ).prefetch_related("line_items"),
         pk=pk,
     )
     can_approve = _can_approve(request.user)
-    is_locked = costing.status == "approved"
+    can_revise_rejected = _can_revise_rejected_advanced(request.user, costing)
+    is_locked = costing.status == "approved" and not can_revise_rejected
 
     if request.method == "POST":
         action = (request.POST.get("action") or "").strip()
@@ -1815,6 +2064,7 @@ def cost_sheet_detail(request, pk):
         "category_choices": NEW_COSTING_CATEGORY_CHOICES,
         "uom_choices": NEW_COSTING_UOM_CHOICES,
         "can_approve": can_approve,
+        "can_resubmit_quotation": can_revise_rejected,
         "is_locked": is_locked,
         "workflow": workflow,
         "can_view_internal_costing": can_view_costing_profit,
@@ -1855,6 +2105,50 @@ def cost_sheet_convert_to_quotation(request, pk):
         return redirect("cost_sheet_detail", pk=pk)
 
     messages.success(request, f"Quotation {costing.quotation_number} is ready.")
+    return redirect("cost_sheet_client_quotation", pk=pk)
+
+
+@require_POST
+def cost_sheet_quotation_resubmit(request, pk):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
+    costing = get_object_or_404(
+        CostingHeader.objects.select_related("opportunity", "opportunity__lead", "quoted_by"),
+        pk=pk,
+    )
+    if not _can_revise_rejected_advanced(request.user, costing):
+        return HttpResponseForbidden("Only the assigned salesperson can resubmit this rejected quotation.")
+    if costing.invoices.exists():
+        messages.error(request, "This quotation already has an invoice and cannot be resubmitted.")
+        return redirect("cost_sheet_detail", pk=pk)
+
+    costing.quotation_status = CostingHeader.QUOTATION_STATUS_DRAFT
+    costing.quoted_by = _user_or_none(request.user)
+    costing.quoted_at = timezone.now()
+    costing.quotation_approved_by = None
+    costing.quotation_approved_at = None
+    costing.quotation_rejected_by = None
+    costing.quotation_rejected_at = None
+    costing.save(
+        update_fields=[
+            "quotation_status",
+            "quoted_by",
+            "quoted_at",
+            "quotation_approved_by",
+            "quotation_approved_at",
+            "quotation_rejected_by",
+            "quotation_rejected_at",
+            "updated_at",
+        ]
+    )
+    CostingAuditLog.objects.create(
+        costing=costing,
+        action="quoted",
+        changed_by=_user_or_none(request.user),
+        note="Resubmitted for CEO approval",
+    )
+    messages.success(request, f"Quotation {costing.quotation_number} resubmitted for CEO approval.")
     return redirect("cost_sheet_client_quotation", pk=pk)
 
 
@@ -2139,7 +2433,7 @@ def cost_sheet_quotation_pdf(request, pk):
 
 @require_POST
 def cost_sheet_convert_to_invoice(request, pk):
-    denied = _deny_without_internal_costing(request)
+    denied = _deny_without_internal_costing_or_accounting(request)
     if denied:
         return denied
     costing = get_object_or_404(CostingHeader.objects.select_related("opportunity", "customer"), pk=pk)

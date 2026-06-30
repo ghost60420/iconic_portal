@@ -123,7 +123,7 @@
     <div>
       <h1 class="cq-title">CEO Quotation Approval Queue</h1>
       <p class="cq-sub">
-        Advanced quotations with a quotation number appear here. Draft quotations are shown as Submitted for CEO Approval without changing database status values.
+        Quick and Advanced Costing submissions use this queue. Existing model statuses remain unchanged and are normalized here for review.
       </p>
     </div>
     <div class="cq-actions">
@@ -175,6 +175,7 @@
     <table class="cq-table">
       <thead>
         <tr>
+          <th>Costing Type</th>
           <th>Quotation</th>
           <th>Lead</th>
           <th>Opportunity</th>
@@ -184,7 +185,6 @@
           <th class="cq-right">Total</th>
           <th class="cq-right">Profit</th>
           <th class="cq-right">Margin</th>
-          <th>Type</th>
           <th>Submitted</th>
           <th>Status</th>
           <th class="cq-right">Actions</th>
@@ -193,9 +193,10 @@
       <tbody>
         {% for row in rows %}
           <tr>
+            <td><strong>{{ row.costing_type }}</strong></td>
             <td>
-              <strong>{{ row.costing.quotation_number }}</strong>
-              <div class="cq-muted">COST-{{ row.costing.pk }}</div>
+              <strong>{{ row.quotation_number }}</strong>
+              <div class="cq-muted">{{ row.record_label }}</div>
             </td>
             <td>{{ row.lead_id|default:"-" }}</td>
             <td>{{ row.opportunity_id|default:"-" }}</td>
@@ -205,24 +206,31 @@
             <td class="cq-right">{{ row.total_amount|finance_money:row.currency }}</td>
             <td class="cq-right">{{ row.profit_amount|finance_money:row.currency }}</td>
             <td class="cq-right">{{ row.profit_margin|floatformat:2 }}%</td>
-            <td>{{ row.purpose }}</td>
             <td>{{ row.submitted_at|date:"Y-m-d H:i" }}</td>
             <td><span class="cq-status">{{ row.status_label }}</span></td>
             <td class="cq-right">
               <div class="cq-row-actions">
-                <a class="cq-btn" href="{% url 'cost_sheet_client_quotation' row.costing.pk %}">View</a>
-                {% if can_use_existing_approval %}
-                  <form method="post" action="{% url 'cost_sheet_quotation_approve' row.costing.pk %}">
+                {% if can_use_existing_approval %}<a class="cq-btn" href="{{ row.detail_url }}">View</a>{% endif %}
+                {% if can_use_existing_approval and row.status_key == "pending" %}
+                  <form method="post" action="{{ row.approve_url }}">
                     {% csrf_token %}
                     <button class="cq-btn cq-btn--gold" type="submit" onclick="return confirm('Approve this quotation using the existing approval action?');">Approve</button>
                   </form>
-                  <form method="post" action="{% url 'cost_sheet_quotation_reject' row.costing.pk %}">
+                  <form method="post" action="{{ row.reject_url }}">
                     {% csrf_token %}
                     <button class="cq-btn cq-btn--bad" type="submit" onclick="return confirm('Reject this quotation using the existing rejection action?');">Reject</button>
                   </form>
-                {% else %}
-                  <span class="cq-muted">Approval permission required</span>
                 {% endif %}
+                {% if can_convert_approved and not row.converted %}
+                  {% if row.status_key == "approved" or row.status_key == "sent" %}
+                    {% if row.costing_type == "Quick" and row.quotation_number == "-" %}
+                      <form method="post" action="{{ row.quotation_url }}">{% csrf_token %}<button class="cq-btn cq-btn--gold" type="submit">Create Quotation</button></form>
+                    {% else %}
+                      <form method="post" action="{{ row.invoice_url }}">{% csrf_token %}<button class="cq-btn cq-btn--gold" type="submit">Create Invoice</button></form>
+                    {% endif %}
+                  {% endif %}
+                {% endif %}
+                {% if not can_use_existing_approval and not can_convert_approved %}<span class="cq-muted">Approval permission required</span>{% endif %}
               </div>
             </td>
           </tr>
