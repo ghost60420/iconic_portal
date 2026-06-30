@@ -210,24 +210,16 @@ def build_ceo_executive_context():
             is_archived=False,
             assigned_production_manager__isnull=False,
         )
-        .values(
-            "assigned_production_manager__username",
-            "assigned_production_manager__first_name",
-            "assigned_production_manager__last_name",
-        )
+        .values("assigned_production_manager_id")
         .annotate(count=Count("id"))
-        .order_by("-count", "assigned_production_manager__username")[:5]
+        .order_by("-count", "assigned_production_manager_id")[:5]
     )
+    identity_index = get_employee_identity_index()
     for row in top_production_managers:
-        row["label"] = " ".join(
-            filter(
-                None,
-                [
-                    row["assigned_production_manager__first_name"],
-                    row["assigned_production_manager__last_name"],
-                ],
-            )
-        ).strip() or row["assigned_production_manager__username"]
+        row["label"] = resolve_employee_identity(
+            user_id=row["assigned_production_manager_id"],
+            index=identity_index,
+        )["canonical_name"]
 
     upcoming_shipments = list(
         Shipment.objects.filter(ship_date__gte=today)
