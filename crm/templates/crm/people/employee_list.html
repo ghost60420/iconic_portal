@@ -23,7 +23,7 @@
     <div class="people-table-wrap">
       <table class="people-table"><thead><tr><th>Employee</th><th>Position</th><th>Department</th><th>Manager</th><th>Roles</th><th>Status</th><th></th></tr></thead><tbody>
         {% for profile in profiles %}<tr>
-          <td data-label="Employee"><div class="people-list-identity">{% if profile.profile_photo %}<img class="people-avatar people-avatar--small" src="{{ profile.profile_photo.url }}" alt="">{% else %}<span class="people-avatar people-avatar--small">{{ profile.initials }}</span>{% endif %}<div><div class="people-name">{{ profile.public_name }}</div><div class="people-muted">{{ profile.employee_id }} · {{ profile.user.get_full_name }}</div></div></div></td>
+          <td data-label="Employee"><div class="people-list-identity">{% if profile.profile_photo %}<img class="people-avatar people-avatar--small" src="{{ profile.profile_photo.url }}" alt="">{% else %}<span class="people-avatar people-avatar--small">{{ profile.initials }}</span>{% endif %}<div><div class="people-name">{{ profile.public_name }}</div><div class="people-muted">{{ profile.employee_id }}</div></div></div></td>
           <td data-label="Position">{{ profile.position_name|default:"Not assigned" }}</td><td data-label="Department">{{ profile.department_name|default:"Not assigned" }}</td>
           <td data-label="Manager">{% if profile.manager %}{{ profile.manager|employee_name }}{% else %}<span class="people-muted">None</span>{% endif %}</td>
           <td data-label="Roles"><div class="people-roles">{% for role in profile.user.groups.all %}<span class="people-badge">{{ role.name }}</span>{% empty %}<span class="people-muted">No roles</span>{% endfor %}</div></td>

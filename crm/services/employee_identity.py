@@ -21,11 +21,23 @@ def normalize_employee_identity(value):
     return " ".join(str(value or "").split()).casefold()
 
 
+def canonical_employee_name(*, profile_display_name="", profile_full_name="", user_full_name="", username=""):
+    profile_display_name = " ".join(str(profile_display_name or "").split())
+    profile_full_name = " ".join(str(profile_full_name or "").split())
+    user_full_name = " ".join(str(user_full_name or "").split())
+    username = " ".join(str(username or "").split())
+    return profile_display_name or profile_full_name or user_full_name or username
+
+
 def _profile_payload(profile):
     user = profile.user
     full_name = " ".join((user.get_full_name() or "").split())
     display_name = " ".join((profile.display_name or "").split())
-    canonical_name = full_name or display_name or user.get_username()
+    canonical_name = canonical_employee_name(
+        profile_display_name=display_name,
+        profile_full_name=full_name,
+        username=user.get_username(),
+    )
     aliases = [" ".join(str(value or "").split()) for value in (profile.aliases or [])]
     aliases = [value for value in aliases if value]
     return {
@@ -112,7 +124,10 @@ def resolve_employee_identity(*, user_id=None, profile_id=None, assigned_user=No
     if profile_id and profile_id in index["by_profile_id"]:
         return index["by_profile_id"][profile_id]
     if assigned_user is not None:
-        assigned_name = " ".join((assigned_user.get_full_name() or "").split()) or assigned_user.get_username()
+        assigned_name = canonical_employee_name(
+            user_full_name=assigned_user.get_full_name(),
+            username=assigned_user.get_username(),
+        )
         return {
             "profile_id": None,
             "user_id": direct_user_id,

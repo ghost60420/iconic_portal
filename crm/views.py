@@ -1430,6 +1430,9 @@ def leads_list(request):
     def display_user(user):
         return resolve_employee_identity(user_id=user.pk, index=identity_index)["canonical_name"]
 
+    for user in users:
+        user.canonical_name = display_user(user)
+
     def count_assignees(source):
         if isinstance(source, list):
             total = len(source)
