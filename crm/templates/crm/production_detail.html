@@ -203,10 +203,8 @@
           {{ order.assigned_production_manager.get_full_name|default:order.assigned_production_manager.username }}
         {% elif opportunity and opportunity.assigned_to %}
           {{ opportunity.assigned_to }}
-        {% elif lead and lead.assigned_to %}
-          {{ lead.assigned_to }}
-        {% elif lead and lead.owner %}
-          {{ lead.owner }}
+        {% elif lead %}
+          {{ lead|canonical_lead_owner }}
         {% else %}
           -
         {% endif %}

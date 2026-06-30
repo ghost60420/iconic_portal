@@ -28,7 +28,7 @@
 
   <form method="post" enctype="multipart/form-data" class="people-card people-form">{% csrf_token %}
     {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
-    {% for field in form.visible_fields %}<div class="people-field {% if field.name == 'roles' or field.name == 'notes' %}people-field--wide{% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% for error in field.errors %}<span class="people-errors">{{ error }}</span>{% endfor %}</div>{% endfor %}
+    {% for field in form.visible_fields %}<div class="people-field {% if field.name == 'roles' or field.name == 'notes' or field.name == 'aliases' %}people-field--wide{% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% for error in field.errors %}<span class="people-errors">{{ error }}</span>{% endfor %}</div>{% endfor %}
     {% if form.non_field_errors %}<div class="people-field people-field--wide people-errors">{{ form.non_field_errors }}</div>{% endif %}
     <div class="people-field people-field--wide"><button class="people-btn people-btn--gold" type="submit">Save Employee</button></div>
   </form>

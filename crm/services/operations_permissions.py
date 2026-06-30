@@ -1,6 +1,7 @@
 from django.db.models import Q
 
 from crm.models_access import UserAccess
+from crm.services.employee_identity import employee_lead_ownership_q
 
 
 ROLE_CEO = "CEO"
@@ -311,12 +312,7 @@ def scope_sales_leads(queryset, user):
         if department in {"sales", "marketing", "customer_service"}:
             return queryset.filter(assigned_to__employee_profile__department=department)
     if has_operations_role(user, ROLE_SALES):
-        names = {user.get_username(), user.get_full_name().strip()}
-        names.discard("")
-        owner_filter = Q(assigned_to=user)
-        for name in names:
-            owner_filter |= Q(owner__iexact=name)
-        return queryset.filter(owner_filter)
+        return queryset.filter(employee_lead_ownership_q(user))
     return queryset
 
 
@@ -328,10 +324,5 @@ def scope_sales_opportunities(queryset, user):
         if department in {"sales", "marketing", "customer_service"}:
             return queryset.filter(lead__assigned_to__employee_profile__department=department)
     if has_operations_role(user, ROLE_SALES):
-        names = {user.get_username(), user.get_full_name().strip()}
-        names.discard("")
-        owner_filter = Q(lead__assigned_to=user)
-        for name in names:
-            owner_filter |= Q(lead__owner__iexact=name)
-        return queryset.filter(owner_filter)
+        return queryset.filter(employee_lead_ownership_q(user, prefix="lead__"))
     return queryset

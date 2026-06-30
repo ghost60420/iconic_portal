@@ -386,13 +386,7 @@
       <div class="summary-sub">Next follow up: {{ lead.next_follow_up_date|default:lead.next_followup|default:"—" }}</div>
       <div class="summary-sub">
         Assigned:
-        {% if lead.assigned_to %}
-          {% if lead.assigned_to.get_full_name %}{{ lead.assigned_to.get_full_name }}{% else %}{{ lead.assigned_to.username }}{% endif %}
-        {% elif lead.owner %}
-          {{ lead.owner }}
-        {% else %}
-          Unassigned
-        {% endif %}
+        {{ lead|canonical_lead_owner }}
       </div>
       <div class="lead-progress {% if lead.lead_status == 'Converted' %}lead-progress--converted{% elif lead.lead_status == 'Qualified' %}lead-progress--qualified{% elif lead.lead_status == 'Working' or lead.lead_status == 'Nurturing' %}lead-progress--working{% elif lead.lead_status == 'Lost' or lead.lead_status == 'Unqualified' %}lead-progress--lost{% endif %}" aria-hidden="true"><span></span></div>
     </div>
@@ -609,19 +603,11 @@
           <tr><td class="row-label">Phone</td><td>{{ lead.phone }}</td></tr>
           <tr><td class="row-label">Website</td><td>{{ lead.website|default:lead.company_website }}</td></tr>
           <tr><td class="row-label">City</td><td>{{ lead.city }}</td></tr>
-          <tr><td class="row-label">Owner</td><td>{{ lead.owner }}</td></tr>
+          <tr><td class="row-label">Owner</td><td>{{ lead|canonical_lead_owner }}</td></tr>
           <tr>
             <td class="row-label">Assigned to</td>
             <td>
-              {% if lead.assigned_to %}
-                {% if lead.assigned_to.get_full_name %}
-                  {{ lead.assigned_to.get_full_name }}
-                {% else %}
-                  {{ lead.assigned_to.username }}
-                {% endif %}
-              {% else %}
-                —
-              {% endif %}
+              {{ lead|canonical_lead_owner }}
             </td>
           </tr>
           <tr>

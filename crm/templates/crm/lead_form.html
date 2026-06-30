@@ -1,4 +1,4 @@
-{% load static %}
+{% load static crm_people %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -260,7 +260,7 @@
           {% if lead %}
             <span class="lead-edit-badge">{{ lead.get_lead_status_display|default:"Status unset" }}</span>
             <span class="lead-edit-badge lead-edit-badge-hot">{{ lead.get_priority_display|default:"Priority unset" }}</span>
-            <span class="lead-edit-badge">{% firstof lead.assigned_to lead.owner "Unassigned" %}</span>
+            <span class="lead-edit-badge">{{ lead|canonical_lead_owner }}</span>
             <span class="lead-edit-badge">{{ lead.brand_fit_score|default:"No" }}{% if lead.brand_fit_score %}%{% endif %} fit</span>
             <span class="lead-edit-badge">{% firstof lead.get_source_display lead.source "Source unset" %}</span>
           {% else %}

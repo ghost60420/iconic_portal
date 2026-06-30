@@ -5,6 +5,7 @@ from django.urls import reverse
 
 from crm.models import CostingHeader, Customer, EmployeeProfile, Invoice, Lead, Opportunity, ProductionOrder
 from crm.services.costing_currency import format_finance_money
+from crm.services.employee_identity import employee_profile_ids_matching
 from crm.services.operations_permissions import (
     ROLE_CEO,
     ROLE_ADMIN,
@@ -176,12 +177,18 @@ def search_operations_records(user, query, *, limit=10, include_opportunities=Tr
         ]))
 
     if has_operations_role(user, ROLE_CEO, ROLE_DIRECTOR, ROLE_ADMIN, ROLE_HR) or user.is_superuser:
-        rows = EmployeeProfile.objects.select_related("user", "position_ref", "department_ref").filter(
+        alias_profile_ids = employee_profile_ids_matching(query)
+        employee_filter = (
             Q(employee_id__icontains=query)
             | Q(display_name__icontains=query)
             | Q(user__first_name__icontains=query)
             | Q(user__last_name__icontains=query)
             | Q(user__email__icontains=query)
+        )
+        if alias_profile_ids:
+            employee_filter |= Q(pk__in=alias_profile_ids)
+        rows = EmployeeProfile.objects.select_related("user", "position_ref", "department_ref").filter(
+            employee_filter
         ).order_by("display_name", "user__username")[:limit]
         groups.append(("Employees", [
             {

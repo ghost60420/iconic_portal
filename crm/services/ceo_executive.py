@@ -5,6 +5,7 @@ from django.db.models import Count, DecimalField, ExpressionWrapper, F, Q, Sum
 from django.utils import timezone
 
 from crm.models import AccountingEntry, CostingHeader, Invoice, ProductionOrder, Shipment
+from crm.services.employee_identity import get_employee_identity_index, resolve_employee_identity
 
 
 CURRENCIES = ("CAD", "USD", "BDT")
@@ -122,6 +123,44 @@ def _ranked_invoice_people(queryset, dimensions, label_builder, limit=5):
     ]
 
 
+def _ranked_invoice_salespeople(queryset, limit=5):
+    grouped = defaultdict(lambda: {"count": 0, "amounts": defaultdict(Decimal)})
+    identity_index = get_employee_identity_index()
+    rows = queryset.values(
+        "order__lead__assigned_to_id",
+        "order__lead__owner",
+        "costing_header__opportunity__lead__assigned_to_id",
+        "costing_header__opportunity__lead__owner",
+        "currency",
+    ).annotate(amount=Sum("total_amount"), count=Count("id"))
+    for row in rows:
+        user_id = (
+            row.get("order__lead__assigned_to_id")
+            or row.get("costing_header__opportunity__lead__assigned_to_id")
+        )
+        owner_text = (
+            row.get("order__lead__owner")
+            or row.get("costing_header__opportunity__lead__owner")
+        )
+        identity = resolve_employee_identity(user_id=user_id, owner_text=owner_text, index=identity_index)
+        if identity["user_id"] is None and not owner_text:
+            continue
+        label = identity["canonical_name"]
+        grouped[label]["count"] += int(row["count"] or 0)
+        currency = (row.get("currency") or "").upper()
+        if currency in CURRENCIES:
+            grouped[label]["amounts"][currency] += _decimal(row["amount"])
+    ranked = sorted(grouped.items(), key=lambda item: (-item[1]["count"], item[0].lower()))[:limit]
+    return [
+        {
+            "label": label,
+            "count": values["count"],
+            "amounts": _currency_rows(values["amounts"]),
+        }
+        for label, values in ranked
+    ]
+
+
 def build_ceo_executive_context():
     today = timezone.localdate()
     month_start = today.replace(day=1)
@@ -165,30 +204,7 @@ def build_ceo_executive_context():
         ["customer__account_brand", "customer__contact_name"],
         lambda row: row.get("customer__account_brand") or row.get("customer__contact_name") or "No customer",
     )
-    top_salespeople = _ranked_invoice_people(
-        monthly_invoices,
-        [
-            "order__lead__assigned_to__username",
-            "order__lead__assigned_to__first_name",
-            "order__lead__assigned_to__last_name",
-            "costing_header__opportunity__lead__assigned_to__username",
-            "costing_header__opportunity__lead__assigned_to__first_name",
-            "costing_header__opportunity__lead__assigned_to__last_name",
-        ],
-        lambda row: " ".join(
-            filter(
-                None,
-                [
-                    row.get("order__lead__assigned_to__first_name")
-                    or row.get("costing_header__opportunity__lead__assigned_to__first_name"),
-                    row.get("order__lead__assigned_to__last_name")
-                    or row.get("costing_header__opportunity__lead__assigned_to__last_name"),
-                ],
-            )
-        ).strip()
-        or row.get("order__lead__assigned_to__username")
-        or row.get("costing_header__opportunity__lead__assigned_to__username"),
-    )
+    top_salespeople = _ranked_invoice_salespeople(monthly_invoices)
     top_production_managers = list(
         ProductionOrder.objects.filter(
             is_archived=False,

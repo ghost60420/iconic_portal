@@ -2,10 +2,15 @@ from collections import defaultdict
 from decimal import Decimal
 
 from django.db.models import Avg, Count, F, Max, Q, Sum
-from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from crm.models import CostingHeader, EmployeeProfile, Invoice, Lead, LeadActivity, Opportunity, ProductionOrder
+from crm.services.employee_identity import (
+    build_employee_identity_index,
+    employee_lead_ownership_q,
+    known_employee_owner_q,
+    resolve_employee_identity,
+)
 
 
 CURRENCIES = ("CAD", "USD", "BDT")
@@ -13,12 +18,7 @@ TERMINAL_LEAD_STATUSES = ("Converted", "Closed", "Disqualified", "Lost", "Unqual
 
 
 def _ownership_q(user, prefix=""):
-    names = {user.get_username(), user.get_full_name().strip()}
-    names.discard("")
-    query = Q(**{f"{prefix}assigned_to": user})
-    for name in names:
-        query |= Q(**{f"{prefix}owner__iexact": name})
-    return query
+    return employee_lead_ownership_q(user, prefix=prefix)
 
 
 def _currency_rows(values):
@@ -223,6 +223,7 @@ def build_team_performance():
     )
     user_ids = [profile.user_id for profile in sales_profiles]
     profile_by_user = {profile.user_id: profile for profile in sales_profiles}
+    identity_index = build_employee_identity_index(sales_profiles)
     rows = {
         user_id: {
             "profile": profile,
@@ -238,9 +239,14 @@ def build_team_performance():
         for user_id, profile in profile_by_user.items()
     }
     if user_ids:
+        known_sales_owner = known_employee_owner_q(index=identity_index)
+        lead_scope = Q(assigned_to_id__in=user_ids)
+        if known_sales_owner:
+            lead_scope |= Q(assigned_to__isnull=True) & known_sales_owner
         for row in (
-            Lead.objects.filter(is_archived=False, assigned_to_id__in=user_ids)
-            .values("assigned_to_id")
+            Lead.objects.filter(is_archived=False)
+            .filter(lead_scope)
+            .values("assigned_to_id", "owner")
             .annotate(
                 overdue=Count(
                     "id",
@@ -249,11 +255,22 @@ def build_team_performance():
                 ),
             )
         ):
-            rows[row["assigned_to_id"]]["overdue_followups"] = int(row["overdue"] or 0)
+            identity = resolve_employee_identity(
+                user_id=row["assigned_to_id"],
+                owner_text=row["owner"],
+                index=identity_index,
+            )
+            owner_id = identity["user_id"]
+            if owner_id in rows:
+                rows[owner_id]["overdue_followups"] += int(row["overdue"] or 0)
 
+        opportunity_scope = Q(lead__assigned_to_id__in=user_ids)
+        known_opportunity_owner = known_employee_owner_q(prefix="lead__", index=identity_index)
+        if known_opportunity_owner:
+            opportunity_scope |= Q(lead__assigned_to__isnull=True) & known_opportunity_owner
         opportunity_rows = list(
-            Opportunity.objects.filter(is_archived=False, lead__assigned_to_id__in=user_ids)
-            .values("lead__assigned_to_id", "order_currency")
+            Opportunity.objects.filter(is_archived=False).filter(opportunity_scope)
+            .values("lead__assigned_to_id", "lead__owner", "order_currency")
             .annotate(
                 total=Count("id"),
                 won=Count("id", filter=Q(stage="Closed Won")),
@@ -262,7 +279,14 @@ def build_team_performance():
             )
         )
         for row in opportunity_rows:
-            item = rows[row["lead__assigned_to_id"]]
+            identity = resolve_employee_identity(
+                user_id=row["lead__assigned_to_id"],
+                owner_text=row["lead__owner"],
+                index=identity_index,
+            )
+            if identity["user_id"] not in rows:
+                continue
+            item = rows[identity["user_id"]]
             item["opportunities"] += int(row["total"] or 0)
             item["won"] += int(row["won"] or 0)
             item["lost"] += int(row["lost"] or 0)
@@ -270,14 +294,23 @@ def build_team_performance():
             if currency in CURRENCIES:
                 item["revenue"][currency] += row["revenue"] or Decimal("0")
 
+        activity_scope = Q(user_id__in=user_ids) | Q(lead__assigned_to_id__in=user_ids)
+        known_activity_owner = known_employee_owner_q(prefix="lead__", index=identity_index)
+        if known_activity_owner:
+            activity_scope |= Q(lead__assigned_to__isnull=True) & known_activity_owner
         for row in (
             LeadActivity.objects.filter(activity_type="follow_up_sent")
-            .annotate(owner_id=Coalesce("user_id", "lead__assigned_to_id"))
-            .filter(owner_id__in=user_ids)
-            .values("owner_id")
+            .filter(activity_scope)
+            .values("user_id", "lead__assigned_to_id", "lead__owner")
             .annotate(total=Count("id"))
         ):
-            rows[row["owner_id"]]["completed_followups"] = int(row["total"] or 0)
+            identity = resolve_employee_identity(
+                user_id=row["user_id"] or row["lead__assigned_to_id"],
+                owner_text=row["lead__owner"],
+                index=identity_index,
+            )
+            if identity["user_id"] in rows:
+                rows[identity["user_id"]]["completed_followups"] += int(row["total"] or 0)
 
     team_rows = list(rows.values())
     for row in team_rows:
