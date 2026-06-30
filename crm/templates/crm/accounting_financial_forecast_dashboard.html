@@ -308,6 +308,7 @@
       </select>
     </div>
     <div class="ff-filter-actions">
+      {% if filter_values.can_include_archived %}<label><input type="checkbox" name="include_archived" value="1" {% if filter_values.include_archived %}checked{% endif %}> Include Archived</label>{% endif %}
       <button class="ff-btn ff-btn--gold" type="submit">Apply</button>
       <a class="ff-btn" href="{% url 'financial_forecast_dashboard' %}">Reset</a>
     </div>

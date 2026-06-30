@@ -29,8 +29,8 @@ class CanonicalEmployeeOwnershipTests(TestCase):
             "hossein-owner", first_name="Hossain", last_name="Forhad"
         )
         cls.hossein.groups.add(cls.sales_group)
-        cls.hossein.employee_profile.display_name = "Hossein Farhad"
-        cls.hossein.employee_profile.aliases = ["Hossein"]
+        cls.hossein.employee_profile.display_name = "Hossain"
+        cls.hossein.employee_profile.aliases = ["Hossein", "Hossein Farhad", "Hussain", "Farhad"]
         cls.hossein.employee_profile.save()
 
         cls.refat = User.objects.create_user(
@@ -96,8 +96,8 @@ class CanonicalEmployeeOwnershipTests(TestCase):
         self.client = Client()
 
     def test_alias_resolution_prioritizes_assigned_user_and_does_not_rewrite_history(self):
-        self.assertEqual(resolve_lead_owner(self.hossein_direct)["canonical_name"], "Hossein Farhad")
-        self.assertEqual(resolve_lead_owner(self.hossein_alias)["canonical_name"], "Hossein Farhad")
+        self.assertEqual(resolve_lead_owner(self.hossein_direct)["canonical_name"], "Hossain")
+        self.assertEqual(resolve_lead_owner(self.hossein_alias)["canonical_name"], "Hossain")
         self.assertEqual(resolve_lead_owner(self.refat_alias)["canonical_name"], "Md Refat")
         self.assertEqual(resolve_lead_owner(self.talha_alias)["canonical_name"], "Talha Akbar")
         self.refat_alias.refresh_from_db()
@@ -122,7 +122,7 @@ class CanonicalEmployeeOwnershipTests(TestCase):
         listed_ids = {lead.pk for lead in response.context["page_obj"].object_list}
         self.assertEqual(listed_ids, {self.refat_alias.pk})
         self.assertNotContains(response, "Hossain Forhad")
-        self.assertContains(response, "Hossein Farhad")
+        self.assertContains(response, "Hossain")
 
     def test_lead_dashboard_groups_aliases_into_one_canonical_card(self):
         self.client.force_login(self.ceo)
@@ -132,7 +132,7 @@ class CanonicalEmployeeOwnershipTests(TestCase):
             row["assigned_to__first_name"]: row["count"]
             for row in response.context["by_assigned"]
         }
-        self.assertEqual(grouped["Hossein Farhad"], 3)
+        self.assertEqual(grouped["Hossain"], 3)
         self.assertEqual(grouped["Md Refat"], 1)
         self.assertEqual(grouped["Talha Akbar"], 1)
         self.assertEqual(sum(grouped.values()), 6)
@@ -140,7 +140,7 @@ class CanonicalEmployeeOwnershipTests(TestCase):
     def test_team_workload_and_reports_use_canonical_identity(self):
         metrics = build_team_performance()
         rows = {row["name"]: row for row in metrics["team_rows"]}
-        self.assertEqual(set(rows), {"Hossein Farhad", "Md Refat", "Talha Akbar"})
+        self.assertEqual(set(rows), {"Hossain", "Md Refat", "Talha Akbar"})
         self.assertEqual(rows["Md Refat"]["won"], 1)
         self.assertEqual(rows["Md Refat"]["revenue"]["CAD"], Decimal("2500"))
 
@@ -156,8 +156,8 @@ class CanonicalEmployeeOwnershipTests(TestCase):
 
         hossein_response = self.client.get(reverse("employee_list"), {"q": "Hossein"})
         self.assertEqual(hossein_response.status_code, 200)
-        self.assertContains(hossein_response, "Hossein Farhad")
-        self.assertNotContains(hossein_response, "Hossain Forhad")
+        self.assertContains(hossein_response, "Hossain")
+        self.assertNotContains(hossein_response, "Hossein Farhad")
 
     def test_employee_management_saves_aliases_and_rejects_identity_conflicts(self):
         self.client.force_login(self.ceo)

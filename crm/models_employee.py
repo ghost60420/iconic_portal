@@ -105,6 +105,15 @@ class EmployeeProfile(models.Model):
     )
     profile_photo = models.ImageField(upload_to="employee_profiles/", null=True, blank=True)
     notes = models.TextField(blank=True, default="")
+    is_archived = models.BooleanField(default=False, db_index=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="archived_employee_profiles",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -152,8 +161,19 @@ class EmployeeProfile(models.Model):
         cache.delete(EMPLOYEE_IDENTITY_CACHE_KEY)
 
     @property
+    def full_name(self):
+        return self.user.get_full_name()
+
+    @property
     def public_name(self):
-        return self.display_name or self.user.first_name or self.user.get_username()
+        from crm.services.employee_identity import canonical_employee_name
+
+        return canonical_employee_name(
+            profile_display_name=self.display_name,
+            profile_full_name=self.full_name,
+            user_full_name=self.user.get_full_name(),
+            username=self.user.get_username(),
+        )
 
     @property
     def position_name(self):

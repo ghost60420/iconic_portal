@@ -68,6 +68,7 @@ class EmployeeProfileForm(forms.ModelForm):
         User = get_user_model()
         self.fields["manager"].queryset = User.objects.filter(
             is_active=True,
+            employee_profile__is_archived=False,
             employee_profile__status__in=EmployeeProfile.MENTIONABLE_STATUSES,
         ).exclude(pk=getattr(self.user_instance, "pk", None)).select_related("employee_profile").order_by(
             "employee_profile__display_name", "first_name", "username"
@@ -126,6 +127,18 @@ class EmployeeProfileForm(forms.ModelForm):
         if not full_name:
             raise forms.ValidationError("Enter the employee's full name.")
         return full_name
+
+    def clean_email(self):
+        email = (self.cleaned_data.get("email") or "").strip()
+        if not email:
+            return ""
+        User = get_user_model()
+        matches = User.objects.filter(email__iexact=email)
+        if self.user_instance:
+            matches = matches.exclude(pk=self.user_instance.pk)
+        if matches.exists():
+            raise forms.ValidationError("An employee account with this email already exists.")
+        return email
 
     def clean_display_name(self):
         display_name = " ".join((self.cleaned_data.get("display_name") or "").split())

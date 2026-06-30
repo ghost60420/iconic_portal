@@ -3,7 +3,7 @@
 {% block content %}
 <link rel="stylesheet" href="{% static 'crm/people.css' %}">
 <main class="people-shell">
-  <header class="people-head"><div class="people-identity">{% if not creating %}{% if profile.profile_photo %}<img class="people-avatar" src="{{ profile.profile_photo.url }}" alt="">{% else %}<span class="people-avatar">{{ profile.initials }}</span>{% endif %}{% endif %}<div><p class="people-eyebrow">People & Access</p><h1 class="people-title">{% if creating %}New Employee{% else %}{{ profile.public_name }}{% endif %}</h1>{% if not creating %}<p class="people-employee-number">{{ profile.employee_id }}</p>{% endif %}<p class="people-subtitle">Positions describe company structure. Permission roles control CRM access and can be combined.</p></div></div><div class="people-actions"><a class="people-btn" href="{% url 'employee_list' %}">Employees</a>{% if target_user.is_active and target_is_sales %}<a class="people-btn" href="{% url 'salesperson_profile_user' target_user.pk %}">Sales Profile</a>{% endif %}</div></header>
+  <header class="people-head"><div class="people-identity">{% if not creating %}{% if profile.profile_photo %}<img class="people-avatar" src="{{ profile.profile_photo.url }}" alt="">{% else %}<span class="people-avatar">{{ profile.initials }}</span>{% endif %}{% endif %}<div><p class="people-eyebrow">People & Access</p><h1 class="people-title">{% if creating %}New Employee{% else %}{{ profile.public_name }}{% endif %}</h1>{% if not creating %}<p class="people-employee-number">{{ profile.employee_id }}{% if profile.is_archived %} · Archived{% endif %}</p>{% endif %}<p class="people-subtitle">Positions describe company structure. Permission roles control CRM access and can be combined.</p></div></div><div class="people-actions"><a class="people-btn" href="{% url 'employee_list' %}">Employees</a>{% if target_user.is_active and target_is_sales and not profile.is_archived %}<a class="people-btn" href="{% url 'salesperson_profile_user' target_user.pk %}">Sales Profile</a>{% endif %}</div></header>
 
   {% if not creating %}
     <section class="people-card employee-profile-card">
@@ -32,6 +32,16 @@
     {% if form.non_field_errors %}<div class="people-field people-field--wide people-errors">{{ form.non_field_errors }}</div>{% endif %}
     <div class="people-field people-field--wide"><button class="people-btn people-btn--gold" type="submit">Save Employee</button></div>
   </form>
+
+  {% if not creating and can_archive_employees %}
+    <section class="people-card people-danger-zone">
+      <div><h2 class="sales-section-title">Employee Access</h2><p class="people-muted">Deactivation blocks CRM login. Archiving also removes the employee from active lists while preserving the employee ID and all historical records.</p></div>
+      <div class="people-actions">
+        {% if target_user.is_active and not profile.is_archived %}<form method="post" action="{% url 'employee_deactivate' target_user.pk %}" onsubmit="return confirm('Deactivate this employee and block CRM login?');">{% csrf_token %}<button class="people-btn" type="submit">Deactivate Employee</button></form>{% endif %}
+        {% if profile.is_archived %}<form method="post" action="{% url 'employee_restore' target_user.pk %}" onsubmit="return confirm('Restore this employee to the inactive employee directory?');">{% csrf_token %}<button class="people-btn" type="submit">Restore Employee</button></form>{% else %}<form method="post" action="{% url 'employee_archive' target_user.pk %}" onsubmit="return confirm('Archive this employee? Their ID and historical records will be preserved.');">{% csrf_token %}<button class="people-btn people-btn--danger" type="submit">Archive Employee</button></form>{% endif %}
+      </div>
+    </section>
+  {% endif %}
 
   {% if not creating %}
     <section class="people-detail-grid">

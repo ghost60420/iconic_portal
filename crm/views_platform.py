@@ -150,7 +150,7 @@ def system_health(request):
     if not (request.user.is_superuser or has_operations_role(request.user, ROLE_CEO)):
         return HttpResponseForbidden("CEO access required.")
     context = {
-        "employee_count": EmployeeProfile.objects.exclude(status=EmployeeProfile.STATUS_RESIGNED).count(),
+        "employee_count": EmployeeProfile.objects.filter(is_archived=False).exclude(status=EmployeeProfile.STATUS_RESIGNED).count(),
         "open_lead_count": Lead.objects.filter(is_archived=False).exclude(lead_status__in=("Converted", "Lost")).count(),
         "open_opportunity_count": Opportunity.objects.filter(is_archived=False, is_open=True).count(),
         "pending_approval_count": CostingHeader.objects.filter(is_archived=False, quotation_number__gt="", quotation_status="draft").count(),

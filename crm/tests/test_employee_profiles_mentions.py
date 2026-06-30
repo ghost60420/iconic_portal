@@ -47,10 +47,10 @@ class EmployeeProfileFeatureTests(TestCase):
             Group.objects.get_or_create(name=role)
 
         cls.hossein = cls.User.objects.create_user(
-            "hossein", first_name="Hossein", last_name="Forhad", email="hossein@example.com"
+            "hossein", first_name="Hossain", last_name="Forhad", email="hossein@example.com"
         )
         cls.hossein.groups.add(Group.objects.get(name="CEO"))
-        cls.hossein.employee_profile.display_name = "Hossein"
+        cls.hossein.employee_profile.display_name = "Hossain"
         cls.hossein.employee_profile.position = "ceo"
         cls.hossein.employee_profile.department = "management"
         cls.hossein.employee_profile.save()
@@ -88,7 +88,7 @@ class EmployeeProfileFeatureTests(TestCase):
     def test_profile_is_created_and_display_name_is_correct(self):
         user = self.User.objects.create_user("new-person", first_name="Nadia")
         self.assertEqual(user.employee_profile.display_name, "Nadia")
-        self.assertEqual(self.hossein.employee_profile.display_name, "Hossein")
+        self.assertEqual(self.hossein.employee_profile.display_name, "Hossain")
         self.assertNotEqual(self.hossein.employee_profile.display_name, "Hussain")
 
     def test_talha_is_salesperson_not_production(self):
@@ -225,8 +225,8 @@ class EmployeeProfileFeatureTests(TestCase):
             reverse("employee_edit", args=[self.hossein.pk]),
             {
                 "username": "hossein",
-                "full_name": "Hossein Forhad",
-                "display_name": "Hossein",
+                "full_name": "Hossain Forhad",
+                "display_name": "Hossain",
                 "email": "hossein@example.com",
                 "phone": "",
                 "employee_id": "",
@@ -403,7 +403,7 @@ class EmployeeProfileFeatureTests(TestCase):
         self.biplob.employee_profile.save(update_fields=["status"])
         response = self.client.get(reverse("employee_list"), {"status": "on_leave"})
         self.assertContains(response, "Biplob")
-        self.assertNotContains(response, "Hossein Forhad")
+        self.assertNotContains(response, "Hossain Forhad")
 
         response = self.client.get(
             reverse("employee_list"),
@@ -416,7 +416,7 @@ class EmployeeProfileFeatureTests(TestCase):
         self.client.force_login(self.hossein)
         self.assertContains(
             self.client.get(reverse("employee_list"), {"q": "hossein@example.com"}),
-            "Hossein",
+            "Hossain",
         )
         self.assertContains(
             self.client.get(reverse("employee_list"), {"q": "Active"}),
@@ -435,7 +435,7 @@ class EmployeeProfileFeatureTests(TestCase):
         self.assertContains(response, "Date Joined")
         self.assertContains(response, "Open Opportunities")
         self.assertContains(response, "Management Tree")
-        self.assertContains(response, "Hossein")
+        self.assertContains(response, "Hossain")
         self.assertContains(response, "Refat")
         self.assertContains(response, "Talha")
 
@@ -493,9 +493,9 @@ class ChatterMentionFeatureTests(TestCase):
         cls.sender.employee_profile.position = "sales_executive"
         cls.sender.employee_profile.department = "sales"
         cls.sender.employee_profile.save()
-        cls.recipient = cls.User.objects.create_user("hossein", first_name="Hossein")
+        cls.recipient = cls.User.objects.create_user("hossein", first_name="Hossain")
         cls.recipient.groups.add(cls.ceo_group)
-        cls.recipient.employee_profile.display_name = "Hossein"
+        cls.recipient.employee_profile.display_name = "Hossain"
         cls.recipient.employee_profile.position = "ceo"
         cls.recipient.employee_profile.department = "management"
         cls.recipient.employee_profile.save()
@@ -516,7 +516,7 @@ class ChatterMentionFeatureTests(TestCase):
     def test_suggestions_use_display_name_and_hide_inactive_users(self):
         response = self.client.get(reverse("mention_suggestions"), {"q": "Ho"})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["results"][0]["display_name"], "Hossein")
+        self.assertEqual(response.json()["results"][0]["display_name"], "Hossain")
         self.assertEqual(response.json()["results"][0]["position"], "CEO")
         self.assertEqual(response.json()["results"][0]["initials"], "H")
         self.assertIn("photo_url", response.json()["results"][0])
@@ -531,8 +531,8 @@ class ChatterMentionFeatureTests(TestCase):
         contains.employee_profile.save()
         response = self.client.get(reverse("mention_suggestions"), {"q": "Ho"})
         names = [row["display_name"] for row in response.json()["results"]]
-        self.assertEqual(names[0], "Hossein")
-        self.assertLess(names.index("Hossein"), names.index("Echo"))
+        self.assertEqual(names[0], "Hossain")
+        self.assertLess(names.index("Hossain"), names.index("Echo"))
         self.assertLessEqual(len(names), 10)
 
     def test_chatter_identity_uses_display_name_position_and_indicators(self):
@@ -540,12 +540,12 @@ class ChatterMentionFeatureTests(TestCase):
             lead=self.lead,
             author="refat@example.com",
             author_user=self.sender,
-            content="@Hossein update",
+            content="@Hossain update",
             pinned=True,
         )
         LeadComment.objects.filter(pk=comment.pk).update(created_at=timezone.now() - timedelta(minutes=2))
         comment.refresh_from_db()
-        comment.content = "@Hossein edited update"
+        comment.content = "@Hossain edited update"
         comment.save(update_fields=["content", "updated_at"])
         response = self.client.get(reverse("chatter_feed"))
         self.assertContains(response, "Refat")
@@ -560,10 +560,10 @@ class ChatterMentionFeatureTests(TestCase):
     def test_new_mention_creates_one_crm_notification_and_no_email(self, send_mail):
         response = self.client.post(
             reverse("chatter_feed"),
-            {"action": "add_chatter", "comment_text": "@Hossein please review", "link_type": "lead", "link_id": self.lead.pk},
+            {"action": "add_chatter", "comment_text": "@Hossain please review", "link_type": "lead", "link_id": self.lead.pk},
         )
         self.assertEqual(response.status_code, 302)
-        comment = LeadComment.objects.get(content__contains="@Hossein")
+        comment = LeadComment.objects.get(content__contains="@Hossain")
         item = AutomationNotification.objects.get(source_key=f"chatter-mention:{comment.pk}:user:{self.recipient.pk}")
         self.assertEqual(item.assigned_user, self.recipient)
         self.assertEqual(item.notification_type, "mention")
@@ -679,10 +679,10 @@ class ChatterMentionFeatureTests(TestCase):
         )
 
     def test_mention_highlighting_escapes_message_html(self):
-        rendered = str(highlight_mentions("<script>alert(1)</script> @Hossein"))
+        rendered = str(highlight_mentions("<script>alert(1)</script> @Hossain"))
         self.assertNotIn("<script>", rendered)
         self.assertIn("&lt;script&gt;", rendered)
-        self.assertIn('<span class="crm-mention">@Hossein</span>', rendered)
+        self.assertIn('<span class="crm-mention">@Hossain</span>', rendered)
 
     def test_mention_suggestions_have_bounded_queries(self):
         with CaptureQueriesContext(connection) as queries:
@@ -747,7 +747,8 @@ class SalespersonDashboardFeatureTests(TestCase):
             stage="Closed Won",
             is_open=False,
             order_currency="CAD",
-            order_value=Decimal("1000"),
+            order_value=Decimal("121000"),
+            order_value_usd=Decimal("1000"),
         )
         cls.won_usd = Opportunity.objects.create(
             lead=cls.converted_lead,
@@ -885,7 +886,7 @@ class TeamPerformanceDashboardTests(TestCase):
         cls.ceo_group = Group.objects.get_or_create(name="CEO")[0]
         cls.manager_group = Group.objects.get_or_create(name="Manager")[0]
         cls.sales_group = Group.objects.get_or_create(name="Sales")[0]
-        cls.ceo = User.objects.create_user("team-ceo", first_name="Hossein")
+        cls.ceo = User.objects.create_user("team-ceo", first_name="Hossain")
         cls.ceo.groups.add(cls.ceo_group)
         cls.manager = User.objects.create_user("team-manager", first_name="Refat")
         cls.manager.groups.add(cls.manager_group)
@@ -918,7 +919,8 @@ class TeamPerformanceDashboardTests(TestCase):
             stage="Closed Won",
             is_open=False,
             order_currency="CAD",
-            order_value=Decimal("3000"),
+            order_value=Decimal("363000"),
+            order_value_usd=Decimal("3000"),
         )
         Opportunity.objects.create(
             lead=lead,

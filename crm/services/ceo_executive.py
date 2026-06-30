@@ -164,7 +164,7 @@ def _ranked_invoice_salespeople(queryset, limit=5):
 def build_ceo_executive_context():
     today = timezone.localdate()
     month_start = today.replace(day=1)
-    live_invoices = Invoice.objects.exclude(status="cancelled")
+    live_invoices = Invoice.objects.filter(is_archived=False).exclude(status="cancelled")
 
     today_sales = _sum_by_currency(live_invoices.filter(issue_date=today), "total_amount")
     monthly_invoices = live_invoices.filter(issue_date__range=(month_start, today))

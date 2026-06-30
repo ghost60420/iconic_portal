@@ -416,7 +416,7 @@ def _can_archive_workflow_record(user):
 def _active_crm_user_options():
     User = get_user_model()
     return (
-        User.objects.filter(is_active=True)
+        User.objects.filter(is_active=True, employee_profile__is_archived=False)
         .order_by("first_name", "last_name", "username")
     )
 
@@ -1412,7 +1412,10 @@ def leads_list(request):
         qs = filtered
 
     users = list(
-        get_user_model().objects.select_related("employee_profile").all().order_by("first_name", "last_name", "username")
+        get_user_model().objects.select_related("employee_profile").filter(
+            is_active=True,
+            employee_profile__is_archived=False,
+        ).order_by("first_name", "last_name", "username")
     )
     identity_index = get_employee_identity_index()
     user_by_id = {user.pk: user for user in users}
@@ -1871,7 +1874,10 @@ def lead_research_start(request):
         messages.success(request, "Research job queued.")
         return redirect("lead_research_job_detail", job_id=job.pk)
 
-    users = get_user_model().objects.all().order_by("first_name", "last_name", "username")
+    users = get_user_model().objects.filter(
+        is_active=True,
+        employee_profile__is_archived=False,
+    ).order_by("first_name", "last_name", "username")
     return render(request, "crm/lead_research.html", {"users": users})
 
 
@@ -11078,6 +11084,7 @@ def _with_opportunity_kpi_value(qs, annotation_name="kpi_order_value"):
             annotation_name: Coalesce(
                 Subquery(approved_quick_value),
                 Subquery(latest_quick_value),
+                F("order_value_usd"),
                 F("order_value"),
                 models.Value(Decimal("0")),
                 output_field=models.DecimalField(max_digits=16, decimal_places=2),
@@ -11094,7 +11101,9 @@ def _sum_opportunity_kpi_value(qs):
             .get("total")
         )
     except (OperationalError, ProgrammingError):
-        return _ceo_decimal(qs.aggregate(total=Sum("order_value")).get("total"))
+        return _ceo_decimal(
+            qs.aggregate(total=Sum(Coalesce("order_value_usd", "order_value"))).get("total")
+        )
 
 
 def _ceo_inventory_label(key):
@@ -11431,7 +11440,7 @@ def ceo_operations_dashboard(request):
     finance_totals = _finance_totals(period_entries)
     prev_finance_totals = _finance_totals(prev_entries)
 
-    invoice_qs = Invoice.objects.exclude(status="cancelled") if Invoice is not None else None
+    invoice_qs = Invoice.objects.filter(is_archived=False).exclude(status="cancelled") if Invoice is not None else None
     if invoice_qs is not None and side:
         invoice_qs = invoice_qs.filter(Q(invoice_region=side) | Q(invoice_region="", currency="BDT" if side == "BD" else "CAD"))
     invoice_open_total = Decimal("0")
@@ -12251,7 +12260,7 @@ def ai_executive_advisor(request):
         elif (entry.direction or "").upper().strip() == "OUT":
             current_cash -= amount
 
-    invoice_qs = Invoice.objects.exclude(status="cancelled") if Invoice is not None else None
+    invoice_qs = Invoice.objects.filter(is_archived=False).exclude(status="cancelled") if Invoice is not None else None
     if invoice_qs is not None and side:
         invoice_qs = invoice_qs.filter(Q(invoice_region=side) | Q(invoice_region="", currency="BDT" if side == "BD" else "CAD"))
     invoice_open_total = Decimal("0")
@@ -12817,7 +12826,7 @@ def _build_daily_ceo_briefing_context(request):
     overdue_invoice_count = 0
     overdue_invoice_rows = []
     if Invoice is not None:
-        invoice_qs = Invoice.objects.exclude(status__in=["paid", "cancelled"]).select_related("customer", "order", "order__customer")
+        invoice_qs = Invoice.objects.filter(is_archived=False).exclude(status__in=["paid", "cancelled"]).select_related("customer", "order", "order__customer")
         if side:
             invoice_qs = invoice_qs.filter(Q(invoice_region=side) | Q(invoice_region="", currency="BDT" if side == "BD" else "CAD"))
         for invoice in invoice_qs.order_by("due_date", "-issue_date")[:1500]:
@@ -13688,7 +13697,7 @@ def main_dashboard(request):
     invoice_status_values = [0, 0, 0, 0]
     if Invoice is not None:
         try:
-            invoice_counts = Invoice.objects.aggregate(
+            invoice_counts = Invoice.objects.filter(is_archived=False).aggregate(
                 draft=Count("id", filter=Q(status="draft")),
                 sent=Count("id", filter=Q(status="sent")),
                 partial=Count("id", filter=Q(status="partial")),
@@ -13700,7 +13709,7 @@ def main_dashboard(request):
                 int(invoice_counts.get("partial") or 0),
                 int(invoice_counts.get("paid") or 0),
             ]
-            open_invoice_base = Invoice.objects.exclude(status__in=["paid", "cancelled"])
+            open_invoice_base = Invoice.objects.filter(is_archived=False).exclude(status__in=["paid", "cancelled"])
             outstanding_invoices_total = sum(
                 (
                     _ceo_invoice_balance_cad(invoice, cad_to_bdt)
@@ -13710,14 +13719,14 @@ def main_dashboard(request):
             )
             overdue_invoices_count = open_invoice_base.filter(due_date__lt=today).count()
             unpaid_invoices_count = open_invoice_base.filter(paid_amount__lte=0).count()
-            partial_payments_count = Invoice.objects.filter(status="partial").count()
-            pending_invoice_approvals = Invoice.objects.filter(invoice_status="DRAFT").count()
+            partial_payments_count = Invoice.objects.filter(is_archived=False, status="partial").count()
+            pending_invoice_approvals = Invoice.objects.filter(is_archived=False, invoice_status="DRAFT").count()
             outstanding_invoices = list(
                 open_invoice_base.select_related("customer", "order").order_by("due_date", "-issue_date")[:5]
             )
             draft_invoices = list(
                 Invoice.objects.select_related("customer", "order")
-                .filter(invoice_status="DRAFT")
+                .filter(is_archived=False, invoice_status="DRAFT")
                 .order_by("-created_at")[:4]
             )
         except Exception:
@@ -14561,7 +14570,15 @@ def opportunities_list(request):
         qs = qs.filter(kpi_order_value__lte=value_max)
 
     today = timezone.localdate()
-    summary = qs.aggregate(pipeline_value=Sum("kpi_order_value"))
+    summary = qs.aggregate(
+        pipeline_cad=Sum("kpi_order_value", filter=Q(order_currency="CAD")),
+        pipeline_usd=Sum("kpi_order_value", filter=Q(order_currency="USD")),
+        pipeline_bdt=Sum("kpi_order_value", filter=Q(order_currency="BDT")),
+    )
+    pipeline_values = [
+        {"currency": currency, "amount": summary.get(f"pipeline_{currency.lower()}") or Decimal("0")}
+        for currency in ("CAD", "USD", "BDT")
+    ]
     due_followups = qs.filter(next_followup__isnull=False, next_followup__lte=today).count()
 
     if sort == "old":
@@ -14583,7 +14600,7 @@ def opportunities_list(request):
         "page_obj": page_obj,
         "per_page": per_page,
         "stage_choices": Opportunity.STAGE_CHOICES,
-        "pipeline_value": summary.get("pipeline_value") or 0,
+        "pipeline_values": pipeline_values,
         "due_followups": due_followups,
         "visible_count": len(page_obj.object_list),
         "archive_filter": archive_filter,

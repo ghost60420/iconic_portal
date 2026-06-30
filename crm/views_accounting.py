@@ -53,6 +53,15 @@ from .models import (
     ProductionOrder,
 )
 
+
+def _finance_invoice_archive_scope(queryset, filters):
+    return queryset if filters.get("include_archived") else queryset.filter(is_archived=False)
+
+
+def _finance_payment_archive_scope(queryset, filters):
+    return queryset if filters.get("include_archived") else queryset.filter(invoice__is_archived=False)
+
+
 from .forms import (
     AccountingEntryForm,
     AccountingEntryAttachForm,
@@ -62,6 +71,7 @@ from .forms import (
     BDStaffMonthForm,
 )
 from .permissions import can_view_internal_costing, get_access, operations_group_names, role_flag_decision
+from .services.operations_permissions import can_archive_invoices
 
 try:
     from .models import AccountingMonthLock
@@ -1277,17 +1287,21 @@ def _exec_health_score(total_revenue, total_received, total_receivables, total_p
 @login_required
 def executive_financial_dashboard(request):
     today = timezone.localdate()
+    can_include_archived = can_archive_invoices(request.user)
     filters = {
         "date_from": _parse_pl_date(request.GET.get("date_from")),
         "date_to": _parse_pl_date(request.GET.get("date_to")),
         "currency": (request.GET.get("currency") or "").strip().upper(),
         "side": (request.GET.get("side") or "").strip().upper(),
+        "include_archived": can_include_archived and (request.GET.get("include_archived") or "") == "1",
     }
     filter_values = {
         "date_from": filters["date_from"].isoformat() if filters["date_from"] else "",
         "date_to": filters["date_to"].isoformat() if filters["date_to"] else "",
         "currency": filters["currency"],
         "side": filters["side"],
+        "include_archived": filters["include_archived"],
+        "can_include_archived": can_include_archived,
     }
 
     accounting_qs = (
@@ -1334,7 +1348,9 @@ def executive_financial_dashboard(request):
     )
     cash_flow = cash_in - cash_out
 
-    invoice_qs = Invoice.objects.exclude(status="cancelled").select_related("customer", "order", "order__customer")
+    invoice_qs = _finance_invoice_archive_scope(
+        Invoice.objects.exclude(status="cancelled").select_related("customer", "order", "order__customer"), filters
+    )
     if filters["date_from"]:
         invoice_qs = invoice_qs.filter(issue_date__gte=filters["date_from"])
     if filters["date_to"]:
@@ -1345,7 +1361,9 @@ def executive_financial_dashboard(request):
     if filters["side"]:
         invoices = [invoice for invoice in invoices if _exec_invoice_side(invoice) == filters["side"]]
 
-    payment_qs = InvoicePayment.objects.select_related("invoice", "invoice__customer", "production_order", "accounting_entry")
+    payment_qs = _finance_payment_archive_scope(
+        InvoicePayment.objects.select_related("invoice", "invoice__customer", "production_order", "accounting_entry"), filters
+    )
     if filters["date_from"]:
         payment_qs = payment_qs.filter(payment_date__gte=filters["date_from"])
     if filters["date_to"]:
@@ -1659,18 +1677,22 @@ def _bs_monthly_rows(entries):
 
 @login_required
 def balance_sheet_dashboard(request):
+    can_include_archived = can_archive_invoices(request.user)
     today = timezone.localdate()
     filters = {
         "date_from": _parse_pl_date(request.GET.get("date_from")),
         "date_to": _parse_pl_date(request.GET.get("date_to")),
         "currency": (request.GET.get("currency") or "").strip().upper(),
         "side": (request.GET.get("side") or "").strip().upper(),
+        "include_archived": can_include_archived and (request.GET.get("include_archived") or "") == "1",
     }
     filter_values = {
         "date_from": filters["date_from"].isoformat() if filters["date_from"] else "",
         "date_to": filters["date_to"].isoformat() if filters["date_to"] else "",
         "currency": filters["currency"],
         "side": filters["side"],
+        "include_archived": filters["include_archived"],
+        "can_include_archived": can_include_archived,
     }
 
     accounting_qs = (
@@ -1715,7 +1737,9 @@ def balance_sheet_dashboard(request):
     )
     inventory_value = _bs_inventory_value_cad(filters)
 
-    invoice_qs = Invoice.objects.exclude(status="cancelled").select_related("customer", "order", "order__customer")
+    invoice_qs = _finance_invoice_archive_scope(
+        Invoice.objects.exclude(status="cancelled").select_related("customer", "order", "order__customer"), filters
+    )
     if filters["date_from"]:
         invoice_qs = invoice_qs.filter(issue_date__gte=filters["date_from"])
     if filters["date_to"]:
@@ -1923,6 +1947,7 @@ def _cf_monthly_rows(entries):
 
 @login_required
 def cash_flow_dashboard(request):
+    can_include_archived = can_archive_invoices(request.user)
     today = timezone.localdate()
     forecast_end = today + timedelta(days=30)
     filters = {
@@ -1932,6 +1957,7 @@ def cash_flow_dashboard(request):
         "side": (request.GET.get("side") or "").strip().upper(),
         "customer_id": (request.GET.get("customer") or "").strip(),
         "supplier": (request.GET.get("supplier") or "").strip(),
+        "include_archived": can_include_archived and (request.GET.get("include_archived") or "") == "1",
     }
     filter_values = {
         "date_from": filters["date_from"].isoformat() if filters["date_from"] else "",
@@ -1940,6 +1966,8 @@ def cash_flow_dashboard(request):
         "side": filters["side"],
         "customer": filters["customer_id"],
         "supplier": filters["supplier"],
+        "include_archived": filters["include_archived"],
+        "can_include_archived": can_include_archived,
     }
 
     base_qs = (
@@ -2000,7 +2028,12 @@ def cash_flow_dashboard(request):
     net_cash_flow = sum((_cf_signed_amount(entry) for entry in period_entries), Decimal("0"))
     closing_cash_balance = opening_cash_balance + net_cash_flow
 
-    invoice_qs = Invoice.objects.exclude(status="cancelled").select_related("customer", "order", "order__customer").filter(due_date__gte=today, due_date__lte=forecast_end)
+    invoice_qs = _finance_invoice_archive_scope(
+        Invoice.objects.exclude(status="cancelled").select_related("customer", "order", "order__customer").filter(
+            due_date__gte=today, due_date__lte=forecast_end
+        ),
+        filters,
+    )
     if filters["currency"]:
         invoice_qs = invoice_qs.filter(currency=filters["currency"])
     if filters["customer_id"]:
@@ -2502,7 +2535,9 @@ def _kpi_row_totals(rows):
 
 def _kpi_ar_open(filters, date_to):
     cad_to_bdt = _bs_latest_cad_to_bdt()
-    qs = Invoice.objects.exclude(status="cancelled").select_related("customer", "order", "order__customer")
+    qs = _finance_invoice_archive_scope(
+        Invoice.objects.exclude(status="cancelled").select_related("customer", "order", "order__customer"), filters
+    )
     if date_to:
         qs = qs.filter(issue_date__lte=date_to)
     if filters["currency"]:
@@ -2517,7 +2552,9 @@ def _kpi_ar_open(filters, date_to):
 
 
 def _kpi_average_collection_days(filters, date_from, date_to):
-    qs = InvoicePayment.objects.select_related("invoice", "invoice__customer", "production_order", "accounting_entry")
+    qs = _finance_payment_archive_scope(
+        InvoicePayment.objects.select_related("invoice", "invoice__customer", "production_order", "accounting_entry"), filters
+    )
     if date_from:
         qs = qs.filter(payment_date__gte=date_from)
     if date_to:
@@ -2580,6 +2617,7 @@ def _kpi_monthly_trends(rows):
 
 @login_required
 def kpi_scorecard_dashboard(request):
+    can_include_archived = can_archive_invoices(request.user)
     today = timezone.localdate()
     date_from, date_to = _kpi_date_range(request, today)
     filters = {
@@ -2589,6 +2627,7 @@ def kpi_scorecard_dashboard(request):
         "side": (request.GET.get("side") or "").strip().upper(),
         "customer_id": (request.GET.get("customer") or "").strip(),
         "product_category": (request.GET.get("product_category") or "").strip(),
+        "include_archived": can_include_archived and (request.GET.get("include_archived") or "") == "1",
     }
     filter_values = {
         "date_from": date_from.isoformat() if date_from else "",
@@ -2597,6 +2636,8 @@ def kpi_scorecard_dashboard(request):
         "side": filters["side"],
         "customer": filters["customer_id"],
         "product_category": filters["product_category"],
+        "include_archived": filters["include_archived"],
+        "can_include_archived": can_include_archived,
     }
 
     month_start = date(date_to.year, date_to.month, 1)
@@ -2817,10 +2858,11 @@ def _ff_product_category_from_order(order):
 def _ff_open_invoice_rows(filters, today, horizon_days):
     end_day = today + timedelta(days=horizon_days)
     cad_to_bdt = _bs_latest_cad_to_bdt()
-    qs = (
+    qs = _finance_invoice_archive_scope(
         Invoice.objects.exclude(status="cancelled")
         .select_related("customer", "order", "order__customer", "order__product", "order__opportunity")
-        .filter(Q(due_date__lte=end_day) | Q(due_date__isnull=True, issue_date__lte=end_day))
+        .filter(Q(due_date__lte=end_day) | Q(due_date__isnull=True, issue_date__lte=end_day)),
+        filters,
     )
     if filters["currency"]:
         qs = qs.filter(currency=filters["currency"])
@@ -3052,6 +3094,7 @@ def _ff_side_rows(history_rows, cash_rows, invoice_rows, payable_rows, history_d
 
 @login_required
 def financial_forecast_dashboard(request):
+    can_include_archived = can_archive_invoices(request.user)
     today = timezone.localdate()
     selected_horizon = _ff_int(request.GET.get("horizon"), 90)
     filters = {
@@ -3060,6 +3103,7 @@ def financial_forecast_dashboard(request):
         "side": (request.GET.get("side") or "").strip().upper(),
         "customer_id": (request.GET.get("customer") or "").strip(),
         "product_category": (request.GET.get("product_category") or "").strip(),
+        "include_archived": can_include_archived and (request.GET.get("include_archived") or "") == "1",
     }
     filter_values = {
         "horizon": str(selected_horizon),
@@ -3067,6 +3111,8 @@ def financial_forecast_dashboard(request):
         "side": filters["side"],
         "customer": filters["customer_id"],
         "product_category": filters["product_category"],
+        "include_archived": filters["include_archived"],
+        "can_include_archived": can_include_archived,
     }
 
     history_start = today - timedelta(days=FF_HISTORY_DAYS - 1)

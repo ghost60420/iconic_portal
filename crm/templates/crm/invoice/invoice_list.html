@@ -1,7 +1,7 @@
 {% extends "crm/base.html" %}
 {% load humanize crm_extras %}
 {% block content %}
-<nav class="crm-archive-switch" aria-label="Invoice archive"><a href="?archive=active">Active</a><a href="?archive=archived">Archived</a></nav>
+{% if can_archive_invoices %}<nav class="crm-archive-switch" aria-label="Invoice archive"><a href="?archive=active">Active</a><a href="?archive=archived">Archived</a><a href="?archive=all">All</a></nav>{% endif %}
 
 <style>
   :root{
@@ -316,6 +316,7 @@
           <option value="paid" {% if paid == "paid" %}selected{% endif %}>Paid only</option>
           <option value="unpaid" {% if paid == "unpaid" %}selected{% endif %}>Unpaid only</option>
         </select>
+        {% if can_archive_invoices %}<select class="ctrl sm" name="archive"><option value="active" {% if archive_filter == 'active' %}selected{% endif %}>Active invoices</option><option value="archived" {% if archive_filter == 'archived' %}selected{% endif %}>Archived invoices</option><option value="all" {% if archive_filter == 'all' %}selected{% endif %}>All invoices</option></select>{% endif %}
         <input class="ctrl sm" type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}" aria-label="Issue date from">
         <input class="ctrl sm" type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}" aria-label="Issue date to">
         <button class="pill gold" type="submit">Apply</button>
@@ -379,6 +380,10 @@
                   <a class="link" href="{% url 'invoice_view' inv.pk %}">View</a>
                   <span class="muted"> / </span>
                   <a class="link" href="{% url 'invoice_view' inv.pk %}#payment-received-form">Payment</a>
+                  {% if can_archive_invoices and not inv.is_archived %}
+                    <span class="muted"> / </span>
+                    {% if inv.paid_amount %}<span class="muted" title="This invoice has payments recorded. Archive is not allowed unless payment is reversed first.">Archive blocked</span>{% else %}<form method="post" action="{% url 'invoice_archive' inv.pk %}" style="display:inline;" onsubmit="return confirm('Archive this unpaid invoice? It will be removed from active invoice lists and reports.');">{% csrf_token %}<button class="link" type="submit" style="border:0;background:none;padding:0;">Archive</button></form>{% endif %}
+                  {% endif %}
                 </td>
 
               </tr>

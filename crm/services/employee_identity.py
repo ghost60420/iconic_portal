@@ -35,7 +35,8 @@ def _profile_payload(profile):
     display_name = " ".join((profile.display_name or "").split())
     canonical_name = canonical_employee_name(
         profile_display_name=display_name,
-        profile_full_name=full_name,
+        profile_full_name=profile.full_name,
+        user_full_name=full_name,
         username=user.get_username(),
     )
     aliases = [" ".join(str(value or "").split()) for value in (profile.aliases or [])]

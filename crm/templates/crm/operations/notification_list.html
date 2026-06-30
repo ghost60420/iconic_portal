@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load static %}
+{% load static crm_people %}
 
 {% block content %}
 <link rel="stylesheet" href="{% static 'crm/operations_control.css' %}">
@@ -73,7 +73,7 @@
                 <span>Notification #{{ item.pk }}</span>
                 <span>{{ item.get_rule_type_display|default:item.rule_type|title }}</span>
                 {% if item.record_label %}<span>{{ item.record_label }}</span>{% endif %}
-                {% if item.assigned_user %}<span>Assigned to {{ item.assigned_user.get_full_name|default:item.assigned_user.username }}</span>{% elif item.assigned_role %}<span>Assigned to {{ item.assigned_role }}</span>{% endif %}
+                {% if item.assigned_user %}<span>Assigned to {{ item.assigned_user|employee_name }}</span>{% elif item.assigned_role %}<span>Assigned to {{ item.assigned_role }}</span>{% endif %}
                 {% if item.due_date %}<span>Due {{ item.due_date|date:"M d, Y" }}</span>{% endif %}
               </div>
             </article>

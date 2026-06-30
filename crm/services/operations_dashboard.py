@@ -188,7 +188,7 @@ def operations_dashboard_context(user, *, today=None):
 
     if can_access_operations_module(user, "invoices"):
         overdue_queryset = (
-            Invoice.objects.select_related("customer")
+            Invoice.objects.select_related("customer").filter(is_archived=False)
             .exclude(status__in=["paid", "cancelled"])
             .filter(due_date__lt=today, total_amount__gt=F("paid_amount"))
         )
@@ -212,7 +212,7 @@ def operations_dashboard_context(user, *, today=None):
             }
         )
 
-        drafts = Invoice.objects.filter(invoice_status="DRAFT").only("id", "invoice_number", "issue_date")[:8]
+        drafts = Invoice.objects.filter(is_archived=False, invoice_status="DRAFT").only("id", "invoice_number", "issue_date")[:8]
         for invoice in drafts:
             pending_approvals.append(
                 {

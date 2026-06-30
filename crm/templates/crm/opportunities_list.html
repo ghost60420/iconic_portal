@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load static crm_people %}
+{% load static crm_people crm_extras %}
 
 {% block content %}
 <link rel="stylesheet" href="{% static 'crm/opportunities_list.css' %}?v=workflow-thumbs-20260602">
@@ -29,9 +29,9 @@
       <small>{% if request.GET.status == "all" %}All visible stages{% elif request.GET.status == "closed_won" %}Closed won filter{% elif request.GET.status == "closed_lost" %}Closed lost filter{% else %}Active pipeline focus{% endif %}</small>
     </article>
     <article class="opp-stat">
-      <span>Pipeline value</span>
-      <strong>{{ pipeline_value|floatformat:0 }}</strong>
-      <small>Order value total for the current filters.</small>
+      <span>Estimated pipeline by currency</span>
+      {% for row in pipeline_values %}<strong>{{ row.amount|finance_money:row.currency }}</strong>{% endfor %}
+      <small>Native order amounts for the current filters; currencies are not combined.</small>
     </article>
     <article class="opp-stat">
       <span>Due follow-ups</span>
@@ -217,12 +217,12 @@
               <td data-label="Value">
                 <div class="opp-value-stack">
                   {% if opp.kpi_order_value %}
-                    <strong>BDT {{ opp.kpi_order_value|floatformat:0 }}</strong>
+                    <strong>{{ opp.kpi_order_value|finance_money:opp.order_currency }}</strong>
                   {% else %}
                     <strong class="opp-muted">Value not set</strong>
                   {% endif %}
-                  {% if opp.order_value_usd %}
-                    <span>USD {{ opp.order_value_usd|floatformat:0 }}</span>
+                  {% if opp.order_value and opp.order_value_usd %}
+                    <span>Converted: {{ opp.order_value|finance_money:"BDT" }}</span>
                   {% endif %}
                   {% if opp.moq_units %}
                     <span>{{ opp.moq_units }} units</span>

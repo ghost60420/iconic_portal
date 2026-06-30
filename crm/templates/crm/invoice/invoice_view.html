@@ -72,6 +72,7 @@
     color:#111827;
     border-color:rgba(255,215,128,0.55);
   }
+  .pill.danger{ background:#7f1d1d; color:#fff; border-color:#b91c1c; }
 
   .cardx{
     background:linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
@@ -423,6 +424,7 @@
           {% if invoice.due_date %} | Due {{ invoice.due_date|date:"Y-m-d" }}{% endif %}
           {% if cur %} | Currency {{ cur }}{% endif %}
         </div>
+        {% if invoice.is_archived %}<div class="status s-cancelled">Archived</div>{% endif %}
       </div>
 
       <div class="btnbar noPrint">
@@ -447,10 +449,24 @@
           {% if lifecycle %}
             <a class="pill" href="{% url 'order_lifecycle_detail' lifecycle.pk %}">Lifecycle</a>
           {% endif %}
+          {% if can_archive_invoice and not invoice.is_archived %}
+            {% if invoice_has_payments %}
+              <span class="pill" title="This invoice has payments recorded. Archive is not allowed unless payment is reversed first.">Archive blocked</span>
+            {% else %}
+              <form method="post" action="{% url 'invoice_archive' invoice.pk %}" style="display:inline;" onsubmit="return confirm('Archive this unpaid invoice? It will be removed from active invoice lists and reports.');">
+                {% csrf_token %}
+                <button type="submit" class="pill danger" style="cursor:pointer;">Archive Invoice</button>
+              </form>
+            {% endif %}
+          {% endif %}
         {% endif %}
         <a class="pill" href="#" onclick="window.print();return false;">Print</a>
       </div>
     </div>
+
+    {% if can_archive_invoice and invoice_has_payments and not invoice.is_archived %}
+      <div class="pay-alert pay-alert--warn noPrint">This invoice has payments recorded. Archive is not allowed unless payment is reversed first.</div>
+    {% endif %}
 
     {% include "crm/partials/workflow_quick_nav.html" %}
     {% include "crm/partials/workflow_order_summary.html" %}

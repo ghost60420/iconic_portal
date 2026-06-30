@@ -2,6 +2,7 @@ from collections import defaultdict
 from decimal import Decimal
 
 from django.db.models import Avg, Count, F, Max, Q, Sum
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from crm.models import CostingHeader, EmployeeProfile, Invoice, Lead, LeadActivity, Opportunity, ProductionOrder
@@ -15,6 +16,11 @@ from crm.services.employee_identity import (
 
 CURRENCIES = ("CAD", "USD", "BDT")
 TERMINAL_LEAD_STATUSES = ("Converted", "Closed", "Disqualified", "Lost", "Unqualified")
+
+
+def _native_opportunity_value():
+    """Return the amount in ``order_currency``; ``order_value`` is the BDT conversion."""
+    return Coalesce("order_value_usd", "order_value")
 
 
 def _ownership_q(user, prefix=""):
@@ -82,17 +88,17 @@ def build_salesperson_profile(user):
     pipeline_filter = Q(is_open=True) & ~Q(stage__in=("Closed Won", "Closed Lost"))
     opportunity_rows = list(
         opportunities.values(currency=F("order_currency")).annotate(
-            won_amount=Sum("order_value", filter=won_filter),
-            won_average=Avg("order_value", filter=won_filter),
+            won_amount=Sum(_native_opportunity_value(), filter=won_filter),
+            won_average=Avg(_native_opportunity_value(), filter=won_filter),
             won_count=Count("id", filter=won_filter),
-            monthly_amount=Sum("order_value", filter=won_filter & won_this_month_filter),
-            monthly_average=Avg("order_value", filter=won_filter & won_this_month_filter),
+            monthly_amount=Sum(_native_opportunity_value(), filter=won_filter & won_this_month_filter),
+            monthly_average=Avg(_native_opportunity_value(), filter=won_filter & won_this_month_filter),
             monthly_count=Count("id", filter=won_filter & won_this_month_filter),
-            lost_month_amount=Sum("order_value", filter=lost_month_filter),
-            lost_month_average=Avg("order_value", filter=lost_month_filter),
+            lost_month_amount=Sum(_native_opportunity_value(), filter=lost_month_filter),
+            lost_month_average=Avg(_native_opportunity_value(), filter=lost_month_filter),
             lost_month_count=Count("id", filter=lost_month_filter),
-            pipeline_amount=Sum("order_value", filter=pipeline_filter),
-            pipeline_average=Avg("order_value", filter=pipeline_filter),
+            pipeline_amount=Sum(_native_opportunity_value(), filter=pipeline_filter),
+            pipeline_average=Avg(_native_opportunity_value(), filter=pipeline_filter),
             pipeline_count=Count("id", filter=pipeline_filter),
             lost_count=Count("id", filter=lost_filter),
             open_count=Count("id", filter=pipeline_filter),
@@ -145,7 +151,7 @@ def build_salesperson_profile(user):
         month=Count("id", filter=Q(created_at__date__gte=month_start, created_at__date__lte=today)),
     )
 
-    invoices = Invoice.objects.exclude(status="cancelled").filter(
+    invoices = Invoice.objects.filter(is_archived=False).exclude(status="cancelled").filter(
         Q(order__lead__in=owned_leads)
         | Q(order__opportunity__in=opportunities)
         | Q(costing_header__opportunity__in=opportunities)
@@ -216,7 +222,7 @@ def build_employee_sales_statistics(user):
 
 def build_team_performance():
     sales_profiles = list(
-        EmployeeProfile.objects.filter(user__groups__name="Sales")
+        EmployeeProfile.objects.filter(user__groups__name="Sales", is_archived=False)
         .select_related("user", "manager", "manager__employee_profile")
         .distinct()
         .order_by("display_name", "user__username")
@@ -275,7 +281,7 @@ def build_team_performance():
                 total=Count("id"),
                 won=Count("id", filter=Q(stage="Closed Won")),
                 lost=Count("id", filter=Q(stage="Closed Lost")),
-                revenue=Sum("order_value", filter=Q(stage="Closed Won")),
+                revenue=Sum(_native_opportunity_value(), filter=Q(stage="Closed Won")),
             )
         )
         for row in opportunity_rows:
@@ -344,6 +350,7 @@ def build_team_performance():
 
     status_profiles = list(
         EmployeeProfile.objects.filter(
+            is_archived=False,
             status__in=(EmployeeProfile.STATUS_ON_LEAVE, EmployeeProfile.STATUS_SUSPENDED)
         ).select_related("user").order_by("display_name", "user__username")
     )

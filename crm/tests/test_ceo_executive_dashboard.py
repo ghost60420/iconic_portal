@@ -39,7 +39,7 @@ class CEOExecutiveDashboardTests(TestCase):
             first_name="Hossain",
             last_name="Forhad",
         )
-        self.manager.employee_profile.display_name = "Hossein Farhad"
+        self.manager.employee_profile.display_name = "Hossain"
         self.manager.employee_profile.aliases = ["Hossein", "Hossain", "Hossain Forhad"]
         self.manager.employee_profile.save()
         self.client.force_login(self.ceo)
@@ -149,7 +149,7 @@ class CEOExecutiveDashboardTests(TestCase):
         self.assertContains(response, "\u09F33,000.00 BDT")
         self.assertContains(response, "Executive Customer")
         self.assertContains(response, "Sales")
-        self.assertContains(response, "Hossein Farhad")
+        self.assertContains(response, "Hossain")
         self.assertNotContains(response, "Hossain Forhad")
         self.assertContains(response, self.order.order_code)
         self.assertIn("ceo-dashboard;dur=", response.headers["Server-Timing"])

@@ -11,12 +11,15 @@ from django.db.models import Q
 from django.db.models.functions import Lower
 from django.http import HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from crm.forms_employee import EmployeeProfileForm
 from crm.models import EmployeeProfile
 from crm.services.chatter_mentions import mention_suggestions
 from crm.services.employee_profiles import (
     build_employee_timeline,
+    can_archive_employees,
     can_manage_employees,
     can_manage_roles,
     can_view_sales_profile,
@@ -94,11 +97,21 @@ def employee_list(request):
         return HttpResponseForbidden("Employee profiles are restricted to authorized management users.")
     query = (request.GET.get("q") or "").strip()[:100]
     status_filter = (request.GET.get("status") or "").strip()
+    archive_filter = (request.GET.get("archive") or "active").strip().lower()
+    can_archive = can_archive_employees(request.user)
+    if archive_filter not in {"active", "archived", "all"}:
+        archive_filter = "active"
+    if archive_filter != "active" and not can_archive:
+        return HttpResponseForbidden("Archived employee profiles are restricted to CEO and Admin users.")
     sort = (request.GET.get("sort") or "name").strip()
     direction = "desc" if request.GET.get("direction") == "desc" else "asc"
     profiles = EmployeeProfile.objects.select_related(
         "user", "manager", "manager__employee_profile", "position_ref", "department_ref"
     ).prefetch_related("user__groups")
+    if archive_filter == "archived":
+        profiles = profiles.filter(is_archived=True)
+    elif archive_filter != "all":
+        profiles = profiles.filter(is_archived=False)
     if query:
         query_key = query.casefold()
         position_values = [
@@ -158,10 +171,12 @@ def employee_list(request):
             "page_obj": page,
             "query": query,
             "status_filter": status_filter,
+            "archive_filter": archive_filter,
             "sort": sort,
             "direction": direction,
             "status_choices": EmployeeProfile.STATUS_CHOICES,
             "can_manage_roles": can_manage_roles(request.user),
+            "can_archive_employees": can_archive,
             "can_view_team_performance": can_view_team_performance(request.user),
         },
     )
@@ -225,7 +240,9 @@ def employee_edit(request, user_id):
         before = original_snapshot
         before_roles = group_names(target_user)
         requested_active = form.requested_user_active()
-        if target_user == request.user and not requested_active:
+        if profile.is_archived and requested_active:
+            form.add_error("is_active", "Restore this employee before enabling CRM login.")
+        elif target_user == request.user and not requested_active:
             form.add_error("is_active", "You cannot deactivate your own account.")
         elif (
             target_user.is_active
@@ -279,8 +296,105 @@ def employee_edit(request, user_id):
             "management_chain": management_chain,
             "direct_reports": direct_reports,
             "employee_statistics": employee_statistics,
+            "can_archive_employees": can_archive_employees(request.user),
         },
     )
+
+
+def _employee_access_action_error(actor, target_user):
+    if target_user.pk == actor.pk:
+        return "You cannot deactivate or archive your own account."
+    if target_user.is_superuser and not actor.is_superuser:
+        return "Only a superuser can deactivate or archive another superuser account."
+    if (
+        target_user.is_active
+        and target_user.groups.filter(name=ROLE_CEO).exists()
+        and Group.objects.filter(name=ROLE_CEO, user__is_active=True).count() <= 1
+    ):
+        return "The last active CEO account cannot be deactivated or archived."
+    return ""
+
+
+@login_required
+@require_POST
+def employee_deactivate(request, user_id):
+    if not can_archive_employees(request.user):
+        return HttpResponseForbidden("Only CEO and Admin users can deactivate employees.")
+    profile = get_object_or_404(EmployeeProfile.objects.select_related("user"), user_id=user_id)
+    target_user = profile.user
+    error = _employee_access_action_error(request.user, target_user)
+    if error:
+        messages.error(request, error)
+        return redirect("employee_edit", user_id=target_user.pk)
+    if profile.is_archived:
+        messages.error(request, "Restore this employee before changing active access.")
+        return redirect("employee_edit", user_id=target_user.pk)
+    with transaction.atomic():
+        was_active = target_user.is_active
+        previous_status = profile.get_status_display()
+        target_user.is_active = False
+        target_user.save(update_fields=["is_active"])
+        profile.status = EmployeeProfile.STATUS_INACTIVE
+        profile.save(update_fields=["status", "updated_at"])
+        if was_active:
+            employee_audit(request.user, target_user, "active", "Active", "Inactive")
+        employee_audit(request.user, target_user, "status", previous_status, "Inactive")
+    messages.success(request, f"{profile.public_name} has been deactivated and can no longer sign in.")
+    return redirect("employee_edit", user_id=target_user.pk)
+
+
+@login_required
+@require_POST
+def employee_archive(request, user_id):
+    if not can_archive_employees(request.user):
+        return HttpResponseForbidden("Only CEO and Admin users can archive employees.")
+    profile = get_object_or_404(EmployeeProfile.objects.select_related("user"), user_id=user_id)
+    target_user = profile.user
+    error = _employee_access_action_error(request.user, target_user)
+    if error:
+        messages.error(request, error)
+        return redirect("employee_edit", user_id=target_user.pk)
+    if profile.is_archived:
+        messages.info(request, f"{profile.public_name} is already archived.")
+        return redirect("employee_edit", user_id=target_user.pk)
+    with transaction.atomic():
+        was_active = target_user.is_active
+        previous_status = profile.get_status_display()
+        target_user.is_active = False
+        target_user.save(update_fields=["is_active"])
+        profile.status = EmployeeProfile.STATUS_INACTIVE
+        profile.is_archived = True
+        profile.archived_at = timezone.now()
+        profile.archived_by = request.user
+        profile.save(update_fields=["status", "is_archived", "archived_at", "archived_by", "updated_at"])
+        if was_active:
+            employee_audit(request.user, target_user, "active", "Active", "Inactive")
+        employee_audit(request.user, target_user, "status", previous_status, "Inactive")
+        employee_audit(request.user, target_user, "archived", "Active directory", "Archived")
+    messages.success(request, f"{profile.public_name} has been archived. Historical records were preserved.")
+    return redirect("employee_list")
+
+
+@login_required
+@require_POST
+def employee_restore(request, user_id):
+    if not can_archive_employees(request.user):
+        return HttpResponseForbidden("Only CEO and Admin users can restore employees.")
+    profile = get_object_or_404(EmployeeProfile.objects.select_related("user"), user_id=user_id)
+    if not profile.is_archived:
+        messages.info(request, f"{profile.public_name} is not archived.")
+        return redirect("employee_edit", user_id=profile.user_id)
+    with transaction.atomic():
+        profile.is_archived = False
+        profile.archived_at = None
+        profile.archived_by = None
+        profile.save(update_fields=["is_archived", "archived_at", "archived_by", "updated_at"])
+        employee_audit(request.user, profile.user, "archived", "Archived", "Active directory")
+    messages.success(
+        request,
+        f"{profile.public_name} has been restored to the employee directory. CRM login remains disabled until reactivated.",
+    )
+    return redirect("employee_edit", user_id=profile.user_id)
 
 
 @login_required
