@@ -471,7 +471,7 @@ def operations_queue(request, queue_key):
         if not can_access_operations_module(request.user, "invoices"):
             return HttpResponseForbidden("Invoice access is required.")
         title = "Invoices Overdue"
-        queryset = Invoice.objects.select_related("customer").exclude(status__in=["paid", "cancelled"]).filter(
+        queryset = Invoice.objects.select_related("customer").filter(is_archived=False).exclude(status__in=["paid", "cancelled"]).filter(
             due_date__lt=today,
             total_amount__gt=F("paid_amount"),
         )
@@ -578,6 +578,7 @@ def role_management(request):
                         user
                         for user in role.user_set.all()
                         if user.is_active
+                        and not user.employee_profile.is_archived
                         and user.employee_profile.status in EmployeeProfile.MENTIONABLE_STATUSES
                     ),
                     key=lambda user: user.get_username().lower(),
@@ -601,6 +602,7 @@ def role_management(request):
             "role_rows": role_rows,
             "users": User.objects.filter(
                 is_active=True,
+                employee_profile__is_archived=False,
                 employee_profile__status__in=EmployeeProfile.MENTIONABLE_STATUSES,
             ).select_related("employee_profile").order_by("first_name", "last_name", "username"),
             "permission_catalog": permission_catalog,

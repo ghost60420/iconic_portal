@@ -4,6 +4,7 @@ from django.db import transaction
 from django.urls import reverse
 
 from crm.models import CRMAuditLog
+from crm.services.employee_identity import canonical_employee_name
 from crm.services.operations_permissions import (
     ROLE_ADMIN,
     ROLE_CEO,
@@ -21,7 +22,9 @@ def employee_display_name(user):
     cached_profile = getattr(getattr(user, "_state", None), "fields_cache", {}).get("employee_profile")
     if cached_profile is not None:
         display_name = cached_profile.display_name
+        profile_full_name = cached_profile.full_name
     else:
+        profile_full_name = ""
         cache_key = f"crm-employee-display:{user.pk}"
         display_name = cache.get(cache_key)
         if display_name is None:
@@ -29,7 +32,12 @@ def employee_display_name(user):
 
             display_name = EmployeeProfile.objects.filter(user_id=user.pk).values_list("display_name", flat=True).first() or ""
             cache.set(cache_key, display_name, 300)
-    return display_name or user.first_name or user.get_username()
+    return canonical_employee_name(
+        profile_display_name=display_name,
+        profile_full_name=profile_full_name,
+        user_full_name=user.get_full_name(),
+        username=user.get_username(),
+    )
 
 
 def build_employee_timeline(profile):
@@ -115,6 +123,17 @@ def can_manage_roles(user):
         and (
             user.is_superuser
             or user.is_staff
+            or has_operations_role(user, ROLE_CEO, ROLE_ADMIN)
+        )
+    )
+
+
+def can_archive_employees(user):
+    return bool(
+        user
+        and user.is_authenticated
+        and (
+            user.is_superuser
             or has_operations_role(user, ROLE_CEO, ROLE_ADMIN)
         )
     )

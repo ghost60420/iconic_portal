@@ -11,6 +11,7 @@ from crm.services.operations_permissions import (
     ROLE_ADMIN,
     ROLE_DIRECTOR,
     ROLE_HR,
+    can_archive_invoices,
     can_access_operations_module,
     has_operations_role,
     scope_sales_leads,
@@ -156,7 +157,10 @@ def search_operations_records(user, query, *, limit=10, include_opportunities=Tr
         ]))
 
     if can_access_operations_module(user, "invoices"):
-        rows = Invoice.objects.select_related("customer").filter(is_archived=False).filter(
+        invoice_rows = Invoice.objects.select_related("customer")
+        if not can_archive_invoices(user):
+            invoice_rows = invoice_rows.filter(is_archived=False)
+        rows = invoice_rows.filter(
             Q(invoice_number__icontains=query)
             | Q(customer__account_brand__icontains=query)
             | Q(customer__contact_name__icontains=query)
@@ -168,7 +172,7 @@ def search_operations_records(user, query, *, limit=10, include_opportunities=Tr
                 "type": "Invoice",
                 "number": row.invoice_number,
                 "name": (row.customer.account_brand if row.customer else "") or "Invoice customer",
-                "status": row.get_status_display(),
+                "status": f"Archived · {row.get_status_display()}" if row.is_archived else row.get_status_display(),
                 "date": row.issue_date,
                 "amount": format_finance_money(row.total_amount, row.currency),
                 "url": reverse("invoice_view", args=[row.pk]),
@@ -188,7 +192,8 @@ def search_operations_records(user, query, *, limit=10, include_opportunities=Tr
         if alias_profile_ids:
             employee_filter |= Q(pk__in=alias_profile_ids)
         rows = EmployeeProfile.objects.select_related("user", "position_ref", "department_ref").filter(
-            employee_filter
+            employee_filter,
+            is_archived=False,
         ).order_by("display_name", "user__username")[:limit]
         groups.append(("Employees", [
             {

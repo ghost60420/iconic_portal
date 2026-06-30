@@ -478,6 +478,7 @@
       </label>
     </div>
     <div class="ar-filter-actions">
+      {% if filter_values.can_include_archived %}<label class="ar-check"><input type="checkbox" name="include_archived" value="1" {% if filter_values.include_archived %}checked{% endif %}> Include Archived</label>{% endif %}
       <button class="ar-btn ar-btn--gold" type="submit">Apply filters</button>
       <a class="ar-btn" href="{% url 'accounts_receivable_dashboard' %}">Reset</a>
     </div>

@@ -12,6 +12,7 @@ from django.db import transaction
 from django.db.models import F, Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils.dateparse import parse_date
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -33,6 +34,7 @@ from .permissions import can_view_internal_costing, get_access
 from .services.costing_workflow import CostingWorkflowError, create_or_link_production_order_from_invoice
 from .services.order_lifecycle import build_lifecycle_profit_breakdown, create_lifecycle_from_invoice
 from .services.workflow_visibility import build_workflow_visibility_context
+from .services.operations_permissions import can_archive_invoices
 
 
 DEFAULT_INVOICE_TERMS = """For bulk orders, 50% advance confirms the order and 50% is due before shipment.
@@ -137,6 +139,20 @@ def can_manage_invoice_settings(user):
     except Exception:
         return False
     return bool(getattr(access, "can_accounting_ca", False) or getattr(access, "can_accounting_bd", False))
+
+
+def can_archive_invoice(user):
+    return can_archive_invoices(user)
+
+
+def _invoice_archive_scope(queryset, archive_filter="active"):
+    if archive_filter == "all":
+        return queryset
+    return queryset.filter(is_archived=archive_filter == "archived")
+
+
+def _invoice_payment_archive_scope(queryset, include_archived=False):
+    return queryset if include_archived else queryset.filter(invoice__is_archived=False)
 
 
 def _invoice_settings():
@@ -1010,6 +1026,7 @@ def invoice_settings_preview(request, preview_type):
 @login_required
 @user_passes_test(superuser_only)
 def accounts_receivable_dashboard(request):
+    can_include_archived = can_archive_invoice(request.user)
     filters = {
         "date_from": _parse_ar_date(request.GET.get("date_from")),
         "date_to": _parse_ar_date(request.GET.get("date_to")),
@@ -1018,6 +1035,7 @@ def accounts_receivable_dashboard(request):
         "currency": (request.GET.get("currency") or "").strip().upper(),
         "side": (request.GET.get("side") or "").strip().upper(),
         "production_linked": (request.GET.get("production_linked") or "") == "1",
+        "include_archived": can_include_archived and (request.GET.get("include_archived") or "") == "1",
     }
     filter_values = {
         "date_from": filters["date_from"].isoformat() if filters["date_from"] else "",
@@ -1027,9 +1045,14 @@ def accounts_receivable_dashboard(request):
         "currency": filters["currency"],
         "side": filters["side"],
         "production_linked": filters["production_linked"],
+        "include_archived": filters["include_archived"],
+        "can_include_archived": can_include_archived,
     }
 
-    invoices_qs = Invoice.objects.select_related("order", "customer")
+    invoices_qs = _invoice_archive_scope(
+        Invoice.objects.select_related("order", "customer"),
+        "all" if filters["include_archived"] else "active",
+    )
     invoices_qs = _apply_ar_invoice_filters(invoices_qs, filters)
     invoice_rows = list(invoices_qs.order_by("due_date", "-issue_date", "-created_at"))
 
@@ -1039,6 +1062,7 @@ def accounts_receivable_dashboard(request):
         "production_order",
         "accounting_entry",
     )
+    payments_qs = _invoice_payment_archive_scope(payments_qs, filters["include_archived"])
     payments_qs = _apply_ar_payment_filters(payments_qs, filters)
     payment_rows = list(payments_qs.order_by("-payment_date", "-id"))
 
@@ -1208,14 +1232,15 @@ def invoice_list(request):
     customer_id = (request.GET.get("customer") or "").strip()
     paid_filter = (request.GET.get("paid") or "").strip()
     archive_filter = (request.GET.get("archive") or "active").strip().lower()
+    can_archive = can_archive_invoice(request.user)
+    if archive_filter not in {"active", "archived", "all"}:
+        archive_filter = "active"
+    if archive_filter != "active" and not can_archive:
+        return HttpResponse("Archived invoices are restricted to CEO, Admin, and Accounts Manager users.", status=403)
     date_from = parse_date((request.GET.get("date_from") or "").strip())
     date_to = parse_date((request.GET.get("date_to") or "").strip())
 
-    invoices = Invoice.objects.select_related("order", "customer")
-    if archive_filter == "archived":
-        invoices = invoices.filter(is_archived=True)
-    elif archive_filter != "all":
-        invoices = invoices.filter(is_archived=False)
+    invoices = _invoice_archive_scope(Invoice.objects.select_related("order", "customer"), archive_filter)
 
     if q:
         invoices = invoices.filter(
@@ -1273,21 +1298,25 @@ def invoice_list(request):
     ]
 
     today = timezone.localdate()
+    payment_summary_qs = InvoicePayment.objects.all()
+    if archive_filter != "all":
+        payment_summary_qs = payment_summary_qs.filter(invoice__is_archived=archive_filter == "archived")
+    invoice_summary_qs = _invoice_archive_scope(Invoice.objects.all(), archive_filter)
     monthly_received = (
-        InvoicePayment.objects.filter(payment_date__year=today.year, payment_date__month=today.month)
+        payment_summary_qs.filter(payment_date__year=today.year, payment_date__month=today.month)
         .aggregate(total=Sum("amount"))["total"]
         or Decimal("0")
     )
     bd_received_total = (
-        Invoice.objects.filter(Q(invoice_region="BD") | Q(currency="BDT")).aggregate(total=Sum("paid_amount"))["total"]
+        invoice_summary_qs.filter(Q(invoice_region="BD") | Q(currency="BDT")).aggregate(total=Sum("paid_amount"))["total"]
         or Decimal("0")
     )
     bd_unpaid_balance = sum(
-        (_d(inv.balance) for inv in Invoice.objects.filter(Q(invoice_region="BD") | Q(currency="BDT"))),
+        (_d(inv.balance) for inv in invoice_summary_qs.filter(Q(invoice_region="BD") | Q(currency="BDT"))),
         Decimal("0"),
     )
     production_received_rows = list(
-        InvoicePayment.objects.filter(production_order__isnull=False)
+        payment_summary_qs.filter(production_order__isnull=False)
         .values("production_order__order_code", "production_order__title")
         .annotate(received_bdt=Sum("amount_bdt"), received_original=Sum("amount"))
         .order_by("-received_bdt")[:8]
@@ -1304,6 +1333,7 @@ def invoice_list(request):
             "customer": customer_id,
             "paid": paid_filter,
             "archive_filter": archive_filter,
+            "can_archive_invoices": can_archive,
             "date_from": date_from,
             "date_to": date_to,
             "customers": Customer.objects.order_by("account_brand", "contact_name", "id"),
@@ -1649,9 +1679,35 @@ def invoice_view(request, pk):
             "invoice_layout_title": _invoice_layout_title(inv),
             "crm_refs": _invoice_crm_references(inv),
             "deposit_terms": _invoice_deposit_terms(inv),
+            "can_archive_invoice": can_archive_invoice(request.user),
+            "invoice_has_payments": bool(payment_history or _d(inv.paid_amount) > 0),
             **workflow_visibility,
         },
     )
+
+
+@login_required
+@require_POST
+def invoice_archive(request, pk):
+    if not can_archive_invoice(request.user):
+        return HttpResponse("Only CEO, Admin, and Accounts Manager users can archive invoices.", status=403)
+    with transaction.atomic():
+        invoice = get_object_or_404(Invoice.objects.select_for_update(), pk=pk)
+        if invoice.is_archived:
+            messages.info(request, f"Invoice {invoice.invoice_number} is already archived.")
+            return redirect("invoice_view", pk=invoice.pk)
+        if _d(invoice.paid_amount) > 0 or invoice.payments.exists():
+            messages.error(
+                request,
+                "This invoice has payments recorded. Archive is not allowed unless payment is reversed first.",
+            )
+            return redirect("invoice_view", pk=invoice.pk)
+        invoice.is_archived = True
+        invoice.archived_at = timezone.now()
+        invoice.archived_by = request.user
+        invoice.save(update_fields=["is_archived", "archived_at", "archived_by", "updated_at"])
+    messages.success(request, f"Invoice {invoice.invoice_number} has been archived. Payment history was preserved.")
+    return redirect(f"{reverse('invoice_list')}?archive=archived")
 
 
 @login_required

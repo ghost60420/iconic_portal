@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load humanize %}
+{% load humanize crm_people %}
 {% block content %}
 
 <style>
@@ -203,7 +203,7 @@
                     </td>
 
                     <td class="nowrap">
-                      {% if r.changed_by %}{{ r.changed_by.username }}{% else %}-{% endif %}
+                      {% if r.changed_by %}{{ r.changed_by|employee_name }}{% else %}-{% endif %}
                     </td>
 
                     <td class="descWrap">

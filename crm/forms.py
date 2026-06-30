@@ -200,7 +200,10 @@ class LeadForm(forms.ModelForm):
                 self.fields["product_interest"].choices.append((current_value, current_value))
 
         if "assigned_to" in self.fields:
-            self.fields["assigned_to"].queryset = get_user_model().objects.all().order_by("first_name", "last_name", "username")
+            self.fields["assigned_to"].queryset = get_user_model().objects.filter(
+                is_active=True,
+                employee_profile__is_archived=False,
+            ).order_by("first_name", "last_name", "username")
             self.fields["assigned_to"].required = False
             self.fields["assigned_to"].empty_label = "Unassigned"
             self.fields["assigned_to"].widget.attrs.update({"class": "form-control"})
@@ -263,7 +266,10 @@ class QuickOutboundLeadForm(forms.ModelForm):
         if "product_interest" in self.fields:
             self.fields["product_interest"].choices = [("", "Select an interest")] + list(lead_product_interest_choices())
         if "assigned_to" in self.fields:
-            self.fields["assigned_to"].queryset = get_user_model().objects.all().order_by("first_name", "last_name", "username")
+            self.fields["assigned_to"].queryset = get_user_model().objects.filter(
+                is_active=True,
+                employee_profile__is_archived=False,
+            ).order_by("first_name", "last_name", "username")
 
 # --------------------------------------------------
 # Library forms

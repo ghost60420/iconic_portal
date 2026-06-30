@@ -329,6 +329,7 @@
       </select>
     </div>
     <div class="exec-filter-actions">
+      {% if filter_values.can_include_archived %}<label><input type="checkbox" name="include_archived" value="1" {% if filter_values.include_archived %}checked{% endif %}> Include Archived</label>{% endif %}
       <button class="exec-btn exec-btn--gold" type="submit">Apply</button>
       <a class="exec-btn" href="{% url 'executive_financial_dashboard' %}">Reset</a>
     </div>

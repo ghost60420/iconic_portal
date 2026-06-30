@@ -30,7 +30,7 @@ from crm.services.platform_tools import record_descriptor, track_recent_record
 class PlatformControlCenterTests(TestCase):
     def setUp(self):
         self.User = get_user_model()
-        self.ceo = self.User.objects.create_user("platform-ceo", password="test-pass", first_name="Hossein")
+        self.ceo = self.User.objects.create_user("platform-ceo", password="test-pass", first_name="Hossain")
         self.sales = self.User.objects.create_user("platform-sales", password="test-pass", first_name="Talha")
         self.other = self.User.objects.create_user("platform-other", password="test-pass", first_name="Other")
         self.admin = self.User.objects.create_user("platform-admin", password="test-pass", first_name="Admin")

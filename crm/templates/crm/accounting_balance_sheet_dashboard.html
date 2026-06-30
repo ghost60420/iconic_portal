@@ -294,6 +294,7 @@
       </select>
     </div>
     <div class="bs-filter-actions">
+      {% if filter_values.can_include_archived %}<label><input type="checkbox" name="include_archived" value="1" {% if filter_values.include_archived %}checked{% endif %}> Include Archived</label>{% endif %}
       <button class="bs-btn bs-btn--gold" type="submit">Apply</button>
       <a class="bs-btn" href="{% url 'balance_sheet_dashboard' %}">Reset</a>
     </div>

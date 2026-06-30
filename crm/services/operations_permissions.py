@@ -259,6 +259,19 @@ def has_operations_role(user, *roles):
     return bool(operations_role_names(user).intersection(roles))
 
 
+def can_archive_invoices(user):
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    if user.is_superuser or has_operations_role(user, ROLE_CEO, ROLE_ADMIN):
+        return True
+    try:
+        profile = user.employee_profile
+    except Exception:
+        return False
+    position_code = profile.position_ref.code if profile.position_ref_id else profile.position
+    return position_code == "accounts_manager"
+
+
 def role_flag_decision(user, flag_name):
     if not user or not getattr(user, "is_authenticated", False):
         return False
