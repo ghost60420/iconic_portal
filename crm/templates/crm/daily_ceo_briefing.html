@@ -1,4 +1,5 @@
 {% extends "crm/base.html" %}
+{% load crm_people %}
 {% block content %}
 
 <style>
@@ -371,13 +372,7 @@
                           {% endif %}
                         </td>
                         <td>
-                          {% if lead.assigned_to %}
-                            {% with full_name=lead.assigned_to.get_full_name %}
-                              {% if full_name %}{{ full_name }}{% else %}{{ lead.assigned_to.username }}{% endif %}
-                            {% endwith %}
-                          {% else %}
-                            Unassigned
-                          {% endif %}
+                          {{ lead|canonical_lead_owner }}
                         </td>
                       </tr>
                     {% endfor %}

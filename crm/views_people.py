@@ -26,6 +26,7 @@ from crm.services.employee_profiles import (
     group_names,
     set_employee_roles,
 )
+from crm.services.employee_identity import employee_profile_ids_matching
 from crm.services.operations_permissions import (
     ROLE_ADMIN,
     ROLE_CEO,
@@ -45,6 +46,7 @@ def _profile_snapshot(profile):
     return {
         "full_name": user.get_full_name(),
         "display_name": profile.display_name,
+        "aliases": ", ".join(profile.aliases or []),
         "email": user.email,
         "phone": profile.phone,
         "employee_id": profile.employee_id or "",
@@ -64,7 +66,7 @@ def _audit_snapshot_changes(actor, target_user, before, after):
 def _apply_profile_form(profile, form):
     draft = form.save(commit=False)
     for field_name in (
-        "display_name", "phone", "position_ref", "department_ref", "status",
+        "display_name", "aliases", "phone", "position_ref", "department_ref", "status",
         "manager", "profile_photo", "notes",
     ):
         setattr(profile, field_name, getattr(draft, field_name))
@@ -118,6 +120,9 @@ def employee_list(request):
             | Q(user__email__icontains=query)
             | Q(employee_id__icontains=query)
         )
+        alias_profile_ids = employee_profile_ids_matching(query)
+        if alias_profile_ids:
+            search_filter |= Q(pk__in=alias_profile_ids)
         search_filter |= Q(position_ref__name__icontains=query) | Q(department_ref__name__icontains=query)
         if position_values:
             search_filter |= Q(position__in=position_values)

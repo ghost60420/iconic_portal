@@ -11,6 +11,7 @@ from crm.services.employee_profiles import (
     can_view_team_performance,
     employee_display_name,
 )
+from crm.services.employee_identity import resolve_lead_owner
 from crm.services.operations_permissions import ROLE_SALES, has_operations_role
 
 
@@ -26,6 +27,11 @@ def employee_name(user):
 def employee_initials(user):
     name = employee_display_name(user).strip()
     return (name[:1] or "?").upper()
+
+
+@register.filter
+def canonical_lead_owner(lead):
+    return resolve_lead_owner(lead)["canonical_name"]
 
 
 @register.filter

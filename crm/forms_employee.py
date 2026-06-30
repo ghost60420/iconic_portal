@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 
 from crm.models import Department, EmployeeProfile, Position
+from crm.services.employee_identity import alias_conflicts
 
 
 class EmployeeProfileForm(forms.ModelForm):
@@ -26,6 +27,11 @@ class EmployeeProfileForm(forms.ModelForm):
     full_name = forms.CharField(max_length=300)
     email = forms.EmailField(required=False)
     is_active = forms.BooleanField(required=False)
+    aliases = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3}),
+        help_text="Enter one historical name per line or separate names with commas.",
+    )
     roles = forms.ModelMultipleChoiceField(
         queryset=Group.objects.none(),
         required=False,
@@ -36,6 +42,7 @@ class EmployeeProfileForm(forms.ModelForm):
         model = EmployeeProfile
         fields = [
             "display_name",
+            "aliases",
             "phone",
             "position_ref",
             "department_ref",
@@ -92,6 +99,7 @@ class EmployeeProfileForm(forms.ModelForm):
             self.fields["email"].initial = self.user_instance.email
             self.fields["is_active"].initial = self.user_instance.is_active
             self.fields["roles"].initial = self.user_instance.groups.all()
+            self.initial["aliases"] = "\n".join(self.instance.aliases or [])
             if not self.instance.position_ref_id and self.instance.position:
                 code = self.POSITION_ALIASES.get(self.instance.position, self.instance.position)
                 self.fields["position_ref"].initial = Position.objects.filter(code=code).first()
@@ -126,6 +134,22 @@ class EmployeeProfileForm(forms.ModelForm):
         if "@" in display_name:
             raise forms.ValidationError("Display name cannot contain @.")
         return display_name
+
+    def clean_aliases(self):
+        raw_aliases = (self.cleaned_data.get("aliases") or "").replace(",", "\n").splitlines()
+        aliases = []
+        seen = set()
+        for value in raw_aliases:
+            alias = " ".join(value.split())
+            key = alias.casefold()
+            if alias and key not in seen:
+                seen.add(key)
+                aliases.append(alias)
+        conflicts = alias_conflicts(aliases, exclude_profile_id=getattr(self.instance, "pk", None))
+        if conflicts:
+            details = ", ".join(f"{alias} ({employee})" for alias, employee in conflicts)
+            raise forms.ValidationError(f"These aliases already identify another employee: {details}.")
+        return aliases
 
     def clean_position_ref(self):
         value = self.cleaned_data.get("position_ref")

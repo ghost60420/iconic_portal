@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load static %}
+{% load static crm_people %}
 {% block content %}
 <link rel="stylesheet" href="{% static 'crm/production_list.css' %}?v=production-kpi-badges-20260603">
 
@@ -410,11 +410,8 @@
                       {% elif order.opportunity and order.opportunity.assigned_to %}
                         <strong>{{ order.opportunity.assigned_to }}</strong>
                         <span>Opportunity owner</span>
-                      {% elif order.lead and order.lead.assigned_to %}
-                        <strong>{{ order.lead.assigned_to }}</strong>
-                        <span>Lead owner</span>
-                      {% elif order.lead and order.lead.owner %}
-                        <strong>{{ order.lead.owner }}</strong>
+                      {% elif order.lead %}
+                        <strong>{{ order.lead|canonical_lead_owner }}</strong>
                         <span>Lead owner</span>
                       {% else %}
                         <strong>-</strong>

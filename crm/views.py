@@ -93,6 +93,14 @@ from .services.chatter_permissions import (
     visible_chatter_comments,
 )
 from .services.employee_profiles import employee_display_name
+from .services.employee_identity import (
+    employee_lead_ownership_q,
+    employee_profile_ids_matching,
+    get_employee_identity_index,
+    known_employee_owner_q,
+    resolve_employee_identity,
+    resolve_lead_owner,
+)
 from .services.calendar_notifications import (
     calendar_event_signature,
     queue_calendar_invite_email,
@@ -977,10 +985,7 @@ def _lead_list_status_payload(lead, today=None):
     return "new", "New"
 
 def _lead_assigned_to_label(lead):
-    user = getattr(lead, "assigned_to", None)
-    if user:
-        return user.get_full_name() or user.first_name or user.username or user.email or f"User {user.pk}"
-    return "Unassigned"
+    return resolve_lead_owner(lead)["canonical_name"]
 
 def _decorate_leads_for_list(leads, today=None):
     today = today or timezone.localdate()
@@ -1308,7 +1313,13 @@ def leads_list(request):
         qs = qs.filter(market__iexact=market)
 
     if owner:
-        qs = qs.filter(Q(owner__icontains=owner))
+        matching_profile_ids = employee_profile_ids_matching(owner)
+        owner_filter = Q(owner__icontains=owner)
+        for profile_id in matching_profile_ids:
+            profile_payload = get_employee_identity_index()["by_profile_id"].get(profile_id)
+            if profile_payload:
+                owner_filter |= employee_lead_ownership_q(profile_payload["user_id"])
+        qs = qs.filter(owner_filter)
 
     created_from = parse_date(created_from_raw) if created_from_raw else None
     created_to = parse_date(created_to_raw) if created_to_raw else None
@@ -1400,7 +1411,11 @@ def leads_list(request):
             filtered.append(lead)
         qs = filtered
 
-    users = list(get_user_model().objects.all().order_by("first_name", "last_name", "username"))
+    users = list(
+        get_user_model().objects.select_related("employee_profile").all().order_by("first_name", "last_name", "username")
+    )
+    identity_index = get_employee_identity_index()
+    user_by_id = {user.pk: user for user in users}
 
     def build_assignee_url(value):
         params = request.GET.copy()
@@ -1413,7 +1428,7 @@ def leads_list(request):
         return f"{request.path}?{query}" if query else request.path
 
     def display_user(user):
-        return user.get_full_name() or user.username or user.email or f"User {user.pk}"
+        return resolve_employee_identity(user_id=user.pk, index=identity_index)["canonical_name"]
 
     def count_assignees(source):
         if isinstance(source, list):
@@ -1421,8 +1436,9 @@ def leads_list(request):
             counts = defaultdict(int)
             unassigned = 0
             for lead in source:
-                if lead.assigned_to_id:
-                    counts[lead.assigned_to_id] += 1
+                identity = resolve_lead_owner(lead, index=identity_index)
+                if identity["user_id"]:
+                    counts[identity["user_id"]] += 1
                 else:
                     unassigned += 1
             return total, dict(counts), unassigned
@@ -1430,11 +1446,16 @@ def leads_list(request):
         total = source.count()
         counts = {}
         unassigned = 0
-        for row in source.order_by().values("assigned_to_id").annotate(count=Count("id", distinct=True)):
-            if row["assigned_to_id"]:
-                counts[row["assigned_to_id"]] = row["count"]
+        for row in source.order_by().values("assigned_to_id", "owner").annotate(count=Count("id", distinct=True)):
+            identity = resolve_employee_identity(
+                user_id=row["assigned_to_id"],
+                owner_text=row["owner"],
+                index=identity_index,
+            )
+            if identity["user_id"]:
+                counts[identity["user_id"]] = counts.get(identity["user_id"], 0) + row["count"]
             else:
-                unassigned = row["count"]
+                unassigned += row["count"]
         return total, counts, unassigned
 
     assignee_total, assignee_counts, unassigned_count = count_assignees(qs)
@@ -1497,19 +1518,28 @@ def leads_list(request):
 
     if assigned_to_unassigned:
         if isinstance(qs, list):
-            qs = [lead for lead in qs if lead.assigned_to_id is None]
+            qs = [lead for lead in qs if resolve_lead_owner(lead, index=identity_index)["user_id"] is None]
         else:
-            qs = qs.filter(assigned_to__isnull=True)
+            qs = qs.filter(assigned_to__isnull=True).exclude(known_employee_owner_q(index=identity_index))
     elif assigned_to_id:
+        selected_user = user_by_id.get(assigned_to_id)
         if isinstance(qs, list):
-            qs = [lead for lead in qs if lead.assigned_to_id == assigned_to_id]
+            qs = [
+                lead for lead in qs
+                if resolve_lead_owner(lead, index=identity_index)["user_id"] == assigned_to_id
+            ]
         else:
-            qs = qs.filter(assigned_to_id=assigned_to_id)
+            qs = qs.filter(employee_lead_ownership_q(selected_user or assigned_to_id, index=identity_index))
     elif assigned_to:
+        selected_user = next((user for user in users if (user.username or "").casefold() == assigned_to_key), None)
         if isinstance(qs, list):
-            qs = [lead for lead in qs if lead.assigned_to and lead.assigned_to.username.lower() == assigned_to_key]
+            selected_user_id = getattr(selected_user, "pk", None)
+            qs = [
+                lead for lead in qs
+                if resolve_lead_owner(lead, index=identity_index)["user_id"] == selected_user_id
+            ]
         else:
-            qs = qs.filter(assigned_to__username__iexact=assigned_to)
+            qs = qs.filter(employee_lead_ownership_q(selected_user, index=identity_index)) if selected_user else qs.none()
 
     paginator = Paginator(qs, per_page)
     page_number = request.GET.get("page") or 1
@@ -1674,11 +1704,24 @@ def leads_dashboard(request):
         .annotate(count=Count("id"))
         .order_by("-count")
     )
-    by_assigned = (
-        outbound.values("assigned_to__username", "assigned_to__first_name", "assigned_to__last_name")
-        .annotate(count=Count("id"))
-        .order_by("-count")
-    )
+    assigned_counts = defaultdict(int)
+    identity_index = get_employee_identity_index()
+    for row in outbound.values("assigned_to_id", "owner").annotate(count=Count("id")):
+        identity = resolve_employee_identity(
+            user_id=row["assigned_to_id"],
+            owner_text=row["owner"],
+            index=identity_index,
+        )
+        assigned_counts[identity["canonical_name"]] += int(row["count"] or 0)
+    by_assigned = [
+        {
+            "assigned_to__username": "",
+            "assigned_to__first_name": name,
+            "assigned_to__last_name": "",
+            "count": count,
+        }
+        for name, count in sorted(assigned_counts.items(), key=lambda item: (-item[1], item[0]))
+    ]
     by_country = (
         outbound.values("country").annotate(count=Count("id")).order_by("-count")
     )
@@ -11234,23 +11277,22 @@ def ceo_operations_dashboard(request):
         .annotate(count=Count("id"))
         .order_by("-count")[:6]
     )
-    assignee_rows = list(
-        lead_kpi_qs.filter(created_date__range=(start_period, today))
-        .values("assigned_to__username", "assigned_to__first_name", "assigned_to__last_name")
-        .annotate(count=Count("id"))
-        .order_by("-count")[:8]
-    )
-    top_assignees = []
+    assignee_rows = lead_kpi_qs.filter(created_date__range=(start_period, today)).values(
+        "assigned_to_id", "owner"
+    ).annotate(count=Count("id"))
+    assignee_counts = defaultdict(int)
+    identity_index = get_employee_identity_index()
     for row in assignee_rows:
-        name = " ".join(
-            part for part in [row.get("assigned_to__first_name"), row.get("assigned_to__last_name")] if part
-        ).strip()
-        top_assignees.append(
-            {
-                "label": name or row.get("assigned_to__username") or "Unassigned",
-                "count": int(row.get("count") or 0),
-            }
+        identity = resolve_employee_identity(
+            user_id=row["assigned_to_id"],
+            owner_text=row["owner"],
+            index=identity_index,
         )
+        assignee_counts[identity["canonical_name"]] += int(row["count"] or 0)
+    top_assignees = [
+        {"label": name, "count": count}
+        for name, count in sorted(assignee_counts.items(), key=lambda item: (-item[1], item[0]))[:8]
+    ]
 
     opp_base = opportunity_kpi_qs.filter(created_date__range=(start_period, today))
     opp_period = opp_base.count()

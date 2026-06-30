@@ -28,13 +28,7 @@
           {% if lead and lead.priority %}{{ lead.priority }} priority{% else %}Priority not set{% endif %}
         </span>
         <span class="opp-badge">
-          {% if lead and lead.assigned_to %}
-            {% if lead.assigned_to.get_full_name %}{{ lead.assigned_to.get_full_name }}{% else %}{{ lead.assigned_to.username }}{% endif %}
-          {% elif lead and lead.owner %}
-            {{ lead.owner }}
-          {% else %}
-            Unassigned
-          {% endif %}
+          {% if lead %}{{ lead|canonical_lead_owner }}{% else %}Unassigned{% endif %}
         </span>
       </div>
     </div>

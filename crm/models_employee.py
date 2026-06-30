@@ -1,9 +1,13 @@
 from django.conf import settings
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.db.models.deletion import ProtectedError
 from django.db.models.signals import post_save, pre_delete
 from django.dispatch import receiver
+
+
+EMPLOYEE_IDENTITY_CACHE_KEY = "crm-employee-identity-index:v1"
 
 
 class EmployeeIdSequence(models.Model):
@@ -72,6 +76,7 @@ class EmployeeProfile(models.Model):
         related_name="employee_profile",
     )
     display_name = models.CharField(max_length=100, blank=True, default="", db_index=True)
+    aliases = models.JSONField(default=list, blank=True)
     phone = models.CharField(max_length=50, blank=True, default="")
     employee_id = models.CharField(max_length=40, unique=True, editable=False)
     position = models.CharField(max_length=40, choices=POSITION_CHOICES, blank=True, default="")
@@ -112,6 +117,16 @@ class EmployeeProfile(models.Model):
 
     def save(self, *args, **kwargs):
         self.display_name = " ".join((self.display_name or "").split())
+        normalized_aliases = []
+        seen_aliases = set()
+        source_aliases = self.aliases if isinstance(self.aliases, (list, tuple)) else [self.aliases]
+        for value in source_aliases:
+            alias = " ".join(str(value or "").split())
+            key = alias.casefold()
+            if alias and key not in seen_aliases:
+                seen_aliases.add(key)
+                normalized_aliases.append(alias)
+        self.aliases = normalized_aliases
         if self.position_ref_id:
             self.position = self.position_ref.code
         if self.department_ref_id:
@@ -134,6 +149,7 @@ class EmployeeProfile(models.Model):
         if allocated_employee_id and kwargs.get("update_fields") is not None:
             kwargs["update_fields"] = set(kwargs["update_fields"]) | {"employee_id"}
         super().save(*args, **kwargs)
+        cache.delete(EMPLOYEE_IDENTITY_CACHE_KEY)
 
     @property
     def public_name(self):
@@ -161,6 +177,7 @@ class EmployeeProfile(models.Model):
 
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
 def ensure_employee_profile(sender, instance, created, **kwargs):
+    cache.delete(EMPLOYEE_IDENTITY_CACHE_KEY)
     if created:
         EmployeeProfile.objects.get_or_create(
             user=instance,
