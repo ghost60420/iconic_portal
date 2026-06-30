@@ -635,7 +635,7 @@
           <option value="unassigned" {% if assigned_to_filter == "unassigned" %}selected{% endif %}>Unassigned</option>
           {% for u in users %}
             <option value="{{ u.id }}" {% if assigned_to_filter == u.id|stringformat:"s" %}selected{% endif %}>
-              {% if u.get_full_name %}{{ u.get_full_name }}{% else %}{{ u.username }}{% endif %}
+              {{ u.canonical_name }}
             </option>
           {% endfor %}
         </select>
@@ -789,7 +789,7 @@
           <option value="">Select user</option>
           {% for u in users %}
             <option value="{{ u.id }}">
-              {% if u.get_full_name %}{{ u.get_full_name }}{% else %}{{ u.username }}{% endif %}
+              {{ u.canonical_name }}
             </option>
           {% endfor %}
         </select>

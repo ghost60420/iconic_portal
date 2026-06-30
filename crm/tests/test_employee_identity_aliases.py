@@ -26,7 +26,7 @@ class CanonicalEmployeeOwnershipTests(TestCase):
         cls.ceo_group = Group.objects.get_or_create(name="CEO")[0]
 
         cls.hossein = User.objects.create_user(
-            "hossein-owner", first_name="Hossein", last_name="Farhad"
+            "hossein-owner", first_name="Hossain", last_name="Forhad"
         )
         cls.hossein.groups.add(cls.sales_group)
         cls.hossein.employee_profile.display_name = "Hossein Farhad"
@@ -97,6 +97,7 @@ class CanonicalEmployeeOwnershipTests(TestCase):
 
     def test_alias_resolution_prioritizes_assigned_user_and_does_not_rewrite_history(self):
         self.assertEqual(resolve_lead_owner(self.hossein_direct)["canonical_name"], "Hossein Farhad")
+        self.assertEqual(resolve_lead_owner(self.hossein_alias)["canonical_name"], "Hossein Farhad")
         self.assertEqual(resolve_lead_owner(self.refat_alias)["canonical_name"], "Md Refat")
         self.assertEqual(resolve_lead_owner(self.talha_alias)["canonical_name"], "Talha Akbar")
         self.refat_alias.refresh_from_db()
@@ -120,6 +121,8 @@ class CanonicalEmployeeOwnershipTests(TestCase):
         self.assertEqual(response.status_code, 200)
         listed_ids = {lead.pk for lead in response.context["page_obj"].object_list}
         self.assertEqual(listed_ids, {self.refat_alias.pk})
+        self.assertNotContains(response, "Hossain Forhad")
+        self.assertContains(response, "Hossein Farhad")
 
     def test_lead_dashboard_groups_aliases_into_one_canonical_card(self):
         self.client.force_login(self.ceo)
@@ -150,6 +153,11 @@ class CanonicalEmployeeOwnershipTests(TestCase):
         response = self.client.get(reverse("employee_list"), {"q": "Talha"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual([profile.public_name for profile in response.context["profiles"]], ["Talha Akbar"])
+
+        hossein_response = self.client.get(reverse("employee_list"), {"q": "Hossein"})
+        self.assertEqual(hossein_response.status_code, 200)
+        self.assertContains(hossein_response, "Hossein Farhad")
+        self.assertNotContains(hossein_response, "Hossain Forhad")
 
     def test_employee_management_saves_aliases_and_rejects_identity_conflicts(self):
         self.client.force_login(self.ceo)

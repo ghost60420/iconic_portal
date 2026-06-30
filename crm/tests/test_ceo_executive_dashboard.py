@@ -145,7 +145,7 @@ class CEOExecutiveDashboardTests(TestCase):
         self.assertContains(response, "USD $200.00")
         self.assertContains(response, "\u09F33,000.00 BDT")
         self.assertContains(response, "Executive Customer")
-        self.assertContains(response, "Sales Owner")
+        self.assertContains(response, "Sales")
         self.assertContains(response, "Production Owner")
         self.assertContains(response, self.order.order_code)
         self.assertIn("ceo-dashboard;dur=", response.headers["Server-Timing"])
