@@ -46,6 +46,24 @@
     padding-bottom: 6px;
   }
 
+  .prod-add-collapsible {
+    grid-column: 1 / -1;
+    border: 1px solid #1f2937;
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+
+  .prod-add-collapsible > summary {
+    color: #f9fafb;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .prod-add-collapsible[open] > summary {
+    margin-bottom: 12px;
+  }
+
   .prod-add-row {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -691,29 +709,34 @@
                   </div>
                 </div>
 
-                <div class="prod-add-field">
-                  <div class="prod-add-label">Accessories and trims</div>
-                  <textarea data-field="accessories_note">{{ line.accessories_note|default_if_none:'' }}</textarea>
-                  <div class="prod-add-help">
-                    List drawcord, zipper type, buttons, labels, patches, tags and other trims.
-                  </div>
-                </div>
+                <details class="prod-add-collapsible">
+                  <summary>Product specifications, accessories, and packaging</summary>
+                  <div class="prod-add-row">
+                    <div class="prod-add-field">
+                      <div class="prod-add-label">Accessories and trims</div>
+                      <textarea data-field="accessories_note">{{ line.accessories_note|default_if_none:'' }}</textarea>
+                      <div class="prod-add-help">
+                        List drawcord, zipper type, buttons, labels, patches, tags and other trims.
+                      </div>
+                    </div>
 
-                <div class="prod-add-field">
-                  <div class="prod-add-label">Packaging details</div>
-                  <textarea data-field="packaging_note">{{ line.packaging_note|default_if_none:'' }}</textarea>
-                  <div class="prod-add-help">
-                    Polybag, bundle, carton mark, size sticker and any special pack.
-                  </div>
-                </div>
+                    <div class="prod-add-field">
+                      <div class="prod-add-label">Packaging details</div>
+                      <textarea data-field="packaging_note">{{ line.packaging_note|default_if_none:'' }}</textarea>
+                      <div class="prod-add-help">
+                        Polybag, bundle, carton mark, size sticker and any special pack.
+                      </div>
+                    </div>
 
-                <div class="prod-add-field">
-                  <div class="prod-add-label">Extra order notes</div>
-                  <textarea data-field="extra_order_note">{{ line.extra_order_note|default_if_none:'' }}</textarea>
-                  <div class="prod-add-help">
-                    Use this for print position, measurement file name, shipping note and anything special.
+                    <div class="prod-add-field">
+                      <div class="prod-add-label">Extra order notes</div>
+                      <textarea data-field="extra_order_note">{{ line.extra_order_note|default_if_none:'' }}</textarea>
+                      <div class="prod-add-help">
+                        Use this for print position, measurement file name, shipping note and anything special.
+                      </div>
+                    </div>
                   </div>
-                </div>
+                </details>
               </div>
             {% endfor %}
           </div>
@@ -940,6 +963,9 @@
           {% endif %}
         </div>
 
+        <details class="prod-add-collapsible">
+          <summary>Internal Costing</summary>
+          <div class="prod-add-row">
         {% if form.fabric_cost_per_kg_bdt %}
           <div class="prod-add-field">
             <div class="prod-add-label">Fabric cost per kg taka</div>
@@ -1100,6 +1126,8 @@
             {% endif %}
           </div>
         {% endif %}
+          </div>
+        </details>
 
       </div>
     </div>

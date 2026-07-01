@@ -476,6 +476,17 @@
           </tbody>
         </table>
       </div>
+      {% if page_obj.paginator.num_pages > 1 %}
+        <nav class="production-filter-actions" aria-label="Production order pages">
+          {% if page_obj.has_previous %}
+            <a class="production-btn production-btn--ghost" href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>
+          {% endif %}
+          <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+          {% if page_obj.has_next %}
+            <a class="production-btn production-btn--ghost" href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
+          {% endif %}
+        </nav>
+      {% endif %}
     {% else %}
       <div class="production-empty-state">
         <strong>No production orders found</strong>

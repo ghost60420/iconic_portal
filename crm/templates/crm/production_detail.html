@@ -105,10 +105,13 @@
   </nav>
 
   {% if order.is_archived %}
-    <section class="production-panel" aria-label="Archive status">
-      <div class="production-panel-head">
+    <details class="production-panel production-raw-details" aria-label="Archive status">
+      <summary>
+        <span>Archive Status</span>
+        <small>Technical archive information</small>
+      </summary>
+      <div class="production-muted-block">
         <div>
-          <h2>Archive Status</h2>
           <p>
             Archived by
             {% if order.archived_by %}
@@ -121,23 +124,13 @@
         </div>
         <span class="production-status-badge cancelled">Archived</span>
       </div>
-    </section>
+    </details>
   {% endif %}
-
-  {% include "crm/partials/workflow_quick_nav.html" %}
-  {% include "crm/partials/workflow_order_summary.html" %}
-  {% include "crm/partials/workflow_activity_timeline.html" %}
-
-  {% include "crm/partials/product_snapshot.html" %}
-
-  {% include "crm/partials/product_reference_images.html" %}
-
-  {% include "crm/partials/production_progress_photos.html" %}
 
   <section class="production-panel" aria-label="Production workflow status">
     <div class="production-panel-head">
       <div>
-        <h2>Workflow Status</h2>
+        <h2>Production Summary</h2>
         <p>Operational production status used for dashboards, filters, and management reporting.</p>
       </div>
       <span class="production-status-badge {{ operational_status }}">{{ operational_status_label }}</span>
@@ -164,11 +157,26 @@
     {% endif %}
   </section>
 
-  <section class="production-snapshot-grid" aria-label="Production snapshot">
+  <section class="production-snapshot-grid" aria-label="Production summary">
     <article class="production-snapshot-card">
-      <span>Total quantity</span>
+      <span>Production Order Number</span>
+      <strong>{{ order.order_code|default:"Not set" }}</strong>
+      <small>{{ order.title }}</small>
+    </article>
+    <article class="production-snapshot-card">
+      <span>Client</span>
+      <strong>{% if customer %}{{ customer.contact_name|default:customer.account_brand|default:customer }}{% elif lead %}{{ lead.contact_name|default:lead.account_brand|default:lead }}{% else %}Not linked{% endif %}</strong>
+      <small>Customer contact</small>
+    </article>
+    <article class="production-snapshot-card">
+      <span>Brand</span>
+      <strong>{% if customer %}{{ customer.account_brand|default:"Not set" }}{% elif lead %}{{ lead.account_brand|default:"Not set" }}{% else %}Not set{% endif %}</strong>
+      <small>Buyer brand</small>
+    </article>
+    <article class="production-snapshot-card">
+      <span>Quantity</span>
       <strong>{{ order.qty_total }}</strong>
-      <small>{{ order.qty_reject }} rejected / {{ reject_percent }}%</small>
+      <small>Total order units</small>
     </article>
     <article class="production-snapshot-card">
       <span>Product / category</span>
@@ -176,52 +184,54 @@
       <small>{% if opportunity %}{{ opportunity.product_category|default:opportunity.product_type|default:"Category not set" }}{% else %}{{ order.color_info|default:"Category not set" }}{% endif %}</small>
     </article>
     <article class="production-snapshot-card">
-      <span>Start date</span>
-      <strong>{{ order.created_at|date:"M j" }}</strong>
-      <small>{{ order.created_at|date:"Y"|default:"Not set" }}</small>
+      <span>Assigned Production Manager</span>
+      <strong>{% if order.assigned_production_manager %}{{ order.assigned_production_manager.get_full_name|default:order.assigned_production_manager.username }}{% else %}Not assigned{% endif %}</strong>
+      <small>Production owner</small>
     </article>
     <article class="production-snapshot-card">
-      <span>Target delivery</span>
-      <strong>{% if order.bulk_deadline %}{{ order.bulk_deadline|date:"M j" }}{% else %}-{% endif %}</strong>
-      <small>{% if order.bulk_deadline %}{{ order.bulk_deadline|timeuntil }} remaining{% else %}No bulk date set{% endif %}</small>
+      <span>Factory</span>
+      <strong>{{ order.get_factory_location_display|default:"Not set" }}</strong>
+      <small>Assigned facility</small>
     </article>
     <article class="production-snapshot-card">
-      <span>Current stage</span>
-      <strong>
-        {% if order.current_stage %}
-          {{ order.current_stage.display_name|default:order.current_stage.get_stage_key_display }}
-        {% else %}
-          {% for stage in stages %}{% if stage.status == "in_progress" %}{{ stage.display_name|default:stage.get_stage_key_display }}{% endif %}{% empty %}-{% endfor %}
-        {% endif %}
-      </strong>
-      <small>{{ percent_done }}% stage completion</small>
+      <span>Delivery Date</span>
+      <strong>{% if order.bulk_deadline %}{{ order.bulk_deadline|date:"M j, Y" }}{% else %}Not scheduled{% endif %}</strong>
+      <small>{% if order.bulk_deadline %}{{ order.bulk_deadline|timeuntil }} remaining{% else %}No target date{% endif %}</small>
     </article>
     <article class="production-snapshot-card">
-      <span>Assigned person</span>
-      <strong>
-        {% if order.assigned_production_manager %}
-          {{ order.assigned_production_manager.get_full_name|default:order.assigned_production_manager.username }}
-        {% elif opportunity and opportunity.assigned_to %}
-          {{ opportunity.assigned_to }}
-        {% elif lead %}
-          {{ lead|canonical_lead_owner }}
-        {% else %}
-          -
-        {% endif %}
-      </strong>
-      <small>{% if order.assigned_production_manager %}Production manager{% elif opportunity and opportunity.assigned_to %}Opportunity owner{% elif lead %}Lead owner{% else %}Not assigned{% endif %}</small>
+      <span>Current Operational Status</span>
+      <strong>{{ operational_status_label }}</strong>
+      <small>{{ percent_done }}% complete</small>
+    </article>
+    <article class="production-snapshot-card">
+      <span>Sample or Bulk</span>
+      <strong>{{ order.get_production_order_type_display|default:"Bulk Production" }}</strong>
+      <small>{{ order.get_order_type_display|default:"Order type not set" }}</small>
+    </article>
+    <article class="production-snapshot-card">
+      <span>Shipment Status</span>
+      <strong>{% if latest_shipment %}{{ latest_shipment.get_status_display }}{% else %}Not started{% endif %}</strong>
+      <small>{% if latest_shipment.tracking_number %}{{ latest_shipment.tracking_number }}{% else %}No tracking number{% endif %}</small>
+    </article>
+    <article class="production-snapshot-card">
+      <span>Reject Quantity</span>
+      <strong>{{ order.qty_reject }}</strong>
+      <small>{{ reject_percent }}% of order</small>
+    </article>
+    <article class="production-snapshot-card">
+      <span>Next Required Action</span>
+      <strong>{{ next_required_action }}</strong>
+      <small>{{ priority_badge.reason }}</small>
     </article>
   </section>
 
   {% if order.source_quotation_id or order.approved_price_locked_at %}
-    <section class="production-panel" aria-label="Production order source of truth">
-      <div class="production-panel-head">
-        <div>
-          <h2>Production Order Source of Truth</h2>
-          <p>Approved Quotation Snapshot and current delivery ownership. Commercial values are locked for production.</p>
-        </div>
-        <span class="production-status-badge approved">Price locked</span>
-      </div>
+    <details class="production-panel production-raw-details" aria-label="Production order source quotation">
+      <summary>
+        <span>Source Quotation</span>
+        <small>Production Order Source of Truth: Approved Quotation Snapshot, read only</small>
+      </summary>
+      <div class="production-muted-block"><span class="production-status-badge approved">Price locked</span></div>
 
       <div class="production-approved-grid">
         <article><span>Production Order ID</span><strong>{{ order.order_code }}</strong></article>
@@ -248,8 +258,16 @@
         <article><span>Created by</span><strong>{% if order.created_by %}{{ order.created_by.get_full_name|default:order.created_by.username }}{% else %}System{% endif %}</strong></article>
         <article><span>Created date</span><strong>{{ order.created_at|date:"M j, Y H:i" }}</strong></article>
       </div>
-    </section>
+    </details>
   {% endif %}
+
+  <details class="production-panel production-raw-details">
+    <summary>
+      <span>Product Specifications</span>
+      <small>Detailed product snapshot and production notes</small>
+    </summary>
+    {% include "crm/partials/product_snapshot.html" %}
+  </details>
 
   <section class="production-detail-grid">
     <main class="production-main-column">
@@ -347,8 +365,8 @@
       <article class="production-panel">
         <div class="production-panel-head">
           <div>
-            <h2>Order Details</h2>
-            <p>Product specifications, fabric and trim selections, buyer notes, and production instructions.</p>
+            <h2>Production Lines</h2>
+            <p>Style, color, size, and quantity for each production line.</p>
           </div>
           <div class="production-panel-actions">
             <a href="{% url 'production_order_sheet_pdf' order.pk %}" class="production-btn production-btn--tiny production-btn--ghost">Order Sheet PDF</a>
@@ -356,7 +374,9 @@
           </div>
         </div>
 
-        <div class="production-info-grid">
+        <details class="production-subdetails">
+          <summary>Product specifications and notes</summary>
+          <div class="production-info-grid">
           <div>
             <span>Style / product</span>
             <strong>{% if product %}{{ product.name }}{% elif order.style_name %}{{ order.style_name }}{% else %}Not set{% endif %}</strong>
@@ -381,7 +401,8 @@
             <span>AI / planning note</span>
             <strong>{{ order.ai_note|default:"No AI note yet. Use AI help to generate a production summary." }}</strong>
           </div>
-        </div>
+          </div>
+        </details>
 
         {% if order_lines %}
           <div class="production-lines">
@@ -400,17 +421,9 @@
                     <span>Color info</span>
                     <strong>{{ line.color_info|default:"Not set" }}</strong>
                   </div>
-                  <div class="production-line-wide">
-                    <span>Accessories and trims</span>
-                    <strong>{{ line.accessories_note|default:"Not set" }}</strong>
-                  </div>
-                  <div class="production-line-wide">
-                    <span>Packaging details</span>
-                    <strong>{{ line.packaging_note|default:"Not set" }}</strong>
-                  </div>
-                  <div class="production-line-wide">
-                    <span>Extra order notes</span>
-                    <strong>{{ line.extra_order_note|default:"Not set" }}</strong>
+                  <div>
+                    <span>Quantity</span>
+                    <strong>{{ line.quantity|default:line.size_total|default:"Not set" }}</strong>
                   </div>
                 </div>
                 {% if line.size_total or line.size_notes or line.size_group_display %}
@@ -445,6 +458,23 @@
                     {% endif %}
                   </div>
                 {% endif %}
+                <details class="production-subdetails">
+                  <summary>Line specifications</summary>
+                  <div class="production-line-grid">
+                    <div class="production-line-wide">
+                      <span>Accessories and trims</span>
+                      <strong>{{ line.accessories_note|default:"Not set" }}</strong>
+                    </div>
+                    <div class="production-line-wide">
+                      <span>Packaging details</span>
+                      <strong>{{ line.packaging_note|default:"Not set" }}</strong>
+                    </div>
+                    <div class="production-line-wide">
+                      <span>Extra order notes</span>
+                      <strong>{{ line.extra_order_note|default:"Not set" }}</strong>
+                    </div>
+                  </div>
+                </details>
               </article>
             {% endfor %}
           </div>
@@ -452,7 +482,9 @@
           <div class="production-empty-inline">No order sheet line details set.</div>
         {% endif %}
 
-        <div class="production-library-grid">
+        <details class="production-subdetails">
+          <summary>Linked material specifications</summary>
+          <div class="production-library-grid">
           <div>
             <span>Fabrics</span>
             {% if order.fabrics.all %}
@@ -493,7 +525,8 @@
               <strong>No threads linked.</strong>
             {% endif %}
           </div>
-        </div>
+          </div>
+        </details>
       </article>
 
       <article class="production-panel">
@@ -558,6 +591,13 @@
             <p>Reserve material for this order, then record actual consumption or damage as production moves.</p>
           </div>
           <a href="{% url 'inventory_list' %}" class="production-btn production-btn--tiny production-btn--ghost">Open Inventory</a>
+        </div>
+
+        <div class="production-info-grid" aria-label="Fabric summary">
+          <div><span>Required Fabric</span><strong>{{ order.fabric_required_kg|default:"Not set" }} kg</strong></div>
+          <div><span>Received Fabric</span><strong>{{ order.fabric_received_kg|default:"Not set" }} kg</strong></div>
+          <div><span>Used Fabric</span><strong>{{ order.fabric_used_kg|default:"Not set" }} kg</strong></div>
+          <div><span>Warehouse Allocation</span><strong>{{ materials|length }} material line{{ materials|length|pluralize }}</strong></div>
         </div>
 
         <form method="post" class="production-material-form">
@@ -664,8 +704,8 @@
       <article class="production-panel" id="production-files">
         <div class="production-panel-head">
           <div>
-            <h2>Files and Documents</h2>
-            <p>Tech packs, sample photos, approval files, costing, invoice, and production attachments.</p>
+            <h2>Attachments</h2>
+            <p>Photos, files, progress images, tech packs, and approval documents.</p>
           </div>
         </div>
 
@@ -690,7 +730,7 @@
           {% elif can_view_lifecycle_profit and cost_sheet_active %}
             <span class="production-doc-static">Legacy cost sheet v{{ cost_sheet_active.version_number }}</span>
           {% endif %}
-          {% for invoice in order.invoices.all %}
+          {% for invoice in invoices %}
             <a href="{% url 'invoice_view' invoice.pk %}" class="production-doc-link">Invoice {{ invoice.invoice_number }}</a>
           {% endfor %}
         </div>
@@ -718,6 +758,9 @@
           {% endif %}
         </div>
       </article>
+
+      {% include "crm/partials/product_reference_images.html" %}
+      {% include "crm/partials/production_progress_photos.html" %}
 
       <article class="production-panel">
         <div class="production-panel-head">
@@ -765,10 +808,6 @@
                   <th>Tracking</th>
                   <th>Boxes</th>
                   <th>Weight kg</th>
-                  {% if can_view_lifecycle_profit %}
-                    <th>Cost BDT</th>
-                    <th>Cost CAD</th>
-                  {% endif %}
                   <th>Status</th>
                 </tr>
               </thead>
@@ -790,10 +829,6 @@
                     </td>
                     <td>{{ s.box_count|default:"-" }}</td>
                     <td>{{ s.total_weight_kg|default:"-" }}</td>
-                    {% if can_view_lifecycle_profit %}
-                      <td>{{ s.cost_bdt|default:"-" }}</td>
-                      <td>{{ s.cost_cad|default:"-" }}</td>
-                    {% endif %}
                     <td><span class="production-status-badge {{ s.status }}">{{ s.get_status_display }}</span></td>
                   </tr>
                 {% endfor %}
@@ -805,13 +840,14 @@
         {% endif %}
       </article>
 
-      <article class="production-panel">
-        <div class="production-panel-head">
-          <div>
-            <h2>Recent Audit History</h2>
-            <p>Latest saved changes to this production order.</p>
-          </div>
-        </div>
+      <details class="production-panel production-raw-details">
+        <summary>
+          <span>Audit and Technical</span>
+          <small>Activity, history, legacy status, and technical metadata</small>
+        </summary>
+        {% include "crm/partials/workflow_quick_nav.html" %}
+        {% include "crm/partials/workflow_order_summary.html" %}
+        {% include "crm/partials/workflow_activity_timeline.html" %}
         <div class="production-linked-list">
           {% for item in record_audit_history %}
             <span><strong>{{ item.get_action_type_display }}</strong>{% if item.field_name %} · {{ item.field_name|title }}{% endif %}<br><small>{% if item.actor %}{{ item.actor.get_full_name|default:item.actor.username }}{% else %}System{% endif %} · {{ item.created_at|date:"M j, Y g:i A" }}</small></span>
@@ -819,15 +855,20 @@
             <span>No audit changes recorded yet.</span>
           {% endfor %}
         </div>
-      </article>
+        <div class="production-info-grid">
+          <div><span>Legacy Status</span><strong>{{ order.get_status_display }}</strong></div>
+          <div><span>Created</span><strong>{{ order.created_at|date:"Y-m-d H:i" }}</strong></div>
+          <div><span>Updated</span><strong>{{ order.updated_at|date:"Y-m-d H:i" }}</strong></div>
+        </div>
+      </details>
 
       {% if can_view_lifecycle_profit %}
-      <article class="production-panel">
-        <div class="production-panel-head">
-          <div>
-            <h2>Costing and Actuals</h2>
-            <p>Actual factory costs, active costing, and variance reporting stay available for operations review.</p>
-          </div>
+      <details class="production-panel production-raw-details">
+        <summary>
+          <span>Internal Costing</span>
+          <small>Costing and Actuals: fabric, material, production, variance, profit, and actual costs</small>
+        </summary>
+        <div class="production-panel-actions">
           {% if order.costing_header %}
             <a href="{% url 'cost_sheet_detail' order.costing_header.pk %}" class="production-btn production-btn--tiny production-btn--ghost">Open Costing</a>
           {% endif %}
@@ -839,6 +880,24 @@
           <div class="production-muted-block">Linked cost sheet: v{{ cost_sheet_active.version_number }}</div>
         {% else %}
           <div class="production-muted-block">No active cost sheet linked yet.</div>
+        {% endif %}
+
+        {% if shipments %}
+          <div class="production-table-wrap">
+            <table class="production-mini-table">
+              <thead><tr><th>Shipment</th><th>Carrier</th><th>Cost BDT</th><th>Cost CAD</th></tr></thead>
+              <tbody>
+                {% for s in shipments %}
+                  <tr>
+                    <td>SHP-{{ s.pk }}</td>
+                    <td>{{ s.get_carrier_display }}</td>
+                    <td>{{ s.cost_bdt|default:"-" }}</td>
+                    <td>{{ s.cost_cad|default:"-" }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
         {% endif %}
 
         {% if lifecycle_profit and can_view_lifecycle_profit %}
@@ -998,26 +1057,19 @@
             </div>
           </div>
         {% endif %}
-      </article>
+      </details>
       {% else %}
-      <article class="production-panel">
-        <div class="production-panel-head">
-          <div>
-            <h2>Restricted Section</h2>
-            <p>Additional financial details are available only to approved internal users.</p>
-          </div>
-        </div>
+      <details class="production-panel production-raw-details">
+        <summary><span>Internal Costing</span><small>Restricted Section</small></summary>
         <div class="production-muted-block">You do not have permission to view this financial section.</div>
-      </article>
+      </details>
       {% endif %}
 
-      <article class="production-panel">
-        <div class="production-panel-head">
-          <div>
-            <h2>Activity and Notes</h2>
-            <p>Production updates, internal notes, pinned comments, and related lead/opportunity activity.</p>
-          </div>
-        </div>
+      <details class="production-panel production-raw-details">
+        <summary>
+          <span>Activity and Notes</span>
+          <small>Production updates, comments, and history</small>
+        </summary>
 
         <div class="production-ops-timeline">
           {% for item in production_activity %}
@@ -1080,17 +1132,12 @@
         {% else %}
           <div class="production-empty-inline">No activity notes yet.</div>
         {% endif %}
-      </article>
+      </details>
     </main>
 
     <aside class="production-side-column">
-      <article class="production-panel">
-        <div class="production-panel-head">
-          <div>
-            <h2>Linked Records</h2>
-            <p>{% if can_view_lifecycle_profit %}Sales, customer, costing, and invoice context.{% else %}Sales, customer, and invoice context.{% endif %}</p>
-          </div>
-        </div>
+      <details class="production-panel production-raw-details">
+        <summary><span>Linked Records</span><small>Sales, customer, costing, and invoice context</small></summary>
         <div class="production-linked-list">
           {% if opportunity %}<a href="{% url 'opportunity_detail' opportunity.pk %}">Opportunity {{ opportunity.opportunity_id }}</a>{% endif %}
           {% if customer %}<a href="{% url 'customer_detail' customer.pk %}">{{ customer.account_brand|default:customer.contact_name|default:"Customer" }}</a>{% endif %}
@@ -1100,21 +1147,16 @@
           {% elif can_view_lifecycle_profit and cost_sheet_active %}
             <span>Legacy cost sheet v{{ cost_sheet_active.version_number }}</span>
           {% endif %}
-          {% for invoice in order.invoices.all %}
+          {% for invoice in invoices %}
             <a href="{% url 'invoice_view' invoice.pk %}">Invoice {{ invoice.invoice_number }}</a>
           {% empty %}
             <span>No linked invoices.</span>
           {% endfor %}
         </div>
-      </article>
+      </details>
 
-      <article class="production-panel">
-        <div class="production-panel-head">
-          <div>
-            <h2>Delivery Focus</h2>
-            <p>Timeline and shipping readiness.</p>
-          </div>
-        </div>
+      <details class="production-panel production-raw-details">
+        <summary><span>Delivery Focus</span><small>Timeline and shipping readiness</small></summary>
         <div class="production-side-metrics">
           <div>
             <span>Sample date</span>
@@ -1129,7 +1171,7 @@
             <strong>{{ shipments|length }}</strong>
           </div>
         </div>
-      </article>
+      </details>
 
       {% if can_view_lifecycle_profit %}
       <details class="production-panel production-raw-details">
@@ -1210,5 +1252,8 @@
   });
 </script>
 
-{% record_timeline_panel "production" order.pk %}
+<details class="production-panel production-raw-details">
+  <summary><span>Record History</span><small>Chronological audit timeline</small></summary>
+  {% record_timeline_panel "production" order.pk %}
+</details>
 {% endblock %}

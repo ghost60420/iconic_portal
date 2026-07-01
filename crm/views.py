@@ -9,7 +9,7 @@ from datetime import timedelta, date
 from decimal import Decimal
 from types import SimpleNamespace
 from django.apps import apps
-from django.db.models import Count, Exists, F, Sum, Q, Max, OuterRef, Subquery
+from django.db.models import Count, Exists, F, Sum, Q, Max, OuterRef, Prefetch, Subquery
 from django.db import models
 from django.conf import settings
 try:
@@ -8011,7 +8011,8 @@ def _production_order_lines(order):
         lines = []
     else:
         try:
-            lines = list(order.lines.all().order_by("line_no", "id"))
+            lines = list(order.lines.all())
+            lines.sort(key=lambda line: (line.line_no, line.id))
         except (OperationalError, ProgrammingError, AttributeError):
             lines = []
     if lines:
@@ -8485,8 +8486,6 @@ def production_list(request):
         if shipment_filter == "late" and not row["late_shipment"]:
             continue
         orders_data.append(row)
-    attach_primary_reference_images_to_production_orders([row["order"] for row in orders_data])
-
     production_operational_counts = Counter(
         row["operational_status"] for row in production_kpi_rows
     )
@@ -8632,11 +8631,23 @@ def production_list(request):
             reverse=True,
         )[:4]
 
+    paginator = Paginator(orders_data, 25)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    paginated_orders_data = list(page_obj.object_list)
+    attach_primary_reference_images_to_production_orders(
+        [row["order"] for row in paginated_orders_data]
+    )
+    pagination_query = request.GET.copy()
+    pagination_query.pop("page", None)
+
     return render(
         request,
         "crm/production_list.html",
         {
-            "orders_data": orders_data,
+            "orders_data": paginated_orders_data,
+            "page_obj": page_obj,
+            "paginator": paginator,
+            "pagination_query": pagination_query.urlencode(),
             "total_orders": total_orders,
             "active_orders": active_orders,
             "total_active_orders_count": total_active_orders_count,
@@ -8861,6 +8872,54 @@ def production_edit(request, pk):
 
 
 def production_detail(request, pk):
+    detail_prefetches = [
+        "fabrics",
+        "accessories",
+        "trims",
+        "threads",
+        Prefetch("stages", queryset=ProductionStage.objects.all()),
+        Prefetch(
+            "shipments",
+            queryset=Shipment.objects.order_by("-ship_date", "-created_at"),
+        ),
+        Prefetch(
+            "attachments",
+            queryset=ProductionOrderAttachment.objects.select_related("line").order_by("-created_at"),
+        ),
+        Prefetch(
+            "progress_photos",
+            queryset=ProductionProgressPhoto.objects.select_related("uploaded_by").order_by(
+                "stage", "-uploaded_at", "-id"
+            ),
+        ),
+        Prefetch(
+            "invoices",
+            queryset=Invoice.objects.select_related("costing_header", "customer").order_by(
+                "-created_at", "-id"
+            ),
+        ),
+        Prefetch(
+            "order_lifecycles",
+            queryset=OrderLifecycle.objects.select_related(
+                "customer",
+                "lead",
+                "opportunity",
+                "costing",
+                "quotation",
+                "invoice",
+                "production_order",
+                "shipping_record",
+            ).order_by("-updated_at", "-id"),
+        ),
+    ]
+    if ProductionOrderLine is not None:
+        detail_prefetches.append(
+            Prefetch(
+                "lines",
+                queryset=ProductionOrderLine.objects.order_by("line_no", "id"),
+            )
+        )
+
     order = get_object_or_404(
         ProductionOrder.objects.select_related(
             "customer",
@@ -8871,18 +8930,7 @@ def production_detail(request, pk):
             "assigned_production_manager",
             "created_by",
         )
-        .prefetch_related(
-            "stages",
-            "shipments",
-            "attachments",
-            "progress_photos",
-            "fabrics",
-            "accessories",
-            "trims",
-            "threads",
-            "invoices",
-            "order_lifecycles",
-        ),
+        .prefetch_related(*detail_prefetches),
         pk=pk,
     )
     can_add_lines = ProductionOrderLine is not None and hasattr(order, "lines")
@@ -8900,28 +8948,34 @@ def production_detail(request, pk):
         OPERATIONAL_STATUS_LABELS[OPERATIONAL_STATUS_PLANNING],
     )
     production_workflow_steps = _production_workflow_steps(operational_status)
+    next_required_action = next(
+        (step.label for step in production_workflow_steps if step.state == "current"),
+        "Review production status",
+    )
 
     # order lines for sheet details
     order_lines = _production_order_lines(order)
 
     # files
     try:
-        attachments = list(order.attachments.all().order_by("-created_at"))
+        attachments = list(order.attachments.all())
     except (OperationalError, ProgrammingError):
         attachments = []
     try:
-        progress_photos = list(order.progress_photos.select_related("uploaded_by").order_by("stage", "-uploaded_at", "-id"))
+        progress_photos = list(order.progress_photos.all())
     except (OperationalError, ProgrammingError):
         progress_photos = []
 
     # shipments for this order
     try:
-        shipments = list(order.shipments.all().order_by("-ship_date", "-created_at"))
+        shipments = list(order.shipments.all())
     except (OperationalError, ProgrammingError):
         shipments = []
 
     # progress and delay
-    percent_done = order.percent_done
+    total_stages = len(stages)
+    done_count = sum(1 for stage in stages if stage.status == "done")
+    percent_done = int((done_count / total_stages) * 100) if total_stages else 0
     stage_delay = any(s.status == "delay" or s.is_late for s in stages)
     order_delayed = bool(
         operational_status not in OPERATIONAL_FINISHED_STATUSES
@@ -8998,21 +9052,15 @@ def production_detail(request, pk):
         except Exception:
             logger.exception("production_detail: failed to build variance report for order %s", order.pk)
             variance_report = None
+    invoices = list(order.invoices.all())
+    latest_invoice = invoices[0] if invoices else None
     lifecycle = None
     lifecycle_profit = None
     try:
-        lifecycle = order.order_lifecycles.select_related(
-            "customer",
-            "lead",
-            "opportunity",
-            "costing",
-            "quotation",
-            "invoice",
-            "production_order",
-            "shipping_record",
-        ).order_by("-updated_at", "-id").first()
+        lifecycles = list(order.order_lifecycles.all())
+        lifecycle = lifecycles[0] if lifecycles else None
         if lifecycle is None:
-            invoice = order.invoices.select_related("costing_header", "customer").order_by("-created_at", "-id").first()
+            invoice = latest_invoice
             lifecycle = OrderLifecycle(
                 customer=customer or getattr(invoice, "customer", None),
                 lead=lead,
@@ -9054,7 +9102,7 @@ def production_detail(request, pk):
         lead=lead,
         opportunity=opportunity,
         costing=getattr(order, "costing_header", None),
-        invoice=order.invoices.order_by("-created_at", "-id").first(),
+        invoice=latest_invoice,
         production_order=order,
         shipment=latest_shipment,
         lifecycle=lifecycle if getattr(lifecycle, "pk", None) else None,
@@ -9280,6 +9328,7 @@ def production_detail(request, pk):
         "operational_status": operational_status,
         "operational_status_label": operational_status_label,
         "production_workflow_steps": production_workflow_steps,
+        "next_required_action": next_required_action,
         "production_visual_stages": production_visual_stages,
         "late_shipment": late_shipment,
         "shipment_pending": shipment_pending,
@@ -9287,6 +9336,7 @@ def production_detail(request, pk):
         "production_activity": production_activity,
         "order_lines": order_lines,
         "attachments": attachments,
+        "invoices": invoices,
         "progress_photo_stage_choices": ProductionProgressPhoto.STAGE_CHOICES,
         "progress_photo_sections": progress_photo_sections,
         "shipments": shipments,
@@ -10368,6 +10418,13 @@ def shipment_list(request):
     sr = _select_related_fields()
     if sr:
         qs = qs.select_related(*sr)
+    if ORDER_FIELD:
+        qs = qs.prefetch_related(
+            Prefetch(
+                f"{ORDER_FIELD}__invoices",
+                queryset=Invoice.objects.order_by("-created_at", "-id"),
+            )
+        )
 
     status_filter = (request.GET.get("status") or "all").strip().lower()
     carrier_filter = (request.GET.get("carrier") or "all").strip().lower()
@@ -10535,9 +10592,24 @@ def shipment_detail(request, pk):
     sr = _select_related_fields()
     if sr:
         qs = qs.select_related(*sr)
+    detail_prefetches = [
+        Prefetch(
+            "order_lifecycles",
+            queryset=OrderLifecycle.objects.order_by("-updated_at", "-id"),
+        )
+    ]
+    if ORDER_FIELD:
+        detail_prefetches.append(
+            Prefetch(
+                f"{ORDER_FIELD}__invoices",
+                queryset=Invoice.objects.order_by("-created_at", "-id"),
+            )
+        )
+    qs = qs.prefetch_related(*detail_prefetches)
 
     shipment = get_object_or_404(qs, pk=pk)
-    lifecycle = shipment.order_lifecycles.order_by("-updated_at", "-id").first()
+    lifecycles = list(shipment.order_lifecycles.all())
+    lifecycle = lifecycles[0] if lifecycles else None
     can_view_shipping_costs = can_view_lifecycle_profit(request.user)
     workflow_visibility = build_workflow_visibility_context(
         "shipping",
