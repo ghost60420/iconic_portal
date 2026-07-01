@@ -122,6 +122,8 @@ urlpatterns = [
     path("leads/research/", perm("can_leads", views.lead_research_start), name="lead_research_start"),
     path("leads/research/<int:job_id>/", perm("can_leads", views.lead_research_job_detail), name="lead_research_job_detail"),
     path("leads/bulk-update/", perm("can_leads", views.lead_bulk_update), name="lead_bulk_update"),
+    path("leads/<int:pk>/claim/", perm("can_leads", views.lead_claim), name="lead_claim"),
+    path("leads/<int:pk>/release/", perm("can_leads", views.lead_release), name="lead_release"),
     path("leads/<int:pk>/", perm("can_leads", views.lead_detail), name="lead_detail"),
     path(
         "leads/<int:pk>/iconic-ai-brain/",

@@ -330,10 +330,25 @@
     </div>
 
     <div class="top-links">
-      <a class="action-btn primary" href="{% url 'lead_edit' lead.pk %}">Edit</a>
-      <a class="action-btn" href="#lead-notes">Add Note</a>
-      <a class="action-btn" href="#lead-convert">Create Opportunity</a>
-      <a class="action-btn" href="{% url 'calendar_add' %}?lead={{ lead.pk }}">Add Follow Up</a>
+      {% if can_claim_lead %}
+        <form method="post" action="{% url 'lead_claim' lead.pk %}" style="display:inline;">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{% url 'lead_detail' lead.pk %}">
+          <button class="action-btn primary" type="submit">Claim Lead</button>
+        </form>
+      {% elif can_release_lead %}
+        <form method="post" action="{% url 'lead_release' lead.pk %}" style="display:inline;">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{% url 'leads_list' %}?view=available">
+          <button class="action-btn" type="submit">Release Lead</button>
+        </form>
+      {% endif %}
+      {% if can_edit_lead %}
+        <a class="action-btn primary" href="{% url 'lead_edit' lead.pk %}">Edit</a>
+        <a class="action-btn" href="#lead-notes">Add Note</a>
+        <a class="action-btn" href="#lead-convert">Create Opportunity</a>
+        <a class="action-btn" href="{% url 'calendar_add' %}?lead={{ lead.pk }}">Add Follow Up</a>
+      {% endif %}
       <a class="action-btn" href="{% url 'leads_list' %}">Back to Leads</a>
       {% if can_archive_records and not lead.is_archived %}
         <form method="post" action="{% url 'lead_archive' lead.pk %}" style="display:inline;">

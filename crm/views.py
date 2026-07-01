@@ -84,7 +84,21 @@ from .services.product_reference_images import (
 from .services.workflow_visibility import build_workflow_visibility_context
 from .services.automation_engine import automation_dashboard_context
 from .services.operations_dashboard import operations_dashboard_context
-from .services.operations_permissions import can_access_operations_module, scope_sales_leads, scope_sales_opportunities
+from .services.operations_permissions import (
+    active_sales_lead_q,
+    available_sales_lead_q,
+    can_access_operations_module,
+    can_claim_sales_lead,
+    can_manage_all_sales_records,
+    can_release_sales_lead,
+    is_available_sales_lead,
+    scope_owned_sales_leads,
+    scope_production_orders,
+    scope_sales_lead_queue,
+    scope_sales_leads,
+    scope_sales_opportunities,
+)
+from .services.audit_log import model_snapshot, schedule_audit
 from .services.platform_tools import can_manage_archives, dashboard_personalization
 from .services.chatter_mentions import notify_chatter_mentions
 from .services.chatter_permissions import (
@@ -1210,6 +1224,8 @@ def _merge_leads(primary, duplicate, user=None):
     duplicate.save(update_fields=["outbound_status", "disqualification_reason"])
 
 def leads_list(request):
+    can_manage_leads = can_manage_all_sales_records(request.user)
+    can_archive_records = _can_archive_workflow_record(request.user)
     lead_id = (request.GET.get("lead_id") or "").strip()
     q = (request.GET.get("q") or "").strip()
     status = (request.GET.get("lead_status") or request.GET.get("status") or "").strip()
@@ -1237,8 +1253,16 @@ def leads_list(request):
     has_phone = (request.GET.get("has_phone") or "").strip().lower()
     has_social = (request.GET.get("has_social") or "").strip().lower()
     outreach_ready = (request.GET.get("outreach_ready") or "").strip().lower()
-    view = (request.GET.get("view") or "all").strip().lower()
+    requested_archive = (request.GET.get("archive") or "").strip().lower()
+    default_view = "all" if can_manage_leads and requested_archive in {"archived", "all"} else "available"
+    requested_view = (request.GET.get("view") or default_view).strip().lower()
+    allowed_views = {"available", "my"}
+    if can_manage_leads:
+        allowed_views.add("all")
+    view = requested_view if requested_view in allowed_views else "available"
     archive_filter = (request.GET.get("archive") or ("archived" if view == "archived" else "active")).strip().lower()
+    if view in {"available", "my"}:
+        archive_filter = "active"
 
     sort = (request.GET.get("sort") or "new").strip().lower()
 
@@ -1250,9 +1274,13 @@ def leads_list(request):
     if per_page not in (20, 50, 100):
         per_page = 50
 
-    qs = scope_sales_leads(Lead.objects.select_related("assigned_to"), request.user)
+    qs = scope_sales_lead_queue(Lead.objects.select_related("assigned_to"), request.user)
 
-    if view == "inbound":
+    if view == "available":
+        qs = qs.filter(available_sales_lead_q())
+    elif view == "my":
+        qs = qs.filter(active_sales_lead_q(), assigned_to=request.user)
+    elif view == "inbound":
         qs = qs.filter(lead_type="inbound")
     elif view == "outbound":
         qs = qs.filter(lead_type="outbound")
@@ -1388,6 +1416,27 @@ def leads_list(request):
 
     today = timezone.localdate()
     qs = qs.annotate(opportunity_count=Count("opportunities", distinct=True))
+    if can_archive_records:
+        qs = qs.annotate(
+            list_has_production_orders=Exists(
+                ProductionOrder.objects.filter(
+                    Q(lead_id=OuterRef("pk")) | Q(opportunity__lead_id=OuterRef("pk"))
+                )
+            ),
+            list_has_invoices=Exists(
+                Invoice.objects.filter(
+                    Q(order__lead_id=OuterRef("pk"))
+                    | Q(order__opportunity__lead_id=OuterRef("pk"))
+                    | Q(costing_header__opportunity__lead_id=OuterRef("pk"))
+                    | Q(quick_costing__opportunity__lead_id=OuterRef("pk"))
+                )
+            ),
+            list_has_activities=Exists(LeadActivity.objects.filter(lead_id=OuterRef("pk"))),
+            list_has_tasks=Exists(LeadTask.objects.filter(lead_id=OuterRef("pk"))),
+            list_has_comments=Exists(LeadComment.objects.filter(lead_id=OuterRef("pk"))),
+            list_has_events=Exists(Event.objects.filter(lead_id=OuterRef("pk"))),
+            list_has_reference_images=Exists(ProductReferenceImage.objects.filter(lead_id=OuterRef("pk"))),
+        )
     if selected_lead_status:
         qs = _filter_leads_by_list_status(qs, selected_lead_status, today)
 
@@ -1411,12 +1460,15 @@ def leads_list(request):
             filtered.append(lead)
         qs = filtered
 
-    users = list(
-        get_user_model().objects.select_related("employee_profile").filter(
-            is_active=True,
-            employee_profile__is_archived=False,
-        ).order_by("first_name", "last_name", "username")
-    )
+    if can_manage_leads:
+        users = list(
+            get_user_model().objects.select_related("employee_profile").filter(
+                is_active=True,
+                employee_profile__is_archived=False,
+            ).order_by("first_name", "last_name", "username")
+        )
+    else:
+        users = [request.user]
     identity_index = get_employee_identity_index()
     user_by_id = {user.pk: user for user in users}
 
@@ -1553,10 +1605,20 @@ def leads_list(request):
     page_obj.object_list = attach_primary_reference_images_to_leads(page_obj.object_list)
     page_obj.object_list = _decorate_leads_for_list(page_obj.object_list, today=today)
     for lead in page_obj.object_list:
-        try:
-            lead.can_hard_delete = not _lead_linked_record_labels(lead)
-        except Exception:
-            lead.can_hard_delete = False
+        lead.can_claim = can_claim_sales_lead(request.user) and is_available_sales_lead(lead)
+        lead.can_release = can_release_sales_lead(request.user, lead)
+        lead.can_edit = can_manage_leads or lead.assigned_to_id == request.user.pk
+        lead.can_hard_delete = bool(
+            can_archive_records
+            and not lead.opportunity_count
+            and not lead.list_has_production_orders
+            and not lead.list_has_invoices
+            and not lead.list_has_activities
+            and not lead.list_has_tasks
+            and not lead.list_has_comments
+            and not lead.list_has_events
+            and not lead.list_has_reference_images
+        )
 
     context = {
         "page_obj": page_obj,
@@ -1569,12 +1631,59 @@ def leads_list(request):
         "qual_status_choices": LEAD_QUAL_STATUS_CHOICES,
         "active_view": view,
         "archive_filter": archive_filter,
-        "can_archive_records": _can_archive_workflow_record(request.user),
+        "can_archive_records": can_archive_records,
+        "can_manage_leads": can_manage_leads,
+        "can_claim_leads": can_claim_sales_lead(request.user),
         "users": users,
         "assigned_to_filter": assigned_to,
         "assignee_summary": assignee_summary,
     }
     return render(request, "crm/leads_list.html", context)
+
+
+def _lead_assignment_return(request, lead):
+    return redirect(request.POST.get("next") or request.META.get("HTTP_REFERER") or reverse("lead_detail", args=[lead.pk]))
+
+
+@require_POST
+def lead_claim(request, pk):
+    lead = get_object_or_404(Lead.objects.select_related("assigned_to"), pk=pk)
+    if not can_claim_sales_lead(request.user):
+        return HttpResponseForbidden("You do not have permission to claim leads.")
+
+    before = model_snapshot(lead)
+    updated = Lead.objects.filter(pk=lead.pk).filter(available_sales_lead_q()).update(
+        assigned_to=request.user,
+    )
+    if not updated:
+        messages.info(request, "This lead is no longer available to claim.")
+        return _lead_assignment_return(request, lead)
+
+    lead.refresh_from_db()
+    schedule_audit(lead, before=before)
+    messages.success(request, f"Lead {lead.lead_id} is now assigned to you.")
+    return _lead_assignment_return(request, lead)
+
+
+@require_POST
+def lead_release(request, pk):
+    lead = get_object_or_404(Lead.objects.select_related("assigned_to"), pk=pk)
+    if not can_release_sales_lead(request.user, lead):
+        return HttpResponseForbidden("You do not have permission to release this lead.")
+
+    before = model_snapshot(lead)
+    releasable = Lead.objects.filter(pk=lead.pk, assigned_to__isnull=False)
+    if not can_manage_all_sales_records(request.user):
+        releasable = releasable.filter(assigned_to=request.user)
+    updated = releasable.update(assigned_to=None)
+    if not updated:
+        messages.info(request, "This lead is already unassigned.")
+        return _lead_assignment_return(request, lead)
+
+    lead.refresh_from_db()
+    schedule_audit(lead, before=before)
+    messages.success(request, f"Lead {lead.lead_id} returned to the available queue.")
+    return _lead_assignment_return(request, lead)
 
 
 @require_POST
@@ -1587,9 +1696,11 @@ def lead_bulk_update(request):
         messages.error(request, "Select at least one lead.")
         return redirect(return_url)
 
-    qs = Lead.objects.filter(id__in=lead_ids)
+    qs = scope_owned_sales_leads(Lead.objects.filter(id__in=lead_ids), request.user)
 
     if action == "assign":
+        if not can_manage_all_sales_records(request.user):
+            return HttpResponseForbidden("You do not have permission to reassign leads.")
         assigned_to_id = request.POST.get("assigned_to") or ""
         if assigned_to_id:
             qs.update(assigned_to_id=assigned_to_id)
@@ -2086,7 +2197,7 @@ def quick_add_outbound_lead(request):
 
 
 def edit_lead(request, pk):
-    lead = get_object_or_404(Lead, pk=pk)
+    lead = get_object_or_404(scope_owned_sales_leads(Lead.objects.all(), request.user), pk=pk)
 
     if request.method == "POST":
         form = LeadForm(request.POST, request.FILES, instance=lead)
@@ -2836,15 +2947,31 @@ def _lead_detail_impl(request, pk):
             logger.exception("lead_detail: failed to load %s", label)
             return fallback
 
+    def _load_visible_lead():
+        return scope_sales_lead_queue(
+            Lead.objects.select_related("assigned_to"),
+            request.user,
+        ).filter(pk=pk).first()
+
     try:
-        lead = get_object_or_404(Lead, pk=pk)
+        lead = _load_visible_lead()
     except OperationalError as exc:
         # Self-heal known schema drift that causes lead detail 500 on stale DB files.
         if "no such column: crm_lead." in str(exc):
             _repair_lead_schema_if_needed()
-            lead = get_object_or_404(Lead, pk=pk)
+            lead = _load_visible_lead()
         else:
             raise
+
+    if lead is None:
+        if request.method == "POST" and Lead.objects.filter(pk=pk).exists():
+            return HttpResponseForbidden("You do not have permission to update this lead.")
+        raise Http404
+
+    if request.method == "POST" and not (
+        can_manage_all_sales_records(request.user) or lead.assigned_to_id == request.user.pk
+    ):
+        return HttpResponseForbidden("Claim this lead before updating it.")
 
     opportunities = _safe_fetch(
         lambda: lead.opportunities.all().order_by("-created_date", "-id"),
@@ -3305,6 +3432,9 @@ def _lead_detail_impl(request, pk):
         "wa_inbox_url": wa_inbox_url,
         "iconic_ai_brain": iconic_ai_brain,
         "can_archive_records": _can_archive_workflow_record(request.user),
+        "can_claim_lead": can_claim_sales_lead(request.user) and is_available_sales_lead(lead),
+        "can_release_lead": can_release_sales_lead(request.user, lead),
+        "can_edit_lead": can_manage_all_sales_records(request.user) or lead.assigned_to_id == request.user.pk,
         "lead_can_hard_delete": not _lead_linked_record_labels(lead),
         **workflow_visibility,
     }
@@ -3323,6 +3453,8 @@ def _render_lead_detail_failsafe(request, lead, error_text: str = ""):
 def lead_detail(request, pk):
     try:
         return _lead_detail_impl(request, pk)
+    except Http404:
+        raise
     except Exception as exc:
         logger.exception("lead_detail hard-fail for lead %s", pk)
         try:
@@ -3491,7 +3623,10 @@ def _opportunity_costing_status(advanced_count, quick_count):
 
 
 def opportunity_detail(request, pk):
-    opportunity = get_object_or_404(Opportunity, pk=pk)
+    opportunity = get_object_or_404(
+        scope_sales_opportunities(Opportunity.objects.select_related("lead"), request.user),
+        pk=pk,
+    )
     lead = opportunity.lead
     can_view_internal_financials = can_view_lifecycle_profit(request.user)
 
@@ -7647,7 +7782,10 @@ def opportunity_edit(request, pk):
     Simple edit page for the main fields of an opportunity.
     This is the view used by urls.py for 'opportunities/<pk>/edit/'.
     """
-    opportunity = get_object_or_404(Opportunity, pk=pk)
+    opportunity = get_object_or_404(
+        scope_sales_opportunities(Opportunity.objects.select_related("lead"), request.user),
+        pk=pk,
+    )
 
     product_type_choices = Opportunity.PRODUCT_TYPE_CHOICES
     product_category_choices = Opportunity.PRODUCT_CATEGORY_CHOICES
@@ -7732,7 +7870,10 @@ def opportunity_edit(request, pk):
 
 @require_POST
 def opportunity_delete(request, pk):
-    opportunity = get_object_or_404(Opportunity, pk=pk)
+    opportunity = get_object_or_404(
+        scope_sales_opportunities(Opportunity.objects.select_related("lead"), request.user),
+        pk=pk,
+    )
     if not _can_archive_workflow_record(request.user):
         messages.error(request, "You do not have permission to archive or delete opportunities.")
         return redirect("opportunity_detail", pk=pk)
@@ -8286,7 +8427,10 @@ def production_list(request):
         valid_statuses = {key for key, _ in ProductionOrder.STATUS_CHOICES}
 
         if order_id and new_operational_status in valid_operational_statuses:
-            order = get_object_or_404(ProductionOrder, pk=order_id)
+            order = get_object_or_404(
+                scope_production_orders(ProductionOrder.objects.all(), request.user),
+                pk=order_id,
+            )
             if new_operational_status != order.operational_status:
                 sync_operational_status(order, explicit_status=new_operational_status)
                 messages.success(
@@ -8294,7 +8438,10 @@ def production_list(request):
                     f"Workflow status updated to {order.get_operational_status_display()}.",
                 )
         elif order_id and new_status in valid_statuses:
-            order = get_object_or_404(ProductionOrder, pk=order_id)
+            order = get_object_or_404(
+                scope_production_orders(ProductionOrder.objects.all(), request.user),
+                pk=order_id,
+            )
             old_status = order.status
             if new_status != old_status:
                 order.status = new_status
@@ -8341,6 +8488,7 @@ def production_list(request):
         .prefetch_related("stages", "shipments", "order_lifecycles")
         .order_by("-created_at")
     )
+    orders = scope_production_orders(orders, request.user)
 
     if archive_filter == "archived":
         orders = orders.filter(is_archived=True)
@@ -14371,7 +14519,7 @@ from .models import Lead, Opportunity
 
 
 def convert_lead_to_opportunity(request, pk):
-    lead = get_object_or_404(Lead, pk=pk)
+    lead = get_object_or_404(scope_owned_sales_leads(Lead.objects.all(), request.user), pk=pk)
 
     if request.method == "POST":
         customer = lead.customer if lead.customer_id else _find_or_create_customer_for_lead(lead)
@@ -14413,7 +14561,10 @@ def convert_lead_to_opportunity(request, pk):
 
 def add_opportunity(request):
     customers = Customer.objects.all().order_by("account_brand")
-    leads = Lead.objects.all().order_by("-created_date")
+    leads = scope_owned_sales_leads(
+        Lead.objects.all().order_by("-created_date"),
+        request.user,
+    )
 
     if request.method == "POST":
         customer_id = request.POST.get("customer")
@@ -14423,7 +14574,7 @@ def add_opportunity(request):
         lead = None
 
         if lead_id:
-            lead = Lead.objects.filter(pk=lead_id).first()
+            lead = leads.filter(pk=lead_id).first()
 
         if customer_id:
             customer = Customer.objects.filter(pk=customer_id).first()

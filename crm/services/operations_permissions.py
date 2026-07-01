@@ -69,7 +69,7 @@ ROLE_FLAG_MATRIX = {
     ROLE_WAREHOUSE: {"can_production", "can_shipping", "can_inventory"},
     ROLE_SUPERVISOR: set(),
     ROLE_HR: set(),
-    ROLE_ADMIN: set(),
+    ROLE_ADMIN: {"can_leads", "can_opportunities", "can_production"},
     ROLE_READ_ONLY: set(),
 }
 
@@ -168,7 +168,7 @@ ROLE_MODULES = {
     ROLE_QC: {"production"},
     ROLE_WAREHOUSE: {"production", "inventory"},
     ROLE_HR: set(),
-    ROLE_ADMIN: set(),
+    ROLE_ADMIN: {"leads", "opportunities", "production"},
     ROLE_READ_ONLY: set(),
     ROLE_SALES_MANAGER: {"customers", "leads", "opportunities", "quotations"},
 }
@@ -317,6 +317,67 @@ def can_access_operations_module(user, module):
     return any(bool(getattr(access, flag, False)) for flag in FALLBACK_FLAGS.get(module, ()))
 
 
+LEAD_CLOSED_STATUSES = {"Converted", "Lost", "Unqualified"}
+LEAD_CLOSED_OUTBOUND_STATUSES = {"Converted to Opportunity", "Archived", "Bad Fit"}
+
+
+def _lead_field(prefix, field_name):
+    return f"{prefix}{field_name}"
+
+
+def active_sales_lead_q(prefix=""):
+    return (
+        Q(**{_lead_field(prefix, "is_archived"): False})
+        & ~Q(**{f"{_lead_field(prefix, 'lead_status')}__in": LEAD_CLOSED_STATUSES})
+        & ~Q(**{f"{_lead_field(prefix, 'outbound_status')}__in": LEAD_CLOSED_OUTBOUND_STATUSES})
+    )
+
+
+def available_sales_lead_q(prefix=""):
+    return active_sales_lead_q(prefix) & Q(**{f"{_lead_field(prefix, 'assigned_to')}__isnull": True})
+
+
+def is_available_sales_lead(lead):
+    return bool(
+        lead
+        and not getattr(lead, "is_archived", False)
+        and getattr(lead, "assigned_to_id", None) is None
+        and getattr(lead, "lead_status", "") not in LEAD_CLOSED_STATUSES
+        and getattr(lead, "outbound_status", "") not in LEAD_CLOSED_OUTBOUND_STATUSES
+    )
+
+
+def can_manage_all_sales_records(user):
+    return has_operations_role(
+        user,
+        ROLE_CEO,
+        ROLE_DIRECTOR,
+        ROLE_ADMIN,
+        ROLE_MANAGER,
+        ROLE_SALES_MANAGER,
+    )
+
+
+def _has_legacy_lead_access(user):
+    return not operations_role_names(user) and can_access_operations_module(user, "leads")
+
+
+def can_claim_sales_lead(user):
+    return (
+        can_manage_all_sales_records(user)
+        or has_operations_role(user, ROLE_SALES)
+        or _has_legacy_lead_access(user)
+    )
+
+
+def can_release_sales_lead(user, lead):
+    return can_manage_all_sales_records(user) or bool(
+        user
+        and getattr(user, "is_authenticated", False)
+        and getattr(lead, "assigned_to_id", None) == user.pk
+    )
+
+
 def scope_sales_leads(queryset, user):
     if has_operations_role(user, ROLE_CEO, ROLE_DIRECTOR, ROLE_ADMIN):
         return queryset
@@ -329,13 +390,35 @@ def scope_sales_leads(queryset, user):
     return queryset
 
 
-def scope_sales_opportunities(queryset, user):
-    if has_operations_role(user, ROLE_CEO, ROLE_DIRECTOR, ROLE_ADMIN):
+def scope_sales_lead_queue(queryset, user):
+    if can_manage_all_sales_records(user):
         return queryset
-    if has_operations_role(user, ROLE_MANAGER, ROLE_SUPERVISOR):
-        department = employee_department(user)
-        if department in {"sales", "marketing", "customer_service"}:
-            return queryset.filter(lead__assigned_to__employee_profile__department=department)
+    if has_operations_role(user, ROLE_SALES) or _has_legacy_lead_access(user):
+        return queryset.filter(Q(assigned_to=user) | available_sales_lead_q()).distinct()
+    return queryset.none()
+
+
+def scope_owned_sales_leads(queryset, user):
+    if can_manage_all_sales_records(user):
+        return queryset
+    if has_operations_role(user, ROLE_SALES) or _has_legacy_lead_access(user):
+        return queryset.filter(assigned_to=user)
+    return queryset.none()
+
+
+def scope_sales_opportunities(queryset, user):
+    if can_manage_all_sales_records(user):
+        return queryset
     if has_operations_role(user, ROLE_SALES):
         return queryset.filter(employee_lead_ownership_q(user, prefix="lead__"))
+    return queryset
+
+
+def scope_production_orders(queryset, user):
+    if has_operations_role(user, ROLE_CEO, ROLE_DIRECTOR, ROLE_ADMIN):
+        return queryset
+    if has_operations_role(user, ROLE_PRODUCTION):
+        return queryset.filter(assigned_production_manager=user)
+    if has_operations_role(user, ROLE_MANAGER, ROLE_SUPERVISOR) and employee_department(user) == "production":
+        return queryset.filter(assigned_production_manager=user)
     return queryset

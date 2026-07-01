@@ -30,6 +30,7 @@ from crm.models import (
     ProductionOrder,
     Shipment,
 )
+from crm.models_access import UserAccess
 from crm.services.automation_engine import automation_dashboard_context
 from crm.services.operations_dashboard import operations_dashboard_context
 from crm.services.operations_notifications import sync_operations_notifications, visible_notifications
@@ -822,7 +823,7 @@ class DashboardAndRoleTests(OperationsControlBase):
     def test_sales_pipeline_list_is_scoped_to_assigned_leads(self):
         client = Client()
         client.force_login(self.sales)
-        response = client.get(reverse("leads_list"))
+        response = client.get(reverse("leads_list"), {"view": "my"})
         self.assertContains(response, self.lead.lead_id)
         self.assertNotContains(response, self.other_lead.lead_id)
 
@@ -888,3 +889,224 @@ class DashboardAndRoleTests(OperationsControlBase):
             {"action": "remove_user", "role_id": ceo_group.pk, "user_id": self.ceo.pk},
         )
         self.assertTrue(ceo_group.user_set.filter(pk=self.ceo.pk).exists())
+
+
+class LeadOwnershipWorkflowTests(OperationsControlBase):
+    def setUp(self):
+        super().setUp()
+        self.available = Lead.objects.create(
+            account_brand="Available Lead",
+            lead_status="New",
+            lead_type="inbound",
+        )
+        self.converted = Lead.objects.create(
+            account_brand="Converted Unassigned",
+            lead_status="Converted",
+            lead_type="inbound",
+        )
+        self.archived = Lead.objects.create(
+            account_brand="Archived Unassigned",
+            lead_status="New",
+            lead_type="inbound",
+            is_archived=True,
+        )
+        self.manager = self.User.objects.create_user("ops-manager", password="test-pass")
+        Group.objects.get_or_create(name="Manager")[0].user_set.add(self.manager)
+        self.admin = self.User.objects.create_user("ops-admin", password="test-pass")
+        Group.objects.get_or_create(name="Admin")[0].user_set.add(self.admin)
+
+    def test_available_is_default_and_my_leads_is_owner_only(self):
+        client = Client()
+        client.force_login(self.sales)
+
+        available_response = client.get(reverse("leads_list"))
+        self.assertContains(available_response, self.available.lead_id)
+        self.assertNotContains(available_response, self.lead.lead_id)
+        self.assertNotContains(available_response, self.other_lead.lead_id)
+        self.assertNotContains(available_response, self.converted.lead_id)
+        self.assertNotContains(available_response, self.archived.lead_id)
+        self.assertContains(available_response, "New / Unassigned Leads")
+        self.assertContains(available_response, "Claim Lead")
+
+        my_response = client.get(reverse("leads_list"), {"view": "my"})
+        self.assertContains(my_response, self.lead.lead_id)
+        self.assertNotContains(my_response, self.available.lead_id)
+        self.assertNotContains(my_response, self.other_lead.lead_id)
+
+    def test_legacy_useraccess_sales_user_is_not_locked_out(self):
+        legacy = self.User.objects.create_user("legacy-sales", password="test-pass")
+        access, _ = UserAccess.objects.get_or_create(user=legacy)
+        access.can_leads = True
+        access.save(update_fields=["can_leads"])
+        client = Client()
+        client.force_login(legacy)
+
+        response = client.get(reverse("leads_list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.available.lead_id)
+        client.post(reverse("lead_claim", args=[self.available.pk]))
+        self.available.refresh_from_db()
+        self.assertEqual(self.available.assigned_to, legacy)
+
+    def test_claim_and_release_reuse_one_lead_and_create_audit_history(self):
+        client = Client()
+        client.force_login(self.sales)
+        lead_count = Lead.objects.count()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            claim_response = client.post(reverse("lead_claim", args=[self.available.pk]))
+        self.available.refresh_from_db()
+
+        self.assertEqual(claim_response.status_code, 302)
+        self.assertEqual(self.available.assigned_to, self.sales)
+        self.assertEqual(Lead.objects.count(), lead_count)
+        self.assertTrue(
+            CRMAuditLog.objects.filter(
+                actor=self.sales,
+                module="leads",
+                record_id=str(self.available.pk),
+                field_name="assigned_to",
+                new_value=str(self.sales.pk),
+            ).exists()
+        )
+        available_ids = [lead.pk for lead in client.get(reverse("leads_list")).context["page_obj"]]
+        my_ids = [
+            lead.pk
+            for lead in client.get(reverse("leads_list"), {"view": "my"}).context["page_obj"]
+        ]
+        self.assertNotIn(self.available.pk, available_ids)
+        self.assertIn(self.available.pk, my_ids)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            release_response = client.post(reverse("lead_release", args=[self.available.pk]))
+        self.available.refresh_from_db()
+
+        self.assertEqual(release_response.status_code, 302)
+        self.assertIsNone(self.available.assigned_to)
+        self.assertEqual(Lead.objects.count(), lead_count)
+        available_ids = [lead.pk for lead in client.get(reverse("leads_list")).context["page_obj"]]
+        self.assertIn(self.available.pk, available_ids)
+        self.assertTrue(
+            CRMAuditLog.objects.filter(
+                actor=self.sales,
+                module="leads",
+                record_id=str(self.available.pk),
+                field_name="assigned_to",
+                previous_value=str(self.sales.pk),
+                new_value="",
+            ).exists()
+        )
+
+    def test_claim_rejects_closed_archived_and_already_assigned_leads(self):
+        client = Client()
+        client.force_login(self.sales)
+
+        for lead in (self.converted, self.archived, self.other_lead):
+            original_owner = lead.assigned_to_id
+            client.post(reverse("lead_claim", args=[lead.pk]))
+            lead.refresh_from_db()
+            self.assertEqual(lead.assigned_to_id, original_owner)
+
+    def test_sales_cannot_view_or_mutate_another_salespersons_records(self):
+        client = Client()
+        client.force_login(self.sales)
+
+        self.assertEqual(client.get(reverse("lead_detail", args=[self.other_lead.pk])).status_code, 404)
+        self.assertEqual(client.get(reverse("lead_edit", args=[self.other_lead.pk])).status_code, 404)
+        response = client.post(
+            reverse("lead_bulk_update"),
+            {
+                "lead_ids": [self.other_lead.pk],
+                "bulk_action": "followup",
+                "next_follow_up_date": timezone.localdate().isoformat(),
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.other_lead.refresh_from_db()
+        self.assertIsNone(self.other_lead.next_follow_up_date)
+
+    def test_manager_and_ceo_can_view_all_and_release_any_lead(self):
+        for user in (self.manager, self.ceo, self.admin):
+            client = Client()
+            client.force_login(user)
+            response = client.get(reverse("leads_list"), {"view": "all"})
+            self.assertContains(response, self.lead.lead_id)
+            self.assertContains(response, self.other_lead.lead_id)
+            self.assertContains(response, self.available.lead_id)
+
+        client = Client()
+        client.force_login(self.manager)
+        client.post(reverse("lead_release", args=[self.other_lead.pk]))
+        self.other_lead.refresh_from_db()
+        self.assertIsNone(self.other_lead.assigned_to)
+
+    def test_conversion_preserves_linked_lead_owner_and_opportunity_scope(self):
+        client = Client()
+        client.force_login(self.sales)
+        client.post(reverse("lead_claim", args=[self.available.pk]))
+        lead_count = Lead.objects.count()
+
+        response = client.post(reverse("convert_lead_to_opportunity", args=[self.available.pk]))
+        opportunity = Opportunity.objects.get(lead=self.available)
+        self.available.refresh_from_db()
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.available.assigned_to, self.sales)
+        self.assertEqual(self.available.lead_status, "Converted")
+        self.assertEqual(opportunity.lead.assigned_to, self.sales)
+        self.assertEqual(Lead.objects.count(), lead_count)
+        self.assertContains(client.get(reverse("opportunities_list")), opportunity.opportunity_id)
+
+        client.force_login(self.sales_other)
+        self.assertNotContains(client.get(reverse("opportunities_list")), opportunity.opportunity_id)
+        self.assertEqual(client.get(reverse("opportunity_detail", args=[opportunity.pk])).status_code, 404)
+
+        client.force_login(self.ceo)
+        self.assertContains(client.get(reverse("opportunities_list")), opportunity.opportunity_id)
+
+    def test_production_users_see_only_assigned_orders_while_ceo_sees_all(self):
+        other_production = self.User.objects.create_user("ops-production-other", password="test-pass")
+        Group.objects.get(name="Production").user_set.add(other_production)
+        own_order = ProductionOrder.objects.create(
+            title="Own Production",
+            order_code="PO-OWNERSHIP-OWN",
+            assigned_production_manager=self.production,
+        )
+        other_order = ProductionOrder.objects.create(
+            title="Other Production",
+            order_code="PO-OWNERSHIP-OTHER",
+            assigned_production_manager=other_production,
+        )
+
+        client = Client()
+        client.force_login(self.production)
+        response = client.get(reverse("production_list"), {"status": "all"})
+        self.assertContains(response, own_order.order_code)
+        self.assertNotContains(response, other_order.order_code)
+
+        for user in (self.ceo, self.admin):
+            client.force_login(user)
+            response = client.get(reverse("production_list"), {"status": "all"})
+            self.assertContains(response, own_order.order_code)
+            self.assertContains(response, other_order.order_code)
+
+    def test_lead_queue_query_count_is_bounded(self):
+        for index in range(25):
+            Lead.objects.create(
+                account_brand=f"Available Performance {index}",
+                lead_status="New",
+                lead_type="inbound",
+            )
+        client = Client()
+        client.force_login(self.sales)
+        client.get(reverse("leads_list"), {"view": "available", "per_page": 20})
+
+        with CaptureQueriesContext(connection) as twenty_queries:
+            response = client.get(reverse("leads_list"), {"view": "available", "per_page": 20})
+        with CaptureQueriesContext(connection) as fifty_queries:
+            larger_response = client.get(reverse("leads_list"), {"view": "available", "per_page": 50})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(larger_response.status_code, 200)
+        self.assertLessEqual(len(twenty_queries), 20)
+        self.assertLessEqual(abs(len(fifty_queries) - len(twenty_queries)), 2)

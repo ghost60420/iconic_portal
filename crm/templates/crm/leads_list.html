@@ -462,7 +462,7 @@
       <p class="lead-eyebrow">Sales Workspace</p>
       <h1 class="lead-title">Leads</h1>
       <p class="lead-subtitle">
-        A focused CRM list for scanning active leads, source quality, follow-up timing, and ownership without changing the lead workflow.
+        Claim available leads or continue working the leads already assigned to you.
       </p>
     </div>
 
@@ -499,6 +499,7 @@
     </div>
   </section>
 
+  {% if can_manage_leads %}
   <section class="lead-panel lead-assignee-summary" aria-label="Assignee summary">
     <div class="lead-panel-head">
       <div>
@@ -519,18 +520,14 @@
       {% endfor %}
     </div>
   </section>
+  {% endif %}
 
   <nav class="lead-tabs tabs" aria-label="Lead list views">
-    <a class="tab {% if active_view == 'all' %}active{% endif %}" href="?view=all">All Leads</a>
-    <a class="tab {% if active_view == 'inbound' %}active{% endif %}" href="?view=inbound">Inbound</a>
-    <a class="tab {% if active_view == 'outbound' %}active{% endif %}" href="?view=outbound">Outbound</a>
-    <a class="tab {% if active_view == 'followup' %}active{% endif %}" href="?view=followup">Follow Up Needed</a>
-    <a class="tab {% if active_view == 'replied' %}active{% endif %}" href="?view=replied">Replied</a>
-    <a class="tab {% if active_view == 'meeting' %}active{% endif %}" href="?view=meeting">Meeting Booked</a>
-    <a class="tab {% if active_view == 'high_fit' %}active{% endif %}" href="?view=high_fit">High Fit</a>
-    <a class="tab {% if active_view == 'target_volume' %}active{% endif %}" href="?view=target_volume">1,000 to 5,000 pcs</a>
-    <a class="tab {% if active_view == 'no_response' %}active{% endif %}" href="?view=no_response">No Response</a>
-    <a class="tab {% if active_view == 'archived' %}active{% endif %}" href="?view=archived">Archived</a>
+    <a class="tab {% if active_view == 'available' %}active{% endif %}" href="?view=available">New / Unassigned Leads</a>
+    <a class="tab {% if active_view == 'my' %}active{% endif %}" href="?view=my">My Leads</a>
+    {% if can_manage_leads %}
+      <a class="tab {% if active_view == 'all' %}active{% endif %}" href="?view=all">All Leads</a>
+    {% endif %}
   </nav>
 
   <section class="lead-panel lead-ai-panel">
@@ -604,6 +601,7 @@
         </select>
       </div>
 
+      {% if can_manage_leads %}
       <div class="field">
         <div class="label">Archive</div>
         <select class="input" name="archive">
@@ -612,6 +610,7 @@
           <option value="all" {% if archive_filter == "all" %}selected{% endif %}>All</option>
         </select>
       </div>
+      {% endif %}
 
       <div class="field">
         <div class="label">Market</div>
@@ -623,6 +622,7 @@
         </select>
       </div>
 
+      {% if can_manage_leads %}
       <div class="field">
         <div class="label">Owner</div>
         <input class="input" name="owner" value="{{ request.GET.owner|default:'' }}" placeholder="Refat, etc">
@@ -640,6 +640,7 @@
           {% endfor %}
         </select>
       </div>
+      {% endif %}
 
       <div class="field" style="min-width:170px;">
         <div class="label">Created from</div>
@@ -779,12 +780,13 @@
       <div class="bulk-bar">
         <select class="input" name="bulk_action">
           <option value="">Bulk action</option>
-          <option value="assign">Assign to user</option>
+          {% if can_manage_leads %}<option value="assign">Assign to user</option>{% endif %}
           <option value="outbound_status">Set outbound status</option>
           <option value="followup">Set follow up date</option>
-          <option value="archive">Archive selected leads</option>
+          {% if can_archive_records %}<option value="archive">Archive selected leads</option>{% endif %}
         </select>
 
+        {% if can_manage_leads %}
         <select class="input" name="assigned_to">
           <option value="">Select user</option>
           {% for u in users %}
@@ -793,6 +795,7 @@
             </option>
           {% endfor %}
         </select>
+        {% endif %}
 
         <select class="input" name="outbound_status">
           <option value="">Select outbound status</option>
@@ -833,7 +836,7 @@
             <tr>
               <td class="lead-image-cell" data-label="Image">
                 <div class="lead-image-with-select">
-                  <input type="checkbox" name="lead_ids" value="{{ lead.pk }}" aria-label="Select {{ lead.lead_id }}">
+                  {% if lead.can_edit %}<input type="checkbox" name="lead_ids" value="{{ lead.pk }}" aria-label="Select {{ lead.lead_id }}">{% endif %}
                   <a class="lead-product-thumb" href="{% url 'lead_detail' lead.pk %}" aria-label="Open {{ lead.lead_id }}">
                     {% if lead.primary_reference_image %}
                       <img class="lead-thumb" src="{{ lead.primary_reference_image.image.url }}" alt="{{ lead.primary_reference_image.caption|default:'Product reference image' }}">
@@ -933,7 +936,26 @@
                     </div>
                   </details>
                   <a class="lead-btn lead-btn--primary lead-btn--tiny" href="{% url 'lead_detail' lead.pk %}">Open</a>
-                  <a class="lead-btn lead-btn--ghost lead-btn--tiny" href="{% url 'lead_edit' lead.pk %}">Edit</a>
+                  {% if lead.can_claim %}
+                    <button
+                      class="lead-btn lead-btn--primary lead-btn--tiny"
+                      type="submit"
+                      formaction="{% url 'lead_claim' lead.pk %}"
+                      formmethod="post"
+                      name="next"
+                      value="{% url 'leads_list' %}?view=available"
+                    >Claim Lead</button>
+                  {% elif lead.can_release %}
+                    <button
+                      class="lead-btn lead-btn--ghost lead-btn--tiny"
+                      type="submit"
+                      formaction="{% url 'lead_release' lead.pk %}"
+                      formmethod="post"
+                      name="next"
+                      value="{{ request.get_full_path }}"
+                    >Release Lead</button>
+                  {% endif %}
+                  {% if lead.can_edit %}<a class="lead-btn lead-btn--ghost lead-btn--tiny" href="{% url 'lead_edit' lead.pk %}">Edit</a>{% endif %}
                   {% if can_archive_records and not lead.is_archived %}
 	                    <button
 	                      class="lead-btn lead-btn--ghost lead-btn--tiny"
