@@ -40,6 +40,7 @@ from .services.costing_workflow import (
     get_costing_quote_amounts,
 )
 from .services.order_lifecycle import create_lifecycle_from_costing
+from .services.operations_permissions import ROLE_SALES, has_operations_role
 from .services.production_orders import (
     ProductionOrderCreationError,
     create_production_order_from_approved_quotation,
@@ -94,6 +95,12 @@ def _can_convert_to_invoice(user):
 
 def _can_view_approval_queue(user):
     return _can_approve(user) or _can_convert_to_invoice(user)
+
+
+def _can_submit_quick_costing(user):
+    if not user or not user.is_authenticated or _can_approve(user):
+        return False
+    return has_operations_role(user, ROLE_SALES) or not _can_convert_to_invoice(user)
 
 
 def _deny_without_internal_costing_or_accounting(request):
@@ -1260,8 +1267,7 @@ def quick_costing_detail(request, pk):
                 quick_costing.status == QuickCosting.STATUS_REJECTED
                 or not quick_costing.approval_submitted_at
             )
-            and not _can_approve(request.user)
-            and not _can_convert_to_invoice(request.user)
+            and _can_submit_quick_costing(request.user)
         ),
         **workflow_visibility,
     }
@@ -1306,7 +1312,7 @@ def quick_costing_submit_for_approval(request, pk):
     if denied:
         return denied
     quick_costing = get_object_or_404(QuickCosting, pk=pk)
-    if _can_approve(request.user) or _can_convert_to_invoice(request.user):
+    if not _can_submit_quick_costing(request.user):
         messages.error(request, "Sales must submit Quick Costing for CEO approval.")
         return redirect("quick_costing_detail", pk=pk)
     if quick_costing.invoices.exists():

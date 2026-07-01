@@ -155,6 +155,48 @@ class UnifiedCEOApprovalQueueTests(TestCase):
         self.assertContains(response, "Submitted for CEO Approval")
         self.assertFalse(any(row["record"].pk == draft.pk and row["costing_type"] == "Quick" for row in rows))
 
+    def test_sales_user_with_accounts_role_can_submit_quick_costing(self):
+        self.sales.groups.add(Group.objects.get(name="Accounts"))
+        quick = self._quick(project_name="Multi-role Sales Quick")
+        self.client.force_login(self.sales)
+
+        detail_response = self.client.get(reverse("quick_costing_detail", args=[quick.pk]))
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_response = self.client.post(
+                reverse("quick_costing_submit_for_approval", args=[quick.pk])
+            )
+        quick.refresh_from_db()
+
+        self.assertContains(detail_response, "Submit for CEO Approval")
+        self.assertEqual(submit_response.status_code, 302)
+        self.assertEqual(quick.status, QuickCosting.STATUS_DRAFT)
+        self.assertEqual(quick.approval_submitted_by, self.sales)
+        self.assertIsNotNone(quick.approval_submitted_at)
+        self.assertTrue(
+            AutomationNotification.objects.filter(
+                notification_type="ceo_approval",
+                assigned_user=self.ceo,
+                record_object_id=quick.pk,
+            ).exists()
+        )
+        self.assertTrue(
+            CRMAuditLog.objects.filter(
+                module="quick_costing",
+                record_id=str(quick.pk),
+                field_name="approval_submitted_at",
+                actor=self.sales,
+            ).exists()
+        )
+
+        self.client.force_login(self.ceo)
+        queue_response = self.client.get(reverse("ceo_quotation_approval_queue"))
+        self.assertTrue(
+            any(
+                row["record"].pk == quick.pk and row["costing_type"] == "Quick"
+                for row in queue_response.context["rows"]
+            )
+        )
+
     def test_advanced_queue_uses_assigned_salesperson_not_conversion_actor(self):
         advanced = self._advanced(quoted_by=self.ceo)
         self.client.force_login(self.ceo)
