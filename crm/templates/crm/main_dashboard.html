@@ -2,6 +2,7 @@
 {% load humanize %}
 {% load static %}
 {% load crm_groups %}
+{% load crm_extras %}
 
 {% block content %}
 {% url 'leads_list' as leads_url %}
@@ -375,7 +376,7 @@
           <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Pending quotations</strong><span>{{ pending_quotations_count|intcomma }}</span></div></li>
           <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Unpaid invoices</strong><span>{{ unpaid_invoices_count|intcomma }}</span></div></li>
           <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Partial payments</strong><span>{{ partial_payments_count|intcomma }}</span></div></li>
-          <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Outstanding balance</strong><span>{{ outstanding_invoices_total|floatformat:2|intcomma }}</span></div></li>
+          <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Outstanding balance</strong><span>{% for row in outstanding_invoice_values %}<span title="{{ row.amount|finance_money:row.currency }}">{{ row.amount|compact_money:row.currency }}</span>{% if not forloop.last %}<br>{% endif %}{% empty %}-{% endfor %}</span></div></li>
         </ul>
       </article>
 
@@ -425,9 +426,13 @@
             </div>
           </div>
           <ul class="dashboard-list">
-            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Invoice value</strong><span>{{ lifecycle_summary.total_invoice_value|floatformat:2|intcomma }}</span></div></li>
-            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Estimated profit</strong><span>{{ lifecycle_summary.estimated_profit|floatformat:2|intcomma }}</span></div></li>
-            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Average margin</strong><span>{{ lifecycle_summary.average_margin|floatformat:2 }}%</span></div></li>
+            {% for row in lifecycle_summary.currency_rows %}
+              <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>{{ row.currency }} invoice value</strong><span title="{{ row.invoice_value|finance_money:row.currency }}">{{ row.invoice_value|compact_money:row.currency }}</span></div></li>
+              <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>{{ row.currency }} estimated profit</strong><span title="{{ row.profit|finance_money:row.currency }}">{{ row.profit|compact_money:row.currency }}</span></div></li>
+              <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>{{ row.currency }} margin</strong><span>{{ row.margin|floatformat:2 }}%</span></div></li>
+            {% empty %}
+              <li class="dashboard-empty">No lifecycle financials available.</li>
+            {% endfor %}
           </ul>
         </article>
       {% endif %}
@@ -621,10 +626,14 @@
             </div>
           </div>
           <ul class="dashboard-list">
-            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Total invoice value</strong><span>{{ lifecycle_summary.total_invoice_value|floatformat:2|intcomma }}</span></div></li>
-            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Estimated profit</strong><span>{{ lifecycle_summary.estimated_profit|floatformat:2|intcomma }}</span></div></li>
-            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Average margin</strong><span>{{ lifecycle_summary.average_margin|floatformat:2 }}%</span></div></li>
-            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Outstanding balance</strong><span>{{ lifecycle_summary.outstanding_balance|floatformat:2|intcomma }}</span></div></li>
+            {% for row in lifecycle_summary.currency_rows %}
+              <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>{{ row.currency }} invoice value</strong><span title="{{ row.invoice_value|finance_money:row.currency }}">{{ row.invoice_value|compact_money:row.currency }}</span></div></li>
+              <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>{{ row.currency }} estimated profit</strong><span title="{{ row.profit|finance_money:row.currency }}">{{ row.profit|compact_money:row.currency }}</span></div></li>
+              <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>{{ row.currency }} margin</strong><span>{{ row.margin|floatformat:2 }}%</span></div></li>
+              <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>{{ row.currency }} outstanding</strong><span title="{{ row.outstanding|finance_money:row.currency }}">{{ row.outstanding|compact_money:row.currency }}</span></div></li>
+            {% empty %}
+              <li class="dashboard-empty">No lifecycle financials available.</li>
+            {% endfor %}
           </ul>
         </article>
       </div>
@@ -746,8 +755,8 @@
         </div>
         <div class="dashboard-inline-metrics">
           <div class="dashboard-inline-metric">
-            <strong>{{ outstanding_invoices_total|floatformat:2|intcomma }}</strong>
-            <span>Outstanding balance</span>
+            {% for row in outstanding_invoice_values %}<strong title="{{ row.amount|finance_money:row.currency }}">{{ row.amount|compact_money:row.currency }}</strong>{% empty %}<strong>-</strong>{% endfor %}
+            <span>Outstanding balance by currency</span>
           </div>
           <div class="dashboard-inline-metric">
             <strong>{{ overdue_invoices_count }}</strong>

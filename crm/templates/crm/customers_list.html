@@ -1,5 +1,6 @@
 {% extends "crm/base.html" %}
 {% load static %}
+{% load crm_extras %}
 {% block content %}
 <nav class="crm-archive-switch" aria-label="Customer archive"><a href="?archive=active">Active</a><a href="?archive=archived">Archived</a></nav>
 <link rel="stylesheet" href="{% static 'crm/customers_list.css' %}?v=customers-modern-20260507">
@@ -37,8 +38,8 @@
     </article>
     <article class="customer-stat">
       <span>Total revenue</span>
-      <strong>{{ summary.total_revenue|floatformat:0 }}</strong>
-      <small>Linked opportunity value</small>
+      {% for row in summary.revenue_rows %}<strong title="{{ row.amount|finance_money:row.currency }}">{{ row.amount|compact_money:row.currency }}</strong>{% empty %}<strong>-</strong>{% endfor %}
+      <small>Linked opportunity value by currency</small>
     </article>
   </section>
 
@@ -158,7 +159,7 @@
                 </td>
                 <td data-label="Revenue">
                   <div class="customer-metric-stack">
-                    <strong>{{ c.total_revenue|default:0|floatformat:0 }}</strong>
+                    {% for row in c.revenue_rows %}<strong title="{{ row.amount|finance_money:row.currency }}">{{ row.amount|compact_money:row.currency }}</strong>{% empty %}<strong>-</strong>{% endfor %}
                     <a href="{% url 'invoice_list' %}">Invoices</a>
                   </div>
                 </td>

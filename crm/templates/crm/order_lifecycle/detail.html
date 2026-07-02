@@ -229,15 +229,15 @@
       </article>
       <article class="ol-kpi">
         <span>Total Cost</span>
-        <strong>{{ profit_breakdown.currency }} {{ profit_breakdown.display.total_cost|intcomma }}</strong>
+        <strong>{% if profit_breakdown.is_comparable %}{{ profit_breakdown.currency }} {{ profit_breakdown.display.total_cost|intcomma }}{% else %}Not comparable{% endif %}</strong>
       </article>
       <article class="ol-kpi">
         <span>Net Profit</span>
-        <strong>{{ profit_breakdown.currency }} {{ profit_breakdown.display.net_profit|intcomma }}</strong>
+        <strong>{% if profit_breakdown.is_comparable %}{{ profit_breakdown.currency }} {{ profit_breakdown.display.net_profit|intcomma }}{% else %}Not comparable{% endif %}</strong>
       </article>
       <article class="ol-kpi">
         <span>Margin</span>
-        <strong>{{ profit_breakdown.display.margin }}%</strong>
+        <strong>{% if profit_breakdown.is_comparable %}{{ profit_breakdown.display.margin }}%{% else %}Not comparable{% endif %}</strong>
       </article>
     </section>
   {% endif %}
@@ -270,6 +270,7 @@
   {% if can_view_profit %}
     <section class="ol-panel">
       <h2>Net Profit Formula</h2>
+      {% if not profit_breakdown.is_comparable %}<p>{{ profit_breakdown.comparison_reason }}</p>{% endif %}
       <table class="ol-table">
         <tbody>
           <tr><th>Invoice Total</th><td class="ol-right">{{ profit_breakdown.currency }} {{ profit_breakdown.display.invoice_total|intcomma }}</td></tr>
@@ -279,10 +280,11 @@
           <tr><th>Minus Shipping</th><td class="ol-right">{{ profit_breakdown.currency }} {{ profit_breakdown.display.shipping_cost|intcomma }}</td></tr>
           <tr><th>Minus Trim Cost</th><td class="ol-right">{{ profit_breakdown.currency }} {{ profit_breakdown.display.trim_cost|intcomma }}</td></tr>
           <tr><th>Minus Sampling</th><td class="ol-right">{{ profit_breakdown.currency }} {{ profit_breakdown.display.sampling_cost|intcomma }}</td></tr>
+          <tr><th>Minus Commission</th><td class="ol-right">{{ profit_breakdown.currency }} {{ profit_breakdown.display.commission_cost|intcomma }}</td></tr>
           {% if profit_breakdown.other_internal_cost %}
             <tr><th>Minus Other Internal Cost</th><td class="ol-right">{{ profit_breakdown.currency }} {{ profit_breakdown.display.other_internal_cost|intcomma }}</td></tr>
           {% endif %}
-          <tr><th>Net Profit</th><td class="ol-right"><strong>{{ profit_breakdown.currency }} {{ profit_breakdown.display.net_profit|intcomma }}</strong></td></tr>
+          <tr><th>Net Profit</th><td class="ol-right"><strong>{% if profit_breakdown.is_comparable %}{{ profit_breakdown.currency }} {{ profit_breakdown.display.net_profit|intcomma }}{% else %}Not comparable{% endif %}</strong></td></tr>
         </tbody>
       </table>
     </section>

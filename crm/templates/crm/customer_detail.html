@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load static platform_tools %}
+{% load static platform_tools crm_extras %}
 {% block content %}
 <link rel="stylesheet" href="{% static 'crm/customer_detail.css' %}?v=customer-detail-modern-20260507">
 
@@ -42,7 +42,7 @@
     </article>
     <article class="customer-summary-card">
       <span>Total revenue</span>
-      <strong>{{ total_revenue|floatformat:0 }}</strong>
+      {% for row in revenue_currency_rows %}<strong title="{{ row.amount|finance_money:row.currency }}">{{ row.amount|compact_money:row.currency }}</strong>{% empty %}<strong>-</strong>{% endfor %}
       <small>{{ total_orders }} valued orders</small>
     </article>
     <article class="customer-summary-card">
@@ -53,12 +53,12 @@
     <article class="customer-summary-card">
       <span>Unpaid invoices</span>
       <strong>{{ unpaid_invoices|length }}</strong>
-      <small>{{ unpaid_invoice_total|floatformat:2 }} outstanding</small>
+      <small>{% for row in invoice_currency_rows %}{{ row.outstanding|finance_money:row.currency }}{% if not forloop.last %} · {% endif %}{% empty %}No outstanding balance{% endfor %}</small>
     </article>
     <article class="customer-summary-card">
       <span>Invoice value</span>
-      <strong>{{ invoice_total|floatformat:0 }}</strong>
-      <small>{{ invoice_paid|floatformat:0 }} paid</small>
+      {% for row in invoice_currency_rows %}<strong title="{{ row.total|finance_money:row.currency }}">{{ row.total|compact_money:row.currency }}</strong>{% empty %}<strong>-</strong>{% endfor %}
+      <small>{% for row in invoice_currency_rows %}{{ row.paid|finance_money:row.currency }} paid{% if not forloop.last %} · {% endif %}{% empty %}No invoices{% endfor %}</small>
     </article>
     <article class="customer-summary-card">
       <span>Last activity</span>
@@ -156,7 +156,7 @@
                       <span>{{ opp.product_category|default:"-" }}</span>
                     </td>
                     <td><span class="customer-stage-badge">{{ opp.stage }}</span></td>
-                    <td>{% if opp.order_value %}{{ opp.order_value }}{% else %}-{% endif %}</td>
+                    <td>{% if opp.kpi_order_value %}{{ opp.kpi_order_value|finance_money:opp.kpi_currency }}{% else %}-{% endif %}</td>
                     {% if can_view_internal_financials %}<td>{% if opp.profit_margin_pct != None %}{{ opp.profit_margin_pct|floatformat:1 }}%{% else %}-{% endif %}</td>{% endif %}
                     <td>{{ opp.next_followup|date:"M j, Y"|default:"-" }}</td>
                     <td><a class="customer-btn customer-btn--tiny customer-btn--ghost" href="{% url 'opportunity_detail' opp.pk %}?customer={{ customer.id }}">Open</a></td>

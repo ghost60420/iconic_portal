@@ -35,13 +35,18 @@ from django.shortcuts import render
 from .models import Product, Fabric, Accessory, Trim, ThreadOption, InventoryItem, InventoryMovement, InventoryReorder, ProductionOrderMaterial
 
 from .services.costing import build_variance_report, calculate_cost_sheet
-from .services.costing_currency import format_finance_money
+from .services.costing_currency import (
+    currency_summary_rows,
+    format_compact_finance_money,
+    format_finance_money,
+)
 from .services.costing_engine import compute_costing
 from .services.order_lifecycle import (
     build_lifecycle_profit_breakdown,
     can_view_lifecycle_profit,
     create_lifecycle_from_production,
     create_lifecycle_from_shipping,
+    lifecycle_currency,
     lifecycle_dashboard_metrics,
 )
 from .services.production_operational_status import (
@@ -4346,15 +4351,6 @@ def customers_list(request):
     completed_statuses = _production_completed_statuses()
     active_prod_statuses = _production_active_statuses()
 
-    revenue_subquery = (
-        Opportunity.objects
-        .filter(customer=OuterRef("pk"))
-        .order_by()
-        .values("customer")
-        .annotate(total=Sum("order_value"))
-        .values("total")
-    )
-
     qs = Customer.objects.all()
     if archive_filter == "archived":
         qs = qs.filter(is_archived=True)
@@ -4385,10 +4381,6 @@ def customers_list(request):
 
     qs = qs.annotate(
         total_opps=Count("opportunities", distinct=True),
-        total_revenue=Subquery(
-            revenue_subquery,
-            output_field=models.DecimalField(max_digits=14, decimal_places=2),
-        ),
         active_opps=Count(
             "opportunities",
             filter=Q(opportunities__stage__in=active_stages),
@@ -4417,6 +4409,20 @@ def customers_list(request):
         qs = qs.filter(production_completed__gt=0)
 
     customers = list(qs)
+    customer_ids = [customer.pk for customer in customers]
+    customer_revenue_map = defaultdict(lambda: defaultdict(lambda: Decimal("0")))
+    if customer_ids:
+        revenue_rows = (
+            _with_opportunity_kpi_value(Opportunity.objects.filter(customer_id__in=customer_ids))
+            .values("customer_id", "kpi_currency")
+            .annotate(amount=Sum("kpi_order_value"))
+        )
+        for row in revenue_rows:
+            code = (row.get("kpi_currency") or "CAD").upper()
+            amount = _ceo_decimal(row.get("amount"))
+            if amount:
+                customer_revenue_map[row["customer_id"]][code] += amount
+    summary_revenue_totals = defaultdict(lambda: {"amount": Decimal("0")})
 
     def _to_date(value):
         if not value:
@@ -4440,11 +4446,22 @@ def customers_list(request):
         c.initials = "".join(part[0] for part in initials_source[:2]).upper() or "C"
         c.status_key = "active" if c.is_active else "inactive"
         c.status_label = "Active" if c.is_active else "Inactive"
+        c.revenue_rows = currency_summary_rows(
+            {
+                code: {"amount": amount}
+                for code, amount in customer_revenue_map[c.pk].items()
+            }
+        )
+        c.revenue_sort_value = max(
+            (row["amount"] for row in c.revenue_rows), default=Decimal("0")
+        )
+        for row in c.revenue_rows:
+            summary_revenue_totals[row["currency"]]["amount"] += row["amount"]
 
     if sort == "name":
         customers.sort(key=lambda c: ((c.account_brand or "").lower(), (c.contact_name or "").lower()))
     elif sort == "revenue":
-        customers.sort(key=lambda c: c.total_revenue or Decimal("0"), reverse=True)
+        customers.sort(key=lambda c: c.revenue_sort_value, reverse=True)
     else:
         customers.sort(key=lambda c: c.last_activity or date.min, reverse=True)
 
@@ -4453,7 +4470,7 @@ def customers_list(request):
         "active": sum(1 for c in customers if c.is_active),
         "with_active_opps": sum(1 for c in customers if (c.active_opps or 0) > 0),
         "in_production": sum(1 for c in customers if (c.production_active or 0) > 0),
-        "total_revenue": sum((c.total_revenue or Decimal("0")) for c in customers),
+        "revenue_rows": currency_summary_rows(summary_revenue_totals),
     }
 
     paginator = Paginator(customers, 25)
@@ -4574,9 +4591,8 @@ def customer_detail(request, pk):
     can_view_internal_financials = can_view_lifecycle_profit(request.user)
     leads = customer.leads.all().order_by("-created_date", "-id")
 
-    opportunities = (
-        Opportunity.objects
-        .filter(Q(customer=customer) | Q(lead__customer=customer))
+    opportunities = _with_opportunity_kpi_value(
+        Opportunity.objects.filter(Q(customer=customer) | Q(lead__customer=customer))
         .select_related("lead")
         .order_by("-updated_at", "-id")
         .distinct()
@@ -4599,13 +4615,15 @@ def customer_detail(request, pk):
     active_stages = _active_opportunity_stages()
     active_opps = opportunities.filter(stage__in=active_stages)
 
-    paid_opps = opportunities.filter(order_value__isnull=False)
-    totals = paid_opps.aggregate(
-        total_revenue=Sum("order_value"),
-        total_orders=Count("id"),
-    )
-    total_revenue = totals.get("total_revenue") or Decimal("0.00")
-    total_orders = totals.get("total_orders") or 0
+    revenue_totals = defaultdict(lambda: {"amount": Decimal("0")})
+    total_orders = 0
+    for row in opportunities.values("kpi_currency").annotate(amount=Sum("kpi_order_value"), count=Count("id")):
+        code = (row.get("kpi_currency") or "CAD").upper()
+        amount = _ceo_decimal(row.get("amount"))
+        if amount:
+            revenue_totals[code]["amount"] += amount
+            total_orders += int(row.get("count") or 0)
+    revenue_currency_rows = currency_summary_rows(revenue_totals)
 
     prod_orders = (
         customer.production_orders
@@ -4629,16 +4647,22 @@ def customer_detail(request, pk):
             .distinct()
         )
         unpaid_invoices = invoices.exclude(status__in=["paid", "cancelled"])
-        invoice_totals = invoices.aggregate(total=Sum("total_amount"), paid=Sum("paid_amount"))
-        invoice_total = invoice_totals.get("total") or Decimal("0.00")
-        invoice_paid = invoice_totals.get("paid") or Decimal("0.00")
-        unpaid_invoice_total = sum((invoice.balance or Decimal("0.00")) for invoice in unpaid_invoices)
+        invoice_totals = defaultdict(
+            lambda: {"total": Decimal("0"), "paid": Decimal("0"), "outstanding": Decimal("0")}
+        )
+        for invoice in invoices:
+            code = (invoice.currency or "CAD").upper().strip()
+            invoice_totals[code]["total"] += _ceo_decimal(invoice.total_amount)
+            invoice_totals[code]["paid"] += _ceo_decimal(invoice.paid_amount)
+            if invoice.status not in {"paid", "cancelled"}:
+                invoice_totals[code]["outstanding"] += _ceo_decimal(invoice.balance)
+        invoice_currency_rows = currency_summary_rows(
+            invoice_totals, ("total", "paid", "outstanding")
+        )
     else:
         invoices = []
         unpaid_invoices = []
-        invoice_total = Decimal("0.00")
-        invoice_paid = Decimal("0.00")
-        unpaid_invoice_total = Decimal("0.00")
+        invoice_currency_rows = []
 
     profit_estimate = None
     profit_margin = None
@@ -4660,18 +4684,22 @@ def customer_detail(request, pk):
             .get("total_cost") or Decimal("0.00")
         )
 
-        profit_estimate = total_revenue - total_cost_bdt
-        if total_revenue:
+        bdt_revenue = next(
+            (row["amount"] for row in revenue_currency_rows if row["currency"] == "BDT"),
+            Decimal("0"),
+        )
+        profit_estimate = bdt_revenue - total_cost_bdt if bdt_revenue else None
+        if bdt_revenue:
             try:
-                profit_margin = (profit_estimate / total_revenue) * 100
+                profit_margin = (profit_estimate / bdt_revenue) * 100
             except Exception:
                 profit_margin = None
 
     for opp in opportunities:
         cost = prod_cost_map.get(opp.id)
-        if can_view_internal_financials and opp.order_value and cost is not None:
+        if can_view_internal_financials and opp.kpi_currency == "BDT" and opp.kpi_order_value and cost is not None:
             try:
-                opp.profit_margin_pct = ((opp.order_value - cost) / opp.order_value) * 100
+                opp.profit_margin_pct = ((opp.kpi_order_value - cost) / opp.kpi_order_value) * 100
             except Exception:
                 opp.profit_margin_pct = None
         else:
@@ -4709,10 +4737,8 @@ def customer_detail(request, pk):
         "production_completed": production_completed,
         "invoices": invoices,
         "unpaid_invoices": unpaid_invoices,
-        "invoice_total": invoice_total,
-        "invoice_paid": invoice_paid,
-        "unpaid_invoice_total": unpaid_invoice_total,
-        "total_revenue": total_revenue,
+        "invoice_currency_rows": invoice_currency_rows,
+        "revenue_currency_rows": revenue_currency_rows,
         "total_orders": total_orders,
         "total_cost_bdt": total_cost_bdt,
         "profit_estimate": profit_estimate,
@@ -11141,6 +11167,13 @@ def _format_money(value, prefix="$"):
     return f"{prefix} {_to_float(value):,.2f}"
 
 
+def _format_currency_summary(rows):
+    return " / ".join(
+        format_compact_finance_money(row.get("amount"), row.get("currency"))
+        for row in (rows or [])
+    ) or "-"
+
+
 def _format_percent(value, places=1):
     return f"{_to_float(value):,.{places}f}%"
 
@@ -11284,46 +11317,100 @@ def _quick_costing_revenue_expression():
 
 def _with_opportunity_kpi_value(qs, annotation_name="kpi_order_value"):
     revenue_expression = _quick_costing_revenue_expression()
-    approved_quick_value = (
+    approved_quick = (
         QuickCosting.objects.filter(
             opportunity=OuterRef("pk"),
             status__in=QUICK_COSTING_KPI_VALUE_STATUSES,
         )
         .annotate(_kpi_revenue=revenue_expression)
         .order_by("-updated_at", "-id")
-        .values("_kpi_revenue")[:1]
     )
-    latest_quick_value = (
+    latest_quick = (
         QuickCosting.objects.filter(opportunity=OuterRef("pk"))
         .annotate(_kpi_revenue=revenue_expression)
         .order_by("-updated_at", "-id")
-        .values("_kpi_revenue")[:1]
     )
-    return qs.annotate(
+    approved_advanced = CostingHeader.objects.filter(
+        opportunity=OuterRef("pk"), status="approved", is_archived=False
+    ).order_by("-updated_at", "-id")
+    latest_advanced = CostingHeader.objects.filter(
+        opportunity=OuterRef("pk"), is_archived=False
+    ).order_by("-updated_at", "-id")
+    annotated = qs.annotate(
+        _quick_kpi_value=Coalesce(
+            Subquery(approved_quick.values("_kpi_revenue")[:1]),
+            Subquery(latest_quick.values("_kpi_revenue")[:1]),
+            output_field=models.DecimalField(max_digits=16, decimal_places=2),
+        ),
+        _quick_kpi_currency=Coalesce(
+            Subquery(approved_quick.values("currency")[:1]),
+            Subquery(latest_quick.values("currency")[:1]),
+            models.Value("BDT"),
+            output_field=models.CharField(max_length=10),
+        ),
+        _advanced_kpi_quantity=Coalesce(
+            Subquery(approved_advanced.values("order_quantity")[:1]),
+            Subquery(latest_advanced.values("order_quantity")[:1]),
+            output_field=models.IntegerField(),
+        ),
+        _advanced_kpi_currency=Coalesce(
+            Subquery(approved_advanced.values("currency")[:1]),
+            Subquery(latest_advanced.values("currency")[:1]),
+            output_field=models.CharField(max_length=10),
+        ),
+    ).annotate(
+        _advanced_kpi_value=models.ExpressionWrapper(
+            F("costing_fob_per_piece") * F("_advanced_kpi_quantity"),
+            output_field=models.DecimalField(max_digits=16, decimal_places=2),
+        )
+    )
+    return annotated.annotate(
         **{
             annotation_name: Coalesce(
-                Subquery(approved_quick_value),
-                Subquery(latest_quick_value),
+                F("_quick_kpi_value"),
+                F("_advanced_kpi_value"),
                 F("order_value_usd"),
                 F("order_value"),
                 models.Value(Decimal("0")),
                 output_field=models.DecimalField(max_digits=16, decimal_places=2),
-            )
+            ),
+            "kpi_currency": Case(
+                When(_quick_kpi_value__isnull=False, then=F("_quick_kpi_currency")),
+                When(_advanced_kpi_value__isnull=False, then=F("_advanced_kpi_currency")),
+                When(order_value_usd__isnull=False, then=models.Value("USD")),
+                default=Coalesce(F("order_currency"), models.Value("CAD")),
+                output_field=models.CharField(max_length=10),
+            ),
         }
     )
 
 
-def _sum_opportunity_kpi_value(qs):
+def _sum_opportunity_kpi_values_by_currency(qs):
     try:
-        return _ceo_decimal(
+        grouped = (
             _with_opportunity_kpi_value(qs)
-            .aggregate(total=Sum("kpi_order_value"))
-            .get("total")
+            .values("kpi_currency")
+            .annotate(total=Sum("kpi_order_value"))
         )
+        totals = {
+            (row.get("kpi_currency") or "CAD").upper(): {
+                "amount": _ceo_decimal(row.get("total"))
+            }
+            for row in grouped
+            if _ceo_decimal(row.get("total")) != 0
+        }
+        return currency_summary_rows(totals)
     except (OperationalError, ProgrammingError):
-        return _ceo_decimal(
-            qs.aggregate(total=Sum(Coalesce("order_value_usd", "order_value"))).get("total")
-        )
+        totals = defaultdict(lambda: {"amount": Decimal("0")})
+        for opportunity in qs.only("order_value", "order_value_usd", "order_currency"):
+            if opportunity.order_value_usd is not None:
+                currency = "USD"
+                amount = opportunity.order_value_usd
+            else:
+                currency = (opportunity.order_currency or "CAD").upper()
+                amount = opportunity.order_value
+            totals[currency]["amount"] += _ceo_decimal(amount)
+        return currency_summary_rows(totals)
 
 
 def _ceo_inventory_label(key):
@@ -11531,7 +11618,7 @@ def ceo_operations_dashboard(request):
     prev_opp_period = opportunity_kpi_qs.filter(created_date__range=(previous_start, previous_end)).count()
     open_pipeline_qs = opportunity_kpi_qs.filter(is_open=True).exclude(stage__in=["Closed Won", "Closed Lost"])
     open_opps = open_pipeline_qs.count()
-    open_pipeline_value = _sum_opportunity_kpi_value(open_pipeline_qs)
+    open_pipeline_values = _sum_opportunity_kpi_values_by_currency(open_pipeline_qs)
     won_period = opportunity_kpi_qs.filter(
         stage="Closed Won", updated_at__date__range=(start_period, today)
     ).count()
@@ -11546,7 +11633,7 @@ def ceo_operations_dashboard(request):
     top_customer_rows = list(
         _with_opportunity_kpi_value(opportunity_kpi_qs.select_related("customer", "lead"))
         .filter(created_date__range=(start_period, today))
-        .values("customer__account_brand", "customer__contact_name", "lead__account_brand")
+        .values("customer__account_brand", "customer__contact_name", "lead__account_brand", "kpi_currency")
         .annotate(total=Sum("kpi_order_value"), count=Count("id"))
         .order_by(*(["-total", "-count"] if can_view_executive_financials else ["-count"]))[:8]
     )
@@ -11559,6 +11646,7 @@ def ceo_operations_dashboard(request):
                 or row.get("lead__account_brand")
                 or "Unassigned customer",
                 "value": _ceo_decimal(row.get("total")),
+                "currency": row.get("kpi_currency") or "CAD",
                 "count": int(row.get("count") or 0),
             }
         )
@@ -11664,57 +11752,68 @@ def ceo_operations_dashboard(request):
     if invoice_qs is not None and side:
         invoice_qs = invoice_qs.filter(Q(invoice_region=side) | Q(invoice_region="", currency="BDT" if side == "BD" else "CAD"))
     invoice_open_total = Decimal("0")
+    invoice_open_values = []
     overdue_invoice_count = 0
     if invoice_qs is not None:
         try:
             open_invoices = invoice_qs.exclude(status="paid")
-            invoice_open_total = sum(
-                (
-                    _ceo_invoice_balance_cad(invoice, cad_to_bdt)
-                    for invoice in open_invoices.only("total_amount", "paid_amount", "currency")
-                ),
-                Decimal("0"),
-            )
+            open_totals = defaultdict(lambda: {"amount": Decimal("0")})
+            for invoice in open_invoices.only("total_amount", "paid_amount", "currency"):
+                code = (invoice.currency or "CAD").upper().strip()
+                open_totals[code]["amount"] += _ceo_decimal(invoice.balance)
+            invoice_open_values = currency_summary_rows(open_totals)
+            if len(invoice_open_values) == 1:
+                invoice_open_total = invoice_open_values[0]["amount"]
             overdue_invoice_count = open_invoices.filter(due_date__lt=today).count()
         except (OperationalError, ProgrammingError):
             invoice_open_total = Decimal("0")
+            invoice_open_values = []
             overdue_invoice_count = 0
 
     ceo_month_keys = _ceo_month_keys(today)
     revenue_overview = None
     invoice_month_labels = []
     invoice_month_values = []
+    invoice_month_series = []
     if can_view_executive_financials and invoice_qs is not None:
         try:
             invoice_period = invoice_qs.filter(issue_date__range=(start_period, today))
-            total_invoiced_cad = Decimal("0")
-            total_paid_cad = Decimal("0")
+            period_totals = defaultdict(
+                lambda: {"invoiced": Decimal("0"), "paid": Decimal("0"), "outstanding": Decimal("0")}
+            )
             for invoice in invoice_period.only("total_amount", "paid_amount", "currency"):
-                total_invoiced_cad += _ceo_currency_amount_cad(invoice.total_amount, invoice.currency, cad_to_bdt)
-                total_paid_cad += _ceo_currency_amount_cad(invoice.paid_amount, invoice.currency, cad_to_bdt)
-            invoice_month_map = defaultdict(lambda: Decimal("0"))
+                code = (invoice.currency or "CAD").upper().strip()
+                period_totals[code]["invoiced"] += _ceo_decimal(invoice.total_amount)
+                period_totals[code]["paid"] += _ceo_decimal(invoice.paid_amount)
+                period_totals[code]["outstanding"] += _ceo_decimal(invoice.balance)
+            invoice_currency_rows = currency_summary_rows(
+                period_totals, ("invoiced", "paid", "outstanding")
+            )
+            invoice_month_map = defaultdict(lambda: defaultdict(lambda: Decimal("0")))
             for invoice in invoice_qs.filter(issue_date__gte=ceo_month_keys[0]).only(
                 "issue_date", "total_amount", "currency"
             ):
                 month_key = _ceo_month_key(invoice.issue_date)
                 if month_key:
-                    invoice_month_map[month_key] += _ceo_currency_amount_cad(
-                        invoice.total_amount,
-                        invoice.currency,
-                        cad_to_bdt,
-                    )
+                    code = (invoice.currency or "CAD").upper().strip()
+                    invoice_month_map[code][month_key] += _ceo_decimal(invoice.total_amount)
             for month_key in ceo_month_keys:
                 invoice_month_labels.append(month_key.strftime("%b"))
-                invoice_month_values.append(_to_float(invoice_month_map.get(month_key, Decimal("0"))))
+            for row in invoice_currency_rows:
+                invoice_month_series.append(
+                    {
+                        "currency": row["currency"],
+                        "values": [
+                            _to_float(invoice_month_map[row["currency"]][month_key])
+                            for month_key in ceo_month_keys
+                        ],
+                    }
+                )
+            if len(invoice_month_series) == 1:
+                invoice_month_values = invoice_month_series[0]["values"]
             revenue_overview = {
-                "total_invoiced": total_invoiced_cad,
-                "total_paid": total_paid_cad,
-                "outstanding_balance": invoice_open_total,
+                "currency_rows": invoice_currency_rows,
                 "overdue_invoice_count": overdue_invoice_count,
-                "monthly_rows": [
-                    {"label": label, "value": value}
-                    for label, value in zip(invoice_month_labels, invoice_month_values)
-                ],
             }
         except (OperationalError, ProgrammingError):
             logger.exception("ceo_dashboard: invoice revenue overview unavailable")
@@ -11965,9 +12064,14 @@ def ceo_operations_dashboard(request):
     top_profit_customers = []
     profit_month_labels = []
     profit_month_values = []
+    profit_month_series = []
     if can_view_executive_financials:
         try:
-            lifecycle_qs = OrderLifecycle.objects.select_related("customer", "invoice", "production_order").exclude(
+            lifecycle_qs = OrderLifecycle.objects.select_related(
+                "customer", "invoice", "invoice__quick_costing", "costing", "quotation", "production_order"
+            ).prefetch_related(
+                "production_order__shipments", "production_order__actual_cost_entries"
+            ).exclude(
                 status="cancelled"
             )
             if side == "CA":
@@ -11982,19 +12086,57 @@ def ceo_operations_dashboard(request):
                     | Q(invoice__invoice_region="BD")
                     | Q(invoice__currency="BDT")
                 ).distinct()
-            profit_totals = lifecycle_qs.aggregate(
-                revenue=Sum("estimated_revenue"),
-                cost=Sum("estimated_cost"),
-                profit=Sum("estimated_profit"),
+            profit_totals = defaultdict(
+                lambda: {"revenue": Decimal("0"), "cost": Decimal("0"), "profit": Decimal("0")}
             )
-            total_estimated_revenue = _ceo_decimal(profit_totals.get("revenue"))
-            total_estimated_cost = _ceo_decimal(profit_totals.get("cost"))
-            total_estimated_profit = _ceo_decimal(profit_totals.get("profit"))
-            low_margin_source = list(
-                lifecycle_qs.filter(estimated_revenue__gt=0, estimated_margin__lt=Decimal("15"))
-                .order_by("estimated_margin", "-estimated_revenue")[:5]
+            profit_month_map = defaultdict(lambda: defaultdict(lambda: Decimal("0")))
+            customer_totals = defaultdict(
+                lambda: {"label": "Customer", "revenue": Decimal("0"), "profit": Decimal("0"), "order_count": 0}
             )
-            for lifecycle in low_margin_source:
+            low_margin_source = []
+            for lifecycle in lifecycle_qs:
+                currency_code = lifecycle_currency(lifecycle)
+                if not currency_code:
+                    continue
+                revenue = _ceo_decimal(lifecycle.estimated_revenue)
+                cost = _ceo_decimal(lifecycle.estimated_cost)
+                profit = _ceo_decimal(lifecycle.estimated_profit)
+                margin = _ceo_decimal(lifecycle.estimated_margin)
+                if lifecycle.invoice_id and getattr(lifecycle.invoice, "quick_costing_id", None):
+                    quick_breakdown = build_lifecycle_profit_breakdown(lifecycle)
+                    revenue = _ceo_decimal(quick_breakdown["invoice_total"])
+                    if quick_breakdown["is_comparable"]:
+                        cost = _ceo_decimal(quick_breakdown["total_cost"])
+                        profit = _ceo_decimal(quick_breakdown["net_profit"])
+                        margin = _ceo_decimal(quick_breakdown["margin"])
+                    else:
+                        cost = profit = margin = Decimal("0")
+                totals = profit_totals[currency_code]
+                totals["revenue"] += revenue
+                totals["cost"] += cost
+                totals["profit"] += profit
+                month_key = _ceo_month_key(lifecycle.updated_at)
+                if month_key in ceo_month_keys:
+                    profit_month_map[currency_code][month_key] += profit
+                customer = lifecycle.customer
+                if customer:
+                    customer_key = (currency_code, customer.pk)
+                    customer_row = customer_totals[customer_key]
+                    customer_row["label"] = customer.account_brand or customer.contact_name or "Customer"
+                    customer_row["revenue"] += revenue
+                    customer_row["profit"] += profit
+                    customer_row["order_count"] += 1
+                if revenue > 0 and margin < Decimal("15"):
+                    low_margin_source.append((margin, -revenue, lifecycle, currency_code, profit))
+
+            profit_currency_rows = currency_summary_rows(
+                profit_totals, ("revenue", "cost", "profit")
+            )
+            for row in profit_currency_rows:
+                row["margin"] = _ceo_percent(row["profit"], row["revenue"])
+            for _margin, _revenue, lifecycle, currency_code, profit in sorted(
+                low_margin_source, key=lambda item: (item[0], item[1])
+            )[:5]:
                 customer = lifecycle.customer
                 low_margin_orders.append(
                     {
@@ -12005,35 +12147,36 @@ def ceo_operations_dashboard(request):
                             or getattr(getattr(lifecycle, "production_order", None), "order_code", "")
                             or f"Lifecycle {lifecycle.pk}"
                         ),
-                        "profit": lifecycle.estimated_profit,
-                        "margin": lifecycle.estimated_margin,
+                        "currency": currency_code,
+                        "profit": profit,
+                        "margin": _margin,
                     }
                 )
-            top_profit_customers = list(
-                lifecycle_qs.filter(customer__isnull=False, estimated_profit__gt=0)
-                .values("customer__account_brand", "customer__contact_name")
-                .annotate(
-                    revenue=Sum("estimated_revenue"),
-                    profit=Sum("estimated_profit"),
-                    order_count=Count("id"),
+            for currency_code in ("CAD", "USD", "BDT"):
+                rows = [
+                    {"currency": code, **values}
+                    for (code, _customer_id), values in customer_totals.items()
+                    if code == currency_code and values["profit"] > 0
+                ]
+                top_profit_customers.extend(
+                    sorted(rows, key=lambda row: row["profit"], reverse=True)[:3]
                 )
-                .order_by("-profit")[:6]
-            )
-            profit_month_map = {
-                _ceo_month_key(row.get("month")): _ceo_decimal(row.get("profit"))
-                for row in lifecycle_qs.filter(updated_at__date__gte=ceo_month_keys[0])
-                .annotate(month=TruncMonth("updated_at"))
-                .values("month")
-                .annotate(profit=Sum("estimated_profit"))
-            }
             for month_key in ceo_month_keys:
                 profit_month_labels.append(month_key.strftime("%b"))
-                profit_month_values.append(_to_float(profit_month_map.get(month_key, Decimal("0"))))
+            for row in profit_currency_rows:
+                profit_month_series.append(
+                    {
+                        "currency": row["currency"],
+                        "values": [
+                            _to_float(profit_month_map[row["currency"]][month_key])
+                            for month_key in ceo_month_keys
+                        ],
+                    }
+                )
+            if len(profit_month_series) == 1:
+                profit_month_values = profit_month_series[0]["values"]
             profit_overview = {
-                "estimated_revenue": total_estimated_revenue,
-                "estimated_cost": total_estimated_cost,
-                "estimated_gross_profit": total_estimated_profit,
-                "average_margin": _ceo_percent(total_estimated_profit, total_estimated_revenue),
+                "currency_rows": profit_currency_rows,
                 "low_margin_orders": low_margin_orders,
                 "top_profit_customers": top_profit_customers,
             }
@@ -12050,7 +12193,7 @@ def ceo_operations_dashboard(request):
         ai_insight_cards.append({"title": "Production flow", "detail": "No active production delays are showing.", "tone": "good"})
     if can_view_executive_financials and top_profit_customers:
         row = top_profit_customers[0]
-        label = row.get("customer__account_brand") or row.get("customer__contact_name") or "Top customer"
+        label = row.get("label") or "Top customer"
         ai_insight_cards.append(
             {"title": "Profit concentration", "detail": f"{label} currently leads estimated profit.", "tone": "blue"}
         )
@@ -12144,14 +12287,14 @@ def ceo_operations_dashboard(request):
         key_trends = [trend for trend in key_trends if trend["label"] != "Revenue"]
 
     kpi_cards = [
-        {"label": "Revenue", "value": _format_money(finance_totals["revenue"]), "note": f"{period_label} accounting inflow.", "tone": "good"},
-        {"label": "Net Cash", "value": _format_money(finance_totals["net"]), "note": "Revenue less accounting outflow.", "tone": "good" if finance_totals["net"] >= 0 else "bad"},
-        {"label": "Open Pipeline", "value": _format_money(open_pipeline_value), "note": f"{open_opps:,} open opportunities.", "tone": "blue"},
+        {"label": "Revenue", "value": format_compact_finance_money(finance_totals["revenue"], "CAD"), "note": f"{period_label} CAD equivalent accounting inflow.", "tone": "good"},
+        {"label": "Net Cash", "value": format_compact_finance_money(finance_totals["net"], "CAD"), "note": "CAD equivalent revenue less accounting outflow.", "tone": "good" if finance_totals["net"] >= 0 else "bad"},
+        {"label": "Open Pipeline", "value": _format_currency_summary(open_pipeline_values), "note": f"{open_opps:,} open opportunities; currencies are not combined.", "tone": "blue"},
         {"label": "Lead Conversion", "value": _format_percent(conversion_rate), "note": f"{opp_period:,} opportunities from {leads_period:,} leads.", "tone": "good" if conversion_rate >= prev_conversion_rate else "warn"},
         {"label": "Production Running", "value": _format_count(production_running), "note": f"{production_quantity:,} active units.", "tone": "blue"},
         {"label": "Shipments In Transit", "value": _format_count(shipments_in_transit), "note": f"{shipments_period:,} shipment(s) created in period.", "tone": "blue"},
         {"label": "Website Visitors", "value": _format_count(website_totals.get("visitors")), "note": f"{_format_count(website_totals.get('page_views'))} page views.", "tone": "blue"},
-        {"label": "Receivables", "value": _format_money(invoice_open_total), "note": f"{overdue_invoice_count:,} overdue invoice(s).", "tone": "warn" if overdue_invoice_count else "blue"},
+        {"label": "Receivables", "value": _format_currency_summary(invoice_open_values), "note": f"{overdue_invoice_count:,} overdue invoice(s); currencies are not combined.", "tone": "warn" if overdue_invoice_count else "blue"},
     ]
     if not can_view_executive_financials:
         kpi_cards = [
@@ -12185,8 +12328,10 @@ def ceo_operations_dashboard(request):
             {
                 "invoice_month_labels": invoice_month_labels,
                 "invoice_month_values": invoice_month_values,
+                "invoice_month_series": invoice_month_series,
                 "profit_month_labels": profit_month_labels,
                 "profit_month_values": profit_month_values,
+                "profit_month_series": profit_month_series,
             }
         )
 
@@ -12244,6 +12389,7 @@ def ceo_operations_dashboard(request):
             "expenses": finance_totals["expenses"] if can_view_executive_financials else None,
             "net": finance_totals["net"] if can_view_executive_financials else None,
             "invoice_open_total": invoice_open_total if can_view_executive_financials else None,
+            "invoice_open_values": invoice_open_values if can_view_executive_financials else [],
             "overdue_invoice_count": overdue_invoice_count if can_view_executive_financials else None,
         },
         "sales_summary": {
@@ -13786,7 +13932,7 @@ def main_dashboard(request):
 
     open_opportunity_qs = opportunity_kpi_qs.filter(is_open=True)
     open_opps = open_opportunity_qs.count()
-    open_pipeline_value = _sum_opportunity_kpi_value(open_opportunity_qs)
+    open_pipeline_values = _sum_opportunity_kpi_values_by_currency(open_opportunity_qs)
     overdue_followups = lead_kpi_qs.filter(next_followup__lt=today).exclude(
         lead_status__in=["Converted", "Closed", "Disqualified", "Lost"]
     ).count()
@@ -13908,6 +14054,7 @@ def main_dashboard(request):
 
     pending_invoice_approvals = 0
     outstanding_invoices_total = Decimal("0")
+    outstanding_invoice_values = []
     overdue_invoices_count = 0
     unpaid_invoices_count = 0
     partial_payments_count = 0
@@ -13930,13 +14077,13 @@ def main_dashboard(request):
                 int(invoice_counts.get("paid") or 0),
             ]
             open_invoice_base = Invoice.objects.filter(is_archived=False).exclude(status__in=["paid", "cancelled"])
-            outstanding_invoices_total = sum(
-                (
-                    _ceo_invoice_balance_cad(invoice, cad_to_bdt)
-                    for invoice in open_invoice_base.only("total_amount", "paid_amount", "currency")
-                ),
-                Decimal("0"),
-            )
+            outstanding_totals = defaultdict(lambda: {"amount": Decimal("0")})
+            for invoice in open_invoice_base.only("total_amount", "paid_amount", "currency"):
+                code = (invoice.currency or "CAD").upper().strip()
+                outstanding_totals[code]["amount"] += _ceo_decimal(invoice.balance)
+            outstanding_invoice_values = currency_summary_rows(outstanding_totals)
+            if len(outstanding_invoice_values) == 1:
+                outstanding_invoices_total = outstanding_invoice_values[0]["amount"]
             overdue_invoices_count = open_invoice_base.filter(due_date__lt=today).count()
             unpaid_invoices_count = open_invoice_base.filter(paid_amount__lte=0).count()
             partial_payments_count = Invoice.objects.filter(is_archived=False, status="partial").count()
@@ -14149,8 +14296,8 @@ def main_dashboard(request):
     primary_kpis = [
         {
             "title": "Total Revenue",
-            "value": _format_money(revenue_cad_period),
-            "note": f"{period_label} revenue excluding transfers.",
+            "value": format_compact_finance_money(revenue_cad_period, "CAD"),
+            "note": f"{period_label} CAD equivalent revenue excluding transfers.",
             "trend_text": f"{revenue_delta_pct:+.0f}% vs prior window",
             "trend_tone": _delta_tone(revenue_delta_pct),
             "accent": "revenue",
@@ -14160,7 +14307,7 @@ def main_dashboard(request):
         {
             "title": "Open Opportunities",
             "value": _format_count(open_opps),
-            "note": f"Open pipeline value {_format_money(open_pipeline_value)}.",
+            "note": f"Open pipeline {_format_currency_summary(open_pipeline_values)}.",
             "trend_text": f"{_format_count(opp_period)} added in {period_label.lower()}",
             "trend_tone": "up" if opp_period else "flat",
             "accent": "pipeline",
@@ -14189,8 +14336,8 @@ def main_dashboard(request):
         },
         {
             "title": "Monthly Profit",
-            "value": _format_money(monthly_profit_cad),
-            "note": f"{today.strftime('%B')} net cash after expenses.",
+            "value": format_compact_finance_money(monthly_profit_cad, "CAD"),
+            "note": f"{today.strftime('%B')} CAD equivalent net cash after expenses.",
             "trend_text": f"{monthly_profit_delta_pct:+.0f}% vs last month",
             "trend_tone": _delta_tone(monthly_profit_delta_pct),
             "accent": "profit",
@@ -14214,8 +14361,8 @@ def main_dashboard(request):
     finance_summary_cards = [
         {
             "title": "Net Cash",
-            "value": _format_money(net_cash_cad_period),
-            "note": f"{period_label} revenue minus expenses.",
+            "value": format_compact_finance_money(net_cash_cad_period, "CAD"),
+            "note": f"{period_label} CAD equivalent revenue minus expenses.",
             "trend_text": f"{gross_margin_pct_period:.1f}% gross margin",
             "trend_tone": "up" if net_cash_cad_period >= 0 else "down",
             "accent": "neutral",
@@ -14223,8 +14370,8 @@ def main_dashboard(request):
         },
         {
             "title": "Production Profit",
-            "value": _format_money(prod_profit_cad_period),
-            "note": "Production-linked accounting revenue less production costs.",
+            "value": format_compact_finance_money(prod_profit_cad_period, "CAD"),
+            "note": "CAD equivalent production-linked accounting revenue less production costs.",
             "trend_text": f"{prod_margin_pct_period:.1f}% margin",
             "trend_tone": "up" if prod_profit_cad_period >= 0 else "down",
             "accent": "neutral",
@@ -14232,8 +14379,8 @@ def main_dashboard(request):
         },
         {
             "title": "Outstanding Invoices",
-            "value": _format_money(outstanding_invoices_total),
-            "note": f"{_format_count(overdue_invoices_count)} invoice(s) overdue.",
+            "value": _format_currency_summary(outstanding_invoice_values),
+            "note": f"{_format_count(overdue_invoices_count)} invoice(s) overdue; currencies are not combined.",
             "trend_text": f"{_format_count(pending_invoice_approvals)} pending approval",
             "trend_tone": "down" if overdue_invoices_count else "flat",
             "accent": "neutral",
@@ -14482,6 +14629,7 @@ def main_dashboard(request):
         "pending_quotations_count": pending_quotations_count,
         "pending_invoice_approvals": pending_invoice_approvals,
         "outstanding_invoices_total": outstanding_invoices_total,
+        "outstanding_invoice_values": outstanding_invoice_values,
         "overdue_invoices_count": overdue_invoices_count,
         "unpaid_invoices_count": unpaid_invoices_count,
         "partial_payments_count": partial_payments_count,
@@ -14793,15 +14941,7 @@ def opportunities_list(request):
         qs = qs.filter(kpi_order_value__lte=value_max)
 
     today = timezone.localdate()
-    summary = qs.aggregate(
-        pipeline_cad=Sum("kpi_order_value", filter=Q(order_currency="CAD")),
-        pipeline_usd=Sum("kpi_order_value", filter=Q(order_currency="USD")),
-        pipeline_bdt=Sum("kpi_order_value", filter=Q(order_currency="BDT")),
-    )
-    pipeline_values = [
-        {"currency": currency, "amount": summary.get(f"pipeline_{currency.lower()}") or Decimal("0")}
-        for currency in ("CAD", "USD", "BDT")
-    ]
+    pipeline_values = _sum_opportunity_kpi_values_by_currency(qs)
     due_followups = qs.filter(next_followup__isnull=False, next_followup__lte=today).count()
 
     if sort == "old":

@@ -1,5 +1,6 @@
 {% extends "crm/base.html" %}
 {% load humanize %}
+{% load crm_extras %}
 {% block content %}
 
 <style>
@@ -431,9 +432,11 @@
         <article class="ceo-exec-card">
           <h2>Revenue Overview</h2>
           <ul class="ceo-stat-list">
-            <li class="ceo-stat"><span>Total invoiced</span><strong>{{ revenue_overview.total_invoiced|floatformat:2|intcomma }}</strong></li>
-            <li class="ceo-stat"><span>Total paid</span><strong>{{ revenue_overview.total_paid|floatformat:2|intcomma }}</strong></li>
-            <li class="ceo-stat"><span>Outstanding balance</span><strong>{{ revenue_overview.outstanding_balance|floatformat:2|intcomma }}</strong></li>
+            {% for row in revenue_overview.currency_rows %}
+              <li class="ceo-stat"><span>{{ row.currency }} invoiced</span><strong title="{{ row.invoiced|finance_money:row.currency }}">{{ row.invoiced|compact_money:row.currency }}</strong></li>
+              <li class="ceo-stat"><span>{{ row.currency }} paid</span><strong title="{{ row.paid|finance_money:row.currency }}">{{ row.paid|compact_money:row.currency }}</strong></li>
+              <li class="ceo-stat"><span>{{ row.currency }} outstanding</span><strong title="{{ row.outstanding|finance_money:row.currency }}">{{ row.outstanding|compact_money:row.currency }}</strong></li>
+            {% endfor %}
             <li class="ceo-stat"><span>Overdue invoices</span><strong>{{ revenue_overview.overdue_invoice_count|intcomma }}</strong></li>
           </ul>
         </article>
@@ -448,17 +451,19 @@
         <article class="ceo-exec-card">
           <h2>Profit Overview</h2>
           <ul class="ceo-stat-list">
-            <li class="ceo-stat"><span>Estimated revenue</span><strong>{{ profit_overview.estimated_revenue|floatformat:2|intcomma }}</strong></li>
-            <li class="ceo-stat"><span>Estimated gross profit</span><strong>{{ profit_overview.estimated_gross_profit|floatformat:2|intcomma }}</strong></li>
-            <li class="ceo-stat"><span>Average margin</span><strong>{{ profit_overview.average_margin|floatformat:2 }}%</strong></li>
+            {% for row in profit_overview.currency_rows %}
+              <li class="ceo-stat"><span>{{ row.currency }} estimated revenue</span><strong title="{{ row.revenue|finance_money:row.currency }}">{{ row.revenue|compact_money:row.currency }}</strong></li>
+              <li class="ceo-stat"><span>{{ row.currency }} estimated profit</span><strong title="{{ row.profit|finance_money:row.currency }}">{{ row.profit|compact_money:row.currency }}</strong></li>
+              <li class="ceo-stat"><span>{{ row.currency }} margin</span><strong>{{ row.margin|floatformat:2 }}%</strong></li>
+            {% endfor %}
             <li class="ceo-stat"><span>Low margin orders</span><strong>{{ profit_overview.low_margin_orders|length|intcomma }}</strong></li>
           </ul>
           <p class="ceo-exec-note" style="margin-top:12px;">Highest profit customers</p>
           <ul class="ceo-stat-list">
             {% for row in profit_overview.top_profit_customers|slice:":3" %}
               <li class="ceo-stat">
-                <span>{{ row.customer__account_brand|default:row.customer__contact_name|default:"Customer" }}</span>
-                <strong>{{ row.profit|floatformat:2|intcomma }}</strong>
+                <span>{{ row.label|default:"Customer" }}</span>
+                <strong title="{{ row.profit|finance_money:row.currency }}">{{ row.profit|compact_money:row.currency }}</strong>
               </li>
             {% empty %}
               <li class="ceo-stat"><span>No profit customer data yet</span><strong>0</strong></li>
@@ -832,7 +837,7 @@
                   <td>{{ row.label }}<br><span class="ceo-muted">{{ row.count }} opportunity row(s)</span></td>
                   <td class="ceo-right">
                     {% if can_view_executive_financials %}
-                      CAD {{ row.value|floatformat:2|intcomma }}
+                      <span title="{{ row.value|finance_money:row.currency }}">{{ row.value|compact_money:row.currency }}</span>
                     {% else %}
                       {{ row.count|intcomma }} row(s)
                     {% endif %}
@@ -864,7 +869,7 @@
               {% if can_view_executive_financials %}
                 <tr><td>Accounting revenue</td><td class="ceo-right">CAD {{ finance_summary.revenue|floatformat:2|intcomma }}</td></tr>
                 <tr><td>Accounting expenses</td><td class="ceo-right">CAD {{ finance_summary.expenses|floatformat:2|intcomma }}</td></tr>
-                <tr><td>Open receivables</td><td class="ceo-right">CAD {{ finance_summary.invoice_open_total|floatformat:2|intcomma }}</td></tr>
+                <tr><td>Open receivables</td><td class="ceo-right">{% for row in finance_summary.invoice_open_values %}<span title="{{ row.amount|finance_money:row.currency }}">{{ row.amount|compact_money:row.currency }}</span>{% if not forloop.last %}<br>{% endif %}{% endfor %}</td></tr>
               {% else %}
                 <tr><td>Financial summary</td><td class="ceo-right"><span class="ceo-badge ceo-badge--warn">Restricted</span></td></tr>
               {% endif %}
@@ -912,17 +917,19 @@
       {% if can_view_executive_financials %}
       if (key === "monthly-revenue") {
         var revenueLabels = labels("invoice_month_labels", ["Month"]);
+        var revenueSeries = data.invoice_month_series || [];
         return {
           type:"line",
-          data:{labels:revenueLabels, datasets:[{label:"Invoiced", data:values("invoice_month_values", revenueLabels.length), borderColor:"#4ade80", backgroundColor:"rgba(74,222,128,.10)", tension:.35, fill:true}]},
+          data:{labels:revenueLabels, datasets:revenueSeries.map(function(row, index){ return {label:row.currency + " invoiced", data:row.values, borderColor:palette[index % palette.length], backgroundColor:"transparent", tension:.35, fill:false}; })},
           options:baseOptions()
         };
       }
       if (key === "profit-trend") {
         var profitLabels = labels("profit_month_labels", ["Month"]);
+        var profitSeries = data.profit_month_series || [];
         return {
           type:"bar",
-          data:{labels:profitLabels, datasets:[{label:"Estimated profit", data:values("profit_month_values", profitLabels.length), backgroundColor:"rgba(167,139,250,.82)", borderRadius:10}]},
+          data:{labels:profitLabels, datasets:profitSeries.map(function(row, index){ return {label:row.currency + " estimated profit", data:row.values, backgroundColor:palette[index % palette.length], borderRadius:10}; })},
           options:baseOptions()
         };
       }

@@ -958,6 +958,11 @@
                     <td>{{ lifecycle_profit.currency }} {{ lifecycle_profit.display.sampling_cost }}</td>
                     <td>Sampling/development costing rows</td>
                   </tr>
+                  <tr>
+                    <td>Commission</td>
+                    <td>{{ lifecycle_profit.currency }} {{ lifecycle_profit.display.commission_cost }}</td>
+                    <td>Approved costing commission</td>
+                  </tr>
                   {% if lifecycle_profit.other_internal_cost %}
                     <tr>
                       <td>Other Internal Cost</td>
@@ -974,8 +979,8 @@
                   {% endif %}
                   <tr>
                     <td>Net Profit</td>
-                    <td>{{ lifecycle_profit.currency }} {{ lifecycle_profit.display.net_profit }}</td>
-                    <td>{{ lifecycle_profit.display.margin }}% margin</td>
+                    <td>{% if lifecycle_profit.is_comparable %}{{ lifecycle_profit.currency }} {{ lifecycle_profit.display.net_profit }}{% else %}Not comparable{% endif %}</td>
+                    <td>{% if lifecycle_profit.is_comparable %}{{ lifecycle_profit.display.margin }}% margin{% else %}{{ lifecycle_profit.comparison_reason }}{% endif %}</td>
                   </tr>
                 </tbody>
               </table>

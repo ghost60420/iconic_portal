@@ -30,7 +30,7 @@
     </article>
     <article class="opp-stat">
       <span>Estimated pipeline by currency</span>
-      {% for row in pipeline_values %}<strong>{{ row.amount|finance_money:row.currency }}</strong>{% endfor %}
+      {% for row in pipeline_values %}<strong title="{{ row.amount|finance_money:row.currency }}">{{ row.amount|compact_money:row.currency }}</strong>{% empty %}<strong>-</strong>{% endfor %}
       <small>Native order amounts for the current filters; currencies are not combined.</small>
     </article>
     <article class="opp-stat">
@@ -217,7 +217,7 @@
               <td data-label="Value">
                 <div class="opp-value-stack">
                   {% if opp.kpi_order_value %}
-                    <strong>{{ opp.kpi_order_value|finance_money:opp.order_currency }}</strong>
+                    <strong title="{{ opp.kpi_order_value|finance_money:opp.kpi_currency }}">{{ opp.kpi_order_value|compact_money:opp.kpi_currency }}</strong>
                   {% else %}
                     <strong class="opp-muted">Value not set</strong>
                   {% endif %}

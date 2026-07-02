@@ -5,6 +5,7 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from crm.models import ActualCostEntry, CostingAuditLog, CostingHeader, Invoice, ProductionOrder, QuickCosting
+from crm.services.costing_currency import normalize_costing_currency
 from crm.services.costing_engine import compute_costing
 from crm.services.order_lifecycle import (
     create_lifecycle_from_invoice,
@@ -100,16 +101,23 @@ def _quick_costing_market_and_currency(quick_costing):
     country = (getattr(customer, "country", "") or "").lower().strip() if customer else ""
     if market_hint == "BD" or "bangladesh" in country:
         return "bangladesh", "BDT"
-    if quick_costing.exchange_rate_bdt_per_cad:
-        return "north_america", "CAD"
-    return "bangladesh", "BDT"
+    source_currency = normalize_costing_currency(quick_costing.currency)
+    return "north_america", "USD" if source_currency == "USD" else "CAD"
 
 
-def _quick_money_for_invoice(value, currency, exchange_rate):
+def _quick_money_for_invoice(value, source_currency, target_currency, exchange_rate):
     value = _d(value)
-    if currency == "CAD" and exchange_rate:
-        return _money(value / _d(exchange_rate))
-    return _money(value)
+    source_currency = normalize_costing_currency(source_currency)
+    target_currency = normalize_costing_currency(target_currency)
+    if source_currency == target_currency:
+        return _money(value)
+
+    rate = _d(exchange_rate)
+    if rate <= 0 or {source_currency, target_currency} != {"BDT", "CAD"}:
+        raise CostingWorkflowError("Currency conversion rate is required before creating this invoice.")
+    if source_currency == "BDT":
+        return _money(value / rate)
+    return _money(value * rate)
 
 
 def get_costing_quote_amounts(costing):
@@ -235,9 +243,14 @@ def create_invoice_from_quick_costing(quick_costing, user=None):
         summary = quick_costing.calculation_summary()
         market, currency = _quick_costing_market_and_currency(quick_costing)
         region = "BD" if market == "bangladesh" else "CA"
+        source_currency = normalize_costing_currency(summary.get("currency"))
         exchange_rate = summary.get("exchange_rate")
-        subtotal = _quick_money_for_invoice(summary.get("revenue"), currency, exchange_rate)
-        shipping = _quick_money_for_invoice(summary.get("shipping_cost_total"), currency, exchange_rate)
+        subtotal = _quick_money_for_invoice(
+            summary.get("revenue"), source_currency, currency, exchange_rate
+        )
+        shipping = _quick_money_for_invoice(
+            summary.get("shipping_cost_total"), source_currency, currency, exchange_rate
+        )
         total = _money(subtotal + shipping)
         invoice_type = "sample" if quick_costing.costing_purpose == QuickCosting.PURPOSE_SAMPLE else "bulk"
         deposit_percentage = Decimal("100.00") if invoice_type == "sample" else Decimal("50.00")
@@ -340,30 +353,89 @@ def create_or_link_production_order_from_invoice(invoice, user=None):
 
 
 def build_production_profit_snapshot(order):
-    invoices = list(order.invoices.all().order_by("-issue_date", "-created_at", "-id"))
-    invoice_total = sum((_d(invoice.total_amount) for invoice in invoices), Decimal("0"))
-    paid_total = sum((_d(invoice.paid_amount) for invoice in invoices), Decimal("0"))
-    balance_total = sum((_d(invoice.balance) for invoice in invoices), Decimal("0"))
+    invoices = list(
+        order.invoices.select_related("quick_costing").order_by("-issue_date", "-created_at", "-id")
+    )
+    totals_by_currency = {}
+    for invoice in invoices:
+        code = (invoice.currency or "CAD").upper().strip()
+        totals = totals_by_currency.setdefault(
+            code,
+            {"currency": code, "invoice_total": Decimal("0"), "paid_total": Decimal("0"), "balance_total": Decimal("0")},
+        )
+        totals["invoice_total"] += _d(invoice.total_amount)
+        totals["paid_total"] += _d(invoice.paid_amount)
+        totals["balance_total"] += _d(invoice.balance)
+    invoice_currency_rows = [
+        totals_by_currency[code]
+        for code in ("CAD", "USD", "BDT")
+        if code in totals_by_currency
+    ]
+    single_currency = invoice_currency_rows[0] if len(invoice_currency_rows) == 1 else None
+    invoice_total = single_currency["invoice_total"] if single_currency else Decimal("0")
+    paid_total = single_currency["paid_total"] if single_currency else Decimal("0")
+    balance_total = single_currency["balance_total"] if single_currency else Decimal("0")
+    currency = single_currency["currency"] if single_currency else ""
 
     standard_cost = Decimal("0")
+    standard_cost_currency = (order.approved_currency or "").upper().strip()
+    approved_summary = order.approved_costing_summary or {}
+    if approved_summary.get("total_cost_order") not in (None, ""):
+        standard_cost = _d(approved_summary.get("total_cost_order"))
     costing = getattr(order, "costing_header", None)
     if costing:
         calc = compute_costing(costing.id)
         if calc:
-            standard_cost = _d(calc.get("total_cost_order"))
+            if standard_cost <= 0:
+                standard_cost = _d(calc.get("total_cost_order"))
+            standard_cost += max(
+                _d(calc.get("total_final_offer_order")) - _d(calc.get("total_sales_order")),
+                Decimal("0"),
+            )
+            standard_cost_currency = (costing.currency or "BDT").upper().strip()
+
+    quick_invoice = next((invoice for invoice in invoices if invoice.quick_costing_id), None)
+    if quick_invoice and len(invoices) == 1:
+        summary = quick_invoice.quick_costing.calculation_summary()
+        source_currency = normalize_costing_currency(summary.get("currency"))
+        try:
+            converted_cost = _quick_money_for_invoice(
+                _d(summary.get("total_cost")) + _d(summary.get("commission_total")),
+                source_currency,
+                currency,
+                summary.get("exchange_rate"),
+            ) if currency else None
+        except CostingWorkflowError:
+            converted_cost = None
+        if converted_cost is not None:
+            standard_cost = converted_cost
+            standard_cost_currency = currency
+        else:
+            standard_cost = _d(summary.get("total_cost")) + _d(summary.get("commission_total"))
+            standard_cost_currency = source_currency
 
     actual_cost = _d(
         ActualCostEntry.objects.filter(production_order=order).aggregate(total=Sum("actual_total_cost")).get("total")
     )
-    estimated_profit = invoice_total - standard_cost if standard_cost > 0 else Decimal("0")
-    currency = invoices[0].currency if invoices else (costing.currency if costing else "")
-    can_compare_actuals = (currency or "").upper() == "BDT"
+    comparison_reason = ""
+    can_compare_standard = bool(
+        single_currency and standard_cost > 0 and standard_cost_currency == currency
+    )
+    if len(invoice_currency_rows) > 1:
+        comparison_reason = "Not comparable: linked invoices use multiple currencies."
+    elif standard_cost > 0 and standard_cost_currency != currency:
+        comparison_reason = "Not comparable: approved costing and invoice currencies differ."
+    elif standard_cost <= 0:
+        comparison_reason = "Not comparable: no approved costing snapshot is available."
+    estimated_profit = invoice_total - standard_cost if can_compare_standard else None
+    can_compare_actuals = bool(single_currency and currency == "BDT")
     actual_profit = invoice_total - actual_cost if actual_cost > 0 and can_compare_actuals else None
     margin_basis = actual_profit if actual_profit is not None else estimated_profit
-    margin = (margin_basis / invoice_total) * Decimal("100") if invoice_total > 0 else Decimal("0")
+    margin = (margin_basis / invoice_total) * Decimal("100") if margin_basis is not None and invoice_total > 0 else None
 
     return {
         "invoices": invoices,
+        "invoice_currency_rows": invoice_currency_rows,
         "invoice_total": invoice_total,
         "paid_total": paid_total,
         "balance_total": balance_total,
@@ -372,7 +444,9 @@ def build_production_profit_snapshot(order):
         "estimated_profit": estimated_profit,
         "actual_profit": actual_profit,
         "has_actual_profit": actual_profit is not None,
+        "can_compare_standard": can_compare_standard,
         "can_compare_actuals": can_compare_actuals,
+        "comparison_reason": comparison_reason,
         "margin": margin,
         "currency": currency,
         "actual_cost_currency": "BDT",
@@ -382,8 +456,8 @@ def build_production_profit_snapshot(order):
             "balance_total": _money(balance_total),
             "standard_cost": _money(standard_cost),
             "actual_cost": _money(actual_cost),
-            "estimated_profit": _money(estimated_profit),
+            "estimated_profit": _money(estimated_profit) if estimated_profit is not None else None,
             "actual_profit": _money(actual_profit) if actual_profit is not None else None,
-            "margin": _money(margin),
+            "margin": _money(margin) if margin is not None else None,
         },
     }

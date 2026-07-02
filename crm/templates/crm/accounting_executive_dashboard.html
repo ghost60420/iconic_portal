@@ -364,9 +364,7 @@
       {% endif %}
     </div>
     <div class="exec-card">
-      <span>Total receivables</span>
-      <strong>{{ total_receivables|finance_money:"CAD" }}</strong>
-      <small>CAD-equivalent open invoice balances. Original currencies are shown below.</small>
+      <span>Receivables by currency</span>
       {% if receivable_currency_totals %}
         <div class="exec-chip-list">
           {% for row in receivable_currency_totals %}
@@ -374,6 +372,7 @@
           {% endfor %}
         </div>
       {% endif %}
+      <small>CAD Equivalent: {{ total_receivables|finance_money:"CAD" }}. Native currencies are not combined.</small>
     </div>
     <div class="exec-card">
       <span>Total payables</span>
