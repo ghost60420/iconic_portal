@@ -55,10 +55,10 @@
         <span>Profit / margin</span>
         {% if summary.by_currency %}
           <strong>{% if summary.by_currency|length == 1 %}{{ summary.by_currency.0.total_profit_order|finance_money:summary.by_currency.0.currency }}{% else %}{{ summary.by_currency|length }} currencies{% endif %}</strong>
-          <small>{% for row in summary.by_currency %}{{ row.total_profit_order|finance_money:row.currency }}{% if not forloop.last %} · {% endif %}{% endfor %} · Avg margin {{ summary.average_margin|floatformat:1 }}%</small>
+          <small>{% for row in summary.by_currency %}{{ row.total_profit_order|finance_money:row.currency }}{% if not forloop.last %} · {% endif %}{% endfor %} · {% if summary.average_margin != None %}Avg margin {{ summary.average_margin|floatformat:1 }}%{% else %}Margin N/A{% endif %}</small>
         {% else %}
           <strong>No values</strong>
-          <small>Average margin {{ summary.average_margin|floatformat:1 }}%</small>
+          <small>{% if summary.average_margin != None %}Average margin {{ summary.average_margin|floatformat:1 }}%{% else %}Cost unavailable · Margin N/A{% endif %}</small>
         {% endif %}
       </article>
     {% endif %}
@@ -298,15 +298,15 @@
                   <td data-label="Margin / profit">
                     <div class="costing-margin-stack">
                       <span class="costing-margin-badge {{ row.margin_tone }}">
-                        {% if row.costing_type == "quick" %}{{ calc.display.net_profit_margin_percent }}%{% else %}{{ calc.display.margin_percent }}%{% endif %}
+                        {% if row.cost_available %}{% if row.costing_type == "quick" %}{{ calc.display.net_profit_margin_percent }}%{% else %}{{ calc.display.margin_percent }}%{% endif %}{% else %}Margin N/A{% endif %}
                       </span>
                       {% if row.costing_type == "quick" %}
-                        <strong>{{ calc.display.net_profit_per_piece_pair }} / pc</strong>
+                        {% if row.cost_available %}<strong>{{ calc.display.net_profit_per_piece_pair }} / pc</strong>
                         <span class="costing-money-lines">{{ calc.display.net_profit_total_lines.bdt }}<br>{{ calc.display.net_profit_total_lines.cad }} net profit</span>
-                        <span>{{ calc.display.margin_status }}</span>
+                        <span>{{ calc.display.margin_status }}</span>{% else %}<strong>Cost unavailable</strong>{% endif %}
                       {% else %}
-                        <strong>{{ calc.profit_per_piece|finance_money:row.currency_label }} / pc</strong>
-                        <span>{{ calc.total_profit_order|finance_money:row.currency_label }} total profit</span>
+                        {% if row.cost_available %}<strong>{{ calc.profit_per_piece|finance_money:row.currency_label }} / pc</strong>
+                        <span>{{ calc.total_profit_order|finance_money:row.currency_label }} total profit</span>{% else %}<strong>Cost unavailable</strong>{% endif %}
                       {% endif %}
                     </div>
                   </td>

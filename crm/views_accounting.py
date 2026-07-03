@@ -72,6 +72,7 @@ from .forms import (
 )
 from .permissions import can_view_internal_costing, get_access, operations_group_names, role_flag_decision
 from .services.operations_permissions import can_archive_invoices
+from .services.costing_currency import CurrencyConversionError, convert_currency
 
 try:
     from .models import AccountingMonthLock
@@ -458,7 +459,7 @@ def accounting_entry_add_bd(request):
             if not obj.rate_to_bdt or obj.rate_to_bdt <= 0:
                 obj.rate_to_bdt = Decimal("1")
             if cad_to_bdt and cad_to_bdt > 0 and (not obj.rate_to_cad or obj.rate_to_cad <= 0):
-                obj.rate_to_cad = (Decimal("1") / cad_to_bdt).quantize(Decimal("0.000001"))
+                obj.rate_to_cad = cad_to_bdt
             obj.created_by = request.user
             obj.save()
             form.save_m2m()
@@ -906,22 +907,21 @@ def _pl_decimal(value):
 
 
 def _pl_amount_cad(entry, cad_to_bdt=None):
-    amount_cad = _pl_decimal(getattr(entry, "amount_cad", None))
-    if amount_cad:
-        return amount_cad
     amount = _pl_decimal(getattr(entry, "amount_original", None))
     currency = (entry.currency or "").upper().strip()
-    if currency == "CAD":
-        return amount
-    rate_to_cad = _pl_decimal(getattr(entry, "rate_to_cad", None))
-    if rate_to_cad > 0:
-        return (amount * rate_to_cad).quantize(Decimal("0.01"))
-    if currency == "BDT":
-        if cad_to_bdt is None:
-            cad_to_bdt = _bs_latest_cad_to_bdt()
-        if cad_to_bdt > 0:
-            return (amount / cad_to_bdt).quantize(Decimal("0.01"))
-    return Decimal("0")
+    if currency == "BDT" and cad_to_bdt is None:
+        cad_to_bdt = _bs_latest_cad_to_bdt()
+    try:
+        return convert_currency(
+            amount,
+            currency,
+            "CAD",
+            bdt_per_cad=cad_to_bdt,
+            stored_rate_to_cad=getattr(entry, "rate_to_cad", None),
+            stored_rate_to_bdt=entry.__dict__.get("rate_to_bdt"),
+        )
+    except CurrencyConversionError:
+        return Decimal("0")
 
 
 def _pl_customer_label(entry):
@@ -1094,7 +1094,8 @@ def profit_loss_dashboard(request):
     if filters["currency"]:
         qs = qs.filter(currency=filters["currency"])
 
-    rows = [_pl_row(entry) for entry in qs.order_by("date", "id").iterator()]
+    cad_to_bdt = _bs_latest_cad_to_bdt()
+    rows = [_pl_row(entry, cad_to_bdt) for entry in qs.order_by("date", "id").iterator()]
     if filters["product_category"]:
         rows = [row for row in rows if row["product_category"] == filters["product_category"]]
 
@@ -1160,22 +1161,22 @@ def profit_loss_dashboard(request):
     )
 
 
-def _exec_payment_amount_cad(payment):
-    amount_cad = _pl_decimal(getattr(payment, "amount_cad", None))
-    if amount_cad:
-        return amount_cad
+def _exec_payment_amount_cad(payment, cad_to_bdt=None):
     amount = _pl_decimal(getattr(payment, "amount", None))
     currency = (payment.currency or "").upper().strip()
-    if currency == "CAD":
-        return amount
-    rate_to_cad = _pl_decimal(getattr(payment, "rate_to_cad", None))
-    if rate_to_cad > 0:
-        return (amount * rate_to_cad).quantize(Decimal("0.01"))
-    if currency == "BDT":
+    if currency == "BDT" and cad_to_bdt is None:
         cad_to_bdt = _bs_latest_cad_to_bdt()
-        if cad_to_bdt > 0:
-            return (amount / cad_to_bdt).quantize(Decimal("0.01"))
-    return Decimal("0")
+    try:
+        return convert_currency(
+            amount,
+            currency,
+            "CAD",
+            bdt_per_cad=cad_to_bdt,
+            stored_rate_to_cad=getattr(payment, "rate_to_cad", None),
+            stored_rate_to_bdt=payment.__dict__.get("rate_to_bdt"),
+        )
+    except CurrencyConversionError:
+        return Decimal("0")
 
 
 def _exec_invoice_side(invoice):
@@ -1377,7 +1378,7 @@ def executive_financial_dashboard(request):
     open_invoices = [invoice for invoice in invoices if _pl_decimal(invoice.balance) > 0]
     overdue_invoices = [invoice for invoice in open_invoices if invoice.due_date and invoice.due_date < today]
     total_receivables = sum((_bs_invoice_balance_cad(invoice, cad_to_bdt) for invoice in open_invoices), Decimal("0"))
-    total_received = sum((_exec_payment_amount_cad(payment) for payment in payments), Decimal("0"))
+    total_received = sum((_exec_payment_amount_cad(payment, cad_to_bdt) for payment in payments), Decimal("0"))
 
     payable_rows = [
         _ap_row(entry, today)
@@ -1417,7 +1418,7 @@ def executive_financial_dashboard(request):
         1
         for payment in payments
         if _pl_decimal(payment.amount) > 0
-        and _exec_payment_amount_cad(payment) == 0
+        and _exec_payment_amount_cad(payment, cad_to_bdt) == 0
         and (payment.currency or "").upper().strip() != "CAD"
     )
     unconverted_entry_count = sum(
@@ -1475,7 +1476,7 @@ def executive_financial_dashboard(request):
             (_pl_amount_cad(row["entry"], cad_to_bdt) for row in open_payable_rows if (row["entry"].side or "").upper().strip() == side),
             Decimal("0"),
         )
-        side_received = sum((_exec_payment_amount_cad(payment) for payment in payments if payment.side == side), Decimal("0"))
+        side_received = sum((_exec_payment_amount_cad(payment, cad_to_bdt) for payment in payments if payment.side == side), Decimal("0"))
         side_receivables = sum((_bs_invoice_balance_cad(invoice, cad_to_bdt) for invoice in open_invoices if _exec_invoice_side(invoice) == side), Decimal("0"))
         side_rows.append(
             {
@@ -1576,11 +1577,10 @@ def _bs_latest_cad_to_bdt():
 def _bs_invoice_balance_cad(invoice, cad_to_bdt):
     balance = _pl_decimal(invoice.balance)
     currency = (invoice.currency or "").upper().strip()
-    if currency == "CAD":
-        return balance
-    if currency == "BDT" and cad_to_bdt > 0:
-        return (balance / cad_to_bdt).quantize(Decimal("0.01"))
-    return Decimal("0")
+    try:
+        return convert_currency(balance, currency, "CAD", bdt_per_cad=cad_to_bdt)
+    except CurrencyConversionError:
+        return Decimal("0")
 
 
 def _bs_inventory_value_cad(filters):
@@ -1592,14 +1592,14 @@ def _bs_inventory_value_cad(filters):
     return total.quantize(Decimal("0.01"))
 
 
-def _bs_profit_from_entries(entries):
+def _bs_profit_from_entries(entries, cad_to_bdt):
     revenue = Decimal("0")
     cogs = Decimal("0")
     opex = Decimal("0")
     for entry in entries:
         text_type = (entry.main_type or "").upper().strip()
         direction = (entry.direction or "").upper().strip()
-        amount = _pl_amount_cad(entry)
+        amount = _pl_amount_cad(entry, cad_to_bdt)
         if direction == AccountingEntry.DIR_IN and text_type == "INCOME":
             revenue += amount
         elif direction == AccountingEntry.DIR_OUT and text_type == "COGS":
@@ -1609,13 +1609,13 @@ def _bs_profit_from_entries(entries):
     return revenue - cogs - opex
 
 
-def _bs_owner_capital(entries):
+def _bs_owner_capital(entries, cad_to_bdt):
     total = Decimal("0")
     for entry in entries:
         text = _bs_entry_text(entry)
         if not _bs_has(text, BS_EQUITY_KEYWORDS):
             continue
-        amount = _pl_amount_cad(entry)
+        amount = _pl_amount_cad(entry, cad_to_bdt)
         if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN:
             total += amount
         elif (entry.direction or "").upper().strip() == AccountingEntry.DIR_OUT:
@@ -1634,7 +1634,7 @@ def _bs_liability_bucket(entry):
     return "accounts_payable"
 
 
-def _bs_monthly_rows(entries):
+def _bs_monthly_rows(entries, cad_to_bdt):
     monthly = {}
     for entry in entries:
         if not entry.date:
@@ -1648,7 +1648,7 @@ def _bs_monthly_rows(entries):
                 "liabilities": Decimal("0"),
                 "equity": Decimal("0"),
             }
-        amount = _pl_amount_cad(entry)
+        amount = _pl_amount_cad(entry, cad_to_bdt)
         direction = (entry.direction or "").upper().strip()
         main_type = (entry.main_type or "").upper().strip()
         text = _bs_entry_text(entry)
@@ -1714,14 +1714,14 @@ def balance_sheet_dashboard(request):
 
     cash_and_bank = sum(
         (
-            _pl_amount_cad(entry) if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN else -_pl_amount_cad(entry)
+            _pl_amount_cad(entry, cad_to_bdt) if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN else -_pl_amount_cad(entry, cad_to_bdt)
             for entry in entries
         ),
         Decimal("0"),
     )
     prepaid_expenses = sum(
         (
-            _pl_amount_cad(entry)
+            _pl_amount_cad(entry, cad_to_bdt)
             for entry in non_transfer_entries
             if (entry.direction or "").upper().strip() == AccountingEntry.DIR_OUT and _bs_has(_bs_entry_text(entry), BS_CURRENT_ASSET_KEYWORDS)
         ),
@@ -1729,7 +1729,7 @@ def balance_sheet_dashboard(request):
     )
     fixed_assets = sum(
         (
-            _pl_amount_cad(entry)
+            _pl_amount_cad(entry, cad_to_bdt)
             for entry in non_transfer_entries
             if (entry.direction or "").upper().strip() == AccountingEntry.DIR_OUT and _bs_has(_bs_entry_text(entry), BS_FIXED_ASSET_KEYWORDS)
         ),
@@ -1765,10 +1765,10 @@ def balance_sheet_dashboard(request):
         "taxes_payable": Decimal("0"),
     }
     for row in open_payable_rows:
-        liability_buckets[_bs_liability_bucket(row["entry"])] += _pl_amount_cad(row["entry"])
+        liability_buckets[_bs_liability_bucket(row["entry"])] += _pl_amount_cad(row["entry"], cad_to_bdt)
     for entry in non_transfer_entries:
         if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN and _bs_has(_bs_entry_text(entry), BS_LOAN_KEYWORDS):
-            liability_buckets["loans"] += _pl_amount_cad(entry)
+            liability_buckets["loans"] += _pl_amount_cad(entry, cad_to_bdt)
 
     current_assets = cash_and_bank + accounts_receivable + inventory_value + prepaid_expenses
     total_assets = current_assets + fixed_assets
@@ -1783,9 +1783,9 @@ def balance_sheet_dashboard(request):
             retained_qs = retained_qs.filter(currency=filters["currency"])
         retained_entries = list(retained_qs.order_by("date", "id"))
 
-    owner_capital = _bs_owner_capital(non_transfer_entries)
-    retained_earnings = _bs_profit_from_entries(retained_entries)
-    current_period_profit = _bs_profit_from_entries(non_transfer_entries)
+    owner_capital = _bs_owner_capital(non_transfer_entries, cad_to_bdt)
+    retained_earnings = _bs_profit_from_entries(retained_entries, cad_to_bdt)
+    current_period_profit = _bs_profit_from_entries(non_transfer_entries, cad_to_bdt)
     total_equity = owner_capital + retained_earnings + current_period_profit
     equation_right = total_liabilities + total_equity
     balance_difference = total_assets - equation_right
@@ -1797,7 +1797,7 @@ def balance_sheet_dashboard(request):
         side_non_transfer = [entry for entry in side_entries if (entry.main_type or "").upper().strip() != "TRANSFER"]
         side_cash = sum(
             (
-                _pl_amount_cad(entry) if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN else -_pl_amount_cad(entry)
+                _pl_amount_cad(entry, cad_to_bdt) if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN else -_pl_amount_cad(entry, cad_to_bdt)
                 for entry in side_entries
             ),
             Decimal("0"),
@@ -1805,13 +1805,13 @@ def balance_sheet_dashboard(request):
         side_ar = sum((_bs_invoice_balance_cad(invoice, cad_to_bdt) for invoice in open_invoices if _exec_invoice_side(invoice) == side), Decimal("0"))
         side_payables = sum(
             (
-                _pl_amount_cad(row["entry"])
+                _pl_amount_cad(row["entry"], cad_to_bdt)
                 for row in open_payable_rows
                 if (row["entry"].side or "").upper().strip() == side
             ),
             Decimal("0"),
         )
-        side_profit = _bs_profit_from_entries(side_non_transfer)
+        side_profit = _bs_profit_from_entries(side_non_transfer, cad_to_bdt)
         side_rows.append(
             {
                 "side": side,
@@ -1851,7 +1851,7 @@ def balance_sheet_dashboard(request):
             "is_balanced": is_balanced,
             "balance_status": "Balanced" if is_balanced else "Out of Balance",
             "side_rows": side_rows,
-            "monthly_rows": _bs_monthly_rows(entries),
+            "monthly_rows": _bs_monthly_rows(entries, cad_to_bdt),
             "entry_count": len(entries),
             "invoice_count": len(invoices),
             "open_invoice_count": len(open_invoices),
@@ -1860,8 +1860,8 @@ def balance_sheet_dashboard(request):
     )
 
 
-def _cf_signed_amount(entry):
-    amount = _pl_amount_cad(entry)
+def _cf_signed_amount(entry, cad_to_bdt):
+    amount = _pl_amount_cad(entry, cad_to_bdt)
     return amount if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN else -amount
 
 
@@ -1873,18 +1873,18 @@ def _cf_is_loan_payment(entry):
     return _bs_has(_bs_entry_text(entry), BS_LOAN_KEYWORDS)
 
 
-def _cf_group_cash(entries, label_getter, limit=12):
+def _cf_group_cash(entries, label_getter, cad_to_bdt, limit=12):
     grouped = {}
     for entry in entries:
         label = label_getter(entry) or "Unassigned"
         if label not in grouped:
             grouped[label] = {"label": label, "amount": Decimal("0"), "count": 0}
-        grouped[label]["amount"] += _pl_amount_cad(entry)
+        grouped[label]["amount"] += _pl_amount_cad(entry, cad_to_bdt)
         grouped[label]["count"] += 1
     return sorted(grouped.values(), key=lambda row: row["amount"], reverse=True)[:limit]
 
 
-def _cf_daily_rows(entries):
+def _cf_daily_rows(entries, cad_to_bdt):
     grouped = {}
     for entry in entries:
         if not entry.date:
@@ -1892,7 +1892,7 @@ def _cf_daily_rows(entries):
         key = entry.date.isoformat()
         if key not in grouped:
             grouped[key] = {"key": key, "label": entry.date.strftime("%b %d"), "cash_in": Decimal("0"), "cash_out": Decimal("0"), "net": Decimal("0")}
-        amount = _pl_amount_cad(entry)
+        amount = _pl_amount_cad(entry, cad_to_bdt)
         if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN:
             grouped[key]["cash_in"] += amount
         else:
@@ -1903,7 +1903,7 @@ def _cf_daily_rows(entries):
     return rows
 
 
-def _cf_weekly_rows(entries):
+def _cf_weekly_rows(entries, cad_to_bdt):
     grouped = {}
     for entry in entries:
         if not entry.date:
@@ -1912,7 +1912,7 @@ def _cf_weekly_rows(entries):
         key = f"{iso.year}-W{iso.week:02d}"
         if key not in grouped:
             grouped[key] = {"key": key, "label": f"W{iso.week:02d} {iso.year}", "cash_in": Decimal("0"), "cash_out": Decimal("0"), "net": Decimal("0")}
-        amount = _pl_amount_cad(entry)
+        amount = _pl_amount_cad(entry, cad_to_bdt)
         if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN:
             grouped[key]["cash_in"] += amount
         else:
@@ -1923,7 +1923,7 @@ def _cf_weekly_rows(entries):
     return rows
 
 
-def _cf_monthly_rows(entries):
+def _cf_monthly_rows(entries, cad_to_bdt):
     grouped = {}
     for entry in entries:
         if not entry.date:
@@ -1931,7 +1931,7 @@ def _cf_monthly_rows(entries):
         key = entry.date.strftime("%Y-%m")
         if key not in grouped:
             grouped[key] = {"key": key, "label": entry.date.strftime("%b %Y"), "cash_in": Decimal("0"), "cash_out": Decimal("0"), "net": Decimal("0")}
-        amount = _pl_amount_cad(entry)
+        amount = _pl_amount_cad(entry, cad_to_bdt)
         if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN:
             grouped[key]["cash_in"] += amount
         else:
@@ -2001,31 +2001,32 @@ def cash_flow_dashboard(request):
 
     inflow_entries = [entry for entry in period_entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN]
     outflow_entries = [entry for entry in period_entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_OUT]
+    cad_to_bdt = _bs_latest_cad_to_bdt()
 
-    opening_cash_balance = sum((_cf_signed_amount(entry) for entry in opening_entries), Decimal("0"))
+    opening_cash_balance = sum((_cf_signed_amount(entry, cad_to_bdt) for entry in opening_entries), Decimal("0"))
     cash_received_from_customers = sum(
         (
-            _pl_amount_cad(entry)
+            _pl_amount_cad(entry, cad_to_bdt)
             for entry in inflow_entries
             if (entry.main_type or "").upper().strip() == "INCOME" or entry.customer_id or (entry.production_order_id and entry.production_order and entry.production_order.customer_id)
         ),
         Decimal("0"),
     )
     cash_paid_to_suppliers = sum(
-        (_pl_amount_cad(entry) for entry in outflow_entries if (entry.main_type or "").upper().strip() == "COGS"),
+        (_pl_amount_cad(entry, cad_to_bdt) for entry in outflow_entries if (entry.main_type or "").upper().strip() == "COGS"),
         Decimal("0"),
     )
-    loan_payments = sum((_pl_amount_cad(entry) for entry in outflow_entries if _cf_is_loan_payment(entry)), Decimal("0"))
-    tax_payments = sum((_pl_amount_cad(entry) for entry in outflow_entries if _cf_is_tax_payment(entry)), Decimal("0"))
+    loan_payments = sum((_pl_amount_cad(entry, cad_to_bdt) for entry in outflow_entries if _cf_is_loan_payment(entry)), Decimal("0"))
+    tax_payments = sum((_pl_amount_cad(entry, cad_to_bdt) for entry in outflow_entries if _cf_is_tax_payment(entry)), Decimal("0"))
     operating_expenses_paid = sum(
         (
-            _pl_amount_cad(entry)
+            _pl_amount_cad(entry, cad_to_bdt)
             for entry in outflow_entries
             if (entry.main_type or "").upper().strip() in {"EXPENSE", "OTHER"} and not _cf_is_loan_payment(entry) and not _cf_is_tax_payment(entry)
         ),
         Decimal("0"),
     )
-    net_cash_flow = sum((_cf_signed_amount(entry) for entry in period_entries), Decimal("0"))
+    net_cash_flow = sum((_cf_signed_amount(entry, cad_to_bdt) for entry in period_entries), Decimal("0"))
     closing_cash_balance = opening_cash_balance + net_cash_flow
 
     invoice_qs = _finance_invoice_archive_scope(
@@ -2041,7 +2042,6 @@ def cash_flow_dashboard(request):
     forecast_invoices = list(invoice_qs.order_by("due_date", "-issue_date"))
     if filters["side"]:
         forecast_invoices = [invoice for invoice in forecast_invoices if _exec_invoice_side(invoice) == filters["side"]]
-    cad_to_bdt = _bs_latest_cad_to_bdt()
     forecast_receivables = sum((_bs_invoice_balance_cad(invoice, cad_to_bdt) for invoice in forecast_invoices if _pl_decimal(invoice.balance) > 0), Decimal("0"))
 
     forecast_payable_qs = base_qs.filter(direction=AccountingEntry.DIR_OUT, date__gte=today, date__lte=forecast_end)
@@ -2050,7 +2050,7 @@ def cash_flow_dashboard(request):
     forecast_payable_rows = [row for row in forecast_payable_rows if row["status_key"] != "paid"]
     if filters["supplier"]:
         forecast_payable_rows = [row for row in forecast_payable_rows if _ap_supplier_label(row["entry"]) == filters["supplier"]]
-    forecast_payables = sum((_pl_amount_cad(row["entry"]) for row in forecast_payable_rows), Decimal("0"))
+    forecast_payables = sum((_pl_amount_cad(row["entry"], cad_to_bdt) for row in forecast_payable_rows), Decimal("0"))
     forecast_net = forecast_receivables - forecast_payables
     forecast_closing_cash = closing_cash_balance + forecast_net
     if forecast_closing_cash < 0:
@@ -2066,8 +2066,8 @@ def cash_flow_dashboard(request):
     side_rows = []
     for side, label in [("CA", "Canada"), ("BD", "Bangladesh")]:
         side_entries = [entry for entry in period_entries if (entry.side or "").upper().strip() == side]
-        side_in = sum((_pl_amount_cad(entry) for entry in side_entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN), Decimal("0"))
-        side_out = sum((_pl_amount_cad(entry) for entry in side_entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_OUT), Decimal("0"))
+        side_in = sum((_pl_amount_cad(entry, cad_to_bdt) for entry in side_entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_IN), Decimal("0"))
+        side_out = sum((_pl_amount_cad(entry, cad_to_bdt) for entry in side_entries if (entry.direction or "").upper().strip() == AccountingEntry.DIR_OUT), Decimal("0"))
         side_rows.append({"side": side, "label": label, "cash_in": side_in, "cash_out": side_out, "net": side_in - side_out})
 
     customers = Customer.objects.filter(accounting_entries__isnull=False).distinct().order_by("account_brand", "contact_name")
@@ -2089,11 +2089,11 @@ def cash_flow_dashboard(request):
             "tax_payments": tax_payments,
             "net_cash_flow": net_cash_flow,
             "closing_cash_balance": closing_cash_balance,
-            "daily_rows": _cf_daily_rows(period_entries),
-            "weekly_rows": _cf_weekly_rows(period_entries),
-            "monthly_rows": _cf_monthly_rows(period_entries),
-            "top_inflow_rows": _cf_group_cash(inflow_entries, _pl_customer_label),
-            "top_outflow_rows": _cf_group_cash(outflow_entries, _ap_supplier_label),
+            "daily_rows": _cf_daily_rows(period_entries, cad_to_bdt),
+            "weekly_rows": _cf_weekly_rows(period_entries, cad_to_bdt),
+            "monthly_rows": _cf_monthly_rows(period_entries, cad_to_bdt),
+            "top_inflow_rows": _cf_group_cash(inflow_entries, _pl_customer_label, cad_to_bdt),
+            "top_outflow_rows": _cf_group_cash(outflow_entries, _ap_supplier_label, cad_to_bdt),
             "side_rows": side_rows,
             "forecast_receivables": forecast_receivables,
             "forecast_payables": forecast_payables,
@@ -2479,7 +2479,7 @@ def _kpi_date_range(request, today):
     return date_from, date_to
 
 
-def _kpi_base_entries(filters, date_from=None, date_to=None):
+def _kpi_base_entries(filters, date_from=None, date_to=None, cad_to_bdt=None):
     qs = (
         AccountingEntry.objects.exclude(main_type="TRANSFER")
         .exclude(status__iexact="CANCELLED")
@@ -2495,7 +2495,9 @@ def _kpi_base_entries(filters, date_from=None, date_to=None):
         qs = qs.filter(side=filters["side"])
     if filters["currency"]:
         qs = qs.filter(currency=filters["currency"])
-    rows = [_pl_row(entry) for entry in qs.order_by("date", "id").iterator()]
+    if cad_to_bdt is None:
+        cad_to_bdt = _bs_latest_cad_to_bdt()
+    rows = [_pl_row(entry, cad_to_bdt) for entry in qs.order_by("date", "id").iterator()]
     if filters["product_category"]:
         rows = [row for row in rows if row["product_category"] == filters["product_category"]]
     return rows
@@ -2573,14 +2575,14 @@ def _kpi_average_collection_days(filters, date_from, date_to):
     return Decimal(sum(days) / len(days)).quantize(Decimal("0.01")) if days else Decimal("0")
 
 
-def _kpi_ap_open(rows, today):
+def _kpi_ap_open(rows, today, cad_to_bdt):
     payable_rows = [
         _ap_row(row["entry"], today)
         for row in rows
         if (row["entry"].direction or "").upper().strip() == AccountingEntry.DIR_OUT
     ]
     open_rows = [row for row in payable_rows if row["status_key"] != "paid"]
-    return open_rows, sum((_pl_amount_cad(row["entry"]) for row in open_rows), Decimal("0"))
+    return open_rows, sum((_pl_amount_cad(row["entry"], cad_to_bdt) for row in open_rows), Decimal("0"))
 
 
 def _kpi_monthly_trends(rows):
@@ -2642,10 +2644,11 @@ def kpi_scorecard_dashboard(request):
 
     month_start = date(date_to.year, date_to.month, 1)
     ytd_start = date(date_to.year, 1, 1)
-    period_rows = _kpi_base_entries(filters, date_from, date_to)
-    month_rows = _kpi_base_entries(filters, month_start, date_to)
-    ytd_rows = _kpi_base_entries(filters, ytd_start, date_to)
-    as_of_rows = _kpi_base_entries(filters, None, date_to)
+    cad_to_bdt = _bs_latest_cad_to_bdt()
+    period_rows = _kpi_base_entries(filters, date_from, date_to, cad_to_bdt)
+    month_rows = _kpi_base_entries(filters, month_start, date_to, cad_to_bdt)
+    ytd_rows = _kpi_base_entries(filters, ytd_start, date_to, cad_to_bdt)
+    as_of_rows = _kpi_base_entries(filters, None, date_to, cad_to_bdt)
 
     period_totals = _kpi_row_totals(period_rows)
     month_totals = _kpi_row_totals(month_rows)
@@ -2653,11 +2656,11 @@ def kpi_scorecard_dashboard(request):
     as_of_totals = _kpi_row_totals(as_of_rows)
     ar_invoices, ar_outstanding = _kpi_ar_open(filters, date_to)
     average_collection_days = _kpi_average_collection_days(filters, date_from, date_to)
-    ap_rows, ap_outstanding = _kpi_ap_open(as_of_rows, today)
+    ap_rows, ap_outstanding = _kpi_ap_open(as_of_rows, today, cad_to_bdt)
     inventory_value = _bs_inventory_value_cad(filters)
     cash_balance = sum(
         (
-            _pl_amount_cad(row["entry"]) if (row["entry"].direction or "").upper().strip() == AccountingEntry.DIR_IN else -_pl_amount_cad(row["entry"])
+            _pl_amount_cad(row["entry"], cad_to_bdt) if (row["entry"].direction or "").upper().strip() == AccountingEntry.DIR_IN else -_pl_amount_cad(row["entry"], cad_to_bdt)
             for row in as_of_rows
         ),
         Decimal("0"),
@@ -2793,7 +2796,7 @@ def _ff_budget_for_days(config, metric, start_day, forecast_days):
     return total.quantize(Decimal("0.01"))
 
 
-def _ff_entry_rows(filters, start_date=None, end_date=None, limit=3000):
+def _ff_entry_rows(filters, start_date=None, end_date=None, limit=3000, cad_to_bdt=None):
     qs = (
         AccountingEntry.objects.exclude(main_type="TRANSFER")
         .exclude(status__iexact="CANCELLED")
@@ -2810,7 +2813,9 @@ def _ff_entry_rows(filters, start_date=None, end_date=None, limit=3000):
     if filters["customer_id"]:
         qs = qs.filter(Q(customer_id=filters["customer_id"]) | Q(production_order__customer_id=filters["customer_id"]))
 
-    rows = [_pl_row(entry) for entry in qs.order_by("date", "id")[:limit]]
+    if cad_to_bdt is None:
+        cad_to_bdt = _bs_latest_cad_to_bdt()
+    rows = [_pl_row(entry, cad_to_bdt) for entry in qs.order_by("date", "id")[:limit]]
     if filters["product_category"]:
         rows = [row for row in rows if row["product_category"] == filters["product_category"]]
     return rows
@@ -2855,9 +2860,8 @@ def _ff_product_category_from_order(order):
     return "Uncategorized"
 
 
-def _ff_open_invoice_rows(filters, today, horizon_days):
+def _ff_open_invoice_rows(filters, today, horizon_days, cad_to_bdt):
     end_day = today + timedelta(days=horizon_days)
-    cad_to_bdt = _bs_latest_cad_to_bdt()
     qs = _finance_invoice_archive_scope(
         Invoice.objects.exclude(status="cancelled")
         .select_related("customer", "order", "order__customer", "order__product", "order__opportunity")
@@ -2898,7 +2902,7 @@ def _ff_open_invoice_rows(filters, today, horizon_days):
     return rows
 
 
-def _ff_open_payable_rows(filters, today, horizon_days):
+def _ff_open_payable_rows(filters, today, horizon_days, cad_to_bdt):
     end_day = today + timedelta(days=horizon_days)
     qs = (
         AccountingEntry.objects.filter(direction=AccountingEntry.DIR_OUT)
@@ -2929,7 +2933,7 @@ def _ff_open_payable_rows(filters, today, horizon_days):
                 "supplier": ap_row["supplier"],
                 "expected_date": expected_date,
                 "days_until": max((expected_date - today).days, 0),
-                "amount": _pl_amount_cad(entry),
+                "amount": _pl_amount_cad(entry, cad_to_bdt),
                 "currency": (entry.currency or "").upper(),
                 "side": (entry.side or "").upper().strip(),
                 "status_label": ap_row["status_label"],
@@ -3116,8 +3120,9 @@ def financial_forecast_dashboard(request):
     }
 
     history_start = today - timedelta(days=FF_HISTORY_DAYS - 1)
-    history_rows = _ff_entry_rows(filters, history_start, today)
-    cash_rows = _ff_entry_rows(filters, None, today)
+    cad_to_bdt = _bs_latest_cad_to_bdt()
+    history_rows = _ff_entry_rows(filters, history_start, today, cad_to_bdt=cad_to_bdt)
+    cash_rows = _ff_entry_rows(filters, None, today, cad_to_bdt=cad_to_bdt)
     history_totals = _ff_row_totals(history_rows)
     history_days = max((today - history_start).days + 1, 1)
     current_cash = sum(
@@ -3129,8 +3134,8 @@ def financial_forecast_dashboard(request):
     )
 
     max_horizon = max(days for days, _label in FF_HORIZON_OPTIONS)
-    invoice_rows = _ff_open_invoice_rows(filters, today, max_horizon)
-    payable_rows = _ff_open_payable_rows(filters, today, max_horizon)
+    invoice_rows = _ff_open_invoice_rows(filters, today, max_horizon, cad_to_bdt)
+    payable_rows = _ff_open_payable_rows(filters, today, max_horizon, cad_to_bdt)
     config = _bva_budget_config()
     horizon_rows = _ff_horizon_rows(history_totals, history_days, current_cash, invoice_rows, payable_rows, today, config)
     selected_forecast = next((row for row in horizon_rows if row["days"] == selected_horizon), horizon_rows[-1])
@@ -3229,7 +3234,7 @@ def accounting_ca_master(request):
                 messages.error(request, "Please set the exchange rate first.")
                 return redirect("accounting_ca_master")
 
-            bdt_amount = (cad_amount * cad_to_bdt).quantize(Decimal("0.01"))
+            bdt_amount = convert_currency(cad_amount, "CAD", "BDT", bdt_per_cad=cad_to_bdt)
             ref = uuid4().hex[:10]
 
             desc_ca = f"Send to BD | Method: {sent_method} | Ref: {ref} | {note}".strip()
@@ -3262,7 +3267,7 @@ def accounting_ca_master(request):
                     transfer_ref=ref,
                     currency="BDT",
                     amount_original=bdt_amount,
-                    rate_to_cad=(Decimal("1") / cad_to_bdt if cad_to_bdt else Decimal("0")),
+                    rate_to_cad=cad_to_bdt,
                     rate_to_bdt=Decimal("1"),
                     description=desc_bd,
                     created_by=request.user,
@@ -3318,16 +3323,11 @@ def accounting_ca_grid(request):
     rows = []
     total_out = Decimal("0")
     total_in = Decimal("0")
+    cad_to_bdt = _bs_latest_cad_to_bdt()
 
     for e in qs:
         direction = (e.direction or "").upper().strip()
-
-        amount_original = e.amount_original or Decimal("0")
-        amount_cad = e.amount_cad or Decimal("0")
-
-        # CA grid should show CAD.
-        # If amount_cad is still 0 (like your DB shows), fall back to amount_original.
-        amount = amount_cad if amount_cad != 0 else amount_original
+        amount = _pl_amount_cad(e, cad_to_bdt)
 
         money_out = Decimal("0")
         money_in = Decimal("0")
@@ -3595,6 +3595,20 @@ def accounting_entry_list(request):
         )
 
     entries = list(qs[:500])
+    cad_to_bdt = _bs_latest_cad_to_bdt()
+    for entry in entries:
+        entry.display_amount_cad = _pl_amount_cad(entry, cad_to_bdt)
+        try:
+            entry.display_amount_bdt = convert_currency(
+                entry.amount_original,
+                entry.currency,
+                "BDT",
+                bdt_per_cad=cad_to_bdt,
+                stored_rate_to_cad=entry.rate_to_cad,
+                stored_rate_to_bdt=entry.rate_to_bdt,
+            )
+        except CurrencyConversionError:
+            entry.display_amount_bdt = Decimal("0")
 
     total_ca_in = Decimal("0")
     total_ca_out = Decimal("0")
@@ -3609,17 +3623,41 @@ def accounting_entry_list(request):
         "amount_cad",
         "amount_bdt",
         "amount_original",
+        "currency",
+        "rate_to_cad",
+        "rate_to_bdt",
     )
     for row in totals_qs.iterator(chunk_size=2000):
         side = (row.get("side") or "").upper().strip()
         direction = (row.get("direction") or "").upper().strip()
         main_type = (row.get("main_type") or "").upper().strip()
         amount_original = row.get("amount_original") or Decimal("0")
+        currency = (row.get("currency") or "").upper().strip()
+        try:
+            amount_cad = convert_currency(
+                amount_original,
+                currency,
+                "CAD",
+                bdt_per_cad=cad_to_bdt,
+                stored_rate_to_cad=row.get("rate_to_cad"),
+                stored_rate_to_bdt=row.get("rate_to_bdt"),
+            )
+        except CurrencyConversionError:
+            amount_cad = Decimal("0")
+        try:
+            amount_bdt = convert_currency(
+                amount_original,
+                currency,
+                "BDT",
+                bdt_per_cad=cad_to_bdt,
+                stored_rate_to_cad=row.get("rate_to_cad"),
+                stored_rate_to_bdt=row.get("rate_to_bdt"),
+            )
+        except CurrencyConversionError:
+            amount_bdt = Decimal("0")
 
         if side == "CA":
-            amount = row.get("amount_cad") or Decimal("0")
-            if amount == 0:
-                amount = amount_original
+            amount = amount_cad
             if direction == "IN":
                 total_ca_in += amount
             elif direction == "OUT":
@@ -3627,9 +3665,7 @@ def accounting_entry_list(request):
                 if main_type == "COGS":
                     cogs_cad += amount
         elif side == "BD":
-            amount = row.get("amount_bdt") or Decimal("0")
-            if amount == 0:
-                amount = amount_original
+            amount = amount_bdt
             if direction == "IN":
                 total_bd_in += amount
             elif direction == "OUT":
@@ -3640,8 +3676,8 @@ def accounting_entry_list(request):
     net_cad = total_ca_net_cad
     net_bdt = total_bd_net_bdt
     revenue_cad = total_ca_in
-    gross_profit_cad = revenue_cad - cogs_cad
-    gross_margin_pct = (gross_profit_cad / revenue_cad * Decimal("100")) if revenue_cad else Decimal("0")
+    gross_profit_cad = revenue_cad - cogs_cad if revenue_cad > 0 and cogs_cad > 0 else None
+    gross_margin_pct = (gross_profit_cad / revenue_cad * Decimal("100")) if gross_profit_cad is not None else None
     total_income_cad = revenue_cad
     total_expense_cad = total_ca_out
 
@@ -4014,29 +4050,21 @@ SWING_SUB_TYPE = "Swing"
 
 
 def _entry_amount_cad(row, cad_to_bdt):
-    amt_cad = row.get("amount_cad") or Decimal("0")
-    if amt_cad != 0:
-        return amt_cad
     currency = (row.get("currency") or "").upper().strip()
     amt_orig = row.get("amount_original") or Decimal("0")
-    if currency == "CAD":
-        return amt_orig
-    if currency == "BDT" and cad_to_bdt:
-        return (amt_orig / cad_to_bdt).quantize(Decimal("0.01"))
-    return Decimal("0")
+    try:
+        return convert_currency(amt_orig, currency, "CAD", bdt_per_cad=cad_to_bdt)
+    except CurrencyConversionError:
+        return Decimal("0")
 
 
 def _entry_amount_bdt(row, cad_to_bdt):
-    amt_bdt = row.get("amount_bdt") or Decimal("0")
-    if amt_bdt != 0:
-        return amt_bdt
     currency = (row.get("currency") or "").upper().strip()
     amt_orig = row.get("amount_original") or Decimal("0")
-    if currency == "BDT":
-        return amt_orig
-    if currency == "CAD" and cad_to_bdt:
-        return (amt_orig * cad_to_bdt).quantize(Decimal("0.01"))
-    return Decimal("0")
+    try:
+        return convert_currency(amt_orig, currency, "BDT", bdt_per_cad=cad_to_bdt)
+    except CurrencyConversionError:
+        return Decimal("0")
 
 
 def production_profit_rows(year=None, month=None):
@@ -4149,12 +4177,13 @@ def production_profit_rows(year=None, month=None):
         swing_bdt = stats[oid]["swing_bdt"]
 
         if bd_total_cost_bdt and cad_to_bdt and cad_to_bdt > 0:
-            cost_cad = (bd_total_cost_bdt / cad_to_bdt).quantize(Decimal("0.01"))
+            cost_cad = convert_currency(bd_total_cost_bdt, "BDT", "CAD", bdt_per_cad=cad_to_bdt)
         else:
             cost_cad = stats[oid]["cost_cad_from_entries"]
 
-        profit = revenue - cost_cad
-        margin = (profit / revenue * Decimal("100")) if revenue else Decimal("0")
+        cost_available = cost_cad > 0
+        profit = revenue - cost_cad if cost_available else None
+        margin = (profit / revenue * Decimal("100")) if revenue > 0 and cost_available else None
 
         rows.append(
             {
@@ -4170,12 +4199,13 @@ def production_profit_rows(year=None, month=None):
                 "bd_sewing_bdt": bd_sewing_bdt,
                 "bd_total_cost_bdt": bd_total_cost_bdt,
                 "cost_cad": cost_cad,
+                "cost_available": cost_available,
                 "profit_cad": profit,
                 "margin_pct": margin,
             }
         )
 
-    rows.sort(key=lambda r: r.get("profit_cad", Decimal("0")), reverse=True)
+    rows.sort(key=lambda r: r.get("profit_cad") if r.get("profit_cad") is not None else Decimal("-Infinity"), reverse=True)
     return rows
 
 
@@ -4189,20 +4219,22 @@ def production_profit_report(request):
     m = _parse_int(request.GET.get("month") or str(today.month)) or today.month
 
     rows = production_profit_rows(year=y, month=m)
+    cost_rows = [row for row in rows if row.get("cost_available")]
     profit_summary = {
         "order_count": len(rows),
-        "profitable_count": sum(1 for row in rows if row.get("profit_cad", Decimal("0")) >= 0),
-        "loss_count": sum(1 for row in rows if row.get("profit_cad", Decimal("0")) < 0),
+        "cost_available": bool(cost_rows),
+        "profitable_count": sum(1 for row in cost_rows if row.get("profit_cad") >= 0),
+        "loss_count": sum(1 for row in cost_rows if row.get("profit_cad") < 0),
         "total_revenue_cad": sum((row.get("revenue_cad", Decimal("0")) for row in rows), Decimal("0")),
-        "total_cost_cad": sum((row.get("cost_cad", Decimal("0")) for row in rows), Decimal("0")),
-        "total_profit_cad": sum((row.get("profit_cad", Decimal("0")) for row in rows), Decimal("0")),
+        "total_cost_cad": sum((row.get("cost_cad", Decimal("0")) for row in cost_rows), Decimal("0")),
+        "total_profit_cad": sum((row.get("profit_cad") for row in cost_rows), Decimal("0")),
         "total_swing_bdt": sum((row.get("swing_bdt", Decimal("0")) for row in rows), Decimal("0")),
         "total_bd_cost_bdt": sum((row.get("bd_total_cost_bdt", Decimal("0")) for row in rows), Decimal("0")),
     }
     profit_summary["margin_pct"] = (
         profit_summary["total_profit_cad"] / profit_summary["total_revenue_cad"] * Decimal("100")
-        if profit_summary["total_revenue_cad"]
-        else Decimal("0")
+        if profit_summary["total_revenue_cad"] > 0 and profit_summary["total_cost_cad"] > 0
+        else None
     )
     rate_row = _get_rate_row()
 
@@ -4429,7 +4461,7 @@ def accounting_bd_grid_export_xlsx(request):
 @login_required
 def bd_staff_list(request):
     qs = BDStaff.objects.all().order_by("name")
-    return render(request, "crm/bd_staff_list.html", {"rows": qs})
+    return render(request, "crm/bd_staff_list.html", {"staff_list": qs})
 
 
 @login_required
@@ -4466,8 +4498,48 @@ def bd_staff_edit(request, pk):
 
 @login_required
 def bd_staff_month_list(request):
-    qs = BDStaffMonth.objects.select_related("staff").order_by("-year", "-month", "staff__name")
-    return render(request, "crm/bd_staff_month_list.html", {"rows": qs})
+    latest = BDStaffMonth.objects.order_by("-year", "-month").values("year", "month").first()
+    today = timezone.localdate()
+    try:
+        year = int(request.GET.get("year") or (latest or {}).get("year") or today.year)
+    except (TypeError, ValueError):
+        year = today.year
+    month = (request.GET.get("month") or str((latest or {}).get("month") or today.month)).strip().lower()
+    month_i = None
+    if month != "all":
+        try:
+            month_i = int(month)
+        except (TypeError, ValueError):
+            month_i = today.month
+            month = str(month_i)
+        if month_i < 1 or month_i > 12:
+            month_i = today.month
+            month = str(month_i)
+
+    qs = BDStaffMonth.objects.filter(year=year).select_related("staff")
+    if month_i is not None:
+        qs = qs.filter(month=month_i)
+    rows = list(qs.order_by("-year", "-month", "staff__name"))
+    total_payroll = sum((row.final_pay_bdt or Decimal("0") for row in rows), Decimal("0"))
+    total_ot = sum((row.overtime_total_bdt or Decimal("0") for row in rows), Decimal("0"))
+    total_bonus = sum((row.bonus_bdt or Decimal("0") for row in rows), Decimal("0"))
+    total_deduction = sum((row.deduction_bdt or Decimal("0") for row in rows), Decimal("0"))
+    return render(
+        request,
+        "crm/bd_staff_month_list.html",
+        {
+            "rows": rows,
+            "year": year,
+            "month": month,
+            "month_i": month_i,
+            "total_payroll": total_payroll,
+            "total_ot": total_ot,
+            "total_bonus": total_bonus,
+            "total_deduction": total_deduction,
+            "paid_count": sum(1 for row in rows if row.is_paid),
+            "unpaid_count": sum(1 for row in rows if not row.is_paid),
+        },
+    )
 
 
 @login_required

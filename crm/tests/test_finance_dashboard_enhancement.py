@@ -43,7 +43,7 @@ class ExecutiveFinanceDashboardEnhancementTests(TestCase):
             amount=Decimal("5000"),
             currency="BDT",
             side="BD",
-            rate_to_cad=Decimal("0.01"),
+            rate_to_cad=Decimal("100"),
         )
         InvoicePayment.objects.create(
             invoice=self.usd_invoice,
@@ -55,10 +55,10 @@ class ExecutiveFinanceDashboardEnhancementTests(TestCase):
         )
 
         self._entry("IN", "INCOME", "CAD", Decimal("500"), Decimal("1"))
-        self._entry("IN", "INCOME", "BDT", Decimal("10000"), Decimal("0.01"))
+        self._entry("IN", "INCOME", "BDT", Decimal("10000"), Decimal("100"))
         self._entry("IN", "INCOME", "USD", Decimal("100"), Decimal("1.25"))
         self._entry("OUT", "EXPENSE", "CAD", Decimal("25"), Decimal("1"))
-        self._entry("OUT", "EXPENSE", "BDT", Decimal("2500"), Decimal("0.01"))
+        self._entry("OUT", "EXPENSE", "BDT", Decimal("2500"), Decimal("100"))
         self._entry("OUT", "EXPENSE", "USD", Decimal("20"), Decimal("1.25"))
         self._entry("OUT", "EXPENSE", "USD", Decimal("10"), Decimal("0"))
 
@@ -77,7 +77,7 @@ class ExecutiveFinanceDashboardEnhancementTests(TestCase):
         )
 
     def _entry(self, direction, main_type, currency, amount, rate_to_cad):
-        return AccountingEntry.objects.create(
+        entry = AccountingEntry(
             date=self.today,
             side="BD" if currency == "BDT" else "CA",
             direction=direction,
@@ -89,6 +89,11 @@ class ExecutiveFinanceDashboardEnhancementTests(TestCase):
             rate_to_bdt=Decimal("1") if currency == "BDT" else Decimal("100"),
             customer=self.customer,
         )
+        if currency == "USD" and rate_to_cad <= 0:
+            AccountingEntry.objects.bulk_create([entry])
+            return entry
+        entry.save()
+        return entry
 
     def test_dashboard_keeps_original_currencies_separate(self):
         response = self.client.get(reverse("executive_financial_dashboard"))
@@ -125,7 +130,7 @@ class ExecutiveFinanceDashboardEnhancementTests(TestCase):
 
         self.assertContains(response, "CAD $725.00")
         self.assertContains(response, "USD $300.00")
-        self.assertContains(response, "\u09F310,000.00 BDT")
+        self.assertContains(response, "\u09F310,000.00")
         self.assertContains(response, "Currency exposure")
 
     def test_dashboard_links_all_executive_finance_reports(self):
@@ -173,10 +178,10 @@ class ExecutiveFinanceDashboardEnhancementTests(TestCase):
         self.assertEqual(ap_totals, {"BDT": Decimal("2500"), "CAD": Decimal("25"), "USD": Decimal("30")})
         self.assertContains(receivables, "CAD $50.00")
         self.assertContains(receivables, "USD $40.00")
-        self.assertContains(receivables, "\u09F35,000.00 BDT")
+        self.assertContains(receivables, "\u09F35,000.00")
         self.assertContains(payables, "CAD $25.00")
         self.assertContains(payables, "USD $30.00")
-        self.assertContains(payables, "\u09F32,500.00 BDT")
+        self.assertContains(payables, "\u09F32,500.00")
 
     def test_finance_report_suite_uses_explicit_cad_symbol(self):
         for url_name in [

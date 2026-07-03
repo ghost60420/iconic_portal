@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load static crm_people %}
+{% load static crm_people crm_extras %}
 {% block content %}
 <link rel="stylesheet" href="{% static 'crm/production_list.css' %}?v=production-kpi-badges-20260603">
 
@@ -147,7 +147,7 @@
           <div>
             <strong>Low Margin</strong>
             {% for row in low_margin_orders %}
-              <a href="{% url 'production_detail' row.order.pk %}" title="{{ row.order.order_code|default:row.order.title }}">{{ row.order.short_order_code|default:row.order.order_code|default:row.order.title }} / {{ row.lifecycle.estimated_margin }}%</a>
+              <a href="{% url 'production_detail' row.order.pk %}" title="{{ row.order.order_code|default:row.order.title }}">{{ row.order.short_order_code|default:row.order.order_code|default:row.order.title }} / {{ row.lifecycle.estimated_margin|floatformat:2 }}%</a>
             {% empty %}
               <span>No low margin lifecycle orders.</span>
             {% endfor %}
@@ -155,7 +155,7 @@
           <div>
             <strong>High Profit</strong>
             {% for row in high_profit_orders %}
-              <a href="{% url 'production_detail' row.order.pk %}" title="{{ row.order.order_code|default:row.order.title }}">{{ row.order.short_order_code|default:row.order.order_code|default:row.order.title }} / {{ row.lifecycle.estimated_profit }}</a>
+              <a href="{% url 'production_detail' row.order.pk %}" title="{{ row.order.order_code|default:row.order.title }}">{{ row.order.short_order_code|default:row.order.order_code|default:row.order.title }} / {{ row.lifecycle.estimated_profit|finance_money:row.lifecycle_currency }}</a>
             {% empty %}
               <span>No profit data in this view.</span>
             {% endfor %}

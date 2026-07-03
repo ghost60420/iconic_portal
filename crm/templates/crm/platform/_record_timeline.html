@@ -10,7 +10,7 @@
         <span class="crm-timeline-dot" aria-hidden="true"></span>
         <div>
           <strong>{{ item.get_action_type_display }}{% if item.field_name and item.field_name != 'record' %}: {{ item.field_name|title }}{% endif %}</strong>
-          {% if item.previous_value or item.new_value %}<p>{% if item.previous_value %}<del>{{ item.previous_value }}</del>{% endif %}{% if item.new_value %} <ins>{{ item.new_value }}</ins>{% endif %}</p>{% endif %}
+          {% if item.previous_value or item.new_value %}<p>{% if item.previous_value %}<del>{{ item.previous_display_value }}</del>{% endif %}{% if item.new_value %} <ins>{{ item.new_display_value }}</ins>{% endif %}</p>{% endif %}
           <small>{% if item.actor %}{{ item.actor|employee_name }} · {% endif %}{{ item.created_at|date:"M d, Y g:i A" }}</small>
         </div>
       </li>

@@ -11,7 +11,7 @@
       <h1 class="opp-title">Opportunities</h1>
       <p class="opp-subtitle">
         Plan revenue, quotes, follow-ups, and production handoff from one focused view.
-        Production-stage opportunities are kept in the Production list.
+        Open opportunities use the same definition as every CRM dashboard, including production-stage opportunities.
       </p>
     </div>
 
@@ -29,7 +29,7 @@
       <small>{% if request.GET.status == "all" %}All visible stages{% elif request.GET.status == "closed_won" %}Closed won filter{% elif request.GET.status == "closed_lost" %}Closed lost filter{% else %}Active pipeline focus{% endif %}</small>
     </article>
     <article class="opp-stat">
-      <span>Estimated pipeline by currency</span>
+      <span>Open pipeline</span>
       {% for row in pipeline_values %}<strong title="{{ row.amount|finance_money:row.currency }}">{{ row.amount|compact_money:row.currency }}</strong>{% empty %}<strong>-</strong>{% endfor %}
       <small>Native order amounts for the current filters; currencies are not combined.</small>
     </article>
@@ -122,12 +122,12 @@
       </div>
 
       <div class="opp-field">
-        <label class="opp-label">Value min</label>
+        <label class="opp-label">Pipeline value min</label>
         <input class="opp-input" type="number" step="0.01" name="value_min" value="{{ request.GET.value_min|default:'' }}" placeholder="1000">
       </div>
 
       <div class="opp-field">
-        <label class="opp-label">Value max</label>
+        <label class="opp-label">Pipeline value max</label>
         <input class="opp-input" type="number" step="0.01" name="value_max" value="{{ request.GET.value_max|default:'' }}" placeholder="25000">
       </div>
 
@@ -178,7 +178,7 @@
           <tr>
             <th class="opp-image-cell">Image</th>
             <th>Opportunity</th>
-            <th>Value</th>
+            <th>Pipeline value</th>
             <th>Product</th>
             <th>Stage</th>
             <th>Expected / follow up</th>
@@ -219,7 +219,7 @@
                   {% if opp.kpi_order_value %}
                     <strong title="{{ opp.kpi_order_value|finance_money:opp.kpi_currency }}">{{ opp.kpi_order_value|compact_money:opp.kpi_currency }}</strong>
                   {% else %}
-                    <strong class="opp-muted">Value not set</strong>
+                    <strong class="opp-muted">Pipeline value not set</strong>
                   {% endif %}
                   {% if opp.order_value and opp.order_value_usd %}
                     <span>Converted: {{ opp.order_value|finance_money:"BDT" }}</span>
@@ -262,7 +262,7 @@
 
               <td data-label="Next action">
                 <div class="opp-next-action">
-                  {% firstof opp.lead.recommended_next_action opp.notes "Review stage, value, and next follow-up." %}
+                  {% firstof opp.lead.recommended_next_action opp.notes "Review stage, pipeline value, and next follow-up." %}
                 </div>
               </td>
 

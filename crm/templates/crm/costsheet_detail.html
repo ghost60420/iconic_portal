@@ -405,7 +405,7 @@
       </div>
       <div class="summary-cell summary-output">
         <div class="summary-label">Margin %</div>
-        <div class="summary-value" id="js-margin">{{ calc.display.margin_percent }}</div>
+        <div class="summary-value" id="js-margin">{% if calc.total_order_cost %}{{ calc.display.margin_percent }}%{% else %}Margin N/A{% endif %}</div>
       </div>
     </div>
 

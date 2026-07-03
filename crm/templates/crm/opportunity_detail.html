@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load static crm_people platform_tools %}
+{% load static crm_people platform_tools crm_extras %}
 
 {% block content %}
 <link rel="stylesheet" href="{% static 'crm/opportunity_detail.css' %}?v=detail-purpose-20260611">
@@ -22,7 +22,7 @@
         <span class="opp-stage-badge" data-stage="{{ opportunity.stage }}">{{ opportunity.get_stage_display }}</span>
         <span class="opp-status-pill {{ opportunity.status_key }}">{{ opportunity.status_label }}</span>
         <span class="opp-badge">
-          {% if opportunity.order_value %}BDT {{ opportunity.order_value|floatformat:0 }}{% else %}Value not set{% endif %}
+          {% if opportunity.kpi_order_value %}Pipeline {{ opportunity.kpi_order_value|finance_money:opportunity.kpi_currency }}{% else %}Pipeline value not set{% endif %}
         </span>
         <span class="opp-badge">
           {% if lead and lead.priority %}{{ lead.priority }} priority{% else %}Priority not set{% endif %}
@@ -93,9 +93,9 @@
       <small>{{ opportunity.product_type|default:"Other" }}</small>
     </article>
     <article class="opp-snapshot-card">
-      <span>Estimated value</span>
-      <strong>{% if order_value_bdt %}BDT {{ order_value_bdt|floatformat:0 }}{% else %}Not set{% endif %}</strong>
-      <small>{% if order_value_usd %}USD {{ order_value_usd|floatformat:0 }}{% else %}USD not set{% endif %}</small>
+      <span>Pipeline value</span>
+      <strong>{% if opportunity.kpi_order_value %}{{ opportunity.kpi_order_value|finance_money:opportunity.kpi_currency }}{% else %}Not set{% endif %}</strong>
+      <small>Shared open-pipeline source</small>
     </article>
     <article class="opp-snapshot-card">
       <span>Next follow up</span>
@@ -380,15 +380,15 @@
           {% if can_view_internal_financials %}
             <article>
               <span>Total cost / piece</span>
-              <strong>{% if costing_calc %}{{ costing_calc.display.total_cost_per_piece }} BDT{% else %}—{% endif %}</strong>
+              <strong>{% if costing_calc %}{{ costing_calc.total_cost_per_piece|finance_money:costing_header.currency }}{% else %}—{% endif %}</strong>
             </article>
             <article>
               <span>FOB / piece</span>
-              <strong>{% if costing_calc %}{{ costing_calc.display.fob_per_piece }} BDT{% else %}—{% endif %}</strong>
+              <strong>{% if costing_calc %}{{ costing_calc.fob_per_piece|finance_money:costing_header.currency }}{% else %}—{% endif %}</strong>
             </article>
             <article>
               <span>Margin</span>
-              <strong>{% if costing_calc %}{{ costing_calc.display.margin_percent }}%{% else %}—{% endif %}</strong>
+              <strong>{% if costing_calc and costing_calc.total_cost_order %}{{ costing_calc.display.margin_percent }}%{% elif costing_calc %}Margin N/A{% else %}—{% endif %}</strong>
             </article>
           {% endif %}
         </div>
@@ -415,7 +415,7 @@
                     <th>Date</th>
                     <th>Quantity</th>
                     <th>Total Cost</th>
-                    <th>Revenue</th>
+                    <th>Sales value</th>
                     <th>Net Profit</th>
                     <th>Net Margin %</th>
                     <th>Target Margin %</th>
@@ -516,7 +516,7 @@
           <article>
             <span>Shipments</span>
             <strong>{{ shipments|length }}</strong>
-            <small>{% if can_view_internal_financials %}{% if shipping_cost_bdt %}{{ shipping_cost_bdt }} BDT shipping{% else %}No shipping cost yet{% endif %}{% else %}Shipment records linked{% endif %}</small>
+            <small>{% if can_view_internal_financials %}{% if shipping_cost_bdt %}{{ shipping_cost_bdt|finance_money:"BDT" }} shipping{% else %}No shipping cost yet{% endif %}{% else %}Shipment records linked{% endif %}</small>
           </article>
         </div>
 
@@ -623,12 +623,12 @@
         <section class="opp-panel opp-profit-card">
           <p class="opp-section-kicker">Profit snapshot</p>
           <div class="opp-profit-value {% if profit_after_shipping and profit_after_shipping < 0 %}negative{% endif %}">
-            {% if profit_after_shipping or profit_after_shipping == 0 %}{{ profit_after_shipping|floatformat:2 }} BDT{% else %}—{% endif %}
+            {% if total_cost_bdt %}{{ profit_after_shipping|finance_money:"BDT" }}{% else %}Cost unavailable{% endif %}
           </div>
-          <div class="opp-money-row"><span>Order value</span><strong>{% if opportunity.order_value %}{{ opportunity.order_value }}{% else %}—{% endif %}</strong></div>
-          <div class="opp-money-row"><span>Total cost</span><strong>{% if total_cost_bdt or total_cost_bdt == 0 %}{{ total_cost_bdt }}{% else %}—{% endif %}</strong></div>
-          <div class="opp-money-row"><span>Margin</span><strong>{% if profit_after_shipping_percent or profit_after_shipping_percent == 0 %}{{ profit_after_shipping_percent|floatformat:1 }}%{% else %}—{% endif %}</strong></div>
-          <div class="opp-money-row"><span>Shipping</span><strong>{% if shipping_cost_bdt %}{{ shipping_cost_bdt }} BDT{% else %}—{% endif %}</strong></div>
+          <div class="opp-money-row"><span>Sales value</span><strong>{% if opportunity.kpi_order_value %}{{ opportunity.kpi_order_value|finance_money:opportunity.kpi_currency }}{% else %}—{% endif %}</strong></div>
+          <div class="opp-money-row"><span>Total cost</span><strong>{% if total_cost_bdt %}{{ total_cost_bdt|finance_money:"BDT" }}{% else %}Cost unavailable{% endif %}</strong></div>
+          <div class="opp-money-row"><span>Margin</span><strong>{% if total_cost_bdt and profit_after_shipping_percent != None %}{{ profit_after_shipping_percent|floatformat:1 }}%{% else %}Margin N/A{% endif %}</strong></div>
+          <div class="opp-money-row"><span>Shipping</span><strong>{% if shipping_cost_bdt %}{{ shipping_cost_bdt|finance_money:"BDT" }}{% else %}{{ 0|finance_money:"BDT" }}{% endif %}</strong></div>
         </section>
       {% endif %}
 
@@ -759,7 +759,7 @@
                   {% else %}
                     No tracking
                   {% endif %}
-                  {% if can_view_internal_financials %} · {{ s.cost_bdt|default:"-" }} BDT{% endif %} · {{ s.get_status_display }}
+                  {% if can_view_internal_financials %} · {% if s.cost_bdt != None %}{{ s.cost_bdt|finance_money:"BDT" }}{% else %}-{% endif %}{% endif %} · {{ s.get_status_display }}
                 </span>
               </li>
             {% endfor %}

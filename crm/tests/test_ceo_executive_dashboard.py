@@ -113,6 +113,8 @@ class CEOExecutiveDashboardTests(TestCase):
             self._entry(currency, "OUT", "EXPENSE", expense)
 
     def _entry(self, currency, direction, main_type, amount):
+        rate_to_cad = {"CAD": Decimal("1"), "USD": Decimal("1.25"), "BDT": Decimal("100")}[currency]
+        rate_to_bdt = {"CAD": Decimal("100"), "USD": Decimal("125"), "BDT": Decimal("1")}[currency]
         AccountingEntry.objects.create(
             date=self.today,
             side="BD" if currency == "BDT" else "CA",
@@ -120,6 +122,8 @@ class CEOExecutiveDashboardTests(TestCase):
             main_type=main_type,
             currency=currency,
             amount_original=amount,
+            rate_to_cad=rate_to_cad,
+            rate_to_bdt=rate_to_bdt,
             customer=self.customer,
         )
 
@@ -128,14 +132,15 @@ class CEOExecutiveDashboardTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         for label in [
-            "Monthly Sales",
+            "Monthly Sales Value",
             "Outstanding AR",
             "Outstanding AP",
             "Current Cash",
             "Production Orders",
             "Late Production Orders",
             "Pending CEO Approvals",
-            "Revenue by Currency",
+            "Accounting Revenue by Currency",
+            "Open Pipeline",
             "Profit by Currency",
             "Top Customers",
             "Top Salesperson",
@@ -143,10 +148,10 @@ class CEOExecutiveDashboardTests(TestCase):
             "Upcoming Shipments",
         ]:
             self.assertContains(response, label)
-        self.assertContains(response, "Today&#x27;s Sales")
+        self.assertContains(response, "Today&#x27;s Sales Value")
         self.assertContains(response, "CAD $100.00")
         self.assertContains(response, "USD $200.00")
-        self.assertContains(response, "\u09F33,000.00 BDT")
+        self.assertContains(response, "\u09F33,000.00")
         self.assertContains(response, "Executive Customer")
         self.assertContains(response, "Sales")
         self.assertContains(response, "Hossain")

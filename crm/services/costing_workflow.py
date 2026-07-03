@@ -5,7 +5,11 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from crm.models import ActualCostEntry, CostingAuditLog, CostingHeader, Invoice, ProductionOrder, QuickCosting
-from crm.services.costing_currency import normalize_costing_currency
+from crm.services.costing_currency import (
+    CurrencyConversionError,
+    convert_currency,
+    normalize_costing_currency,
+)
 from crm.services.costing_engine import compute_costing
 from crm.services.order_lifecycle import (
     create_lifecycle_from_invoice,
@@ -109,15 +113,15 @@ def _quick_money_for_invoice(value, source_currency, target_currency, exchange_r
     value = _d(value)
     source_currency = normalize_costing_currency(source_currency)
     target_currency = normalize_costing_currency(target_currency)
-    if source_currency == target_currency:
-        return _money(value)
-
-    rate = _d(exchange_rate)
-    if rate <= 0 or {source_currency, target_currency} != {"BDT", "CAD"}:
-        raise CostingWorkflowError("Currency conversion rate is required before creating this invoice.")
-    if source_currency == "BDT":
-        return _money(value / rate)
-    return _money(value * rate)
+    try:
+        return convert_currency(
+            value,
+            source_currency,
+            target_currency,
+            bdt_per_cad=exchange_rate,
+        )
+    except CurrencyConversionError as exc:
+        raise CostingWorkflowError("Currency conversion rate is required before creating this invoice.") from exc
 
 
 def get_costing_quote_amounts(costing):

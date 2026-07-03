@@ -194,19 +194,19 @@
 
     <div class="pp-summary">
       <div class="pp-summary-card">
-        <span>Total revenue</span>
+        <span>Production accounting revenue</span>
         <strong>{{ profit_summary.total_revenue_cad|finance_money:"CAD" }}</strong>
         <small>{{ profit_summary.order_count }} order row(s) in this period.</small>
       </div>
       <div class="pp-summary-card">
         <span>Total cost</span>
-        <strong>{{ profit_summary.total_cost_cad|finance_money:"CAD" }}</strong>
+        <strong>{% if profit_summary.cost_available %}{{ profit_summary.total_cost_cad|finance_money:"CAD" }}{% else %}Cost unavailable{% endif %}</strong>
         <small>Converted CAD display. Original BD total cost: {{ profit_summary.total_bd_cost_bdt|finance_money:"BDT" }}.</small>
       </div>
       <div class="pp-summary-card">
         <span>Profit</span>
-        <strong>{{ profit_summary.total_profit_cad|finance_money:"CAD" }}</strong>
-        <small>Margin {{ profit_summary.margin_pct|floatformat:1 }}% across visible rows.</small>
+        <strong>{% if profit_summary.cost_available %}{{ profit_summary.total_profit_cad|finance_money:"CAD" }}{% else %}N/A{% endif %}</strong>
+        <small>{% if profit_summary.margin_pct != None %}Margin {{ profit_summary.margin_pct|floatformat:1 }}% across costed rows.{% else %}Cost unavailable · Margin N/A{% endif %}</small>
       </div>
       <div class="pp-summary-card">
         <span>Swing / risk</span>
@@ -321,16 +321,16 @@
                 </td>
 
                 <td class="text-end pp-money">
-                  {{ r.cost_cad|default:0|finance_money:"CAD" }}
+                  {% if r.cost_available %}{{ r.cost_cad|finance_money:"CAD" }}{% else %}Cost unavailable{% endif %}
                 </td>
 
                 <td class="text-end fw-bold pp-money"
                     style="color:{% if r.profit_cad|default:0 < 0 %}#ff6b6b{% else %}#4ade80{% endif %};">
-                  {{ r.profit_cad|default:0|finance_money:"CAD" }}
+                  {% if r.profit_cad != None %}{{ r.profit_cad|finance_money:"CAD" }}{% else %}N/A{% endif %}
                 </td>
 
                 <td class="text-end fw-bold pp-money">
-                  {{ r.margin_pct|default:0|floatformat:1 }}%
+                  {% if r.margin_pct != None %}{{ r.margin_pct|floatformat:1 }}%{% else %}Margin N/A{% endif %}
                 </td>
               </tr>
               {% empty %}

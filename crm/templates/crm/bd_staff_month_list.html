@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load tz %}
+{% load tz crm_extras %}
 {% block content %}
 
 <style>
@@ -38,7 +38,7 @@
       <div class="bd-card h-100">
         <div class="card-body">
           <div class="bd-k">Total payroll (BDT)</div>
-          <div class="bd-v bd-v-green">{{ total_payroll|default:"0.00"|floatformat:2 }}</div>
+          <div class="bd-v bd-v-green">{{ total_payroll|default:"0.00"|finance_money:"BDT" }}</div>
         </div>
       </div>
     </div>
@@ -47,7 +47,7 @@
       <div class="bd-card h-100">
         <div class="card-body">
           <div class="bd-k">Overtime (BDT)</div>
-          <div class="bd-v">{{ total_ot|default:"0.00"|floatformat:2 }}</div>
+          <div class="bd-v">{{ total_ot|default:"0.00"|finance_money:"BDT" }}</div>
         </div>
       </div>
     </div>
@@ -56,7 +56,7 @@
       <div class="bd-card h-100">
         <div class="card-body">
           <div class="bd-k">Bonus</div>
-          <div class="bd-v">{{ total_bonus|default:"0.00"|floatformat:2 }}</div>
+          <div class="bd-v">{{ total_bonus|default:"0.00"|finance_money:"BDT" }}</div>
         </div>
       </div>
     </div>
@@ -65,7 +65,7 @@
       <div class="bd-card h-100">
         <div class="card-body">
           <div class="bd-k">Deduction</div>
-          <div class="bd-v bd-v-red">{{ total_deduction|default:"0.00"|floatformat:2 }}</div>
+          <div class="bd-v bd-v-red">{{ total_deduction|default:"0.00"|finance_money:"BDT" }}</div>
         </div>
       </div>
     </div>
@@ -160,13 +160,13 @@
           {% for r in rows %}
           <tr>
             <td>{{ r.staff.name }}</td>
-            <td class="text-end">{{ r.base_salary_bdt|floatformat:2 }}</td>
+            <td class="text-end">{{ r.base_salary_bdt|finance_money:"BDT" }}</td>
             <td class="text-end">{{ r.overtime_hours|floatformat:2 }}</td>
-            <td class="text-end">{{ r.overtime_rate_bdt|floatformat:2 }}</td>
-            <td class="text-end">{{ r.overtime_total_bdt|floatformat:2 }}</td>
-            <td class="text-end">{{ r.bonus_bdt|floatformat:2 }}</td>
-            <td class="text-end">{{ r.deduction_bdt|floatformat:2 }}</td>
-            <td class="text-end"><strong>{{ r.final_pay_bdt|floatformat:2 }}</strong></td>
+            <td class="text-end">{{ r.overtime_rate_bdt|finance_money:"BDT" }}</td>
+            <td class="text-end">{{ r.overtime_total_bdt|finance_money:"BDT" }}</td>
+            <td class="text-end">{{ r.bonus_bdt|finance_money:"BDT" }}</td>
+            <td class="text-end">{{ r.deduction_bdt|finance_money:"BDT" }}</td>
+            <td class="text-end"><strong>{{ r.final_pay_bdt|finance_money:"BDT" }}</strong></td>
             <td>
               {% if r.is_paid %}
                 <span class="badge bg-success">Yes</span>

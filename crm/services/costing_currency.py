@@ -6,6 +6,10 @@ SUPPORTED_COSTING_CURRENCIES = {"BDT", "CAD", "USD"}
 CURRENCY_DISPLAY_ORDER = ("CAD", "USD", "BDT")
 
 
+class CurrencyConversionError(ValueError):
+    """Raised when a requested currency conversion has no valid stored rate."""
+
+
 def _to_decimal(value):
     if value is None:
         return Decimal("0")
@@ -19,11 +23,11 @@ def _to_decimal(value):
 
 def _format_decimal(value):
     rounded = _to_decimal(value).quantize(MONEY_QUANT, rounding=ROUND_HALF_UP)
-    return f"{rounded:.2f}"
+    return f"{rounded:,.2f}"
 
 
 def format_money(value, symbol):
-    return f"{symbol} {_format_decimal(value)}"
+    return f"{symbol}{_format_decimal(value)}"
 
 
 def normalize_costing_currency(currency):
@@ -53,7 +57,7 @@ def format_finance_money(value, currency):
     if code == "USD":
         return f"USD ${amount}"
     if code == "BDT":
-        return f"\u09F3{amount} BDT"
+        return f"\u09F3{amount}"
     if code:
         return f"{code} {amount}"
     return amount
@@ -115,18 +119,88 @@ def format_bdt(value):
 
 
 def format_cad(value):
-    return format_money(value, "$")
+    return f"CAD ${_format_decimal(value)}"
 
 
-def cad_from_bdt(bdt_value, exchange_rate_bdt_per_cad):
-    rate = _to_decimal(exchange_rate_bdt_per_cad)
-    if rate <= 0:
-        return None
-    return _to_decimal(bdt_value) / rate
+def convert_currency(
+    value,
+    source_currency,
+    target_currency,
+    *,
+    bdt_per_cad=None,
+    cad_per_usd=None,
+    bdt_per_usd=None,
+    stored_rate_to_cad=None,
+    stored_rate_to_bdt=None,
+    quantize=MONEY_QUANT,
+):
+    """Convert money with explicit, direction-safe rate semantics.
+
+    ``bdt_per_cad`` is BDT for one CAD. ``cad_per_usd`` is CAD for one
+    USD. ``bdt_per_usd`` is BDT for one USD. The stored-rate arguments are
+    compatibility inputs for AccountingEntry and InvoicePayment. For BDT/CAD,
+    every accepted rate has one meaning only: BDT per one CAD.
+    """
+    amount = _to_decimal(value)
+    source = normalize_finance_currency(source_currency)
+    target = normalize_finance_currency(target_currency)
+    if source not in SUPPORTED_COSTING_CURRENCIES or target not in SUPPORTED_COSTING_CURRENCIES:
+        raise CurrencyConversionError(f"Unsupported currency conversion: {source or '?'} to {target or '?'}.")
+    if source == target:
+        result = amount
+    elif {source, target} == {"BDT", "CAD"}:
+        rate = _to_decimal(bdt_per_cad)
+        stored_cad = _to_decimal(stored_rate_to_cad)
+        stored_bdt = _to_decimal(stored_rate_to_bdt)
+        if rate <= 0:
+            if source == "BDT" and stored_cad > 0:
+                rate = stored_cad
+            elif source == "CAD" and stored_bdt > 0:
+                rate = stored_bdt
+        if rate <= 1:
+            raise CurrencyConversionError("A valid BDT-per-CAD exchange rate greater than one is required.")
+        result = amount / rate if source == "BDT" else amount * rate
+    elif {source, target} == {"USD", "CAD"}:
+        rate = _to_decimal(cad_per_usd)
+        if rate <= 0:
+            rate = _to_decimal(stored_rate_to_cad)
+        if rate <= 0:
+            raise CurrencyConversionError("A positive CAD-per-USD exchange rate is required.")
+        result = amount * rate if source == "USD" else amount / rate
+    elif {source, target} == {"USD", "BDT"}:
+        direct_rate = _to_decimal(bdt_per_usd)
+        if direct_rate <= 0:
+            direct_rate = _to_decimal(stored_rate_to_bdt)
+        if direct_rate > 0:
+            result = amount * direct_rate if source == "USD" else amount / direct_rate
+        else:
+            bdt_cad_rate = _to_decimal(bdt_per_cad)
+            usd_cad_rate = _to_decimal(cad_per_usd)
+            if usd_cad_rate <= 0:
+                usd_cad_rate = _to_decimal(stored_rate_to_cad)
+            if bdt_cad_rate <= 0 or usd_cad_rate <= 0:
+                raise CurrencyConversionError(
+                    "A positive BDT-per-USD rate or both BDT-per-CAD and CAD-per-USD rates are required."
+                )
+            result = (
+                amount * usd_cad_rate * bdt_cad_rate
+                if source == "USD"
+                else amount / bdt_cad_rate / usd_cad_rate
+            )
+    else:  # pragma: no cover - guarded by the supported currency set
+        raise CurrencyConversionError(f"Unsupported currency conversion: {source} to {target}.")
+
+    if quantize is None:
+        return result
+    return result.quantize(quantize, rounding=ROUND_HALF_UP)
 
 
 def format_cad_from_bdt(bdt_value, exchange_rate_bdt_per_cad):
-    cad_value = cad_from_bdt(bdt_value, exchange_rate_bdt_per_cad)
-    if cad_value is None:
-        return None
-    return format_cad(cad_value)
+    return format_cad(
+        convert_currency(
+            bdt_value,
+            "BDT",
+            "CAD",
+            bdt_per_cad=exchange_rate_bdt_per_cad,
+        )
+    )

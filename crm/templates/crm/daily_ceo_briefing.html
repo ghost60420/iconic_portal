@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load crm_people %}
+{% load crm_people crm_extras %}
 {% block content %}
 
 <style>
@@ -399,7 +399,7 @@
                       <th>Opportunity</th>
                       <th>Stage</th>
                       <th>Next follow up</th>
-                      <th class="brief-right">Value</th>
+                      <th class="brief-right">Pipeline value</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -419,7 +419,7 @@
                         </td>
                         <td><span class="brief-badge brief-badge--blue">{{ opportunity.stage }}</span></td>
                         <td>{{ opportunity.next_followup|date:"M d, Y"|default:"Needs date" }}</td>
-                        <td class="brief-right">${{ opportunity.order_value|default:0|floatformat:2 }}</td>
+                        <td class="brief-right">{{ opportunity.order_value|default:0|finance_money:"CAD" }}</td>
                       </tr>
                     {% endfor %}
                   </tbody>

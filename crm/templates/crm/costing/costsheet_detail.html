@@ -454,8 +454,8 @@
       </article>
       <article class="costing-kpi costing-kpi--accent {{ margin_tone }}">
         <span>Margin</span>
-        <strong>{{ calc.display.margin_percent }}%</strong>
-        <small>{{ margin_tone|title }} pricing signal</small>
+        <strong>{% if calc.total_cost_order %}{{ calc.display.margin_percent }}%{% else %}Margin N/A{% endif %}</strong>
+        <small>{% if calc.total_cost_order %}{{ margin_tone|title }} pricing signal{% else %}Cost unavailable{% endif %}</small>
       </article>
       <article class="costing-kpi">
         <span>Order quantity</span>
@@ -1031,7 +1031,7 @@
         <p class="section-lead">Use this section to compare per-piece cost, order-level totals, margin, and the cost groups driving the quote.</p>
       </div>
       {% if calc %}
-        <span class="costing-margin-badge {{ margin_tone }}">{{ calc.display.margin_percent }}% margin</span>
+        <span class="costing-margin-badge {{ margin_tone }}">{% if calc.total_cost_order %}{{ calc.display.margin_percent }}% margin{% else %}Cost unavailable · Margin N/A{% endif %}</span>
       {% endif %}
     </div>
     {% if calc %}
@@ -1060,7 +1060,7 @@
         </div>
         <div class="summary-card">
           <div class="summary-label">Margin %</div>
-          <div class="summary-value">{{ calc.display.margin_percent }}%</div>
+          <div class="summary-value">{% if calc.total_cost_order %}{{ calc.display.margin_percent }}%{% else %}Margin N/A{% endif %}</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Shipping Cost</div>
@@ -1272,7 +1272,7 @@
       <div class="print-quote-summary">
         <div><span>Total Cost / Pc</span><strong>{{ costing.currency|default:"BDT" }} {{ calc.display.total_cost_per_piece }}</strong></div>
         <div><span>FOB / Pc</span><strong>{{ costing.currency|default:"BDT" }} {{ calc.display.fob_per_piece }}</strong></div>
-        <div><span>Margin</span><strong>{{ calc.display.margin_percent }}%</strong></div>
+        <div><span>Margin</span><strong>{% if calc.total_cost_order %}{{ calc.display.margin_percent }}%{% else %}Margin N/A{% endif %}</strong></div>
         <div><span>Total Offer</span><strong>{{ costing.currency|default:"BDT" }} {{ calc.display.total_final_offer_order }}</strong></div>
       </div>
     {% endif %}

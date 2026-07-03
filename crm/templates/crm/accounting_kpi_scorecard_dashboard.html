@@ -357,7 +357,7 @@
         <div class="kpi-table-wrap">
           {% if top_customer_rows %}
             <table class="kpi-table">
-              <thead><tr><th>Customer</th><th class="kpi-right">Rows</th><th class="kpi-right">Revenue</th></tr></thead>
+              <thead><tr><th>Customer</th><th class="kpi-right">Rows</th><th class="kpi-right">Accounting revenue</th></tr></thead>
               <tbody>
                 {% for row in top_customer_rows %}
                   <tr><td>{{ row.label }}</td><td class="kpi-right">{{ row.count }}</td><td class="kpi-right">{{ row.amount|finance_money:"CAD" }}</td></tr>
@@ -424,7 +424,7 @@
           {% for row in side_rows %}
             <div class="kpi-side-card">
               <h3>{{ row.label }}</h3>
-              <div class="kpi-side-line"><span>Revenue</span><strong>{{ row.revenue|finance_money:"CAD" }}</strong></div>
+              <div class="kpi-side-line"><span>Accounting revenue</span><strong>{{ row.revenue|finance_money:"CAD" }}</strong></div>
               <div class="kpi-side-line"><span>Gross Margin</span><strong>{{ row.gross_margin_percent|floatformat:2 }}%</strong></div>
               <div class="kpi-side-line"><span>Net Profit</span><strong>{{ row.net_profit|finance_money:"CAD" }}</strong></div>
               <div class="kpi-side-line"><span>Net Profit %</span><strong>{{ row.net_profit_percent|floatformat:2 }}%</strong></div>

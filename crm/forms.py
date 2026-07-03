@@ -521,7 +521,7 @@ class AccountingEntryForm(forms.ModelForm):
             if not rate_to_cad or rate_to_cad <= 0:
                 cad_to_bdt = _latest_rate_bdt_per_cad()
                 if cad_to_bdt and cad_to_bdt > 0:
-                    cleaned["rate_to_cad"] = (Decimal("1") / cad_to_bdt).quantize(Decimal("0.000001"))
+                    cleaned["rate_to_cad"] = cad_to_bdt
 
         return cleaned
 
@@ -602,7 +602,7 @@ class BDDailyEntryForm(ModelForm):
         cleaned["rate_to_bdt"] = Decimal("1")
         cad_to_bdt = _latest_rate_bdt_per_cad()
         if cad_to_bdt and cad_to_bdt > 0:
-            cleaned["rate_to_cad"] = (Decimal("1") / cad_to_bdt).quantize(Decimal("0.000001"))
+            cleaned["rate_to_cad"] = cad_to_bdt
         else:
             cleaned["rate_to_cad"] = Decimal("0")
 
@@ -1376,11 +1376,34 @@ class InvoicePaymentForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
-        invoice_currency = ((getattr(self.invoice, "currency", "") if self.invoice else "") or "").upper()
-        payment_currency = (cleaned.get("currency") or "").upper()
-        if invoice_currency and payment_currency and payment_currency != invoice_currency:
-            raise forms.ValidationError(
-                "Payment currency must match the invoice currency for this phase. "
-                "Use the exchange-rate fields for accounting conversion."
-            )
+        currency = (cleaned.get("currency") or "").upper().strip()
+        rate_to_cad = cleaned.get("rate_to_cad") or Decimal("0")
+        rate_to_bdt = cleaned.get("rate_to_bdt") or Decimal("0")
+
+        if self.invoice is not None:
+            invoice_currency = (self.invoice.currency or "").upper().strip()
+            if currency and currency != invoice_currency:
+                self.add_error("currency", "Payment currency must match the invoice currency.")
+
+        if currency == "CAD":
+            cleaned["rate_to_cad"] = Decimal("1")
+            if rate_to_bdt <= 0:
+                cad_to_bdt = _latest_rate_bdt_per_cad()
+                if cad_to_bdt > 0:
+                    cleaned["rate_to_bdt"] = cad_to_bdt
+        elif currency == "BDT":
+            cleaned["rate_to_bdt"] = Decimal("1")
+            if rate_to_cad <= 1:
+                self.add_error(
+                    "rate_to_cad",
+                    "Enter the BDT-per-CAD rate, for example 85. BDT payments are divided by this rate.",
+                )
+        elif currency == "USD":
+            if rate_to_cad <= 0:
+                self.add_error("rate_to_cad", "Enter the positive CAD value of one USD.")
+            if rate_to_bdt <= 0:
+                self.add_error("rate_to_bdt", "Enter the positive BDT value of one USD.")
+        else:
+            self.add_error("currency", "Select CAD, USD, or BDT.")
+
         return cleaned

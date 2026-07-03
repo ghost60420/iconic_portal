@@ -12,6 +12,7 @@ from crm.services.employee_identity import (
     known_employee_owner_q,
     resolve_employee_identity,
 )
+from crm.services.pipeline import CLOSED_PIPELINE_STAGES
 
 
 CURRENCIES = ("CAD", "USD", "BDT")
@@ -85,7 +86,7 @@ def build_salesperson_profile(user):
     won_filter = Q(stage="Closed Won")
     lost_filter = Q(stage="Closed Lost")
     lost_month_filter = lost_filter & Q(updated_at__date__gte=month_start, updated_at__date__lte=today)
-    pipeline_filter = Q(is_open=True) & ~Q(stage__in=("Closed Won", "Closed Lost"))
+    pipeline_filter = Q(is_open=True, is_archived=False) & ~Q(stage__in=CLOSED_PIPELINE_STAGES)
     opportunity_rows = list(
         opportunities.values(currency=F("order_currency")).annotate(
             won_amount=Sum(_native_opportunity_value(), filter=won_filter),

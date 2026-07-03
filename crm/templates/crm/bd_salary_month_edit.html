@@ -1,4 +1,5 @@
 {% extends "crm/base.html" %}
+{% load crm_extras %}
 {% block content %}
 
 <style>
@@ -28,8 +29,8 @@
       <div class="title">Edit payroll month</div>
       <div class="sub">{{ row.staff.name }} | {{ row.year }} {{ row.month }}</div>
       <div class="statline">
-        <div>OT total: <b>{{ row.overtime_total_bdt|floatformat:2 }}</b></div>
-        <div>Final pay: <b>{{ row.final_pay_bdt|floatformat:2 }}</b></div>
+        <div>OT total: <b>{{ row.overtime_total_bdt|finance_money:"BDT" }}</b></div>
+        <div>Final pay: <b>{{ row.final_pay_bdt|finance_money:"BDT" }}</b></div>
       </div>
     </div>
     <div>

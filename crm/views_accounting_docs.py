@@ -126,9 +126,7 @@ def accounting_docs_upload_bd(request):
                     description=description,
                     amount_original=amount,
                     rate_to_bdt=Decimal("1"),
-                    rate_to_cad=(Decimal("1") / cad_to_bdt).quantize(Decimal("0.000001"))
-                    if cad_to_bdt > 0
-                    else Decimal("0"),
+                    rate_to_cad=cad_to_bdt,
                     created_by=request.user,
                 )
 

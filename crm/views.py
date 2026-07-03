@@ -36,6 +36,8 @@ from .models import Product, Fabric, Accessory, Trim, ThreadOption, InventoryIte
 
 from .services.costing import build_variance_report, calculate_cost_sheet
 from .services.costing_currency import (
+    CurrencyConversionError,
+    convert_currency,
     currency_summary_rows,
     format_compact_finance_money,
     format_finance_money,
@@ -89,6 +91,12 @@ from .services.product_reference_images import (
 from .services.workflow_visibility import build_workflow_visibility_context
 from .services.automation_engine import automation_dashboard_context
 from .services.operations_dashboard import operations_dashboard_context
+from .services.pipeline import (
+    CLOSED_PIPELINE_STAGES,
+    open_pipeline_queryset,
+    summarize_pipeline,
+    with_pipeline_value,
+)
 from .services.operations_permissions import (
     active_sales_lead_q,
     available_sales_lead_q,
@@ -145,7 +153,15 @@ def _safe_decimal_or_none(value):
 def _calc_order_value_bdt(order_value_usd, fx_rate):
     if order_value_usd is None or fx_rate is None:
         return None
-    return (order_value_usd * fx_rate).quantize(Decimal("0.01"))
+    try:
+        return convert_currency(
+            order_value_usd,
+            "USD",
+            "BDT",
+            bdt_per_usd=fx_rate,
+        )
+    except CurrencyConversionError:
+        return None
 
 from .forms import (
     BDStaffMonthForm,
@@ -3537,19 +3553,15 @@ from django.utils import timezone
 def _format_quick_opportunity_money(value, exchange_rate, currency="BDT", is_legacy_currency=True):
     amount = Decimal(value or 0)
     if not is_legacy_currency:
-        if currency == "CAD":
-            return f"CAD ${amount:,.2f}"
-        if currency == "USD":
-            return f"USD ${amount:,.2f}"
-        return f"৳{amount:,.2f} BDT"
-    bdt = f"৳{amount:,.2f} BDT"
+        return format_finance_money(amount, currency)
+    bdt = format_finance_money(amount, "BDT")
     if not exchange_rate:
         return f"{bdt} / CAD N/A"
-    rate = Decimal(exchange_rate)
-    if rate <= 0:
+    try:
+        cad = convert_currency(amount, "BDT", "CAD", bdt_per_cad=exchange_rate)
+    except CurrencyConversionError:
         return f"{bdt} / CAD N/A"
-    cad = (amount / rate).quantize(Decimal("0.01"))
-    return f"{bdt} / CAD ${cad:,.2f}"
+    return f"{bdt} / {format_finance_money(cad, 'CAD')}"
 
 
 def _format_quick_opportunity_money_lines(value, exchange_rate, currency="BDT", is_legacy_currency=True):
@@ -3559,14 +3571,14 @@ def _format_quick_opportunity_money_lines(value, exchange_rate, currency="BDT", 
             "bdt": _format_quick_opportunity_money(amount, exchange_rate, currency, False),
             "cad": "",
         }
-    bdt = f"৳{amount:,.2f} BDT"
+    bdt = format_finance_money(amount, "BDT")
     if not exchange_rate:
         return {"bdt": bdt, "cad": "CAD N/A"}
-    rate = Decimal(exchange_rate)
-    if rate <= 0:
+    try:
+        cad = convert_currency(amount, "BDT", "CAD", bdt_per_cad=exchange_rate)
+    except CurrencyConversionError:
         return {"bdt": bdt, "cad": "CAD N/A"}
-    cad = (amount / rate).quantize(Decimal("0.01"))
-    return {"bdt": bdt, "cad": f"CAD ${cad:,.2f}"}
+    return {"bdt": bdt, "cad": format_finance_money(cad, "CAD")}
 
 
 def _format_quick_opportunity_percent(value):
@@ -3580,6 +3592,7 @@ def _quick_costing_opportunity_row(quick_costing):
     exchange_rate = summary.get("exchange_rate")
     currency = summary["currency"]
     is_legacy_currency = summary["is_legacy_currency"]
+    cost_available = (summary.get("total_cost") or Decimal("0")) > Decimal("0")
     return {
         "record": quick_costing,
         "number": f"QC-{quick_costing.pk}",
@@ -3595,14 +3608,18 @@ def _quick_costing_opportunity_row(quick_costing):
         "revenue_lines": _format_quick_opportunity_money_lines(summary["revenue"], exchange_rate, currency, is_legacy_currency),
         "net_profit": _format_quick_opportunity_money(summary["net_profit_total"], exchange_rate, currency, is_legacy_currency),
         "net_profit_lines": _format_quick_opportunity_money_lines(summary["net_profit_total"], exchange_rate, currency, is_legacy_currency),
-        "margin_percent": _format_quick_opportunity_percent(summary["net_profit_margin_percent"]),
+        "margin_percent": (
+            _format_quick_opportunity_percent(summary["net_profit_margin_percent"])
+            if cost_available
+            else "Margin N/A"
+        ),
         "status": quick_costing.get_status_display(),
         "target_margin_percent": (
             _format_quick_opportunity_percent(summary["target_margin_percent"])
             if summary["target_margin_percent"] is not None
             else "N/A"
         ),
-        "margin_status": summary["margin_status"],
+        "margin_status": summary["margin_status"] if cost_available else "Cost unavailable",
     }
 
 
@@ -3629,7 +3646,10 @@ def _opportunity_costing_status(advanced_count, quick_count):
 
 def opportunity_detail(request, pk):
     opportunity = get_object_or_404(
-        scope_sales_opportunities(Opportunity.objects.select_related("lead"), request.user),
+        scope_sales_opportunities(
+            _with_opportunity_kpi_value(Opportunity.objects.select_related("lead")),
+            request.user,
+        ),
         pk=pk,
     )
     lead = opportunity.lead
@@ -4099,6 +4119,7 @@ def opportunity_detail(request, pk):
         workflow_order_summary.update(
             {
                 "value": "",
+                "value_label": "Sales value",
                 "value_lines": latest_quick_costing_row["revenue_lines"],
                 "costing_purpose": latest_quick_costing_row["purpose_label"],
                 "costing_purpose_key": latest_quick_costing_row["purpose_key"],
@@ -4347,7 +4368,6 @@ def customers_list(request):
     sort = (request.GET.get("sort") or "recent").strip().lower()
     archive_filter = (request.GET.get("archive") or "active").strip().lower()
 
-    active_stages = _active_opportunity_stages()
     completed_statuses = _production_completed_statuses()
     active_prod_statuses = _production_active_statuses()
 
@@ -4383,7 +4403,10 @@ def customers_list(request):
         total_opps=Count("opportunities", distinct=True),
         active_opps=Count(
             "opportunities",
-            filter=Q(opportunities__stage__in=active_stages),
+            filter=(
+                Q(opportunities__is_open=True, opportunities__is_archived=False)
+                & ~Q(opportunities__stage__in=CLOSED_PIPELINE_STAGES)
+            ),
             distinct=True,
         ),
         production_active=Count(
@@ -4413,15 +4436,22 @@ def customers_list(request):
     customer_revenue_map = defaultdict(lambda: defaultdict(lambda: Decimal("0")))
     if customer_ids:
         revenue_rows = (
-            _with_opportunity_kpi_value(Opportunity.objects.filter(customer_id__in=customer_ids))
-            .values("customer_id", "kpi_currency")
-            .annotate(amount=Sum("kpi_order_value"))
+            AccountingEntry.objects.exclude(main_type="TRANSFER")
+            .exclude(status__iexact="CANCELLED")
+            .filter(
+                direction=AccountingEntry.DIR_IN,
+                main_type="INCOME",
+            )
+            .filter(Q(customer_id__in=customer_ids) | Q(production_order__customer_id__in=customer_ids))
+            .annotate(revenue_customer_id=Coalesce("customer_id", "production_order__customer_id"))
+            .values("revenue_customer_id", "currency")
+            .annotate(amount=Sum("amount_original"))
         )
         for row in revenue_rows:
-            code = (row.get("kpi_currency") or "CAD").upper()
+            code = (row.get("currency") or "CAD").upper()
             amount = _ceo_decimal(row.get("amount"))
             if amount:
-                customer_revenue_map[row["customer_id"]][code] += amount
+                customer_revenue_map[row["revenue_customer_id"]][code] += amount
     summary_revenue_totals = defaultdict(lambda: {"amount": Decimal("0")})
 
     def _to_date(value):
@@ -4465,10 +4495,13 @@ def customers_list(request):
     else:
         customers.sort(key=lambda c: c.last_activity or date.min, reverse=True)
 
+    shared_pipeline = summarize_pipeline(Opportunity.objects.all())
     summary = {
         "total": len(customers),
         "active": sum(1 for c in customers if c.is_active),
         "with_active_opps": sum(1 for c in customers if (c.active_opps or 0) > 0),
+        "pipeline_count": shared_pipeline["count"],
+        "pipeline_rows": shared_pipeline["rows"],
         "in_production": sum(1 for c in customers if (c.production_active or 0) > 0),
         "revenue_rows": currency_summary_rows(summary_revenue_totals),
     }
@@ -4612,17 +4645,26 @@ def customer_detail(request, pk):
                 messages.success(request, "Note added.")
             return redirect("customer_detail", pk=pk)
 
-    active_stages = _active_opportunity_stages()
-    active_opps = opportunities.filter(stage__in=active_stages)
+    active_opps = open_pipeline_queryset(opportunities)
 
+    accounting_revenue_qs = (
+        AccountingEntry.objects.exclude(main_type="TRANSFER")
+        .exclude(status__iexact="CANCELLED")
+        .filter(
+            Q(customer=customer) | Q(production_order__customer=customer),
+            direction=AccountingEntry.DIR_IN,
+            main_type="INCOME",
+        )
+        .distinct()
+    )
     revenue_totals = defaultdict(lambda: {"amount": Decimal("0")})
     total_orders = 0
-    for row in opportunities.values("kpi_currency").annotate(amount=Sum("kpi_order_value"), count=Count("id")):
-        code = (row.get("kpi_currency") or "CAD").upper()
+    for row in accounting_revenue_qs.values("currency").annotate(amount=Sum("amount_original"), count=Count("id")):
+        code = (row.get("currency") or "CAD").upper()
         amount = _ceo_decimal(row.get("amount"))
         if amount:
             revenue_totals[code]["amount"] += amount
-            total_orders += int(row.get("count") or 0)
+        total_orders += int(row.get("count") or 0)
     revenue_currency_rows = currency_summary_rows(revenue_totals)
 
     prod_orders = (
@@ -4688,8 +4730,8 @@ def customer_detail(request, pk):
             (row["amount"] for row in revenue_currency_rows if row["currency"] == "BDT"),
             Decimal("0"),
         )
-        profit_estimate = bdt_revenue - total_cost_bdt if bdt_revenue else None
-        if bdt_revenue:
+        profit_estimate = bdt_revenue - total_cost_bdt if bdt_revenue > 0 and total_cost_bdt > 0 else None
+        if bdt_revenue > 0 and total_cost_bdt > 0:
             try:
                 profit_margin = (profit_estimate / bdt_revenue) * 100
             except Exception:
@@ -4697,7 +4739,7 @@ def customer_detail(request, pk):
 
     for opp in opportunities:
         cost = prod_cost_map.get(opp.id)
-        if can_view_internal_financials and opp.kpi_currency == "BDT" and opp.kpi_order_value and cost is not None:
+        if can_view_internal_financials and opp.kpi_currency == "BDT" and opp.kpi_order_value and cost is not None and cost > 0:
             try:
                 opp.profit_margin_pct = ((opp.kpi_order_value - cost) / opp.kpi_order_value) * 100
             except Exception:
@@ -8606,6 +8648,7 @@ def production_list(request):
                 ),
                 "latest_shipment": shipments[0] if shipments else None,
                 "lifecycle": lifecycle,
+                "lifecycle_currency": lifecycle_currency(lifecycle) if lifecycle else "",
                 "can_hard_delete": not (
                     shipments
                     or order.list_has_inventory_allocations
@@ -8792,14 +8835,18 @@ def production_list(request):
         low_margin_orders = sorted(
             [
                 row for row in profit_rows
-                if row["lifecycle"].estimated_revenue and row["lifecycle"].estimated_margin < Decimal("15")
+                if row["lifecycle"].estimated_revenue
+                and row["lifecycle"].estimated_cost > 0
+                and row["lifecycle"].estimated_margin < Decimal("15")
             ],
             key=lambda row: row["lifecycle"].estimated_margin,
         )[:4]
         high_profit_orders = sorted(
             [
                 row for row in profit_rows
-                if row["lifecycle"].estimated_profit and row["lifecycle"].estimated_profit > 0
+                if row["lifecycle"].estimated_cost > 0
+                and row["lifecycle"].estimated_profit
+                and row["lifecycle"].estimated_profit > 0
             ],
             key=lambda row: row["lifecycle"].estimated_profit,
             reverse=True,
@@ -11163,8 +11210,8 @@ def _format_count(value):
         return "0"
 
 
-def _format_money(value, prefix="$"):
-    return f"{prefix} {_to_float(value):,.2f}"
+def _format_money(value, currency="CAD"):
+    return format_finance_money(value, currency)
 
 
 def _format_currency_summary(rows):
@@ -11212,30 +11259,24 @@ def _ceo_decimal(value):
 
 
 def _ceo_amount_cad(entry, cad_to_bdt=None):
-    amount_cad = _ceo_decimal(getattr(entry, "amount_cad", None))
-    if amount_cad:
-        return amount_cad
-
-    amount = _ceo_decimal(getattr(entry, "amount_original", None))
-    currency = (getattr(entry, "currency", "") or "").upper().strip()
-    rate_to_cad = _ceo_decimal(getattr(entry, "rate_to_cad", None))
-    if currency == "CAD":
-        return amount
-    if rate_to_cad > 0:
-        return (amount * rate_to_cad).quantize(Decimal("0.01"))
-    if currency == "BDT" and cad_to_bdt and cad_to_bdt > 0:
-        return (amount / cad_to_bdt).quantize(Decimal("0.01"))
-    return Decimal("0")
+    try:
+        return convert_currency(
+            getattr(entry, "amount_original", None),
+            getattr(entry, "currency", ""),
+            "CAD",
+            bdt_per_cad=cad_to_bdt,
+            stored_rate_to_cad=getattr(entry, "rate_to_cad", None),
+            stored_rate_to_bdt=entry.__dict__.get("rate_to_bdt"),
+        )
+    except CurrencyConversionError:
+        return Decimal("0")
 
 
 def _ceo_currency_amount_cad(amount, currency, cad_to_bdt=None):
-    amount = _ceo_decimal(amount)
-    currency = (currency or "").upper().strip()
-    if currency == "CAD":
-        return amount
-    if currency == "BDT" and cad_to_bdt and cad_to_bdt > 0:
-        return (amount / cad_to_bdt).quantize(Decimal("0.01"))
-    return Decimal("0")
+    try:
+        return convert_currency(amount, currency, "CAD", bdt_per_cad=cad_to_bdt)
+    except CurrencyConversionError:
+        return Decimal("0")
 
 
 def _ceo_invoice_balance_cad(invoice, cad_to_bdt=None):
@@ -11316,90 +11357,14 @@ def _quick_costing_revenue_expression():
 
 
 def _with_opportunity_kpi_value(qs, annotation_name="kpi_order_value"):
-    revenue_expression = _quick_costing_revenue_expression()
-    approved_quick = (
-        QuickCosting.objects.filter(
-            opportunity=OuterRef("pk"),
-            status__in=QUICK_COSTING_KPI_VALUE_STATUSES,
-        )
-        .annotate(_kpi_revenue=revenue_expression)
-        .order_by("-updated_at", "-id")
-    )
-    latest_quick = (
-        QuickCosting.objects.filter(opportunity=OuterRef("pk"))
-        .annotate(_kpi_revenue=revenue_expression)
-        .order_by("-updated_at", "-id")
-    )
-    approved_advanced = CostingHeader.objects.filter(
-        opportunity=OuterRef("pk"), status="approved", is_archived=False
-    ).order_by("-updated_at", "-id")
-    latest_advanced = CostingHeader.objects.filter(
-        opportunity=OuterRef("pk"), is_archived=False
-    ).order_by("-updated_at", "-id")
-    annotated = qs.annotate(
-        _quick_kpi_value=Coalesce(
-            Subquery(approved_quick.values("_kpi_revenue")[:1]),
-            Subquery(latest_quick.values("_kpi_revenue")[:1]),
-            output_field=models.DecimalField(max_digits=16, decimal_places=2),
-        ),
-        _quick_kpi_currency=Coalesce(
-            Subquery(approved_quick.values("currency")[:1]),
-            Subquery(latest_quick.values("currency")[:1]),
-            models.Value("BDT"),
-            output_field=models.CharField(max_length=10),
-        ),
-        _advanced_kpi_quantity=Coalesce(
-            Subquery(approved_advanced.values("order_quantity")[:1]),
-            Subquery(latest_advanced.values("order_quantity")[:1]),
-            output_field=models.IntegerField(),
-        ),
-        _advanced_kpi_currency=Coalesce(
-            Subquery(approved_advanced.values("currency")[:1]),
-            Subquery(latest_advanced.values("currency")[:1]),
-            output_field=models.CharField(max_length=10),
-        ),
-    ).annotate(
-        _advanced_kpi_value=models.ExpressionWrapper(
-            F("costing_fob_per_piece") * F("_advanced_kpi_quantity"),
-            output_field=models.DecimalField(max_digits=16, decimal_places=2),
-        )
-    )
-    return annotated.annotate(
-        **{
-            annotation_name: Coalesce(
-                F("_quick_kpi_value"),
-                F("_advanced_kpi_value"),
-                F("order_value_usd"),
-                F("order_value"),
-                models.Value(Decimal("0")),
-                output_field=models.DecimalField(max_digits=16, decimal_places=2),
-            ),
-            "kpi_currency": Case(
-                When(_quick_kpi_value__isnull=False, then=F("_quick_kpi_currency")),
-                When(_advanced_kpi_value__isnull=False, then=F("_advanced_kpi_currency")),
-                When(order_value_usd__isnull=False, then=models.Value("USD")),
-                default=Coalesce(F("order_currency"), models.Value("CAD")),
-                output_field=models.CharField(max_length=10),
-            ),
-        }
+    return with_pipeline_value(qs, annotation_name=annotation_name).annotate(
+        kpi_currency=F("pipeline_currency")
     )
 
 
 def _sum_opportunity_kpi_values_by_currency(qs):
     try:
-        grouped = (
-            _with_opportunity_kpi_value(qs)
-            .values("kpi_currency")
-            .annotate(total=Sum("kpi_order_value"))
-        )
-        totals = {
-            (row.get("kpi_currency") or "CAD").upper(): {
-                "amount": _ceo_decimal(row.get("total"))
-            }
-            for row in grouped
-            if _ceo_decimal(row.get("total")) != 0
-        }
-        return currency_summary_rows(totals)
+        return summarize_pipeline(qs, apply_open_definition=False)["rows"]
     except (OperationalError, ProgrammingError):
         totals = defaultdict(lambda: {"amount": Decimal("0")})
         for opportunity in qs.only("order_value", "order_value_usd", "order_currency"):
@@ -11546,8 +11511,8 @@ def ceo_dashboard(request):
     started = perf_counter()
     context = build_ceo_executive_context()
     context["executive_money_cards"] = [
-        ("Today's Sales", context["today_sales"]),
-        ("Monthly Sales", context["monthly_sales"]),
+        ("Today's Sales Value", context["today_sales"]),
+        ("Monthly Sales Value", context["monthly_sales"]),
         ("Outstanding AR", context["outstanding_ar"]),
         ("Outstanding AP", context["outstanding_ap"]),
         ("Current Cash", context["current_cash"]),
@@ -11616,7 +11581,7 @@ def ceo_operations_dashboard(request):
     opp_base = opportunity_kpi_qs.filter(created_date__range=(start_period, today))
     opp_period = opp_base.count()
     prev_opp_period = opportunity_kpi_qs.filter(created_date__range=(previous_start, previous_end)).count()
-    open_pipeline_qs = opportunity_kpi_qs.filter(is_open=True).exclude(stage__in=["Closed Won", "Closed Lost"])
+    open_pipeline_qs = open_pipeline_queryset(opportunity_kpi_qs)
     open_opps = open_pipeline_qs.count()
     open_pipeline_values = _sum_opportunity_kpi_values_by_currency(open_pipeline_qs)
     won_period = opportunity_kpi_qs.filter(
@@ -12087,7 +12052,13 @@ def ceo_operations_dashboard(request):
                     | Q(invoice__currency="BDT")
                 ).distinct()
             profit_totals = defaultdict(
-                lambda: {"revenue": Decimal("0"), "cost": Decimal("0"), "profit": Decimal("0")}
+                lambda: {
+                    "revenue": Decimal("0"),
+                    "costed_revenue": Decimal("0"),
+                    "cost": Decimal("0"),
+                    "profit": Decimal("0"),
+                    "unavailable_cost_count": Decimal("0"),
+                }
             )
             profit_month_map = defaultdict(lambda: defaultdict(lambda: Decimal("0")))
             customer_totals = defaultdict(
@@ -12102,10 +12073,14 @@ def ceo_operations_dashboard(request):
                 cost = _ceo_decimal(lifecycle.estimated_cost)
                 profit = _ceo_decimal(lifecycle.estimated_profit)
                 margin = _ceo_decimal(lifecycle.estimated_margin)
+                cost_available = cost > 0
                 if lifecycle.invoice_id and getattr(lifecycle.invoice, "quick_costing_id", None):
                     quick_breakdown = build_lifecycle_profit_breakdown(lifecycle)
                     revenue = _ceo_decimal(quick_breakdown["invoice_total"])
-                    if quick_breakdown["is_comparable"]:
+                    cost_available = bool(
+                        quick_breakdown["is_comparable"] and quick_breakdown.get("cost_available")
+                    )
+                    if cost_available:
                         cost = _ceo_decimal(quick_breakdown["total_cost"])
                         profit = _ceo_decimal(quick_breakdown["net_profit"])
                         margin = _ceo_decimal(quick_breakdown["margin"])
@@ -12113,8 +12088,12 @@ def ceo_operations_dashboard(request):
                         cost = profit = margin = Decimal("0")
                 totals = profit_totals[currency_code]
                 totals["revenue"] += revenue
-                totals["cost"] += cost
-                totals["profit"] += profit
+                if cost_available:
+                    totals["costed_revenue"] += revenue
+                    totals["cost"] += cost
+                    totals["profit"] += profit
+                else:
+                    totals["unavailable_cost_count"] += Decimal("1")
                 month_key = _ceo_month_key(lifecycle.updated_at)
                 if month_key in ceo_month_keys:
                     profit_month_map[currency_code][month_key] += profit
@@ -12126,14 +12105,19 @@ def ceo_operations_dashboard(request):
                     customer_row["revenue"] += revenue
                     customer_row["profit"] += profit
                     customer_row["order_count"] += 1
-                if revenue > 0 and margin < Decimal("15"):
+                if revenue > 0 and cost_available and margin < Decimal("15"):
                     low_margin_source.append((margin, -revenue, lifecycle, currency_code, profit))
 
             profit_currency_rows = currency_summary_rows(
-                profit_totals, ("revenue", "cost", "profit")
+                profit_totals,
+                ("revenue", "costed_revenue", "cost", "profit", "unavailable_cost_count"),
             )
             for row in profit_currency_rows:
-                row["margin"] = _ceo_percent(row["profit"], row["revenue"])
+                row["margin"] = (
+                    _ceo_percent(row["profit"], row["costed_revenue"])
+                    if row["costed_revenue"] > 0 and row["cost"] > 0
+                    else None
+                )
             for _margin, _revenue, lifecycle, currency_code, profit in sorted(
                 low_margin_source, key=lambda item: (item[0], item[1])
             )[:5]:
@@ -12271,7 +12255,7 @@ def ceo_operations_dashboard(request):
             "detail": f"{opp_period:,} opportunities vs {prev_opp_period:,} previous.",
         },
         {
-            "label": "Revenue",
+            "label": "Accounting Revenue",
             "value": f"{_delta_pct(finance_totals['revenue'], prev_finance_totals['revenue']):+.0f}%",
             "tone": _delta_tone(_delta_pct(finance_totals["revenue"], prev_finance_totals["revenue"])),
             "detail": f"{period_label} revenue compared with prior window.",
@@ -12284,10 +12268,10 @@ def ceo_operations_dashboard(request):
         },
     ]
     if not can_view_executive_financials:
-        key_trends = [trend for trend in key_trends if trend["label"] != "Revenue"]
+        key_trends = [trend for trend in key_trends if trend["label"] != "Accounting Revenue"]
 
     kpi_cards = [
-        {"label": "Revenue", "value": format_compact_finance_money(finance_totals["revenue"], "CAD"), "note": f"{period_label} CAD equivalent accounting inflow.", "tone": "good"},
+        {"label": "Accounting Revenue", "value": format_compact_finance_money(finance_totals["revenue"], "CAD"), "note": f"{period_label} CAD equivalent accounting inflow.", "tone": "good"},
         {"label": "Net Cash", "value": format_compact_finance_money(finance_totals["net"], "CAD"), "note": "CAD equivalent revenue less accounting outflow.", "tone": "good" if finance_totals["net"] >= 0 else "bad"},
         {"label": "Open Pipeline", "value": _format_currency_summary(open_pipeline_values), "note": f"{open_opps:,} open opportunities; currencies are not combined.", "tone": "blue"},
         {"label": "Lead Conversion", "value": _format_percent(conversion_rate), "note": f"{opp_period:,} opportunities from {leads_period:,} leads.", "tone": "good" if conversion_rate >= prev_conversion_rate else "warn"},
@@ -12300,7 +12284,7 @@ def ceo_operations_dashboard(request):
         kpi_cards = [
             card
             for card in kpi_cards
-            if card["label"] not in {"Revenue", "Net Cash", "Receivables"}
+            if card["label"] not in {"Accounting Revenue", "Net Cash", "Receivables"}
         ]
         for card in kpi_cards:
             if card["label"] == "Open Pipeline":
@@ -12513,7 +12497,7 @@ def ai_executive_advisor(request):
 
     opp_period = Opportunity.objects.filter(created_date__range=(start_period, today)).count()
     prev_opp_period = Opportunity.objects.filter(created_date__range=(previous_start, previous_end)).count()
-    open_pipeline_qs = Opportunity.objects.filter(is_open=True).exclude(stage__in=["Closed Won", "Closed Lost"])
+    open_pipeline_qs = open_pipeline_queryset(Opportunity.objects.all())
     open_opps = open_pipeline_qs.count()
     open_pipeline_value = _ceo_decimal(open_pipeline_qs.aggregate(total=Sum("order_value")).get("total"))
     won_period = Opportunity.objects.filter(stage="Closed Won", updated_at__date__range=(start_period, today)).count()
@@ -12521,7 +12505,7 @@ def ai_executive_advisor(request):
     conversion_rate = round((opp_period / leads_period) * 100, 1) if leads_period else 0
     prev_conversion_rate = round((prev_opp_period / prev_leads_period) * 100, 1) if prev_leads_period else 0
     pipeline_rows = list(
-        Opportunity.objects.values("stage")
+        open_pipeline_qs.values("stage")
         .annotate(count=Count("id"), value=Sum("order_value"))
         .order_by("-value", "-count")[:10]
     )
@@ -13096,8 +13080,7 @@ def _build_daily_ceo_briefing_context(request):
     )
 
     opportunities_needing_followup_qs = (
-        Opportunity.objects.filter(is_open=True)
-        .exclude(stage__in=["Closed Won", "Closed Lost"])
+        open_pipeline_queryset(Opportunity.objects.all())
         .filter(Q(next_followup__lte=date_to) | Q(next_followup__isnull=True))
     )
     if side:
@@ -13531,34 +13514,30 @@ def main_dashboard(request):
         cad_to_bdt = None
 
     def _entry_amount_cad(entry):
-        amt_cad = entry.amount_cad or Decimal("0")
-        if amt_cad != 0:
-            return amt_cad
-        currency = (entry.currency or "").upper().strip()
-        amt_orig = entry.amount_original or Decimal("0")
-        rate_to_cad = getattr(entry, "rate_to_cad", None) or Decimal("0")
-        if currency == "CAD":
-            return amt_orig
-        if rate_to_cad and rate_to_cad > 0:
-            return (amt_orig * rate_to_cad).quantize(Decimal("0.01"))
-        if currency == "BDT" and cad_to_bdt:
-            return (amt_orig / cad_to_bdt).quantize(Decimal("0.01"))
-        return Decimal("0")
+        try:
+            return convert_currency(
+                entry.amount_original,
+                entry.currency,
+                "CAD",
+                bdt_per_cad=cad_to_bdt,
+                stored_rate_to_cad=getattr(entry, "rate_to_cad", None),
+                stored_rate_to_bdt=entry.__dict__.get("rate_to_bdt"),
+            )
+        except CurrencyConversionError:
+            return Decimal("0")
 
     def _entry_amount_bdt(entry):
-        amt_bdt = entry.amount_bdt or Decimal("0")
-        if amt_bdt != 0:
-            return amt_bdt
-        currency = (entry.currency or "").upper().strip()
-        amt_orig = entry.amount_original or Decimal("0")
-        rate_to_bdt = getattr(entry, "rate_to_bdt", None) or Decimal("0")
-        if currency == "BDT":
-            return amt_orig
-        if rate_to_bdt and rate_to_bdt > 0:
-            return (amt_orig * rate_to_bdt).quantize(Decimal("0.01"))
-        if currency == "CAD" and cad_to_bdt:
-            return (amt_orig * cad_to_bdt).quantize(Decimal("0.01"))
-        return Decimal("0")
+        try:
+            return convert_currency(
+                entry.amount_original,
+                entry.currency,
+                "BDT",
+                bdt_per_cad=cad_to_bdt,
+                stored_rate_to_cad=getattr(entry, "rate_to_cad", None),
+                stored_rate_to_bdt=entry.__dict__.get("rate_to_bdt"),
+            )
+        except CurrencyConversionError:
+            return Decimal("0")
 
     def _sum_side(qs, side_code):
         totals = {
@@ -13566,7 +13545,8 @@ def main_dashboard(request):
             "income": Decimal("0"),
             "out": Decimal("0"),
         }
-        for entry in qs.iterator():
+        source = qs.iterator() if hasattr(qs, "iterator") else iter(qs)
+        for entry in source:
             totals["entries"] += 1
             direction = (entry.direction or "").upper().strip()
             if side_code == "CA":
@@ -13592,15 +13572,18 @@ def main_dashboard(request):
         "amount_bdt",
         "rate_to_cad",
         "rate_to_bdt",
+        "production_order_id",
     ]
+    all_accounting_entries = list(AccountingEntry.objects.only(*acc_only_fields))
 
     def _cash_window_metrics(start_date, end_date):
         revenue = Decimal("0")
         expense = Decimal("0")
         if start_date > end_date:
             return {"revenue": revenue, "expense": expense, "net": revenue}
-        qs = AccountingEntry.objects.filter(date__range=(start_date, end_date)).only(*acc_only_fields)
-        for entry in qs.iterator():
+        for entry in all_accounting_entries:
+            if not entry.date or entry.date < start_date or entry.date > end_date:
+                continue
             if (entry.main_type or "").upper().strip() == "TRANSFER":
                 continue
             direction = (entry.direction or "").upper().strip()
@@ -13631,10 +13614,8 @@ def main_dashboard(request):
     swing_cad_period = Decimal("0")
     swing_bdt_period = Decimal("0")
 
-    acc_period = AccountingEntry.objects.filter(date__range=(start_period, today)).only(
-        *acc_only_fields
-    )
-    for entry in acc_period.iterator():
+    acc_period = [entry for entry in all_accounting_entries if entry.date and start_period <= entry.date <= today]
+    for entry in acc_period:
         acc_entries_period += 1
         side = (entry.side or "").upper().strip()
         direction = (entry.direction or "").upper().strip()
@@ -13697,8 +13678,8 @@ def main_dashboard(request):
     monthly_revenue_map = {month_key: Decimal("0") for month_key in month_starts}
     monthly_expense_map = {month_key: Decimal("0") for month_key in month_starts}
     month_floor = month_starts[0]
-    monthly_entries = AccountingEntry.objects.filter(date__range=(month_floor, today)).only(*acc_only_fields)
-    for entry in monthly_entries.iterator():
+    monthly_entries = [entry for entry in all_accounting_entries if entry.date and month_floor <= entry.date <= today]
+    for entry in monthly_entries:
         if not entry.date:
             continue
         month_key = entry.date.replace(day=1)
@@ -13730,13 +13711,8 @@ def main_dashboard(request):
     prod_cost_cad_period = Decimal("0")
     prod_profit_cad_period = Decimal("0")
     prod_margin_pct_period = Decimal("0")
-    prod_entries = AccountingEntry.objects.filter(
-        production_order_id__isnull=False,
-        date__range=(start_period, today),
-    ).only(
-        *acc_only_fields
-    )
-    for entry in prod_entries.iterator():
+    prod_entries = [entry for entry in acc_period if entry.production_order_id is not None]
+    for entry in prod_entries:
         side = (entry.side or "").upper().strip()
         direction = (entry.direction or "").upper().strip()
         main_type = (entry.main_type or "").upper().strip()
@@ -13811,30 +13787,38 @@ def main_dashboard(request):
         orders_processed_daily_values.append(int(orders_processed_map.get(d, 0)))
 
     if prod_cost_cad_period == 0 and production_cost_bdt_period and cad_to_bdt:
-        prod_cost_cad_period = (production_cost_bdt_period / cad_to_bdt).quantize(Decimal("0.01"))
-    prod_profit_cad_period = prod_revenue_cad_period - prod_cost_cad_period
-    if prod_revenue_cad_period > 0:
+        prod_cost_cad_period = convert_currency(
+            production_cost_bdt_period,
+            "BDT",
+            "CAD",
+            bdt_per_cad=cad_to_bdt,
+        )
+    prod_cost_available = prod_cost_cad_period > 0
+    prod_profit_cad_period = (
+        prod_revenue_cad_period - prod_cost_cad_period
+        if prod_revenue_cad_period > 0 and prod_cost_available
+        else None
+    )
+    if prod_revenue_cad_period > 0 and prod_cost_available:
         prod_margin_pct_period = (prod_profit_cad_period / prod_revenue_cad_period) * Decimal("100")
+    else:
+        prod_margin_pct_period = None
 
     month_start = today.replace(day=1)
     acc_ca_month = _sum_side(
-        AccountingEntry.objects.filter(side="CA", date__range=(month_start, today)).only(
-            *acc_only_fields
-        ),
+        [entry for entry in all_accounting_entries if entry.side == "CA" and entry.date and month_start <= entry.date <= today],
         "CA",
     )
     acc_ca_all = _sum_side(
-        AccountingEntry.objects.filter(side="CA").only(*acc_only_fields),
+        [entry for entry in all_accounting_entries if entry.side == "CA"],
         "CA",
     )
     acc_bd_month = _sum_side(
-        AccountingEntry.objects.filter(side="BD", date__range=(month_start, today)).only(
-            *acc_only_fields
-        ),
+        [entry for entry in all_accounting_entries if entry.side == "BD" and entry.date and month_start <= entry.date <= today],
         "BD",
     )
     acc_bd_all = _sum_side(
-        AccountingEntry.objects.filter(side="BD").only(*acc_only_fields),
+        [entry for entry in all_accounting_entries if entry.side == "BD"],
         "BD",
     )
 
@@ -13930,7 +13914,7 @@ def main_dashboard(request):
             lead_market_labels.append(m)
             lead_market_values.append(int(cnt))
 
-    open_opportunity_qs = opportunity_kpi_qs.filter(is_open=True)
+    open_opportunity_qs = open_pipeline_queryset(opportunity_kpi_qs)
     open_opps = open_opportunity_qs.count()
     open_pipeline_values = _sum_opportunity_kpi_values_by_currency(open_opportunity_qs)
     overdue_followups = lead_kpi_qs.filter(next_followup__lt=today).exclude(
@@ -14295,7 +14279,7 @@ def main_dashboard(request):
 
     primary_kpis = [
         {
-            "title": "Total Revenue",
+            "title": "Accounting Revenue",
             "value": format_compact_finance_money(revenue_cad_period, "CAD"),
             "note": f"{period_label} CAD equivalent revenue excluding transfers.",
             "trend_text": f"{revenue_delta_pct:+.0f}% vs prior window",
@@ -14305,7 +14289,7 @@ def main_dashboard(request):
             "href": "#finance-section",
         },
         {
-            "title": "Open Opportunities",
+            "title": "Open Pipeline",
             "value": _format_count(open_opps),
             "note": f"Open pipeline {_format_currency_summary(open_pipeline_values)}.",
             "trend_text": f"{_format_count(opp_period)} added in {period_label.lower()}",
@@ -14370,10 +14354,18 @@ def main_dashboard(request):
         },
         {
             "title": "Production Profit",
-            "value": format_compact_finance_money(prod_profit_cad_period, "CAD"),
-            "note": "CAD equivalent production-linked accounting revenue less production costs.",
-            "trend_text": f"{prod_margin_pct_period:.1f}% margin",
-            "trend_tone": "up" if prod_profit_cad_period >= 0 else "down",
+            "value": (
+                format_compact_finance_money(prod_profit_cad_period, "CAD")
+                if prod_cost_available
+                else "Cost unavailable"
+            ),
+            "note": (
+                "CAD equivalent production-linked accounting revenue less production costs."
+                if prod_cost_available
+                else "Production revenue exists, but no positive production cost is recorded."
+            ),
+            "trend_text": f"{prod_margin_pct_period:.1f}% margin" if prod_cost_available else "Margin N/A",
+            "trend_tone": "up" if prod_cost_available and prod_profit_cad_period >= 0 else "flat",
             "accent": "neutral",
             "icon": "sparkles",
         },
@@ -14390,7 +14382,7 @@ def main_dashboard(request):
             "title": "Orders Processed",
             "value": _format_count(orders_processed_period),
             "note": f"{_format_count(orders_created_period)} created in {period_label.lower()}.",
-            "trend_text": f"BDT {production_cost_bdt_period:,.2f} production cost",
+            "trend_text": f"{format_finance_money(production_cost_bdt_period, 'BDT')} production cost",
             "trend_tone": "flat",
             "accent": "neutral",
             "icon": "package-check",
@@ -14406,18 +14398,18 @@ def main_dashboard(request):
     payroll_summary_cards = [
         {
             "title": "Payroll Total",
-            "value": f"BDT {payroll_total:,.2f}",
+            "value": format_finance_money(payroll_total, "BDT"),
             "note": f"{payroll_paid} paid | {payroll_unpaid} unpaid",
-            "trend_text": f"OT BDT {payroll_ot:,.2f}",
+            "trend_text": f"OT {format_finance_money(payroll_ot, 'BDT')}",
             "trend_tone": "flat",
             "accent": "neutral",
             "icon": "users",
         },
         {
             "title": "Bonus",
-            "value": f"BDT {payroll_bonus:,.2f}",
+            "value": format_finance_money(payroll_bonus, "BDT"),
             "note": "Current payroll cycle bonus total.",
-            "trend_text": f"Deduction BDT {payroll_deduction:,.2f}",
+            "trend_text": f"Deduction {format_finance_money(payroll_deduction, 'BDT')}",
             "trend_tone": "flat",
             "accent": "neutral",
             "icon": "gift",
@@ -14594,6 +14586,7 @@ def main_dashboard(request):
         "production_cost_bdt_period": production_cost_bdt_period if can_view_order_lifecycle_profit else None,
         "prod_revenue_cad_period": prod_revenue_cad_period,
         "prod_cost_cad_period": prod_cost_cad_period if can_view_order_lifecycle_profit else None,
+        "prod_cost_available": prod_cost_available if can_view_order_lifecycle_profit else False,
         "prod_profit_cad_period": prod_profit_cad_period if can_view_order_lifecycle_profit else None,
         "prod_margin_pct_period": prod_margin_pct_period if can_view_order_lifecycle_profit else None,
 
@@ -14884,12 +14877,7 @@ def opportunities_list(request):
         per_page = 50
 
     active_stages = _active_opportunity_stages()
-    qs = (
-        Opportunity.objects
-        .select_related("lead", "lead__assigned_to")
-        .exclude(stage="Production")
-        .exclude(productionorder__isnull=False)
-    )
+    qs = Opportunity.objects.select_related("lead", "lead__assigned_to")
     qs = scope_sales_opportunities(qs, request.user)
 
     if archive_filter == "archived":
@@ -14915,7 +14903,7 @@ def opportunities_list(request):
 
     if status:
         if status == "open":
-            qs = qs.filter(stage__in=active_stages)
+            qs = open_pipeline_queryset(qs)
         elif status == "closed_won":
             qs = qs.filter(stage="Closed Won")
         elif status == "closed_lost":
@@ -14923,7 +14911,7 @@ def opportunities_list(request):
         elif status == "all":
             pass
     else:
-        qs = qs.filter(stage__in=active_stages)
+        qs = open_pipeline_queryset(qs)
 
     created_from = parse_date(created_from_raw) if created_from_raw else None
     created_to = parse_date(created_to_raw) if created_to_raw else None
@@ -14941,7 +14929,7 @@ def opportunities_list(request):
         qs = qs.filter(kpi_order_value__lte=value_max)
 
     today = timezone.localdate()
-    pipeline_values = _sum_opportunity_kpi_values_by_currency(qs)
+    pipeline_values = _sum_opportunity_kpi_values_by_currency(open_pipeline_queryset(qs))
     due_followups = qs.filter(next_followup__isnull=False, next_followup__lte=today).count()
 
     if sort == "old":

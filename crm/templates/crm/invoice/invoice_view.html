@@ -550,11 +550,11 @@
           </div>
           <div class="internal-profit-cell">
             <span>Estimated Gross Profit</span>
-            <strong>{{ invoice.estimated_gross_profit|default_if_none:0|finance_money:cur }}</strong>
+            <strong>{% if invoice.total_internal_cost %}{{ invoice.estimated_gross_profit|finance_money:cur }}{% else %}Cost unavailable{% endif %}</strong>
           </div>
           <div class="internal-profit-cell">
             <span>Estimated Profit Margin</span>
-            <strong>{{ invoice.estimated_profit_margin|default_if_none:0|floatformat:2 }}%</strong>
+            <strong>{% if invoice.total_internal_cost %}{{ invoice.estimated_profit_margin|floatformat:2 }}%{% else %}Margin N/A{% endif %}</strong>
           </div>
         </div>
         {% if lifecycle_profit %}
@@ -639,9 +639,10 @@
             </div>
 
             <div class="pay-field">
-              <label for="{{ payment_form.rate_to_cad.id_for_label }}">Rate to CAD</label>
+              <label for="{{ payment_form.rate_to_cad.id_for_label }}">Exchange rate for CAD</label>
               {{ payment_form.rate_to_cad }}
               {% if payment_form.rate_to_cad.errors %}<div class="pay-error">{{ payment_form.rate_to_cad.errors }}</div>{% endif %}
+              <div class="pay-help">BDT: enter BDT per 1 CAD (for example 85). USD: enter CAD per 1 USD.</div>
             </div>
 
             <div class="pay-field">

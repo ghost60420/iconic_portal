@@ -697,6 +697,7 @@ def build_workflow_visibility_context(
         ),
         "status": _summary_status(record_type, links, lifecycle),
         "value": _summary_money(links, can_view_costing=can_view_costing),
+        "value_label": "Invoice value" if links["invoice"] else "Sales value",
         "date": _due_label(
             invoice=links["invoice"],
             production_order=links["production_order"],

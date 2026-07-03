@@ -126,7 +126,7 @@
         <strong>{{ workflow_order_summary.quantity }}</strong>
       </div>
       <div class="workflow-order-summary-cell">
-        <span>Value</span>
+        <span>{{ workflow_order_summary.value_label }}</span>
         <strong>
           {% if workflow_order_summary.value_lines %}
             <span class="workflow-order-summary-money">

@@ -18,6 +18,7 @@ from .models_platform import (
     UserDashboardPreference,
 )
 from .models_employee import EmployeeIdSequence, EmployeeProfile
+from .services.costing_currency import CurrencyConversionError, convert_currency
 
 class BDMonthlyTarget(models.Model):
     year = models.PositiveIntegerField()
@@ -4162,9 +4163,13 @@ class Shipment(models.Model):
             return
 
         try:
-            step = Decimal("0.01")
-            self.cost_cad = (Decimal(str(self.cost_bdt)) / rate).quantize(step)
-        except Exception:
+            self.cost_cad = convert_currency(
+                self.cost_bdt,
+                "BDT",
+                "CAD",
+                bdt_per_cad=rate,
+            )
+        except CurrencyConversionError:
             self.cost_cad = None
 
     @property
@@ -4869,9 +4874,26 @@ class InvoicePayment(models.Model):
 
         rate_to_cad = self.rate_to_cad or Decimal("0")
         rate_to_bdt = self.rate_to_bdt or Decimal("0")
-
-        self.amount_cad = (amount * rate_to_cad).quantize(Decimal("0.01")) if rate_to_cad > 0 else Decimal("0")
-        self.amount_bdt = (amount * rate_to_bdt).quantize(Decimal("0.01")) if rate_to_bdt > 0 else Decimal("0")
+        try:
+            self.amount_cad = convert_currency(
+                amount,
+                currency,
+                "CAD",
+                stored_rate_to_cad=rate_to_cad,
+                stored_rate_to_bdt=rate_to_bdt,
+            )
+        except CurrencyConversionError as exc:
+            raise ValidationError({"rate_to_cad": str(exc)}) from exc
+        try:
+            self.amount_bdt = convert_currency(
+                amount,
+                currency,
+                "BDT",
+                stored_rate_to_cad=rate_to_cad,
+                stored_rate_to_bdt=rate_to_bdt,
+            )
+        except CurrencyConversionError:
+            self.amount_bdt = Decimal("0")
 
         super().save(*args, **kwargs)
 
@@ -5601,15 +5623,25 @@ class AccountingEntry(models.Model):
 
         r_cad = self.rate_to_cad or Decimal("0")
         r_bdt = self.rate_to_bdt or Decimal("0")
-
-        if r_cad > 0:
-            self.amount_cad = (amt * r_cad).quantize(Decimal("0.01"))
-        else:
-            self.amount_cad = Decimal("0")
-
-        if r_bdt > 0:
-            self.amount_bdt = (amt * r_bdt).quantize(Decimal("0.01"))
-        else:
+        try:
+            self.amount_cad = convert_currency(
+                amt,
+                currency,
+                "CAD",
+                stored_rate_to_cad=r_cad,
+                stored_rate_to_bdt=r_bdt,
+            )
+        except CurrencyConversionError as exc:
+            raise ValidationError({"rate_to_cad": str(exc)}) from exc
+        try:
+            self.amount_bdt = convert_currency(
+                amt,
+                currency,
+                "BDT",
+                stored_rate_to_cad=r_cad,
+                stored_rate_to_bdt=r_bdt,
+            )
+        except CurrencyConversionError:
             self.amount_bdt = Decimal("0")
 
         super().save(*args, **kwargs)

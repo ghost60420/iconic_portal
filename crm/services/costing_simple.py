@@ -1,6 +1,6 @@
 from decimal import Decimal, ROUND_HALF_UP
 
-from .costing_currency import cad_from_bdt
+from .costing_currency import convert_currency
 
 
 INTERNAL_QUANT = Decimal("0.0001")
@@ -104,11 +104,11 @@ def calculate_cost_sheet_simple(cost_sheet):
     cad_available = bool(exchange_rate and _to_decimal(exchange_rate) > 0)
 
     cad_values = {
-        "total_cost_per_piece": cad_from_bdt(total_cost_per_piece, exchange_rate),
-        "quote_price_per_piece": cad_from_bdt(quote_price, exchange_rate),
-        "profit_per_piece": cad_from_bdt(profit_per_piece, exchange_rate),
-        "total_order_cost": cad_from_bdt(total_order_cost, exchange_rate),
-        "total_profit": cad_from_bdt(total_profit, exchange_rate),
+        "total_cost_per_piece": convert_currency(total_cost_per_piece, "BDT", "CAD", bdt_per_cad=exchange_rate, quantize=None),
+        "quote_price_per_piece": convert_currency(quote_price, "BDT", "CAD", bdt_per_cad=exchange_rate, quantize=None),
+        "profit_per_piece": convert_currency(profit_per_piece, "BDT", "CAD", bdt_per_cad=exchange_rate, quantize=None),
+        "total_order_cost": convert_currency(total_order_cost, "BDT", "CAD", bdt_per_cad=exchange_rate, quantize=None),
+        "total_profit": convert_currency(total_profit, "BDT", "CAD", bdt_per_cad=exchange_rate, quantize=None),
     }
 
     return {

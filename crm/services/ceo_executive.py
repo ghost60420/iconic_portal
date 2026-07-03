@@ -4,8 +4,9 @@ from decimal import Decimal
 from django.db.models import Count, DecimalField, ExpressionWrapper, F, Q, Sum
 from django.utils import timezone
 
-from crm.models import AccountingEntry, CostingHeader, Invoice, ProductionOrder, Shipment
+from crm.models import AccountingEntry, CostingHeader, Invoice, Opportunity, ProductionOrder, Shipment
 from crm.services.employee_identity import get_employee_identity_index, resolve_employee_identity
+from crm.services.pipeline import summarize_pipeline
 
 
 CURRENCIES = ("CAD", "USD", "BDT")
@@ -184,16 +185,25 @@ def build_ceo_executive_context():
     )
     current_cash = _cash_by_currency()
     revenue, profit = _revenue_profit_by_currency(month_start, today)
+    open_pipeline = summarize_pipeline(Opportunity.objects.all())
 
-    production = ProductionOrder.objects.filter(is_archived=False).aggregate(
-        total=Count("id"),
-        active=Count("id", filter=Q(operational_status__in=ACTIVE_PRODUCTION_STATUSES)),
-        late=Count(
-            "id",
-            filter=Q(bulk_deadline__lt=today)
-            & ~Q(operational_status__in=["shipped", "cancelled"]),
-        ),
+    production_groups = list(
+        ProductionOrder.objects.filter(is_archived=False)
+        .values("assigned_production_manager_id")
+        .annotate(
+            total=Count("id"),
+            active=Count("id", filter=Q(operational_status__in=ACTIVE_PRODUCTION_STATUSES)),
+            late=Count(
+                "id",
+                filter=Q(bulk_deadline__lt=today)
+                & ~Q(operational_status__in=["shipped", "cancelled"]),
+            ),
+        )
     )
+    production = {
+        key: sum(int(row[key] or 0) for row in production_groups)
+        for key in ("total", "active", "late")
+    }
     pending_approvals = CostingHeader.objects.filter(
         status="approved",
         quotation_status=CostingHeader.QUOTATION_STATUS_DRAFT,
@@ -205,15 +215,16 @@ def build_ceo_executive_context():
         lambda row: row.get("customer__account_brand") or row.get("customer__contact_name") or "No customer",
     )
     top_salespeople = _ranked_invoice_salespeople(monthly_invoices)
-    top_production_managers = list(
-        ProductionOrder.objects.filter(
-            is_archived=False,
-            assigned_production_manager__isnull=False,
-        )
-        .values("assigned_production_manager_id")
-        .annotate(count=Count("id"))
-        .order_by("-count", "assigned_production_manager_id")[:5]
-    )
+    top_production_managers = [
+        {
+            "assigned_production_manager_id": row["assigned_production_manager_id"],
+            "count": int(row["total"] or 0),
+        }
+        for row in sorted(
+            (row for row in production_groups if row["assigned_production_manager_id"]),
+            key=lambda row: (-int(row["total"] or 0), row["assigned_production_manager_id"]),
+        )[:5]
+    ]
     identity_index = get_employee_identity_index()
     for row in top_production_managers:
         row["label"] = resolve_employee_identity(
@@ -238,6 +249,8 @@ def build_ceo_executive_context():
         "current_cash": _currency_rows(current_cash),
         "revenue_by_currency": _currency_rows(revenue),
         "profit_by_currency": _currency_rows(profit),
+        "open_pipeline_count": open_pipeline["count"],
+        "open_pipeline_rows": open_pipeline["rows"],
         "production_total": int(production["total"] or 0),
         "production_active": int(production["active"] or 0),
         "late_production_orders": int(production["late"] or 0),

@@ -430,7 +430,7 @@
     <div class="ceo-exec-grid">
       {% if can_view_executive_financials and revenue_overview %}
         <article class="ceo-exec-card">
-          <h2>Revenue Overview</h2>
+          <h2>Invoice Overview</h2>
           <ul class="ceo-stat-list">
             {% for row in revenue_overview.currency_rows %}
               <li class="ceo-stat"><span>{{ row.currency }} invoiced</span><strong title="{{ row.invoiced|finance_money:row.currency }}">{{ row.invoiced|compact_money:row.currency }}</strong></li>
@@ -452,9 +452,10 @@
           <h2>Profit Overview</h2>
           <ul class="ceo-stat-list">
             {% for row in profit_overview.currency_rows %}
-              <li class="ceo-stat"><span>{{ row.currency }} estimated revenue</span><strong title="{{ row.revenue|finance_money:row.currency }}">{{ row.revenue|compact_money:row.currency }}</strong></li>
+              <li class="ceo-stat"><span>{{ row.currency }} invoiced value</span><strong title="{{ row.revenue|finance_money:row.currency }}">{{ row.revenue|compact_money:row.currency }}</strong></li>
               <li class="ceo-stat"><span>{{ row.currency }} estimated profit</span><strong title="{{ row.profit|finance_money:row.currency }}">{{ row.profit|compact_money:row.currency }}</strong></li>
-              <li class="ceo-stat"><span>{{ row.currency }} margin</span><strong>{{ row.margin|floatformat:2 }}%</strong></li>
+              <li class="ceo-stat"><span>{{ row.currency }} margin</span><strong>{% if row.margin != None %}{{ row.margin|floatformat:2 }}%{% else %}Margin N/A{% endif %}</strong></li>
+              {% if row.unavailable_cost_count %}<li class="ceo-stat"><span>{{ row.currency }} cost coverage</span><strong>Cost unavailable for {{ row.unavailable_cost_count|floatformat:0 }} order(s)</strong></li>{% endif %}
             {% endfor %}
             <li class="ceo-stat"><span>Low margin orders</span><strong>{{ profit_overview.low_margin_orders|length|intcomma }}</strong></li>
           </ul>
@@ -490,8 +491,8 @@
           <li class="ceo-stat"><span>Reserved stock</span><strong>{{ inventory_intelligence.reserved_stock|floatformat:2|intcomma }}</strong></li>
           <li class="ceo-stat"><span>Consumed material</span><strong>{{ inventory_intelligence.consumed_qty|floatformat:2|intcomma }}</strong></li>
           {% if can_view_executive_financials %}
-            <li class="ceo-stat"><span>Inventory value</span><strong>{{ inventory_intelligence.total_value|floatformat:2|intcomma }}</strong></li>
-            <li class="ceo-stat"><span>Dead stock / waste estimate</span><strong>{{ inventory_intelligence.dead_stock_value|floatformat:2|intcomma }} / {{ inventory_intelligence.waste_estimate|floatformat:2|intcomma }}</strong></li>
+            <li class="ceo-stat"><span>Inventory cost estimate</span><strong>Currency unavailable</strong></li>
+            <li class="ceo-stat"><span>Dead-stock / waste cost estimate</span><strong>Currency unavailable</strong></li>
           {% endif %}
         </ul>
         <p class="ceo-exec-note" style="margin-top:12px;">Highest usage materials</p>
@@ -675,7 +676,7 @@
               </div>
               <div class="ceo-right">
                 {% if can_view_executive_financials %}
-                  <span class="ceo-badge {% if row.net >= 0 %}ceo-badge--good{% else %}ceo-badge--bad{% endif %}">CAD {{ row.net|floatformat:0|intcomma }}</span>
+                  <span class="ceo-badge {% if row.net >= 0 %}ceo-badge--good{% else %}ceo-badge--bad{% endif %}">{{ row.net|finance_money:"CAD" }}</span>
                 {% else %}
                   <span class="ceo-badge ceo-badge--blue">{{ row.leads|intcomma }} leads / {{ row.opportunities|intcomma }} opps</span>
                 {% endif %}
@@ -867,8 +868,8 @@
               <tr><td>Production delayed</td><td class="ceo-right">{{ operations_summary.production_delayed|intcomma }}</td></tr>
               <tr><td>Shipments delayed</td><td class="ceo-right">{{ operations_summary.shipments_delayed|intcomma }}</td></tr>
               {% if can_view_executive_financials %}
-                <tr><td>Accounting revenue</td><td class="ceo-right">CAD {{ finance_summary.revenue|floatformat:2|intcomma }}</td></tr>
-                <tr><td>Accounting expenses</td><td class="ceo-right">CAD {{ finance_summary.expenses|floatformat:2|intcomma }}</td></tr>
+                <tr><td>Accounting revenue</td><td class="ceo-right">{{ finance_summary.revenue|finance_money:"CAD" }}</td></tr>
+                <tr><td>Accounting expenses</td><td class="ceo-right">{{ finance_summary.expenses|finance_money:"CAD" }}</td></tr>
                 <tr><td>Open receivables</td><td class="ceo-right">{% for row in finance_summary.invoice_open_values %}<span title="{{ row.amount|finance_money:row.currency }}">{{ row.amount|compact_money:row.currency }}</span>{% if not forloop.last %}<br>{% endif %}{% endfor %}</td></tr>
               {% else %}
                 <tr><td>Financial summary</td><td class="ceo-right"><span class="ceo-badge ceo-badge--warn">Restricted</span></td></tr>

@@ -99,4 +99,4 @@ class CostingCurrencyLabelTests(TestCase):
     def test_finance_money_formatter_uses_symbol_and_code_standard(self):
         self.assertEqual(format_finance_money(Decimal("1250"), "CAD"), "CAD $1,250.00")
         self.assertEqual(format_finance_money(Decimal("950"), "USD"), "USD $950.00")
-        self.assertEqual(format_finance_money(Decimal("125000"), "BDT"), "৳125,000.00 BDT")
+        self.assertEqual(format_finance_money(Decimal("125000"), "BDT"), "৳125,000.00")

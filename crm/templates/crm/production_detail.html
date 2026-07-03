@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load static crm_people platform_tools %}
+{% load static crm_people platform_tools crm_extras %}
 {% block content %}
 <link rel="stylesheet" href="{% static 'crm/production_detail.css' %}?v=production-order-snapshot-20260627">
 
@@ -918,7 +918,7 @@
                 <thead>
                   <tr>
                     <th>Metric</th>
-                    <th>Value</th>
+                    <th>Financial amount</th>
                     <th>Basis</th>
                   </tr>
                 </thead>
@@ -973,7 +973,7 @@
                   {% if lifecycle_profit.actual_production_cost %}
                     <tr>
                       <td>Actual Production Cost</td>
-                      <td>BDT {{ lifecycle_profit.display.actual_production_cost }}</td>
+                      <td>{{ lifecycle_profit.display.actual_production_cost|finance_money:"BDT" }}</td>
                       <td>{% if lifecycle_profit.can_use_actual_production %}Used as production cost basis{% else %}Recorded in BDT; not mixed into {{ lifecycle_profit.currency }} profit{% endif %}</td>
                     </tr>
                   {% endif %}

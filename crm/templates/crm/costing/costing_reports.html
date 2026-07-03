@@ -96,7 +96,7 @@
             <td>{{ row.costing.currency }}</td>
             <td>{{ row.total_cost_per_piece|finance_money:row.costing.currency }}</td>
             <td>{{ row.fob_per_piece|finance_money:row.costing.currency }}</td>
-            <td>{{ row.display.margin_percent }}</td>
+            <td>{% if row.total_cost_order %}{{ row.display.margin_percent }}%{% else %}Margin N/A{% endif %}</td>
             <td>{{ row.costing.get_status_display }}</td>
           </tr>
         {% empty %}

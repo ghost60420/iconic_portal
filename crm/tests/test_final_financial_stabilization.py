@@ -7,6 +7,9 @@ from django.urls import reverse
 from django.utils import timezone
 
 from crm.models import (
+    AccountingEntry,
+    BDStaff,
+    BDStaffMonth,
     CostingHeader,
     Customer,
     Invoice,
@@ -18,9 +21,12 @@ from crm.models import (
     QuickCosting,
 )
 from crm.services.costing_currency import (
+    CurrencyConversionError,
+    convert_currency,
     format_compact_finance_money,
     format_finance_money,
 )
+from crm.services.pipeline import open_pipeline_queryset
 from crm.services.costing_workflow import (
     CostingWorkflowError,
     build_production_profit_snapshot,
@@ -87,6 +93,22 @@ class NativeCurrencyDashboardTests(TestCase):
             currency="BDT",
             status="approved",
         )
+        for currency, amount, rate_to_cad, rate_to_bdt in (
+            ("CAD", Decimal("500"), Decimal("1"), Decimal("100")),
+            ("USD", Decimal("400"), Decimal("1.25"), Decimal("125")),
+            ("BDT", Decimal("200"), Decimal("100"), Decimal("1")),
+        ):
+            AccountingEntry.objects.create(
+                date=timezone.localdate(),
+                side="BD" if currency == "BDT" else "CA",
+                direction="IN",
+                main_type="INCOME",
+                currency=currency,
+                amount_original=amount,
+                rate_to_cad=rate_to_cad,
+                rate_to_bdt=rate_to_bdt,
+                customer=self.customer,
+            )
 
     @staticmethod
     def _amounts(rows):
@@ -102,7 +124,7 @@ class NativeCurrencyDashboardTests(TestCase):
         )
         self.assertContains(response, "CAD $500.00")
         self.assertContains(response, "USD $400.00")
-        self.assertContains(response, "\u09F3200.00 BDT")
+        self.assertContains(response, "\u09F3200.00")
 
     def test_main_and_operations_dashboards_do_not_mix_pipeline_currency(self):
         main = self.client.get(reverse("main_dashboard"))
@@ -110,12 +132,92 @@ class NativeCurrencyDashboardTests(TestCase):
 
         self.assertEqual(main.status_code, 200)
         self.assertEqual(operations.status_code, 200)
-        main_pipeline = next(card for card in main.context["primary_kpis"] if card["title"] == "Open Opportunities")
+        main_pipeline = next(card for card in main.context["primary_kpis"] if card["title"] == "Open Pipeline")
         operations_pipeline = next(card for card in operations.context["kpi_cards"] if card["label"] == "Open Pipeline")
         for value in (main_pipeline["note"], operations_pipeline["value"]):
             self.assertIn("CAD $500.00", value)
             self.assertIn("USD $400.00", value)
             self.assertIn("\u09F3200.00", value)
+
+    def test_all_pipeline_surfaces_include_production_stage_opportunity(self):
+        production_opportunity = Opportunity.objects.create(
+            lead=self.lead,
+            customer=self.customer,
+            stage="Production",
+            is_open=True,
+            order_currency="CAD",
+        )
+        QuickCosting.objects.create(
+            opportunity=production_opportunity,
+            buyer_name="HONEST RESTAURANTS CALGARY",
+            project_name="Polo Shirt",
+            quantity=150,
+            currency="CAD",
+            selling_price_per_piece=Decimal("21"),
+            status=QuickCosting.STATUS_INVOICED,
+        )
+
+        pipeline = self.client.get(reverse("opportunities_list"))
+        main = self.client.get(reverse("main_dashboard"))
+        operations = self.client.get(reverse("ceo_operations_dashboard"))
+        customers = self.client.get(reverse("customers_list"))
+        ceo = self.client.get(reverse("ceo_dashboard"))
+
+        expected = {"CAD": Decimal("3650"), "USD": Decimal("400"), "BDT": Decimal("200")}
+        self.assertEqual(self._amounts(pipeline.context["pipeline_values"]), expected)
+        self.assertEqual(self._amounts(customers.context["summary"]["pipeline_rows"]), expected)
+        self.assertEqual(self._amounts(ceo.context["open_pipeline_rows"]), expected)
+        self.assertEqual(customers.context["summary"]["pipeline_count"], 4)
+        self.assertEqual(ceo.context["open_pipeline_count"], 4)
+        self.assertContains(pipeline, production_opportunity.opportunity_id)
+        for response in (main, operations, customers, ceo, pipeline):
+            self.assertContains(response, "CAD $3.65K")
+
+    def test_customer_detail_uses_source_labels_and_shared_money_format(self):
+        Invoice.objects.create(
+            invoice_number="INV-CUSTOMER-FORMAT",
+            customer=self.customer,
+            issue_date=timezone.localdate(),
+            due_date=timezone.localdate() + timedelta(days=14),
+            currency="BDT",
+            total_amount=Decimal("3611"),
+            paid_amount=Decimal("1800"),
+            status="partial",
+        )
+
+        response = self.client.get(reverse("customer_detail", args=[self.customer.pk]))
+
+        self.assertContains(response, "Accounting revenue")
+        self.assertContains(response, "Sales value")
+        self.assertContains(response, "\u09F33,611.00")
+        self.assertContains(response, "\u09F31,800.00")
+        self.assertNotContains(response, "3611.00 BDT")
+
+    def test_zero_cost_invoice_and_costing_hide_margin(self):
+        invoice = Invoice.objects.create(
+            invoice_number="INV-ZERO-COST",
+            customer=self.customer,
+            issue_date=timezone.localdate(),
+            due_date=timezone.localdate() + timedelta(days=14),
+            currency="CAD",
+            total_amount=Decimal("100"),
+            status="sent",
+        )
+        zero_costing = CostingHeader.objects.create(
+            opportunity=self.cad_opportunity,
+            customer=self.customer,
+            currency="BDT",
+            order_quantity=10,
+            manual_fob_per_piece=Decimal("10"),
+        )
+
+        invoice_response = self.client.get(reverse("invoice_view", args=[invoice.pk]))
+        costing_response = self.client.get(reverse("cost_sheet_detail", args=[zero_costing.pk]))
+
+        self.assertContains(invoice_response, "Cost unavailable")
+        self.assertContains(invoice_response, "Margin N/A")
+        self.assertContains(costing_response, "Cost unavailable")
+        self.assertContains(costing_response, "Margin N/A")
 
     def test_customer_summaries_keep_revenue_by_currency(self):
         detail = self.client.get(reverse("customer_detail", args=[self.customer.pk]))
@@ -132,6 +234,27 @@ class NativeCurrencyDashboardTests(TestCase):
             self._amounts(listed_customer.revenue_rows),
             {"CAD": Decimal("500"), "USD": Decimal("400"), "BDT": Decimal("200")},
         )
+
+    def test_open_pipeline_excludes_every_closed_or_archived_state(self):
+        for stage, is_archived in (
+            ("Closed Won", False),
+            ("Closed Lost", False),
+            ("Cancelled", False),
+            ("Prospecting", True),
+        ):
+            Opportunity.objects.create(
+                lead=self.lead,
+                customer=self.customer,
+                stage=stage,
+                is_open=True,
+                is_archived=is_archived,
+            )
+
+        rows = open_pipeline_queryset(Opportunity.objects.all())
+
+        self.assertEqual(rows.count(), 3)
+        self.assertFalse(rows.filter(stage__in=["Closed Won", "Closed Lost", "Cancelled"]).exists())
+        self.assertFalse(rows.filter(is_archived=True).exists())
 
 
 class ReceivablesAndPaymentSourceTests(TestCase):
@@ -274,3 +397,47 @@ class CompactPresentationTests(TestCase):
         self.assertEqual(format_compact_finance_money(Decimal("835000"), "USD"), "USD $835K")
         self.assertEqual(format_compact_finance_money(Decimal("12800000"), "BDT"), "\u09F312.8M")
         self.assertEqual(format_finance_money(Decimal("1250000"), "CAD"), "CAD $1,250,000.00")
+
+
+class SharedCurrencyAndPayrollTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_superuser(
+            username="step-two-finance-admin",
+            email="step-two-finance@example.com",
+            password="test-pass",
+        )
+        self.client.force_login(self.user)
+
+    def test_bdt_1800_at_85_is_cad_21_18_in_helper_and_model(self):
+        self.assertEqual(
+            convert_currency(Decimal("1800"), "BDT", "CAD", bdt_per_cad=Decimal("85")),
+            Decimal("21.18"),
+        )
+        entry = AccountingEntry.objects.create(
+            date=timezone.localdate(),
+            side="BD",
+            direction="IN",
+            main_type="INCOME",
+            currency="BDT",
+            amount_original=Decimal("1800"),
+            rate_to_cad=Decimal("85"),
+            rate_to_bdt=Decimal("1"),
+        )
+        self.assertEqual(entry.amount_cad, Decimal("21.18"))
+
+    def test_shared_helper_rejects_missing_or_invalid_rates(self):
+        for rate in (None, Decimal("0"), Decimal("-1"), Decimal("0.01")):
+            with self.subTest(rate=rate), self.assertRaises(CurrencyConversionError):
+                convert_currency(Decimal("1800"), "BDT", "CAD", bdt_per_cad=rate)
+
+    def test_bd_staff_context_and_payroll_money_format(self):
+        staff = BDStaff.objects.create(name="Payroll Staff", base_salary_bdt=Decimal("244200"))
+        row = BDStaffMonth.objects.create(staff=staff, year=2026, month=2)
+
+        staff_response = self.client.get(reverse("bd_staff_list"))
+        payroll_response = self.client.get(reverse("bd_staff_month_list"))
+
+        self.assertEqual(list(staff_response.context["staff_list"]), [staff])
+        self.assertEqual(payroll_response.context["total_payroll"], Decimal("244200.00"))
+        self.assertContains(payroll_response, "\u09F3244,200.00")
+        self.assertEqual(row.final_pay_bdt, Decimal("244200.00"))

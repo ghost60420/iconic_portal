@@ -244,7 +244,7 @@ def _payment_rate_initial(currency: str) -> dict:
     elif currency == "BDT":
         data["rate_to_bdt"] = Decimal("1")
         if cad_to_bdt > 0:
-            data["rate_to_cad"] = (Decimal("1") / cad_to_bdt).quantize(Decimal("0.000001"))
+            data["rate_to_cad"] = cad_to_bdt
 
     return data
 

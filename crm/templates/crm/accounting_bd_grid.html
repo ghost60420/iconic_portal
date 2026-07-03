@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load crm_groups %}
+{% load crm_groups crm_extras %}
 {% load humanize %}
 {% block content %}
 
@@ -258,9 +258,9 @@
                     {{ c.main_type }}{% if c.sub_type %} / {{ c.sub_type }}{% endif %}
                     —
                     {% if c.total_bdt %}
-                      {{ c.total_bdt|default_if_none:0|floatformat:2|intcomma }} BDT
+                      {{ c.total_bdt|default_if_none:0|finance_money:"BDT" }}
                     {% else %}
-                      {{ c.total|default_if_none:0|floatformat:2|intcomma }} BDT
+                      {{ c.total|default_if_none:0|finance_money:"BDT" }}
                     {% endif %}
                   </li>
                 {% endfor %}
@@ -280,9 +280,9 @@
                     <span class="ai-bad">
                       ↑
                       {% if s.increase_bdt %}
-                        {{ s.increase_bdt|default_if_none:0|floatformat:2|intcomma }} BDT
+                        {{ s.increase_bdt|default_if_none:0|finance_money:"BDT" }}
                       {% else %}
-                        {{ s.increase|default_if_none:0|floatformat:2|intcomma }} BDT
+                        {{ s.increase|default_if_none:0|finance_money:"BDT" }}
                       {% endif %}
                     </span>
                   </li>
@@ -300,7 +300,7 @@
                 {% for r in ai_insights.neg_orders %}
                   <li class="ai-bad">
                     Order {{ r.order_code|default:r.order_id }} —
-                    {{ r.profit_cad|default_if_none:0|floatformat:2|intcomma }} CAD
+                    {{ r.profit_cad|default_if_none:0|finance_money:"CAD" }}
                   </li>
                 {% endfor %}
               </ul>
@@ -318,7 +318,7 @@
         <div class="cardx">
           <div class="card-body p-3">
             <div class="kpi-label">Total money in</div>
-            <div class="kpi-val pos">{{ total_in_bdt|default_if_none:0|floatformat:2|intcomma }} BDT</div>
+            <div class="kpi-val pos">{{ total_in_bdt|default_if_none:0|finance_money:"BDT" }}</div>
             <div class="kpi-sub">All money coming in for this view.</div>
           </div>
         </div>
@@ -328,7 +328,7 @@
         <div class="cardx">
           <div class="card-body p-3">
             <div class="kpi-label">Total money out</div>
-            <div class="kpi-val neg">{{ total_out_bdt|default_if_none:0|floatformat:2|intcomma }} BDT</div>
+            <div class="kpi-val neg">{{ total_out_bdt|default_if_none:0|finance_money:"BDT" }}</div>
             <div class="kpi-sub">Total cost for this view.</div>
           </div>
         </div>
@@ -339,7 +339,7 @@
           <div class="card-body p-3">
             <div class="kpi-label">Net result</div>
             <div class="kpi-val {% if net_bdt and net_bdt < 0 %}neg{% else %}pos{% endif %}">
-              {{ net_bdt|default_if_none:0|floatformat:2|intcomma }} BDT
+              {{ net_bdt|default_if_none:0|finance_money:"BDT" }}
             </div>
             <div class="kpi-sub">Money in minus money out.</div>
           </div>
@@ -352,17 +352,17 @@
             <div class="kpi-label">Monthly target</div>
 
             <div class="kpi-val neg">
-              {{ bd_monthly_target_bdt|default_if_none:0|floatformat:0|intcomma }} BDT
+              {{ bd_monthly_target_bdt|default_if_none:0|finance_money:"BDT" }}
             </div>
 
             {% if filter_month %}
               {% if bd_over_target_bdt and bd_over_target_bdt > 0 %}
                 <div class="kpi-sub" style="color:var(--good); font-weight:900;">
-                  Extra achieved: {{ bd_over_target_bdt|default_if_none:0|floatformat:0|intcomma }} BDT
+                  Extra achieved: {{ bd_over_target_bdt|default_if_none:0|finance_money:"BDT" }}
                 </div>
               {% else %}
                 <div class="kpi-sub">
-                  Remaining: {{ bd_target_remaining_bdt|default_if_none:0|floatformat:0|intcomma }} BDT
+                  Remaining: {{ bd_target_remaining_bdt|default_if_none:0|finance_money:"BDT" }}
                 </div>
               {% endif %}
 
@@ -616,7 +616,7 @@
                       {% endif %}
                     </td>
 
-                    <td class="text-end nowrap">{{ e.amount_original|default_if_none:0|floatformat:2|intcomma }}</td>
+                    <td class="text-end nowrap">{{ e.amount_original|default_if_none:0|finance_money:e.currency }}</td>
 
                     {% if request.user|in_group:"CA" or request.user.is_superuser %}
                       <td class="nowrap">
@@ -659,7 +659,7 @@
             <tr style="background:var(--bg2); font-weight:900;">
               <td colspan="7" class="text-end" style="color:var(--text);">Net for this view</td>
               <td class="text-end nowrap" style="color:var(--text);">
-                {{ net_bdt|default_if_none:0|floatformat:2|intcomma }} BDT
+                {{ net_bdt|default_if_none:0|finance_money:"BDT" }}
               </td>
               <td colspan="{% if request.user.is_superuser %}2{% elif request.user|in_group:'CA' %}1{% else %}0{% endif %}"
                   style="color:var(--muted); font-weight:800;">

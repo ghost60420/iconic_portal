@@ -41,9 +41,9 @@
       <small>{{ active_opps|length }} active opportunities</small>
     </article>
     <article class="customer-summary-card">
-      <span>Total revenue</span>
+      <span>Accounting revenue</span>
       {% for row in revenue_currency_rows %}<strong title="{{ row.amount|finance_money:row.currency }}">{{ row.amount|compact_money:row.currency }}</strong>{% empty %}<strong>-</strong>{% endfor %}
-      <small>{{ total_orders }} valued orders</small>
+      <small>{{ total_orders }} accounting revenue entries</small>
     </article>
     <article class="customer-summary-card">
       <span>Active production</span>
@@ -131,7 +131,7 @@
         <div class="customer-section-head">
           <div>
             <h2>Opportunities</h2>
-            <p>Related sales opportunities, value, status, and next follow up.</p>
+            <p>Related sales opportunities, sales value, status, and next follow up.</p>
           </div>
           <a href="{% url 'add_opportunity' %}?customer={{ customer.id }}" class="customer-btn customer-btn--tiny customer-btn--primary">Create Opportunity</a>
         </div>
@@ -142,7 +142,7 @@
                 <tr>
                   <th>Opportunity</th>
                   <th>Stage</th>
-                  <th>Value</th>
+                  <th>Sales value</th>
                   {% if can_view_internal_financials %}<th>Margin</th>{% endif %}
                   <th>Next follow up</th>
                   <th>Open</th>
@@ -253,9 +253,9 @@
                   <tr class="clickable-row" data-href="{% url 'invoice_view' invoice.pk %}">
                     <td><a href="{% url 'invoice_view' invoice.pk %}">{{ invoice.invoice_number }}</a></td>
                     <td><span class="customer-stage-badge {{ invoice.status }}">{{ invoice.get_status_display }}</span></td>
-                    <td>{{ invoice.total_amount|floatformat:2 }} {{ invoice.currency }}</td>
-                    <td>{{ invoice.paid_amount|floatformat:2 }}</td>
-                    <td>{{ invoice.balance|floatformat:2 }}</td>
+                    <td>{{ invoice.total_amount|finance_money:invoice.currency }}</td>
+                    <td>{{ invoice.paid_amount|finance_money:invoice.currency }}</td>
+                    <td>{{ invoice.balance|finance_money:invoice.currency }}</td>
                     <td>{{ invoice.due_date|date:"M j, Y"|default:"-" }}</td>
                     <td><a class="customer-btn customer-btn--tiny customer-btn--ghost" href="{% url 'invoice_view' invoice.pk %}">Open</a></td>
                   </tr>

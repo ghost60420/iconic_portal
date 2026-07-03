@@ -30,7 +30,13 @@ from .models import (
     OpportunityDocument,
     QuickCosting,
 )
-from .services.costing_currency import format_costing_money, normalize_costing_currency
+from .services.costing_currency import (
+    CurrencyConversionError,
+    convert_currency,
+    format_costing_money,
+    format_finance_money,
+    normalize_costing_currency,
+)
 from .services.costing_engine import compute_costing, validate_costing
 from .services.costing_workflow import (
     CostingWorkflowError,
@@ -155,26 +161,26 @@ def _format_quick_percent(value):
 
 
 def _format_quick_bdt(value):
-    return f"৳{_format_quick_decimal(value)} BDT"
+    return format_finance_money(value, "BDT")
 
 
 def _format_quick_currency(value, currency):
-    currency = (currency or "BDT").upper()
-    if currency == "CAD":
-        return f"CAD ${_format_quick_decimal(value)}"
-    if currency == "USD":
-        return f"USD ${_format_quick_decimal(value)}"
-    return _format_quick_bdt(value)
+    return format_finance_money(value, currency or "BDT")
 
 
 def _format_quick_cad_from_bdt(value, exchange_rate):
     if not exchange_rate:
         return "CAD N/A"
     try:
-        cad_value = (value or Decimal("0")) / exchange_rate
-    except Exception:
+        cad_value = convert_currency(
+            value or Decimal("0"),
+            "BDT",
+            "CAD",
+            bdt_per_cad=exchange_rate,
+        )
+    except CurrencyConversionError:
         return "CAD N/A"
-    return f"CAD ${_format_quick_decimal(cad_value)}"
+    return format_finance_money(cad_value, "CAD")
 
 
 def _format_quick_money_pair(value, exchange_rate, currency="BDT", is_legacy_currency=True):
@@ -246,6 +252,7 @@ def _quick_costing_calc(quick_costing):
         "target_margin_percent": summary["target_margin_percent"],
         "margin_status": summary["margin_status"],
     }
+    calc["cost_available"] = calc["total_cost_order"] > Decimal("0")
     money_pair = lambda value: _format_quick_money_pair(value, exchange_rate, currency, is_legacy_currency)
     money_lines = lambda value: _format_quick_money_lines(value, exchange_rate, currency, is_legacy_currency)
     calc["display"] = {
@@ -392,6 +399,8 @@ def _quick_approval_status_label(quick_costing):
 
 
 def _quick_profit_health(calc):
+    if calc.get("cost_available") is False:
+        return {"label": "Cost unavailable", "tone": "low"}
     margin = calc.get("net_profit_margin_percent") or Decimal("0")
     if margin > Decimal("30"):
         return {"label": "Excellent", "tone": "excellent"}
@@ -727,7 +736,12 @@ def _advanced_approval_queue_row(costing):
         amounts = {"order_total": Decimal("0"), "standard_cost_total": Decimal("0")}
     total_amount = amounts["order_total"]
     profit_amount = total_amount - amounts["standard_cost_total"]
-    profit_margin = (profit_amount / total_amount * Decimal("100")) if total_amount else Decimal("0")
+    cost_available = amounts["standard_cost_total"] > Decimal("0")
+    profit_margin = (
+        (profit_amount / total_amount * Decimal("100"))
+        if total_amount and cost_available
+        else None
+    )
     converted = bool(list(costing.invoices.all()))
     status_key, status_label = _advanced_queue_status(costing, converted=converted)
     opportunity = costing.opportunity
@@ -750,6 +764,7 @@ def _advanced_approval_queue_row(costing):
         "total_amount": total_amount,
         "profit_amount": profit_amount,
         "profit_margin": profit_margin,
+        "cost_available": cost_available,
         "submitted_at": costing.quoted_at or costing.created_at,
         "status_key": status_key,
         "status_label": status_label,
@@ -788,7 +803,8 @@ def _quick_approval_queue_row(quick_costing):
         "currency": quick_costing.currency or "BDT",
         "total_amount": calc["total_sales_order"],
         "profit_amount": calc["net_profit_total"],
-        "profit_margin": calc["net_profit_margin_percent"],
+        "profit_margin": calc["net_profit_margin_percent"] if calc["cost_available"] else None,
+        "cost_available": calc["cost_available"],
         "submitted_at": quick_costing.approval_submitted_at or quick_costing.updated_at,
         "status_key": status_key,
         "status_label": status_label,
@@ -1028,7 +1044,10 @@ def cost_sheet_list(request):
         calc = compute_costing(sheet.id)
         if calc:
             margin_percent = calc.get("margin_percent") or Decimal("0")
-            if margin_percent >= Decimal("20"):
+            cost_available = (calc.get("total_cost_order") or Decimal("0")) > Decimal("0")
+            if not cost_available:
+                margin_tone = "neutral"
+            elif margin_percent >= Decimal("20"):
                 margin_tone = "good"
             elif margin_percent >= Decimal("5"):
                 margin_tone = "watch"
@@ -1040,6 +1059,7 @@ def cost_sheet_list(request):
                 "quick": None,
                 "calc": calc,
                 "margin_tone": margin_tone,
+                "cost_available": cost_available,
                 "costing_type": "advanced",
                 "type_label": "Advanced",
                 "currency_label": sheet.currency,
@@ -1052,7 +1072,9 @@ def cost_sheet_list(request):
     for quick in quick_qs:
         calc = _quick_costing_calc(quick)
         margin_percent = calc.get("net_profit_margin_percent") or Decimal("0")
-        if calc.get("net_profit_total", Decimal("0")) >= Decimal("0") and margin_percent >= Decimal("0"):
+        if not calc["cost_available"]:
+            margin_tone = "neutral"
+        elif calc.get("net_profit_total", Decimal("0")) >= Decimal("0") and margin_percent >= Decimal("0"):
             margin_tone = "good"
         else:
             margin_tone = "risk"
@@ -1063,6 +1085,7 @@ def cost_sheet_list(request):
                 "quick": quick,
                 "calc": calc,
                 "margin_tone": margin_tone,
+                "cost_available": calc["cost_available"],
                 "costing_type": "quick",
                 "type_label": "Quick",
                 "currency_label": "BDT / CAD" if calc["is_legacy_currency"] else calc["currency"],
@@ -1095,8 +1118,12 @@ def cost_sheet_list(request):
         }
         for currency, values in sorted(summary_by_currency.items())
     ]
-    margin_values = [row["calc"].get("margin_percent") or Decimal("0") for row in advanced_rows]
-    average_margin = (sum(margin_values) / Decimal(len(margin_values))) if margin_values else Decimal("0")
+    margin_values = [
+        row["calc"].get("margin_percent") or Decimal("0")
+        for row in advanced_rows
+        if row["cost_available"]
+    ]
+    average_margin = (sum(margin_values) / Decimal(len(margin_values))) if margin_values else None
     customers_by_id = {
         row["sheet"].customer_id: row["sheet"].customer
         for row in advanced_rows
@@ -2003,7 +2030,9 @@ def cost_sheet_detail(request, pk):
     margin_tone = "neutral"
     if calc:
         margin_percent = calc.get("margin_percent") or Decimal("0")
-        if margin_percent >= Decimal("20"):
+        if not (calc.get("total_cost_order") or Decimal("0")) > Decimal("0"):
+            margin_tone = "neutral"
+        elif margin_percent >= Decimal("20"):
             margin_tone = "good"
         elif margin_percent >= Decimal("5"):
             margin_tone = "watch"
@@ -2934,7 +2963,10 @@ def cost_sheet_dashboard(request):
             rows.append(calc)
 
     top_profit = sorted(rows, key=lambda r: r["total_profit_order"], reverse=True)[:10]
-    lowest_margin = sorted(rows, key=lambda r: r["margin_percent"])[:10]
+    lowest_margin = sorted(
+        [row for row in rows if (row.get("total_cost_order") or Decimal("0")) > Decimal("0")],
+        key=lambda r: r["margin_percent"],
+    )[:10]
 
     breakdown_totals = defaultdict(Decimal)
     for row in rows:
@@ -2961,7 +2993,12 @@ def cost_sheet_dashboard(request):
     customer_rows = []
     for customer, items in customer_summary.items():
         total_qty = sum(r["order_quantity"] for r in items)
-        avg_margin = sum(r["margin_percent"] for r in items) / Decimal(len(items)) if items else Decimal("0")
+        costed_items = [r for r in items if (r.get("total_cost_order") or Decimal("0")) > Decimal("0")]
+        avg_margin = (
+            sum(r["margin_percent"] for r in costed_items) / Decimal(len(costed_items))
+            if costed_items
+            else None
+        )
         customer_rows.append(
             {
                 "customer": customer,

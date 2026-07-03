@@ -27,9 +27,10 @@
       <small>{{ summary.active }} active accounts</small>
     </article>
     <article class="customer-stat">
-      <span>Active opportunities</span>
-      <strong>{{ summary.with_active_opps }}</strong>
-      <small>Customers with open sales work</small>
+      <span>Open pipeline</span>
+      <strong>{{ summary.pipeline_count }}</strong>
+      {% for row in summary.pipeline_rows %}<strong title="{{ row.amount|finance_money:row.currency }}">{{ row.amount|compact_money:row.currency }}</strong>{% empty %}<strong>-</strong>{% endfor %}
+      <small>Same open-opportunity definition used across dashboards</small>
     </article>
     <article class="customer-stat">
       <span>In production</span>
@@ -37,9 +38,9 @@
       <small>Accounts with active production</small>
     </article>
     <article class="customer-stat">
-      <span>Total revenue</span>
+      <span>Accounting revenue</span>
       {% for row in summary.revenue_rows %}<strong title="{{ row.amount|finance_money:row.currency }}">{{ row.amount|compact_money:row.currency }}</strong>{% empty %}<strong>-</strong>{% endfor %}
-      <small>Linked opportunity value by currency</small>
+      <small>Recognized accounting revenue by currency</small>
     </article>
   </section>
 
@@ -117,7 +118,7 @@
               <th>Phone</th>
               <th>Country</th>
               <th>Opportunities</th>
-              <th>Revenue</th>
+              <th>Accounting revenue</th>
               <th>Production</th>
               <th>Last activity</th>
               <th>Status</th>
@@ -157,7 +158,7 @@
                     <a href="{% url 'opportunities_list' %}?q={{ c.display_name|urlencode }}&status=all">View opportunities</a>
                   </div>
                 </td>
-                <td data-label="Revenue">
+                <td data-label="Accounting revenue">
                   <div class="customer-metric-stack">
                     {% for row in c.revenue_rows %}<strong title="{{ row.amount|finance_money:row.currency }}">{{ row.amount|compact_money:row.currency }}</strong>{% empty %}<strong>-</strong>{% endfor %}
                     <a href="{% url 'invoice_list' %}">Invoices</a>

@@ -204,8 +204,8 @@
             <td>{{ row.salesperson }}</td>
             <td>{{ row.currency }}</td>
             <td class="cq-right">{{ row.total_amount|finance_money:row.currency }}</td>
-            <td class="cq-right">{{ row.profit_amount|finance_money:row.currency }}</td>
-            <td class="cq-right">{{ row.profit_margin|floatformat:2 }}%</td>
+            <td class="cq-right">{% if row.cost_available %}{{ row.profit_amount|finance_money:row.currency }}{% else %}Cost unavailable{% endif %}</td>
+            <td class="cq-right">{% if row.cost_available %}{{ row.profit_margin|floatformat:2 }}%{% else %}Margin N/A{% endif %}</td>
             <td>{{ row.submitted_at|date:"Y-m-d H:i" }}</td>
             <td><span class="cq-status">{{ row.status_label }}</span></td>
             <td class="cq-right">

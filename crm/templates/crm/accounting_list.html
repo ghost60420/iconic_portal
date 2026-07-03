@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load crm_groups %}
+{% load crm_groups crm_extras %}
 {% load humanize %}
 {% block content %}
 
@@ -244,7 +244,7 @@
           <div class="card-body p-3">
             <div class="acct-label">Canada net CAD</div>
             <div class="acct-value" style="{% if total_ca_net_cad and total_ca_net_cad < 0 %}color:var(--bad);{% else %}color:var(--good);{% endif %}">
-              {{ total_ca_net_cad|default_if_none:0|floatformat:2|intcomma }}
+              {{ total_ca_net_cad|default_if_none:0|finance_money:"CAD" }}
             </div>
             <div class="acct-small">Canada money in minus money out.</div>
           </div>
@@ -256,7 +256,7 @@
           <div class="card-body p-3">
             <div class="acct-label">Bangladesh net BDT</div>
             <div class="acct-value" style="{% if total_bd_net_bdt and total_bd_net_bdt < 0 %}color:var(--bad);{% else %}color:var(--good);{% endif %}">
-              {{ total_bd_net_bdt|default_if_none:0|floatformat:2|intcomma }}
+              {{ total_bd_net_bdt|default_if_none:0|finance_money:"BDT" }}
             </div>
             <div class="acct-small">Bangladesh money in minus money out.</div>
           </div>
@@ -268,7 +268,7 @@
           <div class="card-body p-3">
             <div class="acct-label">Total income CAD</div>
             <div class="acct-value">
-              {{ total_income_cad|default_if_none:0|floatformat:2|intcomma }}
+              {{ total_income_cad|default_if_none:0|finance_money:"CAD" }}
             </div>
             <div class="acct-small">Income and transfers coming in.</div>
           </div>
@@ -280,7 +280,7 @@
           <div class="card-body p-3">
             <div class="acct-label">Total expense and COGS CAD</div>
             <div class="acct-value" style="color:var(--bad);">
-              {{ total_expense_cad|default_if_none:0|floatformat:2|intcomma }}
+              {{ total_expense_cad|default_if_none:0|finance_money:"CAD" }}
             </div>
             <div class="acct-small">All expenses and cost of goods.</div>
           </div>
@@ -292,12 +292,12 @@
           <div class="card-body p-3">
             <div class="acct-label">Production gross margin</div>
             <div class="acct-value" style="color:var(--good);">
-              {{ gross_margin_pct|default_if_none:0|floatformat:1 }} %
+              {% if gross_margin_pct != None %}{{ gross_margin_pct|floatformat:1 }} %{% else %}Margin N/A{% endif %}
             </div>
             <div class="acct-small">
-              Profit: {{ gross_profit_cad|default_if_none:0|floatformat:2|intcomma }} CAD<br>
-              Revenue: {{ revenue_cad|default_if_none:0|floatformat:2|intcomma }} CAD<br>
-              COGS: {{ cogs_cad|default_if_none:0|floatformat:2|intcomma }} CAD
+              Profit: {% if gross_profit_cad != None %}{{ gross_profit_cad|finance_money:"CAD" }}{% else %}N/A{% endif %}<br>
+              Revenue: {{ revenue_cad|finance_money:"CAD" }}<br>
+              COGS: {% if cogs_cad > 0 %}{{ cogs_cad|finance_money:"CAD" }}{% else %}Cost unavailable{% endif %}
             </div>
           </div>
         </div>
@@ -398,8 +398,8 @@
               <th class="nowrap">Main type</th>
               <th class="nowrap">Sub type</th>
               <th>Description</th>
-              <th class="nowrap">Curr</th>
-              <th class="text-end nowrap">Original</th>
+              <th class="nowrap">Currency</th>
+              <th class="text-end nowrap">Original amount</th>
               <th class="text-end nowrap">CAD</th>
               <th class="text-end nowrap">BDT</th>
               <th class="nowrap">Order</th>
@@ -459,9 +459,9 @@
 
                 <td class="nowrap">{{ e.currency|default:"" }}</td>
 
-                <td class="text-end nowrap">{{ e.amount_original|default_if_none:0|floatformat:2|intcomma }}</td>
-                <td class="text-end nowrap">{{ e.amount_cad|default_if_none:0|floatformat:2|intcomma }}</td>
-                <td class="text-end nowrap">{{ e.amount_bdt|default_if_none:0|floatformat:2|intcomma }}</td>
+                <td class="text-end nowrap">{{ e.amount_original|finance_money:e.currency }}</td>
+                <td class="text-end nowrap">{{ e.display_amount_cad|finance_money:"CAD" }}</td>
+                <td class="text-end nowrap">{{ e.display_amount_bdt|finance_money:"BDT" }}</td>
 
                 <td class="nowrap">
                   {% if e.production_order %}
@@ -538,8 +538,8 @@
           <tfoot>
             <tr style="background:var(--bg2); font-weight:900;">
               <td colspan="8" class="text-end" style="color:var(--text);">Net totals for this view</td>
-              <td class="text-end nowrap" style="color:var(--text);">{{ net_cad|default_if_none:0|floatformat:2|intcomma }}</td>
-              <td class="text-end nowrap" style="color:var(--text);">{{ net_bdt|default_if_none:0|floatformat:2|intcomma }}</td>
+              <td class="text-end nowrap" style="color:var(--text);">{{ net_cad|finance_money:"CAD" }}</td>
+              <td class="text-end nowrap" style="color:var(--text);">{{ net_bdt|finance_money:"BDT" }}</td>
               <td
                 colspan="{% if request.user.is_superuser %}4{% elif request.user|in_group:'CA' or request.user|in_group:'Canada' %}3{% else %}2{% endif %}"
                 style="color:var(--muted); font-weight:800;"

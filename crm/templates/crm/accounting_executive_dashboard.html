@@ -347,7 +347,7 @@
 
   <div class="exec-summary">
     <div class="exec-card">
-      <span>Total revenue</span>
+      <span>Accounting revenue</span>
       <strong>{{ total_revenue|finance_money:"CAD" }}</strong>
       <small>Income entries, excluding transfers and cancelled rows.</small>
     </div>
@@ -564,7 +564,7 @@
           {% for row in side_rows %}
             <div class="exec-side-card">
               <h3>{{ row.label }}</h3>
-              <div class="exec-side-line"><span>Revenue</span><strong>{{ row.revenue|finance_money:"CAD" }}</strong></div>
+              <div class="exec-side-line"><span>Accounting revenue</span><strong>{{ row.revenue|finance_money:"CAD" }}</strong></div>
               <div class="exec-side-line"><span>Received</span><strong>{{ row.received|finance_money:"CAD" }}</strong></div>
               <div class="exec-side-line"><span>Receivables</span><strong>{{ row.receivables|finance_money:"CAD" }}</strong></div>
               <div class="exec-side-line"><span>Payables</span><strong>{{ row.payables|finance_money:"CAD" }}</strong></div>

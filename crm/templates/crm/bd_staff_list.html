@@ -1,4 +1,5 @@
 {% extends "crm/base.html" %}
+{% load crm_extras %}
 {% block content %}
 
 <style>
@@ -126,7 +127,7 @@
             <tr>
               <td style="font-weight:700;">{{ s.name }}</td>
               <td>{{ s.role|default:"" }}</td>
-              <td class="text-end">{{ s.base_salary_bdt|floatformat:2 }}</td>
+              <td class="text-end">{{ s.base_salary_bdt|finance_money:"BDT" }}</td>
               <td>
                 {% if s.is_active %}
                   <span class="badge-soft badge-yes">Yes</span>

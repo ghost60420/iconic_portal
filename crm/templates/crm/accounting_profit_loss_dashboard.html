@@ -307,7 +307,7 @@
 
   <div class="pl-summary">
     <div class="pl-card">
-      <span>Total revenue</span>
+      <span>Accounting revenue</span>
       <strong>{{ total_revenue|finance_money:"CAD" }}</strong>
       <small>{{ revenue_count }} revenue row(s), CAD-equivalent basis.</small>
       <div class="pl-chip-list">
@@ -483,7 +483,7 @@
       {% for row in side_rows %}
         <div class="pl-side-card">
           <h3>{{ row.label }}</h3>
-          <div class="pl-side-line"><span>Revenue</span><strong>{{ row.revenue|finance_money:"CAD" }}</strong></div>
+          <div class="pl-side-line"><span>Accounting revenue</span><strong>{{ row.revenue|finance_money:"CAD" }}</strong></div>
           <div class="pl-side-line"><span>COGS</span><strong>{{ row.cogs|finance_money:"CAD" }}</strong></div>
           <div class="pl-side-line"><span>Gross profit</span><strong>{{ row.gross_profit|finance_money:"CAD" }}</strong></div>
           <div class="pl-side-line"><span>Operating expenses</span><strong>{{ row.opex|finance_money:"CAD" }}</strong></div>

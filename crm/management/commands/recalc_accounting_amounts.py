@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.core.management.base import BaseCommand
 
 from crm.models import AccountingEntry, ExchangeRate
+from crm.services.costing_currency import convert_currency
 
 
 class Command(BaseCommand):
@@ -55,10 +56,26 @@ class Command(BaseCommand):
                     entry.rate_to_bdt = Decimal("1")
                     changed = True
                 if cad_to_bdt > 0 and (not entry.rate_to_cad or entry.rate_to_cad <= 0):
-                    entry.rate_to_cad = (Decimal("1") / cad_to_bdt).quantize(Decimal("0.000001"))
+                    entry.rate_to_cad = cad_to_bdt
                     changed = True
 
             if changed:
+                entry.amount_cad = convert_currency(
+                    entry.amount_original,
+                    currency,
+                    "CAD",
+                    bdt_per_cad=cad_to_bdt,
+                    stored_rate_to_cad=entry.rate_to_cad,
+                    stored_rate_to_bdt=entry.rate_to_bdt,
+                )
+                entry.amount_bdt = convert_currency(
+                    entry.amount_original,
+                    currency,
+                    "BDT",
+                    bdt_per_cad=cad_to_bdt,
+                    stored_rate_to_cad=entry.rate_to_cad,
+                    stored_rate_to_bdt=entry.rate_to_bdt,
+                )
                 updated += 1
                 if not dry_run:
                     entry.save(update_fields=["rate_to_cad", "rate_to_bdt", "amount_cad", "amount_bdt"])

@@ -6,7 +6,12 @@ from django.utils import timezone
 
 from crm.models import ActualCostEntry, Invoice, OrderLifecycle, Shipment
 from crm.permissions import can_view_internal_costing
-from crm.services.costing_currency import currency_summary_rows, normalize_finance_currency
+from crm.services.costing_currency import (
+    CurrencyConversionError,
+    convert_currency,
+    currency_summary_rows,
+    normalize_finance_currency,
+)
 from crm.services.costing_engine import compute_costing
 from crm.services.production_operational_status import (
     OPERATIONAL_STATUS_READY_TO_SHIP,
@@ -177,12 +182,16 @@ def _convert_quick_amount(value, source_currency, target_currency, exchange_rate
     amount = _d(value)
     source_currency = normalize_finance_currency(source_currency) or "BDT"
     target_currency = normalize_finance_currency(target_currency)
-    if source_currency == target_currency:
-        return amount
-    rate = _d(exchange_rate)
-    if rate <= 0 or {source_currency, target_currency} != {"BDT", "CAD"}:
+    try:
+        return convert_currency(
+            amount,
+            source_currency,
+            target_currency,
+            bdt_per_cad=exchange_rate,
+            quantize=None,
+        )
+    except CurrencyConversionError:
         return None
-    return amount / rate if source_currency == "BDT" else amount * rate
 
 
 def build_lifecycle_profit_breakdown(lifecycle):
@@ -306,11 +315,12 @@ def build_lifecycle_profit_breakdown(lifecycle):
             + commission_cost
         )
 
-    net_profit = revenue - total_cost if total_cost is not None else None
-    if net_profit is not None and revenue > 0:
+    cost_available = total_cost is not None and total_cost > 0
+    net_profit = revenue - total_cost if cost_available else None
+    if net_profit is not None and revenue > 0 and cost_available:
         margin = (net_profit / revenue) * Decimal("100")
     else:
-        margin = Decimal("0") if is_comparable else None
+        margin = None
 
     return {
         "currency": currency,
@@ -328,6 +338,7 @@ def build_lifecycle_profit_breakdown(lifecycle):
         "is_comparable": is_comparable,
         "comparison_reason": comparison_reason,
         "total_cost": total_cost,
+        "cost_available": cost_available,
         "net_profit": net_profit,
         "margin": margin,
         "display": {
@@ -352,9 +363,9 @@ def refresh_lifecycle_financials(lifecycle):
     breakdown = build_lifecycle_profit_breakdown(lifecycle)
     lifecycle.estimated_revenue = breakdown["display"]["invoice_total"]
     if breakdown["is_comparable"]:
-        lifecycle.estimated_cost = breakdown["display"]["total_cost"]
-        lifecycle.estimated_profit = breakdown["display"]["net_profit"]
-        lifecycle.estimated_margin = breakdown["display"]["margin"]
+        lifecycle.estimated_cost = breakdown["display"]["total_cost"] or Decimal("0")
+        lifecycle.estimated_profit = breakdown["display"]["net_profit"] or Decimal("0")
+        lifecycle.estimated_margin = breakdown["display"]["margin"] or Decimal("0")
     return lifecycle
 
 

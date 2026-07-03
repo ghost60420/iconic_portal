@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load humanize %}
+{% load humanize crm_extras %}
 {% block content %}
 
 <style>
@@ -141,28 +141,28 @@
           <div class="bd-kpi">
             <div class="bd-kpi-label">Total out</div>
             <div class="bd-kpi-val" style="color:var(--bad);">
-              {{ this_month_spent_bdt|default_if_none:0|floatformat:2|intcomma }} BDT
+              {{ this_month_spent_bdt|default_if_none:0|finance_money:"BDT" }}
             </div>
           </div>
 
           <div class="bd-kpi">
             <div class="bd-kpi-label">Remaining</div>
             <div class="bd-kpi-val" style="{% if remaining_month_bdt and remaining_month_bdt < 0 %}color:var(--bad);{% else %}color:var(--good);{% endif %}">
-              {{ remaining_month_bdt|default_if_none:0|floatformat:2|intcomma }} BDT
+              {{ remaining_month_bdt|default_if_none:0|finance_money:"BDT" }}
             </div>
           </div>
 
           <div class="bd-kpi">
             <div class="bd-kpi-label">Monthly target</div>
             <div class="bd-kpi-val">
-              {{ monthly_target_bdt|default_if_none:0|floatformat:2|intcomma }} BDT
+              {{ monthly_target_bdt|default_if_none:0|finance_money:"BDT" }}
             </div>
           </div>
 
           <div class="bd-kpi">
             <div class="bd-kpi-label">Net</div>
             <div class="bd-kpi-val">
-              {{ net_bdt|default_if_none:0|floatformat:2|intcomma }} BDT
+              {{ net_bdt|default_if_none:0|finance_money:"BDT" }}
             </div>
           </div>
         </div>

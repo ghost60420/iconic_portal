@@ -437,7 +437,7 @@
             <div class="ff-scenario-card">
               <h3>{{ row.label }}</h3>
               <span class="ff-badge ff-badge--{{ row.tone }}">{{ row.tone }}</span>
-              <div class="ff-side-line"><span>Revenue</span><strong>{{ row.revenue|finance_money:"CAD" }}</strong></div>
+              <div class="ff-side-line"><span>Forecast accounting revenue</span><strong>{{ row.revenue|finance_money:"CAD" }}</strong></div>
               <div class="ff-side-line"><span>Expenses</span><strong>{{ row.expenses|finance_money:"CAD" }}</strong></div>
               <div class="ff-side-line"><span>Net Profit</span><strong>{{ row.net_profit|finance_money:"CAD" }}</strong></div>
               <div class="ff-side-line"><span>Cash Balance</span><strong>{{ row.cash_balance|finance_money:"CAD" }}</strong></div>
@@ -481,7 +481,7 @@
           {% for row in side_rows %}
             <div class="ff-side-card">
               <h3>{{ row.label }}</h3>
-              <div class="ff-side-line"><span>Revenue</span><strong>{{ row.revenue|finance_money:"CAD" }}</strong></div>
+              <div class="ff-side-line"><span>Forecast accounting revenue</span><strong>{{ row.revenue|finance_money:"CAD" }}</strong></div>
               <div class="ff-side-line"><span>Expenses</span><strong>{{ row.expenses|finance_money:"CAD" }}</strong></div>
               <div class="ff-side-line"><span>Net Profit</span><strong>{{ row.net_profit|finance_money:"CAD" }}</strong></div>
               <div class="ff-side-line"><span>Collections</span><strong>{{ row.collections|finance_money:"CAD" }}</strong></div>

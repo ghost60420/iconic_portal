@@ -360,7 +360,7 @@
         </div>
         <ul class="dashboard-list">
           <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>New leads</strong><span>{{ new_leads_count|intcomma }}</span></div></li>
-          <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Open opportunities</strong><span>{{ open_opps|intcomma }}</span></div></li>
+          <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Open pipeline opportunities</strong><span>{{ open_opps|intcomma }}</span></div></li>
           <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Customers</strong><span>{{ customer_count|intcomma }}</span></div></li>
         </ul>
       </article>
@@ -1219,19 +1219,19 @@
                     <div class="dashboard-finance-label">MTD Money In</div>
                     <span class="dashboard-card-note">{{ acc_bd_entries_month }} entries</span>
                   </div>
-                  <div class="dashboard-finance-value dashboard-finance-value--good">BDT {{ acc_bd_income_bdt_month|floatformat:2|intcomma }}</div>
+                  <div class="dashboard-finance-value dashboard-finance-value--good">{{ acc_bd_income_bdt_month|finance_money:"BDT" }}</div>
                 </div>
                 <div class="dashboard-finance-row">
                   <div class="dashboard-finance-label">MTD Money Out</div>
-                  <div class="dashboard-finance-value dashboard-finance-value--bad">BDT {{ acc_bd_out_bdt_month|floatformat:2|intcomma }}</div>
+                  <div class="dashboard-finance-value dashboard-finance-value--bad">{{ acc_bd_out_bdt_month|finance_money:"BDT" }}</div>
                 </div>
                 <div class="dashboard-finance-row">
                   <div class="dashboard-finance-label">MTD Net</div>
-                  <div class="dashboard-finance-value {% if acc_bd_net_bdt_month < 0 %}dashboard-finance-value--bad{% else %}dashboard-finance-value--good{% endif %}">BDT {{ acc_bd_net_bdt_month|floatformat:2|intcomma }}</div>
+                  <div class="dashboard-finance-value {% if acc_bd_net_bdt_month < 0 %}dashboard-finance-value--bad{% else %}dashboard-finance-value--good{% endif %}">{{ acc_bd_net_bdt_month|finance_money:"BDT" }}</div>
                 </div>
                 <div class="dashboard-finance-row">
                   <div class="dashboard-finance-label">All-time Net</div>
-                  <div class="dashboard-finance-value {% if acc_bd_net_bdt_all < 0 %}dashboard-finance-value--bad{% else %}dashboard-finance-value--good{% endif %}">BDT {{ acc_bd_net_bdt_all|floatformat:2|intcomma }}</div>
+                  <div class="dashboard-finance-value {% if acc_bd_net_bdt_all < 0 %}dashboard-finance-value--bad{% else %}dashboard-finance-value--good{% endif %}">{{ acc_bd_net_bdt_all|finance_money:"BDT" }}</div>
                 </div>
               </div>
             </article>
@@ -1287,7 +1287,7 @@
                   <span>Orders processed</span>
                 </div>
                 <div class="dashboard-inline-metric">
-                  <strong>BDT {{ production_cost_bdt_period|floatformat:2|intcomma }}</strong>
+                  <strong>{{ production_cost_bdt_period|finance_money:"BDT" }}</strong>
                   <span>Production cost</span>
                 </div>
                 <div class="dashboard-inline-metric">

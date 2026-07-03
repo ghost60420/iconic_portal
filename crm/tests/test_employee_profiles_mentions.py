@@ -876,7 +876,7 @@ class SalespersonDashboardFeatureTests(TestCase):
         response = self.client.get(reverse("salesperson_profile"))
         self.assertContains(response, "CAD $1,000.00")
         self.assertContains(response, "USD $500.00")
-        self.assertContains(response, "৳10,000.00 BDT")
+        self.assertContains(response, "৳10,000.00")
 
 
 class TeamPerformanceDashboardTests(TestCase):
@@ -966,7 +966,7 @@ class TeamPerformanceDashboardTests(TestCase):
         response = self.client.get(reverse("team_performance"))
         self.assertContains(response, "CAD $3,000.00")
         self.assertContains(response, "USD $2,000.00")
-        self.assertContains(response, "৳0.00 BDT")
+        self.assertContains(response, "৳0.00")
 
     def test_team_service_has_bounded_queries(self):
         with CaptureQueriesContext(connection) as queries:

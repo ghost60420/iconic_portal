@@ -608,7 +608,7 @@
                 {% for error in quick_form.target_margin_percent.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
               </div>
               <div>
-                <label>Total Revenue</label>
+                <label>Sales Value</label>
                 <div class="quick-readonly-field" data-quick-summary="revenue">৳0.00 BDT</div>
               </div>
             </div>
@@ -1102,12 +1102,13 @@
       const commissionTotal = commission * quantity;
       const netProfitPerPiece = grossProfitPerPiece - commission;
       const netProfitTotal = grossProfitTotal - commissionTotal;
-      const grossMargin = revenue > 0 ? (grossProfitTotal / revenue) * 100 : 0;
-      const netMargin = revenue > 0 ? (netProfitTotal / revenue) * 100 : 0;
+      const costAvailable = totalCost > 0;
+      const grossMargin = costAvailable && revenue > 0 ? (grossProfitTotal / revenue) * 100 : null;
+      const netMargin = costAvailable && revenue > 0 ? (netProfitTotal / revenue) * 100 : null;
       const grossHealth = profitHealth(grossMargin);
       const netHealth = profitHealth(netMargin);
-      let marginStatus = "No target set";
-      if (targetMargin !== null) {
+      let marginStatus = costAvailable ? "No target set" : "Cost unavailable";
+      if (costAvailable && targetMargin !== null) {
         marginStatus = netMargin >= targetMargin ? "Meets target" : "Below target";
       }
 
@@ -1135,8 +1136,8 @@
       setSummary("commissionTotal", formatMoney(commissionTotal, currency, exchangeRate));
       setSummary("netProfitPerPiece", formatMoney(netProfitPerPiece, currency, exchangeRate), netHealth.profitTone);
       setSummary("netProfitTotal", formatMoney(netProfitTotal, currency, exchangeRate), netHealth.profitTone);
-      setSummary("netMargin", netMargin.toFixed(2) + "%", netHealth.profitTone);
-      setProfitHealth(netHealth);
+      setSummary("netMargin", costAvailable ? netMargin.toFixed(2) + "%" : "Margin N/A", netHealth.profitTone);
+      if (costAvailable) setProfitHealth(netHealth);
       setSummary("targetMargin", targetMargin === null ? "N/A" : targetMargin.toFixed(2) + "%");
       setSummary(
         "marginStatus",

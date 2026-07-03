@@ -558,7 +558,7 @@
         <div class="quick-summary-grid">
           <div class="quick-summary-row"><span>Selling Price Per Piece</span><strong>{{ calc.display.selling_price_per_piece_pair }}</strong></div>
           <div class="quick-summary-row"><span>Commission</span><strong>{{ calc.display.commission_percent_label }}</strong></div>
-          <div class="quick-summary-row"><span>Total Revenue</span><strong>{{ calc.display.total_sales_order_pair }}</strong></div>
+          <div class="quick-summary-row"><span>Sales Value</span><strong>{{ calc.display.total_sales_order_pair }}</strong></div>
         </div>
       </div>
     </details>
@@ -572,10 +572,10 @@
           <div class="quick-summary-row"><span>Profit Before Commission</span><strong class="quick-money-pair quick-profit-{{ margin_tone }}"><span>Per Piece: {{ calc.display.gross_profit_per_piece_pair }}</span><span>Total Order: {{ calc.display.gross_profit_total_pair }}</span></strong></div>
           <div class="quick-summary-row"><span>Commission ({{ calc.display.commission_percent_label }})</span><strong class="quick-money-pair"><span>Per Piece: {{ calc.display.commission_per_piece_pair }}</span><span>Total Order: {{ calc.display.commission_total_pair }}</span></strong></div>
           <div class="quick-summary-row"><span>Final Profit After Commission</span><strong class="quick-money-pair quick-profit-{{ margin_tone }}"><span>Per Piece: {{ calc.display.net_profit_per_piece_pair }}</span><span>Total Order: {{ calc.display.net_profit_total_pair }}</span></strong></div>
-          <div class="quick-summary-row"><span>Gross Profit Margin %</span><strong>{{ calc.display.gross_profit_margin_percent }}%</strong></div>
-          <div class="quick-summary-row"><span>Net Profit Margin %</span><strong class="quick-profit-{{ margin_tone }}">{{ calc.display.net_profit_margin_percent }}%</strong></div>
+          <div class="quick-summary-row"><span>Gross Profit Margin %</span><strong>{% if calc.cost_available %}{{ calc.display.gross_profit_margin_percent }}%{% else %}Margin N/A{% endif %}</strong></div>
+          <div class="quick-summary-row"><span>Net Profit Margin %</span><strong class="quick-profit-{{ margin_tone }}">{% if calc.cost_available %}{{ calc.display.net_profit_margin_percent }}%{% else %}Margin N/A{% endif %}</strong></div>
           <div class="quick-summary-row"><span>Target Margin %</span><strong>{{ calc.display.target_margin_percent_label }}</strong></div>
-          <div class="quick-summary-row"><span>Margin Status</span><strong class="quick-profit-{{ margin_tone }}">{{ calc.display.margin_status }}</strong></div>
+          <div class="quick-summary-row"><span>Margin Status</span><strong class="quick-profit-{{ margin_tone }}">{% if calc.cost_available %}{{ calc.display.margin_status }}{% else %}Cost unavailable{% endif %}</strong></div>
         </div>
       </div>
     </details>
