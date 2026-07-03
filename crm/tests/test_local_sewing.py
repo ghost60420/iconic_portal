@@ -223,6 +223,7 @@ class LocalSewingWorkflowTests(TestCase):
 
     def test_main_dashboard_and_report_show_separate_local_totals(self):
         main = self.client.get(reverse("main_dashboard"))
+        ceo = self.client.get(reverse("ceo_dashboard"))
         report = self.client.get(reverse("production_profit_report"))
 
         self.assertEqual(main.status_code, 200)
@@ -230,6 +231,12 @@ class LocalSewingWorkflowTests(TestCase):
         self.assertIn("Bangladesh Sewing Revenue", cards)
         self.assertIn("\u09F324.0K", cards["Bangladesh Sewing Revenue"]["value"])
         self.assertEqual(main.context["local_sewing_summary"]["total_sewing_revenue"], Decimal("24000.00"))
+        self.assertEqual(ceo.status_code, 200)
+        self.assertEqual(
+            ceo.context["local_sewing_summary"]["total_sewing_revenue"],
+            Decimal("24000.00"),
+        )
+        self.assertContains(ceo, "৳24,000.00")
         self.assertContains(report, "Bangladesh Sewing Revenue")
         self.assertContains(report, "\u09F324,000.00")
 

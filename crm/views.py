@@ -11637,6 +11637,7 @@ def ceo_dashboard(request):
     context = build_ceo_executive_context()
     production_business = summarize_production_business_models()
     context.update(production_business)
+    context["local_sewing_summary"] = production_business["local_sewing"]
     context["executive_money_cards"] = [
         ("Today's Sales Value", context["today_sales"]),
         ("Monthly Sales Value", context["monthly_sales"]),
