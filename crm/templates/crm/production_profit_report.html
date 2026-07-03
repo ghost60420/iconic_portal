@@ -192,6 +192,13 @@
       </div>
     </div>
 
+    <div class="pp-summary" aria-label="Production business model breakdown">
+      <div class="pp-summary-card"><span>Canada Export Revenue</span><strong>{% for row in canada_export_revenue_rows %}{{ row.amount|finance_money:row.currency }}{% if not forloop.last %}<br>{% endif %}{% empty %}-{% endfor %}</strong><small>FOB and Canada door-to-door; native currencies are not combined.</small></div>
+      <div class="pp-summary-card"><span>Bangladesh Sewing Revenue</span><strong>{{ local_sewing_summary.total_sewing_revenue|finance_money:"BDT" }}</strong><small>{{ local_sewing_summary.order_count }} local order(s).</small></div>
+      <div class="pp-summary-card"><span>Bangladesh Sewing Cost</span><strong>{% if local_sewing_summary.cost_available %}{{ local_sewing_summary.total_sewing_cost|finance_money:"BDT" }}{% else %}Cost unavailable{% endif %}</strong><small>{{ local_sewing_summary.costed_order_count }} costed order(s).</small></div>
+      <div class="pp-summary-card"><span>Bangladesh Sewing Profit</span><strong>{% if local_sewing_summary.profit != None %}{{ local_sewing_summary.profit|finance_money:"BDT" }}{% else %}N/A{% endif %}</strong><small>{% if local_sewing_summary.margin != None %}Margin {{ local_sewing_summary.margin|floatformat:2 }}%{% else %}Margin N/A{% endif %}</small></div>
+    </div>
+
     <div class="pp-summary">
       <div class="pp-summary-card">
         <span>Production accounting revenue</span>

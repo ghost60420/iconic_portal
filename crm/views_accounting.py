@@ -73,6 +73,7 @@ from .forms import (
 from .permissions import can_view_internal_costing, get_access, operations_group_names, role_flag_decision
 from .services.operations_permissions import can_archive_invoices
 from .services.costing_currency import CurrencyConversionError, convert_currency
+from .services.local_sewing import summarize_production_business_models
 
 try:
     from .models import AccountingMonthLock
@@ -1501,6 +1502,13 @@ def executive_financial_dashboard(request):
         len(due_vendor_rows),
     )
 
+    production_value_qs = ProductionOrder.objects.all()
+    if filters["date_from"]:
+        production_value_qs = production_value_qs.filter(created_at__date__gte=filters["date_from"])
+    if filters["date_to"]:
+        production_value_qs = production_value_qs.filter(created_at__date__lte=filters["date_to"])
+    production_business = summarize_production_business_models(production_value_qs)
+
     return render(
         request,
         "crm/accounting_executive_dashboard.html",
@@ -1544,6 +1552,8 @@ def executive_financial_dashboard(request):
             "entry_count": len(entries),
             "invoice_count": len(invoices),
             "payment_count": len(payments),
+            "local_sewing_summary": production_business["local_sewing"],
+            "canada_export_revenue_rows": production_business["canada_export_revenue_rows"],
         },
     )
 
@@ -4219,6 +4229,11 @@ def production_profit_report(request):
     m = _parse_int(request.GET.get("month") or str(today.month)) or today.month
 
     rows = production_profit_rows(year=y, month=m)
+    local_orders = ProductionOrder.objects.filter(
+        created_at__year=y,
+        created_at__month=m,
+    )
+    production_business = summarize_production_business_models(local_orders)
     cost_rows = [row for row in rows if row.get("cost_available")]
     profit_summary = {
         "order_count": len(rows),
@@ -4248,6 +4263,8 @@ def production_profit_report(request):
             "SWING_SUB_TYPE": SWING_SUB_TYPE,
             "profit_summary": profit_summary,
             "cad_to_bdt": rate_row.cad_to_bdt or Decimal("0"),
+            "local_sewing_summary": production_business["local_sewing"],
+            "canada_export_revenue_rows": production_business["canada_export_revenue_rows"],
         },
     )
 

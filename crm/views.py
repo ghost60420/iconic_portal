@@ -9,7 +9,7 @@ from datetime import timedelta, date
 from decimal import Decimal
 from types import SimpleNamespace
 from django.apps import apps
-from django.db.models import Count, Exists, F, Sum, Q, Max, OuterRef, Prefetch, Subquery
+from django.db.models import Count, Exists, F, Sum, Q, Max, OuterRef, Prefetch, Subquery, prefetch_related_objects
 from django.db import models
 from django.conf import settings
 try:
@@ -103,6 +103,7 @@ from .services.operations_permissions import (
     can_access_operations_module,
     can_claim_sales_lead,
     can_manage_all_sales_records,
+    can_view_local_sewing_financials,
     can_release_sales_lead,
     is_available_sales_lead,
     scope_owned_sales_leads,
@@ -110,6 +111,12 @@ from .services.operations_permissions import (
     scope_sales_lead_queue,
     scope_sales_leads,
     scope_sales_opportunities,
+)
+from .services.local_sewing import (
+    calculate_local_sewing,
+    is_bangladesh_local_sewing,
+    summarize_local_sewing_orders,
+    summarize_production_business_models,
 )
 from .services.audit_log import model_snapshot, schedule_audit
 from .services.platform_tools import can_manage_archives, dashboard_personalization
@@ -4496,6 +4503,8 @@ def customers_list(request):
         customers.sort(key=lambda c: c.last_activity or date.min, reverse=True)
 
     shared_pipeline = summarize_pipeline(Opportunity.objects.all())
+    local_customer_orders = ProductionOrder.objects.filter(customer_id__in=customer_ids)
+    local_sewing_summary = summarize_local_sewing_orders(local_customer_orders)
     summary = {
         "total": len(customers),
         "active": sum(1 for c in customers if c.is_active),
@@ -4504,6 +4513,8 @@ def customers_list(request):
         "pipeline_rows": shared_pipeline["rows"],
         "in_production": sum(1 for c in customers if (c.production_active or 0) > 0),
         "revenue_rows": currency_summary_rows(summary_revenue_totals),
+        "local_sewing": local_sewing_summary,
+        "can_view_local_sewing_financials": can_view_local_sewing_financials(request.user),
     }
 
     paginator = Paginator(customers, 25)
@@ -4672,6 +4683,7 @@ def customer_detail(request, pk):
         .select_related("opportunity", "lead")
         .order_by("-created_at", "-id")
     )
+    local_sewing_summary = summarize_local_sewing_orders(prod_orders)
 
     completed_statuses = _production_completed_statuses()
     active_prod_statuses = _production_active_statuses()
@@ -4790,6 +4802,8 @@ def customer_detail(request, pk):
         "notes_list": notes_list,
         "events": events,
         "prod_orders": prod_orders,
+        "local_sewing_summary": local_sewing_summary,
+        "can_view_local_sewing_financials": can_view_local_sewing_financials(request.user),
     }
     return render(request, "crm/customer_detail.html", context)
 
@@ -8828,6 +8842,9 @@ def production_list(request):
         "ready_to_ship": ready_to_ship_operations_count,
     }
     can_view_profit = can_view_lifecycle_profit(request.user)
+    local_sewing_summary = summarize_local_sewing_orders(
+        scope_production_orders(ProductionOrder.objects.all(), request.user)
+    )
     low_margin_orders = []
     high_profit_orders = []
     if can_view_profit:
@@ -8899,6 +8916,8 @@ def production_list(request):
             "urgent_orders": urgent_orders,
             "factory_summary": factory_summary,
             "can_view_lifecycle_profit": can_view_profit,
+            "local_sewing_summary": local_sewing_summary,
+            "can_view_local_sewing_financials": can_view_local_sewing_financials(request.user),
             "low_margin_orders": low_margin_orders,
             "high_profit_orders": high_profit_orders,
             "can_archive_records": _can_archive_workflow_record(request.user),
@@ -8912,11 +8931,13 @@ def production_add(request):
     """
     order_lines = None
     can_edit_internal_costing = can_view_lifecycle_profit(request.user)
+    can_edit_local_financials = can_view_local_sewing_financials(request.user)
     if request.method == "POST":
         form = ProductionOrderForm(
             request.POST,
             request.FILES,
             can_edit_internal_costing=can_edit_internal_costing,
+            can_edit_local_sewing_financials=can_edit_local_financials,
         )
         if form.is_valid():
             form.instance.created_by = request.user if request.user.is_authenticated else None
@@ -8928,7 +8949,10 @@ def production_add(request):
             return redirect("production_detail", pk=order.pk)
         order_lines = _production_order_lines_from_payload(request.POST.get("line_payload"))
     else:
-        form = ProductionOrderForm(can_edit_internal_costing=can_edit_internal_costing)
+        form = ProductionOrderForm(
+            can_edit_internal_costing=can_edit_internal_costing,
+            can_edit_local_sewing_financials=can_edit_local_financials,
+        )
 
     return render(
         request,
@@ -8941,6 +8965,7 @@ def production_add(request):
             "production_size_labels": SIZE_LABELS,
             "production_size_group_choices": SIZE_GROUP_CHOICES,
             "can_view_lifecycle_profit": can_edit_internal_costing,
+            "can_edit_local_sewing_financials": can_edit_local_financials,
             **_production_library_context(),
         },
     )
@@ -8950,10 +8975,14 @@ def production_edit(request, pk):
     """
     Edit existing production order.
     """
-    order = get_object_or_404(ProductionOrder, pk=pk)
+    order = get_object_or_404(
+        scope_production_orders(ProductionOrder.objects.all(), request.user),
+        pk=pk,
+    )
     old_status = order.status
     order_lines = None
     can_edit_internal_costing = can_view_lifecycle_profit(request.user)
+    can_edit_local_financials = can_view_local_sewing_financials(request.user)
 
     if request.method == "POST":
         action = (request.POST.get("action") or "").strip()
@@ -8985,6 +9014,7 @@ def production_edit(request, pk):
                 request.FILES,
                 instance=order,
                 can_edit_internal_costing=can_edit_internal_costing,
+                can_edit_local_sewing_financials=can_edit_local_financials,
             )
             if form.is_valid():
                 obj = form.save()
@@ -9009,10 +9039,18 @@ def production_edit(request, pk):
                 request,
                 "Production order could not be updated. Please try shorter text or reload and try again.",
             )
-            form = ProductionOrderForm(instance=order, can_edit_internal_costing=can_edit_internal_costing)
+            form = ProductionOrderForm(
+                instance=order,
+                can_edit_internal_costing=can_edit_internal_costing,
+                can_edit_local_sewing_financials=can_edit_local_financials,
+            )
         order_lines = _production_order_lines_from_payload(request.POST.get("line_payload"))
     else:
-        form = ProductionOrderForm(instance=order, can_edit_internal_costing=can_edit_internal_costing)
+        form = ProductionOrderForm(
+            instance=order,
+            can_edit_internal_costing=can_edit_internal_costing,
+            can_edit_local_sewing_financials=can_edit_local_financials,
+        )
 
     try:
         materials = list(order.materials.select_related("inventory_item"))
@@ -9059,6 +9097,7 @@ def production_edit(request, pk):
             "production_size_labels": SIZE_LABELS,
             "production_size_group_choices": SIZE_GROUP_CHOICES,
             "can_view_lifecycle_profit": can_edit_internal_costing,
+            "can_edit_local_sewing_financials": can_edit_local_financials,
             **inventory_context,
             **_production_library_context(order),
         }
@@ -9142,7 +9181,7 @@ def production_detail(request, pk):
         )
 
     order = get_object_or_404(
-        ProductionOrder.objects.select_related(
+        scope_production_orders(ProductionOrder.objects.select_related(
             "customer",
             "product",
             "opportunity",
@@ -9150,10 +9189,70 @@ def production_detail(request, pk):
             "source_quotation",
             "assigned_production_manager",
             "created_by",
-        )
-        .prefetch_related(*detail_prefetches),
+        ), request.user),
         pk=pk,
     )
+    if request.method == "POST" and not (
+        request.user.is_superuser
+        or can_access_operations_module(request.user, "production")
+    ):
+        return HttpResponseForbidden("Production updates are not permitted for this role.")
+    if is_bangladesh_local_sewing(order):
+        if request.method == "POST":
+            return HttpResponseForbidden("Use the local sewing edit form to update this order.")
+        stages = list(order.stages.all())
+        local_sewing = calculate_local_sewing(order, stages=stages)
+        local_statuses = {
+            "planning": ("planning", "Planning"),
+            "in_progress": ("sewing", "In progress"),
+            "hold": ("hold", "On hold"),
+            "done": ("shipped", "Done"),
+            "closed_won": ("shipped", "Completed"),
+            "closed_lost": ("cancelled", "Cancelled"),
+        }
+        operational_status, operational_status_label = local_statuses.get(
+            order.status,
+            ("planning", "Planning"),
+        )
+        if order.status == "planning" and local_sewing["completed_quantity"] > 0:
+            operational_status, operational_status_label = "sewing", "In progress"
+        percent_done = 0
+        if local_sewing["quantity"]:
+            percent_done = min(
+                int((local_sewing["completed_quantity"] / local_sewing["quantity"]) * 100),
+                100,
+            )
+        return render(
+            request,
+            "crm/production_detail.html",
+            {
+                "order": order,
+                "stages": stages,
+                "percent_done": percent_done,
+                "order_delayed": False,
+                "late_shipment": False,
+                "shipment_pending": False,
+                "priority_badge": SimpleNamespace(
+                    label="Normal",
+                    tone="neutral",
+                    reason="Bangladesh local sewing",
+                ),
+                "operational_status": operational_status,
+                "operational_status_label": operational_status_label,
+                "customer": _safe_related_attr(order, "customer"),
+                "lead": _safe_related_attr(order, "lead"),
+                "opportunity": _safe_related_attr(order, "opportunity"),
+                "product": _safe_related_attr(order, "product"),
+                "is_bangladesh_local_sewing": True,
+                "local_sewing": local_sewing,
+                "can_view_local_sewing_financials": can_view_local_sewing_financials(request.user),
+                "can_edit_production": can_access_operations_module(request.user, "production"),
+                "can_archive_records": _can_archive_workflow_record(request.user),
+                "production_can_hard_delete": False,
+            },
+        )
+
+    prefetch_related_objects([order], *detail_prefetches)
     can_add_lines = ProductionOrderLine is not None and hasattr(order, "lines")
     opportunity = _safe_related_attr(order, "opportunity")
     lead = _safe_related_attr(order, "lead")
@@ -9163,11 +9262,27 @@ def production_detail(request, pk):
 
     # sorted stages
     stages = get_sorted_stages(order)
+    local_sewing = calculate_local_sewing(order, stages=stages) if is_bangladesh_local_sewing(order) else None
     operational_status = get_production_operational_status(order)
     operational_status_label = OPERATIONAL_STATUS_LABELS.get(
         operational_status,
         OPERATIONAL_STATUS_LABELS[OPERATIONAL_STATUS_PLANNING],
     )
+    if local_sewing:
+        local_statuses = {
+            "planning": ("planning", "Planning"),
+            "in_progress": ("sewing", "In progress"),
+            "hold": ("hold", "On hold"),
+            "done": ("shipped", "Done"),
+            "closed_won": ("shipped", "Completed"),
+            "closed_lost": ("cancelled", "Cancelled"),
+        }
+        operational_status, operational_status_label = local_statuses.get(
+            order.status,
+            (operational_status, operational_status_label),
+        )
+        if order.status == "planning" and local_sewing["completed_quantity"] > 0:
+            operational_status, operational_status_label = "sewing", "In progress"
     production_workflow_steps = _production_workflow_steps(operational_status)
     next_required_action = next(
         (step.label for step in production_workflow_steps if step.state == "current"),
@@ -9197,6 +9312,11 @@ def production_detail(request, pk):
     total_stages = len(stages)
     done_count = sum(1 for stage in stages if stage.status == "done")
     percent_done = int((done_count / total_stages) * 100) if total_stages else 0
+    if local_sewing and local_sewing["quantity"]:
+        percent_done = min(
+            int((local_sewing["completed_quantity"] / local_sewing["quantity"]) * 100),
+            100,
+        )
     stage_delay = any(s.status == "delay" or s.is_late for s in stages)
     order_delayed = bool(
         operational_status not in OPERATIONAL_FINISHED_STATUSES
@@ -9257,6 +9377,7 @@ def production_detail(request, pk):
         logger.exception("production_detail: failed to load chatter for order %s", order.pk)
         comments = []
     can_view_profit = can_view_lifecycle_profit(request.user)
+    can_view_local_financials = can_view_local_sewing_financials(request.user)
     if can_view_profit:
         try:
             actual_entries = list(order.actual_cost_entries.all().order_by("section", "id"))
@@ -9592,6 +9713,10 @@ def production_detail(request, pk):
         "lifecycle": lifecycle if getattr(lifecycle, "pk", None) else None,
         "lifecycle_profit": lifecycle_profit,
         "can_view_lifecycle_profit": can_view_profit,
+        "can_view_local_sewing_financials": can_view_local_financials,
+        "can_edit_production": can_access_operations_module(request.user, "production"),
+        "is_bangladesh_local_sewing": bool(local_sewing),
+        "local_sewing": local_sewing,
         "can_add_lines": can_add_lines,
         "can_archive_records": _can_archive_workflow_record(request.user),
         "production_can_hard_delete": not _production_linked_record_labels(order),
@@ -11510,6 +11635,8 @@ def ceo_dashboard(request):
 
     started = perf_counter()
     context = build_ceo_executive_context()
+    production_business = summarize_production_business_models()
+    context.update(production_business)
     context["executive_money_cards"] = [
         ("Today's Sales Value", context["today_sales"]),
         ("Monthly Sales Value", context["monthly_sales"]),
@@ -11543,6 +11670,7 @@ def ceo_operations_dashboard(request):
     filter_values = {"days": str(period_days), "side": side}
     period_label = f"Last {period_days} days"
     can_view_executive_financials = can_view_lifecycle_profit(request.user)
+    can_view_local_financials = can_view_local_sewing_financials(request.user)
     lead_kpi_qs = _active_lead_queryset()
     opportunity_kpi_qs = _active_opportunity_queryset()
     production_kpi_qs = _active_production_queryset()
@@ -12280,6 +12408,20 @@ def ceo_operations_dashboard(request):
         {"label": "Website Visitors", "value": _format_count(website_totals.get("visitors")), "note": f"{_format_count(website_totals.get('page_views'))} page views.", "tone": "blue"},
         {"label": "Receivables", "value": _format_currency_summary(invoice_open_values), "note": f"{overdue_invoice_count:,} overdue invoice(s); currencies are not combined.", "tone": "warn" if overdue_invoice_count else "blue"},
     ]
+    production_business = summarize_production_business_models()
+    local_sewing_summary = production_business["local_sewing"]
+    if can_view_local_financials:
+        kpi_cards.extend(
+            [
+                {"label": "Bangladesh Sewing Revenue", "value": format_compact_finance_money(local_sewing_summary["total_sewing_revenue"], "BDT"), "note": "Sewing-only order value; native BDT.", "tone": "blue"},
+                {"label": "Bangladesh Sewing Cost", "value": format_compact_finance_money(local_sewing_summary["total_sewing_cost"], "BDT") if local_sewing_summary["cost_available"] else "Cost unavailable", "note": "Costed local sewing orders only.", "tone": "blue"},
+                {"label": "Bangladesh Sewing Profit", "value": format_compact_finance_money(local_sewing_summary["profit"], "BDT") if local_sewing_summary["profit"] is not None else "N/A", "note": "Revenue less available sewing cost.", "tone": "good"},
+                {"label": "Bangladesh Sewing Margin", "value": f"{local_sewing_summary['margin']:.2f}%" if local_sewing_summary["margin"] is not None else "Margin N/A", "note": "Never calculated without positive cost.", "tone": "good"},
+                {"label": "Bangladesh Local Orders", "value": _format_count(local_sewing_summary["order_count"]), "note": "Bangladesh sewing-charge production orders.", "tone": "blue"},
+                {"label": "Sewing Orders In Progress", "value": _format_count(local_sewing_summary["in_progress_count"]), "note": "Open local sewing orders.", "tone": "blue"},
+                {"label": "Sewing Orders Completed", "value": _format_count(local_sewing_summary["completed_count"]), "note": "Completed local sewing orders.", "tone": "good"},
+            ]
+        )
     if not can_view_executive_financials:
         kpi_cards = [
             card
@@ -12326,6 +12468,8 @@ def ceo_operations_dashboard(request):
         "filter_values": filter_values,
         "side_options": [("", "All sides"), ("CA", "Canada"), ("BD", "Bangladesh")],
         "can_view_executive_financials": can_view_executive_financials,
+        "local_sewing_summary": local_sewing_summary,
+        "canada_export_revenue_rows": production_business["canada_export_revenue_rows"],
         "kpi_cards": kpi_cards,
         "alerts": alerts,
         "executive_alert_cards": executive_alert_cards,
@@ -14277,6 +14421,9 @@ def main_dashboard(request):
     conversion_delta_pct = conversion_rate - prev_conversion_rate
     monthly_profit_delta_pct = _delta_pct(monthly_profit_cad, previous_month_profit_cad)
 
+    production_business = summarize_production_business_models()
+    local_sewing_summary = production_business["local_sewing"]
+    canada_export_revenue_rows = production_business["canada_export_revenue_rows"]
     primary_kpis = [
         {
             "title": "Accounting Revenue",
@@ -14339,6 +14486,19 @@ def main_dashboard(request):
             "href": "#activity-section",
         },
     ]
+    if can_view_local_sewing_financials(request.user):
+        primary_kpis.extend(
+            [
+                {"title": "Canada Export Revenue", "value": _format_currency_summary(canada_export_revenue_rows), "note": "FOB and Canada door-to-door approved order value; currencies are not combined.", "trend_text": "Native currencies", "trend_tone": "flat", "accent": "revenue", "icon": "plane"},
+                {"title": "Bangladesh Sewing Revenue", "value": format_compact_finance_money(local_sewing_summary["total_sewing_revenue"], "BDT"), "note": "Sewing-only order value in native BDT.", "trend_text": f"{local_sewing_summary['order_count']:,} local order(s)", "trend_tone": "flat", "accent": "revenue", "icon": "shirt"},
+                {"title": "Bangladesh Sewing Cost", "value": format_compact_finance_money(local_sewing_summary["total_sewing_cost"], "BDT") if local_sewing_summary["cost_available"] else "Cost unavailable", "note": "Positive recorded sewing cost plus extra local cost.", "trend_text": f"{local_sewing_summary['costed_order_count']:,} costed order(s)", "trend_tone": "flat", "accent": "neutral", "icon": "calculator"},
+                {"title": "Bangladesh Sewing Profit", "value": format_compact_finance_money(local_sewing_summary["profit"], "BDT") if local_sewing_summary["profit"] is not None else "N/A", "note": "Costed local sewing revenue less cost.", "trend_text": f"{local_sewing_summary['margin']:.2f}% margin" if local_sewing_summary["margin"] is not None else "Margin N/A", "trend_tone": "up" if local_sewing_summary["profit"] is not None and local_sewing_summary["profit"] >= 0 else "flat", "accent": "profit", "icon": "badge-dollar-sign"},
+                {"title": "Bangladesh Sewing Margin", "value": f"{local_sewing_summary['margin']:.2f}%" if local_sewing_summary["margin"] is not None else "Margin N/A", "note": "Calculated only when positive sewing cost exists.", "trend_text": "Cost-aware margin", "trend_tone": "flat", "accent": "profit", "icon": "percent"},
+                {"title": "Bangladesh Local Orders", "value": f"{local_sewing_summary['order_count']:,}", "note": "Bangladesh sewing-charge production orders.", "trend_text": f"{local_sewing_summary['in_progress_count']:,} in progress", "trend_tone": "flat", "accent": "pipeline", "icon": "list-checks"},
+                {"title": "Sewing Orders In Progress", "value": f"{local_sewing_summary['in_progress_count']:,}", "note": "Open Bangladesh local sewing orders.", "trend_text": "Current production", "trend_tone": "flat", "accent": "pipeline", "icon": "activity"},
+                {"title": "Sewing Orders Completed", "value": f"{local_sewing_summary['completed_count']:,}", "note": "Completed Bangladesh local sewing orders.", "trend_text": "Production status", "trend_tone": "up", "accent": "pipeline", "icon": "circle-check"},
+            ]
+        )
     if not can_view_order_lifecycle_profit:
         primary_kpis = [card for card in primary_kpis if card.get("title") != "Monthly Profit"]
 
@@ -14536,6 +14696,8 @@ def main_dashboard(request):
 
     ctx = {
         "today": today,
+        "local_sewing_summary": local_sewing_summary,
+        "canada_export_revenue_rows": canada_export_revenue_rows,
         "leads_today": leads_today,
         "leads_period": leads_period,
 

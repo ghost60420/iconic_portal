@@ -3687,6 +3687,25 @@ class ProductionOrder(models.Model):
 
     qty_total = models.PositiveIntegerField(default=0)
     qty_reject = models.PositiveIntegerField(default=0)
+    sewing_charge_per_piece_bdt = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    sewing_cost_per_piece_bdt = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    extra_local_cost_bdt = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    completed_quantity = models.PositiveIntegerField(null=True, blank=True)
 
     style_image = models.ImageField(
         upload_to="production_styles/", null=True, blank=True

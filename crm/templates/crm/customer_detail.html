@@ -65,6 +65,10 @@
       <strong>{% if last_activity %}{{ last_activity|date:"M j" }}{% else %}-{% endif %}</strong>
       <small>{% if last_activity %}{{ last_activity|date:"Y" }}{% else %}No activity yet{% endif %}</small>
     </article>
+    <article class="customer-summary-card"><span>Bangladesh Local Orders</span><strong>{{ local_sewing_summary.order_count }}</strong><small>{{ local_sewing_summary.in_progress_count }} in progress / {{ local_sewing_summary.completed_count }} completed</small></article>
+    {% if can_view_local_sewing_financials %}
+      <article class="customer-summary-card"><span>Bangladesh Sewing Revenue</span><strong>{{ local_sewing_summary.total_sewing_revenue|finance_money:"BDT" }}</strong><small>{% if local_sewing_summary.margin != None %}Margin {{ local_sewing_summary.margin|floatformat:2 }}%{% else %}Margin N/A{% endif %}</small></article>
+    {% endif %}
   </section>
 
   <section class="customer-detail-grid">

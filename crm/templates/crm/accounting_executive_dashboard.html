@@ -406,6 +406,14 @@
       <strong>{{ due_vendor_bills|intcomma }}</strong>
       <small>Open vendor bills due now or within seven days.</small>
     </div>
+    <div class="exec-card"><span>Canada Export Revenue</span>{% for row in canada_export_revenue_rows %}<strong>{{ row.amount|finance_money:row.currency }}</strong>{% empty %}<strong>-</strong>{% endfor %}<small>Approved FOB and Canada door-to-door values; native currencies remain separate.</small></div>
+    <div class="exec-card"><span>Bangladesh Sewing Revenue</span><strong>{{ local_sewing_summary.total_sewing_revenue|finance_money:"BDT" }}</strong><small>Bangladesh local sewing order value.</small></div>
+    <div class="exec-card"><span>Bangladesh Sewing Cost</span><strong>{% if local_sewing_summary.cost_available %}{{ local_sewing_summary.total_sewing_cost|finance_money:"BDT" }}{% else %}Cost unavailable{% endif %}</strong><small>Positive cost records only.</small></div>
+    <div class="exec-card"><span>Bangladesh Sewing Profit</span><strong>{% if local_sewing_summary.profit != None %}{{ local_sewing_summary.profit|finance_money:"BDT" }}{% else %}N/A{% endif %}</strong><small>{% if local_sewing_summary.margin != None %}Margin {{ local_sewing_summary.margin|floatformat:2 }}%{% else %}Margin N/A{% endif %}</small></div>
+    <div class="exec-card"><span>Bangladesh Sewing Margin</span><strong>{% if local_sewing_summary.margin != None %}{{ local_sewing_summary.margin|floatformat:2 }}%{% else %}Margin N/A{% endif %}</strong><small>Requires positive sewing cost.</small></div>
+    <div class="exec-card"><span>Bangladesh Local Orders</span><strong>{{ local_sewing_summary.order_count|intcomma }}</strong><small>{{ local_sewing_summary.in_progress_count }} in progress / {{ local_sewing_summary.completed_count }} completed.</small></div>
+    <div class="exec-card"><span>Sewing Orders In Progress</span><strong>{{ local_sewing_summary.in_progress_count|intcomma }}</strong><small>Open Bangladesh local sewing orders.</small></div>
+    <div class="exec-card"><span>Sewing Orders Completed</span><strong>{{ local_sewing_summary.completed_count|intcomma }}</strong><small>Completed Bangladesh local sewing orders.</small></div>
   </div>
 
   <div class="exec-grid">

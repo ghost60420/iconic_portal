@@ -86,6 +86,15 @@
       <strong>{{ total_pieces }}</strong>
       <small>Active operational units / {{ total_reject }} rejected / {{ reject_percent }} percent</small>
     </article>
+    <article class="production-stat"><span>Bangladesh Local Orders</span><strong>{{ local_sewing_summary.order_count }}</strong><small>{{ local_sewing_summary.in_progress_count }} in progress</small></article>
+    <article class="production-stat"><span>Sewing Orders Completed</span><strong>{{ local_sewing_summary.completed_count }}</strong><small>Bangladesh local sewing</small></article>
+    {% if can_view_local_sewing_financials %}
+      <article class="production-stat"><span>Bangladesh Sewing Revenue</span><strong>{{ local_sewing_summary.total_sewing_revenue|finance_money:"BDT" }}</strong><small>Native BDT</small></article>
+      <article class="production-stat"><span>Bangladesh Sewing Cost</span><strong>{% if local_sewing_summary.cost_available %}{{ local_sewing_summary.total_sewing_cost|finance_money:"BDT" }}{% else %}Cost unavailable{% endif %}</strong><small>Positive cost records only</small></article>
+      <article class="production-stat"><span>Bangladesh Sewing Profit</span><strong>{% if local_sewing_summary.profit != None %}{{ local_sewing_summary.profit|finance_money:"BDT" }}{% else %}N/A{% endif %}</strong><small>{% if local_sewing_summary.margin != None %}{{ local_sewing_summary.margin|floatformat:2 }}% margin{% else %}Margin N/A{% endif %}</small></article>
+      <article class="production-stat"><span>Bangladesh Sewing Margin</span><strong>{% if local_sewing_summary.margin != None %}{{ local_sewing_summary.margin|floatformat:2 }}%{% else %}Margin N/A{% endif %}</strong><small>Requires positive cost</small></article>
+    {% endif %}
+    <article class="production-stat"><span>Sewing Orders In Progress</span><strong>{{ local_sewing_summary.in_progress_count }}</strong><small>Bangladesh local sewing</small></article>
   </section>
 
   <section class="production-control-grid" aria-label="Production control center">

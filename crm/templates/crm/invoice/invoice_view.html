@@ -472,6 +472,13 @@
     {% include "crm/partials/workflow_order_summary.html" %}
     {% include "crm/partials/workflow_activity_timeline.html" %}
 
+    {% if invoice.order.order_type == "sewing_charge" and invoice.order.factory_location == "bd" %}
+      <div class="pay-alert noPrint">
+        <strong>Service Type: Bangladesh Local Sewing</strong><br>
+        Charge Type: Sewing Charge / CMT
+      </div>
+    {% endif %}
+
     {% with pay_key=invoice.payment_status_key %}
       <div class="pay-hero">
         <div class="pay-kpi">

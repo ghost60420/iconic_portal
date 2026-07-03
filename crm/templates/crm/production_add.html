@@ -622,6 +622,50 @@
       </div>
     </div>
 
+    <div class="prod-add-card" id="local-sewing-fields" hidden>
+      <div class="prod-add-card-title">Bangladesh Local Sewing</div>
+      <div class="prod-add-help" style="margin-bottom:14px;">Currency is fixed to BDT. Shipping, fabric cost, and material cost are not required.</div>
+      <div class="prod-add-row">
+        {% if form.sewing_charge_per_piece_bdt %}
+          <div class="prod-add-field">
+            <div class="prod-add-label">Sewing charge per piece (BDT)</div>
+            {{ form.sewing_charge_per_piece_bdt }}
+            {% if form.sewing_charge_per_piece_bdt.errors %}<div class="prod-add-errors">{{ form.sewing_charge_per_piece_bdt.errors|striptags }}</div>{% endif %}
+          </div>
+        {% endif %}
+        {% if form.sewing_cost_per_piece_bdt %}
+          <div class="prod-add-field">
+            <div class="prod-add-label">Sewing cost per piece (BDT)</div>
+            {{ form.sewing_cost_per_piece_bdt }}
+            {% if form.sewing_cost_per_piece_bdt.errors %}<div class="prod-add-errors">{{ form.sewing_cost_per_piece_bdt.errors|striptags }}</div>{% endif %}
+            <div class="prod-add-help">Leave blank when cost is unavailable. Margin will display N/A.</div>
+          </div>
+        {% endif %}
+        {% if form.extra_local_cost_bdt %}
+          <div class="prod-add-field">
+            <div class="prod-add-label">Extra local cost (BDT)</div>
+            {{ form.extra_local_cost_bdt }}
+            {% if form.extra_local_cost_bdt.errors %}<div class="prod-add-errors">{{ form.extra_local_cost_bdt.errors|striptags }}</div>{% endif %}
+          </div>
+        {% endif %}
+        <div class="prod-add-field">
+          <div class="prod-add-label">Completed quantity</div>
+          {{ form.completed_quantity }}
+          {% if form.completed_quantity.errors %}<div class="prod-add-errors">{{ form.completed_quantity.errors|striptags }}</div>{% endif %}
+        </div>
+        <div class="prod-add-field">
+          <div class="prod-add-label">Start date</div>
+          {{ form.sewing_start_date }}
+          {% if form.sewing_start_date.errors %}<div class="prod-add-errors">{{ form.sewing_start_date.errors|striptags }}</div>{% endif %}
+        </div>
+        <div class="prod-add-field">
+          <div class="prod-add-label">End date</div>
+          {{ form.sewing_end_date }}
+          {% if form.sewing_end_date.errors %}<div class="prod-add-errors">{{ form.sewing_end_date.errors|striptags }}</div>{% endif %}
+        </div>
+      </div>
+    </div>
+
     <div class="prod-add-card">
       <div class="prod-add-card-title">Style and work order details</div>
 
@@ -1327,6 +1371,21 @@
   </div>
 
 </div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var serviceType = document.getElementById("id_order_type");
+    var factory = document.getElementById("id_factory_location");
+    var localFields = document.getElementById("local-sewing-fields");
+    function syncLocalSewingFields() {
+      if (!localFields) return;
+      localFields.hidden = !(serviceType && factory && serviceType.value === "sewing_charge" && factory.value === "bd");
+    }
+    if (serviceType) serviceType.addEventListener("change", syncLocalSewingFields);
+    if (factory) factory.addEventListener("change", syncLocalSewingFields);
+    syncLocalSewingFields();
+  });
+</script>
 
 <script>
   (function () {

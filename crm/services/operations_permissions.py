@@ -417,8 +417,33 @@ def scope_sales_opportunities(queryset, user):
 def scope_production_orders(queryset, user):
     if has_operations_role(user, ROLE_CEO, ROLE_DIRECTOR, ROLE_ADMIN):
         return queryset
+    if has_operations_role(user, ROLE_ACCOUNTS, ROLE_FINANCE):
+        return queryset
     if has_operations_role(user, ROLE_PRODUCTION):
         return queryset.filter(assigned_production_manager=user)
+    if has_operations_role(user, ROLE_SALES):
+        return queryset.filter(
+            Q(lead__assigned_to=user)
+            | employee_lead_ownership_q(user, prefix="opportunity__lead__")
+        ).distinct()
     if has_operations_role(user, ROLE_MANAGER, ROLE_SUPERVISOR) and employee_department(user) == "production":
         return queryset.filter(assigned_production_manager=user)
     return queryset
+
+
+def can_view_local_sewing_financials(user):
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    if user.is_superuser:
+        return True
+    roles = operations_role_names(user)
+    if roles:
+        return bool(roles.intersection({ROLE_CEO, ROLE_ADMIN, ROLE_ACCOUNTS, ROLE_FINANCE}))
+    try:
+        access = get_access(user)
+    except Exception:
+        return False
+    return bool(
+        access.can_view_internal_costing
+        and (access.can_accounting_ca or access.can_accounting_bd)
+    )

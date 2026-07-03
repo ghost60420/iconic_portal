@@ -42,6 +42,14 @@
       {% for row in summary.revenue_rows %}<strong title="{{ row.amount|finance_money:row.currency }}">{{ row.amount|compact_money:row.currency }}</strong>{% empty %}<strong>-</strong>{% endfor %}
       <small>Recognized accounting revenue by currency</small>
     </article>
+    <article class="customer-stat">
+      <span>Bangladesh Local Orders</span>
+      <strong>{{ summary.local_sewing.order_count }}</strong>
+      <small>{{ summary.local_sewing.in_progress_count }} in progress / {{ summary.local_sewing.completed_count }} completed</small>
+    </article>
+    {% if summary.can_view_local_sewing_financials %}
+      <article class="customer-stat"><span>Bangladesh Sewing Revenue</span><strong>{{ summary.local_sewing.total_sewing_revenue|finance_money:"BDT" }}</strong><small>Native BDT only</small></article>
+    {% endif %}
   </section>
 
   <form class="customer-filters" method="get">

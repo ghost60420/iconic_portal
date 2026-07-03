@@ -35,6 +35,7 @@ from .services.costing_workflow import CostingWorkflowError, create_or_link_prod
 from .services.order_lifecycle import build_lifecycle_profit_breakdown, create_lifecycle_from_invoice
 from .services.workflow_visibility import build_workflow_visibility_context
 from .services.operations_permissions import can_archive_invoices
+from .services.local_sewing import calculate_local_sewing, is_bangladesh_local_sewing
 
 
 DEFAULT_INVOICE_TERMS = """For bulk orders, 50% advance confirms the order and 50% is due before shipment.
@@ -127,6 +128,44 @@ def superuser_only(user):
 
 def can_manage_invoice_internal_costing(user):
     return can_view_internal_costing(user)
+
+
+def _local_sewing_order(order_id):
+    if not order_id:
+        return None
+    try:
+        order = ProductionOrder.objects.prefetch_related("stages").get(pk=int(order_id))
+    except (ProductionOrder.DoesNotExist, TypeError, ValueError):
+        return None
+    return order if is_bangladesh_local_sewing(order) else None
+
+
+def _local_sewing_invoice_initial(order):
+    summary = calculate_local_sewing(order)
+    return {
+        "order": order,
+        "customer": order.customer,
+        "currency": "BDT",
+        "invoice_market": "bangladesh",
+        "invoice_type": "sewing_charge",
+        "subtotal": summary["total_sewing_revenue"],
+        "shipping_amount": Decimal("0"),
+        "deposit_percentage": _default_deposit_for("bangladesh", "sewing_charge"),
+    }
+
+
+def _apply_local_sewing_invoice_source(inv, order):
+    summary = calculate_local_sewing(order)
+    inv.order = order
+    inv.customer = order.customer
+    inv.currency = "BDT"
+    inv.invoice_market = "bangladesh"
+    inv.invoice_region = "BD"
+    inv.invoice_type = "sewing_charge"
+    inv.subtotal = summary["total_sewing_revenue"]
+    inv.shipping_amount = Decimal("0")
+    # Invoice.sewing_charge is an internal-cost field and is never a revenue source.
+    return inv
 
 
 def can_manage_invoice_settings(user):
@@ -1426,6 +1465,9 @@ def invoice_add(request):
     # optional prefill from order
     order_id = request.GET.get("order_id")
     initial = {"deposit_percentage": _default_deposit_for("north_america", "bulk")}
+    local_order = _local_sewing_order(order_id)
+    if local_order:
+        initial.update(_local_sewing_invoice_initial(local_order))
     can_edit_internal_costs = can_manage_invoice_internal_costing(request.user)
 
     if order_id:
@@ -1458,6 +1500,9 @@ def invoice_add(request):
                     except Exception:
                         pass
 
+                local_order = _local_sewing_order(inv.order_id)
+                if local_order:
+                    _apply_local_sewing_invoice_source(inv, local_order)
                 _sync_invoice_market_region(inv)
                 _calc_totals(inv)
                 inv.save()
@@ -1527,6 +1572,8 @@ def invoice_add_ca(request):
 def invoice_add_bd(request):
     # wrapper to force BDT
     can_edit_internal_costs = can_manage_invoice_internal_costing(request.user)
+    order_id = request.GET.get("order_id") or request.POST.get("order")
+    local_order = _local_sewing_order(order_id)
     if request.method == "POST":
         form = InvoiceForm(request.POST, can_edit_internal_costs=can_edit_internal_costs)
         if form.is_valid():
@@ -1543,6 +1590,9 @@ def invoice_add_bd(request):
                         inv.customer_id = inv.order.customer_id
                     except Exception:
                         pass
+                local_order = _local_sewing_order(inv.order_id)
+                if local_order:
+                    _apply_local_sewing_invoice_source(inv, local_order)
                 inv.invoice_market = "bangladesh"
                 inv.invoice_region = "BD"
                 _sync_invoice_market_region(inv)
@@ -1552,13 +1602,16 @@ def invoice_add_bd(request):
             messages.success(request, "Invoice created.")
             return redirect("invoice_view", pk=inv.pk)
     else:
-        form = InvoiceForm(
-            initial={
+        initial = {
                 "currency": "BDT",
                 "invoice_market": "bangladesh",
                 "invoice_region": "BD",
                 "deposit_percentage": _default_deposit_for("bangladesh", "bulk"),
-            },
+            }
+        if local_order:
+            initial.update(_local_sewing_invoice_initial(local_order))
+        form = InvoiceForm(
+            initial=initial,
             can_edit_internal_costs=can_edit_internal_costs,
         )
     return render(
@@ -1588,6 +1641,13 @@ def invoice_edit(request, pk):
                         inv2.customer_id = inv2.order.customer_id
                     except Exception:
                         pass
+
+                local_order = _local_sewing_order(inv2.order_id)
+                if local_order:
+                    inv2.currency = "BDT"
+                    inv2.invoice_market = "bangladesh"
+                    inv2.invoice_region = "BD"
+                    inv2.invoice_type = "sewing_charge"
 
                 _sync_invoice_market_region(inv2)
                 _calc_totals(inv2)
@@ -1846,6 +1906,13 @@ def invoice_pdf(request, pk):
         f"Invoice type: {context['invoice_type_label']}",
         f"Payment status: {payment_status['label']}",
     ]
+    if is_bd_sewing_charge_invoice and is_bangladesh_local_sewing(inv.order):
+        detail_lines.extend(
+            [
+                "Service Type: Bangladesh Local Sewing",
+                "Charge Type: Sewing Charge / CMT",
+            ]
+        )
     row_y = y
     for line in [line for line in company_lines if line]:
         pdf.drawString(left, row_y, line[:84])
@@ -1854,7 +1921,7 @@ def invoice_pdf(request, pk):
     for line in detail_lines:
         pdf.drawString(width / 2 + 12, row_y, line)
         row_y -= 12
-    y -= 90
+    y -= 114 if is_bd_sewing_charge_invoice and is_bangladesh_local_sewing(inv.order) else 90
 
     ensure_space(120)
     pdf.setFont("Helvetica-Bold", 10)
