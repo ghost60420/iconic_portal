@@ -43,6 +43,17 @@ def acc_any(view_func):
     return login_required(require_any_access("can_accounting_ca", "can_accounting_bd")(view_func))
 
 
+def production_read(view_func):
+    return login_required(
+        require_any_access(
+            "can_production",
+            "can_opportunities",
+            "can_accounting_ca",
+            "can_accounting_bd",
+        )(view_func)
+    )
+
+
 def accounting_reports_redirect(request):
     return redirect("profit_loss_dashboard")
 
@@ -261,7 +272,7 @@ urlpatterns = [
 
     path("production/", perm("can_production", views.production_list), name="production_list"),
     path("production/add/", perm("can_production", views.production_add), name="production_add"),
-    path("production/<int:pk>/", perm("can_production", views.production_detail), name="production_detail"),
+    path("production/<int:pk>/", production_read(views.production_detail), name="production_detail"),
     path("production/<int:pk>/edit/", perm("can_production", views.production_edit), name="production_edit"),
     path("production/<int:pk>/archive/", perm("can_production", views.production_archive), name="production_archive"),
     path("production/<int:pk>/delete/", perm("can_production", views.production_delete), name="production_delete"),

@@ -20,6 +20,17 @@ PRODUCTION_INTERNAL_COST_FIELDS = {
 
 
 class ProductionOrderForm(forms.ModelForm):
+    sewing_start_date = forms.DateField(
+        required=False,
+        label="Start date",
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+    sewing_end_date = forms.DateField(
+        required=False,
+        label="End date",
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+
     class Meta:
         model = ProductionOrder
         fields = [
@@ -38,6 +49,10 @@ class ProductionOrderForm(forms.ModelForm):
             "bulk_deadline",
             "qty_total",
             "qty_reject",
+            "sewing_charge_per_piece_bdt",
+            "sewing_cost_per_piece_bdt",
+            "extra_local_cost_bdt",
+            "completed_quantity",
 
             # middle section
             "style_name",
@@ -89,11 +104,22 @@ class ProductionOrderForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         can_edit_internal_costing = kwargs.pop("can_edit_internal_costing", False)
+        can_edit_local_sewing_financials = kwargs.pop(
+            "can_edit_local_sewing_financials",
+            can_edit_internal_costing,
+        )
         super().__init__(*args, **kwargs)
 
         if not can_edit_internal_costing:
             for field_name in PRODUCTION_INTERNAL_COST_FIELDS:
                 self.fields.pop(field_name, None)
+        if not can_edit_local_sewing_financials:
+            for field_name in (
+                    "sewing_charge_per_piece_bdt",
+                    "sewing_cost_per_piece_bdt",
+                    "extra_local_cost_bdt",
+                ):
+                    self.fields.pop(field_name, None)
 
         # dark style for all fields
         for name, field in self.fields.items():
@@ -112,6 +138,17 @@ class ProductionOrderForm(forms.ModelForm):
             self.fields["qty_reject"].required = False
             if not self.instance.pk:
                 self.fields["qty_reject"].initial = 0
+
+        if "completed_quantity" in self.fields:
+            self.fields["completed_quantity"].required = False
+            if not self.instance.pk:
+                self.fields["completed_quantity"].initial = 0
+
+        if self.instance.pk:
+            sewing_stage = self.instance.stages.filter(stage_key="sewing").first()
+            if sewing_stage:
+                self.fields["sewing_start_date"].initial = sewing_stage.actual_start
+                self.fields["sewing_end_date"].initial = sewing_stage.actual_end
 
         if "operational_status" in self.fields:
             self.fields["operational_status"].required = False
@@ -159,6 +196,66 @@ class ProductionOrderForm(forms.ModelForm):
         valid_values = {key for key, _ in ProductionOrder.SIZE_GROUP_CHOICES}
         return value if value in valid_values else "unisex"
 
+    def clean(self):
+        cleaned = super().clean()
+        is_local = (
+            cleaned.get("order_type") == "sewing_charge"
+            and cleaned.get("factory_location") == "bd"
+        )
+        if not is_local:
+            return cleaned
+
+        quantity = cleaned.get("qty_total") or 0
+        rejected = cleaned.get("qty_reject") or 0
+        completed = cleaned.get("completed_quantity") or 0
+        charge = cleaned.get(
+            "sewing_charge_per_piece_bdt",
+            getattr(self.instance, "sewing_charge_per_piece_bdt", None),
+        )
+        cost = cleaned.get(
+            "sewing_cost_per_piece_bdt",
+            getattr(self.instance, "sewing_cost_per_piece_bdt", None),
+        )
+        extra_cost = cleaned.get(
+            "extra_local_cost_bdt",
+            getattr(self.instance, "extra_local_cost_bdt", None),
+        )
+        start_date = cleaned.get("sewing_start_date")
+        end_date = cleaned.get("sewing_end_date")
+
+        if quantity <= 0:
+            self.add_error("qty_total", "Quantity must be greater than zero for local sewing.")
+        if charge is None or charge <= 0:
+            if "sewing_charge_per_piece_bdt" in self.fields:
+                self.add_error(
+                    "sewing_charge_per_piece_bdt",
+                    "Sewing charge per piece is required and must be greater than zero.",
+                )
+            else:
+                self.add_error(None, "Finance must add the sewing charge before this order can be saved.")
+        if cost is not None and cost < 0:
+            if "sewing_cost_per_piece_bdt" in self.fields:
+                self.add_error("sewing_cost_per_piece_bdt", "Sewing cost cannot be negative.")
+            else:
+                self.add_error(None, "The saved sewing cost is invalid. Finance must correct it.")
+        if extra_cost is not None and extra_cost < 0:
+            if "extra_local_cost_bdt" in self.fields:
+                self.add_error("extra_local_cost_bdt", "Extra local cost cannot be negative.")
+            else:
+                self.add_error(None, "The saved extra local cost is invalid. Finance must correct it.")
+        if completed > quantity:
+            self.add_error("completed_quantity", "Completed quantity cannot exceed order quantity.")
+        if rejected > quantity:
+            self.add_error("qty_reject", "Rejected quantity cannot exceed order quantity.")
+        if completed + rejected > quantity:
+            self.add_error(
+                "completed_quantity",
+                "Completed and rejected quantities cannot exceed order quantity.",
+            )
+        if start_date and end_date and end_date < start_date:
+            self.add_error("sewing_end_date", "End date cannot be before start date.")
+        return cleaned
+
     def save(self, commit=True):
         was_adding = self.instance._state.adding
         order = super().save(commit=commit)
@@ -170,6 +267,13 @@ class ProductionOrderForm(forms.ModelForm):
                 sync_operational_status(order)
             else:
                 sync_operational_status(order, explicit_status=explicit_status)
+            if order.order_type == "sewing_charge" and order.factory_location == "bd":
+                stage = order.stages.filter(stage_key="sewing").first()
+                if stage is None:
+                    stage = ProductionStage(order=order, stage_key="sewing", display_name="Sewing")
+                stage.actual_start = self.cleaned_data.get("sewing_start_date")
+                stage.actual_end = self.cleaned_data.get("sewing_end_date")
+                stage.save()
         return order
 
 

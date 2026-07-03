@@ -59,7 +59,15 @@
     </div>
 
     <div class="production-hero-actions" aria-label="Production quick actions">
+      {% if can_edit_production %}
       <a href="{% url 'production_edit' order.pk %}" class="production-btn production-btn--primary">Edit</a>
+      {% endif %}
+      {% if is_bangladesh_local_sewing %}
+      {% if can_view_local_sewing_financials %}
+      <a href="{% url 'invoice_add_bd' %}?order_id={{ order.pk }}" class="production-btn production-btn--ghost">Create BDT Invoice</a>
+      {% endif %}
+      <a href="{% url 'production_list' %}" class="production-btn production-btn--ghost">Back to Production</a>
+      {% else %}
       <a href="#stage-progress" class="production-btn production-btn--ghost">Update Status</a>
       <a href="{% url 'production_next_stage' order.pk %}" class="production-btn production-btn--ghost">Next Stage</a>
       <a href="#production-files" class="production-btn production-btn--ghost">Upload File</a>
@@ -93,9 +101,42 @@
 	      {% elif order.is_archived %}
 	        <span class="production-btn production-btn--ghost">Archived</span>
 	      {% endif %}
+      {% endif %}
     </div>
   </section>
 
+  {% if is_bangladesh_local_sewing %}
+  <section class="production-panel" aria-label="Bangladesh Local Sewing summary">
+    <div class="production-panel-head">
+      <div>
+        <h2>Bangladesh Local Sewing</h2>
+        <p>Simplified sewing-only production record. Currency: BDT.</p>
+      </div>
+      <span class="production-status-badge {{ operational_status }}">{{ operational_status_label }}</span>
+    </div>
+    <div class="production-approved-grid">
+      <article><span>Customer</span><strong>{% if customer %}{{ customer.account_brand|default:customer.contact_name }}{% else %}Not linked{% endif %}</strong></article>
+      <article><span>Product</span><strong>{% if product %}{{ product.name }}{% else %}{{ order.style_name|default:order.title }}{% endif %}</strong></article>
+      <article><span>Quantity</span><strong>{{ local_sewing.quantity }}</strong></article>
+      {% if can_view_local_sewing_financials %}
+        <article><span>Sewing charge per piece</span><strong>{{ local_sewing.sewing_charge_per_piece|finance_money:"BDT" }}</strong></article>
+        <article><span>Total sewing revenue</span><strong>{{ local_sewing.total_sewing_revenue|finance_money:"BDT" }}</strong></article>
+        <article><span>Sewing cost per piece</span><strong>{% if local_sewing.cost_available %}{{ local_sewing.sewing_cost_per_piece|finance_money:"BDT" }}{% else %}Cost unavailable{% endif %}</strong></article>
+        <article><span>Total sewing cost</span><strong>{% if local_sewing.cost_available %}{{ local_sewing.total_sewing_cost|finance_money:"BDT" }}{% else %}Cost unavailable{% endif %}</strong></article>
+        <article><span>Extra local cost</span><strong>{{ local_sewing.extra_local_cost|finance_money:"BDT" }}</strong></article>
+        <article><span>Profit</span><strong>{% if local_sewing.profit != None %}{{ local_sewing.profit|finance_money:"BDT" }}{% else %}N/A{% endif %}</strong></article>
+        <article><span>Margin</span><strong>{% if local_sewing.margin != None %}{{ local_sewing.margin|floatformat:2 }}%{% else %}Margin N/A{% endif %}</strong></article>
+      {% endif %}
+      <article><span>Start date</span><strong>{{ local_sewing.start_date|date:"M j, Y"|default:"Not started" }}</strong></article>
+      <article><span>End date</span><strong>{{ local_sewing.end_date|date:"M j, Y"|default:"In progress" }}</strong></article>
+      <article><span>Days used</span><strong>{{ local_sewing.days_used|default:"N/A" }}</strong></article>
+      <article><span>Daily output</span><strong>{% if local_sewing.daily_output != None %}{{ local_sewing.daily_output|floatformat:2 }} pcs{% else %}N/A{% endif %}</strong></article>
+      <article><span>Completed quantity</span><strong>{{ local_sewing.completed_quantity }}</strong></article>
+      <article><span>Rejected quantity</span><strong>{{ local_sewing.rejected_quantity }}</strong></article>
+      <article><span>Status</span><strong>{{ operational_status_label }}</strong></article>
+    </div>
+  </section>
+  {% else %}
   <nav class="production-mobile-action-bar" aria-label="Factory quick actions">
     <a href="{% url 'production_next_stage' order.pk %}" class="production-btn production-btn--primary">Next Stage</a>
     {% if stages %}
@@ -1212,6 +1253,7 @@
       {% endif %}
     </aside>
   </section>
+  {% endif %}
 </div>
 
 <script>
