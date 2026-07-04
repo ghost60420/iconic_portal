@@ -449,6 +449,17 @@
                 {% for error in quick_form.costing_purpose.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
               </div>
               <div>
+                <label>{{ quick_form.pricing_type.label }}</label>
+                {{ quick_form.pricing_type }}
+                <div class="field-help">{{ quick_form.pricing_type.help_text }}</div>
+                {% for error in quick_form.pricing_type.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+              </div>
+              <div data-local-sewing-only hidden>
+                <label>Factory</label>
+                <div class="quick-readonly-field">Bangladesh</div>
+                <div class="field-help">CMT / Sewing Only is always produced in Bangladesh.</div>
+              </div>
+              <div>
                 <label>{{ quick_form.currency.label }}</label>
                 {{ quick_form.currency }}
                 <div class="field-help">{{ quick_form.currency.help_text }}</div>
@@ -479,7 +490,37 @@
           </div>
         </details>
 
-        <details class="card quick-breakdown-card" open>
+        <details class="card quick-breakdown-card" data-local-sewing-only hidden open>
+          <summary>2. Bangladesh Local Sewing</summary>
+          <div class="quick-breakdown-body">
+            <div class="grid">
+              <div>
+                <label>{{ quick_form.sewing_charge_per_piece_bdt.label }}</label>
+                <div class="quick-input-with-unit">{{ quick_form.sewing_charge_per_piece_bdt }}<span class="quick-input-unit">৳ BDT</span></div>
+                <div class="field-help">{{ quick_form.sewing_charge_per_piece_bdt.help_text }}</div>
+                {% for error in quick_form.sewing_charge_per_piece_bdt.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+              </div>
+              <div>
+                <label>{{ quick_form.sewing_cost_per_piece_bdt.label }}</label>
+                <div class="quick-input-with-unit">{{ quick_form.sewing_cost_per_piece_bdt }}<span class="quick-input-unit">৳ BDT</span></div>
+                <div class="field-help">{{ quick_form.sewing_cost_per_piece_bdt.help_text }}</div>
+                {% for error in quick_form.sewing_cost_per_piece_bdt.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+              </div>
+              <div>
+                <label>{{ quick_form.extra_local_cost_bdt.label }}</label>
+                <div class="quick-input-with-unit">{{ quick_form.extra_local_cost_bdt }}<span class="quick-input-unit">৳ BDT</span></div>
+                <div class="field-help">{{ quick_form.extra_local_cost_bdt.help_text }}</div>
+                {% for error in quick_form.extra_local_cost_bdt.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+              </div>
+              <div><label>Total Sewing Revenue</label><div class="quick-readonly-field" data-local-summary="revenue">৳0.00</div></div>
+              <div><label>Total Sewing Cost</label><div class="quick-readonly-field" data-local-summary="cost">Cost unavailable</div></div>
+              <div><label>Profit</label><div class="quick-readonly-field" data-local-summary="profit">N/A</div></div>
+              <div><label>Margin</label><div class="quick-readonly-field" data-local-summary="margin">Margin N/A</div></div>
+            </div>
+          </div>
+        </details>
+
+        <details class="card quick-breakdown-card" data-export-costing open>
           <summary>2. Material Cost</summary>
           <div class="quick-breakdown-body">
             <div class="grid">
@@ -512,7 +553,7 @@
           </div>
         </details>
 
-        <details class="card quick-breakdown-card" open>
+        <details class="card quick-breakdown-card" data-export-costing open>
           <summary>3. Production Cost</summary>
           <div class="quick-breakdown-body">
             <div class="grid">
@@ -577,7 +618,7 @@
           </div>
         </details>
 
-        <details class="card quick-breakdown-card" open>
+        <details class="card quick-breakdown-card" data-export-costing open>
           <summary>4. Sales</summary>
           <div class="quick-breakdown-body">
             <div class="grid">
@@ -991,6 +1032,7 @@
 <script>
   (function () {
     const fields = {
+      pricingType: document.getElementById("id_pricing_type"),
       quantity: document.getElementById("id_quantity"),
       currency: document.getElementById("id_currency"),
       exchangeRate: document.getElementById("id_exchange_rate_bdt_per_cad"),
@@ -1007,7 +1049,10 @@
       selling: document.getElementById("id_selling_price_per_piece"),
       commissionPercent: document.getElementById("id_commission_percent"),
       commission: document.getElementById("id_commission_per_piece"),
-      targetMargin: document.getElementById("id_target_margin_percent")
+      targetMargin: document.getElementById("id_target_margin_percent"),
+      sewingCharge: document.getElementById("id_sewing_charge_per_piece_bdt"),
+      sewingCost: document.getElementById("id_sewing_cost_per_piece_bdt"),
+      extraLocalCost: document.getElementById("id_extra_local_cost_bdt")
     };
     const legacyMode = {% if quick_form.show_legacy_fields %}true{% else %}false{% endif %};
 
@@ -1072,6 +1117,10 @@
 
     function updateSummary() {
       const quantity = Math.max(0, numberValue(fields.quantity));
+      const isLocalSewing = fields.pricingType && fields.pricingType.value === "cmt_sewing";
+      document.querySelectorAll("[data-local-sewing-only]").forEach((node) => { node.hidden = !isLocalSewing; });
+      document.querySelectorAll("[data-export-costing]").forEach((node) => { node.hidden = isLocalSewing; });
+      if (isLocalSewing && fields.currency) fields.currency.value = "BDT";
       const currency = fields.currency && fields.currency.value ? fields.currency.value : "BDT";
       const exchangeRate = numberValue(fields.exchangeRate);
       const fabricKg = numberValue(fields.fabricKg);
@@ -1091,6 +1140,40 @@
       const commissionPercent = fields.commissionPercent && fields.commissionPercent.value !== "" ? numberValue(fields.commissionPercent) : null;
       const commission = commissionPercent !== null ? roundMoney(selling * commissionPercent / 100) : numberValue(fields.commission);
       const targetMargin = fields.targetMargin && fields.targetMargin.value !== "" ? numberValue(fields.targetMargin) : null;
+      if (isLocalSewing) {
+        const charge = numberValue(fields.sewingCharge);
+        const hasCost = fields.sewingCost && fields.sewingCost.value !== "" && numberValue(fields.sewingCost) > 0;
+        const sewingCost = numberValue(fields.sewingCost);
+        const extraCost = numberValue(fields.extraLocalCost);
+        const localRevenue = charge * quantity;
+        const localCost = hasCost ? sewingCost * quantity + extraCost : 0;
+        const localProfit = hasCost ? localRevenue - localCost : 0;
+        const localMargin = hasCost && localRevenue > 0 ? (localProfit / localRevenue) * 100 : null;
+        const localMoney = (value) => "৳" + formatNumber(value);
+        document.querySelectorAll('[data-local-summary="revenue"]').forEach((node) => { node.textContent = localMoney(localRevenue); });
+        document.querySelectorAll('[data-local-summary="cost"]').forEach((node) => { node.textContent = hasCost ? localMoney(localCost) : "Cost unavailable"; });
+        document.querySelectorAll('[data-local-summary="profit"]').forEach((node) => { node.textContent = hasCost ? localMoney(localProfit) : "N/A"; });
+        document.querySelectorAll('[data-local-summary="margin"]').forEach((node) => { node.textContent = localMargin === null ? "Margin N/A" : localMargin.toFixed(2) + "%"; });
+        setSummary("quantity", quantity.toLocaleString() + " pieces");
+        setSummary("currency", "BDT");
+        setSummary("costPerPiece", hasCost ? localMoney(localCost / Math.max(quantity, 1)) : "Cost unavailable");
+        setSummary("totalCost", hasCost ? localMoney(localCost) : "Cost unavailable");
+        setSummary("revenue", localMoney(localRevenue));
+        setSummary("grossProfitPerPiece", hasCost ? localMoney(localProfit / Math.max(quantity, 1)) : "N/A");
+        setSummary("commissionPerPiece", "N/A");
+        setSummary("commissionTotal", localMoney(0));
+        setSummary("netProfitPerPiece", hasCost ? localMoney(localProfit / Math.max(quantity, 1)) : "N/A");
+        setSummary("netProfitTotal", hasCost ? localMoney(localProfit) : "N/A");
+        setSummary("netMargin", localMargin === null ? "Margin N/A" : localMargin.toFixed(2) + "%");
+        setSummary("targetMargin", "N/A");
+        setSummary("marginStatus", hasCost ? "Calculated" : "Cost unavailable");
+        setProfitHealth(
+          hasCost
+            ? profitHealth(localMargin)
+            : { label: "Cost unavailable", tone: "low", profitTone: "neutral" }
+        );
+        return;
+      }
       const otherPerPiece = quantity > 0 ? other / quantity : 0;
       const shippingPerPiece = quantity > 0 ? shipping / quantity : 0;
       const detailedCostPerPiece = fabricPiece + making + printEmbroidery + trims + packaging + otherPerPiece + shippingPerPiece;

@@ -1,8 +1,8 @@
 from decimal import Decimal, ROUND_HALF_UP
 
-from django.db.models import Count, DecimalField, ExpressionWrapper, F, Q, Sum, Value
+from django.db.models import Count, DecimalField, ExpressionWrapper, F, IntegerField, Max, Q, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
-from crm.models import ProductionOrder
+from crm.models import ProductionOrder, QuickCosting
 from crm.services.costing_currency import currency_summary_rows
 
 
@@ -16,6 +16,28 @@ COMPLETED_STATUSES = ("done", "closed_won")
 CANCELLED_STATUSES = ("closed_lost",)
 COMPLETED_OPERATIONAL_STATUSES = ("shipped",)
 CANCELLED_OPERATIONAL_STATUSES = ("cancelled",)
+
+
+def _workflow_count_expression(filter_q):
+    counts = (
+        QuickCosting.objects.filter(pricing_type=QuickCosting.PRICING_CMT)
+        .order_by()
+        .annotate(_group=Value(1))
+        .values("_group")
+        .annotate(total=Count("id", filter=filter_q))
+        .values("total")[:1]
+    )
+    return Coalesce(Max(Subquery(counts, output_field=IntegerField())), Value(0))
+
+
+def _workflow_count_aggregates():
+    return {
+        "approved_count": _workflow_count_expression(Q(approved_at__isnull=False)),
+        "pending_approval_count": _workflow_count_expression(
+            Q(status=QuickCosting.STATUS_DRAFT, approval_submitted_at__isnull=False)
+        ),
+        "rejected_count": _workflow_count_expression(Q(status=QuickCosting.STATUS_REJECTED)),
+    }
 
 
 def _decimal(value):
@@ -149,6 +171,7 @@ def summarize_local_sewing_orders(queryset=None):
             Value(Decimal("0")),
             output_field=money_field,
         ),
+        **_workflow_count_aggregates(),
     )
     revenue = _money(totals["revenue"])
     cost = _money(totals["cost"])
@@ -172,6 +195,9 @@ def summarize_local_sewing_orders(queryset=None):
         "costed_order_count": totals["costed_order_count"],
         "profit": profit,
         "margin": margin,
+        "approved_count": totals["approved_count"],
+        "pending_approval_count": totals["pending_approval_count"],
+        "rejected_count": totals["rejected_count"],
     }
 
 
@@ -259,6 +285,7 @@ def summarize_production_business_models(queryset=None):
             Value(Decimal("0")),
             output_field=money_field,
         ),
+        **_workflow_count_aggregates(),
     )
     revenue = _money(totals["revenue"])
     cost = _money(totals["cost"])
@@ -282,6 +309,9 @@ def summarize_production_business_models(queryset=None):
         "costed_order_count": totals["costed_order_count"],
         "profit": profit,
         "margin": margin,
+        "approved_count": totals["approved_count"],
+        "pending_approval_count": totals["pending_approval_count"],
+        "rejected_count": totals["rejected_count"],
     }
     export_totals = {
         code: {"amount": _money(totals[f"export_{code.lower()}"])}

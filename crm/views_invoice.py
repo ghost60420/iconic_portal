@@ -157,6 +157,7 @@ def _local_sewing_invoice_initial(order):
 def _apply_local_sewing_invoice_source(inv, order):
     summary = calculate_local_sewing(order)
     inv.order = order
+    inv.quick_costing = order.source_quick_costing
     inv.customer = order.customer
     inv.currency = "BDT"
     inv.invoice_market = "bangladesh"
@@ -1910,7 +1911,7 @@ def invoice_pdf(request, pk):
         detail_lines.extend(
             [
                 "Service Type: Bangladesh Local Sewing",
-                "Charge Type: Sewing Charge / CMT",
+                "Charge Type: CMT / Sewing Charge",
             ]
         )
     row_y = y

@@ -439,6 +439,9 @@ class QuickCostingForm(forms.ModelForm):
         "print_embroidery_cost_per_piece",
         "trims_cost_per_piece",
         "packaging_cost_per_piece",
+        "sewing_charge_per_piece_bdt",
+        "sewing_cost_per_piece_bdt",
+        "extra_local_cost_bdt",
     ]
     non_negative_messages = {
         "fabric_cost_per_kg": "Fabric cost per kg cannot be negative.",
@@ -453,11 +456,17 @@ class QuickCostingForm(forms.ModelForm):
         "shipping_cost": "Shipping total cannot be negative.",
         "selling_price_per_piece": "Selling price per piece cannot be negative.",
         "commission_per_piece": "Legacy commission per piece cannot be negative.",
+        "sewing_charge_per_piece_bdt": "Sewing charge cannot be negative.",
+        "sewing_cost_per_piece_bdt": "Sewing cost cannot be negative.",
+        "extra_local_cost_bdt": "Extra local cost cannot be negative.",
     }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["costing_purpose"].required = False
+        self.fields["pricing_type"].required = False
+        if not self.instance.pk and not self.initial.get("pricing_type"):
+            self.initial["pricing_type"] = QuickCosting.PRICING_FULL_PACKAGE
         self.show_legacy_fields = bool(self.instance.pk and self.instance.currency is None)
         self.fields["currency"].required = not self.show_legacy_fields
         self.fields["currency"].error_messages["required"] = "Select BDT, CAD, or USD."
@@ -490,8 +499,24 @@ class QuickCostingForm(forms.ModelForm):
     def clean_costing_purpose(self):
         return self.cleaned_data.get("costing_purpose") or QuickCosting.PURPOSE_BULK
 
+    def clean_pricing_type(self):
+        return self.cleaned_data.get("pricing_type") or QuickCosting.PRICING_FULL_PACKAGE
+
     def clean(self):
         cleaned = super().clean()
+        is_local_sewing = cleaned.get("pricing_type") == QuickCosting.PRICING_CMT
+        if is_local_sewing:
+            cleaned["currency"] = "BDT"
+            charge = cleaned.get("sewing_charge_per_piece_bdt")
+            if charge is None or charge <= 0:
+                self.add_error(
+                    "sewing_charge_per_piece_bdt",
+                    "Sewing charge per piece is required and must be greater than zero.",
+                )
+        else:
+            cleaned["sewing_charge_per_piece_bdt"] = None
+            cleaned["sewing_cost_per_piece_bdt"] = None
+            cleaned["extra_local_cost_bdt"] = None
         for field_name in self.money_fields:
             value = cleaned.get(field_name)
             if field_name in {"shipping_cost", "commission_per_piece"} and value in (None, ""):
@@ -532,6 +557,7 @@ class QuickCostingForm(forms.ModelForm):
             "project_name",
             "product_type",
             "costing_purpose",
+            "pricing_type",
             "quantity",
             "currency",
             "exchange_rate_bdt_per_cad",
@@ -549,11 +575,15 @@ class QuickCostingForm(forms.ModelForm):
             "commission_percent",
             "commission_per_piece",
             "target_margin_percent",
+            "sewing_charge_per_piece_bdt",
+            "sewing_cost_per_piece_bdt",
+            "extra_local_cost_bdt",
         ]
         widgets = {
             "buyer_name": forms.TextInput(attrs={"placeholder": "Buyer or company name"}),
             "project_name": forms.TextInput(attrs={"placeholder": "Project or style name"}),
             "costing_purpose": forms.Select(),
+            "pricing_type": forms.Select(),
             "quantity": forms.NumberInput(attrs={"min": 1, "step": "1", "placeholder": "300"}),
             "currency": forms.Select(),
             "exchange_rate_bdt_per_cad": forms.NumberInput(attrs={"min": 0, "step": "0.0001", "placeholder": "90"}),
@@ -571,12 +601,16 @@ class QuickCostingForm(forms.ModelForm):
             "commission_percent": forms.NumberInput(attrs={"min": 0, "max": 100, "step": "0.01", "placeholder": "5.00"}),
             "commission_per_piece": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
             "target_margin_percent": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "30"}),
+            "sewing_charge_per_piece_bdt": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
+            "sewing_cost_per_piece_bdt": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
+            "extra_local_cost_bdt": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
         }
         labels = {
             "buyer_name": "Buyer Name",
             "project_name": "Project Name",
             "product_type": "Product Type",
             "costing_purpose": "Costing Purpose",
+            "pricing_type": "Pricing Type",
             "currency": "Currency",
             "exchange_rate_bdt_per_cad": "Exchange Rate",
             "fabric_cost_per_kg": "Fabric Cost Per KG",
@@ -593,9 +627,13 @@ class QuickCostingForm(forms.ModelForm):
             "commission_percent": "Commission Percent",
             "commission_per_piece": "Legacy Commission Per Piece",
             "target_margin_percent": "Target Margin %",
+            "sewing_charge_per_piece_bdt": "Sewing Charge Per Piece",
+            "sewing_cost_per_piece_bdt": "Sewing Cost Per Piece",
+            "extra_local_cost_bdt": "Extra Local Cost",
         }
         help_texts = {
             "currency": "Select BDT, CAD, or USD for this costing.",
+            "pricing_type": "Choose Full Package, FOB, or CMT / Sewing Only.",
             "exchange_rate_bdt_per_cad": "Optional legacy conversion: BDT per 1 CAD.",
             "fabric_cost_per_kg": "Enter fabric price per KG.",
             "fabric_consumption_kg_per_piece": "Example: 0.42 KG per garment.",
@@ -611,6 +649,9 @@ class QuickCostingForm(forms.ModelForm):
             "commission_percent": "Percentage of selling price.",
             "commission_per_piece": "Legacy absolute BDT amount per piece. Used only when commission percent is empty.",
             "target_margin_percent": "Percentage target for profit after commission.",
+            "sewing_charge_per_piece_bdt": "Customer sewing charge per piece in BDT.",
+            "sewing_cost_per_piece_bdt": "Internal sewing cost per piece in BDT. Leave blank when unavailable.",
+            "extra_local_cost_bdt": "Additional local order cost in BDT.",
         }
 
 

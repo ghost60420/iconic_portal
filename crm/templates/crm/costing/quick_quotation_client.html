@@ -290,6 +290,14 @@
         <span>Approved Date</span>
         <strong>{% if quick_costing.approved_at %}{{ quick_costing.approved_at|date:"Y-m-d H:i" }}{% else %}Not recorded{% endif %}</strong>
       </div>
+      <div class="quick-quote-status-item">
+        <span>Service Type</span>
+        <strong>{{ quick_costing.service_type_label }}</strong>
+      </div>
+      <div class="quick-quote-status-item">
+        <span>Pricing Type</span>
+        <strong>{{ quick_costing.get_pricing_type_display|default:"Full Package" }}</strong>
+      </div>
     </div>
     {% if approval_status_label == "Approved" %}
       <p class="quick-quote-status-note">This quotation was approved through the Quick Costing Approval Workflow.</p>

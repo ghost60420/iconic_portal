@@ -94,6 +94,8 @@ def _invoice_region_for_costing(costing):
 
 
 def _quick_costing_market_and_currency(quick_costing):
+    if quick_costing.is_bangladesh_local_sewing:
+        return "bangladesh", "BDT"
     opportunity = getattr(quick_costing, "opportunity", None)
     lead = getattr(opportunity, "lead", None) if opportunity else None
     customer = None
@@ -231,7 +233,10 @@ def create_invoice_from_quick_costing(quick_costing, user=None):
     with transaction.atomic():
         quick_costing = (
             QuickCosting.objects.select_for_update()
-            .select_related("opportunity", "opportunity__lead", "opportunity__customer", "opportunity__lead__customer")
+            .select_related(
+                "opportunity", "opportunity__lead", "opportunity__customer",
+                "opportunity__lead__customer", "production_order",
+            )
             .get(pk=quick_costing.pk)
         )
 
@@ -252,12 +257,20 @@ def create_invoice_from_quick_costing(quick_costing, user=None):
         subtotal = _quick_money_for_invoice(
             summary.get("revenue"), source_currency, currency, exchange_rate
         )
-        shipping = _quick_money_for_invoice(
+        shipping = Decimal("0") if quick_costing.is_bangladesh_local_sewing else _quick_money_for_invoice(
             summary.get("shipping_cost_total"), source_currency, currency, exchange_rate
         )
         total = _money(subtotal + shipping)
-        invoice_type = "sample" if quick_costing.costing_purpose == QuickCosting.PURPOSE_SAMPLE else "bulk"
-        deposit_percentage = Decimal("100.00") if invoice_type == "sample" else Decimal("50.00")
+        invoice_type = (
+            "sewing_charge"
+            if quick_costing.is_bangladesh_local_sewing
+            else ("sample" if quick_costing.costing_purpose == QuickCosting.PURPOSE_SAMPLE else "bulk")
+        )
+        deposit_percentage = (
+            Decimal("0")
+            if invoice_type == "sewing_charge"
+            else (Decimal("100.00") if invoice_type == "sample" else Decimal("50.00"))
+        )
         opportunity = quick_costing.opportunity
         lead = getattr(opportunity, "lead", None) if opportunity else None
         customer = None
@@ -265,10 +278,18 @@ def create_invoice_from_quick_costing(quick_costing, user=None):
             customer = getattr(opportunity, "customer", None)
         if not customer and lead:
             customer = getattr(lead, "customer", None)
+        production_order = getattr(quick_costing, "production_order", None)
+        if quick_costing.is_bangladesh_local_sewing and not production_order:
+            raise CostingWorkflowError(
+                "Create the approved Bangladesh Local Sewing production order before invoicing."
+            )
+        if not customer and production_order:
+            customer = production_order.customer
 
         today = timezone.localdate()
         invoice = Invoice.objects.create(
             quick_costing=quick_costing,
+            order=production_order,
             customer=customer,
             invoice_number=_next_invoice_number(),
             issue_date=today,
@@ -285,7 +306,11 @@ def create_invoice_from_quick_costing(quick_costing, user=None):
             total_amount=total,
             paid_amount=Decimal("0"),
             status="sent",
-            notes=f"Converted from quick quotation {quick_costing.quotation_number or 'QC-' + str(quick_costing.pk)}.",
+            notes=(
+                f"Bangladesh Local Sewing · CMT / Sewing Charge · {quick_costing.quotation_number}"
+                if quick_costing.is_bangladesh_local_sewing
+                else f"Converted from quick quotation {quick_costing.quotation_number or 'QC-' + str(quick_costing.pk)}."
+            ),
             sewing_charge=Decimal("0"),
             other_internal_cost=Decimal("0"),
             internal_cost_note="",

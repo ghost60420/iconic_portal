@@ -97,6 +97,26 @@
     font-weight:950;
     white-space:nowrap;
   }
+  .cq-service-badge,
+  .cq-pricing-badge{
+    display:inline-flex;
+    align-items:center;
+    padding:5px 8px;
+    border-radius:999px;
+    font-size:11px;
+    font-weight:950;
+    white-space:nowrap;
+    border:1px solid rgba(96,165,250,0.42);
+    background:rgba(37,99,235,0.12);
+    color:#bfdbfe;
+  }
+  .cq-service-badge--bangladesh_local_sewing{
+    border-color:rgba(74,222,128,0.45);
+    background:rgba(22,163,74,0.12);
+    color:#bbf7d0;
+  }
+  .cq-pricing-badge{ border-color:rgba(245,196,81,0.45); background:rgba(245,196,81,0.1); color:#fde68a; }
+  .cq-money-label{ display:block; margin-bottom:3px; color:var(--cq-muted); font-size:9px; font-weight:900; text-transform:uppercase; letter-spacing:.04em; }
   .cq-empty{ padding:28px; color:var(--cq-muted); text-align:center; font-weight:850; }
   .cq-row-actions{ display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap; }
   @media (max-width: 980px){
@@ -176,15 +196,20 @@
       <thead>
         <tr>
           <th>Costing Type</th>
+          <th>Service Type</th>
+          <th>Pricing Type</th>
           <th>Quotation</th>
           <th>Lead</th>
           <th>Opportunity</th>
           <th>Client</th>
           <th>Salesperson</th>
           <th>Currency</th>
-          <th class="cq-right">Total</th>
+          <th class="cq-right">Revenue</th>
+          <th class="cq-right">Cost</th>
           <th class="cq-right">Profit</th>
           <th class="cq-right">Margin</th>
+          <th class="cq-right">Estimated Days</th>
+          <th class="cq-right">Daily Target</th>
           <th>Submitted</th>
           <th>Status</th>
           <th class="cq-right">Actions</th>
@@ -194,6 +219,8 @@
         {% for row in rows %}
           <tr>
             <td><strong>{{ row.costing_type }}</strong></td>
+            <td><span class="cq-service-badge cq-service-badge--{{ row.service_key }}">{{ row.service_type|default:"Canada Export" }}</span></td>
+            <td><span class="cq-pricing-badge">{{ row.pricing_type|default:"Full Package" }}</span></td>
             <td>
               <strong>{{ row.quotation_number }}</strong>
               <div class="cq-muted">{{ row.record_label }}</div>
@@ -203,9 +230,12 @@
             <td>{{ row.client_name }}</td>
             <td>{{ row.salesperson }}</td>
             <td>{{ row.currency }}</td>
-            <td class="cq-right">{{ row.total_amount|finance_money:row.currency }}</td>
-            <td class="cq-right">{% if row.cost_available %}{{ row.profit_amount|finance_money:row.currency }}{% else %}Cost unavailable{% endif %}</td>
-            <td class="cq-right">{% if row.cost_available %}{{ row.profit_margin|floatformat:2 }}%{% else %}Margin N/A{% endif %}</td>
+            <td class="cq-right"><span class="cq-money-label">{{ row.revenue_label }}</span>{{ row.total_amount|finance_money:row.currency }}</td>
+            <td class="cq-right"><span class="cq-money-label">{{ row.cost_label }}</span>{% if row.cost_available %}{{ row.cost_amount|finance_money:row.currency }}{% else %}Cost unavailable{% endif %}</td>
+            <td class="cq-right"><span class="cq-money-label">{{ row.profit_label }}</span>{% if row.cost_available %}{{ row.profit_amount|finance_money:row.currency }}{% else %}N/A{% endif %}</td>
+            <td class="cq-right"><span class="cq-money-label">{{ row.margin_label }}</span>{% if row.cost_available %}{{ row.profit_margin|floatformat:2 }}%{% else %}Margin N/A{% endif %}</td>
+            <td class="cq-right">{{ row.estimated_days|default:"-" }}</td>
+            <td class="cq-right">{% if row.daily_target != None %}{{ row.daily_target|floatformat:2 }} pcs/day{% else %}-{% endif %}</td>
             <td>{{ row.submitted_at|date:"Y-m-d H:i" }}</td>
             <td><span class="cq-status">{{ row.status_label }}</span></td>
             <td class="cq-right">
@@ -236,7 +266,7 @@
           </tr>
         {% empty %}
           <tr>
-            <td colspan="13"><div class="cq-empty">No quotations match the current queue filters.</div></td>
+            <td colspan="18"><div class="cq-empty">No quotations match the current queue filters.</div></td>
           </tr>
         {% endfor %}
       </tbody>
