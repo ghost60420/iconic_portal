@@ -4920,6 +4920,71 @@ class InvoicePayment(models.Model):
         return f"{self.invoice.invoice_number} payment {self.amount} {self.currency}"
 
 
+class SalesCommission(models.Model):
+    """Invoice-backed salesperson commission; ownership resolves through the invoice Lead."""
+
+    APPROVAL_PENDING = "pending"
+    APPROVAL_APPROVED = "approved"
+    APPROVAL_REJECTED = "rejected"
+    APPROVAL_CHOICES = [
+        (APPROVAL_PENDING, "Pending"),
+        (APPROVAL_APPROVED, "Approved"),
+        (APPROVAL_REJECTED, "Rejected"),
+    ]
+    PAID_UNPAID = "unpaid"
+    PAID_PAID = "paid"
+    PAID_CHOICES = [(PAID_UNPAID, "Unpaid"), (PAID_PAID, "Paid")]
+
+    invoice = models.ForeignKey("Invoice", on_delete=models.CASCADE, related_name="sales_commissions")
+    eligible_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    currency = models.CharField(max_length=3, choices=NEW_COSTING_CURRENCY_CHOICES)
+    commission_percent = models.DecimalField(max_digits=6, decimal_places=2)
+    commission_amount = models.DecimalField(max_digits=14, decimal_places=2, editable=False)
+    approval_status = models.CharField(max_length=12, choices=APPROVAL_CHOICES, default=APPROVAL_PENDING)
+    paid_status = models.CharField(max_length=10, choices=PAID_CHOICES, default=PAID_UNPAID)
+    paid_date = models.DateField(null=True, blank=True)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="approved_sales_commissions",
+    )
+    payment_reference = models.CharField(max_length=120, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["approval_status", "paid_status"], name="crm_salesco_approva_19e0df_idx"),
+            models.Index(fields=["currency"], name="crm_salesco_currenc_94f5fd_idx"),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.eligible_amount is not None and self.eligible_amount < 0:
+            raise ValidationError({"eligible_amount": "Eligible amount cannot be negative."})
+        if self.commission_percent is not None and not Decimal("0") <= self.commission_percent <= Decimal("100"):
+            raise ValidationError({"commission_percent": "Commission percent must be between 0 and 100."})
+        if self.invoice_id and self.currency != self.invoice.currency:
+            raise ValidationError({"currency": "Commission currency must match the invoice currency."})
+        if self.paid_status == self.PAID_PAID and not self.paid_date:
+            raise ValidationError({"paid_date": "Paid date is required when commission is paid."})
+
+    def save(self, *args, **kwargs):
+        self.commission_amount = (
+            (self.eligible_amount or Decimal("0"))
+            * (self.commission_percent or Decimal("0"))
+            / Decimal("100")
+        ).quantize(Decimal("0.01"))
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.invoice.invoice_number} commission {self.commission_amount} {self.currency}"
+
+
 ## ==============================
 # PRODUCTION ATTACHMENT
 ## ==============================

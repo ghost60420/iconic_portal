@@ -178,7 +178,7 @@ class CEOExecutiveDashboardTests(TestCase):
         with CaptureQueriesContext(connection) as captured:
             build_ceo_executive_context()
 
-        self.assertLessEqual(len(captured), 13)
+        self.assertLessEqual(len(captured), 10)
 
     def test_detailed_operations_dashboard_remains_available(self):
         response = self.client.get(reverse("ceo_operations_dashboard"))

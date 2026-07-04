@@ -12577,7 +12577,7 @@ def _advisor_answer(question, metrics):
     if any(word in q for word in ["sales", "pipeline", "lead", "opportunity", "conversion"]):
         return (
             f"Sales generated {metrics['leads_period']} lead(s) and {metrics['opp_period']} opportunity row(s) "
-            f"in this period. Open pipeline is {_format_money(metrics['open_pipeline_value'])}, with a "
+            f"in this period. Open pipeline is {metrics['open_pipeline_display']}, with a "
             f"{metrics['conversion_rate']:.1f}% lead-to-opportunity conversion rate. "
             f"{metrics['overdue_followups']} follow-up(s) are overdue."
         )
@@ -12643,21 +12643,25 @@ def ai_executive_advisor(request):
     opp_period = Opportunity.objects.filter(created_date__range=(start_period, today)).count()
     prev_opp_period = Opportunity.objects.filter(created_date__range=(previous_start, previous_end)).count()
     open_pipeline_qs = open_pipeline_queryset(Opportunity.objects.all())
-    open_opps = open_pipeline_qs.count()
-    open_pipeline_value = _ceo_decimal(open_pipeline_qs.aggregate(total=Sum("order_value")).get("total"))
+    open_pipeline_summary = summarize_pipeline(open_pipeline_qs, apply_open_definition=False)
+    open_opps = open_pipeline_summary["count"]
+    open_pipeline_values = open_pipeline_summary["rows"]
+    open_pipeline_display = _format_currency_summary(open_pipeline_values)
     won_period = Opportunity.objects.filter(stage="Closed Won", updated_at__date__range=(start_period, today)).count()
     lost_period = Opportunity.objects.filter(stage="Closed Lost", updated_at__date__range=(start_period, today)).count()
     conversion_rate = round((opp_period / leads_period) * 100, 1) if leads_period else 0
     prev_conversion_rate = round((prev_opp_period / prev_leads_period) * 100, 1) if prev_leads_period else 0
     pipeline_rows = list(
-        open_pipeline_qs.values("stage")
-        .annotate(count=Count("id"), value=Sum("order_value"))
+        _with_opportunity_kpi_value(open_pipeline_qs)
+        .values("stage", "kpi_currency")
+        .annotate(count=Count("id"), value=Sum("kpi_order_value"))
         .order_by("-value", "-count")[:10]
     )
     pipeline_rows = _ceo_bar_rows(
         [
             {
                 "label": row.get("stage") or "Unknown",
+                "currency": (row.get("kpi_currency") or "CAD").upper(),
                 "count": int(row.get("count") or 0),
                 "value": _ceo_decimal(row.get("value")),
             }
@@ -12852,7 +12856,7 @@ def ai_executive_advisor(request):
     sales_score = _advisor_score(
         82,
         penalties=[min(overdue_followups * 2, 18), 8 if conversion_rate < prev_conversion_rate else 0],
-        bonuses=[6 if open_pipeline_value > 0 else 0],
+        bonuses=[6 if open_opps else 0],
     )
     production_score = _advisor_score(
         84,
@@ -12908,7 +12912,7 @@ def ai_executive_advisor(request):
     summary_cards = [
         {"label": "Business Health", "value": f"{overall_score}/100", "note": "Composite department score.", "tone": _advisor_score_tone(overall_score)},
         {"label": "30-Day Cash Forecast", "value": _format_money(forecast_cash_30), "note": f"Collections {_format_money(receivables_30)} less payments {_format_money(payables_30)}.", "tone": "good" if forecast_cash_30 >= 0 else "bad"},
-        {"label": "Open Pipeline", "value": _format_money(open_pipeline_value), "note": f"{open_opps} open opportunity row(s).", "tone": "blue"},
+        {"label": "Open Pipeline", "value": open_pipeline_display, "note": f"{open_opps} open opportunity row(s); currencies are not combined.", "tone": "blue"},
         {"label": "Overdue Receivables", "value": _format_count(overdue_invoice_count), "note": f"Open AR {_format_money(invoice_open_total)}.", "tone": "bad" if overdue_invoice_count else "good"},
         {"label": "Sales Follow-Ups", "value": _format_count(overdue_followups), "note": f"{due_soon_followups} due in the next 7 days.", "tone": "warn" if overdue_followups else "good"},
         {"label": "Production Warnings", "value": _format_count(production_delayed), "note": f"{production_hold} order(s) on hold.", "tone": "warn" if production_delayed else "good"},
@@ -12926,7 +12930,7 @@ def ai_executive_advisor(request):
         "invoice_open_total": invoice_open_total,
         "leads_period": leads_period,
         "opp_period": opp_period,
-        "open_pipeline_value": open_pipeline_value,
+        "open_pipeline_display": open_pipeline_display,
         "conversion_rate": conversion_rate,
         "overdue_followups": overdue_followups,
         "production_running": production_running,

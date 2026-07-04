@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load humanize %}
+{% load humanize crm_extras %}
 {% block content %}
 
 <style>
@@ -371,7 +371,7 @@
                 <div class="aia-bar aia-bar-value"><span style="width:{{ row.value_bar }}%"></span></div>
                 <div class="aia-bar aia-bar-count"><span style="width:{{ row.count_bar }}%"></span></div>
               </div>
-              <div class="aia-right"><span class="aia-badge aia-badge--blue">CAD {{ row.value|floatformat:0|intcomma }}</span></div>
+              <div class="aia-right"><span class="aia-badge aia-badge--blue">{{ row.value|finance_money:row.currency }}</span></div>
             </div>
           {% endfor %}
         {% else %}

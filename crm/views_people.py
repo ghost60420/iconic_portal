@@ -37,10 +37,10 @@ from crm.services.operations_permissions import (
     has_operations_role,
     operations_group_names,
 )
-from crm.services.sales_profiles import (
+from crm.services.sales_attribution import (
     build_employee_sales_statistics,
-    build_salesperson_profile,
-    build_team_performance,
+    build_sales_kpis,
+    build_team_sales_kpis,
 )
 
 
@@ -414,7 +414,7 @@ def salesperson_profile(request, user_id=None):
         return HttpResponseForbidden("You can only view your own sales profile.")
     if not has_operations_role(target_user, ROLE_SALES):
         return HttpResponseForbidden("This employee is not assigned to the Sales role.")
-    context = build_salesperson_profile(target_user)
+    context = build_sales_kpis(target_user)
     context.update({"salesperson": target_user, "viewing_self": viewing_self})
     response = render(request, "crm/people/salesperson_profile.html", context)
     response["Server-Timing"] = f"sales-profile;dur={(time.perf_counter() - started) * 1000:.1f}"
@@ -426,7 +426,7 @@ def team_performance(request):
     started = time.perf_counter()
     if not can_view_team_performance(request.user):
         return HttpResponseForbidden("Team Performance is restricted to CEO and management users.")
-    context = build_team_performance()
+    context = build_team_sales_kpis()
     response = render(request, "crm/people/team_performance.html", context)
     response["Server-Timing"] = f"team-performance;dur={(time.perf_counter() - started) * 1000:.1f}"
     return response
