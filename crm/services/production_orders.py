@@ -3,13 +3,99 @@ from decimal import Decimal
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from crm.models import CostingAuditLog, CostingHeader, ProductionOrder
+from crm.models import CostingAuditLog, CostingHeader, ProductionOrder, ProductionStage, QuickCosting
 from crm.services.costing_workflow import CostingWorkflowError, get_costing_quote_amounts
 from crm.services.order_lifecycle import create_lifecycle_from_production
 
 
 class ProductionOrderCreationError(Exception):
     pass
+
+
+def create_production_order_from_approved_quick_costing(quick_costing, user=None):
+    """Create the single Bangladesh Local Sewing order for an approved CMT Quick Costing."""
+    if not quick_costing.pk:
+        raise ProductionOrderCreationError("The Quick Costing must be saved before production can begin.")
+
+    with transaction.atomic():
+        quick_costing = (
+            QuickCosting.objects.select_for_update()
+            .select_related("opportunity", "opportunity__lead", "opportunity__customer", "opportunity__lead__customer")
+            .get(pk=quick_costing.pk)
+        )
+        if quick_costing.effective_pricing_type != QuickCosting.PRICING_CMT:
+            raise ProductionOrderCreationError("Only CMT / Sewing Only Quick Costing creates local sewing production.")
+        if quick_costing.status != QuickCosting.STATUS_APPROVED or not quick_costing.approved_at:
+            raise ProductionOrderCreationError("CEO approval is required before production can begin.")
+        if quick_costing.currency != "BDT":
+            raise ProductionOrderCreationError("Bangladesh Local Sewing must use BDT.")
+        if not quick_costing.sewing_charge_per_piece_bdt or quick_costing.sewing_charge_per_piece_bdt <= 0:
+            raise ProductionOrderCreationError("A positive sewing charge is required before production.")
+
+        existing = ProductionOrder.objects.filter(source_quick_costing=quick_costing).first()
+        if existing:
+            return existing, False
+
+        summary = quick_costing.calculation_summary()
+        opportunity = quick_costing.opportunity
+        lead = getattr(opportunity, "lead", None) if opportunity else None
+        customer = getattr(opportunity, "customer", None) if opportunity else None
+        if not customer and lead:
+            customer = getattr(lead, "customer", None)
+        approved_summary = {
+            "pricing_type": quick_costing.effective_pricing_type,
+            "service_type": quick_costing.service_type_label,
+            "sewing_charge_per_piece_bdt": str(quick_costing.sewing_charge_per_piece_bdt or Decimal("0")),
+            "sewing_cost_per_piece_bdt": (
+                str(quick_costing.sewing_cost_per_piece_bdt)
+                if quick_costing.sewing_cost_per_piece_bdt is not None
+                else None
+            ),
+            "extra_local_cost_bdt": str(quick_costing.extra_local_cost_bdt or Decimal("0")),
+            "total_sewing_revenue_bdt": str(summary["revenue"]),
+            "total_sewing_cost_bdt": str(summary["total_cost"]) if summary["cost_available"] else None,
+        }
+        try:
+            order = ProductionOrder.objects.create(
+                source_quick_costing=quick_costing,
+                opportunity=opportunity,
+                lead=lead,
+                customer=customer,
+                title=quick_costing.project_name,
+                factory_location="bd",
+                order_type="sewing_charge",
+                production_order_type="bulk",
+                qty_total=quick_costing.quantity,
+                style_name=quick_costing.project_name,
+                sewing_charge_per_piece_bdt=quick_costing.sewing_charge_per_piece_bdt,
+                sewing_cost_per_piece_bdt=quick_costing.sewing_cost_per_piece_bdt,
+                extra_local_cost_bdt=quick_costing.extra_local_cost_bdt,
+                completed_quantity=0,
+                quotation_number_snapshot=quick_costing.quotation_number or "",
+                client_name_snapshot=quick_costing.buyer_name,
+                brand_name_snapshot=quick_costing.account_brand,
+                product_name_snapshot=quick_costing.project_name,
+                product_type_snapshot=quick_costing.product_type,
+                approved_currency="BDT",
+                approved_selling_price=quick_costing.sewing_charge_per_piece_bdt,
+                approved_total_value=summary["revenue"],
+                approved_costing_summary=approved_summary,
+                approved_price_locked_at=quick_costing.approved_at,
+                created_by=_user_or_none(user),
+            )
+        except (IntegrityError, ValueError) as exc:
+            existing = ProductionOrder.objects.filter(source_quick_costing=quick_costing).first()
+            if existing:
+                return existing, False
+            raise ProductionOrderCreationError("Could not create the local sewing production order.") from exc
+
+        ProductionStage.objects.get_or_create(
+            order=order,
+            stage_key="sewing",
+            defaults={"display_name": "Sewing"},
+        )
+        create_lifecycle_from_production(order, user=user)
+        return order, True
 
 
 def _user_or_none(user):

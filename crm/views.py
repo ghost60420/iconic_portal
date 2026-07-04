@@ -12421,6 +12421,9 @@ def ceo_operations_dashboard(request):
                 {"label": "Bangladesh Local Orders", "value": _format_count(local_sewing_summary["order_count"]), "note": "Bangladesh sewing-charge production orders.", "tone": "blue"},
                 {"label": "Sewing Orders In Progress", "value": _format_count(local_sewing_summary["in_progress_count"]), "note": "Open local sewing orders.", "tone": "blue"},
                 {"label": "Sewing Orders Completed", "value": _format_count(local_sewing_summary["completed_count"]), "note": "Completed local sewing orders.", "tone": "good"},
+                {"label": "Approved Bangladesh Sewing", "value": _format_count(local_sewing_summary["approved_count"]), "note": "CEO-approved CMT Quick Costing.", "tone": "good"},
+                {"label": "Pending CEO Approval", "value": _format_count(local_sewing_summary["pending_approval_count"]), "note": "Bangladesh sewing costings awaiting CEO decision.", "tone": "warn"},
+                {"label": "Rejected", "value": _format_count(local_sewing_summary["rejected_count"]), "note": "Rejected Bangladesh sewing costings.", "tone": "warn"},
             ]
         )
     if not can_view_executive_financials:
@@ -14502,6 +14505,9 @@ def main_dashboard(request):
                 {"title": "Bangladesh Local Orders", "value": f"{local_sewing_summary['order_count']:,}", "note": "Bangladesh sewing-charge production orders.", "trend_text": f"{local_sewing_summary['in_progress_count']:,} in progress", "trend_tone": "flat", "accent": "pipeline", "icon": "list-checks"},
                 {"title": "Sewing Orders In Progress", "value": f"{local_sewing_summary['in_progress_count']:,}", "note": "Open Bangladesh local sewing orders.", "trend_text": "Current production", "trend_tone": "flat", "accent": "pipeline", "icon": "activity"},
                 {"title": "Sewing Orders Completed", "value": f"{local_sewing_summary['completed_count']:,}", "note": "Completed Bangladesh local sewing orders.", "trend_text": "Production status", "trend_tone": "up", "accent": "pipeline", "icon": "circle-check"},
+                {"title": "Approved Bangladesh Sewing", "value": f"{local_sewing_summary['approved_count']:,}", "note": "CEO-approved CMT Quick Costing.", "trend_text": "Approval workflow", "trend_tone": "up", "accent": "pipeline", "icon": "circle-check"},
+                {"title": "Pending CEO Approval", "value": f"{local_sewing_summary['pending_approval_count']:,}", "note": "Bangladesh sewing costings awaiting CEO decision.", "trend_text": "Approval workflow", "trend_tone": "flat", "accent": "pipeline", "icon": "clock"},
+                {"title": "Rejected", "value": f"{local_sewing_summary['rejected_count']:,}", "note": "Rejected Bangladesh sewing costings.", "trend_text": "Approval workflow", "trend_tone": "flat", "accent": "pipeline", "icon": "circle-x"},
             ]
         )
     if not can_view_order_lifecycle_profit:

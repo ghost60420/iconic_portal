@@ -1,4 +1,5 @@
 {% extends "crm/base.html" %}
+{% load crm_extras %}
 
 {% block content %}
 <style>
@@ -473,6 +474,9 @@
       {% elif quick_costing.status != "approved" %}
         <span class="quick-disabled-note">CEO approval is required before creating a quotation.</span>
       {% endif %}
+      {% if production_order %}
+        <a class="quick-btn quick-btn-primary" href="{% url 'production_detail' production_order.pk %}">Open Production Order</a>
+      {% endif %}
       {% if quick_costing.opportunity %}
         <a class="quick-btn" href="{% url 'opportunity_detail' quick_costing.opportunity.pk %}">Open Opportunity</a>
       {% endif %}
@@ -502,6 +506,9 @@
           <div class="quick-meta-row"><span>Style / Project</span><strong>{{ quick_costing.project_name }}</strong></div>
           <div class="quick-meta-row"><span>Product</span><strong>{{ quick_costing.get_product_type_display }}</strong></div>
           <div class="quick-meta-row"><span>Costing Purpose</span><strong><span class="quick-type-badge purpose-{{ quick_costing.costing_purpose }}">{{ quick_costing.purpose_label }}</span></strong></div>
+          <div class="quick-meta-row"><span>Pricing Type</span><strong>{{ quick_costing.get_pricing_type_display|default:"Full Package" }}</strong></div>
+          <div class="quick-meta-row"><span>Service Type</span><strong>{{ quick_costing.service_type_label }}</strong></div>
+          {% if quick_costing.is_bangladesh_local_sewing %}<div class="quick-meta-row"><span>Factory</span><strong>Bangladesh</strong></div>{% endif %}
           <div class="quick-meta-row"><span>Status</span><strong><span class="quick-type-badge status-{{ quick_costing.status }}">{{ quick_costing.get_status_display }}</span></strong></div>
           <div class="quick-meta-row"><span>Approval Status</span><strong><span class="quick-type-badge status-{{ approval_status_label|lower }}">{{ approval_status_label }}</span></strong></div>
           <div class="quick-meta-row"><span>Currency</span><strong>{{ calc.display.currency }}</strong></div>
@@ -514,6 +521,24 @@
       </div>
     </details>
 
+    {% if quick_costing.is_bangladesh_local_sewing %}
+      <details class="quick-detail-card" open>
+        <summary>Bangladesh Local Sewing</summary>
+        <div class="quick-detail-body">
+          <div class="quick-summary-grid">
+            <div class="quick-summary-row"><span>Sewing Charge Per Piece</span><strong>{{ quick_costing.sewing_charge_per_piece_bdt|finance_money:"BDT" }}</strong></div>
+            <div class="quick-summary-row"><span>Total Sewing Revenue</span><strong>{{ calc.total_sales_order|finance_money:"BDT" }}</strong></div>
+            <div class="quick-summary-row"><span>Sewing Cost Per Piece</span><strong>{% if calc.cost_available %}{{ quick_costing.sewing_cost_per_piece_bdt|finance_money:"BDT" }}{% else %}Cost unavailable{% endif %}</strong></div>
+            <div class="quick-summary-row"><span>Extra Local Cost</span><strong>{{ quick_costing.extra_local_cost_bdt|default_if_none:0|finance_money:"BDT" }}</strong></div>
+            <div class="quick-summary-row"><span>Total Sewing Cost</span><strong>{% if calc.cost_available %}{{ calc.total_cost_order|finance_money:"BDT" }}{% else %}Cost unavailable{% endif %}</strong></div>
+            <div class="quick-summary-row"><span>Profit</span><strong>{% if calc.cost_available %}{{ calc.net_profit_total|finance_money:"BDT" }}{% else %}N/A{% endif %}</strong></div>
+            <div class="quick-summary-row"><span>Margin</span><strong>{% if calc.cost_available %}{{ calc.net_profit_margin_percent|floatformat:2 }}%{% else %}Margin N/A{% endif %}</strong></div>
+          </div>
+        </div>
+      </details>
+    {% endif %}
+
+    {% if not quick_costing.is_bangladesh_local_sewing %}
     <details class="quick-detail-card" open>
       <summary>2. Material Cost</summary>
       <div class="quick-detail-body">
@@ -579,6 +604,7 @@
         </div>
       </div>
     </details>
+    {% endif %}
 
     <details class="quick-detail-card" open>
       <summary>6. Live Order Summary</summary>

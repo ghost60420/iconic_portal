@@ -5,6 +5,7 @@ from django.db.utils import OperationalError, ProgrammingError
 from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
+from django.core.exceptions import ValidationError
 from decimal import Decimal, ROUND_HALF_UP
 from .models_access import UserAccess
 from .models_platform import (
@@ -2009,6 +2010,14 @@ class QuickCosting(models.Model):
         (PURPOSE_SAMPLE, "Sample"),
         (PURPOSE_BULK, "Bulk Production"),
     ]
+    PRICING_FULL_PACKAGE = "full_package"
+    PRICING_FOB = "fob"
+    PRICING_CMT = "cmt_sewing"
+    PRICING_TYPE_CHOICES = [
+        (PRICING_FULL_PACKAGE, "Full Package"),
+        (PRICING_FOB, "FOB"),
+        (PRICING_CMT, "CMT / Sewing Only"),
+    ]
     STATUS_DRAFT = "draft"
     STATUS_APPROVED = "approved"
     STATUS_REJECTED = "rejected"
@@ -2057,6 +2066,13 @@ class QuickCosting(models.Model):
         default=PURPOSE_BULK,
         db_index=True,
     )
+    pricing_type = models.CharField(
+        max_length=20,
+        choices=PRICING_TYPE_CHOICES,
+        null=True,
+        blank=True,
+        db_index=True,
+    )
     quantity = models.PositiveIntegerField(default=1)
     exchange_rate_bdt_per_cad = models.DecimalField(
         max_digits=12,
@@ -2091,6 +2107,24 @@ class QuickCosting(models.Model):
     packaging_cost_per_piece = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     target_margin_percent = models.DecimalField(
         max_digits=6,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    sewing_charge_per_piece_bdt = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    sewing_cost_per_piece_bdt = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    extra_local_cost_bdt = models.DecimalField(
+        max_digits=14,
         decimal_places=2,
         null=True,
         blank=True,
@@ -2157,6 +2191,52 @@ class QuickCosting(models.Model):
         return "Bulk Production Costing"
 
     @property
+    def effective_pricing_type(self):
+        return self.pricing_type or self.PRICING_FULL_PACKAGE
+
+    @property
+    def is_bangladesh_local_sewing(self):
+        return self.effective_pricing_type == self.PRICING_CMT
+
+    @property
+    def service_type_label(self):
+        return "Bangladesh Local Sewing" if self.is_bangladesh_local_sewing else "Canada Export"
+
+    def clean(self):
+        super().clean()
+        if self.is_bangladesh_local_sewing:
+            if self.currency != "BDT":
+                raise ValidationError({"currency": "CMT / Sewing Only must use BDT."})
+            if not self.sewing_charge_per_piece_bdt or self.sewing_charge_per_piece_bdt <= 0:
+                raise ValidationError(
+                    {"sewing_charge_per_piece_bdt": "Sewing charge must be greater than zero."}
+                )
+            if self.sewing_cost_per_piece_bdt is not None and self.sewing_cost_per_piece_bdt < 0:
+                raise ValidationError({"sewing_cost_per_piece_bdt": "Sewing cost cannot be negative."})
+            if self.extra_local_cost_bdt is not None and self.extra_local_cost_bdt < 0:
+                raise ValidationError({"extra_local_cost_bdt": "Extra local cost cannot be negative."})
+        if (
+            self.created_by_id
+            and self.approved_by_id == self.created_by_id
+            and self.approved_by
+            and not self.approved_by.is_superuser
+        ):
+            raise ValidationError("The costing creator cannot approve their own Quick Costing.")
+
+    def save(self, *args, **kwargs):
+        if self.approved_by_id and self.created_by_id == self.approved_by_id:
+            previous_approver_id = None
+            if self.pk:
+                previous_approver_id = (
+                    type(self).objects.filter(pk=self.pk).values_list("approved_by_id", flat=True).first()
+                )
+            if previous_approver_id != self.approved_by_id:
+                approver = self.approved_by
+                if approver and not approver.is_superuser:
+                    raise ValidationError("The costing creator cannot approve their own Quick Costing.")
+        return super().save(*args, **kwargs)
+
+    @property
     def is_locked(self):
         return self.status in {
             self.STATUS_APPROVED,
@@ -2169,6 +2249,60 @@ class QuickCosting(models.Model):
 
     def calculation_summary(self):
         quantity = Decimal(self.quantity or 0)
+        if self.is_bangladesh_local_sewing:
+            zero = Decimal("0")
+            charge = self.sewing_charge_per_piece_bdt or zero
+            cost = self.sewing_cost_per_piece_bdt
+            extra_cost = self.extra_local_cost_bdt or zero
+            revenue = charge * quantity
+            cost_available = cost is not None and cost > 0
+            total_cost = (cost * quantity + extra_cost) if cost_available else zero
+            profit = revenue - total_cost if cost_available else zero
+            cost_per_piece = (total_cost / quantity) if quantity and cost_available else zero
+            profit_per_piece = (profit / quantity) if quantity and cost_available else zero
+            margin = ((profit / revenue) * Decimal("100")) if revenue and cost_available else zero
+            return {
+                "quantity": quantity,
+                "currency": "BDT",
+                "is_legacy_currency": False,
+                "exchange_rate": None,
+                "uses_detailed_costing": False,
+                "fabric_cost_per_kg": zero,
+                "fabric_consumption_kg_per_piece": zero,
+                "fabric_cost_per_piece": zero,
+                "making_cost_per_piece": cost or zero,
+                "print_embroidery_cost_per_piece": zero,
+                "trims_cost_per_piece": zero,
+                "packaging_cost_per_piece": zero,
+                "material_cost_total": zero,
+                "material_cost_per_piece": zero,
+                "production_cost_total": total_cost,
+                "production_cost_per_piece": cost_per_piece,
+                "other_expenses_total": extra_cost,
+                "other_expenses_per_piece": (extra_cost / quantity) if quantity else zero,
+                "shipping_cost_total": zero,
+                "shipping_cost_per_piece": zero,
+                "total_cost": total_cost,
+                "cost_per_piece": cost_per_piece,
+                "selling_price_per_piece": charge,
+                "selling_price_total": revenue,
+                "revenue": revenue,
+                "gross_profit_per_piece": profit_per_piece,
+                "gross_profit_total": profit,
+                "commission_per_piece": zero,
+                "commission_total": zero,
+                "commission_percent": None,
+                "net_profit_per_piece": profit_per_piece,
+                "net_profit_total": profit,
+                "gross_profit_margin_percent": margin,
+                "net_profit_margin_percent": margin,
+                "target_margin_percent": self.target_margin_percent,
+                "margin_status": "Cost unavailable" if not cost_available else "Calculated",
+                "profit_per_piece": profit_per_piece,
+                "total_profit": profit,
+                "profit_margin_percent": margin,
+                "cost_available": cost_available,
+            }
         exchange_rate = self.exchange_rate_bdt_per_cad or None
         material_cost = self.material_cost or Decimal("0")
         production_cost = self.production_cost or Decimal("0")
@@ -3495,6 +3629,7 @@ class ProductionOrder(models.Model):
 
     APPROVED_SNAPSHOT_FIELDS = (
         "source_quotation_id",
+        "source_quick_costing_id",
         "quotation_number_snapshot",
         "client_name_snapshot",
         "brand_name_snapshot",
@@ -3561,6 +3696,14 @@ class ProductionOrder(models.Model):
         blank=True,
         editable=False,
         related_name="auto_production_order",
+    )
+    source_quick_costing = models.OneToOneField(
+        "QuickCosting",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        editable=False,
+        related_name="production_order",
     )
     quotation_number_snapshot = models.CharField(
         max_length=50,
@@ -3870,6 +4013,17 @@ class ProductionOrder(models.Model):
             if self.order_code:
                 self.order_code = self.order_code.strip()
             return super().save(*args, **kwargs)
+
+        if self.order_type == "sewing_charge":
+            source = self.source_quick_costing
+            if not source:
+                raise ValidationError(
+                    "Bangladesh Local Sewing production requires an approved Quick Costing."
+                )
+            if source.effective_pricing_type != QuickCosting.PRICING_CMT:
+                raise ValidationError("The source Quick Costing must use CMT / Sewing Only pricing.")
+            if source.status != QuickCosting.STATUS_APPROVED:
+                raise ValidationError("The source Quick Costing must be CEO approved.")
 
         supplied_order_code = (self.order_code or "").strip()
         if supplied_order_code:
@@ -4642,6 +4796,21 @@ class Invoice(models.Model):
 
     def __str__(self):
         return f"Invoice {self.invoice_number}"
+
+    def save(self, *args, **kwargs):
+        if self._state.adding and self.order_id:
+            order = self.order
+            if order.order_type == "sewing_charge" and order.factory_location == "bd":
+                source = order.source_quick_costing
+                if not source or not source.approved_at:
+                    raise ValidationError(
+                        "Bangladesh Local Sewing invoices require a CEO-approved Quick Costing."
+                    )
+                if self.quick_costing_id != source.pk:
+                    raise ValidationError(
+                        "The invoice must retain the Production Order's approved Quick Costing."
+                    )
+        return super().save(*args, **kwargs)
 
     @property
     def balance(self):

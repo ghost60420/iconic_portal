@@ -87,6 +87,9 @@
       <small>Active operational units / {{ total_reject }} rejected / {{ reject_percent }} percent</small>
     </article>
     <article class="production-stat"><span>Bangladesh Local Orders</span><strong>{{ local_sewing_summary.order_count }}</strong><small>{{ local_sewing_summary.in_progress_count }} in progress</small></article>
+    <article class="production-stat"><span>Approved Bangladesh Sewing</span><strong>{{ local_sewing_summary.approved_count }}</strong><small>CEO-approved Quick Costing</small></article>
+    <article class="production-stat"><span>Pending CEO Approval</span><strong>{{ local_sewing_summary.pending_approval_count }}</strong><small>Bangladesh sewing costings</small></article>
+    <article class="production-stat"><span>Rejected</span><strong>{{ local_sewing_summary.rejected_count }}</strong><small>Bangladesh sewing costings</small></article>
     <article class="production-stat"><span>Sewing Orders Completed</span><strong>{{ local_sewing_summary.completed_count }}</strong><small>Bangladesh local sewing</small></article>
     {% if can_view_local_sewing_financials %}
       <article class="production-stat"><span>Bangladesh Sewing Revenue</span><strong>{{ local_sewing_summary.total_sewing_revenue|finance_money:"BDT" }}</strong><small>Native BDT</small></article>

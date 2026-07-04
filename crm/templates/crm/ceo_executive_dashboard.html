@@ -43,6 +43,9 @@
     <article class="exec-card"><h2>Bangladesh Sewing Profit</h2><div class="exec-number">{% if local_sewing_summary.profit != None %}{{ local_sewing_summary.profit|finance_money:"BDT" }}{% else %}N/A{% endif %}</div><div class="exec-muted">{% if local_sewing_summary.margin != None %}{{ local_sewing_summary.margin|floatformat:2 }}% margin{% else %}Margin N/A{% endif %}</div></article>
     <article class="exec-card"><h2>Bangladesh Sewing Margin</h2><div class="exec-number">{% if local_sewing_summary.margin != None %}{{ local_sewing_summary.margin|floatformat:2 }}%{% else %}Margin N/A{% endif %}</div><div class="exec-muted">Requires positive cost</div></article>
     <article class="exec-card"><h2>Bangladesh Local Orders</h2><div class="exec-number">{{ local_sewing_summary.order_count }}</div><div class="exec-muted">{{ local_sewing_summary.in_progress_count }} in progress</div></article>
+    <article class="exec-card"><h2>Approved Bangladesh Sewing</h2><div class="exec-number">{{ local_sewing_summary.approved_count }}</div><div class="exec-muted">CEO-approved Quick Costing</div></article>
+    <article class="exec-card {% if local_sewing_summary.pending_approval_count %}exec-card--warn{% else %}exec-card--good{% endif %}"><h2>Pending CEO Approval</h2><div class="exec-number">{{ local_sewing_summary.pending_approval_count }}</div><div class="exec-muted">Bangladesh sewing costings</div></article>
+    <article class="exec-card"><h2>Rejected</h2><div class="exec-number">{{ local_sewing_summary.rejected_count }}</div><div class="exec-muted">Bangladesh sewing costings</div></article>
     <article class="exec-card"><h2>Sewing Orders In Progress</h2><div class="exec-number">{{ local_sewing_summary.in_progress_count }}</div></article>
     <article class="exec-card"><h2>Sewing Orders Completed</h2><div class="exec-number">{{ local_sewing_summary.completed_count }}</div></article>
   </section>

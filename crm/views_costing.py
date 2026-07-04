@@ -49,6 +49,7 @@ from .services.order_lifecycle import create_lifecycle_from_costing
 from .services.operations_permissions import ROLE_SALES, has_operations_role
 from .services.production_orders import (
     ProductionOrderCreationError,
+    create_production_order_from_approved_quick_costing,
     create_production_order_from_approved_quotation,
 )
 from .services.workflow_visibility import build_workflow_visibility_context
@@ -749,6 +750,9 @@ def _advanced_approval_queue_row(costing):
     return {
         "record": costing,
         "costing_type": "Advanced",
+        "service_type": "Canada Export",
+        "service_key": "canada_export",
+        "pricing_type": "FOB",
         "quotation_number": costing.quotation_number or "-",
         "record_label": f"COST-{costing.pk}",
         "lead_id": getattr(lead, "lead_id", "") or "",
@@ -762,9 +766,16 @@ def _advanced_approval_queue_row(costing):
         "salesperson": _quotation_salesperson_label(costing) or "Not assigned",
         "currency": costing.currency or "BDT",
         "total_amount": total_amount,
+        "cost_amount": amounts["standard_cost_total"],
         "profit_amount": profit_amount,
         "profit_margin": profit_margin,
         "cost_available": cost_available,
+        "revenue_label": "Revenue",
+        "cost_label": "Cost",
+        "profit_label": "Profit",
+        "margin_label": "Margin",
+        "estimated_days": None,
+        "daily_target": None,
         "submitted_at": costing.quoted_at or costing.created_at,
         "status_key": status_key,
         "status_label": status_label,
@@ -786,9 +797,33 @@ def _quick_approval_queue_row(quick_costing):
     salesperson = quick_costing.approval_submitted_by or quick_costing.created_by
     if not salesperson and getattr(lead, "assigned_to", None):
         salesperson = lead.assigned_to
+    production_order = getattr(quick_costing, "production_order", None)
+    estimated_days = None
+    daily_target = None
+    if quick_costing.is_bangladesh_local_sewing and production_order:
+        stages = list(production_order.stages.all())
+        sewing_stage = next((stage for stage in stages if stage.stage_key == "sewing"), None)
+        start_date = (
+            getattr(sewing_stage, "planned_start", None)
+            or getattr(sewing_stage, "actual_start", None)
+        )
+        end_date = (
+            getattr(sewing_stage, "planned_end", None)
+            or production_order.bulk_deadline
+            or getattr(sewing_stage, "actual_end", None)
+        )
+        if start_date and end_date and end_date >= start_date:
+            estimated_days = (end_date - start_date).days + 1
+            if estimated_days > 0:
+                daily_target = (
+                    Decimal(quick_costing.quantity or 0) / Decimal(estimated_days)
+                ).quantize(Decimal("0.01"))
     return {
         "record": quick_costing,
         "costing_type": "Quick",
+        "service_type": quick_costing.service_type_label,
+        "service_key": "bangladesh_local_sewing" if quick_costing.is_bangladesh_local_sewing else "canada_export",
+        "pricing_type": quick_costing.get_pricing_type_display() if quick_costing.pricing_type else "Full Package",
         "quotation_number": quick_costing.quotation_number or "-",
         "record_label": f"QC-{quick_costing.pk}",
         "lead_id": getattr(lead, "lead_id", "") or "",
@@ -802,9 +837,16 @@ def _quick_approval_queue_row(quick_costing):
         "salesperson": _display_user(salesperson) or "Not assigned",
         "currency": quick_costing.currency or "BDT",
         "total_amount": calc["total_sales_order"],
+        "cost_amount": calc["total_cost_order"],
         "profit_amount": calc["net_profit_total"],
         "profit_margin": calc["net_profit_margin_percent"] if calc["cost_available"] else None,
         "cost_available": calc["cost_available"],
+        "revenue_label": "Sewing Revenue" if quick_costing.is_bangladesh_local_sewing else "Revenue",
+        "cost_label": "Sewing Cost" if quick_costing.is_bangladesh_local_sewing else "Cost",
+        "profit_label": "Sewing Profit" if quick_costing.is_bangladesh_local_sewing else "Profit",
+        "margin_label": "Sewing Margin" if quick_costing.is_bangladesh_local_sewing else "Margin",
+        "estimated_days": estimated_days,
+        "daily_target": daily_target,
         "submitted_at": quick_costing.approval_submitted_at or quick_costing.updated_at,
         "status_key": status_key,
         "status_label": status_label,
@@ -856,8 +898,9 @@ def ceo_quotation_approval_queue(request):
             "approval_submitted_by",
             "approved_by",
             "rejected_by",
+            "production_order",
         )
-        .prefetch_related("invoices")
+        .prefetch_related("invoices", "production_order__stages")
         .filter(
             Q(approval_submitted_at__isnull=False)
             | ~Q(status=QuickCosting.STATUS_DRAFT)
@@ -1262,7 +1305,10 @@ def quick_costing_detail(request, pk):
     if denied:
         return denied
     quick_costing = get_object_or_404(
-        QuickCosting.objects.select_related("created_by", "opportunity", "opportunity__lead", "approved_by", "rejected_by", "quoted_by"),
+        QuickCosting.objects.select_related(
+            "created_by", "opportunity", "opportunity__lead", "approved_by",
+            "rejected_by", "quoted_by", "production_order",
+        ),
         pk=pk,
     )
     calc = _quick_costing_calc(quick_costing)
@@ -1280,6 +1326,7 @@ def quick_costing_detail(request, pk):
         "quick_costing": quick_costing,
         "calc": calc,
         "invoice": invoice,
+        "production_order": getattr(quick_costing, "production_order", None),
         "margin_tone": margin_tone,
         "profit_health": _quick_profit_health(calc),
         "quick_workflow_badges": _quick_workflow_badges(quick_costing, invoice=invoice),
@@ -1386,13 +1433,30 @@ def quick_costing_approve(request, pk):
     if quick_costing.status != QuickCosting.STATUS_DRAFT or not quick_costing.approval_submitted_at:
         messages.error(request, "Quick Costing must be submitted before CEO approval.")
         return redirect("quick_costing_detail", pk=pk)
-    quick_costing.status = QuickCosting.STATUS_APPROVED
-    quick_costing.approved_by = _user_or_none(request.user)
-    quick_costing.approved_at = timezone.now()
-    quick_costing.rejected_by = None
-    quick_costing.rejected_at = None
-    quick_costing.save(update_fields=["status", "approved_by", "approved_at", "rejected_by", "rejected_at", "updated_at"])
-    messages.success(request, "Quick costing approved and locked.")
+    if quick_costing.created_by_id == request.user.id and not request.user.is_superuser:
+        messages.error(request, "The costing creator cannot approve their own Quick Costing.")
+        return redirect("quick_costing_detail", pk=pk)
+    try:
+        with transaction.atomic():
+            quick_costing.status = QuickCosting.STATUS_APPROVED
+            quick_costing.approved_by = _user_or_none(request.user)
+            quick_costing.approved_at = timezone.now()
+            quick_costing.rejected_by = None
+            quick_costing.rejected_at = None
+            quick_costing.save(
+                update_fields=["status", "approved_by", "approved_at", "rejected_by", "rejected_at", "updated_at"]
+            )
+            if quick_costing.is_bangladesh_local_sewing:
+                create_production_order_from_approved_quick_costing(quick_costing, user=request.user)
+    except ProductionOrderCreationError as exc:
+        messages.error(request, str(exc))
+        return redirect("quick_costing_detail", pk=pk)
+    messages.success(
+        request,
+        "Quick costing approved and local sewing production created."
+        if quick_costing.is_bangladesh_local_sewing
+        else "Quick costing approved and locked.",
+    )
     return redirect("quick_costing_detail", pk=pk)
 
 
@@ -1407,6 +1471,9 @@ def quick_costing_reject(request, pk):
         return redirect("quick_costing_detail", pk=pk)
     if not quick_costing.approval_submitted_at:
         messages.error(request, "Quick Costing must be submitted before CEO rejection.")
+        return redirect("quick_costing_detail", pk=pk)
+    if quick_costing.is_bangladesh_local_sewing and hasattr(quick_costing, "production_order"):
+        messages.error(request, "A local sewing production order already exists and cannot be rejected.")
         return redirect("quick_costing_detail", pk=pk)
     if quick_costing.invoices.exists():
         messages.error(request, "This quick costing already has an invoice and cannot be rejected.")
@@ -1445,7 +1512,7 @@ def quick_costing_convert_to_quotation(request, pk):
     if not (_can_approve(request.user) or _can_convert_to_invoice(request.user)):
         messages.error(request, "You do not have permission to create a quotation.")
         return redirect("quick_costing_detail", pk=pk)
-    if quick_costing.status != QuickCosting.STATUS_APPROVED and not quick_costing.quotation_number:
+    if quick_costing.status != QuickCosting.STATUS_APPROVED:
         messages.error(request, "Approve costing before creating quotation.")
         return redirect("quick_costing_detail", pk=pk)
     if not quick_costing.quotation_number:

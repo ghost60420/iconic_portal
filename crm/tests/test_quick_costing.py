@@ -338,7 +338,7 @@ class QuickCostingTests(TestCase):
         self.assertContains(response, "Sales")
         self.assertContains(response, "5. Profit Summary")
         self.assertContains(response, "6. Live Order Summary")
-        self.assertContains(response, 'class="card quick-breakdown-card"', count=6)
+        self.assertContains(response, 'class="card quick-breakdown-card"', count=7)
         self.assertContains(response, "Calculated Fabric Cost Per Piece")
         self.assertContains(response, "Wash Cost Per Piece")
         self.assertContains(response, "Not configured in Quick Costing")

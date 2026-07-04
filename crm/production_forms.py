@@ -110,6 +110,16 @@ class ProductionOrderForm(forms.ModelForm):
         )
         super().__init__(*args, **kwargs)
 
+        if not self.instance.pk and "order_type" in self.fields:
+            self.fields["order_type"].choices = [
+                choice
+                for choice in self.fields["order_type"].choices
+                if choice[0] != "sewing_charge"
+            ]
+            self.fields["order_type"].help_text = (
+                "Bangladesh Local Sewing orders are created only from CEO-approved Quick Costing."
+            )
+
         if not can_edit_internal_costing:
             for field_name in PRODUCTION_INTERNAL_COST_FIELDS:
                 self.fields.pop(field_name, None)
@@ -203,6 +213,12 @@ class ProductionOrderForm(forms.ModelForm):
             and cleaned.get("factory_location") == "bd"
         )
         if not is_local:
+            return cleaned
+        if not self.instance.pk:
+            self.add_error(
+                "order_type",
+                "Bangladesh Local Sewing must be created from an approved Quick Costing.",
+            )
             return cleaned
 
         quantity = cleaned.get("qty_total") or 0
