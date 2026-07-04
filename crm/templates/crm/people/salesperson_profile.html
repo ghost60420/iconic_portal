@@ -3,23 +3,48 @@
 {% block content %}
 <link rel="stylesheet" href="{% static 'crm/people.css' %}">
 <main class="people-shell">
-  <header class="people-head"><div class="sales-identity">{% if salesperson.employee_profile.profile_photo %}<img class="sales-avatar" src="{{ salesperson.employee_profile.profile_photo.url }}" alt="">{% else %}<div class="sales-avatar">{{ salesperson.employee_profile.initials }}</div>{% endif %}<div><p class="people-eyebrow">Sales Profile</p><h1 class="people-title">{{ salesperson|employee_name }}</h1><p class="people-subtitle">{{ salesperson.employee_profile.employee_id }} · {{ salesperson.employee_profile.position_name|default:"Sales Executive" }}{% if salesperson.employee_profile.department_name %} · {{ salesperson.employee_profile.department_name }}{% endif %}</p></div></div>{% if not viewing_self %}<a class="people-btn" href="{% url 'employee_list' %}">Employees</a>{% endif %}</header>
-  <section class="sales-metric-grid">
-    <div class="sales-metric"><span>Total Leads</span><strong>{{ lead_counts.total }}</strong></div><div class="sales-metric"><span>Open Leads</span><strong>{{ lead_counts.open }}</strong></div><div class="sales-metric"><span>Converted Leads</span><strong>{{ lead_counts.converted }}</strong></div><div class="sales-metric"><span>Lost Leads</span><strong>{{ lead_counts.lost }}</strong></div>
-    <div class="sales-metric"><span>Open Opportunities</span><strong>{{ opportunity_counts.open }}</strong></div><div class="sales-metric"><span>Open Quotations</span><strong>{{ quotation_counts.open }}</strong></div><div class="sales-metric"><span>CEO Approved</span><strong>{{ quotation_counts.approved }}</strong></div><div class="sales-metric"><span>Closing Ratio</span><strong>{{ closing_ratio }}%</strong></div>
-    <div class="sales-metric"><span>Follow Ups Due</span><strong>{{ lead_counts.due_today }}</strong></div><div class="sales-metric"><span>Overdue Follow Ups</span><strong>{{ lead_counts.overdue }}</strong></div><div class="sales-metric"><span>Orders This Month</span><strong>{{ production_counts.month }}</strong></div><div class="sales-metric"><span>Orders Created</span><strong>{{ production_counts.total }}</strong></div>
-    <div class="sales-metric"><span>Won This Month</span><strong>{{ won_this_month_count }}</strong></div><div class="sales-metric"><span>Lost This Month</span><strong>{{ lost_this_month_count }}</strong></div><div class="sales-metric"><span>Average Sales Cycle</span><strong>{{ average_sales_cycle_days }} days</strong></div><div class="sales-metric"><span>Invoices Paid</span><strong>{{ paid_invoice_count }}</strong></div>
+  <header class="people-head">
+    <div class="sales-identity">
+      {% if salesperson.employee_profile.profile_photo %}<img class="sales-avatar" src="{{ salesperson.employee_profile.profile_photo.url }}" alt="">{% else %}<div class="sales-avatar">{{ salesperson.employee_profile.initials }}</div>{% endif %}
+      <div><p class="people-eyebrow">Sales Dashboard</p><h1 class="people-title">{{ salesperson|employee_name }}</h1><p class="people-subtitle">Salesperson-of-record metrics inherited from owned leads. Record authorship is tracked separately.</p></div>
+    </div>
+    {% if not viewing_self %}<a class="people-btn" href="{% url 'employee_list' %}">Employees</a>{% endif %}
+  </header>
+
+  <section class="sales-metric-grid" aria-label="Sales counts">
+    <div class="sales-metric"><span>Leads</span><strong>{{ lead_counts.total }}</strong></div>
+    <div class="sales-metric"><span>Open Opportunities</span><strong>{{ opportunity_counts.open }}</strong></div>
+    <div class="sales-metric"><span>Closed Won</span><strong>{{ opportunity_counts.won }}</strong></div>
+    <div class="sales-metric"><span>Closed Lost</span><strong>{{ opportunity_counts.lost }}</strong></div>
+    <div class="sales-metric"><span>Active Customers</span><strong>{{ customer_counts.active }}</strong></div>
+    <div class="sales-metric"><span>Won Customers</span><strong>{{ customer_counts.won }}</strong></div>
+    <div class="sales-metric"><span>Repeat Customers</span><strong>{{ customer_counts.repeat }}</strong></div>
+    <div class="sales-metric"><span>Closing Ratio</span><strong>{{ closing_ratio }}%</strong></div>
   </section>
+
   <section class="sales-sections">
-    <div class="people-card"><h2 class="sales-section-title">Sales Revenue · Closed Won</h2>{% for row in sales_revenue %}<div class="sales-money-row"><span>{{ row.currency }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
-    <div class="people-card"><h2 class="sales-section-title">Monthly Performance · Closed Won</h2>{% for row in monthly_sales_revenue %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.count }} deal{{ row.count|pluralize }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
-    <div class="people-card"><h2 class="sales-section-title">Lost This Month</h2>{% for row in lost_this_month %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.count }} deal{{ row.count|pluralize }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
-    <div class="people-card"><h2 class="sales-section-title">Current Pipeline</h2>{% for row in pipeline_value %}<div class="sales-money-row"><span>{{ row.currency }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
-    <div class="people-card"><h2 class="sales-section-title">Invoiced Revenue</h2>{% for row in invoice_values %}<div class="sales-money-row"><span>{{ row.currency }}</span><strong>{{ row.invoiced|finance_money:row.currency }}</strong></div>{% endfor %}</div>
-    <div class="people-card"><h2 class="sales-section-title">Collected Revenue</h2>{% for row in invoice_values %}<div class="sales-money-row"><span>{{ row.currency }}</span><strong>{{ row.collected|finance_money:row.currency }}</strong></div>{% endfor %}</div>
-    <div class="people-card"><h2 class="sales-section-title">Paid Invoices</h2>{% for row in paid_invoice_values %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.count }} paid</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
-    <div class="people-card"><h2 class="sales-section-title">Average Deal Size</h2>{% for row in average_deal_value %}<div class="sales-money-row"><span>{{ row.currency }}</span><strong>{{ row.average|finance_money:row.currency }}</strong></div>{% endfor %}</div>
-    <div class="people-card"><h2 class="sales-section-title">Linked Invoice Value</h2>{% for row in invoice_values %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.count }} invoice{{ row.count|pluralize }}</span><strong>{{ row.invoiced|finance_money:row.currency }}</strong></div>{% endfor %}</div>
+    <div class="people-card"><h2 class="sales-section-title">Pipeline Value · Open Opportunities</h2>{% for row in pipeline_value %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.count }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
+    <div class="people-card"><h2 class="sales-section-title">Closed Won Value</h2>{% for row in closed_won_value %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.count }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
+    <div class="people-card"><h2 class="sales-section-title">Quick Costing · Quoted Value</h2>{% for row in quick_quoted_value %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.count }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
+    <div class="people-card"><h2 class="sales-section-title">Advanced Costing · Quoted Value</h2>{% for row in advanced_quoted_value %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.count }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
+    <div class="people-card"><h2 class="sales-section-title">Combined Quoted Value</h2>{% for row in quoted_value %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.count }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
+    <div class="people-card"><h2 class="sales-section-title">Invoiced Revenue</h2>{% for row in invoice_values %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.count }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
+    <div class="people-card"><h2 class="sales-section-title">Collected Revenue · Payment History</h2>{% for row in collected_values %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.count }} payment{{ row.count|pluralize }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
+    <div class="people-card"><h2 class="sales-section-title">Production Value · Active Orders</h2>{% for row in production_values %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.count }}</span><strong>{% if row.count and not row.available_count %}Value unavailable{% else %}{{ row.amount|finance_money:row.currency }}{% endif %}</strong></div>{% endfor %}</div>
+    <div class="people-card"><h2 class="sales-section-title">Commission Eligible Amount</h2>{% for row in commission_eligible_values %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.count }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
+    <div class="people-card"><h2 class="sales-section-title">Commission Amount</h2>{% for row in commission_values %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.count }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
+  </section>
+
+  <section class="people-card" style="margin-top:16px">
+    <h2 class="sales-section-title">Sales Activity</h2>
+    <div class="sales-metric-grid">
+      <div class="sales-metric"><span>Leads</span><strong>{{ activity_counts.leads }}</strong></div>
+      <div class="sales-metric"><span>Follow Ups</span><strong>{{ activity_counts.follow_ups }}</strong></div>
+      <div class="sales-metric"><span>Calls</span><strong>{{ activity_counts.calls }}</strong></div>
+      <div class="sales-metric"><span>Emails</span><strong>{{ activity_counts.emails }}</strong></div>
+      <div class="sales-metric"><span>Meetings</span><strong>{{ activity_counts.meetings }}</strong></div>
+      <div class="sales-metric"><span>Conversions</span><strong>{{ activity_counts.conversions }}</strong></div>
+    </div>
   </section>
 </main>
 {% endblock %}

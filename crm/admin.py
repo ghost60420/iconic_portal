@@ -26,7 +26,20 @@ from .models import (
     AccountingEntry,
     AccountingMonthlyTarget,
     BDMonthlyTarget,
+    SalesCommission,
 )
+
+
+@admin.register(SalesCommission)
+class SalesCommissionAdmin(admin.ModelAdmin):
+    list_display = (
+        "invoice", "eligible_amount", "currency", "commission_percent",
+        "commission_amount", "approval_status", "paid_status", "paid_date",
+    )
+    list_filter = ("currency", "approval_status", "paid_status")
+    search_fields = ("invoice__invoice_number", "payment_reference")
+    readonly_fields = ("commission_amount", "created_at", "updated_at")
+    raw_id_fields = ("invoice", "approved_by")
 
 # Email config model is in another file in your project
 from crm.models_email_config import EmailInboxConfig

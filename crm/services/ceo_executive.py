@@ -4,9 +4,9 @@ from decimal import Decimal
 from django.db.models import Count, DecimalField, ExpressionWrapper, F, Q, Sum
 from django.utils import timezone
 
-from crm.models import AccountingEntry, CostingHeader, Invoice, Opportunity, ProductionOrder, Shipment
+from crm.models import AccountingEntry, CostingHeader, Invoice, ProductionOrder, Shipment
 from crm.services.employee_identity import get_employee_identity_index, resolve_employee_identity
-from crm.services.pipeline import summarize_pipeline
+from crm.services.sales_attribution import build_ceo_sales_kpis
 
 
 CURRENCIES = ("CAD", "USD", "BDT")
@@ -99,77 +99,12 @@ def _revenue_profit_by_currency(month_start, today):
     return revenue, profit
 
 
-def _ranked_invoice_people(queryset, dimensions, label_builder, limit=5):
-    grouped = defaultdict(lambda: {"count": 0, "amounts": defaultdict(Decimal)})
-    rows = queryset.values(*dimensions, "currency").annotate(
-        amount=Sum("total_amount"),
-        count=Count("id"),
-    )
-    for row in rows:
-        label = label_builder(row)
-        if not label:
-            continue
-        grouped[label]["count"] += int(row["count"] or 0)
-        currency = (row.get("currency") or "").upper()
-        if currency in CURRENCIES:
-            grouped[label]["amounts"][currency] += _decimal(row["amount"])
-    ranked = sorted(grouped.items(), key=lambda item: (-item[1]["count"], item[0].lower()))[:limit]
-    return [
-        {
-            "label": label,
-            "count": values["count"],
-            "amounts": _currency_rows(values["amounts"]),
-        }
-        for label, values in ranked
-    ]
-
-
-def _ranked_invoice_salespeople(queryset, limit=5):
-    grouped = defaultdict(lambda: {"count": 0, "amounts": defaultdict(Decimal)})
-    identity_index = get_employee_identity_index()
-    rows = queryset.values(
-        "order__lead__assigned_to_id",
-        "order__lead__owner",
-        "costing_header__opportunity__lead__assigned_to_id",
-        "costing_header__opportunity__lead__owner",
-        "currency",
-    ).annotate(amount=Sum("total_amount"), count=Count("id"))
-    for row in rows:
-        user_id = (
-            row.get("order__lead__assigned_to_id")
-            or row.get("costing_header__opportunity__lead__assigned_to_id")
-        )
-        owner_text = (
-            row.get("order__lead__owner")
-            or row.get("costing_header__opportunity__lead__owner")
-        )
-        identity = resolve_employee_identity(user_id=user_id, owner_text=owner_text, index=identity_index)
-        if identity["user_id"] is None and not owner_text:
-            continue
-        label = identity["canonical_name"]
-        grouped[label]["count"] += int(row["count"] or 0)
-        currency = (row.get("currency") or "").upper()
-        if currency in CURRENCIES:
-            grouped[label]["amounts"][currency] += _decimal(row["amount"])
-    ranked = sorted(grouped.items(), key=lambda item: (-item[1]["count"], item[0].lower()))[:limit]
-    return [
-        {
-            "label": label,
-            "count": values["count"],
-            "amounts": _currency_rows(values["amounts"]),
-        }
-        for label, values in ranked
-    ]
-
-
 def build_ceo_executive_context():
     today = timezone.localdate()
     month_start = today.replace(day=1)
     live_invoices = Invoice.objects.filter(is_archived=False).exclude(status="cancelled")
 
-    today_sales = _sum_by_currency(live_invoices.filter(issue_date=today), "total_amount")
-    monthly_invoices = live_invoices.filter(issue_date__range=(month_start, today))
-    monthly_sales = _sum_by_currency(monthly_invoices, "total_amount")
+    sales_kpis = build_ceo_sales_kpis(today)
     outstanding_ar = _invoice_balance_by_currency(
         live_invoices.filter(total_amount__gt=F("paid_amount"))
     )
@@ -185,7 +120,6 @@ def build_ceo_executive_context():
     )
     current_cash = _cash_by_currency()
     revenue, profit = _revenue_profit_by_currency(month_start, today)
-    open_pipeline = summarize_pipeline(Opportunity.objects.all())
 
     production_groups = list(
         ProductionOrder.objects.filter(is_archived=False)
@@ -209,12 +143,6 @@ def build_ceo_executive_context():
         quotation_status=CostingHeader.QUOTATION_STATUS_DRAFT,
     ).exclude(quotation_number="").count()
 
-    top_customers = _ranked_invoice_people(
-        monthly_invoices,
-        ["customer__account_brand", "customer__contact_name"],
-        lambda row: row.get("customer__account_brand") or row.get("customer__contact_name") or "No customer",
-    )
-    top_salespeople = _ranked_invoice_salespeople(monthly_invoices)
     top_production_managers = [
         {
             "assigned_production_manager_id": row["assigned_production_manager_id"],
@@ -242,21 +170,21 @@ def build_ceo_executive_context():
     return {
         "today": today,
         "month_start": month_start,
-        "today_sales": _currency_rows(today_sales),
-        "monthly_sales": _currency_rows(monthly_sales),
+        "today_sales": sales_kpis["today_sales"],
+        "monthly_sales": sales_kpis["monthly_sales"],
         "outstanding_ar": _currency_rows(outstanding_ar),
         "outstanding_ap": _currency_rows(outstanding_ap),
         "current_cash": _currency_rows(current_cash),
         "revenue_by_currency": _currency_rows(revenue),
         "profit_by_currency": _currency_rows(profit),
-        "open_pipeline_count": open_pipeline["count"],
-        "open_pipeline_rows": open_pipeline["rows"],
+        "open_pipeline_count": sales_kpis["open_pipeline_count"],
+        "open_pipeline_rows": sales_kpis["open_pipeline_rows"],
         "production_total": int(production["total"] or 0),
         "production_active": int(production["active"] or 0),
         "late_production_orders": int(production["late"] or 0),
         "pending_ceo_approvals": pending_approvals,
-        "top_customers": top_customers,
-        "top_salespeople": top_salespeople,
+        "top_customers": sales_kpis["top_customers"],
+        "top_salespeople": sales_kpis["top_salespeople"],
         "top_production_managers": top_production_managers,
         "upcoming_shipments": upcoming_shipments,
     }
