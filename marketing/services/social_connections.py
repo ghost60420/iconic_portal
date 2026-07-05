@@ -14,6 +14,7 @@ from marketing.services.oauth_connections import (
     oauth_configured,
     oauth_storage_platform,
 )
+from marketing.services.intelligence import linkedin_connection_status
 from marketing.utils.activity import log_marketing_sync_failure
 
 
@@ -156,20 +157,21 @@ def build_connection_cards():
         else:
             matches = [item for item in base_qs if item.platform == config["key"]]
         primary = matches[0] if matches else None
-        cards.append(
-            {
-                "config": config,
-                "connection": primary,
-                "storage_platform": storage_platform,
-                "connection_count": len(matches),
-                "has_access_token": bool(primary and primary.has_access_token),
-                "has_refresh_token": bool(primary and primary.has_refresh_token),
-                "last_synced_at": _resolved_last_synced_at(primary) if primary else None,
-                "last_sync_status": _resolved_last_sync_status(primary) if primary else "",
-                "last_error": _resolved_last_error(primary) if primary else "",
-                "oauth_configured": oauth_configured(config["key"]),
-            }
-        )
+        card = {
+            "config": config,
+            "connection": primary,
+            "storage_platform": storage_platform,
+            "connection_count": len(matches),
+            "has_access_token": bool(primary and primary.has_access_token),
+            "has_refresh_token": bool(primary and primary.has_refresh_token),
+            "last_synced_at": _resolved_last_synced_at(primary) if primary else None,
+            "last_sync_status": _resolved_last_sync_status(primary) if primary else "",
+            "last_error": _resolved_last_error(primary) if primary else "",
+            "oauth_configured": oauth_configured(config["key"]),
+        }
+        if config["key"] == "linkedin":
+            card["readiness"] = linkedin_connection_status(primary)
+        cards.append(card)
     return cards
 
 

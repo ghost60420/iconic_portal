@@ -9,6 +9,34 @@ from .services.metrics import calc_engagement_rate, calc_engagement_score, calc_
 from .utils.crypto import encrypt_value, decrypt_value
 
 
+MARKETING_COUNTRY_CHOICES = [
+    ("CA", "Canada"),
+    ("US", "USA"),
+    ("GB", "UK"),
+    ("AU", "Australia"),
+    ("AE", "UAE"),
+    ("BD", "Bangladesh"),
+]
+
+MARKETING_PRODUCT_CATEGORY_CHOICES = [
+    ("hoodies", "Hoodies"),
+    ("t_shirts", "T shirts"),
+    ("activewear", "Activewear"),
+    ("streetwear", "Streetwear"),
+    ("uniforms", "Uniforms"),
+    ("kids_clothing", "Kids clothing"),
+    ("private_label_apparel", "Private label apparel"),
+    ("low_moq_manufacturing", "Low MOQ manufacturing"),
+    ("bangladesh_garment_manufacturing", "Bangladesh garment manufacturing"),
+]
+
+MARKETING_PRIORITY_CHOICES = [
+    ("high", "High"),
+    ("medium", "Medium"),
+    ("low", "Low"),
+]
+
+
 class SeoProperty(models.Model):
     name = models.CharField(max_length=200)
     gsc_site_url = models.CharField(max_length=255, blank=True, default="")
@@ -688,6 +716,196 @@ class InsightItem(models.Model):
         ordering = ("-priority_score", "-created_at")
 
 
+class MarketingKeywordPlan(models.Model):
+    INTENT_CHOICES = [
+        ("informational", "Informational"),
+        ("commercial", "Commercial"),
+        ("transactional", "Transactional"),
+        ("navigational", "Navigational"),
+    ]
+    TREND_CHOICES = [
+        ("rising", "Rising"),
+        ("stable", "Stable"),
+        ("declining", "Declining"),
+        ("unknown", "Unknown"),
+    ]
+    DIFFICULTY_CHOICES = [
+        ("easy", "Easy"),
+        ("medium", "Medium"),
+        ("hard", "Hard"),
+        ("unknown", "Unknown"),
+    ]
+    CONTENT_TYPE_CHOICES = [
+        ("landing_page", "Landing page"),
+        ("blog", "Blog"),
+        ("video", "Video"),
+        ("case_study", "Case study"),
+        ("social", "Social content"),
+    ]
+    STATUS_CHOICES = [
+        ("idea", "Idea"),
+        ("approved", "Approved"),
+        ("in_progress", "In progress"),
+        ("published", "Published"),
+        ("paused", "Paused"),
+    ]
+
+    keyword = models.CharField(max_length=240, db_index=True)
+    target_country = models.CharField(max_length=2, choices=MARKETING_COUNTRY_CHOICES, default="CA")
+    target_audience = models.CharField(max_length=240, blank=True, default="")
+    product_category = models.CharField(
+        max_length=50,
+        choices=MARKETING_PRODUCT_CATEGORY_CHOICES,
+        default="private_label_apparel",
+    )
+    search_intent = models.CharField(max_length=20, choices=INTENT_CHOICES, default="commercial")
+    priority = models.CharField(max_length=10, choices=MARKETING_PRIORITY_CHOICES, default="medium")
+    trend_status = models.CharField(max_length=20, choices=TREND_CHOICES, default="unknown")
+    difficulty_estimate = models.CharField(max_length=20, choices=DIFFICULTY_CHOICES, default="unknown")
+    content_type = models.CharField(max_length=20, choices=CONTENT_TYPE_CHOICES, default="landing_page")
+    landing_page_suggestion = models.CharField(max_length=300, blank=True, default="")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="idea")
+    notes = models.TextField(blank=True, default="")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="marketing_keyword_plans",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=["status", "priority"]),
+            models.Index(fields=["target_country", "product_category"]),
+        ]
+
+    def __str__(self) -> str:
+        return self.keyword
+
+
+class MarketingContentIdea(models.Model):
+    CONTENT_TYPE_CHOICES = [
+        ("blog", "Blog"),
+        ("video", "Video"),
+        ("reel", "Reel"),
+        ("linkedin_post", "LinkedIn post"),
+        ("instagram_carousel", "Instagram carousel"),
+        ("tiktok_video", "TikTok video"),
+        ("google_business_post", "Google Business post"),
+        ("email_campaign", "Email campaign"),
+        ("case_study", "Case study"),
+    ]
+    PLATFORM_CHOICES = [
+        ("website", "Website"),
+        ("linkedin", "LinkedIn"),
+        ("instagram", "Instagram"),
+        ("tiktok", "TikTok"),
+        ("google_business", "Google Business"),
+        ("youtube", "YouTube"),
+        ("email", "Email"),
+    ]
+    FUNNEL_CHOICES = [
+        ("awareness", "Awareness"),
+        ("consideration", "Consideration"),
+        ("conversion", "Conversion"),
+        ("retention", "Retention"),
+    ]
+    STATUS_CHOICES = [
+        ("idea", "Idea"),
+        ("approved", "Approved"),
+        ("assigned", "Assigned"),
+        ("in_progress", "In progress"),
+        ("ready_for_review", "Ready for review"),
+        ("published", "Published"),
+        ("archived", "Archived"),
+    ]
+
+    title = models.CharField(max_length=300)
+    content_type = models.CharField(max_length=30, choices=CONTENT_TYPE_CHOICES, default="blog")
+    target_platform = models.CharField(max_length=30, choices=PLATFORM_CHOICES, default="website")
+    keyword = models.CharField(max_length=240, blank=True, default="")
+    audience = models.CharField(max_length=240, blank=True, default="")
+    funnel_stage = models.CharField(max_length=20, choices=FUNNEL_CHOICES, default="awareness")
+    priority = models.CharField(max_length=10, choices=MARKETING_PRIORITY_CHOICES, default="medium")
+    due_date = models.DateField(null=True, blank=True, db_index=True)
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="assigned_marketing_content_ideas",
+    )
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default="idea", db_index=True)
+    notes = models.TextField(blank=True, default="")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="created_marketing_content_ideas",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("due_date", "-created_at")
+        indexes = [models.Index(fields=["target_platform", "status"])]
+
+    def __str__(self) -> str:
+        return self.title
+
+
+class MarketingVideoIdea(models.Model):
+    PLATFORM_CHOICES = [
+        ("youtube", "YouTube"),
+        ("linkedin", "LinkedIn"),
+        ("instagram", "Instagram"),
+        ("tiktok", "TikTok"),
+        ("facebook", "Facebook"),
+    ]
+    STATUS_CHOICES = MarketingContentIdea.STATUS_CHOICES
+
+    video_title = models.CharField(max_length=300)
+    platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES, default="youtube")
+    hook = models.CharField(max_length=500, blank=True, default="")
+    main_talking_points = models.TextField(blank=True, default="")
+    product_category = models.CharField(
+        max_length=50,
+        choices=MARKETING_PRODUCT_CATEGORY_CHOICES,
+        default="private_label_apparel",
+    )
+    target_keyword = models.CharField(max_length=240, blank=True, default="")
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default="idea", db_index=True)
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="assigned_marketing_video_ideas",
+    )
+    due_date = models.DateField(null=True, blank=True, db_index=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="created_marketing_video_ideas",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("due_date", "-created_at")
+        indexes = [models.Index(fields=["platform", "status"])]
+
+    def __str__(self) -> str:
+        return self.video_title
+
+
 class OAuthCredential(models.Model):
     PLATFORM_CHOICES = [
         ("gsc", "Google Search Console"),
@@ -796,10 +1014,20 @@ class OAuthConnectionRequest(models.Model):
 
 
 class MarketingCompetitor(models.Model):
+    STATUS_CHOICES = [
+        ("watching", "Watching"),
+        ("paused", "Paused"),
+        ("archived", "Archived"),
+    ]
+
     name = models.CharField(max_length=200)
     website = models.URLField(blank=True, default="")
     industry = models.CharField(max_length=120, blank=True, default="")
+    country = models.CharField(max_length=2, choices=MARKETING_COUNTRY_CHOICES, blank=True, default="")
+    category = models.CharField(max_length=120, blank=True, default="")
     notes = models.TextField(blank=True, default="")
+    last_checked_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="watching")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

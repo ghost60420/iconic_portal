@@ -1,0 +1,179 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+{% include "marketing/_style.html" %}
+
+<div class="mk-container">
+  <div class="mk-header mk-header-lg">
+    <div>
+      <div class="mk-title">Marketing Intelligence Center</div>
+      <div class="mk-sub">Plan keywords, content, video, competitors, and campaigns from stored CRM data. No provider APIs run during page load.</div>
+    </div>
+    <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_connection_settings' %}">Connection Settings</a>
+  </div>
+
+  {% include "marketing/_control_nav.html" %}
+
+  <div class="mk-card mk-span-12" style="margin-bottom:14px;">
+    <div class="mk-toolbar">
+      <a class="mk-filter-chip" href="#overview">Overview</a>
+      <a class="mk-filter-chip" href="#keyword-planner">SEO Keywords</a>
+      <a class="mk-filter-chip" href="#content-planner">Content</a>
+      <a class="mk-filter-chip" href="#video-planner">Video</a>
+      <a class="mk-filter-chip" href="#competitor-watch">Competitors</a>
+      <a class="mk-filter-chip" href="#marketing-calendar">Calendar</a>
+      <a class="mk-filter-chip" href="#ai-recommendations">Recommendations</a>
+      <a class="mk-filter-chip" href="#data-sources">Data Sources</a>
+    </div>
+  </div>
+
+  <section id="overview" class="mk-card mk-span-12" style="margin-bottom:14px;">
+    <div class="mk-section-title">1. Marketing Overview</div>
+    <div class="mk-metric-grid">
+      <div class="mk-metric-card"><div class="mk-label">Keywords</div><div class="mk-metric-value">{{ overview.keywords }}</div></div>
+      <div class="mk-metric-card"><div class="mk-label">Approved Keywords</div><div class="mk-metric-value">{{ overview.approved_keywords }}</div></div>
+      <div class="mk-metric-card"><div class="mk-label">Content Ideas</div><div class="mk-metric-value">{{ overview.content_ideas }}</div></div>
+      <div class="mk-metric-card"><div class="mk-label">Video Ideas</div><div class="mk-metric-value">{{ overview.videos }}</div></div>
+      <div class="mk-metric-card"><div class="mk-label">Competitors</div><div class="mk-metric-value">{{ overview.competitors }}</div></div>
+      <div class="mk-metric-card"><div class="mk-label">Scheduled</div><div class="mk-metric-value">{{ overview.scheduled }}</div></div>
+    </div>
+  </section>
+
+  <section id="google-trends" class="mk-card mk-span-12" style="margin-bottom:14px;">
+    <div class="mk-section-title">2. Google Trends Ideas</div>
+    <div class="mk-callout">Manual research mode is active. Track country, audience, product category, intent, trend direction, and estimated difficulty without calling Google Trends or paid APIs.</div>
+    <div class="mk-hint" style="margin-top:10px;">Use the SEO Keyword Planner below to capture and prioritize trend research.</div>
+  </section>
+
+  <section id="keyword-planner" class="mk-card mk-span-12" style="margin-bottom:14px;">
+    <div class="mk-section-head">
+      <div>
+        <div class="mk-section-title mb-0">3. SEO Keyword Planner</div>
+        <div class="mk-sub">Manual and internally assisted keyword planning.</div>
+      </div>
+    </div>
+    <details id="keyword-form" {% if forms.keyword.errors %}open{% endif %}>
+      <summary class="mk-filter-chip" style="cursor:pointer;">Add Keyword</summary>
+      <form method="post" class="mk-form" style="margin-top:12px;">
+        {% csrf_token %}<input type="hidden" name="form_name" value="keyword">
+        {{ forms.keyword.as_p }}
+        <button class="btn btn-warning mk-btn" type="submit">Save Keyword</button>
+      </form>
+    </details>
+    <div class="table-responsive mk-table" style="margin-top:14px;">
+      <table class="table table-dark table-hover align-middle mb-0">
+        <thead><tr><th>Keyword</th><th>Country</th><th>Category</th><th>Intent</th><th>Priority</th><th>Difficulty</th><th>Trend</th><th>Content</th><th>Landing Page</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for item in keywords %}
+            <tr>
+              <td><strong>{{ item.keyword }}</strong>{% if item.target_audience %}<div class="mk-hint">{{ item.target_audience }}</div>{% endif %}</td>
+              <td>{{ item.get_target_country_display }}</td><td>{{ item.get_product_category_display }}</td><td>{{ item.get_search_intent_display }}</td>
+              <td>{{ item.get_priority_display }}</td><td>{{ item.get_difficulty_estimate_display }}</td><td>{{ item.get_trend_status_display }}</td>
+              <td>{{ item.get_content_type_display }}</td><td style="min-width:180px;">{{ item.landing_page_suggestion|default:"-" }}</td><td>{{ item.get_status_display }}</td>
+            </tr>
+          {% empty %}<tr><td colspan="10"><div class="mk-empty-state">No keyword ideas yet.</div></td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="content-planner" class="mk-card mk-span-12" style="margin-bottom:14px;">
+    <div class="mk-section-title">4. Content Ideas</div>
+    <details {% if forms.content.errors %}open{% endif %}>
+      <summary class="mk-filter-chip" style="cursor:pointer;">Add Content Idea</summary>
+      <form method="post" class="mk-form" style="margin-top:12px;">
+        {% csrf_token %}<input type="hidden" name="form_name" value="content">
+        {{ forms.content.as_p }}
+        <button class="btn btn-warning mk-btn" type="submit">Save Content Idea</button>
+      </form>
+    </details>
+    <div class="table-responsive mk-table" style="margin-top:14px;">
+      <table class="table table-dark table-hover align-middle mb-0">
+        <thead><tr><th>Title</th><th>Type</th><th>Platform</th><th>Keyword</th><th>Audience</th><th>Funnel</th><th>Priority</th><th>Due</th><th>Assigned</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for item in content_ideas %}
+            <tr><td><strong>{{ item.title }}</strong></td><td>{{ item.get_content_type_display }}</td><td>{{ item.get_target_platform_display }}</td><td>{{ item.keyword|default:"-" }}</td><td>{{ item.audience|default:"-" }}</td><td>{{ item.get_funnel_stage_display }}</td><td>{{ item.get_priority_display }}</td><td>{{ item.due_date|date:"Y-m-d"|default:"-" }}</td><td>{% if item.assigned_to %}{{ item.assigned_to.get_full_name|default:item.assigned_to.username }}{% else %}Unassigned{% endif %}</td><td>{{ item.get_status_display }}</td></tr>
+          {% empty %}<tr><td colspan="10"><div class="mk-empty-state">No content ideas yet.</div></td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="video-planner" class="mk-card mk-span-12" style="margin-bottom:14px;">
+    <div class="mk-section-title">5. Video Ideas</div>
+    <details {% if forms.video.errors %}open{% endif %}>
+      <summary class="mk-filter-chip" style="cursor:pointer;">Add Video Idea</summary>
+      <form method="post" class="mk-form" style="margin-top:12px;">
+        {% csrf_token %}<input type="hidden" name="form_name" value="video">
+        {{ forms.video.as_p }}
+        <button class="btn btn-warning mk-btn" type="submit">Save Video Idea</button>
+      </form>
+    </details>
+    <div class="table-responsive mk-table" style="margin-top:14px;">
+      <table class="table table-dark table-hover align-middle mb-0">
+        <thead><tr><th>Title</th><th>Platform</th><th>Hook</th><th>Talking Points</th><th>Category</th><th>Keyword</th><th>Assigned</th><th>Due</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for item in video_ideas %}
+            <tr><td><strong>{{ item.video_title }}</strong></td><td>{{ item.get_platform_display }}</td><td style="min-width:180px;">{{ item.hook|default:"-" }}</td><td style="min-width:220px;white-space:normal;">{{ item.main_talking_points|default:"-" }}</td><td>{{ item.get_product_category_display }}</td><td>{{ item.target_keyword|default:"-" }}</td><td>{% if item.assigned_to %}{{ item.assigned_to.get_full_name|default:item.assigned_to.username }}{% else %}Unassigned{% endif %}</td><td>{{ item.due_date|date:"Y-m-d"|default:"-" }}</td><td>{{ item.get_status_display }}</td></tr>
+          {% empty %}<tr><td colspan="9"><div class="mk-empty-state">No video ideas yet.</div></td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="blog-ideas" class="mk-card mk-span-12" style="margin-bottom:14px;">
+    <div class="mk-section-title">6. Blog Ideas</div>
+    <div class="mk-insight-list">
+      {% for item in blog_ideas %}<div class="mk-insight-item"><div class="mk-insight-title">{{ item.title }}</div><div class="mk-hint">{{ item.keyword|default:"Keyword not assigned" }} · {{ item.get_status_display }}</div></div>{% empty %}<div class="mk-empty-state">Add blog ideas through the Content Ideas planner.</div>{% endfor %}
+    </div>
+  </section>
+
+  <section id="competitor-watch" class="mk-card mk-span-12" style="margin-bottom:14px;">
+    <div class="mk-section-title">7. Competitor Watch</div>
+    <div class="mk-callout">Tracking only. This page does not scrape competitor websites or call external services.</div>
+    <details {% if forms.competitor.errors %}open{% endif %} style="margin-top:12px;">
+      <summary class="mk-filter-chip" style="cursor:pointer;">Add Competitor</summary>
+      <form method="post" class="mk-form" style="margin-top:12px;">
+        {% csrf_token %}<input type="hidden" name="form_name" value="competitor">
+        {{ forms.competitor.as_p }}
+        <button class="btn btn-warning mk-btn" type="submit">Save Competitor</button>
+      </form>
+    </details>
+    <div class="table-responsive mk-table" style="margin-top:14px;">
+      <table class="table table-dark table-hover align-middle mb-0"><thead><tr><th>Name</th><th>Website</th><th>Country</th><th>Category</th><th>Notes</th><th>Last Checked</th><th>Status</th></tr></thead><tbody>
+        {% for item in competitors %}<tr><td><strong>{{ item.name }}</strong></td><td>{% if item.website %}<a href="{{ item.website }}" rel="noopener noreferrer" target="_blank">Open</a>{% else %}-{% endif %}</td><td>{{ item.get_country_display|default:"-" }}</td><td>{{ item.category|default:item.industry|default:"-" }}</td><td style="min-width:220px;white-space:normal;">{{ item.notes|default:"-" }}</td><td>{{ item.last_checked_at|date:"Y-m-d H:i"|default:"-" }}</td><td>{{ item.get_status_display }}</td></tr>
+        {% empty %}<tr><td colspan="7"><div class="mk-empty-state">No competitors tracked yet.</div></td></tr>{% endfor %}
+      </tbody></table>
+    </div>
+  </section>
+
+  <section id="marketing-calendar" class="mk-card mk-span-12" style="margin-bottom:14px;">
+    <div class="mk-section-title">8. Marketing Calendar</div>
+    <div class="mk-sub" style="margin-bottom:10px;">Internal schedule only. Google Calendar is not connected.</div>
+    <div class="table-responsive mk-table"><table class="table table-dark table-hover align-middle mb-0"><thead><tr><th>Due Date</th><th>Title</th><th>Type</th><th>Platform</th><th>Assigned To</th><th>Status</th></tr></thead><tbody>
+      {% for row in calendar_rows %}<tr><td>{{ row.due_date|date:"Y-m-d" }}</td><td><strong>{{ row.title }}</strong></td><td>{{ row.kind }}</td><td>{{ row.platform }}</td><td>{% if row.assigned_to %}{{ row.assigned_to.get_full_name|default:row.assigned_to.username }}{% else %}Unassigned{% endif %}</td><td>{{ row.status }}</td></tr>
+      {% empty %}<tr><td colspan="6"><div class="mk-empty-state">Add a due date to content or video ideas to build the calendar.</div></td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+
+  <section id="ai-recommendations" class="mk-card mk-span-12" style="margin-bottom:14px;">
+    <div class="mk-section-title">9. AI Recommendations</div>
+    <div class="mk-sub" style="margin-bottom:10px;">Rule-based recommendations use stored keywords, product categories, content ideas, and competitors only. No private client data or external AI call is used.</div>
+    <div class="mk-insight-list">
+      {% for item in recommendations %}<div class="mk-insight-item"><div class="mk-row-title">{{ item.type }}</div><div class="mk-insight-title">{{ item.title }}</div><div class="mk-insight-action">{{ item.reason }}</div>{% if item.already_planned %}<span class="mk-pill mk-pill-good">Already planned</span>{% endif %}</div>{% endfor %}
+    </div>
+  </section>
+
+  <section id="data-sources" class="mk-card mk-span-12" style="margin-bottom:14px;">
+    <div class="mk-section-title">10. Data Source Status</div>
+    <div class="mk-platform-grid">
+      {% for source in data_sources %}
+        <div class="mk-platform-card">
+          <div class="mk-platform-top"><div class="mk-platform-name">{{ source.label }}</div><span class="mk-pill {% if source.tone == 'good' %}mk-pill-good{% elif source.tone == 'warn' %}mk-pill-warn{% endif %}">{{ source.status_label }}</span></div>
+          <div class="mk-hint">{{ source.message }}</div>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}

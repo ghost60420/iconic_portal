@@ -9,6 +9,9 @@ from .models import (
     MarketingCompetitor,
     MarketingCompetitorAccount,
     MarketingCompetitorPost,
+    MarketingContentIdea,
+    MarketingKeywordPlan,
+    MarketingVideoIdea,
     SocialAccount,
 )
 
@@ -144,12 +147,107 @@ class SocialAccountConnectForm(forms.Form):
 class MarketingCompetitorForm(forms.ModelForm):
     class Meta:
         model = MarketingCompetitor
-        fields = ["name", "website", "industry", "notes", "is_active"]
+        fields = ["name", "website", "country", "category", "industry", "status", "last_checked_at", "notes", "is_active"]
         widgets = {
             "name": forms.TextInput(attrs={"class": "form-control"}),
             "website": forms.URLInput(attrs={"class": "form-control"}),
+            "country": forms.Select(attrs={"class": "form-select"}),
+            "category": forms.TextInput(attrs={"class": "form-control"}),
             "industry": forms.TextInput(attrs={"class": "form-control"}),
+            "status": forms.Select(attrs={"class": "form-select"}),
+            "last_checked_at": forms.DateTimeInput(attrs={"class": "form-control", "type": "datetime-local"}),
             "notes": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
+        }
+
+
+class MarketingKeywordPlanForm(forms.ModelForm):
+    class Meta:
+        model = MarketingKeywordPlan
+        fields = [
+            "keyword",
+            "target_country",
+            "target_audience",
+            "product_category",
+            "search_intent",
+            "priority",
+            "trend_status",
+            "difficulty_estimate",
+            "content_type",
+            "landing_page_suggestion",
+            "status",
+            "notes",
+        ]
+        widgets = {
+            "keyword": forms.TextInput(attrs={"class": "form-control"}),
+            "target_country": forms.Select(attrs={"class": "form-select"}),
+            "target_audience": forms.TextInput(attrs={"class": "form-control"}),
+            "product_category": forms.Select(attrs={"class": "form-select"}),
+            "search_intent": forms.Select(attrs={"class": "form-select"}),
+            "priority": forms.Select(attrs={"class": "form-select"}),
+            "trend_status": forms.Select(attrs={"class": "form-select"}),
+            "difficulty_estimate": forms.Select(attrs={"class": "form-select"}),
+            "content_type": forms.Select(attrs={"class": "form-select"}),
+            "landing_page_suggestion": forms.TextInput(attrs={"class": "form-control"}),
+            "status": forms.Select(attrs={"class": "form-select"}),
+            "notes": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+        }
+
+
+class MarketingContentIdeaForm(forms.ModelForm):
+    class Meta:
+        model = MarketingContentIdea
+        fields = [
+            "title",
+            "content_type",
+            "target_platform",
+            "keyword",
+            "audience",
+            "funnel_stage",
+            "priority",
+            "due_date",
+            "assigned_to",
+            "status",
+            "notes",
+        ]
+        widgets = {
+            "title": forms.TextInput(attrs={"class": "form-control"}),
+            "content_type": forms.Select(attrs={"class": "form-select"}),
+            "target_platform": forms.Select(attrs={"class": "form-select"}),
+            "keyword": forms.TextInput(attrs={"class": "form-control"}),
+            "audience": forms.TextInput(attrs={"class": "form-control"}),
+            "funnel_stage": forms.Select(attrs={"class": "form-select"}),
+            "priority": forms.Select(attrs={"class": "form-select"}),
+            "due_date": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "assigned_to": forms.Select(attrs={"class": "form-select"}),
+            "status": forms.Select(attrs={"class": "form-select"}),
+            "notes": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+        }
+
+
+class MarketingVideoIdeaForm(forms.ModelForm):
+    class Meta:
+        model = MarketingVideoIdea
+        fields = [
+            "video_title",
+            "platform",
+            "hook",
+            "main_talking_points",
+            "product_category",
+            "target_keyword",
+            "status",
+            "assigned_to",
+            "due_date",
+        ]
+        widgets = {
+            "video_title": forms.TextInput(attrs={"class": "form-control"}),
+            "platform": forms.Select(attrs={"class": "form-select"}),
+            "hook": forms.TextInput(attrs={"class": "form-control"}),
+            "main_talking_points": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+            "product_category": forms.Select(attrs={"class": "form-select"}),
+            "target_keyword": forms.TextInput(attrs={"class": "form-control"}),
+            "status": forms.Select(attrs={"class": "form-select"}),
+            "assigned_to": forms.Select(attrs={"class": "form-select"}),
+            "due_date": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
         }
 
 

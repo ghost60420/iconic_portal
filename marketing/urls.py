@@ -1,9 +1,14 @@
+from functools import wraps
+
 from django.urls import path
 from django.contrib.auth.decorators import login_required
+from django.http import HttpResponseForbidden
 
 from crm.permissions import require_access
+from crm.services.operations_permissions import ROLE_ADMIN, has_operations_role
 from . import views
 from . import views_social_connections
+from . import views_intelligence
 
 
 def perm(view_func):
@@ -16,9 +21,25 @@ def perm(view_func):
     return login_required(_wrapped)
 
 
+def intelligence_perm(view_func):
+    @wraps(view_func)
+    def _wrapped(request, *args, **kwargs):
+        user = request.user
+        if user.is_authenticated and (
+            user.is_superuser
+            or user.groups.filter(name="Marketing Manager").exists()
+            or has_operations_role(user, ROLE_ADMIN)
+        ):
+            return view_func(request, *args, **kwargs)
+        return HttpResponseForbidden("Marketing Intelligence access requires Admin or Marketing Manager approval.")
+
+    return login_required(_wrapped)
+
+
 urlpatterns = [
     path("", perm(views.marketing_home), name="marketing_home"),
     path("dashboard/", perm(views.dashboard), name="marketing_dashboard"),
+    path("intelligence/", intelligence_perm(views_intelligence.marketing_intelligence), name="marketing_intelligence"),
     path("connect/", perm(views_social_connections.social_connections), name="marketing_connect"),
     path(
         "social/connections/",

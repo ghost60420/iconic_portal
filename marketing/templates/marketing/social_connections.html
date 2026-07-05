@@ -244,6 +244,16 @@
           </div>
         {% endif %}
 
+        {% if card.readiness.approval_required %}
+          <div class="mk-error-box">
+            <strong>{{ card.readiness.status_label }}</strong><br>
+            {{ card.readiness.message }}
+          </div>
+          <div class="mk-hint">
+            LinkedIn Developer App requirement: request the Community Management API product, then reconnect after LinkedIn approves organization access.
+          </div>
+        {% endif %}
+
         <div class="mk-oauth-note">
           Daily sync command: <code>{{ card.config.command_hint }}</code>
         </div>
