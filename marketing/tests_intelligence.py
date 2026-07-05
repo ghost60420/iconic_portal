@@ -32,7 +32,7 @@ class MarketingIntelligenceTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Marketing Intelligence Center")
-        self.assertContains(response, "Google Trends Ideas")
+        self.assertContains(response, "Google Trends Placeholder")
         self.assertContains(response, "SEO Keyword Planner")
         self.assertContains(response, "Data Source Status")
         urlopen.assert_not_called()
@@ -161,8 +161,8 @@ class MarketingIntelligenceTests(TestCase):
         response = self.client.get(reverse("marketing_intelligence"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "API approval pending")
-        self.assertContains(response, "Planning tools remain available")
+        self.assertContains(response, "Google Business Profile")
+        self.assertContains(response, "Waiting for API")
 
     def test_linkedin_missing_organization_scopes_shows_approval_required(self):
         credential = OAuthCredential.objects.create(
@@ -177,7 +177,8 @@ class MarketingIntelligenceTests(TestCase):
         intelligence = self.client.get(reverse("marketing_intelligence"))
         connections = self.client.get(reverse("marketing_connection_settings"))
 
-        self.assertContains(intelligence, "LinkedIn API approval required")
+        self.assertContains(intelligence, "LinkedIn Analytics")
+        self.assertContains(intelligence, "Waiting for API")
         self.assertContains(connections, "LinkedIn API approval required")
         self.assertContains(connections, "Community Management API")
 
@@ -189,7 +190,7 @@ class MarketingIntelligenceTests(TestCase):
             with self.subTest(label=label):
                 self.assertContains(response, label)
 
-    def test_restricted_sales_user_is_blocked(self):
+    def test_sales_user_without_marketing_role_is_blocked(self):
         sales = get_user_model().objects.create_user(username="restricted-sales", password="pass1234")
         sales.groups.add(Group.objects.get_or_create(name="Sales")[0])
         self.client.force_login(sales)

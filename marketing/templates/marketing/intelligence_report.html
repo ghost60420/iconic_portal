@@ -1,0 +1,9 @@
+{% extends "crm/base.html" %}
+{% block content %}
+{% include "marketing/_style.html" %}
+<div class="mk-container">
+  <div class="mk-header"><div><div class="mk-title">{{ report.title }}</div><div class="mk-sub">Generated from stored CRM marketing data at {{ report.generated_at|date:"Y-m-d H:i" }}. No external API was called.</div></div><a class="btn btn-outline-light" href="{% url 'marketing_intelligence' %}#reports">Back to Operations Center</a></div>
+  <div class="mk-card"><div class="mk-metric-value">{{ report.rows|length }}</div><div class="mk-label">Report rows</div></div>
+  <div class="table-responsive mk-table" style="margin-top:14px;"><table class="table table-dark table-hover align-middle mb-0"><thead><tr><th>Item</th><th>Type / Category</th><th>Platform / Country / Count</th><th>Status</th><th>Due / Checked</th><th>Owner</th></tr></thead><tbody>{% for row in report.rows %}<tr><td><strong>{{ row.title }}</strong></td><td>{{ row.type }}</td><td>{{ row.platform }}</td><td>{{ row.status }}</td><td>{{ row.due|date:"Y-m-d"|default:"—" }}</td><td>{% if row.owner %}{{ row.owner.get_full_name|default:row.owner.username }}{% else %}—{% endif %}</td></tr>{% empty %}<tr><td colspan="6"><div class="mk-empty-state">No stored records for this report.</div></td></tr>{% endfor %}</tbody></table></div>
+</div>
+{% endblock %}

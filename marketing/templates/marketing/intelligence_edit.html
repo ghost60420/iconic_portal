@@ -1,0 +1,8 @@
+{% extends "crm/base.html" %}
+{% block content %}
+{% include "marketing/_style.html" %}
+<div class="mk-container">
+  <div class="mk-header"><div><div class="mk-title">{{ title }}</div><div class="mk-sub">Marketing Operations Center</div></div><a class="btn btn-outline-light" href="{% url 'marketing_intelligence' %}">Cancel</a></div>
+  <div class="mk-card"><form method="post" class="mk-form">{% csrf_token %}{{ form.as_p }}<button class="btn btn-warning" type="submit">Save Changes</button></form></div>
+</div>
+{% endblock %}

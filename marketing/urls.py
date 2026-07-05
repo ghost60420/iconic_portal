@@ -5,10 +5,10 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseForbidden
 
 from crm.permissions import require_access
-from crm.services.operations_permissions import ROLE_ADMIN, has_operations_role
 from . import views
 from . import views_social_connections
 from . import views_intelligence
+from .services.intelligence_permissions import intelligence_access
 
 
 def perm(view_func):
@@ -25,13 +25,13 @@ def intelligence_perm(view_func):
     @wraps(view_func)
     def _wrapped(request, *args, **kwargs):
         user = request.user
-        if user.is_authenticated and (
-            user.is_superuser
-            or user.groups.filter(name="Marketing Manager").exists()
-            or has_operations_role(user, ROLE_ADMIN)
-        ):
+        access = intelligence_access(user)
+        if access != "deny":
+            request.marketing_access_level = access
+            request.marketing_can_edit = access == "edit"
+            request.marketing_can_create = access in {"edit", "create"}
             return view_func(request, *args, **kwargs)
-        return HttpResponseForbidden("Marketing Intelligence access requires Admin or Marketing Manager approval.")
+        return HttpResponseForbidden("Marketing Intelligence access requires an approved marketing role.")
 
     return login_required(_wrapped)
 
@@ -40,6 +40,9 @@ urlpatterns = [
     path("", perm(views.marketing_home), name="marketing_home"),
     path("dashboard/", perm(views.dashboard), name="marketing_dashboard"),
     path("intelligence/", intelligence_perm(views_intelligence.marketing_intelligence), name="marketing_intelligence"),
+    path("intelligence/keywords/<int:pk>/edit/", intelligence_perm(views_intelligence.edit_keyword), name="marketing_intelligence_keyword_edit"),
+    path("intelligence/content/<int:pk>/edit/", intelligence_perm(views_intelligence.edit_content), name="marketing_intelligence_content_edit"),
+    path("intelligence/reports/<slug:report_type>/", intelligence_perm(views_intelligence.marketing_report), name="marketing_intelligence_report"),
     path("connect/", perm(views_social_connections.social_connections), name="marketing_connect"),
     path(
         "social/connections/",

@@ -735,6 +735,12 @@ class MarketingKeywordPlan(models.Model):
         ("hard", "Hard"),
         ("unknown", "Unknown"),
     ]
+    COMPETITION_CHOICES = [
+        ("low", "Low"),
+        ("medium", "Medium"),
+        ("high", "High"),
+        ("unknown", "Unknown"),
+    ]
     CONTENT_TYPE_CHOICES = [
         ("landing_page", "Landing page"),
         ("blog", "Blog"),
@@ -762,8 +768,12 @@ class MarketingKeywordPlan(models.Model):
     priority = models.CharField(max_length=10, choices=MARKETING_PRIORITY_CHOICES, default="medium")
     trend_status = models.CharField(max_length=20, choices=TREND_CHOICES, default="unknown")
     difficulty_estimate = models.CharField(max_length=20, choices=DIFFICULTY_CHOICES, default="unknown")
+    monthly_search_estimate = models.PositiveIntegerField(null=True, blank=True)
+    competition = models.CharField(max_length=20, choices=COMPETITION_CHOICES, default="unknown")
     content_type = models.CharField(max_length=20, choices=CONTENT_TYPE_CHOICES, default="landing_page")
     landing_page_suggestion = models.CharField(max_length=300, blank=True, default="")
+    suggested_article = models.CharField(max_length=300, blank=True, default="")
+    suggested_video = models.CharField(max_length=300, blank=True, default="")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="idea")
     notes = models.TextField(blank=True, default="")
     created_by = models.ForeignKey(
@@ -795,6 +805,7 @@ class MarketingContentIdea(models.Model):
         ("linkedin_post", "LinkedIn post"),
         ("instagram_carousel", "Instagram carousel"),
         ("tiktok_video", "TikTok video"),
+        ("youtube_short", "YouTube Short"),
         ("google_business_post", "Google Business post"),
         ("email_campaign", "Email campaign"),
         ("case_study", "Case study"),
@@ -820,6 +831,7 @@ class MarketingContentIdea(models.Model):
         ("assigned", "Assigned"),
         ("in_progress", "In progress"),
         ("ready_for_review", "Ready for review"),
+        ("scheduled", "Scheduled"),
         ("published", "Published"),
         ("archived", "Archived"),
     ]
@@ -828,7 +840,13 @@ class MarketingContentIdea(models.Model):
     content_type = models.CharField(max_length=30, choices=CONTENT_TYPE_CHOICES, default="blog")
     target_platform = models.CharField(max_length=30, choices=PLATFORM_CHOICES, default="website")
     keyword = models.CharField(max_length=240, blank=True, default="")
+    secondary_keywords = models.TextField(blank=True, default="")
+    meta_title = models.CharField(max_length=300, blank=True, default="")
+    meta_description = models.CharField(max_length=500, blank=True, default="")
+    outline = models.TextField(blank=True, default="")
+    call_to_action = models.CharField(max_length=300, blank=True, default="")
     audience = models.CharField(max_length=240, blank=True, default="")
+    estimated_read_time = models.PositiveSmallIntegerField(null=True, blank=True)
     funnel_stage = models.CharField(max_length=20, choices=FUNNEL_CHOICES, default="awareness")
     priority = models.CharField(max_length=10, choices=MARKETING_PRIORITY_CHOICES, default="medium")
     due_date = models.DateField(null=True, blank=True, db_index=True)
@@ -838,6 +856,13 @@ class MarketingContentIdea(models.Model):
         blank=True,
         on_delete=models.SET_NULL,
         related_name="assigned_marketing_content_ideas",
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="authored_marketing_content_ideas",
     )
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default="idea", db_index=True)
     notes = models.TextField(blank=True, default="")
@@ -872,7 +897,11 @@ class MarketingVideoIdea(models.Model):
     video_title = models.CharField(max_length=300)
     platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES, default="youtube")
     hook = models.CharField(max_length=500, blank=True, default="")
+    thumbnail_text = models.CharField(max_length=200, blank=True, default="")
+    opening = models.TextField(blank=True, default="")
     main_talking_points = models.TextField(blank=True, default="")
+    closing_cta = models.CharField(max_length=300, blank=True, default="")
+    video_length = models.CharField(max_length=80, blank=True, default="")
     product_category = models.CharField(
         max_length=50,
         choices=MARKETING_PRODUCT_CATEGORY_CHOICES,
@@ -904,6 +933,42 @@ class MarketingVideoIdea(models.Model):
 
     def __str__(self) -> str:
         return self.video_title
+
+
+class MarketingKeywordGeneration(models.Model):
+    country = models.CharField(max_length=2, choices=MARKETING_COUNTRY_CHOICES, default="CA")
+    industry = models.CharField(max_length=160)
+    product = models.CharField(max_length=160)
+    target_customer = models.CharField(max_length=240)
+    primary_keywords = models.JSONField(default=list, blank=True)
+    secondary_keywords = models.JSONField(default=list, blank=True)
+    long_tail_keywords = models.JSONField(default=list, blank=True)
+    customer_questions = models.JSONField(default=list, blank=True)
+    comparison_keywords = models.JSONField(default=list, blank=True)
+    buying_intent_keywords = models.JSONField(default=list, blank=True)
+    commercial_keywords = models.JSONField(default=list, blank=True)
+    local_keywords = models.JSONField(default=list, blank=True)
+    brand_keywords = models.JSONField(default=list, blank=True)
+    blog_ideas = models.JSONField(default=list, blank=True)
+    video_ideas = models.JSONField(default=list, blank=True)
+    social_post_ideas = models.JSONField(default=list, blank=True)
+    google_business_post_ideas = models.JSONField(default=list, blank=True)
+    email_campaign_ideas = models.JSONField(default=list, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="marketing_keyword_generations",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [models.Index(fields=["country", "created_at"])]
+
+    def __str__(self) -> str:
+        return f"{self.product} — {self.get_country_display()}"
 
 
 class OAuthCredential(models.Model):
@@ -1025,6 +1090,11 @@ class MarketingCompetitor(models.Model):
     industry = models.CharField(max_length=120, blank=True, default="")
     country = models.CharField(max_length=2, choices=MARKETING_COUNTRY_CHOICES, blank=True, default="")
     category = models.CharField(max_length=120, blank=True, default="")
+    keywords = models.TextField(blank=True, default="")
+    strengths = models.TextField(blank=True, default="")
+    weaknesses = models.TextField(blank=True, default="")
+    content_frequency = models.CharField(max_length=120, blank=True, default="")
+    content_ideas = models.TextField(blank=True, default="")
     notes = models.TextField(blank=True, default="")
     last_checked_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="watching")
@@ -1037,6 +1107,97 @@ class MarketingCompetitor(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+
+class MarketingTrendEntry(models.Model):
+    TREND_CHOICES = MarketingKeywordPlan.TREND_CHOICES
+
+    trend_category = models.CharField(max_length=120)
+    country = models.CharField(max_length=2, choices=MARKETING_COUNTRY_CHOICES, default="CA")
+    product = models.CharField(max_length=160)
+    keyword = models.CharField(max_length=240, db_index=True)
+    trend_direction = models.CharField(max_length=20, choices=TREND_CHOICES, default="unknown")
+    recommended_content_idea = models.CharField(max_length=300, blank=True, default="")
+    notes = models.TextField(blank=True, default="")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="marketing_trend_entries",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-updated_at",)
+        indexes = [models.Index(fields=["country", "trend_direction"])]
+
+    def __str__(self) -> str:
+        return f"{self.keyword} — {self.get_country_display()}"
+
+
+class MarketingTask(models.Model):
+    PLATFORM_CHOICES = [
+        ("website", "Website"),
+        ("google_business", "Google Business"),
+        ("linkedin", "LinkedIn"),
+        ("facebook", "Facebook"),
+        ("instagram", "Instagram"),
+        ("tiktok", "TikTok"),
+        ("youtube", "YouTube"),
+        ("email", "Email"),
+    ]
+    STATUS_CHOICES = [
+        ("assigned", "Assigned"),
+        ("in_progress", "In progress"),
+        ("completed", "Completed"),
+        ("cancelled", "Cancelled"),
+    ]
+
+    title = models.CharField(max_length=300)
+    source_keyword = models.ForeignKey(
+        MarketingKeywordPlan,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="marketing_tasks",
+    )
+    source_content = models.ForeignKey(
+        MarketingContentIdea,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="marketing_tasks",
+    )
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="assigned_marketing_tasks",
+    )
+    due_date = models.DateField(null=True, blank=True, db_index=True)
+    priority = models.CharField(max_length=10, choices=MARKETING_PRIORITY_CHOICES, default="medium")
+    platform = models.CharField(max_length=30, choices=PLATFORM_CHOICES, default="website")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="assigned", db_index=True)
+    notes = models.TextField(blank=True, default="")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="created_marketing_tasks",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("due_date", "-priority", "-created_at")
+        indexes = [models.Index(fields=["status", "priority"])]
+
+    def __str__(self) -> str:
+        return self.title
 
 
 class MarketingCompetitorAccount(models.Model):

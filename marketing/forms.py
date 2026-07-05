@@ -10,7 +10,10 @@ from .models import (
     MarketingCompetitorAccount,
     MarketingCompetitorPost,
     MarketingContentIdea,
+    MarketingKeywordGeneration,
     MarketingKeywordPlan,
+    MarketingTask,
+    MarketingTrendEntry,
     MarketingVideoIdea,
     SocialAccount,
 )
@@ -147,13 +150,21 @@ class SocialAccountConnectForm(forms.Form):
 class MarketingCompetitorForm(forms.ModelForm):
     class Meta:
         model = MarketingCompetitor
-        fields = ["name", "website", "country", "category", "industry", "status", "last_checked_at", "notes", "is_active"]
+        fields = [
+            "name", "website", "country", "category", "industry", "keywords", "strengths",
+            "weaknesses", "content_frequency", "content_ideas", "status", "last_checked_at", "notes", "is_active",
+        ]
         widgets = {
             "name": forms.TextInput(attrs={"class": "form-control"}),
             "website": forms.URLInput(attrs={"class": "form-control"}),
             "country": forms.Select(attrs={"class": "form-select"}),
             "category": forms.TextInput(attrs={"class": "form-control"}),
             "industry": forms.TextInput(attrs={"class": "form-control"}),
+            "keywords": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
+            "strengths": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
+            "weaknesses": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
+            "content_frequency": forms.TextInput(attrs={"class": "form-control", "placeholder": "Example: 3 posts per week"}),
+            "content_ideas": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
             "status": forms.Select(attrs={"class": "form-select"}),
             "last_checked_at": forms.DateTimeInput(attrs={"class": "form-control", "type": "datetime-local"}),
             "notes": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
@@ -172,8 +183,12 @@ class MarketingKeywordPlanForm(forms.ModelForm):
             "priority",
             "trend_status",
             "difficulty_estimate",
+            "monthly_search_estimate",
+            "competition",
             "content_type",
             "landing_page_suggestion",
+            "suggested_article",
+            "suggested_video",
             "status",
             "notes",
         ]
@@ -186,11 +201,22 @@ class MarketingKeywordPlanForm(forms.ModelForm):
             "priority": forms.Select(attrs={"class": "form-select"}),
             "trend_status": forms.Select(attrs={"class": "form-select"}),
             "difficulty_estimate": forms.Select(attrs={"class": "form-select"}),
+            "monthly_search_estimate": forms.NumberInput(attrs={"class": "form-control", "min": 0}),
+            "competition": forms.Select(attrs={"class": "form-select"}),
             "content_type": forms.Select(attrs={"class": "form-select"}),
             "landing_page_suggestion": forms.TextInput(attrs={"class": "form-control"}),
+            "suggested_article": forms.TextInput(attrs={"class": "form-control"}),
+            "suggested_video": forms.TextInput(attrs={"class": "form-control"}),
             "status": forms.Select(attrs={"class": "form-select"}),
             "notes": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["competition"].required = False
+
+    def clean_competition(self):
+        return self.cleaned_data.get("competition") or "unknown"
 
 
 class MarketingContentIdeaForm(forms.ModelForm):
@@ -223,6 +249,11 @@ class MarketingContentIdeaForm(forms.ModelForm):
             "notes": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
         }
 
+    def __init__(self, *args, assignee_choices=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if assignee_choices is not None:
+            self.fields["assigned_to"].widget.choices = assignee_choices
+
 
 class MarketingVideoIdeaForm(forms.ModelForm):
     class Meta:
@@ -231,7 +262,11 @@ class MarketingVideoIdeaForm(forms.ModelForm):
             "video_title",
             "platform",
             "hook",
+            "thumbnail_text",
+            "opening",
             "main_talking_points",
+            "closing_cta",
+            "video_length",
             "product_category",
             "target_keyword",
             "status",
@@ -242,13 +277,109 @@ class MarketingVideoIdeaForm(forms.ModelForm):
             "video_title": forms.TextInput(attrs={"class": "form-control"}),
             "platform": forms.Select(attrs={"class": "form-select"}),
             "hook": forms.TextInput(attrs={"class": "form-control"}),
+            "thumbnail_text": forms.TextInput(attrs={"class": "form-control"}),
+            "opening": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
             "main_talking_points": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+            "closing_cta": forms.TextInput(attrs={"class": "form-control"}),
+            "video_length": forms.TextInput(attrs={"class": "form-control", "placeholder": "Example: 60 seconds"}),
             "product_category": forms.Select(attrs={"class": "form-select"}),
             "target_keyword": forms.TextInput(attrs={"class": "form-control"}),
             "status": forms.Select(attrs={"class": "form-select"}),
             "assigned_to": forms.Select(attrs={"class": "form-select"}),
             "due_date": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
         }
+
+    def __init__(self, *args, assignee_choices=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if assignee_choices is not None:
+            self.fields["assigned_to"].widget.choices = assignee_choices
+
+
+class MarketingKeywordGenerationForm(forms.ModelForm):
+    class Meta:
+        model = MarketingKeywordGeneration
+        fields = ["country", "industry", "product", "target_customer"]
+        widgets = {
+            "country": forms.Select(attrs={"class": "form-select"}),
+            "industry": forms.TextInput(attrs={"class": "form-control", "placeholder": "Apparel manufacturing"}),
+            "product": forms.TextInput(attrs={"class": "form-control", "placeholder": "Private label hoodies"}),
+            "target_customer": forms.TextInput(attrs={"class": "form-control", "placeholder": "Canadian startup clothing brands"}),
+        }
+
+
+class MarketingBlogPlanForm(forms.ModelForm):
+    class Meta:
+        model = MarketingContentIdea
+        fields = [
+            "title", "keyword", "secondary_keywords", "meta_title", "meta_description",
+            "outline", "call_to_action", "audience", "estimated_read_time", "author",
+            "assigned_to", "priority", "due_date", "status", "notes",
+        ]
+        widgets = {
+            "title": forms.TextInput(attrs={"class": "form-control"}),
+            "keyword": forms.TextInput(attrs={"class": "form-control"}),
+            "secondary_keywords": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
+            "meta_title": forms.TextInput(attrs={"class": "form-control"}),
+            "meta_description": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
+            "outline": forms.Textarea(attrs={"class": "form-control", "rows": 5}),
+            "call_to_action": forms.TextInput(attrs={"class": "form-control"}),
+            "audience": forms.TextInput(attrs={"class": "form-control"}),
+            "estimated_read_time": forms.NumberInput(attrs={"class": "form-control", "min": 1}),
+            "author": forms.Select(attrs={"class": "form-select"}),
+            "assigned_to": forms.Select(attrs={"class": "form-select"}),
+            "priority": forms.Select(attrs={"class": "form-select"}),
+            "due_date": forms.DateInput(attrs={"class": "form-control", "type": "date"}),
+            "status": forms.Select(attrs={"class": "form-select"}),
+            "notes": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+        }
+
+    def __init__(self, *args, assignee_choices=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if assignee_choices is not None:
+            self.fields["author"].widget.choices = assignee_choices
+            self.fields["assigned_to"].widget.choices = assignee_choices
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        instance.content_type = "blog"
+        instance.target_platform = "website"
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance
+
+
+class MarketingTrendEntryForm(forms.ModelForm):
+    class Meta:
+        model = MarketingTrendEntry
+        fields = [
+            "trend_category", "country", "product", "keyword", "trend_direction",
+            "recommended_content_idea", "notes",
+        ]
+        widgets = {
+            "trend_category": forms.TextInput(attrs={"class": "form-control", "placeholder": "Example: Seasonal demand"}),
+            "country": forms.Select(attrs={"class": "form-select"}),
+            "product": forms.TextInput(attrs={"class": "form-control"}),
+            "keyword": forms.TextInput(attrs={"class": "form-control"}),
+            "trend_direction": forms.Select(attrs={"class": "form-select"}),
+            "recommended_content_idea": forms.TextInput(attrs={"class": "form-control"}),
+            "notes": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
+        }
+
+
+class MarketingTaskForm(forms.Form):
+    title = forms.CharField(max_length=300, widget=forms.TextInput(attrs={"class": "form-control"}))
+    source = forms.ChoiceField(required=False, choices=(), widget=forms.Select(attrs={"class": "form-select"}))
+    assigned_to = forms.ChoiceField(required=False, choices=(), widget=forms.Select(attrs={"class": "form-select"}))
+    due_date = forms.DateField(required=False, widget=forms.DateInput(attrs={"class": "form-control", "type": "date"}))
+    priority = forms.ChoiceField(choices=MarketingTask._meta.get_field("priority").choices, widget=forms.Select(attrs={"class": "form-select"}))
+    platform = forms.ChoiceField(choices=MarketingTask.PLATFORM_CHOICES, widget=forms.Select(attrs={"class": "form-select"}))
+    notes = forms.CharField(required=False, widget=forms.Textarea(attrs={"class": "form-control", "rows": 3}))
+
+    def __init__(self, *args, assignee_choices=None, source_choices=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["assigned_to"].choices = assignee_choices or [("", "Unassigned")]
+        self.fields["source"].choices = source_choices or [("", "No source")]
 
 
 class MarketingCompetitorAccountForm(forms.ModelForm):
