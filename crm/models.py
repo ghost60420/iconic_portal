@@ -2220,6 +2220,7 @@ class QuickCosting(models.Model):
             and self.approved_by_id == self.created_by_id
             and self.approved_by
             and not self.approved_by.is_superuser
+            and not getattr(self, "_authorized_self_approval", False)
         ):
             raise ValidationError("The costing creator cannot approve their own Quick Costing.")
 
@@ -2230,7 +2231,10 @@ class QuickCosting(models.Model):
                 previous_approver_id = (
                     type(self).objects.filter(pk=self.pk).values_list("approved_by_id", flat=True).first()
                 )
-            if previous_approver_id != self.approved_by_id:
+            if (
+                previous_approver_id != self.approved_by_id
+                and not getattr(self, "_authorized_self_approval", False)
+            ):
                 approver = self.approved_by
                 if approver and not approver.is_superuser:
                     raise ValidationError("The costing creator cannot approve their own Quick Costing.")

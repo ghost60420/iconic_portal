@@ -138,7 +138,12 @@ def notify_quotation_status_decision(sender, instance, created=False, raw=False,
 
 @receiver(post_save, sender=QuickCosting)
 def notify_ceo_on_quick_costing_submission(sender, instance, created=False, raw=False, **kwargs):
-    if raw or created or not instance.approval_submitted_at:
+    if (
+        raw
+        or created
+        or getattr(instance, "_skip_quick_approval_notifications", False)
+        or not instance.approval_submitted_at
+    ):
         return
     before = getattr(instance, "_crm_audit_before", {})
     if before.get("approval_submitted_at") == str(instance.approval_submitted_at):
@@ -156,7 +161,12 @@ def notify_ceo_on_quick_costing_submission(sender, instance, created=False, raw=
 
 @receiver(post_save, sender=QuickCosting)
 def notify_quick_costing_decision(sender, instance, created=False, raw=False, **kwargs):
-    if raw or created or instance.status not in {QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_REJECTED}:
+    if (
+        raw
+        or created
+        or getattr(instance, "_skip_quick_approval_notifications", False)
+        or instance.status not in {QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_REJECTED}
+    ):
         return
     before = getattr(instance, "_crm_audit_before", {})
     if before.get("status") == instance.status:

@@ -396,6 +396,24 @@ class UnifiedCEOApprovalQueueTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertLessEqual(len(six_row_queries), len(one_row_queries))
 
+    def test_quick_rows_do_not_add_queue_queries(self):
+        first = self._quick(project_name="First submitted quick")
+        self._submit_quick(first)
+        self.client.force_login(self.ceo)
+        with CaptureQueriesContext(connection) as one_row_queries:
+            response = self.client.get(reverse("ceo_quotation_approval_queue"))
+        self.assertEqual(response.status_code, 200)
+
+        for number in range(2, 7):
+            quick = self._quick(project_name=f"Submitted quick {number}")
+            self._submit_quick(quick)
+        self.client.force_login(self.ceo)
+        with CaptureQueriesContext(connection) as six_row_queries:
+            response = self.client.get(reverse("ceo_quotation_approval_queue"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertLessEqual(len(six_row_queries), len(one_row_queries))
+
     def test_only_ceo_or_authorized_approver_can_decide(self):
         quick = self._quick()
         advanced = self._advanced("QT20269904")

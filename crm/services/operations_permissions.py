@@ -259,6 +259,18 @@ def has_operations_role(user, *roles):
     return bool(operations_role_names(user).intersection(roles))
 
 
+def can_approve_costing(user):
+    """Canonical approver predicate for Quick and Advanced Costing workflows."""
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    if getattr(user, "is_superuser", False):
+        return True
+    access = getattr(user, "access", None)
+    if access and getattr(access, "can_costing_approve", False):
+        return True
+    return ROLE_CEO.casefold() in operations_group_names(user)
+
+
 def can_archive_invoices(user):
     if not user or not getattr(user, "is_authenticated", False):
         return False

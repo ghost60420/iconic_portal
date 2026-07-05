@@ -201,7 +201,8 @@
           <th>Quotation</th>
           <th>Lead</th>
           <th>Opportunity</th>
-          <th>Client</th>
+          <th>Customer</th>
+          <th>Product</th>
           <th>Salesperson</th>
           <th>Currency</th>
           <th class="cq-right">Revenue</th>
@@ -210,7 +211,8 @@
           <th class="cq-right">Margin</th>
           <th class="cq-right">Estimated Days</th>
           <th class="cq-right">Daily Target</th>
-          <th>Submitted</th>
+          <th>Submitted By</th>
+          <th>Submitted Date</th>
           <th>Status</th>
           <th class="cq-right">Actions</th>
         </tr>
@@ -228,6 +230,7 @@
             <td>{{ row.lead_id|default:"-" }}</td>
             <td>{{ row.opportunity_id|default:"-" }}</td>
             <td>{{ row.client_name }}</td>
+            <td>{{ row.product_name }}</td>
             <td>{{ row.salesperson }}</td>
             <td>{{ row.currency }}</td>
             <td class="cq-right"><span class="cq-money-label">{{ row.revenue_label }}</span>{{ row.total_amount|finance_money:row.currency }}</td>
@@ -236,12 +239,13 @@
             <td class="cq-right"><span class="cq-money-label">{{ row.margin_label }}</span>{% if row.cost_available %}{{ row.profit_margin|floatformat:2 }}%{% else %}Margin N/A{% endif %}</td>
             <td class="cq-right">{{ row.estimated_days|default:"-" }}</td>
             <td class="cq-right">{% if row.daily_target != None %}{{ row.daily_target|floatformat:2 }} pcs/day{% else %}-{% endif %}</td>
+            <td>{{ row.submitted_by }}</td>
             <td>{{ row.submitted_at|date:"Y-m-d H:i" }}</td>
             <td><span class="cq-status">{{ row.status_label }}</span></td>
             <td class="cq-right">
               <div class="cq-row-actions">
                 {% if can_use_existing_approval %}<a class="cq-btn" href="{{ row.detail_url }}">View</a>{% endif %}
-                {% if can_use_existing_approval and row.status_key == "pending" %}
+                {% if can_use_existing_approval and row.status_key == "pending" and row.can_decide != False %}
                   <form method="post" action="{{ row.approve_url }}">
                     {% csrf_token %}
                     <button class="cq-btn cq-btn--gold" type="submit" onclick="return confirm('Approve this quotation using the existing approval action?');">Approve</button>

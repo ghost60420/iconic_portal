@@ -8,7 +8,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.core.files.base import ContentFile
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import F, Q
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -40,16 +40,17 @@ from .services.costing_currency import (
 from .services.costing_engine import compute_costing, validate_costing
 from .services.costing_workflow import (
     CostingWorkflowError,
+    approve_quick_costing,
     convert_costing_to_quotation,
     create_invoice_from_costing,
     create_invoice_from_quick_costing,
     get_costing_quote_amounts,
+    is_authorized_quick_costing_creator,
 )
 from .services.order_lifecycle import create_lifecycle_from_costing
-from .services.operations_permissions import ROLE_SALES, has_operations_role
+from .services.operations_permissions import ROLE_SALES, can_approve_costing, has_operations_role
 from .services.production_orders import (
     ProductionOrderCreationError,
-    create_production_order_from_approved_quick_costing,
     create_production_order_from_approved_quotation,
 )
 from .services.workflow_visibility import build_workflow_visibility_context
@@ -77,19 +78,7 @@ All agreements are governed under the laws of British Columbia, Canada."""
 
 
 def _can_approve(user):
-    if not user or not user.is_authenticated:
-        return False
-    if user.is_superuser:
-        return True
-    group_names = set(user.groups.filter(name__in=["CEO", "Sales", "Accounts"]).values_list("name", flat=True))
-    if "CEO" in group_names:
-        return True
-    if "Sales" in group_names:
-        return False
-    if "Accounts" in group_names:
-        return False
-    access = getattr(user, "access", None)
-    return bool(access and access.can_costing_approve)
+    return can_approve_costing(user)
 
 
 def _can_convert_to_invoice(user):
@@ -108,6 +97,14 @@ def _can_submit_quick_costing(user):
     if not user or not user.is_authenticated or _can_approve(user):
         return False
     return has_operations_role(user, ROLE_SALES) or not _can_convert_to_invoice(user)
+
+
+def _can_decide_quick_costing(user, quick_costing, *, user_can_approve=None):
+    if user_can_approve is None:
+        user_can_approve = _can_approve(user)
+    if not user_can_approve:
+        return False
+    return True
 
 
 def _deny_without_internal_costing_or_accounting(request):
@@ -395,7 +392,7 @@ def _quick_approval_status_label(quick_costing):
     }:
         return "Approved"
     if quick_costing.approval_submitted_at:
-        return "Submitted for CEO Approval"
+        return "Pending CEO Approval"
     return "Draft"
 
 
@@ -726,7 +723,7 @@ def _quick_queue_status(quick_costing, converted=False):
     if quick_costing.status == QuickCosting.STATUS_APPROVED:
         return "approved", "CEO Approved"
     if quick_costing.approval_submitted_at:
-        return "pending", "Submitted for CEO Approval"
+        return "pending", "Pending CEO Approval"
     return "draft", "Draft"
 
 
@@ -763,7 +760,9 @@ def _advanced_approval_queue_row(costing):
             or getattr(lead, "account_brand", "")
             or "Client"
         ),
+        "product_name": costing.style_name or costing.get_product_type_display() or "-",
         "salesperson": _quotation_salesperson_label(costing) or "Not assigned",
+        "submitted_by": _display_user(costing.quoted_by) or "Not recorded",
         "currency": costing.currency or "BDT",
         "total_amount": total_amount,
         "cost_amount": amounts["standard_cost_total"],
@@ -780,6 +779,7 @@ def _advanced_approval_queue_row(costing):
         "status_key": status_key,
         "status_label": status_label,
         "converted": converted,
+        "can_decide": True,
         "detail_url": reverse("cost_sheet_client_quotation", args=[costing.pk]),
         "approve_url": reverse("cost_sheet_quotation_approve", args=[costing.pk]),
         "reject_url": reverse("cost_sheet_quotation_reject", args=[costing.pk]),
@@ -788,7 +788,7 @@ def _advanced_approval_queue_row(costing):
     }
 
 
-def _quick_approval_queue_row(quick_costing):
+def _quick_approval_queue_row(quick_costing, user=None, *, user_can_approve=None):
     calc = _quick_costing_calc(quick_costing)
     converted = bool(list(quick_costing.invoices.all()))
     status_key, status_label = _quick_queue_status(quick_costing, converted=converted)
@@ -834,7 +834,9 @@ def _quick_approval_queue_row(quick_costing):
             or getattr(lead, "account_brand", "")
             or "Client"
         ),
+        "product_name": quick_costing.get_product_type_display() or quick_costing.project_name or "-",
         "salesperson": _display_user(salesperson) or "Not assigned",
+        "submitted_by": _display_user(quick_costing.approval_submitted_by) or "Not recorded",
         "currency": quick_costing.currency or "BDT",
         "total_amount": calc["total_sales_order"],
         "cost_amount": calc["total_cost_order"],
@@ -851,6 +853,11 @@ def _quick_approval_queue_row(quick_costing):
         "status_key": status_key,
         "status_label": status_label,
         "converted": converted,
+        "can_decide": _can_decide_quick_costing(
+            user,
+            quick_costing,
+            user_can_approve=user_can_approve,
+        ),
         "detail_url": reverse("quick_costing_detail", args=[quick_costing.pk]),
         "approve_url": reverse("quick_costing_approve", args=[quick_costing.pk]),
         "reject_url": reverse("quick_costing_reject", args=[quick_costing.pk]),
@@ -904,6 +911,10 @@ def ceo_quotation_approval_queue(request):
         .filter(
             Q(approval_submitted_at__isnull=False)
             | ~Q(status=QuickCosting.STATUS_DRAFT)
+        )
+        .exclude(
+            pricing_type=QuickCosting.PRICING_CMT,
+            created_by=F("approved_by"),
         )
         .order_by("-approval_submitted_at", "-updated_at", "-id")
     )
@@ -986,7 +997,14 @@ def ceo_quotation_approval_queue(request):
         )
 
     rows = [_advanced_approval_queue_row(costing) for costing in advanced_qs[:200]]
-    rows.extend(_quick_approval_queue_row(quick_costing) for quick_costing in quick_qs[:200])
+    rows.extend(
+        _quick_approval_queue_row(
+            quick_costing,
+            request.user,
+            user_can_approve=can_decide,
+        )
+        for quick_costing in quick_qs[:200]
+    )
     rows.sort(key=lambda row: (row["submitted_at"], row["costing_type"], row["record"].pk), reverse=True)
     rows = rows[:200]
 
@@ -1245,8 +1263,32 @@ def cost_sheet_create(request, opportunity_id=None):
                     quick_costing.account_brand = account_brand
                     quick_costing.contact_name = contact_name
                 quick_costing.created_by = request.user if request.user.is_authenticated else None
-                quick_costing.save()
-                messages.success(request, "Quick costing saved.")
+                if is_authorized_quick_costing_creator(request.user, quick_costing):
+                    try:
+                        quick_costing, _production_order, _created = approve_quick_costing(
+                            quick_costing,
+                            approver=request.user,
+                            auto_submit=True,
+                        )
+                    except (CostingWorkflowError, ProductionOrderCreationError) as exc:
+                        messages.error(request, str(exc))
+                        return render(
+                            request,
+                            "crm/costing/costsheet_form.html",
+                            {
+                                "quick_form": quick_form,
+                                "opportunity": opportunity,
+                                "mode": "create",
+                                "costing_type": "quick",
+                            },
+                        )
+                    messages.success(
+                        request,
+                        "Quick costing approved automatically and local sewing production created.",
+                    )
+                else:
+                    quick_costing.save()
+                    messages.success(request, "Quick costing saved.")
                 return redirect("quick_costing_detail", pk=quick_costing.pk)
             messages.error(request, "Please fix the errors below.")
         else:
@@ -1343,6 +1385,12 @@ def quick_costing_detail(request, pk):
             )
             and _can_submit_quick_costing(request.user)
         ),
+        "can_auto_approve_quick_costing": (
+            not invoice
+            and quick_costing.status in {QuickCosting.STATUS_DRAFT, QuickCosting.STATUS_REJECTED}
+            and is_authorized_quick_costing_creator(request.user, quick_costing)
+        ),
+        "can_decide_quick_costing": _can_decide_quick_costing(request.user, quick_costing),
         **workflow_visibility,
     }
     return render(request, "crm/costing/quick_costing_detail.html", context)
@@ -1363,8 +1411,34 @@ def quick_costing_edit(request, pk):
     if request.method == "POST":
         form = QuickCostingForm(request.POST, instance=quick_costing)
         if form.is_valid():
-            form.save()
-            messages.success(request, "Quick costing updated.")
+            quick_costing = form.save(commit=False)
+            if is_authorized_quick_costing_creator(request.user, quick_costing) and not quick_costing.is_locked:
+                try:
+                    quick_costing, _production_order, _created = approve_quick_costing(
+                        quick_costing,
+                        approver=request.user,
+                        auto_submit=True,
+                    )
+                except (CostingWorkflowError, ProductionOrderCreationError) as exc:
+                    messages.error(request, str(exc))
+                    return render(
+                        request,
+                        "crm/costing/costsheet_form.html",
+                        {
+                            "quick_form": form,
+                            "quick_costing": quick_costing,
+                            "opportunity": quick_costing.opportunity,
+                            "mode": "edit",
+                            "costing_type": "quick",
+                        },
+                    )
+                messages.success(
+                    request,
+                    "Quick costing approved automatically and local sewing production created.",
+                )
+            else:
+                quick_costing.save()
+                messages.success(request, "Quick costing updated.")
             return redirect("quick_costing_detail", pk=pk)
         messages.error(request, "Please fix the errors below.")
     else:
@@ -1430,25 +1504,14 @@ def quick_costing_approve(request, pk):
     if not _can_approve(request.user):
         messages.error(request, "You do not have permission to approve.")
         return redirect("quick_costing_detail", pk=pk)
-    if quick_costing.status != QuickCosting.STATUS_DRAFT or not quick_costing.approval_submitted_at:
-        messages.error(request, "Quick Costing must be submitted before CEO approval.")
-        return redirect("quick_costing_detail", pk=pk)
-    if quick_costing.created_by_id == request.user.id and not request.user.is_superuser:
-        messages.error(request, "The costing creator cannot approve their own Quick Costing.")
-        return redirect("quick_costing_detail", pk=pk)
+    auto_submit = is_authorized_quick_costing_creator(request.user, quick_costing)
     try:
-        with transaction.atomic():
-            quick_costing.status = QuickCosting.STATUS_APPROVED
-            quick_costing.approved_by = _user_or_none(request.user)
-            quick_costing.approved_at = timezone.now()
-            quick_costing.rejected_by = None
-            quick_costing.rejected_at = None
-            quick_costing.save(
-                update_fields=["status", "approved_by", "approved_at", "rejected_by", "rejected_at", "updated_at"]
-            )
-            if quick_costing.is_bangladesh_local_sewing:
-                create_production_order_from_approved_quick_costing(quick_costing, user=request.user)
-    except ProductionOrderCreationError as exc:
+        quick_costing, _production_order, _created = approve_quick_costing(
+            quick_costing,
+            approver=request.user,
+            auto_submit=auto_submit,
+        )
+    except (CostingWorkflowError, ProductionOrderCreationError) as exc:
         messages.error(request, str(exc))
         return redirect("quick_costing_detail", pk=pk)
     messages.success(

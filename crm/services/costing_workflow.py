@@ -4,7 +4,15 @@ from django.db import IntegrityError, transaction
 from django.db.models import Sum
 from django.utils import timezone
 
-from crm.models import ActualCostEntry, CostingAuditLog, CostingHeader, Invoice, ProductionOrder, QuickCosting
+from crm.models import (
+    ActualCostEntry,
+    CostingAuditLog,
+    CostingHeader,
+    CRMAuditLog,
+    Invoice,
+    ProductionOrder,
+    QuickCosting,
+)
 from crm.services.costing_currency import (
     CurrencyConversionError,
     convert_currency,
@@ -16,6 +24,7 @@ from crm.services.order_lifecycle import (
     create_lifecycle_from_production,
     create_lifecycle_from_quotation,
 )
+from crm.services.operations_permissions import can_approve_costing
 
 
 DISPLAY_QUANT = Decimal("0.01")
@@ -42,6 +51,121 @@ def _money(value):
 
 def _user_or_none(user):
     return user if user and getattr(user, "is_authenticated", False) else None
+
+
+def is_authorized_quick_costing_creator(user, quick_costing):
+    return bool(
+        can_approve_costing(user)
+        and quick_costing.is_bangladesh_local_sewing
+        and quick_costing.created_by_id
+        and quick_costing.created_by_id == getattr(user, "pk", None)
+    )
+
+
+def _schedule_auto_approval_audit(quick_costing, actor, approved_at):
+    common = {
+        "actor": actor,
+        "module": "quick_costing",
+        "record_id": str(quick_costing.pk),
+        "record_label": quick_costing.quotation_number or quick_costing.project_name or f"QC-{quick_costing.pk}",
+        "target_url": f"/costing/quick/{quick_costing.pk}/",
+    }
+    rows = [
+        CRMAuditLog(
+            action_type=CRMAuditLog.ACTION_UPDATED,
+            field_name="approval_submitted_at",
+            previous_value="",
+            new_value=approved_at.isoformat(),
+            **common,
+        ),
+        CRMAuditLog(
+            action_type=CRMAuditLog.ACTION_APPROVED,
+            field_name="status",
+            previous_value=QuickCosting.STATUS_DRAFT,
+            new_value=QuickCosting.STATUS_APPROVED,
+            **common,
+        ),
+    ]
+    transaction.on_commit(lambda: CRMAuditLog.objects.bulk_create(rows), robust=True)
+
+
+def approve_quick_costing(quick_costing, *, approver, auto_submit=False):
+    """Canonical Quick Costing approval transaction for queue and authorized-creator paths."""
+    if not can_approve_costing(approver):
+        raise CostingWorkflowError("You do not have permission to approve Quick Costing.")
+
+    is_new = not quick_costing.pk
+    if is_new and not auto_submit:
+        raise CostingWorkflowError("Quick Costing must be saved before CEO approval.")
+
+    with transaction.atomic():
+        if not is_new:
+            quick_costing = QuickCosting.objects.select_for_update().get(pk=quick_costing.pk)
+
+        if quick_costing.status == QuickCosting.STATUS_APPROVED:
+            production_order = getattr(quick_costing, "production_order", None)
+            return quick_costing, production_order, False
+        if quick_costing.status not in {QuickCosting.STATUS_DRAFT, QuickCosting.STATUS_REJECTED}:
+            raise CostingWorkflowError("Only draft or rejected Quick Costing can be approved.")
+        if quick_costing.pk and quick_costing.invoices.exists():
+            raise CostingWorkflowError("This Quick Costing already has an invoice.")
+
+        authorized_creator = is_authorized_quick_costing_creator(approver, quick_costing)
+        if auto_submit:
+            if not authorized_creator:
+                raise CostingWorkflowError(
+                    "Automatic approval is limited to a Bangladesh Local Sewing costing created by its approver."
+                )
+        elif not quick_costing.approval_submitted_at:
+            raise CostingWorkflowError("Quick Costing must be submitted before CEO approval.")
+        elif (
+            quick_costing.created_by_id == approver.pk
+            and not approver.is_superuser
+            and not authorized_creator
+        ):
+            raise CostingWorkflowError("The costing creator cannot approve their own Quick Costing.")
+
+        approved_at = timezone.now()
+        if auto_submit:
+            quick_costing.approval_submitted_by = approver
+            quick_costing.approval_submitted_at = approved_at
+        quick_costing.status = QuickCosting.STATUS_APPROVED
+        quick_costing.approved_by = approver
+        quick_costing.approved_at = approved_at
+        quick_costing.rejected_by = None
+        quick_costing.rejected_at = None
+        quick_costing._authorized_self_approval = authorized_creator
+        quick_costing._skip_quick_approval_notifications = auto_submit
+        try:
+            if is_new:
+                quick_costing.save()
+                _schedule_auto_approval_audit(quick_costing, approver, approved_at)
+            else:
+                update_fields = [
+                    "status",
+                    "approved_by",
+                    "approved_at",
+                    "rejected_by",
+                    "rejected_at",
+                    "updated_at",
+                ]
+                if auto_submit:
+                    update_fields.extend(["approval_submitted_by", "approval_submitted_at"])
+                quick_costing.save(update_fields=update_fields)
+        finally:
+            quick_costing._authorized_self_approval = False
+            quick_costing._skip_quick_approval_notifications = False
+
+        production_order = None
+        production_created = False
+        if quick_costing.is_bangladesh_local_sewing:
+            from crm.services.production_orders import create_production_order_from_approved_quick_costing
+
+            production_order, production_created = create_production_order_from_approved_quick_costing(
+                quick_costing,
+                user=approver,
+            )
+        return quick_costing, production_order, production_created
 
 
 def _next_quotation_number():
