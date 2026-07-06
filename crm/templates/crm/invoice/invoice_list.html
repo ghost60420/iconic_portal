@@ -421,7 +421,7 @@
             <tbody>
               {% for row in production_received_rows %}
                 <tr>
-                  <td class="mono">{{ row.production_order__order_code|production_po|default:"-" }}</td>
+                  <td class="mono">{{ row.production_order__order_code|production_po:row.production_order_id|default:"-" }}</td>
                   <td>{{ row.production_order__title|default:"-" }}</td>
                   <td class="right">{{ row.received_bdt|default_if_none:0|finance_money:"BDT" }}</td>
                 </tr>

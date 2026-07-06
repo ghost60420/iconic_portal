@@ -1357,7 +1357,7 @@ def invoice_list(request):
     )
     production_received_rows = list(
         payment_summary_qs.filter(production_order__isnull=False)
-        .values("production_order__order_code", "production_order__title")
+        .values("production_order_id", "production_order__order_code", "production_order__title")
         .annotate(received_bdt=Sum("amount_bdt"), received_original=Sum("amount"))
         .order_by("-received_bdt")[:8]
     )

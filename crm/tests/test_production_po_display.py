@@ -12,7 +12,7 @@ from crm.services.operations_search import search_operations_records
 
 class ProductionPurchaseOrderDisplayTests(TestCase):
     INTERNAL_ORDER_ID = "PO260705511257ABCDEF"
-    PURCHASE_ORDER_NUMBER = "PO-511257"
+    PURCHASE_ORDER_BASE = "PO-511257"
 
     @classmethod
     def setUpTestData(cls):
@@ -26,6 +26,7 @@ class ProductionPurchaseOrderDisplayTests(TestCase):
             order_code=cls.INTERNAL_ORDER_ID,
             qty_total=120,
         )
+        cls.PURCHASE_ORDER_NUMBER = f"{cls.PURCHASE_ORDER_BASE}-{cls.order.pk:03d}"
 
     def setUp(self):
         self.client.force_login(self.user)
@@ -43,6 +44,35 @@ class ProductionPurchaseOrderDisplayTests(TestCase):
         self.assertEqual(
             ProductionOrder.format_purchase_order_number("PO-SEARCH-001"),
             "PO-SEARCH-001",
+        )
+
+    def test_orders_created_in_the_same_second_have_unique_friendly_numbers(self):
+        with patch.object(
+            ProductionOrder,
+            "generate_order_code",
+            side_effect=[
+                "PO260706123456AAAAAA",
+                "PO260706123456BBBBBB",
+            ],
+        ):
+            first = ProductionOrder.objects.create(title="Same second order one")
+            second = ProductionOrder.objects.create(title="Same second order two")
+
+        self.assertEqual(first.purchase_order_number, f"PO-123456-{first.pk:03d}")
+        self.assertEqual(second.purchase_order_number, f"PO-123456-{second.pk:03d}")
+        self.assertNotEqual(first.purchase_order_number, second.purchase_order_number)
+        self.assertNotEqual(first.internal_order_id, second.internal_order_id)
+        self.assertEqual(
+            ProductionOrder.objects.filter(
+                ProductionOrder.identifier_search_query(first.purchase_order_number)
+            ).get(),
+            first,
+        )
+        self.assertEqual(
+            ProductionOrder.objects.filter(
+                ProductionOrder.identifier_search_query(second.purchase_order_number)
+            ).get(),
+            second,
         )
 
     def test_purchase_order_formatting_performs_no_database_queries(self):

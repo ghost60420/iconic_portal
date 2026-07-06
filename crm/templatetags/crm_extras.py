@@ -19,12 +19,12 @@ def get_item(mapping, key):
 
 
 @register.filter(name="production_po")
-def production_po_filter(value):
+def production_po_filter(value, object_id=None):
     if hasattr(value, "purchase_order_number"):
         return value.purchase_order_number
     from crm.models import ProductionOrder
 
-    return ProductionOrder.format_purchase_order_number(value)
+    return ProductionOrder.format_purchase_order_number(value, object_id)
 
 
 @register.filter(name="format_bdt")

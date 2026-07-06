@@ -4055,7 +4055,7 @@ class ProductionOrder(models.Model):
         return self.title
 
     @classmethod
-    def format_purchase_order_number(cls, value):
+    def format_purchase_order_number(cls, value, object_id=None):
         code = str(value or "").strip()
         if not code:
             return ""
@@ -4072,23 +4072,43 @@ class ProductionOrder(models.Model):
 
         timestamp_digits = code[digit_start:index]
         if len(timestamp_digits) >= 6:
-            return f"PO-{timestamp_digits[-6:]}"
-        if len(code) <= 10:
-            return code
-        return f"PO-{code[-6:]}"
+            friendly = f"PO-{timestamp_digits[-6:]}"
+        elif len(code) <= 10:
+            friendly = code
+        else:
+            friendly = f"PO-{code[-6:]}"
+
+        if object_id:
+            return f"{friendly}-{int(object_id):03d}"
+        return friendly
 
     @classmethod
     def identifier_search_query(cls, value, field_name="order_code"):
         query = str(value or "").strip()
         lookup = models.Q(**{f"{field_name}__icontains": query})
         normalized = query.upper()
-        if normalized.startswith("PO-") and len(normalized) > 3:
+        parts = normalized.split("-")
+        if (
+            len(parts) == 3
+            and parts[0] == "PO"
+            and len(parts[1]) == 6
+            and parts[1].isdigit()
+            and parts[2].isdigit()
+        ):
+            id_field = "pk"
+            if "__" in field_name:
+                id_field = f"{field_name.rsplit('__', 1)[0]}__pk"
+            lookup |= (
+                models.Q(**{f"{field_name}__icontains": parts[1]})
+                & models.Q(**{id_field: int(parts[2])})
+            )
+        elif normalized.startswith("PO-") and len(normalized) > 3:
             lookup |= models.Q(**{f"{field_name}__icontains": normalized[3:]})
         return lookup
 
     @property
     def short_order_code(self):
-        return self.format_purchase_order_number(self.order_code)
+        return self.format_purchase_order_number(self.order_code, self.pk)
 
     @property
     def purchase_order_number(self):

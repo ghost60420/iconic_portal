@@ -198,7 +198,8 @@ def production_profit_rows(year: int, month: Optional[int]) -> List[Dict]:
             {
                 "order_id": po_id,
                 "order_code": ProductionOrder.format_purchase_order_number(
-                    r.get("production_order__order_code")
+                    r.get("production_order__order_code"),
+                    po_id,
                 ),
                 "revenue_cad": revenue,
                 "swing_cad": swing,
