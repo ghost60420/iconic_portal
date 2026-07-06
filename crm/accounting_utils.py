@@ -7,7 +7,7 @@ from typing import Dict, Optional, Tuple, List
 from django.db.models import Q, Sum, Count
 from django.db.models.functions import Coalesce
 
-from .models import AccountingEntry
+from .models import AccountingEntry, ProductionOrder
 
 ZERO = Decimal("0")
 SWING_SUB_TYPE = "Swing"
@@ -60,7 +60,7 @@ def build_accounting_qs_for_list(request, year: int, month: Optional[int]):
             | Q(transfer_ref__icontains=q)
             | Q(customer__name__icontains=q)
             | Q(opportunity__title__icontains=q)
-            | Q(production_order__order_code__icontains=q)
+            | ProductionOrder.identifier_search_query(q, "production_order__order_code")
         )
 
     qs = qs.annotate(att_count=Count("attachments", distinct=True))
@@ -101,7 +101,7 @@ def build_accounting_qs_for_bd_grid(request, year: int, month: Optional[int]):
         qs = qs.filter(main_type=main_type)
 
     if order_q:
-        qs = qs.filter(production_order__order_code__icontains=order_q)
+        qs = qs.filter(ProductionOrder.identifier_search_query(order_q, "production_order__order_code"))
 
     if q:
         qs = qs.filter(
@@ -110,7 +110,7 @@ def build_accounting_qs_for_bd_grid(request, year: int, month: Optional[int]):
             | Q(transfer_ref__icontains=q)
             | Q(customer__name__icontains=q)
             | Q(opportunity__title__icontains=q)
-            | Q(production_order__order_code__icontains=q)
+            | ProductionOrder.identifier_search_query(q, "production_order__order_code")
         )
 
     qs = qs.annotate(att_count=Count("attachments", distinct=True))
@@ -197,7 +197,10 @@ def production_profit_rows(year: int, month: Optional[int]) -> List[Dict]:
         rows.append(
             {
                 "order_id": po_id,
-                "order_code": r.get("production_order__order_code") or "",
+                "order_code": ProductionOrder.format_purchase_order_number(
+                    r.get("production_order__order_code"),
+                    po_id,
+                ),
                 "revenue_cad": revenue,
                 "swing_cad": swing,
                 "cost_cad": cost,

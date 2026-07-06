@@ -18,7 +18,7 @@
 
       <div class="production-hero-copy">
         <p class="production-eyebrow">Factory order workspace</p>
-        <h1 title="{{ order.order_code|default:'Production Order' }}">{{ order.short_order_code|default:order.order_code|default:"Production Order" }}</h1>
+        <h1>{{ order.purchase_order_number|default:"Production Order" }}</h1>
         <div class="production-hero-title">{{ order.title }}</div>
         <div class="production-hero-meta">
           <span>
@@ -201,7 +201,7 @@
   <section class="production-snapshot-grid" aria-label="Production summary">
     <article class="production-snapshot-card">
       <span>Production Order Number</span>
-      <strong>{{ order.order_code|default:"Not set" }}</strong>
+      <strong>{{ order.purchase_order_number|default:"Not set" }}</strong>
       <small>{{ order.title }}</small>
     </article>
     <article class="production-snapshot-card">
@@ -275,7 +275,7 @@
       <div class="production-muted-block"><span class="production-status-badge approved">Price locked</span></div>
 
       <div class="production-approved-grid">
-        <article><span>Production Order ID</span><strong>{{ order.order_code }}</strong></article>
+        <article><span>Purchase Order Number</span><strong>{{ order.purchase_order_number }}</strong></article>
         <article><span>Quotation ID</span><strong>{% if order.source_quotation_id %}<a href="{% url 'cost_sheet_client_quotation' order.source_quotation_id %}">{{ order.quotation_number_snapshot }}</a>{% else %}{{ order.quotation_number_snapshot|default:"-" }}{% endif %}</strong></article>
         <article><span>Lead ID</span><strong>{% if order.lead %}{{ order.lead.lead_id }}{% else %}-{% endif %}</strong></article>
         <article><span>Opportunity ID</span><strong>{% if order.opportunity %}{{ order.opportunity.opportunity_id }}{% else %}-{% endif %}</strong></article>
@@ -1226,8 +1226,8 @@
           <small>Advanced production cost and internal fields</small>
         </summary>
         <div class="production-raw-grid">
-          <div><span>Short PO</span><strong title="{{ order.order_code|default:'Not set' }}">{{ order.short_order_code|default:order.order_code|default:"Not set" }}</strong></div>
-          <div><span>Full order code</span><strong>{{ order.order_code|default:"Not set" }}</strong></div>
+          <div><span>Purchase Order Number</span><strong>{{ order.purchase_order_number|default:"Not set" }}</strong></div>
+          <div><span>Internal Order ID</span><strong>{{ order.internal_order_id|default:"Not set" }}</strong></div>
           <div><span>Created</span><strong>{{ order.created_at|date:"Y-m-d H:i" }}</strong></div>
           <div><span>Updated</span><strong>{{ order.updated_at|date:"Y-m-d H:i" }}</strong></div>
           <div><span>Fabric required kg</span><strong>{{ order.fabric_required_kg|default:"not set" }}</strong></div>

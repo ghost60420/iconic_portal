@@ -326,7 +326,7 @@ def _record_label(key, record):
     if key == "invoice":
         return getattr(record, "invoice_number", "") or f"Invoice {record.pk}"
     if key == "production":
-        return getattr(record, "order_code", "") or f"PO-{record.pk}"
+        return getattr(record, "purchase_order_number", "") or f"PO-{record.pk}"
     if key == "shipping":
         return f"SHP-{record.pk:05d}" if isinstance(record.pk, int) else f"Shipment {record.pk}"
     return str(record)

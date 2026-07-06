@@ -2402,7 +2402,7 @@ def cost_sheet_quotation_approve(request, pk):
     action = "created" if created else "linked"
     messages.success(
         request,
-        f"Quotation {costing.quotation_number} approved. Production order {production_order.order_code} {action}.",
+        f"Quotation {costing.quotation_number} approved. Production order {production_order.purchase_order_number} {action}.",
     )
     return redirect("cost_sheet_client_quotation", pk=pk)
 

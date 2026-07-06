@@ -42,7 +42,7 @@ def _record_context(comment):
             "record": record,
             "module": "production",
             "rule_type": "production",
-            "label": record.order_code or record.title or f"Production Order {record.pk}",
+            "label": record.purchase_order_number or record.title or f"Production Order {record.pk}",
             "url": reverse("production_detail", args=[record.pk]),
         }
     if comment.opportunity_id:

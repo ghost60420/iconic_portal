@@ -110,7 +110,7 @@
         {% for row in urgent_orders %}
           {% with order=row.order %}
             <a href="{% url 'production_detail' order.pk %}" class="production-control-row">
-              <strong title="{{ order.order_code|default:order.title }}">{{ order.short_order_code|default:order.order_code|default:order.title }}</strong>
+              <strong>{{ order.purchase_order_number|default:order.title }}</strong>
               <span>{{ row.priority.label }} / {{ row.priority.reason }}</span>
               <small>{% if order.bulk_deadline %}Target {{ order.bulk_deadline|date:"M j" }}{% else %}No target date{% endif %}</small>
             </a>
@@ -159,7 +159,7 @@
           <div>
             <strong>Low Margin</strong>
             {% for row in low_margin_orders %}
-              <a href="{% url 'production_detail' row.order.pk %}" title="{{ row.order.order_code|default:row.order.title }}">{{ row.order.short_order_code|default:row.order.order_code|default:row.order.title }} / {{ row.lifecycle.estimated_margin|floatformat:2 }}%</a>
+              <a href="{% url 'production_detail' row.order.pk %}">{{ row.order.purchase_order_number|default:row.order.title }} / {{ row.lifecycle.estimated_margin|floatformat:2 }}%</a>
             {% empty %}
               <span>No low margin lifecycle orders.</span>
             {% endfor %}
@@ -167,7 +167,7 @@
           <div>
             <strong>High Profit</strong>
             {% for row in high_profit_orders %}
-              <a href="{% url 'production_detail' row.order.pk %}" title="{{ row.order.order_code|default:row.order.title }}">{{ row.order.short_order_code|default:row.order.order_code|default:row.order.title }} / {{ row.lifecycle.estimated_profit|finance_money:row.lifecycle_currency }}</a>
+              <a href="{% url 'production_detail' row.order.pk %}">{{ row.order.purchase_order_number|default:row.order.title }} / {{ row.lifecycle.estimated_profit|finance_money:row.lifecycle_currency }}</a>
             {% empty %}
               <span>No profit data in this view.</span>
             {% endfor %}
@@ -284,7 +284,7 @@
               {% with order=row.order stages=row.stages percent=row.percent_done has_delay=row.has_delay %}
                 <tr class="{% if has_delay %}is-delayed{% endif %}">
                   <td class="production-image-cell" data-label="Image">
-                    <a class="production-thumb" href="{% url 'production_detail' order.pk %}" aria-label="Open {{ order.order_code|default:order.title }}">
+                    <a class="production-thumb" href="{% url 'production_detail' order.pk %}" aria-label="Open {{ order.purchase_order_number|default:order.title }}">
                       {% if order.primary_reference_image %}
                         <img class="lead-thumb" src="{{ order.primary_reference_image.image.url }}" alt="{{ order.primary_reference_image.caption|default:'Product reference image' }}">
                       {% elif order.product and order.product.image %}
@@ -299,7 +299,7 @@
                   <td data-label="Order">
                     <div class="production-order-cell">
                       <div class="production-stack">
-                        <a href="{% url 'production_detail' order.pk %}" class="production-primary-link" title="{{ order.order_code|default:'No code' }}">{{ order.short_order_code|default:order.order_code|default:"No code" }}</a>
+                        <a href="{% url 'production_detail' order.pk %}" class="production-primary-link">{{ order.purchase_order_number|default:"No code" }}</a>
                         <strong>{{ order.title }}</strong>
                         <span class="production-type-badge production-type-badge--{{ order.production_order_type }}">
                           {{ order.get_production_order_type_display|default:"Bulk Production" }}
@@ -397,7 +397,7 @@
                         {% csrf_token %}
                         <input type="hidden" name="order_id" value="{{ order.pk }}">
                         <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                        <select name="operational_status" onchange="this.form.submit()" aria-label="Update workflow status for {{ order.order_code|default:order.title }}">
+                        <select name="operational_status" onchange="this.form.submit()" aria-label="Update workflow status for {{ order.purchase_order_number|default:order.title }}">
                           {% for key, label in operational_status_choices %}
                             <option value="{{ key }}" {% if row.operational_status == key %}selected{% endif %}>{{ label }}</option>
                           {% endfor %}

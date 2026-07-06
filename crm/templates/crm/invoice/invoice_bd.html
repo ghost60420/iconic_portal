@@ -377,12 +377,12 @@
             <div class="box-title">{% if is_sample_invoice %}Sample Development{% elif is_bd_sewing_charge_invoice %}Sewing Charge Details{% else %}Order Details{% endif %}</div>
             {% if invoice.order %}
               <div class="stack">
-                <div class="value">{{ invoice.order.title|default:invoice.order.order_code }}</div>
+                <div class="value">{{ invoice.order.purchase_order_number }}</div>
+                {% if invoice.order.title %}<div class="muted">{{ invoice.order.title }}</div>{% endif %}
                 {% if invoice.order.order_type == "sewing_charge" and invoice.order.factory_location == "bd" %}
                   <div class="muted">Service Type: <strong>Bangladesh Local Sewing</strong></div>
                   <div class="muted">Charge Type: <strong>CMT / Sewing Charge</strong></div>
                 {% endif %}
-                {% if invoice.order.order_code %}<div class="muted">Order code: {{ invoice.order.order_code }}</div>{% endif %}
                 {% if invoice.order.qty_total %}<div class="muted">Quantity: {{ invoice.order.qty_total|intcomma }}</div>{% endif %}
                 {% if invoice.order.factory_location %}<div class="muted">Factory: {{ invoice.order.get_factory_location_display }}</div>{% endif %}
                 {% if invoice.order.style_name %}<div class="muted">Style: {{ invoice.order.style_name }}</div>{% endif %}

@@ -323,7 +323,7 @@ def _entry_export_row(e: AccountingEntry):
         str(e.amount_bdt or ""),
         (e.customer.name if getattr(e.customer, "name", None) else ""),
         str(e.opportunity_id or ""),
-        (e.production_order.order_code if getattr(e.production_order, "order_code", None) else ""),
+        (e.production_order.purchase_order_number if getattr(e.production_order, "order_code", None) else ""),
         str(e.shipment_id or ""),
         e.description or "",
         e.internal_note or "",
@@ -621,7 +621,7 @@ def _ap_category(entry):
 
 def _ap_supplier_label(entry):
     if entry.production_order_id and entry.production_order:
-        return f"Factory / {entry.production_order.order_code or entry.production_order.title or entry.production_order_id}"
+        return f"Factory / {entry.production_order.purchase_order_number or entry.production_order.title or entry.production_order_id}"
     if entry.shipment_id and entry.shipment:
         tracking = getattr(entry.shipment, "tracking_number", "") or ""
         carrier = getattr(entry.shipment, "carrier", "") or ""
@@ -3601,7 +3601,7 @@ def accounting_entry_list(request):
             | Q(sub_type__icontains=filter_q)
             | Q(main_type__icontains=filter_q)
             | Q(transfer_ref__icontains=filter_q)
-            | Q(production_order__order_code__icontains=filter_q)
+            | ProductionOrder.identifier_search_query(filter_q, "production_order__order_code")
         )
 
     entries = list(qs[:500])
@@ -4170,7 +4170,7 @@ def production_profit_rows(year=None, month=None):
         bd_total_cost_bdt = Decimal("0")
 
         if po:
-            order_code = po.order_code or str(po.id)
+            order_code = po.purchase_order_number or str(po.id)
             product_type = (po.style_name or po.title or "").strip()
             pcs = getattr(po, "qty_total", 0) or 0
             order_type = (po.order_type or "").strip()

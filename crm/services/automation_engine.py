@@ -147,7 +147,7 @@ def _invoice_label(invoice):
 
 
 def _production_label(order):
-    return getattr(order, "order_code", "") or getattr(order, "title", "") or f"Production {order.pk}"
+    return getattr(order, "purchase_order_number", "") or getattr(order, "title", "") or f"Production {order.pk}"
 
 
 def _inventory_label(item):

@@ -504,7 +504,7 @@
           <strong>
             <span class="status s-{{ pay_key }}">{{ invoice.payment_status_label }}</span>
           </strong>
-          <small>{% if invoice.order %}Production: {{ invoice.order.order_code|default:invoice.order }}{% else %}No production order linked.{% endif %}</small>
+          <small>{% if invoice.order %}Production: {{ invoice.order.purchase_order_number|default:invoice.order }}{% else %}No production order linked.{% endif %}</small>
         </div>
       </div>
     {% endwith %}
@@ -525,7 +525,7 @@
             {% endif %}
             {% if invoice.order %}
               | Production
-              <a href="{% url 'production_detail' invoice.order.pk %}" style="color:#fde68a; font-weight:900;">{{ invoice.order.order_code|default:invoice.order.pk }}</a>
+              <a href="{% url 'production_detail' invoice.order.pk %}" style="color:#fde68a; font-weight:900;">{{ invoice.order.purchase_order_number|default:invoice.order.pk }}</a>
             {% endif %}
           </div>
         {% elif invoice.quick_costing %}
@@ -706,7 +706,7 @@
                     <td>{{ payment.get_payment_method_display }}</td>
                     <td>
                       {% if payment.production_order %}
-                        <a class="v" href="{% url 'production_detail' payment.production_order.pk %}">{{ payment.production_order.order_code|default:payment.production_order }}</a>
+                        <a class="v" href="{% url 'production_detail' payment.production_order.pk %}">{{ payment.production_order.purchase_order_number|default:payment.production_order }}</a>
                       {% else %}
                         —
                       {% endif %}

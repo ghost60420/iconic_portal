@@ -454,7 +454,7 @@
       </div>
       <div class="prod-add-sub">
         {% if is_edit and order %}
-          Code {{ order.order_code }} created {{ order.created_at|date:"Y-m-d" }}
+          Purchase Order {{ order.purchase_order_number }} created {{ order.created_at|date:"Y-m-d" }}
         {% else %}
           Link to opportunity and customer to track cost and profit
         {% endif %}

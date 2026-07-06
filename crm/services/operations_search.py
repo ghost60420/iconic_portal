@@ -136,7 +136,7 @@ def search_operations_records(user, query, *, limit=10, include_opportunities=Tr
 
     if can_access_operations_module(user, "production"):
         rows = ProductionOrder.objects.select_related("customer").filter(is_archived=False).filter(
-            Q(order_code__icontains=query)
+            ProductionOrder.identifier_search_query(query)
             | Q(title__icontains=query)
             | Q(client_name_snapshot__icontains=query)
             | Q(brand_name_snapshot__icontains=query)
@@ -146,7 +146,7 @@ def search_operations_records(user, query, *, limit=10, include_opportunities=Tr
         groups.append(("Production", [
             {
                 "type": "Production Order",
-                "number": row.order_code,
+                "number": row.purchase_order_number,
                 "name": row.client_name_snapshot or (row.customer.account_brand if row.customer else "") or row.title,
                 "status": row.get_operational_status_display(),
                 "date": row.updated_at,

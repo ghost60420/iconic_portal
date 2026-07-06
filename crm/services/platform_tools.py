@@ -47,7 +47,7 @@ RECORD_CONFIGS = {
     "lead": RecordConfig(Lead, "leads", "Lead", "lead_detail", ("lead_id", "account_brand", "contact_name")),
     "opportunity": RecordConfig(Opportunity, "opportunities", "Opportunity", "opportunity_detail", ("opportunity_id",)),
     "quotation": RecordConfig(CostingHeader, "quotations", "Quotation", "cost_sheet_detail", ("quotation_number", "style_name", "brand")),
-    "production": RecordConfig(ProductionOrder, "production", "Production Order", "production_detail", ("order_code", "title")),
+    "production": RecordConfig(ProductionOrder, "production", "Production Order", "production_detail", ("purchase_order_number", "title")),
     "invoice": RecordConfig(Invoice, "invoices", "Invoice", "invoice_view", ("invoice_number",)),
 }
 

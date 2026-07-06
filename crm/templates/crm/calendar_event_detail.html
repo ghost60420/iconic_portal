@@ -348,8 +348,8 @@
               </a>
             {% endfor %}
             {% for production in related_productions %}
-              <a class="tag-link" href="{% url 'production_detail' production.pk %}" title="{{ production.order_code }}">
-                Production: {{ production.short_order_code|default:production.order_code }}
+              <a class="tag-link" href="{% url 'production_detail' production.pk %}" title="{{ production.purchase_order_number }}">
+                Production: {{ production.purchase_order_number }}
               </a>
             {% endfor %}
             {% if not event.lead and not event.customer and not related_opportunities and not related_productions %}

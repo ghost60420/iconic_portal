@@ -1024,7 +1024,7 @@
         <ul class="dashboard-feed-list">
           {% for order in recent_production_updates %}
             <li class="dashboard-feed-item">
-              <strong>{{ order.order_code|default:"Order" }}{% if order.title %} · {{ order.title }}{% endif %}</strong>
+              <strong>{{ order.purchase_order_number|default:"Order" }}{% if order.title %} · {{ order.title }}{% endif %}</strong>
               <span>{{ order.qty_total|intcomma }} pcs | {{ order.factory_location|upper }}</span>
               <div class="dashboard-feed-meta">
                 <span class="dashboard-tag {% if order.status == 'hold' %}dashboard-tag--bad{% elif order.status == 'done' or order.status == 'closed_won' %}dashboard-tag--good{% endif %}">
