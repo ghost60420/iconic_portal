@@ -30,13 +30,15 @@
   .pp-head{ color:#facc15; font-weight:900; }
 
   .pp-filter label{ color:#ffffff; font-weight:900; }
-  .pp-filter input{
+  .pp-filter input,
+  .pp-filter select{
     background:#0b1220;
     border:1px solid #475569;
     color:#ffffff;
     font-weight:900;
   }
-  .pp-filter input:focus{
+  .pp-filter input:focus,
+  .pp-filter select:focus{
     background:#0b1220;
     color:#ffffff;
     border-color:#facc15;
@@ -178,10 +180,10 @@
     <!-- Header -->
     <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
       <div>
-        <div class="pp-title">Production profit report</div>
+        <div class="pp-title">Revenue Breakdown Dashboard</div>
 
         <div class="pp-sub mt-2">
-          Read-only invoice revenue and linked production cost reconciliation.
+          Read-only bulk, sewing, sample, and other revenue with linked production cost reconciliation.
           {% if exchange_rate %}
             Current conversion: <span style="color:#facc15;">1 CAD = {{ exchange_rate|floatformat:2|intcomma }} BDT</span>.
           {% else %}
@@ -192,12 +194,173 @@
 
       <div class="pp-actions">
         <button class="btn btn-outline-light btn-sm rounded-pill fw-bold" type="button" onclick="window.print()">Print</button>
+        <a class="btn btn-outline-light btn-sm rounded-pill fw-bold" href="?{% if filter_query %}{{ filter_query }}&{% endif %}export=pdf">PDF</a>
+        <a class="btn btn-outline-light btn-sm rounded-pill fw-bold" href="?{% if filter_query %}{{ filter_query }}&{% endif %}export=xlsx">Excel</a>
         <a class="btn btn-outline-light btn-sm rounded-pill fw-bold"
            href="{% url 'accounting_entry_list' %}">
           Back
         </a>
       </div>
     </div>
+
+    <div class="pp-section-title">Company Revenue Overview</div>
+    {% for company in company_revenue %}
+      <div class="pp-summary" aria-label="Company revenue {{ company.currency }}">
+        <div class="pp-summary-card"><span>Total Revenue</span><strong>{{ company.revenue|finance_money:company.currency }}</strong><small>Bulk + sewing + sample + other, grouped in {{ company.currency }} only.</small></div>
+        <div class="pp-summary-card"><span>Total Cost</span><strong>{% if company.cost != None %}{{ company.cost|finance_money:company.currency }}{% else %}Unavailable{% endif %}</strong><small>Unavailable when any included category has no recorded cost.</small></div>
+        <div class="pp-summary-card"><span>Gross Profit</span><strong>{% if company.profit != None %}{{ company.profit|finance_money:company.currency }}{% else %}N/A{% endif %}</strong><small>No cost is inferred.</small></div>
+        <div class="pp-summary-card"><span>Gross Margin</span><strong>{% if company.margin_pct != None %}{{ company.margin_pct|floatformat:2 }}%{% else %}N/A{% endif %}</strong><small>Gross profit ÷ total revenue × 100.</small></div>
+      </div>
+    {% empty %}
+      <div class="pp-summary"><div class="pp-summary-card"><span>Total Revenue</span><strong>Unavailable</strong><small>No classified revenue in the selected period.</small></div></div>
+    {% endfor %}
+
+    {% if not revenue_type_filter or revenue_type_filter == "bulk" %}
+    <div class="pp-section-title">Bulk Production Revenue</div>
+    {% for summary in bulk_revenue %}
+      <div class="pp-summary" aria-label="Bulk production revenue {{ summary.currency }}">
+        <div class="pp-summary-card"><span>Bulk Revenue</span><strong>{{ summary.revenue|finance_money:summary.currency }}</strong><small>{{ summary.order_count }} bulk order/invoice record(s).</small></div>
+        <div class="pp-summary-card"><span>Bulk Cost</span><strong>{% if summary.cost != None %}{{ summary.cost|finance_money:summary.currency }}{% else %}Unavailable{% endif %}</strong><small>Recorded production cost only.</small></div>
+        <div class="pp-summary-card"><span>Bulk Gross Profit</span><strong>{% if summary.profit != None %}{{ summary.profit|finance_money:summary.currency }}{% else %}N/A{% endif %}</strong></div>
+        <div class="pp-summary-card"><span>Bulk Margin</span><strong>{% if summary.margin_pct != None %}{{ summary.margin_pct|floatformat:2 }}%{% else %}N/A{% endif %}</strong></div>
+      </div>
+    {% empty %}
+      <div class="pp-summary"><div class="pp-summary-card"><span>Bulk Revenue</span><strong>Unavailable</strong><small>No classified bulk revenue.</small></div></div>
+    {% endfor %}
+    {% endif %}
+
+    {% if not revenue_type_filter or revenue_type_filter == "sewing" %}
+    <div class="pp-section-title">Sewing Charge Revenue</div>
+    {% for summary in sewing_revenue %}
+      <div class="pp-summary" aria-label="Sewing charge revenue {{ summary.currency }}">
+        <div class="pp-summary-card"><span>{% if summary.currency == "BDT" %}Bangladesh Local Sewing Revenue{% else %}Canada Sewing Revenue{% endif %}</span><strong>{{ summary.revenue|finance_money:summary.currency }}</strong><small>{{ summary.order_count }} sewing order/invoice record(s).</small></div>
+        <div class="pp-summary-card"><span>Sewing Cost</span><strong>{% if summary.cost != None %}{{ summary.cost|finance_money:summary.currency }}{% else %}Unavailable{% endif %}</strong></div>
+        <div class="pp-summary-card"><span>Sewing Profit</span><strong>{% if summary.profit != None %}{{ summary.profit|finance_money:summary.currency }}{% else %}N/A{% endif %}</strong></div>
+        <div class="pp-summary-card"><span>Sewing Margin</span><strong>{% if summary.margin_pct != None %}{{ summary.margin_pct|floatformat:2 }}%{% else %}N/A{% endif %}</strong></div>
+      </div>
+    {% empty %}
+      <div class="pp-summary"><div class="pp-summary-card"><span>Sewing Revenue</span><strong>Unavailable</strong><small>No classified sewing revenue.</small></div></div>
+    {% endfor %}
+    {% endif %}
+
+    {% if not revenue_type_filter or revenue_type_filter == "sample" %}
+    <div class="pp-section-title">Sample Revenue Summary</div>
+    <div class="pp-note mb-3">
+      Sample revenue is tracked separately and excluded from production margin.
+      Amounts remain grouped by invoice currency and are never combined across currencies.
+    </div>
+    {% for sample_summary in sample_revenue %}
+      <div class="pp-summary" aria-label="Sample revenue summary {{ sample_summary.currency }}">
+        <div class="pp-summary-card"><span>Total Sample Revenue</span><strong>{{ sample_summary.revenue|finance_money:sample_summary.currency }}</strong><small>Currency: {{ sample_summary.currency }}</small></div>
+        <div class="pp-summary-card"><span>Sample Invoices</span><strong>{{ sample_summary.invoice_count|intcomma }}</strong><small>Non-cancelled sample invoice(s) in the selected period.</small></div>
+        <div class="pp-summary-card"><span>Sample Pieces</span><strong>{% if sample_summary.piece_count != None %}{{ sample_summary.piece_count|intcomma }}{% else %}Unavailable{% endif %}</strong><small>Unavailable when any included invoice has no stored quantity.</small></div>
+        <div class="pp-summary-card"><span>Paid Amount</span><strong>{{ sample_summary.paid|finance_money:sample_summary.currency }}</strong><small>Stored invoice paid amount.</small></div>
+        <div class="pp-summary-card"><span>Balance Amount</span><strong>{{ sample_summary.balance|finance_money:sample_summary.currency }}</strong><small>Sample invoice total minus paid amount.</small></div>
+        <div class="pp-summary-card"><span>Sample Cost</span><strong>{% if sample_summary.cost != None %}{{ sample_summary.cost|finance_money:sample_summary.currency }}{% else %}Unavailable{% endif %}</strong><small>Recorded internal invoice cost only.</small></div>
+        <div class="pp-summary-card"><span>Sample Gross Profit</span><strong>{% if sample_summary.profit != None %}{{ sample_summary.profit|finance_money:sample_summary.currency }}{% else %}N/A{% endif %}</strong></div>
+        <div class="pp-summary-card"><span>Sample Margin</span><strong>{% if sample_summary.margin_pct != None %}{{ sample_summary.margin_pct|floatformat:2 }}%{% else %}N/A{% endif %}</strong></div>
+      </div>
+    {% empty %}
+      <div class="pp-summary">
+        <div class="pp-summary-card"><span>Total Sample Revenue</span><strong>Unavailable</strong><small>No classified sample invoices in the selected period.</small></div>
+      </div>
+    {% endfor %}
+
+    <div class="card mb-3 pp-card">
+      <div class="card-header" style="background:#020617;border-bottom:1px solid #111827;">
+        <span class="pp-head" style="font-size:16px;">Sample invoices</span>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive" style="max-height:420px;">
+          <table class="table table-dark table-sm align-middle pp-table">
+            <thead>
+              <tr>
+                <th>Sample Invoice Number</th>
+                <th>Client</th>
+                <th>Lead ID</th>
+                <th>Opportunity ID</th>
+                <th>Friendly Production PO</th>
+                <th>Sample type</th>
+                <th class="text-end">Number of pieces</th>
+                <th>Currency</th>
+                <th class="text-end">Revenue</th>
+                <th class="text-end">Courier charge</th>
+                <th class="text-end">Sample cost</th>
+                <th class="text-end">Gross profit</th>
+                <th class="text-end">Margin %</th>
+                <th class="text-end">Paid amount</th>
+                <th class="text-end">Outstanding Balance</th>
+                <th>Invoice status</th>
+                <th>Payment status</th>
+                <th>Credit Applied to Bulk</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for sample in sample_rows %}
+                <tr>
+                  <td><a href="{% url 'invoice_view' sample.invoice_id %}">{{ sample.invoice_number }}</a></td>
+                  <td>{{ sample.client }}</td>
+                  <td>{{ sample.lead_id }}</td>
+                  <td>{{ sample.opportunity_id }}</td>
+                  <td>
+                    {% if sample.production_order_id %}
+                      <a href="{% url 'production_detail' sample.production_order_id %}">{{ sample.purchase_order_number }}</a>
+                    {% else %}
+                      Unavailable
+                    {% endif %}
+                  </td>
+                  <td>{{ sample.sample_type }}</td>
+                  <td class="text-end pp-money">{% if sample.pieces != None %}{{ sample.pieces|intcomma }}{% else %}Unavailable{% endif %}</td>
+                  <td>{{ sample.currency }}</td>
+                  <td class="text-end pp-money">{{ sample.invoice_amount|finance_money:sample.currency }}</td>
+                  <td class="text-end pp-money">{{ sample.courier_charge|finance_money:sample.currency }}</td>
+                  <td class="text-end pp-money">{% if sample.sample_cost != None %}{{ sample.sample_cost|finance_money:sample.currency }}{% else %}Unavailable{% endif %}</td>
+                  <td class="text-end pp-money">{% if sample.gross_profit != None %}{{ sample.gross_profit|finance_money:sample.currency }}{% else %}N/A{% endif %}</td>
+                  <td class="text-end pp-money">{% if sample.margin_pct != None %}{{ sample.margin_pct|floatformat:2 }}%{% else %}N/A{% endif %}</td>
+                  <td class="text-end pp-money">{{ sample.paid_amount|finance_money:sample.currency }}</td>
+                  <td class="text-end pp-money">{{ sample.balance_amount|finance_money:sample.currency }}</td>
+                  <td>{{ sample.invoice_status }}</td>
+                  <td>{{ sample.payment_status }}</td>
+                  <td>{{ sample.credit_status }}</td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="18" class="text-center pp-muted">No classified sample invoices found.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if unclassified_sample_invoices %}
+          <div class="pp-note mt-3" style="color:#fde68a;">
+            <strong>Unclassified sample candidates:</strong>
+            {% for item in unclassified_sample_invoices %}
+              <a href="{% url 'invoice_view' item.invoice_id %}">{{ item.invoice_number }}</a> ({{ item.reason }}){% if not forloop.last %}; {% endif %}
+            {% endfor %}.
+            These invoices are excluded from both sample revenue and production profit totals.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if not revenue_type_filter or revenue_type_filter == "other" %}
+    <div class="pp-section-title">Other Revenue</div>
+    <div class="pp-note mb-3">Design, pattern, tech pack, shipping income, consulting, and other service fees are tracked independently from production revenue.</div>
+    {% for summary in other_revenue %}
+      <div class="pp-summary" aria-label="Other revenue {{ summary.currency }}">
+        <div class="pp-summary-card"><span>Other Revenue</span><strong>{{ summary.revenue|finance_money:summary.currency }}</strong><small>{{ summary.record_count }} classified service-income record(s).</small></div>
+        <div class="pp-summary-card"><span>Other Revenue Cost</span><strong>Unavailable</strong><small>No dedicated service-cost field exists.</small></div>
+        <div class="pp-summary-card"><span>Other Revenue Profit</span><strong>N/A</strong><small>No profit is inferred without cost.</small></div>
+        <div class="pp-summary-card"><span>Other Revenue Margin</span><strong>N/A</strong></div>
+      </div>
+    {% empty %}
+      <div class="pp-summary"><div class="pp-summary-card"><span>Other Revenue</span><strong>Unavailable</strong><small>No explicitly classified service income.</small></div></div>
+    {% endfor %}
+    <div class="card mb-3 pp-card"><div class="card-body"><div class="table-responsive" style="max-height:420px;"><table class="table table-dark table-sm align-middle pp-table"><thead><tr><th>Date</th><th>Reference</th><th>Source</th><th>Service type</th><th>Client</th><th>Brand</th><th>Country</th><th>Currency</th><th class="text-end">Revenue</th><th class="text-end">Paid</th><th class="text-end">Balance</th><th>Payment status</th></tr></thead><tbody>{% for other in other_rows %}<tr><td>{{ other.date|date:"Y-m-d" }}</td><td>{{ other.reference }}</td><td>{{ other.source }}</td><td>{{ other.service_type }}</td><td>{{ other.client }}</td><td>{{ other.brand }}</td><td>{{ other.country }}</td><td>{{ other.currency }}</td><td class="text-end pp-money">{{ other.revenue|finance_money:other.currency }}</td><td class="text-end pp-money">{{ other.paid_amount|finance_money:other.currency }}</td><td class="text-end pp-money">{{ other.balance_amount|finance_money:other.currency }}</td><td>{{ other.payment_status }}</td></tr>{% empty %}<tr><td colspan="12" class="text-center pp-muted">No classified other revenue.</td></tr>{% endfor %}</tbody></table></div></div></div>
+    {% endif %}
+
+    {% if not revenue_type_filter or revenue_type_filter == "bulk" or revenue_type_filter == "sewing" %}
+    <div class="pp-section-title">Existing Production Profit Reconciliation</div>
+    <div class="pp-note mb-3">The Canada, Bangladesh, sewing, and combined calculations below are unchanged.</div>
 
     <div class="pp-section-title">Canada Export Summary</div>
     <div class="pp-summary" aria-label="Canada export summary">
@@ -238,6 +401,16 @@
       <div class="pp-summary-card"><span>Total Profit CAD Equivalent</span><strong>{% if combined.profit_cad != None %}{{ combined.profit_cad|finance_money:"CAD" }}{% else %}N/A{% endif %}</strong><small>Revenue equivalent minus cost equivalent.</small></div>
       <div class="pp-summary-card"><span>Overall Margin</span><strong>{% if combined.margin_pct != None %}{{ combined.margin_pct|floatformat:2 }}%{% else %}N/A{% endif %}</strong><small>{{ unclassified_count }} unclassified order(s) excluded.</small></div>
     </div>
+    {% endif %}
+
+    <div class="pp-section-title">Accounting Revenue Reconciliation</div>
+    <div class="pp-summary">
+      {% for row in accounting_reconciliation %}
+        <div class="pp-summary-card"><span>{{ row.currency }} Categorized Revenue</span><strong>{{ row.categorized_revenue|finance_money:row.currency }}</strong><small>Accounting revenue: {{ row.accounting_revenue|finance_money:row.currency }}<br>Difference: {{ row.difference|finance_money:row.currency }}</small></div>
+      {% empty %}
+        <div class="pp-summary-card"><span>Reconciliation</span><strong>Unavailable</strong><small>No accounting revenue in the selected period.</small></div>
+      {% endfor %}
+    </div>
 
     <!-- Filter -->
     <div class="card mb-3 pp-card">
@@ -253,6 +426,38 @@
             <label class="form-label">Month</label>
             <input class="form-control form-control-sm" name="month"
                    value="{{ filter_month|default_if_none:'' }}">
+          </div>
+
+          <div class="col-sm-2">
+            <label class="form-label">Start date</label>
+            <input class="form-control form-control-sm" type="date" name="start_date" value="{{ filter_start_date }}">
+          </div>
+
+          <div class="col-sm-2">
+            <label class="form-label">End date</label>
+            <input class="form-control form-control-sm" type="date" name="end_date" value="{{ filter_end_date }}">
+          </div>
+
+          <div class="col-sm-2">
+            <label class="form-label">Client</label>
+            <input class="form-control form-control-sm" name="client" value="{{ filter_client }}">
+          </div>
+
+          <div class="col-sm-2">
+            <label class="form-label">Brand</label>
+            <input class="form-control form-control-sm" name="brand" value="{{ filter_brand }}">
+          </div>
+
+          <div class="col-sm-2">
+            <label class="form-label">Country</label>
+            <input class="form-control form-control-sm" name="country" value="{{ filter_country }}">
+          </div>
+
+          <div class="col-sm-2">
+            <label class="form-label">Revenue type</label>
+            <select class="form-control form-control-sm" name="revenue_type">
+              {% for value,label in revenue_type_options %}<option value="{{ value }}" {% if revenue_type_filter == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
           </div>
 
           <div class="col-sm-5">
@@ -327,7 +532,8 @@
         </div>
 
         <div class="mt-3 pp-note">
-          Revenue uses non-cancelled invoice totals. Bangladesh Local Sewing may use the explicit quantity × sewing charge when no invoice exists.
+          Production revenue uses non-cancelled, non-sample invoice totals. Sample revenue is tracked separately and excluded from production margin.
+          Bangladesh Local Sewing may use the explicit quantity × sewing charge when no invoice exists.
           Canada cost uses stored Production Order total cost, then linked BD COGS/expense entries as a fallback.
           Missing values remain unavailable; this report never writes to production, invoice, accounting, costing, payment, or exchange-rate records.
         </div>

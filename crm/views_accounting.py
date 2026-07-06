@@ -4067,11 +4067,32 @@ def production_profit_report(request):
     m = _parse_int(request.GET.get("month") or str(today.month)) or today.month
 
     search_query = (request.GET.get("q") or "").strip()
+    start_date = parse_date((request.GET.get("start_date") or "").strip())
+    end_date = parse_date((request.GET.get("end_date") or "").strip())
+    client_filter = (request.GET.get("client") or "").strip()
+    brand_filter = (request.GET.get("brand") or "").strip()
+    country_filter = (request.GET.get("country") or "").strip()
+    revenue_type = (request.GET.get("revenue_type") or "").strip().lower()
     report = build_production_profit_report(
         year=y,
         month=m,
         search_query=search_query,
+        start_date=start_date,
+        end_date=end_date,
+        client=client_filter,
+        brand=brand_filter,
+        country=country_filter,
+        revenue_type=revenue_type,
     )
+
+    export_type = (request.GET.get("export") or "").strip().lower()
+    if export_type == "xlsx":
+        return _production_revenue_xlsx(report)
+    if export_type == "pdf":
+        return _production_revenue_pdf(report)
+
+    filter_params = request.GET.copy()
+    filter_params.pop("export", None)
 
     return render(
         request,
@@ -4081,8 +4102,134 @@ def production_profit_report(request):
             "filter_year": str(y),
             "filter_month": str(m),
             "search_query": search_query,
+            "filter_start_date": start_date.isoformat() if start_date else "",
+            "filter_end_date": end_date.isoformat() if end_date else "",
+            "filter_client": client_filter,
+            "filter_brand": brand_filter,
+            "filter_country": country_filter,
+            "filter_query": filter_params.urlencode(),
         },
     )
+
+
+def _production_revenue_xlsx(report):
+    workbook = Workbook()
+    summary = workbook.active
+    summary.title = "Revenue Summary"
+    summary.append(["Revenue Type", "Currency", "Revenue", "Cost", "Profit", "Margin %"])
+    for key, label in (
+        ("bulk_revenue", "Bulk Production"),
+        ("sewing_revenue", "Sewing Charge"),
+        ("sample_revenue", "Sample"),
+        ("other_revenue", "Other"),
+    ):
+        for row in report[key]:
+            summary.append([
+                label,
+                row["currency"],
+                row["revenue"],
+                row.get("cost"),
+                row.get("profit"),
+                row.get("margin_pct"),
+            ])
+
+    details = workbook.create_sheet("Revenue Detail")
+    headers = [
+        "Revenue Type", "Subtype", "Date", "Reference", "Client", "Brand", "Country",
+        "Currency", "Revenue", "Cost", "Profit", "Margin %", "Paid", "Balance", "Status",
+    ]
+    details.append(headers)
+    for row in report["export_rows"]:
+        details.append([
+            row["revenue_type"],
+            row["subtype"],
+            row["date"].isoformat() if row["date"] else "",
+            row["reference"],
+            row["client"],
+            row["brand"],
+            row["country"],
+            row["currency"],
+            row["revenue"],
+            row["cost"],
+            row["profit"],
+            row["margin_pct"],
+            row["paid"],
+            row["balance"],
+            row["status"],
+        ])
+    for worksheet in workbook.worksheets:
+        worksheet.freeze_panes = "A2"
+        worksheet.auto_filter.ref = worksheet.dimensions
+
+    output = io.BytesIO()
+    workbook.save(output)
+    response = HttpResponse(
+        output.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = 'attachment; filename="revenue_breakdown.xlsx"'
+    return response
+
+
+def _production_revenue_pdf(report):
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib.units import mm
+        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    except ImportError:
+        return HttpResponse("ReportLab is not installed", status=500)
+
+    output = io.BytesIO()
+    document = SimpleDocTemplate(
+        output,
+        pagesize=landscape(A4),
+        rightMargin=10 * mm,
+        leftMargin=10 * mm,
+        topMargin=10 * mm,
+        bottomMargin=10 * mm,
+        title="Revenue Breakdown Dashboard",
+    )
+    styles = getSampleStyleSheet()
+    story = [Paragraph("Revenue Breakdown Dashboard", styles["Title"]), Spacer(1, 6)]
+    table_data = [[
+        "Type", "Subtype", "Date", "Reference", "Client", "Currency",
+        "Revenue", "Cost", "Profit", "Margin", "Status",
+    ]]
+    for row in report["export_rows"]:
+        table_data.append([
+            row["revenue_type"],
+            row["subtype"],
+            row["date"].isoformat() if row["date"] else "",
+            row["reference"],
+            row["client"],
+            row["currency"] or "",
+            f"{row['revenue']:,.2f}" if row["revenue"] is not None else "Unavailable",
+            f"{row['cost']:,.2f}" if row["cost"] is not None else "Unavailable",
+            f"{row['profit']:,.2f}" if row["profit"] is not None else "N/A",
+            f"{row['margin_pct']:.2f}%" if row["margin_pct"] is not None else "N/A",
+            row["status"],
+        ])
+    table = Table(
+        table_data,
+        repeatRows=1,
+        colWidths=[18*mm, 24*mm, 20*mm, 27*mm, 32*mm, 16*mm, 22*mm, 22*mm, 22*mm, 18*mm, 23*mm],
+    )
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#111827")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 7),
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#94a3b8")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fafc")]),
+    ]))
+    story.append(table)
+    document.build(story)
+    response = HttpResponse(output.getvalue(), content_type="application/pdf")
+    response["Content-Disposition"] = 'attachment; filename="revenue_breakdown.pdf"'
+    return response
 
 from collections import defaultdict
 from decimal import Decimal
