@@ -156,7 +156,8 @@ class CEOExecutiveDashboardTests(TestCase):
         self.assertContains(response, "Sales")
         self.assertContains(response, "Hossain")
         self.assertNotContains(response, "Hossain Forhad")
-        self.assertContains(response, self.order.order_code)
+        self.assertContains(response, self.order.purchase_order_number)
+        self.assertNotContains(response, self.order.internal_order_id)
         self.assertIn("ceo-dashboard;dur=", response.headers["Server-Timing"])
 
     def test_context_keeps_currency_exposure_separate(self):
