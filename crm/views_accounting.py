@@ -74,6 +74,7 @@ from .permissions import can_view_internal_costing, get_access, operations_group
 from .services.operations_permissions import can_archive_invoices
 from .services.costing_currency import CurrencyConversionError, convert_currency
 from .services.local_sewing import summarize_production_business_models
+from .services.production_profit import build_production_profit_report
 
 try:
     from .models import AccountingMonthLock
@@ -4056,169 +4057,6 @@ def _parse_int(v):
         return None
 
 
-SWING_SUB_TYPE = "Swing"
-
-
-def _entry_amount_cad(row, cad_to_bdt):
-    currency = (row.get("currency") or "").upper().strip()
-    amt_orig = row.get("amount_original") or Decimal("0")
-    try:
-        return convert_currency(amt_orig, currency, "CAD", bdt_per_cad=cad_to_bdt)
-    except CurrencyConversionError:
-        return Decimal("0")
-
-
-def _entry_amount_bdt(row, cad_to_bdt):
-    currency = (row.get("currency") or "").upper().strip()
-    amt_orig = row.get("amount_original") or Decimal("0")
-    try:
-        return convert_currency(amt_orig, currency, "BDT", bdt_per_cad=cad_to_bdt)
-    except CurrencyConversionError:
-        return Decimal("0")
-
-
-def production_profit_rows(year=None, month=None):
-    base_entries = AccountingEntry.objects.filter(production_order_id__isnull=False)
-    if year:
-        base_entries = base_entries.filter(date__year=year)
-    if month:
-        base_entries = base_entries.filter(date__month=month)
-
-    order_ids = set(
-        base_entries.values_list("production_order_id", flat=True).distinct()
-    )
-
-    po_qs = ProductionOrder.objects.all()
-    if year:
-        po_qs = po_qs.filter(created_at__year=year)
-    if month:
-        po_qs = po_qs.filter(created_at__month=month)
-    po_qs = po_qs.filter(
-        Q(actual_total_cost_bdt__gt=0)
-        | Q(production_total_cost_bdt__gt=0)
-        | Q(production_sewing_cost_bdt__gt=0)
-    )
-    order_ids.update(po_qs.values_list("id", flat=True))
-
-    order_ids = sorted({oid for oid in order_ids if oid})
-    if not order_ids:
-        return []
-
-    rate_row = _get_rate_row()
-    cad_to_bdt = rate_row.cad_to_bdt or Decimal("0")
-
-    stats = {}
-    for oid in order_ids:
-        stats[oid] = {
-            "revenue_cad": Decimal("0"),
-            "swing_cad": Decimal("0"),
-            "swing_bdt": Decimal("0"),
-            "cost_cad_from_entries": Decimal("0"),
-        }
-
-    entries_qs = (
-        base_entries.filter(production_order_id__in=order_ids)
-        .values(
-            "production_order_id",
-            "side",
-            "direction",
-            "main_type",
-            "sub_type",
-            "currency",
-            "amount_original",
-            "amount_cad",
-            "amount_bdt",
-        )
-    )
-
-    for row in entries_qs.iterator(chunk_size=2000):
-        oid = row.get("production_order_id")
-        if not oid or oid not in stats:
-            continue
-        side = (row.get("side") or "").upper().strip()
-        direction = (row.get("direction") or "").upper().strip()
-        main_type = (row.get("main_type") or "").upper().strip()
-        sub_type = (row.get("sub_type") or "").strip()
-
-        if side == "CA" and direction == "IN":
-            amount_cad = _entry_amount_cad(row, cad_to_bdt)
-            stats[oid]["revenue_cad"] += amount_cad
-            if sub_type.lower() == SWING_SUB_TYPE.lower():
-                stats[oid]["swing_cad"] += amount_cad
-
-        if side == "BD" and direction == "OUT":
-            amount_cad = _entry_amount_cad(row, cad_to_bdt)
-            amount_bdt = _entry_amount_bdt(row, cad_to_bdt)
-            if main_type in ["COGS", "EXPENSE"]:
-                stats[oid]["cost_cad_from_entries"] += amount_cad
-            if sub_type.lower() == SWING_SUB_TYPE.lower():
-                stats[oid]["swing_bdt"] += amount_bdt
-
-    orders_map = ProductionOrder.objects.in_bulk(order_ids)
-    order_type_labels = dict(getattr(ProductionOrder, "ORDER_TYPE_CHOICES", []))
-
-    rows = []
-    for oid in order_ids:
-        po = orders_map.get(oid)
-
-        order_code = str(oid)
-        product_type = ""
-        pcs = 0
-        order_type = ""
-        order_type_label = ""
-        bd_sewing_bdt = Decimal("0")
-        bd_total_cost_bdt = Decimal("0")
-
-        if po:
-            order_code = po.purchase_order_number or str(po.id)
-            product_type = (po.style_name or po.title or "").strip()
-            pcs = getattr(po, "qty_total", 0) or 0
-            order_type = (po.order_type or "").strip()
-            order_type_label = order_type_labels.get(order_type, "")
-            bd_sewing_bdt = po.production_sewing_cost_bdt or Decimal("0")
-            bd_total_cost_bdt = (
-                po.actual_total_cost_bdt
-                or po.production_total_cost_bdt
-                or Decimal("0")
-            )
-
-        revenue = stats[oid]["revenue_cad"]
-        swing_cad = stats[oid]["swing_cad"]
-        swing_bdt = stats[oid]["swing_bdt"]
-
-        if bd_total_cost_bdt and cad_to_bdt and cad_to_bdt > 0:
-            cost_cad = convert_currency(bd_total_cost_bdt, "BDT", "CAD", bdt_per_cad=cad_to_bdt)
-        else:
-            cost_cad = stats[oid]["cost_cad_from_entries"]
-
-        cost_available = cost_cad > 0
-        profit = revenue - cost_cad if cost_available else None
-        margin = (profit / revenue * Decimal("100")) if revenue > 0 and cost_available else None
-
-        rows.append(
-            {
-                "production_order_id": oid,
-                "order_code": order_code,
-                "product_type": product_type,
-                "pcs": pcs,
-                "order_type": order_type,
-                "order_type_label": order_type_label,
-                "revenue_cad": revenue,
-                "swing_cad": swing_cad,
-                "swing_bdt": swing_bdt,
-                "bd_sewing_bdt": bd_sewing_bdt,
-                "bd_total_cost_bdt": bd_total_cost_bdt,
-                "cost_cad": cost_cad,
-                "cost_available": cost_available,
-                "profit_cad": profit,
-                "margin_pct": margin,
-            }
-        )
-
-    rows.sort(key=lambda r: r.get("profit_cad") if r.get("profit_cad") is not None else Decimal("-Infinity"), reverse=True)
-    return rows
-
-
 @login_required
 def production_profit_report(request):
     if not can_view_internal_costing(request.user):
@@ -4228,43 +4066,21 @@ def production_profit_report(request):
     y = _parse_int(request.GET.get("year") or str(today.year)) or today.year
     m = _parse_int(request.GET.get("month") or str(today.month)) or today.month
 
-    rows = production_profit_rows(year=y, month=m)
-    local_orders = ProductionOrder.objects.filter(
-        created_at__year=y,
-        created_at__month=m,
+    search_query = (request.GET.get("q") or "").strip()
+    report = build_production_profit_report(
+        year=y,
+        month=m,
+        search_query=search_query,
     )
-    production_business = summarize_production_business_models(local_orders)
-    cost_rows = [row for row in rows if row.get("cost_available")]
-    profit_summary = {
-        "order_count": len(rows),
-        "cost_available": bool(cost_rows),
-        "profitable_count": sum(1 for row in cost_rows if row.get("profit_cad") >= 0),
-        "loss_count": sum(1 for row in cost_rows if row.get("profit_cad") < 0),
-        "total_revenue_cad": sum((row.get("revenue_cad", Decimal("0")) for row in rows), Decimal("0")),
-        "total_cost_cad": sum((row.get("cost_cad", Decimal("0")) for row in cost_rows), Decimal("0")),
-        "total_profit_cad": sum((row.get("profit_cad") for row in cost_rows), Decimal("0")),
-        "total_swing_bdt": sum((row.get("swing_bdt", Decimal("0")) for row in rows), Decimal("0")),
-        "total_bd_cost_bdt": sum((row.get("bd_total_cost_bdt", Decimal("0")) for row in rows), Decimal("0")),
-    }
-    profit_summary["margin_pct"] = (
-        profit_summary["total_profit_cad"] / profit_summary["total_revenue_cad"] * Decimal("100")
-        if profit_summary["total_revenue_cad"] > 0 and profit_summary["total_cost_cad"] > 0
-        else None
-    )
-    rate_row = _get_rate_row()
 
     return render(
         request,
         "crm/production_profit_report.html",
         {
-            "rows": rows,
+            **report,
             "filter_year": str(y),
             "filter_month": str(m),
-            "SWING_SUB_TYPE": SWING_SUB_TYPE,
-            "profit_summary": profit_summary,
-            "cad_to_bdt": rate_row.cad_to_bdt or Decimal("0"),
-            "local_sewing_summary": production_business["local_sewing"],
-            "canada_export_revenue_rows": production_business["canada_export_revenue_rows"],
+            "search_query": search_query,
         },
     )
 

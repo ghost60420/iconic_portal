@@ -137,6 +137,11 @@
   }
 
   .pp-money{ font-variant-numeric: tabular-nums; }
+  .pp-section-title{color:#facc15;font-size:18px;font-weight:900;margin:22px 0 10px;}
+  .pp-status{display:inline-flex;padding:5px 9px;border-radius:999px;font-size:11px;font-weight:900;}
+  .pp-status.complete{background:#14532d;color:#bbf7d0;}
+  .pp-status.missing{background:#78350f;color:#fde68a;}
+  .pp-status.unavailable{background:#475569;color:#f8fafc;}
 
   /* Sorting */
   .pp-sort{ cursor:pointer; user-select:none; }
@@ -176,10 +181,12 @@
         <div class="pp-title">Production profit report</div>
 
         <div class="pp-sub mt-2">
-          Revenue from Canada IN. Cost from Bangladesh OUT.
-          Swing sub type is
-          <span style="color:#facc15;">{{ SWING_SUB_TYPE|default:"Swing Charge" }}</span>.
-          Bangladesh swing is shown in BDT. Current display conversion: 1 CAD = {{ cad_to_bdt|floatformat:2|intcomma }} BDT.
+          Read-only invoice revenue and linked production cost reconciliation.
+          {% if exchange_rate %}
+            Current conversion: <span style="color:#facc15;">1 CAD = {{ exchange_rate|floatformat:2|intcomma }} BDT</span>.
+          {% else %}
+            <span style="color:#fca5a5;">Exchange rate unavailable. CAD-equivalent profit is not calculated.</span>
+          {% endif %}
         </div>
       </div>
 
@@ -192,34 +199,44 @@
       </div>
     </div>
 
-    <div class="pp-summary" aria-label="Production business model breakdown">
-      <div class="pp-summary-card"><span>Canada Export Revenue</span><strong>{% for row in canada_export_revenue_rows %}{{ row.amount|finance_money:row.currency }}{% if not forloop.last %}<br>{% endif %}{% empty %}-{% endfor %}</strong><small>FOB and Canada door-to-door; native currencies are not combined.</small></div>
-      <div class="pp-summary-card"><span>Bangladesh Sewing Revenue</span><strong>{{ local_sewing_summary.total_sewing_revenue|finance_money:"BDT" }}</strong><small>{{ local_sewing_summary.order_count }} local order(s).</small></div>
-      <div class="pp-summary-card"><span>Bangladesh Sewing Cost</span><strong>{% if local_sewing_summary.cost_available %}{{ local_sewing_summary.total_sewing_cost|finance_money:"BDT" }}{% else %}Cost unavailable{% endif %}</strong><small>{{ local_sewing_summary.costed_order_count }} costed order(s).</small></div>
-      <div class="pp-summary-card"><span>Bangladesh Sewing Profit</span><strong>{% if local_sewing_summary.profit != None %}{{ local_sewing_summary.profit|finance_money:"BDT" }}{% else %}N/A{% endif %}</strong><small>{% if local_sewing_summary.margin != None %}Margin {{ local_sewing_summary.margin|floatformat:2 }}%{% else %}Margin N/A{% endif %}</small></div>
+    <div class="pp-section-title">Canada Export Summary</div>
+    <div class="pp-summary" aria-label="Canada export summary">
+      <div class="pp-summary-card"><span>Invoice Revenue</span><strong>{% if canada_export.revenue != None %}{{ canada_export.revenue|finance_money:"CAD" }}{% else %}Unavailable{% endif %}</strong><small>{{ canada_export.order_count }} classified order(s).</small></div>
+      <div class="pp-summary-card"><span>Bangladesh Factory Cost</span><strong>{% if canada_export.cost_bdt != None %}{{ canada_export.cost_bdt|finance_money:"BDT" }}{% else %}Unavailable{% endif %}</strong><small>Stored production cost or linked BD accounting cost.</small></div>
+      <div class="pp-summary-card"><span>Converted Cost</span><strong>{% if canada_export.cost_cad != None %}{{ canada_export.cost_cad|finance_money:"CAD" }}{% else %}Unavailable{% endif %}</strong><small>Uses the displayed BDT-per-CAD rate.</small></div>
+      <div class="pp-summary-card"><span>Gross Profit</span><strong>{% if canada_export.profit != None %}{{ canada_export.profit|finance_money:"CAD" }}{% else %}N/A{% endif %}</strong><small>Revenue minus converted cost.</small></div>
+      <div class="pp-summary-card"><span>Canada Margin</span><strong>{% if canada_export.margin_pct != None %}{{ canada_export.margin_pct|floatformat:2 }}%{% else %}N/A{% endif %}</strong><small>Gross profit ÷ invoice revenue × 100.</small></div>
     </div>
 
-    <div class="pp-summary">
-      <div class="pp-summary-card">
-        <span>Production accounting revenue</span>
-        <strong>{{ profit_summary.total_revenue_cad|finance_money:"CAD" }}</strong>
-        <small>{{ profit_summary.order_count }} order row(s) in this period.</small>
-      </div>
-      <div class="pp-summary-card">
-        <span>Total cost</span>
-        <strong>{% if profit_summary.cost_available %}{{ profit_summary.total_cost_cad|finance_money:"CAD" }}{% else %}Cost unavailable{% endif %}</strong>
-        <small>Converted CAD display. Original BD total cost: {{ profit_summary.total_bd_cost_bdt|finance_money:"BDT" }}.</small>
-      </div>
-      <div class="pp-summary-card">
-        <span>Profit</span>
-        <strong>{% if profit_summary.cost_available %}{{ profit_summary.total_profit_cad|finance_money:"CAD" }}{% else %}N/A{% endif %}</strong>
-        <small>{% if profit_summary.margin_pct != None %}Margin {{ profit_summary.margin_pct|floatformat:1 }}% across costed rows.{% else %}Cost unavailable · Margin N/A{% endif %}</small>
-      </div>
-      <div class="pp-summary-card">
-        <span>Swing / risk</span>
-        <strong>{{ profit_summary.total_swing_bdt|finance_money:"BDT" }}</strong>
-        <small>{{ profit_summary.loss_count }} loss row(s), {{ profit_summary.profitable_count }} non-loss row(s).</small>
-      </div>
+    <div class="pp-section-title">Bangladesh Local Summary</div>
+    <div class="pp-summary" aria-label="Bangladesh local summary">
+      <div class="pp-summary-card"><span>Local Revenue</span><strong>{% if bangladesh_local.revenue != None %}{{ bangladesh_local.revenue|finance_money:"BDT" }}{% else %}Unavailable{% endif %}</strong><small>{{ bangladesh_local.order_count }} classified order(s).</small></div>
+      <div class="pp-summary-card"><span>Local Sewing Cost</span><strong>{% if bangladesh_local.cost_bdt != None %}{{ bangladesh_local.cost_bdt|finance_money:"BDT" }}{% else %}Unavailable{% endif %}</strong><small>Quantity × sewing cost plus extra local cost.</small></div>
+      <div class="pp-summary-card"><span>Local Profit</span><strong>{% if bangladesh_local.profit != None %}{{ bangladesh_local.profit|finance_money:"BDT" }}{% else %}N/A{% endif %}</strong><small>Revenue minus recorded local cost.</small></div>
+      <div class="pp-summary-card"><span>Local Margin</span><strong>{% if bangladesh_local.margin_pct != None %}{{ bangladesh_local.margin_pct|floatformat:2 }}%{% else %}N/A{% endif %}</strong><small>Profit ÷ revenue × 100.</small></div>
+    </div>
+
+    <div class="pp-section-title">Sewing Charge Summary</div>
+    <div class="pp-summary" aria-label="Bangladesh local sewing charge summary">
+      <div class="pp-summary-card"><span>Bangladesh Sewing Revenue · Local</span><strong>{% if bangladesh_local_sewing.revenue != None %}{{ bangladesh_local_sewing.revenue|finance_money:"BDT" }}{% else %}Unavailable{% endif %}</strong><small>{{ bangladesh_local_sewing.order_count }} local sewing-charge order(s).</small></div>
+      <div class="pp-summary-card"><span>Bangladesh Sewing Cost · Local</span><strong>{% if bangladesh_local_sewing.cost_bdt != None %}{{ bangladesh_local_sewing.cost_bdt|finance_money:"BDT" }}{% else %}Unavailable{% endif %}</strong><small>Recorded local sewing cost only.</small></div>
+      <div class="pp-summary-card"><span>Bangladesh Sewing Profit · Local</span><strong>{% if bangladesh_local_sewing.profit != None %}{{ bangladesh_local_sewing.profit|finance_money:"BDT" }}{% else %}N/A{% endif %}</strong><small>Revenue minus recorded sewing cost.</small></div>
+      <div class="pp-summary-card"><span>Bangladesh Sewing Margin · Local</span><strong>{% if bangladesh_local_sewing.margin_pct != None %}{{ bangladesh_local_sewing.margin_pct|floatformat:2 }}%{% else %}N/A{% endif %}</strong><small>Profit ÷ sewing revenue × 100.</small></div>
+    </div>
+    <div class="pp-summary" aria-label="Canada export sewing charge summary">
+      <div class="pp-summary-card"><span>Canada Export Sewing Revenue</span><strong>{% if canada_export_sewing.revenue != None %}{{ canada_export_sewing.revenue|finance_money:"CAD" }}{% else %}Unavailable{% endif %}</strong><small>{{ canada_export_sewing.order_count }} sewing-charge invoice order(s).</small></div>
+      <div class="pp-summary-card"><span>Bangladesh Sewing Cost</span><strong>{% if canada_export_sewing.cost_bdt != None %}{{ canada_export_sewing.cost_bdt|finance_money:"BDT" }}{% else %}Unavailable{% endif %}</strong><small>Production sewing cost or linked sewing cost.</small></div>
+      <div class="pp-summary-card"><span>Converted Sewing Cost</span><strong>{% if canada_export_sewing.cost_cad != None %}{{ canada_export_sewing.cost_cad|finance_money:"CAD" }}{% else %}Unavailable{% endif %}</strong><small>Uses the displayed exchange rate.</small></div>
+      <div class="pp-summary-card"><span>Canada Sewing Profit</span><strong>{% if canada_export_sewing.profit != None %}{{ canada_export_sewing.profit|finance_money:"CAD" }}{% else %}N/A{% endif %}</strong><small>Revenue minus converted sewing cost.</small></div>
+      <div class="pp-summary-card"><span>Canada Sewing Margin</span><strong>{% if canada_export_sewing.margin_pct != None %}{{ canada_export_sewing.margin_pct|floatformat:2 }}%{% else %}N/A{% endif %}</strong><small>Profit ÷ sewing revenue × 100.</small></div>
+    </div>
+
+    <div class="pp-section-title">Combined Company View</div>
+    <div class="pp-summary" aria-label="Combined company view">
+      <div class="pp-summary-card"><span>Total Revenue CAD Equivalent</span><strong>{% if combined.revenue_cad != None %}{{ combined.revenue_cad|finance_money:"CAD" }}{% else %}Unavailable{% endif %}</strong><small>Classified complete rows only; no mixed-currency addition.</small></div>
+      <div class="pp-summary-card"><span>Total Cost CAD Equivalent</span><strong>{% if combined.cost_cad != None %}{{ combined.cost_cad|finance_money:"CAD" }}{% else %}Unavailable{% endif %}</strong><small>BDT cost divided by the displayed rate.</small></div>
+      <div class="pp-summary-card"><span>Total Profit CAD Equivalent</span><strong>{% if combined.profit_cad != None %}{{ combined.profit_cad|finance_money:"CAD" }}{% else %}N/A{% endif %}</strong><small>Revenue equivalent minus cost equivalent.</small></div>
+      <div class="pp-summary-card"><span>Overall Margin</span><strong>{% if combined.margin_pct != None %}{{ combined.margin_pct|floatformat:2 }}%{% else %}N/A{% endif %}</strong><small>{{ unclassified_count }} unclassified order(s) excluded.</small></div>
     </div>
 
     <!-- Filter -->
@@ -236,6 +253,11 @@
             <label class="form-label">Month</label>
             <input class="form-control form-control-sm" name="month"
                    value="{{ filter_month|default_if_none:'' }}">
+          </div>
+
+          <div class="col-sm-5">
+            <label class="form-label">PO, Internal Order ID, client or product</label>
+            <input class="form-control form-control-sm" name="q" value="{{ search_query }}" placeholder="PO-511257-001 or internal ID">
           </div>
 
           <div class="col-sm-2">
@@ -258,21 +280,19 @@
           <table id="ppTable" class="table table-dark table-sm align-middle pp-table">
             <thead>
               <tr>
-                <th class="pp-sort" data-type="text">Order <span class="pp-arrow">↕</span></th>
+                <th class="pp-sort" data-type="text">Friendly PO <span class="pp-arrow">↕</span></th>
+                <th class="pp-sort" data-type="text">Client <span class="pp-arrow">↕</span></th>
                 <th class="pp-sort" data-type="text">Product <span class="pp-arrow">↕</span></th>
-                <th class="text-end pp-sort" data-type="num">Pcs <span class="pp-arrow">↕</span></th>
+                <th class="text-end pp-sort" data-type="num">Quantity <span class="pp-arrow">↕</span></th>
                 <th class="pp-sort" data-type="text">Order type <span class="pp-arrow">↕</span></th>
-
-                <th class="text-end pp-sort" data-type="num">Revenue CAD <span class="pp-arrow">↕</span></th>
-                <th class="text-end pp-sort" data-type="num">Swing CAD <span class="pp-arrow">↕</span></th>
-                <th class="text-end pp-sort" data-type="num">Swing BDT <span class="pp-arrow">↕</span></th>
-
-                <th class="text-end pp-sort" data-type="num">BD sewing BDT <span class="pp-arrow">↕</span></th>
-                <th class="text-end pp-sort" data-type="num">BD total cost BDT <span class="pp-arrow">↕</span></th>
-
-                <th class="text-end pp-sort" data-type="num">Cost CAD <span class="pp-arrow">↕</span></th>
-                <th class="text-end pp-sort" data-type="num">Profit CAD <span class="pp-arrow">↕</span></th>
+                <th class="pp-sort" data-type="text">Revenue currency <span class="pp-arrow">↕</span></th>
+                <th class="text-end pp-sort" data-type="num">Revenue amount <span class="pp-arrow">↕</span></th>
+                <th class="text-end pp-sort" data-type="num">Sewing charge <span class="pp-arrow">↕</span></th>
+                <th class="text-end pp-sort" data-type="num">Bangladesh cost BDT <span class="pp-arrow">↕</span></th>
+                <th class="text-end pp-sort" data-type="num">Converted cost CAD <span class="pp-arrow">↕</span></th>
+                <th class="text-end pp-sort" data-type="num">Profit <span class="pp-arrow">↕</span></th>
                 <th class="text-end pp-sort" data-type="num">Margin % <span class="pp-arrow">↕</span></th>
+                <th class="pp-sort" data-type="text">Data status <span class="pp-arrow">↕</span></th>
               </tr>
             </thead>
 
@@ -280,69 +300,24 @@
               {% for r in rows %}
               <tr>
                 <td class="fw-bold">
-                  {% if r.order_code %}{{ r.order_code|production_po }}{% else %}{{ r.production_order_id|default:"" }}{% endif %}
+                  <a href="{% url 'production_detail' r.production_order_id %}">{{ r.purchase_order_number }}</a>
                 </td>
-
-                <td>
-                  {{ r.product_type|default:"" }}
-                </td>
-
-                <td class="text-end pp-money">
-                  {{ r.pcs|default:0|intcomma }}
-                </td>
-
-                <td>
-                  {% with ot=r.order_type|default:"" %}
-                    {% if ot == "fob" %}
-                      <span class="badge bg-primary pp-badge">FOB</span>
-                    {% elif ot == "sewing_charge" %}
-                      <span class="badge bg-warning text-dark pp-badge">Sewing</span>
-                    {% elif ot == "canada_full" %}
-                      <span class="badge bg-success pp-badge">Canada D2D</span>
-                    {% else %}
-                      <span class="badge bg-secondary pp-badge">
-                        {{ r.order_type_label|default:"Other" }}
-                      </span>
-                    {% endif %}
-                  {% endwith %}
-                </td>
-
-                <td class="text-end pp-money">
-                  {{ r.revenue_cad|default:0|finance_money:"CAD" }}
-                </td>
-
-                <td class="text-end pp-money">
-                  {{ r.swing_cad|default:0|finance_money:"CAD" }}
-                </td>
-
-                <td class="text-end pp-money">
-                  {{ r.swing_bdt|default:0|finance_money:"BDT" }}
-                </td>
-
-                <td class="text-end pp-money">
-                  {{ r.bd_sewing_bdt|default:0|finance_money:"BDT" }}
-                </td>
-
-                <td class="text-end pp-money">
-                  {{ r.bd_total_cost_bdt|default:0|finance_money:"BDT" }}
-                </td>
-
-                <td class="text-end pp-money">
-                  {% if r.cost_available %}{{ r.cost_cad|finance_money:"CAD" }}{% else %}Cost unavailable{% endif %}
-                </td>
-
-                <td class="text-end fw-bold pp-money"
-                    style="color:{% if r.profit_cad|default:0 < 0 %}#ff6b6b{% else %}#4ade80{% endif %};">
-                  {% if r.profit_cad != None %}{{ r.profit_cad|finance_money:"CAD" }}{% else %}N/A{% endif %}
-                </td>
-
-                <td class="text-end fw-bold pp-money">
-                  {% if r.margin_pct != None %}{{ r.margin_pct|floatformat:1 }}%{% else %}Margin N/A{% endif %}
-                </td>
+                <td>{{ r.client }}</td>
+                <td>{{ r.product }}</td>
+                <td class="text-end pp-money">{{ r.quantity|intcomma }}</td>
+                <td><span class="badge bg-secondary pp-badge">{{ r.classification_label }} · {{ r.order_type_label }}</span></td>
+                <td>{{ r.revenue_currency|default:"Unavailable" }}</td>
+                <td class="text-end pp-money">{% if r.revenue_amount != None %}{{ r.revenue_amount|finance_money:r.revenue_currency }}{% else %}Unavailable{% endif %}</td>
+                <td class="text-end pp-money">{% if r.sewing_charge_amount != None %}{{ r.sewing_charge_amount|finance_money:r.sewing_charge_currency }}{% else %}—{% endif %}</td>
+                <td class="text-end pp-money">{% if r.cost_bdt != None %}{{ r.cost_bdt|finance_money:"BDT" }}{% else %}Unavailable{% endif %}</td>
+                <td class="text-end pp-money">{% if r.cost_cad != None %}{{ r.cost_cad|finance_money:"CAD" }}{% else %}Unavailable{% endif %}</td>
+                <td class="text-end fw-bold pp-money">{% if r.profit != None %}{{ r.profit|finance_money:r.profit_currency }}{% else %}N/A{% endif %}</td>
+                <td class="text-end fw-bold pp-money">{% if r.margin_pct != None %}{{ r.margin_pct|floatformat:2 }}%{% else %}N/A{% endif %}</td>
+                <td><span class="pp-status {% if r.data_status == 'Complete' %}complete{% elif r.data_status == 'Unavailable' %}unavailable{% else %}missing{% endif %}">{{ r.data_status }}</span></td>
               </tr>
               {% empty %}
               <tr>
-                <td colspan="12" class="text-center pp-muted">
+                <td colspan="13" class="text-center pp-muted">
                   No rows found
                 </td>
               </tr>
@@ -352,10 +327,9 @@
         </div>
 
         <div class="mt-3 pp-note">
-          Swing BDT comes from Bangladesh OUT entries with sub type
-          <span style="color:#facc15;">{{ SWING_SUB_TYPE|default:"Swing Charge" }}</span>.
-          BD sewing BDT comes from Production Order sewing cost.
-          BD total cost BDT comes from Production Order total cost fields. This summary preserves the existing formula and does not write back to production, invoice, or accounting records.
+          Revenue uses non-cancelled invoice totals. Bangladesh Local Sewing may use the explicit quantity × sewing charge when no invoice exists.
+          Canada cost uses stored Production Order total cost, then linked BD COGS/expense entries as a fallback.
+          Missing values remain unavailable; this report never writes to production, invoice, accounting, costing, payment, or exchange-rate records.
         </div>
       </div>
     </div>
