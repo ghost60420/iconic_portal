@@ -120,7 +120,7 @@ You are Iconic production helper.
 Be short and practical.
 
 Production order:
-Code: {_val(po, "order_code", "po_number", "code", "id")}
+Purchase Order Number: {_val(po, "purchase_order_number", "po_number", "code", "id")}
 Status: {_val(po, "status")}
 Current stage: {_val(po, "current_stage", "stage")}
 Deadline: {_val(po, "delivery_date", "ship_date", "due_date")}

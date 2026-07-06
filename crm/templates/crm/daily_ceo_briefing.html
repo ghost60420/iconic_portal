@@ -455,7 +455,7 @@
                     {% for order in production_alert_rows %}
                       <tr>
                         <td>
-                          <span class="brief-primary">{{ order.order_code|default:order.title }}</span>
+                          <span class="brief-primary">{{ order.purchase_order_number|default:order.title }}</span>
                           <span class="brief-secondary">
                             {% if order.customer %}
                               {% if order.customer.account_brand %}{{ order.customer.account_brand }}{% elif order.customer.contact_name %}{{ order.customer.contact_name }}{% else %}No customer{% endif %}
@@ -510,7 +510,7 @@
                             {% else %}
                               No customer
                             {% endif %}
-                            {% if shipment.order %} - {{ shipment.order.order_code }}{% endif %}
+                            {% if shipment.order %} - {{ shipment.order.purchase_order_number }}{% endif %}
                           </span>
                         </td>
                         <td>{{ shipment.get_carrier_display }}</td>

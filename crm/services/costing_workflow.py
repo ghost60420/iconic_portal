@@ -499,7 +499,7 @@ def create_or_link_production_order_from_invoice(invoice, user=None):
             costing=costing,
             action="production_created",
             changed_by=_user_or_none(user),
-            note=order.order_code or str(order.pk),
+            note=order.purchase_order_number or str(order.pk),
         )
         create_lifecycle_from_production(order, user=user)
         return order, created

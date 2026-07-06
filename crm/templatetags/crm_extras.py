@@ -18,6 +18,15 @@ def get_item(mapping, key):
     return mapping.get(key, "")
 
 
+@register.filter(name="production_po")
+def production_po_filter(value):
+    if hasattr(value, "purchase_order_number"):
+        return value.purchase_order_number
+    from crm.models import ProductionOrder
+
+    return ProductionOrder.format_purchase_order_number(value)
+
+
 @register.filter(name="format_bdt")
 def format_bdt_filter(value):
     return format_bdt(value)

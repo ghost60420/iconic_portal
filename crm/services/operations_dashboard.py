@@ -145,7 +145,7 @@ def operations_dashboard_context(user, *, today=None):
         for order in orders:
             row = {
                 "type": "Delivery",
-                "title": order.order_code or order.title,
+                "title": order.purchase_order_number or order.title,
                 "detail": f"Due {order.bulk_deadline:%b %d, %Y} | {order.get_operational_status_display()}",
                 "url": reverse("production_detail", args=[order.pk]),
                 "tone": "high" if order.bulk_deadline <= today + timedelta(days=3) else "normal",
@@ -162,7 +162,7 @@ def operations_dashboard_context(user, *, today=None):
             today_tasks.append(
                 {
                     "type": "Shipment",
-                    "title": order.order_code or order.title,
+                    "title": order.purchase_order_number or order.title,
                     "detail": "Ready to ship",
                     "url": reverse("production_detail", args=[order.pk]),
                     "tone": "high",
@@ -179,7 +179,7 @@ def operations_dashboard_context(user, *, today=None):
             today_tasks.append(
                 {
                     "type": "Shipment",
-                    "title": shipment.order.order_code if shipment.order else f"Shipment {shipment.pk}",
+                    "title": shipment.order.purchase_order_number if shipment.order else f"Shipment {shipment.pk}",
                     "detail": f"Ships {shipment.ship_date:%b %d, %Y}",
                     "url": reverse("shipment_detail", args=[shipment.pk]),
                     "tone": "high",

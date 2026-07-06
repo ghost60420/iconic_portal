@@ -662,7 +662,7 @@ def _invoice_crm_references(inv: Invoice) -> dict:
         "production": order,
         "lead_id": getattr(lead, "lead_id", "") or getattr(lead, "pk", "") or "",
         "opportunity_id": getattr(opportunity, "opportunity_id", "") or getattr(opportunity, "pk", "") or "",
-        "production_id": getattr(order, "order_code", "") or getattr(order, "pk", "") or "",
+        "production_id": getattr(order, "purchase_order_number", "") or getattr(order, "pk", "") or "",
         "account_manager": account_manager or "N/A",
     }
 
@@ -843,7 +843,7 @@ def _invoice_sewing_charge_line_items(inv: Invoice, qty: Decimal, sewing_total: 
         description = (
             getattr(order, "style_name", "")
             or getattr(order, "title", "")
-            or getattr(order, "order_code", "")
+            or getattr(order, "purchase_order_number", "")
             or "Sewing Charge"
         ).strip()
         rate = (sewing_total / qty).quantize(Decimal("0.01")) if qty > 0 and sewing_total > 0 else Decimal("0")
@@ -901,13 +901,13 @@ def _invoice_line_items(inv: Invoice) -> list[dict]:
         if getattr(quick_costing, "costing_purpose", ""):
             detail_parts.append(f"Purpose: {quick_costing.purpose_label}")
     if order:
-        description = getattr(order, "title", "") or getattr(order, "style_name", "") or getattr(order, "order_code", "") or description
+        description = getattr(order, "title", "") or getattr(order, "style_name", "") or getattr(order, "purchase_order_number", "") or description
         if getattr(order, "style_name", ""):
             detail_parts.append(f"Style: {order.style_name}")
         if getattr(order, "color_info", ""):
             detail_parts.append(f"Color: {order.color_info}")
-        if getattr(order, "order_code", ""):
-            detail_parts.append(f"Order code: {order.order_code}")
+        if getattr(order, "purchase_order_number", ""):
+            detail_parts.append(f"Purchase Order Number: {order.purchase_order_number}")
 
     rows = [
         {
@@ -1285,7 +1285,7 @@ def invoice_list(request):
     if q:
         invoices = invoices.filter(
             Q(invoice_number__icontains=q)
-            | Q(order__order_code__icontains=q)
+            | ProductionOrder.identifier_search_query(q, "order__order_code")
             | Q(order__title__icontains=q)
             | Q(customer__account_brand__icontains=q)
             | Q(customer__contact_name__icontains=q)
@@ -1402,7 +1402,7 @@ def _invoice_list_by_currency(request, currency_code: str):
     if q:
         invoices = invoices.filter(
             Q(invoice_number__icontains=q)
-            | Q(order__order_code__icontains=q)
+            | ProductionOrder.identifier_search_query(q, "order__order_code")
             | Q(order__title__icontains=q)
             | Q(customer__account_brand__icontains=q)
             | Q(customer__contact_name__icontains=q)
@@ -1965,7 +1965,7 @@ def invoice_pdf(request, pk):
     for line in [
         f"Lead ID: {crm_refs.get('lead_id') or 'N/A'}",
         f"Opportunity ID: {crm_refs.get('opportunity_id') or 'N/A'}",
-        f"Production ID: {crm_refs.get('production_id') or 'N/A'}",
+        f"Purchase Order Number: {crm_refs.get('production_id') or 'N/A'}",
         f"Account Manager: {crm_refs.get('account_manager') or 'N/A'}",
     ]:
         pdf.drawString(left, y, line[:100])
@@ -2352,7 +2352,7 @@ def invoice_convert_to_production_order(request, pk):
         return redirect("invoice_view", pk=pk)
 
     if created:
-        messages.success(request, f"Production order {order.order_code or order.pk} created from invoice.")
+        messages.success(request, f"Production order {order.purchase_order_number or order.pk} created from invoice.")
     else:
-        messages.info(request, f"Invoice linked to production order {order.order_code or order.pk}.")
+        messages.info(request, f"Invoice linked to production order {order.purchase_order_number or order.pk}.")
     return redirect("production_detail", pk=order.pk)

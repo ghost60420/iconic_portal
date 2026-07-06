@@ -4050,15 +4050,17 @@ class ProductionOrder(models.Model):
         raise last_error or IntegrityError("Could not generate a unique production order code.")
 
     def __str__(self):
-        if self.order_code:
-            return f"{self.order_code} - {self.title}"
+        if self.purchase_order_number:
+            return f"{self.purchase_order_number} - {self.title}"
         return self.title
 
-    @property
-    def short_order_code(self):
-        code = (self.order_code or "").strip()
+    @classmethod
+    def format_purchase_order_number(cls, value):
+        code = str(value or "").strip()
         if not code:
             return ""
+        if code.upper().startswith("PO-"):
+            return code
 
         index = 0
         while index < len(code) and code[index].isalpha():
@@ -4074,6 +4076,27 @@ class ProductionOrder(models.Model):
         if len(code) <= 10:
             return code
         return f"PO-{code[-6:]}"
+
+    @classmethod
+    def identifier_search_query(cls, value, field_name="order_code"):
+        query = str(value or "").strip()
+        lookup = models.Q(**{f"{field_name}__icontains": query})
+        normalized = query.upper()
+        if normalized.startswith("PO-") and len(normalized) > 3:
+            lookup |= models.Q(**{f"{field_name}__icontains": normalized[3:]})
+        return lookup
+
+    @property
+    def short_order_code(self):
+        return self.format_purchase_order_number(self.order_code)
+
+    @property
+    def purchase_order_number(self):
+        return self.short_order_code
+
+    @property
+    def internal_order_id(self):
+        return (self.order_code or "").strip() or str(self.pk or "")
 
     @property
     def percent_done(self):
@@ -4147,7 +4170,7 @@ class ProductionOrderLine(models.Model):
 
     def __str__(self):
         label = self.style_name or "Line"
-        return f"{self.order.order_code or self.order_id} - {label}"
+        return f"{self.order.purchase_order_number or self.order_id} - {label}"
 
 
 class ProductionOrderMaterial(models.Model):
@@ -4200,7 +4223,7 @@ class ProductionOrderMaterial(models.Model):
         return allocated - consumed - damaged
 
     def __str__(self):
-        return f"{self.order.order_code} - {self.inventory_item.name}"
+        return f"{self.order.purchase_order_number} - {self.inventory_item.name}"
 
 
 from decimal import Decimal
@@ -4318,8 +4341,8 @@ class Shipment(models.Model):
 
     def __str__(self):
         base = self.tracking_number or f"Shipment {self.pk}"
-        if self.order and self.order.order_code:
-            return f"{self.order.order_code} - {base}"
+        if self.order and self.order.purchase_order_number:
+            return f"{self.order.purchase_order_number} - {base}"
         return base
 
     def update_cost_cad(self):
@@ -4478,7 +4501,7 @@ class OrderLifecycle(models.Model):
         if self.invoice_id and self.invoice:
             return f"Lifecycle for {self.invoice.invoice_number}"
         if self.production_order_id and self.production_order:
-            return f"Lifecycle for {self.production_order.order_code or self.production_order_id}"
+            return f"Lifecycle for {self.production_order.purchase_order_number or self.production_order_id}"
         if self.quotation_id and self.quotation:
             return f"Lifecycle for {self.quotation.quotation_number or 'COST-' + str(self.quotation_id)}"
         return f"Order Lifecycle {self.pk or ''}".strip()
@@ -5311,7 +5334,7 @@ class ProductionStage(models.Model):
         ordering = ["order", "planned_start", "stage_key"]
 
     def __str__(self):
-        return f"{self.order.order_code} - {self.get_stage_key_display()}"
+        return f"{self.order.purchase_order_number} - {self.get_stage_key_display()}"
 
     @property
     def is_late(self):

@@ -299,7 +299,7 @@
               <ul class="ai-list">
                 {% for r in ai_insights.neg_orders %}
                   <li class="ai-bad">
-                    Order {{ r.order_code|default:r.order_id }} —
+                    Order {% if r.order_code %}{{ r.order_code|production_po }}{% else %}{{ r.order_id }}{% endif %} —
                     {{ r.profit_cad|default_if_none:0|finance_money:"CAD" }}
                   </li>
                 {% endfor %}
@@ -500,7 +500,7 @@
           </div>
 
           <div class="col-sm-3">
-            <label class="form-label mb-1 label">Order code</label>
+            <label class="form-label mb-1 label">Purchase Order Number or Internal Order ID</label>
             <input type="text" name="order" value="{{ filter_order }}" class="form-control form-control-sm inp" placeholder="Example PO 1001">
           </div>
 
@@ -579,7 +579,7 @@
 
                     <td class="nowrap">
                       {% if e.production_order %}
-                        {{ e.production_order.order_code }}
+                        {{ e.production_order.purchase_order_number }}
                       {% else %}
                         <span style="color:var(--muted);">-</span>
                       {% endif %}

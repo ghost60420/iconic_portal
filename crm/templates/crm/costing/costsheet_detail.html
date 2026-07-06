@@ -422,7 +422,7 @@
     </div>
     <div class="workflow-step {% if workflow.production_order %}active{% endif %}">
       <span>Production</span>
-      <small>{% if workflow.production_order %}{{ workflow.production_order.order_code|default:"Created" }}{% else %}After invoice{% endif %}</small>
+      <small>{% if workflow.production_order %}{{ workflow.production_order.purchase_order_number|default:"Created" }}{% else %}After invoice{% endif %}</small>
     </div>
     <div class="workflow-step {% if workflow.production_order %}active{% endif %}">
       <span>Profit</span>

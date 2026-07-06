@@ -195,7 +195,7 @@
 
           {% if order %}
             <div class="badge-soft">
-              {{ order.order_code|default:order.title|default:"Order" }}
+              {{ order.purchase_order_number|default:order.title|default:"Order" }}
             </div>
 
             {# IMPORTANT: submit the FK even when the dropdown is hidden #}

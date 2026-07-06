@@ -195,7 +195,7 @@
           <article>
             <span>Production order</span>
             {% if shipment.order %}
-              <strong>{{ shipment.order.order_code|default:shipment.order.pk }}</strong>
+              <strong>{{ shipment.order.purchase_order_number|default:shipment.order.pk }}</strong>
               <small>{{ shipment.order.title }}</small>
               <a href="{% url 'production_detail' shipment.order.pk %}" class="shipping-inline-link">Open Production</a>
             {% else %}

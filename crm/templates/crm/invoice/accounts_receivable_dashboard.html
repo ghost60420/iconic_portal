@@ -593,7 +593,7 @@
                     </td>
                     <td>
                       {% if row.invoice.order %}
-                        <a class="ar-link" href="{% url 'production_detail' row.invoice.order.pk %}">{{ row.invoice.order.order_code|default:row.invoice.order }}</a>
+                        <a class="ar-link" href="{% url 'production_detail' row.invoice.order.pk %}">{{ row.invoice.order.purchase_order_number|default:row.invoice.order }}</a>
                       {% else %}
                         <span class="ar-muted">Not linked</span>
                       {% endif %}
@@ -734,7 +734,7 @@
                   <tr>
                     <td>
                       {% if row.order %}
-                        <a class="ar-link" href="{% url 'production_detail' row.order.pk %}">{{ row.order.order_code|default:row.order }}</a>
+                        <a class="ar-link" href="{% url 'production_detail' row.order.pk %}">{{ row.order.purchase_order_number|default:row.order }}</a>
                         <div class="ar-muted">{{ row.order.title|default:"Production order" }}</div>
                       {% else %}
                         No production order

@@ -283,7 +283,7 @@ def notify_quotation_decision(costing, decision):
 
 
 def notify_production_order_created(order):
-    label = order.order_code or order.title or f"Production Order {order.pk}"
+    label = order.purchase_order_number or order.title or f"Production Order {order.pk}"
     quoted_by = order.source_quotation.quoted_by if order.source_quotation_id else None
     recipients = _combined_recipient_rows(
         users=(order.assigned_production_manager, quoted_by, _lead_owner(order.lead)),
@@ -358,7 +358,7 @@ def notify_comment_added(comment):
     if comment.production_id:
         record = comment.production
         owner = record.assigned_production_manager
-        label = record.order_code or record.title or f"Production Order {record.pk}"
+        label = record.purchase_order_number or record.title or f"Production Order {record.pk}"
         target_url = _safe_reverse("production_detail", record.pk)
         related_module = "production"
     elif comment.opportunity_id:
@@ -430,7 +430,7 @@ def sync_operations_notifications(today=None, *, force=False):
             .only("id", "order_code", "title", "sample_deadline")[:100]
         )
         for order in sample_orders:
-            label = order.order_code or order.title or f"Production {order.pk}"
+            label = order.purchase_order_number or order.title or f"Production {order.pk}"
             active_keys |= create_operations_notification(
                 source_key=f"operations:sample_due:{order.pk}",
                 notification_type="sample_due",
@@ -451,7 +451,7 @@ def sync_operations_notifications(today=None, *, force=False):
             .only("id", "order_code", "title", "bulk_deadline")[:100]
         )
         for order in overdue_orders:
-            label = order.order_code or order.title or f"Production {order.pk}"
+            label = order.purchase_order_number or order.title or f"Production {order.pk}"
             active_keys |= create_operations_notification(
                 source_key=f"operations:production_overdue:{order.pk}",
                 notification_type="production_due",
@@ -474,7 +474,7 @@ def sync_operations_notifications(today=None, *, force=False):
         )
         for shipment in due_shipments:
             order = shipment.order
-            label = (order.order_code or order.title) if order else f"Shipment {shipment.pk}"
+            label = (order.purchase_order_number or order.title) if order else f"Shipment {shipment.pk}"
             active_keys |= create_operations_notification(
                 source_key=f"operations:shipment_due_today:{shipment.pk}",
                 notification_type="shipment_due",
@@ -496,7 +496,7 @@ def sync_operations_notifications(today=None, *, force=False):
         )
         for shipment in delayed_shipments:
             order = shipment.order
-            label = (order.order_code or order.title) if order else f"Shipment {shipment.pk}"
+            label = (order.purchase_order_number or order.title) if order else f"Shipment {shipment.pk}"
             active_keys |= create_operations_notification(
                 source_key=f"operations:shipment_delayed:{shipment.pk}",
                 notification_type="shipment_delayed",
@@ -636,7 +636,7 @@ def filter_notifications_by_search(queryset, query):
         (
             ProductionOrder,
             ProductionOrder.objects.filter(
-                Q(order_code__icontains=query)
+                ProductionOrder.identifier_search_query(query)
                 | Q(title__icontains=query)
                 | Q(client_name_snapshot__icontains=query)
                 | Q(brand_name_snapshot__icontains=query)
@@ -656,7 +656,7 @@ def filter_notifications_by_search(queryset, query):
             Shipment,
             Shipment.objects.filter(
                 Q(tracking_number__icontains=query)
-                | Q(order__order_code__icontains=query)
+                | ProductionOrder.identifier_search_query(query, "order__order_code")
                 | Q(customer__account_brand__icontains=query)
             ).values("pk"),
         ),

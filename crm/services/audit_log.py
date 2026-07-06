@@ -37,7 +37,7 @@ MODEL_LABEL_FIELDS = {
     "Lead": ("lead_id", "account_brand", "contact_name"),
     "Opportunity": ("opportunity_id",),
     "CostingHeader": ("quotation_number", "style_code", "style_name"),
-    "ProductionOrder": ("order_code", "title"),
+    "ProductionOrder": ("purchase_order_number", "title"),
     "Invoice": ("invoice_number",),
     "InvoicePayment": (),
     "Shipment": ("tracking_number",),

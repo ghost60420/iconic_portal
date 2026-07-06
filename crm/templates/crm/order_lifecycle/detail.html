@@ -208,7 +208,7 @@
       <p class="ol-eyebrow">Order Lifecycle</p>
       <h1 class="ol-title">
         {% if lifecycle.invoice %}{{ lifecycle.invoice.invoice_number }}
-        {% elif lifecycle.production_order %}{{ lifecycle.production_order.order_code|default:lifecycle.production_order.title }}
+        {% elif lifecycle.production_order %}{{ lifecycle.production_order.purchase_order_number|default:lifecycle.production_order.title }}
         {% elif lifecycle.quotation %}{{ lifecycle.quotation.quotation_number|default:"Quotation" }}
         {% else %}Lifecycle {{ lifecycle.pk }}{% endif %}
       </h1>

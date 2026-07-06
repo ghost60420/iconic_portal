@@ -70,7 +70,7 @@
       </section>
       <section class="exec-panel">
         <div class="exec-panel-head"><h2>Upcoming Shipments</h2><small>Next 8 scheduled shipments</small></div>
-        {% if upcoming_shipments %}<div class="exec-table-wrap"><table class="exec-table"><thead><tr><th>Date</th><th>Production Order</th><th>Status</th></tr></thead><tbody>{% for shipment in upcoming_shipments %}<tr><td>{{ shipment.ship_date|date:"M j, Y" }}</td><td>{% if shipment.order %}<a href="{% url 'production_detail' shipment.order_id %}">{{ shipment.order.order_code }}</a>{% else %}-{% endif %}</td><td>{{ shipment.get_status_display }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="exec-empty">No upcoming shipments scheduled.</div>{% endif %}
+        {% if upcoming_shipments %}<div class="exec-table-wrap"><table class="exec-table"><thead><tr><th>Date</th><th>Production Order</th><th>Status</th></tr></thead><tbody>{% for shipment in upcoming_shipments %}<tr><td>{{ shipment.ship_date|date:"M j, Y" }}</td><td>{% if shipment.order %}<a href="{% url 'production_detail' shipment.order_id %}">{{ shipment.order.purchase_order_number }}</a>{% else %}-{% endif %}</td><td>{{ shipment.get_status_display }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="exec-empty">No upcoming shipments scheduled.</div>{% endif %}
       </section>
     </div>
   </div>

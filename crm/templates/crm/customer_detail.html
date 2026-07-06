@@ -201,7 +201,7 @@
               <tbody>
                 {% for order in production_active %}
                   <tr class="clickable-row" data-href="{% url 'production_detail' order.pk %}">
-                    <td><a href="{% url 'production_detail' order.pk %}">{{ order.order_code|default:order.title }}</a></td>
+                    <td><a href="{% url 'production_detail' order.pk %}">{{ order.purchase_order_number|default:order.title }}</a></td>
                     <td><span class="customer-stage-badge active">{{ order.get_status_display }}</span></td>
                     <td>{{ order.qty_total|default:"-" }}</td>
                     <td>{{ order.bulk_deadline|date:"M j, Y"|default:"-" }}</td>
@@ -211,7 +211,7 @@
                 {% endfor %}
                 {% for order in production_completed %}
                   <tr class="clickable-row" data-href="{% url 'production_detail' order.pk %}">
-                    <td><a href="{% url 'production_detail' order.pk %}">{{ order.order_code|default:order.title }}</a></td>
+                    <td><a href="{% url 'production_detail' order.pk %}">{{ order.purchase_order_number|default:order.title }}</a></td>
                     <td><span class="customer-stage-badge done">{{ order.get_status_display }}</span></td>
                     <td>{{ order.qty_total|default:"-" }}</td>
                     <td>{{ order.bulk_deadline|date:"M j, Y"|default:"-" }}</td>

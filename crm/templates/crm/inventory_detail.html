@@ -406,7 +406,7 @@
             <select name="production_order">
               <option value="">No production link</option>
               {% for po in production_options %}
-                <option value="{{ po.pk }}">{{ po.order_code|default:po.pk }} / {{ po.title }}</option>
+                <option value="{{ po.pk }}">{{ po.purchase_order_number|default:po.pk }} / {{ po.title }}</option>
               {% endfor %}
             </select>
           </label>
@@ -531,7 +531,7 @@
             <div class="reorder-row d-flex justify-content-between">
               <div>
                 <div style="color:#f5f5f5;">
-                  {{ line.order.order_code }} — {{ line.order.title }}
+                  {{ line.order.purchase_order_number }} — {{ line.order.title }}
                 </div>
                 <div class="inv-muted">
                   Allocated {{ line.allocated_quantity|default:line.quantity|default:"-" }} {{ line.unit_type|default:item.unit_type }}
@@ -566,7 +566,7 @@
                 <div class="inv-muted">
                   {{ move.created_at|date:"Y M d H:i" }}
                   {% if move.reason %} · {{ move.reason }}{% endif %}
-                  {% if move.production_order %} · {{ move.production_order.order_code|default:move.production_order.pk }}{% endif %}
+                  {% if move.production_order %} · {{ move.production_order.purchase_order_number|default:move.production_order.pk }}{% endif %}
                 </div>
               </div>
               <div class="inv-muted text-end">

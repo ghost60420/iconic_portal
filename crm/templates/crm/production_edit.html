@@ -197,7 +197,7 @@
     <div>
       <div class="prod-edit-title">Edit production order</div>
       <div class="prod-edit-sub">
-        Code {{ order.order_code }} · Created {{ order.created_at|date:"Y-m-d" }}
+        Purchase Order {{ order.purchase_order_number }} · Created {{ order.created_at|date:"Y-m-d" }}
       </div>
     </div>
     <div>
@@ -227,8 +227,8 @@
         </div>
 
         <div class="prod-edit-field">
-          <label>Order code</label>
-          <div class="readonly-box">{{ order.order_code }}</div>
+          <label>Purchase Order Number</label>
+          <div class="readonly-box">{{ order.purchase_order_number }}</div>
         </div>
 
         <div class="prod-edit-field">

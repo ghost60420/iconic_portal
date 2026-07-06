@@ -280,7 +280,7 @@
               {% for r in rows %}
               <tr>
                 <td class="fw-bold">
-                  {{ r.order_code|default:r.production_order_id|default:"" }}
+                  {% if r.order_code %}{{ r.order_code|production_po }}{% else %}{{ r.production_order_id|default:"" }}{% endif %}
                 </td>
 
                 <td>

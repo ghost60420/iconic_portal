@@ -458,7 +458,7 @@ def operations_queue(request, queue_key):
             queryset = queryset.filter(bulk_deadline__lt=today)
         rows = [
             {
-                "number": row.order_code or f"Production {row.pk}",
+                "number": row.purchase_order_number or f"Production {row.pk}",
                 "name": row.client_name_snapshot or (row.customer.account_brand if row.customer else "") or row.title,
                 "status": row.get_operational_status_display(),
                 "date": row.bulk_deadline,

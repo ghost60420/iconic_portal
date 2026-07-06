@@ -133,7 +133,7 @@
                     {{ e.date|date:"Y-m-d" }} |
                     {{ e.side }} |
                     {{ e.main_type }}{% if e.sub_type %} | {{ e.sub_type }}{% endif %}
-                    {% if e.production_order %} | {{ e.production_order.order_code }}{% endif %}
+                    {% if e.production_order %} | {{ e.production_order.purchase_order_number }}{% endif %}
                   </div>
 
                   {% if e.description %}

@@ -478,7 +478,7 @@ def _archive_workflow_record(record, user):
 
 
 def _workflow_object_label(record):
-    for attr in ("lead_id", "opportunity_id", "order_code", "invoice_number", "customer_code"):
+    for attr in ("purchase_order_number", "lead_id", "opportunity_id", "order_code", "invoice_number", "customer_code"):
         value = getattr(record, attr, None)
         if value:
             return str(value)
@@ -613,13 +613,23 @@ def _calendar_related_productions(event):
 def _calendar_link_payload():
     payload = []
 
-    def add(record_type, record, label, *, lead_id=None, opportunity_id=None, customer_id=None, production_id=None):
+    def add(
+        record_type,
+        record,
+        label,
+        *,
+        lead_id=None,
+        opportunity_id=None,
+        customer_id=None,
+        production_id=None,
+        search_extra="",
+    ):
         payload.append(
             {
                 "type": record_type,
                 "id": record.pk,
                 "label": label,
-                "search": f"{record_type} {label}".lower(),
+                "search": f"{record_type} {label} {search_extra}".lower(),
                 "lead_id": lead_id or "",
                 "opportunity_id": opportunity_id or "",
                 "customer_id": customer_id or "",
@@ -655,11 +665,12 @@ def _calendar_link_payload():
         add(
             "production",
             order,
-            f"{order.short_order_code or order.order_code} - {order.title}",
+            f"{order.purchase_order_number} - {order.title}",
             lead_id=order.lead_id,
             opportunity_id=order.opportunity_id,
             customer_id=order.customer_id,
             production_id=order.pk,
+            search_extra=order.internal_order_id,
         )
     return payload
 
@@ -8049,7 +8060,7 @@ def _apply_production_status_change(order, old_status):
         customer=customer,
         event_type="production_status",
         title="Production status updated",
-        details=f"Production {order.order_code or order.pk} is now {order.get_status_display()}.",
+        details=f"Production {order.purchase_order_number or order.pk} is now {order.get_status_display()}.",
         opportunity=order.opportunity,
         production=order,
     )
@@ -8061,7 +8072,7 @@ def _apply_production_status_change(order, old_status):
             customer=customer,
             event_type="production_completed",
             title="Production completed",
-            details=f"Production {order.order_code or order.pk} marked completed.",
+            details=f"Production {order.purchase_order_number or order.pk} marked completed.",
             opportunity=order.opportunity,
             production=order,
         )
@@ -8072,7 +8083,7 @@ def _apply_production_status_change(order, old_status):
             customer=customer,
             event_type="production_closed_won",
             title="Production closed won",
-            details=f"Production {order.order_code or order.pk} closed won.",
+            details=f"Production {order.purchase_order_number or order.pk} closed won.",
             opportunity=order.opportunity,
             production=order,
         )
@@ -8083,7 +8094,7 @@ def _apply_production_status_change(order, old_status):
             customer=customer,
             event_type="production_closed_lost",
             title="Production closed lost",
-            details=f"Production {order.order_code or order.pk} closed lost.",
+            details=f"Production {order.purchase_order_number or order.pk} closed lost.",
             opportunity=order.opportunity,
             production=order,
         )
@@ -8580,7 +8591,7 @@ def production_list(request):
     if search_query:
         orders = orders.filter(
             Q(title__icontains=search_query)
-            | Q(order_code__icontains=search_query)
+            | ProductionOrder.identifier_search_query(search_query)
             | Q(customer__account_brand__icontains=search_query)
             | Q(customer__contact_name__icontains=search_query)
             | Q(product__name__icontains=search_query)
@@ -10027,7 +10038,7 @@ Use short simple English.
 Write clear bullet points.
 
 Order title: {order.title}
-Order code: {order.order_code}
+Purchase order number: {order.purchase_order_number}
 Order type: {order.get_order_type_display()}
 Total quantity: {order.qty_total}
 Reject quantity: {order.qty_reject}
@@ -10208,7 +10219,7 @@ def production_order_sheet_pdf(request, pk):
         )
 
     response = HttpResponse(content_type="application/pdf")
-    filename = f"production_order_sheet_{order.order_code or order.pk}.pdf"
+    filename = f"production_order_sheet_{order.purchase_order_number or order.pk}.pdf"
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
 
     p = canvas.Canvas(response, pagesize=letter)
@@ -10305,7 +10316,7 @@ def production_order_sheet_pdf(request, pk):
 
     p.setFont("Helvetica", 11)
     header_lines = [
-        f"Order: {order.order_code or order.pk}",
+        f"Purchase Order Number: {order.purchase_order_number or order.pk}",
         f"Title: {order.title}",
         f"Customer: {(order.customer.account_brand if order.customer else '') or 'Not set'}",
         f"Product ID: {(order.product.product_code if order.product else '-')}",
@@ -10439,7 +10450,7 @@ def production_packing_list_pdf(request, pk):
         )
 
     response = HttpResponse(content_type="application/pdf")
-    filename = f"packing_list_{order.order_code or order.pk}.pdf"
+    filename = f"packing_list_{order.purchase_order_number or order.pk}.pdf"
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
 
     p = canvas.Canvas(response, pagesize=letter)
@@ -10479,7 +10490,7 @@ def production_packing_list_pdf(request, pk):
 
     # summary line
     p.setFont("Helvetica", 10)
-    p.drawString(40, y, f"Order: {order.order_code or order.pk}")
+    p.drawString(40, y, f"Purchase Order Number: {order.purchase_order_number or order.pk}")
     p.drawString(220, y, f"Total PCS: {order.qty_total or 0}")
     p.drawString(360, y, f"Reject: {order.qty_reject or 0}")
     y -= 18
@@ -10793,7 +10804,7 @@ def shipment_list(request):
             | Q(customer__city__icontains=search_query)
             | Q(customer__country__icontains=search_query)
             | Q(opportunity__opportunity_id__icontains=search_query)
-            | Q(order__order_code__icontains=search_query)
+            | ProductionOrder.identifier_search_query(search_query, "order__order_code")
             | Q(order__title__icontains=search_query)
         )
 
@@ -12257,7 +12268,7 @@ def ceo_operations_dashboard(request):
                             getattr(customer, "account_brand", "")
                             or getattr(customer, "contact_name", "")
                             or getattr(getattr(lifecycle, "invoice", None), "invoice_number", "")
-                            or getattr(getattr(lifecycle, "production_order", None), "order_code", "")
+                            or getattr(getattr(lifecycle, "production_order", None), "purchase_order_number", "")
                             or f"Lifecycle {lifecycle.pk}"
                         ),
                         "currency": currency_code,
@@ -13127,7 +13138,7 @@ def _build_daily_ceo_briefing_email_draft(context):
             customer = _briefing_customer_label(getattr(order, "customer", None))
             product = getattr(getattr(order, "product", None), "name", "") or "No product"
             lines.append(
-                f"- {getattr(order, 'order_code', '') or getattr(order, 'title', 'Production order')}: "
+                f"- {getattr(order, 'purchase_order_number', '') or getattr(order, 'title', 'Production order')}: "
                 f"{customer}, {product}, status {order.get_status_display()}, "
                 f"deadline {_briefing_date_label(getattr(order, 'bulk_deadline', None))}, "
                 f"qty {getattr(order, 'qty_total', 0)}."

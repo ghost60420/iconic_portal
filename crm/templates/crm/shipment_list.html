@@ -142,7 +142,7 @@
                   <td data-label="Production / Opportunity">
                     <div class="shipping-stack">
                       {% if s.order %}
-                        <a href="{% url 'production_detail' s.order.pk %}" class="shipping-inline-link">{{ s.order.order_code|default:s.order.pk }}</a>
+                        <a href="{% url 'production_detail' s.order.pk %}" class="shipping-inline-link">{{ s.order.purchase_order_number|default:s.order.pk }}</a>
                         <span>{{ s.order.title|default:"Production order" }}</span>
                       {% else %}
                         <strong>No production order</strong>
