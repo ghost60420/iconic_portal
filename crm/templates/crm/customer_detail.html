@@ -134,7 +134,49 @@
       <article class="customer-card">
         <div class="customer-section-head">
           <div>
-            <h2>Opportunities</h2>
+            <h2>Lead history</h2>
+            <p>All leads linked to this client, including converted, closed, and archived records.</p>
+          </div>
+        </div>
+        {% if leads %}
+          <div class="customer-table-wrap">
+            <table class="customer-mini-table">
+              <thead>
+                <tr>
+                  <th>Lead</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                  <th>Amount</th>
+                  <th>Currency</th>
+                  <th>Open</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for lead in leads %}
+                  <tr class="clickable-row" data-href="{% url 'lead_detail' lead.pk %}?customer={{ customer.id }}">
+                    <td><a href="{% url 'lead_detail' lead.pk %}?customer={{ customer.id }}">{{ lead.lead_id }}</a><span>{{ lead.account_brand|default:lead.contact_name|default:"Lead" }}</span></td>
+                    <td><span class="customer-stage-badge">{{ lead.lead_status|default:"New" }}{% if lead.is_archived %} · Archived{% endif %}</span></td>
+                    <td>{{ lead.created_date|date:"M j, Y"|default:"-" }}</td>
+                    <td>{{ lead.budget|default:"-" }}</td>
+                    <td>{{ lead.market|default:"-" }}</td>
+                    <td><a class="customer-btn customer-btn--tiny customer-btn--ghost" href="{% url 'lead_detail' lead.pk %}?customer={{ customer.id }}">Open</a></td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="customer-empty-block">
+            <strong>No lead history yet</strong>
+            <span>Converted and closed leads will remain visible here.</span>
+          </div>
+        {% endif %}
+      </article>
+
+      <article class="customer-card">
+        <div class="customer-section-head">
+          <div>
+            <h2>Opportunity history</h2>
             <p>Related sales opportunities, sales value, status, and next follow up.</p>
           </div>
           <a href="{% url 'add_opportunity' %}?customer={{ customer.id }}" class="customer-btn customer-btn--tiny customer-btn--primary">Create Opportunity</a>
@@ -180,7 +222,7 @@
       <article class="customer-card">
         <div class="customer-section-head">
           <div>
-            <h2>Production</h2>
+            <h2>Production order history</h2>
             <p>Linked active and completed production orders for this account.</p>
           </div>
           <a href="{% url 'production_list' %}?q={{ customer_display_name|urlencode }}&status=active" class="customer-btn customer-btn--tiny customer-btn--ghost">View Production</a>
@@ -202,7 +244,7 @@
                 {% for order in production_active %}
                   <tr class="clickable-row" data-href="{% url 'production_detail' order.pk %}">
                     <td><a href="{% url 'production_detail' order.pk %}">{{ order.purchase_order_number|default:order.title }}</a></td>
-                    <td><span class="customer-stage-badge active">{{ order.get_status_display }}</span></td>
+                    <td><span class="customer-stage-badge active">{{ order.history_operational_status_label|default:order.get_status_display }}</span></td>
                     <td>{{ order.qty_total|default:"-" }}</td>
                     <td>{{ order.bulk_deadline|date:"M j, Y"|default:"-" }}</td>
                     <td>{{ order.updated_at|date:"M j, Y" }}</td>
@@ -212,7 +254,7 @@
                 {% for order in production_completed %}
                   <tr class="clickable-row" data-href="{% url 'production_detail' order.pk %}">
                     <td><a href="{% url 'production_detail' order.pk %}">{{ order.purchase_order_number|default:order.title }}</a></td>
-                    <td><span class="customer-stage-badge done">{{ order.get_status_display }}</span></td>
+                    <td><span class="customer-stage-badge done">{{ order.history_operational_status_label|default:order.get_status_display }}</span></td>
                     <td>{{ order.qty_total|default:"-" }}</td>
                     <td>{{ order.bulk_deadline|date:"M j, Y"|default:"-" }}</td>
                     <td>{{ order.updated_at|date:"M j, Y" }}</td>
@@ -233,7 +275,7 @@
       <article class="customer-card">
         <div class="customer-section-head">
           <div>
-            <h2>Invoices and finance</h2>
+            <h2>Invoice history</h2>
             <p>Invoice status, balances, and quick links for finance follow up.</p>
           </div>
           <a href="{% url 'invoice_list' %}" class="customer-btn customer-btn--tiny customer-btn--ghost">View Invoices</a>
@@ -271,6 +313,90 @@
           <div class="customer-empty-block">
             <strong>No invoices yet</strong>
             <span>Invoices linked to this account or its production orders will show here.</span>
+          </div>
+        {% endif %}
+      </article>
+
+      <article class="customer-card">
+        <div class="customer-section-head">
+          <div>
+            <h2>Shipment history</h2>
+            <p>Linked shipments remain visible after delivery and production completion.</p>
+          </div>
+        </div>
+        {% if shipments %}
+          <div class="customer-table-wrap">
+            <table class="customer-mini-table">
+              <thead>
+                <tr>
+                  <th>Shipment</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                  <th>Amount</th>
+                  <th>Currency</th>
+                  <th>Open</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for shipment in shipments %}
+                  <tr class="clickable-row" data-href="{% url 'shipment_detail' shipment.pk %}">
+                    <td><a href="{% url 'shipment_detail' shipment.pk %}">{{ shipment.tracking_number|default:shipment.pk }}</a><span>{% if shipment.order %}{{ shipment.order.purchase_order_number|default:shipment.order.title }}{% else %}No production link{% endif %}</span></td>
+                    <td><span class="customer-stage-badge">{{ shipment.get_status_display }}</span></td>
+                    <td>{% if shipment.ship_date %}{{ shipment.ship_date|date:"M j, Y" }}{% else %}{{ shipment.created_at|date:"M j, Y" }}{% endif %}</td>
+                    <td>{% if can_view_internal_financials and shipment.cost_bdt %}{{ shipment.cost_bdt|finance_money:"BDT" }}{% else %}-{% endif %}</td>
+                    <td>{% if can_view_internal_financials and shipment.cost_bdt %}BDT{% else %}-{% endif %}</td>
+                    <td><a class="customer-btn customer-btn--tiny customer-btn--ghost" href="{% url 'shipment_detail' shipment.pk %}">Open</a></td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="customer-empty-block">
+            <strong>No shipment history yet</strong>
+            <span>Delivered shipments will remain visible here.</span>
+          </div>
+        {% endif %}
+      </article>
+
+      <article class="customer-card">
+        <div class="customer-section-head">
+          <div>
+            <h2>Payment history</h2>
+            <p>Recorded invoice payments linked to this client.</p>
+          </div>
+        </div>
+        {% if payment_history %}
+          <div class="customer-table-wrap">
+            <table class="customer-mini-table">
+              <thead>
+                <tr>
+                  <th>Payment</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                  <th>Amount</th>
+                  <th>Currency</th>
+                  <th>Open</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for payment in payment_history %}
+                  <tr class="clickable-row" data-href="{% url 'invoice_view' payment.invoice.pk %}">
+                    <td><a href="{% url 'invoice_view' payment.invoice.pk %}">{{ payment.invoice.invoice_number }}</a><span>{{ payment.payment_method|default:"payment" }}</span></td>
+                    <td><span class="customer-stage-badge">{{ payment.invoice.get_status_display }}</span></td>
+                    <td>{{ payment.payment_date|date:"M j, Y"|default:"-" }}</td>
+                    <td>{{ payment.amount|finance_money:payment.currency }}</td>
+                    <td>{{ payment.currency }}</td>
+                    <td><a class="customer-btn customer-btn--tiny customer-btn--ghost" href="{% url 'invoice_view' payment.invoice.pk %}">Open</a></td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="customer-empty-block">
+            <strong>No payment history yet</strong>
+            <span>Payments will appear here after invoice receipt entries are recorded.</span>
           </div>
         {% endif %}
       </article>

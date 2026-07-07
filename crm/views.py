@@ -253,6 +253,7 @@ from .models import (
     CostSheetSimple,
     QuickCosting,
     Invoice,
+    InvoicePayment,
     Opportunity,
     OpportunityDocument,
     OpportunityFile,
@@ -977,11 +978,14 @@ def _parse_money_value(raw_value):
         return None
 
 LEAD_LIST_STATUS_CHOICES = [
+    ("active", "Active"),
     ("new", "New"),
     ("contacted", "Contacted"),
     ("follow_up", "Follow Up"),
     ("converted", "Converted"),
-    ("lost", "Lost"),
+    ("closed", "Closed / Not Viable"),
+    ("archived", "Archived"),
+    ("all", "All"),
 ]
 
 _LEAD_FOLLOW_UP_OUTBOUND_STATUSES = {
@@ -1018,7 +1022,13 @@ def _normalize_lead_list_status_filter(value):
         "on_hold": "follow_up",
         "converted": "converted",
         "lost": "lost",
+        "closed": "closed",
+        "not_viable": "closed",
         "unqualified": "lost",
+        "archived": "archived",
+        "archive": "archived",
+        "active": "active",
+        "all": "all",
     }.get(key, "")
 
 def _lead_opportunity_count(lead):
@@ -1139,9 +1149,15 @@ def _filter_leads_by_list_status(qs, status_key, today):
     follow_up_q = _lead_list_follow_up_q(today)
     contacted_q = _lead_list_contacted_q()
 
+    if status_key == "all":
+        return qs
+    if status_key == "archived":
+        return qs.filter(Q(is_archived=True) | Q(lead_type="outbound", outbound_status="Archived")).distinct()
+    if status_key == "active":
+        return qs.filter(is_archived=False).exclude(converted_q | lost_q).distinct()
     if status_key == "converted":
         return qs.filter(converted_q).distinct()
-    if status_key == "lost":
+    if status_key in {"closed", "lost"}:
         return qs.filter(lost_q).exclude(converted_q).distinct()
     if status_key == "follow_up":
         return qs.filter(follow_up_q).exclude(converted_q | lost_q).distinct()
@@ -1344,9 +1360,19 @@ def leads_list(request):
     if can_manage_leads:
         allowed_views.add("all")
     view = requested_view if requested_view in allowed_views else "available"
+    if (
+        can_manage_leads
+        and view == "available"
+        and selected_lead_status in {"converted", "closed", "archived", "all"}
+    ):
+        view = "all"
     archive_filter = (request.GET.get("archive") or ("archived" if view == "archived" else "active")).strip().lower()
     if view in {"available", "my"}:
         archive_filter = "active"
+    if selected_lead_status == "archived" and can_manage_leads:
+        archive_filter = "archived"
+    elif selected_lead_status == "all" and can_manage_leads and "archive" not in request.GET:
+        archive_filter = "all"
 
     sort = (request.GET.get("sort") or "new").strip().lower()
 
@@ -1523,6 +1549,8 @@ def leads_list(request):
         )
     if selected_lead_status:
         qs = _filter_leads_by_list_status(qs, selected_lead_status, today)
+    elif archive_filter == "active":
+        qs = _filter_leads_by_list_status(qs, "active", today)
 
     if sort == "old":
         qs = qs.order_by("created_date", "id")
@@ -3029,6 +3057,67 @@ def _safe_related_attr(instance, attr_name, *, default=None):
         return default
 
 
+def _first_from_queryset_or_list(records):
+    try:
+        if isinstance(records, list):
+            return records[0] if records else None
+        return records.first()
+    except (AttributeError, IndexError, OperationalError, ProgrammingError):
+        return None
+
+
+def _lead_lifecycle_banner(lead, opportunities):
+    if not lead:
+        return None
+    is_converted = (
+        getattr(lead, "lead_status", "") == "Converted"
+        or getattr(lead, "outbound_status", "") == "Converted to Opportunity"
+    )
+    if not is_converted:
+        return None
+
+    opportunity = _first_from_queryset_or_list(opportunities)
+    if not opportunity:
+        return None
+
+    return {
+        "opportunity": opportunity,
+        "date": getattr(opportunity, "created_date", None) or getattr(lead, "created_date", None),
+    }
+
+
+def _opportunity_lifecycle_banner(production_orders):
+    order = _first_from_queryset_or_list(production_orders)
+    if not order:
+        return None
+
+    return {
+        "order": order,
+        "date": getattr(order, "created_at", None),
+    }
+
+
+def _production_lifecycle_banner(shipments):
+    delivered = None
+    for shipment in shipments or []:
+        if getattr(shipment, "status", "") == "delivered":
+            delivered = shipment
+            break
+    if not delivered:
+        return None
+
+    return {
+        "shipment": delivered,
+        "date": (
+            getattr(delivered, "delivered_at", None)
+            or getattr(delivered, "ship_date", None)
+            or getattr(delivered, "updated_at", None)
+            or getattr(delivered, "created_at", None)
+        ),
+        "reference": getattr(delivered, "tracking_number", "") or f"SHP-{delivered.pk:05d}",
+    }
+
+
 def _lead_detail_impl(request, pk):
     def _safe_fetch(fetcher, fallback, label: str):
         try:
@@ -3068,6 +3157,8 @@ def _lead_detail_impl(request, pk):
         [],
         "opportunities",
     )
+    if not isinstance(opportunities, list):
+        opportunities = list(opportunities)
     comments = _safe_fetch(lambda: _chatter_for_lead(lead, request.user), [], "comments")
     tasks = _safe_fetch(lambda: lead.tasks.all(), [], "tasks")
     activities = _safe_fetch(lambda: lead.activities.all(), [], "activities")
@@ -3526,6 +3617,7 @@ def _lead_detail_impl(request, pk):
         "can_release_lead": can_release_sales_lead(request.user, lead),
         "can_edit_lead": can_manage_all_sales_records(request.user) or lead.assigned_to_id == request.user.pk,
         "lead_can_hard_delete": not _lead_linked_record_labels(lead),
+        "lead_lifecycle_banner": _lead_lifecycle_banner(lead, opportunities),
         **workflow_visibility,
     }
 
@@ -4103,8 +4195,8 @@ def opportunity_detail(request, pk):
                 ai_messages_qs = conversation.messages.order_by("created_at")
 
     # Production totals
-    prod_orders = ProductionOrder.objects.filter(opportunity=opportunity)
-    prod_totals = prod_orders.aggregate(
+    prod_orders_qs = ProductionOrder.objects.filter(opportunity=opportunity)
+    prod_totals = prod_orders_qs.aggregate(
         total_qty=Sum("qty_total"),
         total_reject=Sum("qty_reject"),
     )
@@ -4114,14 +4206,14 @@ def opportunity_detail(request, pk):
     prod_total_actual_cost = None
     if can_view_internal_financials:
         prod_total_actual_cost = (
-            prod_orders.aggregate(total_actual_cost=Sum("actual_total_cost_bdt")).get("total_actual_cost") or 0
+            prod_orders_qs.aggregate(total_actual_cost=Sum("actual_total_cost_bdt")).get("total_actual_cost") or 0
         )
 
     costing_calc = compute_costing(costing_header.id) if costing_header and can_view_internal_financials else None
     variance_placeholder = None
     variance_display = None
     if costing_calc:
-        latest_po = prod_orders.order_by("-created_at").first()
+        latest_po = prod_orders_qs.order_by("-created_at", "-id").first()
         actual_cost_per_piece = None
         produced_qty = 0
         if latest_po and latest_po.actual_cost_per_piece_bdt is not None:
@@ -4154,6 +4246,8 @@ def opportunity_detail(request, pk):
                 "variance_per_piece": _fmt(variance_per_piece),
                 "total_variance": _fmt(total_variance),
             }
+
+    prod_orders = list(prod_orders_qs.order_by("-created_at", "-id"))
 
     order_value = opportunity.order_value or 0
     total_cost_bdt = (prod_total_actual_cost or 0) + (shipping_cost_bdt or 0) if can_view_internal_financials else None
@@ -4222,6 +4316,7 @@ def opportunity_detail(request, pk):
         "task_assignee_options": task_assignee_options,
         "can_archive_records": _can_archive_workflow_record(request.user),
         "opportunity_can_hard_delete": opportunity_can_hard_delete,
+        "opportunity_lifecycle_banner": _opportunity_lifecycle_banner(prod_orders),
         "variance_placeholder": variance_placeholder,
         "variance_display": variance_display,
 
@@ -4471,7 +4566,7 @@ def customers_list(request):
             "opportunities",
             filter=(
                 Q(opportunities__is_open=True, opportunities__is_archived=False)
-                & ~Q(opportunities__stage__in=CLOSED_PIPELINE_STAGES)
+                & ~Q(opportunities__stage__in=tuple(CLOSED_PIPELINE_STAGES) + ("Production", "Shipment Complete"))
             ),
             distinct=True,
         ),
@@ -4561,7 +4656,10 @@ def customers_list(request):
     else:
         customers.sort(key=lambda c: c.last_activity or date.min, reverse=True)
 
-    shared_pipeline = summarize_pipeline(Opportunity.objects.all())
+    shared_pipeline = summarize_pipeline(
+        _active_opportunity_list_queryset(_with_opportunity_production_flag(Opportunity.objects.all())),
+        apply_open_definition=False,
+    )
     local_customer_orders = ProductionOrder.objects.filter(customer_id__in=customer_ids)
     local_sewing_summary = summarize_local_sewing_orders(local_customer_orders)
     summary = {
@@ -4737,18 +4835,28 @@ def customer_detail(request, pk):
         total_orders += int(row.get("count") or 0)
     revenue_currency_rows = currency_summary_rows(revenue_totals)
 
-    prod_orders = (
+    prod_orders_qs = (
         customer.production_orders
         .select_related("opportunity", "lead")
+        .prefetch_related("shipments")
         .order_by("-created_at", "-id")
     )
-    local_sewing_summary = summarize_local_sewing_orders(prod_orders)
+    local_sewing_summary = summarize_local_sewing_orders(prod_orders_qs)
+    prod_orders = list(prod_orders_qs)
 
-    completed_statuses = _production_completed_statuses()
-    active_prod_statuses = _production_active_statuses()
-
-    production_active = prod_orders.filter(status__in=active_prod_statuses)
-    production_completed = prod_orders.filter(status__in=completed_statuses)
+    production_active = []
+    production_completed = []
+    for order in prod_orders:
+        operational_status = get_production_operational_status(order)
+        order.history_operational_status = operational_status
+        order.history_operational_status_label = OPERATIONAL_STATUS_LABELS.get(
+            operational_status,
+            order.get_status_display(),
+        )
+        if operational_status in OPERATIONAL_ACTIVE_STATUSES:
+            production_active.append(order)
+        elif operational_status in OPERATIONAL_FINISHED_STATUSES:
+            production_completed.append(order)
 
     invoice_model = globals().get("Invoice")
     if invoice_model is not None:
@@ -4776,6 +4884,27 @@ def customer_detail(request, pk):
         invoices = []
         unpaid_invoices = []
         invoice_currency_rows = []
+
+    shipments = (
+        Shipment.objects
+        .filter(
+            Q(customer=customer)
+            | Q(order__customer=customer)
+            | Q(opportunity__customer=customer)
+            | Q(opportunity__lead__customer=customer)
+        )
+        .select_related("order", "opportunity")
+        .order_by("-ship_date", "-created_at")
+        .distinct()
+    )
+
+    payment_history = (
+        InvoicePayment.objects
+        .filter(Q(invoice__customer=customer) | Q(invoice__order__customer=customer))
+        .select_related("invoice", "production_order")
+        .order_by("-payment_date", "-id")
+        .distinct()
+    )
 
     profit_estimate = None
     profit_margin = None
@@ -4848,6 +4977,8 @@ def customer_detail(request, pk):
         "active_opps": active_opps,
         "production_active": production_active,
         "production_completed": production_completed,
+        "shipments": shipments,
+        "payment_history": payment_history,
         "invoices": invoices,
         "unpaid_invoices": unpaid_invoices,
         "invoice_currency_rows": invoice_currency_rows,
@@ -8594,6 +8725,10 @@ def production_list(request):
         request.GET.get("status")
         or ("all" if archive_filter == "archived" else "active")
     ).strip().lower()
+    if status_filter == "archived":
+        archive_filter = "archived"
+    elif status_filter == "all" and "archive" not in request.GET:
+        archive_filter = "all"
     search_query = (request.GET.get("q") or "").strip()
     priority_filter = (request.GET.get("priority") or "all").strip().lower()
     delayed_filter = (request.GET.get("delayed") or "all").strip().lower()
@@ -8744,9 +8879,16 @@ def production_list(request):
             continue
         if status_filter == "ready_to_ship" and operational_status != OPERATIONAL_STATUS_READY_TO_SHIP:
             continue
-        if status_filter in {"shipped", "completed"} and operational_status != OPERATIONAL_STATUS_SHIPPED:
+        if status_filter == "shipped" and (
+            operational_status != OPERATIONAL_STATUS_SHIPPED
+            or _production_row_is_completed(row)
+        ):
+            continue
+        if status_filter == "completed" and not _production_row_is_completed(row):
             continue
         if status_filter == "cancelled" and operational_status != OPERATIONAL_STATUS_CANCELLED:
+            continue
+        if status_filter == "archived" and not row["order"].is_archived:
             continue
         if status_filter not in {
             "active",
@@ -8757,6 +8899,7 @@ def production_list(request):
             "shipped",
             "completed",
             "cancelled",
+            "archived",
             "all",
         } and operational_status not in OPERATIONAL_ACTIVE_STATUSES:
             continue
@@ -9776,6 +9919,7 @@ def production_detail(request, pk):
         "can_add_lines": can_add_lines,
         "can_archive_records": _can_archive_workflow_record(request.user),
         "production_can_hard_delete": not _production_linked_record_labels(order),
+        "production_lifecycle_banner": _production_lifecycle_banner(shipments),
         **workflow_visibility,
     }
 
@@ -10791,6 +10935,7 @@ def shipment_list(request):
                 if new_status == "delivered" and not shipment.delivered_at:
                     shipment.delivered_at = timezone.now()
                 shipment.save()
+                _sync_production_after_delivered_shipment(shipment)
                 _handle_shipment_status_change(
                     request,
                     shipment,
@@ -11018,6 +11163,7 @@ def shipment_detail(request, pk):
                 if new_status == "delivered" and not shipment.delivered_at:
                     shipment.delivered_at = timezone.now()
                 shipment.save()
+                _sync_production_after_delivered_shipment(shipment)
                 _handle_shipment_status_change(
                     request,
                     shipment,
@@ -11056,6 +11202,7 @@ def shipment_edit(request, pk):
             if rate not in [None, ""]:
                 shipment.rate_bdt_per_cad = rate
             shipment.save()
+            _sync_production_after_delivered_shipment(shipment)
             _handle_shipment_status_change(
                 request,
                 shipment,
@@ -11132,6 +11279,7 @@ def shipping_add_for_opportunity(request, pk):
                 shipment.ship_date = timezone.localdate()
 
             shipment.save()
+            _sync_production_after_delivered_shipment(shipment)
             _handle_shipment_status_change(
                 request,
                 shipment,
@@ -11211,6 +11359,7 @@ def shipping_add_for_order(request, pk):
                 shipment.cost_cad = Decimal("0")
 
             shipment.save()
+            _sync_production_after_delivered_shipment(shipment)
             _handle_shipment_status_change(
                 request,
                 shipment,
@@ -11504,15 +11653,71 @@ QUICK_COSTING_KPI_VALUE_STATUSES = [
 
 
 def _active_lead_queryset():
-    return Lead.objects.filter(is_archived=False)
+    return (
+        Lead.objects.filter(is_archived=False)
+        .annotate(
+            visibility_has_opportunity=Exists(
+                Opportunity.objects.filter(lead_id=OuterRef("pk"))
+            )
+        )
+        .exclude(
+            Q(lead_status__in=["Converted", "Lost", "Unqualified"])
+            | Q(outbound_status__in=_LEAD_LOST_OUTBOUND_STATUSES | _LEAD_CONVERTED_OUTBOUND_STATUSES)
+            | Q(visibility_has_opportunity=True)
+        )
+    )
 
 
 def _active_opportunity_queryset():
-    return Opportunity.objects.filter(is_archived=False)
+    return _active_opportunity_list_queryset(Opportunity.objects.all())
 
 
 def _active_production_queryset():
     return ProductionOrder.objects.filter(is_archived=False)
+
+
+def _opportunity_has_production_subquery():
+    return ProductionOrder.objects.filter(opportunity_id=OuterRef("pk"), is_archived=False)
+
+
+def _with_opportunity_production_flag(qs, annotation_name="list_has_production"):
+    return qs.annotate(**{annotation_name: Exists(_opportunity_has_production_subquery())})
+
+
+def _active_opportunity_list_queryset(qs, production_flag="list_has_production"):
+    if production_flag not in getattr(qs, "query", SimpleNamespace(annotations={})).annotations:
+        qs = _with_opportunity_production_flag(qs, production_flag)
+    return (
+        open_pipeline_queryset(qs)
+        .filter(**{production_flag: False})
+        .exclude(stage="Production")
+    )
+
+
+def _production_row_has_delivered_shipment(row):
+    return any(getattr(shipment, "status", "") == "delivered" for shipment in row.get("shipments", []))
+
+
+def _production_row_is_completed(row):
+    return row["operational_status"] == OPERATIONAL_STATUS_SHIPPED and _production_row_has_delivered_shipment(row)
+
+
+def _sync_production_after_delivered_shipment(shipment):
+    if getattr(shipment, "status", "") != "delivered":
+        return None
+    order = getattr(shipment, ORDER_FIELD, None) if ORDER_FIELD else getattr(shipment, "order", None)
+    if not order:
+        return None
+    update_fields = []
+    if getattr(order, "status", "") != "done":
+        order.status = "done"
+        update_fields.append("status")
+    if update_fields:
+        if hasattr(order, "updated_at"):
+            update_fields.append("updated_at")
+        order.save(update_fields=update_fields)
+    sync_operational_status(order, explicit_status=OPERATIONAL_STATUS_SHIPPED)
+    return order
 
 
 def _quick_costing_revenue_expression():
@@ -15078,7 +15283,11 @@ def opportunities_list(request):
     value_min_raw = (request.GET.get("value_min") or "").strip()
     value_max_raw = (request.GET.get("value_max") or "").strip()
     archive_filter = (request.GET.get("archive") or "active").strip().lower()
-    status = (request.GET.get("status") or ("all" if archive_filter == "archived" else "")).strip()
+    status = (request.GET.get("status") or ("archived" if archive_filter == "archived" else "active")).strip().lower()
+    if status == "archived":
+        archive_filter = "archived"
+    elif status == "all" and "archive" not in request.GET:
+        archive_filter = "all"
 
     sort = (request.GET.get("sort") or "new").strip().lower()
 
@@ -15093,6 +15302,7 @@ def opportunities_list(request):
     active_stages = _active_opportunity_stages()
     qs = Opportunity.objects.select_related("lead", "lead__assigned_to")
     qs = scope_sales_opportunities(qs, request.user)
+    qs = _with_opportunity_production_flag(qs)
 
     if archive_filter == "archived":
         qs = qs.filter(is_archived=True)
@@ -15115,17 +15325,20 @@ def opportunities_list(request):
     if stage:
         qs = qs.filter(stage__iexact=stage)
 
-    if status:
-        if status == "open":
-            qs = open_pipeline_queryset(qs)
-        elif status == "closed_won":
-            qs = qs.filter(stage="Closed Won")
-        elif status == "closed_lost":
-            qs = qs.filter(stage="Closed Lost")
-        elif status == "all":
-            pass
+    if status in {"active", "open", ""}:
+        qs = _active_opportunity_list_queryset(qs)
+    elif status == "moved_to_production":
+        qs = qs.filter(Q(stage="Production") | Q(list_has_production=True)).distinct()
+    elif status == "closed_won":
+        qs = qs.filter(stage="Closed Won")
+    elif status == "closed_lost":
+        qs = qs.filter(stage="Closed Lost")
+    elif status == "archived":
+        qs = qs.filter(is_archived=True)
+    elif status == "all":
+        pass
     else:
-        qs = open_pipeline_queryset(qs)
+        qs = _active_opportunity_list_queryset(qs)
 
     created_from = parse_date(created_from_raw) if created_from_raw else None
     created_to = parse_date(created_to_raw) if created_to_raw else None
@@ -15143,7 +15356,7 @@ def opportunities_list(request):
         qs = qs.filter(kpi_order_value__lte=value_max)
 
     today = timezone.localdate()
-    pipeline_values = _sum_opportunity_kpi_values_by_currency(open_pipeline_queryset(qs))
+    pipeline_values = _sum_opportunity_kpi_values_by_currency(_active_opportunity_list_queryset(qs))
     due_followups = qs.filter(next_followup__isnull=False, next_followup__lte=today).count()
 
     if sort == "old":
@@ -15169,6 +15382,7 @@ def opportunities_list(request):
         "due_followups": due_followups,
         "visible_count": len(page_obj.object_list),
         "archive_filter": archive_filter,
+        "status_filter": status,
         "can_archive_records": _can_archive_workflow_record(request.user),
     }
     return render(request, "crm/opportunities_list.html", context)

@@ -139,7 +139,7 @@ class NativeCurrencyDashboardTests(TestCase):
             self.assertIn("USD $400.00", value)
             self.assertIn("\u09F3200.00", value)
 
-    def test_all_pipeline_surfaces_include_production_stage_opportunity(self):
+    def test_active_pipeline_surfaces_exclude_production_stage_opportunity_by_default(self):
         production_opportunity = Opportunity.objects.create(
             lead=self.lead,
             customer=self.customer,
@@ -163,15 +163,17 @@ class NativeCurrencyDashboardTests(TestCase):
         customers = self.client.get(reverse("customers_list"))
         ceo = self.client.get(reverse("ceo_dashboard"))
 
-        expected = {"CAD": Decimal("3650"), "USD": Decimal("400"), "BDT": Decimal("200")}
+        expected = {"CAD": Decimal("500"), "USD": Decimal("400"), "BDT": Decimal("200")}
         self.assertEqual(self._amounts(pipeline.context["pipeline_values"]), expected)
         self.assertEqual(self._amounts(customers.context["summary"]["pipeline_rows"]), expected)
         self.assertEqual(self._amounts(ceo.context["open_pipeline_rows"]), expected)
-        self.assertEqual(customers.context["summary"]["pipeline_count"], 4)
-        self.assertEqual(ceo.context["open_pipeline_count"], 4)
-        self.assertContains(pipeline, production_opportunity.opportunity_id)
+        self.assertEqual(customers.context["summary"]["pipeline_count"], 3)
+        self.assertEqual(ceo.context["open_pipeline_count"], 3)
+        self.assertNotContains(pipeline, production_opportunity.opportunity_id)
+        moved_filter = self.client.get(reverse("opportunities_list"), {"status": "moved_to_production"})
+        self.assertContains(moved_filter, production_opportunity.opportunity_id)
         for response in (main, operations, customers, ceo, pipeline):
-            self.assertContains(response, "CAD $3.65K")
+            self.assertContains(response, "CAD $500.00")
 
     def test_customer_detail_uses_source_labels_and_shared_money_format(self):
         Invoice.objects.create(

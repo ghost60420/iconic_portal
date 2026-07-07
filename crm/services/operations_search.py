@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from django.urls import reverse
 
 from crm.models import CostingHeader, Customer, EmployeeProfile, Invoice, Lead, Opportunity, ProductionOrder
@@ -17,6 +17,10 @@ from crm.services.operations_permissions import (
     scope_sales_leads,
     scope_sales_opportunities,
 )
+from crm.services.production_operational_status import (
+    OPERATIONAL_STATUS_LABELS,
+    get_production_operational_status,
+)
 
 
 def _safe_decimal(value):
@@ -24,6 +28,19 @@ def _safe_decimal(value):
         return Decimal(str(value or "0"))
     except Exception:
         return Decimal("0")
+
+
+def _production_search_status(order):
+    operational_status = get_production_operational_status(order)
+    label = OPERATIONAL_STATUS_LABELS.get(operational_status, order.get_operational_status_display())
+    try:
+        if any(getattr(shipment, "status", "") == "delivered" for shipment in order.shipments.all()):
+            label = "Completed"
+    except Exception:
+        pass
+    if order.is_archived:
+        return f"Archived · {label}"
+    return label
 
 
 def search_operations_records(user, query, *, limit=10, include_opportunities=True):
@@ -55,7 +72,9 @@ def search_operations_records(user, query, *, limit=10, include_opportunities=Tr
 
     if can_access_operations_module(user, "leads"):
         rows = scope_sales_leads(
-            Lead.objects.filter(is_archived=False).filter(
+            Lead.objects.annotate(
+                search_has_opportunity=Exists(Opportunity.objects.filter(lead_id=OuterRef("pk")))
+            ).filter(
                 Q(lead_id__icontains=query)
                 | Q(account_brand__icontains=query)
                 | Q(contact_name__icontains=query)
@@ -69,7 +88,13 @@ def search_operations_records(user, query, *, limit=10, include_opportunities=Tr
                 "type": "Lead",
                 "number": row.lead_id,
                 "name": row.account_brand or row.contact_name,
-                "status": row.lead_status,
+                "status": (
+                    "Archived"
+                    if row.is_archived
+                    else "Converted"
+                    if row.lead_status == "Converted" or row.search_has_opportunity
+                    else row.lead_status
+                ),
                 "date": row.created_date,
                 "amount": "",
                 "url": reverse("lead_detail", args=[row.pk]),
@@ -79,7 +104,9 @@ def search_operations_records(user, query, *, limit=10, include_opportunities=Tr
 
     if include_opportunities and can_access_operations_module(user, "opportunities"):
         rows = scope_sales_opportunities(
-            Opportunity.objects.select_related("lead", "customer").filter(is_archived=False).filter(
+            Opportunity.objects.select_related("lead", "customer")
+            .annotate(search_has_production=Exists(ProductionOrder.objects.filter(opportunity_id=OuterRef("pk"))))
+            .filter(
                 Q(opportunity_id__icontains=query)
                 | Q(lead__lead_id__icontains=query)
                 | Q(lead__account_brand__icontains=query)
@@ -94,7 +121,13 @@ def search_operations_records(user, query, *, limit=10, include_opportunities=Tr
                 "type": "Opportunity",
                 "number": row.opportunity_id,
                 "name": (row.customer.account_brand if row.customer else "") or row.lead.account_brand,
-                "status": row.stage,
+                "status": (
+                    f"Archived · {row.stage}"
+                    if row.is_archived
+                    else "Moved to Production"
+                    if row.stage == "Production" or row.search_has_production
+                    else row.stage
+                ),
                 "date": row.updated_at,
                 "amount": format_finance_money(row.order_value, row.order_currency) if row.order_value else "",
                 "url": reverse("opportunity_detail", args=[row.pk]),
@@ -135,7 +168,7 @@ def search_operations_records(user, query, *, limit=10, include_opportunities=Tr
         ]))
 
     if can_access_operations_module(user, "production"):
-        rows = ProductionOrder.objects.select_related("customer").filter(is_archived=False).filter(
+        rows = ProductionOrder.objects.select_related("customer").prefetch_related("stages", "shipments").filter(
             ProductionOrder.identifier_search_query(query)
             | Q(title__icontains=query)
             | Q(client_name_snapshot__icontains=query)
@@ -148,7 +181,7 @@ def search_operations_records(user, query, *, limit=10, include_opportunities=Tr
                 "type": "Production Order",
                 "number": row.purchase_order_number,
                 "name": row.client_name_snapshot or (row.customer.account_brand if row.customer else "") or row.title,
-                "status": row.get_operational_status_display(),
+                "status": _production_search_status(row),
                 "date": row.updated_at,
                 "amount": format_finance_money(row.approved_total_value, row.approved_currency) if row.approved_total_value else "",
                 "url": reverse("production_detail", args=[row.pk]),

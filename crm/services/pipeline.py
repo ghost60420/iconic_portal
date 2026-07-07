@@ -10,6 +10,7 @@ from crm.services.costing_currency import currency_summary_rows
 
 
 CLOSED_PIPELINE_STAGES = ("Closed Won", "Closed Lost", "Cancelled")
+NON_OPEN_PIPELINE_STAGES = CLOSED_PIPELINE_STAGES + ("Production", "Shipment Complete")
 PIPELINE_QUICK_COSTING_STATUSES = (
     QuickCosting.STATUS_APPROVED,
     QuickCosting.STATUS_QUOTED,
@@ -25,7 +26,7 @@ def open_pipeline_queryset(queryset=None):
     queryset = queryset if queryset is not None else Opportunity.objects.all()
     return (
         queryset.filter(is_archived=False, is_open=True)
-        .exclude(stage__in=CLOSED_PIPELINE_STAGES)
+        .exclude(stage__in=NON_OPEN_PIPELINE_STAGES)
     )
 
 

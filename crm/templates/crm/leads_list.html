@@ -592,9 +592,9 @@
       </div>
 
       <div class="field">
-        <div class="label">Lead Status</div>
+        <div class="label">Lifecycle / Status</div>
         <select class="input" name="lead_status">
-          <option value="">All statuses</option>
+          <option value="">Active default</option>
           {% for value,label in lead_status_filter_choices %}
             <option value="{{ value }}" {% if selected_lead_status == value %}selected{% endif %}>{{ label }}</option>
           {% endfor %}

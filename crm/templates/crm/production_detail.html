@@ -105,6 +105,26 @@
     </div>
   </section>
 
+  {% if production_lifecycle_banner %}
+    <section class="production-panel" aria-label="Production lifecycle status" style="border-color:rgba(34,197,94,0.45); background:rgba(34,197,94,0.08);">
+      <div class="production-panel-head">
+        <div>
+          <h2>
+            Shipment completed on {{ production_lifecycle_banner.date|date:"M j, Y"|default:"date unavailable" }}.
+          </h2>
+          <p>
+            Shipment reference:
+            <a href="{% url 'shipment_detail' production_lifecycle_banner.shipment.pk %}">
+              {{ production_lifecycle_banner.reference }}
+            </a>
+          </p>
+          <p>This order now appears in Client History.</p>
+        </div>
+        <span class="production-status-badge shipped">Completed</span>
+      </div>
+    </section>
+  {% endif %}
+
   {% if is_bangladesh_local_sewing %}
   <section class="production-panel" aria-label="Bangladesh Local Sewing summary">
     <div class="production-panel-head">

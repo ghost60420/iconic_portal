@@ -821,10 +821,17 @@ class DashboardAndRoleTests(OperationsControlBase):
         self.assertEqual(client.get(reverse("production_list")).status_code, 200)
 
     def test_sales_pipeline_list_is_scoped_to_assigned_leads(self):
+        active_lead = Lead.objects.create(
+            account_brand="Active Sales Customer",
+            contact_name="Active Buyer",
+            email="active@example.com",
+            assigned_to=self.sales,
+        )
         client = Client()
         client.force_login(self.sales)
         response = client.get(reverse("leads_list"), {"view": "my"})
-        self.assertContains(response, self.lead.lead_id)
+        self.assertContains(response, active_lead.lead_id)
+        self.assertNotContains(response, self.lead.lead_id)
         self.assertNotContains(response, self.other_lead.lead_id)
 
     def test_accounts_and_merchandising_restrictions(self):
@@ -899,6 +906,12 @@ class LeadOwnershipWorkflowTests(OperationsControlBase):
             lead_status="New",
             lead_type="inbound",
         )
+        self.active_owned = Lead.objects.create(
+            account_brand="Active Owned Lead",
+            lead_status="New",
+            lead_type="inbound",
+            assigned_to=self.sales,
+        )
         self.converted = Lead.objects.create(
             account_brand="Converted Unassigned",
             lead_status="Converted",
@@ -929,7 +942,8 @@ class LeadOwnershipWorkflowTests(OperationsControlBase):
         self.assertContains(available_response, "Claim Lead")
 
         my_response = client.get(reverse("leads_list"), {"view": "my"})
-        self.assertContains(my_response, self.lead.lead_id)
+        self.assertContains(my_response, self.active_owned.lead_id)
+        self.assertNotContains(my_response, self.lead.lead_id)
         self.assertNotContains(my_response, self.available.lead_id)
         self.assertNotContains(my_response, self.other_lead.lead_id)
 
@@ -1030,7 +1044,8 @@ class LeadOwnershipWorkflowTests(OperationsControlBase):
             client = Client()
             client.force_login(user)
             response = client.get(reverse("leads_list"), {"view": "all"})
-            self.assertContains(response, self.lead.lead_id)
+            self.assertContains(response, self.active_owned.lead_id)
+            self.assertNotContains(response, self.lead.lead_id)
             self.assertContains(response, self.other_lead.lead_id)
             self.assertContains(response, self.available.lead_id)
 

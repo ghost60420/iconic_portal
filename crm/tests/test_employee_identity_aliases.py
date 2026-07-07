@@ -73,6 +73,11 @@ class CanonicalEmployeeOwnershipTests(TestCase):
             owner="Rifat",
             lead_type="outbound",
         )
+        cls.refat_active_alias = Lead.objects.create(
+            account_brand="Refat Active Alias",
+            owner="Refat",
+            lead_type="outbound",
+        )
         cls.talha_alias = Lead.objects.create(
             account_brand="Talha Alias",
             owner="Talha",
@@ -120,7 +125,7 @@ class CanonicalEmployeeOwnershipTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         listed_ids = {lead.pk for lead in response.context["page_obj"].object_list}
-        self.assertEqual(listed_ids, {self.refat_alias.pk})
+        self.assertEqual(listed_ids, {self.refat_active_alias.pk})
         self.assertNotContains(response, "Hossain Forhad")
         self.assertContains(response, "Hossain")
 

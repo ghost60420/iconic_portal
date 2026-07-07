@@ -273,6 +273,22 @@
   .wa-btn:hover { filter:brightness(1.05); text-decoration:none; }
   .wa-green { border-color:#22c55e; }
   .wa-gold { border-color:#facc15; }
+  .lead-lifecycle-banner {
+    margin: 12px 0;
+    padding: 12px 14px;
+    border: 1px solid rgba(34, 197, 94, 0.45);
+    border-radius: 14px;
+    background: rgba(34, 197, 94, 0.1);
+    color: #dcfce7;
+    font-size: 13px;
+    font-weight: 800;
+  }
+  .lead-lifecycle-banner small {
+    display: block;
+    margin-top: 4px;
+    color: #bbf7d0;
+    font-weight: 700;
+  }
 
   @media (max-width: 768px) {
     .top-bar { flex-direction: column; }
@@ -366,6 +382,15 @@
       {% endif %}
     </div>
   </section>
+
+  {% if lead_lifecycle_banner %}
+    <section class="lead-lifecycle-banner" aria-label="Lead lifecycle status">
+      Converted to Opportunity
+      <a href="{% url 'opportunity_detail' lead_lifecycle_banner.opportunity.pk %}">{{ lead_lifecycle_banner.opportunity.opportunity_id }}</a>
+      on {{ lead_lifecycle_banner.date|date:"M j, Y"|default:"date unavailable" }}.
+      <small>This lead no longer appears in the active Lead List.</small>
+    </section>
+  {% endif %}
 
   {% include "crm/partials/workflow_quick_nav.html" %}
   {% include "crm/partials/workflow_order_summary.html" %}

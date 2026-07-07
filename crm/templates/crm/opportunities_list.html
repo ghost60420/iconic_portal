@@ -94,11 +94,12 @@
       <div class="opp-field">
         <label class="opp-label">Status</label>
         <select class="opp-input" name="status">
-          <option value="" {% if not request.GET.status %}selected{% endif %}>Active default</option>
-          <option value="all" {% if request.GET.status == "all" %}selected{% endif %}>All</option>
-          <option value="open" {% if request.GET.status == "open" %}selected{% endif %}>Open</option>
-          <option value="closed_won" {% if request.GET.status == "closed_won" %}selected{% endif %}>Closed Won</option>
-          <option value="closed_lost" {% if request.GET.status == "closed_lost" %}selected{% endif %}>Closed Lost</option>
+          <option value="active" {% if status_filter == "active" or not status_filter %}selected{% endif %}>Active</option>
+          <option value="moved_to_production" {% if status_filter == "moved_to_production" %}selected{% endif %}>Moved to Production</option>
+          <option value="closed_won" {% if status_filter == "closed_won" %}selected{% endif %}>Closed Won</option>
+          <option value="closed_lost" {% if status_filter == "closed_lost" %}selected{% endif %}>Closed Lost</option>
+          <option value="archived" {% if status_filter == "archived" %}selected{% endif %}>Archived</option>
+          <option value="all" {% if status_filter == "all" %}selected{% endif %}>All</option>
         </select>
       </div>
 

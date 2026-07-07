@@ -76,6 +76,24 @@
     </div>
   </section>
 
+  {% if opportunity_lifecycle_banner %}
+    <section class="opp-panel" aria-label="Opportunity lifecycle status" style="border-color:rgba(34,197,94,0.45); background:rgba(34,197,94,0.08);">
+      <div class="opp-panel-head">
+        <div>
+          <p class="opp-section-kicker">Lifecycle status</p>
+          <h2>
+            Moved to Production
+            <a href="{% url 'production_detail' opportunity_lifecycle_banner.order.pk %}">
+              {{ opportunity_lifecycle_banner.order.purchase_order_number|default:opportunity_lifecycle_banner.order.order_code }}
+            </a>
+            on {{ opportunity_lifecycle_banner.date|date:"M j, Y"|default:"date unavailable" }}.
+          </h2>
+          <p class="opp-muted">This opportunity no longer appears in the active Opportunity List.</p>
+        </div>
+      </div>
+    </section>
+  {% endif %}
+
   {% include "crm/partials/workflow_quick_nav.html" %}
   {% include "crm/partials/workflow_order_summary.html" %}
   {% include "crm/partials/workflow_activity_timeline.html" %}
