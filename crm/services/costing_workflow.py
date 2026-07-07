@@ -53,95 +53,58 @@ def _user_or_none(user):
     return user if user and getattr(user, "is_authenticated", False) else None
 
 
-def is_authorized_quick_costing_creator(user, quick_costing):
-    return bool(
-        can_approve_costing(user)
-        and quick_costing.is_bangladesh_local_sewing
-        and quick_costing.created_by_id
-        and quick_costing.created_by_id == getattr(user, "pk", None)
+def _quick_audit(quick_costing, *, actor, action_type, field_name, previous_value="", new_value=""):
+    CRMAuditLog.objects.create(
+        actor=_user_or_none(actor),
+        module="quick_costing",
+        record_id=str(quick_costing.pk),
+        record_label=quick_costing.quotation_number or quick_costing.project_name or f"QC-{quick_costing.pk}",
+        action_type=action_type,
+        field_name=field_name,
+        previous_value=str(previous_value or ""),
+        new_value=str(new_value or ""),
+        target_url=f"/costing/quick/{quick_costing.pk}/",
     )
 
 
-def _schedule_auto_approval_audit(quick_costing, actor, approved_at):
-    common = {
-        "actor": actor,
-        "module": "quick_costing",
-        "record_id": str(quick_costing.pk),
-        "record_label": quick_costing.quotation_number or quick_costing.project_name or f"QC-{quick_costing.pk}",
-        "target_url": f"/costing/quick/{quick_costing.pk}/",
-    }
-    rows = [
-        CRMAuditLog(
-            action_type=CRMAuditLog.ACTION_UPDATED,
-            field_name="approval_submitted_at",
-            previous_value="",
-            new_value=approved_at.isoformat(),
-            **common,
-        ),
-        CRMAuditLog(
-            action_type=CRMAuditLog.ACTION_APPROVED,
-            field_name="status",
-            previous_value=QuickCosting.STATUS_DRAFT,
-            new_value=QuickCosting.STATUS_APPROVED,
-            **common,
-        ),
-    ]
-    transaction.on_commit(lambda: CRMAuditLog.objects.bulk_create(rows), robust=True)
+def approve_quick_costing(quick_costing, *, approver):
+    """Canonical Quick Costing approval transaction.
 
-
-def approve_quick_costing(quick_costing, *, approver, auto_submit=False):
-    """Canonical Quick Costing approval transaction for queue and authorized-creator paths."""
+    Auto-approval is no longer supported: every Quick Costing must be submitted
+    first, then approved by an authorized CEO/Admin approver.
+    """
     if not can_approve_costing(approver):
         raise CostingWorkflowError("You do not have permission to approve Quick Costing.")
 
     is_new = not quick_costing.pk
-    if is_new and not auto_submit:
+    if is_new:
         raise CostingWorkflowError("Quick Costing must be saved before CEO approval.")
 
     with transaction.atomic():
-        if not is_new:
-            quick_costing = QuickCosting.objects.select_for_update().get(pk=quick_costing.pk)
+        quick_costing = QuickCosting.objects.select_for_update().get(pk=quick_costing.pk)
 
         if quick_costing.status == QuickCosting.STATUS_APPROVED:
             production_order = getattr(quick_costing, "production_order", None)
             return quick_costing, production_order, False
-        if quick_costing.status not in {QuickCosting.STATUS_DRAFT, QuickCosting.STATUS_REJECTED}:
-            raise CostingWorkflowError("Only draft or rejected Quick Costing can be approved.")
+        if quick_costing.status not in {QuickCosting.STATUS_SUBMITTED, QuickCosting.STATUS_DRAFT}:
+            raise CostingWorkflowError("Quick Costing must be submitted before CEO approval.")
         if quick_costing.pk and quick_costing.invoices.exists():
             raise CostingWorkflowError("This Quick Costing already has an invoice.")
-
-        authorized_creator = is_authorized_quick_costing_creator(approver, quick_costing)
-        if auto_submit:
-            if not authorized_creator:
-                raise CostingWorkflowError(
-                    "Automatic approval is limited to a Bangladesh Local Sewing costing created by its approver."
-                )
-        elif not quick_costing.approval_submitted_at:
+        if not quick_costing.approval_submitted_at:
             raise CostingWorkflowError("Quick Costing must be submitted before CEO approval.")
-        elif (
-            quick_costing.created_by_id == approver.pk
-            and not approver.is_superuser
-            and not authorized_creator
-        ):
-            raise CostingWorkflowError("The costing creator cannot approve their own Quick Costing.")
-
         approved_at = timezone.now()
-        if auto_submit:
-            quick_costing.approval_submitted_by = approver
-            quick_costing.approval_submitted_at = approved_at
+        previous_status = quick_costing.status
         quick_costing.status = QuickCosting.STATUS_APPROVED
         quick_costing.approved_by = approver
         quick_costing.approved_at = approved_at
         quick_costing.rejected_by = None
         quick_costing.rejected_at = None
-        quick_costing._authorized_self_approval = authorized_creator
-        quick_costing._skip_quick_approval_notifications = auto_submit
+        quick_costing._authorized_self_approval = (
+            quick_costing.created_by_id == getattr(approver, "pk", None)
+        )
         try:
-            if is_new:
-                quick_costing.save()
-                _schedule_auto_approval_audit(quick_costing, approver, approved_at)
-            else:
-                update_fields = [
+            quick_costing.save(
+                update_fields=[
                     "status",
                     "approved_by",
                     "approved_at",
@@ -149,23 +112,18 @@ def approve_quick_costing(quick_costing, *, approver, auto_submit=False):
                     "rejected_at",
                     "updated_at",
                 ]
-                if auto_submit:
-                    update_fields.extend(["approval_submitted_by", "approval_submitted_at"])
-                quick_costing.save(update_fields=update_fields)
+            )
         finally:
             quick_costing._authorized_self_approval = False
-            quick_costing._skip_quick_approval_notifications = False
-
-        production_order = None
-        production_created = False
-        if quick_costing.is_bangladesh_local_sewing:
-            from crm.services.production_orders import create_production_order_from_approved_quick_costing
-
-            production_order, production_created = create_production_order_from_approved_quick_costing(
-                quick_costing,
-                user=approver,
-            )
-        return quick_costing, production_order, production_created
+        _quick_audit(
+            quick_costing,
+            actor=approver,
+            action_type=CRMAuditLog.ACTION_APPROVED,
+            field_name="status",
+            previous_value=previous_status,
+            new_value=QuickCosting.STATUS_APPROVED,
+        )
+        return quick_costing, getattr(quick_costing, "production_order", None), False
 
 
 def _next_quotation_number():
@@ -368,7 +326,11 @@ def create_invoice_from_quick_costing(quick_costing, user=None):
         if existing:
             create_lifecycle_from_invoice(existing, user=user)
             return existing, False
-        if quick_costing.status not in {QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_QUOTED}:
+        if quick_costing.status not in {
+            QuickCosting.STATUS_APPROVED,
+            QuickCosting.STATUS_QUOTED,
+            QuickCosting.STATUS_PRODUCTION,
+        }:
             raise CostingWorkflowError("Approve the quick costing quotation before creating an invoice.")
         if not quick_costing.quotation_number or not quick_costing.quoted_at:
             raise CostingWorkflowError("Create a quotation before creating an invoice.")
@@ -446,61 +408,70 @@ def create_invoice_from_quick_costing(quick_costing, user=None):
 
 
 def create_or_link_production_order_from_invoice(invoice, user=None):
-    costing = invoice.costing_header
-    if not costing:
-        raise CostingWorkflowError("This invoice is not linked to an approved costing.")
-    if costing.status != "approved":
-        raise CostingWorkflowError("The linked costing must be approved before production conversion.")
+    if not can_approve_costing(user):
+        raise CostingWorkflowError("CEO/Admin approval is required before production conversion.")
 
     with transaction.atomic():
-        invoice = Invoice.objects.select_for_update().select_related("costing_header", "order").get(pk=invoice.pk)
+        invoice = (
+            Invoice.objects.select_for_update()
+            .select_related("costing_header", "quick_costing", "order")
+            .get(pk=invoice.pk)
+        )
+        if invoice.order_id:
+            create_lifecycle_from_production(invoice.order, user=user)
+            return invoice.order, False
+
         costing = invoice.costing_header
+        quick_costing = invoice.quick_costing
 
-        order = invoice.order
-        if not order:
-            order = ProductionOrder.objects.filter(costing_header=costing).order_by("-created_at", "-id").first()
-        if not order and costing.opportunity_id:
-            order = ProductionOrder.objects.filter(opportunity=costing.opportunity).order_by("-created_at", "-id").first()
+        if costing:
+            if costing.status != "approved":
+                raise CostingWorkflowError("The linked costing must be approved before production conversion.")
+            if (
+                costing.quotation_status != CostingHeader.QUOTATION_STATUS_APPROVED
+                or not costing.quotation_approved_at
+            ):
+                raise CostingWorkflowError("CEO-approved quotation is required before production conversion.")
+            from crm.services.production_orders import create_production_order_from_approved_quotation
 
-        created = False
-        if not order:
-            title = costing.style_name or costing.style_code or f"{costing.opportunity.opportunity_id} production"
-            try:
-                order = ProductionOrder.objects.create(
-                    opportunity=costing.opportunity,
-                    lead=costing.opportunity.lead if costing.opportunity_id else None,
-                    customer=invoice.customer or costing.customer,
-                    costing_header=costing,
-                    title=title,
-                    factory_location="ca" if costing.factory_location == "ca" else "bd",
-                    order_type="fob",
-                    qty_total=costing.order_quantity or 0,
-                    style_name=costing.style_name or "",
-                    color_info="",
-                    notes=f"Created from invoice {invoice.invoice_number} and quotation {costing.quotation_number or 'COST-' + str(costing.pk)}.",
-                )
-                created = True
-            except IntegrityError as exc:
-                raise CostingWorkflowError("Could not create a unique production order number.") from exc
-        elif not order.costing_header_id:
-            order.costing_header = costing
-            order.save(update_fields=["costing_header", "updated_at"])
+            order, created = create_production_order_from_approved_quotation(costing, user=user)
+        elif quick_costing:
+            if quick_costing.status != QuickCosting.STATUS_APPROVED or not quick_costing.approved_at:
+                raise CostingWorkflowError("CEO-approved Quick Costing is required before production conversion.")
+            if quick_costing.is_bangladesh_local_sewing:
+                from crm.services.production_orders import create_production_order_from_approved_quick_costing
+
+                order, created = create_production_order_from_approved_quick_costing(quick_costing, user=user)
+            else:
+                raise CostingWorkflowError("This Quick Costing invoice is not eligible for direct production conversion.")
+        else:
+            raise CostingWorkflowError("This invoice is not linked to an approved costing.")
 
         if invoice.order_id != order.pk:
             invoice.order = order
             invoice.save(update_fields=["order", "updated_at"])
 
-        opportunity = costing.opportunity
+        opportunity = getattr(costing, "opportunity", None) or getattr(quick_costing, "opportunity", None)
         if opportunity and opportunity.stage != "Production":
             opportunity.stage = "Production"
             opportunity.save(update_fields=["stage", "updated_at"])
 
-        CostingAuditLog.objects.create(
-            costing=costing,
-            action="production_created",
-            changed_by=_user_or_none(user),
-            note=order.purchase_order_number or str(order.pk),
-        )
+        if costing:
+            CostingAuditLog.objects.create(
+                costing=costing,
+                action="production_created",
+                changed_by=_user_or_none(user),
+                note=order.purchase_order_number or str(order.pk),
+            )
+        elif quick_costing:
+            _quick_audit(
+                quick_costing,
+                actor=user,
+                action_type=CRMAuditLog.ACTION_CONVERTED,
+                field_name="status",
+                previous_value=quick_costing.status,
+                new_value=QuickCosting.STATUS_PRODUCTION,
+            )
         create_lifecycle_from_production(order, user=user)
         return order, created
 

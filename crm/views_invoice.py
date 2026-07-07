@@ -22,6 +22,7 @@ from .models import (
     AccountingEntryAudit,
     AccountingMonthClose,
     AccountingMonthLock,
+    CRMAuditLog,
     Customer,
     ExchangeRate,
     Invoice,
@@ -34,7 +35,7 @@ from .permissions import can_view_internal_costing, get_access
 from .services.costing_workflow import CostingWorkflowError, create_or_link_production_order_from_invoice
 from .services.order_lifecycle import build_lifecycle_profit_breakdown, create_lifecycle_from_invoice
 from .services.workflow_visibility import build_workflow_visibility_context
-from .services.operations_permissions import can_archive_invoices
+from .services.operations_permissions import ROLE_ADMIN, ROLE_CEO, can_archive_invoices, has_operations_role
 from .services.local_sewing import calculate_local_sewing, is_bangladesh_local_sewing
 
 
@@ -183,6 +184,12 @@ def can_manage_invoice_settings(user):
 
 def can_archive_invoice(user):
     return can_archive_invoices(user)
+
+
+def can_void_or_delete_invoice(user):
+    if not user or not user.is_authenticated:
+        return False
+    return bool(user.is_superuser or has_operations_role(user, ROLE_CEO, ROLE_ADMIN))
 
 
 def _invoice_archive_scope(queryset, archive_filter="active"):
@@ -1741,6 +1748,7 @@ def invoice_view(request, pk):
             "crm_refs": _invoice_crm_references(inv),
             "deposit_terms": _invoice_deposit_terms(inv),
             "can_archive_invoice": can_archive_invoice(request.user),
+            "can_void_or_delete_invoice": can_void_or_delete_invoice(request.user),
             "invoice_has_payments": bool(payment_history or _d(inv.paid_amount) > 0),
             **workflow_visibility,
         },
@@ -1769,6 +1777,102 @@ def invoice_archive(request, pk):
         invoice.save(update_fields=["is_archived", "archived_at", "archived_by", "updated_at"])
     messages.success(request, f"Invoice {invoice.invoice_number} has been archived. Payment history was preserved.")
     return redirect(f"{reverse('invoice_list')}?archive=archived")
+
+
+def _invoice_delete_blockers(invoice):
+    blockers = []
+    if _d(invoice.paid_amount) > 0 or invoice.payments.exists():
+        blockers.append("payment records")
+    if invoice.payments.filter(accounting_entry__isnull=False).exists():
+        blockers.append("accounting records")
+    return blockers
+
+
+def _audit_invoice_delete_or_void(invoice, user, *, action, reason, previous_status):
+    CRMAuditLog.objects.create(
+        actor=user if user and user.is_authenticated else None,
+        module="invoice",
+        record_id=str(invoice.pk),
+        record_label=invoice.invoice_number,
+        action_type=CRMAuditLog.ACTION_DELETED if action == "deleted" else CRMAuditLog.ACTION_STATUS_CHANGED,
+        field_name="status" if action == "voided" else "record",
+        previous_value=previous_status,
+        new_value=f"{action}: {reason}",
+        target_url=reverse("invoice_view", args=[invoice.pk]) if invoice.pk else "",
+    )
+
+
+@login_required
+def invoice_delete_or_void(request, pk):
+    if not can_void_or_delete_invoice(request.user):
+        return HttpResponse("Only CEO/Admin users can delete or void invoices.", status=403)
+    invoice = get_object_or_404(
+        Invoice.objects.select_related("order", "customer").prefetch_related("payments"),
+        pk=pk,
+    )
+    blockers = _invoice_delete_blockers(invoice)
+    if request.method == "POST":
+        reason = (request.POST.get("reason") or "").strip()
+        requested_action = (request.POST.get("action") or "").strip().lower()
+        if not reason:
+            messages.error(request, "A reason is required before an invoice can be deleted or voided.")
+            return redirect("invoice_delete_or_void", pk=invoice.pk)
+        if requested_action not in {"delete", "void"}:
+            requested_action = "void" if blockers else "delete"
+
+        with transaction.atomic():
+            invoice = Invoice.objects.select_for_update().get(pk=pk)
+            blockers = _invoice_delete_blockers(invoice)
+            previous_status = invoice.status
+            if requested_action == "delete" and blockers:
+                messages.error(
+                    request,
+                    "This invoice cannot be deleted because payment or accounting records are linked. "
+                    "Please void or archive it instead.",
+                )
+                return redirect("invoice_delete_or_void", pk=invoice.pk)
+
+            if requested_action == "delete":
+                invoice_label = invoice.invoice_number
+                invoice_pk = invoice.pk
+                _audit_invoice_delete_or_void(
+                    invoice,
+                    request.user,
+                    action="deleted",
+                    reason=reason,
+                    previous_status=previous_status,
+                )
+                invoice.delete()
+                messages.success(request, f"Invoice {invoice_label} was deleted. Reason recorded.")
+                return redirect("invoice_list")
+
+            invoice.status = "cancelled"
+            invoice.is_archived = True
+            invoice.archived_at = timezone.now()
+            invoice.archived_by = request.user
+            invoice.notes = (invoice.notes or "").strip()
+            void_note = f"Voided by {request.user.get_username()} on {timezone.now():%Y-%m-%d %H:%M}: {reason}"
+            invoice.notes = f"{invoice.notes}\n\n{void_note}".strip()
+            invoice.save(update_fields=["status", "is_archived", "archived_at", "archived_by", "notes", "updated_at"])
+            _audit_invoice_delete_or_void(
+                invoice,
+                request.user,
+                action="voided",
+                reason=reason,
+                previous_status=previous_status,
+            )
+        messages.success(request, f"Invoice {invoice.invoice_number} was voided. Payment and accounting records were preserved.")
+        return redirect("invoice_view", pk=invoice.pk)
+
+    return render(
+        request,
+        "crm/invoice/invoice_delete_confirm.html",
+        {
+            "invoice": invoice,
+            "blockers": blockers,
+            "can_hard_delete": not blockers,
+        },
+    )
 
 
 @login_required

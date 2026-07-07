@@ -268,7 +268,8 @@ def can_approve_costing(user):
     access = getattr(user, "access", None)
     if access and getattr(access, "can_costing_approve", False):
         return True
-    return ROLE_CEO.casefold() in operations_group_names(user)
+    roles = operations_group_names(user)
+    return ROLE_CEO.casefold() in roles or ROLE_ADMIN.casefold() in roles
 
 
 def can_archive_invoices(user):

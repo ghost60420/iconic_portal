@@ -339,7 +339,7 @@
 
           <div class="opp-add-field opp-add-field-full">
             <label for="fx_rate_bdt_per_usd">Exchange Rate (BDT per 1 selected currency)</label>
-            <input type="number" step="0.0001" name="fx_rate_bdt_per_usd" id="fx_rate_bdt_per_usd" placeholder="Example 82.50 for CAD or 110.50 for USD">
+            <input type="number" step="0.0001" name="fx_rate_bdt_per_usd" id="fx_rate_bdt_per_usd" placeholder="Example 85 for BDT/CAD, 82.50 for CAD, or 110.50 for USD">
           </div>
         </div>
 
@@ -349,14 +349,22 @@
             <strong id="order_value_bdt">-</strong>
           </div>
           <div class="opp-add-result">
+            <span>Total order value (CAD)</span>
+            <strong id="order_value_cad">Conversion unavailable</strong>
+          </div>
+          <div class="opp-add-result">
             <span>BDT per piece</span>
             <strong id="bdt_per_piece">-</strong>
+          </div>
+          <div class="opp-add-result">
+            <span>CAD per piece</span>
+            <strong id="cad_per_piece">Conversion unavailable</strong>
           </div>
         </div>
 
         <div class="opp-add-muted-card" style="margin-top:16px;">
           <strong>Currency note</strong>
-          <span>The existing opportunity amount field is preserved for compatibility. The new currency dropdown records whether the amount is CAD or USD.</span>
+          <span>The existing opportunity amount field is preserved for compatibility. The currency dropdown records whether the amount is CAD, USD, or BDT.</span>
         </div>
 
         <div class="opp-add-actions">
@@ -388,29 +396,42 @@ function filterDropdown(inputId, dropdownId) {
     const moq = document.getElementById("moq_units");
     const orderAmount = document.getElementById("order_value_usd");
     const fx = document.getElementById("fx_rate_bdt_per_usd");
+    const currency = document.getElementById("order_currency");
     const bdt = document.getElementById("order_value_bdt");
+    const cad = document.getElementById("order_value_cad");
     const perPiece = document.getElementById("bdt_per_piece");
+    const cadPerPiece = document.getElementById("cad_per_piece");
+
+    function money(code, value) {
+        const formatted = value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        if (code === "BDT") return "৳" + formatted;
+        if (code === "CAD") return "CAD $" + formatted;
+        if (code === "USD") return "USD $" + formatted;
+        return formatted;
+    }
 
     function recalc() {
         const orderAmountVal = parseNum(orderAmount && orderAmount.value);
         const fxVal = parseNum(fx && fx.value);
         const moqVal = parseNum(moq && moq.value);
+        const currencyVal = (currency && currency.value || "CAD").toUpperCase();
 
-        if (orderAmountVal > 0 && fxVal > 0) {
-            const totalBdt = orderAmountVal * fxVal;
-            bdt.textContent = totalBdt.toFixed(2);
-            if (moqVal > 0) {
-                perPiece.textContent = (totalBdt / moqVal).toFixed(2);
-            } else {
-                perPiece.textContent = "-";
-            }
+        if (orderAmountVal > 0) {
+            const totalBdt = currencyVal === "BDT" ? orderAmountVal : (fxVal > 0 ? orderAmountVal * fxVal : null);
+            const totalCad = currencyVal === "CAD" ? orderAmountVal : (currencyVal === "BDT" && fxVal > 0 ? orderAmountVal / fxVal : null);
+            bdt.textContent = totalBdt !== null ? money("BDT", totalBdt) : "Conversion unavailable";
+            cad.textContent = totalCad !== null ? money("CAD", totalCad) : "Conversion unavailable";
+            perPiece.textContent = totalBdt !== null && moqVal > 0 ? money("BDT", totalBdt / moqVal) : "-";
+            cadPerPiece.textContent = totalCad !== null && moqVal > 0 ? money("CAD", totalCad / moqVal) : "Conversion unavailable";
         } else {
             bdt.textContent = "-";
+            cad.textContent = "Conversion unavailable";
             perPiece.textContent = "-";
+            cadPerPiece.textContent = "Conversion unavailable";
         }
     }
 
-    [moq, orderAmount, fx].forEach((el) => {
+    [moq, orderAmount, fx, currency].forEach((el) => {
         if (!el) return;
         el.addEventListener("input", recalc);
     });

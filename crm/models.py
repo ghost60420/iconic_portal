@@ -1148,6 +1148,7 @@ class Opportunity(models.Model):
     ORDER_CURRENCY_CHOICES = [
         ("CAD", "CAD"),
         ("USD", "USD"),
+        ("BDT", "BDT"),
     ]
 
     STAGE_CHOICES = [
@@ -2019,6 +2020,7 @@ class QuickCosting(models.Model):
         (PRICING_CMT, "CMT / Sewing Only"),
     ]
     STATUS_DRAFT = "draft"
+    STATUS_SUBMITTED = "submitted"
     STATUS_APPROVED = "approved"
     STATUS_REJECTED = "rejected"
     STATUS_QUOTED = "quoted"
@@ -2028,6 +2030,7 @@ class QuickCosting(models.Model):
     STATUS_CLOSED = "closed"
     STATUS_CHOICES = [
         (STATUS_DRAFT, "Draft"),
+        (STATUS_SUBMITTED, "Submitted for Approval"),
         (STATUS_APPROVED, "Approved"),
         (STATUS_REJECTED, "Rejected"),
         (STATUS_QUOTED, "Quoted"),

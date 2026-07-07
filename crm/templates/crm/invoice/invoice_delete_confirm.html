@@ -1,0 +1,31 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+<div style="max-width:760px;margin:32px auto;padding:24px;background:#111827;color:#f9fafb;border:1px solid rgba(255,255,255,.12);border-radius:18px;">
+  <p style="letter-spacing:.12em;text-transform:uppercase;color:#fbbf24;font-weight:800;margin:0 0 8px;">Invoice Control</p>
+  <h1 style="margin:0 0 8px;">Delete or void {{ invoice.invoice_number }}</h1>
+  <p style="color:#cbd5e1;margin:0 0 20px;">Only CEO/Admin users can perform this action. A reason is required and an audit log will be created.</p>
+
+  {% if blockers %}
+    <div style="background:#7f1d1d;color:#fee2e2;border:1px solid #ef4444;border-radius:12px;padding:14px;margin-bottom:18px;">
+      This invoice cannot be deleted because payment or accounting records are linked.
+      Please void or archive it instead.
+      <div style="margin-top:8px;font-size:13px;">Linked blockers: {{ blockers|join:", " }}</div>
+    </div>
+  {% endif %}
+
+  <form method="post" style="display:grid;gap:14px;">
+    {% csrf_token %}
+    <label for="reason" style="font-weight:800;">Reason</label>
+    <textarea id="reason" name="reason" rows="4" required style="width:100%;border-radius:12px;border:1px solid #374151;background:#0b1120;color:#fff;padding:12px;"></textarea>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;">
+      {% if can_hard_delete %}
+        <button type="submit" name="action" value="delete" style="border:0;border-radius:999px;background:#dc2626;color:#fff;padding:10px 16px;font-weight:800;cursor:pointer;">Delete invoice</button>
+      {% endif %}
+      <button type="submit" name="action" value="void" style="border:0;border-radius:999px;background:#f59e0b;color:#111827;padding:10px 16px;font-weight:800;cursor:pointer;">Void invoice</button>
+      <a href="{% url 'invoice_view' invoice.pk %}" style="border:1px solid #4b5563;border-radius:999px;color:#f9fafb;padding:10px 16px;text-decoration:none;font-weight:800;">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

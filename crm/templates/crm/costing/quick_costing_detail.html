@@ -444,12 +444,7 @@
       <p class="quick-subtitle">{{ quick_costing.buyer_name }} · {{ quick_costing.get_product_type_display }} · {{ quick_costing.purpose_label }} · QC-{{ quick_costing.pk }}</p>
     </div>
     <div class="quick-actions">
-      {% if can_auto_approve_quick_costing %}
-        <form method="post" action="{% url 'quick_costing_approve' quick_costing.pk %}" class="quick-inline-form">
-          {% csrf_token %}
-          <button type="submit" class="quick-btn quick-btn-primary" style="cursor:pointer;">Approve and Continue</button>
-        </form>
-      {% elif can_submit_for_approval %}
+      {% if can_submit_for_approval %}
         <form method="post" action="{% url 'quick_costing_submit_for_approval' quick_costing.pk %}" class="quick-inline-form">
           {% csrf_token %}
           <button type="submit" class="quick-btn quick-btn-primary" style="cursor:pointer;">Submit for CEO Approval</button>
@@ -473,7 +468,7 @@
             <button type="submit" class="quick-btn quick-btn-primary" style="cursor:pointer;">Create Invoice</button>
           </form>
         {% endif %}
-      {% elif quick_costing.status == "approved" and can_approve %}
+      {% elif approval_status_label == "Approved" and can_approve %}
         <form method="post" action="{% url 'quick_costing_convert_to_quotation' quick_costing.pk %}" class="quick-inline-form">
           {% csrf_token %}
           <button type="submit" class="quick-btn quick-btn-primary" style="cursor:pointer;">Create Quotation</button>
@@ -483,6 +478,11 @@
       {% endif %}
       {% if production_order %}
         <a class="quick-btn quick-btn-primary" href="{% url 'production_detail' production_order.pk %}">Open Production Order</a>
+      {% elif can_move_quick_to_production %}
+        <form method="post" action="{% url 'quick_costing_convert_to_production' quick_costing.pk %}" class="quick-inline-form">
+          {% csrf_token %}
+          <button type="submit" class="quick-btn quick-btn-primary" style="cursor:pointer;">Move to Production</button>
+        </form>
       {% endif %}
       {% if quick_costing.opportunity %}
         <a class="quick-btn" href="{% url 'opportunity_detail' quick_costing.opportunity.pk %}">Open Opportunity</a>
@@ -643,9 +643,7 @@
         <span>Approval Status</span>
         <strong><span class="quick-type-badge status-{{ approval_status_label|lower }}">{{ approval_status_label }}</span></strong>
       </div>
-      {% if can_auto_approve_quick_costing %}
-        <p class="quick-disabled-note">Approval not required. This record was created by an authorized approver.</p>
-      {% elif quick_costing.status == "draft" and quick_costing.approval_submitted_at and can_decide_quick_costing %}
+      {% if quick_costing.approval_submitted_at and approval_status_label == "Pending CEO Approval" and can_decide_quick_costing %}
         <div class="quick-actions" style="justify-content:flex-start;">
           <form method="post" action="{% url 'quick_costing_approve' quick_costing.pk %}" class="quick-inline-form">
             {% csrf_token %}
@@ -656,7 +654,7 @@
             <button type="submit" class="quick-btn" style="cursor:pointer;">Reject</button>
           </form>
         </div>
-      {% elif quick_costing.status == "draft" and quick_costing.approval_submitted_at %}
+      {% elif quick_costing.approval_submitted_at and approval_status_label == "Pending CEO Approval" %}
         <p class="quick-disabled-note">Submitted for CEO Approval. The costing creator cannot approve their own Quick Costing.</p>
       {% elif quick_costing.status == "approved" %}
         <p class="quick-disabled-note">Approval completed. The approved costing is ready for quotation and production.</p>

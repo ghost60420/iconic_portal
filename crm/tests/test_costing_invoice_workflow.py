@@ -72,6 +72,17 @@ class CostingInvoiceWorkflowTests(TestCase):
     def test_costing_to_quote_to_invoice_to_production_tracks_profit(self):
         convert_costing_to_quotation(self.costing, user=self.user)
         self.costing.refresh_from_db()
+        self.costing.quotation_status = CostingHeader.QUOTATION_STATUS_APPROVED
+        self.costing.quotation_approved_by = self.user
+        self.costing.quotation_approved_at = self.costing.quoted_at
+        self.costing.save(
+            update_fields=[
+                "quotation_status",
+                "quotation_approved_by",
+                "quotation_approved_at",
+                "updated_at",
+            ]
+        )
 
         self.assertTrue(self.costing.quotation_number.startswith("QT"))
         self.assertIsNotNone(self.costing.quoted_at)

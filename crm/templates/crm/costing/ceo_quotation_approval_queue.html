@@ -203,6 +203,8 @@
           <th>Opportunity</th>
           <th>Customer</th>
           <th>Product</th>
+          <th>Order Type</th>
+          <th class="cq-right">Quantity</th>
           <th>Salesperson</th>
           <th>Currency</th>
           <th class="cq-right">Revenue</th>
@@ -231,6 +233,8 @@
             <td>{{ row.opportunity_id|default:"-" }}</td>
             <td>{{ row.client_name }}</td>
             <td>{{ row.product_name }}</td>
+            <td>{{ row.order_type|default:"-" }}</td>
+            <td class="cq-right">{{ row.quantity|default:"-" }}</td>
             <td>{{ row.salesperson }}</td>
             <td>{{ row.currency }}</td>
             <td class="cq-right"><span class="cq-money-label">{{ row.revenue_label }}</span>{{ row.total_amount|finance_money:row.currency }}</td>
@@ -270,7 +274,7 @@
           </tr>
         {% empty %}
           <tr>
-            <td colspan="18"><div class="cq-empty">No quotations match the current queue filters.</div></td>
+            <td colspan="20"><div class="cq-empty">No quotations match the current queue filters.</div></td>
           </tr>
         {% endfor %}
       </tbody>

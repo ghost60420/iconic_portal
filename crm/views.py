@@ -101,6 +101,7 @@ from .services.operations_permissions import (
     active_sales_lead_q,
     available_sales_lead_q,
     can_access_operations_module,
+    can_approve_costing,
     can_claim_sales_lead,
     can_manage_all_sales_records,
     can_view_local_sewing_financials,
@@ -111,6 +112,10 @@ from .services.operations_permissions import (
     scope_sales_lead_queue,
     scope_sales_leads,
     scope_sales_opportunities,
+)
+from .services.production_orders import (
+    ProductionOrderCreationError,
+    create_production_order_from_approved_quotation,
 )
 from .services.local_sewing import (
     calculate_local_sewing,
@@ -157,18 +162,58 @@ def _safe_decimal_or_none(value):
     except Exception:
         return None
 
-def _calc_order_value_bdt(order_value_usd, fx_rate):
-    if order_value_usd is None or fx_rate is None:
+def _calc_order_value_bdt(order_amount, fx_rate, currency="USD"):
+    if order_amount is None:
+        return None
+    currency = (currency or "USD").upper()
+    if currency == "BDT":
+        return order_amount
+    if fx_rate is None:
         return None
     try:
-        return convert_currency(
-            order_value_usd,
-            "USD",
-            "BDT",
-            bdt_per_usd=fx_rate,
-        )
+        if currency == "CAD":
+            return convert_currency(order_amount, "CAD", "BDT", bdt_per_cad=fx_rate)
+        return convert_currency(order_amount, "USD", "BDT", bdt_per_usd=fx_rate)
     except CurrencyConversionError:
         return None
+
+
+def _opportunity_currency_summary(opportunity):
+    currency = (getattr(opportunity, "order_currency", "") or "CAD").upper()
+    if currency not in {"CAD", "USD", "BDT"}:
+        currency = "CAD"
+    amount = getattr(opportunity, "order_value_usd", None)
+    total_bdt = getattr(opportunity, "order_value", None)
+    rate = getattr(opportunity, "fx_rate_bdt_per_usd", None)
+    moq = getattr(opportunity, "moq_units", None) or 0
+    total_cad = None
+    if currency == "CAD" and amount is not None:
+        total_cad = amount
+    elif currency == "BDT" and amount is not None and rate:
+        try:
+            total_cad = convert_currency(amount, "BDT", "CAD", bdt_per_cad=rate)
+        except CurrencyConversionError:
+            total_cad = None
+    bdt_per_piece = None
+    cad_per_piece = None
+    if total_bdt is not None and moq:
+        bdt_per_piece = (Decimal(total_bdt) / Decimal(moq)).quantize(Decimal("0.01"))
+    if total_cad is not None and moq:
+        cad_per_piece = (Decimal(total_cad) / Decimal(moq)).quantize(Decimal("0.01"))
+    return {
+        "currency": currency,
+        "entered_amount": amount,
+        "exchange_rate": rate,
+        "total_bdt": total_bdt,
+        "total_cad": total_cad,
+        "bdt_per_piece": bdt_per_piece,
+        "cad_per_piece": cad_per_piece,
+        "total_bdt_display": format_finance_money(total_bdt, "BDT") if total_bdt is not None else "",
+        "total_cad_display": format_finance_money(total_cad, "CAD") if total_cad is not None else "",
+        "bdt_per_piece_display": format_finance_money(bdt_per_piece, "BDT") if bdt_per_piece is not None else "",
+        "cad_per_piece_display": format_finance_money(cad_per_piece, "CAD") if cad_per_piece is not None else "",
+        "conversion_available": bool(total_cad is not None or currency != "BDT"),
+    }
 
 from .forms import (
     BDStaffMonthForm,
@@ -2308,6 +2353,9 @@ def opportunity_create_manual(request):
         stage = request.POST.get("stage") or "Prospecting"
         product_type = request.POST.get("product_type") or "Other"
         product_category = request.POST.get("product_category") or "Other"
+        order_currency = (request.POST.get("order_currency") or "CAD").upper()
+        if order_currency not in {"CAD", "USD", "BDT"}:
+            order_currency = "CAD"
         moq_units_raw = request.POST.get("moq_units")
         order_value_raw = request.POST.get("order_value")
         order_value_usd_raw = request.POST.get("order_value_usd")
@@ -2338,8 +2386,8 @@ def opportunity_create_manual(request):
         order_value_usd = _safe_decimal_or_none(order_value_usd_raw)
         fx_rate = _safe_decimal_or_none(fx_rate_raw)
 
-        if order_value_usd is not None and fx_rate is not None:
-            order_value = _calc_order_value_bdt(order_value_usd, fx_rate)
+        if order_value_usd is not None:
+            order_value = _calc_order_value_bdt(order_value_usd, fx_rate, order_currency)
 
         opp = Opportunity.objects.create(
             lead=lead,
@@ -2348,6 +2396,7 @@ def opportunity_create_manual(request):
             product_type=product_type,
             product_category=product_category,
             moq_units=moq_units,
+            order_currency=order_currency,
             order_value=order_value,
             order_value_usd=order_value_usd,
             fx_rate_bdt_per_usd=fx_rate,
@@ -2373,6 +2422,8 @@ def opportunity_create_manual(request):
         "stage_choices": Opportunity.STAGE_CHOICES,
         "product_type_choices": Opportunity.PRODUCT_TYPE_CHOICES,
         "product_category_choices": Opportunity.PRODUCT_CATEGORY_CHOICES,
+        "currency_choices": Opportunity.ORDER_CURRENCY_CHOICES,
+        "default_currency": "CAD",
     }
     return render(request, "crm/opportunity_create_manual.html", context)
 
@@ -4116,12 +4167,8 @@ def opportunity_detail(request, pk):
     order_value_usd = opportunity.order_value_usd
     fx_rate = opportunity.fx_rate_bdt_per_usd
     order_value_bdt = opportunity.order_value
-    bdt_per_piece = None
-    if order_value_bdt and opportunity.moq_units:
-        try:
-            bdt_per_piece = (Decimal(order_value_bdt) / Decimal(opportunity.moq_units)).quantize(Decimal("0.01"))
-        except Exception:
-            bdt_per_piece = None
+    currency_summary = _opportunity_currency_summary(opportunity)
+    bdt_per_piece = currency_summary["bdt_per_piece"]
 
     reference_images = list(reference_images_for_opportunity(opportunity))
     primary_reference_image = reference_images[0] if reference_images else None
@@ -4196,6 +4243,7 @@ def opportunity_detail(request, pk):
         "fx_rate_bdt_per_usd": fx_rate,
         "order_value_bdt": order_value_bdt,
         "bdt_per_piece": bdt_per_piece,
+        "currency_summary": currency_summary,
 
         # Shipping for the template
         "ship": ship,
@@ -7930,8 +7978,8 @@ def opportunity_edit(request, pk):
         if fx_rate is not None:
             opportunity.fx_rate_bdt_per_usd = fx_rate
 
-        if order_value_usd is not None and fx_rate is not None:
-            order_value = _calc_order_value_bdt(order_value_usd, fx_rate)
+        if order_value_usd is not None:
+            order_value = _calc_order_value_bdt(order_value_usd, fx_rate, opportunity.order_currency)
 
         if order_value is not None:
             opportunity.order_value = order_value
@@ -7952,11 +8000,8 @@ def opportunity_edit(request, pk):
             "order_currency_choices": order_currency_choices,
             "selected_order_currency": selected_order_currency,
             "account_label": account_label,
-            "bdt_per_piece": (
-                (Decimal(opportunity.order_value) / Decimal(opportunity.moq_units)).quantize(Decimal("0.01"))
-                if opportunity.order_value and opportunity.moq_units
-                else None
-            ),
+            "currency_summary": _opportunity_currency_summary(opportunity),
+            "bdt_per_piece": _opportunity_currency_summary(opportunity)["bdt_per_piece"],
         },
     )
 
@@ -9843,6 +9888,7 @@ def production_attachment_delete(request, pk, att_pk):
 def production_from_opportunity(request, pk):
     """
     Open or create production order from an opportunity.
+    New orders require a CEO/Admin-approved quotation and a CEO/Admin user.
     """
     opportunity = get_object_or_404(Opportunity, pk=pk)
     try:
@@ -9852,12 +9898,11 @@ def production_from_opportunity(request, pk):
         customer = None
 
     try:
-        active_cost_sheet = CostSheet.objects.filter(opportunity=opportunity, is_active=True).first()
-    except (OperationalError, ProgrammingError):
-        active_cost_sheet = None
-    try:
         approved_costing = CostingHeader.objects.filter(
-            opportunity=opportunity, status="approved"
+            opportunity=opportunity,
+            status="approved",
+            quotation_status=CostingHeader.QUOTATION_STATUS_APPROVED,
+            quotation_approved_at__isnull=False,
         ).order_by("-updated_at", "-id").first()
     except (OperationalError, ProgrammingError):
         approved_costing = None
@@ -9866,40 +9911,25 @@ def production_from_opportunity(request, pk):
     created = False
 
     if not po:
-        title = f"{opportunity.lead.account_brand} order for {opportunity.opportunity_id}"
-        qty_guess = opportunity.moq_units or 0
-        try:
-            po = ProductionOrder.objects.create(
-                opportunity=opportunity,
-                lead=opportunity.lead,
-                customer=customer,
-                title=title,
-                qty_total=qty_guess,
-                cost_sheet_active=active_cost_sheet,
-                costing_header=approved_costing,
-            )
-            created = True
-        except IntegrityError:
-            logger.exception(
-                "Order code collision while creating production order for opportunity %s",
-                opportunity.pk,
-            )
-            messages.error(request, "Unable to create production order right now.")
+        if not can_approve_costing(request.user):
+            messages.error(request, "CEO/Admin approval is required before moving an order to Production.")
             return redirect("opportunity_detail", pk=opportunity.pk)
-        except Exception:
+        if not approved_costing:
+            messages.error(request, "A CEO-approved quotation is required before moving this opportunity to Production.")
+            return redirect("opportunity_detail", pk=opportunity.pk)
+        try:
+            po, created = create_production_order_from_approved_quotation(approved_costing, user=request.user)
+        except ProductionOrderCreationError as exc:
+            messages.error(request, str(exc))
+            return redirect("opportunity_detail", pk=opportunity.pk)
+        except Exception as exc:
             logger.exception("Failed to create production order for opportunity %s", opportunity.pk)
             messages.error(request, "Unable to create production order right now.")
             return redirect("opportunity_detail", pk=opportunity.pk)
 
-        if not created:
-            messages.error(request, "Unable to create production order right now.")
-            return redirect("opportunity_detail", pk=opportunity.pk)
     elif customer and not po.customer_id:
         po.customer = customer
         po.save(update_fields=["customer"])
-    elif active_cost_sheet and not po.cost_sheet_active_id:
-        po.cost_sheet_active = active_cost_sheet
-        po.save(update_fields=["cost_sheet_active"])
     elif approved_costing and not po.costing_header_id:
         po.costing_header = approved_costing
         po.save(update_fields=["costing_header"])
@@ -14934,7 +14964,7 @@ def add_opportunity(request):
         product_type = request.POST.get("product_type") or "Other"
         product_category = request.POST.get("product_category") or "Other"
         order_currency = (request.POST.get("order_currency") or "CAD").upper()
-        if order_currency not in {"CAD", "USD"}:
+        if order_currency not in {"CAD", "USD", "BDT"}:
             order_currency = "CAD"
         moq_units_raw = request.POST.get("moq_units")
         order_value_raw = request.POST.get("order_value")
@@ -14951,8 +14981,8 @@ def add_opportunity(request):
         order_value = _safe_decimal_or_none(order_value_raw)
         order_value_usd = _safe_decimal_or_none(order_value_usd_raw)
         fx_rate = _safe_decimal_or_none(fx_rate_raw)
-        if order_value_usd is not None and fx_rate is not None:
-            order_value = _calc_order_value_bdt(order_value_usd, fx_rate)
+        if order_value_usd is not None:
+            order_value = _calc_order_value_bdt(order_value_usd, fx_rate, order_currency)
 
         opp = Opportunity.objects.create(
             lead=lead,

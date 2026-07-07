@@ -169,7 +169,7 @@ class UnifiedCEOApprovalQueueTests(TestCase):
 
         self.assertContains(detail_response, "Submit for CEO Approval")
         self.assertEqual(submit_response.status_code, 302)
-        self.assertEqual(quick.status, QuickCosting.STATUS_DRAFT)
+        self.assertEqual(quick.status, QuickCosting.STATUS_SUBMITTED)
         self.assertEqual(quick.approval_submitted_by, self.sales)
         self.assertIsNotNone(quick.approval_submitted_at)
         self.assertTrue(
@@ -276,7 +276,7 @@ class UnifiedCEOApprovalQueueTests(TestCase):
 
         self.assertEqual(edit_response.status_code, 200)
         self.assertEqual(submit_response.status_code, 302)
-        self.assertEqual(quick.status, QuickCosting.STATUS_DRAFT)
+        self.assertEqual(quick.status, QuickCosting.STATUS_SUBMITTED)
         self.assertGreaterEqual(quick.approval_submitted_at, first_submission)
         self.assertIsNone(quick.rejected_by)
         self.client.force_login(self.ceo)

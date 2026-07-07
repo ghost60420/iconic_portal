@@ -216,7 +216,15 @@
           </div>
           <div>
             <span>BDT per piece</span>
-            <strong>{% if bdt_per_piece %}{{ bdt_per_piece }}{% else %}—{% endif %}</strong>
+            <strong>{% if currency_summary.bdt_per_piece_display %}{{ currency_summary.bdt_per_piece_display }}{% else %}—{% endif %}</strong>
+          </div>
+          <div>
+            <span>Total Order Value CAD</span>
+            <strong>{% if currency_summary.total_cad_display %}{{ currency_summary.total_cad_display }}{% else %}Conversion unavailable{% endif %}</strong>
+          </div>
+          <div>
+            <span>CAD per piece</span>
+            <strong>{% if currency_summary.cad_per_piece_display %}{{ currency_summary.cad_per_piece_display }}{% else %}Conversion unavailable{% endif %}</strong>
           </div>
         </div>
 

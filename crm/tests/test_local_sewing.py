@@ -92,7 +92,7 @@ class LocalSewingApprovalGateTests(TestCase):
         with self.assertRaisesMessage(ProductionOrderCreationError, "CEO approval is required"):
             create_production_order_from_approved_quick_costing(quick)
 
-    def test_ceo_approval_creates_one_local_production_order(self):
+    def test_ceo_approval_unlocks_explicit_local_production_move(self):
         user_model = get_user_model()
         creator = user_model.objects.create_user(username="cmt-creator", password="pass")
         ceo = user_model.objects.create_user(username="cmt-ceo", password="pass")
@@ -109,6 +109,12 @@ class LocalSewingApprovalGateTests(TestCase):
         self.assertEqual(response.status_code, 302)
         quick.refresh_from_db()
         self.assertEqual(quick.status, QuickCosting.STATUS_APPROVED)
+        self.assertFalse(ProductionOrder.objects.filter(source_quick_costing=quick).exists())
+
+        move_response = self.client.post(reverse("quick_costing_convert_to_production", args=[quick.pk]))
+        self.assertEqual(move_response.status_code, 302)
+        quick.refresh_from_db()
+        self.assertEqual(quick.status, QuickCosting.STATUS_PRODUCTION)
         order = ProductionOrder.objects.get(source_quick_costing=quick)
         self.assertEqual(order.order_type, "sewing_charge")
         self.assertEqual(order.factory_location, "bd")
@@ -119,7 +125,7 @@ class LocalSewingApprovalGateTests(TestCase):
         stage.planned_end = timezone.localdate() + timedelta(days=4)
         stage.save(update_fields=["planned_start", "planned_end"])
 
-        queue = self.client.get(reverse("ceo_quotation_approval_queue"), {"status": "approved"})
+        queue = self.client.get(reverse("ceo_quotation_approval_queue"), {"status": "all"})
         row = next(item for item in queue.context["rows"] if item["record"].pk == quick.pk)
         self.assertEqual(row["service_type"], "Bangladesh Local Sewing")
         self.assertEqual(row["pricing_type"], "CMT / Sewing Only")
@@ -160,7 +166,7 @@ class LocalSewingApprovalGateTests(TestCase):
         quick.refresh_from_db()
 
         self.assertEqual(submit_response.status_code, 302)
-        self.assertEqual(quick.status, QuickCosting.STATUS_DRAFT)
+        self.assertEqual(quick.status, QuickCosting.STATUS_SUBMITTED)
         self.assertEqual(quick.approval_submitted_by, sales)
         self.assertIsNotNone(quick.approval_submitted_at)
         self.assertTrue(
@@ -179,10 +185,13 @@ class LocalSewingApprovalGateTests(TestCase):
         self.assertEqual(approval.status_code, 302)
         self.assertEqual(quick.status, QuickCosting.STATUS_APPROVED)
         self.assertEqual(quick.approved_by, ceo)
+        self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 0)
+        move_response = self.client.post(reverse("quick_costing_convert_to_production", args=[quick.pk]))
+        self.assertEqual(move_response.status_code, 302)
         self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 1)
         self.assertEqual(AccountingEntry.objects.count(), 0)
 
-    def test_superuser_creator_is_auto_approved_once_and_bypasses_ceo_queue(self):
+    def test_superuser_creator_must_submit_then_approve_before_production(self):
         admin = get_user_model().objects.create_superuser(
             username="cmt-superuser-creator",
             email="cmt-superuser@example.com",
@@ -195,49 +204,43 @@ class LocalSewingApprovalGateTests(TestCase):
 
         quick = QuickCosting.objects.get(project_name="Authorized CMT Order")
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(quick.status, QuickCosting.STATUS_APPROVED)
+        self.assertEqual(quick.status, QuickCosting.STATUS_DRAFT)
+        self.assertIsNone(quick.approval_submitted_at)
+        self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 0)
+
+        submit = self.client.post(reverse("quick_costing_submit_for_approval", args=[quick.pk]))
+        quick.refresh_from_db()
+        self.assertEqual(submit.status_code, 302)
+        self.assertEqual(quick.status, QuickCosting.STATUS_SUBMITTED)
         self.assertEqual(quick.approval_submitted_by, admin)
         self.assertIsNotNone(quick.approval_submitted_at)
+
+        approve = self.client.post(reverse("quick_costing_approve", args=[quick.pk]))
+        quick.refresh_from_db()
+        self.assertEqual(approve.status_code, 302)
+        self.assertEqual(quick.status, QuickCosting.STATUS_APPROVED)
         self.assertEqual(quick.approved_by, admin)
         self.assertIsNotNone(quick.approved_at)
-        self.assertEqual(quick.approval_submitted_at, quick.approved_at)
-        self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 1)
-        self.assertFalse(
-            AutomationNotification.objects.filter(
-                notification_type="ceo_approval",
-                record_object_id=quick.pk,
-            ).exists()
-        )
-
+        self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 0)
         queue = self.client.get(reverse("ceo_quotation_approval_queue"), {"status": "all"})
         detail = self.client.get(reverse("quick_costing_detail", args=[quick.pk]))
-        self.assertFalse(any(row["record"].pk == quick.pk for row in queue.context["rows"]))
+        self.assertTrue(any(row["record"].pk == quick.pk for row in queue.context["rows"]))
         self.assertContains(detail, "Approved")
         self.assertContains(detail, "Create Quotation")
-        self.assertNotContains(detail, "Submit for CEO Approval")
 
         audit_rows = list(
             CRMAuditLog.objects.filter(module="quick_costing", record_id=str(quick.pk)).order_by("id")
         )
-        self.assertEqual(len(audit_rows), 3)
-        self.assertEqual(
-            [(row.action_type, row.field_name) for row in audit_rows],
-            [
-                (CRMAuditLog.ACTION_CREATED, "record"),
-                (CRMAuditLog.ACTION_UPDATED, "approval_submitted_at"),
-                (CRMAuditLog.ACTION_APPROVED, "status"),
-            ],
-        )
-        self.assertTrue(all(row.actor == admin for row in audit_rows))
+        self.assertTrue(any(row.action_type == CRMAuditLog.ACTION_STATUS_CHANGED and row.new_value == QuickCosting.STATUS_SUBMITTED for row in audit_rows))
+        self.assertTrue(any(row.action_type == CRMAuditLog.ACTION_APPROVED for row in audit_rows))
 
         with self.captureOnCommitCallbacks(execute=True):
             duplicate = self.client.post(reverse("quick_costing_approve", args=[quick.pk]))
         self.assertEqual(duplicate.status_code, 302)
+        self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 0)
+        move = self.client.post(reverse("quick_costing_convert_to_production", args=[quick.pk]))
+        self.assertEqual(move.status_code, 302)
         self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 1)
-        self.assertEqual(
-            CRMAuditLog.objects.filter(module="quick_costing", record_id=str(quick.pk)).count(),
-            3,
-        )
 
         quotation = self.client.post(reverse("quick_costing_convert_to_quotation", args=[quick.pk]))
         self.assertEqual(quotation.status_code, 302)
@@ -250,7 +253,7 @@ class LocalSewingApprovalGateTests(TestCase):
         self.assertEqual(invoice.order.source_quick_costing, quick)
         self.assertEqual(AccountingEntry.objects.count(), 0)
 
-    def test_explicit_costing_approver_creator_is_auto_approved(self):
+    def test_explicit_costing_approver_creator_uses_manual_approval_gate(self):
         approver = get_user_model().objects.create_user(
             username="cmt-explicit-approver",
             password="pass",
@@ -270,11 +273,18 @@ class LocalSewingApprovalGateTests(TestCase):
         quick = QuickCosting.objects.get(project_name="Explicit approver CMT")
 
         self.assertEqual(response.status_code, 302)
+        self.assertEqual(quick.status, QuickCosting.STATUS_DRAFT)
+        self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 0)
+        self.client.post(reverse("quick_costing_submit_for_approval", args=[quick.pk]))
+        self.client.post(reverse("quick_costing_approve", args=[quick.pk]))
+        quick.refresh_from_db()
         self.assertEqual(quick.status, QuickCosting.STATUS_APPROVED)
         self.assertEqual(quick.approved_by, approver)
+        self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 0)
+        self.client.post(reverse("quick_costing_convert_to_production", args=[quick.pk]))
         self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 1)
         queue = self.client.get(reverse("ceo_quotation_approval_queue"), {"status": "all"})
-        self.assertFalse(any(row["record"].pk == quick.pk for row in queue.context["rows"]))
+        self.assertTrue(any(row["record"].pk == quick.pk for row in queue.context["rows"]))
 
     def test_ceo_queue_never_invents_margin_when_sewing_cost_is_missing(self):
         admin = get_user_model().objects.create_superuser(
@@ -297,7 +307,7 @@ class LocalSewingApprovalGateTests(TestCase):
         self.assertContains(queue, "Margin N/A")
         self.assertNotContains(queue, "100.00%")
 
-    def test_non_superuser_ceo_creator_can_auto_approve_without_queue(self):
+    def test_non_superuser_ceo_creator_uses_manual_approval_gate(self):
         user_model = get_user_model()
         creator = user_model.objects.create_user(username="cmt-self-approver", password="pass")
         creator.groups.add(Group.objects.get_or_create(name="CEO")[0])
@@ -311,11 +321,17 @@ class LocalSewingApprovalGateTests(TestCase):
         quick = QuickCosting.objects.get(project_name="CEO self-approved CMT")
 
         self.assertEqual(response.status_code, 302)
+        self.assertEqual(quick.status, QuickCosting.STATUS_DRAFT)
+        self.client.post(reverse("quick_costing_submit_for_approval", args=[quick.pk]))
+        self.client.post(reverse("quick_costing_approve", args=[quick.pk]))
+        quick.refresh_from_db()
         self.assertEqual(quick.status, QuickCosting.STATUS_APPROVED)
         self.assertEqual(quick.approval_submitted_by, creator)
         self.assertIsNotNone(quick.approval_submitted_at)
         self.assertEqual(quick.approved_by, creator)
         self.assertIsNotNone(quick.approved_at)
+        self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 0)
+        self.client.post(reverse("quick_costing_convert_to_production", args=[quick.pk]))
         self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 1)
         queue = self.client.get(reverse("ceo_quotation_approval_queue"))
         self.assertFalse(any(row["record"].pk == quick.pk for row in queue.context["rows"]))

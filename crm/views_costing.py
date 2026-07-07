@@ -8,7 +8,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.core.files.base import ContentFile
 from django.db import transaction
-from django.db.models import F, Q
+from django.db.models import Q
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -23,6 +23,7 @@ from .models import (
     CostingSMV,
     CostingAuditLog,
     CostingSnapshot,
+    CRMAuditLog,
     NEW_COSTING_CATEGORY_CHOICES,
     NEW_COSTING_CURRENCY_CHOICES,
     NEW_COSTING_UOM_CHOICES,
@@ -45,12 +46,12 @@ from .services.costing_workflow import (
     create_invoice_from_costing,
     create_invoice_from_quick_costing,
     get_costing_quote_amounts,
-    is_authorized_quick_costing_creator,
 )
 from .services.order_lifecycle import create_lifecycle_from_costing
 from .services.operations_permissions import ROLE_SALES, can_approve_costing, has_operations_role
 from .services.production_orders import (
     ProductionOrderCreationError,
+    create_production_order_from_approved_quick_costing,
     create_production_order_from_approved_quotation,
 )
 from .services.workflow_visibility import build_workflow_visibility_context
@@ -94,7 +95,7 @@ def _can_view_approval_queue(user):
 
 
 def _can_submit_quick_costing(user):
-    if not user or not user.is_authenticated or _can_approve(user):
+    if not user or not user.is_authenticated:
         return False
     return has_operations_role(user, ROLE_SALES) or not _can_convert_to_invoice(user)
 
@@ -709,9 +710,10 @@ def _advanced_queue_status(costing, converted=False):
 
 
 def _quick_queue_status(quick_costing, converted=False):
+    if quick_costing.status == QuickCosting.STATUS_PRODUCTION:
+        return "converted", "Moved to Production"
     if converted or quick_costing.status in {
         QuickCosting.STATUS_INVOICED,
-        QuickCosting.STATUS_PRODUCTION,
         QuickCosting.STATUS_SHIPPED,
         QuickCosting.STATUS_CLOSED,
     }:
@@ -722,6 +724,8 @@ def _quick_queue_status(quick_costing, converted=False):
         return "sent", "Quotation Sent"
     if quick_costing.status == QuickCosting.STATUS_APPROVED:
         return "approved", "CEO Approved"
+    if quick_costing.status == QuickCosting.STATUS_SUBMITTED:
+        return "pending", "Pending CEO Approval"
     if quick_costing.approval_submitted_at:
         return "pending", "Pending CEO Approval"
     return "draft", "Draft"
@@ -731,7 +735,7 @@ def _advanced_approval_queue_row(costing):
     try:
         amounts = get_costing_quote_amounts(costing)
     except CostingWorkflowError:
-        amounts = {"order_total": Decimal("0"), "standard_cost_total": Decimal("0")}
+        amounts = {"order_total": Decimal("0"), "standard_cost_total": Decimal("0"), "quantity": 0}
     total_amount = amounts["order_total"]
     profit_amount = total_amount - amounts["standard_cost_total"]
     cost_available = amounts["standard_cost_total"] > Decimal("0")
@@ -761,6 +765,8 @@ def _advanced_approval_queue_row(costing):
             or "Client"
         ),
         "product_name": costing.style_name or costing.get_product_type_display() or "-",
+        "order_type": "Canada Export",
+        "quantity": amounts.get("quantity") or costing.order_quantity or 0,
         "salesperson": _quotation_salesperson_label(costing) or "Not assigned",
         "submitted_by": _display_user(costing.quoted_by) or "Not recorded",
         "currency": costing.currency or "BDT",
@@ -835,6 +841,8 @@ def _quick_approval_queue_row(quick_costing, user=None, *, user_can_approve=None
             or "Client"
         ),
         "product_name": quick_costing.get_product_type_display() or quick_costing.project_name or "-",
+        "order_type": "Sewing Charge" if quick_costing.is_bangladesh_local_sewing else "Canada Export",
+        "quantity": quick_costing.quantity or 0,
         "salesperson": _display_user(salesperson) or "Not assigned",
         "submitted_by": _display_user(quick_costing.approval_submitted_by) or "Not recorded",
         "currency": quick_costing.currency or "BDT",
@@ -912,10 +920,6 @@ def ceo_quotation_approval_queue(request):
             Q(approval_submitted_at__isnull=False)
             | ~Q(status=QuickCosting.STATUS_DRAFT)
         )
-        .exclude(
-            pricing_type=QuickCosting.PRICING_CMT,
-            created_by=F("approved_by"),
-        )
         .order_by("-approval_submitted_at", "-updated_at", "-id")
     )
 
@@ -938,10 +942,9 @@ def ceo_quotation_approval_queue(request):
             invoices__isnull=True,
         )
         quick_qs = quick_qs.filter(
-            status=QuickCosting.STATUS_DRAFT,
             approval_submitted_at__isnull=False,
             invoices__isnull=True,
-        )
+        ).filter(Q(status=QuickCosting.STATUS_SUBMITTED) | Q(status=QuickCosting.STATUS_DRAFT))
     elif status_filter == "approved":
         advanced_qs = advanced_qs.filter(
             quotation_status=CostingHeader.QUOTATION_STATUS_APPROVED,
@@ -972,10 +975,9 @@ def ceo_quotation_approval_queue(request):
             invoices__isnull=True,
         )
         quick_qs = quick_qs.filter(
-            status=QuickCosting.STATUS_DRAFT,
             approval_submitted_at__isnull=False,
             invoices__isnull=True,
-        )
+        ).filter(Q(status=QuickCosting.STATUS_SUBMITTED) | Q(status=QuickCosting.STATUS_DRAFT))
 
     if search:
         advanced_qs = advanced_qs.filter(
@@ -1263,32 +1265,8 @@ def cost_sheet_create(request, opportunity_id=None):
                     quick_costing.account_brand = account_brand
                     quick_costing.contact_name = contact_name
                 quick_costing.created_by = request.user if request.user.is_authenticated else None
-                if is_authorized_quick_costing_creator(request.user, quick_costing):
-                    try:
-                        quick_costing, _production_order, _created = approve_quick_costing(
-                            quick_costing,
-                            approver=request.user,
-                            auto_submit=True,
-                        )
-                    except (CostingWorkflowError, ProductionOrderCreationError) as exc:
-                        messages.error(request, str(exc))
-                        return render(
-                            request,
-                            "crm/costing/costsheet_form.html",
-                            {
-                                "quick_form": quick_form,
-                                "opportunity": opportunity,
-                                "mode": "create",
-                                "costing_type": "quick",
-                            },
-                        )
-                    messages.success(
-                        request,
-                        "Quick costing approved automatically and local sewing production created.",
-                    )
-                else:
-                    quick_costing.save()
-                    messages.success(request, "Quick costing saved.")
+                quick_costing.save()
+                messages.success(request, "Quick costing saved.")
                 return redirect("quick_costing_detail", pk=quick_costing.pk)
             messages.error(request, "Please fix the errors below.")
         else:
@@ -1385,10 +1363,12 @@ def quick_costing_detail(request, pk):
             )
             and _can_submit_quick_costing(request.user)
         ),
-        "can_auto_approve_quick_costing": (
+        "can_move_quick_to_production": (
             not invoice
-            and quick_costing.status in {QuickCosting.STATUS_DRAFT, QuickCosting.STATUS_REJECTED}
-            and is_authorized_quick_costing_creator(request.user, quick_costing)
+            and quick_costing.is_bangladesh_local_sewing
+            and quick_costing.status in {QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_QUOTED}
+            and not getattr(quick_costing, "production_order", None)
+            and _can_approve(request.user)
         ),
         "can_decide_quick_costing": _can_decide_quick_costing(request.user, quick_costing),
         **workflow_visibility,
@@ -1411,34 +1391,8 @@ def quick_costing_edit(request, pk):
     if request.method == "POST":
         form = QuickCostingForm(request.POST, instance=quick_costing)
         if form.is_valid():
-            quick_costing = form.save(commit=False)
-            if is_authorized_quick_costing_creator(request.user, quick_costing) and not quick_costing.is_locked:
-                try:
-                    quick_costing, _production_order, _created = approve_quick_costing(
-                        quick_costing,
-                        approver=request.user,
-                        auto_submit=True,
-                    )
-                except (CostingWorkflowError, ProductionOrderCreationError) as exc:
-                    messages.error(request, str(exc))
-                    return render(
-                        request,
-                        "crm/costing/costsheet_form.html",
-                        {
-                            "quick_form": form,
-                            "quick_costing": quick_costing,
-                            "opportunity": quick_costing.opportunity,
-                            "mode": "edit",
-                            "costing_type": "quick",
-                        },
-                    )
-                messages.success(
-                    request,
-                    "Quick costing approved automatically and local sewing production created.",
-                )
-            else:
-                quick_costing.save()
-                messages.success(request, "Quick costing updated.")
+            quick_costing = form.save()
+            messages.success(request, "Quick costing updated.")
             return redirect("quick_costing_detail", pk=pk)
         messages.error(request, "Please fix the errors below.")
     else:
@@ -1472,7 +1426,8 @@ def quick_costing_submit_for_approval(request, pk):
     if quick_costing.status == QuickCosting.STATUS_DRAFT and quick_costing.approval_submitted_at:
         messages.info(request, "This Quick Costing is already waiting for CEO approval.")
         return redirect("quick_costing_detail", pk=pk)
-    quick_costing.status = QuickCosting.STATUS_DRAFT
+    previous_status = quick_costing.status
+    quick_costing.status = QuickCosting.STATUS_SUBMITTED
     quick_costing.approval_submitted_by = _user_or_none(request.user)
     quick_costing.approval_submitted_at = timezone.now()
     quick_costing.approved_by = None
@@ -1491,6 +1446,17 @@ def quick_costing_submit_for_approval(request, pk):
             "updated_at",
         ]
     )
+    CRMAuditLog.objects.create(
+        actor=_user_or_none(request.user),
+        module="quick_costing",
+        record_id=str(quick_costing.pk),
+        record_label=quick_costing.quotation_number or quick_costing.project_name or f"QC-{quick_costing.pk}",
+        action_type=CRMAuditLog.ACTION_STATUS_CHANGED,
+        field_name="status",
+        previous_value=previous_status,
+        new_value=QuickCosting.STATUS_SUBMITTED,
+        target_url=reverse("quick_costing_detail", args=[quick_costing.pk]),
+    )
     messages.success(request, "Quick Costing submitted for CEO approval.")
     return redirect("quick_costing_detail", pk=pk)
 
@@ -1504,19 +1470,17 @@ def quick_costing_approve(request, pk):
     if not _can_approve(request.user):
         messages.error(request, "You do not have permission to approve.")
         return redirect("quick_costing_detail", pk=pk)
-    auto_submit = is_authorized_quick_costing_creator(request.user, quick_costing)
     try:
         quick_costing, _production_order, _created = approve_quick_costing(
             quick_costing,
             approver=request.user,
-            auto_submit=auto_submit,
         )
     except (CostingWorkflowError, ProductionOrderCreationError) as exc:
         messages.error(request, str(exc))
         return redirect("quick_costing_detail", pk=pk)
     messages.success(
         request,
-        "Quick costing approved and local sewing production created."
+        "Quick costing approved. Move to Production is now available."
         if quick_costing.is_bangladesh_local_sewing
         else "Quick costing approved and locked.",
     )
@@ -1541,6 +1505,7 @@ def quick_costing_reject(request, pk):
     if quick_costing.invoices.exists():
         messages.error(request, "This quick costing already has an invoice and cannot be rejected.")
         return redirect("quick_costing_detail", pk=pk)
+    previous_status = quick_costing.status
     quick_costing.status = QuickCosting.STATUS_REJECTED
     quick_costing.rejected_by = _user_or_none(request.user)
     quick_costing.rejected_at = timezone.now()
@@ -1562,8 +1527,68 @@ def quick_costing_reject(request, pk):
             "updated_at",
         ]
     )
+    CRMAuditLog.objects.create(
+        actor=_user_or_none(request.user),
+        module="quick_costing",
+        record_id=str(quick_costing.pk),
+        record_label=quick_costing.quotation_number or quick_costing.project_name or f"QC-{quick_costing.pk}",
+        action_type=CRMAuditLog.ACTION_REJECTED,
+        field_name="status",
+        previous_value=previous_status,
+        new_value=QuickCosting.STATUS_REJECTED,
+        target_url=reverse("quick_costing_detail", args=[quick_costing.pk]),
+    )
     messages.success(request, "Quick costing rejected.")
     return redirect("quick_costing_detail", pk=pk)
+
+
+@require_POST
+def quick_costing_convert_to_production(request, pk):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
+    quick_costing = get_object_or_404(
+        QuickCosting.objects.select_related("opportunity", "opportunity__lead"),
+        pk=pk,
+    )
+    if not _can_approve(request.user):
+        messages.error(request, "CEO/Admin approval is required to move an order to Production.")
+        return redirect("quick_costing_detail", pk=pk)
+    if not quick_costing.is_bangladesh_local_sewing:
+        messages.error(request, "This Quick Costing does not use the Bangladesh Local Sewing workflow.")
+        return redirect("quick_costing_detail", pk=pk)
+    if quick_costing.status not in {QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_QUOTED} or not quick_costing.approved_at:
+        messages.error(request, "CEO approval is required before production can begin.")
+        return redirect("quick_costing_detail", pk=pk)
+    previous_status = quick_costing.status
+    try:
+        production_order, created = create_production_order_from_approved_quick_costing(
+            quick_costing,
+            user=request.user,
+        )
+    except ProductionOrderCreationError as exc:
+        messages.error(request, str(exc))
+        return redirect("quick_costing_detail", pk=pk)
+
+    quick_costing.status = QuickCosting.STATUS_PRODUCTION
+    quick_costing.save(update_fields=["status", "updated_at"])
+    CRMAuditLog.objects.create(
+        actor=_user_or_none(request.user),
+        module="quick_costing",
+        record_id=str(quick_costing.pk),
+        record_label=quick_costing.quotation_number or quick_costing.project_name or f"QC-{quick_costing.pk}",
+        action_type=CRMAuditLog.ACTION_CONVERTED,
+        field_name="status",
+        previous_value=previous_status,
+        new_value=QuickCosting.STATUS_PRODUCTION,
+        target_url=reverse("quick_costing_detail", args=[quick_costing.pk]),
+    )
+    action = "created" if created else "linked"
+    messages.success(
+        request,
+        f"Production order {production_order.purchase_order_number or production_order.pk} {action}.",
+    )
+    return redirect("production_detail", pk=production_order.pk)
 
 
 @require_POST
@@ -1575,7 +1600,7 @@ def quick_costing_convert_to_quotation(request, pk):
     if not (_can_approve(request.user) or _can_convert_to_invoice(request.user)):
         messages.error(request, "You do not have permission to create a quotation.")
         return redirect("quick_costing_detail", pk=pk)
-    if quick_costing.status != QuickCosting.STATUS_APPROVED:
+    if quick_costing.status not in {QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_PRODUCTION}:
         messages.error(request, "Approve costing before creating quotation.")
         return redirect("quick_costing_detail", pk=pk)
     if not quick_costing.quotation_number:

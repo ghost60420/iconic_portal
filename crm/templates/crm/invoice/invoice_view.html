@@ -459,6 +459,9 @@
               </form>
             {% endif %}
           {% endif %}
+          {% if can_void_or_delete_invoice %}
+            <a class="pill danger" href="{% url 'invoice_delete_or_void' invoice.pk %}">Delete / Void</a>
+          {% endif %}
         {% endif %}
         <a class="pill" href="#" onclick="window.print();return false;">Print</a>
       </div>
