@@ -141,6 +141,70 @@
     display:none;
   }
 
+  .prefillBox{
+    margin-bottom:14px;
+    padding:14px;
+    border-radius:16px;
+    border:1px solid rgba(96,165,250,0.35);
+    background:rgba(37,99,235,0.10);
+  }
+  .prefillHead{
+    display:flex;
+    justify-content:space-between;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:10px;
+  }
+  .prefillHead strong{
+    font-size:14px;
+    font-weight:950;
+  }
+  .prefillGrid{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:10px;
+  }
+  @media (max-width: 850px){
+    .prefillGrid{ grid-template-columns:1fr; }
+  }
+  .prefillItem{
+    padding:10px 12px;
+    border-radius:12px;
+    background:rgba(15,23,42,0.65);
+    border:1px solid rgba(148,163,184,0.18);
+  }
+  .prefillItem span{
+    display:block;
+    color:var(--muted);
+    font-size:11px;
+    font-weight:900;
+    margin-bottom:4px;
+  }
+  .prefillItem b{
+    display:block;
+    font-size:13px;
+    word-break:break-word;
+  }
+  .prefillNotice{
+    margin-top:10px;
+    font-size:12px;
+    font-weight:850;
+    color:#bfdbfe;
+    line-height:1.45;
+  }
+  .prefillWarning{
+    margin-top:10px;
+    padding:10px 12px;
+    border-radius:12px;
+    border:1px solid rgba(251,191,36,0.40);
+    background:rgba(251,191,36,0.10);
+    color:#fde68a;
+    font-size:12px;
+    font-weight:900;
+    line-height:1.45;
+  }
+  .prefillWarning a{ color:#fff7ed; text-decoration:underline; }
+
   .form-control, .form-select, textarea, input, select{
     width:100% !important;
     background:var(--bg2) !important;
@@ -283,6 +347,57 @@
 
         <form method="post" novalidate>
           {% csrf_token %}
+          {% if opportunity_prefill %}
+            <input type="hidden" name="source_opportunity_id" value="{{ opportunity_prefill.source_opportunity_id }}">
+            <div class="prefillBox" id="opportunityInvoicePrefill">
+              <div class="prefillHead">
+                <strong>Invoice from Opportunity {{ opportunity_prefill.opportunity_label }}</strong>
+                <span class="pill">Review before saving</span>
+              </div>
+              <div class="prefillGrid">
+                <div class="prefillItem"><span>Customer / brand</span><b>{{ opportunity_prefill.account_or_brand }}</b></div>
+                <div class="prefillItem"><span>Lead ID</span><b>{{ opportunity_prefill.lead_label }}</b></div>
+                <div class="prefillItem"><span>Opportunity ID</span><b>{{ opportunity_prefill.opportunity_label }}</b></div>
+                <div class="prefillItem"><span>Contact</span><b>{{ opportunity_prefill.contact_person }}</b></div>
+                <div class="prefillItem"><span>Email</span><b>{{ opportunity_prefill.email }}</b></div>
+                <div class="prefillItem"><span>Phone</span><b>{{ opportunity_prefill.phone }}</b></div>
+                <div class="prefillItem"><span>Product type</span><b>{{ opportunity_prefill.product_type }}</b></div>
+                <div class="prefillItem"><span>Product category</span><b>{{ opportunity_prefill.product_category }}</b></div>
+                <div class="prefillItem"><span>Invoice type</span><b>{{ opportunity_prefill.invoice_type_label }}</b></div>
+                <div class="prefillItem"><span>Order value</span><b>{{ opportunity_prefill.order_amount_display }}</b></div>
+                <div class="prefillItem"><span>Currency</span><b>{{ opportunity_prefill.currency }}</b></div>
+                <div class="prefillItem"><span>Market</span><b>{{ opportunity_prefill.market }}</b></div>
+                {% if opportunity_prefill.production_order %}
+                  <div class="prefillItem"><span>Production Order</span><b>{{ opportunity_prefill.production_order.purchase_order_number }}</b></div>
+                {% else %}
+                  <div class="prefillItem"><span>Production Order</span><b>No production order linked yet</b></div>
+                {% endif %}
+                {% if opportunity_prefill.bdt_total_display %}
+                  <div class="prefillItem"><span>Total Order Value BDT</span><b>{{ opportunity_prefill.bdt_total_display }}</b></div>
+                {% endif %}
+                {% if opportunity_prefill.cad_total_display %}
+                  <div class="prefillItem"><span>Total Order Value CAD</span><b>{{ opportunity_prefill.cad_total_display }}</b></div>
+                {% endif %}
+                {% if opportunity_prefill.bdt_per_piece_display %}
+                  <div class="prefillItem"><span>BDT per piece</span><b>{{ opportunity_prefill.bdt_per_piece_display }}</b></div>
+                {% endif %}
+                {% if opportunity_prefill.cad_per_piece_display %}
+                  <div class="prefillItem"><span>CAD per piece</span><b>{{ opportunity_prefill.cad_per_piece_display }}</b></div>
+                {% endif %}
+              </div>
+              <div class="prefillNotice">{{ opportunity_prefill.production_message }}</div>
+              <div class="prefillNotice">{{ opportunity_prefill.conversion_note }}</div>
+              {% if opportunity_prefill.has_existing_invoices %}
+                <div class="prefillWarning">
+                  Existing invoice found for this opportunity:
+                  {% for existing_invoice in opportunity_prefill.existing_invoices %}
+                    <a href="{% url 'invoice_view' existing_invoice.pk %}">{{ existing_invoice.invoice_number }}</a>{% if not forloop.last %}, {% endif %}
+                  {% endfor %}
+                  . Open the existing invoice or continue only if another invoice is required.
+                </div>
+              {% endif %}
+            </div>
+          {% endif %}
 
           <div class="grid2">
 

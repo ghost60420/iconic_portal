@@ -4760,6 +4760,13 @@ class Invoice(models.Model):
         null=True,
         blank=True,
     )
+    opportunity = models.ForeignKey(
+        "Opportunity",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="invoices",
+    )
 
     invoice_number = models.CharField(max_length=50, unique=True)
     issue_date = models.DateField(default=timezone.now)

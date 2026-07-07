@@ -46,7 +46,7 @@
           <a href="{% url 'cost_sheet_create_for_opportunity' opportunity.pk %}?costing_type=quick" class="opp-btn opp-btn--ghost">Quick Costing</a>
         {% endif %}
       {% endif %}
-      <a href="{% url 'invoice_add' %}" class="opp-btn opp-btn--ghost">Create Invoice</a>
+      <a href="{% url 'invoice_add' %}?opportunity_id={{ opportunity.pk }}" class="opp-btn opp-btn--ghost">Create Invoice</a>
       {% if prod_orders %}
         <a href="{% url 'production_detail' prod_orders.0.pk %}" class="opp-btn opp-btn--ghost">View Production</a>
       {% else %}

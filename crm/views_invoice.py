@@ -28,10 +28,13 @@ from .models import (
     Invoice,
     InvoicePayment,
     InvoiceSettings,
+    Opportunity,
     ProductionOrder,
+    QuickCosting,
 )
 from .forms import InvoiceForm, InvoicePaymentForm, InvoiceSettingsForm
 from .permissions import can_view_internal_costing, get_access
+from .services.costing_currency import CurrencyConversionError, convert_currency, format_finance_money
 from .services.costing_workflow import CostingWorkflowError, create_or_link_production_order_from_invoice
 from .services.order_lifecycle import build_lifecycle_profit_breakdown, create_lifecycle_from_invoice
 from .services.workflow_visibility import build_workflow_visibility_context
@@ -646,11 +649,11 @@ def _invoice_crm_references(inv: Invoice) -> dict:
     order = getattr(inv, "order", None)
     costing = getattr(inv, "costing_header", None)
     quick_costing = getattr(inv, "quick_costing", None)
-    opportunity = None
+    opportunity = getattr(inv, "opportunity", None)
     lead = None
 
     if order:
-        opportunity = getattr(order, "opportunity", None)
+        opportunity = opportunity or getattr(order, "opportunity", None)
         lead = getattr(order, "lead", None)
     if not opportunity and costing:
         opportunity = getattr(costing, "opportunity", None)
@@ -697,8 +700,9 @@ def _static_if_exists(path: str) -> str:
     return path if finders.find(path) else ""
 
 
-def _invoice_default_deposit_values() -> dict:
-    invoice_settings = _invoice_settings()
+def _invoice_default_deposit_values(invoice_settings=None) -> dict:
+    if invoice_settings is None:
+        invoice_settings = _invoice_settings()
     return {
         "sample": getattr(invoice_settings, "default_sample_deposit_percentage", None) or Decimal("100.00"),
         "bulk": getattr(invoice_settings, "default_bulk_deposit_percentage", None) or Decimal("50.00"),
@@ -706,8 +710,8 @@ def _invoice_default_deposit_values() -> dict:
     }
 
 
-def _default_deposit_for(market: str, invoice_type: str) -> Decimal:
-    defaults = _invoice_default_deposit_values()
+def _default_deposit_for(market: str, invoice_type: str, defaults=None) -> Decimal:
+    defaults = defaults or _invoice_default_deposit_values()
     if invoice_type == "sample":
         return defaults["sample"]
     if market == "bangladesh" and invoice_type == "sewing_charge":
@@ -715,8 +719,8 @@ def _default_deposit_for(market: str, invoice_type: str) -> Decimal:
     return defaults["bulk"]
 
 
-def _invoice_form_extra_context() -> dict:
-    defaults = _invoice_default_deposit_values()
+def _invoice_form_extra_context(defaults=None) -> dict:
+    defaults = defaults or _invoice_default_deposit_values()
     return {
         "invoice_default_deposits": {
             "sample": f"{defaults['sample']:.2f}",
@@ -724,6 +728,230 @@ def _invoice_form_extra_context() -> dict:
             "bd_sewing": f"{defaults['bd_sewing']:.2f}",
         }
     }
+
+
+def _latest_bdt_per_cad_rate() -> Decimal:
+    try:
+        row = ExchangeRate.objects.order_by("-updated_at").first()
+        rate = _d(getattr(row, "cad_to_bdt", None)) if row else Decimal("0")
+        return rate if rate > 1 else Decimal("0")
+    except Exception:
+        return Decimal("0")
+
+
+def _opportunity_invoice_amount(opportunity: Opportunity) -> Decimal:
+    currency = (getattr(opportunity, "order_currency", "") or "CAD").upper()
+    entered = getattr(opportunity, "order_value_usd", None)
+    stored = getattr(opportunity, "order_value", None)
+    if entered is not None:
+        return _d(entered)
+    if currency in {"CAD", "BDT"} and stored is not None:
+        return _d(stored)
+    return Decimal("0")
+
+
+def _opportunity_invoice_customer(opportunity: Opportunity):
+    lead = getattr(opportunity, "lead", None)
+    return (
+        getattr(opportunity, "customer", None)
+        or getattr(lead, "customer", None)
+    )
+
+
+def _opportunity_invoice_market(opportunity: Opportunity, production_order=None) -> str:
+    currency = (getattr(opportunity, "order_currency", "") or "").upper()
+    lead = getattr(opportunity, "lead", None)
+    customer = _opportunity_invoice_customer(opportunity)
+    market_values = {
+        (getattr(lead, "market", "") or "").upper(),
+        (getattr(customer, "market", "") or "").upper(),
+        (getattr(customer, "country", "") or "").upper(),
+        (getattr(production_order, "factory_location", "") or "").upper(),
+    }
+    if currency == "BDT" or "BD" in market_values or "BANGLADESH" in market_values:
+        return "bangladesh"
+    return "north_america"
+
+
+def _opportunity_invoice_type(opportunity: Opportunity, production_order=None, quick=None) -> str:
+    if quick:
+        if quick.costing_purpose == QuickCosting.PURPOSE_SAMPLE:
+            return "sample"
+        if quick.effective_pricing_type == QuickCosting.PRICING_CMT:
+            return "sewing_charge"
+
+    order_type = (getattr(production_order, "order_type", "") or "").lower()
+    production_type = (getattr(production_order, "production_order_type", "") or "").lower()
+    text = " ".join(
+        str(value or "").lower()
+        for value in (
+            getattr(opportunity, "product_type", ""),
+            getattr(opportunity, "product_category", ""),
+            getattr(opportunity, "notes", ""),
+        )
+    )
+    if production_type == "sampling" or "sample" in text:
+        return "sample"
+    if order_type == "sewing_charge" or "sewing" in text or "cmt" in text:
+        return "sewing_charge"
+    return "bulk"
+
+
+def _opportunity_invoice_existing_qs(opportunity: Opportunity):
+    return (
+        Invoice.objects.select_related("order", "customer", "opportunity")
+        .filter(
+            Q(opportunity=opportunity)
+            | Q(order__opportunity=opportunity)
+            | Q(quick_costing__opportunity=opportunity)
+            | Q(costing_header__opportunity=opportunity)
+        )
+        .distinct()
+        .order_by("-issue_date", "-created_at", "-id")
+    )
+
+
+def _build_opportunity_invoice_prefill(opportunity_id, deposit_defaults=None):
+    if not opportunity_id:
+        return None
+    try:
+        opportunity = (
+            Opportunity.objects.select_related("lead", "customer", "lead__customer")
+            .prefetch_related("quick_costings")
+            .get(pk=int(opportunity_id))
+        )
+    except (Opportunity.DoesNotExist, TypeError, ValueError):
+        return None
+
+    lead = getattr(opportunity, "lead", None)
+    customer = _opportunity_invoice_customer(opportunity)
+    production_order = (
+        ProductionOrder.objects.select_related("customer", "lead", "opportunity")
+        .filter(opportunity=opportunity, is_archived=False)
+        .order_by("-updated_at", "-id")
+        .first()
+    )
+    quick_costings = list(opportunity.quick_costings.all())
+    quick_costing = quick_costings[0] if quick_costings else None
+    currency = (getattr(opportunity, "order_currency", "") or "CAD").upper()
+    if currency not in {"CAD", "USD", "BDT"}:
+        currency = "CAD"
+    amount = _opportunity_invoice_amount(opportunity)
+    exchange_rate = _d(getattr(opportunity, "fx_rate_bdt_per_usd", None)) or _latest_bdt_per_cad_rate()
+    moq_units = getattr(opportunity, "moq_units", None) or 0
+    total_cad = None
+    total_bdt = None
+    cad_per_piece = None
+    bdt_per_piece = None
+    conversion_note = "Conversion unavailable"
+    try:
+        if currency == "BDT":
+            total_bdt = amount
+            if exchange_rate > 1:
+                total_cad = convert_currency(amount, "BDT", "CAD", bdt_per_cad=exchange_rate)
+                conversion_note = f"Converted at 1 CAD = {exchange_rate:,.2f} BDT"
+        elif currency == "CAD":
+            total_cad = amount
+            if exchange_rate > 1:
+                total_bdt = convert_currency(amount, "CAD", "BDT", bdt_per_cad=exchange_rate)
+                conversion_note = f"Converted at 1 CAD = {exchange_rate:,.2f} BDT"
+        elif currency == "USD":
+            conversion_note = "USD conversion uses existing invoice currency behavior."
+    except CurrencyConversionError:
+        conversion_note = "Conversion unavailable"
+    if total_bdt is not None and moq_units:
+        bdt_per_piece = (_d(total_bdt) / Decimal(moq_units)).quantize(Decimal("0.01"))
+    if total_cad is not None and moq_units:
+        cad_per_piece = (_d(total_cad) / Decimal(moq_units)).quantize(Decimal("0.01"))
+
+    market = _opportunity_invoice_market(opportunity, production_order)
+    invoice_type = _opportunity_invoice_type(opportunity, production_order, quick_costing)
+    references = [
+        f"Opportunity: {opportunity.opportunity_id or opportunity.pk}",
+    ]
+    if lead:
+        references.append(f"Lead: {lead.lead_id or lead.pk}")
+    if production_order:
+        references.append(f"Production PO: {production_order.purchase_order_number}")
+    if getattr(opportunity, "product_type", ""):
+        references.append(f"Product type: {opportunity.product_type}")
+    if getattr(opportunity, "product_category", ""):
+        references.append(f"Product category: {opportunity.product_category}")
+
+    initial = {
+        "opportunity": opportunity,
+        "customer": customer,
+        "order": production_order,
+        "currency": currency,
+        "invoice_market": market,
+        "invoice_type": invoice_type,
+        "subtotal": amount,
+        "shipping_amount": Decimal("0"),
+        "discount_amount": Decimal("0"),
+        "tax_amount": Decimal("0"),
+        "paid_amount": Decimal("0"),
+        "status": "draft",
+        "deposit_percentage": _default_deposit_for(market, invoice_type, defaults=deposit_defaults),
+        "notes": "\n".join(references),
+    }
+    existing_invoices = list(_opportunity_invoice_existing_qs(opportunity)[:5])
+    context = {
+        "opportunity": opportunity,
+        "lead": lead,
+        "customer": customer,
+        "production_order": production_order,
+        "existing_invoices": existing_invoices,
+        "has_existing_invoices": bool(existing_invoices),
+        "source_opportunity_id": opportunity.pk,
+        "opportunity_label": opportunity.opportunity_id or f"Opportunity {opportunity.pk}",
+        "lead_label": (getattr(lead, "lead_id", "") or f"Lead {lead.pk}") if lead else "Lead unavailable",
+        "account_or_brand": (
+            getattr(customer, "account_brand", "")
+            or getattr(lead, "account_brand", "")
+            or "Customer unavailable"
+        ),
+        "contact_person": (
+            getattr(customer, "contact_name", "")
+            or getattr(lead, "contact_name", "")
+            or "Unavailable"
+        ),
+        "email": getattr(customer, "email", "") or getattr(lead, "email", "") or "Unavailable",
+        "phone": getattr(customer, "phone", "") or getattr(lead, "phone", "") or "Unavailable",
+        "product_type": getattr(opportunity, "product_type", "") or "Unavailable",
+        "product_category": getattr(opportunity, "product_category", "") or "Unavailable",
+        "market": market,
+        "currency": currency,
+        "order_amount_display": format_finance_money(amount, currency) if amount else "Unavailable",
+        "bdt_total_display": format_finance_money(total_bdt, "BDT") if total_bdt is not None else "",
+        "cad_total_display": format_finance_money(total_cad, "CAD") if total_cad is not None else "",
+        "bdt_per_piece_display": format_finance_money(bdt_per_piece, "BDT") if bdt_per_piece is not None else "",
+        "cad_per_piece_display": format_finance_money(cad_per_piece, "CAD") if cad_per_piece is not None else "",
+        "conversion_note": conversion_note,
+        "invoice_type_label": dict(Invoice.INVOICE_TYPE_CHOICES).get(invoice_type, "Bulk Production"),
+        "production_message": (
+            f"Production order selected: {production_order.purchase_order_number}"
+            if production_order
+            else "No production order linked yet. Invoice will be linked to this opportunity."
+        ),
+    }
+    return {"initial": initial, "context": context}
+
+
+def _scope_opportunity_invoice_form_choices(form, opportunity_prefill):
+    if not opportunity_prefill:
+        return
+    customer = opportunity_prefill.get("customer")
+    production_order = opportunity_prefill.get("production_order")
+    if "customer" in form.fields:
+        if customer:
+            form.fields["customer"].choices = [("", "---------"), (customer.pk, str(customer))]
+        else:
+            form.fields["customer"].choices = [("", "Customer unavailable")]
+    if "order" in form.fields:
+        if production_order:
+            form.fields["order"].choices = [("", "---------"), (production_order.pk, str(production_order))]
+        else:
+            form.fields["order"].choices = [("", "No production order linked yet")]
 
 
 def _invoice_payment_info(inv: Invoice) -> dict:
@@ -1472,7 +1700,12 @@ def invoice_list_bd(request):
 def invoice_add(request):
     # optional prefill from order
     order_id = request.GET.get("order_id")
-    initial = {"deposit_percentage": _default_deposit_for("north_america", "bulk")}
+    opportunity_id = request.GET.get("opportunity_id") or request.POST.get("source_opportunity_id")
+    deposit_defaults = _invoice_default_deposit_values()
+    initial = {"deposit_percentage": _default_deposit_for("north_america", "bulk", defaults=deposit_defaults)}
+    opportunity_prefill = _build_opportunity_invoice_prefill(opportunity_id, deposit_defaults=deposit_defaults)
+    if opportunity_prefill:
+        initial.update(opportunity_prefill["initial"])
     local_order = _local_sewing_order(order_id)
     if local_order:
         initial.update(_local_sewing_invoice_initial(local_order))
@@ -1492,6 +1725,7 @@ def invoice_add(request):
         if form.is_valid():
             with transaction.atomic():
                 inv = form.save(commit=False)
+                source_opportunity = opportunity_prefill["context"]["opportunity"] if opportunity_prefill else None
 
                 # defaults
                 if not inv.issue_date:
@@ -1505,6 +1739,17 @@ def invoice_add(request):
                 if inv.order_id and not inv.customer_id:
                     try:
                         inv.customer_id = inv.order.customer_id
+                    except Exception:
+                        pass
+                if source_opportunity:
+                    inv.opportunity = source_opportunity
+                    if not inv.customer_id:
+                        customer = _opportunity_invoice_customer(source_opportunity)
+                        if customer:
+                            inv.customer = customer
+                elif inv.order_id and not inv.opportunity_id:
+                    try:
+                        inv.opportunity = inv.order.opportunity
                     except Exception:
                         pass
 
@@ -1522,10 +1767,19 @@ def invoice_add(request):
     else:
         form = InvoiceForm(initial=initial, can_edit_internal_costs=can_edit_internal_costs)
 
+    opportunity_prefill_context = opportunity_prefill["context"] if opportunity_prefill else None
+    _scope_opportunity_invoice_form_choices(form, opportunity_prefill_context)
+    context = {
+        "form": form,
+        "mode": "add",
+        "can_manage_invoice_costing": can_edit_internal_costs,
+        "opportunity_prefill": opportunity_prefill_context,
+        **_invoice_form_extra_context(deposit_defaults),
+    }
     return render(
         request,
         "crm/invoice/invoice_form.html",
-        {"form": form, "mode": "add", "can_manage_invoice_costing": can_edit_internal_costs, **_invoice_form_extra_context()},
+        context,
     )
 
 
