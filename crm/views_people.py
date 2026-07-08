@@ -426,7 +426,7 @@ def team_performance(request):
     started = time.perf_counter()
     if not can_view_team_performance(request.user):
         return HttpResponseForbidden("Team Performance is restricted to CEO and management users.")
-    context = build_team_sales_kpis()
+    context = build_team_sales_kpis(request.GET)
     response = render(request, "crm/people/team_performance.html", context)
     response["Server-Timing"] = f"team-performance;dur={(time.perf_counter() - started) * 1000:.1f}"
     return response

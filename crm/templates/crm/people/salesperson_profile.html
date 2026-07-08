@@ -12,19 +12,22 @@
   </header>
 
   <section class="sales-metric-grid" aria-label="Sales counts">
-    <div class="sales-metric"><span>Leads</span><strong>{{ lead_counts.total }}</strong></div>
-    <div class="sales-metric"><span>Open Opportunities</span><strong>{{ opportunity_counts.open }}</strong></div>
-    <div class="sales-metric"><span>Closed Won</span><strong>{{ opportunity_counts.won }}</strong></div>
-    <div class="sales-metric"><span>Closed Lost</span><strong>{{ opportunity_counts.lost }}</strong></div>
-    <div class="sales-metric"><span>Active Customers</span><strong>{{ customer_counts.active }}</strong></div>
-    <div class="sales-metric"><span>Won Customers</span><strong>{{ customer_counts.won }}</strong></div>
-    <div class="sales-metric"><span>Repeat Customers</span><strong>{{ customer_counts.repeat }}</strong></div>
-    <div class="sales-metric"><span>Closing Ratio</span><strong>{{ closing_ratio }}%</strong></div>
+    <div class="sales-metric"><span>My Leads</span><strong>{{ owner_counts.active_leads }}</strong></div>
+    <div class="sales-metric"><span>My Opportunities</span><strong>{{ owner_counts.active_opportunities }}</strong></div>
+    <div class="sales-metric"><span>My Production Orders</span><strong>{{ owner_counts.active_production_orders }}</strong></div>
+    <div class="sales-metric"><span>My Ready to Ship</span><strong>{{ owner_counts.ready_to_ship_orders }}</strong></div>
+    <div class="sales-metric"><span>My Shipped</span><strong>{{ owner_counts.shipped_orders }}</strong></div>
+    <div class="sales-metric"><span>Completed Orders</span><strong>{{ owner_counts.completed_orders }}</strong></div>
+    <div class="sales-metric"><span>Open Invoices</span><strong>{{ owner_counts.open_invoices }}</strong></div>
+    <div class="sales-metric"><span>Paid Invoices</span><strong>{{ owner_counts.paid_invoices }}</strong></div>
   </section>
 
   <section class="sales-sections">
+    <div class="people-card"><h2 class="sales-section-title">My Revenue · Invoice Totals</h2>{% for row in total_invoice_value %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.count }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
+    <div class="people-card"><h2 class="sales-section-title">My Outstanding Balance</h2>{% for row in outstanding_balance %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.count }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
     <div class="people-card"><h2 class="sales-section-title">Pipeline Value · Open Opportunities</h2>{% for row in pipeline_value %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.count }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
     <div class="people-card"><h2 class="sales-section-title">Closed Won Value</h2>{% for row in closed_won_value %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.count }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
+    <div class="people-card"><h2 class="sales-section-title">Total Order Value</h2>{% for row in total_order_value %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.count }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
     <div class="people-card"><h2 class="sales-section-title">Quick Costing · Quoted Value</h2>{% for row in quick_quoted_value %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.count }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
     <div class="people-card"><h2 class="sales-section-title">Advanced Costing · Quoted Value</h2>{% for row in advanced_quoted_value %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.count }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
     <div class="people-card"><h2 class="sales-section-title">Combined Quoted Value</h2>{% for row in quoted_value %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.count }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
@@ -33,6 +36,29 @@
     <div class="people-card"><h2 class="sales-section-title">Production Value · Active Orders</h2>{% for row in production_values %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.count }}</span><strong>{% if row.count and not row.available_count %}Value unavailable{% else %}{{ row.amount|finance_money:row.currency }}{% endif %}</strong></div>{% endfor %}</div>
     <div class="people-card"><h2 class="sales-section-title">Commission Eligible Amount</h2>{% for row in commission_eligible_values %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.count }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
     <div class="people-card"><h2 class="sales-section-title">Commission Amount</h2>{% for row in commission_values %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.count }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
+  </section>
+
+  <section class="sales-sections sales-owner-tables" aria-label="Salesperson records" style="margin-top:16px">
+    <div class="people-card">
+      <h2 class="sales-section-title">My Active Leads</h2>
+      <div class="people-table-wrap"><table class="people-table"><thead><tr><th>Lead</th><th>Client</th><th>Status</th><th>Date</th></tr></thead><tbody>{% for lead in owner_tables.active_leads %}<tr><td data-label="Lead"><a href="{% url 'lead_detail' lead.id %}">{{ lead.lead_id }}</a></td><td data-label="Client">{{ lead.customer }}</td><td data-label="Status">{{ lead.status }}</td><td data-label="Date">{{ lead.date|date:"M j, Y" }}</td></tr>{% empty %}<tr><td colspan="4">No active leads.</td></tr>{% endfor %}</tbody></table></div>
+    </div>
+    <div class="people-card">
+      <h2 class="sales-section-title">My Active Opportunities</h2>
+      <div class="people-table-wrap"><table class="people-table"><thead><tr><th>Opportunity</th><th>Client</th><th>Stage</th><th>Value</th></tr></thead><tbody>{% for opportunity in owner_tables.active_opportunities %}<tr><td data-label="Opportunity"><a href="{% url 'opportunity_detail' opportunity.id %}">{{ opportunity.opportunity_id }}</a></td><td data-label="Client">{{ opportunity.customer }}</td><td data-label="Stage">{{ opportunity.stage }}</td><td data-label="Value">{{ opportunity.value|finance_money:opportunity.currency }}</td></tr>{% empty %}<tr><td colspan="4">No active opportunities.</td></tr>{% endfor %}</tbody></table></div>
+    </div>
+    <div class="people-card">
+      <h2 class="sales-section-title">My Production Orders</h2>
+      <div class="people-table-wrap"><table class="people-table"><thead><tr><th>PO</th><th>Client</th><th>Status</th><th>Value</th></tr></thead><tbody>{% for order in owner_tables.production_orders %}<tr><td data-label="PO"><a href="{% url 'production_detail' order.id %}">{{ order.purchase_order_number }}</a></td><td data-label="Client">{{ order.customer }}</td><td data-label="Status">{{ order.status }}</td><td data-label="Value">{{ order.value|finance_money:order.currency }}</td></tr>{% empty %}<tr><td colspan="4">No active production orders.</td></tr>{% endfor %}</tbody></table></div>
+    </div>
+    <div class="people-card">
+      <h2 class="sales-section-title">My Ready to Ship Orders</h2>
+      <div class="people-table-wrap"><table class="people-table"><thead><tr><th>PO</th><th>Client</th><th>Status</th><th>Qty</th></tr></thead><tbody>{% for order in owner_tables.ready_to_ship_orders %}<tr><td data-label="PO"><a href="{% url 'production_detail' order.id %}">{{ order.purchase_order_number }}</a></td><td data-label="Client">{{ order.customer }}</td><td data-label="Status">{{ order.status }}</td><td data-label="Qty">{{ order.quantity }}</td></tr>{% empty %}<tr><td colspan="4">No ready to ship orders.</td></tr>{% endfor %}</tbody></table></div>
+    </div>
+    <div class="people-card">
+      <h2 class="sales-section-title">My Recent Invoices</h2>
+      <div class="people-table-wrap"><table class="people-table"><thead><tr><th>Invoice</th><th>Client</th><th>Status</th><th>Total</th><th>Balance</th></tr></thead><tbody>{% for invoice in owner_tables.recent_invoices %}<tr><td data-label="Invoice"><a href="{% url 'invoice_view' invoice.id %}">{{ invoice.invoice_number }}</a></td><td data-label="Client">{{ invoice.customer }}</td><td data-label="Status">{{ invoice.status }}</td><td data-label="Total">{{ invoice.total|finance_money:invoice.currency }}</td><td data-label="Balance">{{ invoice.balance|finance_money:invoice.currency }}</td></tr>{% empty %}<tr><td colspan="5">No recent invoices.</td></tr>{% endfor %}</tbody></table></div>
+    </div>
   </section>
 
   <section class="people-card" style="margin-top:16px">
