@@ -7,10 +7,8 @@
   <section class="production-detail-hero">
     <div class="production-hero-main">
       <div class="production-thumb">
-        {% if product and product.image %}
-          <img src="{{ product.image.url }}" alt="{{ product.name }}">
-        {% elif order.style_image %}
-          <img src="{{ order.style_image.url }}" alt="{{ order.title }}">
+        {% if product_snapshot.image_file %}
+          <img src="{{ product_snapshot.image_file.url }}" alt="{{ product_snapshot.image_alt|default:order.title }}">
         {% else %}
           <span>PO</span>
         {% endif %}

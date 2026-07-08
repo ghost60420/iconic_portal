@@ -52,12 +52,16 @@ def save_reference_images_for_lead(lead, payload, user=None):
 
         if image:
             upload_count += 1
+            existing_opportunity = getattr(existing, "opportunity", None)
+            existing_production_order = getattr(existing, "production_order", None)
             if existing and existing.image:
                 existing.image.delete(save=False)
                 existing.delete()
 
             reference_image = ProductReferenceImage.objects.create(
                 lead=lead,
+                opportunity=existing_opportunity,
+                production_order=existing_production_order,
                 slot=slot,
                 image=image,
                 caption=caption,
@@ -125,19 +129,57 @@ def reference_images_for_opportunity(opportunity):
 
 def reference_images_for_production(production_order):
     if not production_order:
-        return ProductReferenceImage.objects.none()
+        return []
 
-    filters = Q(production_order=production_order)
-    if getattr(production_order, "opportunity_id", None):
-        filters |= Q(opportunity_id=production_order.opportunity_id)
-    if getattr(production_order, "lead_id", None):
-        filters |= Q(lead_id=production_order.lead_id)
-    return (
+    filters = Q()
+    opportunity_id = getattr(production_order, "opportunity_id", None)
+    lead_id = getattr(production_order, "lead_id", None)
+    production_order_id = getattr(production_order, "id", None)
+
+    if opportunity_id:
+        filters |= Q(opportunity_id=opportunity_id)
+    if lead_id:
+        filters |= Q(lead_id=lead_id)
+    if production_order_id:
+        filters |= Q(production_order_id=production_order_id)
+
+    if not filters:
+        return []
+
+    def source_rank(image):
+        if opportunity_id and image.opportunity_id == opportunity_id:
+            return 0
+        if lead_id and image.lead_id == lead_id:
+            return 1
+        if production_order_id and image.production_order_id == production_order_id:
+            return 2
+        return 3
+
+    images = list(
         ProductReferenceImage.objects.filter(filters)
         .select_related("uploaded_by", "lead", "opportunity", "production_order")
         .distinct()
-        .order_by("slot", "uploaded_at", "id")[:MAX_REFERENCE_IMAGES]
     )
+    images.sort(
+        key=lambda image: (
+            source_rank(image),
+            image.slot or 0,
+            image.uploaded_at,
+            image.pk,
+        )
+    )
+
+    prioritized = []
+    seen_ids = set()
+    for image in images:
+        if image.pk in seen_ids:
+            continue
+        prioritized.append(image)
+        seen_ids.add(image.pk)
+        if len(prioritized) >= MAX_REFERENCE_IMAGES:
+            break
+
+    return prioritized
 
 
 def _first_images_by_key(queryset, key_name):
@@ -252,6 +294,8 @@ def product_snapshot_for_lead(lead, reference_image=None):
         "category": category or "Category not set",
         "quantity": _lead_quantity_text(lead) or "Quantity not set",
         "caption": getattr(reference_image, "caption", "") or "",
+        "label": "Product Snapshot",
+        "source_note": "",
     }
 
 
@@ -274,6 +318,8 @@ def product_snapshot_for_opportunity(opportunity, reference_image=None):
         "category": category or "Category not set",
         "quantity": f"{quantity} units" if quantity else _lead_quantity_text(lead) or "Quantity not set",
         "caption": getattr(reference_image, "caption", "") or "",
+        "label": "Product Snapshot",
+        "source_note": "",
     }
 
 
@@ -281,12 +327,6 @@ def product_snapshot_for_production(order, reference_image=None):
     lead = getattr(order, "lead", None)
     opportunity = getattr(order, "opportunity", None)
     product = getattr(order, "product", None)
-    image_file = _reference_image_file(reference_image)
-    if not image_file and product and getattr(product, "image", None):
-        image_file = product.image
-    if not image_file and getattr(order, "style_image", None):
-        image_file = order.style_image
-
     product_type = (
         getattr(opportunity, "product_type", "")
         or getattr(lead, "primary_product_type", "")
@@ -300,12 +340,40 @@ def product_snapshot_for_production(order, reference_image=None):
         or category
         or getattr(order, "title", "")
     )
+
+    image_file = None
+    image_alt = title or "Product reference image"
+    caption = ""
+    source_note = "No snapshot uploaded"
+
+    style_image = getattr(order, "style_image", None)
+    if style_image and getattr(style_image, "name", ""):
+        image_file = style_image
+        source_note = "Production specific snapshot"
+    else:
+        reference_file = _reference_image_file(reference_image)
+        if reference_file:
+            image_file = reference_file
+            image_alt = getattr(reference_image, "caption", "") or image_alt
+            caption = getattr(reference_image, "caption", "") or ""
+            if opportunity and getattr(reference_image, "opportunity_id", None) == getattr(opportunity, "id", None):
+                source_note = "Using Opportunity snapshot"
+            elif lead and getattr(reference_image, "lead_id", None) == getattr(lead, "id", None):
+                source_note = "Using Lead snapshot"
+            else:
+                source_note = "Using linked production snapshot"
+        elif product and getattr(product, "image", None):
+            image_file = product.image
+            source_note = "Using product library image"
+
     return {
         "image_file": image_file,
-        "image_alt": getattr(reference_image, "caption", "") or title or "Product reference image",
+        "image_alt": image_alt,
         "title": title or "Product not set",
         "primary_type": product_type or "Type not set",
         "category": category or getattr(order, "color_info", "") or "Category not set",
         "quantity": f"{getattr(order, 'qty_total', 0) or 0} units",
-        "caption": getattr(reference_image, "caption", "") or "",
+        "caption": caption,
+        "label": "Production Snapshot",
+        "source_note": source_note,
     }

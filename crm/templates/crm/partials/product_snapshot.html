@@ -71,6 +71,17 @@
         font-size: 12px;
         font-weight: 800;
       }
+      .product-snapshot-source {
+        display: inline-flex;
+        margin-top: 6px;
+        padding: 3px 8px;
+        border: 1px solid rgba(250, 204, 21, 0.28);
+        border-radius: 999px;
+        color: #fde68a;
+        background: rgba(250, 204, 21, 0.08);
+        font-size: 11px;
+        font-weight: 900;
+      }
       @media (max-width: 640px) {
         .product-snapshot-panel {
           grid-template-columns: 1fr;
@@ -88,8 +99,11 @@
       {% endif %}
     </div>
     <div>
-      <p class="product-snapshot-kicker">Product Snapshot</p>
+      <p class="product-snapshot-kicker">{{ product_snapshot.label|default:"Product Snapshot" }}</p>
       <h2>{{ product_snapshot.title }}</h2>
+      {% if product_snapshot.source_note %}
+        <div class="product-snapshot-source">{{ product_snapshot.source_note }}</div>
+      {% endif %}
       <div class="product-snapshot-grid">
         <div>
           <span>Primary type</span>
