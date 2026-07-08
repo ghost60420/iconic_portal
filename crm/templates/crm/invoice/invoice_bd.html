@@ -289,7 +289,7 @@
         {% if invoice.invoice_status == "DRAFT" and can_approve_invoice %}
           <form method="post" action="{% url 'invoice_approve' invoice.pk %}">
             {% csrf_token %}
-            <button class="pill approve" type="submit">Approve</button>
+            <button class="pill approve" type="submit">Send Invoice</button>
           </form>
         {% endif %}
         <a class="pill" href="#" onclick="window.print();return false;">Print</a>

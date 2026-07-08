@@ -428,14 +428,26 @@
       </div>
 
       <div class="btnbar noPrint">
-        <a class="pill" href="{% url 'invoice_list' %}">Back to invoices</a>
+        {% if can_manage_invoices %}
+          <a class="pill" href="{% url 'invoice_list' %}">Back to invoices</a>
+        {% elif invoice.costing_header %}
+          <a class="pill" href="{% url 'cost_sheet_client_quotation' invoice.costing_header.pk %}">Back to quotation</a>
+        {% endif %}
         {% if invoice.pk %}
-          <a class="pill gold" href="{% url 'invoice_edit' invoice.pk %}">Edit</a>
-          <a class="pill" href="{% url 'invoice_client_view' invoice.pk %}">Client invoice</a>
-          <a class="pill" href="{% url 'invoice_pdf' invoice.pk %}">PDF</a>
+          {% if can_manage_invoices %}
+            <a class="pill gold" href="{% url 'invoice_edit' invoice.pk %}">Edit</a>
+            {% if invoice.status == "draft" %}
+              <form method="post" action="{% url 'invoice_approve' invoice.pk %}" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="pill gold" style="cursor:pointer;">Send Invoice</button>
+              </form>
+            {% endif %}
+            <a class="pill" href="{% url 'invoice_client_view' invoice.pk %}">Client invoice</a>
+            <a class="pill" href="{% url 'invoice_pdf' invoice.pk %}">PDF</a>
+          {% endif %}
           {% if invoice.costing_header %}
             <a class="pill" href="{% url 'cost_sheet_detail' invoice.costing_header.pk %}">Costing</a>
-            {% if not invoice.order %}
+            {% if can_manage_invoices and not invoice.order %}
               <form method="post" action="{% url 'invoice_convert_to_production_order' invoice.pk %}" style="display:inline;">
                 {% csrf_token %}
                 <button type="submit" class="pill gold" style="cursor:pointer;">Convert to Production</button>
@@ -487,7 +499,15 @@
         <div class="pay-kpi">
           <span>Invoice amount</span>
           <strong>{{ invoice.total_amount|default_if_none:0|finance_money:cur }}</strong>
-          <small>Approved invoice value for payment tracking.</small>
+          {% if invoice_total_cad_equivalent %}
+            {% if invoice_total_cad_equivalent.available %}
+              <small>CAD equivalent: {{ invoice_total_cad_equivalent.display }}</small>
+            {% else %}
+              <small>CAD equivalent unavailable</small>
+            {% endif %}
+          {% else %}
+            <small>Approved invoice value for payment tracking.</small>
+          {% endif %}
         </div>
 
         <div class="pay-kpi">
@@ -589,91 +609,93 @@
       </div>
     {% endif %}
 
-    <div class="cardx pay-section noPrint" id="payment-received-form">
-      <div class="pad">
-        <div class="pay-section-title">
-          <span>Record payment received</span>
-          {% if is_payment_month_closed %}
-            <span class="status s-overpaid">Current month closed</span>
+    {% if can_manage_invoices %}
+      <div class="cardx pay-section noPrint" id="payment-received-form">
+        <div class="pad">
+          <div class="pay-section-title">
+            <span>Record payment received</span>
+            {% if is_payment_month_closed %}
+              <span class="status s-overpaid">Current month closed</span>
+            {% endif %}
+          </div>
+
+          {% if payment_form.non_field_errors %}
+            <div class="pay-alert">{{ payment_form.non_field_errors }}</div>
           {% endif %}
+          {% if is_payment_month_closed %}
+            <div class="pay-alert pay-alert--warn">
+              The current accounting month is closed. Choose an open payment date or open the month before saving.
+            </div>
+          {% endif %}
+
+          <form method="post" action="{% url 'invoice_payment_add' invoice.pk %}" novalidate>
+            {% csrf_token %}
+            <div class="pay-form-grid">
+              <div class="pay-field">
+                <label for="{{ payment_form.payment_date.id_for_label }}">Payment date</label>
+                {{ payment_form.payment_date }}
+                {% if payment_form.payment_date.errors %}<div class="pay-error">{{ payment_form.payment_date.errors }}</div>{% endif %}
+              </div>
+
+              <div class="pay-field">
+                <label for="{{ payment_form.amount.id_for_label }}">Amount received</label>
+                {{ payment_form.amount }}
+                {% if payment_form.amount.errors %}<div class="pay-error">{{ payment_form.amount.errors }}</div>{% endif %}
+              </div>
+
+              <div class="pay-field">
+                <label for="{{ payment_form.payment_method.id_for_label }}">Payment method</label>
+                {{ payment_form.payment_method }}
+                {% if payment_form.payment_method.errors %}<div class="pay-error">{{ payment_form.payment_method.errors }}</div>{% endif %}
+              </div>
+
+              <div class="pay-field">
+                <label for="{{ payment_form.currency.id_for_label }}">Currency</label>
+                {{ payment_form.currency }}
+                {% if payment_form.currency.errors %}<div class="pay-error">{{ payment_form.currency.errors }}</div>{% endif %}
+                <div class="pay-help">Must match the invoice currency in Phase 1.</div>
+              </div>
+
+              <div class="pay-field">
+                <label for="{{ payment_form.side.id_for_label }}">Accounting side</label>
+                {{ payment_form.side }}
+                {% if payment_form.side.errors %}<div class="pay-error">{{ payment_form.side.errors }}</div>{% endif %}
+                <div class="pay-help">Bangladesh payments create BD money-in entries.</div>
+              </div>
+
+              <div class="pay-field">
+                <label for="{{ payment_form.production_order.id_for_label }}">Related production order</label>
+                {{ payment_form.production_order }}
+                {% if payment_form.production_order.errors %}<div class="pay-error">{{ payment_form.production_order.errors }}</div>{% endif %}
+              </div>
+
+              <div class="pay-field">
+                <label for="{{ payment_form.rate_to_cad.id_for_label }}">Exchange rate for CAD</label>
+                {{ payment_form.rate_to_cad }}
+                {% if payment_form.rate_to_cad.errors %}<div class="pay-error">{{ payment_form.rate_to_cad.errors }}</div>{% endif %}
+                <div class="pay-help">BDT: enter BDT per 1 CAD (for example 85). USD: enter CAD per 1 USD.</div>
+              </div>
+
+              <div class="pay-field">
+                <label for="{{ payment_form.rate_to_bdt.id_for_label }}">Rate to BDT</label>
+                {{ payment_form.rate_to_bdt }}
+                {% if payment_form.rate_to_bdt.errors %}<div class="pay-error">{{ payment_form.rate_to_bdt.errors }}</div>{% endif %}
+              </div>
+
+              <div class="pay-field pay-field--wide">
+                <label for="{{ payment_form.notes.id_for_label }}">Notes</label>
+                {{ payment_form.notes }}
+                {% if payment_form.notes.errors %}<div class="pay-error">{{ payment_form.notes.errors }}</div>{% endif %}
+              </div>
+            </div>
+
+            <div class="pay-actions">
+              <button class="pay-save" type="submit">Save payment received</button>
+            </div>
+          </form>
         </div>
-
-        {% if payment_form.non_field_errors %}
-          <div class="pay-alert">{{ payment_form.non_field_errors }}</div>
-        {% endif %}
-        {% if is_payment_month_closed %}
-          <div class="pay-alert pay-alert--warn">
-            The current accounting month is closed. Choose an open payment date or open the month before saving.
-          </div>
-        {% endif %}
-
-        <form method="post" action="{% url 'invoice_payment_add' invoice.pk %}" novalidate>
-          {% csrf_token %}
-          <div class="pay-form-grid">
-            <div class="pay-field">
-              <label for="{{ payment_form.payment_date.id_for_label }}">Payment date</label>
-              {{ payment_form.payment_date }}
-              {% if payment_form.payment_date.errors %}<div class="pay-error">{{ payment_form.payment_date.errors }}</div>{% endif %}
-            </div>
-
-            <div class="pay-field">
-              <label for="{{ payment_form.amount.id_for_label }}">Amount received</label>
-              {{ payment_form.amount }}
-              {% if payment_form.amount.errors %}<div class="pay-error">{{ payment_form.amount.errors }}</div>{% endif %}
-            </div>
-
-            <div class="pay-field">
-              <label for="{{ payment_form.payment_method.id_for_label }}">Payment method</label>
-              {{ payment_form.payment_method }}
-              {% if payment_form.payment_method.errors %}<div class="pay-error">{{ payment_form.payment_method.errors }}</div>{% endif %}
-            </div>
-
-            <div class="pay-field">
-              <label for="{{ payment_form.currency.id_for_label }}">Currency</label>
-              {{ payment_form.currency }}
-              {% if payment_form.currency.errors %}<div class="pay-error">{{ payment_form.currency.errors }}</div>{% endif %}
-              <div class="pay-help">Must match the invoice currency in Phase 1.</div>
-            </div>
-
-            <div class="pay-field">
-              <label for="{{ payment_form.side.id_for_label }}">Accounting side</label>
-              {{ payment_form.side }}
-              {% if payment_form.side.errors %}<div class="pay-error">{{ payment_form.side.errors }}</div>{% endif %}
-              <div class="pay-help">Bangladesh payments create BD money-in entries.</div>
-            </div>
-
-            <div class="pay-field">
-              <label for="{{ payment_form.production_order.id_for_label }}">Related production order</label>
-              {{ payment_form.production_order }}
-              {% if payment_form.production_order.errors %}<div class="pay-error">{{ payment_form.production_order.errors }}</div>{% endif %}
-            </div>
-
-            <div class="pay-field">
-              <label for="{{ payment_form.rate_to_cad.id_for_label }}">Exchange rate for CAD</label>
-              {{ payment_form.rate_to_cad }}
-              {% if payment_form.rate_to_cad.errors %}<div class="pay-error">{{ payment_form.rate_to_cad.errors }}</div>{% endif %}
-              <div class="pay-help">BDT: enter BDT per 1 CAD (for example 85). USD: enter CAD per 1 USD.</div>
-            </div>
-
-            <div class="pay-field">
-              <label for="{{ payment_form.rate_to_bdt.id_for_label }}">Rate to BDT</label>
-              {{ payment_form.rate_to_bdt }}
-              {% if payment_form.rate_to_bdt.errors %}<div class="pay-error">{{ payment_form.rate_to_bdt.errors }}</div>{% endif %}
-            </div>
-
-            <div class="pay-field pay-field--wide">
-              <label for="{{ payment_form.notes.id_for_label }}">Notes</label>
-              {{ payment_form.notes }}
-              {% if payment_form.notes.errors %}<div class="pay-error">{{ payment_form.notes.errors }}</div>{% endif %}
-            </div>
-          </div>
-
-          <div class="pay-actions">
-            <button class="pay-save" type="submit">Save payment received</button>
-          </div>
-        </form>
       </div>
-    </div>
+    {% endif %}
 
     <div class="cardx pay-section">
       <div class="pad">

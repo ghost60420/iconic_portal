@@ -12347,6 +12347,7 @@ def ceo_operations_dashboard(request):
     profit_overview = None
     low_margin_orders = []
     top_profit_customers = []
+    top_profit_customer_groups = []
     profit_month_labels = []
     profit_month_values = []
     profit_month_series = []
@@ -12385,6 +12386,7 @@ def ceo_operations_dashboard(request):
                 lambda: {"label": "Customer", "revenue": Decimal("0"), "profit": Decimal("0"), "order_count": 0}
             )
             low_margin_source = []
+            latest_cad_to_bdt = _get_latest_cad_to_bdt_rate()
             for lifecycle in lifecycle_qs:
                 currency_code = lifecycle_currency(lifecycle)
                 if not currency_code:
@@ -12395,6 +12397,7 @@ def ceo_operations_dashboard(request):
                 margin = _ceo_decimal(lifecycle.estimated_margin)
                 cost_available = cost > 0
                 if lifecycle.invoice_id and getattr(lifecycle.invoice, "quick_costing_id", None):
+                    lifecycle._bdt_per_cad_rate = latest_cad_to_bdt
                     quick_breakdown = build_lifecycle_profit_breakdown(lifecycle)
                     revenue = _ceo_decimal(quick_breakdown["invoice_total"])
                     cost_available = bool(
@@ -12418,7 +12421,7 @@ def ceo_operations_dashboard(request):
                 if month_key in ceo_month_keys:
                     profit_month_map[currency_code][month_key] += profit
                 customer = lifecycle.customer
-                if customer:
+                if customer and cost_available:
                     customer_key = (currency_code, customer.pk)
                     customer_row = customer_totals[customer_key]
                     customer_row["label"] = customer.account_brand or customer.contact_name or "Customer"
@@ -12462,9 +12465,35 @@ def ceo_operations_dashboard(request):
                     for (code, _customer_id), values in customer_totals.items()
                     if code == currency_code and values["profit"] > 0
                 ]
-                top_profit_customers.extend(
-                    sorted(rows, key=lambda row: row["profit"], reverse=True)[:3]
-                )
+                rows = sorted(rows, key=lambda row: row["profit"], reverse=True)[:3]
+                for row in rows:
+                    row["profit_display"] = format_finance_money(row["profit"], currency_code)
+                    row["profit_title"] = format_finance_money(row["profit"], currency_code)
+                    if currency_code == "BDT":
+                        row["profit_display"] = f"BDT {row['profit_display']}"
+                        row["profit_title"] = f"BDT {row['profit_title']}"
+                        if latest_cad_to_bdt > 0:
+                            try:
+                                cad_equivalent = convert_currency(
+                                    row["profit"],
+                                    "BDT",
+                                    "CAD",
+                                    bdt_per_cad=latest_cad_to_bdt,
+                                )
+                                row["cad_equivalent"] = cad_equivalent
+                                row["cad_equivalent_display"] = format_finance_money(cad_equivalent, "CAD")
+                            except CurrencyConversionError:
+                                row["cad_equivalent"] = None
+                                row["cad_equivalent_display"] = ""
+                        else:
+                            row["cad_equivalent"] = None
+                            row["cad_equivalent_display"] = ""
+                    else:
+                        row["cad_equivalent"] = None
+                        row["cad_equivalent_display"] = ""
+                if rows:
+                    top_profit_customer_groups.append({"currency": currency_code, "rows": rows})
+                    top_profit_customers.extend(rows)
             for month_key in ceo_month_keys:
                 profit_month_labels.append(month_key.strftime("%b"))
             for row in profit_currency_rows:
@@ -12483,6 +12512,7 @@ def ceo_operations_dashboard(request):
                 "currency_rows": profit_currency_rows,
                 "low_margin_orders": low_margin_orders,
                 "top_profit_customers": top_profit_customers,
+                "top_profit_customer_groups": top_profit_customer_groups,
             }
         except (OperationalError, ProgrammingError):
             logger.exception("ceo_dashboard: profit overview unavailable")

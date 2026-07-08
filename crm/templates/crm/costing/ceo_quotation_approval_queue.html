@@ -263,6 +263,8 @@
                   {% if row.status_key == "approved" or row.status_key == "sent" %}
                     {% if row.costing_type == "Quick" and row.quotation_number == "-" %}
                       <form method="post" action="{{ row.quotation_url }}">{% csrf_token %}<button class="cq-btn cq-btn--gold" type="submit">Create Quotation</button></form>
+                    {% elif row.costing_type == "Advanced" %}
+                      <a class="cq-btn cq-btn--gold" href="{{ row.invoice_url }}">Create Invoice</a>
                     {% else %}
                       <form method="post" action="{{ row.invoice_url }}">{% csrf_token %}<button class="cq-btn cq-btn--gold" type="submit">Create Invoice</button></form>
                     {% endif %}

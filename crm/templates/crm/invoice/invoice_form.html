@@ -349,9 +349,18 @@
           {% csrf_token %}
           {% if opportunity_prefill %}
             <input type="hidden" name="source_opportunity_id" value="{{ opportunity_prefill.source_opportunity_id }}">
+            {% if opportunity_prefill.source_quotation_id %}
+              <input type="hidden" name="source_quotation_id" value="{{ opportunity_prefill.source_quotation_id }}">
+            {% endif %}
             <div class="prefillBox" id="opportunityInvoicePrefill">
               <div class="prefillHead">
-                <strong>Invoice from Opportunity {{ opportunity_prefill.opportunity_label }}</strong>
+                <strong>
+                  {% if opportunity_prefill.source_title %}
+                    {{ opportunity_prefill.source_title }}
+                  {% else %}
+                    Invoice from Opportunity {{ opportunity_prefill.opportunity_label }}
+                  {% endif %}
+                </strong>
                 <span class="pill">Review before saving</span>
               </div>
               <div class="prefillGrid">
@@ -389,11 +398,11 @@
               <div class="prefillNotice">{{ opportunity_prefill.conversion_note }}</div>
               {% if opportunity_prefill.has_existing_invoices %}
                 <div class="prefillWarning">
-                  Existing invoice found for this opportunity:
+                  Existing invoice found for this {% if opportunity_prefill.source_quotation_id %}quotation{% else %}opportunity{% endif %}:
                   {% for existing_invoice in opportunity_prefill.existing_invoices %}
                     <a href="{% url 'invoice_view' existing_invoice.pk %}">{{ existing_invoice.invoice_number }}</a>{% if not forloop.last %}, {% endif %}
                   {% endfor %}
-                  . Open the existing invoice or continue only if another invoice is required.
+                  . Open the existing invoice{% if opportunity_prefill.duplicate_blocked %}. New invoice creation is blocked for this quotation to prevent duplicates{% else %} or continue only if another invoice is required{% endif %}.
                 </div>
               {% endif %}
             </div>
@@ -462,11 +471,13 @@
                   {% if form.currency.errors %}<div class="err">{{ form.currency.errors }}</div>{% endif %}
                 </div>
 
-                <div class="mb-3">
-                  <label for="{{ form.status.id_for_label }}">Status</label>
-                  {{ form.status }}
-                  {% if form.status.errors %}<div class="err">{{ form.status.errors }}</div>{% endif %}
-                </div>
+                {% if mode == "edit" %}
+                  <div class="mb-3">
+                    <label for="{{ form.status.id_for_label }}">Status</label>
+                    {{ form.status }}
+                    {% if form.status.errors %}<div class="err">{{ form.status.errors }}</div>{% endif %}
+                  </div>
+                {% endif %}
               </div>
 
               <div class="mb-3">
@@ -583,9 +594,21 @@
           <div class="actions">
             <button type="button" class="btnx btn-cancel" id="calcBtn">Auto calculate total</button>
 
-            <a class="btnx btn-cancel" href="{% url 'invoice_list' %}">Cancel</a>
+            {% if mode == "edit" and invoice %}
+              <a class="btnx btn-cancel" href="{% url 'invoice_view' invoice.pk %}">Cancel</a>
+            {% elif can_manage_invoices or not opportunity_prefill %}
+              <a class="btnx btn-cancel" href="{% url 'invoice_list' %}">Cancel</a>
+            {% elif opportunity_prefill.quotation %}
+              <a class="btnx btn-cancel" href="{% url 'cost_sheet_client_quotation' opportunity_prefill.quotation.pk %}">Cancel</a>
+            {% else %}
+              <a class="btnx btn-cancel" href="{% url 'ceo_quotation_approval_queue' %}">Cancel</a>
+            {% endif %}
 
-            <button class="btnx btn-save" type="submit" id="saveBtn">Save</button>
+            {% if opportunity_prefill.duplicate_blocked %}
+              <button class="btnx btn-save" type="button" id="saveBtn" disabled>Existing invoice linked</button>
+            {% else %}
+              <button class="btnx btn-save" type="submit" id="saveBtn">Save</button>
+            {% endif %}
           </div>
 
         </form>

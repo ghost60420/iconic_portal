@@ -4,7 +4,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.db.models import F, Q, Sum
 from django.utils import timezone
 
-from crm.models import ActualCostEntry, Invoice, OrderLifecycle, Shipment
+from crm.models import ActualCostEntry, ExchangeRate, Invoice, OrderLifecycle, Shipment
 from crm.permissions import can_view_internal_costing
 from crm.services.costing_currency import (
     CurrencyConversionError,
@@ -194,6 +194,21 @@ def _convert_quick_amount(value, source_currency, target_currency, exchange_rate
         return None
 
 
+def _latest_bdt_per_cad_rate():
+    try:
+        row = ExchangeRate.objects.order_by("-updated_at", "-id").first()
+    except Exception:
+        return Decimal("0")
+    return _d(getattr(row, "cad_to_bdt", None))
+
+
+def _bdt_per_cad_rate_for_lifecycle(lifecycle):
+    cached_rate = getattr(lifecycle, "_bdt_per_cad_rate", None)
+    if cached_rate is not None:
+        return _d(cached_rate)
+    return _latest_bdt_per_cad_rate()
+
+
 def build_lifecycle_profit_breakdown(lifecycle):
     invoice = lifecycle.invoice
     costing = lifecycle.quotation or lifecycle.costing
@@ -294,13 +309,41 @@ def build_lifecycle_profit_breakdown(lifecycle):
                 .get("total")
             )
 
-    can_use_actual_production = bool(
-        is_comparable and actual_production_cost > 0 and (currency or "").upper() == "BDT"
-    )
+    actual_production_cost_for_profit = actual_production_cost
+    actual_production_cost_conversion_rate = None
+    actual_production_cost_currency = "BDT" if actual_production_cost > 0 else (currency or "")
+    can_use_actual_production = bool(is_comparable and actual_production_cost > 0)
+    if can_use_actual_production:
+        target_currency = (currency or "").upper()
+        if target_currency == "BDT":
+            actual_production_cost_for_profit = actual_production_cost
+        elif target_currency == "CAD":
+            actual_production_cost_conversion_rate = _bdt_per_cad_rate_for_lifecycle(lifecycle)
+            if actual_production_cost_conversion_rate > 0:
+                converted_actual = _convert_quick_amount(
+                    actual_production_cost,
+                    "BDT",
+                    "CAD",
+                    actual_production_cost_conversion_rate,
+                )
+                if converted_actual is None:
+                    is_comparable = False
+                    can_use_actual_production = False
+                    comparison_reason = "Profit unavailable: BDT production cost could not be converted to CAD."
+                else:
+                    actual_production_cost_for_profit = converted_actual
+            else:
+                is_comparable = False
+                can_use_actual_production = False
+                comparison_reason = "Profit unavailable: BDT production cost requires a stored CAD exchange rate."
+        else:
+            is_comparable = False
+            can_use_actual_production = False
+            comparison_reason = "Profit unavailable: BDT production cost cannot be compared with this invoice currency."
     if not is_comparable:
         total_cost = None
     elif can_use_actual_production:
-        total_cost = actual_production_cost + shipping_cost + commission_cost
+        total_cost = actual_production_cost_for_profit + shipping_cost + commission_cost
     elif quick_costing:
         total_cost = costing_buckets["costing_total"] + commission_cost
     else:
@@ -334,6 +377,9 @@ def build_lifecycle_profit_breakdown(lifecycle):
         "commission_cost": commission_cost,
         "other_internal_cost": other_internal_cost,
         "actual_production_cost": actual_production_cost,
+        "actual_production_cost_currency": actual_production_cost_currency,
+        "actual_production_cost_for_profit": actual_production_cost_for_profit,
+        "actual_production_cost_conversion_rate": actual_production_cost_conversion_rate,
         "can_use_actual_production": can_use_actual_production,
         "is_comparable": is_comparable,
         "comparison_reason": comparison_reason,
@@ -352,6 +398,7 @@ def build_lifecycle_profit_breakdown(lifecycle):
             "commission_cost": _money(commission_cost),
             "other_internal_cost": _money(other_internal_cost),
             "actual_production_cost": _money(actual_production_cost),
+            "actual_production_cost_for_profit": _money(actual_production_cost_for_profit),
             "total_cost": _money(total_cost) if total_cost is not None else None,
             "net_profit": _money(net_profit) if net_profit is not None else None,
             "margin": _money(margin) if margin is not None else None,

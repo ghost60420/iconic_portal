@@ -48,7 +48,7 @@ from .services.costing_workflow import (
     get_costing_quote_amounts,
 )
 from .services.order_lifecycle import create_lifecycle_from_costing
-from .services.operations_permissions import ROLE_SALES, can_approve_costing, has_operations_role
+from .services.operations_permissions import ROLE_SALES, ROLE_SALES_MANAGER, can_approve_costing, has_operations_role
 from .services.production_orders import (
     ProductionOrderCreationError,
     create_production_order_from_approved_quick_costing,
@@ -90,8 +90,12 @@ def _can_convert_to_invoice(user):
     )
 
 
+def _can_create_approved_quotation_invoice(user):
+    return _can_convert_to_invoice(user) or has_operations_role(user, ROLE_SALES, ROLE_SALES_MANAGER)
+
+
 def _can_view_approval_queue(user):
-    return _can_approve(user) or _can_convert_to_invoice(user)
+    return _can_approve(user) or _can_create_approved_quotation_invoice(user)
 
 
 def _can_submit_quick_costing(user):
@@ -109,7 +113,7 @@ def _can_decide_quick_costing(user, quick_costing, *, user_can_approve=None):
 
 
 def _deny_without_internal_costing_or_accounting(request):
-    if can_view_internal_costing(request.user) or _can_convert_to_invoice(request.user):
+    if can_view_internal_costing(request.user) or _can_create_approved_quotation_invoice(request.user):
         return None
     return HttpResponseForbidden("No access")
 
@@ -456,15 +460,18 @@ def _quick_workflow_badges(quick_costing, invoice=None):
 def _quotation_context(costing, user=None):
     amounts = get_costing_quote_amounts(costing)
     quote_is_approved = costing.quotation_status == CostingHeader.QUOTATION_STATUS_APPROVED
-    converted = costing.invoices.exists()
+    invoice = costing.invoices.select_related("order").order_by("-created_at", "-id").first()
+    converted = bool(invoice)
     return {
         "costing": costing,
         "amounts": amounts,
+        "invoice": invoice,
+        "converted": converted,
         "company": _quotation_company(),
         "terms": DEFAULT_QUOTATION_TERMS,
         "can_approve_quotation": _can_approve(user),
-        "can_convert_to_invoice": _can_convert_to_invoice(user) and quote_is_approved,
-        "user_can_convert_to_invoice": _can_convert_to_invoice(user),
+        "can_convert_to_invoice": _can_create_approved_quotation_invoice(user) and quote_is_approved and not converted,
+        "user_can_convert_to_invoice": _can_create_approved_quotation_invoice(user),
         "quote_is_approved": quote_is_approved,
         "quotation_ceo_status_label": _quotation_ceo_status_label(costing, converted=converted),
     }
@@ -489,7 +496,7 @@ def _workflow_context(costing, user=None):
         "invoice": invoice,
         "production_order": production_order,
         "lifecycle": lifecycle,
-        "can_convert_to_invoice": _can_convert_to_invoice(user),
+        "can_convert_to_invoice": _can_create_approved_quotation_invoice(user),
     }
 
 
@@ -790,7 +797,7 @@ def _advanced_approval_queue_row(costing):
         "approve_url": reverse("cost_sheet_quotation_approve", args=[costing.pk]),
         "reject_url": reverse("cost_sheet_quotation_reject", args=[costing.pk]),
         "quotation_url": "",
-        "invoice_url": reverse("cost_sheet_convert_to_invoice", args=[costing.pk]),
+        "invoice_url": f"{reverse('invoice_add')}?quotation_id={costing.pk}",
     }
 
 
@@ -878,7 +885,7 @@ def ceo_quotation_approval_queue(request):
     if not _can_view_approval_queue(request.user):
         return HttpResponseForbidden("CEO approval or Accounting access is required.")
     can_decide = _can_approve(request.user)
-    can_convert = _can_convert_to_invoice(request.user)
+    can_convert = _can_create_approved_quotation_invoice(request.user)
     status_filter = (request.GET.get("status") or ("pending" if can_decide else "approved")).strip()
     if not can_decide:
         status_filter = "approved"
@@ -1351,7 +1358,11 @@ def quick_costing_detail(request, pk):
         "profit_health": _quick_profit_health(calc),
         "quick_workflow_badges": _quick_workflow_badges(quick_costing, invoice=invoice),
         "can_approve": _can_approve(request.user),
-        "can_convert_to_invoice": _can_convert_to_invoice(request.user) and _quick_approval_status_label(quick_costing) == "Approved",
+        "can_convert_to_invoice": (
+            _can_create_approved_quotation_invoice(request.user)
+            and _quick_approval_status_label(quick_costing) == "Approved"
+            and not invoice
+        ),
         "approval_status_label": _quick_approval_status_label(quick_costing),
         "can_edit_quick_costing": (not quick_costing.is_locked) or _can_approve(request.user),
         "can_submit_for_approval": (
@@ -1675,8 +1686,8 @@ def quick_costing_convert_to_invoice(request, pk):
         QuickCosting.objects.select_related("opportunity", "opportunity__lead"),
         pk=pk,
     )
-    if not _can_convert_to_invoice(request.user):
-        messages.error(request, "Only invoice managers can create invoices.")
+    if not _can_create_approved_quotation_invoice(request.user):
+        messages.error(request, "Only Sales, Sales Manager, or invoice managers can create draft invoices from approved quotations.")
         return redirect("quick_costing_client_quotation", pk=pk)
     if _quick_approval_status_label(quick_costing) != "Approved":
         messages.error(request, "Approve the quick costing quotation before creating an invoice.")
@@ -2627,8 +2638,8 @@ def cost_sheet_convert_to_invoice(request, pk):
     if denied:
         return denied
     costing = get_object_or_404(CostingHeader.objects.select_related("opportunity", "customer"), pk=pk)
-    if not _can_convert_to_invoice(request.user):
-        messages.error(request, "Only invoice managers can convert quotations to invoices.")
+    if not _can_create_approved_quotation_invoice(request.user):
+        messages.error(request, "Only Sales, Sales Manager, or invoice managers can create draft invoices from approved quotations.")
         return redirect("cost_sheet_detail", pk=pk)
     if costing.quotation_status != CostingHeader.QUOTATION_STATUS_APPROVED:
         messages.error(request, "Approve the quotation before creating an invoice.")

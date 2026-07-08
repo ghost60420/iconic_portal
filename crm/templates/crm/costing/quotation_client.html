@@ -227,11 +227,10 @@
   <a class="quote-btn" href="{% url 'cost_sheet_detail' costing.pk %}">Back</a>
   <div>
     <a class="quote-btn" href="{% url 'cost_sheet_quotation_pdf' costing.pk %}">Download PDF</a>
-    {% if can_convert_to_invoice %}
-      <form method="post" action="{% url 'cost_sheet_convert_to_invoice' costing.pk %}" style="display:inline;">
-        {% csrf_token %}
-        <button type="submit" class="quote-btn primary" style="cursor:pointer;">Convert to Invoice</button>
-      </form>
+    {% if invoice %}
+      <a class="quote-btn" href="{% url 'invoice_view' invoice.pk %}" title="An invoice already exists for this quotation.">Existing invoice {{ invoice.invoice_number }}</a>
+    {% elif can_convert_to_invoice %}
+      <a class="quote-btn primary" href="{% url 'invoice_add' %}?quotation_id={{ costing.pk }}">Create Invoice</a>
     {% elif user_can_convert_to_invoice %}
       <span class="quote-btn" title="Approve the quotation before creating an invoice.">Invoice locked until approved</span>
     {% endif %}
@@ -247,6 +246,12 @@
       Draft quotations cannot be converted to invoices until approved.
     </div>
     <div class="quote-status-details">
+      {% if invoice %}
+        <div>
+          <span>Invoice</span>
+          <strong><a href="{% url 'invoice_view' invoice.pk %}">{{ invoice.invoice_number }}</a> already exists</strong>
+        </div>
+      {% endif %}
       <div>
         <span>Status</span>
         <strong>{{ quotation_ceo_status_label }}</strong>

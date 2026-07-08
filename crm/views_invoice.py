@@ -3,14 +3,14 @@
 import io
 from collections import defaultdict
 from datetime import timedelta
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.staticfiles import finders
 from django.db import transaction
 from django.db.models import F, Q, Sum
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.dateparse import parse_date
@@ -23,6 +23,7 @@ from .models import (
     AccountingMonthClose,
     AccountingMonthLock,
     CRMAuditLog,
+    CostingHeader,
     Customer,
     ExchangeRate,
     Invoice,
@@ -35,10 +36,19 @@ from .models import (
 from .forms import InvoiceForm, InvoicePaymentForm, InvoiceSettingsForm
 from .permissions import can_view_internal_costing, get_access
 from .services.costing_currency import CurrencyConversionError, convert_currency, format_finance_money
-from .services.costing_workflow import CostingWorkflowError, create_or_link_production_order_from_invoice
+from .services.costing_workflow import CostingWorkflowError, create_or_link_production_order_from_invoice, get_costing_quote_amounts
 from .services.order_lifecycle import build_lifecycle_profit_breakdown, create_lifecycle_from_invoice
 from .services.workflow_visibility import build_workflow_visibility_context
-from .services.operations_permissions import ROLE_ADMIN, ROLE_CEO, can_archive_invoices, has_operations_role
+from .services.operations_permissions import (
+    ROLE_ADMIN,
+    ROLE_ACCOUNTS,
+    ROLE_CEO,
+    ROLE_FINANCE,
+    ROLE_SALES,
+    ROLE_SALES_MANAGER,
+    can_archive_invoices,
+    has_operations_role,
+)
 from .services.local_sewing import calculate_local_sewing, is_bangladesh_local_sewing
 
 
@@ -119,6 +129,8 @@ def can_manage_invoices(user):
         return True
     if user.is_staff:
         return True
+    if has_operations_role(user, ROLE_CEO, ROLE_ADMIN, ROLE_ACCOUNTS, ROLE_FINANCE):
+        return True
     try:
         access = user.access
     except Exception:
@@ -128,6 +140,32 @@ def can_manage_invoices(user):
 
 def superuser_only(user):
     return can_manage_invoices(user)
+
+
+def can_create_invoice_from_approved_quotation(user):
+    return bool(
+        can_manage_invoices(user)
+        or has_operations_role(user, ROLE_CEO, ROLE_ADMIN, ROLE_SALES, ROLE_SALES_MANAGER)
+    )
+
+
+def can_view_invoice_from_approved_quotation(user, inv):
+    if can_manage_invoices(user):
+        return True
+    if not can_create_invoice_from_approved_quotation(user):
+        return False
+    costing = getattr(inv, "costing_header", None)
+    if costing and costing.quotation_status == CostingHeader.QUOTATION_STATUS_APPROVED:
+        return True
+    quick_costing = getattr(inv, "quick_costing", None)
+    if quick_costing and quick_costing.quotation_number and quick_costing.status in {
+        QuickCosting.STATUS_APPROVED,
+        QuickCosting.STATUS_QUOTED,
+        QuickCosting.STATUS_PRODUCTION,
+        QuickCosting.STATUS_INVOICED,
+    }:
+        return True
+    return False
 
 
 def can_manage_invoice_internal_costing(user):
@@ -247,6 +285,10 @@ def _d(v):
         return Decimal("0")
 
 
+def _money(v):
+    return _d(v).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
 def _calc_totals(inv: Invoice) -> None:
     subtotal = _d(inv.subtotal)
     shipping = _d(inv.shipping_amount)
@@ -261,7 +303,7 @@ def _calc_totals(inv: Invoice) -> None:
     paid = _d(inv.paid_amount)
     if paid <= 0:
         if inv.status not in ("draft", "sent", "cancelled"):
-            inv.status = "sent"
+            inv.status = "draft"
     else:
         if paid >= total and total > 0:
             inv.status = "paid"
@@ -297,6 +339,29 @@ def _payment_rate_initial(currency: str) -> dict:
             data["rate_to_cad"] = cad_to_bdt
 
     return data
+
+
+def _invoice_total_cad_equivalent(inv: Invoice) -> dict | None:
+    currency = (getattr(inv, "currency", "") or "").upper().strip()
+    if currency != "BDT":
+        return None
+    rate = _latest_cad_to_bdt()
+    if rate <= 0:
+        return {"available": False, "display": "", "rate": None}
+    try:
+        cad_amount = convert_currency(
+            _d(getattr(inv, "total_amount", Decimal("0"))),
+            "BDT",
+            "CAD",
+            bdt_per_cad=rate,
+        )
+    except CurrencyConversionError:
+        return {"available": False, "display": "", "rate": None}
+    return {
+        "available": True,
+        "display": format_finance_money(cad_amount, "CAD"),
+        "rate": rate,
+    }
 
 
 def _is_accounting_month_closed(payment_date, side: str) -> bool:
@@ -359,11 +424,32 @@ def _sync_invoice_payment_status(inv: Invoice) -> None:
     total = _d(inv.total_amount)
     paid = _d(inv.paid_amount)
     if paid <= 0:
-        inv.status = "sent" if inv.status != "draft" else inv.status
+        inv.status = "draft" if inv.status == "draft" else "sent"
     elif total > 0 and paid >= total:
         inv.status = "paid"
     elif total > 0:
         inv.status = "partial"
+
+
+def _audit_invoice_status_change(invoice: Invoice, user, old_status, new_status, *, action_type=None) -> None:
+    old_status = old_status or ""
+    new_status = new_status or ""
+    if old_status == new_status and action_type != CRMAuditLog.ACTION_CREATED:
+        return
+    try:
+        CRMAuditLog.objects.create(
+            actor=user if user and getattr(user, "is_authenticated", False) else None,
+            module="invoice",
+            record_id=str(invoice.pk),
+            record_label=invoice.invoice_number or f"Invoice {invoice.pk}",
+            action_type=action_type or CRMAuditLog.ACTION_STATUS_CHANGED,
+            field_name="status",
+            previous_value=old_status,
+            new_value=new_status,
+            target_url=reverse("invoice_view", args=[invoice.pk]),
+        )
+    except Exception:
+        pass
 
 
 def _parse_ar_date(value):
@@ -885,11 +971,11 @@ def _build_opportunity_invoice_prefill(opportunity_id, deposit_defaults=None):
         "currency": currency,
         "invoice_market": market,
         "invoice_type": invoice_type,
-        "subtotal": amount,
-        "shipping_amount": Decimal("0"),
-        "discount_amount": Decimal("0"),
-        "tax_amount": Decimal("0"),
-        "paid_amount": Decimal("0"),
+        "subtotal": _money(amount),
+        "shipping_amount": _money(0),
+        "discount_amount": _money(0),
+        "tax_amount": _money(0),
+        "paid_amount": _money(0),
         "status": "draft",
         "deposit_percentage": _default_deposit_for(market, invoice_type, defaults=deposit_defaults),
         "notes": "\n".join(references),
@@ -935,6 +1021,136 @@ def _build_opportunity_invoice_prefill(opportunity_id, deposit_defaults=None):
         ),
     }
     return {"initial": initial, "context": context}
+
+
+def _quotation_invoice_region(costing):
+    currency = (costing.currency or "").upper()
+    if currency == "BDT" or getattr(costing, "factory_location", "") == "bd":
+        return "BD"
+    return "CA"
+
+
+def _build_quotation_invoice_prefill(quotation_id, user, deposit_defaults=None):
+    if not quotation_id:
+        return None
+    try:
+        quote_pk = int(quotation_id)
+    except (TypeError, ValueError):
+        return {"forbidden": "A valid approved quotation is required before creating this invoice."}
+
+    costing = get_object_or_404(
+        CostingHeader.objects.select_related(
+            "opportunity",
+            "opportunity__lead",
+            "opportunity__customer",
+            "opportunity__lead__customer",
+            "customer",
+        ),
+        pk=quote_pk,
+    )
+    if costing.quotation_status != CostingHeader.QUOTATION_STATUS_APPROVED:
+        return {"forbidden": "CEO approval is required before creating an invoice from this quotation."}
+    if not can_create_invoice_from_approved_quotation(user):
+        return {"forbidden": "Invoice creation from approved quotations is limited to Sales, Sales Manager, CEO/Admin, or invoice managers."}
+
+    try:
+        amounts = get_costing_quote_amounts(costing)
+    except CostingWorkflowError as exc:
+        return {"error": str(exc), "redirect": reverse("cost_sheet_client_quotation", args=[costing.pk])}
+
+    opportunity = costing.opportunity
+    lead = getattr(opportunity, "lead", None) if opportunity else None
+    customer = costing.customer or _opportunity_invoice_customer(opportunity)
+    currency = (costing.currency or "CAD").upper()
+    if currency not in {"CAD", "USD", "BDT"}:
+        currency = "CAD"
+    region = _quotation_invoice_region(costing)
+    market = "bangladesh" if region == "BD" else "north_america"
+    invoice_type = "bulk"
+    quotation_label = costing.quotation_number or f"COST-{costing.pk}"
+    existing_invoices = list(
+        Invoice.objects.select_related("order", "customer")
+        .filter(costing_header=costing)
+        .order_by("-issue_date", "-created_at", "-id")[:5]
+    )
+
+    references = [
+        f"Quotation: {quotation_label}",
+        f"Costing: COST-{costing.pk}",
+    ]
+    if opportunity:
+        references.append(f"Opportunity: {opportunity.opportunity_id or opportunity.pk}")
+    if lead:
+        references.append(f"Lead: {lead.lead_id or lead.pk}")
+    if costing.style_name:
+        references.append(f"Style: {costing.style_name}")
+    if costing.style_code:
+        references.append(f"Style code: {costing.style_code}")
+
+    initial = {
+        "opportunity": opportunity,
+        "customer": customer,
+        "currency": currency,
+        "invoice_market": market,
+        "invoice_type": invoice_type,
+        "subtotal": _money(amounts["order_total"]),
+        "shipping_amount": _money(0),
+        "discount_amount": _money(0),
+        "tax_amount": _money(0),
+        "paid_amount": _money(0),
+        "status": "draft",
+        "deposit_percentage": _default_deposit_for(market, invoice_type, defaults=deposit_defaults),
+        "notes": "\n".join(references),
+        "sewing_charge": _money(amounts["labor_total"]),
+        "other_internal_cost": _money(amounts["other_cost_total"]),
+        "internal_cost_note": f"Auto-filled from CEO-approved quotation {quotation_label}.",
+    }
+    context = {
+        "source_title": f"Invoice from Quotation {quotation_label}",
+        "source_quotation_id": costing.pk,
+        "quotation": costing,
+        "opportunity": opportunity,
+        "lead": lead,
+        "customer": customer,
+        "production_order": None,
+        "existing_invoices": existing_invoices,
+        "has_existing_invoices": bool(existing_invoices),
+        "duplicate_blocked": bool(existing_invoices),
+        "source_opportunity_id": opportunity.pk if opportunity else "",
+        "opportunity_label": (
+            opportunity.opportunity_id or f"Opportunity {opportunity.pk}"
+            if opportunity
+            else "Opportunity unavailable"
+        ),
+        "lead_label": (getattr(lead, "lead_id", "") or f"Lead {lead.pk}") if lead else "Lead unavailable",
+        "account_or_brand": (
+            getattr(customer, "account_brand", "")
+            or getattr(lead, "account_brand", "")
+            or costing.buyer
+            or costing.brand
+            or "Customer unavailable"
+        ),
+        "contact_person": (
+            getattr(customer, "contact_name", "")
+            or getattr(lead, "contact_name", "")
+            or "Unavailable"
+        ),
+        "email": getattr(customer, "email", "") or getattr(lead, "email", "") or "Unavailable",
+        "phone": getattr(customer, "phone", "") or getattr(lead, "phone", "") or "Unavailable",
+        "product_type": costing.get_product_type_display() or getattr(opportunity, "product_type", "") or "Unavailable",
+        "product_category": getattr(opportunity, "product_category", "") or "Unavailable",
+        "market": market,
+        "currency": currency,
+        "order_amount_display": format_finance_money(amounts["order_total"], currency),
+        "bdt_total_display": format_finance_money(amounts["order_total"], "BDT") if currency == "BDT" else "",
+        "cad_total_display": format_finance_money(amounts["order_total"], "CAD") if currency == "CAD" else "",
+        "bdt_per_piece_display": "",
+        "cad_per_piece_display": "",
+        "conversion_note": "Quotation currency is preserved. No silent currency conversion is applied.",
+        "invoice_type_label": dict(Invoice.INVOICE_TYPE_CHOICES).get(invoice_type, "Bulk Production"),
+        "production_message": "Invoice will be linked to this CEO-approved quotation. Production conversion still requires the existing approval workflow.",
+    }
+    return {"initial": initial, "context": context, "amounts": amounts, "costing": costing}
 
 
 def _scope_opportunity_invoice_form_choices(form, opportunity_prefill):
@@ -1696,20 +1912,38 @@ def invoice_list_bd(request):
 
 
 @login_required
-@user_passes_test(superuser_only)
 def invoice_add(request):
     # optional prefill from order
     order_id = request.GET.get("order_id")
     opportunity_id = request.GET.get("opportunity_id") or request.POST.get("source_opportunity_id")
+    quotation_id = request.GET.get("quotation_id") or request.POST.get("source_quotation_id")
+    user_can_manage_invoices = can_manage_invoices(request.user)
+    if not user_can_manage_invoices and not quotation_id:
+        return HttpResponseForbidden("Invoice manager access or a CEO-approved quotation is required.")
+
     deposit_defaults = _invoice_default_deposit_values()
     initial = {"deposit_percentage": _default_deposit_for("north_america", "bulk", defaults=deposit_defaults)}
-    opportunity_prefill = _build_opportunity_invoice_prefill(opportunity_id, deposit_defaults=deposit_defaults)
+    quotation_prefill = _build_quotation_invoice_prefill(
+        quotation_id,
+        request.user,
+        deposit_defaults=deposit_defaults,
+    )
+    if quotation_prefill:
+        if quotation_prefill.get("forbidden"):
+            return HttpResponseForbidden(quotation_prefill["forbidden"])
+        if quotation_prefill.get("error"):
+            messages.error(request, quotation_prefill["error"])
+            return redirect(quotation_prefill.get("redirect") or "invoice_list")
+        initial.update(quotation_prefill["initial"])
+    opportunity_prefill = None
+    if not quotation_prefill:
+        opportunity_prefill = _build_opportunity_invoice_prefill(opportunity_id, deposit_defaults=deposit_defaults)
     if opportunity_prefill:
         initial.update(opportunity_prefill["initial"])
     local_order = _local_sewing_order(order_id)
     if local_order:
         initial.update(_local_sewing_invoice_initial(local_order))
-    can_edit_internal_costs = can_manage_invoice_internal_costing(request.user)
+    can_edit_internal_costs = user_can_manage_invoices and can_manage_invoice_internal_costing(request.user)
 
     if order_id:
         try:
@@ -1721,11 +1955,19 @@ def invoice_add(request):
             order = None
 
     if request.method == "POST":
+        if quotation_prefill and quotation_prefill["context"].get("has_existing_invoices"):
+            existing_invoice = quotation_prefill["context"]["existing_invoices"][0]
+            messages.warning(
+                request,
+                f"Invoice {existing_invoice.invoice_number} already exists for this quotation. A duplicate was not created.",
+            )
+            return redirect("invoice_view", pk=existing_invoice.pk)
         form = InvoiceForm(request.POST, can_edit_internal_costs=can_edit_internal_costs)
         if form.is_valid():
             with transaction.atomic():
                 inv = form.save(commit=False)
                 source_opportunity = opportunity_prefill["context"]["opportunity"] if opportunity_prefill else None
+                source_costing = quotation_prefill["costing"] if quotation_prefill else None
 
                 # defaults
                 if not inv.issue_date:
@@ -1747,6 +1989,18 @@ def invoice_add(request):
                         customer = _opportunity_invoice_customer(source_opportunity)
                         if customer:
                             inv.customer = customer
+                if source_costing:
+                    inv.costing_header = source_costing
+                    inv.opportunity = source_costing.opportunity
+                    if not inv.customer_id:
+                        inv.customer = source_costing.customer
+                    inv.status = "draft"
+                    inv.sewing_charge = _d(quotation_prefill["amounts"]["labor_total"])
+                    inv.other_internal_cost = _d(quotation_prefill["amounts"]["other_cost_total"])
+                    inv.internal_cost_note = (
+                        f"Auto-filled from CEO-approved quotation "
+                        f"{source_costing.quotation_number or 'COST-' + str(source_costing.pk)}."
+                    )
                 elif inv.order_id and not inv.opportunity_id:
                     try:
                         inv.opportunity = inv.order.opportunity
@@ -1758,8 +2012,16 @@ def invoice_add(request):
                     _apply_local_sewing_invoice_source(inv, local_order)
                 _sync_invoice_market_region(inv)
                 _calc_totals(inv)
+                inv.status = "draft"
                 inv.save()
                 form.save_m2m()
+                _audit_invoice_status_change(
+                    inv,
+                    request.user,
+                    "",
+                    inv.status,
+                    action_type=CRMAuditLog.ACTION_CREATED,
+                )
                 create_lifecycle_from_invoice(inv, user=request.user)
 
             messages.success(request, "Invoice created.")
@@ -1767,12 +2029,17 @@ def invoice_add(request):
     else:
         form = InvoiceForm(initial=initial, can_edit_internal_costs=can_edit_internal_costs)
 
-    opportunity_prefill_context = opportunity_prefill["context"] if opportunity_prefill else None
+    opportunity_prefill_context = (
+        quotation_prefill["context"]
+        if quotation_prefill
+        else (opportunity_prefill["context"] if opportunity_prefill else None)
+    )
     _scope_opportunity_invoice_form_choices(form, opportunity_prefill_context)
     context = {
         "form": form,
         "mode": "add",
         "can_manage_invoice_costing": can_edit_internal_costs,
+        "can_manage_invoices": user_can_manage_invoices,
         "opportunity_prefill": opportunity_prefill_context,
         **_invoice_form_extra_context(deposit_defaults),
     }
@@ -1808,8 +2075,16 @@ def invoice_add_ca(request):
                 inv.invoice_region = "CA"
                 _sync_invoice_market_region(inv)
                 _calc_totals(inv)
+                inv.status = "draft"
                 inv.save()
                 form.save_m2m()
+                _audit_invoice_status_change(
+                    inv,
+                    request.user,
+                    "",
+                    inv.status,
+                    action_type=CRMAuditLog.ACTION_CREATED,
+                )
             messages.success(request, "Invoice created.")
             return redirect("invoice_view", pk=inv.pk)
     else:
@@ -1859,8 +2134,16 @@ def invoice_add_bd(request):
                 inv.invoice_region = "BD"
                 _sync_invoice_market_region(inv)
                 _calc_totals(inv)
+                inv.status = "draft"
                 inv.save()
                 form.save_m2m()
+                _audit_invoice_status_change(
+                    inv,
+                    request.user,
+                    "",
+                    inv.status,
+                    action_type=CRMAuditLog.ACTION_CREATED,
+                )
             messages.success(request, "Invoice created.")
             return redirect("invoice_view", pk=inv.pk)
     else:
@@ -1887,6 +2170,7 @@ def invoice_add_bd(request):
 @user_passes_test(superuser_only)
 def invoice_edit(request, pk):
     inv = get_object_or_404(Invoice, pk=pk)
+    previous_status = inv.status
     can_edit_internal_costs = can_manage_invoice_internal_costing(request.user)
 
     if request.method == "POST":
@@ -1897,6 +2181,7 @@ def invoice_edit(request, pk):
 
                 if not (inv2.invoice_number or "").strip():
                     inv2.invoice_number = _next_invoice_number()
+                inv2.status = previous_status
 
                 if inv2.order_id and not inv2.customer_id:
                     try:
@@ -1915,6 +2200,7 @@ def invoice_edit(request, pk):
                 _calc_totals(inv2)
                 inv2.save()
                 form.save_m2m()
+                _audit_invoice_status_change(inv2, request.user, previous_status, inv2.status)
                 create_lifecycle_from_invoice(inv2, user=request.user)
 
             messages.success(request, "Invoice updated.")
@@ -1937,7 +2223,6 @@ def invoice_edit(request, pk):
 
 
 @login_required
-@user_passes_test(superuser_only)
 def invoice_view(request, pk):
     inv = get_object_or_404(
         Invoice.objects.select_related(
@@ -1950,6 +2235,8 @@ def invoice_view(request, pk):
         ),
         pk=pk,
     )
+    if not can_view_invoice_from_approved_quotation(request.user, inv):
+        return HttpResponseForbidden("Invoice manager access or an approved quotation invoice is required.")
     payment_history = list(
         inv.payments.select_related("production_order", "accounting_entry", "created_by").order_by("-payment_date", "-id")
     )
@@ -1958,7 +2245,8 @@ def invoice_view(request, pk):
     if legacy_paid_amount < 0:
         legacy_paid_amount = Decimal("0")
     lifecycle = inv.order_lifecycles.order_by("-updated_at", "-id").first()
-    can_view_invoice_costing = can_manage_invoice_internal_costing(request.user)
+    user_can_manage_invoices = can_manage_invoices(request.user)
+    can_view_invoice_costing = user_can_manage_invoices and can_manage_invoice_internal_costing(request.user)
     lifecycle_profit = None
     if lifecycle and can_view_invoice_costing:
         lifecycle_profit = build_lifecycle_profit_breakdown(lifecycle)
@@ -2001,9 +2289,11 @@ def invoice_view(request, pk):
             "invoice_layout_title": _invoice_layout_title(inv),
             "crm_refs": _invoice_crm_references(inv),
             "deposit_terms": _invoice_deposit_terms(inv),
-            "can_archive_invoice": can_archive_invoice(request.user),
-            "can_void_or_delete_invoice": can_void_or_delete_invoice(request.user),
+            "can_manage_invoices": user_can_manage_invoices,
+            "can_archive_invoice": user_can_manage_invoices and can_archive_invoice(request.user),
+            "can_void_or_delete_invoice": user_can_manage_invoices and can_void_or_delete_invoice(request.user),
             "invoice_has_payments": bool(payment_history or _d(inv.paid_amount) > 0),
+            "invoice_total_cad_equivalent": _invoice_total_cad_equivalent(inv),
             **workflow_visibility,
         },
     )
@@ -2043,6 +2333,7 @@ def _invoice_delete_blockers(invoice):
 
 
 def _audit_invoice_delete_or_void(invoice, user, *, action, reason, previous_status):
+    new_value = f"{invoice.status}: {reason}" if action == "voided" else f"{action}: {reason}"
     CRMAuditLog.objects.create(
         actor=user if user and user.is_authenticated else None,
         module="invoice",
@@ -2051,7 +2342,7 @@ def _audit_invoice_delete_or_void(invoice, user, *, action, reason, previous_sta
         action_type=CRMAuditLog.ACTION_DELETED if action == "deleted" else CRMAuditLog.ACTION_STATUS_CHANGED,
         field_name="status" if action == "voided" else "record",
         previous_value=previous_status,
-        new_value=f"{action}: {reason}",
+        new_value=new_value,
         target_url=reverse("invoice_view", args=[invoice.pk]) if invoice.pk else "",
     )
 
@@ -2664,10 +2955,12 @@ def invoice_payment_add(request, pk):
         payment.accounting_entry = entry
         payment.save(update_fields=["accounting_entry"])
 
+        previous_status = inv.status
         inv.paid_amount = _d(inv.paid_amount) + _d(payment.amount)
         _sync_invoice_payment_status(inv)
         inv.updated_at = timezone.now()
         inv.save(update_fields=["paid_amount", "status", "updated_at"])
+        _audit_invoice_status_change(inv, request.user, previous_status, inv.status)
         create_lifecycle_from_invoice(inv, user=request.user)
 
     if inv.payment_status_key == "overpaid":
@@ -2682,19 +2975,22 @@ def invoice_payment_add(request, pk):
 @require_POST
 def invoice_approve(request, pk):
     """
-    Lightweight approve endpoint to avoid 500s if approval fields are not present.
-    Marks invoice as sent and sets approved fields if they exist.
+    Explicit send endpoint. Kept under the existing URL name for compatibility.
     """
     inv = get_object_or_404(Invoice, pk=pk)
+    previous_status = inv.status
+    if previous_status != "draft":
+        messages.info(request, "Only draft invoices can be sent.")
+        return redirect("invoice_view", pk=inv.pk)
     if hasattr(inv, "approved_at"):
         inv.approved_at = timezone.now()
     if hasattr(inv, "approved_by"):
         inv.approved_by = request.user
-    if hasattr(inv, "status"):
-        inv.status = "sent"
-    inv.save()
+    inv.status = "sent"
+    inv.save(update_fields=["status", "approved_at", "approved_by", "updated_at"])
+    _audit_invoice_status_change(inv, request.user, previous_status, inv.status)
     create_lifecycle_from_invoice(inv, user=request.user)
-    messages.success(request, "Invoice approved.")
+    messages.success(request, "Invoice sent.")
     return redirect("invoice_view", pk=inv.pk)
 
 

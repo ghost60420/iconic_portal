@@ -459,13 +459,26 @@
             {% endfor %}
             <li class="ceo-stat"><span>Low margin orders</span><strong>{{ profit_overview.low_margin_orders|length|intcomma }}</strong></li>
           </ul>
-          <p class="ceo-exec-note" style="margin-top:12px;">Highest profit customers</p>
+          <p class="ceo-exec-note" style="margin-top:12px;">Most profitable customers</p>
           <ul class="ceo-stat-list">
-            {% for row in profit_overview.top_profit_customers|slice:":3" %}
-              <li class="ceo-stat">
-                <span>{{ row.label|default:"Customer" }}</span>
-                <strong title="{{ row.profit|finance_money:row.currency }}">{{ row.profit|compact_money:row.currency }}</strong>
-              </li>
+            {% for group in profit_overview.top_profit_customer_groups %}
+              <li class="ceo-stat"><span>{{ group.currency }}</span><strong>Profit by customer</strong></li>
+              {% for row in group.rows %}
+                <li class="ceo-stat">
+                  <span>
+                    {{ row.label|default:"Customer" }}
+                    {% if group.currency == "BDT" %}
+                      <br>
+                      {% if row.cad_equivalent_display %}
+                        CAD equivalent: {{ row.cad_equivalent_display }}
+                      {% else %}
+                        CAD equivalent unavailable
+                      {% endif %}
+                    {% endif %}
+                  </span>
+                  <strong title="{{ row.profit_title }}">{{ row.profit_display }} profit</strong>
+                </li>
+              {% endfor %}
             {% empty %}
               <li class="ceo-stat"><span>No profit customer data yet</span><strong>0</strong></li>
             {% endfor %}

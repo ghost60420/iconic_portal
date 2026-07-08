@@ -67,6 +67,20 @@ def _quick_audit(quick_costing, *, actor, action_type, field_name, previous_valu
     )
 
 
+def _audit_invoice_draft_created(invoice, *, actor):
+    CRMAuditLog.objects.create(
+        actor=_user_or_none(actor),
+        module="invoice",
+        record_id=str(invoice.pk),
+        record_label=invoice.invoice_number or f"Invoice {invoice.pk}",
+        action_type=CRMAuditLog.ACTION_CREATED,
+        field_name="status",
+        previous_value="",
+        new_value=invoice.status or "draft",
+        target_url=f"/invoices/{invoice.pk}/",
+    )
+
+
 def approve_quick_costing(quick_costing, *, approver):
     """Canonical Quick Costing approval transaction.
 
@@ -269,6 +283,8 @@ def create_invoice_from_costing(costing, user=None):
 
     with transaction.atomic():
         costing = CostingHeader.objects.select_for_update().get(pk=costing.pk)
+        if costing.quotation_status != CostingHeader.QUOTATION_STATUS_APPROVED:
+            raise CostingWorkflowError("Approve the quotation before creating an invoice.")
         convert_costing_to_quotation(costing, user=user)
 
         existing = Invoice.objects.filter(costing_header=costing).order_by("-created_at", "-id").first()
@@ -295,7 +311,7 @@ def create_invoice_from_costing(costing, user=None):
             tax_amount=Decimal("0"),
             total_amount=_money(amounts["order_total"]),
             paid_amount=Decimal("0"),
-            status="sent",
+            status="draft",
             notes=f"Converted from quotation {costing.quotation_number or 'COST-' + str(costing.pk)}.",
             sewing_charge=_money(amounts["labor_total"]),
             other_internal_cost=_money(amounts["other_cost_total"]),
@@ -307,6 +323,7 @@ def create_invoice_from_costing(costing, user=None):
             changed_by=_user_or_none(user),
             note=invoice.invoice_number,
         )
+        _audit_invoice_draft_created(invoice, actor=user)
         create_lifecycle_from_invoice(invoice, user=user)
         return invoice, True
 
@@ -391,7 +408,7 @@ def create_invoice_from_quick_costing(quick_costing, user=None):
             tax_amount=Decimal("0"),
             total_amount=total,
             paid_amount=Decimal("0"),
-            status="sent",
+            status="draft",
             notes=(
                 f"Bangladesh Local Sewing · CMT / Sewing Charge · {quick_costing.quotation_number}"
                 if quick_costing.is_bangladesh_local_sewing
@@ -401,6 +418,7 @@ def create_invoice_from_quick_costing(quick_costing, user=None):
             other_internal_cost=Decimal("0"),
             internal_cost_note="",
         )
+        _audit_invoice_draft_created(invoice, actor=user)
         quick_costing.status = QuickCosting.STATUS_INVOICED
         quick_costing.save(update_fields=["status", "updated_at"])
         create_lifecycle_from_invoice(invoice, user=user)

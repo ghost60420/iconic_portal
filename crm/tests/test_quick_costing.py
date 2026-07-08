@@ -946,6 +946,7 @@ class QuickCostingTests(TestCase):
         self.assertEqual(invoice.customer, opportunity.customer)
         self.assertEqual(invoice.invoice_market, "north_america")
         self.assertEqual(invoice.invoice_type, "bulk")
+        self.assertEqual(invoice.status, "draft")
         self.assertEqual(invoice.currency, "CAD")
         self.assertEqual(invoice.subtotal, Decimal("16.67"))
         self.assertEqual(invoice.shipping_amount, Decimal("1.11"))

@@ -120,7 +120,7 @@ class InvoiceFromOpportunityTests(TestCase):
                 "discount_amount": "0.00",
                 "tax_amount": "0.00",
                 "paid_amount": "0.00",
-                "status": "draft",
+                "status": "sent",
                 "notes": "Manual edited note",
             },
         )
@@ -129,6 +129,7 @@ class InvoiceFromOpportunityTests(TestCase):
         invoice = Invoice.objects.get(opportunity=opportunity)
         self.assertEqual(invoice.customer, self.customer)
         self.assertIsNone(invoice.order)
+        self.assertEqual(invoice.status, "draft")
         self.assertEqual(invoice.subtotal, Decimal("250000.00"))
         self.assertEqual(invoice.total_amount, Decimal("250000.00"))
         self.assertEqual(invoice.notes, "Manual edited note")
