@@ -22,6 +22,93 @@
     <div class="sales-metric"><span>Paid Invoices</span><strong>{{ owner_counts.paid_invoices }}</strong></div>
   </section>
 
+  <section class="sales-chart-grid" aria-label="Sales dashboard charts">
+    <article class="people-card sales-chart-card sales-chart-card--wide">
+      <div class="sales-chart-head">
+        <div><h2 class="sales-section-title">Monthly Revenue Trend</h2><p>Last 12 months · invoice revenue by currency</p></div>
+        <div class="sales-chart-legend">{% for series in sales_charts.monthly_revenue.series %}<span><i style="background:{{ series.color }}"></i>{{ series.currency }}</span>{% endfor %}</div>
+      </div>
+      {% if sales_charts.monthly_revenue.has_data %}
+        <svg class="sales-line-chart" viewBox="0 0 {{ sales_charts.monthly_revenue.width }} {{ sales_charts.monthly_revenue.height }}" role="img" aria-label="Monthly revenue trend">
+          <line x1="30" y1="96" x2="336" y2="96" class="sales-chart-axis" />
+          <line x1="30" y1="14" x2="30" y2="96" class="sales-chart-axis" />
+          {% for series in sales_charts.monthly_revenue.series %}
+            <polyline points="{{ series.points }}" fill="none" stroke="{{ series.color }}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+            {% for point in series.points_meta %}
+              <a href="{{ point.url }}"><circle cx="{{ point.x }}" cy="{{ point.y }}" r="4.5" fill="{{ series.color }}"><title>{{ point.label }} · {{ series.currency }} {{ point.amount }}</title></circle></a>
+            {% endfor %}
+          {% endfor %}
+          {% for item in sales_charts.monthly_revenue.months %}
+            <text x="{{ item.x }}" y="122" class="sales-chart-month">{{ item.label }}</text>
+          {% endfor %}
+        </svg>
+      {% else %}
+        <div class="sales-chart-empty">No invoice revenue in the last 12 months.</div>
+      {% endif %}
+    </article>
+
+    <article class="people-card sales-chart-card">
+      <div class="sales-chart-head"><div><h2 class="sales-section-title">Pipeline Distribution</h2><p>Active pipeline by workflow stage</p></div></div>
+      {% if sales_charts.pipeline_distribution.has_data %}
+        <div class="sales-donut-wrap">
+          <svg class="sales-donut-chart" viewBox="0 0 120 120" role="img" aria-label="Pipeline distribution">
+            <circle cx="60" cy="60" r="42" fill="none" stroke="#252932" stroke-width="16" />
+            {% for item in sales_charts.pipeline_distribution.items %}
+              {% if item.count %}
+                <a href="{{ item.url }}"><circle cx="60" cy="60" r="42" fill="none" stroke="{{ item.color }}" stroke-width="16" stroke-dasharray="{{ item.dash }}" stroke-dashoffset="{{ item.offset }}" transform="rotate(-90 60 60)"><title>{{ item.label }} · {{ item.count }} · {{ item.percent }}%</title></circle></a>
+              {% endif %}
+            {% endfor %}
+            <text x="60" y="56" text-anchor="middle" class="sales-donut-total">{{ sales_charts.pipeline_distribution.total }}</text>
+            <text x="60" y="72" text-anchor="middle" class="sales-donut-caption">records</text>
+          </svg>
+          <div class="sales-chart-list">{% for item in sales_charts.pipeline_distribution.items %}<a href="{{ item.url }}"><i style="background:{{ item.color }}"></i><span>{{ item.label }}</span><strong>{{ item.count }}</strong></a>{% endfor %}</div>
+        </div>
+      {% else %}
+        <div class="sales-chart-empty">No active pipeline records.</div>
+      {% endif %}
+    </article>
+
+    <article class="people-card sales-chart-card">
+      <div class="sales-chart-head"><div><h2 class="sales-section-title">Monthly Orders</h2><p>New opportunities and production orders</p></div></div>
+      {% if sales_charts.monthly_orders.has_data %}
+        <svg class="sales-bar-chart" viewBox="0 0 {{ sales_charts.monthly_orders.width }} {{ sales_charts.monthly_orders.height }}" role="img" aria-label="Monthly orders">
+          <line x1="30" y1="96" x2="336" y2="96" class="sales-chart-axis" />
+          {% for item in sales_charts.monthly_orders.months %}
+            <a href="{{ item.url }}"><rect x="{{ item.x }}" y="{{ item.y }}" width="{{ item.width }}" height="{{ item.height }}" rx="4" class="sales-bar-fill"><title>{{ item.full_label }} · {{ item.count }} records</title></rect></a>
+            <text x="{{ item.x }}" y="120" class="sales-chart-month">{{ item.label }}</text>
+          {% endfor %}
+        </svg>
+      {% else %}
+        <div class="sales-chart-empty">No new opportunities or orders in the last 12 months.</div>
+      {% endif %}
+    </article>
+
+    <article class="people-card sales-chart-card sales-chart-card--wide">
+      <div class="sales-chart-head">
+        <div><h2 class="sales-section-title">Revenue by Product Type</h2><p>Invoice revenue grouped by product type</p></div>
+        <div class="sales-chart-legend"><span><i style="background:#d6b45a"></i>CAD</span><span><i style="background:#9fb7ff"></i>USD</span><span><i style="background:#34d399"></i>BDT</span></div>
+      </div>
+      {% if sales_charts.revenue_by_product_type.has_data %}
+        <div class="sales-product-chart">
+          {% for row in sales_charts.revenue_by_product_type.rows %}
+            <div class="sales-product-row">
+              <a href="{{ row.url }}" class="sales-product-label">{{ row.label }} <small>{{ row.count }} invoice{{ row.count|pluralize }}</small></a>
+              <div class="sales-product-bars">
+                {% for bar in row.bars %}
+                  {% if bar.amount %}
+                    <a href="{{ row.url }}" class="sales-product-bar" title="{{ row.label }} · {{ bar.currency }} {{ bar.amount }}"><span style="width:{{ bar.width }}%;background:{{ bar.color }}"></span><em>{{ bar.currency }} {{ bar.amount }}</em></a>
+                  {% endif %}
+                {% endfor %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="sales-chart-empty">No product-linked invoice revenue yet.</div>
+      {% endif %}
+    </article>
+  </section>
+
   <section class="sales-sections">
     <div class="people-card"><h2 class="sales-section-title">My Revenue · Invoice Totals</h2>{% for row in total_invoice_value %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.count }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
     <div class="people-card"><h2 class="sales-section-title">My Outstanding Balance</h2>{% for row in outstanding_balance %}<div class="sales-money-row"><span>{{ row.currency }} · {{ row.count }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% endfor %}</div>
