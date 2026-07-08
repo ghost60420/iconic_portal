@@ -5,8 +5,11 @@ are intentionally separate and never affect commercial attribution.
 """
 
 from collections import defaultdict
+from datetime import timedelta
 from decimal import Decimal
+from urllib.parse import urlencode
 
+from django.urls import reverse
 from django.db import models
 from django.core.cache import cache
 from django.db.models import Count, DecimalField, Exists, ExpressionWrapper, F, Max, OuterRef, Q, Sum
@@ -47,6 +50,11 @@ from crm.services.production_operational_status import (
 
 CURRENCIES = ("CAD", "USD", "BDT")
 ZERO = Decimal("0")
+CHART_COLORS = {
+    "CAD": "#d6b45a",
+    "USD": "#9fb7ff",
+    "BDT": "#34d399",
+}
 ISSUED_INVOICE_STATUSES = ("sent", "partial", "paid")
 OPEN_INVOICE_STATUSES = ("draft", "sent", "partial")
 ACTIVE_PRODUCTION_STATUSES = ("planning", "in_progress", "hold")
@@ -88,6 +96,279 @@ def _add_currency_amount(amounts, counts, currency, amount, *, count=1):
         return
     amounts[currency] += amount or ZERO
     counts[currency] += int(count or 0)
+
+
+def _shift_month(month_start, offset):
+    month = month_start.month - 1 + offset
+    year = month_start.year + month // 12
+    month = month % 12 + 1
+    return month_start.replace(year=year, month=month, day=1)
+
+
+def _last_12_months(today):
+    first_month = _shift_month(today.replace(day=1), -11)
+    return [_shift_month(first_month, offset) for offset in range(12)]
+
+
+def _month_end(month_start):
+    return _shift_month(month_start, 1) - timedelta(days=1)
+
+
+def _month_key(value):
+    return value.replace(day=1).isoformat()
+
+
+def _chart_url(name, **params):
+    clean = {
+        key: value
+        for key, value in params.items()
+        if value not in (None, "", [])
+    }
+    query = urlencode(clean)
+    return f"{reverse(name)}?{query}" if query else reverse(name)
+
+
+def _decimal_to_float(value):
+    return float(value or ZERO)
+
+
+def _invoice_product_type(invoice):
+    opportunity = getattr(invoice, "opportunity", None)
+    if opportunity:
+        return _record_label(opportunity.product_type, opportunity.product_category, fallback="Other")
+    order = getattr(invoice, "order", None)
+    if order:
+        order_opportunity = getattr(order, "opportunity", None)
+        order_lead = getattr(order, "lead", None)
+        product = getattr(order, "product", None)
+        return _record_label(
+            getattr(order, "product_type_snapshot", ""),
+            getattr(order_opportunity, "product_type", ""),
+            getattr(order_opportunity, "product_category", ""),
+            getattr(order_lead, "primary_product_type", ""),
+            getattr(product, "name", ""),
+            fallback="Other",
+        )
+    costing = getattr(invoice, "costing_header", None)
+    if costing and getattr(costing, "opportunity", None):
+        return _record_label(costing.opportunity.product_type, costing.opportunity.product_category, fallback="Other")
+    quick = getattr(invoice, "quick_costing", None)
+    if quick and getattr(quick, "opportunity", None):
+        return _record_label(quick.opportunity.product_type, quick.opportunity.product_category, fallback="Other")
+    return "Other"
+
+
+def _build_sales_chart_data(user, *, today, lead_counts, opportunity_counts, production_counts, opportunity_rows, invoices, production_orders):
+    months = _last_12_months(today)
+    month_keys = [_month_key(month) for month in months]
+    monthly_revenue = {
+        currency: {key: {"amount": ZERO, "count": 0} for key in month_keys}
+        for currency in CURRENCIES
+    }
+    product_revenue = defaultdict(lambda: {
+        "amounts": {currency: ZERO for currency in CURRENCIES},
+        "counts": {currency: 0 for currency in CURRENCIES},
+    })
+
+    for invoice in invoices:
+        currency = (invoice.currency or "").upper()
+        if currency not in CURRENCIES or invoice.status not in ISSUED_INVOICE_STATUSES:
+            continue
+        issue_date = invoice.issue_date
+        if issue_date:
+            key = _month_key(issue_date)
+            if key in monthly_revenue[currency]:
+                monthly_revenue[currency][key]["amount"] += invoice.total_amount or ZERO
+                monthly_revenue[currency][key]["count"] += 1
+        product_type = _invoice_product_type(invoice)
+        product_revenue[product_type]["amounts"][currency] += invoice.total_amount or ZERO
+        product_revenue[product_type]["counts"][currency] += 1
+
+    chart_width = 360
+    chart_height = 130
+    left = 30
+    top = 14
+    plot_width = 306
+    plot_height = 82
+    max_revenue = max(
+        [_decimal_to_float(monthly_revenue[currency][key]["amount"]) for currency in CURRENCIES for key in month_keys]
+        or [0]
+    )
+    revenue_series = []
+    for currency in CURRENCIES:
+        points = []
+        point_rows = []
+        for index, month in enumerate(months):
+            key = _month_key(month)
+            amount = monthly_revenue[currency][key]["amount"]
+            x = left + (plot_width / 11 * index if len(months) > 1 else 0)
+            y = top + plot_height - ((_decimal_to_float(amount) / max_revenue) * plot_height if max_revenue else 0)
+            points.append(f"{x:.1f},{y:.1f}")
+            point_rows.append({
+                "x": f"{x:.1f}",
+                "y": f"{y:.1f}",
+                "amount": amount,
+                "count": monthly_revenue[currency][key]["count"],
+                "label": month.strftime("%b %Y"),
+                "url": _chart_url(
+                    "invoice_list",
+                    date_from=month.isoformat(),
+                    date_to=_month_end(month).isoformat(),
+                    currency=currency,
+                    salesperson=user.pk,
+                ),
+            })
+        revenue_series.append({
+            "currency": currency,
+            "color": CHART_COLORS[currency],
+            "points": " ".join(points),
+            "points_meta": point_rows,
+        })
+
+    pipeline_items = [
+        {
+            "key": "active_leads",
+            "label": "Active Leads",
+            "count": lead_counts["active"],
+            "url": _chart_url("leads_list", status="active", assigned_to=user.pk),
+            "color": "#d6b45a",
+        },
+        {
+            "key": "opportunities",
+            "label": "Opportunities",
+            "count": opportunity_counts["active"],
+            "url": _chart_url("opportunities_list", status="active", salesperson=user.pk),
+            "color": "#9fb7ff",
+        },
+        {
+            "key": "production",
+            "label": "Production",
+            "count": production_counts["active"],
+            "url": _chart_url("production_list", status="active", salesperson=user.pk),
+            "color": "#34d399",
+        },
+        {
+            "key": "ready_to_ship",
+            "label": "Ready to Ship",
+            "count": production_counts["ready_to_ship"],
+            "url": _chart_url("production_list", status="ready_to_ship", salesperson=user.pk),
+            "color": "#f59e0b",
+        },
+        {
+            "key": "shipped",
+            "label": "Shipped",
+            "count": production_counts["shipped"],
+            "url": _chart_url("production_list", status="shipped", salesperson=user.pk),
+            "color": "#e7d28f",
+        },
+    ]
+    pipeline_total = sum(item["count"] for item in pipeline_items)
+    circumference = 263.89
+    offset = 0
+    for item in pipeline_items:
+        length = (item["count"] / pipeline_total * circumference) if pipeline_total else 0
+        item["dash"] = f"{length:.2f} {circumference - length:.2f}"
+        item["offset"] = f"{-offset:.2f}"
+        item["percent"] = round((item["count"] / pipeline_total * 100), 1) if pipeline_total else 0
+        offset += length
+
+    monthly_order_counts = {key: 0 for key in month_keys}
+    for opportunity in opportunity_rows:
+        created_date = opportunity.get("created_date")
+        if created_date:
+            key = _month_key(created_date)
+            if key in monthly_order_counts:
+                monthly_order_counts[key] += 1
+    for order in production_orders:
+        created_at = getattr(order, "created_at", None)
+        if created_at:
+            key = _month_key(created_at.date())
+            if key in monthly_order_counts:
+                monthly_order_counts[key] += 1
+    max_orders = max(monthly_order_counts.values() or [0])
+    monthly_orders = []
+    bar_width = 18
+    for index, month in enumerate(months):
+        key = _month_key(month)
+        count = monthly_order_counts[key]
+        height = (count / max_orders * plot_height) if max_orders else 0
+        x = left + (plot_width / 12 * index) + 4
+        y = top + plot_height - height
+        monthly_orders.append({
+            "label": month.strftime("%b"),
+            "full_label": month.strftime("%b %Y"),
+            "count": count,
+            "x": f"{x:.1f}",
+            "y": f"{y:.1f}",
+            "width": bar_width,
+            "height": f"{height:.1f}",
+            "url": _chart_url(
+                "opportunities_list",
+                status="all",
+                created_from=month.isoformat(),
+                created_to=_month_end(month).isoformat(),
+                salesperson=user.pk,
+            ),
+        })
+
+    product_max_by_currency = {
+        currency: max([values["amounts"][currency] for values in product_revenue.values()] or [ZERO])
+        for currency in CURRENCIES
+    }
+    product_rows = []
+    for product_type, values in product_revenue.items():
+        total_count = sum(values["counts"].values())
+        bars = []
+        for currency in CURRENCIES:
+            amount = values["amounts"][currency]
+            max_amount = product_max_by_currency[currency]
+            bars.append({
+                "currency": currency,
+                "amount": amount,
+                "count": values["counts"][currency],
+                "width": int((amount / max_amount * 100)) if max_amount else 0,
+                "color": CHART_COLORS[currency],
+            })
+        product_rows.append({
+            "label": product_type or "Other",
+            "count": total_count,
+            "bars": bars,
+            "url": _chart_url("opportunities_list", status="all", q=product_type, salesperson=user.pk),
+        })
+    product_rows.sort(key=lambda row: (-row["count"], row["label"]))
+
+    return {
+        "monthly_revenue": {
+            "width": chart_width,
+            "height": chart_height,
+            "months": [
+                {
+                    "label": month.strftime("%b"),
+                    "x": f"{left + (plot_width / 11 * index if len(months) > 1 else 0):.1f}",
+                }
+                for index, month in enumerate(months)
+            ],
+            "series": revenue_series,
+            "has_data": any(
+                monthly_revenue[currency][key]["amount"] for currency in CURRENCIES for key in month_keys
+            ),
+        },
+        "pipeline_distribution": {
+            "items": pipeline_items,
+            "total": pipeline_total,
+            "has_data": bool(pipeline_total),
+        },
+        "monthly_orders": {
+            "width": chart_width,
+            "height": chart_height,
+            "months": monthly_orders,
+            "has_data": bool(max_orders),
+        },
+        "revenue_by_product_type": {
+            "rows": product_rows[:8],
+            "has_data": bool(product_rows),
+        },
+    }
 
 
 def _lead_has_opportunity_annotation():
@@ -579,9 +860,14 @@ def build_sales_kpis(user):
         "customer",
         "opportunity",
         "order",
+        "order__product",
         "order__lead",
         "order__opportunity",
         "order__opportunity__lead",
+        "costing_header",
+        "costing_header__opportunity",
+        "quick_costing",
+        "quick_costing__opportunity",
     ).prefetch_related("payments", "sales_commissions")
     invoice_totals = _empty_rows()
     payment_totals = _empty_rows()
@@ -728,6 +1014,16 @@ def build_sales_kpis(user):
     )
     commission_rows = [{"currency": currency, **commission_totals[currency]} for currency in CURRENCIES]
     commission_eligible_rows = [{"currency": currency, **commission_eligible_totals[currency]} for currency in CURRENCIES]
+    sales_charts = _build_sales_chart_data(
+        user,
+        today=today,
+        lead_counts=lead_counts,
+        opportunity_counts=opportunity_counts,
+        production_counts=production_counts,
+        opportunity_rows=opportunity_rows,
+        invoices=invoices,
+        production_orders=production_orders,
+    )
     metrics = {
         "lead_counts": lead_counts,
         "opportunity_counts": opportunity_counts,
@@ -754,6 +1050,7 @@ def build_sales_kpis(user):
         "activity_counts": activity_counts,
         "commission_values": commission_rows,
         "commission_eligible_values": commission_eligible_rows,
+        "sales_charts": sales_charts,
         "production_counts": production_counts,
         "invoice_counts": {
             "open": open_invoice_count,

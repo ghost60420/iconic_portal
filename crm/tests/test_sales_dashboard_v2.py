@@ -335,6 +335,69 @@ class SalesOwnerMetricsTests(TestCase):
         self.assertEqual(metrics["production_counts"]["shipped"], 1)
         self.assertEqual(metrics["production_counts"]["completed"], 1)
 
+    def test_salesperson_chart_data_is_scoped_and_currency_separated(self):
+        today = timezone.localdate()
+        self.active_opportunity.product_type = "Streetwear"
+        self.active_opportunity.save(update_fields=["product_type"])
+        self.production_opportunity.product_type = "Streetwear"
+        self.production_opportunity.save(update_fields=["product_type"])
+        Invoice.objects.create(
+            invoice_number="INV-TALHA-USD-CHART",
+            customer=self.customer,
+            opportunity=self.active_opportunity,
+            currency="USD",
+            total_amount=Decimal("250"),
+            status="sent",
+            issue_date=today,
+        )
+        Invoice.objects.create(
+            invoice_number="INV-TALHA-BDT-CHART",
+            customer=self.customer,
+            order=self.active_order,
+            currency="BDT",
+            total_amount=Decimal("250000"),
+            status="sent",
+            issue_date=today,
+        )
+        Invoice.objects.create(
+            invoice_number="INV-BIPLOB-USD-CHART",
+            customer=self.other_customer,
+            opportunity=self.other_invoice.opportunity,
+            currency="USD",
+            total_amount=Decimal("999"),
+            status="sent",
+            issue_date=today,
+        )
+
+        charts = build_sales_kpis(self.talha)["sales_charts"]
+        revenue_series = {row["currency"]: row for row in charts["monthly_revenue"]["series"]}
+        self.assertTrue(charts["monthly_revenue"]["has_data"])
+        self.assertIn(Decimal("250"), [point["amount"] for point in revenue_series["USD"]["points_meta"]])
+        self.assertIn(Decimal("250000"), [point["amount"] for point in revenue_series["BDT"]["points_meta"]])
+        self.assertNotIn(Decimal("999"), [point["amount"] for point in revenue_series["USD"]["points_meta"]])
+        self.assertEqual(
+            [item["label"] for item in charts["pipeline_distribution"]["items"]],
+            ["Active Leads", "Opportunities", "Production", "Ready to Ship", "Shipped"],
+        )
+        product_rows = {row["label"]: row for row in charts["revenue_by_product_type"]["rows"]}
+        self.assertIn("Streetwear", product_rows)
+        streetwear = product_rows["Streetwear"]
+        self.assertEqual(
+            {bar["currency"]: bar["amount"] for bar in streetwear["bars"]},
+            {"CAD": Decimal("1000"), "USD": Decimal("250"), "BDT": Decimal("250000")},
+        )
+
+    def test_salesperson_dashboard_renders_charts_below_kpis(self):
+        self.client.force_login(self.talha)
+        response = self.client.get(reverse("salesperson_profile"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "My Leads")
+        self.assertContains(response, "Monthly Revenue Trend")
+        self.assertContains(response, "Pipeline Distribution")
+        self.assertContains(response, "Monthly Orders")
+        self.assertContains(response, "Revenue by Product Type")
+        self.assertContains(response, f"salesperson={self.talha.pk}")
+
     def test_sales_user_profile_shows_own_numbers_only(self):
         self.client.force_login(self.talha)
         response = self.client.get(reverse("salesperson_profile"))
