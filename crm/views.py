@@ -9396,61 +9396,6 @@ def production_detail(request, pk):
         or can_access_operations_module(request.user, "production")
     ):
         return HttpResponseForbidden("Production updates are not permitted for this role.")
-    if is_bangladesh_local_sewing(order):
-        if request.method == "POST":
-            return HttpResponseForbidden("Use the local sewing edit form to update this order.")
-        stages = list(order.stages.all())
-        local_sewing = calculate_local_sewing(order, stages=stages)
-        local_statuses = {
-            "planning": ("planning", "Planning"),
-            "in_progress": ("sewing", "In progress"),
-            "hold": ("hold", "On hold"),
-            "done": ("shipped", "Done"),
-            "closed_won": ("shipped", "Completed"),
-            "closed_lost": ("cancelled", "Cancelled"),
-        }
-        operational_status, operational_status_label = local_statuses.get(
-            order.status,
-            ("planning", "Planning"),
-        )
-        if order.status == "planning" and local_sewing["completed_quantity"] > 0:
-            operational_status, operational_status_label = "sewing", "In progress"
-        percent_done = 0
-        if local_sewing["quantity"]:
-            percent_done = min(
-                int((local_sewing["completed_quantity"] / local_sewing["quantity"]) * 100),
-                100,
-            )
-        return render(
-            request,
-            "crm/production_detail.html",
-            {
-                "order": order,
-                "stages": stages,
-                "percent_done": percent_done,
-                "order_delayed": False,
-                "late_shipment": False,
-                "shipment_pending": False,
-                "priority_badge": SimpleNamespace(
-                    label="Normal",
-                    tone="neutral",
-                    reason="Bangladesh local sewing",
-                ),
-                "operational_status": operational_status,
-                "operational_status_label": operational_status_label,
-                "customer": _safe_related_attr(order, "customer"),
-                "lead": _safe_related_attr(order, "lead"),
-                "opportunity": _safe_related_attr(order, "opportunity"),
-                "product": _safe_related_attr(order, "product"),
-                "is_bangladesh_local_sewing": True,
-                "local_sewing": local_sewing,
-                "can_view_local_sewing_financials": can_view_local_sewing_financials(request.user),
-                "can_edit_production": can_access_operations_module(request.user, "production"),
-                "can_archive_records": _can_archive_workflow_record(request.user),
-                "production_can_hard_delete": False,
-            },
-        )
-
     prefetch_related_objects([order], *detail_prefetches)
     can_add_lines = ProductionOrderLine is not None and hasattr(order, "lines")
     opportunity = _safe_related_attr(order, "opportunity")

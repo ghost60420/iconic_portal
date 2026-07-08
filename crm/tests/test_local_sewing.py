@@ -4,7 +4,9 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
@@ -541,7 +543,7 @@ class LocalSewingWorkflowTests(TestCase):
     def setUp(self):
         self.client.force_login(self.admin)
 
-    def test_local_detail_is_simplified_and_canada_detail_is_unchanged(self):
+    def test_local_and_canada_details_share_production_workflow(self):
         local_response = self.client.get(reverse("production_detail", args=[self.order.pk]))
         canada = ProductionOrder.objects.create(
             title="Existing Canada Export",
@@ -552,12 +554,57 @@ class LocalSewingWorkflowTests(TestCase):
         canada_response = self.client.get(reverse("production_detail", args=[canada.pk]))
 
         self.assertContains(local_response, "Bangladesh Local Sewing")
+        self.assertContains(local_response, "Bangladesh Financial Summary")
         self.assertContains(local_response, "৳24,000.00")
         self.assertContains(local_response, "In progress")
         self.assertContains(local_response, "37% complete")
-        self.assertNotContains(local_response, "Stage Progress Tracker")
+        self.assertContains(local_response, "Production Summary")
+        self.assertContains(local_response, "Stage Progress Tracker")
+        self.assertContains(local_response, "Production Lines")
+        self.assertContains(local_response, "Daily Production Updates")
+        self.assertContains(local_response, "Shipment Information")
+        self.assertContains(local_response, "Linked Records")
+        self.assertContains(local_response, "Record History")
+        self.assertContains(local_response, "Production Manager")
+        self.assertContains(local_response, "Merchant")
+        self.assertContains(local_response, "Estimated completion")
+        self.assertContains(local_response, "Actual completion")
         self.assertContains(canada_response, "Stage Progress Tracker")
+        self.assertContains(canada_response, "Production Summary")
+        self.assertContains(canada_response, "Production Lines")
+        self.assertNotContains(canada_response, "Bangladesh Financial Summary")
         self.assertFalse(is_bangladesh_local_sewing(canada))
+
+    def test_production_detail_render_is_read_only_for_local_and_canada(self):
+        canada = ProductionOrder.objects.create(
+            title="Read Only Canada Export",
+            factory_location="ca",
+            order_type="canada_full",
+            qty_total=40,
+        )
+
+        for order in (self.order, canada):
+            with self.subTest(order=order.pk), CaptureQueriesContext(connection) as queries:
+                response = self.client.get(reverse("production_detail", args=[order.pk]))
+
+            self.assertEqual(response.status_code, 200)
+            protected_table_writes = [
+                query["sql"]
+                for query in queries.captured_queries
+                if query["sql"].lstrip().upper().startswith(("INSERT", "UPDATE", "DELETE", "ALTER", "CREATE", "DROP"))
+                and any(
+                    table in query["sql"].lower()
+                    for table in (
+                        "crm_productionorder",
+                        "crm_invoice",
+                        "crm_accountingentry",
+                        "crm_payment",
+                        "crm_quickcosting",
+                        "crm_costsheet",
+                    )
+                )
+            ]
+            self.assertEqual(protected_table_writes, [])
 
     def test_bdt_invoice_uses_order_revenue_and_not_internal_sewing_cost(self):
         response = self.client.post(

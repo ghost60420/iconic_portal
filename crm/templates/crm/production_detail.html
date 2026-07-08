@@ -62,12 +62,9 @@
       {% if can_edit_production %}
       <a href="{% url 'production_edit' order.pk %}" class="production-btn production-btn--primary">Edit</a>
       {% endif %}
-      {% if is_bangladesh_local_sewing %}
-      {% if can_view_local_sewing_financials %}
-      <a href="{% url 'invoice_add_bd' %}?order_id={{ order.pk }}" class="production-btn production-btn--ghost">Create BDT Invoice</a>
+      {% if is_bangladesh_local_sewing and can_view_local_sewing_financials %}
+        <a href="{% url 'invoice_add_bd' %}?order_id={{ order.pk }}" class="production-btn production-btn--ghost">Create BDT Invoice</a>
       {% endif %}
-      <a href="{% url 'production_list' %}" class="production-btn production-btn--ghost">Back to Production</a>
-      {% else %}
       <a href="#stage-progress" class="production-btn production-btn--ghost">Update Status</a>
       <a href="{% url 'production_next_stage' order.pk %}" class="production-btn production-btn--ghost">Next Stage</a>
       <a href="#production-files" class="production-btn production-btn--ghost">Upload File</a>
@@ -101,7 +98,6 @@
 	      {% elif order.is_archived %}
 	        <span class="production-btn production-btn--ghost">Archived</span>
 	      {% endif %}
-      {% endif %}
     </div>
   </section>
 
@@ -126,15 +122,17 @@
   {% endif %}
 
   {% if is_bangladesh_local_sewing %}
-  <section class="production-panel" aria-label="Bangladesh Local Sewing summary">
+  <section class="production-panel" aria-label="Bangladesh financial summary">
     <div class="production-panel-head">
       <div>
-        <h2>Bangladesh Local Sewing</h2>
-        <p>Simplified sewing-only production record. Currency: BDT.</p>
+        <h2>Bangladesh Financial Summary</h2>
+        <p>Local sewing financials in BDT. Production workflow continues below.</p>
       </div>
       <span class="production-status-badge {{ operational_status }}">{{ operational_status_label }}</span>
     </div>
     <div class="production-approved-grid">
+      <article><span>Service Type</span><strong>Bangladesh Local Sewing</strong></article>
+      <article><span>Local Currency</span><strong>BDT</strong></article>
       <article><span>Customer</span><strong>{% if customer %}{{ customer.account_brand|default:customer.contact_name }}{% else %}Not linked{% endif %}</strong></article>
       <article><span>Product</span><strong>{% if product %}{{ product.name }}{% else %}{{ order.style_name|default:order.title }}{% endif %}</strong></article>
       <article><span>Quantity</span><strong>{{ local_sewing.quantity }}</strong></article>
@@ -156,7 +154,7 @@
       <article><span>Status</span><strong>{{ operational_status_label }}</strong></article>
     </div>
   </section>
-  {% else %}
+  {% endif %}
   <nav class="production-mobile-action-bar" aria-label="Factory quick actions">
     <a href="{% url 'production_next_stage' order.pk %}" class="production-btn production-btn--primary">Next Stage</a>
     {% if stages %}
@@ -245,9 +243,14 @@
       <small>{% if opportunity %}{{ opportunity.product_category|default:opportunity.product_type|default:"Category not set" }}{% else %}{{ order.color_info|default:"Category not set" }}{% endif %}</small>
     </article>
     <article class="production-snapshot-card">
-      <span>Assigned Production Manager</span>
+      <span>Production Manager</span>
       <strong>{% if order.assigned_production_manager %}{{ order.assigned_production_manager.get_full_name|default:order.assigned_production_manager.username }}{% else %}Not assigned{% endif %}</strong>
-      <small>Production owner</small>
+      <small>Assigned employees</small>
+    </article>
+    <article class="production-snapshot-card">
+      <span>Merchant</span>
+      <strong>{% if lead and lead.assigned_to %}{{ lead.assigned_to.get_full_name|default:lead.assigned_to.username }}{% elif lead and lead.owner %}{{ lead.owner }}{% else %}Not assigned{% endif %}</strong>
+      <small>Sales / merchandising owner</small>
     </article>
     <article class="production-snapshot-card">
       <span>Factory</span>
@@ -255,9 +258,14 @@
       <small>Assigned facility</small>
     </article>
     <article class="production-snapshot-card">
-      <span>Delivery Date</span>
+      <span>Estimated completion</span>
       <strong>{% if order.bulk_deadline %}{{ order.bulk_deadline|date:"M j, Y" }}{% else %}Not scheduled{% endif %}</strong>
       <small>{% if order.bulk_deadline %}{{ order.bulk_deadline|timeuntil }} remaining{% else %}No target date{% endif %}</small>
+    </article>
+    <article class="production-snapshot-card">
+      <span>Actual completion</span>
+      <strong>{% if latest_shipment and latest_shipment.status == "delivered" %}{% if latest_shipment.ship_date %}{{ latest_shipment.ship_date|date:"M j, Y" }}{% else %}{{ latest_shipment.updated_at|date:"M j, Y" }}{% endif %}{% else %}Not completed{% endif %}</strong>
+      <small>{% if latest_shipment %}{{ latest_shipment.get_status_display }}{% else %}No shipment yet{% endif %}</small>
     </article>
     <article class="production-snapshot-card">
       <span>Current Operational Status</span>
@@ -593,7 +601,7 @@
       <article class="production-panel">
         <div class="production-panel-head">
           <div>
-            <h2>Factory Action Section</h2>
+            <h2>Daily Production Updates</h2>
             <p>Current pending work, next action, missing information, and QC reminders.</p>
           </div>
           <a href="#production-files" class="production-btn production-btn--tiny production-btn--primary">Upload Documents</a>
@@ -826,7 +834,7 @@
       <article class="production-panel">
         <div class="production-panel-head">
           <div>
-            <h2>Shipping and Delivery</h2>
+            <h2>Shipment Information</h2>
             <p>Shipment status, tracking, carrier, delivery dates, and shipping actions.</p>
           </div>
           <div class="production-panel-actions">
@@ -1273,7 +1281,6 @@
       {% endif %}
     </aside>
   </section>
-  {% endif %}
 </div>
 
 <script>
