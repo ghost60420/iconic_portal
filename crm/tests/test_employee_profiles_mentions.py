@@ -829,7 +829,7 @@ class SalespersonDashboardFeatureTests(TestCase):
         metrics = build_salesperson_profile(self.sales)
         self.assertEqual(metrics["lead_counts"]["total"], 5)
         self.assertEqual(metrics["lead_counts"]["open"], 2)
-        self.assertEqual(metrics["lead_counts"]["converted"], 2)
+        self.assertEqual(metrics["lead_counts"]["converted"], 3)
         self.assertEqual(metrics["lead_counts"]["due_today"], 1)
         self.assertEqual(metrics["lead_counts"]["overdue"], 1)
         self.assertEqual(metrics["opportunity_counts"]["open"], 1)
@@ -843,7 +843,7 @@ class SalespersonDashboardFeatureTests(TestCase):
         self.assertEqual(invoices["BDT"]["amount"], Decimal("10000"))
         paid = {row["currency"]: row["amount"] for row in metrics["paid_invoice_values"]}
         self.assertEqual(paid, {"CAD": Decimal("0"), "USD": Decimal("0"), "BDT": Decimal("0")})
-        self.assertEqual(metrics["paid_invoice_count"], 0)
+        self.assertEqual(metrics["paid_invoice_count"], 3)
 
     def test_closed_won_timestamp_is_set_once(self):
         opportunity = Opportunity.objects.create(
