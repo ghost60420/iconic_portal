@@ -269,20 +269,7 @@
 
               <div class="col-md-3">
                 <div class="label">Flow</div>
-
-                <input
-                  list="direction_list"
-                  name="direction"
-                  id="id_direction"
-                  value="{{ form.direction.value|default_if_none:'' }}"
-                  class="searchInput"
-                  placeholder="Type or pick"
-                >
-                <datalist id="direction_list">
-                  <option value="IN"></option>
-                  <option value="OUT"></option>
-                </datalist>
-
+                {{ form.direction }}
                 <div class="help">IN means money received. OUT means money spent.</div>
 
                 {% if form.direction.errors %}
@@ -445,7 +432,7 @@
 
     [
       "id_date","id_status","id_main_type","id_sub_type",
-      "id_production_order","id_shipment","id_amount_original",
+      "id_direction","id_production_order","id_shipment","id_amount_original",
       "id_description","id_internal_note","id_attachments"
     ].forEach(addClassByTag);
 
@@ -461,11 +448,6 @@
       dateEl.addEventListener("click", function(){
         try { if (dateEl.showPicker) dateEl.showPicker(); } catch(e){}
       });
-    }
-
-    var dirEl = document.getElementById("id_direction");
-    if (dirEl) {
-      dirEl.classList.add("inp");
     }
 
     function cacheOptions(selectEl){

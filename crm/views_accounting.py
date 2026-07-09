@@ -66,7 +66,7 @@ from .forms import (
     AccountingEntryForm,
     AccountingEntryAttachForm,
     AccountingDocumentForm,
-    BDDailyEntryForm,
+    BD_MAIN_TYPE_CHOICES,
     BDStaffForm,
     BDStaffMonthForm,
 )
@@ -446,7 +446,13 @@ def accounting_entry_add_bd(request):
     LOCK_CURRENCY = "BDT"
 
     if request.method == "POST":
-        form = AccountingEntryForm(request.POST, request.FILES)
+        form = AccountingEntryForm(
+            request.POST,
+            request.FILES,
+            lock_side=LOCK_SIDE,
+            lock_currency=LOCK_CURRENCY,
+            bd_mode=True,
+        )
         if form.is_valid():
             obj = form.save(commit=False)
 
@@ -458,9 +464,8 @@ def accounting_entry_add_bd(request):
 
             rate_row = _get_rate_row()
             cad_to_bdt = rate_row.cad_to_bdt if rate_row else Decimal("0")
-            if not obj.rate_to_bdt or obj.rate_to_bdt <= 0:
-                obj.rate_to_bdt = Decimal("1")
-            if cad_to_bdt and cad_to_bdt > 0 and (not obj.rate_to_cad or obj.rate_to_cad <= 0):
+            obj.rate_to_bdt = Decimal("1")
+            if cad_to_bdt and cad_to_bdt > 0:
                 obj.rate_to_cad = cad_to_bdt
             obj.created_by = request.user
             obj.save()
@@ -474,7 +479,12 @@ def accounting_entry_add_bd(request):
 
         messages.error(request, "Please fix the errors below.")
     else:
-        form = AccountingEntryForm(initial={"side": LOCK_SIDE, "currency": LOCK_CURRENCY})
+        form = AccountingEntryForm(
+            initial={"side": LOCK_SIDE, "currency": LOCK_CURRENCY, "direction": "OUT"},
+            lock_side=LOCK_SIDE,
+            lock_currency=LOCK_CURRENCY,
+            bd_mode=True,
+        )
 
     return render(
         request,
@@ -3414,7 +3424,8 @@ def accounting_ca_grid(request):
 # --------------------
 # BD DAILY
 # --------------------
-BD_MONTHLY_TARGET_BDT = Decimal("0")  # replace later if you want from DB
+BD_MONTHLY_TARGET_BDT = Decimal("400000")
+
 
 @login_required
 @bd_required
@@ -3423,20 +3434,6 @@ def accounting_bd_daily(request):
 
     y = _parse_int(request.GET.get("year") or str(today.year)) or today.year
     m = _parse_int(request.GET.get("month") or str(today.month)) or today.month
-
-    if request.method == "POST":
-        form = BDDailyEntryForm(request.POST, request.FILES, user=request.user)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Bangladesh daily entry saved.")
-            return redirect(f"/accounting/bd-daily/?year={y}&month={m}")
-
-        # ADD THIS LINE
-        print("BD DAILY FORM ERRORS:", form.errors)
-
-        messages.error(request, "Please fix the errors and try again.")
-    else:
-        form = BDDailyEntryForm(initial={"date": today}, user=request.user)
 
     qs = AccountingEntry.objects.filter(
         side="BD",
@@ -3453,6 +3450,24 @@ def accounting_bd_daily(request):
         x=Coalesce(Sum("amount_bdt"), Decimal("0"))
     )["x"]
 
+    summary_map = {}
+    for row in (
+        qs.values("main_type", "direction")
+        .annotate(total_bdt=Coalesce(Sum("amount_bdt"), Decimal("0")))
+        .order_by("main_type", "direction")
+    ):
+        label = (row.get("main_type") or "Uncategorized").strip()
+        direction = (row.get("direction") or "").upper().strip()
+        item = summary_map.setdefault(
+            label,
+            {"label": label, "in_bdt": Decimal("0"), "out_bdt": Decimal("0"), "net_bdt": Decimal("0")},
+        )
+        if direction == "IN":
+            item["in_bdt"] += row["total_bdt"] or Decimal("0")
+        elif direction == "OUT":
+            item["out_bdt"] += row["total_bdt"] or Decimal("0")
+        item["net_bdt"] = item["in_bdt"] - item["out_bdt"]
+
     net_bdt = total_in - total_out
     entries = qs.order_by("-date", "-id")[:300]
     remaining_month_bdt = BD_MONTHLY_TARGET_BDT - total_out
@@ -3461,102 +3476,8 @@ def accounting_bd_daily(request):
         request,
         "crm/accounting_bd_daily.html",
         {
-            "form": form,
             "entries": entries,
-            "today": today,
-            "filter_year": str(y),
-            "filter_month": str(m),
-            "monthly_target_bdt": BD_MONTHLY_TARGET_BDT,
-            "this_month_spent_bdt": total_out,
-            "remaining_month_bdt": remaining_month_bdt,
-            "net_bdt": net_bdt,
-        },
-    )
-
-
-# --------------------
-# BD GRID
-# --------------------
-# crm/views_accounting.py
-
-from decimal import Decimal
-from django.contrib import messages
-from django.db.models import Sum
-from django.db.models.functions import Coalesce
-from django.shortcuts import redirect, render
-from django.utils import timezone
-
-from .forms import BDDailyEntryForm
-from .models import AccountingEntry, AccountingAttachment
-
-
-@login_required
-@bd_required
-def accounting_bd_daily(request):
-    today = timezone.localdate()
-
-    def _parse_int(x):
-        try:
-            return int(str(x).strip())
-        except Exception:
-            return None
-
-    y = _parse_int(request.GET.get("year") or str(today.year)) or today.year
-    m = _parse_int(request.GET.get("month") or str(today.month)) or today.month
-
-    if request.method == "POST":
-        form = BDDailyEntryForm(request.POST, request.FILES, user=request.user)
-
-        if form.is_valid():
-            entry = form.save()
-
-            # Save attachments if any
-            files = request.FILES.getlist("attachments")
-            for f in files:
-                AccountingAttachment.objects.create(
-                    entry=entry,
-                    file=f,
-                    uploaded_by=request.user,
-                    original_name=(getattr(f, "name", "") or "")[:255],
-                )
-
-            messages.success(request, "Bangladesh daily entry saved.")
-            return redirect(f"/accounting/bd-daily/?year={y}&month={m}")
-
-        # This will help you see the real reason on screen
-        messages.error(request, f"Form errors: {form.errors.as_text()}")
-
-    else:
-        form = BDDailyEntryForm(initial={"date": today}, user=request.user)
-
-    qs = AccountingEntry.objects.filter(
-        side="BD",
-        currency="BDT",
-        date__year=y,
-        date__month=m,
-    )
-
-    total_in = qs.filter(direction="IN").aggregate(
-        x=Coalesce(Sum("amount_bdt"), Decimal("0"))
-    )["x"]
-
-    total_out = qs.filter(direction="OUT").aggregate(
-        x=Coalesce(Sum("amount_bdt"), Decimal("0"))
-    )["x"]
-
-    net_bdt = total_in - total_out
-
-    entries = qs.order_by("-date", "-id")[:300]
-
-    BD_MONTHLY_TARGET_BDT = Decimal("400000")
-    remaining_month_bdt = BD_MONTHLY_TARGET_BDT - total_out
-
-    return render(
-        request,
-        "crm/accounting_bd_daily.html",
-        {
-            "form": form,
-            "entries": entries,
+            "main_type_summary": sorted(summary_map.values(), key=lambda item: item["label"].lower()),
             "today": today,
             "filter_year": str(y),
             "filter_month": str(m),
@@ -3949,10 +3870,16 @@ def accounting_bd_grid(request):
 
     year_raw = (request.GET.get("year") or str(today.year)).strip()
     month_raw = (request.GET.get("month") or "").strip()
+    filter_direction = (request.GET.get("direction") or "ALL").strip()
+    filter_main_type = (request.GET.get("main_type") or "ALL").strip()
+    filter_has_file = (request.GET.get("has_file") or "ALL").strip()
+    filter_order = (request.GET.get("order") or "").strip()
     q = (request.GET.get("q") or "").strip()
 
     qs = (
         AccountingEntry.objects.filter(side="BD")
+        .select_related("production_order")
+        .prefetch_related("attachments")
         .order_by("-date", "-id")
     )
 
@@ -3966,6 +3893,17 @@ def accounting_bd_grid(request):
             month = str(m)
             qs = qs.filter(date__month=m)
 
+    if filter_direction in {"IN", "OUT"}:
+        qs = qs.filter(direction=filter_direction)
+
+    if filter_main_type and filter_main_type != "ALL":
+        qs = qs.filter(main_type=filter_main_type)
+
+    if filter_has_file == "YES":
+        qs = qs.filter(attachments__isnull=False).distinct()
+    elif filter_has_file == "NO":
+        qs = qs.filter(attachments__isnull=True)
+
     if q:
         qs = qs.filter(
             Q(description__icontains=q)
@@ -3973,6 +3911,9 @@ def accounting_bd_grid(request):
             | Q(main_type__icontains=q)
             | Q(transfer_ref__icontains=q)
         )
+
+    if filter_order:
+        qs = qs.filter(ProductionOrder.identifier_search_query(filter_order, "production_order__order_code"))
 
     total_in_bdt = qs.filter(direction="IN").aggregate(
         x=Coalesce(Sum("amount_original"), Decimal("0"))
@@ -3983,6 +3924,24 @@ def accounting_bd_grid(request):
     )["x"]
 
     net_bdt = total_in_bdt - total_out_bdt
+    existing_main_types = (
+        AccountingEntry.objects.filter(side="BD")
+        .exclude(main_type="")
+        .values_list("main_type", flat=True)
+        .distinct()
+        .order_by("main_type")
+    )
+    seen_main_types = set()
+    main_type_options = []
+    for value, label in BD_MAIN_TYPE_CHOICES:
+        if not value:
+            continue
+        seen_main_types.add(value)
+        main_type_options.append({"value": value, "label": label})
+    for value in existing_main_types:
+        if value not in seen_main_types:
+            seen_main_types.add(value)
+            main_type_options.append({"value": value, "label": value})
 
     return render(
         request,
@@ -3991,7 +3950,12 @@ def accounting_bd_grid(request):
             "entries": list(qs[:500]),
             "filter_year": year_raw,
             "filter_month": month,
-            "q": q,
+            "filter_direction": filter_direction,
+            "filter_main_type": filter_main_type,
+            "filter_has_file": filter_has_file,
+            "filter_order": filter_order,
+            "filter_q": q,
+            "main_type_options": main_type_options,
             "total_in_bdt": total_in_bdt,
             "total_out_bdt": total_out_bdt,
             "net_bdt": net_bdt,

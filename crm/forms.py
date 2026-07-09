@@ -419,6 +419,46 @@ MAIN_TYPE_CHOICES = [
     ("OTHER", "Other"),
 ]
 
+BD_MAIN_TYPE_CHOICES = [
+    ("", "Select"),
+    ("Office Rent", "Office Rent"),
+    ("Utility Bill", "Utility Bill"),
+    ("WiFi Bill", "WiFi Bill"),
+    ("Salary", "Salary"),
+    ("Overtime", "Overtime"),
+    ("Transport", "Transport"),
+    ("Food", "Food"),
+    ("Production Cost", "Production Cost"),
+    ("Sewing Cost", "Sewing Cost"),
+    ("Fabric", "Fabric"),
+    ("Accessories", "Accessories"),
+    ("Printing", "Printing"),
+    ("Embroidery", "Embroidery"),
+    ("Delivery", "Delivery"),
+    ("Maintenance", "Maintenance"),
+    ("Loan", "Loan"),
+    ("Advance", "Advance"),
+    ("Customer Payment", "Customer Payment"),
+    ("Other Income", "Other Income"),
+    ("Other Expense", "Other Expense"),
+]
+
+BD_FLOW_CHOICES = [
+    ("IN", "IN"),
+    ("OUT", "OUT"),
+]
+
+
+def _choices_with_current(choices, *values):
+    normalized = {str(value) for value, _label in choices}
+    result = list(choices)
+    for value in values:
+        value = (value or "").strip()
+        if value and value not in normalized:
+            result.append((value, value))
+            normalized.add(value)
+    return result
+
 
 class AccountingEntryForm(forms.ModelForm):
     attachments = MultipleFileField(
@@ -475,14 +515,40 @@ class AccountingEntryForm(forms.ModelForm):
             "internal_note": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
         }
 
-    def __init__(self, *args, lock_side=None, lock_direction=None, **kwargs):
+    def __init__(self, *args, lock_side=None, lock_direction=None, lock_currency=None, bd_mode=False, **kwargs):
         super().__init__(*args, **kwargs)
+
+        current_status = ""
+        current_main_type = ""
+        if self.instance and self.instance.pk:
+            current_status = (self.instance.status or "").strip()
+            current_main_type = (self.instance.main_type or "").strip()
+        current_status = current_status or (self.initial.get("status") or "")
+        current_main_type = current_main_type or (self.initial.get("main_type") or "")
+        legacy_main_type = ""
+        if self.is_bound:
+            posted_main_type = (self.data.get(self.add_prefix("main_type")) or "").strip()
+            legacy_values = {value for value, _label in MAIN_TYPE_CHOICES if value}
+            if posted_main_type in legacy_values:
+                legacy_main_type = posted_main_type
+
+        if bd_mode:
+            if "direction" in self.fields:
+                self.fields["direction"].choices = BD_FLOW_CHOICES
+            if "status" in self.fields:
+                self.fields["status"].choices = _choices_with_current(STATUS_CHOICES, current_status)
+            if "main_type" in self.fields:
+                self.fields["main_type"].choices = _choices_with_current(
+                    BD_MAIN_TYPE_CHOICES,
+                    current_main_type,
+                    legacy_main_type,
+                )
 
         if self.instance and self.instance.pk:
             if "status" in self.fields:
-                self.fields["status"].initial = (self.instance.status or "").strip()
+                self.fields["status"].initial = current_status
             if "main_type" in self.fields:
-                self.fields["main_type"].initial = (self.instance.main_type or "").strip()
+                self.fields["main_type"].initial = current_main_type
 
         if lock_side and "side" in self.fields:
             self.fields["side"].initial = lock_side
@@ -492,7 +558,11 @@ class AccountingEntryForm(forms.ModelForm):
             self.fields["direction"].initial = lock_direction
             self.fields["direction"].disabled = True
 
-        for name in ("side", "direction"):
+        if lock_currency and "currency" in self.fields:
+            self.fields["currency"].initial = lock_currency
+            self.fields["currency"].disabled = True
+
+        for name in ("side", "direction", "currency"):
             if name in self.fields and getattr(self.fields[name], "disabled", False):
                 css = self.fields[name].widget.attrs.get("class", "")
                 self.fields[name].widget.attrs["class"] = (css + " opacity-75").strip()
@@ -505,6 +575,9 @@ class AccountingEntryForm(forms.ModelForm):
 
         if "direction" in self.fields and self.fields["direction"].disabled:
             cleaned["direction"] = self.fields["direction"].initial
+
+        if "currency" in self.fields and self.fields["currency"].disabled:
+            cleaned["currency"] = self.fields["currency"].initial
 
         currency = (cleaned.get("currency") or "").upper().strip()
         rate_to_cad = cleaned.get("rate_to_cad")
@@ -532,113 +605,6 @@ class AccountingEntryForm(forms.ModelForm):
         return files
 
 
-# --------------------------------------------------
-# BD daily entry form
-# Locked: BD, OUT, BDT
-# --------------------------------------------------
-# crm/forms.py
-
-from decimal import Decimal
-from django import forms
-from django.forms import ModelForm
-from .models import AccountingEntry
-
-BD_QUICK_CHOICES = [
-    ("", "Select"),
-    ("FABRIC", "Fabric"),
-    ("TRIMS", "Trims"),
-    ("PRINT", "Print"),
-    ("EMB", "Embroidery"),
-    ("SALARY", "Salary"),
-    ("RENT", "Rent"),
-    ("UTILITY", "Utility"),
-    ("TRANSPORT", "Transport"),
-    ("FOOD", "Food"),
-    ("MISC", "Misc"),
-]
-
-
-class BDDailyEntryForm(ModelForm):
-    # Make this optional so the form can save even if the UI does not send it
-    quick_category = forms.ChoiceField(
-        choices=BD_QUICK_CHOICES,
-        required=False,
-    )
-
-    # This matches your UI field "Sub type"
-    sub_type = forms.CharField(required=False)
-
-    class Meta:
-        model = AccountingEntry
-        fields = [
-            "date",
-            "main_type",
-            "sub_type",
-            "amount_original",
-            "description",
-        ]
-        widgets = {
-            "description": forms.Textarea(attrs={"rows": 2}),
-        }
-
-    def __init__(self, *args, **kwargs):
-        self.user = kwargs.pop("user", None)
-        super().__init__(*args, **kwargs)
-
-        self.fields["main_type"].required = False
-        self.fields["main_type"].initial = "EXPENSE"
-        self.fields["amount_original"].required = True
-
-    def clean(self):
-        cleaned = super().clean()
-
-        qc = (cleaned.get("quick_category") or "").strip()
-        st = (cleaned.get("sub_type") or "").strip()
-
-        # Locked BD rules
-        cleaned["side"] = "BD"
-        cleaned["direction"] = "OUT"
-        cleaned["currency"] = "BDT"
-        cleaned["rate_to_bdt"] = Decimal("1")
-        cad_to_bdt = _latest_rate_bdt_per_cad()
-        if cad_to_bdt and cad_to_bdt > 0:
-            cleaned["rate_to_cad"] = cad_to_bdt
-        else:
-            cleaned["rate_to_cad"] = Decimal("0")
-
-        # If user typed sub_type, use it
-        # If not, use quick_category
-        cleaned["sub_type"] = st or qc
-
-        # Auto main_type if empty
-        mt = (cleaned.get("main_type") or "").strip()
-        if not mt:
-            if qc in ["FABRIC", "TRIMS", "PRINT", "EMB"]:
-                cleaned["main_type"] = "COGS"
-            else:
-                cleaned["main_type"] = "EXPENSE"
-
-        return cleaned
-
-    def save(self, commit=True):
-        obj = super().save(commit=False)
-        cd = self.cleaned_data
-
-        obj.side = cd["side"]
-        obj.direction = cd["direction"]
-        obj.currency = cd["currency"]
-        obj.rate_to_bdt = cd["rate_to_bdt"]
-        obj.rate_to_cad = cd["rate_to_cad"]
-        obj.sub_type = cd.get("sub_type") or ""
-        obj.main_type = cd.get("main_type") or "EXPENSE"
-
-        if self.user and not obj.created_by_id:
-            obj.created_by = self.user
-
-        if commit:
-            obj.save()
-
-        return obj
 # --------------------------------------------------
 # Accounting document forms
 # --------------------------------------------------

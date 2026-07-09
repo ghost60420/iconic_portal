@@ -476,12 +476,9 @@
             <label class="form-label mb-1 label">Main type</label>
             <select name="main_type" class="form-select form-select-sm inp">
               <option value="ALL" {% if filter_main_type == "ALL" or not filter_main_type %}selected{% endif %}>All</option>
-              <option value="INCOME" {% if filter_main_type == "INCOME" %}selected{% endif %}>Income</option>
-              <option value="COGS" {% if filter_main_type == "COGS" %}selected{% endif %}>COGS</option>
-              <option value="EXPENSE" {% if filter_main_type == "EXPENSE" %}selected{% endif %}>Expense</option>
-              <option value="TRANSFER" {% if filter_main_type == "TRANSFER" %}selected{% endif %}>Transfer</option>
-              <option value="TAX" {% if filter_main_type == "TAX" %}selected{% endif %}>Tax</option>
-              <option value="OTHER" {% if filter_main_type == "OTHER" %}selected{% endif %}>Other</option>
+              {% for option in main_type_options %}
+                <option value="{{ option.value }}" {% if filter_main_type == option.value %}selected{% endif %}>{{ option.label }}</option>
+              {% endfor %}
             </select>
           </div>
 
