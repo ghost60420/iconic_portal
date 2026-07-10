@@ -3871,9 +3871,17 @@ def _preferred_quick_costing_opportunity_row(rows):
         return None
     approved = [
         row for row in rows
-        if getattr(row.get("record"), "status", "") == QuickCosting.STATUS_APPROVED
+        if getattr(row.get("record"), "status", "") in QuickCosting.ACTIVE_APPROVED_STATUSES
     ]
-    return approved[0] if approved else rows[0]
+    approved.sort(
+        key=lambda row: (
+            getattr(row.get("record"), "revision_number", 1) or 1,
+            getattr(row.get("record"), "approved_at", None) or getattr(row.get("record"), "created_at", None),
+            getattr(row.get("record"), "pk", 0) or 0,
+        ),
+        reverse=True,
+    )
+    return approved[0] if approved else None
 
 
 def _opportunity_costing_status(advanced_count, quick_count):
@@ -3927,14 +3935,15 @@ def opportunity_detail(request, pk):
     ).first()
     quick_costings = list(
         QuickCosting.objects.filter(opportunity=opportunity)
-        .select_related("created_by")
+        .select_related("created_by", "previous_revision", "superseded_by", "revision_root")
         .order_by("-updated_at", "-id")
     )
     quick_costing_rows = [
         _quick_costing_opportunity_row(quick_costing)
         for quick_costing in quick_costings
     ] if can_view_internal_financials else []
-    latest_quick_costing_row = _preferred_quick_costing_opportunity_row(quick_costing_rows)
+    latest_quick_costing_row = quick_costing_rows[0] if quick_costing_rows else None
+    reporting_quick_costing_row = _preferred_quick_costing_opportunity_row(quick_costing_rows)
     advanced_costing_count = CostingHeader.objects.filter(opportunity=opportunity).count()
     quick_costing_count = len(quick_costings)
     opportunity_costing_status = _opportunity_costing_status(
@@ -4356,16 +4365,16 @@ def opportunity_detail(request, pk):
         opportunity=opportunity,
         costing=costing_header,
     )
-    if latest_quick_costing_row and workflow_visibility.get("workflow_order_summary"):
+    if reporting_quick_costing_row and workflow_visibility.get("workflow_order_summary"):
         workflow_order_summary = dict(workflow_visibility["workflow_order_summary"])
         workflow_order_summary.update(
             {
                 "value": "",
                 "value_label": "Sales value",
-                "value_lines": latest_quick_costing_row["revenue_lines"],
-                "costing_purpose": latest_quick_costing_row["purpose_label"],
-                "costing_purpose_key": latest_quick_costing_row["purpose_key"],
-                "costing_reference": latest_quick_costing_row["number"],
+                "value_lines": reporting_quick_costing_row["revenue_lines"],
+                "costing_purpose": reporting_quick_costing_row["purpose_label"],
+                "costing_purpose_key": reporting_quick_costing_row["purpose_key"],
+                "costing_reference": reporting_quick_costing_row["number"],
             }
         )
         workflow_visibility["workflow_order_summary"] = workflow_order_summary
@@ -9522,6 +9531,10 @@ def production_detail(request, pk):
             "opportunity",
             "lead",
             "source_quotation",
+            "source_quick_costing",
+            "source_quick_costing__previous_revision",
+            "source_quick_costing__superseded_by",
+            "source_quick_costing__revision_root",
             "assigned_production_manager",
             "created_by",
         ), request.user),
@@ -9630,6 +9643,12 @@ def production_detail(request, pk):
     reject_percent = int((order.qty_reject / order.qty_total) * 100) if order.qty_total else 0
     approved_summary = order.approved_costing_summary or {}
     approved_currency = order.approved_currency or "BDT"
+    source_quick_costing = getattr(order, "source_quick_costing", None)
+    quick_latest_approved_revision = (
+        source_quick_costing.latest_approved_revision()
+        if source_quick_costing
+        else None
+    )
     approved_costing_rows = [
         {
             "label": "Total cost per piece",
@@ -9972,6 +9991,8 @@ def production_detail(request, pk):
             approved_currency,
         ),
         "approved_costing_rows": approved_costing_rows,
+        "source_quick_costing": source_quick_costing,
+        "quick_latest_approved_revision": quick_latest_approved_revision,
         "opportunity": opportunity,
         "lead": lead,
         "customer": customer,
@@ -11159,6 +11180,9 @@ def shipment_add(request):
             rate = form.cleaned_data.get("rate_bdt_per_cad")
             if rate not in [None, ""]:
                 shipment.rate_bdt_per_cad = rate
+            blocked_response = _block_inactive_quick_revision_shipment(request, shipment)
+            if blocked_response:
+                return blocked_response
             shipment.save()
             _handle_shipment_status_change(
                 request,
@@ -11198,6 +11222,38 @@ def shipment_add(request):
             "can_view_shipping_costs": can_edit_internal_costing,
         },
     )
+
+
+def _shipment_source_quick_costing(shipment, order=None):
+    source_order = order
+    if source_order is None:
+        source_order = getattr(shipment, "order", None) or getattr(shipment, "production_order", None)
+    if not source_order:
+        return None
+    return getattr(source_order, "source_quick_costing", None)
+
+
+def _block_inactive_quick_revision_shipment(request, shipment, order=None):
+    source_quick_costing = _shipment_source_quick_costing(shipment, order=order)
+    if not source_quick_costing:
+        return None
+    latest_approved_revision = source_quick_costing.latest_approved_revision()
+    if (
+        source_quick_costing.status not in QuickCosting.ACTIVE_APPROVED_STATUSES
+        or (
+            latest_approved_revision
+            and latest_approved_revision.pk != source_quick_costing.pk
+        )
+    ):
+        messages.error(
+            request,
+            "Shipment creation is blocked because this production order is not linked to the latest approved Quick Costing revision.",
+        )
+        return redirect(
+            "quick_costing_detail",
+            pk=latest_approved_revision.pk if latest_approved_revision else source_quick_costing.pk,
+        )
+    return None
 
 
 def shipment_detail(request, pk):
@@ -11454,6 +11510,10 @@ def shipping_add_for_order(request, pk):
 
             if not shipment.ship_date:
                 shipment.ship_date = timezone.localdate()
+
+            blocked_response = _block_inactive_quick_revision_shipment(request, shipment, order=order)
+            if blocked_response:
+                return blocked_response
 
             # safe numbers
             if hasattr(shipment, "cost_bdt") and shipment.cost_bdt is None:
@@ -11745,14 +11805,7 @@ def _ceo_percent(numerator, denominator):
     return (numerator / denominator * Decimal("100")).quantize(Decimal("0.01"))
 
 
-QUICK_COSTING_KPI_VALUE_STATUSES = [
-    QuickCosting.STATUS_APPROVED,
-    QuickCosting.STATUS_QUOTED,
-    QuickCosting.STATUS_INVOICED,
-    QuickCosting.STATUS_PRODUCTION,
-    QuickCosting.STATUS_SHIPPED,
-    QuickCosting.STATUS_CLOSED,
-]
+QUICK_COSTING_KPI_VALUE_STATUSES = list(QuickCosting.ACTIVE_APPROVED_STATUSES)
 
 
 def _active_lead_queryset():
@@ -11976,6 +12029,28 @@ def _ceo_safe_inventory_snapshot(can_view_financials):
     return snapshot
 
 
+def _quick_revision_metrics():
+    try:
+        return {
+            "total_active_revisions": QuickCosting.objects.exclude(
+                status__in=QuickCosting.INACTIVE_REPORTING_STATUSES
+            ).count(),
+            "superseded_revisions": QuickCosting.objects.filter(
+                status=QuickCosting.STATUS_SUPERSEDED
+            ).count(),
+            "recalled_revisions": QuickCosting.objects.filter(
+                status=QuickCosting.STATUS_RECALLED
+            ).count(),
+        }
+    except (OperationalError, ProgrammingError):
+        logger.exception("quick costing revision metrics unavailable")
+        return {
+            "total_active_revisions": 0,
+            "superseded_revisions": 0,
+            "recalled_revisions": 0,
+        }
+
+
 @login_required
 def ceo_dashboard(request):
     from time import perf_counter
@@ -11987,6 +12062,7 @@ def ceo_dashboard(request):
     production_business = summarize_production_business_models()
     context.update(production_business)
     context["local_sewing_summary"] = production_business["local_sewing"]
+    context["quick_revision_metrics"] = _quick_revision_metrics()
     context["executive_money_cards"] = [
         ("Today's Sales Value", context["today_sales"]),
         ("Monthly Sales Value", context["monthly_sales"]),
@@ -12393,6 +12469,11 @@ def ceo_operations_dashboard(request):
     total_invoice_customers = 0
     quotation_funnel_labels = ["Costings", "Approved", "Quoted", "Invoiced"]
     quotation_funnel_values = [0, 0, 0, 0]
+    quick_revision_metrics = {
+        "total_active_revisions": 0,
+        "superseded_revisions": 0,
+        "recalled_revisions": 0,
+    }
     try:
         advanced_costings_total = CostingHeader.objects.count()
         advanced_approved_costings = CostingHeader.objects.filter(status="approved").count()
@@ -12403,19 +12484,30 @@ def ceo_operations_dashboard(request):
             .distinct()
             .count()
         )
-        quick_costings_total = QuickCosting.objects.count()
-        quick_approved_costings = QuickCosting.objects.filter(
-            status__in=[
-                QuickCosting.STATUS_APPROVED,
-                QuickCosting.STATUS_QUOTED,
-                QuickCosting.STATUS_INVOICED,
-                QuickCosting.STATUS_PRODUCTION,
-                QuickCosting.STATUS_SHIPPED,
-                QuickCosting.STATUS_CLOSED,
-            ]
+        active_quick_costings = QuickCosting.objects.exclude(status__in=QuickCosting.INACTIVE_REPORTING_STATUSES)
+        approved_quick_costings = active_quick_costings.filter(
+            status__in=QuickCosting.ACTIVE_APPROVED_STATUSES,
+        )
+        quick_costings_total = active_quick_costings.count()
+        quick_approved_costings = approved_quick_costings.count()
+        quick_quotation_count = approved_quick_costings.exclude(quotation_number="").filter(
+            quotation_revision_required=False
         ).count()
-        quick_quotation_count = QuickCosting.objects.exclude(quotation_number="").count()
-        quick_quote_to_invoice_count = QuickCosting.objects.exclude(quotation_number="").filter(invoices__isnull=False).distinct().count()
+        quick_quote_to_invoice_count = (
+            approved_quick_costings.exclude(quotation_number="")
+            .filter(quotation_revision_required=False, invoices__isnull=False)
+            .distinct()
+            .count()
+        )
+        quick_revision_metrics = {
+            "total_active_revisions": quick_costings_total,
+            "superseded_revisions": QuickCosting.objects.filter(
+                status=QuickCosting.STATUS_SUPERSEDED
+            ).count(),
+            "recalled_revisions": QuickCosting.objects.filter(
+                status=QuickCosting.STATUS_RECALLED
+            ).count(),
+        }
         costings_total = advanced_costings_total + quick_costings_total
         approved_costings = advanced_approved_costings + quick_approved_costings
         quotation_count = advanced_quotation_count + quick_quotation_count
@@ -12448,6 +12540,7 @@ def ceo_operations_dashboard(request):
         "total_invoice_customers": total_invoice_customers,
         "quotation_count": quotation_count,
         "quote_to_invoice_count": quote_to_invoice_count,
+        "quick_revision_metrics": quick_revision_metrics,
     }
 
     lifecycle_active_orders = 0

@@ -27,6 +27,8 @@ def create_production_order_from_approved_quick_costing(quick_costing, user=None
             raise ProductionOrderCreationError("Only CMT / Sewing Only Quick Costing creates local sewing production.")
         if quick_costing.status != QuickCosting.STATUS_APPROVED or not quick_costing.approved_at:
             raise ProductionOrderCreationError("CEO approval is required before production can begin.")
+        if not quick_costing.is_latest_revision:
+            raise ProductionOrderCreationError("Only the latest Quick Costing revision can move to Production.")
         if quick_costing.currency != "BDT":
             raise ProductionOrderCreationError("Bangladesh Local Sewing must use BDT.")
         if not quick_costing.sewing_charge_per_piece_bdt or quick_costing.sewing_charge_per_piece_bdt <= 0:

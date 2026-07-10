@@ -73,11 +73,22 @@
     text-decoration: none;
   }
 
-  .quick-btn-primary {
-    background: linear-gradient(135deg, #facc15, #f97316);
-    border-color: #fbbf24;
-    color: #111827;
-  }
+	  .quick-btn-primary {
+	    background: linear-gradient(135deg, #facc15, #f97316);
+	    border-color: #fbbf24;
+	    color: #111827;
+	  }
+
+	  .quick-warning-banner {
+	    margin-bottom: 14px;
+	    padding: 12px 14px;
+	    border: 1px solid rgba(251, 191, 36, 0.5);
+	    border-radius: 8px;
+	    background: rgba(120, 53, 15, 0.32);
+	    color: #fde68a;
+	    font-size: 13px;
+	    font-weight: 900;
+	  }
 
   .quick-detail-grid {
     display: grid;
@@ -267,11 +278,24 @@
     color: #fecaca;
   }
 
-  .quick-workflow-badge.state-current.workflow-invoiced {
-    border-color: rgba(168, 85, 247, 0.48);
-    background: rgba(168, 85, 247, 0.16);
-    color: #e9d5ff;
-  }
+	  .quick-workflow-badge.state-current.workflow-invoiced {
+	    border-color: rgba(168, 85, 247, 0.48);
+	    background: rgba(168, 85, 247, 0.16);
+	    color: #e9d5ff;
+	  }
+
+	  .quick-workflow-badge.state-current.workflow-recall-requested {
+	    border-color: rgba(251, 146, 60, 0.5);
+	    background: rgba(251, 146, 60, 0.16);
+	    color: #fed7aa;
+	  }
+
+	  .quick-workflow-badge.state-current.workflow-recalled,
+	  .quick-workflow-badge.state-current.workflow-superseded {
+	    border-color: rgba(148, 163, 184, 0.48);
+	    background: rgba(148, 163, 184, 0.16);
+	    color: #e2e8f0;
+	  }
 
   .quick-version-grid {
     display: grid;
@@ -306,6 +330,44 @@
     font-size: 12px;
   }
 
+  .quick-revision-history {
+    overflow-x: auto;
+  }
+
+  .quick-revision-history table {
+    width: 100%;
+    min-width: 820px;
+    border-collapse: collapse;
+  }
+
+  .quick-revision-history th,
+  .quick-revision-history td {
+    padding: 12px 10px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+    text-align: left;
+    vertical-align: top;
+    color: #e5e7eb;
+    font-size: 12px;
+  }
+
+  .quick-revision-history th {
+    color: #94a3b8;
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+
+  .quick-revision-history td strong,
+  .quick-revision-history td span {
+    display: block;
+  }
+
+  .quick-revision-history .quick-btn {
+    min-height: 30px;
+    padding: 0 10px;
+    font-size: 11px;
+  }
+
   .quick-type-badge {
     display: inline-flex;
     align-items: center;
@@ -326,18 +388,41 @@
     color: #cbd5e1;
   }
 
+  .quick-type-badge.status-submitted {
+    border-color: rgba(96, 165, 250, 0.38);
+    background: rgba(96, 165, 250, 0.13);
+    color: #bfdbfe;
+  }
+
   .quick-type-badge.status-approved,
-  .quick-type-badge.status-quoted {
+  .quick-type-badge.status-quoted,
+  .quick-type-badge.status-production,
+  .quick-type-badge.status-invoiced,
+  .quick-type-badge.status-shipped,
+  .quick-type-badge.status-closed {
     border-color: rgba(34, 197, 94, 0.36);
     background: rgba(34, 197, 94, 0.12);
     color: #bbf7d0;
   }
 
-  .quick-type-badge.status-rejected {
-    border-color: rgba(248, 113, 113, 0.36);
-    background: rgba(248, 113, 113, 0.12);
-    color: #fecaca;
-  }
+	  .quick-type-badge.status-rejected {
+	    border-color: rgba(248, 113, 113, 0.36);
+	    background: rgba(248, 113, 113, 0.12);
+	    color: #fecaca;
+	  }
+
+	  .quick-type-badge.status-recall_requested {
+	    border-color: rgba(251, 146, 60, 0.4);
+	    background: rgba(251, 146, 60, 0.14);
+	    color: #fed7aa;
+	  }
+
+	  .quick-type-badge.status-recalled,
+	  .quick-type-badge.status-superseded {
+	    border-color: rgba(148, 163, 184, 0.36);
+	    background: rgba(148, 163, 184, 0.12);
+	    color: #e2e8f0;
+	  }
 
   .quick-type-badge.purpose-sample {
     border-color: rgba(96, 165, 250, 0.38);
@@ -351,10 +436,26 @@
     color: #bbf7d0;
   }
 
-  .quick-inline-form {
-    display: inline-flex;
-    margin: 0;
-  }
+	  .quick-inline-form {
+	    display: inline-flex;
+	    margin: 0;
+	  }
+
+	  .quick-recall-form {
+	    gap: 6px;
+	    flex-wrap: wrap;
+	  }
+
+	  .quick-recall-input {
+	    min-height: 36px;
+	    max-width: 230px;
+	    padding: 0 10px;
+	    border: 1px solid #374151;
+	    border-radius: 999px;
+	    background: rgba(15, 23, 42, 0.8);
+	    color: #e5e7eb;
+	    font-size: 12px;
+	  }
 
   .quick-disabled-note {
     display: inline-flex;
@@ -386,12 +487,13 @@
   }
 
   @media (max-width: 560px) {
-    .quick-actions,
-    .quick-actions .quick-btn,
-    .quick-actions .quick-inline-form,
-    .quick-actions .quick-disabled-note {
-      width: 100%;
-    }
+	    .quick-actions,
+	    .quick-actions .quick-btn,
+	    .quick-actions .quick-inline-form,
+	    .quick-actions .quick-recall-input,
+	    .quick-actions .quick-disabled-note {
+	      width: 100%;
+	    }
 
     .quick-version-grid {
       grid-template-columns: 1fr;
@@ -449,7 +551,7 @@
           {% csrf_token %}
           <button type="submit" class="quick-btn quick-btn-primary" style="cursor:pointer;">Submit for CEO Approval</button>
         </form>
-      {% elif approval_status_label == "Pending CEO Approval" %}
+      {% elif approval_status_label == "Pending Approval" %}
         <span class="quick-disabled-note">Submitted for CEO Approval</span>
       {% endif %}
       {% if can_edit_quick_costing %}
@@ -468,12 +570,12 @@
             <button type="submit" class="quick-btn quick-btn-primary" style="cursor:pointer;">Create Invoice</button>
           </form>
         {% endif %}
-      {% elif approval_status_label == "Approved" and can_approve %}
+      {% elif can_create_quick_quotation %}
         <form method="post" action="{% url 'quick_costing_convert_to_quotation' quick_costing.pk %}" class="quick-inline-form">
           {% csrf_token %}
           <button type="submit" class="quick-btn quick-btn-primary" style="cursor:pointer;">Create Quotation</button>
         </form>
-      {% elif quick_costing.status != "approved" %}
+      {% elif quick_costing.status != "approved" and quick_costing.status != "production" %}
         <span class="quick-disabled-note">CEO approval is required before creating a quotation.</span>
       {% endif %}
       {% if production_order %}
@@ -487,11 +589,59 @@
       {% if quick_costing.opportunity %}
         <a class="quick-btn" href="{% url 'opportunity_detail' quick_costing.opportunity.pk %}">Open Opportunity</a>
       {% endif %}
+      {% if can_request_recall %}
+        <form method="post" action="{% url 'quick_costing_request_recall' quick_costing.pk %}" class="quick-inline-form quick-recall-form">
+          {% csrf_token %}
+          <input class="quick-recall-input" type="text" name="reason" maxlength="500" placeholder="Recall reason">
+          <button type="submit" class="quick-btn" style="cursor:pointer;">Request Recall</button>
+        </form>
+      {% elif recall_blockers %}
+        <span class="quick-disabled-note">Recall blocked by linked {{ recall_blockers|join:", " }}.</span>
+      {% endif %}
+      {% if can_create_revision_copy %}
+        <form method="post" action="{% url 'quick_costing_create_revision_copy' quick_costing.pk %}" class="quick-inline-form">
+          {% csrf_token %}
+          <button type="submit" class="quick-btn quick-btn-primary" style="cursor:pointer;">Create Revision Copy</button>
+        </form>
+      {% endif %}
       <a class="quick-btn quick-btn-primary" href="{% url 'cost_sheet_create' %}?costing_type=quick">New Quick Costing</a>
       <a class="quick-btn" href="{% url 'cost_sheet_list' %}?costing_type=quick">Quick Costing List</a>
       <a class="quick-btn" href="{% url 'cost_sheet_list' %}">All Costings</a>
     </div>
   </section>
+
+  {% if show_not_active_revision_warning %}
+    <div class="quick-warning-banner">
+      This is not the active costing revision.<br>
+      Latest approved version: {{ latest_approved_revision.revision_label }}.
+      <a href="{% url 'quick_costing_detail' latest_approved_revision.pk %}" style="color:#fef3c7;">Open Latest Version</a>
+    </div>
+  {% endif %}
+  {% if quick_costing.status == "recalled" %}
+    <div class="quick-warning-banner">
+      This costing has been recalled and cannot create new transactions.
+    </div>
+  {% elif quick_costing.status == "superseded" or quick_costing.superseded_by %}
+    <div class="quick-warning-banner">
+      This costing has been superseded.<br>
+      Latest approved version: {% if latest_approved_revision %}{{ latest_approved_revision.revision_label }}{% else %}Not available{% endif %}.
+      {% if latest_approved_revision and latest_approved_revision.pk != quick_costing.pk %}
+        <a href="{% url 'quick_costing_detail' latest_approved_revision.pk %}" style="color:#fef3c7;">Open Latest Version</a>
+      {% endif %}
+    </div>
+  {% elif quick_costing.quotation_revision_required %}
+    <div class="quick-warning-banner">
+      This quotation is marked Revision Required. Existing quotation records remain linked to {{ quick_costing.revision_label }}.
+      {% if latest_approved_revision and latest_approved_revision.pk != quick_costing.pk %}
+        <a href="{% url 'quick_costing_detail' latest_approved_revision.pk %}" style="color:#fef3c7;">Open Latest Version</a>
+      {% endif %}
+    </div>
+  {% endif %}
+  {% if quick_costing.is_locked and not can_edit_quick_costing %}
+    <div class="quick-warning-banner">
+      This revision is read only.
+    </div>
+  {% endif %}
 
   <section class="quick-detail-card" style="margin-bottom:14px;" aria-label="Costing workflow status">
     <h2 class="quick-section-title">Management Status</h2>
@@ -516,8 +666,12 @@
           <div class="quick-meta-row"><span>Pricing Type</span><strong>{{ quick_costing.get_pricing_type_display|default:"Full Package" }}</strong></div>
           <div class="quick-meta-row"><span>Service Type</span><strong>{{ quick_costing.service_type_label }}</strong></div>
           {% if quick_costing.is_bangladesh_local_sewing %}<div class="quick-meta-row"><span>Factory</span><strong>Bangladesh</strong></div>{% endif %}
-          <div class="quick-meta-row"><span>Status</span><strong><span class="quick-type-badge status-{{ quick_costing.status }}">{{ quick_costing.get_status_display }}</span></strong></div>
-          <div class="quick-meta-row"><span>Approval Status</span><strong><span class="quick-type-badge status-{{ approval_status_label|lower }}">{{ approval_status_label }}</span></strong></div>
+	          <div class="quick-meta-row"><span>Status</span><strong><span class="quick-type-badge status-{{ quick_costing.status }}">{{ quick_costing.get_status_display }}</span></strong></div>
+	          <div class="quick-meta-row"><span>Approval Status</span><strong><span class="quick-type-badge status-{{ quick_costing.status }}">{{ approval_status_label }}</span></strong></div>
+		          <div class="quick-meta-row"><span>Current Revision</span><strong>{{ quick_costing.revision_label }}{% if is_latest_revision %} · Latest{% endif %}</strong></div>
+		          <div class="quick-meta-row"><span>Previous Revision</span><strong>{% if quick_costing.previous_revision %}<a href="{% url 'quick_costing_detail' quick_costing.previous_revision.pk %}">{{ quick_costing.previous_revision.revision_label }}</a>{% else %}None{% endif %}</strong></div>
+		          <div class="quick-meta-row"><span>Latest Approved Revision</span><strong>{% if latest_approved_revision %}<a href="{% url 'quick_costing_detail' latest_approved_revision.pk %}">{{ latest_approved_revision.revision_label }}</a>{% else %}None{% endif %}</strong></div>
+		          {% if latest_approved_revision and latest_approved_revision.pk != quick_costing.pk %}<div class="quick-meta-row"><span>Open Latest Version</span><strong><a href="{% url 'quick_costing_detail' latest_approved_revision.pk %}">Open Latest Version</a></strong></div>{% endif %}
           <div class="quick-meta-row"><span>Currency</span><strong>{{ calc.display.currency }}</strong></div>
           <div class="quick-meta-row"><span>Exchange Rate</span><strong>{{ calc.display.exchange_rate }}</strong></div>
           <div class="quick-meta-row"><span>Quantity</span><strong>{{ quick_costing.quantity }} pieces</strong></div>
@@ -636,42 +790,110 @@
       </div>
     </details>
 
-    <section class="quick-detail-card" aria-label="Version information">
-      <h2 class="quick-section-title">Version Information</h2>
-      <div class="quick-version-grid">
-        <div class="quick-version-item"><span>Created By</span><strong>{% if quick_costing.created_by %}{{ quick_costing.created_by.get_full_name|default:quick_costing.created_by.username }}{% else %}Not set{% endif %}</strong></div>
-        <div class="quick-version-item"><span>Created Date</span><strong>{{ quick_costing.created_at|date:"M j, Y H:i" }}</strong></div>
-        <div class="quick-version-item"><span>Last Updated By</span><strong>Not tracked</strong></div>
-        <div class="quick-version-item"><span>Last Updated</span><strong>{{ quick_costing.updated_at|date:"M j, Y H:i" }}</strong></div>
-      </div>
-    </section>
-  </section>
+		    <section class="quick-detail-card" aria-label="Version information">
+		      <h2 class="quick-section-title">Version Information</h2>
+		      <div class="quick-version-grid">
+		        <div class="quick-version-item"><span>Current Revision</span><strong>{{ quick_costing.revision_label }}{% if is_latest_revision %} · Latest{% endif %}</strong></div>
+		        <div class="quick-version-item"><span>Previous Revision</span><strong>{% if quick_costing.previous_revision %}<a href="{% url 'quick_costing_detail' quick_costing.previous_revision.pk %}">{{ quick_costing.previous_revision.revision_label }}</a>{% else %}None{% endif %}</strong></div>
+		        <div class="quick-version-item"><span>Latest Approved Revision</span><strong>{% if latest_approved_revision %}<a href="{% url 'quick_costing_detail' latest_approved_revision.pk %}">{{ latest_approved_revision.revision_label }}</a>{% else %}None{% endif %}</strong></div>
+		        <div class="quick-version-item"><span>Superseded By</span><strong>{% if quick_costing.superseded_by %}<a href="{% url 'quick_costing_detail' quick_costing.superseded_by.pk %}">{{ quick_costing.superseded_by.revision_label }}</a>{% else %}None{% endif %}</strong></div>
+		        {% if latest_approved_revision and latest_approved_revision.pk != quick_costing.pk %}<div class="quick-version-item"><span>Open Latest Version</span><strong><a href="{% url 'quick_costing_detail' latest_approved_revision.pk %}">Open Latest Version</a></strong></div>{% endif %}
+	        <div class="quick-version-item"><span>Created By</span><strong>{% if quick_costing.created_by %}{{ quick_costing.created_by.get_full_name|default:quick_costing.created_by.username }}{% else %}Not set{% endif %}</strong></div>
+	        <div class="quick-version-item"><span>Created Date</span><strong>{{ quick_costing.created_at|date:"M j, Y H:i" }}</strong></div>
+	        <div class="quick-version-item"><span>Last Updated By</span><strong>Not tracked</strong></div>
+	        <div class="quick-version-item"><span>Last Updated</span><strong>{{ quick_costing.updated_at|date:"M j, Y H:i" }}</strong></div>
+	        <div class="quick-version-item"><span>Approved By</span><strong>{% if quick_costing.approved_by %}{{ quick_costing.approved_by.get_full_name|default:quick_costing.approved_by.username }}{% else %}Not recorded{% endif %}</strong></div>
+	        <div class="quick-version-item"><span>Approved At</span><strong>{% if quick_costing.approved_at %}{{ quick_costing.approved_at|date:"M j, Y H:i" }}{% else %}Not recorded{% endif %}</strong></div>
+	        <div class="quick-version-item"><span>Recall Requested By</span><strong>{% if quick_costing.recall_requested_by %}{{ quick_costing.recall_requested_by.get_full_name|default:quick_costing.recall_requested_by.username }}{% else %}Not requested{% endif %}</strong></div>
+	        <div class="quick-version-item"><span>Recall Requested At</span><strong>{% if quick_costing.recall_requested_at %}{{ quick_costing.recall_requested_at|date:"M j, Y H:i" }}{% else %}Not requested{% endif %}</strong></div>
+	        <div class="quick-version-item"><span>Recalled By</span><strong>{% if quick_costing.recalled_by %}{{ quick_costing.recalled_by.get_full_name|default:quick_costing.recalled_by.username }}{% else %}Not recalled{% endif %}</strong></div>
+	        <div class="quick-version-item"><span>Recalled At</span><strong>{% if quick_costing.recalled_at %}{{ quick_costing.recalled_at|date:"M j, Y H:i" }}{% else %}Not recalled{% endif %}</strong></div>
+		        <div class="quick-version-item"><span>Recall Reason</span><strong>{{ quick_costing.recall_reason|default:"Not recorded" }}</strong></div>
+		      </div>
+		    </section>
+
+      <section class="quick-detail-card" aria-label="Revision history">
+        <h2 class="quick-section-title">Revision History</h2>
+        <div class="quick-revision-history">
+          <table>
+            <thead>
+              <tr>
+                <th>Revision</th>
+                <th>Status</th>
+                <th>Created By</th>
+                <th>Created Date</th>
+                <th>Approved By</th>
+                <th>Approved Date</th>
+                <th>Revenue</th>
+                <th>Profit</th>
+                <th>Open</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in revision_history_rows %}
+                <tr>
+                  <td>
+                    <strong>Revision {{ row.label }}</strong>
+                    {% if row.is_current %}<span>Current page</span>{% endif %}
+                  </td>
+                  <td><span class="quick-type-badge status-{{ row.record.status }}">{{ row.status_label }}</span></td>
+                  <td>{{ row.created_by|default:"Not set" }}</td>
+                  <td>{% if row.created_at %}{{ row.created_at|date:"M j, Y H:i" }}{% else %}Not set{% endif %}</td>
+                  <td>{{ row.approved_by|default:"Not recorded" }}</td>
+                  <td>{% if row.approved_at %}{{ row.approved_at|date:"M j, Y H:i" }}{% else %}Not recorded{% endif %}</td>
+                  <td>{{ row.revenue }}</td>
+                  <td>{{ row.profit }}</td>
+                  <td><a class="quick-btn" href="{% url 'quick_costing_detail' row.record.pk %}">Open</a></td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="9">No revision history available.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+	  </section>
 
   {% if can_approve %}
     <section class="quick-detail-card" style="margin-top:14px;">
       <h2 class="quick-section-title">Approval Workflow</h2>
-      <div class="quick-meta-row" style="margin-bottom:12px;">
-        <span>Approval Status</span>
-        <strong><span class="quick-type-badge status-{{ approval_status_label|lower }}">{{ approval_status_label }}</span></strong>
-      </div>
-      {% if quick_costing.approval_submitted_at and approval_status_label == "Pending CEO Approval" and can_decide_quick_costing %}
-        <div class="quick-actions" style="justify-content:flex-start;">
-          <form method="post" action="{% url 'quick_costing_approve' quick_costing.pk %}" class="quick-inline-form">
-            {% csrf_token %}
-            <button type="submit" class="quick-btn quick-btn-primary" style="cursor:pointer;">Approve</button>
+	      <div class="quick-meta-row" style="margin-bottom:12px;">
+	        <span>Approval Status</span>
+	        <strong><span class="quick-type-badge status-{{ quick_costing.status }}">{{ approval_status_label }}</span></strong>
+	      </div>
+	      {% if can_approve_recall %}
+	        <div class="quick-actions" style="justify-content:flex-start;">
+	          <form method="post" action="{% url 'quick_costing_approve_recall' quick_costing.pk %}" class="quick-inline-form">
+	            {% csrf_token %}
+	            <button type="submit" class="quick-btn quick-btn-primary" style="cursor:pointer;">Approve Recall</button>
+	          </form>
+	          <form method="post" action="{% url 'quick_costing_reject_recall' quick_costing.pk %}" class="quick-inline-form">
+	            {% csrf_token %}
+	            <button type="submit" class="quick-btn" style="cursor:pointer;">Reject Recall</button>
+	          </form>
+	        </div>
+		      {% elif quick_costing.approval_submitted_at and approval_status_label == "Pending Approval" and can_decide_quick_costing %}
+	        <div class="quick-actions" style="justify-content:flex-start;">
+	          <form method="post" action="{% url 'quick_costing_approve' quick_costing.pk %}" class="quick-inline-form">
+	            {% csrf_token %}
+	            <button type="submit" class="quick-btn quick-btn-primary" style="cursor:pointer;">Approve</button>
           </form>
           <form method="post" action="{% url 'quick_costing_reject' quick_costing.pk %}" class="quick-inline-form">
             {% csrf_token %}
             <button type="submit" class="quick-btn" style="cursor:pointer;">Reject</button>
           </form>
         </div>
-      {% elif quick_costing.approval_submitted_at and approval_status_label == "Pending CEO Approval" %}
+      {% elif quick_costing.approval_submitted_at and approval_status_label == "Pending Approval" %}
         <p class="quick-disabled-note">Submitted for CEO Approval. The costing creator cannot approve their own Quick Costing.</p>
-      {% elif quick_costing.status == "approved" %}
-        <p class="quick-disabled-note">Approval completed. The approved costing is ready for quotation and production.</p>
-      {% else %}
-        <p class="quick-disabled-note">Only submitted Quick Costing can be approved or rejected.</p>
-      {% endif %}
+	      {% elif quick_costing.status == "approved" or quick_costing.status == "quoted" or quick_costing.status == "production" %}
+	        <p class="quick-disabled-note">Approval completed. The approved costing is ready for quotation and production.</p>
+	      {% elif quick_costing.status == "recalled" %}
+	        <p class="quick-disabled-note">Recall approved. Create a revision copy before editing this costing.</p>
+	      {% elif quick_costing.status == "superseded" %}
+	        <p class="quick-disabled-note">This historical costing is superseded and remains read only.</p>
+	      {% else %}
+	        <p class="quick-disabled-note">Only submitted Quick Costing can be approved or rejected.</p>
+	      {% endif %}
     </section>
   {% endif %}
 

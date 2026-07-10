@@ -74,6 +74,8 @@ def _is_quotation(costing):
         costing
         and getattr(costing, "quotation_number", "")
         and getattr(costing, "quoted_at", None)
+        and not getattr(costing, "quotation_revision_required", False)
+        and getattr(costing, "status", "") in QuickCosting.ACTIVE_APPROVED_STATUSES
     )
 
 
@@ -256,7 +258,8 @@ def _hydrate_links(
             quick_costing = _first_or_none(
                 QuickCosting.objects.select_related("opportunity", "created_by")
                 .filter(opportunity=opportunity)
-                .order_by("-updated_at", "-id")
+                .exclude(status__in=QuickCosting.INACTIVE_REPORTING_STATUSES)
+                .order_by("-revision_number", "-updated_at", "-id")
             )
         quick_costing_count = QuickCosting.objects.filter(opportunity=opportunity).count()
         if _is_quotation(quick_costing):

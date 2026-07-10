@@ -47,6 +47,18 @@
     flex-wrap: wrap;
   }
 
+  .quick-quote-superseded {
+    max-width: 1040px;
+    margin: 0 auto 14px;
+    padding: 12px 14px;
+    border: 1px solid #d4af37;
+    border-radius: 8px;
+    background: #fff7ed;
+    color: #92400e;
+    font-size: 13px;
+    font-weight: 900;
+  }
+
   .quick-quote-status-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(150px, 1fr));
@@ -76,6 +88,55 @@
     color: #475569;
     font-size: 13px;
     line-height: 1.45;
+  }
+
+  .quick-quote-status-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 26px;
+    padding: 0 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.42);
+    background: rgba(148, 163, 184, 0.12);
+    color: #334155;
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .quick-quote-status-badge.status-submitted {
+    border-color: rgba(37, 99, 235, 0.34);
+    background: rgba(37, 99, 235, 0.10);
+    color: #1d4ed8;
+  }
+
+  .quick-quote-status-badge.status-approved,
+  .quick-quote-status-badge.status-quoted,
+  .quick-quote-status-badge.status-production,
+  .quick-quote-status-badge.status-invoiced,
+  .quick-quote-status-badge.status-shipped,
+  .quick-quote-status-badge.status-closed {
+    border-color: rgba(22, 163, 74, 0.34);
+    background: rgba(22, 163, 74, 0.10);
+    color: #166534;
+  }
+
+  .quick-quote-status-badge.status-recall_requested {
+    border-color: rgba(217, 119, 6, 0.38);
+    background: rgba(217, 119, 6, 0.12);
+    color: #92400e;
+  }
+
+  .quick-quote-status-badge.status-recalled,
+  .quick-quote-status-badge.status-superseded {
+    border-color: rgba(100, 116, 139, 0.34);
+    background: rgba(100, 116, 139, 0.10);
+    color: #475569;
+  }
+
+  .quick-quote-status-badge.status-rejected {
+    border-color: rgba(220, 38, 38, 0.34);
+    background: rgba(220, 38, 38, 0.10);
+    color: #991b1b;
   }
 
   .quick-quote-wrap {
@@ -275,12 +336,32 @@
   <a class="quick-quote-btn primary" href="#" onclick="window.print();return false;">Print</a>
 </div>
 
+{% if latest_approved_revision and latest_approved_revision.pk != quick_costing.pk %}
+  <div class="quick-quote-superseded">
+    This is not the active costing revision. Latest approved version: {{ latest_approved_revision.revision_label }}.
+    <a href="{% url 'quick_costing_detail' latest_approved_revision.pk %}" style="color:#92400e;font-weight:800;">Open Latest Version</a>
+  </div>
+{% endif %}
+
+{% if quick_costing.status == "recalled" %}
+  <div class="quick-quote-superseded">
+    This costing has been recalled and cannot create new transactions.
+  </div>
+{% elif quick_costing.status == "superseded" or quick_costing.superseded_by %}
+  <div class="quick-quote-superseded">
+    This costing has been superseded. Latest approved version: {% if latest_approved_revision %}{{ latest_approved_revision.revision_label }}{% else %}Not available{% endif %}.
+    {% if latest_approved_revision and latest_approved_revision.pk != quick_costing.pk %}
+      <a href="{% url 'quick_costing_detail' latest_approved_revision.pk %}" style="color:#92400e;font-weight:800;">Open Latest Version</a>
+    {% endif %}
+  </div>
+{% endif %}
+
 <section class="quick-quote-status-banner" aria-label="Quick costing quotation approval status">
   <div>
     <div class="quick-quote-status-grid">
       <div class="quick-quote-status-item">
         <span>Quotation Status</span>
-        <strong>{{ approval_status_label }}</strong>
+        <strong><span class="quick-quote-status-badge status-{{ quick_costing.status }}">{{ approval_status_label }}</span></strong>
       </div>
       <div class="quick-quote-status-item">
         <span>Approved By</span>
@@ -299,7 +380,7 @@
         <strong>{{ quick_costing.get_pricing_type_display|default:"Full Package" }}</strong>
       </div>
     </div>
-    {% if approval_status_label == "Approved" %}
+    {% if approval_status_label == "CEO Approved" %}
       <p class="quick-quote-status-note">This quotation was approved through the Quick Costing Approval Workflow.</p>
     {% elif approval_status_label == "Rejected" %}
       <p class="quick-quote-status-note">This quotation was rejected through the Quick Costing Approval Workflow.</p>
@@ -324,6 +405,20 @@
 {% include "crm/partials/workflow_order_summary.html" %}
 {% include "crm/partials/workflow_activity_timeline.html" %}
 
+{% if quick_costing.quotation_revision_required %}
+  {% if quick_costing.status != "superseded" and not quick_costing.superseded_by %}
+    <section class="quick-quote-status-panel noPrint" style="border-color:#f59e0b;background:#451a03;color:#fef3c7;">
+      <div>
+        <strong>Quotation Status: Revision Required</strong><br>
+        This quotation remains linked to {{ quick_costing.revision_label }} and should not be used for a new invoice.
+        {% if latest_approved_revision and latest_approved_revision.pk != quick_costing.pk %}
+          · <a href="{% url 'quick_costing_detail' latest_approved_revision.pk %}" style="color:#fef3c7;font-weight:800;">Open Latest Version</a>
+        {% endif %}
+      </div>
+    </section>
+  {% endif %}
+{% endif %}
+
 <article class="quick-quote-wrap">
   <header class="quick-quote-head">
     <div>
@@ -339,7 +434,11 @@
       <strong>Quotation</strong>
       Quote # {{ quick_costing.quotation_number }}<br>
       Date {% if quick_costing.quoted_at %}{{ quick_costing.quoted_at|date:"Y-m-d" }}{% else %}{% now "Y-m-d" %}{% endif %}<br>
-      Prepared By {{ prepared_by|default:"Iconic Apparel House" }}
+      Prepared By {{ prepared_by|default:"Iconic Apparel House" }}<br>
+      Current Revision: {{ quick_costing.revision_label }}<br>
+      Previous Revision: {% if quick_costing.previous_revision %}{{ quick_costing.previous_revision.revision_label }}{% else %}None{% endif %}<br>
+      Latest Approved Revision: {% if latest_approved_revision %}{{ latest_approved_revision.revision_label }}{% else %}None{% endif %}
+      {% if latest_approved_revision and latest_approved_revision.pk != quick_costing.pk %}<br><a href="{% url 'quick_costing_detail' latest_approved_revision.pk %}" style="color:#fef3c7;font-weight:800;">Open Latest Version</a>{% endif %}
     </div>
   </header>
 

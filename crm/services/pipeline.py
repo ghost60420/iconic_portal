@@ -12,12 +12,7 @@ from crm.services.costing_currency import currency_summary_rows
 CLOSED_PIPELINE_STAGES = ("Closed Won", "Closed Lost", "Cancelled")
 NON_OPEN_PIPELINE_STAGES = CLOSED_PIPELINE_STAGES + ("Production", "Shipment Complete")
 PIPELINE_QUICK_COSTING_STATUSES = (
-    QuickCosting.STATUS_APPROVED,
-    QuickCosting.STATUS_QUOTED,
-    QuickCosting.STATUS_INVOICED,
-    QuickCosting.STATUS_PRODUCTION,
-    QuickCosting.STATUS_SHIPPED,
-    QuickCosting.STATUS_CLOSED,
+    *QuickCosting.ACTIVE_APPROVED_STATUSES,
 )
 
 
@@ -42,12 +37,7 @@ def with_pipeline_value(queryset, annotation_name="pipeline_value"):
             status__in=PIPELINE_QUICK_COSTING_STATUSES,
         )
         .annotate(_pipeline_revenue=revenue_expression)
-        .order_by("-updated_at", "-id")
-    )
-    latest_quick = (
-        QuickCosting.objects.filter(opportunity=OuterRef("pk"))
-        .annotate(_pipeline_revenue=revenue_expression)
-        .order_by("-updated_at", "-id")
+        .order_by("-revision_number", "-approved_at", "-updated_at", "-id")
     )
     approved_advanced = CostingHeader.objects.filter(
         opportunity=OuterRef("pk"), status="approved", is_archived=False
@@ -56,15 +46,12 @@ def with_pipeline_value(queryset, annotation_name="pipeline_value"):
         opportunity=OuterRef("pk"), is_archived=False
     ).order_by("-updated_at", "-id")
     annotated = queryset.annotate(
-        _pipeline_quick_value=Coalesce(
-            Subquery(approved_quick.values("_pipeline_revenue")[:1]),
-            Subquery(latest_quick.values("_pipeline_revenue")[:1]),
+        _pipeline_quick_value=Subquery(
+            approved_quick.values("_pipeline_revenue")[:1],
             output_field=models.DecimalField(max_digits=16, decimal_places=2),
         ),
-        _pipeline_quick_currency=Coalesce(
-            Subquery(approved_quick.values("currency")[:1]),
-            Subquery(latest_quick.values("currency")[:1]),
-            models.Value("BDT"),
+        _pipeline_quick_currency=Subquery(
+            approved_quick.values("currency")[:1],
             output_field=models.CharField(max_length=10),
         ),
         _pipeline_advanced_quantity=Coalesce(

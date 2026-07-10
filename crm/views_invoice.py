@@ -2232,6 +2232,9 @@ def invoice_view(request, pk):
             "quick_costing",
             "quick_costing__opportunity",
             "quick_costing__opportunity__lead",
+            "quick_costing__previous_revision",
+            "quick_costing__superseded_by",
+            "quick_costing__revision_root",
         ),
         pk=pk,
     )
@@ -2262,6 +2265,11 @@ def invoice_view(request, pk):
     )
     invoice_market = _invoice_market(inv)
     invoice_type = _invoice_type(inv)
+    quick_latest_approved_revision = (
+        inv.quick_costing.latest_approved_revision()
+        if getattr(inv, "quick_costing", None)
+        else None
+    )
 
     initial = {
         "payment_date": timezone.localdate(),
@@ -2294,6 +2302,7 @@ def invoice_view(request, pk):
             "can_void_or_delete_invoice": user_can_manage_invoices and can_void_or_delete_invoice(request.user),
             "invoice_has_payments": bool(payment_history or _d(inv.paid_amount) > 0),
             "invoice_total_cad_equivalent": _invoice_total_cad_equivalent(inv),
+            "quick_latest_approved_revision": quick_latest_approved_revision,
             **workflow_visibility,
         },
     )

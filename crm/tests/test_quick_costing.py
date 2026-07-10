@@ -8,7 +8,20 @@ from django.urls import reverse
 from django.utils import timezone
 
 from crm.forms_costing import QuickCostingForm
-from crm.models import CostingHeader, Invoice, Lead, Opportunity, QuickCosting
+from crm.models import (
+    AccountingEntry,
+    CRMAuditLog,
+    CostingHeader,
+    Invoice,
+    InvoicePayment,
+    Lead,
+    Opportunity,
+    ProductionOrder,
+    QuickCosting,
+    Shipment,
+)
+from crm.services.pipeline import with_pipeline_value
+from crm.services.production_orders import create_production_order_from_approved_quick_costing
 from crm.views_costing import _quick_profit_health, _quick_workflow_badges
 
 
@@ -429,6 +442,9 @@ class QuickCostingTests(TestCase):
             QuickCosting.STATUS_DRAFT: "draft",
             QuickCosting.STATUS_APPROVED: "ceo-approved",
             QuickCosting.STATUS_REJECTED: "rejected",
+            QuickCosting.STATUS_RECALL_REQUESTED: "recall-requested",
+            QuickCosting.STATUS_RECALLED: "recalled",
+            QuickCosting.STATUS_SUPERSEDED: "superseded",
             QuickCosting.STATUS_QUOTED: "quoted",
             QuickCosting.STATUS_INVOICED: "invoiced",
         }
@@ -440,7 +456,17 @@ class QuickCostingTests(TestCase):
                 self.assertEqual(current, [expected_current])
                 self.assertEqual(
                     [badge["label"] for badge in badges],
-                    ["Draft", "Submitted", "CEO Pending", "CEO Approved", "Rejected", "Quoted", "Invoiced"],
+                    [
+                        "Draft",
+                        "Pending Approval",
+                        "CEO Approved",
+                        "Recall Requested",
+                        "Recalled",
+                        "Superseded",
+                        "Rejected",
+                        "Quoted",
+                        "Invoiced",
+                    ],
                 )
 
     def test_calculation_summary_handles_missing_exchange_and_zero_quantity(self):
@@ -567,8 +593,7 @@ class QuickCostingTests(TestCase):
         self.assertContains(detail_response, "Print Costing")
         self.assertContains(detail_response, "Management Status")
         self.assertContains(detail_response, "Draft")
-        self.assertContains(detail_response, "Submitted")
-        self.assertContains(detail_response, "CEO Pending")
+        self.assertContains(detail_response, "Pending Approval")
         self.assertContains(detail_response, "CEO Approved")
         self.assertContains(detail_response, "Rejected")
         self.assertContains(detail_response, "Quoted")
@@ -648,12 +673,12 @@ class QuickCostingTests(TestCase):
         self.assertContains(list_response, "BDT")
         self.assertContains(list_response, "৳1,100.00")
 
-    def test_quick_costing_detail_uses_four_queries_without_invoice(self):
+    def test_quick_costing_detail_uses_five_queries_without_invoice(self):
         admin = self._admin_user("quick-costing-query-admin")
         quick = self._quick_costing(created_by=admin)
         self.client.force_login(admin)
 
-        with self.assertNumQueries(4):
+        with self.assertNumQueries(5):
             response = self.client.get(reverse("quick_costing_detail", args=[quick.pk]))
 
         self.assertEqual(response.status_code, 200)
@@ -1005,6 +1030,9 @@ class QuickCostingTests(TestCase):
         self.assertContains(invoice_response, invoice.invoice_number)
         self.assertContains(invoice_response, "Quick Costing")
         self.assertContains(invoice_response, opportunity.opportunity_id)
+        self.assertContains(invoice_response, "Current Revision")
+        self.assertContains(invoice_response, "Latest Approved Revision")
+        self.assertContains(invoice_response, "V1")
         timeline_html = invoice_response.content.decode("utf-8").split("Workflow Activity Timeline", 1)[1]
         self.assertIn(invoice.invoice_number, timeline_html)
 
@@ -1026,6 +1054,419 @@ class QuickCostingTests(TestCase):
         self.assertEqual(Invoice.objects.filter(quick_costing=quick).count(), 1)
         self.assertEqual(invoice.shipping_amount, Decimal("1.11"))
         self.assertEqual(invoice.total_amount, Decimal("17.78"))
+
+    def test_quick_costing_recall_approval_and_revision_copy_preserve_history(self):
+        admin = self._admin_user("quick-costing-recall-admin")
+        staff = self._costing_user("quick-costing-recall-sales", approve=False)
+        opportunity = self._opportunity()
+        quick = self._quick_costing(opportunity=opportunity, created_by=staff)
+        self._mark_submitted(quick, staff)
+        self.client.force_login(admin)
+        self.client.post(reverse("quick_costing_approve", args=[quick.pk]))
+        self.client.post(reverse("quick_costing_convert_to_quotation", args=[quick.pk]))
+        quick.refresh_from_db()
+        quotation_number = quick.quotation_number
+        approved_by = quick.approved_by
+        approved_at = quick.approved_at
+
+        self.client.force_login(staff)
+        request_response = self.client.post(
+            reverse("quick_costing_request_recall", args=[quick.pk]),
+            data={"reason": "Client changed trim package."},
+        )
+        quick.refresh_from_db()
+        self.assertEqual(request_response.status_code, 302)
+        self.assertEqual(quick.status, QuickCosting.STATUS_RECALL_REQUESTED)
+        self.assertEqual(quick.recall_previous_status, QuickCosting.STATUS_QUOTED)
+        self.assertEqual(quick.recall_requested_by, staff)
+        self.assertIsNotNone(quick.recall_requested_at)
+        self.assertEqual(quick.recall_reason, "Client changed trim package.")
+
+        self.client.force_login(admin)
+        approve_response = self.client.post(reverse("quick_costing_approve_recall", args=[quick.pk]))
+        quick.refresh_from_db()
+        self.assertEqual(approve_response.status_code, 302)
+        self.assertEqual(quick.status, QuickCosting.STATUS_RECALLED)
+        self.assertEqual(quick.recalled_by, admin)
+        self.assertIsNotNone(quick.recalled_at)
+        self.assertEqual(quick.approved_by, approved_by)
+        self.assertEqual(quick.approved_at, approved_at)
+        self.assertEqual(quick.quotation_number, quotation_number)
+        self.assertTrue(quick.quotation_revision_required)
+        self.assertIsNotNone(quick.quotation_revision_required_at)
+
+        detail_response = self.client.get(reverse("quick_costing_detail", args=[quick.pk]))
+        self.assertContains(detail_response, "Create Revision Copy")
+        self.assertContains(detail_response, "Revision Required")
+
+        revision_response = self.client.post(reverse("quick_costing_create_revision_copy", args=[quick.pk]))
+        quick.refresh_from_db()
+        new_revision = QuickCosting.objects.get(previous_revision=quick)
+        self.assertEqual(revision_response.status_code, 302)
+        self.assertEqual(revision_response["Location"], reverse("quick_costing_detail", args=[new_revision.pk]))
+        self.assertEqual(quick.status, QuickCosting.STATUS_RECALLED)
+        self.assertIsNone(quick.superseded_by)
+        self.assertEqual(quick.quotation_number, quotation_number)
+        self.assertEqual(new_revision.status, QuickCosting.STATUS_DRAFT)
+        self.assertEqual(new_revision.revision_number, 2)
+        self.assertEqual(new_revision.revision_root, quick)
+        self.assertEqual(new_revision.previous_revision, quick)
+        self.assertEqual(new_revision.project_name, quick.project_name)
+        self.assertEqual(new_revision.quantity, quick.quantity)
+        self.assertEqual(new_revision.quotation_number, "")
+        self.assertFalse(new_revision.quotation_revision_required)
+        self.assertIsNone(new_revision.approved_by)
+        self.assertIsNone(new_revision.approved_at)
+
+        self._mark_submitted(new_revision, admin)
+        approve_revision_response = self.client.post(reverse("quick_costing_approve", args=[new_revision.pk]))
+        quick.refresh_from_db()
+        new_revision.refresh_from_db()
+        self.assertEqual(approve_revision_response.status_code, 302)
+        self.assertEqual(new_revision.status, QuickCosting.STATUS_APPROVED)
+        self.assertEqual(quick.status, QuickCosting.STATUS_SUPERSEDED)
+        self.assertEqual(quick.superseded_by, new_revision)
+        self.assertEqual(quick.latest_approved_revision(), new_revision)
+
+        old_detail_response = self.client.get(reverse("quick_costing_detail", args=[quick.pk]))
+        self.assertContains(old_detail_response, "This is not the active costing revision.")
+        self.assertContains(old_detail_response, "This costing has been superseded.")
+        self.assertContains(old_detail_response, "Latest approved version: V2")
+        self.assertContains(old_detail_response, "Open Latest Version")
+        self.assertContains(old_detail_response, "Revision History")
+        self.assertContains(old_detail_response, "Revision V1")
+        self.assertContains(old_detail_response, "Revision V2")
+        self.assertContains(old_detail_response, "Revenue")
+        self.assertContains(old_detail_response, "Profit")
+        quote_response = self.client.get(reverse("quick_costing_client_quotation", args=[quick.pk]))
+        self.assertEqual(quote_response.status_code, 200)
+        self.assertContains(quote_response, quotation_number)
+        self.assertContains(quote_response, "This is not the active costing revision.")
+        self.assertContains(quote_response, "This costing has been superseded.")
+        self.assertContains(quote_response, "Latest approved version: V2")
+        self.assertTrue(
+            CRMAuditLog.objects.filter(
+                module="quick_costing",
+                record_id=str(quick.pk),
+                new_value=QuickCosting.STATUS_RECALL_REQUESTED,
+            ).exists()
+        )
+        self.assertTrue(
+            CRMAuditLog.objects.filter(
+                module="quick_costing",
+                record_id=str(quick.pk),
+                new_value=QuickCosting.STATUS_SUPERSEDED,
+            ).exists()
+        )
+
+    def test_quick_costing_recall_can_be_rejected_to_previous_status(self):
+        admin = self._admin_user("quick-costing-recall-reject-admin")
+        staff = self._costing_user("quick-costing-recall-reject-sales", approve=False)
+        quick = self._quick_costing(created_by=staff)
+        self._mark_submitted(quick, staff)
+        self.client.force_login(admin)
+        self.client.post(reverse("quick_costing_approve", args=[quick.pk]))
+        self.client.force_login(staff)
+        self.client.post(reverse("quick_costing_request_recall", args=[quick.pk]), data={"reason": "Revise price."})
+
+        self.client.force_login(admin)
+        response = self.client.post(reverse("quick_costing_reject_recall", args=[quick.pk]))
+        quick.refresh_from_db()
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(quick.status, QuickCosting.STATUS_APPROVED)
+        self.assertEqual(quick.recall_rejected_by, admin)
+        self.assertIsNotNone(quick.recall_rejected_at)
+        self.assertEqual(quick.recall_reason, "Revise price.")
+
+    def test_only_latest_approved_revision_counts_in_opportunity_totals(self):
+        admin = self._admin_user("quick-costing-reporting-revision-admin")
+        opportunity = self._opportunity()
+        quick = self._quick_costing(
+            opportunity=opportunity,
+            created_by=admin,
+            selling_price_per_piece=Decimal("10.00"),
+        )
+        self._mark_submitted(quick, admin)
+        self.client.force_login(admin)
+        self.client.post(reverse("quick_costing_approve", args=[quick.pk]))
+        self.client.post(reverse("quick_costing_convert_to_quotation", args=[quick.pk]))
+        self.client.post(reverse("quick_costing_request_recall", args=[quick.pk]), data={"reason": "New price."})
+        self.client.post(reverse("quick_costing_approve_recall", args=[quick.pk]))
+        self.client.post(reverse("quick_costing_create_revision_copy", args=[quick.pk]))
+        new_revision = QuickCosting.objects.get(previous_revision=quick)
+        new_revision.selling_price_per_piece = Decimal("20.00")
+        new_revision.save(update_fields=["selling_price_per_piece", "updated_at"])
+        self._mark_submitted(new_revision, admin)
+        self.client.post(reverse("quick_costing_approve", args=[new_revision.pk]))
+        quick.refresh_from_db()
+        new_revision.refresh_from_db()
+
+        opportunity_row = with_pipeline_value(Opportunity.objects.filter(pk=opportunity.pk)).get()
+        detail_response = self.client.get(reverse("opportunity_detail", args=[opportunity.pk]))
+
+        self.assertEqual(quick.status, QuickCosting.STATUS_SUPERSEDED)
+        self.assertEqual(new_revision.status, QuickCosting.STATUS_APPROVED)
+        self.assertEqual(opportunity_row.pipeline_value, Decimal("2000"))
+        self.assertContains(detail_response, "QC-{}".format(new_revision.pk))
+
+    def test_quick_costing_recall_is_blocked_by_invoice_or_production(self):
+        admin = self._admin_user("quick-costing-recall-block-admin")
+        invoice_quick = self._quick_costing(created_by=admin, status=QuickCosting.STATUS_APPROVED)
+        invoice_quick.approved_by = admin
+        invoice_quick.approved_at = timezone.now()
+        invoice_quick.save(update_fields=["approved_by", "approved_at", "updated_at"])
+        Invoice.objects.create(
+            quick_costing=invoice_quick,
+            invoice_number="INV-RECALL-BLOCK",
+            issue_date=timezone.localdate(),
+            currency="CAD",
+            subtotal=Decimal("100.00"),
+            total_amount=Decimal("100.00"),
+            status="draft",
+        )
+        self.client.force_login(admin)
+
+        invoice_response = self.client.post(reverse("quick_costing_request_recall", args=[invoice_quick.pk]))
+        invoice_quick.refresh_from_db()
+        self.assertEqual(invoice_response.status_code, 302)
+        self.assertEqual(invoice_quick.status, QuickCosting.STATUS_APPROVED)
+        self.assertIsNone(invoice_quick.recall_requested_at)
+
+        paid_quick = self._quick_costing(created_by=admin, status=QuickCosting.STATUS_APPROVED)
+        paid_quick.approved_by = admin
+        paid_quick.approved_at = timezone.now()
+        paid_quick.save(update_fields=["approved_by", "approved_at", "updated_at"])
+        paid_invoice = Invoice.objects.create(
+            quick_costing=paid_quick,
+            invoice_number="INV-RECALL-PAYMENT-BLOCK",
+            issue_date=timezone.localdate(),
+            currency="CAD",
+            subtotal=Decimal("100.00"),
+            total_amount=Decimal("100.00"),
+            status="draft",
+        )
+        InvoicePayment.objects.create(
+            invoice=paid_invoice,
+            payment_date=timezone.localdate(),
+            amount=Decimal("25.00"),
+            currency="CAD",
+            payment_method="bank",
+        )
+        payment_response = self.client.post(reverse("quick_costing_request_recall", args=[paid_quick.pk]))
+        paid_quick.refresh_from_db()
+        self.assertEqual(payment_response.status_code, 302)
+        self.assertEqual(paid_quick.status, QuickCosting.STATUS_APPROVED)
+        self.assertIsNone(paid_quick.recall_requested_at)
+        self.assertIn("payment", paid_quick.recall_dependency_blockers())
+
+        production_quick = self._quick_costing(
+            opportunity=self._opportunity(),
+            created_by=admin,
+            status=QuickCosting.STATUS_APPROVED,
+            pricing_type=QuickCosting.PRICING_CMT,
+            currency="BDT",
+            sewing_charge_per_piece_bdt=Decimal("150.00"),
+            sewing_cost_per_piece_bdt=Decimal("90.00"),
+            extra_local_cost_bdt=Decimal("100.00"),
+        )
+        production_quick.approved_by = admin
+        production_quick.approved_at = timezone.now()
+        production_quick.save(update_fields=["approved_by", "approved_at", "updated_at"])
+        production_order, _created = create_production_order_from_approved_quick_costing(
+            production_quick,
+            user=admin,
+        )
+
+        production_response = self.client.post(reverse("quick_costing_request_recall", args=[production_quick.pk]))
+        production_quick.refresh_from_db()
+        self.assertEqual(production_response.status_code, 302)
+        self.assertEqual(production_quick.status, QuickCosting.STATUS_APPROVED)
+        self.assertIsNone(production_quick.recall_requested_at)
+        self.assertEqual(ProductionOrder.objects.filter(pk=production_order.pk).count(), 1)
+
+    def test_quick_costing_revision_display_on_production_detail(self):
+        admin = self._admin_user("quick-costing-production-revision-admin")
+        quick = self._quick_costing(
+            opportunity=self._opportunity(),
+            created_by=admin,
+            status=QuickCosting.STATUS_APPROVED,
+            pricing_type=QuickCosting.PRICING_CMT,
+            currency="BDT",
+            sewing_charge_per_piece_bdt=Decimal("150.00"),
+            sewing_cost_per_piece_bdt=Decimal("90.00"),
+            extra_local_cost_bdt=Decimal("100.00"),
+        )
+        quick.approved_by = admin
+        quick.approved_at = timezone.now()
+        quick.save(update_fields=["approved_by", "approved_at", "updated_at"])
+        production_order, _created = create_production_order_from_approved_quick_costing(
+            quick,
+            user=admin,
+        )
+
+        self.client.force_login(admin)
+        response = self.client.get(reverse("production_detail", args=[production_order.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Quick Costing")
+        self.assertContains(response, "Current Revision")
+        self.assertContains(response, "Latest Approved Revision")
+        self.assertContains(response, "V1")
+
+    def test_quick_costing_recall_is_blocked_by_shipment_or_accounting(self):
+        admin = self._admin_user("quick-costing-recall-extra-block-admin")
+        shipment_opportunity = self._opportunity()
+        shipment_quick = self._quick_costing(
+            opportunity=shipment_opportunity,
+            created_by=admin,
+            status=QuickCosting.STATUS_APPROVED,
+        )
+        shipment_quick.approved_by = admin
+        shipment_quick.approved_at = timezone.now()
+        shipment_quick.save(update_fields=["approved_by", "approved_at", "updated_at"])
+        Shipment.objects.create(opportunity=shipment_opportunity, carrier="dhl", status="planned")
+        self.client.force_login(admin)
+
+        shipment_response = self.client.post(reverse("quick_costing_request_recall", args=[shipment_quick.pk]))
+        shipment_quick.refresh_from_db()
+        self.assertEqual(shipment_response.status_code, 302)
+        self.assertEqual(shipment_quick.status, QuickCosting.STATUS_APPROVED)
+        self.assertIsNone(shipment_quick.recall_requested_at)
+
+        accounting_opportunity = self._opportunity()
+        accounting_quick = self._quick_costing(
+            opportunity=accounting_opportunity,
+            created_by=admin,
+            status=QuickCosting.STATUS_APPROVED,
+        )
+        accounting_quick.approved_by = admin
+        accounting_quick.approved_at = timezone.now()
+        accounting_quick.save(update_fields=["approved_by", "approved_at", "updated_at"])
+        AccountingEntry.objects.create(
+            date=timezone.localdate(),
+            side=AccountingEntry.SIDE_CA,
+            direction=AccountingEntry.DIR_IN,
+            opportunity=accounting_opportunity,
+            currency="CAD",
+            amount_original=Decimal("100.00"),
+        )
+
+        accounting_response = self.client.post(reverse("quick_costing_request_recall", args=[accounting_quick.pk]))
+        accounting_quick.refresh_from_db()
+        self.assertEqual(accounting_response.status_code, 302)
+        self.assertEqual(accounting_quick.status, QuickCosting.STATUS_APPROVED)
+        self.assertIsNone(accounting_quick.recall_requested_at)
+
+        draft_accounting_opportunity = self._opportunity()
+        draft_accounting_quick = self._quick_costing(
+            opportunity=draft_accounting_opportunity,
+            created_by=admin,
+            status=QuickCosting.STATUS_APPROVED,
+        )
+        draft_accounting_quick.approved_by = admin
+        draft_accounting_quick.approved_at = timezone.now()
+        draft_accounting_quick.save(update_fields=["approved_by", "approved_at", "updated_at"])
+        AccountingEntry.objects.create(
+            date=timezone.localdate(),
+            side=AccountingEntry.SIDE_CA,
+            direction=AccountingEntry.DIR_IN,
+            opportunity=draft_accounting_opportunity,
+            currency="CAD",
+            amount_original=Decimal("100.00"),
+            status="draft",
+        )
+
+        draft_accounting_response = self.client.post(
+            reverse("quick_costing_request_recall", args=[draft_accounting_quick.pk]),
+            data={"reason": "Draft test accounting entry should not block."},
+        )
+        draft_accounting_quick.refresh_from_db()
+        self.assertEqual(draft_accounting_response.status_code, 302)
+        self.assertEqual(draft_accounting_quick.status, QuickCosting.STATUS_RECALL_REQUESTED)
+        self.assertIsNotNone(draft_accounting_quick.recall_requested_at)
+
+    def test_superseded_quick_costing_cannot_create_new_quotation_or_invoice(self):
+        admin = self._admin_user("quick-costing-superseded-gate-admin")
+        quick = self._quick_costing(created_by=admin)
+        self._mark_submitted(quick, admin)
+        self.client.force_login(admin)
+        self.client.post(reverse("quick_costing_approve", args=[quick.pk]))
+        self.client.post(reverse("quick_costing_request_recall", args=[quick.pk]), data={"reason": "Revision needed."})
+        self.client.post(reverse("quick_costing_approve_recall", args=[quick.pk]))
+        self.client.post(reverse("quick_costing_create_revision_copy", args=[quick.pk]))
+        new_revision = QuickCosting.objects.get(previous_revision=quick)
+        self._mark_submitted(new_revision, admin)
+        self.client.post(reverse("quick_costing_approve", args=[new_revision.pk]))
+        quick.refresh_from_db()
+        new_revision.refresh_from_db()
+
+        quote_response = self.client.post(reverse("quick_costing_convert_to_quotation", args=[quick.pk]))
+        invoice_response = self.client.post(reverse("quick_costing_convert_to_invoice", args=[quick.pk]))
+        quick.refresh_from_db()
+
+        self.assertEqual(quick.status, QuickCosting.STATUS_SUPERSEDED)
+        self.assertEqual(quick.quotation_number, "")
+        self.assertEqual(Invoice.objects.filter(quick_costing=quick).count(), 0)
+        self.assertEqual(quote_response["Location"], reverse("quick_costing_detail", args=[new_revision.pk]))
+        self.assertEqual(invoice_response["Location"], reverse("quick_costing_detail", args=[new_revision.pk]))
+
+    def test_v1_invoice_and_production_are_blocked_after_v2_approval(self):
+        admin = self._admin_user("quick-costing-v1-transaction-block-admin")
+        quick = self._quick_costing(
+            opportunity=self._opportunity(),
+            created_by=admin,
+            pricing_type=QuickCosting.PRICING_CMT,
+            currency="BDT",
+            sewing_charge_per_piece_bdt=Decimal("150.00"),
+            sewing_cost_per_piece_bdt=Decimal("90.00"),
+            extra_local_cost_bdt=Decimal("100.00"),
+        )
+        self._mark_submitted(quick, admin)
+        self.client.force_login(admin)
+        self.client.post(reverse("quick_costing_approve", args=[quick.pk]))
+        self.client.post(reverse("quick_costing_convert_to_quotation", args=[quick.pk]))
+        self.client.post(reverse("quick_costing_request_recall", args=[quick.pk]), data={"reason": "Customer requested revision."})
+        self.client.post(reverse("quick_costing_approve_recall", args=[quick.pk]))
+        self.client.post(reverse("quick_costing_create_revision_copy", args=[quick.pk]))
+        new_revision = QuickCosting.objects.get(previous_revision=quick)
+        self._mark_submitted(new_revision, admin)
+        self.client.post(reverse("quick_costing_approve", args=[new_revision.pk]))
+        quick.refresh_from_db()
+        new_revision.refresh_from_db()
+
+        invoice_response = self.client.post(reverse("quick_costing_convert_to_invoice", args=[quick.pk]))
+        production_response = self.client.post(reverse("quick_costing_convert_to_production", args=[quick.pk]))
+
+        self.assertEqual(quick.status, QuickCosting.STATUS_SUPERSEDED)
+        self.assertEqual(new_revision.status, QuickCosting.STATUS_APPROVED)
+        self.assertEqual(invoice_response.status_code, 302)
+        self.assertEqual(production_response.status_code, 302)
+        self.assertEqual(invoice_response["Location"], reverse("quick_costing_detail", args=[new_revision.pk]))
+        self.assertEqual(production_response["Location"], reverse("quick_costing_detail", args=[new_revision.pk]))
+        self.assertFalse(Invoice.objects.filter(quick_costing=quick).exists())
+        self.assertFalse(ProductionOrder.objects.filter(source_quick_costing=quick).exists())
+
+    def test_ceo_dashboard_shows_quick_revision_counts(self):
+        admin = self._admin_user("quick-costing-revision-count-admin")
+        active = self._quick_costing(created_by=admin, status=QuickCosting.STATUS_APPROVED)
+        active.approved_by = admin
+        active.approved_at = timezone.now()
+        active.save(update_fields=["approved_by", "approved_at", "updated_at"])
+        self._quick_costing(created_by=admin, status=QuickCosting.STATUS_SUPERSEDED)
+        self._quick_costing(created_by=admin, status=QuickCosting.STATUS_RECALLED)
+
+        self.client.force_login(admin)
+        response = self.client.get(reverse("ceo_dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Total Active Revisions")
+        self.assertContains(response, "Superseded Revisions")
+        self.assertContains(response, "Recalled Revisions")
+        metrics = response.context["quick_revision_metrics"]
+        self.assertEqual(metrics["total_active_revisions"], 1)
+        self.assertEqual(metrics["superseded_revisions"], 1)
+        self.assertEqual(metrics["recalled_revisions"], 1)
 
     def test_quick_costing_excel_export(self):
         admin = self._admin_user("quick-costing-excel-admin")

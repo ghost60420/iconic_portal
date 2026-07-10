@@ -2057,6 +2057,9 @@ class QuickCosting(models.Model):
     STATUS_SUBMITTED = "submitted"
     STATUS_APPROVED = "approved"
     STATUS_REJECTED = "rejected"
+    STATUS_RECALL_REQUESTED = "recall_requested"
+    STATUS_RECALLED = "recalled"
+    STATUS_SUPERSEDED = "superseded"
     STATUS_QUOTED = "quoted"
     STATUS_INVOICED = "invoiced"
     STATUS_PRODUCTION = "production"
@@ -2064,15 +2067,78 @@ class QuickCosting(models.Model):
     STATUS_CLOSED = "closed"
     STATUS_CHOICES = [
         (STATUS_DRAFT, "Draft"),
-        (STATUS_SUBMITTED, "Submitted for Approval"),
-        (STATUS_APPROVED, "Approved"),
+        (STATUS_SUBMITTED, "Pending Approval"),
+        (STATUS_APPROVED, "CEO Approved"),
         (STATUS_REJECTED, "Rejected"),
+        (STATUS_RECALL_REQUESTED, "Recall Requested"),
+        (STATUS_RECALLED, "Recalled"),
+        (STATUS_SUPERSEDED, "Superseded"),
         (STATUS_QUOTED, "Quoted"),
         (STATUS_INVOICED, "Invoiced"),
         (STATUS_PRODUCTION, "Production"),
         (STATUS_SHIPPED, "Shipped"),
         (STATUS_CLOSED, "Closed"),
     ]
+    ACTIVE_APPROVED_STATUSES = (
+        STATUS_APPROVED,
+        STATUS_QUOTED,
+        STATUS_INVOICED,
+        STATUS_PRODUCTION,
+        STATUS_SHIPPED,
+        STATUS_CLOSED,
+    )
+    INACTIVE_REPORTING_STATUSES = (
+        STATUS_REJECTED,
+        STATUS_RECALL_REQUESTED,
+        STATUS_RECALLED,
+        STATUS_SUPERSEDED,
+    )
+    NON_BLOCKING_ACCOUNTING_STATUSES = (
+        "draft",
+        "test",
+        "rolled_back",
+        "rolled back",
+        "rollback",
+        "cancelled",
+        "canceled",
+        "void",
+        "voided",
+        "reversed",
+    )
+    REVISION_COPY_FIELDS = (
+        "opportunity",
+        "account_brand",
+        "contact_name",
+        "buyer_name",
+        "project_name",
+        "product_type",
+        "costing_purpose",
+        "pricing_type",
+        "quantity",
+        "exchange_rate_bdt_per_cad",
+        "currency",
+        "material_cost",
+        "production_cost",
+        "other_expenses",
+        "shipping_cost",
+        "selling_price_per_piece",
+        "commission_per_piece",
+        "commission_percent",
+        "salesperson",
+        "commission_type",
+        "commission_value",
+        "commission_currency",
+        "fabric_cost_per_kg",
+        "fabric_consumption_kg_per_piece",
+        "making_cost_per_piece",
+        "print_embroidery_cost_per_piece",
+        "trims_cost_per_piece",
+        "packaging_cost_per_piece",
+        "target_margin_percent",
+        "sewing_charge_per_piece_bdt",
+        "sewing_cost_per_piece_bdt",
+        "extra_local_cost_bdt",
+    )
 
     costing_type = models.CharField(
         max_length=20,
@@ -2190,6 +2256,28 @@ class QuickCosting(models.Model):
         default=STATUS_DRAFT,
         db_index=True,
     )
+    revision_number = models.PositiveIntegerField(default=1, db_index=True)
+    revision_root = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="revision_children",
+    )
+    previous_revision = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="next_revisions",
+    )
+    superseded_by = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="superseded_versions",
+    )
     approved_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
@@ -2214,6 +2302,34 @@ class QuickCosting(models.Model):
         related_name="submitted_quick_costings",
     )
     approval_submitted_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    recall_requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="quick_costing_recall_requests",
+    )
+    recall_requested_at = models.DateTimeField(null=True, blank=True)
+    recall_previous_status = models.CharField(max_length=20, blank=True, default="")
+    recall_rejected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="quick_costing_recall_rejections",
+    )
+    recall_rejected_at = models.DateTimeField(null=True, blank=True)
+    recalled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="quick_costings_recalled",
+    )
+    recalled_at = models.DateTimeField(null=True, blank=True)
+    recall_reason = models.TextField(blank=True, default="")
+    quotation_revision_required = models.BooleanField(default=False, db_index=True)
+    quotation_revision_required_at = models.DateTimeField(null=True, blank=True)
     quotation_number = models.CharField(max_length=50, blank=True, default="", db_index=True)
     quoted_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -2256,6 +2372,168 @@ class QuickCosting(models.Model):
     @property
     def service_type_label(self):
         return "Bangladesh Local Sewing" if self.is_bangladesh_local_sewing else "Canada Export"
+
+    @property
+    def revision_label(self):
+        return f"V{self.revision_number or 1}"
+
+    def revision_root_record(self):
+        return self.revision_root if self.revision_root_id else self
+
+    def revision_family_queryset(self):
+        if not self.pk:
+            return type(self).objects.none()
+        root = self.revision_root_record()
+        root_id = root.pk or self.pk
+        return type(self).objects.filter(models.Q(pk=root_id) | models.Q(revision_root_id=root_id))
+
+    def latest_revision(self):
+        if not self.pk:
+            return self
+        return self.revision_family_queryset().order_by("-revision_number", "-created_at", "-pk").first()
+
+    def latest_approved_revision(self):
+        if not self.pk:
+            return self if self.status in self.ACTIVE_APPROVED_STATUSES else None
+        return (
+            self.revision_family_queryset()
+            .filter(status__in=self.ACTIVE_APPROVED_STATUSES)
+            .order_by("-revision_number", "-approved_at", "-created_at", "-pk")
+            .first()
+        )
+
+    @property
+    def is_latest_revision(self):
+        latest = self.latest_revision()
+        return not latest or latest.pk == self.pk
+
+    @property
+    def is_latest_approved_revision(self):
+        latest = self.latest_approved_revision()
+        return bool(latest and latest.pk == self.pk)
+
+    @property
+    def counts_in_reporting(self):
+        return (
+            self.status in self.ACTIVE_APPROVED_STATUSES
+            and self.is_latest_approved_revision
+        )
+
+    @classmethod
+    def active_approved_statuses(cls):
+        return cls.ACTIVE_APPROVED_STATUSES
+
+    @classmethod
+    def reporting_excluded_statuses(cls):
+        return cls.INACTIVE_REPORTING_STATUSES
+
+    @classmethod
+    def active_accounting_entries(cls, queryset):
+        for status in cls.NON_BLOCKING_ACCOUNTING_STATUSES:
+            queryset = queryset.exclude(status__iexact=status)
+        return queryset
+
+    def recall_dependency_blockers(self):
+        if not self.pk:
+            return []
+        blockers = []
+        if self.invoices.exists():
+            blockers.append("invoice")
+        if InvoicePayment.objects.filter(invoice__quick_costing_id=self.pk).exists():
+            blockers.append("payment")
+
+        production_order = None
+        try:
+            production_order = self.production_order
+        except ProductionOrder.DoesNotExist:
+            production_order = None
+        if production_order:
+            blockers.append("production order")
+            if production_order.shipments.exists():
+                blockers.append("shipment")
+        elif self.opportunity_id and Shipment.objects.filter(opportunity_id=self.opportunity_id).exists():
+            blockers.append("shipment")
+
+        accounting_filter = models.Q()
+        has_accounting_filter = False
+        if production_order:
+            accounting_filter |= models.Q(production_order_id=production_order.pk)
+            has_accounting_filter = True
+        if self.opportunity_id:
+            accounting_filter |= models.Q(opportunity_id=self.opportunity_id)
+            has_accounting_filter = True
+        accounting_entries = AccountingEntry.objects.filter(accounting_filter) if has_accounting_filter else AccountingEntry.objects.none()
+        if has_accounting_filter and self.active_accounting_entries(accounting_entries).exists():
+            blockers.append("accounting entry")
+        return blockers
+
+    def can_request_recall(self):
+        return (
+            self.status in {self.STATUS_APPROVED, self.STATUS_QUOTED}
+            and self.is_latest_revision
+            and not self.recall_dependency_blockers()
+        )
+
+    def can_create_revision_copy(self):
+        return (
+            self.status == self.STATUS_RECALLED
+            and not self.superseded_by_id
+            and not self.next_revisions.exists()
+        )
+
+    def create_revision_copy(self, *, user=None):
+        if not self.pk:
+            raise ValidationError("Quick Costing must be saved before creating a revision.")
+        with transaction.atomic():
+            source = (
+                type(self).objects.select_for_update()
+                .select_related("revision_root", "created_by")
+                .get(pk=self.pk)
+            )
+            if not source.can_create_revision_copy():
+                raise ValidationError("Only recalled Quick Costing can be revised.")
+
+            root = source.revision_root_record()
+            latest = (
+                source.revision_family_queryset()
+                .select_for_update()
+                .order_by("-revision_number", "-created_at", "-pk")
+                .first()
+            )
+            next_revision_number = ((latest.revision_number if latest else source.revision_number) or 1) + 1
+            actor = user if user and getattr(user, "is_authenticated", False) else None
+            revision_data = {
+                field_name: getattr(source, field_name)
+                for field_name in self.REVISION_COPY_FIELDS
+            }
+            revision_data.update(
+                status=self.STATUS_DRAFT,
+                revision_number=next_revision_number,
+                revision_root=root,
+                previous_revision=source,
+                created_by=actor or source.created_by,
+                approved_by=None,
+                approved_at=None,
+                rejected_by=None,
+                rejected_at=None,
+                approval_submitted_by=None,
+                approval_submitted_at=None,
+                recall_requested_by=None,
+                recall_requested_at=None,
+                recall_previous_status="",
+                recall_rejected_by=None,
+                recall_rejected_at=None,
+                recalled_by=None,
+                recalled_at=None,
+                recall_reason="",
+                quotation_number="",
+                quoted_by=None,
+                quoted_at=None,
+                quotation_revision_required=False,
+                quotation_revision_required_at=None,
+            )
+            new_revision = type(self).objects.create(**revision_data)
+            return new_revision
 
     def clean(self):
         super().clean()
@@ -2300,6 +2578,9 @@ class QuickCosting(models.Model):
         return self.status in {
             self.STATUS_APPROVED,
             self.STATUS_QUOTED,
+            self.STATUS_RECALL_REQUESTED,
+            self.STATUS_RECALLED,
+            self.STATUS_SUPERSEDED,
             self.STATUS_INVOICED,
             self.STATUS_PRODUCTION,
             self.STATUS_SHIPPED,

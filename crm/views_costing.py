@@ -6,6 +6,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.db import transaction
 from django.db.models import Q
@@ -435,6 +436,14 @@ def _can_revise_rejected_advanced(user, costing):
 
 
 def _quick_approval_status_label(quick_costing):
+    if quick_costing.status == QuickCosting.STATUS_SUPERSEDED:
+        return "Superseded"
+    if getattr(quick_costing, "quotation_revision_required", False):
+        return "Revision Required"
+    if quick_costing.status == QuickCosting.STATUS_RECALL_REQUESTED:
+        return "Recall Requested"
+    if quick_costing.status == QuickCosting.STATUS_RECALLED:
+        return "Recalled"
     if getattr(quick_costing, "rejected_at", None) or quick_costing.status == QuickCosting.STATUS_REJECTED:
         return "Rejected"
     if getattr(quick_costing, "approved_at", None) or quick_costing.status in {
@@ -445,10 +454,71 @@ def _quick_approval_status_label(quick_costing):
         QuickCosting.STATUS_SHIPPED,
         QuickCosting.STATUS_CLOSED,
     }:
-        return "Approved"
+        return "CEO Approved"
     if quick_costing.approval_submitted_at:
-        return "Pending CEO Approval"
+        return "Pending Approval"
     return "Draft"
+
+
+def _quick_is_latest_revision(quick_costing):
+    cached = getattr(quick_costing, "_is_latest_revision", None)
+    if cached is not None:
+        return cached
+    return quick_costing.is_latest_revision
+
+
+def _quick_can_create_new_quotation(quick_costing):
+    return (
+        quick_costing.status in {QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_PRODUCTION}
+        and bool(quick_costing.approved_at)
+        and _quick_is_latest_revision(quick_costing)
+        and not quick_costing.quotation_revision_required
+    )
+
+
+def _quick_can_create_invoice_document(quick_costing):
+    return (
+        quick_costing.status in {
+            QuickCosting.STATUS_APPROVED,
+            QuickCosting.STATUS_QUOTED,
+            QuickCosting.STATUS_PRODUCTION,
+            QuickCosting.STATUS_INVOICED,
+        }
+        and bool(quick_costing.approved_at)
+        and _quick_is_latest_revision(quick_costing)
+        and not quick_costing.quotation_revision_required
+    )
+
+
+def _quick_latest_approved_redirect(request, quick_costing, message, *, fallback_view="quick_costing_detail"):
+    latest_approved_revision = quick_costing.latest_approved_revision()
+    if latest_approved_revision and latest_approved_revision.pk != quick_costing.pk:
+        messages.error(request, message)
+        return redirect("quick_costing_detail", pk=latest_approved_revision.pk)
+    messages.error(request, message)
+    return redirect(fallback_view, pk=quick_costing.pk)
+
+
+def _quick_revision_history_rows(quick_costing, revisions):
+    rows = []
+    for revision in revisions:
+        calc = _quick_costing_calc(revision)
+        display = calc.get("display", {})
+        rows.append(
+            {
+                "record": revision,
+                "label": revision.revision_label,
+                "status_label": _quick_approval_status_label(revision),
+                "created_by": _display_user(revision.created_by),
+                "created_at": revision.created_at,
+                "approved_by": _display_user(revision.approved_by),
+                "approved_at": revision.approved_at,
+                "revenue": display.get("sales_value_pair", "N/A"),
+                "profit": display.get("net_profit_total_pair", "N/A"),
+                "is_current": revision.pk == quick_costing.pk,
+            }
+        )
+    return rows
 
 
 def _quick_profit_health(calc):
@@ -473,6 +543,12 @@ def _quick_workflow_badges(quick_costing, invoice=None):
         QuickCosting.STATUS_CLOSED,
     }:
         current_key = "invoiced"
+    elif status == QuickCosting.STATUS_SUPERSEDED:
+        current_key = "superseded"
+    elif status == QuickCosting.STATUS_RECALLED:
+        current_key = "recalled"
+    elif status == QuickCosting.STATUS_RECALL_REQUESTED:
+        current_key = "recall-requested"
     elif status == QuickCosting.STATUS_QUOTED:
         current_key = "quoted"
     elif status == QuickCosting.STATUS_REJECTED:
@@ -486,14 +562,16 @@ def _quick_workflow_badges(quick_costing, invoice=None):
 
     stages = [
         ("draft", "Draft"),
-        ("submitted", "Submitted"),
-        ("ceo-pending", "CEO Pending"),
+        ("ceo-pending", "Pending Approval"),
         ("ceo-approved", "CEO Approved"),
+        ("recall-requested", "Recall Requested"),
+        ("recalled", "Recalled"),
+        ("superseded", "Superseded"),
         ("rejected", "Rejected"),
         ("quoted", "Quoted"),
         ("invoiced", "Invoiced"),
     ]
-    normal_order = ["draft", "submitted", "ceo-pending", "ceo-approved", "quoted", "invoiced"]
+    normal_order = ["draft", "ceo-pending", "ceo-approved", "quoted", "invoiced"]
     current_index = normal_order.index(current_key) if current_key in normal_order else -1
     badges = []
     for key, label in stages:
@@ -783,14 +861,20 @@ def _quick_queue_status(quick_costing, converted=False):
         return "converted", "Invoice Created"
     if quick_costing.status == QuickCosting.STATUS_REJECTED:
         return "rejected", "CEO Rejected"
+    if quick_costing.status == QuickCosting.STATUS_RECALL_REQUESTED:
+        return "pending", "Recall Requested"
+    if quick_costing.status == QuickCosting.STATUS_RECALLED:
+        return "recalled", "Recalled"
+    if quick_costing.status == QuickCosting.STATUS_SUPERSEDED:
+        return "superseded", "Superseded"
     if quick_costing.status == QuickCosting.STATUS_QUOTED:
         return "sent", "Quotation Sent"
     if quick_costing.status == QuickCosting.STATUS_APPROVED:
         return "approved", "CEO Approved"
     if quick_costing.status == QuickCosting.STATUS_SUBMITTED:
-        return "pending", "Pending CEO Approval"
+        return "pending", "Pending Approval"
     if quick_costing.approval_submitted_at:
-        return "pending", "Pending CEO Approval"
+        return "pending", "Pending Approval"
     return "draft", "Draft"
 
 
@@ -1010,10 +1094,13 @@ def ceo_quotation_approval_queue(request):
             quotation_status=CostingHeader.QUOTATION_STATUS_DRAFT,
             invoices__isnull=True,
         )
-        quick_qs = quick_qs.filter(
-            approval_submitted_at__isnull=False,
-            invoices__isnull=True,
-        ).filter(Q(status=QuickCosting.STATUS_SUBMITTED) | Q(status=QuickCosting.STATUS_DRAFT))
+        quick_qs = quick_qs.filter(invoices__isnull=True).filter(
+            Q(
+                approval_submitted_at__isnull=False,
+                status__in=[QuickCosting.STATUS_SUBMITTED, QuickCosting.STATUS_DRAFT],
+            )
+            | Q(status=QuickCosting.STATUS_RECALL_REQUESTED)
+        )
     elif status_filter == "approved":
         advanced_qs = advanced_qs.filter(
             quotation_status=CostingHeader.QUOTATION_STATUS_APPROVED,
@@ -1026,6 +1113,9 @@ def ceo_quotation_approval_queue(request):
     elif status_filter == "rejected":
         advanced_qs = advanced_qs.filter(quotation_status=CostingHeader.QUOTATION_STATUS_REJECTED)
         quick_qs = quick_qs.filter(status=QuickCosting.STATUS_REJECTED)
+    elif status_filter == "recall_requested":
+        advanced_qs = advanced_qs.none()
+        quick_qs = quick_qs.filter(status=QuickCosting.STATUS_RECALL_REQUESTED)
     elif status_filter == "sent":
         advanced_qs = advanced_qs.filter(quotation_status=CostingHeader.QUOTATION_STATUS_SENT)
         quick_qs = quick_qs.filter(status=QuickCosting.STATUS_QUOTED)
@@ -1043,10 +1133,13 @@ def ceo_quotation_approval_queue(request):
             quotation_status=CostingHeader.QUOTATION_STATUS_DRAFT,
             invoices__isnull=True,
         )
-        quick_qs = quick_qs.filter(
-            approval_submitted_at__isnull=False,
-            invoices__isnull=True,
-        ).filter(Q(status=QuickCosting.STATUS_SUBMITTED) | Q(status=QuickCosting.STATUS_DRAFT))
+        quick_qs = quick_qs.filter(invoices__isnull=True).filter(
+            Q(
+                approval_submitted_at__isnull=False,
+                status__in=[QuickCosting.STATUS_SUBMITTED, QuickCosting.STATUS_DRAFT],
+            )
+            | Q(status=QuickCosting.STATUS_RECALL_REQUESTED)
+        )
 
     if search:
         advanced_qs = advanced_qs.filter(
@@ -1091,6 +1184,7 @@ def ceo_quotation_approval_queue(request):
             ("pending", "Submitted for CEO Approval"),
             ("approved", "CEO Approved"),
             ("rejected", "CEO Rejected"),
+            ("recall_requested", "Recall Requested"),
             ("sent", "Sent to Client"),
             ("accepted", "Customer Approved"),
             ("converted", "Converted"),
@@ -1270,9 +1364,15 @@ def cost_sheet_list(request):
         ),
         "status_choices": [
             ("draft", "Draft"),
-            ("approved", "Approved"),
+            ("submitted", "Pending Approval"),
+            ("approved", "CEO Approved"),
             ("rejected", "Rejected"),
+            ("recall_requested", "Recall Requested"),
+            ("recalled", "Recalled"),
+            ("superseded", "Superseded"),
             ("quoted", "Quoted"),
+            ("invoiced", "Invoiced"),
+            ("production", "Production"),
         ],
         "product_types": Opportunity.PRODUCT_TYPE_CHOICES,
         "purpose_choices": QuickCosting.PURPOSE_CHOICES,
@@ -1396,13 +1496,56 @@ def quick_costing_detail(request, pk):
     quick_costing = get_object_or_404(
         QuickCosting.objects.select_related(
             "created_by", "salesperson", "opportunity", "opportunity__lead", "opportunity__assigned_to", "approved_by",
-            "rejected_by", "quoted_by", "production_order",
+            "rejected_by", "quoted_by", "production_order", "previous_revision", "superseded_by",
+            "revision_root", "recall_requested_by", "recall_rejected_by", "recalled_by",
         ),
         pk=pk,
     )
     calc = _quick_costing_calc(quick_costing)
     invoice = quick_costing.invoices.select_related("customer", "order").order_by("-created_at", "-id").first()
     quick_costing._workflow_invoice_resolved = True
+    revision_history = list(
+        quick_costing.revision_family_queryset()
+        .select_related(
+            "created_by",
+            "approved_by",
+            "previous_revision",
+            "superseded_by",
+            "revision_root",
+            "salesperson",
+            "opportunity",
+            "opportunity__lead",
+            "opportunity__assigned_to",
+        )
+        .order_by("revision_number", "created_at", "pk")
+    )
+    if not revision_history:
+        revision_history = [quick_costing]
+    latest_revision = revision_history[-1]
+    latest_approved_revision = next(
+        (
+            revision
+            for revision in reversed(revision_history)
+            if revision.status in QuickCosting.ACTIVE_APPROVED_STATUSES
+        ),
+        None,
+    )
+    quick_costing._is_latest_revision = bool(latest_revision and latest_revision.pk == quick_costing.pk)
+    show_not_active_revision_warning = bool(
+        latest_approved_revision and latest_approved_revision.pk != quick_costing.pk
+    )
+    recall_blockers = (
+        quick_costing.recall_dependency_blockers()
+        if quick_costing.status in {QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_QUOTED}
+        else []
+    )
+    approval_status_label = _quick_approval_status_label(quick_costing)
+    can_approve_user = _can_approve(request.user)
+    immutable_recall_statuses = {
+        QuickCosting.STATUS_RECALL_REQUESTED,
+        QuickCosting.STATUS_RECALLED,
+        QuickCosting.STATUS_SUPERSEDED,
+    }
     margin_tone = "positive" if calc.get("net_profit_total", Decimal("0")) >= Decimal("0") else "negative"
     workflow_visibility = build_workflow_visibility_context(
         "costing",
@@ -1416,19 +1559,29 @@ def quick_costing_detail(request, pk):
         "calc": calc,
         "invoice": invoice,
         "production_order": getattr(quick_costing, "production_order", None),
+        "latest_revision": latest_revision,
+        "latest_approved_revision": latest_approved_revision,
+        "is_latest_revision": quick_costing._is_latest_revision,
+        "show_not_active_revision_warning": show_not_active_revision_warning,
+        "revision_history_rows": _quick_revision_history_rows(quick_costing, revision_history),
+        "recall_blockers": recall_blockers,
         "margin_tone": margin_tone,
         "profit_health": _quick_profit_health(calc),
         "quick_workflow_badges": _quick_workflow_badges(quick_costing, invoice=invoice),
-        "can_approve": _can_approve(request.user),
+        "can_approve": can_approve_user,
         "can_convert_to_invoice": (
             _can_create_approved_quotation_invoice(request.user)
-            and _quick_approval_status_label(quick_costing) == "Approved"
+            and _quick_can_create_invoice_document(quick_costing)
             and not invoice
         ),
-        "approval_status_label": _quick_approval_status_label(quick_costing),
-        "can_edit_quick_costing": (not quick_costing.is_locked) or _can_approve(request.user),
+        "can_create_quick_quotation": can_approve_user and _quick_can_create_new_quotation(quick_costing),
+        "approval_status_label": approval_status_label,
+        "can_edit_quick_costing": (not quick_costing.is_locked) or (
+            can_approve_user and quick_costing.status not in immutable_recall_statuses
+        ),
         "can_submit_for_approval": (
             not invoice
+            and quick_costing._is_latest_revision
             and quick_costing.status in {QuickCosting.STATUS_DRAFT, QuickCosting.STATUS_REJECTED}
             and (
                 quick_costing.status == QuickCosting.STATUS_REJECTED
@@ -1441,9 +1594,33 @@ def quick_costing_detail(request, pk):
             and quick_costing.is_bangladesh_local_sewing
             and quick_costing.status in {QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_QUOTED}
             and not getattr(quick_costing, "production_order", None)
+            and quick_costing._is_latest_revision
             and _can_approve(request.user)
         ),
-        "can_decide_quick_costing": _can_decide_quick_costing(request.user, quick_costing),
+        "can_decide_quick_costing": (
+            quick_costing._is_latest_revision
+            and _can_decide_quick_costing(request.user, quick_costing)
+        ),
+        "can_request_recall": (
+            (can_approve_user or _can_submit_quick_costing(request.user))
+            and quick_costing.status in {QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_QUOTED}
+            and quick_costing._is_latest_revision
+            and not recall_blockers
+        ),
+        "can_approve_recall": (
+            can_approve_user
+            and quick_costing.status == QuickCosting.STATUS_RECALL_REQUESTED
+            and quick_costing._is_latest_revision
+        ),
+        "can_reject_recall": (
+            can_approve_user
+            and quick_costing.status == QuickCosting.STATUS_RECALL_REQUESTED
+            and quick_costing._is_latest_revision
+        ),
+        "can_create_revision_copy": (
+            (can_approve_user or _can_submit_quick_costing(request.user))
+            and quick_costing.can_create_revision_copy()
+        ),
         **workflow_visibility,
     }
     return render(request, "crm/costing/quick_costing_detail.html", context)
@@ -1457,6 +1634,13 @@ def quick_costing_edit(request, pk):
         QuickCosting.objects.select_related("salesperson", "opportunity", "opportunity__lead", "opportunity__assigned_to"),
         pk=pk,
     )
+    if quick_costing.status in {
+        QuickCosting.STATUS_RECALL_REQUESTED,
+        QuickCosting.STATUS_RECALLED,
+        QuickCosting.STATUS_SUPERSEDED,
+    }:
+        messages.error(request, "Recalled or superseded Quick Costing records cannot be edited.")
+        return redirect("quick_costing_detail", pk=pk)
     if quick_costing.is_locked and not _can_approve(request.user):
         messages.error(request, "Approved quick costing is locked.")
         return redirect("quick_costing_detail", pk=pk)
@@ -1543,6 +1727,10 @@ def quick_costing_approve(request, pk):
     if not _can_approve(request.user):
         messages.error(request, "You do not have permission to approve.")
         return redirect("quick_costing_detail", pk=pk)
+    if not quick_costing.is_latest_revision:
+        latest_revision = quick_costing.latest_revision()
+        messages.error(request, "Only the latest Quick Costing revision can be approved.")
+        return redirect("quick_costing_detail", pk=latest_revision.pk if latest_revision else pk)
     try:
         quick_costing, _production_order, _created = approve_quick_costing(
             quick_costing,
@@ -1569,6 +1757,10 @@ def quick_costing_reject(request, pk):
     if not _can_approve(request.user):
         messages.error(request, "You do not have permission to reject.")
         return redirect("quick_costing_detail", pk=pk)
+    if not quick_costing.is_latest_revision:
+        latest_revision = quick_costing.latest_revision()
+        messages.error(request, "Only the latest Quick Costing revision can be rejected.")
+        return redirect("quick_costing_detail", pk=latest_revision.pk if latest_revision else pk)
     if not quick_costing.approval_submitted_at:
         messages.error(request, "Quick Costing must be submitted before CEO rejection.")
         return redirect("quick_costing_detail", pk=pk)
@@ -1616,6 +1808,231 @@ def quick_costing_reject(request, pk):
 
 
 @require_POST
+def quick_costing_request_recall(request, pk):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
+    quick_costing = get_object_or_404(
+        QuickCosting.objects.select_related("revision_root", "production_order"),
+        pk=pk,
+    )
+    if not (_can_approve(request.user) or _can_submit_quick_costing(request.user)):
+        messages.error(request, "You do not have permission to request a Quick Costing recall.")
+        return redirect("quick_costing_detail", pk=pk)
+    if not quick_costing.is_latest_revision:
+        messages.error(request, "Only the latest Quick Costing revision can be recalled.")
+        return redirect("quick_costing_detail", pk=pk)
+    if quick_costing.status not in {QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_QUOTED}:
+        messages.error(request, "Only CEO Approved Quick Costing can be recalled.")
+        return redirect("quick_costing_detail", pk=pk)
+    blockers = quick_costing.recall_dependency_blockers()
+    if blockers:
+        messages.error(request, f"Recall is blocked by linked {', '.join(blockers)} records.")
+        return redirect("quick_costing_detail", pk=pk)
+
+    previous_status = quick_costing.status
+    quick_costing.status = QuickCosting.STATUS_RECALL_REQUESTED
+    quick_costing.recall_previous_status = previous_status
+    quick_costing.recall_requested_by = _user_or_none(request.user)
+    quick_costing.recall_requested_at = timezone.now()
+    quick_costing.recall_reason = (request.POST.get("reason") or "").strip()
+    quick_costing.recall_rejected_by = None
+    quick_costing.recall_rejected_at = None
+    quick_costing.save(
+        update_fields=[
+            "status",
+            "recall_previous_status",
+            "recall_requested_by",
+            "recall_requested_at",
+            "recall_reason",
+            "recall_rejected_by",
+            "recall_rejected_at",
+            "updated_at",
+        ]
+    )
+    CRMAuditLog.objects.create(
+        actor=_user_or_none(request.user),
+        module="quick_costing",
+        record_id=str(quick_costing.pk),
+        record_label=quick_costing.quotation_number or quick_costing.project_name or f"QC-{quick_costing.pk}",
+        action_type=CRMAuditLog.ACTION_STATUS_CHANGED,
+        field_name="status",
+        previous_value=previous_status,
+        new_value=QuickCosting.STATUS_RECALL_REQUESTED,
+        target_url=reverse("quick_costing_detail", args=[quick_costing.pk]),
+    )
+    if quick_costing.recall_reason:
+        CRMAuditLog.objects.create(
+            actor=_user_or_none(request.user),
+            module="quick_costing",
+            record_id=str(quick_costing.pk),
+            record_label=quick_costing.quotation_number or quick_costing.project_name or f"QC-{quick_costing.pk}",
+            action_type=CRMAuditLog.ACTION_STATUS_CHANGED,
+            field_name="recall_reason",
+            previous_value=quick_costing.revision_label,
+            new_value=quick_costing.recall_reason,
+            target_url=reverse("quick_costing_detail", args=[quick_costing.pk]),
+        )
+    if quick_costing.quotation_number and not quick_costing.invoices.exists():
+        messages.warning(
+            request,
+            "This costing has a quotation but no invoice. Recall can continue; the quotation will be marked Revision Required if approved.",
+        )
+    messages.success(request, "Quick Costing recall requested for CEO approval.")
+    return redirect("quick_costing_detail", pk=pk)
+
+
+@require_POST
+def quick_costing_approve_recall(request, pk):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
+    quick_costing = get_object_or_404(
+        QuickCosting.objects.select_related("revision_root", "production_order"),
+        pk=pk,
+    )
+    if not _can_approve(request.user):
+        messages.error(request, "You do not have permission to approve recalls.")
+        return redirect("quick_costing_detail", pk=pk)
+    if not quick_costing.is_latest_revision:
+        latest_revision = quick_costing.latest_revision()
+        messages.error(request, "Only the latest Quick Costing revision can approve recall.")
+        return redirect("quick_costing_detail", pk=latest_revision.pk if latest_revision else pk)
+    if quick_costing.status != QuickCosting.STATUS_RECALL_REQUESTED:
+        messages.error(request, "Only recall requested Quick Costing can be recalled.")
+        return redirect("quick_costing_detail", pk=pk)
+    blockers = quick_costing.recall_dependency_blockers()
+    if blockers:
+        messages.error(request, f"Recall is blocked by linked {', '.join(blockers)} records.")
+        return redirect("quick_costing_detail", pk=pk)
+
+    previous_status = quick_costing.status
+    quick_costing.status = QuickCosting.STATUS_RECALLED
+    quick_costing.recalled_by = _user_or_none(request.user)
+    quick_costing.recalled_at = timezone.now()
+    if request.POST.get("reason") and not quick_costing.recall_reason:
+        quick_costing.recall_reason = request.POST.get("reason", "").strip()
+    update_fields = [
+        "status",
+        "recalled_by",
+        "recalled_at",
+        "recall_reason",
+        "updated_at",
+    ]
+    if quick_costing.quotation_number and not quick_costing.invoices.exists():
+        quick_costing.quotation_revision_required = True
+        quick_costing.quotation_revision_required_at = timezone.now()
+        update_fields.extend(["quotation_revision_required", "quotation_revision_required_at"])
+    quick_costing.save(
+        update_fields=update_fields
+    )
+    CRMAuditLog.objects.create(
+        actor=_user_or_none(request.user),
+        module="quick_costing",
+        record_id=str(quick_costing.pk),
+        record_label=quick_costing.quotation_number or quick_costing.project_name or f"QC-{quick_costing.pk}",
+        action_type=CRMAuditLog.ACTION_STATUS_CHANGED,
+        field_name="status",
+        previous_value=previous_status,
+        new_value=QuickCosting.STATUS_RECALLED,
+        target_url=reverse("quick_costing_detail", args=[quick_costing.pk]),
+    )
+    if quick_costing.quotation_revision_required:
+        CRMAuditLog.objects.create(
+            actor=_user_or_none(request.user),
+            module="quick_costing",
+            record_id=str(quick_costing.pk),
+            record_label=quick_costing.quotation_number or quick_costing.project_name or f"QC-{quick_costing.pk}",
+            action_type=CRMAuditLog.ACTION_STATUS_CHANGED,
+            field_name="quotation_revision_required",
+            previous_value="False",
+            new_value=f"True ({quick_costing.revision_label})",
+            target_url=reverse("quick_costing_detail", args=[quick_costing.pk]),
+        )
+        messages.warning(request, "Existing quotation marked Revision Required. It remains linked to this recalled revision.")
+    messages.success(request, "Quick Costing recall approved. A revision copy can now be created.")
+    return redirect("quick_costing_detail", pk=pk)
+
+
+@require_POST
+def quick_costing_reject_recall(request, pk):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
+    quick_costing = get_object_or_404(QuickCosting, pk=pk)
+    if not _can_approve(request.user):
+        messages.error(request, "You do not have permission to reject recalls.")
+        return redirect("quick_costing_detail", pk=pk)
+    if not quick_costing.is_latest_revision:
+        latest_revision = quick_costing.latest_revision()
+        messages.error(request, "Only the latest Quick Costing revision can reject recall.")
+        return redirect("quick_costing_detail", pk=latest_revision.pk if latest_revision else pk)
+    if quick_costing.status != QuickCosting.STATUS_RECALL_REQUESTED:
+        messages.error(request, "Only recall requested Quick Costing can be rejected.")
+        return redirect("quick_costing_detail", pk=pk)
+
+    previous_status = quick_costing.status
+    restored_status = quick_costing.recall_previous_status or QuickCosting.STATUS_APPROVED
+    if restored_status not in {QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_QUOTED}:
+        restored_status = QuickCosting.STATUS_APPROVED
+    quick_costing.status = restored_status
+    quick_costing.recall_rejected_by = _user_or_none(request.user)
+    quick_costing.recall_rejected_at = timezone.now()
+    quick_costing.save(
+        update_fields=[
+            "status",
+            "recall_rejected_by",
+            "recall_rejected_at",
+            "updated_at",
+        ]
+    )
+    CRMAuditLog.objects.create(
+        actor=_user_or_none(request.user),
+        module="quick_costing",
+        record_id=str(quick_costing.pk),
+        record_label=quick_costing.quotation_number or quick_costing.project_name or f"QC-{quick_costing.pk}",
+        action_type=CRMAuditLog.ACTION_STATUS_CHANGED,
+        field_name="status",
+        previous_value=previous_status,
+        new_value=restored_status,
+        target_url=reverse("quick_costing_detail", args=[quick_costing.pk]),
+    )
+    messages.success(request, "Quick Costing recall rejected.")
+    return redirect("quick_costing_detail", pk=pk)
+
+
+@require_POST
+def quick_costing_create_revision_copy(request, pk):
+    denied = _deny_without_internal_costing(request)
+    if denied:
+        return denied
+    quick_costing = get_object_or_404(QuickCosting, pk=pk)
+    if not (_can_approve(request.user) or _can_submit_quick_costing(request.user)):
+        messages.error(request, "You do not have permission to create a Quick Costing revision.")
+        return redirect("quick_costing_detail", pk=pk)
+
+    try:
+        new_revision = quick_costing.create_revision_copy(user=request.user)
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages) if hasattr(exc, "messages") else str(exc))
+        return redirect("quick_costing_detail", pk=pk)
+
+    CRMAuditLog.objects.create(
+        actor=_user_or_none(request.user),
+        module="quick_costing",
+        record_id=str(new_revision.pk),
+        record_label=new_revision.project_name or f"QC-{new_revision.pk}",
+        action_type=CRMAuditLog.ACTION_CREATED,
+        field_name="revision_number",
+        previous_value=quick_costing.revision_label,
+        new_value=new_revision.revision_label,
+        target_url=reverse("quick_costing_detail", args=[new_revision.pk]),
+    )
+    messages.success(request, f"Revision {new_revision.revision_label} created.")
+    return redirect("quick_costing_detail", pk=new_revision.pk)
+
+
+@require_POST
 def quick_costing_convert_to_production(request, pk):
     denied = _deny_without_internal_costing(request)
     if denied:
@@ -1630,6 +2047,12 @@ def quick_costing_convert_to_production(request, pk):
     if not quick_costing.is_bangladesh_local_sewing:
         messages.error(request, "This Quick Costing does not use the Bangladesh Local Sewing workflow.")
         return redirect("quick_costing_detail", pk=pk)
+    if not quick_costing.is_latest_revision:
+        return _quick_latest_approved_redirect(
+            request,
+            quick_costing,
+            "Only the latest CEO Approved Quick Costing revision can move to Production.",
+        )
     if quick_costing.status not in {QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_QUOTED} or not quick_costing.approved_at:
         messages.error(request, "CEO approval is required before production can begin.")
         return redirect("quick_costing_detail", pk=pk)
@@ -1673,15 +2096,30 @@ def quick_costing_convert_to_quotation(request, pk):
     if not (_can_approve(request.user) or _can_convert_to_invoice(request.user)):
         messages.error(request, "You do not have permission to create a quotation.")
         return redirect("quick_costing_detail", pk=pk)
-    if quick_costing.status not in {QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_PRODUCTION}:
-        messages.error(request, "Approve costing before creating quotation.")
-        return redirect("quick_costing_detail", pk=pk)
+    if not _quick_can_create_new_quotation(quick_costing):
+        return _quick_latest_approved_redirect(
+            request,
+            quick_costing,
+            "Only the latest CEO Approved Quick Costing revision can create a quotation.",
+        )
     if not quick_costing.quotation_number:
         quick_costing.quotation_number = _next_quick_quotation_number()
         quick_costing.quoted_by = _user_or_none(request.user)
         quick_costing.quoted_at = timezone.now()
     quick_costing.status = QuickCosting.STATUS_QUOTED
-    quick_costing.save(update_fields=["status", "quotation_number", "quoted_by", "quoted_at", "updated_at"])
+    quick_costing.quotation_revision_required = False
+    quick_costing.quotation_revision_required_at = None
+    quick_costing.save(
+        update_fields=[
+            "status",
+            "quotation_number",
+            "quoted_by",
+            "quoted_at",
+            "quotation_revision_required",
+            "quotation_revision_required_at",
+            "updated_at",
+        ]
+    )
     messages.success(request, f"Quick quotation {quick_costing.quotation_number} is ready.")
     if _can_convert_to_invoice(request.user) and not _can_approve(request.user):
         return redirect(f"{reverse('ceo_quotation_approval_queue')}?status=approved")
@@ -1699,6 +2137,9 @@ def quick_costing_client_quotation(request, pk):
             "quoted_by",
             "approved_by",
             "rejected_by",
+            "superseded_by",
+            "previous_revision",
+            "revision_root",
             "opportunity",
             "opportunity__assigned_to",
             "opportunity__lead",
@@ -1711,6 +2152,7 @@ def quick_costing_client_quotation(request, pk):
     calc = _quick_costing_calc(quick_costing)
     invoice = quick_costing.invoices.select_related("customer", "order").order_by("-created_at", "-id").first()
     quick_costing._workflow_invoice_resolved = True
+    latest_approved_revision = quick_costing.latest_approved_revision()
     quotation_total = calc.get("sales_value") or calc.get("total_sales_order") or Decimal("0")
     quotation_total_pair = _format_quick_money_pair(
         quotation_total,
@@ -1734,7 +2176,8 @@ def quick_costing_client_quotation(request, pk):
         "prepared_by": _display_user(quick_costing.quoted_by or quick_costing.created_by),
         "approval_status_label": _quick_approval_status_label(quick_costing),
         "approval_user": _display_user(quick_costing.approved_by),
-        "can_convert_to_invoice": _can_convert_to_invoice(request.user) and _quick_approval_status_label(quick_costing) == "Approved",
+        "can_convert_to_invoice": _can_convert_to_invoice(request.user) and _quick_can_create_invoice_document(quick_costing),
+        "latest_approved_revision": latest_approved_revision,
         "quotation_total_pair": quotation_total_pair,
         **workflow_visibility,
     }
@@ -1753,9 +2196,13 @@ def quick_costing_convert_to_invoice(request, pk):
     if not _can_create_approved_quotation_invoice(request.user):
         messages.error(request, "Only Sales, Sales Manager, or invoice managers can create draft invoices from approved quotations.")
         return redirect("quick_costing_client_quotation", pk=pk)
-    if _quick_approval_status_label(quick_costing) != "Approved":
-        messages.error(request, "Approve the quick costing quotation before creating an invoice.")
-        return redirect("quick_costing_client_quotation", pk=pk)
+    if not _quick_can_create_invoice_document(quick_costing):
+        return _quick_latest_approved_redirect(
+            request,
+            quick_costing,
+            "Only the latest CEO Approved Quick Costing revision can create an invoice.",
+            fallback_view="quick_costing_client_quotation",
+        )
     if not quick_costing.quotation_number or not quick_costing.quoted_at:
         messages.error(request, "Create a quick quotation before creating an invoice.")
         return redirect("quick_costing_detail", pk=pk)

@@ -145,6 +145,17 @@
   .s-unknown{ color:#e5e7eb; }
   .s-unpaid{ color:#e5e7eb; }
   .s-overpaid{ color:#fb7185; border-color:rgba(251,113,133,0.45); background:rgba(251,113,133,0.10); }
+  .s-submitted{ color:#bfdbfe; border-color:rgba(96,165,250,0.45); background:rgba(96,165,250,0.10); }
+  .s-approved,
+  .s-quoted,
+  .s-production,
+  .s-invoiced,
+  .s-shipped,
+  .s-closed{ color:#bbf7d0; border-color:rgba(34,197,94,0.42); background:rgba(34,197,94,0.10); }
+  .s-recall_requested{ color:#fed7aa; border-color:rgba(251,146,60,0.45); background:rgba(251,146,60,0.12); }
+  .s-recalled,
+  .s-superseded{ color:#e2e8f0; border-color:rgba(148,163,184,0.36); background:rgba(148,163,184,0.10); }
+  .s-rejected{ color:#fecaca; border-color:rgba(248,113,113,0.42); background:rgba(248,113,113,0.10); }
 
   .pay-hero{
     display:grid;
@@ -551,15 +562,32 @@
               <a href="{% url 'production_detail' invoice.order.pk %}" style="color:#fde68a; font-weight:900;">{{ invoice.order.purchase_order_number|default:invoice.order.pk }}</a>
             {% endif %}
           </div>
-        {% elif invoice.quick_costing %}
-          <div class="note" style="margin-bottom:12px;">
-            Source quick costing:
-            <a href="{% url 'quick_costing_detail' invoice.quick_costing.pk %}" style="color:#fde68a; font-weight:900;">QC-{{ invoice.quick_costing.pk }}</a>
-            {% if invoice.quick_costing.quotation_number %}
-              | Quotation
-              <a href="{% url 'quick_costing_client_quotation' invoice.quick_costing.pk %}" style="color:#fde68a; font-weight:900;">{{ invoice.quick_costing.quotation_number }}</a>
-            {% endif %}
-          </div>
+	        {% elif invoice.quick_costing %}
+		          <div class="note" style="margin-bottom:12px;">
+		            Source quick costing:
+		            <a href="{% url 'quick_costing_detail' invoice.quick_costing.pk %}" style="color:#fde68a; font-weight:900;">QC-{{ invoice.quick_costing.pk }}</a>
+		            | Status: <span class="status s-{{ invoice.quick_costing.status }}">{{ invoice.quick_costing.get_status_display }}</span>
+		            | Current Revision: {{ invoice.quick_costing.revision_label }}
+	            | Previous Revision:
+	            {% if invoice.quick_costing.previous_revision %}
+	              <a href="{% url 'quick_costing_detail' invoice.quick_costing.previous_revision.pk %}" style="color:#fde68a; font-weight:900;">{{ invoice.quick_costing.previous_revision.revision_label }}</a>
+	            {% else %}
+	              None
+	            {% endif %}
+	            | Latest Approved Revision:
+	            {% if quick_latest_approved_revision %}
+	              <a href="{% url 'quick_costing_detail' quick_latest_approved_revision.pk %}" style="color:#fde68a; font-weight:900;">{{ quick_latest_approved_revision.revision_label }}</a>
+	            {% else %}
+	              None
+	            {% endif %}
+	            {% if quick_latest_approved_revision and quick_latest_approved_revision.pk != invoice.quick_costing.pk %}
+	              | <a href="{% url 'quick_costing_detail' quick_latest_approved_revision.pk %}" style="color:#fde68a; font-weight:900;">Open Latest Version</a>
+	            {% endif %}
+	            {% if invoice.quick_costing.quotation_number %}
+	              | Quotation
+	              <a href="{% url 'quick_costing_client_quotation' invoice.quick_costing.pk %}" style="color:#fde68a; font-weight:900;">{{ invoice.quick_costing.quotation_number }}</a>
+	            {% endif %}
+	          </div>
         {% endif %}
         <div class="internal-profit-grid">
           <div class="internal-profit-cell">

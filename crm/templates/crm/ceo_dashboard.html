@@ -525,6 +525,9 @@
           <li class="ceo-stat"><span>Quote to Invoice Conversion Rate</span><strong>{{ sales_intelligence.quotation_approval_rate|floatformat:2 }}%</strong></li>
           <li class="ceo-stat"><span>Repeat customer rate</span><strong>{{ sales_intelligence.repeat_customer_rate|floatformat:2 }}%</strong></li>
           <li class="ceo-stat"><span>Quoted to invoiced</span><strong>{{ sales_intelligence.quote_to_invoice_count|intcomma }} / {{ sales_intelligence.quotation_count|intcomma }}</strong></li>
+          <li class="ceo-stat"><span>Total Active Revisions</span><strong>{{ sales_intelligence.quick_revision_metrics.total_active_revisions|intcomma }}</strong></li>
+          <li class="ceo-stat"><span>Superseded Revisions</span><strong>{{ sales_intelligence.quick_revision_metrics.superseded_revisions|intcomma }}</strong></li>
+          <li class="ceo-stat"><span>Recalled Revisions</span><strong>{{ sales_intelligence.quick_revision_metrics.recalled_revisions|intcomma }}</strong></li>
         </ul>
       </article>
 

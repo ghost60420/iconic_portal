@@ -1,7 +1,7 @@
 {% extends "crm/base.html" %}
 {% load static crm_people platform_tools crm_extras %}
 {% block content %}
-<link rel="stylesheet" href="{% static 'crm/production_detail.css' %}?v=production-order-snapshot-20260627">
+<link rel="stylesheet" href="{% static 'crm/production_detail.css' %}?v=production-order-revisions-20260710">
 
 <div class="production-detail">
   <section class="production-detail-hero">
@@ -301,9 +301,16 @@
       <div class="production-muted-block"><span class="production-status-badge approved">Price locked</span></div>
 
       <div class="production-approved-grid">
-        <article><span>Purchase Order Number</span><strong>{{ order.purchase_order_number }}</strong></article>
-        <article><span>Quotation ID</span><strong>{% if order.source_quotation_id %}<a href="{% url 'cost_sheet_client_quotation' order.source_quotation_id %}">{{ order.quotation_number_snapshot }}</a>{% else %}{{ order.quotation_number_snapshot|default:"-" }}{% endif %}</strong></article>
-        <article><span>Lead ID</span><strong>{% if order.lead %}{{ order.lead.lead_id }}{% else %}-{% endif %}</strong></article>
+	        <article><span>Purchase Order Number</span><strong>{{ order.purchase_order_number }}</strong></article>
+	        <article><span>Quotation ID</span><strong>{% if order.source_quotation_id %}<a href="{% url 'cost_sheet_client_quotation' order.source_quotation_id %}">{{ order.quotation_number_snapshot }}</a>{% else %}{{ order.quotation_number_snapshot|default:"-" }}{% endif %}</strong></article>
+		        {% if source_quick_costing %}
+		          <article><span>Quick Costing</span><strong><a href="{% url 'quick_costing_detail' source_quick_costing.pk %}">QC-{{ source_quick_costing.pk }}</a></strong></article>
+		          <article><span>Status</span><strong><span class="production-status-badge quick-{{ source_quick_costing.status }}">{{ source_quick_costing.get_status_display }}</span></strong></article>
+		          <article><span>Current Revision</span><strong>{{ source_quick_costing.revision_label }}</strong></article>
+	          <article><span>Previous Revision</span><strong>{% if source_quick_costing.previous_revision %}<a href="{% url 'quick_costing_detail' source_quick_costing.previous_revision.pk %}">{{ source_quick_costing.previous_revision.revision_label }}</a>{% else %}None{% endif %}</strong></article>
+	          <article><span>Latest Approved Revision</span><strong>{% if quick_latest_approved_revision %}<a href="{% url 'quick_costing_detail' quick_latest_approved_revision.pk %}">{{ quick_latest_approved_revision.revision_label }}</a>{% else %}None{% endif %}</strong>{% if quick_latest_approved_revision and quick_latest_approved_revision.pk != source_quick_costing.pk %}<small><a href="{% url 'quick_costing_detail' quick_latest_approved_revision.pk %}">Open Latest Version</a></small>{% endif %}</article>
+	        {% endif %}
+	        <article><span>Lead ID</span><strong>{% if order.lead %}{{ order.lead.lead_id }}{% else %}-{% endif %}</strong></article>
         <article><span>Opportunity ID</span><strong>{% if order.opportunity %}{{ order.opportunity.opportunity_id }}{% else %}-{% endif %}</strong></article>
         <article><span>Customer</span><strong>{{ order.client_name_snapshot|default:"-" }}</strong></article>
         <article><span>Brand</span><strong>{{ order.brand_name_snapshot|default:"-" }}</strong></article>

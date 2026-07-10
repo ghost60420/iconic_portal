@@ -67,6 +67,35 @@ def _quick_audit(quick_costing, *, actor, action_type, field_name, previous_valu
     )
 
 
+def _supersede_previous_quick_revision(quick_costing, *, actor):
+    if not quick_costing.previous_revision_id:
+        return None
+    previous = QuickCosting.objects.select_for_update().get(pk=quick_costing.previous_revision_id)
+    if previous.status == QuickCosting.STATUS_SUPERSEDED and previous.superseded_by_id == quick_costing.pk:
+        return previous
+    previous_status = previous.status
+    previous.status = QuickCosting.STATUS_SUPERSEDED
+    previous.superseded_by = quick_costing
+    previous.save(update_fields=["status", "superseded_by", "updated_at"])
+    _quick_audit(
+        previous,
+        actor=actor,
+        action_type=CRMAuditLog.ACTION_STATUS_CHANGED,
+        field_name="status",
+        previous_value=previous_status,
+        new_value=QuickCosting.STATUS_SUPERSEDED,
+    )
+    _quick_audit(
+        quick_costing,
+        actor=actor,
+        action_type=CRMAuditLog.ACTION_APPROVED,
+        field_name="revision",
+        previous_value=previous.revision_label,
+        new_value=quick_costing.revision_label,
+    )
+    return previous
+
+
 def _audit_invoice_draft_created(invoice, *, actor):
     CRMAuditLog.objects.create(
         actor=_user_or_none(actor),
@@ -98,6 +127,7 @@ def approve_quick_costing(quick_costing, *, approver):
         quick_costing = QuickCosting.objects.select_for_update().get(pk=quick_costing.pk)
 
         if quick_costing.status == QuickCosting.STATUS_APPROVED:
+            _supersede_previous_quick_revision(quick_costing, actor=approver)
             production_order = getattr(quick_costing, "production_order", None)
             return quick_costing, production_order, False
         if quick_costing.status not in {QuickCosting.STATUS_SUBMITTED, QuickCosting.STATUS_DRAFT}:
@@ -137,6 +167,7 @@ def approve_quick_costing(quick_costing, *, approver):
             previous_value=previous_status,
             new_value=QuickCosting.STATUS_APPROVED,
         )
+        _supersede_previous_quick_revision(quick_costing, actor=approver)
         return quick_costing, getattr(quick_costing, "production_order", None), False
 
 
@@ -343,6 +374,10 @@ def create_invoice_from_quick_costing(quick_costing, user=None):
         if existing:
             create_lifecycle_from_invoice(existing, user=user)
             return existing, False
+        if not quick_costing.is_latest_revision:
+            raise CostingWorkflowError("Only the latest CEO Approved Quick Costing revision can create an invoice.")
+        if quick_costing.quotation_revision_required:
+            raise CostingWorkflowError("This quick quotation requires a new approved revision before invoicing.")
         if quick_costing.status not in {
             QuickCosting.STATUS_APPROVED,
             QuickCosting.STATUS_QUOTED,
@@ -456,6 +491,8 @@ def create_or_link_production_order_from_invoice(invoice, user=None):
         elif quick_costing:
             if quick_costing.status != QuickCosting.STATUS_APPROVED or not quick_costing.approved_at:
                 raise CostingWorkflowError("CEO-approved Quick Costing is required before production conversion.")
+            if not quick_costing.is_latest_revision:
+                raise CostingWorkflowError("Only the latest Quick Costing revision can move to Production.")
             if quick_costing.is_bangladesh_local_sewing:
                 from crm.services.production_orders import create_production_order_from_approved_quick_costing
 

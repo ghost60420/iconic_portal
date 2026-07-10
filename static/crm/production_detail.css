@@ -438,6 +438,48 @@
   color: #fde68a;
 }
 
+.production-status-badge.quick-draft {
+  border-color: rgba(148, 163, 184, 0.36);
+  background: rgba(148, 163, 184, 0.12);
+  color: #cbd5e1;
+}
+
+.production-status-badge.quick-submitted {
+  border-color: rgba(96, 165, 250, 0.38);
+  background: rgba(37, 99, 235, 0.16);
+  color: #dbeafe;
+}
+
+.production-status-badge.quick-approved,
+.production-status-badge.quick-quoted,
+.production-status-badge.quick-production,
+.production-status-badge.quick-invoiced,
+.production-status-badge.quick-shipped,
+.production-status-badge.quick-closed {
+  border-color: rgba(52, 211, 153, 0.36);
+  background: rgba(16, 185, 129, 0.14);
+  color: #bbf7d0;
+}
+
+.production-status-badge.quick-recall_requested {
+  border-color: rgba(251, 146, 60, 0.42);
+  background: rgba(120, 53, 15, 0.22);
+  color: #fed7aa;
+}
+
+.production-status-badge.quick-recalled,
+.production-status-badge.quick-superseded {
+  border-color: rgba(148, 163, 184, 0.36);
+  background: rgba(148, 163, 184, 0.12);
+  color: #e2e8f0;
+}
+
+.production-status-badge.quick-rejected {
+  border-color: rgba(248, 113, 113, 0.42);
+  background: rgba(127, 29, 29, 0.22);
+  color: #fecaca;
+}
+
 .production-priority-badge.neutral {
   color: #cbd5e1;
 }

@@ -683,13 +683,17 @@ def _quoted_values(user):
         output_field=DecimalField(max_digits=18, decimal_places=2),
     )
     quick = (
-        QuickCosting.objects.filter(lead_ownership_q(user, "opportunity__lead__"), quotation_number__gt="")
-        .exclude(status=QuickCosting.STATUS_REJECTED)
+        QuickCosting.objects.filter(
+            lead_ownership_q(user, "opportunity__lead__"),
+            quotation_number__gt="",
+            status__in=QuickCosting.ACTIVE_APPROVED_STATUSES,
+            quotation_revision_required=False,
+        )
         .values("currency")
         .annotate(
             amount=Sum(quick_value),
             count=Count("id"),
-            approved=Count("id", filter=Q(status=QuickCosting.STATUS_APPROVED)),
+            approved=Count("id", filter=Q(status__in=QuickCosting.ACTIVE_APPROVED_STATUSES)),
         )
     )
     advanced_unit = Coalesce("manual_fob_per_piece", "opportunity__costing_fob_per_piece", ZERO)

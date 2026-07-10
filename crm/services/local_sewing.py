@@ -32,7 +32,9 @@ def _workflow_count_expression(filter_q):
 
 def _workflow_count_aggregates():
     return {
-        "approved_count": _workflow_count_expression(Q(approved_at__isnull=False)),
+        "approved_count": _workflow_count_expression(
+            Q(status__in=QuickCosting.ACTIVE_APPROVED_STATUSES)
+        ),
         "pending_approval_count": _workflow_count_expression(
             Q(status=QuickCosting.STATUS_DRAFT, approval_submitted_at__isnull=False)
         ),
