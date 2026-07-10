@@ -1234,8 +1234,17 @@ class Opportunity(models.Model):
 
     lead = models.ForeignKey(
         "Lead",
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name="opportunities",
+    )
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="assigned_opportunities",
     )
     converted_from_lead_type = models.CharField(max_length=20, blank=True, default="")
     converted_from_source_channel = models.CharField(max_length=100, blank=True, default="")
@@ -1365,6 +1374,12 @@ class Opportunity(models.Model):
         if not self.opportunity_id and self.lead and self.lead.lead_id:
             count_for_lead = Opportunity.objects.filter(lead=self.lead).count() + 1
             self.opportunity_id = f"OPP-{self.lead.lead_id}-{count_for_lead:03}"
+        elif not self.opportunity_id and self.customer_id:
+            customer_label = self.customer.customer_code or f"CUST-{self.customer_id}"
+            count_for_customer = Opportunity.objects.filter(customer=self.customer, lead__isnull=True).count() + 1
+            self.opportunity_id = f"OPP-{customer_label}-{count_for_customer:03}"
+        elif not self.opportunity_id:
+            self.opportunity_id = f"OPP-{timezone.now():%Y%m%d}-{uuid.uuid4().hex[:6].upper()}"
 
         if self.stage == "Closed Won" and self.closed_won_at is None:
             self.closed_won_at = timezone.now()
@@ -1375,7 +1390,13 @@ class Opportunity(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.opportunity_id} for {self.lead.account_brand}"
+        account = (
+            getattr(self.lead, "account_brand", "")
+            or getattr(self.customer, "account_brand", "")
+            or getattr(self.customer, "contact_name", "")
+            or "Unlinked account"
+        )
+        return f"{self.opportunity_id} for {account}"
 
 
 class OpportunityTask(models.Model):
@@ -2005,6 +2026,19 @@ class QuickCosting(models.Model):
     COSTING_TYPE_CHOICES = [
         ("quick", "Quick"),
     ]
+    COMMISSION_NONE = "none"
+    COMMISSION_FIXED = "fixed"
+    COMMISSION_PERCENTAGE = "percentage"
+    COMMISSION_TYPE_CHOICES = [
+        (COMMISSION_NONE, "None"),
+        (COMMISSION_FIXED, "Fixed Amount"),
+        (COMMISSION_PERCENTAGE, "Percentage"),
+    ]
+    COMMISSION_CURRENCY_CHOICES = [
+        ("BDT", "BDT"),
+        ("CAD", "CAD"),
+        ("USD", "USD"),
+    ]
     PURPOSE_SAMPLE = "sample"
     PURPOSE_BULK = "bulk"
     PURPOSE_CHOICES = [
@@ -2101,6 +2135,24 @@ class QuickCosting(models.Model):
         decimal_places=2,
         null=True,
         blank=True,
+    )
+    salesperson = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="sales_quick_costings",
+    )
+    commission_type = models.CharField(
+        max_length=20,
+        choices=COMMISSION_TYPE_CHOICES,
+        default=COMMISSION_NONE,
+    )
+    commission_value = models.DecimalField(max_digits=12, decimal_places=2, blank=True, default=Decimal("0"))
+    commission_currency = models.CharField(
+        max_length=3,
+        choices=COMMISSION_CURRENCY_CHOICES,
+        default="BDT",
     )
     fabric_cost_per_kg = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     fabric_consumption_kg_per_piece = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True)
@@ -2254,6 +2306,127 @@ class QuickCosting(models.Model):
             self.STATUS_CLOSED,
         }
 
+    def _commission_currency(self):
+        currency = (self.commission_currency or self.currency or "BDT").upper().strip()
+        return currency if currency in {"BDT", "CAD", "USD"} else "BDT"
+
+    def _usd_to_bdt_rate(self):
+        opportunity = getattr(self, "opportunity", None)
+        rate = getattr(opportunity, "fx_rate_bdt_per_usd", None) if opportunity else None
+        if rate and rate > 0:
+            return rate
+        return None
+
+    def _fixed_commission_in_costing_currency(self, value, exchange_rate):
+        costing_currency = (self.currency or "BDT").upper()
+        commission_currency = self._commission_currency()
+        if commission_currency == costing_currency:
+            return value, True
+        if commission_currency == "CAD" and costing_currency == "BDT" and exchange_rate:
+            return value * exchange_rate, True
+        if commission_currency == "BDT" and costing_currency == "CAD" and exchange_rate:
+            return value / exchange_rate, True
+        if commission_currency == "USD" and costing_currency == "BDT":
+            usd_rate = self._usd_to_bdt_rate()
+            if usd_rate:
+                return value * usd_rate, True
+        if commission_currency == "BDT" and costing_currency == "USD":
+            usd_rate = self._usd_to_bdt_rate()
+            if usd_rate:
+                return value / usd_rate, True
+        return Decimal("0"), False
+
+    def _commission_display_amount(self, commission_total, exchange_rate):
+        costing_currency = (self.currency or "BDT").upper()
+        commission_currency = self._commission_currency()
+        if commission_currency == costing_currency:
+            return commission_total, True
+        if commission_currency == "CAD" and costing_currency == "BDT" and exchange_rate:
+            return commission_total / exchange_rate, True
+        if commission_currency == "BDT" and costing_currency == "CAD" and exchange_rate:
+            return commission_total * exchange_rate, True
+        if commission_currency == "USD" and costing_currency == "BDT":
+            usd_rate = self._usd_to_bdt_rate()
+            if usd_rate:
+                return commission_total / usd_rate, True
+        if commission_currency == "BDT" and costing_currency == "USD":
+            usd_rate = self._usd_to_bdt_rate()
+            if usd_rate:
+                return commission_total * usd_rate, True
+        return Decimal("0"), False
+
+    def _commission_summary(self, profit_before_commission, quantity, exchange_rate):
+        commission_type = self.commission_type or self.COMMISSION_NONE
+        if commission_type not in {self.COMMISSION_NONE, self.COMMISSION_FIXED, self.COMMISSION_PERCENTAGE}:
+            commission_type = self.COMMISSION_NONE
+
+        value = self.commission_value or Decimal("0")
+        if value < 0:
+            value = Decimal("0")
+
+        conversion_available = True
+        if commission_type == self.COMMISSION_FIXED and value > 0:
+            commission_total, conversion_available = self._fixed_commission_in_costing_currency(value, exchange_rate)
+        elif commission_type == self.COMMISSION_PERCENTAGE and value > 0:
+            commission_base = profit_before_commission if profit_before_commission > 0 else Decimal("0")
+            commission_total = (commission_base * value / Decimal("100")).quantize(
+                Decimal("0.01"),
+                rounding=ROUND_HALF_UP,
+            )
+        else:
+            commission_total = Decimal("0")
+
+        commission_per_piece = (commission_total / quantity) if quantity else Decimal("0")
+        display_amount, display_available = self._commission_display_amount(commission_total, exchange_rate)
+        return {
+            "commission_type": commission_type,
+            "commission_value": value,
+            "commission_currency": self._commission_currency(),
+            "commission_total": commission_total,
+            "commission_per_piece": commission_per_piece,
+            "commission_amount_calculated": commission_total,
+            "commission_display_amount": display_amount,
+            "commission_display_available": display_available,
+            "commission_conversion_available": conversion_available,
+        }
+
+    def _legacy_commission_summary(self, selling_price_per_piece, quantity):
+        zero = Decimal("0")
+        commission_percent = self.commission_percent
+        commission_type = self.COMMISSION_NONE
+        commission_value = zero
+        if commission_percent is not None:
+            if Decimal("0") <= commission_percent <= Decimal("100"):
+                commission_per_piece = (selling_price_per_piece * commission_percent / Decimal("100")).quantize(
+                    Decimal("0.01"),
+                    rounding=ROUND_HALF_UP,
+                )
+                commission_total = commission_per_piece * quantity
+                commission_type = self.COMMISSION_PERCENTAGE
+                commission_value = commission_percent
+            else:
+                commission_per_piece = zero
+                commission_total = zero
+        else:
+            commission_per_piece = self.commission_per_piece or zero
+            if commission_per_piece < zero:
+                commission_per_piece = zero
+            commission_total = commission_per_piece * quantity
+            if commission_total:
+                commission_type = self.COMMISSION_FIXED
+                commission_value = commission_total
+        return {
+            "commission_type": commission_type,
+            "commission_value": commission_value,
+            "commission_currency": self.currency or "BDT",
+            "commission_total": commission_total,
+            "commission_per_piece": commission_per_piece,
+            "commission_amount_calculated": commission_total,
+            "commission_display_amount": commission_total,
+            "commission_display_available": True,
+            "commission_conversion_available": True,
+        }
+
     def calculation_summary(self):
         quantity = Decimal(self.quantity or 0)
         if self.is_bangladesh_local_sewing:
@@ -2266,8 +2439,14 @@ class QuickCosting(models.Model):
             total_cost = (cost * quantity + extra_cost) if cost_available else zero
             profit = revenue - total_cost if cost_available else zero
             cost_per_piece = (total_cost / quantity) if quantity and cost_available else zero
+            commission = self._commission_summary(profit, quantity, None)
+            commission_per_piece = commission["commission_per_piece"]
+            commission_total = commission["commission_total"]
+            net_profit = profit - commission_total
             profit_per_piece = (profit / quantity) if quantity and cost_available else zero
+            net_profit_per_piece = profit_per_piece - commission_per_piece
             margin = ((profit / revenue) * Decimal("100")) if revenue and cost_available else zero
+            net_margin = ((net_profit / revenue) * Decimal("100")) if revenue and cost_available else zero
             return {
                 "quantity": quantity,
                 "currency": "BDT",
@@ -2296,13 +2475,24 @@ class QuickCosting(models.Model):
                 "revenue": revenue,
                 "gross_profit_per_piece": profit_per_piece,
                 "gross_profit_total": profit,
-                "commission_per_piece": zero,
-                "commission_total": zero,
+                "commission_per_piece": commission_per_piece,
+                "commission_total": commission_total,
                 "commission_percent": None,
-                "net_profit_per_piece": profit_per_piece,
-                "net_profit_total": profit,
+                "commission_amount_calculated": commission["commission_amount_calculated"],
+                "commission_type": commission["commission_type"],
+                "commission_value": commission["commission_value"],
+                "commission_currency": commission["commission_currency"],
+                "commission_display_amount": commission["commission_display_amount"],
+                "commission_display_available": commission["commission_display_available"],
+                "commission_conversion_available": commission["commission_conversion_available"],
+                "profit_before_commission": profit,
+                "profit_before_commission_per_piece": profit_per_piece,
+                "final_profit_after_commission": net_profit,
+                "final_profit_after_commission_per_piece": net_profit_per_piece,
+                "net_profit_per_piece": net_profit_per_piece,
+                "net_profit_total": net_profit,
                 "gross_profit_margin_percent": margin,
-                "net_profit_margin_percent": margin,
+                "net_profit_margin_percent": net_margin,
                 "target_margin_percent": self.target_margin_percent,
                 "margin_status": "Cost unavailable" if not cost_available else "Calculated",
                 "profit_per_piece": profit_per_piece,
@@ -2351,15 +2541,13 @@ class QuickCosting(models.Model):
             total_cost = material_cost + production_cost + other_expenses + shipping_cost
             cost_per_piece = (total_cost / quantity) if quantity else Decimal("0")
 
-        if self.commission_percent is not None:
-            commission_per_piece = (
-                selling_price_per_piece * self.commission_percent / Decimal("100")
-            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        else:
-            commission_per_piece = self.commission_per_piece or Decimal("0")
         revenue = selling_price_per_piece * quantity
         gross_profit_per_piece = selling_price_per_piece - cost_per_piece
         gross_profit_total = revenue - total_cost
+        commission = self._commission_summary(gross_profit_total, quantity, exchange_rate)
+        if commission["commission_type"] == self.COMMISSION_NONE:
+            commission = self._legacy_commission_summary(selling_price_per_piece, quantity)
+        commission_per_piece = commission["commission_per_piece"]
         commission_total = commission_per_piece * quantity
         net_profit_per_piece = gross_profit_per_piece - commission_per_piece
         net_profit_total = gross_profit_total - commission_total
@@ -2403,6 +2591,17 @@ class QuickCosting(models.Model):
             "commission_per_piece": commission_per_piece,
             "commission_total": commission_total,
             "commission_percent": self.commission_percent,
+            "commission_amount_calculated": commission["commission_amount_calculated"],
+            "commission_type": commission["commission_type"],
+            "commission_value": commission["commission_value"],
+            "commission_currency": commission["commission_currency"],
+            "commission_display_amount": commission["commission_display_amount"],
+            "commission_display_available": commission["commission_display_available"],
+            "commission_conversion_available": commission["commission_conversion_available"],
+            "profit_before_commission": gross_profit_total,
+            "profit_before_commission_per_piece": gross_profit_per_piece,
+            "final_profit_after_commission": net_profit_total,
+            "final_profit_after_commission_per_piece": net_profit_per_piece,
             "net_profit_per_piece": net_profit_per_piece,
             "net_profit_total": net_profit_total,
             "gross_profit_margin_percent": gross_profit_margin_percent,

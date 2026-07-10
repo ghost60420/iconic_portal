@@ -248,6 +248,17 @@ def _quick_costing_calc(quick_costing):
         "commission_per_piece": summary["commission_per_piece"],
         "commission_total": summary["commission_total"],
         "commission_percent": summary["commission_percent"],
+        "commission_amount_calculated": summary["commission_amount_calculated"],
+        "commission_type": summary["commission_type"],
+        "commission_value": summary["commission_value"],
+        "commission_currency": summary["commission_currency"],
+        "commission_display_amount": summary["commission_display_amount"],
+        "commission_display_available": summary["commission_display_available"],
+        "commission_conversion_available": summary["commission_conversion_available"],
+        "profit_before_commission": summary["profit_before_commission"],
+        "profit_before_commission_per_piece": summary["profit_before_commission_per_piece"],
+        "final_profit_after_commission": summary["final_profit_after_commission"],
+        "final_profit_after_commission_per_piece": summary["final_profit_after_commission_per_piece"],
         "net_profit_per_piece": summary["net_profit_per_piece"],
         "net_profit_total": summary["net_profit_total"],
         "gross_profit_margin_percent": summary["gross_profit_margin_percent"],
@@ -258,6 +269,7 @@ def _quick_costing_calc(quick_costing):
     calc["cost_available"] = calc["total_cost_order"] > Decimal("0")
     money_pair = lambda value: _format_quick_money_pair(value, exchange_rate, currency, is_legacy_currency)
     money_lines = lambda value: _format_quick_money_lines(value, exchange_rate, currency, is_legacy_currency)
+    commission_type_labels = dict(QuickCosting.COMMISSION_TYPE_CHOICES)
     calc["display"] = {
         "total_cost_order": _format_quick_decimal(calc["total_cost_order"]),
         "total_cost_order_pair": money_pair(calc["total_cost_order"]),
@@ -302,10 +314,28 @@ def _quick_costing_calc(quick_costing):
         "gross_profit_per_piece_pair": money_pair(calc["gross_profit_per_piece"]),
         "gross_profit_total": _format_quick_decimal(calc["gross_profit_total"]),
         "gross_profit_total_pair": money_pair(calc["gross_profit_total"]),
+        "profit_before_commission_per_piece_pair": money_pair(calc["profit_before_commission_per_piece"]),
+        "profit_before_commission_total_pair": money_pair(calc["profit_before_commission"]),
+        "profit_before_commission_total_lines": money_lines(calc["profit_before_commission"]),
+        "salesperson": _display_user(
+            quick_costing.salesperson
+            or getattr(getattr(quick_costing, "opportunity", None), "assigned_to", None)
+            or getattr(getattr(getattr(quick_costing, "opportunity", None), "lead", None), "assigned_to", None)
+        ) or "Not assigned",
+        "commission_type": commission_type_labels.get(calc["commission_type"], "None"),
+        "commission_value": _format_quick_decimal(calc["commission_value"]),
+        "commission_currency": calc["commission_currency"],
         "commission_per_piece": _format_quick_decimal(calc["commission_per_piece"]),
         "commission_per_piece_pair": money_pair(calc["commission_per_piece"]),
         "commission_total": _format_quick_decimal(calc["commission_total"]),
         "commission_total_pair": money_pair(calc["commission_total"]),
+        "commission_total_lines": money_lines(calc["commission_total"]),
+        "commission_amount_calculated_pair": money_pair(calc["commission_amount_calculated"]),
+        "commission_selected_currency": (
+            f"{calc['commission_currency']} {_format_quick_decimal(calc['commission_display_amount'])}"
+            if calc["commission_display_available"]
+            else "N/A"
+        ),
         "commission_percent": _format_quick_percent(calc["commission_percent"]) if calc["commission_percent"] is not None else "N/A",
         "commission_percent_label": f"{_format_quick_percent(calc['commission_percent'])}%" if calc["commission_percent"] is not None else "Legacy absolute amount",
         "net_profit_per_piece": _format_quick_decimal(calc["net_profit_per_piece"]),
@@ -313,6 +343,9 @@ def _quick_costing_calc(quick_costing):
         "net_profit_total": _format_quick_decimal(calc["net_profit_total"]),
         "net_profit_total_pair": money_pair(calc["net_profit_total"]),
         "net_profit_total_lines": money_lines(calc["net_profit_total"]),
+        "final_profit_after_commission_per_piece_pair": money_pair(calc["final_profit_after_commission_per_piece"]),
+        "final_profit_after_commission_total_pair": money_pair(calc["final_profit_after_commission"]),
+        "final_profit_after_commission_total_lines": money_lines(calc["final_profit_after_commission"]),
         "gross_profit_margin_percent": _format_quick_percent(calc["gross_profit_margin_percent"]),
         "net_profit_margin_percent": _format_quick_percent(calc["net_profit_margin_percent"]),
         "target_margin_percent": _format_quick_percent(calc["target_margin_percent"]) if calc["target_margin_percent"] is not None else "N/A",
@@ -361,7 +394,10 @@ def _quotation_ceo_status_label(costing, converted=False):
 
 
 def _quotation_salesperson_label(costing):
-    lead = getattr(getattr(costing, "opportunity", None), "lead", None)
+    opportunity = getattr(costing, "opportunity", None)
+    if getattr(opportunity, "assigned_to", None):
+        return _display_user(opportunity.assigned_to)
+    lead = getattr(opportunity, "lead", None)
     if getattr(lead, "assigned_to", None):
         return _display_user(lead.assigned_to)
     if costing.quoted_by:
@@ -658,7 +694,11 @@ def _costing_header_initial(opportunity=None):
             "product_type": opportunity.product_type,
             "order_quantity": opportunity.moq_units or 0,
             "moq": opportunity.moq_units or 0,
-            "brand": getattr(opportunity.lead, "account_brand", "") or "",
+            "brand": (
+                getattr(getattr(opportunity, "lead", None), "account_brand", "")
+                or getattr(getattr(opportunity, "customer", None), "account_brand", "")
+                or ""
+            ),
         }
     )
     return initial
@@ -699,6 +739,8 @@ def _quick_costing_initial(opportunity=None):
         "project_name": project_name,
         "product_type": opportunity.product_type or "Other",
         "quantity": quantity,
+        "salesperson": getattr(opportunity, "assigned_to_id", None)
+        or getattr(getattr(opportunity, "lead", None), "assigned_to_id", None),
     }
 
 
@@ -807,9 +849,13 @@ def _quick_approval_queue_row(quick_costing, user=None, *, user_can_approve=None
     status_key, status_label = _quick_queue_status(quick_costing, converted=converted)
     opportunity = quick_costing.opportunity
     lead = getattr(opportunity, "lead", None)
-    salesperson = quick_costing.approval_submitted_by or quick_costing.created_by
-    if not salesperson and getattr(lead, "assigned_to", None):
-        salesperson = lead.assigned_to
+    salesperson = (
+        quick_costing.salesperson
+        or getattr(opportunity, "assigned_to", None)
+        or getattr(lead, "assigned_to", None)
+        or quick_costing.approval_submitted_by
+        or quick_costing.created_by
+    )
     production_order = getattr(quick_costing, "production_order", None)
     estimated_days = None
     daily_target = None
@@ -914,8 +960,10 @@ def ceo_quotation_approval_queue(request):
     quick_qs = (
         QuickCosting.objects.select_related(
             "opportunity",
+            "opportunity__assigned_to",
             "opportunity__lead",
             "opportunity__lead__assigned_to",
+            "salesperson",
             "created_by",
             "approval_submitted_by",
             "approved_by",
@@ -1046,7 +1094,7 @@ def cost_sheet_list(request):
         return denied
     can_view_costing_profit = can_view_internal_costing(request.user)
     qs = CostingHeader.objects.select_related("opportunity", "customer").order_by("-updated_at")
-    quick_qs = QuickCosting.objects.select_related("created_by", "opportunity").order_by("-updated_at")
+    quick_qs = QuickCosting.objects.select_related("created_by", "salesperson", "opportunity", "opportunity__assigned_to", "opportunity__lead").order_by("-updated_at")
     archive_filter = (request.GET.get("archive") or "active").strip().lower()
     if archive_filter == "archived":
         qs = qs.filter(is_archived=True)
@@ -1263,7 +1311,7 @@ def cost_sheet_create(request, opportunity_id=None):
 
     if costing_type == "quick":
         if request.method == "POST":
-            quick_form = QuickCostingForm(request.POST)
+            quick_form = QuickCostingForm(request.POST, opportunity=opportunity)
             if quick_form.is_valid():
                 quick_costing = quick_form.save(commit=False)
                 if opportunity:
@@ -1277,7 +1325,7 @@ def cost_sheet_create(request, opportunity_id=None):
                 return redirect("quick_costing_detail", pk=quick_costing.pk)
             messages.error(request, "Please fix the errors below.")
         else:
-            quick_form = QuickCostingForm(initial=_quick_costing_initial(opportunity))
+            quick_form = QuickCostingForm(initial=_quick_costing_initial(opportunity), opportunity=opportunity)
 
         context = {
             "quick_form": quick_form,
@@ -1333,7 +1381,7 @@ def quick_costing_detail(request, pk):
         return denied
     quick_costing = get_object_or_404(
         QuickCosting.objects.select_related(
-            "created_by", "opportunity", "opportunity__lead", "approved_by",
+            "created_by", "salesperson", "opportunity", "opportunity__lead", "opportunity__assigned_to", "approved_by",
             "rejected_by", "quoted_by", "production_order",
         ),
         pk=pk,
@@ -1392,7 +1440,7 @@ def quick_costing_edit(request, pk):
     if denied:
         return denied
     quick_costing = get_object_or_404(
-        QuickCosting.objects.select_related("opportunity", "opportunity__lead"),
+        QuickCosting.objects.select_related("salesperson", "opportunity", "opportunity__lead", "opportunity__assigned_to"),
         pk=pk,
     )
     if quick_costing.is_locked and not _can_approve(request.user):
@@ -1400,14 +1448,14 @@ def quick_costing_edit(request, pk):
         return redirect("quick_costing_detail", pk=pk)
 
     if request.method == "POST":
-        form = QuickCostingForm(request.POST, instance=quick_costing)
+        form = QuickCostingForm(request.POST, instance=quick_costing, opportunity=quick_costing.opportunity)
         if form.is_valid():
             quick_costing = form.save()
             messages.success(request, "Quick costing updated.")
             return redirect("quick_costing_detail", pk=pk)
         messages.error(request, "Please fix the errors below.")
     else:
-        form = QuickCostingForm(instance=quick_costing)
+        form = QuickCostingForm(instance=quick_costing, opportunity=quick_costing.opportunity)
 
     context = {
         "quick_form": form,
@@ -1559,7 +1607,7 @@ def quick_costing_convert_to_production(request, pk):
     if denied:
         return denied
     quick_costing = get_object_or_404(
-        QuickCosting.objects.select_related("opportunity", "opportunity__lead"),
+        QuickCosting.objects.select_related("salesperson", "opportunity", "opportunity__assigned_to", "opportunity__lead"),
         pk=pk,
     )
     if not _can_approve(request.user):
@@ -1633,10 +1681,12 @@ def quick_costing_client_quotation(request, pk):
     quick_costing = get_object_or_404(
         QuickCosting.objects.select_related(
             "created_by",
+            "salesperson",
             "quoted_by",
             "approved_by",
             "rejected_by",
             "opportunity",
+            "opportunity__assigned_to",
             "opportunity__lead",
         ),
         pk=pk,
@@ -1683,7 +1733,7 @@ def quick_costing_convert_to_invoice(request, pk):
     if denied:
         return denied
     quick_costing = get_object_or_404(
-        QuickCosting.objects.select_related("opportunity", "opportunity__lead"),
+        QuickCosting.objects.select_related("salesperson", "opportunity", "opportunity__assigned_to", "opportunity__lead"),
         pk=pk,
     )
     if not _can_create_approved_quotation_invoice(request.user):
@@ -1714,7 +1764,7 @@ def quick_costing_export_excel(request, pk):
     if denied:
         return denied
     quick_costing = get_object_or_404(
-        QuickCosting.objects.select_related("created_by", "approved_by", "opportunity"),
+        QuickCosting.objects.select_related("created_by", "salesperson", "approved_by", "opportunity", "opportunity__assigned_to", "opportunity__lead"),
         pk=pk,
     )
     try:
@@ -1795,7 +1845,7 @@ def quick_costing_export_pdf(request, pk):
     if denied:
         return denied
     quick_costing = get_object_or_404(
-        QuickCosting.objects.select_related("created_by", "opportunity"),
+        QuickCosting.objects.select_related("created_by", "salesperson", "opportunity", "opportunity__assigned_to", "opportunity__lead"),
         pk=pk,
     )
 

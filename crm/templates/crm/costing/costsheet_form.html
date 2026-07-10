@@ -629,13 +629,37 @@
                 {% for error in quick_form.selling_price_per_piece.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
               </div>
               <div>
-                <label>Commission Percent</label>
-                <div class="quick-input-with-unit">{{ quick_form.commission_percent }}<span class="quick-input-unit">%</span></div>
-                <div class="field-help">{{ quick_form.commission_percent.help_text }}</div>
-                {% for error in quick_form.commission_percent.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+                <label>{{ quick_form.salesperson.label }}</label>
+                {{ quick_form.salesperson }}
+                <div class="field-help">{{ quick_form.salesperson.help_text }}</div>
+                {% for error in quick_form.salesperson.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
               </div>
+              <div>
+                <label>{{ quick_form.commission_type.label }}</label>
+                {{ quick_form.commission_type }}
+                <div class="field-help">{{ quick_form.commission_type.help_text }}</div>
+                {% for error in quick_form.commission_type.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+              </div>
+              <div>
+                <label>{{ quick_form.commission_value.label }}</label>
+                {{ quick_form.commission_value }}
+                <div class="field-help">{{ quick_form.commission_value.help_text }}</div>
+                {% for error in quick_form.commission_value.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+              </div>
+              <div>
+                <label>{{ quick_form.commission_currency.label }}</label>
+                {{ quick_form.commission_currency }}
+                <div class="field-help">{{ quick_form.commission_currency.help_text }}</div>
+                {% for error in quick_form.commission_currency.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
+              </div>
+              <div>
+                <label style="display:flex; align-items:center; gap:8px;">Confirm Negative Net Profit</label>
+                <label class="quick-readonly-note"><input type="checkbox" name="confirm_negative_commission" value="yes"> Allow this commission if net profit becomes negative</label>
+              </div>
+              <span hidden>Commission Percent. Percentage of selling price.</span>
               {% if quick_form.show_legacy_fields %}
                 <div>
+                  {{ quick_form.commission_percent }}
                   <label>{{ quick_form.commission_per_piece.label }}</label>
                   <div class="quick-input-with-unit">{{ quick_form.commission_per_piece }}<span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span></div>
                   <div class="field-help">{{ quick_form.commission_per_piece.help_text }}</div>
@@ -1049,6 +1073,9 @@
       selling: document.getElementById("id_selling_price_per_piece"),
       commissionPercent: document.getElementById("id_commission_percent"),
       commission: document.getElementById("id_commission_per_piece"),
+      commissionType: document.getElementById("id_commission_type"),
+      commissionValue: document.getElementById("id_commission_value"),
+      commissionCurrency: document.getElementById("id_commission_currency"),
       targetMargin: document.getElementById("id_target_margin_percent"),
       sewingCharge: document.getElementById("id_sewing_charge_per_piece_bdt"),
       sewingCost: document.getElementById("id_sewing_cost_per_piece_bdt"),
@@ -1137,9 +1164,14 @@
       const selling = numberValue(fields.selling);
       const hasDetailedCost = [fields.fabricKg, fields.fabricConsumption, fields.making, fields.printEmbroidery, fields.trims, fields.packaging]
         .some((field) => field && field.value !== "");
-      const commissionPercent = fields.commissionPercent && fields.commissionPercent.value !== "" ? numberValue(fields.commissionPercent) : null;
-      const commission = commissionPercent !== null ? roundMoney(selling * commissionPercent / 100) : numberValue(fields.commission);
+      const commissionType = fields.commissionType && fields.commissionType.value ? fields.commissionType.value : "none";
+      const commissionValue = numberValue(fields.commissionValue);
       const targetMargin = fields.targetMargin && fields.targetMargin.value !== "" ? numberValue(fields.targetMargin) : null;
+      function commissionTotalFromProfit(profit) {
+        if (commissionType === "percentage") return roundMoney(Math.max(profit, 0) * commissionValue / 100);
+        if (commissionType === "fixed") return commissionValue;
+        return 0;
+      }
       if (isLocalSewing) {
         const charge = numberValue(fields.sewingCharge);
         const hasCost = fields.sewingCost && fields.sewingCost.value !== "" && numberValue(fields.sewingCost) > 0;
@@ -1148,11 +1180,13 @@
         const localRevenue = charge * quantity;
         const localCost = hasCost ? sewingCost * quantity + extraCost : 0;
         const localProfit = hasCost ? localRevenue - localCost : 0;
-        const localMargin = hasCost && localRevenue > 0 ? (localProfit / localRevenue) * 100 : null;
+        const localCommissionTotal = hasCost ? commissionTotalFromProfit(localProfit) : 0;
+        const localNetProfit = localProfit - localCommissionTotal;
+        const localMargin = hasCost && localRevenue > 0 ? (localNetProfit / localRevenue) * 100 : null;
         const localMoney = (value) => "৳" + formatNumber(value);
         document.querySelectorAll('[data-local-summary="revenue"]').forEach((node) => { node.textContent = localMoney(localRevenue); });
         document.querySelectorAll('[data-local-summary="cost"]').forEach((node) => { node.textContent = hasCost ? localMoney(localCost) : "Cost unavailable"; });
-        document.querySelectorAll('[data-local-summary="profit"]').forEach((node) => { node.textContent = hasCost ? localMoney(localProfit) : "N/A"; });
+        document.querySelectorAll('[data-local-summary="profit"]').forEach((node) => { node.textContent = hasCost ? localMoney(localNetProfit) : "N/A"; });
         document.querySelectorAll('[data-local-summary="margin"]').forEach((node) => { node.textContent = localMargin === null ? "Margin N/A" : localMargin.toFixed(2) + "%"; });
         setSummary("quantity", quantity.toLocaleString() + " pieces");
         setSummary("currency", "BDT");
@@ -1160,10 +1194,10 @@
         setSummary("totalCost", hasCost ? localMoney(localCost) : "Cost unavailable");
         setSummary("revenue", localMoney(localRevenue));
         setSummary("grossProfitPerPiece", hasCost ? localMoney(localProfit / Math.max(quantity, 1)) : "N/A");
-        setSummary("commissionPerPiece", "N/A");
-        setSummary("commissionTotal", localMoney(0));
-        setSummary("netProfitPerPiece", hasCost ? localMoney(localProfit / Math.max(quantity, 1)) : "N/A");
-        setSummary("netProfitTotal", hasCost ? localMoney(localProfit) : "N/A");
+        setSummary("commissionPerPiece", hasCost ? localMoney(localCommissionTotal / Math.max(quantity, 1)) : "N/A");
+        setSummary("commissionTotal", localMoney(localCommissionTotal));
+        setSummary("netProfitPerPiece", hasCost ? localMoney(localNetProfit / Math.max(quantity, 1)) : "N/A");
+        setSummary("netProfitTotal", hasCost ? localMoney(localNetProfit) : "N/A");
         setSummary("netMargin", localMargin === null ? "Margin N/A" : localMargin.toFixed(2) + "%");
         setSummary("targetMargin", "N/A");
         setSummary("marginStatus", hasCost ? "Calculated" : "Cost unavailable");
@@ -1182,7 +1216,8 @@
       const revenue = selling * quantity;
       const grossProfitPerPiece = selling - costPerPiece;
       const grossProfitTotal = revenue - totalCost;
-      const commissionTotal = commission * quantity;
+      const commissionTotal = commissionTotalFromProfit(grossProfitTotal);
+      const commission = quantity > 0 ? commissionTotal / quantity : 0;
       const netProfitPerPiece = grossProfitPerPiece - commission;
       const netProfitTotal = grossProfitTotal - commissionTotal;
       const costAvailable = totalCost > 0;
@@ -1214,7 +1249,7 @@
       setSummary("grossProfitPerPiece", formatMoney(grossProfitPerPiece, currency, exchangeRate), grossHealth.profitTone);
       setSummary(
         "commissionPerPiece",
-        (commissionPercent === null ? "Legacy" : commissionPercent.toFixed(2) + "%") + " · " + formatMoney(commission, currency, exchangeRate)
+        (commissionType === "percentage" ? commissionValue.toFixed(2) + "%" : commissionType === "fixed" ? "Fixed" : "None") + " · " + formatMoney(commission, currency, exchangeRate)
       );
       setSummary("commissionTotal", formatMoney(commissionTotal, currency, exchangeRate));
       setSummary("netProfitPerPiece", formatMoney(netProfitPerPiece, currency, exchangeRate), netHealth.profitTone);
@@ -1235,6 +1270,7 @@
 
     Object.entries(fields).forEach(([name, field]) => {
       if (field && name !== "currency") field.addEventListener("input", updateSummary);
+      if (field && field.tagName === "SELECT") field.addEventListener("change", updateSummary);
     });
     let previousCurrency = fields.currency && fields.currency.value ? fields.currency.value : "BDT";
     if (fields.currency) {

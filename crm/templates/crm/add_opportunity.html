@@ -279,6 +279,29 @@
             </select>
           </div>
 
+          {% if active_customer_opportunities %}
+            <div class="opp-add-field opp-add-field-full">
+              <div class="opp-add-muted-card">
+                <strong>Existing active opportunities</strong>
+                {% for opp in active_customer_opportunities %}
+                  <span>{{ opp.opportunity_id }} - {{ opp.stage }}{% if opp.product_category %} - {{ opp.product_category }}{% endif %}</span>
+                {% endfor %}
+              </div>
+            </div>
+          {% endif %}
+
+          <div class="opp-add-field opp-add-field-full">
+            <label for="assigned_to">Assigned Salesperson</label>
+            <select name="assigned_to" id="assigned_to">
+              <option value="">Auto / Not assigned</option>
+              {% for user in salesperson_options %}
+                <option value="{{ user.pk }}" {% if default_salesperson_id|stringformat:"s" == user.pk|stringformat:"s" %}selected{% endif %}>
+                  {% if user.get_full_name %}{{ user.get_full_name }}{% else %}{{ user.username }}{% endif %}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
           <div class="opp-add-field">
             <label for="stage">Deal Stage</label>
             <select name="stage" id="stage">
@@ -305,6 +328,11 @@
               {% endfor %}
             </select>
             <div class="opp-add-help">Sports categories such as Basketball Jersey and Soccer Jersey are available here.</div>
+          </div>
+
+          <div class="opp-add-field opp-add-field-full">
+            <label for="notes">Notes Reference</label>
+            <input type="text" name="notes" id="notes" value="{% if selected_customer %}{{ selected_customer.notes|truncatechars:120 }}{% endif %}" placeholder="Project notes or customer reference">
           </div>
         </div>
       </div>

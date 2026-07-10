@@ -31,6 +31,12 @@
       <a href="{% url 'production_list' %}?q={{ customer_display_name|urlencode }}&status=active" class="customer-btn customer-btn--ghost">View Production</a>
       <a href="{% url 'customers_list' %}" class="customer-btn customer-btn--ghost">Back to Customers</a>
       <a href="#customer-notes" class="customer-btn customer-btn--ghost">Add Note</a>
+      {% if can_archive_customer and not customer.is_archived %}
+        <form method="post" action="{% url 'customer_archive' customer.pk %}" onsubmit="return confirm('Archive this customer? Linked records will be preserved.');">
+          {% csrf_token %}
+          <button type="submit" class="customer-btn customer-btn--ghost">Archive Customer</button>
+        </form>
+      {% endif %}
     </div>
   </section>
 

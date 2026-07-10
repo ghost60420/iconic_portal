@@ -423,7 +423,9 @@ def scope_sales_opportunities(queryset, user):
     if can_manage_all_sales_records(user):
         return queryset
     if has_operations_role(user, ROLE_SALES):
-        return queryset.filter(employee_lead_ownership_q(user, prefix="lead__"))
+        return queryset.filter(
+            Q(assigned_to=user) | employee_lead_ownership_q(user, prefix="lead__")
+        ).distinct()
     return queryset
 
 
@@ -437,6 +439,7 @@ def scope_production_orders(queryset, user):
     if has_operations_role(user, ROLE_SALES):
         return queryset.filter(
             Q(lead__assigned_to=user)
+            | Q(opportunity__assigned_to=user)
             | employee_lead_ownership_q(user, prefix="opportunity__lead__")
         ).distinct()
     if has_operations_role(user, ROLE_MANAGER, ROLE_SUPERVISOR) and employee_department(user) == "production":

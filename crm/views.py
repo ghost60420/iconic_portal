@@ -501,6 +501,15 @@ def _can_archive_workflow_record(user):
     return can_manage_archives(user)
 
 
+def _can_archive_customer(user):
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    access = getattr(user, "access", None)
+    return bool(access and getattr(access, "can_view_ceo_tools", False))
+
+
 def _active_crm_user_options():
     User = get_user_model()
     return (
@@ -743,6 +752,55 @@ def _opportunity_linked_record_labels(opportunity):
         labels.append("comments")
     if Event.objects.filter(opportunity=opportunity).exists():
         labels.append("calendar events")
+    return labels
+
+
+def _customer_linked_record_labels(customer):
+    flags = (
+        Customer.objects
+        .filter(pk=customer.pk)
+        .annotate(
+            has_leads=Exists(Lead.objects.filter(customer=OuterRef("pk"))),
+            has_opportunities=Exists(
+                Opportunity.objects.filter(Q(customer=OuterRef("pk")) | Q(lead__customer=OuterRef("pk")))
+            ),
+            has_production_orders=Exists(ProductionOrder.objects.filter(customer=OuterRef("pk"))),
+            has_invoices=Exists(Invoice.objects.filter(Q(customer=OuterRef("pk")) | Q(order__customer=OuterRef("pk")))),
+            has_payments=Exists(InvoicePayment.objects.filter(invoice__customer=OuterRef("pk"))),
+            has_shipments=Exists(Shipment.objects.filter(customer=OuterRef("pk"))),
+            has_accounting_records=Exists(AccountingEntry.objects.filter(customer=OuterRef("pk"))),
+            has_order_lifecycles=Exists(OrderLifecycle.objects.filter(customer=OuterRef("pk"))),
+        )
+        .values(
+            "has_leads",
+            "has_opportunities",
+            "has_production_orders",
+            "has_invoices",
+            "has_payments",
+            "has_shipments",
+            "has_accounting_records",
+            "has_order_lifecycles",
+        )
+        .first()
+    ) or {}
+
+    labels = []
+    if flags.get("has_leads"):
+        labels.append("leads")
+    if flags.get("has_opportunities"):
+        labels.append("opportunities")
+    if flags.get("has_production_orders"):
+        labels.append("production orders")
+    if flags.get("has_invoices"):
+        labels.append("invoices")
+    if flags.get("has_payments"):
+        labels.append("payments")
+    if flags.get("has_shipments"):
+        labels.append("shipments")
+    if flags.get("has_accounting_records"):
+        labels.append("accounting records")
+    if flags.get("has_order_lifecycles"):
+        labels.append("order lifecycles")
     return labels
 
 
@@ -2381,6 +2439,7 @@ def opportunity_create_manual(request):
         stage = request.POST.get("stage") or "Prospecting"
         product_type = request.POST.get("product_type") or "Other"
         product_category = request.POST.get("product_category") or "Other"
+        notes = (request.POST.get("notes") or "").strip()
         order_currency = (request.POST.get("order_currency") or "CAD").upper()
         if order_currency not in {"CAD", "USD", "BDT"}:
             order_currency = "CAD"
@@ -2428,6 +2487,7 @@ def opportunity_create_manual(request):
             order_value=order_value,
             order_value_usd=order_value_usd,
             fx_rate_bdt_per_usd=fx_rate,
+            notes=notes,
         )
         link_reference_images_to_opportunity(lead, opp)
         if lead:
@@ -2980,6 +3040,28 @@ def _ensure_customer_for_opportunity(opportunity):
         opportunity.save(update_fields=["customer"])
         return customer
 
+    return None
+
+
+def _customer_default_salesperson(customer):
+    if not customer:
+        return None
+    latest_opportunity = (
+        Opportunity.objects.filter(customer=customer, assigned_to__isnull=False)
+        .select_related("assigned_to")
+        .order_by("-updated_at", "-id")
+        .first()
+    )
+    if latest_opportunity and latest_opportunity.assigned_to_id:
+        return latest_opportunity.assigned_to
+    latest_lead = (
+        Lead.objects.filter(customer=customer, assigned_to__isnull=False)
+        .select_related("assigned_to")
+        .order_by("-created_date", "-id")
+        .first()
+    )
+    if latest_lead and latest_lead.assigned_to_id:
+        return latest_lead.assigned_to
     return None
 
 
@@ -3808,7 +3890,7 @@ def _opportunity_costing_status(advanced_count, quick_count):
 def opportunity_detail(request, pk):
     opportunity = get_object_or_404(
         scope_sales_opportunities(
-            _with_opportunity_kpi_value(Opportunity.objects.select_related("lead")),
+            _with_opportunity_kpi_value(Opportunity.objects.select_related("lead", "lead__assigned_to", "customer", "assigned_to")),
             request.user,
         ),
         pk=pk,
@@ -3871,7 +3953,7 @@ def opportunity_detail(request, pk):
     # Comments and activity
     comments = _chatter_for_opportunity(opportunity, request.user)
 
-    activities = LeadActivity.objects.filter(lead=lead).order_by("-created_at")
+    activities = LeadActivity.objects.filter(lead=lead).order_by("-created_at") if lead else LeadActivity.objects.none()
 
     stage_choices = Opportunity.STAGE_CHOICES
 
@@ -3987,11 +4069,12 @@ def opportunity_detail(request, pk):
                 customer.shipping_country = shipping_country
                 customer.save()
 
-                LeadActivity.objects.create(
-                    lead=lead,
-                    activity_type="shipping_updated",
-                    description="Shipping address updated from opportunity page.",
-                )
+                if lead:
+                    LeadActivity.objects.create(
+                        lead=lead,
+                        activity_type="shipping_updated",
+                        description="Shipping address updated from opportunity page.",
+                    )
 
             return redirect("opportunity_detail", pk=opportunity.pk)
 
@@ -4693,6 +4776,7 @@ def customers_list(request):
         "sort": sort,
         "archive_filter": archive_filter,
         "query_params": query_params.urlencode(),
+        "can_archive_customer": _can_archive_customer(request.user),
     }
     return render(request, "crm/customers_list.html", context)
 
@@ -4994,8 +5078,50 @@ def customer_detail(request, pk):
         "prod_orders": prod_orders,
         "local_sewing_summary": local_sewing_summary,
         "can_view_local_sewing_financials": can_view_local_sewing_financials(request.user),
+        "can_archive_customer": _can_archive_customer(request.user),
+        "customer_linked_records": _customer_linked_record_labels(customer),
     }
     return render(request, "crm/customer_detail.html", context)
+
+
+@require_POST
+def customer_archive(request, pk):
+    customer = get_object_or_404(Customer, pk=pk)
+    if not _can_archive_customer(request.user):
+        messages.error(request, "Only CEO/Admin can archive customers.")
+        return redirect("customer_detail", pk=pk)
+
+    linked_labels = _customer_linked_record_labels(customer)
+    if not customer.is_archived:
+        customer.is_archived = True
+        customer.is_active = False
+        customer.archived_at = timezone.now()
+        customer.archived_by = request.user if request.user.is_authenticated else None
+        customer.save(update_fields=["is_archived", "is_active", "archived_at", "archived_by", "updated_at"])
+    _log_workflow_safety_action(
+        request,
+        action="archive",
+        record=customer,
+        message=f"Customer {customer.customer_code} archived.",
+        meta={"linked_records": linked_labels},
+    )
+    _record_customer_event(
+        customer=customer,
+        event_type="customer_archived",
+        title="Customer archived",
+        details=(
+            f"Archived by {_user_display_name(request.user)}. "
+            f"Linked records preserved: {', '.join(linked_labels) if linked_labels else 'none'}."
+        ),
+    )
+    if linked_labels:
+        messages.warning(
+            request,
+            f"Customer archived. Linked records were preserved: {', '.join(linked_labels)}.",
+        )
+    else:
+        messages.success(request, "Customer archived.")
+    return redirect("customers_list")
 
 
 @require_POST
@@ -7916,7 +8042,12 @@ def get_sorted_stages(order):
 
         po = ProductionOrder.objects.filter(opportunity=opportunity).first()
         if not po:
-            title = f"{opportunity.lead.account_brand} order for {opportunity.opportunity_id}"
+            account = (
+                getattr(opportunity.lead, "account_brand", "")
+                or getattr(opportunity.customer, "account_brand", "")
+                or "Customer"
+            )
+            title = f"{account} order for {opportunity.opportunity_id}"
             qty_guess = opportunity.moq_units or 0
             po = ProductionOrder.objects.create(
                 opportunity=opportunity,
@@ -7946,16 +8077,19 @@ def opportunity_ai_detail(request, pk):
     email_body = request.POST.get("email_body", "")
 
     # lead info
-    lead_info = (
-        f"Brand: {lead.account_brand}. "
-        f"Contact: {lead.contact_name}. "
-        f"Email: {lead.email}. "
-        f"Phone: {lead.phone}. "
-        f"Market: {getattr(lead, 'market', '')}. "
-        f"Lead type: {getattr(lead, 'lead_type', '')}. "
-        f"Budget: {getattr(lead, 'budget', '')}. "
-        f"Order quantity: {getattr(lead, 'order_quantity', '')}. "
-    )
+    if lead:
+        lead_info = (
+            f"Brand: {lead.account_brand}. "
+            f"Contact: {lead.contact_name}. "
+            f"Email: {lead.email}. "
+            f"Phone: {lead.phone}. "
+            f"Market: {getattr(lead, 'market', '')}. "
+            f"Lead type: {getattr(lead, 'lead_type', '')}. "
+            f"Budget: {getattr(lead, 'budget', '')}. "
+            f"Order quantity: {getattr(lead, 'order_quantity', '')}. "
+        )
+    else:
+        lead_info = "No lead linked. This opportunity was created directly from a customer. "
 
     # opportunity info
     opp_info = (
@@ -8033,13 +8167,14 @@ def opportunity_ai_detail(request, pk):
     # try to save as a comment if model exists
     try:
         from .models import LeadComment  # safe local import
-        LeadComment.objects.create(
-            lead=lead,
-            opportunity=opportunity,
-            author="AI",
-            content=ai_text,
-            is_ai=True,
-        )
+        if lead:
+            LeadComment.objects.create(
+                lead=lead,
+                opportunity=opportunity,
+                author="AI",
+                content=ai_text,
+                is_ai=True,
+            )
     except Exception:
         # if model does not exist just skip
         pass
@@ -8055,7 +8190,7 @@ def opportunity_edit(request, pk):
     This is the view used by urls.py for 'opportunities/<pk>/edit/'.
     """
     opportunity = get_object_or_404(
-        scope_sales_opportunities(Opportunity.objects.select_related("lead"), request.user),
+        scope_sales_opportunities(Opportunity.objects.select_related("lead", "customer"), request.user),
         pk=pk,
     )
 
@@ -8159,9 +8294,10 @@ def opportunity_delete(request, pk):
         message=f"Opportunity {opp_id} archived.",
         meta={"linked_records": linked_labels},
     )
-    _log_lead_workflow_note(opportunity.lead, request.user, f"Opportunity {opp_id} archived by {_user_display_name(request.user)}.")
+    lead = opportunity.lead
+    _log_lead_workflow_note(lead, request.user, f"Opportunity {opp_id} archived by {_user_display_name(request.user)}.")
     _record_customer_event(
-        customer=opportunity.customer or getattr(opportunity.lead, "customer", None),
+        customer=opportunity.customer or getattr(lead, "customer", None),
         event_type="opportunity_created",
         title="Opportunity archived",
         details=f"Opportunity {opp_id} archived by {_user_display_name(request.user)}.",
@@ -11087,6 +11223,26 @@ def shipment_detail(request, pk):
     shipment = get_object_or_404(qs, pk=pk)
     lifecycles = list(shipment.order_lifecycles.all())
     lifecycle = lifecycles[0] if lifecycles else None
+    product_reference_images = []
+    product_snapshot = None
+    if getattr(shipment, "order", None):
+        product_reference_images = list(reference_images_for_production(shipment.order))
+        product_snapshot = product_snapshot_for_production(
+            shipment.order,
+            product_reference_images[0] if product_reference_images else None,
+        )
+    elif getattr(shipment, "opportunity", None):
+        product_reference_images = list(reference_images_for_opportunity(shipment.opportunity))
+        product_snapshot = product_snapshot_for_opportunity(
+            shipment.opportunity,
+            product_reference_images[0] if product_reference_images else None,
+        )
+    elif getattr(shipment, "lead", None):
+        product_reference_images = list(reference_images_for_lead(shipment.lead))
+        product_snapshot = product_snapshot_for_lead(
+            shipment.lead,
+            product_reference_images[0] if product_reference_images else None,
+        )
     can_view_shipping_costs = can_view_lifecycle_profit(request.user)
     workflow_visibility = build_workflow_visibility_context(
         "shipping",
@@ -11124,6 +11280,8 @@ def shipment_detail(request, pk):
         {
             "shipment": shipment,
             "lifecycle": lifecycle,
+            "product_snapshot": product_snapshot,
+            "product_reference_images": product_reference_images,
             "can_view_shipping_costs": can_view_shipping_costs,
             **workflow_visibility,
         },
@@ -15065,6 +15223,7 @@ def convert_lead_to_opportunity(request, pk):
         opp = Opportunity.objects.create(
             lead=lead,
             customer=customer,
+            assigned_to=lead.assigned_to if lead.assigned_to_id else None,
             stage="Prospecting",
             product_category="Other",
             product_type="Other",
@@ -15095,50 +15254,71 @@ def convert_lead_to_opportunity(request, pk):
 
 
 def add_opportunity(request):
-    customers = Customer.objects.all().order_by("account_brand")
+    customers = Customer.objects.filter(is_archived=False).order_by("account_brand")
     leads = scope_owned_sales_leads(
         Lead.objects.all().order_by("-created_date"),
         request.user,
+    )
+    salesperson_options = _active_crm_user_options()
+    selected_customer = None
+    selected_lead = None
+    selected_customer_id = request.GET.get("customer") or ""
+    selected_lead_id = request.GET.get("lead") or ""
+    if selected_customer_id:
+        selected_customer = Customer.objects.filter(pk=selected_customer_id, is_archived=False).first()
+    if selected_lead_id:
+        selected_lead = leads.filter(pk=selected_lead_id).select_related("customer", "assigned_to").first()
+    if selected_lead and not selected_customer and selected_lead.customer_id:
+        selected_customer = selected_lead.customer
+    default_salesperson = None
+    if selected_lead and selected_lead.assigned_to_id:
+        default_salesperson = selected_lead.assigned_to
+    elif selected_customer:
+        default_salesperson = _customer_default_salesperson(selected_customer)
+    active_customer_opportunities = (
+        Opportunity.objects.filter(customer=selected_customer, is_open=True, is_archived=False)
+        .exclude(stage__in=["Closed Won", "Closed Lost", "Shipment Complete"])
+        .order_by("-updated_at", "-id")
+        if selected_customer
+        else Opportunity.objects.none()
     )
 
     if request.method == "POST":
         customer_id = request.POST.get("customer")
         lead_id = request.POST.get("lead")
+        assigned_to_id = request.POST.get("assigned_to")
 
         customer = None
         lead = None
 
         if lead_id:
-            lead = leads.filter(pk=lead_id).first()
+            lead = leads.filter(pk=lead_id).select_related("customer", "assigned_to").first()
 
         if customer_id:
-            customer = Customer.objects.filter(pk=customer_id).first()
+            customer = Customer.objects.filter(pk=customer_id, is_archived=False).first()
 
-        if not lead and customer:
-            lead = Lead.objects.create(
-                account_brand=customer.account_brand,
-                contact_name=customer.contact_name,
-                email=customer.email,
-                phone=customer.phone,
-                market=customer.market,
-                source="Returning Client",
-            )
-            lead.customer = customer
-            lead.save(update_fields=["customer"])
-
-        if not lead:
+        if not lead and not customer:
             messages.error(request, "Please select a lead or a customer.")
             return redirect("add_opportunity")
 
-        if lead.customer_id:
-            customer = lead.customer
-        elif customer:
-            lead.customer = customer
-            lead.save(update_fields=["customer"])
-        else:
-            customer = _find_or_create_customer_for_lead(lead)
-            lead.customer = customer
-            lead.save(update_fields=["customer"])
+        if lead:
+            if lead.customer_id:
+                customer = lead.customer
+            elif customer:
+                lead.customer = customer
+                lead.save(update_fields=["customer"])
+            else:
+                customer = _find_or_create_customer_for_lead(lead)
+                lead.customer = customer
+                lead.save(update_fields=["customer"])
+
+        assigned_to = None
+        if assigned_to_id:
+            assigned_to = salesperson_options.filter(pk=assigned_to_id).first()
+        if not assigned_to and lead and lead.assigned_to_id:
+            assigned_to = lead.assigned_to
+        if not assigned_to and customer:
+            assigned_to = _customer_default_salesperson(customer)
 
         stage = request.POST.get("stage") or "Prospecting"
         product_type = request.POST.get("product_type") or "Other"
@@ -15170,11 +15350,13 @@ def add_opportunity(request):
             product_type=product_type,
             product_category=product_category,
             customer=customer,
+            assigned_to=assigned_to,
             moq_units=moq_units,
             order_currency=order_currency,
             order_value=order_value,
             order_value_usd=order_value_usd,
             fx_rate_bdt_per_usd=fx_rate,
+            notes=(request.POST.get("notes") or "").strip(),
         )
         if lead:
             lead.lead_status = "Converted"
@@ -15200,8 +15382,13 @@ def add_opportunity(request):
         "category_choices": Opportunity.PRODUCT_CATEGORY_CHOICES,
         "currency_choices": Opportunity.ORDER_CURRENCY_CHOICES,
         "default_currency": "CAD",
-        "selected_customer_id": request.GET.get("customer") or "",
-        "selected_lead_id": request.GET.get("lead") or "",
+        "salesperson_options": salesperson_options,
+        "default_salesperson_id": getattr(default_salesperson, "pk", ""),
+        "selected_customer": selected_customer,
+        "selected_customer_id": selected_customer_id,
+        "selected_lead": selected_lead,
+        "selected_lead_id": selected_lead_id,
+        "active_customer_opportunities": active_customer_opportunities,
     }
     return render(request, "crm/add_opportunity.html", context)
 

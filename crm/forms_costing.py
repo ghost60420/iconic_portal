@@ -271,10 +271,13 @@ HEADER_HELP_TEXTS = {
 
 def _safe_opportunity_label(opportunity):
     label = opportunity.opportunity_id or f"Opportunity {opportunity.pk}"
-    try:
-        brand = opportunity.lead.account_brand
-    except Exception:
-        brand = ""
+    lead = getattr(opportunity, "lead", None)
+    customer = getattr(opportunity, "customer", None)
+    brand = (
+        getattr(lead, "account_brand", "")
+        or getattr(customer, "account_brand", "")
+        or getattr(customer, "contact_name", "")
+    )
     return f"{label} - {brand}" if brand else label
 
 
@@ -425,6 +428,11 @@ class CostingSMVForm(forms.ModelForm):
         }
 
 
+def is_local_sewing_initial(initial, instance):
+    pricing_type = (initial or {}).get("pricing_type") or getattr(instance, "pricing_type", "")
+    return pricing_type == QuickCosting.PRICING_CMT
+
+
 class QuickCostingForm(forms.ModelForm):
     money_fields = [
         "material_cost",
@@ -433,6 +441,7 @@ class QuickCostingForm(forms.ModelForm):
         "shipping_cost",
         "selling_price_per_piece",
         "commission_per_piece",
+        "commission_value",
         "fabric_cost_per_kg",
         "fabric_consumption_kg_per_piece",
         "making_cost_per_piece",
@@ -456,13 +465,17 @@ class QuickCostingForm(forms.ModelForm):
         "shipping_cost": "Shipping total cannot be negative.",
         "selling_price_per_piece": "Selling price per piece cannot be negative.",
         "commission_per_piece": "Legacy commission per piece cannot be negative.",
+        "commission_value": "Fixed commission cannot be less than 0.",
         "sewing_charge_per_piece_bdt": "Sewing charge cannot be negative.",
         "sewing_cost_per_piece_bdt": "Sewing cost cannot be negative.",
         "extra_local_cost_bdt": "Extra local cost cannot be negative.",
     }
 
     def __init__(self, *args, **kwargs):
+        self.opportunity = kwargs.pop("opportunity", None)
         super().__init__(*args, **kwargs)
+        opportunity = self.opportunity or getattr(self.instance, "opportunity", None)
+        linked_salesperson = self._linked_salesperson(opportunity)
         self.fields["costing_purpose"].required = False
         self.fields["pricing_type"].required = False
         if not self.instance.pk and not self.initial.get("pricing_type"):
@@ -476,13 +489,36 @@ class QuickCostingForm(forms.ModelForm):
             ("CAD", "CAD ($)"),
             ("USD", "USD ($)"),
         ]
+        legacy_commission_posted = self.is_bound and (
+            "commission_percent" in self.data or "commission_per_piece" in self.data
+        )
         if not self.show_legacy_fields:
-            for field_name in ("material_cost", "production_cost", "commission_per_piece"):
+            for field_name in ("material_cost", "production_cost", "commission_per_piece", "commission_percent"):
                 self.fields[field_name].widget = forms.HiddenInput()
-                self.fields[field_name].disabled = True
+                self.fields[field_name].disabled = not (
+                    legacy_commission_posted and field_name in {"commission_per_piece", "commission_percent"}
+                )
+        for field_name in ("commission_type", "commission_value", "commission_currency"):
+            self.fields[field_name].required = False
+        self.fields["salesperson"].required = False
+        self.fields["salesperson"].empty_label = "Not assigned"
+        self.fields["salesperson"].queryset = self.fields["salesperson"].queryset.filter(
+            is_active=True,
+        ).order_by("first_name", "last_name", "username")
+        if not self.is_bound and linked_salesperson and not getattr(self.instance, "salesperson_id", None):
+            self.initial["salesperson"] = linked_salesperson.pk
+        if not self.is_bound and is_local_sewing_initial(self.initial, self.instance):
+            self.initial.setdefault("commission_currency", "BDT")
         for field in self.fields.values():
             css = field.widget.attrs.get("class", "")
             field.widget.attrs["class"] = (css + " costing-input").strip()
+
+    def _linked_salesperson(self, opportunity=None):
+        opportunity = opportunity or self.opportunity or getattr(self.instance, "opportunity", None)
+        if getattr(opportunity, "assigned_to", None):
+            return opportunity.assigned_to
+        lead = getattr(opportunity, "lead", None) if opportunity else None
+        return getattr(lead, "assigned_to", None) if lead else None
 
     def clean_quantity(self):
         quantity = self.cleaned_data.get("quantity")
@@ -519,7 +555,7 @@ class QuickCostingForm(forms.ModelForm):
             cleaned["extra_local_cost_bdt"] = None
         for field_name in self.money_fields:
             value = cleaned.get(field_name)
-            if field_name in {"shipping_cost", "commission_per_piece"} and value in (None, ""):
+            if field_name in {"shipping_cost", "commission_per_piece", "commission_value"} and value in (None, ""):
                 cleaned[field_name] = Decimal("0")
                 continue
             if value is not None and value < 0:
@@ -542,13 +578,86 @@ class QuickCostingForm(forms.ModelForm):
         commission_percent = cleaned.get("commission_percent")
         if commission_percent is not None and not Decimal("0") <= commission_percent <= Decimal("100"):
             self.add_error("commission_percent", "Commission must be between 0% and 100%.")
+        commission_type = cleaned.get("commission_type") or QuickCosting.COMMISSION_NONE
+        commission_value = cleaned.get("commission_value") or Decimal("0")
+        commission_currency = cleaned.get("commission_currency") or cleaned.get("currency") or "BDT"
+        cleaned["commission_type"] = commission_type
+        cleaned["commission_value"] = commission_value
+        cleaned["commission_currency"] = commission_currency
+        if commission_type == QuickCosting.COMMISSION_NONE:
+            cleaned["commission_value"] = Decimal("0")
+            cleaned["commission_currency"] = "BDT"
+        elif commission_value < 0:
+            self.add_error("commission_value", "Fixed commission cannot be less than 0.")
+        elif commission_type == QuickCosting.COMMISSION_PERCENTAGE and commission_value > Decimal("100"):
+            self.add_error("commission_value", "Commission percentage must be between 0 and 100.")
+        elif commission_type == QuickCosting.COMMISSION_FIXED:
+            costing_currency = cleaned.get("currency") or "BDT"
+            if commission_currency == "CAD" and costing_currency == "BDT" and not exchange_rate:
+                self.add_error("exchange_rate_bdt_per_cad", "Enter an exchange rate for CAD commission.")
+            elif commission_currency == "BDT" and costing_currency == "CAD" and not exchange_rate:
+                self.add_error("exchange_rate_bdt_per_cad", "Enter an exchange rate for BDT commission.")
+            elif "USD" in {commission_currency, costing_currency} and commission_currency != costing_currency:
+                opportunity = self.opportunity or getattr(self.instance, "opportunity", None)
+                usd_rate = getattr(opportunity, "fx_rate_bdt_per_usd", None) if opportunity else None
+                if not usd_rate or usd_rate <= 0:
+                    self.add_error("commission_currency", "USD commission conversion requires a linked opportunity with a USD to BDT rate.")
         fabric_cost = cleaned.get("fabric_cost_per_kg")
         fabric_consumption = cleaned.get("fabric_consumption_kg_per_piece")
         if (fabric_cost is None) != (fabric_consumption is None):
             message = "Enter both fabric cost per kg and fabric consumption per piece."
             self.add_error("fabric_cost_per_kg", message)
             self.add_error("fabric_consumption_kg_per_piece", message)
+        if commission_type != QuickCosting.COMMISSION_NONE and not self.errors:
+            projected = QuickCosting(
+                buyer_name=cleaned.get("buyer_name") or "",
+                project_name=cleaned.get("project_name") or "",
+                product_type=cleaned.get("product_type") or "Other",
+                costing_purpose=cleaned.get("costing_purpose") or QuickCosting.PURPOSE_BULK,
+                pricing_type=cleaned.get("pricing_type") or QuickCosting.PRICING_FULL_PACKAGE,
+                quantity=cleaned.get("quantity") or 0,
+                currency=cleaned.get("currency") or "BDT",
+                exchange_rate_bdt_per_cad=exchange_rate,
+                fabric_cost_per_kg=cleaned.get("fabric_cost_per_kg"),
+                fabric_consumption_kg_per_piece=cleaned.get("fabric_consumption_kg_per_piece"),
+                making_cost_per_piece=cleaned.get("making_cost_per_piece"),
+                print_embroidery_cost_per_piece=cleaned.get("print_embroidery_cost_per_piece"),
+                trims_cost_per_piece=cleaned.get("trims_cost_per_piece"),
+                packaging_cost_per_piece=cleaned.get("packaging_cost_per_piece"),
+                material_cost=cleaned.get("material_cost") or Decimal("0"),
+                production_cost=cleaned.get("production_cost") or Decimal("0"),
+                other_expenses=cleaned.get("other_expenses") or Decimal("0"),
+                shipping_cost=cleaned.get("shipping_cost") or Decimal("0"),
+                selling_price_per_piece=cleaned.get("selling_price_per_piece") or Decimal("0"),
+                sewing_charge_per_piece_bdt=cleaned.get("sewing_charge_per_piece_bdt"),
+                sewing_cost_per_piece_bdt=cleaned.get("sewing_cost_per_piece_bdt"),
+                extra_local_cost_bdt=cleaned.get("extra_local_cost_bdt"),
+                commission_type=commission_type,
+                commission_value=commission_value,
+                commission_currency=commission_currency,
+                target_margin_percent=target_margin,
+                opportunity=self.opportunity or getattr(self.instance, "opportunity", None),
+            )
+            if projected.calculation_summary()["final_profit_after_commission"] < 0:
+                confirmed = (self.data.get("confirm_negative_commission") or "").strip().lower() == "yes"
+                if not confirmed:
+                    raise forms.ValidationError(
+                        "Sales commission makes net profit negative. Confirm the warning to save anyway."
+                    )
         return cleaned
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if self.opportunity and not instance.opportunity_id:
+            instance.opportunity = self.opportunity
+        if not instance.salesperson_id:
+            linked_salesperson = self._linked_salesperson(instance.opportunity)
+            if linked_salesperson:
+                instance.salesperson = linked_salesperson
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance
 
     class Meta:
         model = QuickCosting
@@ -574,6 +683,10 @@ class QuickCostingForm(forms.ModelForm):
             "selling_price_per_piece",
             "commission_percent",
             "commission_per_piece",
+            "salesperson",
+            "commission_type",
+            "commission_value",
+            "commission_currency",
             "target_margin_percent",
             "sewing_charge_per_piece_bdt",
             "sewing_cost_per_piece_bdt",
@@ -600,6 +713,7 @@ class QuickCostingForm(forms.ModelForm):
             "selling_price_per_piece": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
             "commission_percent": forms.NumberInput(attrs={"min": 0, "max": 100, "step": "0.01", "placeholder": "5.00"}),
             "commission_per_piece": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
+            "commission_value": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
             "target_margin_percent": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "30"}),
             "sewing_charge_per_piece_bdt": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
             "sewing_cost_per_piece_bdt": forms.NumberInput(attrs={"min": 0, "step": "0.01", "placeholder": "0.00"}),
@@ -626,6 +740,10 @@ class QuickCostingForm(forms.ModelForm):
             "selling_price_per_piece": "Selling Price Per Piece",
             "commission_percent": "Commission Percent",
             "commission_per_piece": "Legacy Commission Per Piece",
+            "salesperson": "Salesperson",
+            "commission_type": "Commission Type",
+            "commission_value": "Commission Value",
+            "commission_currency": "Commission Currency",
             "target_margin_percent": "Target Margin %",
             "sewing_charge_per_piece_bdt": "Sewing Charge Per Piece",
             "sewing_cost_per_piece_bdt": "Sewing Cost Per Piece",
@@ -648,6 +766,10 @@ class QuickCostingForm(forms.ModelForm):
             "selling_price_per_piece": "Cost basis: per piece in the selected currency.",
             "commission_percent": "Percentage of selling price.",
             "commission_per_piece": "Legacy absolute BDT amount per piece. Used only when commission percent is empty.",
+            "salesperson": "Auto-filled from the linked opportunity or lead when available.",
+            "commission_type": "Use None, Fixed Amount, or Percentage.",
+            "commission_value": "Fixed amount or percentage value. Percentage is calculated from gross profit.",
+            "commission_currency": "Keep CAD, USD, and BDT separate. Converted values appear only when exchange rates exist.",
             "target_margin_percent": "Percentage target for profit after commission.",
             "sewing_charge_per_piece_bdt": "Customer sewing charge per piece in BDT.",
             "sewing_cost_per_piece_bdt": "Internal sewing cost per piece in BDT. Leave blank when unavailable.",

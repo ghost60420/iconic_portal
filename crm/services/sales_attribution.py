@@ -456,13 +456,17 @@ def lead_ownership_q(user, prefix=""):
     return employee_lead_ownership_q(user, prefix=prefix)
 
 
+def opportunity_ownership_q(user, prefix=""):
+    return Q(**{f"{prefix}assigned_to": user}) | lead_ownership_q(user, f"{prefix}lead__")
+
+
 def production_ownership_q(user, prefix=""):
     """Prefer an explicit order lead; otherwise inherit the opportunity lead."""
     return (
         lead_ownership_q(user, f"{prefix}lead__")
         | (
             Q(**{f"{prefix}lead__isnull": True})
-            & lead_ownership_q(user, f"{prefix}opportunity__lead__")
+            & opportunity_ownership_q(user, f"{prefix}opportunity__")
         )
     )
 
@@ -471,7 +475,7 @@ def shipment_ownership_q(user, prefix=""):
     """Resolve shipment ownership through production first, then opportunity."""
     order = Q(**{f"{prefix}order__isnull": False}) & production_ownership_q(user, f"{prefix}order__")
     no_order = Q(**{f"{prefix}order__isnull": True})
-    opportunity = no_order & lead_ownership_q(user, f"{prefix}opportunity__lead__")
+    opportunity = no_order & opportunity_ownership_q(user, f"{prefix}opportunity__")
     return order | opportunity
 
 
@@ -482,19 +486,19 @@ def invoice_ownership_q(user, prefix=""):
     direct_opportunity = (
         no_order
         & Q(**{f"{prefix}opportunity__isnull": False})
-        & lead_ownership_q(user, f"{prefix}opportunity__lead__")
+        & opportunity_ownership_q(user, f"{prefix}opportunity__")
     )
     advanced = (
         no_order
         & Q(**{f"{prefix}opportunity__isnull": True})
         & Q(**{f"{prefix}costing_header__isnull": False})
-        & lead_ownership_q(user, f"{prefix}costing_header__opportunity__lead__")
+        & opportunity_ownership_q(user, f"{prefix}costing_header__opportunity__")
     )
     quick = (
         no_order
         & Q(**{f"{prefix}opportunity__isnull": True})
         & Q(**{f"{prefix}costing_header__isnull": True})
-        & lead_ownership_q(user, f"{prefix}quick_costing__opportunity__lead__")
+        & opportunity_ownership_q(user, f"{prefix}quick_costing__opportunity__")
     )
     return order | direct_opportunity | advanced | quick
 
@@ -533,6 +537,27 @@ def _lead_for_record(record):
     order = getattr(record, "order", None)
     opportunity = getattr(record, "opportunity", None)
     return _lead_for_record(order or opportunity) if (order or opportunity) else None
+
+
+def _opportunity_for_record(record):
+    if isinstance(record, Opportunity):
+        return record
+    if isinstance(record, (QuickCosting, CostingHeader, ProductionOrder, Shipment, Invoice)):
+        opportunity = getattr(record, "opportunity", None)
+        if opportunity:
+            return opportunity
+        order = getattr(record, "order", None)
+        if order and getattr(order, "opportunity", None):
+            return order.opportunity
+        costing = getattr(record, "costing_header", None)
+        if costing and getattr(costing, "opportunity", None):
+            return costing.opportunity
+        quick = getattr(record, "quick_costing", None)
+        if quick and getattr(quick, "opportunity", None):
+            return quick.opportunity
+    if isinstance(record, InvoicePayment):
+        return _opportunity_for_record(record.invoice)
+    return None
 
 
 def resolve_salesperson_for_record(record, *, index=None):
@@ -607,12 +632,18 @@ def attribution_for(record, *, index=None, include_author=True):
     """Return separately labelled salesperson-of-record and record author."""
     lead = _lead_for_record(record)
     assigned_user = lead._state.fields_cache.get("assigned_to") if lead else None
+    opportunity = _opportunity_for_record(record)
+    if assigned_user is None and opportunity and getattr(opportunity, "assigned_to_id", None):
+        assigned_user = opportunity._state.fields_cache.get("assigned_to") or opportunity.assigned_to
     salesperson = _cached_identity(assigned_user, index=index)
     if salesperson is None and lead:
         lookup_index = index or get_employee_identity_index()
         salesperson = resolve_employee_identity(
             user_id=lead.assigned_to_id, owner_text=lead.owner, index=lookup_index
         )
+    if salesperson is None and opportunity and getattr(opportunity, "assigned_to_id", None):
+        lookup_index = index or get_employee_identity_index()
+        salesperson = resolve_employee_identity(user_id=opportunity.assigned_to_id, index=lookup_index)
     if salesperson is None:
         salesperson = resolve_employee_identity(index=index or {"by_user_id": {}, "by_profile_id": {}, "by_token": {}})
     author_id = _author_user_id(record) if include_author else None

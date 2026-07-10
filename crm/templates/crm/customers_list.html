@@ -2,7 +2,7 @@
 {% load static %}
 {% load crm_extras %}
 {% block content %}
-<nav class="crm-archive-switch" aria-label="Customer archive"><a href="?archive=active">Active</a><a href="?archive=archived">Archived</a></nav>
+<nav class="crm-archive-switch" aria-label="Customer archive"><a href="?archive=active">Active</a><a href="?archive=archived">Archived</a><a href="?archive=all">All</a></nav>
 <link rel="stylesheet" href="{% static 'crm/customers_list.css' %}?v=customers-modern-20260507">
 
 <div class="customer-page">
@@ -194,6 +194,12 @@
                     <a href="/admin/crm/customer/{{ c.id }}/change/" class="customer-btn customer-btn--tiny customer-btn--ghost">Edit</a>
                     <a href="{% url 'opportunities_list' %}?q={{ c.display_name|urlencode }}&status=all" class="customer-btn customer-btn--tiny customer-btn--ghost">Opportunities</a>
                     <a href="{% url 'add_opportunity' %}?customer={{ c.pk }}" class="customer-btn customer-btn--tiny customer-btn--ghost">Create Opportunity</a>
+                    {% if can_archive_customer and not c.is_archived %}
+                      <form method="post" action="{% url 'customer_archive' c.pk %}" onsubmit="return confirm('Archive this customer? Linked records will be preserved.');">
+                        {% csrf_token %}
+                        <button type="submit" class="customer-btn customer-btn--tiny customer-btn--ghost">Archive</button>
+                      </form>
+                    {% endif %}
                     {% if c.email %}
                       <a href="mailto:{{ c.email }}?subject=Follow up from Iconic Apparel House" class="customer-btn customer-btn--tiny customer-btn--ghost">Email Draft</a>
                     {% else %}

@@ -105,7 +105,7 @@
     </div>
     {% if opportunity %}
       <div class="muted" style="margin-top:8px;">
-        Linked opportunity: {{ opportunity.opportunity_id }} - {{ opportunity.lead.account_brand|default:"-" }}
+        Linked opportunity: {{ opportunity.opportunity_id }} - {% firstof opportunity.lead.account_brand opportunity.customer.account_brand opportunity.customer.contact_name "-" %}
       </div>
       <a href="{% url 'opportunity_detail' opportunity.pk %}" class="btnx" style="margin-top:6px;">
         Open opportunity

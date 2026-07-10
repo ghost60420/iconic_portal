@@ -90,6 +90,69 @@
 
   <section class="shipping-detail-grid">
     <main class="shipping-main-column">
+      <article class="shipping-panel">
+        <div class="shipping-panel-head">
+          <div>
+            <h2>Product Snapshot</h2>
+            <p>Product context inherited from shipment, production, opportunity, lead, or product library.</p>
+          </div>
+        </div>
+        <div class="shipping-linked-grid">
+          <article>
+            <span>Product image</span>
+            {% if product_snapshot and product_snapshot.image_file %}
+              <img src="{{ product_snapshot.image_file.url }}" alt="{{ product_snapshot.image_alt }}" style="width:100%; max-width:220px; border-radius:10px; display:block;">
+              <small>{{ product_snapshot.source_note|default:"Product snapshot" }}</small>
+            {% else %}
+              <strong>No snapshot uploaded</strong>
+            {% endif %}
+          </article>
+          <article>
+            <span>Product name</span>
+            <strong>{% if product_snapshot %}{{ product_snapshot.title }}{% else %}Product not set{% endif %}</strong>
+            <small>{% if product_snapshot %}{{ product_snapshot.primary_type }} / {{ product_snapshot.category }}{% endif %}</small>
+          </article>
+          <article>
+            <span>PO number</span>
+            <strong>{% if shipment.order %}{{ shipment.order.purchase_order_number|default:shipment.order.order_code|default:shipment.order.pk }}{% else %}-{% endif %}</strong>
+            {% if shipment.order %}<a href="{% url 'production_detail' shipment.order.pk %}" class="shipping-inline-link">Open Production</a>{% endif %}
+          </article>
+          <article>
+            <span>Quantity</span>
+            <strong>{% if product_snapshot %}{{ product_snapshot.quantity }}{% elif shipment.order %}{{ shipment.order.qty_total|default:"-" }} units{% else %}-{% endif %}</strong>
+            <small>
+              {% if shipment.order %}
+                {% if shipment.order.size_ratio_note and shipment.order.color_info %}
+                  {{ shipment.order.size_ratio_note }} / {{ shipment.order.color_info }}
+                {% else %}
+                  {% firstof shipment.order.size_ratio_note shipment.order.color_info "Size/color not set" %}
+                {% endif %}
+              {% else %}
+                Size/color not set
+              {% endif %}
+            </small>
+          </article>
+          <article>
+            <span>Opportunity</span>
+            {% if shipment.opportunity %}
+              <strong>{{ shipment.opportunity.opportunity_id }}</strong>
+              <a href="{% url 'opportunity_detail' shipment.opportunity.pk %}" class="shipping-inline-link">Open Opportunity</a>
+            {% else %}
+              <strong>Not linked</strong>
+            {% endif %}
+          </article>
+          <article>
+            <span>Customer</span>
+            {% if shipment.customer %}
+              <strong>{{ shipment.customer.account_brand|default:shipment.customer.contact_name|default:shipment.customer }}</strong>
+              <a href="{% url 'customer_detail' shipment.customer.pk %}" class="shipping-inline-link">Open Customer</a>
+            {% else %}
+              <strong>Not linked</strong>
+            {% endif %}
+          </article>
+        </div>
+      </article>
+
       <article class="shipping-panel" id="shipping-status">
         <div class="shipping-panel-head">
           <div>

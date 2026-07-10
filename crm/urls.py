@@ -204,6 +204,7 @@ urlpatterns = [
 
     path("customers/", perm("can_customers", views.customers_list), name="customers_list"),
     path("customers/<int:pk>/", perm("can_customers", views.customer_detail), name="customer_detail"),
+    path("customers/<int:pk>/archive/", perm("can_customers", views.customer_archive), name="customer_archive"),
     path("customers/<int:pk>/ai/", perm("can_ai", views.customer_ai_detail), name="customer_ai_detail"),
     path("customers/ai/overview/", perm("can_ai", views.customer_ai_overview), name="customer_ai_overview"),
     path("customers/ai/focus/", perm("can_ai", views.customer_ai_focus), name="customer_ai_focus"),
