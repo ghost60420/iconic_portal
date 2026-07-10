@@ -369,11 +369,14 @@ class QuickCostingCurrencyAndProfitTests(TestCase):
         breakdown = build_lifecycle_profit_breakdown(lifecycle)
 
         self.assertTrue(breakdown["is_comparable"])
-        self.assertEqual(breakdown["invoice_total"], Decimal("330.00"))
+        self.assertEqual(breakdown["invoice_total"], Decimal("300.00"))
+        self.assertEqual(invoice.subtotal, Decimal("300.00"))
+        self.assertEqual(invoice.shipping_amount, Decimal("0"))
+        self.assertEqual(invoice.total_amount, Decimal("300.00"))
         self.assertEqual(breakdown["shipping_cost"], Decimal("30"))
         self.assertEqual(breakdown["commission_cost"], Decimal("20"))
         self.assertEqual(breakdown["total_cost"], Decimal("220"))
-        self.assertEqual(breakdown["net_profit"], Decimal("110.00"))
+        self.assertEqual(breakdown["net_profit"], Decimal("80.00"))
 
     def test_production_profit_refuses_mixed_invoice_currency(self):
         order = ProductionOrder.objects.create(title="Mixed currency order")

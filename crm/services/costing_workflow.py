@@ -360,10 +360,10 @@ def create_invoice_from_quick_costing(quick_costing, user=None):
         subtotal = _quick_money_for_invoice(
             summary.get("revenue"), source_currency, currency, exchange_rate
         )
-        shipping = Decimal("0") if quick_costing.is_bangladesh_local_sewing else _quick_money_for_invoice(
-            summary.get("shipping_cost_total"), source_currency, currency, exchange_rate
-        )
-        total = _money(subtotal + shipping)
+        # Quick Costing selling price already includes shipping. Internal
+        # shipping remains in the costing profit calculation, not the invoice.
+        shipping = Decimal("0")
+        total = _money(subtotal)
         invoice_type = (
             "sewing_charge"
             if quick_costing.is_bangladesh_local_sewing

@@ -384,16 +384,9 @@
           <td class="num">{{ calc.display.fob_per_piece_pair }}</td>
           <td class="num">{{ calc.display.total_sales_order_pair }}</td>
         </tr>
-        {% if quick_costing.shipping_cost %}
-          <tr>
-            <td><strong>Shipping Cost</strong></td>
-            <td class="num">1</td>
-            <td class="num">{{ calc.display.shipping_cost_total_pair }}</td>
-            <td class="num">{{ calc.display.shipping_cost_total_pair }}</td>
-          </tr>
-        {% endif %}
       </tbody>
     </table>
+    <div class="quick-quote-text" style="margin-top:10px;">Shipping: Included in Selling Price.</div>
     <div class="quick-quote-total">
       <div class="quick-quote-total-box">
         <span>Total Price</span>

@@ -93,6 +93,11 @@ class QuickCostingTests(TestCase):
 
         summary = quick.calculation_summary()
 
+        self.assertEqual(summary["sales_value"], Decimal("1500.00"))
+        self.assertEqual(summary["shipping_cost_total"], Decimal("100.00"))
+        self.assertEqual(summary["other_expenses_total"], Decimal("200.00"))
+        self.assertEqual(summary["net_revenue"], Decimal("1200.00"))
+        self.assertEqual(summary["product_production_cost_total"], Decimal("800.00"))
         self.assertEqual(summary["total_cost"], Decimal("1100.00"))
         self.assertEqual(summary["cost_per_piece"], Decimal("11.00"))
         self.assertEqual(summary["revenue"], Decimal("1500.00"))
@@ -130,6 +135,10 @@ class QuickCostingTests(TestCase):
         self.assertEqual(summary["fabric_cost_per_piece"], Decimal("50.000000"))
         self.assertEqual(summary["other_expenses_per_piece"], Decimal("1.00"))
         self.assertEqual(summary["shipping_cost_per_piece"], Decimal("2.00"))
+        self.assertEqual(summary["sales_value"], Decimal("10000.00"))
+        self.assertEqual(summary["net_revenue"], Decimal("9700.00"))
+        self.assertEqual(summary["product_production_cost_total"], Decimal("8000.000000"))
+        self.assertEqual(summary["product_production_cost_per_piece"], Decimal("80.000000"))
         self.assertEqual(summary["cost_per_piece"], Decimal("83.000000"))
         self.assertEqual(summary["total_cost"], Decimal("8300.000000"))
         self.assertEqual(summary["commission_per_piece"], Decimal("5.00"))
@@ -162,6 +171,37 @@ class QuickCostingTests(TestCase):
         self.assertEqual(summary["commission_total"], Decimal("50.00"))
         self.assertEqual(summary["net_profit_per_piece"], Decimal("15.000000"))
         self.assertEqual(summary["net_profit_total"], Decimal("150.000000"))
+
+    def test_shipping_is_deducted_from_profit_not_added_to_sales_value(self):
+        quick = QuickCosting(
+            buyer_name="Shipping Rule Buyer",
+            project_name="Shipping Included Order",
+            product_type="Streetwear",
+            pricing_type=QuickCosting.PRICING_FULL_PACKAGE,
+            quantity=605,
+            currency="CAD",
+            material_cost=Decimal("5000.00"),
+            production_cost=Decimal("3000.00"),
+            other_expenses=Decimal("58.82"),
+            shipping_cost=Decimal("9779.41"),
+            selling_price_per_piece=Decimal("38.00"),
+            commission_type=QuickCosting.COMMISSION_PERCENTAGE,
+            commission_value=Decimal("10.00"),
+            commission_currency="CAD",
+        )
+
+        summary = quick.calculation_summary()
+
+        self.assertEqual(summary["sales_value"], Decimal("22990.00"))
+        self.assertEqual(summary["revenue"], Decimal("22990.00"))
+        self.assertEqual(summary["shipping_cost_total"], Decimal("9779.41"))
+        self.assertEqual(summary["other_expenses_total"], Decimal("58.82"))
+        self.assertEqual(summary["net_revenue"], Decimal("13151.77"))
+        self.assertEqual(summary["product_production_cost_total"], Decimal("8000.00"))
+        self.assertEqual(summary["total_cost"], Decimal("17838.23"))
+        self.assertEqual(summary["gross_profit_total"], Decimal("5151.77"))
+        self.assertEqual(summary["commission_total"], Decimal("515.18"))
+        self.assertEqual(summary["net_profit_total"], Decimal("4636.59"))
 
     def test_legacy_absolute_commission_still_works(self):
         quick = self._quick_costing(commission_percent=None, commission_per_piece=Decimal("1.25"))
@@ -218,7 +258,10 @@ class QuickCostingTests(TestCase):
         )
         self.assertIn("per piece", form.fields["making_cost_per_piece"].help_text)
         self.assertIn("total order", form.fields["other_expenses"].help_text)
-        self.assertEqual(form.fields["shipping_cost"].help_text, "Total shipping cost for this order.")
+        self.assertEqual(
+            form.fields["shipping_cost"].help_text,
+            "Internal shipping cost already included in selling price; deducted from profit only.",
+        )
         self.assertEqual(form.fields["commission_percent"].help_text, "Percentage of selling price.")
         self.assertTrue(form.fields["commission_per_piece"].disabled)
         self.assertEqual(form.fields["commission_per_piece"].widget.input_type, "hidden")
@@ -324,13 +367,13 @@ class QuickCostingTests(TestCase):
         self.assertContains(response, "Print / Embroidery Cost Per Piece")
         self.assertContains(response, "Trims Cost Per Piece")
         self.assertContains(response, "Packaging Cost Per Piece")
-        self.assertContains(response, "Shipping Cost Per Order")
+        self.assertContains(response, "Less Shipping Cost Per Order")
         self.assertContains(response, "Selling Price Per Piece")
         self.assertContains(response, "Commission Percent")
         self.assertContains(response, "Enter fabric price per KG.")
         self.assertContains(response, "Example: 0.42 KG per garment.")
         self.assertContains(response, "Percentage of selling price.")
-        self.assertContains(response, "Total shipping cost for this order.")
+        self.assertContains(response, "Internal shipping cost already included in selling price; deducted from profit only.")
         self.assertContains(response, "Select BDT, CAD, or USD for this costing.")
         self.assertContains(response, "1. General Information")
         self.assertContains(response, "2. Material Cost")
@@ -343,12 +386,14 @@ class QuickCostingTests(TestCase):
         self.assertContains(response, "Wash Cost Per Piece")
         self.assertContains(response, "Not configured in Quick Costing")
         self.assertContains(response, "Shipping Allocation Per Piece")
-        self.assertContains(response, "Gross Profit Per Piece")
-        self.assertContains(response, "Net Profit Per Piece")
-        self.assertContains(response, "Net Margin %")
         self.assertContains(response, "Sales Value")
-        self.assertContains(response, "Order Cost")
-        self.assertContains(response, "Order Profit")
+        self.assertContains(response, "Less Shipping Cost")
+        self.assertContains(response, "Net Revenue")
+        self.assertContains(response, "Total Product and Production Cost")
+        self.assertContains(response, "Gross Profit Before Commission")
+        self.assertContains(response, "Sales Commission")
+        self.assertContains(response, "Final Profit")
+        self.assertContains(response, "Final Margin")
         self.assertContains(response, "Profit Health")
         self.assertContains(response, "Excellent")
         self.assertContains(response, "Healthy")
@@ -547,7 +592,8 @@ class QuickCostingTests(TestCase):
         self.assertContains(detail_response, "Commission")
         self.assertContains(detail_response, "Meets target")
         self.assertContains(detail_response, "৳2,000.00")
-        self.assertContains(detail_response, "৳1,100.00")
+        self.assertContains(detail_response, "৳1,700.00")
+        self.assertContains(detail_response, "৳900.00")
         self.assertContains(detail_response, "৳800.00")
 
         pdf_response = self.client.get(reverse("quick_costing_export_pdf", args=[quick.pk]))
@@ -568,18 +614,16 @@ class QuickCostingTests(TestCase):
         assert_pdf_contains(b"Total Order - BDT")
         assert_pdf_contains(b"Fabric Cost")
         assert_pdf_contains(b"Making and Finishing")
-        assert_pdf_contains(b"Other Expenses")
-        assert_pdf_contains(b"Shipping Cost")
-        assert_pdf_contains(b"Total Cost")
-        assert_pdf_contains(b"COST PER PIECE")
+        assert_pdf_contains(b"Less Other Order Expenses")
+        assert_pdf_contains(b"Less Shipping Cost")
+        assert_pdf_contains(b"Total Product and Production Cost")
         assert_pdf_contains(b"SELLING PRICE PER PIECE")
-        assert_pdf_contains(b"TOTAL ORDER VALUE")
-        assert_pdf_contains(b"Profit Before Commission")
-        assert_pdf_contains(b"COMMISSION PER PIECE")
-        assert_pdf_contains(b"COMMISSION TOTAL")
-        assert_pdf_contains(b"Final Profit After Commission")
-        assert_pdf_contains(b"GROSS PROFIT MARGIN")
-        assert_pdf_contains(b"NET PROFIT MARGIN")
+        assert_pdf_contains(b"Sales Value")
+        assert_pdf_contains(b"Net Revenue")
+        assert_pdf_contains(b"Gross Profit Before Commission")
+        assert_pdf_contains(b"Sales Commission")
+        assert_pdf_contains(b"Final Profit")
+        assert_pdf_contains(b"Final Margin")
         assert_pdf_contains(b"TARGET MARGIN")
         assert_pdf_contains(b"MARGIN STATUS")
         assert_pdf_contains(b"Meets target")
@@ -587,7 +631,8 @@ class QuickCostingTests(TestCase):
         assert_pdf_contains(b"Thank You!")
         assert_pdf_contains(b"For Your Business")
         assert_pdf_contains(b"100.00")
-        assert_pdf_contains(b"1,100.00")
+        assert_pdf_contains(b"1,700.00")
+        assert_pdf_contains(b"900.00")
         assert_pdf_contains(b"800.00")
         self.assertFalse(re.search(rb"0\.9254\d*\s+0\.2823\d*\s+0\.6", pdf_content))
 
@@ -890,7 +935,9 @@ class QuickCostingTests(TestCase):
         self.assertContains(quote_response, quick.quotation_number)
         self.assertContains(quote_response, "Selling Price")
         self.assertContains(quote_response, "Currency: Legacy BDT with CAD conversion")
-        self.assertContains(quote_response, "Shipping Cost")
+        self.assertContains(quote_response, "Shipping: Included in Selling Price.")
+        self.assertNotContains(quote_response, "Shipping Cost")
+        self.assertNotContains(quote_response, "CAD $1.11")
         self.assertContains(quote_response, "Total Price")
         self.assertContains(quote_response, "Thank You!")
         self.assertContains(quote_response, "Quotation Status")
@@ -949,8 +996,8 @@ class QuickCostingTests(TestCase):
         self.assertEqual(invoice.status, "draft")
         self.assertEqual(invoice.currency, "CAD")
         self.assertEqual(invoice.subtotal, Decimal("16.67"))
-        self.assertEqual(invoice.shipping_amount, Decimal("1.11"))
-        self.assertEqual(invoice.total_amount, Decimal("17.78"))
+        self.assertEqual(invoice.shipping_amount, Decimal("0"))
+        self.assertEqual(invoice.total_amount, Decimal("16.67"))
         self.assertEqual(invoice.sewing_charge, Decimal("0"))
         self.assertEqual(invoice.other_internal_cost, Decimal("0"))
 
@@ -969,10 +1016,16 @@ class QuickCostingTests(TestCase):
         self.assertContains(quote_response, "Open Invoice")
         self.assertContains(quote_response, reverse("invoice_view", args=[invoice.pk]))
 
+        invoice.shipping_amount = Decimal("1.11")
+        invoice.total_amount = Decimal("17.78")
+        invoice.save(update_fields=["shipping_amount", "total_amount", "updated_at"])
         duplicate_response = self.client.post(reverse("quick_costing_convert_to_invoice", args=[quick.pk]))
+        invoice.refresh_from_db()
         self.assertEqual(duplicate_response.status_code, 302)
         self.assertEqual(duplicate_response["Location"], reverse("invoice_view", args=[invoice.pk]))
         self.assertEqual(Invoice.objects.filter(quick_costing=quick).count(), 1)
+        self.assertEqual(invoice.shipping_amount, Decimal("1.11"))
+        self.assertEqual(invoice.total_amount, Decimal("17.78"))
 
     def test_quick_costing_excel_export(self):
         admin = self._admin_user("quick-costing-excel-admin")
@@ -992,8 +1045,11 @@ class QuickCostingTests(TestCase):
         sheet = workbook.active
         labels = [row[0].value for row in sheet.iter_rows(min_col=1, max_col=1)]
         self.assertIn("Buyer Name", labels)
-        self.assertIn("Total Cost", labels)
-        self.assertIn("Final Profit After Commission", labels)
+        self.assertIn("Sales Value", labels)
+        self.assertIn("Less Shipping Cost", labels)
+        self.assertIn("Net Revenue", labels)
+        self.assertIn("Total Product and Production Cost", labels)
+        self.assertIn("Final Profit", labels)
         self.assertIn("Status", labels)
         self.assertIn("Approved Date", labels)
 

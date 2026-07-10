@@ -2434,19 +2434,27 @@ class QuickCosting(models.Model):
             charge = self.sewing_charge_per_piece_bdt or zero
             cost = self.sewing_cost_per_piece_bdt
             extra_cost = self.extra_local_cost_bdt or zero
-            revenue = charge * quantity
+            sales_value = charge * quantity
+            shipping_cost = zero
+            net_revenue = sales_value - shipping_cost - extra_cost
             cost_available = cost is not None and cost > 0
-            total_cost = (cost * quantity + extra_cost) if cost_available else zero
-            profit = revenue - total_cost if cost_available else zero
+            product_production_cost = (cost * quantity) if cost_available else zero
+            total_cost = (product_production_cost + shipping_cost + extra_cost) if cost_available else zero
+            profit = net_revenue - product_production_cost if cost_available else zero
             cost_per_piece = (total_cost / quantity) if quantity and cost_available else zero
+            product_production_cost_per_piece = (
+                product_production_cost / quantity
+                if quantity and cost_available
+                else zero
+            )
             commission = self._commission_summary(profit, quantity, None)
             commission_per_piece = commission["commission_per_piece"]
             commission_total = commission["commission_total"]
             net_profit = profit - commission_total
             profit_per_piece = (profit / quantity) if quantity and cost_available else zero
             net_profit_per_piece = profit_per_piece - commission_per_piece
-            margin = ((profit / revenue) * Decimal("100")) if revenue and cost_available else zero
-            net_margin = ((net_profit / revenue) * Decimal("100")) if revenue and cost_available else zero
+            margin = ((profit / sales_value) * Decimal("100")) if sales_value and cost_available else zero
+            net_margin = ((net_profit / sales_value) * Decimal("100")) if sales_value and cost_available else zero
             return {
                 "quantity": quantity,
                 "currency": "BDT",
@@ -2460,19 +2468,23 @@ class QuickCosting(models.Model):
                 "print_embroidery_cost_per_piece": zero,
                 "trims_cost_per_piece": zero,
                 "packaging_cost_per_piece": zero,
+                "sales_value": sales_value,
+                "net_revenue": net_revenue,
+                "product_production_cost_total": product_production_cost,
+                "product_production_cost_per_piece": product_production_cost_per_piece,
                 "material_cost_total": zero,
                 "material_cost_per_piece": zero,
-                "production_cost_total": total_cost,
-                "production_cost_per_piece": cost_per_piece,
+                "production_cost_total": product_production_cost,
+                "production_cost_per_piece": product_production_cost_per_piece,
                 "other_expenses_total": extra_cost,
                 "other_expenses_per_piece": (extra_cost / quantity) if quantity else zero,
-                "shipping_cost_total": zero,
+                "shipping_cost_total": shipping_cost,
                 "shipping_cost_per_piece": zero,
                 "total_cost": total_cost,
                 "cost_per_piece": cost_per_piece,
                 "selling_price_per_piece": charge,
-                "selling_price_total": revenue,
-                "revenue": revenue,
+                "selling_price_total": sales_value,
+                "revenue": sales_value,
                 "gross_profit_per_piece": profit_per_piece,
                 "gross_profit_total": profit,
                 "commission_per_piece": commission_per_piece,
@@ -2530,29 +2542,31 @@ class QuickCosting(models.Model):
         if uses_detailed_costing:
             material_cost = fabric_cost_per_piece * quantity
             production_cost = detailed_component_total_per_piece * quantity
-            cost_per_piece = (
-                fabric_cost_per_piece
-                + detailed_component_total_per_piece
-                + other_expenses_per_piece
-                + shipping_cost_per_piece
-            )
-            total_cost = cost_per_piece * quantity
+            product_production_cost_per_piece = fabric_cost_per_piece + detailed_component_total_per_piece
+            product_production_cost_total = material_cost + production_cost
         else:
-            total_cost = material_cost + production_cost + other_expenses + shipping_cost
-            cost_per_piece = (total_cost / quantity) if quantity else Decimal("0")
+            product_production_cost_total = material_cost + production_cost
+            product_production_cost_per_piece = (
+                product_production_cost_total / quantity
+                if quantity
+                else Decimal("0")
+            )
 
-        revenue = selling_price_per_piece * quantity
-        gross_profit_per_piece = selling_price_per_piece - cost_per_piece
-        gross_profit_total = revenue - total_cost
+        sales_value = selling_price_per_piece * quantity
+        net_revenue = sales_value - shipping_cost - other_expenses
+        total_cost = product_production_cost_total + other_expenses + shipping_cost
+        cost_per_piece = (total_cost / quantity) if quantity else Decimal("0")
+        gross_profit_total = net_revenue - product_production_cost_total
+        gross_profit_per_piece = (gross_profit_total / quantity) if quantity else Decimal("0")
         commission = self._commission_summary(gross_profit_total, quantity, exchange_rate)
         if commission["commission_type"] == self.COMMISSION_NONE:
             commission = self._legacy_commission_summary(selling_price_per_piece, quantity)
         commission_per_piece = commission["commission_per_piece"]
         commission_total = commission_per_piece * quantity
-        net_profit_per_piece = gross_profit_per_piece - commission_per_piece
         net_profit_total = gross_profit_total - commission_total
-        gross_profit_margin_percent = ((gross_profit_total / revenue) * Decimal("100")) if revenue else Decimal("0")
-        net_profit_margin_percent = ((net_profit_total / revenue) * Decimal("100")) if revenue else Decimal("0")
+        net_profit_per_piece = (net_profit_total / quantity) if quantity else Decimal("0")
+        gross_profit_margin_percent = ((gross_profit_total / sales_value) * Decimal("100")) if sales_value else Decimal("0")
+        net_profit_margin_percent = ((net_profit_total / sales_value) * Decimal("100")) if sales_value else Decimal("0")
         target_margin_percent = self.target_margin_percent
         if target_margin_percent is None:
             margin_status = "No target set"
@@ -2573,6 +2587,10 @@ class QuickCosting(models.Model):
             "print_embroidery_cost_per_piece": print_embroidery_cost_per_piece,
             "trims_cost_per_piece": trims_cost_per_piece,
             "packaging_cost_per_piece": packaging_cost_per_piece,
+            "sales_value": sales_value,
+            "net_revenue": net_revenue,
+            "product_production_cost_total": product_production_cost_total,
+            "product_production_cost_per_piece": product_production_cost_per_piece,
             "material_cost_total": material_cost,
             "material_cost_per_piece": (material_cost / quantity) if quantity else Decimal("0"),
             "production_cost_total": production_cost,
@@ -2584,8 +2602,8 @@ class QuickCosting(models.Model):
             "total_cost": total_cost,
             "cost_per_piece": cost_per_piece,
             "selling_price_per_piece": selling_price_per_piece,
-            "selling_price_total": revenue,
-            "revenue": revenue,
+            "selling_price_total": sales_value,
+            "revenue": sales_value,
             "gross_profit_per_piece": gross_profit_per_piece,
             "gross_profit_total": gross_profit_total,
             "commission_per_piece": commission_per_piece,

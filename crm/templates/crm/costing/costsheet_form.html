@@ -601,7 +601,7 @@
                 {% for error in quick_form.other_expenses.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
               </div>
               <div>
-                <label>Shipping Cost Per Order</label>
+                <label>Less Shipping Cost Per Order</label>
                 <div class="quick-input-with-unit">{{ quick_form.shipping_cost }}<span class="quick-input-unit" data-quick-currency-unit>৳ BDT</span></div>
                 <div class="field-help">{{ quick_form.shipping_cost.help_text }}</div>
                 {% for error in quick_form.shipping_cost.errors %}<div class="quick-error">{{ error }}</div>{% endfor %}
@@ -683,11 +683,15 @@
         <details class="card quick-breakdown-card" open aria-label="Live cost summary" aria-live="polite">
           <summary><span>5. Profit Summary <span class="quick-summary-currency" data-quick-summary="currency">BDT</span></span></summary>
           <div class="quick-breakdown-body">
-            <div class="quick-summary-row"><span>Total Cost Per Piece</span><strong data-quick-summary="costPerPiece">৳0.00 BDT</strong></div>
-            <div class="quick-summary-row"><span>Gross Profit Per Piece</span><strong data-quick-summary="grossProfitPerPiece">৳0.00 BDT</strong></div>
-            <div class="quick-summary-row"><span>Commission Per Piece</span><strong data-quick-summary="commissionPerPiece">0.00% · ৳0.00 BDT</strong></div>
-            <div class="quick-summary-row"><span>Net Profit Per Piece</span><strong data-quick-summary="netProfitPerPiece">৳0.00 BDT</strong></div>
-            <div class="quick-summary-row"><span>Net Margin %</span><strong data-quick-summary="netMargin">0.00%</strong></div>
+            <div class="quick-summary-row"><span>Sales Value</span><strong data-quick-summary="salesValue">৳0.00 BDT</strong></div>
+            <div class="quick-summary-row"><span>Less Shipping Cost</span><strong data-quick-summary="shippingTotal">৳0.00 BDT</strong></div>
+            <div class="quick-summary-row"><span>Less Other Order Expenses</span><strong data-quick-summary="otherTotal">৳0.00 BDT</strong></div>
+            <div class="quick-summary-row"><span>Net Revenue</span><strong data-quick-summary="netRevenue">৳0.00 BDT</strong></div>
+            <div class="quick-summary-row"><span>Total Product and Production Cost</span><strong data-quick-summary="productProductionCost">৳0.00 BDT</strong></div>
+            <div class="quick-summary-row"><span>Gross Profit Before Commission</span><strong data-quick-summary="grossProfitTotal">৳0.00 BDT</strong></div>
+            <div class="quick-summary-row"><span>Sales Commission</span><strong data-quick-summary="commissionTotal">৳0.00 BDT</strong></div>
+            <div class="quick-summary-row"><span>Final Profit</span><strong data-quick-summary="netProfitTotal">৳0.00 BDT</strong></div>
+            <div class="quick-summary-row"><span>Final Margin</span><strong data-quick-summary="netMargin">0.00%</strong></div>
             <div class="quick-summary-row"><span>Profit Health</span><strong><span class="quick-health-badge health-loss" data-quick-summary="profitHealth">Loss</span></strong></div>
             <div class="quick-summary-row"><span>Target Margin</span><strong data-quick-summary="targetMargin">N/A</strong></div>
             <div class="quick-summary-row"><span>Margin Status</span><strong data-quick-summary="marginStatus">No target set</strong></div>
@@ -699,10 +703,9 @@
           <summary>6. Live Order Summary</summary>
           <div class="quick-breakdown-body">
             <div class="quick-summary-row"><span>Quantity</span><strong data-quick-summary="quantity">0 pieces</strong></div>
-            <div class="quick-summary-row"><span>Order Cost</span><strong data-quick-summary="totalCost">৳0.00 BDT</strong></div>
-            <div class="quick-summary-row"><span>Order Revenue</span><strong data-quick-summary="revenue">৳0.00 BDT</strong></div>
-            <div class="quick-summary-row"><span>Total Commission</span><strong data-quick-summary="commissionTotal">৳0.00 BDT</strong></div>
-            <div class="quick-summary-row"><span>Order Profit</span><strong data-quick-summary="netProfitTotal">৳0.00 BDT</strong></div>
+            <div class="quick-summary-row"><span>Sales Value</span><strong data-quick-summary="revenue">৳0.00 BDT</strong></div>
+            <div class="quick-summary-row"><span>Net Revenue</span><strong data-quick-summary="netRevenue">৳0.00 BDT</strong></div>
+            <div class="quick-summary-row"><span>Final Profit</span><strong data-quick-summary="netProfitTotal">৳0.00 BDT</strong></div>
           </div>
         </details>
 
@@ -1178,8 +1181,11 @@
         const sewingCost = numberValue(fields.sewingCost);
         const extraCost = numberValue(fields.extraLocalCost);
         const localRevenue = charge * quantity;
-        const localCost = hasCost ? sewingCost * quantity + extraCost : 0;
-        const localProfit = hasCost ? localRevenue - localCost : 0;
+        const localShipping = 0;
+        const localNetRevenue = localRevenue - localShipping - extraCost;
+        const localProductCost = hasCost ? sewingCost * quantity : 0;
+        const localCost = hasCost ? localProductCost + extraCost : 0;
+        const localProfit = hasCost ? localNetRevenue - localProductCost : 0;
         const localCommissionTotal = hasCost ? commissionTotalFromProfit(localProfit) : 0;
         const localNetProfit = localProfit - localCommissionTotal;
         const localMargin = hasCost && localRevenue > 0 ? (localNetProfit / localRevenue) * 100 : null;
@@ -1193,7 +1199,13 @@
         setSummary("costPerPiece", hasCost ? localMoney(localCost / Math.max(quantity, 1)) : "Cost unavailable");
         setSummary("totalCost", hasCost ? localMoney(localCost) : "Cost unavailable");
         setSummary("revenue", localMoney(localRevenue));
+        setSummary("salesValue", localMoney(localRevenue));
+        setSummary("shippingTotal", localMoney(localShipping));
+        setSummary("otherTotal", localMoney(extraCost));
+        setSummary("netRevenue", localMoney(localNetRevenue));
+        setSummary("productProductionCost", hasCost ? localMoney(localProductCost) : "Cost unavailable");
         setSummary("grossProfitPerPiece", hasCost ? localMoney(localProfit / Math.max(quantity, 1)) : "N/A");
+        setSummary("grossProfitTotal", hasCost ? localMoney(localProfit) : "N/A");
         setSummary("commissionPerPiece", hasCost ? localMoney(localCommissionTotal / Math.max(quantity, 1)) : "N/A");
         setSummary("commissionTotal", localMoney(localCommissionTotal));
         setSummary("netProfitPerPiece", hasCost ? localMoney(localNetProfit / Math.max(quantity, 1)) : "N/A");
@@ -1210,16 +1222,19 @@
       }
       const otherPerPiece = quantity > 0 ? other / quantity : 0;
       const shippingPerPiece = quantity > 0 ? shipping / quantity : 0;
-      const detailedCostPerPiece = fabricPiece + making + printEmbroidery + trims + packaging + otherPerPiece + shippingPerPiece;
-      const totalCost = hasDetailedCost ? detailedCostPerPiece * quantity : material + production + other + shipping;
+      const productProductionCost = hasDetailedCost
+        ? (fabricPiece + making + printEmbroidery + trims + packaging) * quantity
+        : material + production;
+      const totalCost = productProductionCost + other + shipping;
       const costPerPiece = quantity > 0 ? totalCost / quantity : 0;
       const revenue = selling * quantity;
-      const grossProfitPerPiece = selling - costPerPiece;
-      const grossProfitTotal = revenue - totalCost;
+      const netRevenue = revenue - shipping - other;
+      const grossProfitTotal = netRevenue - productProductionCost;
+      const grossProfitPerPiece = quantity > 0 ? grossProfitTotal / quantity : 0;
       const commissionTotal = commissionTotalFromProfit(grossProfitTotal);
       const commission = quantity > 0 ? commissionTotal / quantity : 0;
-      const netProfitPerPiece = grossProfitPerPiece - commission;
       const netProfitTotal = grossProfitTotal - commissionTotal;
+      const netProfitPerPiece = quantity > 0 ? netProfitTotal / quantity : 0;
       const costAvailable = totalCost > 0;
       const grossMargin = costAvailable && revenue > 0 ? (grossProfitTotal / revenue) * 100 : null;
       const netMargin = costAvailable && revenue > 0 ? (netProfitTotal / revenue) * 100 : null;
@@ -1246,7 +1261,13 @@
       setSummary("totalCost", formatMoney(totalCost, currency, exchangeRate));
       setSummary("sellingPrice", formatMoney(selling, currency, exchangeRate));
       setSummary("revenue", formatMoney(revenue, currency, exchangeRate));
+      setSummary("salesValue", formatMoney(revenue, currency, exchangeRate));
+      setSummary("shippingTotal", formatMoney(shipping, currency, exchangeRate));
+      setSummary("otherTotal", formatMoney(other, currency, exchangeRate));
+      setSummary("netRevenue", formatMoney(netRevenue, currency, exchangeRate));
+      setSummary("productProductionCost", formatMoney(productProductionCost, currency, exchangeRate));
       setSummary("grossProfitPerPiece", formatMoney(grossProfitPerPiece, currency, exchangeRate), grossHealth.profitTone);
+      setSummary("grossProfitTotal", formatMoney(grossProfitTotal, currency, exchangeRate), grossHealth.profitTone);
       setSummary(
         "commissionPerPiece",
         (commissionType === "percentage" ? commissionValue.toFixed(2) + "%" : commissionType === "fixed" ? "Fixed" : "None") + " · " + formatMoney(commission, currency, exchangeRate)

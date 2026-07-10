@@ -534,14 +534,16 @@
         <div class="quick-detail-body">
           <div class="quick-summary-grid">
             <div class="quick-summary-row"><span>Sewing Charge Per Piece</span><strong>{{ quick_costing.sewing_charge_per_piece_bdt|finance_money:"BDT" }}</strong></div>
-            <div class="quick-summary-row"><span>Revenue</span><strong>{{ calc.total_sales_order|finance_money:"BDT" }}</strong></div>
+            <div class="quick-summary-row"><span>Sales Value</span><strong>{{ calc.sales_value|finance_money:"BDT" }}</strong></div>
+            <div class="quick-summary-row"><span>Less Shipping Cost</span><strong>{{ calc.shipping_cost_total|finance_money:"BDT" }}</strong></div>
+            <div class="quick-summary-row"><span>Less Other Order Expenses</span><strong>{{ calc.other_expenses_total|finance_money:"BDT" }}</strong></div>
+            <div class="quick-summary-row"><span>Net Revenue</span><strong>{{ calc.net_revenue|finance_money:"BDT" }}</strong></div>
             <div class="quick-summary-row"><span>Sewing Cost Per Piece</span><strong>{% if calc.cost_available %}{{ quick_costing.sewing_cost_per_piece_bdt|finance_money:"BDT" }}{% else %}Cost unavailable{% endif %}</strong></div>
-            <div class="quick-summary-row"><span>Extra Local Cost</span><strong>{{ quick_costing.extra_local_cost_bdt|default_if_none:0|finance_money:"BDT" }}</strong></div>
-            <div class="quick-summary-row"><span>Total Cost</span><strong>{% if calc.cost_available %}{{ calc.total_cost_order|finance_money:"BDT" }}{% else %}Cost unavailable{% endif %}</strong></div>
-            <div class="quick-summary-row"><span>Gross Profit</span><strong>{% if calc.cost_available %}{{ calc.profit_before_commission|finance_money:"BDT" }}{% else %}N/A{% endif %}</strong></div>
+            <div class="quick-summary-row"><span>Total Product and Production Cost</span><strong>{% if calc.cost_available %}{{ calc.product_production_cost_total|finance_money:"BDT" }}{% else %}Cost unavailable{% endif %}</strong></div>
+            <div class="quick-summary-row"><span>Gross Profit Before Commission</span><strong>{% if calc.cost_available %}{{ calc.profit_before_commission|finance_money:"BDT" }}{% else %}N/A{% endif %}</strong></div>
             <div class="quick-summary-row"><span>Sales Commission</span><strong>{% if calc.cost_available %}{{ calc.commission_total|finance_money:"BDT" }}{% else %}N/A{% endif %}</strong></div>
-            <div class="quick-summary-row"><span>Net Profit After Commission</span><strong>{% if calc.cost_available %}{{ calc.final_profit_after_commission|finance_money:"BDT" }}{% else %}N/A{% endif %}</strong></div>
-            <div class="quick-summary-row"><span>Net Profit Margin</span><strong>{% if calc.cost_available %}{{ calc.net_profit_margin_percent|floatformat:2 }}%{% else %}Margin N/A{% endif %}</strong></div>
+            <div class="quick-summary-row"><span>Final Profit</span><strong>{% if calc.cost_available %}{{ calc.final_profit_after_commission|finance_money:"BDT" }}{% else %}N/A{% endif %}</strong></div>
+            <div class="quick-summary-row"><span>Final Margin</span><strong>{% if calc.cost_available %}{{ calc.net_profit_margin_percent|floatformat:2 }}%{% else %}Margin N/A{% endif %}</strong></div>
           </div>
         </div>
       </details>
@@ -604,16 +606,17 @@
       <div class="quick-detail-body">
         <div class="quick-summary-grid">
           <div class="quick-summary-row"><span>Profit Health</span><strong><span class="quick-health-badge health-{{ profit_health.tone }}">{{ profit_health.label }}</span></strong></div>
-          <div class="quick-summary-row"><span>Total Cost Per Piece</span><strong>{{ calc.display.total_cost_per_piece_pair }}</strong></div>
-          <div class="quick-summary-row"><span>Revenue</span><strong>{{ calc.display.total_sales_order_pair }}</strong></div>
-          <div class="quick-summary-row"><span>Total Cost</span><strong>{{ calc.display.total_cost_order_pair }}</strong></div>
+          <div class="quick-summary-row"><span>Sales Value</span><strong>{{ calc.display.sales_value_pair }}</strong></div>
+          <div class="quick-summary-row"><span>Less Shipping Cost</span><strong>{{ calc.display.shipping_cost_total_pair }}</strong></div>
+          <div class="quick-summary-row"><span>Less Other Order Expenses</span><strong>{{ calc.display.other_expenses_total_pair }}</strong></div>
+          <div class="quick-summary-row"><span>Net Revenue</span><strong>{{ calc.display.net_revenue_pair }}</strong></div>
+          <div class="quick-summary-row"><span>Total Product and Production Cost</span><strong>{{ calc.display.product_production_cost_total_pair }}</strong></div>
           <span hidden>Profit Before Commission</span>
-          <div class="quick-summary-row"><span>Gross Profit</span><strong class="quick-money-pair quick-profit-{{ margin_tone }}"><span>Per Piece: {{ calc.display.profit_before_commission_per_piece_pair }}</span><span>Total Order: {{ calc.display.profit_before_commission_total_pair }}</span></strong></div>
+          <div class="quick-summary-row"><span>Gross Profit Before Commission</span><strong class="quick-money-pair quick-profit-{{ margin_tone }}"><span>Per Piece: {{ calc.display.profit_before_commission_per_piece_pair }}</span><span>Total Order: {{ calc.display.profit_before_commission_total_pair }}</span></strong></div>
           <div class="quick-summary-row"><span>Sales Commission</span><strong class="quick-money-pair"><span>Per Piece: {{ calc.display.commission_per_piece_pair }}</span><span>Total Order: {{ calc.display.commission_total_pair }}</span></strong></div>
           <span hidden>Final Profit After Commission</span>
-          <div class="quick-summary-row"><span>Net Profit After Commission</span><strong class="quick-money-pair quick-profit-{{ margin_tone }}"><span>Per Piece: {{ calc.display.final_profit_after_commission_per_piece_pair }}</span><span>Total Order: {{ calc.display.final_profit_after_commission_total_pair }}</span></strong></div>
-          <div class="quick-summary-row"><span>Gross Profit Margin %</span><strong>{% if calc.cost_available %}{{ calc.display.gross_profit_margin_percent }}%{% else %}Margin N/A{% endif %}</strong></div>
-          <div class="quick-summary-row"><span>Net Profit Margin %</span><strong class="quick-profit-{{ margin_tone }}">{% if calc.cost_available %}{{ calc.display.net_profit_margin_percent }}%{% else %}Margin N/A{% endif %}</strong></div>
+          <div class="quick-summary-row"><span>Final Profit</span><strong class="quick-money-pair quick-profit-{{ margin_tone }}"><span>Per Piece: {{ calc.display.final_profit_after_commission_per_piece_pair }}</span><span>Total Order: {{ calc.display.final_profit_after_commission_total_pair }}</span></strong></div>
+          <div class="quick-summary-row"><span>Final Margin</span><strong class="quick-profit-{{ margin_tone }}">{% if calc.cost_available %}{{ calc.display.net_profit_margin_percent }}%{% else %}Margin N/A{% endif %}</strong></div>
           <div class="quick-summary-row"><span>Target Margin %</span><strong>{{ calc.display.target_margin_percent_label }}</strong></div>
           <div class="quick-summary-row"><span>Margin Status</span><strong class="quick-profit-{{ margin_tone }}">{% if calc.cost_available %}{{ calc.display.margin_status }}{% else %}Cost unavailable{% endif %}</strong></div>
         </div>
@@ -626,9 +629,9 @@
       <div class="quick-detail-body">
         <div class="quick-summary-grid">
           <div class="quick-summary-row"><span>Quantity</span><strong>{{ quick_costing.quantity }} pieces</strong></div>
-          <div class="quick-summary-row"><span>Order Cost</span><strong>{{ calc.display.total_cost_order_pair }}</strong></div>
-          <div class="quick-summary-row"><span>Order Revenue</span><strong>{{ calc.display.total_sales_order_pair }}</strong></div>
-          <div class="quick-summary-row"><span>Order Profit</span><strong class="quick-profit-{{ margin_tone }}">{{ calc.display.net_profit_total_pair }}</strong></div>
+          <div class="quick-summary-row"><span>Sales Value</span><strong>{{ calc.display.sales_value_pair }}</strong></div>
+          <div class="quick-summary-row"><span>Net Revenue</span><strong>{{ calc.display.net_revenue_pair }}</strong></div>
+          <div class="quick-summary-row"><span>Final Profit</span><strong class="quick-profit-{{ margin_tone }}">{{ calc.display.net_profit_total_pair }}</strong></div>
         </div>
       </div>
     </details>
