@@ -1,13 +1,56 @@
 {% extends "crm/base.html" %}
+{% load static %}
 
 {% block content %}
-  <div class="card" style="max-width: 760px; margin: 40px auto; padding: 24px;">
-    <h2 style="margin: 0 0 8px;">WhatsApp is disabled</h2>
-    <p style="margin: 0 0 12px; color: #94a3b8;">
-      This module is currently turned off. No inbound or outbound WhatsApp traffic is processed.
-    </p>
-    <p style="margin: 0; color: #94a3b8;">
-      If you need this re-enabled, set <code>WHATSAPP_ENABLED=1</code> and restart services.
-    </p>
+<link rel="stylesheet" href="{% static 'crm/ui_system.css' %}?v=communication-phase-d">
+
+<div class="comm-modern">
+  <div class="comm-shell">
+    <section class="comm-header">
+      <div>
+        <p class="comm-kicker">Communication Center</p>
+        <h1 class="comm-title">WhatsApp Disabled</h1>
+        <div class="comm-subtitle">No inbound or outbound WhatsApp traffic is processed while this module is turned off.</div>
+      </div>
+      <div class="comm-actions">
+        <a class="comm-btn" href="{% url 'email_sync_dashboard' %}">Email Center</a>
+      </div>
+    </section>
+
+    <div class="comm-grid">
+      <nav class="comm-nav" aria-label="Communication navigation">
+        <a href="{% url 'email_sync_dashboard' %}"><span>Inbox</span><span class="comm-count">Email</span></a>
+        <a class="is-muted" href="#disabled-state"><span>Drafts</span><span class="comm-count">0</span></a>
+        <a class="is-muted" href="#disabled-state"><span>Sent</span><span class="comm-count">0</span></a>
+        <a class="is-muted" href="#disabled-state"><span>Failed</span><span class="comm-count">0</span></a>
+        <a class="is-muted" href="#disabled-state"><span>Templates</span><span class="comm-count">0</span></a>
+        <a class="is-active" href="#disabled-state"><span>WhatsApp</span><span class="comm-count">Off</span></a>
+        <a class="is-muted" href="#disabled-state"><span>History</span><span class="comm-count">0</span></a>
+      </nav>
+
+      <main class="comm-main" id="disabled-state">
+        <section class="comm-kpis" aria-label="Disabled WhatsApp summary">
+          <article class="comm-kpi"><span>Unread Count</span><strong>0</strong><small>WhatsApp disabled</small></article>
+          <article class="comm-kpi"><span>Sent Today</span><strong>0</strong><small>No outbound traffic</small></article>
+          <article class="comm-kpi"><span>Failed Today</span><strong>0</strong><small>Processing stopped</small></article>
+          <article class="comm-kpi"><span>Scheduled</span><strong>0</strong><small>No scheduled sends</small></article>
+          <article class="comm-kpi"><span>Pending Replies</span><strong>0</strong><small>Inbox offline</small></article>
+        </section>
+
+        <section class="comm-panel">
+          <div class="comm-panel-header">
+            <div>
+              <h2 class="comm-panel-title">Module Status</h2>
+              <div class="comm-panel-note">Configuration-only state. No workflow is changed from this page.</div>
+            </div>
+            <span class="comm-status is-failed">Disabled</span>
+          </div>
+          <div class="comm-empty">
+            If this module needs to be re-enabled, set <code>WHATSAPP_ENABLED=1</code> and restart services through the approved deployment process.
+          </div>
+        </section>
+      </main>
+    </div>
   </div>
+</div>
 {% endblock %}

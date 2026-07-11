@@ -2,11 +2,12 @@
 {% load static %}
 {% block content %}
 <link rel="stylesheet" href="{% static 'crm/production_detail.css' %}?v=production-detail-modern-20260507">
+<link rel="stylesheet" href="{% static 'crm/ui_system.css' %}?v=phase4-production-detail">
 
-<div class="production-detail">
-  <section class="production-detail-hero">
-    <div class="production-hero-main">
-      <div class="production-thumb">
+<div class="production-detail production-phase4 crm-stack is-tight" data-crm-density="compact" data-production-order-id="{{ order.pk }}">
+  <section class="crm-header is-compact production-phase4-header">
+    <div class="production-phase4-header-main">
+      <div class="crm-thumb is-48 production-phase4-thumb">
         {% if product and product.image %}
           <img src="{{ product.image.url }}" alt="{{ product.name }}">
         {% elif order.style_image %}
@@ -16,82 +17,69 @@
         {% endif %}
       </div>
 
-      <div class="production-hero-copy">
-        <p class="production-eyebrow">Factory order workspace</p>
+      <div>
+        <p class="crm-header-kicker">Production order</p>
         <h1 title="{{ order.order_code|default:'Production Order' }}">{{ order.short_order_code|default:order.order_code|default:"Production Order" }}</h1>
-        <div class="production-hero-title">{{ order.title }}</div>
-        <div class="production-hero-meta">
-          <span>
-            {% if customer %}
-              {{ customer.account_brand|default:customer.contact_name|default:customer }}
-            {% elif lead %}
-              {{ lead.account_brand|default:lead.contact_name|default:lead }}
-            {% else %}
-              Client not linked
-            {% endif %}
+        <div class="crm-header-meta">
+          <span class="crm-status-pill is-brand" title="{{ order.order_code|default:'No full PO set' }}">PO {% firstof order.order_code order.short_order_code "Not set" %}</span>
+          <span class="crm-status-pill">
+            Customer:
+            {% if customer %}{{ customer.account_brand|default:customer.contact_name|default:customer }}
+            {% elif lead %}{{ lead.account_brand|default:lead.contact_name|default:lead }}
+            {% else %}Not linked{% endif %}
           </span>
+          <span class="crm-status-pill">Product: {% if product %}{{ product.name }}{% elif order.style_name %}{{ order.style_name }}{% else %}{{ order.title }}{% endif %}</span>
+          <span class="crm-status-pill {% if operational_status == 'shipped' %}is-success{% elif operational_status == 'cancelled' %}is-danger{% elif order_delayed or late_shipment %}is-warning{% else %}is-info{% endif %}">{{ operational_status_label }}</span>
+          <span class="crm-status-pill">{{ percent_done }}% complete</span>
+          <span class="crm-status-pill">{{ priority_badge.label }} priority</span>
           {% if opportunity %}
-            <a href="{% url 'opportunity_detail' opportunity.pk %}">Opportunity {{ opportunity.opportunity_id }}</a>
-          {% else %}
-            <span>No linked opportunity</span>
+            <a class="crm-status-pill" href="{% url 'opportunity_detail' opportunity.pk %}">Opportunity {{ opportunity.opportunity_id }}</a>
           {% endif %}
-          <span>{{ order.get_factory_location_display|default:"Factory not set" }}</span>
-        </div>
-        <div class="production-hero-badges">
-          <span class="production-status-badge {{ operational_status }}">{{ operational_status_label }}</span>
-          <span class="production-priority-badge {{ priority_badge.tone }}">{{ priority_badge.label }} priority</span>
           {% if order_delayed %}
-            <span class="production-priority-badge risk">Delayed</span>
+            <span class="crm-status-pill is-danger">Delayed</span>
           {% elif late_shipment %}
-            <span class="production-priority-badge risk">Late shipment</span>
+            <span class="crm-status-pill is-danger">Late shipment</span>
           {% elif shipment_pending %}
-            <span class="production-priority-badge warning">Shipment pending</span>
-          {% elif operational_status == "shipped" %}
-            <span class="production-priority-badge good">Complete</span>
-          {% elif operational_status == "cancelled" %}
-            <span class="production-priority-badge neutral">Cancelled</span>
-          {% else %}
-            <span class="production-priority-badge good">On track</span>
+            <span class="crm-status-pill is-warning">Shipment pending</span>
           {% endif %}
-          <span class="production-progress-pill">{{ percent_done }}% complete</span>
         </div>
       </div>
     </div>
 
-    <div class="production-hero-actions" aria-label="Production quick actions">
-      <a href="{% url 'production_edit' order.pk %}" class="production-btn production-btn--primary">Edit</a>
-      <a href="#stage-progress" class="production-btn production-btn--ghost">Update Status</a>
-      <a href="{% url 'production_next_stage' order.pk %}" class="production-btn production-btn--ghost">Next Stage</a>
-      <a href="#production-files" class="production-btn production-btn--ghost">Upload File</a>
-      <a href="{% url 'shipping_add_for_order' order.pk %}" class="production-btn production-btn--ghost">Move to Shipping</a>
+    <div class="crm-header-actions production-phase4-actions" aria-label="Production quick actions">
+      <a href="{% url 'production_edit' order.pk %}" class="crm-btn crm-btn-primary">Edit</a>
+      <a href="#stage-progress" class="crm-btn crm-btn-muted">Update Status</a>
+      <a href="{% url 'production_next_stage' order.pk %}" class="crm-btn crm-btn-muted">Next Stage</a>
+      <a href="#production-files" class="crm-btn crm-btn-muted" data-production-tab-jump="files">Upload File</a>
+      <a href="{% url 'shipping_add_for_order' order.pk %}" class="crm-btn crm-btn-muted">Move to Shipping</a>
       {% if opportunity %}
-        <a href="{% url 'opportunity_detail' opportunity.pk %}" class="production-btn production-btn--ghost">Open Opportunity</a>
+        <a href="{% url 'opportunity_detail' opportunity.pk %}" class="crm-btn crm-btn-muted">Open Opportunity</a>
       {% endif %}
-      <a href="{% url 'production_ai_help' order.pk %}" class="production-btn production-btn--ghost">AI Help</a>
-      <a href="{% url 'production_list' %}" class="production-btn production-btn--ghost">Back to Production</a>
+      <a href="{% url 'production_ai_help' order.pk %}" class="crm-btn crm-btn-muted" data-production-tab-jump="ai">AI Help</a>
+      <a href="{% url 'production_list' %}" class="crm-btn crm-btn-muted">Back to Production</a>
       {% if can_archive_records and not order.is_archived %}
-        <form method="post" action="{% url 'production_archive' order.pk %}" style="display:inline;">
+        <form method="post" action="{% url 'production_archive' order.pk %}" class="crm-action-menu-form">
           {% csrf_token %}
           <input type="hidden" name="confirm_archive" value="archive">
 	          <button
 	            type="submit"
-	            class="production-btn production-btn--ghost"
+	            class="crm-btn crm-btn-muted"
 	            onclick="return confirm('{% if operational_status == "ready_to_ship" or operational_status == "shipped" %}This production order is {{ operational_status_label }}. Archive only if management has confirmed. Continue?{% else %}Are you sure you want to archive this record? This action will hide it from active lists but keep the history.{% endif %}');"
 	          >Archive / Cancel Production</button>
 	        </form>
         {% if production_can_hard_delete %}
-          <form method="post" action="{% url 'production_delete' order.pk %}" style="display:inline;">
+          <form method="post" action="{% url 'production_delete' order.pk %}" class="crm-action-menu-form">
             {% csrf_token %}
             <input type="hidden" name="confirm_delete" value="delete">
             <button
               type="submit"
-              class="production-btn production-btn--ghost"
+              class="crm-btn crm-btn-muted"
               onclick="return confirm('Are you sure? This action cannot be undone.');"
             >Delete</button>
           </form>
         {% endif %}
 	      {% elif order.is_archived %}
-	        <span class="production-btn production-btn--ghost">Archived</span>
+	        <span class="crm-btn crm-btn-muted">Archived</span>
 	      {% endif %}
     </div>
   </section>
@@ -99,9 +87,9 @@
   <nav class="production-mobile-action-bar" aria-label="Factory quick actions">
     <a href="{% url 'production_next_stage' order.pk %}" class="production-btn production-btn--primary">Next Stage</a>
     {% if stages %}
-      <a href="{% url 'production_stage_edit' stages.0.id %}" class="production-btn production-btn--ghost">Stages</a>
+      <a href="{% url 'production_stage_edit' stages.0.id %}" class="production-btn production-btn--ghost" data-production-tab-jump="stages">Stages</a>
     {% endif %}
-    <a href="{% url 'shipping_add_for_order' order.pk %}" class="production-btn production-btn--ghost">Shipment</a>
+    <a href="{% url 'shipping_add_for_order' order.pk %}" class="production-btn production-btn--ghost" data-production-tab-jump="shipment">Shipment</a>
   </nav>
 
   {% if order.is_archived %}
@@ -124,17 +112,118 @@
     </section>
   {% endif %}
 
-  {% include "crm/partials/workflow_quick_nav.html" %}
-  {% include "crm/partials/workflow_order_summary.html" %}
-  {% include "crm/partials/workflow_activity_timeline.html" %}
+  <section class="crm-kpi-strip is-compact production-phase4-kpis" aria-label="Production KPI summary">
+    <article class="crm-kpi-card crm-kpi-horizontal">
+      <div>
+        <div class="crm-kpi-label">Qty</div>
+        <div class="crm-kpi-value">{{ order.qty_total }}</div>
+        <div class="crm-kpi-note">{{ order.qty_reject }} rejected / {{ reject_percent }}%</div>
+      </div>
+      <span class="crm-kpi-indicator">Q</span>
+    </article>
+    <article class="crm-kpi-card crm-kpi-horizontal">
+      <div>
+        <div class="crm-kpi-label">Delivered</div>
+        <div class="crm-kpi-value">{% if operational_status == "shipped" %}{{ order.qty_total }}{% else %}0{% endif %}</div>
+        <div class="crm-kpi-note">{% if latest_shipment %}{{ latest_shipment.get_status_display }}{% else %}No delivery record{% endif %}</div>
+      </div>
+      <span class="crm-kpi-indicator">D</span>
+    </article>
+    <article class="crm-kpi-card crm-kpi-horizontal">
+      <div>
+        <div class="crm-kpi-label">Pending</div>
+        <div class="crm-kpi-value">{% if operational_status == "shipped" %}0{% else %}{{ order.qty_total }}{% endif %}</div>
+        <div class="crm-kpi-note">{{ percent_done }}% stage completion</div>
+      </div>
+      <span class="crm-kpi-indicator">P</span>
+    </article>
+    <article class="crm-kpi-card">
+      <div class="crm-kpi-label">Profit</div>
+      <div class="crm-kpi-value">
+        {% if lifecycle_profit and can_view_lifecycle_profit %}
+          {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.net_profit_after_commission }}
+        {% elif can_view_lifecycle_profit %}
+          -
+        {% else %}
+          Restricted
+        {% endif %}
+      </div>
+      <div class="crm-kpi-note">Net after commission when available</div>
+    </article>
+    <article class="crm-kpi-card crm-kpi-horizontal">
+      <div>
+        <div class="crm-kpi-label">Shipment Status</div>
+        <div class="crm-kpi-value">{% if latest_shipment %}{{ latest_shipment.get_status_display }}{% elif shipment_pending %}Pending{% else %}-{% endif %}</div>
+        <div class="crm-kpi-note">{% if latest_shipment %}{{ latest_shipment.get_carrier_display }}{% if latest_shipment.tracking_number %} / {{ latest_shipment.tracking_number }}{% endif %}{% else %}{{ shipments|length }} linked shipments{% endif %}</div>
+      </div>
+      <span class="crm-kpi-indicator">S</span>
+    </article>
+  </section>
 
-  {% include "crm/partials/product_snapshot.html" %}
+  <section class="production-phase4-stage-shell" aria-label="Sticky stage tracker">
+    <div data-production-stage-slot></div>
+  </section>
 
-  {% include "crm/partials/product_reference_images.html" %}
+  <section class="crm-tabbed production-phase4-tabs" data-production-tabs>
+    <nav class="crm-tabs is-compact is-sticky" aria-label="Production detail sections" role="tablist">
+      <button type="button" class="crm-tab is-active" data-production-tab-target="overview" role="tab" aria-selected="true">Overview</button>
+      <button type="button" class="crm-tab" data-production-tab-target="stages" role="tab" aria-selected="false">Stages <span class="crm-tab-count">{{ stages|length }}</span></button>
+      <button type="button" class="crm-tab" data-production-tab-target="product" role="tab" aria-selected="false">Product</button>
+      <button type="button" class="crm-tab" data-production-tab-target="files" role="tab" aria-selected="false">Files <span class="crm-tab-count">{{ attachments|length }}</span></button>
+      <button type="button" class="crm-tab" data-production-tab-target="finance" role="tab" aria-selected="false">Finance</button>
+      <button type="button" class="crm-tab" data-production-tab-target="shipment" role="tab" aria-selected="false">Shipment <span class="crm-tab-count">{{ shipments|length }}</span></button>
+      <button type="button" class="crm-tab" data-production-tab-target="history" role="tab" aria-selected="false">History <span class="crm-tab-count">{{ production_activity|length }}</span></button>
+      <button type="button" class="crm-tab" data-production-tab-target="ai" role="tab" aria-selected="false">AI</button>
+    </nav>
+    <div class="crm-stack">
+      <section class="crm-tab-panel crm-panel" data-production-tab-panel="overview" role="tabpanel">
+        <div data-production-tab-slot="overview"></div>
+      </section>
+      <section class="crm-tab-panel crm-panel" data-production-tab-panel="stages" role="tabpanel" hidden>
+        <div data-production-tab-slot="stages"></div>
+      </section>
+      <section class="crm-tab-panel crm-panel" data-production-tab-panel="product" role="tabpanel" hidden>
+        <div data-production-tab-slot="product"></div>
+      </section>
+      <section class="crm-tab-panel crm-panel" data-production-tab-panel="files" role="tabpanel" hidden>
+        <div data-production-tab-slot="files"></div>
+      </section>
+      <section class="crm-tab-panel crm-panel" data-production-tab-panel="finance" role="tabpanel" hidden>
+        <div data-production-tab-slot="finance"></div>
+      </section>
+      <section class="crm-tab-panel crm-panel" data-production-tab-panel="shipment" role="tabpanel" hidden>
+        <div data-production-tab-slot="shipment"></div>
+      </section>
+      <section class="crm-tab-panel crm-panel" data-production-tab-panel="history" role="tabpanel" hidden>
+        <div data-production-tab-slot="history"></div>
+      </section>
+      <section class="crm-tab-panel crm-panel" data-production-tab-panel="ai" role="tabpanel" hidden>
+        <div data-production-tab-slot="ai">
+          <div class="production-phase4-ai-panel">
+            <div>
+              <h2>AI Support</h2>
+              <p>{{ order.ai_note|default:"No AI note yet. Use AI help to generate a production summary." }}</p>
+            </div>
+            <a href="{% url 'production_ai_help' order.pk %}" class="crm-btn crm-btn-primary">Open AI Help</a>
+          </div>
+        </div>
+      </section>
+    </div>
+  </section>
 
-  {% include "crm/partials/production_progress_photos.html" %}
+  <div id="production-overview-workflow" class="production-phase4-section-group">
+    {% include "crm/partials/workflow_quick_nav.html" %}
+    {% include "crm/partials/workflow_order_summary.html" %}
+    {% include "crm/partials/workflow_activity_timeline.html" %}
+  </div>
 
-  <section class="production-panel" aria-label="Production workflow status">
+  <div id="production-product-snapshots" class="production-phase4-section-group">
+    {% include "crm/partials/product_snapshot.html" %}
+    {% include "crm/partials/product_reference_images.html" %}
+    {% include "crm/partials/production_progress_photos.html" %}
+  </div>
+
+  <section class="production-panel" id="production-workflow-status" aria-label="Production workflow status">
     <div class="production-panel-head">
       <div>
         <h2>Workflow Status</h2>
@@ -164,7 +253,7 @@
     {% endif %}
   </section>
 
-  <section class="production-snapshot-grid" aria-label="Production snapshot">
+  <section class="production-snapshot-grid" id="production-legacy-snapshot" aria-label="Production snapshot">
     <article class="production-snapshot-card">
       <span>Total quantity</span>
       <strong>{{ order.qty_total }}</strong>
@@ -278,7 +367,7 @@
           {% endfor %}
         </div>
 
-        <details class="production-subdetails" open>
+        <details class="production-subdetails">
           <summary>Stage dates and manual edits</summary>
           <div class="production-stage-table">
             {% for stage in stages %}
@@ -306,7 +395,7 @@
         </details>
       </article>
 
-      <article class="production-panel">
+      <article class="production-panel" id="production-order-details">
         <div class="production-panel-head">
           <div>
             <h2>Order Details</h2>
@@ -362,6 +451,10 @@
                     <span>Color info</span>
                     <strong>{{ line.color_info|default:"Not set" }}</strong>
                   </div>
+                  <div>
+                    <span>Line quantity</span>
+                    <strong>{% if line.quantity is not None %}{{ line.quantity }}{% else %}Quantity unavailable{% endif %}</strong>
+                  </div>
                   <div class="production-line-wide">
                     <span>Accessories and trims</span>
                     <strong>{{ line.accessories_note|default:"Not set" }}</strong>
@@ -397,7 +490,7 @@
                       </div>
                     {% endif %}
                     {% if line.size_total %}
-                      <div class="production-size-total">Line total {{ line.size_total }}</div>
+                      <div class="production-size-total">Size total {{ line.size_total }}</div>
                     {% endif %}
                     {% if line.size_notes %}
                       <div class="production-size-notes">
@@ -458,7 +551,7 @@
         </div>
       </article>
 
-      <article class="production-panel">
+      <article class="production-panel" id="production-factory-actions">
         <div class="production-panel-head">
           <div>
             <h2>Factory Action Section</h2>
@@ -681,7 +774,7 @@
         </div>
       </article>
 
-      <article class="production-panel">
+      <article class="production-panel" id="production-shipment">
         <div class="production-panel-head">
           <div>
             <h2>Shipping and Delivery</h2>
@@ -768,7 +861,7 @@
       </article>
 
       {% if can_view_lifecycle_profit %}
-      <article class="production-panel">
+      <article class="production-panel" id="production-finance">
         <div class="production-panel-head">
           <div>
             <h2>Costing and Actuals</h2>
@@ -792,13 +885,8 @@
             <h3>Automatic Profit Tracker</h3>
             <p>
               Invoice Total {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.invoice_total }}
-              - Sewing {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.sewing_cost }}
-              - Fabric {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.fabric_cost }}
-              - Print {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.print_cost }}
-              - Shipping {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.shipping_cost }}
-              - Trim {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.trim_cost }}
-              - Sampling {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.sampling_cost }}
-              = Net Profit {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.net_profit }}
+              - Total Cost {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.total_cost }}
+              = Net Profit After Commission {{ lifecycle_profit.currency }} {{ lifecycle_profit.display.net_profit_after_commission }}
             </p>
             <div class="production-table-wrap">
               <table class="production-mini-table">
@@ -814,6 +902,26 @@
                     <td>Invoice Total</td>
                     <td>{{ lifecycle_profit.currency }} {{ lifecycle_profit.display.invoice_total }}</td>
                     <td>Linked invoice or quotation</td>
+                  </tr>
+                  <tr>
+                    <td>Total Cost</td>
+                    <td>{{ lifecycle_profit.currency }} {{ lifecycle_profit.display.total_cost }}</td>
+                    <td>Internal costing, production, shipping, and commission costs</td>
+                  </tr>
+                  <tr>
+                    <td>Gross Profit</td>
+                    <td>{{ lifecycle_profit.currency }} {{ lifecycle_profit.display.gross_profit }}</td>
+                    <td>Profit before sales commission</td>
+                  </tr>
+                  <tr>
+                    <td>Sales Commission</td>
+                    <td>{{ lifecycle_profit.currency }} {{ lifecycle_profit.display.sales_commission }}</td>
+                    <td>Inherited from linked Quick Costing when available</td>
+                  </tr>
+                  <tr>
+                    <td>Net Profit After Commission</td>
+                    <td>{{ lifecycle_profit.currency }} {{ lifecycle_profit.display.net_profit_after_commission }}</td>
+                    <td>{{ lifecycle_profit.display.margin }}% margin</td>
                   </tr>
                   <tr>
                     <td>Sewing Cost</td>
@@ -859,11 +967,6 @@
                       <td>{% if lifecycle_profit.can_use_actual_production %}Used as production cost basis{% else %}Recorded in BDT; not mixed into {{ lifecycle_profit.currency }} profit{% endif %}</td>
                     </tr>
                   {% endif %}
-                  <tr>
-                    <td>Net Profit</td>
-                    <td>{{ lifecycle_profit.currency }} {{ lifecycle_profit.display.net_profit }}</td>
-                    <td>{{ lifecycle_profit.display.margin }}% margin</td>
-                  </tr>
                 </tbody>
               </table>
             </div>
@@ -946,7 +1049,7 @@
         {% endif %}
       </article>
       {% else %}
-      <article class="production-panel">
+      <article class="production-panel" id="production-finance">
         <div class="production-panel-head">
           <div>
             <h2>Restricted Section</h2>
@@ -957,7 +1060,7 @@
       </article>
       {% endif %}
 
-      <article class="production-panel">
+      <article class="production-panel" id="production-history">
         <div class="production-panel-head">
           <div>
             <h2>Activity and Notes</h2>
@@ -1030,7 +1133,7 @@
     </main>
 
     <aside class="production-side-column">
-      <article class="production-panel">
+      <article class="production-panel" id="production-linked-records">
         <div class="production-panel-head">
           <div>
             <h2>Linked Records</h2>
@@ -1054,7 +1157,7 @@
         </div>
       </article>
 
-      <article class="production-panel">
+      <article class="production-panel" id="production-delivery-focus">
         <div class="production-panel-head">
           <div>
             <h2>Delivery Focus</h2>
@@ -1078,7 +1181,7 @@
       </article>
 
       {% if can_view_lifecycle_profit %}
-      <details class="production-panel production-raw-details">
+      <details class="production-panel production-raw-details" id="production-raw-details">
         <summary>
           <span>Admin / Raw Details</span>
           <small>Advanced production cost and internal fields</small>
@@ -1115,6 +1218,148 @@
 
 <script>
   document.addEventListener("DOMContentLoaded", function () {
+    function setupProductionTabs() {
+      var tabRoot = document.querySelector("[data-production-tabs]");
+      if (!tabRoot) return;
+
+      function moveToSlot(slotName, selectors) {
+        var slot = tabRoot.querySelector('[data-production-tab-slot="' + slotName + '"]');
+        if (!slot) return;
+        selectors.forEach(function (selector) {
+          var node = document.querySelector(selector);
+          if (node) {
+            slot.appendChild(node);
+          }
+        });
+      }
+
+      var stageSlot = document.querySelector("[data-production-stage-slot]");
+      var stageTracker = document.getElementById("stage-progress");
+      if (stageSlot && stageTracker) {
+        stageSlot.appendChild(stageTracker);
+      }
+
+      moveToSlot("overview", [
+        "#production-overview-workflow",
+        "#production-legacy-snapshot"
+      ]);
+      moveToSlot("stages", [
+        "#production-workflow-status"
+      ]);
+      moveToSlot("product", [
+        "#production-product-snapshots",
+        "#production-order-details",
+        "#production-factory-actions",
+        "#production-materials"
+      ]);
+      moveToSlot("files", [
+        "#production-files"
+      ]);
+      moveToSlot("finance", [
+        "#production-finance"
+      ]);
+      moveToSlot("shipment", [
+        "#production-shipment"
+      ]);
+      moveToSlot("history", [
+        "#production-history",
+        "#production-linked-records",
+        "#production-delivery-focus",
+        "#production-raw-details"
+      ]);
+
+      var oldGrid = document.querySelector(".production-detail-grid");
+      if (oldGrid) {
+        oldGrid.hidden = true;
+      }
+
+      var tabs = tabRoot.querySelectorAll("[data-production-tab-target]");
+      var panels = tabRoot.querySelectorAll("[data-production-tab-panel]");
+      var pageRoot = document.querySelector(".production-detail[data-production-order-id]");
+      var storageKey = pageRoot ? "production-detail-active-tab-" + pageRoot.getAttribute("data-production-order-id") : "";
+
+      function tabFromHash() {
+        var hash = window.location.hash || "";
+        if (!hash) return "";
+        if (hash === "#stage-progress") return "stages";
+        if (hash === "#production-files") return "files";
+        if (hash === "#production-materials" || hash === "#production-order-details") return "product";
+        if (hash === "#production-finance") return "finance";
+        if (hash === "#production-shipment") return "shipment";
+        if (hash === "#production-history") return "history";
+        return "";
+      }
+
+      function tabForElement(element) {
+        if (!element) return "";
+        var panel = element.closest("[data-production-tab-panel]");
+        if (panel) {
+          return panel.getAttribute("data-production-tab-panel") || "";
+        }
+        if (element.closest("#stage-progress")) {
+          return "stages";
+        }
+        return "";
+      }
+
+      function storeTab(tabName) {
+        if (!storageKey || !tabName) return;
+        try {
+          sessionStorage.setItem(storageKey, tabName);
+        } catch (error) {
+          return;
+        }
+      }
+
+      function popStoredTab() {
+        if (!storageKey) return "";
+        try {
+          var tabName = sessionStorage.getItem(storageKey) || "";
+          sessionStorage.removeItem(storageKey);
+          return tabName;
+        } catch (error) {
+          return "";
+        }
+      }
+
+      function activate(tabName) {
+        tabs.forEach(function (tab) {
+          var active = tab.getAttribute("data-production-tab-target") === tabName;
+          tab.classList.toggle("is-active", active);
+          tab.setAttribute("aria-selected", active ? "true" : "false");
+        });
+        panels.forEach(function (panel) {
+          panel.hidden = panel.getAttribute("data-production-tab-panel") !== tabName;
+        });
+      }
+
+      tabs.forEach(function (tab) {
+        tab.addEventListener("click", function () {
+          var tabName = tab.getAttribute("data-production-tab-target");
+          activate(tabName);
+          storeTab(tabName);
+        });
+      });
+
+      document.querySelectorAll("[data-production-tab-jump]").forEach(function (link) {
+        link.addEventListener("click", function () {
+          var tabName = link.getAttribute("data-production-tab-jump");
+          activate(tabName);
+          storeTab(tabName);
+        });
+      });
+
+      document.querySelectorAll("form").forEach(function (form) {
+        form.addEventListener("submit", function () {
+          storeTab(tabForElement(form));
+        });
+      });
+
+      activate(tabFromHash() || popStoredTab() || "overview");
+    }
+
+    setupProductionTabs();
+
     function parseNum(value) {
       var v = parseFloat(value);
       return Number.isFinite(v) ? v : null;

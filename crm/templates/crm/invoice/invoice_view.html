@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load humanize crm_extras %}
+{% load humanize crm_extras static %}
 {% block content %}
 
 <style>
@@ -399,8 +399,11 @@
   }
 </style>
 
+<link rel="stylesheet" href="{% static 'crm/ui_system.css' %}?v=invoice-detail-modernization-20260710">
+<link rel="stylesheet" href="{% static 'crm/invoice_detail.css' %}?v=invoice-detail-modernization-20260710">
+
 {% with cur=invoice.currency|default:"USD" invno=invoice.invoice_number|default:"" %}
-<div class="container-fluid">
+<div class="container-fluid invoice-detail-page" data-crm-density="compact" data-invoice-detail-root data-invoice-id="{{ invoice.pk }}">
   <div class="wrap">
 
     <div class="printHeader">
@@ -415,13 +418,20 @@
       {% endif %}
     </div>
 
-    <div class="head">
+    <div class="head invoice-detail-header">
       <div>
         <h2 class="title">Invoice {{ invno }}</h2>
         <div class="sub">
-          Issue {{ invoice.issue_date|date:"Y-m-d"|default:"" }}
+          {% if invoice.customer %}{{ invoice.customer }}{% else %}Customer not set{% endif %}
+          | Issue {{ invoice.issue_date|date:"Y-m-d"|default:"" }}
           {% if invoice.due_date %} | Due {{ invoice.due_date|date:"Y-m-d" }}{% endif %}
           {% if cur %} | Currency {{ cur }}{% endif %}
+        </div>
+        <div class="invoice-header-meta" aria-label="Invoice header summary">
+          <span class="crm-status-pill s-{{ invoice.payment_status_key }}">{{ invoice.payment_status_label }}</span>
+          <span class="invoice-meta-chip">{{ invoice.total_amount|default_if_none:0|finance_money:cur }}</span>
+          <span class="invoice-meta-chip">{% if invoice.due_date %}Due {{ invoice.due_date|date:"Y-m-d" }}{% else %}Due date not set{% endif %}</span>
+          <span class="invoice-meta-chip">{% if invoice.order %}Production linked{% else %}No production{% endif %}</span>
         </div>
       </div>
 
@@ -452,9 +462,202 @@
       </div>
     </div>
 
+    <section class="crm-kpi-strip is-compact invoice-kpi-strip noPrint" aria-label="Invoice KPI summary">
+      <article class="crm-kpi-card crm-kpi-horizontal">
+        <div>
+          <div class="crm-kpi-label">Revenue</div>
+          <div class="crm-kpi-value">{{ invoice.total_amount|default_if_none:0|finance_money:cur }}</div>
+          <div class="crm-kpi-note">Invoice total</div>
+        </div>
+        <span class="crm-kpi-indicator">R</span>
+      </article>
+      <article class="crm-kpi-card crm-kpi-horizontal">
+        <div>
+          <div class="crm-kpi-label">Paid</div>
+          <div class="crm-kpi-value">{{ invoice.paid_amount|default_if_none:0|finance_money:cur }}</div>
+          <div class="crm-kpi-note">{{ payment_history|length }} payment record(s)</div>
+        </div>
+        <span class="crm-kpi-indicator">P</span>
+      </article>
+      <article class="crm-kpi-card crm-kpi-horizontal">
+        <div>
+          <div class="crm-kpi-label">Balance</div>
+          <div class="crm-kpi-value">{{ invoice.balance|default_if_none:0|finance_money:cur }}</div>
+          <div class="crm-kpi-note">{{ invoice.payment_status_label }}</div>
+        </div>
+        <span class="crm-kpi-indicator">B</span>
+      </article>
+      <article class="crm-kpi-card crm-kpi-horizontal">
+        <div>
+          <div class="crm-kpi-label">Profit</div>
+          <div class="crm-kpi-value">{{ invoice.estimated_gross_profit|default_if_none:0|finance_money:cur }}</div>
+          <div class="crm-kpi-note">Internal estimate</div>
+        </div>
+        <span class="crm-kpi-indicator">%</span>
+      </article>
+      <article class="crm-kpi-card crm-kpi-horizontal">
+        <div>
+          <div class="crm-kpi-label">Production</div>
+          <div class="crm-kpi-value">{% if invoice.order %}Linked{% else %}None{% endif %}</div>
+          <div class="crm-kpi-note">{% if invoice.order %}{{ invoice.order.order_code|default:invoice.order }}{% else %}No order{% endif %}</div>
+        </div>
+        <span class="crm-kpi-indicator">PO</span>
+      </article>
+      <article class="crm-kpi-card crm-kpi-horizontal">
+        <div>
+          <div class="crm-kpi-label">Shipment</div>
+          <div class="crm-kpi-value">{% if invoice.order %}Via PO{% else %}None{% endif %}</div>
+          <div class="crm-kpi-note">{% if invoice.order %}Use shipment workflow links{% else %}No production link{% endif %}</div>
+        </div>
+        <span class="crm-kpi-indicator">S</span>
+      </article>
+    </section>
+
+    <div class="invoice-tab-shell" data-invoice-tab-shell>
+      <nav class="crm-tabs is-compact is-sticky invoice-tabs noPrint" role="tablist" aria-label="Invoice detail sections" data-invoice-tabs>
+        <button type="button" class="crm-tab is-active" id="invoice-tab-overview" role="tab" aria-selected="true" aria-controls="invoice-tab-overview-panel" data-invoice-tab-target="overview">Overview</button>
+        <button type="button" class="crm-tab" id="invoice-tab-payments" role="tab" aria-selected="false" aria-controls="invoice-tab-payments-panel" data-invoice-tab-target="payments">Payments <span class="crm-tab-count">{{ payment_history|length }}</span></button>
+        <button type="button" class="crm-tab" id="invoice-tab-production" role="tab" aria-selected="false" aria-controls="invoice-tab-production-panel" data-invoice-tab-target="production">Production</button>
+        <button type="button" class="crm-tab" id="invoice-tab-shipment" role="tab" aria-selected="false" aria-controls="invoice-tab-shipment-panel" data-invoice-tab-target="shipment">Shipment</button>
+        <button type="button" class="crm-tab" id="invoice-tab-internal-profit" role="tab" aria-selected="false" aria-controls="invoice-tab-internal-profit-panel" data-invoice-tab-target="internal-profit">Internal Profit</button>
+        <button type="button" class="crm-tab" id="invoice-tab-notes" role="tab" aria-selected="false" aria-controls="invoice-tab-notes-panel" data-invoice-tab-target="notes">Notes</button>
+        <button type="button" class="crm-tab" id="invoice-tab-files" role="tab" aria-selected="false" aria-controls="invoice-tab-files-panel" data-invoice-tab-target="files">Files</button>
+        <button type="button" class="crm-tab" id="invoice-tab-ai" role="tab" aria-selected="false" aria-controls="invoice-tab-ai-panel" data-invoice-tab-target="ai">AI</button>
+        <button type="button" class="crm-tab" id="invoice-tab-history" role="tab" aria-selected="false" aria-controls="invoice-tab-history-panel" data-invoice-tab-target="history">History</button>
+      </nav>
+
+      <div class="invoice-tab-panels" data-invoice-tab-panels>
+        <section class="crm-tab-panel invoice-tab-panel" id="invoice-tab-overview-panel" role="tabpanel" aria-labelledby="invoice-tab-overview" data-invoice-tab-panel="overview">
+          <div class="invoice-tab-slot" data-invoice-tab-slot="overview"></div>
+        </section>
+        <section class="crm-tab-panel invoice-tab-panel" id="invoice-tab-payments-panel" role="tabpanel" aria-labelledby="invoice-tab-payments" data-invoice-tab-panel="payments" hidden>
+          <div class="invoice-tab-slot" data-invoice-tab-slot="payments"></div>
+        </section>
+        <section class="crm-tab-panel invoice-tab-panel" id="invoice-tab-production-panel" role="tabpanel" aria-labelledby="invoice-tab-production" data-invoice-tab-panel="production" hidden>
+          <div class="invoice-tab-slot" data-invoice-tab-slot="production"></div>
+        </section>
+        <section class="crm-tab-panel invoice-tab-panel" id="invoice-tab-shipment-panel" role="tabpanel" aria-labelledby="invoice-tab-shipment" data-invoice-tab-panel="shipment" hidden>
+          <div class="invoice-tab-slot" data-invoice-tab-slot="shipment"></div>
+        </section>
+        <section class="crm-tab-panel invoice-tab-panel" id="invoice-tab-internal-profit-panel" role="tabpanel" aria-labelledby="invoice-tab-internal-profit" data-invoice-tab-panel="internal-profit" hidden>
+          <div class="invoice-tab-slot" data-invoice-tab-slot="internal-profit"></div>
+        </section>
+        <section class="crm-tab-panel invoice-tab-panel" id="invoice-tab-notes-panel" role="tabpanel" aria-labelledby="invoice-tab-notes" data-invoice-tab-panel="notes" hidden>
+          <div class="invoice-tab-slot" data-invoice-tab-slot="notes"></div>
+        </section>
+        <section class="crm-tab-panel invoice-tab-panel" id="invoice-tab-files-panel" role="tabpanel" aria-labelledby="invoice-tab-files" data-invoice-tab-panel="files" hidden>
+          <div class="invoice-tab-slot" data-invoice-tab-slot="files"></div>
+        </section>
+        <section class="crm-tab-panel invoice-tab-panel" id="invoice-tab-ai-panel" role="tabpanel" aria-labelledby="invoice-tab-ai" data-invoice-tab-panel="ai" hidden>
+          <div class="invoice-tab-slot" data-invoice-tab-slot="ai"></div>
+        </section>
+        <section class="crm-tab-panel invoice-tab-panel" id="invoice-tab-history-panel" role="tabpanel" aria-labelledby="invoice-tab-history" data-invoice-tab-panel="history" hidden>
+          <div class="invoice-tab-slot" data-invoice-tab-slot="history"></div>
+        </section>
+      </div>
+    </div>
+
+    <div class="invoice-section-source" data-invoice-section-source>
+
     {% include "crm/partials/workflow_quick_nav.html" %}
     {% include "crm/partials/workflow_order_summary.html" %}
     {% include "crm/partials/workflow_activity_timeline.html" %}
+
+    <div class="cardx invoice-production-summary" id="invoice-production-summary">
+      <div class="pad">
+        <div class="pay-section-title">
+          <span>Production</span>
+          {% if invoice.order %}<span class="status s-sent">{{ invoice.order.status|default:"Linked" }}</span>{% endif %}
+        </div>
+        {% if invoice.order %}
+          <div class="kv">
+            <div class="k">Production order</div>
+            <div class="v"><a href="{% url 'production_detail' invoice.order.pk %}">{{ invoice.order.order_code|default:invoice.order }}</a></div>
+            <div class="k">Style</div>
+            <div class="v">{{ invoice.order.style_name|default:invoice.order.title|default:"Not set" }}</div>
+            <div class="k">Quantity</div>
+            <div class="v">{{ invoice.order.qty_total|default:"0" }}</div>
+            <div class="k">Operational status</div>
+            <div class="v">{{ invoice.order.get_operational_status_display|default:invoice.order.operational_status|default:"Not set" }}</div>
+          </div>
+        {% else %}
+          <div class="pay-help">No production order is linked to this invoice.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="cardx invoice-shipment-summary" id="invoice-shipment-summary">
+      <div class="pad">
+        <div class="pay-section-title">
+          <span>Shipment</span>
+          {% if invoice.order %}<span class="status s-sent">Production workflow</span>{% endif %}
+        </div>
+        {% if invoice.order %}
+          <div class="pay-help">
+            Shipment records are managed from the linked production workflow. Use the workflow links and production detail page to open shipment records without changing invoice totals or payment logic.
+          </div>
+          <div class="pay-actions invoice-inline-actions">
+            <a class="pill" href="{% url 'production_detail' invoice.order.pk %}">Open Production</a>
+            <a class="pill" href="{% url 'shipment_list' %}">Open Shipments</a>
+          </div>
+        {% else %}
+          <div class="pay-help">No production order is linked, so no shipment workflow is available from this invoice.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="cardx invoice-notes-summary" id="invoice-notes-summary">
+      <div class="pad">
+        <div class="pay-section-title"><span>Notes</span></div>
+        <div class="note">{% if invoice.notes %}{{ invoice.notes }}{% else %}No invoice notes recorded.{% endif %}</div>
+        {% if invoice.internal_cost_note and can_manage_invoice_costing %}
+          <div class="note">
+            <div style="margin-bottom:6px; color:var(--text); font-weight:900;">Internal cost note</div>
+            {{ invoice.internal_cost_note }}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="cardx invoice-files-summary" id="invoice-files-summary">
+      <div class="pad">
+        <div class="pay-section-title"><span>Files and Documents</span></div>
+        <div class="invoice-doc-links">
+          <a class="pill" href="{% url 'invoice_client_view' invoice.pk %}">Client invoice</a>
+          <a class="pill" href="{% url 'invoice_pdf' invoice.pk %}">PDF</a>
+          {% if invoice.costing_header %}
+            <a class="pill" href="{% url 'cost_sheet_detail' invoice.costing_header.pk %}">Costing</a>
+          {% endif %}
+          {% if invoice.quick_costing %}
+            <a class="pill" href="{% url 'quick_costing_detail' invoice.quick_costing.pk %}">Quick Costing</a>
+            <a class="pill" href="{% url 'quick_costing_client_quotation' invoice.quick_costing.pk %}">Quick Quotation</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="cardx invoice-ai-summary" id="invoice-ai-summary">
+      <div class="pad">
+        <div class="pay-section-title"><span>AI</span></div>
+        <div class="pay-help">No invoice-specific AI controls are available on this page.</div>
+      </div>
+    </div>
+
+    <div class="cardx invoice-history-summary" id="invoice-history-summary">
+      <div class="pad">
+        <div class="pay-section-title"><span>History</span></div>
+        <div class="kv">
+          <div class="k">Created</div>
+          <div class="v">{{ invoice.created_at|date:"Y-m-d H:i"|default:"" }}</div>
+          <div class="k">Updated</div>
+          <div class="v">{{ invoice.updated_at|date:"Y-m-d H:i"|default:"" }}</div>
+          <div class="k">Approval status</div>
+          <div class="v">{{ invoice.invoice_status|default:"DRAFT" }}</div>
+          <div class="k">Approved at</div>
+          <div class="v">{% if invoice.approved_at %}{{ invoice.approved_at|date:"Y-m-d H:i" }}{% else %}—{% endif %}</div>
+        </div>
+      </div>
+    </div>
 
     {% with pay_key=invoice.payment_status_key %}
       <div class="pay-hero">
@@ -487,7 +690,7 @@
     {% endwith %}
 
     {% if can_manage_invoice_costing %}
-      <div class="internal-profit noPrint">
+      <div class="internal-profit noPrint" id="invoice-internal-profit">
         <div class="internal-profit-title">
           <span>Internal Profit Estimate</span>
           <small>Internal only. Hidden from client invoice and PDF.</small>
@@ -543,15 +746,12 @@
         </div>
         {% if lifecycle_profit %}
           <div class="note" style="margin-top:12px;">
-            <div style="margin-bottom:8px; color:#fde68a; font-weight:900;">Net profit formula</div>
+            <div style="margin-bottom:8px; color:#fde68a; font-weight:900;">Internal profit formula</div>
             Invoice Total {{ lifecycle_profit.display.invoice_total|finance_money:lifecycle_profit.currency }}
-            - Sewing Cost {{ lifecycle_profit.display.sewing_cost|finance_money:lifecycle_profit.currency }}
-            - Fabric Cost {{ lifecycle_profit.display.fabric_cost|finance_money:lifecycle_profit.currency }}
-            - Print Cost {{ lifecycle_profit.display.print_cost|finance_money:lifecycle_profit.currency }}
-            - Shipping {{ lifecycle_profit.display.shipping_cost|finance_money:lifecycle_profit.currency }}
-            - Trim Cost {{ lifecycle_profit.display.trim_cost|finance_money:lifecycle_profit.currency }}
-            - Sampling {{ lifecycle_profit.display.sampling_cost|finance_money:lifecycle_profit.currency }}
-            = Net Profit {{ lifecycle_profit.display.net_profit|finance_money:lifecycle_profit.currency }}
+            - Total Cost {{ lifecycle_profit.display.total_cost|finance_money:lifecycle_profit.currency }}
+            = Gross Profit {{ lifecycle_profit.display.gross_profit|finance_money:lifecycle_profit.currency }}
+            - Sales Commission {{ lifecycle_profit.display.sales_commission|finance_money:lifecycle_profit.currency }}
+            = Net Profit After Commission {{ lifecycle_profit.display.net_profit_after_commission|finance_money:lifecycle_profit.currency }}
           </div>
         {% endif %}
         {% if invoice.internal_cost_note %}
@@ -648,7 +848,7 @@
       </div>
     </div>
 
-    <div class="cardx pay-section">
+    <div class="cardx pay-section" id="invoice-payment-history">
       <div class="pad">
         <div class="pay-section-title">
           <span>Payment history</span>
@@ -708,9 +908,9 @@
       </div>
     </div>
 
-    <div class="grid">
+    <div class="grid" id="invoice-overview-grid">
 
-      <div class="cardx">
+      <div class="cardx" id="invoice-detail-card">
         <div class="pad">
 
           <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
@@ -789,7 +989,7 @@
         </div>
       </div>
 
-      <div class="cardx">
+      <div class="cardx" id="invoice-totals-card">
         <div class="pad">
 
           <div style="font-weight:900; margin-bottom:10px;">Totals</div>
@@ -834,8 +1034,189 @@
 
     </div>
 
+    </div>
+
   </div>
 </div>
 {% endwith %}
+
+<script>
+(function () {
+  function initInvoiceDetailTabs() {
+    const root = document.querySelector("[data-invoice-detail-root]");
+    if (!root) return;
+
+    const source = root.querySelector("[data-invoice-section-source]");
+    const tabs = Array.prototype.slice.call(root.querySelectorAll("[data-invoice-tab-target]"));
+    const panels = Array.prototype.slice.call(root.querySelectorAll("[data-invoice-tab-panel]"));
+    const slots = {};
+    Array.prototype.slice.call(root.querySelectorAll("[data-invoice-tab-slot]")).forEach(function (slot) {
+      slots[slot.getAttribute("data-invoice-tab-slot")] = slot;
+    });
+
+    if (!source || !tabs.length || !panels.length) return;
+
+    function moveSections(tabName, selectors) {
+      const slot = slots[tabName];
+      if (!slot) return;
+      selectors.forEach(function (selector) {
+        const node = root.querySelector(selector);
+        if (node) {
+          slot.appendChild(node);
+        }
+      });
+    }
+
+    moveSections("overview", [
+      ".workflow-quick-nav",
+      "#invoice-overview-grid"
+    ]);
+    moveSections("payments", [
+      ".pay-hero",
+      "#payment-received-form",
+      "#invoice-payment-history"
+    ]);
+    moveSections("production", [
+      ".workflow-order-summary",
+      "#invoice-production-summary"
+    ]);
+    moveSections("shipment", [
+      "#invoice-shipment-summary"
+    ]);
+    moveSections("internal-profit", [
+      "#invoice-internal-profit"
+    ]);
+    moveSections("notes", [
+      "#invoice-notes-summary"
+    ]);
+    moveSections("files", [
+      "#invoice-files-summary"
+    ]);
+    moveSections("ai", [
+      "#invoice-ai-summary"
+    ]);
+    moveSections("history", [
+      ".workflow-activity-timeline",
+      "#invoice-history-summary"
+    ]);
+
+    source.hidden = true;
+    root.classList.add("is-tabbed");
+
+    const invoiceId = root.getAttribute("data-invoice-id") || "current";
+    const storageKey = "invoice-detail-active-tab-" + invoiceId;
+    const hashTabMap = {
+      "payment-received-form": "payments",
+      "invoice-payment-history": "payments",
+      "invoice-production-summary": "production",
+      "invoice-shipment-summary": "shipment",
+      "invoice-internal-profit": "internal-profit",
+      "invoice-notes-summary": "notes",
+      "invoice-files-summary": "files",
+      "invoice-ai-summary": "ai",
+      "invoice-history-summary": "history"
+    };
+
+    function safeStoreTab(tabName) {
+      try {
+        window.sessionStorage.setItem(storageKey, tabName);
+      } catch (error) {
+      }
+    }
+
+    function safeReadTab() {
+      try {
+        return window.sessionStorage.getItem(storageKey);
+      } catch (error) {
+        return "";
+      }
+    }
+
+    function tabForElement(element) {
+      const panel = element ? element.closest("[data-invoice-tab-panel]") : null;
+      return panel ? panel.getAttribute("data-invoice-tab-panel") : "";
+    }
+
+    function tabForHash(hash) {
+      const cleanHash = (hash || "").replace(/^#/, "");
+      if (!cleanHash) return "";
+      if (hashTabMap[cleanHash]) return hashTabMap[cleanHash];
+      const element = document.getElementById(cleanHash);
+      return tabForElement(element);
+    }
+
+    function activateTab(tabName, shouldStore) {
+      const requested = tabName || "overview";
+      const targetTab = tabs.some(function (tab) {
+        return tab.getAttribute("data-invoice-tab-target") === requested;
+      }) ? requested : "overview";
+
+      tabs.forEach(function (tab) {
+        const isActive = tab.getAttribute("data-invoice-tab-target") === targetTab;
+        tab.classList.toggle("is-active", isActive);
+        tab.setAttribute("aria-selected", isActive ? "true" : "false");
+        tab.setAttribute("tabindex", isActive ? "0" : "-1");
+      });
+
+      panels.forEach(function (panel) {
+        panel.hidden = panel.getAttribute("data-invoice-tab-panel") !== targetTab;
+      });
+
+      if (shouldStore !== false) {
+        safeStoreTab(targetTab);
+      }
+    }
+
+    tabs.forEach(function (tab, index) {
+      tab.addEventListener("click", function () {
+        activateTab(tab.getAttribute("data-invoice-tab-target"));
+      });
+      tab.addEventListener("keydown", function (event) {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+        event.preventDefault();
+        let nextIndex = index;
+        if (event.key === "ArrowLeft") nextIndex = index === 0 ? tabs.length - 1 : index - 1;
+        if (event.key === "ArrowRight") nextIndex = index === tabs.length - 1 ? 0 : index + 1;
+        if (event.key === "Home") nextIndex = 0;
+        if (event.key === "End") nextIndex = tabs.length - 1;
+        const nextTab = tabs[nextIndex];
+        if (nextTab) {
+          nextTab.focus();
+          activateTab(nextTab.getAttribute("data-invoice-tab-target"));
+        }
+      });
+    });
+
+    root.addEventListener("submit", function (event) {
+      const submittedTab = tabForElement(event.target);
+      if (submittedTab) {
+        safeStoreTab(submittedTab);
+      }
+    }, true);
+
+    window.addEventListener("hashchange", function () {
+      const hashTab = tabForHash(window.location.hash);
+      if (hashTab) {
+        activateTab(hashTab);
+      }
+    });
+
+    let printTab = "";
+    window.addEventListener("beforeprint", function () {
+      printTab = root.querySelector("[data-invoice-tab-target].is-active")?.getAttribute("data-invoice-tab-target") || "overview";
+      panels.forEach(function (panel) {
+        panel.hidden = false;
+      });
+    });
+    window.addEventListener("afterprint", function () {
+      activateTab(printTab || "overview", false);
+    });
+
+    activateTab(tabForHash(window.location.hash) || safeReadTab() || "overview", false);
+  }
+
+  initInvoiceDetailTabs();
+})();
+</script>
 
 {% endblock %}

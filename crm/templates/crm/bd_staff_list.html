@@ -1,158 +1,180 @@
 {% extends "crm/base.html" %}
+{% load static %}
 {% block content %}
 
+<link rel="stylesheet" href="{% static 'crm/ui_system.css' %}?v=employee-phase-b">
+
 <style>
-  .btn-3d {
-    border-radius: 999px;
-    font-weight: 700;
-    padding: 8px 14px;
-    border: 1px solid rgba(255,255,255,0.18);
-    box-shadow:
-      0 10px 22px rgba(0,0,0,0.45),
-      inset 0 1px 0 rgba(255,255,255,0.14);
-    transform: translateY(0);
-    transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+  .employee-modern {
+    color: var(--crm-text);
   }
-  .btn-3d:active {
-    transform: translateY(2px);
-    box-shadow:
-      0 6px 14px rgba(0,0,0,0.40),
-      inset 0 1px 0 rgba(255,255,255,0.10);
+  .employee-modern .employee-tabs {
+    top: 86px;
   }
-
-  .btn-gold {
-    background: linear-gradient(145deg, #f5d580, #d4b35f);
-    color: #050505;
-    border-color: rgba(255,215,128,0.55);
+  .employee-modern .employee-table-wrap {
+    max-height: 66vh;
   }
-  .btn-gold:hover { filter: brightness(1.05); }
-
-  .btn-dark3d {
-    background: linear-gradient(145deg, #0f172a, #020617);
-    color: #e5e7eb;
-    border-color: rgba(148,163,184,0.22);
+  .employee-modern .employee-table {
+    min-width: 760px;
   }
-  .btn-dark3d:hover { filter: brightness(1.08); }
-
-  .card-neo {
-    background: radial-gradient(circle at top, #0b1224, #020617);
-    border: 1px solid #374151;
-    box-shadow: 0 18px 40px rgba(0,0,0,0.55);
-    border-radius: 14px;
-    overflow: hidden;
+  .employee-modern .employee-table td:last-child,
+  .employee-modern .employee-table th:last-child {
+    text-align: right;
   }
-
-  .card-neo .card-header {
-    background: rgba(2,6,23,0.75);
-    border-bottom: 1px solid #1f2937;
+  .employee-modern .employee-disabled-tab {
+    opacity: .52;
+    cursor: not-allowed;
   }
-
-  .table thead th {
-    color: #cbd5e1;
-    font-weight: 700;
-    border-color: #1f2937;
-  }
-  .table td {
-    border-color: #1f2937;
-  }
-
-  .badge-soft {
-    padding: 6px 10px;
-    border-radius: 999px;
-    font-weight: 700;
-    font-size: 11px;
-    display: inline-block;
-  }
-  .badge-yes {
-    background: rgba(34,197,94,0.16);
-    color: #86efac;
-    border: 1px solid rgba(34,197,94,0.35);
-  }
-  .badge-no {
-    background: rgba(148,163,184,0.14);
-    color: #cbd5e1;
-    border: 1px solid rgba(148,163,184,0.25);
+  @media (max-width: 620px) {
+    .employee-modern .employee-tabs {
+      top: 0;
+    }
+    .employee-modern .employee-table {
+      min-width: 0;
+    }
+    .employee-modern .crm-kpi-strip.is-compact {
+      display: flex;
+      overflow-x: auto;
+      gap: 8px;
+      scrollbar-width: thin;
+    }
+    .employee-modern .crm-kpi-strip.is-compact .crm-kpi-card {
+      flex: 0 0 168px;
+      min-height: 58px;
+    }
+    .employee-modern .crm-kpi-note,
+    .employee-modern .crm-panel-subtitle {
+      display: none;
+    }
+    .employee-modern .crm-table.crm-table-mobile-cards tbody tr {
+      margin: 6px;
+    }
+    .employee-modern .crm-table.is-dense.crm-table-mobile-cards td {
+      grid-template-columns: 86px minmax(0, 1fr);
+      min-height: 32px;
+      padding: 6px 8px;
+      gap: 8px;
+    }
   }
 </style>
 
-<div class="container-fluid" style="color:#f9fafb;">
-
-  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+<div class="crm-page crm-page-wide employee-modern" data-crm-density="compact">
+  <section class="crm-header is-compact">
     <div>
-      <h2 class="mb-1">Bangladesh staff</h2>
-      <div style="font-size:12px; color:#9ca3af;">
-        All factory staff used for salary and overtime.
+      <p class="crm-header-kicker">Employee Module</p>
+      <h1 class="crm-header-title">Bangladesh Staff</h1>
+      <p class="crm-header-subtitle">All factory staff used for salary and overtime.</p>
+    </div>
+    <div class="crm-header-actions">
+      <a href="{% url 'bd_staff_month_list' %}" class="crm-btn">Payroll months</a>
+      <a href="{% url 'bd_staff_add' %}" class="crm-btn crm-btn-primary">Add Bangladesh staff</a>
+    </div>
+  </section>
+
+  <section class="crm-kpi-strip is-compact crm-mt-sm" aria-label="Employee summary">
+    <article class="crm-kpi-card crm-kpi-horizontal">
+      <div>
+        <div class="crm-kpi-label">Staff</div>
+        <div class="crm-kpi-value">List</div>
+        <div class="crm-kpi-note">Visible staff records</div>
       </div>
-    </div>
-
-    <div class="d-flex gap-2 flex-wrap">
-      <a href="{% url 'bd_staff_month_list' %}"
-         class="btn btn-outline-light btn-sm rounded-pill">
-        Payroll months
-      </a>
-
-      <a href="{% url 'bd_staff_add' %}"
-         class="btn btn-warning btn-sm rounded-pill">
-        Add Bangladesh staff
-      </a>
-    </div>
-  </div>
-
-  <div class="card card-neo">
-    <div class="card-header py-2">
-      <div class="d-flex justify-content-between align-items-center">
-        <span style="font-size:14px; font-weight:800;">Staff list</span>
-        <span style="font-size:11px; color:#9ca3af;">
-          {{ staff_list|length }} staff
-        </span>
+      <span class="crm-kpi-indicator">S</span>
+    </article>
+    <article class="crm-kpi-card crm-kpi-horizontal">
+      <div>
+        <div class="crm-kpi-label">Payroll</div>
+        <div class="crm-kpi-value">BDT</div>
+        <div class="crm-kpi-note">Salary records remain separate</div>
       </div>
+      <span class="crm-kpi-indicator">P</span>
+    </article>
+    <article class="crm-kpi-card crm-kpi-horizontal">
+      <div>
+        <div class="crm-kpi-label">Active Tab</div>
+        <div class="crm-kpi-value">Profile</div>
+        <div class="crm-kpi-note">Current employee view</div>
+      </div>
+      <span class="crm-kpi-indicator">A</span>
+    </article>
+  </section>
+
+  <nav class="crm-tabs is-compact is-sticky employee-tabs crm-mt-sm" aria-label="Employee module tabs">
+    <a class="crm-tab is-active" href="{% url 'bd_staff_list' %}">Profile</a>
+    <button type="button" class="crm-tab employee-disabled-tab" aria-disabled="true">Attendance</button>
+    <a class="crm-tab" href="{% url 'bd_staff_month_list' %}">Payroll</a>
+    <button type="button" class="crm-tab employee-disabled-tab" aria-disabled="true">Performance</button>
+    <button type="button" class="crm-tab employee-disabled-tab" aria-disabled="true">Documents</button>
+    <button type="button" class="crm-tab employee-disabled-tab" aria-disabled="true">Leaves</button>
+    <button type="button" class="crm-tab employee-disabled-tab" aria-disabled="true">History</button>
+  </nav>
+
+  <section class="crm-filter-bar is-dense is-sticky crm-mt-sm" aria-label="Employee actions">
+    <div class="crm-filter-field">
+      <label>Current View</label>
+      <div class="crm-input" aria-readonly="true">Bangladesh staff profile list</div>
+    </div>
+    <div class="crm-filter-field">
+      <label>Records</label>
+      <div class="crm-input" aria-readonly="true">Staff records</div>
+    </div>
+    <div class="crm-filter-actions">
+      <a href="{% url 'bd_staff_month_list' %}" class="crm-btn">Payroll</a>
+      <a href="{% url 'bd_staff_add' %}" class="crm-btn crm-btn-primary">Add Staff</a>
+    </div>
+  </section>
+
+  <section class="crm-panel is-dense crm-mt-sm">
+    <div class="crm-panel-header">
+      <div>
+        <h2 class="crm-panel-title">Staff List</h2>
+        <p class="crm-panel-subtitle">Dense table view with the existing edit action preserved.</p>
+      </div>
+      <span class="crm-status-pill is-brand">Staff records</span>
     </div>
 
-    <div class="table-responsive">
-      <table class="table table-dark table-sm mb-0" style="font-size:12px;">
+    <div class="crm-table-wrap employee-table-wrap">
+      <table class="crm-table is-dense crm-table-mobile-cards employee-table">
         <thead>
           <tr>
             <th>Name</th>
             <th>Role</th>
-            <th class="text-end">Base salary BDT</th>
+            <th>Base Salary BDT</th>
             <th>Active</th>
-            <th class="text-end">Edit</th>
+            <th>Edit</th>
           </tr>
         </thead>
-
         <tbody>
-        {% if staff_list %}
-          {% for s in staff_list %}
+          {% if rows %}
+            {% for s in rows %}
+              <tr>
+                <td data-label="Name" class="crm-primary-cell">{{ s.name }}</td>
+                <td data-label="Role">{{ s.role|default:"" }}</td>
+                <td data-label="Base Salary BDT">{{ s.base_salary_bdt|floatformat:2 }}</td>
+                <td data-label="Active">
+                  {% if s.is_active %}
+                    <span class="crm-status-pill is-success">Yes</span>
+                  {% else %}
+                    <span class="crm-status-pill">No</span>
+                  {% endif %}
+                </td>
+                <td data-label="Edit">
+                  <div class="crm-table-actions">
+                    <a href="{% url 'bd_staff_edit' s.pk %}" class="crm-btn">Edit</a>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          {% else %}
             <tr>
-              <td style="font-weight:700;">{{ s.name }}</td>
-              <td>{{ s.role|default:"" }}</td>
-              <td class="text-end">{{ s.base_salary_bdt|floatformat:2 }}</td>
-              <td>
-                {% if s.is_active %}
-                  <span class="badge-soft badge-yes">Yes</span>
-                {% else %}
-                  <span class="badge-soft badge-no">No</span>
-                {% endif %}
-              </td>
-              <td class="text-end">
-                <a href="{% url 'bd_staff_edit' s.pk %}" class="btn btn-3d btn-dark3d btn-sm">
-                  Edit
-                </a>
+              <td colspan="5">
+                <div class="crm-empty-state">No staff yet. Click Add Bangladesh staff.</div>
               </td>
             </tr>
-          {% endfor %}
-        {% else %}
-          <tr>
-            <td colspan="5" class="text-center text-muted py-3">
-              No staff yet. Click Add Bangladesh staff.
-            </td>
-          </tr>
-        {% endif %}
+          {% endif %}
         </tbody>
       </table>
     </div>
-  </div>
-
+  </section>
 </div>
 
 {% endblock %}

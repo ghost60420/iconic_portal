@@ -1,198 +1,22 @@
 {% extends "crm/base.html" %}
+{% load static %}
 {% load crm_groups %}
 {% load humanize %}
 {% block content %}
 
-<style>
-  :root{
-    --bg:#020617;
-    --bg2:#030712;
-    --line:#374151;
-    --line2:#111827;
-    --text:#f9fafb;
-    --muted:#cbd5e1;
-    --good:#86efac;
-    --bad:#ffb4b4;
-    --gold1:#f5d580;
-    --gold2:#d4b35f;
-  }
+<link rel="stylesheet" href="{% static 'crm/ui_system.css' %}?v=accounting-modernization">
+<link rel="stylesheet" href="{% static 'crm/accounting_modern.css' %}?v=accounting-modernization">
 
-  .acct-wrap{ max-width:1400px; margin:0 auto; color:var(--text); }
-
-  .acct-card{
-    background:var(--bg);
-    border:1px solid var(--line);
-    border-radius:16px;
-    box-shadow:0 14px 34px rgba(0,0,0,0.38);
-    overflow:hidden;
-  }
-
-  .acct-head{
-    display:flex;
-    justify-content:space-between;
-    align-items:flex-start;
-    gap:14px;
-    flex-wrap:wrap;
-    margin-bottom:14px;
-  }
-
-  .acct-title{ margin:0; font-weight:900; letter-spacing:0.2px; }
-  .acct-subtitle{ font-size:12px; color:var(--muted); font-weight:700; margin-top:4px; }
-
-  .pillbar{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
-  .pill{
-    text-decoration:none;
-    display:inline-flex;
-    align-items:center;
-    gap:8px;
-    padding:8px 14px;
-    border-radius:999px;
-    font-weight:900;
-    font-size:12px;
-    border:1px solid var(--line);
-    background:linear-gradient(145deg,#0f172a,var(--bg));
-    color:var(--text);
-    box-shadow:0 3px 0 #020617;
-    white-space:nowrap;
-    cursor:pointer;
-  }
-  .pill:hover{ opacity:0.95; text-decoration:none; }
-  .pill-gold{
-    background:linear-gradient(145deg,var(--gold1),var(--gold2));
-    color:#050505;
-    border:1px solid #e5c670;
-    box-shadow:0 3px 0 #8a6b24;
-  }
-  .pill-green{
-    background:linear-gradient(145deg,#22c55e,#16a34a);
-    color:#052e16;
-    border:1px solid #22c55e;
-    box-shadow:0 3px 0 #166534;
-  }
-
-  .acct-label{
-    font-size:11px;
-    text-transform:uppercase;
-    color:#e5e7eb;
-    letter-spacing:0.45px;
-    font-weight:900;
-  }
-  .acct-value{
-    font-size:22px;
-    font-weight:900;
-    color:var(--text);
-    line-height:1.15;
-    word-break:break-word;
-  }
-  .acct-small{
-    font-size:12px;
-    color:var(--muted);
-    font-weight:700;
-    line-height:1.35;
-    margin-top:6px;
-  }
-
-  .acct-input{
-    background:var(--bg2) !important;
-    border-color:#4b5563 !important;
-    color:var(--text) !important;
-    font-weight:800;
-  }
-  .acct-input::placeholder{ color:#94a3b8; font-weight:800; }
-
-  .acct-table{ color:var(--text) !important; }
-  .acct-table th{
-    color:var(--text) !important;
-    font-weight:900 !important;
-    white-space:nowrap;
-    border-color:var(--line2) !important;
-  }
-  .acct-table td{
-    color:var(--text) !important;
-    vertical-align:middle;
-    border-color:var(--line2) !important;
-    font-weight:750;
-  }
-
-  .nowrap{ white-space:nowrap; }
-  .descWrap{
-    max-width:460px;
-    white-space:normal;
-    word-break:break-word;
-    line-height:1.25;
-    color:var(--text);
-  }
-
-  .badge{ font-weight:900 !important; letter-spacing:0.2px; }
-
-  .filePill{
-    display:inline-flex;
-    align-items:center;
-    gap:8px;
-    padding:6px 10px;
-    border-radius:999px;
-    border:1px solid #475569;
-    background:#0b1220;
-    color:var(--text);
-    font-weight:900;
-    font-size:12px;
-    text-decoration:none;
-    cursor:pointer;
-  }
-
-  .fileListBox{
-    margin-top:8px;
-    padding:10px 12px;
-    border:1px solid #334155;
-    border-radius:12px;
-    background:var(--bg2);
-  }
-  .fileRow{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    gap:10px;
-    padding:6px 0;
-    border-bottom:1px solid var(--line2);
-  }
-  .fileRow:last-child{ border-bottom:none; }
-  .fileName{
-    color:#e5e7eb;
-    font-weight:800;
-    font-size:12px;
-    word-break:break-word;
-  }
-  .linkGold{
-    color:#ffe39b;
-    text-decoration:none;
-    font-weight:900;
-  }
-  .linkGold:hover{ text-decoration:underline; }
-
-  .section-title{ font-size:14px; font-weight:900; color:var(--text); margin:0; }
-  .section-note{ font-size:11px; color:var(--muted); font-weight:700; margin:0; }
-
-  .warnBox{
-    border:1px solid #7f1d1d;
-    background:#0b1220;
-    border-radius:14px;
-    padding:12px 14px;
-    margin-bottom:14px;
-  }
-  .warnTitle{ font-weight:900; font-size:12px; color:var(--bad); margin:0 0 6px 0; }
-  .warnList{ margin:0; padding-left:16px; font-size:12px; font-weight:800; color:#e5e7eb; }
-</style>
-
-<div class="container-fluid">
+<div class="container-fluid accounting-modern-page" data-accounting-root data-crm-density="compact">
   <div class="acct-wrap">
 
-    <div class="acct-head">
+    <div class="acct-head crm-header">
       <div>
         <h2 class="acct-title">Accounting dashboard</h2>
         <div class="acct-subtitle">Track every entry for Canada and Bangladesh.</div>
       </div>
 
-      <div class="pillbar">
+      <div class="pillbar acct-head-actions">
         {% if request.user.is_superuser %}
           <a href="{% url 'accounting_entry_add_ca' %}" class="pill pill-gold">Add Canada entry</a>
         {% else %}
@@ -209,102 +33,251 @@
       </div>
     </div>
 
-    <div class="acct-card mb-3">
-      <div class="card-body p-3">
-        <div class="pillbar">
-          <a href="{% url 'accounting_entry_list' %}" class="pill pill-gold">All entries</a>
-          <a href="{% url 'accounting_ca_master' %}" class="pill">💰 Money transfer</a>
-          <a href="{% url 'accounting_bd_dashboard' %}" class="pill">Bangladesh dashboard</a>
-          <a href="{% url 'accounting_bd_grid' %}" class="pill">Bangladesh grid</a>
-          <a href="{% url 'accounting_bd_daily' %}" class="pill">Bangladesh daily</a>
-          <a href="{% url 'bd_staff_list' %}" class="pill">Bangladesh staff</a>
-          <a href="{% url 'bd_staff_month_list' %}" class="pill">Payroll months</a>
-          {% if request.user.is_superuser %}
-            <a href="{% url 'bd_staff_add' %}" class="pill pill-green">Add BD staff</a>
-          {% endif %}
+    <section class="crm-kpi-strip is-compact accounting-kpi-strip" aria-label="Accounting KPI summary">
+      <article class="crm-kpi-card crm-kpi-horizontal">
+        <div>
+          <div class="crm-kpi-label">Revenue</div>
+          <div class="crm-kpi-value">{{ revenue_cad|default_if_none:0|floatformat:2|intcomma }} CAD</div>
+          <div class="crm-kpi-note">Current filtered income.</div>
         </div>
-        <div class="acct-subtitle" style="margin-top:8px;">Use these buttons to switch pages fast.</div>
-      </div>
-    </div>
-
-    {% if warnings %}
-      <div class="warnBox">
-        <p class="warnTitle">Warnings</p>
-        <ul class="warnList">
-          {% for w in warnings %}
-            <li>{{ w }}</li>
-          {% endfor %}
-        </ul>
-      </div>
-    {% endif %}
-
-    <div class="row g-3 mb-3">
-      <div class="col-md-3">
-        <div class="acct-card">
-          <div class="card-body p-3">
-            <div class="acct-label">Canada net CAD</div>
-            <div class="acct-value" style="{% if total_ca_net_cad and total_ca_net_cad < 0 %}color:var(--bad);{% else %}color:var(--good);{% endif %}">
-              {{ total_ca_net_cad|default_if_none:0|floatformat:2|intcomma }}
-            </div>
-            <div class="acct-small">Canada money in minus money out.</div>
-          </div>
+        <span class="crm-kpi-indicator">R</span>
+      </article>
+      <article class="crm-kpi-card crm-kpi-horizontal">
+        <div>
+          <div class="crm-kpi-label">Expenses</div>
+          <div class="crm-kpi-value">{{ total_expense_cad|default_if_none:0|floatformat:2|intcomma }} CAD</div>
+          <div class="crm-kpi-note">Expenses and COGS.</div>
         </div>
-      </div>
-
-      <div class="col-md-3">
-        <div class="acct-card">
-          <div class="card-body p-3">
-            <div class="acct-label">Bangladesh net BDT</div>
-            <div class="acct-value" style="{% if total_bd_net_bdt and total_bd_net_bdt < 0 %}color:var(--bad);{% else %}color:var(--good);{% endif %}">
-              {{ total_bd_net_bdt|default_if_none:0|floatformat:2|intcomma }}
-            </div>
-            <div class="acct-small">Bangladesh money in minus money out.</div>
-          </div>
+        <span class="crm-kpi-indicator">E</span>
+      </article>
+      <article class="crm-kpi-card crm-kpi-horizontal">
+        <div>
+          <div class="crm-kpi-label">Profit</div>
+          <div class="crm-kpi-value">{{ gross_profit_cad|default_if_none:0|floatformat:2|intcomma }} CAD</div>
+          <div class="crm-kpi-note">{{ gross_margin_pct|default_if_none:0|floatformat:1 }}% gross margin.</div>
         </div>
-      </div>
-
-      <div class="col-md-3">
-        <div class="acct-card">
-          <div class="card-body p-3">
-            <div class="acct-label">Total income CAD</div>
-            <div class="acct-value">
-              {{ total_income_cad|default_if_none:0|floatformat:2|intcomma }}
-            </div>
-            <div class="acct-small">Income and transfers coming in.</div>
-          </div>
+        <span class="crm-kpi-indicator">P</span>
+      </article>
+      <article class="crm-kpi-card crm-kpi-horizontal">
+        <div>
+          <div class="crm-kpi-label">Receivables</div>
+          <div class="crm-kpi-value">Report</div>
+          <div class="crm-kpi-note"><a href="{% url 'accounts_receivable_dashboard' %}" class="linkGold">Open receivables</a></div>
         </div>
-      </div>
-
-      <div class="col-md-3">
-        <div class="acct-card">
-          <div class="card-body p-3">
-            <div class="acct-label">Total expense and COGS CAD</div>
-            <div class="acct-value" style="color:var(--bad);">
-              {{ total_expense_cad|default_if_none:0|floatformat:2|intcomma }}
-            </div>
-            <div class="acct-small">All expenses and cost of goods.</div>
-          </div>
+        <span class="crm-kpi-indicator">AR</span>
+      </article>
+      <article class="crm-kpi-card crm-kpi-horizontal">
+        <div>
+          <div class="crm-kpi-label">Payables</div>
+          <div class="crm-kpi-value">Report</div>
+          <div class="crm-kpi-note"><a href="{% url 'accounts_payable_dashboard' %}" class="linkGold">Open payables</a></div>
         </div>
-      </div>
+        <span class="crm-kpi-indicator">AP</span>
+      </article>
+      <article class="crm-kpi-card">
+        <div class="crm-kpi-label">Cash Position</div>
+        <div class="crm-kpi-value">{{ total_ca_net_cad|default_if_none:0|floatformat:2|intcomma }} CAD</div>
+        <div class="crm-kpi-note">{{ total_bd_net_bdt|default_if_none:0|floatformat:2|intcomma }} BDT</div>
+      </article>
+    </section>
 
-      <div class="col-md-3">
-        <div class="acct-card">
-          <div class="card-body p-3">
-            <div class="acct-label">Production gross margin</div>
-            <div class="acct-value" style="color:var(--good);">
-              {{ gross_margin_pct|default_if_none:0|floatformat:1 }} %
-            </div>
-            <div class="acct-small">
-              Profit: {{ gross_profit_cad|default_if_none:0|floatformat:2|intcomma }} CAD<br>
-              Revenue: {{ revenue_cad|default_if_none:0|floatformat:2|intcomma }} CAD<br>
-              COGS: {{ cogs_cad|default_if_none:0|floatformat:2|intcomma }} CAD
+    <section class="crm-tabbed accounting-tabs" data-accounting-tabs>
+      <nav class="crm-tabs is-compact is-sticky" aria-label="Accounting sections" role="tablist">
+        <button type="button" class="crm-tab is-active" id="accounting-tab-overview" data-accounting-tab-target="overview" role="tab" aria-selected="true" aria-controls="accounting-panel-overview">Overview</button>
+        <button type="button" class="crm-tab" id="accounting-tab-bangladesh" data-accounting-tab-target="bangladesh" role="tab" aria-selected="false" aria-controls="accounting-panel-bangladesh">Bangladesh</button>
+        <button type="button" class="crm-tab" id="accounting-tab-canada" data-accounting-tab-target="canada" role="tab" aria-selected="false" aria-controls="accounting-panel-canada">Canada</button>
+        <button type="button" class="crm-tab" id="accounting-tab-payroll" data-accounting-tab-target="payroll" role="tab" aria-selected="false" aria-controls="accounting-panel-payroll">Payroll</button>
+        <button type="button" class="crm-tab" id="accounting-tab-profit" data-accounting-tab-target="profit" role="tab" aria-selected="false" aria-controls="accounting-panel-profit">Profit Reports</button>
+        <button type="button" class="crm-tab" id="accounting-tab-ledgers" data-accounting-tab-target="ledgers" role="tab" aria-selected="false" aria-controls="accounting-panel-ledgers">Ledgers <span class="crm-tab-count">{{ entries|length }}</span></button>
+        <button type="button" class="crm-tab" id="accounting-tab-history" data-accounting-tab-target="history" role="tab" aria-selected="false" aria-controls="accounting-panel-history">History</button>
+      </nav>
+
+      <section class="crm-tab-panel accounting-tab-panel" id="accounting-panel-overview" data-accounting-tab-panel="overview" role="tabpanel" aria-labelledby="accounting-tab-overview">
+        <div class="accounting-link-grid">
+          <div class="acct-card accounting-link-card">
+            <div class="card-body p-3">
+              <div class="section-title">Accounting navigation</div>
+              <div class="acct-subtitle">Primary accounting workspaces and current ledger view.</div>
+              <div class="pillbar">
+                <a href="{% url 'accounting_entry_list' %}" class="pill pill-gold">All entries</a>
+                <a href="{% url 'accounting_ca_master' %}" class="pill">Money transfer</a>
+                <a href="{% url 'accounting_bd_dashboard' %}" class="pill">Bangladesh dashboard</a>
+                <a href="{% url 'accounting_bd_grid' %}" class="pill">Bangladesh grid</a>
+                <a href="{% url 'accounting_bd_daily' %}" class="pill">Bangladesh daily</a>
+                <a href="{% url 'bd_staff_list' %}" class="pill">Bangladesh staff</a>
+                <a href="{% url 'bd_staff_month_list' %}" class="pill">Payroll months</a>
+                {% if request.user.is_superuser %}
+                  <a href="{% url 'bd_staff_add' %}" class="pill pill-green">Add BD staff</a>
+                {% endif %}
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    </div>
 
-    <div class="acct-card mb-3">
+        {% if warnings %}
+          <div class="warnBox">
+            <p class="warnTitle">Warnings</p>
+            <ul class="warnList">
+              {% for w in warnings %}
+                <li>{{ w }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+
+        <details class="acct-card accounting-secondary">
+          <summary>Detailed financial totals</summary>
+          <div class="accounting-secondary-body">
+            <div class="row g-3">
+              <div class="col-md-3">
+                <div class="acct-card accounting-metric-card">
+                  <div class="card-body p-3">
+                    <div class="acct-label">Canada net CAD</div>
+                    <div class="acct-value" style="{% if total_ca_net_cad and total_ca_net_cad < 0 %}color:var(--bad);{% else %}color:var(--good);{% endif %}">
+                      {{ total_ca_net_cad|default_if_none:0|floatformat:2|intcomma }}
+                    </div>
+                    <div class="acct-small">Canada money in minus money out.</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-md-3">
+                <div class="acct-card accounting-metric-card">
+                  <div class="card-body p-3">
+                    <div class="acct-label">Bangladesh net BDT</div>
+                    <div class="acct-value" style="{% if total_bd_net_bdt and total_bd_net_bdt < 0 %}color:var(--bad);{% else %}color:var(--good);{% endif %}">
+                      {{ total_bd_net_bdt|default_if_none:0|floatformat:2|intcomma }}
+                    </div>
+                    <div class="acct-small">Bangladesh money in minus money out.</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-md-3">
+                <div class="acct-card accounting-metric-card">
+                  <div class="card-body p-3">
+                    <div class="acct-label">Total income CAD</div>
+                    <div class="acct-value">
+                      {{ total_income_cad|default_if_none:0|floatformat:2|intcomma }}
+                    </div>
+                    <div class="acct-small">Income and transfers coming in.</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-md-3">
+                <div class="acct-card accounting-metric-card">
+                  <div class="card-body p-3">
+                    <div class="acct-label">Total expense and COGS CAD</div>
+                    <div class="acct-value" style="color:var(--bad);">
+                      {{ total_expense_cad|default_if_none:0|floatformat:2|intcomma }}
+                    </div>
+                    <div class="acct-small">All expenses and cost of goods.</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-md-3">
+                <div class="acct-card accounting-metric-card">
+                  <div class="card-body p-3">
+                    <div class="acct-label">Production gross margin</div>
+                    <div class="acct-value" style="color:var(--good);">
+                      {{ gross_margin_pct|default_if_none:0|floatformat:1 }} %
+                    </div>
+                    <div class="acct-small">
+                      Profit: {{ gross_profit_cad|default_if_none:0|floatformat:2|intcomma }} CAD<br>
+                      Revenue: {{ revenue_cad|default_if_none:0|floatformat:2|intcomma }} CAD<br>
+                      COGS: {{ cogs_cad|default_if_none:0|floatformat:2|intcomma }} CAD
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <section class="crm-tab-panel accounting-tab-panel" id="accounting-panel-bangladesh" data-accounting-tab-panel="bangladesh" role="tabpanel" aria-labelledby="accounting-tab-bangladesh" hidden>
+        <div class="accounting-link-grid">
+          <div class="acct-card accounting-link-card">
+            <div class="card-body p-3">
+              <div class="section-title">Bangladesh accounting</div>
+              <div class="acct-subtitle">Bangladesh ledgers, daily views, and staff records.</div>
+              <div class="pillbar">
+                <a href="{% url 'accounting_bd_dashboard' %}" class="pill pill-gold">Bangladesh dashboard</a>
+                <a href="{% url 'accounting_bd_grid' %}" class="pill">Bangladesh grid</a>
+                <a href="{% url 'accounting_bd_daily' %}" class="pill">Bangladesh daily</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="crm-tab-panel accounting-tab-panel" id="accounting-panel-canada" data-accounting-tab-panel="canada" role="tabpanel" aria-labelledby="accounting-tab-canada" hidden>
+        <div class="accounting-link-grid">
+          <div class="acct-card accounting-link-card">
+            <div class="card-body p-3">
+              <div class="section-title">Canada accounting</div>
+              <div class="acct-subtitle">Canada ledger entries, transfers, and receivables.</div>
+              <div class="pillbar">
+                <a href="{% url 'accounting_ca_master' %}" class="pill pill-gold">Money transfer</a>
+                {% if request.user.is_superuser %}
+                  <a href="{% url 'accounting_entry_add_ca' %}" class="pill">Add Canada entry</a>
+                {% else %}
+                  {% if request.user|in_group:"CA" or request.user|in_group:"Canada" %}
+                    <a href="{% url 'accounting_entry_add_ca' %}" class="pill">Add entry</a>
+                  {% endif %}
+                {% endif %}
+                <a href="{% url 'accounts_receivable_dashboard' %}" class="pill">Receivables</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="crm-tab-panel accounting-tab-panel" id="accounting-panel-payroll" data-accounting-tab-panel="payroll" role="tabpanel" aria-labelledby="accounting-tab-payroll" hidden>
+        <div class="accounting-link-grid">
+          <div class="acct-card accounting-link-card">
+            <div class="card-body p-3">
+              <div class="section-title">Payroll</div>
+              <div class="acct-subtitle">Bangladesh staff and payroll month records.</div>
+              <div class="pillbar">
+                <a href="{% url 'bd_staff_list' %}" class="pill pill-gold">Bangladesh staff</a>
+                <a href="{% url 'bd_staff_month_list' %}" class="pill">Payroll months</a>
+                {% if request.user.is_superuser %}
+                  <a href="{% url 'bd_staff_add' %}" class="pill pill-green">Add BD staff</a>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="crm-tab-panel accounting-tab-panel" id="accounting-panel-profit" data-accounting-tab-panel="profit" role="tabpanel" aria-labelledby="accounting-tab-profit" hidden>
+        <div class="accounting-link-grid accounting-link-grid-wide">
+          <div class="acct-card accounting-link-card">
+            <div class="card-body p-3">
+              <div class="section-title">Profit and financial reports</div>
+              <div class="acct-subtitle">Existing accounting reports and financial dashboards.</div>
+              <div class="pillbar">
+                <a href="{% url 'production_profit_report' %}" class="pill pill-gold">Production profit</a>
+                <a href="{% url 'profit_loss_dashboard' %}" class="pill">Profit &amp; loss</a>
+                <a href="{% url 'executive_financial_dashboard' %}" class="pill">Executive dashboard</a>
+                <a href="{% url 'balance_sheet_dashboard' %}" class="pill">Balance sheet</a>
+                <a href="{% url 'cash_flow_dashboard' %}" class="pill">Cash flow</a>
+                <a href="{% url 'budget_vs_actual_dashboard' %}" class="pill">Budget vs actual</a>
+                <a href="{% url 'kpi_scorecard_dashboard' %}" class="pill">KPI scorecard</a>
+                <a href="{% url 'financial_forecast_dashboard' %}" class="pill">Forecast</a>
+                <a href="{% url 'accounts_payable_dashboard' %}" class="pill">Payables</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="crm-tab-panel accounting-tab-panel" id="accounting-panel-ledgers" data-accounting-tab-panel="ledgers" role="tabpanel" aria-labelledby="accounting-tab-ledgers" hidden>
+
+    <div class="acct-card mb-3 accounting-filter-card crm-filter-bar">
       <div class="card-body p-3">
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2" style="margin-bottom:10px;">
           {% with qs=request.GET.urlencode %}
@@ -317,7 +290,7 @@
           {% endwith %}
         </div>
 
-        <form method="get" class="row g-2 align-items-end" style="font-size:13px; font-weight:800;">
+        <form method="get" class="row g-2 align-items-end accounting-filter-form" style="font-size:13px; font-weight:800;">
           <div class="col-sm-2">
             <label class="form-label mb-1" style="color:#ffffff; font-weight:900;">Year</label>
             <input type="text" name="year" value="{{ filter_year }}" class="form-control form-control-sm acct-input" placeholder="2025">
@@ -380,7 +353,7 @@
       </div>
     </div>
 
-    <div class="acct-card" id="entriesTableBox">
+    <div class="acct-card accounting-ledger-card" id="entriesTableBox">
       <div class="card-header py-2" style="border-bottom:1px solid #1f2937;">
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
           <span class="section-title">Accounting entries</span>
@@ -388,8 +361,8 @@
         </div>
       </div>
 
-      <div class="table-responsive">
-        <table class="table table-dark table-sm mb-0 acct-table" style="font-size:12px;">
+      <div class="table-responsive accounting-table-wrap">
+        <table class="table table-dark table-sm mb-0 acct-table crm-table is-compact is-dense crm-table-mobile-cards" style="font-size:12px;">
           <thead>
             <tr>
               <th class="nowrap">Date</th>
@@ -418,9 +391,9 @@
             {% for e in entries %}
               {% with file_count=e.attachments.count %}
               <tr>
-                <td class="nowrap">{{ e.date|date:"Y-m-d" }}</td>
+                <td class="nowrap" data-label="Date">{{ e.date|date:"Y-m-d" }}</td>
 
-                <td class="nowrap">
+                <td class="nowrap" data-label="Side">
                   {% if e.side == "CA" %}
                     <span class="badge rounded-pill text-bg-primary">CA</span>
                   {% elif e.side == "BD" %}
@@ -430,7 +403,7 @@
                   {% endif %}
                 </td>
 
-                <td class="nowrap">
+                <td class="nowrap" data-label="Flow">
                   {% if e.direction == "IN" %}
                     <span class="badge rounded-pill text-bg-success">In</span>
                   {% else %}
@@ -438,7 +411,7 @@
                   {% endif %}
                 </td>
 
-                <td class="nowrap">
+                <td class="nowrap" data-label="Main type">
                   {% if e.main_type == "INCOME" %}
                     <span class="badge rounded-pill text-bg-success">Income</span>
                   {% elif e.main_type == "COGS" %}
@@ -454,16 +427,16 @@
                   {% endif %}
                 </td>
 
-                <td class="nowrap">{{ e.sub_type|default:"" }}</td>
-                <td class="descWrap">{{ e.description|default:"" }}</td>
+                <td class="nowrap" data-label="Sub type">{{ e.sub_type|default:"" }}</td>
+                <td class="descWrap" data-label="Description">{{ e.description|default:"" }}</td>
 
-                <td class="nowrap">{{ e.currency|default:"" }}</td>
+                <td class="nowrap" data-label="Currency">{{ e.currency|default:"" }}</td>
 
-                <td class="text-end nowrap">{{ e.amount_original|default_if_none:0|floatformat:2|intcomma }}</td>
-                <td class="text-end nowrap">{{ e.amount_cad|default_if_none:0|floatformat:2|intcomma }}</td>
-                <td class="text-end nowrap">{{ e.amount_bdt|default_if_none:0|floatformat:2|intcomma }}</td>
+                <td class="text-end nowrap" data-label="Original">{{ e.amount_original|default_if_none:0|floatformat:2|intcomma }}</td>
+                <td class="text-end nowrap" data-label="CAD">{{ e.amount_cad|default_if_none:0|floatformat:2|intcomma }}</td>
+                <td class="text-end nowrap" data-label="BDT">{{ e.amount_bdt|default_if_none:0|floatformat:2|intcomma }}</td>
 
-                <td class="nowrap">
+                <td class="nowrap" data-label="Order">
                   {% if e.production_order %}
                     {{ e.production_order.order_code }}
                   {% else %}
@@ -471,7 +444,7 @@
                   {% endif %}
                 </td>
 
-                <td class="nowrap">
+                <td class="nowrap" data-label="Files">
                   {% if file_count > 0 %}
                     <button
                       type="button"
@@ -501,7 +474,7 @@
                 </td>
 
                 {% if request.user|in_group:"CA" or request.user|in_group:"Canada" or request.user.is_superuser %}
-                  <td class="nowrap">
+                  <td class="nowrap" data-label="Edit">
                     <a href="{% url 'accounting_entry_edit' e.pk %}" class="btn btn-outline-light btn-sm rounded-pill" style="font-weight:900;">
                       Edit
                     </a>
@@ -509,7 +482,7 @@
                 {% endif %}
 
                 {% if request.user.is_superuser %}
-                  <td class="nowrap">
+                  <td class="nowrap" data-label="Delete">
                     <form method="post" action="{% url 'accounting_entry_delete' e.pk %}" style="display:inline;">
                       {% csrf_token %}
                       <button type="submit" class="btn btn-outline-danger btn-sm rounded-pill" style="font-weight:900;"
@@ -527,6 +500,7 @@
               <td
                 colspan="{% if request.user.is_superuser %}14{% elif request.user|in_group:'CA' or request.user|in_group:'Canada' %}13{% else %}12{% endif %}"
                 class="text-center py-3"
+                data-label="Entries"
                 style="color:var(--muted); font-weight:800;"
               >
                 No accounting entries yet.
@@ -557,11 +531,96 @@
       For year end, pick a year and side at the top. Export the list to review.
     </div>
 
+      </section>
+
+      <section class="crm-tab-panel accounting-tab-panel" id="accounting-panel-history" data-accounting-tab-panel="history" role="tabpanel" aria-labelledby="accounting-tab-history" hidden>
+        <div class="accounting-link-grid">
+          <div class="acct-card accounting-link-card">
+            <div class="card-body p-3">
+              <div class="section-title">History and controls</div>
+              <div class="acct-subtitle">Audit, AI review, and accounting files remain available from the same URLs.</div>
+              {% with qs=request.GET.urlencode %}
+                <div class="pillbar">
+                  <a href="{% url 'accounting_audit_trail' %}{% if qs %}?{{ qs }}{% endif %}" class="pill pill-gold">Audit trail</a>
+                  <a href="{% url 'accounting_ai_audit' %}" class="pill">AI Audit</a>
+                  <a href="{% url 'accounting_files' %}" class="pill">Files</a>
+                  <a href="{% url 'accounting_doc_list' %}" class="pill">Documents</a>
+                </div>
+              {% endwith %}
+            </div>
+          </div>
+        </div>
+      </section>
+    </section>
+
   </div>
 </div>
 
 <script>
   (function(){
+    var tabRoot = document.querySelector("[data-accounting-tabs]");
+    if(tabRoot){
+      var tabButtons = tabRoot.querySelectorAll("[data-accounting-tab-target]");
+      var tabPanels = tabRoot.querySelectorAll("[data-accounting-tab-panel]");
+      var storageKey = "accounting-active-tab";
+
+      function setAccountingTab(name, shouldFocus){
+        if(!name) return;
+
+        var found = false;
+        for(var i=0;i<tabButtons.length;i++){
+          var btn = tabButtons[i];
+          var isActive = btn.getAttribute("data-accounting-tab-target") === name;
+          btn.classList.toggle("is-active", isActive);
+          btn.setAttribute("aria-selected", isActive ? "true" : "false");
+          if(isActive){
+            found = true;
+            if(shouldFocus) btn.focus();
+          }
+        }
+
+        if(!found) return;
+
+        for(var j=0;j<tabPanels.length;j++){
+          var panel = tabPanels[j];
+          var show = panel.getAttribute("data-accounting-tab-panel") === name;
+          if(show) panel.removeAttribute("hidden");
+          else panel.setAttribute("hidden", "hidden");
+        }
+
+        try { window.sessionStorage.setItem(storageKey, name); } catch(e) {}
+      }
+
+      var initialTab = "";
+      if(window.location.hash && window.location.hash.indexOf("accounting-panel-") === 1){
+        initialTab = window.location.hash.replace("#accounting-panel-", "");
+      }
+      if(!initialTab){
+        try { initialTab = window.sessionStorage.getItem(storageKey) || ""; } catch(e) {}
+      }
+      setAccountingTab(initialTab || "overview", false);
+
+      tabRoot.addEventListener("click", function(e){
+        var tab = e.target.closest("[data-accounting-tab-target]");
+        if(!tab) return;
+        var next = tab.getAttribute("data-accounting-tab-target");
+        setAccountingTab(next, false);
+      });
+
+      tabRoot.addEventListener("keydown", function(e){
+        if(e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+        var current = document.activeElement;
+        if(!current || !current.matches("[data-accounting-tab-target]")) return;
+        var tabs = Array.prototype.slice.call(tabButtons);
+        var index = tabs.indexOf(current);
+        if(index < 0) return;
+        var direction = e.key === "ArrowRight" ? 1 : -1;
+        var nextIndex = (index + direction + tabs.length) % tabs.length;
+        e.preventDefault();
+        setAccountingTab(tabs[nextIndex].getAttribute("data-accounting-tab-target"), true);
+      });
+    }
+
     function toggleOne(id){
       var el = document.getElementById(id);
       if(!el) return false;

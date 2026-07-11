@@ -1,7 +1,10 @@
 {% extends "crm/base.html" %}
+{% load static %}
 {% load humanize crm_extras %}
 
 {% block content %}
+<link rel="stylesheet" href="{% static 'crm/ui_system.css' %}?v=approval-queue-modernization">
+
 <style>
   :root{
     --cq-bg:#020617;
@@ -99,10 +102,128 @@
   }
   .cq-empty{ padding:28px; color:var(--cq-muted); text-align:center; font-weight:850; }
   .cq-row-actions{ display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap; }
+  .cq-modern .cq-head{ padding:16px; margin-bottom:12px; }
+  .cq-modern .cq-title{ font-size:24px; }
+  .cq-modern .cq-sub{ font-size:12px; max-width:920px; }
+  .cq-modern .cq-summary{ margin-bottom:12px; }
+  .cq-modern .crm-kpi-card{ min-height:58px; padding:10px 12px; }
+  .cq-modern .crm-kpi-value{ font-size:16px; }
+  .cq-modern .crm-kpi-note{ font-size:10px; }
+  .cq-modern .cq-tabs{ margin-bottom:12px; }
+  .cq-modern .cq-tabs .crm-tab{ text-decoration:none; }
+  .cq-modern .cq-tabs .crm-tab[aria-disabled="true"]{ opacity:.55; cursor:not-allowed; }
+  .cq-modern .cq-filters{
+    position:sticky;
+    top:92px;
+    z-index:8;
+    grid-template-columns:minmax(220px, 1.6fr) repeat(4, minmax(120px, 1fr)) auto auto;
+    padding:12px;
+    margin-bottom:12px;
+    box-shadow:0 12px 28px rgba(0,0,0,.24);
+  }
+  .cq-modern .cq-field input,
+  .cq-modern .cq-field select{ min-height:34px; font-size:12px; }
+  .cq-modern .cq-table-wrap{ max-height:66vh; overflow:auto; }
+  .cq-modern .cq-table{ min-width:1120px; }
+  .cq-modern .cq-table th{
+    position:sticky;
+    top:0;
+    z-index:3;
+    background:#07111f;
+  }
+  .cq-modern .cq-table th:last-child,
+  .cq-modern .cq-table td:last-child{
+    position:sticky;
+    right:0;
+    z-index:4;
+    background:#07111f;
+    box-shadow:-12px 0 18px rgba(2,6,23,.28);
+  }
+  .cq-modern .cq-table th:last-child{ z-index:5; }
+  .cq-modern .cq-table th,
+  .cq-modern .cq-table td{ padding:9px 10px; }
+  .cq-modern .cq-table td{ font-size:12px; vertical-align:middle; }
+  .cq-modern .cq-detail-toggle{
+    margin-top:6px;
+    color:#dbeafe;
+    font-size:11px;
+    font-weight:900;
+  }
+  .cq-modern .cq-detail-toggle summary{ cursor:pointer; }
+  .cq-modern .cq-detail-grid{
+    display:grid;
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+    gap:4px 10px;
+    margin-top:6px;
+  }
+  .cq-modern .cq-detail-grid span{ color:var(--cq-muted); }
+  .cq-modern .cq-action-menu{ position:relative; }
+  .cq-modern .cq-action-menu summary{ list-style:none; }
+  .cq-modern .cq-action-menu summary::-webkit-details-marker{ display:none; }
+  .cq-modern .cq-action-menu-panel{
+    position:absolute;
+    right:0;
+    top:calc(100% + 6px);
+    z-index:20;
+    min-width:150px;
+    padding:8px;
+    border:1px solid rgba(148,163,184,.32);
+    border-radius:8px;
+    background:#07111f;
+    box-shadow:0 16px 32px rgba(0,0,0,.45);
+  }
+  .cq-modern .cq-action-menu-panel .cq-btn{ width:100%; }
   @media (max-width: 980px){
     .cq-filters{ grid-template-columns:1fr 1fr; }
+    .cq-modern .cq-filters{ grid-template-columns:1fr 1fr; }
     .cq-filter-action{ align-items:stretch; }
     .cq-filter-action .cq-btn{ width:100%; }
+  }
+  @media (max-width: 720px){
+    .cq-modern .cq-head{ padding:14px; }
+    .cq-modern .cq-title{ font-size:20px; }
+    .cq-modern .cq-actions{
+      position:sticky;
+      bottom:10px;
+      z-index:30;
+      width:100%;
+      padding:8px;
+      border:1px solid var(--cq-line);
+      border-radius:8px;
+      background:rgba(2,6,23,.94);
+      box-shadow:0 12px 28px rgba(0,0,0,.35);
+    }
+    .cq-modern .cq-actions .cq-btn{ flex:1 1 auto; }
+    .cq-modern .cq-tabs{ overflow-x:auto; flex-wrap:nowrap; scrollbar-width:thin; }
+    .cq-modern .cq-summary{
+      display:flex;
+      overflow-x:auto;
+      gap:8px;
+      padding-bottom:2px;
+      scrollbar-width:thin;
+    }
+    .cq-modern .cq-summary .crm-kpi-card{
+      flex:0 0 164px;
+      min-height:54px;
+      padding:8px 10px;
+    }
+    .cq-modern .cq-summary .crm-kpi-note{ display:none; }
+    .cq-modern .cq-filters{
+      position:relative;
+      top:auto;
+      grid-template-columns:1fr 1fr;
+      gap:8px;
+      padding:10px;
+    }
+    .cq-modern .cq-field:first-child{ grid-column:1 / -1; }
+    .cq-modern .cq-table-wrap{
+      overflow-x:auto;
+      border:1px solid var(--cq-line);
+      background:var(--cq-panel);
+    }
+    .cq-modern .cq-table td{ white-space:nowrap; }
+    .cq-modern .cq-row-actions{ justify-content:flex-end; flex-wrap:nowrap; }
+    .cq-modern .cq-action-menu-panel{ position:absolute; margin-top:0; }
   }
   @media print{
     .crm-topbar,
@@ -118,8 +239,8 @@
   }
 </style>
 
-<div class="cq-wrap">
-  <section class="cq-head">
+<div class="cq-wrap cq-modern">
+  <section class="cq-head crm-header">
     <div>
       <h1 class="cq-title">CEO Quotation Approval Queue</h1>
       <p class="cq-sub">
@@ -132,6 +253,49 @@
       <a class="cq-btn cq-btn--gold" href="{% url 'cost_sheet_list' %}">Quotation List</a>
     </div>
   </section>
+
+  <section class="crm-kpi-strip is-compact cq-summary" aria-label="Approval queue summary">
+    <article class="crm-kpi-card crm-kpi-horizontal">
+      <div>
+        <div class="crm-kpi-label">Visible Rows</div>
+        <div class="crm-kpi-value">{{ rows|length|intcomma }}</div>
+        <div class="crm-kpi-note">Current queue filter</div>
+      </div>
+      <span class="crm-kpi-indicator">Q</span>
+    </article>
+    <article class="crm-kpi-card crm-kpi-horizontal">
+      <div>
+        <div class="crm-kpi-label">Status</div>
+        <div class="crm-kpi-value">{{ status_filter|title }}</div>
+        <div class="crm-kpi-note">Existing status filter</div>
+      </div>
+      <span class="crm-kpi-indicator">S</span>
+    </article>
+    <article class="crm-kpi-card crm-kpi-horizontal">
+      <div>
+        <div class="crm-kpi-label">Currency</div>
+        <div class="crm-kpi-value">{{ currency|default:"All" }}</div>
+        <div class="crm-kpi-note">CAD, USD, and BDT stay separate</div>
+      </div>
+      <span class="crm-kpi-indicator">$</span>
+    </article>
+    <article class="crm-kpi-card crm-kpi-horizontal">
+      <div>
+        <div class="crm-kpi-label">Approval Access</div>
+        <div class="crm-kpi-value">{% if can_use_existing_approval %}Enabled{% else %}View Only{% endif %}</div>
+        <div class="crm-kpi-note">Permission rules unchanged</div>
+      </div>
+      <span class="crm-kpi-indicator">A</span>
+    </article>
+  </section>
+
+  <nav class="crm-tabs is-compact is-sticky cq-tabs" aria-label="Approval queue status filters">
+    <a class="crm-tab {% if status_filter == 'pending' %}is-active{% endif %}" href="{% url 'ceo_quotation_approval_queue' %}?status=pending{% if currency %}&currency={{ currency }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}{% if date_from %}&date_from={{ date_from|date:'Y-m-d' }}{% endif %}{% if date_to %}&date_to={{ date_to|date:'Y-m-d' }}{% endif %}">Pending</a>
+    <a class="crm-tab {% if status_filter == 'approved' %}is-active{% endif %}" href="{% url 'ceo_quotation_approval_queue' %}?status=approved{% if currency %}&currency={{ currency }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}{% if date_from %}&date_from={{ date_from|date:'Y-m-d' }}{% endif %}{% if date_to %}&date_to={{ date_to|date:'Y-m-d' }}{% endif %}">Approved</a>
+    <a class="crm-tab {% if status_filter == 'rejected' %}is-active{% endif %}" href="{% url 'ceo_quotation_approval_queue' %}?status=rejected{% if currency %}&currency={{ currency }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}{% if date_from %}&date_from={{ date_from|date:'Y-m-d' }}{% endif %}{% if date_to %}&date_to={{ date_to|date:'Y-m-d' }}{% endif %}">Rejected</a>
+    <button type="button" class="crm-tab" aria-disabled="true" title="No recalled quotation queue exists in this page's current backend filters.">Recalled</button>
+    <a class="crm-tab {% if status_filter == 'all' %}is-active{% endif %}" href="{% url 'ceo_quotation_approval_queue' %}?status=all{% if currency %}&currency={{ currency }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}{% if date_from %}&date_from={{ date_from|date:'Y-m-d' }}{% endif %}{% if date_to %}&date_to={{ date_to|date:'Y-m-d' }}{% endif %}">History</a>
+  </nav>
 
   <form class="cq-filters" method="get">
     <div class="cq-field">
@@ -193,24 +357,32 @@
       <tbody>
         {% for row in rows %}
           <tr>
-            <td>
+            <td data-label="Quotation">
               <strong>{{ row.costing.quotation_number }}</strong>
               <div class="cq-muted">COST-{{ row.costing.pk }}</div>
+              <details class="cq-detail-toggle">
+                <summary>Details</summary>
+                <div class="cq-detail-grid">
+                  <span>Client</span><strong>{{ row.client_name }}</strong>
+                  <span>Salesperson</span><strong>{{ row.salesperson }}</strong>
+                  <span>Total</span><strong>{{ row.total_amount|finance_money:row.currency }}</strong>
+                  <span>Profit</span><strong>{{ row.profit_amount|finance_money:row.currency }}</strong>
+                </div>
+              </details>
             </td>
-            <td>{{ row.lead_id|default:"-" }}</td>
-            <td>{{ row.opportunity_id|default:"-" }}</td>
-            <td>{{ row.client_name }}</td>
-            <td>{{ row.salesperson }}</td>
-            <td>{{ row.currency }}</td>
-            <td class="cq-right">{{ row.total_amount|finance_money:row.currency }}</td>
-            <td class="cq-right">{{ row.profit_amount|finance_money:row.currency }}</td>
-            <td class="cq-right">{{ row.profit_margin|floatformat:2 }}%</td>
-            <td>{{ row.purpose }}</td>
-            <td>{{ row.submitted_at|date:"Y-m-d H:i" }}</td>
-            <td><span class="cq-status">{{ row.status_label }}</span></td>
-            <td class="cq-right">
+            <td data-label="Lead">{{ row.lead_id|default:"-" }}</td>
+            <td data-label="Opportunity">{{ row.opportunity_id|default:"-" }}</td>
+            <td data-label="Client">{{ row.client_name }}</td>
+            <td data-label="Salesperson">{{ row.salesperson }}</td>
+            <td data-label="Currency">{{ row.currency }}</td>
+            <td data-label="Total" class="cq-right">{{ row.total_amount|finance_money:row.currency }}</td>
+            <td data-label="Profit" class="cq-right">{{ row.profit_amount|finance_money:row.currency }}</td>
+            <td data-label="Margin" class="cq-right">{{ row.profit_margin|floatformat:2 }}%</td>
+            <td data-label="Type">{{ row.purpose }}</td>
+            <td data-label="Submitted">{{ row.submitted_at|date:"Y-m-d H:i" }}</td>
+            <td data-label="Status"><span class="cq-status">{{ row.status_label }}</span></td>
+            <td data-label="Actions" class="cq-right">
               <div class="cq-row-actions">
-                <a class="cq-btn" href="{% url 'cost_sheet_client_quotation' row.costing.pk %}">View</a>
                 {% if can_use_existing_approval %}
                   <form method="post" action="{% url 'cost_sheet_quotation_approve' row.costing.pk %}">
                     {% csrf_token %}
@@ -223,6 +395,12 @@
                 {% else %}
                   <span class="cq-muted">Approval permission required</span>
                 {% endif %}
+                <details class="cq-action-menu">
+                  <summary class="cq-btn">More</summary>
+                  <div class="cq-action-menu-panel">
+                    <a class="cq-btn" href="{% url 'cost_sheet_client_quotation' row.costing.pk %}">View</a>
+                  </div>
+                </details>
               </div>
             </td>
           </tr>

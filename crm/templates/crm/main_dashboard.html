@@ -2,6 +2,7 @@
 {% load humanize %}
 {% load static %}
 {% load crm_groups %}
+{% load crm_extras %}
 
 {% block content %}
 {% url 'leads_list' as leads_url %}
@@ -28,8 +29,9 @@
 {% url 'logout' as logout_url %}
 
 <link rel="stylesheet" href="{% static 'crm/dashboard.css' %}?v=top-actions-layer-20260505">
+<link rel="stylesheet" href="{% static 'crm/ui_system.css' %}?v=dashboard-modernization-phase">
 
-<div class="dashboard-shell" data-dashboard-root data-density="comfortable">
+<div class="dashboard-shell crm-dashboard-shell" data-dashboard-root data-density="comfortable">
   <section class="dashboard-topbar">
     <div class="dashboard-brand">
       <div class="dashboard-brand-copy">
@@ -90,6 +92,29 @@
             <option value="compact">Dense</option>
           </select>
         </div>
+
+        <details class="dashboard-menu dashboard-menu--views" data-dashboard-menu>
+          <summary aria-label="Open saved dashboard views">
+            <span class="dashboard-action-icon">
+              <i data-lucide="layout-dashboard"></i>
+            </span>
+            <span class="dashboard-action-copy">
+              <span class="dashboard-action-label">Saved Views</span>
+              <span class="dashboard-action-sub">Dashboard tabs</span>
+            </span>
+            <i class="dashboard-action-chevron" data-lucide="chevron-down"></i>
+          </summary>
+          <div class="dashboard-menu-panel">
+            <p class="dashboard-menu-title">Saved Views</p>
+            <ul class="dashboard-menu-list">
+              <li><a class="dashboard-menu-link" href="#dashboard-overview" data-dashboard-tab-jump="overview">Overview</a></li>
+              <li><a class="dashboard-menu-link" href="#dashboard-sales" data-dashboard-tab-jump="sales">Sales</a></li>
+              <li><a class="dashboard-menu-link" href="#dashboard-production" data-dashboard-tab-jump="production">Production</a></li>
+              <li><a class="dashboard-menu-link" href="#dashboard-finance" data-dashboard-tab-jump="finance">Finance</a></li>
+              <li><a class="dashboard-menu-link" href="#dashboard-ai" data-dashboard-tab-jump="ai">AI</a></li>
+            </ul>
+          </div>
+        </details>
 
         <div class="dashboard-action-cluster" aria-label="Dashboard action center">
           <details class="dashboard-menu dashboard-menu--notifications" data-dashboard-menu>
@@ -344,6 +369,34 @@
     </div>
   </section>
 
+  <nav class="crm-tabs is-compact is-sticky dashboard-tab-nav" data-dashboard-tabs role="tablist" aria-label="Dashboard sections">
+    <button type="button" class="crm-tab is-active" id="dashboard-overview" data-dashboard-tab-target="overview" role="tab" aria-selected="true">Overview</button>
+    <button type="button" class="crm-tab" id="dashboard-sales" data-dashboard-tab-target="sales" role="tab" aria-selected="false">Sales</button>
+    <button type="button" class="crm-tab" id="dashboard-production" data-dashboard-tab-target="production" role="tab" aria-selected="false">Production</button>
+    <button type="button" class="crm-tab" id="dashboard-finance" data-dashboard-tab-target="finance" role="tab" aria-selected="false">Finance</button>
+    <button type="button" class="crm-tab" id="dashboard-ai" data-dashboard-tab-target="ai" role="tab" aria-selected="false">AI</button>
+  </nav>
+
+  <div class="dashboard-tab-panels crm-dashboard-grid" data-dashboard-tab-panels>
+    <section class="dashboard-tab-panel is-active" data-dashboard-tab-panel="overview" role="tabpanel" aria-labelledby="dashboard-overview">
+      <div data-dashboard-tab-slot="overview"></div>
+    </section>
+    <section class="dashboard-tab-panel" data-dashboard-tab-panel="sales" role="tabpanel" aria-labelledby="dashboard-sales" hidden>
+      <div data-dashboard-tab-slot="sales"></div>
+    </section>
+    <section class="dashboard-tab-panel" data-dashboard-tab-panel="production" role="tabpanel" aria-labelledby="dashboard-production" hidden>
+      <div data-dashboard-tab-slot="production"></div>
+    </section>
+    <section class="dashboard-tab-panel" data-dashboard-tab-panel="finance" role="tabpanel" aria-labelledby="dashboard-finance" hidden>
+      <div data-dashboard-tab-slot="finance"></div>
+    </section>
+    <section class="dashboard-tab-panel" data-dashboard-tab-panel="ai" role="tabpanel" aria-labelledby="dashboard-ai" hidden>
+      <div data-dashboard-tab-slot="ai"></div>
+    </section>
+  </div>
+
+  <div class="dashboard-section-source" data-dashboard-section-source>
+
   <div class="dashboard-grid dashboard-grid--kpis">
     {% for kpi in primary_kpis %}
       {% include "crm/dashboard/_metric_card.html" with title=kpi.title value=kpi.value note=kpi.note trend_text=kpi.trend_text trend_tone=kpi.trend_tone accent=kpi.accent icon=kpi.icon href=kpi.href %}
@@ -384,7 +437,11 @@
           <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Pending quotations</strong><span>{{ pending_quotations_count|intcomma }}</span></div></li>
           <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Unpaid invoices</strong><span>{{ unpaid_invoices_count|intcomma }}</span></div></li>
           <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Partial payments</strong><span>{{ partial_payments_count|intcomma }}</span></div></li>
-          <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Outstanding balance</strong><span>{{ outstanding_invoices_total|floatformat:2|intcomma }}</span></div></li>
+          {% for row in outstanding_invoice_values %}
+            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Outstanding · {{ row.currency }}</strong><span title="{{ row.amount|finance_money:row.currency }}">{{ row.amount|compact_money:row.currency }}</span></div></li>
+          {% empty %}
+            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Outstanding balance</strong><span>-</span></div></li>
+          {% endfor %}
         </ul>
       </article>
 
@@ -434,9 +491,15 @@
             </div>
           </div>
           <ul class="dashboard-list">
-            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Invoice value</strong><span>{{ lifecycle_summary.total_invoice_value|floatformat:2|intcomma }}</span></div></li>
-            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Estimated profit</strong><span>{{ lifecycle_summary.estimated_profit|floatformat:2|intcomma }}</span></div></li>
-            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Average margin</strong><span>{{ lifecycle_summary.average_margin|floatformat:2 }}%</span></div></li>
+            {% for row in lifecycle_summary.currency_rows %}
+              <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Invoice value · {{ row.currency }}</strong><span title="{{ row.invoice_value|finance_money:row.currency }}">{{ row.invoice_value|compact_money:row.currency }}</span></div></li>
+              <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Gross profit · {{ row.currency }}</strong><span title="{{ row.gross_profit|finance_money:row.currency }}">{{ row.gross_profit|compact_money:row.currency }}</span></div></li>
+              <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Total commission · {{ row.currency }}</strong><span title="{{ row.sales_commission|finance_money:row.currency }}">{{ row.sales_commission|compact_money:row.currency }}</span></div></li>
+              <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Net profit after commission · {{ row.currency }}</strong><span title="{{ row.net_profit|finance_money:row.currency }}">{{ row.net_profit|compact_money:row.currency }}</span></div></li>
+              <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Margin · {{ row.currency }}</strong><span>{{ row.margin|floatformat:2 }}%</span></div></li>
+            {% empty %}
+              <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Internal profit</strong><span>-</span></div></li>
+            {% endfor %}
           </ul>
         </article>
       {% endif %}
@@ -557,10 +620,16 @@
             </div>
           </div>
           <ul class="dashboard-list">
-            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Total invoice value</strong><span>{{ lifecycle_summary.total_invoice_value|floatformat:2|intcomma }}</span></div></li>
-            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Estimated profit</strong><span>{{ lifecycle_summary.estimated_profit|floatformat:2|intcomma }}</span></div></li>
-            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Average margin</strong><span>{{ lifecycle_summary.average_margin|floatformat:2 }}%</span></div></li>
-            <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Outstanding balance</strong><span>{{ lifecycle_summary.outstanding_balance|floatformat:2|intcomma }}</span></div></li>
+            {% for row in lifecycle_summary.currency_rows %}
+              <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Invoice value · {{ row.currency }}</strong><span title="{{ row.invoice_value|finance_money:row.currency }}">{{ row.invoice_value|compact_money:row.currency }}</span></div></li>
+              <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Gross profit · {{ row.currency }}</strong><span title="{{ row.gross_profit|finance_money:row.currency }}">{{ row.gross_profit|compact_money:row.currency }}</span></div></li>
+              <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Total commission earned · {{ row.currency }}</strong><span title="{{ row.sales_commission|finance_money:row.currency }}">{{ row.sales_commission|compact_money:row.currency }}</span></div></li>
+              <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Net profit after commission · {{ row.currency }}</strong><span title="{{ row.net_profit|finance_money:row.currency }}">{{ row.net_profit|compact_money:row.currency }}</span></div></li>
+              <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Margin · {{ row.currency }}</strong><span>{{ row.margin|floatformat:2 }}%</span></div></li>
+              <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Outstanding · {{ row.currency }}</strong><span title="{{ row.outstanding|finance_money:row.currency }}">{{ row.outstanding|compact_money:row.currency }}</span></div></li>
+            {% empty %}
+              <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Lifecycle financials</strong><span>-</span></div></li>
+            {% endfor %}
           </ul>
         </article>
       </div>
@@ -682,7 +751,11 @@
         </div>
         <div class="dashboard-inline-metrics">
           <div class="dashboard-inline-metric">
-            <strong>{{ outstanding_invoices_total|floatformat:2|intcomma }}</strong>
+            {% for row in outstanding_invoice_values %}
+              <strong title="{{ row.amount|finance_money:row.currency }}">{{ row.amount|compact_money:row.currency }}</strong>
+            {% empty %}
+              <strong>-</strong>
+            {% endfor %}
             <span>Outstanding balance</span>
           </div>
           <div class="dashboard-inline-metric">
@@ -865,7 +938,7 @@
             <li class="dashboard-list-item">
               <div class="dashboard-list-row">
                 <strong>{{ invoice.invoice_number }}</strong>
-                <span>{{ invoice.balance|floatformat:2|intcomma }} {{ invoice.currency }}</span>
+                <span title="{{ invoice.balance|finance_money:invoice.currency }}">{{ invoice.balance|compact_money:invoice.currency }}</span>
               </div>
               <div class="dashboard-item-meta">
                 <span class="dashboard-tag {% if invoice.due_date and invoice.due_date < today %}dashboard-tag--bad{% endif %}">
@@ -1016,7 +1089,7 @@
     </div>
   </section>
 
-  <section class="dashboard-section">
+  <section class="dashboard-section" id="dashboard-deep-metrics-section">
     <div class="dashboard-section-head">
       <div>
         <p class="dashboard-eyebrow">Deep Metrics</p>
@@ -1116,19 +1189,19 @@
                     <div class="dashboard-finance-label">MTD Money In</div>
                     <span class="dashboard-card-note">{{ acc_ca_entries_month }} entries</span>
                   </div>
-                  <div class="dashboard-finance-value dashboard-finance-value--good">$ {{ acc_ca_income_cad_month|floatformat:2|intcomma }}</div>
+                  <div class="dashboard-finance-value dashboard-finance-value--good" title="{{ acc_ca_income_cad_month|finance_money:'CAD' }}">{{ acc_ca_income_cad_month|compact_money:'CAD' }}</div>
                 </div>
                 <div class="dashboard-finance-row">
                   <div class="dashboard-finance-label">MTD Money Out</div>
-                  <div class="dashboard-finance-value dashboard-finance-value--bad">$ {{ acc_ca_out_cad_month|floatformat:2|intcomma }}</div>
+                  <div class="dashboard-finance-value dashboard-finance-value--bad" title="{{ acc_ca_out_cad_month|finance_money:'CAD' }}">{{ acc_ca_out_cad_month|compact_money:'CAD' }}</div>
                 </div>
                 <div class="dashboard-finance-row">
                   <div class="dashboard-finance-label">MTD Net</div>
-                  <div class="dashboard-finance-value {% if acc_ca_net_cad_month < 0 %}dashboard-finance-value--bad{% else %}dashboard-finance-value--good{% endif %}">$ {{ acc_ca_net_cad_month|floatformat:2|intcomma }}</div>
+                  <div class="dashboard-finance-value {% if acc_ca_net_cad_month < 0 %}dashboard-finance-value--bad{% else %}dashboard-finance-value--good{% endif %}" title="{{ acc_ca_net_cad_month|finance_money:'CAD' }}">{{ acc_ca_net_cad_month|compact_money:'CAD' }}</div>
                 </div>
                 <div class="dashboard-finance-row">
                   <div class="dashboard-finance-label">All-time Net</div>
-                  <div class="dashboard-finance-value {% if acc_ca_net_cad_all < 0 %}dashboard-finance-value--bad{% else %}dashboard-finance-value--good{% endif %}">$ {{ acc_ca_net_cad_all|floatformat:2|intcomma }}</div>
+                  <div class="dashboard-finance-value {% if acc_ca_net_cad_all < 0 %}dashboard-finance-value--bad{% else %}dashboard-finance-value--good{% endif %}" title="{{ acc_ca_net_cad_all|finance_money:'CAD' }}">{{ acc_ca_net_cad_all|compact_money:'CAD' }}</div>
                 </div>
               </div>
             </article>
@@ -1146,19 +1219,19 @@
                     <div class="dashboard-finance-label">MTD Money In</div>
                     <span class="dashboard-card-note">{{ acc_bd_entries_month }} entries</span>
                   </div>
-                  <div class="dashboard-finance-value dashboard-finance-value--good">BDT {{ acc_bd_income_bdt_month|floatformat:2|intcomma }}</div>
+                  <div class="dashboard-finance-value dashboard-finance-value--good" title="{{ acc_bd_income_bdt_month|finance_money:'BDT' }}">{{ acc_bd_income_bdt_month|compact_money:'BDT' }}</div>
                 </div>
                 <div class="dashboard-finance-row">
                   <div class="dashboard-finance-label">MTD Money Out</div>
-                  <div class="dashboard-finance-value dashboard-finance-value--bad">BDT {{ acc_bd_out_bdt_month|floatformat:2|intcomma }}</div>
+                  <div class="dashboard-finance-value dashboard-finance-value--bad" title="{{ acc_bd_out_bdt_month|finance_money:'BDT' }}">{{ acc_bd_out_bdt_month|compact_money:'BDT' }}</div>
                 </div>
                 <div class="dashboard-finance-row">
                   <div class="dashboard-finance-label">MTD Net</div>
-                  <div class="dashboard-finance-value {% if acc_bd_net_bdt_month < 0 %}dashboard-finance-value--bad{% else %}dashboard-finance-value--good{% endif %}">BDT {{ acc_bd_net_bdt_month|floatformat:2|intcomma }}</div>
+                  <div class="dashboard-finance-value {% if acc_bd_net_bdt_month < 0 %}dashboard-finance-value--bad{% else %}dashboard-finance-value--good{% endif %}" title="{{ acc_bd_net_bdt_month|finance_money:'BDT' }}">{{ acc_bd_net_bdt_month|compact_money:'BDT' }}</div>
                 </div>
                 <div class="dashboard-finance-row">
                   <div class="dashboard-finance-label">All-time Net</div>
-                  <div class="dashboard-finance-value {% if acc_bd_net_bdt_all < 0 %}dashboard-finance-value--bad{% else %}dashboard-finance-value--good{% endif %}">BDT {{ acc_bd_net_bdt_all|floatformat:2|intcomma }}</div>
+                  <div class="dashboard-finance-value {% if acc_bd_net_bdt_all < 0 %}dashboard-finance-value--bad{% else %}dashboard-finance-value--good{% endif %}" title="{{ acc_bd_net_bdt_all|finance_money:'BDT' }}">{{ acc_bd_net_bdt_all|compact_money:'BDT' }}</div>
                 </div>
               </div>
             </article>
@@ -1214,7 +1287,7 @@
                   <span>Orders processed</span>
                 </div>
                 <div class="dashboard-inline-metric">
-                  <strong>BDT {{ production_cost_bdt_period|floatformat:2|intcomma }}</strong>
+                  <strong title="{{ production_cost_bdt_period|finance_money:'BDT' }}">{{ production_cost_bdt_period|compact_money:'BDT' }}</strong>
                   <span>Production cost</span>
                 </div>
                 <div class="dashboard-inline-metric">
@@ -1234,6 +1307,7 @@
       </details>
     </div>
   </section>
+  </div>
 </div>
 
 {{ chart_data|json_script:"dash-data" }}

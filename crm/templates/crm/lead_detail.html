@@ -279,9 +279,10 @@
   }
 </style>
 
-<link rel="stylesheet" href="{% static 'crm/lead_detail.css' %}?v=client-notes-20260511">
+<link rel="stylesheet" href="{% static 'crm/ui_system.css' %}?v=lead-detail-modernization-20260710">
+<link rel="stylesheet" href="{% static 'crm/lead_detail.css' %}?v=lead-detail-modernization-20260710">
 
-<div class="page lead-detail-page">
+<div class="page lead-detail-page lead-detail-modern" data-crm-density="compact" data-lead-detail-root data-lead-id="{{ lead.pk }}">
   <div class="lead-detail-shell">
 
   <section class="top-bar lead-detail-hero">
@@ -290,6 +291,21 @@
       <h1>
         {{ lead.account_brand|default:"Lead" }}
       </h1>
+      <div class="lead-detail-header-meta" aria-label="Lead header summary">
+        <span class="crm-status-pill is-info">{{ lead.lead_status }}</span>
+        <span class="crm-status-pill is-warning">{{ lead.priority }}</span>
+        <span class="lead-detail-meta-chip">{{ lead.contact_name|default:"Contact not set" }}</span>
+        <span class="lead-detail-meta-chip">
+          Assigned:
+          {% if lead.assigned_to %}
+            {% if lead.assigned_to.get_full_name %}{{ lead.assigned_to.get_full_name }}{% else %}{{ lead.assigned_to.username }}{% endif %}
+          {% elif lead.owner %}
+            {{ lead.owner }}
+          {% else %}
+            Unassigned
+          {% endif %}
+        </span>
+      </div>
       <p class="lead-detail-subtitle">
         {% if lead.contact_name %}{{ lead.contact_name }}{% else %}Contact not set{% endif %}
         {% if lead.email %} · {{ lead.email }}{% endif %}
@@ -331,8 +347,8 @@
 
     <div class="top-links">
       <a class="action-btn primary" href="{% url 'lead_edit' lead.pk %}">Edit</a>
-      <a class="action-btn" href="#lead-notes">Add Note</a>
-      <a class="action-btn" href="#lead-convert">Create Opportunity</a>
+      <a class="action-btn" href="#lead-notes" data-lead-tab-jump="history">Add Note</a>
+      <a class="action-btn" href="#lead-convert" data-lead-tab-jump="opportunities">Create Opportunity</a>
       <a class="action-btn" href="{% url 'calendar_add' %}?lead={{ lead.pk }}">Add Follow Up</a>
       <a class="action-btn" href="{% url 'leads_list' %}">Back to Leads</a>
       {% if can_archive_records and not lead.is_archived %}
@@ -352,11 +368,116 @@
     </div>
   </section>
 
+  <section class="crm-kpi-strip is-compact lead-detail-kpi-strip" aria-label="Lead KPI summary">
+    <article class="crm-kpi-card crm-kpi-horizontal">
+      <div>
+        <div class="crm-kpi-label">Value</div>
+        <div class="crm-kpi-value">CAD {{ budget_cad }}</div>
+        {% if budget_bdt and budget_bdt > 0 %}<div class="crm-kpi-note">BDT {{ budget_bdt }}</div>{% endif %}
+      </div>
+      <span class="crm-kpi-indicator">$</span>
+    </article>
+    <article class="crm-kpi-card crm-kpi-horizontal">
+      <div>
+        <div class="crm-kpi-label">Activities</div>
+        <div class="crm-kpi-value">{{ activities|length }}</div>
+        <div class="crm-kpi-note">{{ tasks|length }} tasks</div>
+      </div>
+      <span class="crm-kpi-indicator">A</span>
+    </article>
+    <article class="crm-kpi-card crm-kpi-horizontal">
+      <div>
+        <div class="crm-kpi-label">Emails</div>
+        <div class="crm-kpi-value">{% if lead.email %}1{% else %}0{% endif %}</div>
+        <div class="crm-kpi-note">{% if lead.email %}Address on file{% else %}No address{% endif %}</div>
+      </div>
+      <span class="crm-kpi-indicator">@</span>
+    </article>
+    <article class="crm-kpi-card crm-kpi-horizontal">
+      <div>
+        <div class="crm-kpi-label">Files</div>
+        <div class="crm-kpi-value">{{ reference_images|length }}</div>
+        <div class="crm-kpi-note">{% if lead.attachment %}Client attachment present{% else %}Reference images{% endif %}</div>
+      </div>
+      <span class="crm-kpi-indicator">F</span>
+    </article>
+    <article class="crm-kpi-card crm-kpi-horizontal">
+      <div>
+        <div class="crm-kpi-label">Opportunities</div>
+        <div class="crm-kpi-value">{{ opportunities|length }}</div>
+        <div class="crm-kpi-note">Linked pipeline</div>
+      </div>
+      <span class="crm-kpi-indicator">O</span>
+    </article>
+  </section>
+
+  <div class="lead-detail-tab-shell" data-lead-tab-shell>
+    <nav class="crm-tabs is-compact is-sticky lead-detail-tabs" role="tablist" aria-label="Lead detail sections" data-lead-tabs>
+      <button type="button" class="crm-tab is-active" id="lead-tab-overview" role="tab" aria-selected="true" aria-controls="lead-tab-overview-panel" data-lead-tab-target="overview">Overview</button>
+      <button type="button" class="crm-tab" id="lead-tab-activity" role="tab" aria-selected="false" aria-controls="lead-tab-activity-panel" data-lead-tab-target="activity">Activity <span class="crm-tab-count">{{ activities|length }}</span></button>
+      <button type="button" class="crm-tab" id="lead-tab-email" role="tab" aria-selected="false" aria-controls="lead-tab-email-panel" data-lead-tab-target="email">Email</button>
+      <button type="button" class="crm-tab" id="lead-tab-whatsapp" role="tab" aria-selected="false" aria-controls="lead-tab-whatsapp-panel" data-lead-tab-target="whatsapp">WhatsApp</button>
+      <button type="button" class="crm-tab" id="lead-tab-files" role="tab" aria-selected="false" aria-controls="lead-tab-files-panel" data-lead-tab-target="files">Files <span class="crm-tab-count">{{ reference_images|length }}</span></button>
+      <button type="button" class="crm-tab" id="lead-tab-opportunities" role="tab" aria-selected="false" aria-controls="lead-tab-opportunities-panel" data-lead-tab-target="opportunities">Opportunities <span class="crm-tab-count">{{ opportunities|length }}</span></button>
+      <button type="button" class="crm-tab" id="lead-tab-ai" role="tab" aria-selected="false" aria-controls="lead-tab-ai-panel" data-lead-tab-target="ai">AI</button>
+      <button type="button" class="crm-tab" id="lead-tab-history" role="tab" aria-selected="false" aria-controls="lead-tab-history-panel" data-lead-tab-target="history">History <span class="crm-tab-count">{{ comments|length }}</span></button>
+    </nav>
+
+    <div class="lead-detail-tab-panels" data-lead-tab-panels>
+      <section class="crm-tab-panel lead-detail-tab-panel" id="lead-tab-overview-panel" role="tabpanel" aria-labelledby="lead-tab-overview" data-lead-tab-panel="overview">
+        <div class="lead-tab-slot" data-lead-tab-slot="overview"></div>
+      </section>
+      <section class="crm-tab-panel lead-detail-tab-panel" id="lead-tab-activity-panel" role="tabpanel" aria-labelledby="lead-tab-activity" data-lead-tab-panel="activity" hidden>
+        <div class="lead-tab-slot" data-lead-tab-slot="activity"></div>
+      </section>
+      <section class="crm-tab-panel lead-detail-tab-panel" id="lead-tab-email-panel" role="tabpanel" aria-labelledby="lead-tab-email" data-lead-tab-panel="email" hidden>
+        <div class="lead-tab-slot" data-lead-tab-slot="email"></div>
+      </section>
+      <section class="crm-tab-panel lead-detail-tab-panel" id="lead-tab-whatsapp-panel" role="tabpanel" aria-labelledby="lead-tab-whatsapp" data-lead-tab-panel="whatsapp" hidden>
+        <div class="lead-tab-slot" data-lead-tab-slot="whatsapp"></div>
+      </section>
+      <section class="crm-tab-panel lead-detail-tab-panel" id="lead-tab-files-panel" role="tabpanel" aria-labelledby="lead-tab-files" data-lead-tab-panel="files" hidden>
+        <div class="lead-tab-slot" data-lead-tab-slot="files"></div>
+      </section>
+      <section class="crm-tab-panel lead-detail-tab-panel" id="lead-tab-opportunities-panel" role="tabpanel" aria-labelledby="lead-tab-opportunities" data-lead-tab-panel="opportunities" hidden>
+        <div class="lead-tab-slot" data-lead-tab-slot="opportunities"></div>
+      </section>
+      <section class="crm-tab-panel lead-detail-tab-panel" id="lead-tab-ai-panel" role="tabpanel" aria-labelledby="lead-tab-ai" data-lead-tab-panel="ai" hidden>
+        <div class="lead-tab-slot" data-lead-tab-slot="ai"></div>
+      </section>
+      <section class="crm-tab-panel lead-detail-tab-panel" id="lead-tab-history-panel" role="tabpanel" aria-labelledby="lead-tab-history" data-lead-tab-panel="history" hidden>
+        <div class="lead-tab-slot" data-lead-tab-slot="history"></div>
+      </section>
+    </div>
+  </div>
+
+  <div class="lead-detail-section-source" data-lead-section-source>
+
   {% include "crm/partials/workflow_quick_nav.html" %}
   {% include "crm/partials/workflow_order_summary.html" %}
   {% include "crm/partials/workflow_activity_timeline.html" %}
 
   {% include "crm/partials/product_snapshot.html" %}
+
+  <section class="section lead-email-section" id="lead-email-panel" aria-label="Lead email">
+    <h2 class="section-title">Email</h2>
+    <p class="small">Primary email contact for this lead.</p>
+    <div class="lead-email-card">
+      <div>
+        <div class="summary-title">Email address</div>
+        <div class="summary-line">
+          {% if lead.email %}
+            <a href="mailto:{{ lead.email }}">{{ lead.email }}</a>
+          {% else %}
+            —
+          {% endif %}
+        </div>
+      </div>
+      {% if lead.email %}
+        <a class="action-btn" href="mailto:{{ lead.email }}">Open Email</a>
+      {% endif %}
+    </div>
+  </section>
 
   <section class="summary-grid" aria-label="Lead sales summary">
     <div class="summary-card">
@@ -986,7 +1107,7 @@
   </div>
 
   {% if potential_duplicates %}
-    <div class="section lead-admin-section">
+    <div class="section lead-admin-section lead-duplicates-section">
       <h2 class="section-title">Possible duplicates</h2>
       <p class="small">Review possible duplicates and merge if needed.</p>
 
@@ -1046,10 +1167,223 @@
   </div>
 
   </div>
+
+  </div>
   </div>
 
   <script>
   (function () {
+    function initLeadDetailTabs() {
+      const root = document.querySelector("[data-lead-detail-root]");
+      if (!root) return;
+
+      const shell = root.querySelector("[data-lead-tab-shell]");
+      const source = root.querySelector("[data-lead-section-source]");
+      const tabs = Array.prototype.slice.call(root.querySelectorAll("[data-lead-tab-target]"));
+      const panels = Array.prototype.slice.call(root.querySelectorAll("[data-lead-tab-panel]"));
+      const slots = {};
+      Array.prototype.slice.call(root.querySelectorAll("[data-lead-tab-slot]")).forEach(function (slot) {
+        slots[slot.getAttribute("data-lead-tab-slot")] = slot;
+      });
+
+      if (!shell || !source || !tabs.length || !panels.length) return;
+
+      function moveSections(tabName, selectors) {
+        const slot = slots[tabName];
+        if (!slot) return;
+        selectors.forEach(function (selector) {
+          const node = root.querySelector(selector);
+          if (node) {
+            slot.appendChild(node);
+          }
+        });
+      }
+
+      function addEmptyState(tabName, title, text) {
+        const slot = slots[tabName];
+        if (!slot || slot.children.length) return;
+        const empty = document.createElement("section");
+        const heading = document.createElement("h2");
+        const copy = document.createElement("p");
+        empty.className = "section lead-tab-empty-state";
+        heading.className = "section-title";
+        heading.textContent = title;
+        copy.className = "small";
+        copy.textContent = text;
+        empty.appendChild(heading);
+        empty.appendChild(copy);
+        slot.appendChild(empty);
+      }
+
+      moveSections("overview", [
+        ".workflow-quick-nav",
+        ".workflow-order-summary",
+        ".product-snapshot-panel",
+        ".summary-grid[aria-label='Lead sales summary']",
+        "#client-requirements-notes"
+      ]);
+      moveSections("activity", [
+        ".workflow-activity-timeline",
+        "#lead-activity",
+        "#lead-tasks"
+      ]);
+      moveSections("email", [
+        "#lead-email-panel"
+      ]);
+      moveSections("whatsapp", [
+        ".wa-row"
+      ]);
+      moveSections("files", [
+        ".product-reference-panel",
+        "section[aria-label='Update Product Reference Images']"
+      ]);
+      moveSections("opportunities", [
+        "#lead-convert"
+      ]);
+      moveSections("ai", [
+        "#iconic-ai-brain-panel",
+        "#iconic-ai-brain-draft-preview"
+      ]);
+      moveSections("history", [
+        "#lead-notes",
+        "#lead-admin-data",
+        ".lead-contact-discovery-section",
+        ".lead-duplicates-section"
+      ]);
+
+      addEmptyState("email", "Email", "No email address is available for this lead.");
+      addEmptyState("whatsapp", "WhatsApp", "No WhatsApp actions are available for this lead.");
+      addEmptyState("files", "Files", "No files or reference images have been added yet.");
+      addEmptyState("opportunities", "Opportunities", "No opportunity has been created for this lead yet.");
+
+      source.hidden = true;
+      root.classList.add("is-tabbed");
+
+      const leadId = root.getAttribute("data-lead-id") || "current";
+      const storageKey = "lead-detail-active-tab-" + leadId;
+      const hashTabMap = {
+        "client-requirements-notes": "overview",
+        "lead-activity": "activity",
+        "lead-tasks": "activity",
+        "lead-email-panel": "email",
+        "lead-convert": "opportunities",
+        "iconic-ai-brain-panel": "ai",
+        "iconic-ai-brain-draft-preview": "ai",
+        "lead-notes": "history",
+        "lead-admin-data": "history"
+      };
+
+      function safeStoreTab(tabName) {
+        try {
+          window.sessionStorage.setItem(storageKey, tabName);
+        } catch (error) {
+        }
+      }
+
+      function safeReadTab() {
+        try {
+          return window.sessionStorage.getItem(storageKey);
+        } catch (error) {
+          return "";
+        }
+      }
+
+      function tabForElement(element) {
+        const panel = element ? element.closest("[data-lead-tab-panel]") : null;
+        return panel ? panel.getAttribute("data-lead-tab-panel") : "";
+      }
+
+      function tabForHash(hash) {
+        const cleanHash = (hash || "").replace(/^#/, "");
+        if (!cleanHash) return "";
+        if (hashTabMap[cleanHash]) return hashTabMap[cleanHash];
+        const element = document.getElementById(cleanHash);
+        return tabForElement(element);
+      }
+
+      function activateTab(tabName, shouldStore) {
+        const requested = tabName || "overview";
+        const targetTab = tabs.some(function (tab) {
+          return tab.getAttribute("data-lead-tab-target") === requested;
+        }) ? requested : "overview";
+
+        tabs.forEach(function (tab) {
+          const isActive = tab.getAttribute("data-lead-tab-target") === targetTab;
+          tab.classList.toggle("is-active", isActive);
+          tab.setAttribute("aria-selected", isActive ? "true" : "false");
+          tab.setAttribute("tabindex", isActive ? "0" : "-1");
+        });
+
+        panels.forEach(function (panel) {
+          panel.hidden = panel.getAttribute("data-lead-tab-panel") !== targetTab;
+        });
+
+        if (shouldStore !== false) {
+          safeStoreTab(targetTab);
+        }
+      }
+
+      tabs.forEach(function (tab, index) {
+        tab.addEventListener("click", function () {
+          activateTab(tab.getAttribute("data-lead-tab-target"));
+        });
+        tab.addEventListener("keydown", function (event) {
+          const key = event.key;
+          if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(key)) return;
+          event.preventDefault();
+          let nextIndex = index;
+          if (key === "ArrowLeft") {
+            nextIndex = index === 0 ? tabs.length - 1 : index - 1;
+          } else if (key === "ArrowRight") {
+            nextIndex = index === tabs.length - 1 ? 0 : index + 1;
+          } else if (key === "Home") {
+            nextIndex = 0;
+          } else if (key === "End") {
+            nextIndex = tabs.length - 1;
+          }
+          const nextTab = tabs[nextIndex];
+          if (nextTab) {
+            nextTab.focus();
+            activateTab(nextTab.getAttribute("data-lead-tab-target"));
+          }
+        });
+      });
+
+      root.addEventListener("click", function (event) {
+        const jump = event.target.closest("[data-lead-tab-jump]");
+        if (!jump) return;
+        const tabName = jump.getAttribute("data-lead-tab-jump");
+        const href = jump.getAttribute("href") || "";
+        activateTab(tabName);
+        if (href.charAt(0) === "#") {
+          const target = document.getElementById(href.slice(1));
+          if (target) {
+            setTimeout(function () {
+              target.scrollIntoView({ block: "start", behavior: "smooth" });
+            }, 0);
+          }
+        }
+      });
+
+      root.addEventListener("submit", function (event) {
+        const submittedTab = tabForElement(event.target);
+        if (submittedTab) {
+          safeStoreTab(submittedTab);
+        }
+      }, true);
+
+      window.addEventListener("hashchange", function () {
+        const hashTab = tabForHash(window.location.hash);
+        if (hashTab) {
+          activateTab(hashTab);
+        }
+      });
+
+      activateTab(tabForHash(window.location.hash) || safeReadTab() || "overview", false);
+    }
+
+    initLeadDetailTabs();
+
     function getIconicAIDraftPreview() {
       return document.getElementById("iconic-ai-brain-draft-preview");
     }

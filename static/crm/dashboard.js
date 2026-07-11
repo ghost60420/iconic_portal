@@ -102,6 +102,104 @@
     });
   }
 
+  root.querySelectorAll(".dashboard-grid").forEach(function (grid) {
+    grid.classList.add("crm-dashboard-grid");
+  });
+
+  root.querySelectorAll(".dashboard-card, .dashboard-metric-card").forEach(function (widget) {
+    widget.classList.add("crm-widget");
+  });
+
+  root.querySelectorAll(".dashboard-metric-card--compact").forEach(function (widget) {
+    widget.classList.add("crm-widget-compact");
+  });
+
+  const dashboardTabs = Array.from(root.querySelectorAll("[data-dashboard-tab-target]"));
+  const dashboardPanels = Array.from(root.querySelectorAll("[data-dashboard-tab-panel]"));
+  const dashboardSlots = root.querySelector("[data-dashboard-tab-panels]");
+  const dashboardSource = root.querySelector("[data-dashboard-section-source]");
+
+  function moveDashboardSection(tabName, selector) {
+    const slot = root.querySelector('[data-dashboard-tab-slot="' + tabName + '"]');
+    if (!slot) return;
+    const node = root.querySelector(selector);
+    if (node) {
+      slot.appendChild(node);
+    }
+  }
+
+  if (dashboardSlots && dashboardSource) {
+    [
+      ["overview", ".dashboard-grid--kpis"],
+      ["overview", "#workflow-section"],
+      ["overview", "#notification-center"],
+      ["overview", "#order-lifecycle-section"],
+      ["sales", "#sales-section"],
+      ["sales", "#lead-intelligence-section"],
+      ["production", "#operations-section"],
+      ["finance", "#finance-section"],
+      ["ai", "#activity-section"],
+      ["ai", "#dashboard-deep-metrics-section"],
+    ].forEach(function (entry) {
+      moveDashboardSection(entry[0], entry[1]);
+    });
+    dashboardSource.hidden = true;
+  }
+
+  function dashboardTabFromHash() {
+    const hash = window.location.hash || "";
+    const map = {
+      "#dashboard-overview": "overview",
+      "#workflow-section": "overview",
+      "#notification-center": "overview",
+      "#order-lifecycle-section": "overview",
+      "#dashboard-sales": "sales",
+      "#sales-section": "sales",
+      "#lead-intelligence-section": "sales",
+      "#dashboard-production": "production",
+      "#operations-section": "production",
+      "#dashboard-finance": "finance",
+      "#finance-section": "finance",
+      "#dashboard-ai": "ai",
+      "#activity-section": "ai",
+      "#dashboard-deep-metrics-section": "ai",
+    };
+    return map[hash] || "";
+  }
+
+  function activateDashboardTab(tabName) {
+    if (!tabName) return;
+    let activePanel = null;
+    dashboardTabs.forEach(function (tab) {
+      const active = tab.getAttribute("data-dashboard-tab-target") === tabName;
+      tab.classList.toggle("is-active", active);
+      tab.setAttribute("aria-selected", active ? "true" : "false");
+    });
+    dashboardPanels.forEach(function (panel) {
+      const active = panel.getAttribute("data-dashboard-tab-panel") === tabName;
+      panel.hidden = !active;
+      panel.classList.toggle("is-active", active);
+      if (active) activePanel = panel;
+    });
+    if (activePanel) {
+      root.dispatchEvent(new CustomEvent("dashboard:tabchange", { detail: { panel: activePanel, tabName: tabName } }));
+    }
+  }
+
+  if (dashboardTabs.length && dashboardPanels.length) {
+    dashboardTabs.forEach(function (tab) {
+      tab.addEventListener("click", function () {
+        activateDashboardTab(tab.getAttribute("data-dashboard-tab-target"));
+      });
+    });
+    root.querySelectorAll("[data-dashboard-tab-jump]").forEach(function (link) {
+      link.addEventListener("click", function () {
+        activateDashboardTab(link.getAttribute("data-dashboard-tab-jump"));
+      });
+    });
+    activateDashboardTab(dashboardTabFromHash() || "overview");
+  }
+
   if (window.lucide && typeof window.lucide.createIcons === "function") {
     window.lucide.createIcons();
   }
@@ -657,6 +755,17 @@
       details.querySelectorAll("canvas[data-chart]").forEach(maybeRender);
     });
   });
+
+  root.addEventListener("dashboard:tabchange", function (event) {
+    const panel = event.detail && event.detail.panel;
+    if (!panel) return;
+    panel.querySelectorAll("canvas[data-chart]").forEach(maybeRender);
+  });
+
+  const activeDashboardPanel = root.querySelector("[data-dashboard-tab-panel]:not([hidden])");
+  if (activeDashboardPanel) {
+    activeDashboardPanel.querySelectorAll("canvas[data-chart]").forEach(maybeRender);
+  }
 
   if ("IntersectionObserver" in window) {
     const observer = new IntersectionObserver(

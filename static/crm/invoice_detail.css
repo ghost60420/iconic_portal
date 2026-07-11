@@ -1,0 +1,370 @@
+.invoice-detail-page {
+  --invoice-bg: #050b14;
+  --invoice-panel: rgba(10, 20, 36, 0.84);
+  --invoice-panel-strong: rgba(13, 25, 45, 0.96);
+  --invoice-line: rgba(148, 163, 184, 0.2);
+  --invoice-text: #f8fafc;
+  --invoice-soft: #d7e2f2;
+  --invoice-muted: #94a3b8;
+  --crm-bg: var(--invoice-bg);
+  --crm-surface: var(--invoice-panel);
+  --crm-surface-2: var(--invoice-panel-strong);
+  --crm-border: var(--invoice-line);
+  --crm-text: var(--invoice-text);
+  --crm-text-soft: var(--invoice-soft);
+  --crm-muted: var(--invoice-muted);
+  --crm-brand: #d8b46a;
+  --crm-brand-2: #f8e3aa;
+  --crm-radius: 8px;
+  --crm-radius-sm: 6px;
+  --card-padding: 14px;
+  --table-row-height: 46px;
+  --kpi-height: 68px;
+}
+
+.invoice-detail-page .wrap {
+  width: min(100% - 28px, 1560px);
+  max-width: none;
+  margin: 0 auto 48px;
+}
+
+.invoice-detail-header {
+  align-items: stretch;
+  margin-bottom: 12px;
+  padding: 16px;
+  border: 1px solid var(--invoice-line);
+  border-radius: 16px;
+  background:
+    linear-gradient(135deg, rgba(14, 27, 48, 0.96), rgba(7, 13, 24, 0.96)),
+    rgba(7, 13, 24, 0.96);
+  box-shadow: 0 18px 48px rgba(2, 8, 23, 0.36);
+}
+
+.invoice-detail-page .title {
+  font-size: clamp(24px, 2vw, 32px);
+  line-height: 1.08;
+  color: var(--invoice-text);
+}
+
+.invoice-header-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.invoice-meta-chip {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 9px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 999px;
+  background: rgba(2, 8, 23, 0.42);
+  color: var(--invoice-soft);
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1.2;
+}
+
+.invoice-detail-page .btnbar {
+  justify-content: flex-end;
+  align-content: flex-start;
+  max-width: 640px;
+  gap: 7px;
+}
+
+.invoice-detail-page .pill,
+.invoice-detail-page .pay-save {
+  min-height: 34px;
+  padding: 0 11px;
+  border-radius: 8px;
+  font-size: 11px;
+  box-shadow: none;
+}
+
+.invoice-detail-page .status,
+.invoice-detail-page .crm-status-pill {
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  box-shadow: none;
+}
+
+.invoice-kpi-strip {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin-bottom: 12px;
+}
+
+.invoice-kpi-strip .crm-kpi-card {
+  min-height: 64px;
+  border-color: var(--invoice-line);
+  background:
+    linear-gradient(180deg, rgba(13, 25, 45, 0.96), rgba(7, 13, 24, 0.96)),
+    var(--invoice-panel);
+}
+
+.invoice-kpi-strip .crm-kpi-value {
+  font-size: 18px;
+  line-height: 1.08;
+}
+
+.invoice-kpi-strip .crm-kpi-indicator {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+
+.invoice-tab-shell {
+  display: none;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.invoice-detail-page.is-tabbed .invoice-tab-shell {
+  display: grid;
+}
+
+.invoice-tabs {
+  top: 74px;
+  align-items: center;
+}
+
+.invoice-tabs .crm-tab {
+  border-radius: 7px;
+}
+
+.invoice-tab-panels,
+.invoice-tab-panel,
+.invoice-tab-slot {
+  min-width: 0;
+}
+
+.invoice-tab-slot {
+  display: grid;
+  gap: 12px;
+}
+
+.invoice-section-source[hidden] {
+  display: none !important;
+}
+
+.invoice-detail-page.is-tabbed .workflow-quick-nav,
+.invoice-detail-page.is-tabbed .workflow-order-summary,
+.invoice-detail-page.is-tabbed .workflow-activity-timeline {
+  margin: 0;
+  border-radius: 10px;
+}
+
+.invoice-detail-page.is-tabbed .pay-hero {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 0;
+}
+
+.invoice-detail-page.is-tabbed .pay-kpi,
+.invoice-detail-page.is-tabbed .internal-profit,
+.invoice-detail-page.is-tabbed .cardx {
+  border-radius: 12px;
+  box-shadow: 0 14px 34px rgba(2, 8, 23, 0.32);
+}
+
+.invoice-detail-page.is-tabbed .pay-kpi {
+  padding: 12px;
+}
+
+.invoice-detail-page.is-tabbed .pay-kpi strong {
+  margin-top: 6px;
+  font-size: 18px;
+}
+
+.invoice-detail-page.is-tabbed .pad,
+.invoice-detail-page.is-tabbed .internal-profit {
+  padding: 14px;
+}
+
+.invoice-detail-page.is-tabbed .grid {
+  grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
+  gap: 12px;
+}
+
+.invoice-detail-page.is-tabbed .kv {
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 8px 12px;
+}
+
+.invoice-detail-page.is-tabbed .pay-form-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.invoice-detail-page.is-tabbed .pay-field--wide {
+  grid-column: 1 / -1;
+}
+
+.invoice-detail-page.is-tabbed .pay-field input,
+.invoice-detail-page.is-tabbed .pay-field select,
+.invoice-detail-page.is-tabbed .pay-field textarea {
+  min-height: 38px;
+  border-radius: 8px;
+}
+
+.invoice-detail-page.is-tabbed .pay-field textarea {
+  min-height: 76px;
+}
+
+.invoice-doc-links,
+.invoice-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-start;
+}
+
+.invoice-detail-page.is-tabbed .pay-history th,
+.invoice-detail-page.is-tabbed .pay-history td {
+  padding: 8px;
+}
+
+.invoice-detail-page.is-tabbed .totals td {
+  padding: 7px 0;
+}
+
+@media (max-width: 1180px) {
+  .invoice-kpi-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .invoice-detail-page.is-tabbed .pay-hero,
+  .invoice-detail-page.is-tabbed .grid,
+  .invoice-detail-page.is-tabbed .pay-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .invoice-detail-page .btnbar {
+    justify-content: flex-start;
+    max-width: none;
+  }
+}
+
+@media (max-width: 760px) {
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .invoice-detail-page .wrap {
+    width: min(100% - 12px, 1560px);
+    margin-bottom: 28px;
+    overflow-x: clip;
+  }
+
+  .invoice-detail-header {
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  .invoice-detail-page .title {
+    font-size: 22px;
+  }
+
+  .invoice-detail-page .btnbar {
+    position: sticky;
+    top: 6px;
+    z-index: 24;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    padding: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 10px;
+    background: rgba(7, 13, 24, 0.92);
+    backdrop-filter: blur(14px);
+  }
+
+  .invoice-detail-page .btnbar .pill,
+  .invoice-detail-page .btnbar button {
+    width: 100%;
+    min-width: 0;
+    white-space: normal;
+  }
+
+  .invoice-kpi-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .invoice-kpi-strip .crm-kpi-card {
+    min-height: 58px;
+  }
+
+  .invoice-tabs {
+    top: 58px;
+    margin-inline: -2px;
+    padding: 4px;
+    border-radius: 8px;
+  }
+
+  .invoice-detail-page.is-tabbed .pay-hero,
+  .invoice-detail-page.is-tabbed .grid,
+  .invoice-detail-page.is-tabbed .pay-form-grid,
+  .invoice-detail-page.is-tabbed .internal-profit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .invoice-detail-page.is-tabbed .pay-kpi,
+  .invoice-detail-page.is-tabbed .pad,
+  .invoice-detail-page.is-tabbed .internal-profit {
+    padding: 12px;
+  }
+
+  .invoice-detail-page.is-tabbed .kv {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .invoice-detail-page.is-tabbed .pay-history,
+  .invoice-detail-page.is-tabbed .pay-history tbody,
+  .invoice-detail-page.is-tabbed .pay-history tr,
+  .invoice-detail-page.is-tabbed .pay-history td {
+    display: block;
+    width: 100%;
+  }
+
+  .invoice-detail-page.is-tabbed .pay-history thead {
+    display: none;
+  }
+
+  .invoice-detail-page.is-tabbed .pay-history tr {
+    padding: 9px 0;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  }
+
+  .invoice-detail-page.is-tabbed .pay-history td {
+    border-bottom: 0;
+    padding: 4px 0;
+    text-align: left;
+  }
+}
+
+@media (max-width: 380px) {
+  .invoice-detail-page .btnbar {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media print {
+  .invoice-tab-shell {
+    display: grid !important;
+  }
+
+  .invoice-tab-panel[hidden] {
+    display: block !important;
+  }
+
+  .invoice-tab-slot {
+    display: block;
+  }
+}

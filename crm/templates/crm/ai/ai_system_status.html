@@ -1,154 +1,244 @@
 {% extends "crm/base.html" %}
+{% load static %}
 
 {% block content %}
-<style>
-  .ai-wrap{ color:#f9fafb; max-width:1100px; margin:0 auto; }
-  .ai-sub{ font-size:12px; color:#9ca3af; font-weight:800; }
-  .ai-row{ display:flex; gap:12px; flex-wrap:wrap; margin-top:16px; }
-  .ai-card{
-    flex:1; min-width:260px; padding:16px;
-    background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
-    border:1px solid #334155;
-    border-radius:18px;
-    box-shadow: 0 18px 40px rgba(0,0,0,0.55);
-  }
-  .ai-badge{
-    display:inline-flex; align-items:center; gap:6px;
-    padding:6px 10px; border-radius:999px;
-    font-size:11px; font-weight:900;
-    border:1px solid #334155;
-    background: rgba(255,255,255,0.03);
-    color:#e5e7eb;
-    white-space:nowrap;
-  }
-  .ai-badge-ok{ background:#16a34a; border-color:#16a34a; color:#0b0f1a; }
-  .ai-badge-warn{ background:#f59e0b; border-color:#f59e0b; color:#111827; }
-  .ai-badge-bad{ background:#ef4444; border-color:#ef4444; color:#fff; }
-  .ai-kv{ margin:8px 0 0 0; font-size:12px; color:#cbd5e1; font-weight:800; }
-  .ai-table{ width:100%; border-collapse:collapse; }
-  .ai-th{ text-align:left; padding:10px; border-bottom:1px solid #334155; font-size:12px; color:#cbd5e1; }
-  .ai-td{ padding:10px; border-bottom:1px solid rgba(148,163,184,0.18); font-size:12px; color:#e5e7eb; vertical-align:top; }
-  .ai-warn{ margin-top:10px; padding:10px; border:1px solid #f59e0b; border-radius:12px; background: rgba(245,158,11,0.12); }
-  .ai-warn ul{ margin:6px 0 0 18px; }
-</style>
+<link rel="stylesheet" href="{% static 'crm/ui_system.css' %}?v=control-phase-c">
 
-<div class="container-fluid">
-  <div class="ai-wrap">
-    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+<div class="crm-page control-modern" data-crm-density="compact">
+  <header class="crm-header is-compact control-header">
+    <div>
+      <p class="crm-header-kicker">Monitoring</p>
+      <h1 class="crm-header-title">AI System Status</h1>
+      <p class="crm-header-subtitle">Provider status, key status, request logs, and errors.</p>
+    </div>
+    <div class="crm-header-actions control-actions">
+      <a class="crm-btn" href="{% url 'ai_health_monitor' %}">Health Monitor</a>
+      <a class="crm-btn" href="{% url 'ai_operations_assistant' %}">AI Operations</a>
+      <span class="crm-status-pill is-info">{{ request.user.get_username }}</span>
+    </div>
+  </header>
+
+  <nav class="crm-tabs is-sticky is-compact control-tabs" aria-label="Control Center sections">
+    <a class="crm-tab is-active" href="#control-overview">Overview</a>
+    <a class="crm-tab" href="#control-alerts">Alerts</a>
+    <a class="crm-tab" href="#control-operations">Operations</a>
+    <a class="crm-tab" href="#control-integrations">Integrations</a>
+    <a class="crm-tab" href="#control-automations">Automations</a>
+    <a class="crm-tab" href="#control-logs">Logs</a>
+    <a class="crm-tab" href="#control-history">History</a>
+  </nav>
+
+  <section class="crm-panel is-dense control-critical-alerts control-section-anchor" id="control-alerts" aria-label="System warnings">
+    <div class="crm-panel-header">
       <div>
-        <h2 class="mb-1" style="font-weight:900;">AI System Status</h2>
-        <div class="ai-sub">Provider status, key status, request logs, and errors.</div>
+        <h2 class="crm-panel-title">Alerts</h2>
+        <p class="crm-panel-subtitle">Provider and CRM warning signals from the existing status view.</p>
       </div>
-
-      <div class="ai-badge">
-        <span>👤</span> {{ request.user.get_username }}
-      </div>
+      {% if provider_ok %}
+        <span class="crm-status-pill is-success">Provider OK</span>
+      {% else %}
+        <span class="crm-status-pill is-danger">Provider Error</span>
+      {% endif %}
     </div>
-
-    <div class="ai-row">
-
-      <div class="ai-card">
-        <div class="d-flex justify-content-between align-items-center">
-          <strong>Provider</strong>
-
-          {% if provider_ok %}
-            <span class="ai-badge ai-badge-ok">OK</span>
-          {% else %}
-            <span class="ai-badge ai-badge-bad">ERROR</span>
-          {% endif %}
+    <div class="control-alert-strip">
+      {% if not provider_ok and provider_error %}
+        <div class="control-alert-card">
+          <strong>Provider issue</strong>
+          <span>{{ provider_error }}</span>
         </div>
-
-        <p class="ai-kv">Name: {{ provider_name|default:"OpenAI" }}</p>
-        <p class="ai-kv">API key loaded: {{ key_loaded|default:False }}</p>
-        <p class="ai-kv">Model: {{ model_name|default:"Not set" }}</p>
-
-        {% if not provider_ok and provider_error %}
-          <p class="ai-kv" style="color:#fca5a5;">{{ provider_error }}</p>
-        {% endif %}
-      </div>
-
-      <div class="ai-card">
-        <div class="d-flex justify-content-between align-items-center">
-          <strong>Usage and health</strong>
-
-          {% if score|default:0 >= 90 %}
-            <span class="ai-badge ai-badge-ok">Good</span>
-          {% elif score|default:0 >= 70 %}
-            <span class="ai-badge ai-badge-warn">Watch</span>
-          {% else %}
-            <span class="ai-badge ai-badge-bad">Risk</span>
-          {% endif %}
-        </div>
-
-        <p class="ai-kv">
-          Last request time:
-          {% if last_request_time %}
-            {{ last_request_time }}
-          {% else %}
-            None
-          {% endif %}
-        </p>
-
-        <p class="ai-kv">Errors last 24 hours: {{ errors_24h|default:0 }}</p>
-        <p class="ai-kv">Status score: {{ score|default:0 }}</p>
-      </div>
-
-      <div class="ai-card">
-        <strong>CRM quick signals</strong>
-        <p class="ai-kv">Leads last 7 days: {{ leads_7|default:"-" }}</p>
-        <p class="ai-kv">Opportunities last 7 days: {{ opp_7|default:"-" }}</p>
-        <p class="ai-kv">Shipments count: {{ ship_count|default:0 }}</p>
-
-        {% if warnings and warnings|length %}
-          <div class="ai-warn">
-            <strong>Warnings</strong>
-            <ul>
-              {% for w in warnings %}
-                <li>{{ w }}</li>
-              {% endfor %}
-            </ul>
+      {% endif %}
+      {% if warnings and warnings|length %}
+        {% for w in warnings %}
+          <div class="control-alert-card">
+            <strong>CRM signal</strong>
+            <span>{{ w }}</span>
           </div>
+        {% endfor %}
+      {% endif %}
+      {% if provider_ok and not warnings %}
+        <div class="control-alert-card">
+          <strong>No current warnings</strong>
+          <span>Provider check and quick CRM signals are currently clear.</span>
+        </div>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="crm-kpi-strip is-compact control-section-anchor" id="control-overview">
+    <article class="crm-kpi-card">
+      <div class="crm-kpi-label">Provider</div>
+      <div class="crm-kpi-value">{{ provider_name|default:"OpenAI" }}</div>
+      <div class="crm-kpi-note">
+        {% if provider_ok %}OK{% else %}Error{% endif %}
+      </div>
+    </article>
+    <article class="crm-kpi-card">
+      <div class="crm-kpi-label">API Key</div>
+      <div class="crm-kpi-value">{% if key_loaded %}Loaded{% else %}Missing{% endif %}</div>
+      <div class="crm-kpi-note">Loaded state</div>
+    </article>
+    <article class="crm-kpi-card">
+      <div class="crm-kpi-label">Model</div>
+      <div class="crm-kpi-value">{{ model_name|default:"Not set" }}</div>
+      <div class="crm-kpi-note">Configured AI model</div>
+    </article>
+    <article class="crm-kpi-card">
+      <div class="crm-kpi-label">Errors 24h</div>
+      <div class="crm-kpi-value">{{ errors_24h|default:0 }}</div>
+      <div class="crm-kpi-note">AI errors</div>
+    </article>
+    <article class="crm-kpi-card">
+      <div class="crm-kpi-label">Status Score</div>
+      <div class="crm-kpi-value">{{ score|default:0 }}</div>
+      <div class="crm-kpi-note">Usage and health</div>
+    </article>
+  </section>
+
+  <details class="crm-collapse control-section-anchor" id="control-operations">
+    <summary>
+      <span>CRM Quick Signals</span>
+      <span class="crm-status-pill is-info">{{ ship_count|default:0 }} shipments</span>
+    </summary>
+    <div class="crm-collapse-body">
+      <div class="crm-panel-header">
+        <div>
+          <h2 class="crm-panel-title">CRM Quick Signals</h2>
+          <p class="crm-panel-subtitle">Lead, opportunity, and shipment signals from the existing view context.</p>
+        </div>
+      </div>
+      <div class="control-signal-grid">
+        <div class="control-signal-card">
+          <strong>Leads last 7 days</strong>
+          <span>{{ leads_7|default:"-" }}</span>
+        </div>
+        <div class="control-signal-card">
+          <strong>Opportunities last 7 days</strong>
+          <span>{{ opp_7|default:"-" }}</span>
+        </div>
+        <div class="control-signal-card">
+          <strong>Shipments count</strong>
+          <span>{{ ship_count|default:0 }}</span>
+        </div>
+        <div class="control-signal-card">
+          <strong>Last request time</strong>
+          <span>
+            {% if last_request_time %}
+              {{ last_request_time }}
+            {% else %}
+              None
+            {% endif %}
+          </span>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <details class="crm-collapse control-section-anchor" id="control-integrations">
+    <summary>
+      <span>Integrations</span>
+      <span class="crm-status-pill is-info">2 links</span>
+    </summary>
+    <div class="crm-collapse-body">
+      <div class="crm-panel-header">
+        <div>
+          <h2 class="crm-panel-title">Integrations</h2>
+          <p class="crm-panel-subtitle">Existing AI monitoring and operations pages.</p>
+        </div>
+      </div>
+      <div class="control-link-grid">
+        <a class="control-link-card" href="{% url 'ai_health_monitor' %}">
+          <strong>AI Health Monitor</strong>
+          <span>Health checks, latest run, and AI error history.</span>
+        </a>
+        <a class="control-link-card" href="{% url 'ai_operations_assistant' %}">
+          <strong>AI Operations</strong>
+          <span>Operational recommendations and supported CRM questions.</span>
+        </a>
+      </div>
+    </div>
+  </details>
+
+  <details class="crm-collapse control-section-anchor" id="control-logs">
+    <summary>
+      <span>Error History</span>
+      <span class="crm-status-pill is-info">{{ recent_errors|length }} rows</span>
+    </summary>
+    <div class="crm-collapse-body">
+      <div class="control-log-table">
+        <table class="crm-table is-dense crm-table-mobile-cards">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Feature</th>
+              <th>Message</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in recent_errors %}
+              <tr>
+                <td data-label="Time">{{ row.created_at }}</td>
+                <td data-label="Feature">
+                  {{ row.feature|default:"" }}
+                  {% if row.provider %}
+                    <div class="crm-text-muted crm-mt-xs">{{ row.provider }} {{ row.model_name|default:"" }}</div>
+                  {% endif %}
+                </td>
+                <td data-label="Message">
+                  {{ row.message|default:"" }}
+                  {% if row.error_type %}
+                    <div class="crm-text-muted crm-mt-xs">{{ row.error_type }}</div>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td data-label="Errors" colspan="3">No errors yet</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </details>
+
+  <details class="crm-collapse control-section-anchor" id="control-automations">
+    <summary>
+      <span>Automations</span>
+      <span class="crm-status-pill is-info">Read only</span>
+    </summary>
+    <div class="crm-collapse-body">
+      <div class="crm-panel-header">
+        <div>
+          <h2 class="crm-panel-title">Automations</h2>
+          <p class="crm-panel-subtitle">No system-status automation controls are available on this read-only monitor.</p>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <details class="crm-collapse control-section-anchor" id="control-history">
+    <summary>
+      <span>History</span>
+      <span class="crm-status-pill is-info">{% if latency_ms %}{{ latency_ms }} ms{% else %}Latest request{% endif %}</span>
+    </summary>
+    <div class="crm-collapse-body">
+      <div class="crm-panel-header">
+        <div>
+          <h2 class="crm-panel-title">History</h2>
+          <p class="crm-panel-subtitle">
+            Last request time:
+            {% if last_request_time %}
+              {{ last_request_time }}
+            {% else %}
+              None
+            {% endif %}
+          </p>
+        </div>
+        {% if latency_ms %}
+          <span class="crm-status-pill is-info">{{ latency_ms }} ms</span>
         {% endif %}
       </div>
-
     </div>
-
-    <h3 style="margin-top:22px; font-weight:900;">Error history</h3>
-    <div class="ai-card" style="margin-top:10px;">
-      <table class="ai-table">
-        <thead>
-          <tr>
-            <th class="ai-th">Time</th>
-            <th class="ai-th">Feature</th>
-            <th class="ai-th">Message</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in recent_errors %}
-            <tr>
-              <td class="ai-td">{{ row.created_at }}</td>
-              <td class="ai-td">
-                {{ row.feature|default:"" }}
-                {% if row.provider %}
-                  <div style="margin-top:4px;color:#9ca3af;">{{ row.provider }} {{ row.model_name|default:"" }}</div>
-                {% endif %}
-              </td>
-              <td class="ai-td">
-                {{ row.message|default:"" }}
-                {% if row.error_type %}
-                  <div style="margin-top:6px;color:#fca5a5;">{{ row.error_type }}</div>
-                {% endif %}
-              </td>
-            </tr>
-          {% empty %}
-            <tr>
-              <td class="ai-td" colspan="3">No errors yet</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-
-  </div>
+  </details>
 </div>
 {% endblock %}

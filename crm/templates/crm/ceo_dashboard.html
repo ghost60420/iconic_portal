@@ -1,6 +1,10 @@
 {% extends "crm/base.html" %}
+{% load static %}
 {% load humanize %}
+{% load crm_extras %}
 {% block content %}
+
+<link rel="stylesheet" href="{% static 'crm/ui_system.css' %}?v=control-phase-c">
 
 <style>
   :root{
@@ -358,8 +362,8 @@
   }
 </style>
 
-<div class="ceo-wrap">
-  <div class="ceo-hero">
+<div class="ceo-wrap crm-page crm-page-wide control-modern" data-crm-density="compact">
+  <div class="ceo-hero crm-header is-compact control-header">
     <div>
       <div class="ceo-kicker">Executive Command Center</div>
       <h1 class="ceo-title">CEO Dashboard</h1>
@@ -367,15 +371,38 @@
         Leads, opportunities, production, shipping, marketing, and accounting in one read-only operating view for {{ period_label|lower }}.
       </div>
     </div>
-    <div class="ceo-actions">
-      <a class="ceo-btn" href="{% url 'main_dashboard' %}">CRM Dashboard</a>
-      <a class="ceo-btn" href="{% url 'ai_operations_assistant' %}">AI Operations</a>
-      <a class="ceo-btn" href="{% url 'kpi_scorecard_dashboard' %}">KPI Scorecard</a>
-      <a class="ceo-btn ceo-btn--gold" href="{% url 'accounting_home' %}">Accounting</a>
+    <div class="ceo-actions crm-action-group">
+      <a class="ceo-btn crm-btn" href="{% url 'main_dashboard' %}">CRM Dashboard</a>
+      <a class="ceo-btn crm-btn" href="{% url 'ai_operations_assistant' %}">AI Operations</a>
+      <a class="ceo-btn crm-btn" href="{% url 'kpi_scorecard_dashboard' %}">KPI Scorecard</a>
+      <a class="ceo-btn ceo-btn--gold crm-btn crm-btn-primary" href="{% url 'accounting_home' %}">Accounting</a>
     </div>
   </div>
 
-  <form class="ceo-filter" method="get">
+  <section class="crm-panel is-dense control-critical-alerts control-section-anchor" id="control-alerts" aria-label="Critical alerts">
+    <div class="crm-panel-header">
+      <div>
+        <h2 class="crm-panel-title">Critical Alerts</h2>
+        <p class="crm-panel-subtitle">Immediate risks and automation signals stay at the top of the Control Center.</p>
+      </div>
+      <span class="crm-status-pill is-warning">{{ alerts|length|intcomma }} alerts</span>
+    </div>
+    <div class="control-alert-strip">
+      {% for alert in alerts|slice:":4" %}
+        <div class="control-alert-card">
+          <strong>{{ alert.title }}</strong>
+          <span>{{ alert.detail }}</span>
+        </div>
+      {% empty %}
+        <div class="control-alert-card">
+          <strong>No urgent alerts</strong>
+          <span>No immediate executive alert signals found for the selected period.</span>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <form class="ceo-filter crm-filter-bar is-dense control-filter-bar" method="get">
     <div class="ceo-field">
       <label for="days">Period</label>
       <select id="days" name="days">
@@ -395,14 +422,24 @@
       </select>
     </div>
     <div class="ceo-filter-actions">
-      <button class="ceo-btn ceo-btn--gold" type="submit">Apply</button>
-      <a class="ceo-btn" href="{% url 'ceo_dashboard' %}">Reset</a>
+      <button class="ceo-btn ceo-btn--gold crm-btn crm-btn-primary" type="submit">Apply</button>
+      <a class="ceo-btn crm-btn" href="{% url 'ceo_dashboard' %}">Reset</a>
     </div>
   </form>
 
-  <div class="ceo-kpis">
+  <nav class="crm-tabs is-sticky is-compact control-tabs" aria-label="Control Center sections">
+    <a class="crm-tab is-active" href="#control-overview">Overview</a>
+    <a class="crm-tab" href="#control-alerts">Alerts</a>
+    <a class="crm-tab" href="#control-operations">Operations</a>
+    <a class="crm-tab" href="#control-integrations">Integrations</a>
+    <a class="crm-tab" href="#control-automations">Automations</a>
+    <a class="crm-tab" href="#control-logs">Logs</a>
+    <a class="crm-tab" href="#control-history">History</a>
+  </nav>
+
+  <div class="ceo-kpis crm-kpi-strip is-compact">
     {% for card in kpi_cards %}
-      <div class="ceo-card ceo-card--{{ card.tone }}">
+      <div class="ceo-card ceo-card--{{ card.tone }} crm-kpi-card">
         <span>{{ card.label }}</span>
         <strong>{{ card.value }}</strong>
         <small>{{ card.note }}</small>
@@ -410,7 +447,7 @@
     {% endfor %}
   </div>
 
-  <section class="ceo-section">
+  <section class="ceo-section control-section-anchor" id="control-overview">
     <div class="ceo-section-head">
       <div>
         <h2 class="ceo-section-title">Executive Intelligence</h2>
@@ -431,9 +468,13 @@
         <article class="ceo-exec-card">
           <h2>Revenue Overview</h2>
           <ul class="ceo-stat-list">
-            <li class="ceo-stat"><span>Total invoiced</span><strong>{{ revenue_overview.total_invoiced|floatformat:2|intcomma }}</strong></li>
-            <li class="ceo-stat"><span>Total paid</span><strong>{{ revenue_overview.total_paid|floatformat:2|intcomma }}</strong></li>
-            <li class="ceo-stat"><span>Outstanding balance</span><strong>{{ revenue_overview.outstanding_balance|floatformat:2|intcomma }}</strong></li>
+            {% for row in revenue_overview.currency_rows %}
+              <li class="ceo-stat"><span>Total invoiced · {{ row.currency }}</span><strong title="{{ row.invoiced|finance_money:row.currency }}">{{ row.invoiced|compact_money:row.currency }}</strong></li>
+              <li class="ceo-stat"><span>Total paid · {{ row.currency }}</span><strong title="{{ row.paid|finance_money:row.currency }}">{{ row.paid|compact_money:row.currency }}</strong></li>
+              <li class="ceo-stat"><span>Outstanding · {{ row.currency }}</span><strong title="{{ row.outstanding|finance_money:row.currency }}">{{ row.outstanding|compact_money:row.currency }}</strong></li>
+            {% empty %}
+              <li class="ceo-stat"><span>No invoice values in this period</span><strong>-</strong></li>
+            {% endfor %}
             <li class="ceo-stat"><span>Overdue invoices</span><strong>{{ revenue_overview.overdue_invoice_count|intcomma }}</strong></li>
           </ul>
         </article>
@@ -448,17 +489,30 @@
         <article class="ceo-exec-card">
           <h2>Profit Overview</h2>
           <ul class="ceo-stat-list">
-            <li class="ceo-stat"><span>Estimated revenue</span><strong>{{ profit_overview.estimated_revenue|floatformat:2|intcomma }}</strong></li>
-            <li class="ceo-stat"><span>Estimated gross profit</span><strong>{{ profit_overview.estimated_gross_profit|floatformat:2|intcomma }}</strong></li>
-            <li class="ceo-stat"><span>Average margin</span><strong>{{ profit_overview.average_margin|floatformat:2 }}%</strong></li>
+            {% for row in profit_overview.currency_rows %}
+              <li class="ceo-stat"><span>Estimated revenue · {{ row.currency }}</span><strong title="{{ row.revenue|finance_money:row.currency }}">{{ row.revenue|compact_money:row.currency }}</strong></li>
+              <li class="ceo-stat"><span>Gross Profit · {{ row.currency }}</span><strong title="{{ row.gross_profit|finance_money:row.currency }}">{{ row.gross_profit|compact_money:row.currency }}</strong></li>
+              <li class="ceo-stat"><span>Total Sales Commission · {{ row.currency }}</span><strong title="{{ row.sales_commission|finance_money:row.currency }}">{{ row.sales_commission|compact_money:row.currency }}</strong></li>
+              <li class="ceo-stat"><span>Net Profit · {{ row.currency }}</span><strong title="{{ row.net_profit|finance_money:row.currency }}">{{ row.net_profit|compact_money:row.currency }}</strong></li>
+              <li class="ceo-stat"><span>Margin · {{ row.currency }}</span><strong>{{ row.margin|floatformat:2 }}%</strong></li>
+            {% empty %}
+              <li class="ceo-stat"><span>No lifecycle financial values</span><strong>-</strong></li>
+            {% endfor %}
             <li class="ceo-stat"><span>Low margin orders</span><strong>{{ profit_overview.low_margin_orders|length|intcomma }}</strong></li>
           </ul>
           <p class="ceo-exec-note" style="margin-top:12px;">Highest profit customers</p>
           <ul class="ceo-stat-list">
             {% for row in profit_overview.top_profit_customers|slice:":3" %}
               <li class="ceo-stat">
-                <span>{{ row.customer__account_brand|default:row.customer__contact_name|default:"Customer" }}</span>
-                <strong>{{ row.profit|floatformat:2|intcomma }}</strong>
+                <span>
+                  {% firstof row.label row.customer__account_brand row.customer__contact_name "Customer" %}
+                  {% if row.currency %} · {{ row.currency }}{% endif %}
+                </span>
+                {% if row.currency %}
+                  <strong title="{{ row.profit|finance_money:row.currency }}">{{ row.profit|compact_money:row.currency }}</strong>
+                {% else %}
+                  <strong>CAD {{ row.profit|floatformat:2|intcomma }}</strong>
+                {% endif %}
               </li>
             {% empty %}
               <li class="ceo-stat"><span>No profit customer data yet</span><strong>0</strong></li>
@@ -524,7 +578,7 @@
     </div>
   </section>
 
-  <section class="ceo-section">
+  <section class="ceo-section control-section-anchor" id="control-logs">
     <div class="ceo-section-head">
       <div>
         <h2 class="ceo-section-title">Visual Analytics</h2>
@@ -557,6 +611,33 @@
     </div>
   </section>
 
+  <section class="crm-panel is-dense control-section-anchor" id="control-integrations" aria-label="Integrations and monitoring">
+    <div class="crm-panel-header">
+      <div>
+        <h2 class="crm-panel-title">Integrations and Monitoring</h2>
+        <p class="crm-panel-subtitle">Quick access to the existing control, AI health, finance, and operations monitors.</p>
+      </div>
+    </div>
+    <div class="control-link-grid">
+      <a class="control-link-card" href="{% url 'ai_operations_assistant' %}">
+        <strong>AI Operations</strong>
+        <span>Recommendations, risks, and supported operational questions.</span>
+      </a>
+      <a class="control-link-card" href="{% url 'ai_health_monitor' %}">
+        <strong>AI Health Monitor</strong>
+        <span>Provider health checks and recent AI error history.</span>
+      </a>
+      <a class="control-link-card" href="{% url 'ai_system_status' %}">
+        <strong>AI System Status</strong>
+        <span>Provider status, CRM signals, warnings, and logs.</span>
+      </a>
+      <a class="control-link-card" href="{% url 'accounting_home' %}">
+        <strong>Accounting</strong>
+        <span>Financial dashboard and operational accounting links.</span>
+      </a>
+    </div>
+  </section>
+
   <div class="ceo-insight-grid">
     {% for insight in ai_insight_cards %}
       <div class="ceo-alert ceo-alert--{{ insight.tone }}">
@@ -576,7 +657,7 @@
   </div>
 
   {% if executive_automation_cards %}
-    <section class="ceo-section">
+    <section class="ceo-section control-section-anchor" id="control-automations">
       <div class="ceo-section-head">
         <div>
           <h2 class="ceo-section-title">Executive Automations</h2>
@@ -644,17 +725,28 @@
         </div>
       </div>
     </section>
+  {% else %}
+    <section class="ceo-section control-section-anchor" id="control-automations">
+      <div class="ceo-section-head">
+        <div>
+          <h2 class="ceo-section-title">Executive Automations</h2>
+          <div class="ceo-section-note">Rule-based risks, orders needing attention, overdue payments, and inventory alerts.</div>
+        </div>
+        <span class="ceo-badge ceo-badge--blue">0 unread</span>
+      </div>
+      <div class="ceo-empty">No executive automation rows are available for the selected period.</div>
+    </section>
   {% endif %}
 
   <div class="ceo-layout">
     <div>
-      <section class="ceo-section">
-        <div class="ceo-section-head">
+      <details class="ceo-section crm-collapse control-section-anchor" id="control-history">
+        <summary class="ceo-section-head">
           <div>
             <h2 class="ceo-section-title">Key trends</h2>
             <div class="ceo-section-note">{% if can_view_executive_financials %}Monthly sales and finance movement.{% else %}Monthly sales movement. Financial trend bars are restricted.{% endif %}</div>
           </div>
-        </div>
+        </summary>
         {% if month_rows %}
           {% for row in month_rows %}
             <div class="ceo-chart-row">
@@ -680,15 +772,15 @@
         {% else %}
           <div class="ceo-empty">No trend data found for the selected filters.</div>
         {% endif %}
-      </section>
+      </details>
 
-      <section class="ceo-section">
-        <div class="ceo-section-head">
+      <details class="ceo-section crm-collapse">
+        <summary class="ceo-section-head">
           <div>
             <h2 class="ceo-section-title">Sales overview</h2>
             <div class="ceo-section-note">Lead sources, opportunity stages, and follow-up load.</div>
           </div>
-        </div>
+        </summary>
         <div class="ceo-mini-grid">
           <div class="ceo-mini">
             <h3>Lead sources</h3>
@@ -707,15 +799,15 @@
             {% endfor %}
           </div>
         </div>
-      </section>
+      </details>
 
-      <section class="ceo-section">
-        <div class="ceo-section-head">
+      <details class="ceo-section crm-collapse control-section-anchor" id="control-operations">
+        <summary class="ceo-section-head">
           <div>
             <h2 class="ceo-section-title">Operations overview</h2>
             <div class="ceo-section-note">Production and shipping status distribution.</div>
           </div>
-        </div>
+        </summary>
         <div class="ceo-mini-grid">
           <div class="ceo-mini">
             <h3>Production</h3>
@@ -734,15 +826,15 @@
             {% endfor %}
           </div>
         </div>
-      </section>
+      </details>
 
-      <section class="ceo-section">
-        <div class="ceo-section-head">
+      <details class="ceo-section crm-collapse">
+        <summary class="ceo-section-head">
           <div>
             <h2 class="ceo-section-title">Marketing impact</h2>
             <div class="ceo-section-note">Website, Google search, social, campaigns, and insight signals.</div>
           </div>
-        </div>
+        </summary>
         <div class="ceo-mini-grid">
           <div class="ceo-mini">
             <h3>Marketing KPIs</h3>
@@ -762,17 +854,17 @@
             {% endfor %}
           </div>
         </div>
-      </section>
+      </details>
     </div>
 
     <div>
-      <section class="ceo-section">
-        <div class="ceo-section-head">
+      <details class="ceo-section crm-collapse">
+        <summary class="ceo-section-head">
           <div>
             <h2 class="ceo-section-title">Alerts</h2>
             <div class="ceo-section-note">Immediate risks and follow-up signals.</div>
           </div>
-        </div>
+        </summary>
         <div class="ceo-alert-list">
           {% for alert in alerts %}
             <div class="ceo-alert ceo-alert--{{ alert.tone }}">
@@ -781,15 +873,15 @@
             </div>
           {% endfor %}
         </div>
-      </section>
+      </details>
 
-      <section class="ceo-section">
-        <div class="ceo-section-head">
+      <details class="ceo-section crm-collapse">
+        <summary class="ceo-section-head">
           <div>
             <h2 class="ceo-section-title">Executive trend signals</h2>
             <div class="ceo-section-note">Current period compared with prior period.</div>
           </div>
-        </div>
+        </summary>
         <div class="ceo-table-wrap">
           <table class="ceo-table ceo-table--compact">
             <tbody>
@@ -802,15 +894,15 @@
             </tbody>
           </table>
         </div>
-      </section>
+      </details>
 
-      <section class="ceo-section">
-        <div class="ceo-section-head">
+      <details class="ceo-section crm-collapse">
+        <summary class="ceo-section-head">
           <div>
             <h2 class="ceo-section-title">Top performers</h2>
             <div class="ceo-section-note">Lead owners and customers contributing activity.</div>
           </div>
-        </div>
+        </summary>
         <div class="ceo-table-wrap">
           <table class="ceo-table ceo-table--compact">
             <thead><tr><th>Lead owner</th><th class="ceo-right">Leads</th></tr></thead>
@@ -832,7 +924,11 @@
                   <td>{{ row.label }}<br><span class="ceo-muted">{{ row.count }} opportunity row(s)</span></td>
                   <td class="ceo-right">
                     {% if can_view_executive_financials %}
-                      CAD {{ row.value|floatformat:2|intcomma }}
+                      {% if row.currency %}
+                        <span title="{{ row.value|finance_money:row.currency }}">{{ row.value|compact_money:row.currency }}</span>
+                      {% else %}
+                        CAD {{ row.value|floatformat:2|intcomma }}
+                      {% endif %}
                     {% else %}
                       {{ row.count|intcomma }} row(s)
                     {% endif %}
@@ -844,15 +940,15 @@
             </tbody>
           </table>
         </div>
-      </section>
+      </details>
 
-      <section class="ceo-section">
-        <div class="ceo-section-head">
+      <details class="ceo-section crm-collapse">
+        <summary class="ceo-section-head">
           <div>
             <h2 class="ceo-section-title">Department summaries</h2>
             <div class="ceo-section-note">Read-only totals by operating area.</div>
           </div>
-        </div>
+        </summary>
         <div class="ceo-table-wrap">
           <table class="ceo-table ceo-table--compact">
             <tbody>
@@ -864,14 +960,18 @@
               {% if can_view_executive_financials %}
                 <tr><td>Accounting revenue</td><td class="ceo-right">CAD {{ finance_summary.revenue|floatformat:2|intcomma }}</td></tr>
                 <tr><td>Accounting expenses</td><td class="ceo-right">CAD {{ finance_summary.expenses|floatformat:2|intcomma }}</td></tr>
-                <tr><td>Open receivables</td><td class="ceo-right">CAD {{ finance_summary.invoice_open_total|floatformat:2|intcomma }}</td></tr>
+                {% for row in finance_summary.invoice_open_values %}
+                  <tr><td>Open receivables · {{ row.currency }}</td><td class="ceo-right" title="{{ row.amount|finance_money:row.currency }}">{{ row.amount|compact_money:row.currency }}</td></tr>
+                {% empty %}
+                  <tr><td>Open receivables</td><td class="ceo-right">-</td></tr>
+                {% endfor %}
               {% else %}
                 <tr><td>Financial summary</td><td class="ceo-right"><span class="ceo-badge ceo-badge--warn">Restricted</span></td></tr>
               {% endif %}
             </tbody>
           </table>
         </div>
-      </section>
+      </details>
     </div>
   </div>
 </div>
@@ -891,6 +991,23 @@
 
     function values(key, length){
       return data[key] && data[key].length ? data[key] : Array(length || 1).fill(0);
+    }
+
+    function currencySeries(key, fallbackLabel, fill){
+      var series = data[key] && data[key].length ? data[key] : [];
+      if (!series.length) return [{label:fallbackLabel, data:[0], borderColor:palette[0], backgroundColor:palette[0], borderRadius:10}];
+      return series.map(function(row, index){
+        var color = palette[index % palette.length];
+        return {
+          label:row.currency,
+          data:row.values,
+          borderColor:color,
+          backgroundColor:fill ? color.replace("rgb", "rgba") : color,
+          tension:.35,
+          fill:false,
+          borderRadius:10
+        };
+      });
     }
 
     function baseOptions(){
@@ -914,7 +1031,7 @@
         var revenueLabels = labels("invoice_month_labels", ["Month"]);
         return {
           type:"line",
-          data:{labels:revenueLabels, datasets:[{label:"Invoiced", data:values("invoice_month_values", revenueLabels.length), borderColor:"#4ade80", backgroundColor:"rgba(74,222,128,.10)", tension:.35, fill:true}]},
+          data:{labels:revenueLabels, datasets:currencySeries("invoice_month_series", "Invoiced", false)},
           options:baseOptions()
         };
       }
@@ -922,7 +1039,7 @@
         var profitLabels = labels("profit_month_labels", ["Month"]);
         return {
           type:"bar",
-          data:{labels:profitLabels, datasets:[{label:"Estimated profit", data:values("profit_month_values", profitLabels.length), backgroundColor:"rgba(167,139,250,.82)", borderRadius:10}]},
+          data:{labels:profitLabels, datasets:currencySeries("profit_month_series", "Estimated profit", true)},
           options:baseOptions()
         };
       }

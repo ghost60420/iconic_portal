@@ -1,89 +1,101 @@
 {% extends "crm/base.html" %}
 {% load static %}
+{% load crm_extras %}
 
 {% block content %}
-<link rel="stylesheet" href="{% static 'crm/opportunities_list.css' %}?v=workflow-thumbs-20260602">
+<link rel="stylesheet" href="{% static 'crm/ui_system.css' %}?v=phase2-opportunity-list">
 
-<div class="opp-page">
-  <section class="opp-hero">
+<div class="crm-page crm-page-wide crm-stack is-tight" data-crm-density="compact">
+  <section class="crm-header is-compact">
     <div>
-      <p class="opp-eyebrow">Sales pipeline</p>
-      <h1 class="opp-title">Opportunities</h1>
-      <p class="opp-subtitle">
+      <p class="crm-header-kicker">Sales pipeline</p>
+      <h1>Opportunities</h1>
+      <p class="crm-header-subtitle">
         Plan revenue, quotes, follow-ups, and production handoff from one focused view.
         Production-stage opportunities are kept in the Production list.
       </p>
     </div>
 
-    <div class="opp-hero-actions">
-      <a href="{% url 'production_list' %}" class="opp-btn opp-btn--ghost">Production list</a>
-      <a href="{% url 'leads_list' %}" class="opp-btn opp-btn--ghost">View leads</a>
-      <a href="{% url 'add_opportunity' %}" class="opp-btn opp-btn--primary">Add opportunity</a>
+    <div class="crm-header-actions">
+      <a href="{% url 'production_list' %}" class="crm-btn crm-btn-muted">Production list</a>
+      <a href="{% url 'leads_list' %}" class="crm-btn crm-btn-muted">View leads</a>
+      <a href="{% url 'add_opportunity' %}" class="crm-btn crm-btn-primary">Add opportunity</a>
     </div>
   </section>
 
-  <section class="opp-summary-grid" aria-label="Opportunity summary">
-    <article class="opp-stat">
-      <span>Total in view</span>
-      <strong>{{ page_obj.paginator.count }}</strong>
-      <small>{% if request.GET.status == "all" %}All visible stages{% elif request.GET.status == "closed_won" %}Closed won filter{% elif request.GET.status == "closed_lost" %}Closed lost filter{% else %}Active pipeline focus{% endif %}</small>
+  <section class="crm-kpi-strip is-compact" aria-label="Opportunity summary">
+    <article class="crm-kpi-card crm-kpi-horizontal">
+      <div>
+        <div class="crm-kpi-label">Total in view</div>
+        <div class="crm-kpi-value">{{ page_obj.paginator.count }}</div>
+        <div class="crm-kpi-note">{% if request.GET.status == "all" %}All visible stages{% elif request.GET.status == "closed_won" %}Closed won filter{% elif request.GET.status == "closed_lost" %}Closed lost filter{% else %}Active pipeline focus{% endif %}</div>
+      </div>
+      <span class="crm-kpi-indicator">T</span>
     </article>
-    <article class="opp-stat">
-      <span>Pipeline value</span>
-      <strong>{{ pipeline_value|floatformat:0 }}</strong>
-      <small>Order value total for the current filters.</small>
+
+    <article class="crm-kpi-card">
+      <div class="crm-kpi-label">Pipeline value</div>
+      <div class="crm-kpi-value">{{ pipeline_value|finance_money:"BDT" }}</div>
+      <div class="crm-kpi-note">Current filters.</div>
     </article>
-    <article class="opp-stat">
-      <span>Due follow-ups</span>
-      <strong>{{ due_followups }}</strong>
-      <small>Opportunities with a follow-up date due today or earlier.</small>
+
+    <article class="crm-kpi-card crm-kpi-horizontal">
+      <div>
+        <div class="crm-kpi-label">Due follow-ups</div>
+        <div class="crm-kpi-value">{{ due_followups }}</div>
+        <div class="crm-kpi-note">Due today or earlier.</div>
+      </div>
+      <span class="crm-kpi-indicator">F</span>
     </article>
-    <article class="opp-stat">
-      <span>Visible rows</span>
-      <strong>{{ visible_count }}</strong>
-      <small>Showing up to {{ per_page }} rows per page.</small>
+
+    <article class="crm-kpi-card crm-kpi-horizontal">
+      <div>
+        <div class="crm-kpi-label">Visible rows</div>
+        <div class="crm-kpi-value">{{ visible_count }}</div>
+        <div class="crm-kpi-note">Up to {{ per_page }} rows per page.</div>
+      </div>
+      <span class="crm-kpi-indicator">R</span>
     </article>
   </section>
 
-  <nav class="opp-tabs" aria-label="Opportunity status filters">
+  <nav class="crm-tabs is-compact" aria-label="Opportunity status filters">
     <a
-      class="opp-tab {% if not request.GET.status or request.GET.status == 'open' %}active{% endif %}"
+      class="crm-tab {% if not request.GET.status or request.GET.status == 'open' %}is-active{% endif %}"
       href="?{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.stage %}stage={{ request.GET.stage|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}{% if request.GET.sort %}sort={{ request.GET.sort|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page=1&status=open"
     >Open</a>
     <a
-      class="opp-tab {% if request.GET.status == 'all' %}active{% endif %}"
+      class="crm-tab {% if request.GET.status == 'all' %}is-active{% endif %}"
       href="?{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.stage %}stage={{ request.GET.stage|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}{% if request.GET.sort %}sort={{ request.GET.sort|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page=1&status=all"
     >All</a>
     <a
-      class="opp-tab {% if request.GET.status == 'closed_won' %}active{% endif %}"
+      class="crm-tab {% if request.GET.status == 'closed_won' %}is-active{% endif %}"
       href="?{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.stage %}stage={{ request.GET.stage|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}{% if request.GET.sort %}sort={{ request.GET.sort|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page=1&status=closed_won"
     >Won</a>
     <a
-      class="opp-tab {% if request.GET.status == 'closed_lost' %}active{% endif %}"
+      class="crm-tab {% if request.GET.status == 'closed_lost' %}is-active{% endif %}"
       href="?{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.stage %}stage={{ request.GET.stage|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}{% if request.GET.sort %}sort={{ request.GET.sort|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page=1&status=closed_lost"
     >Lost</a>
   </nav>
 
-  <section class="opp-panel">
-    <div class="opp-panel-head">
+  <section class="crm-panel is-dense">
+    <div class="crm-panel-header">
       <div>
-        <h2 class="opp-panel-title">Filters</h2>
-        <p class="opp-panel-note">Search by opportunity, brand, lead, contact, stage, or product.</p>
+        <h2 class="crm-panel-title">Filters</h2>
+        <p class="crm-panel-subtitle">Search by opportunity, brand, lead, contact, stage, or product.</p>
       </div>
-      <a class="opp-btn opp-btn--ghost" href="{% url 'opportunities_list' %}">Clear filters</a>
     </div>
 
-    <form method="get" class="opp-filters">
+    <form method="get" class="crm-filter-bar is-sticky is-dense">
       <input type="hidden" name="sort" value="{{ request.GET.sort|default:'new' }}">
 
-      <div class="opp-field opp-field--wide">
-        <label class="opp-label">Search</label>
-        <input class="opp-input" name="q" value="{{ request.GET.q|default:'' }}" placeholder="Opportunity, brand, lead id, product">
+      <div class="crm-filter-field">
+        <label>Search</label>
+        <input class="crm-input" name="q" value="{{ request.GET.q|default:'' }}" placeholder="Opportunity, brand, lead id, product">
       </div>
 
-      <div class="opp-field">
-        <label class="opp-label">Stage</label>
-        <select class="opp-input" name="stage">
+      <div class="crm-filter-field">
+        <label>Stage</label>
+        <select class="crm-select" name="stage">
           <option value="" {% if not request.GET.stage %}selected{% endif %}>All stages</option>
           {% for value,label in stage_choices %}
             <option value="{{ value }}" {% if request.GET.stage == value %}selected{% endif %}>{{ label }}</option>
@@ -91,9 +103,9 @@
         </select>
       </div>
 
-      <div class="opp-field">
-        <label class="opp-label">Status</label>
-        <select class="opp-input" name="status">
+      <div class="crm-filter-field">
+        <label>Status</label>
+        <select class="crm-select" name="status">
           <option value="" {% if not request.GET.status %}selected{% endif %}>Active default</option>
           <option value="all" {% if request.GET.status == "all" %}selected{% endif %}>All</option>
           <option value="open" {% if request.GET.status == "open" %}selected{% endif %}>Open</option>
@@ -102,81 +114,83 @@
         </select>
       </div>
 
-      <div class="opp-field">
-        <label class="opp-label">Archive</label>
-        <select class="opp-input" name="archive">
+      <div class="crm-filter-field">
+        <label>Archive</label>
+        <select class="crm-select" name="archive">
           <option value="active" {% if archive_filter == "active" %}selected{% endif %}>Active</option>
           <option value="archived" {% if archive_filter == "archived" %}selected{% endif %}>Archived</option>
           <option value="all" {% if archive_filter == "all" %}selected{% endif %}>All</option>
         </select>
       </div>
 
-      <div class="opp-field">
-        <label class="opp-label">Created from</label>
-        <input class="opp-input" type="date" name="created_from" value="{{ request.GET.created_from|default:'' }}">
+      <div class="crm-filter-field">
+        <label>Created from</label>
+        <input class="crm-input" type="date" name="created_from" value="{{ request.GET.created_from|default:'' }}">
       </div>
 
-      <div class="opp-field">
-        <label class="opp-label">Created to</label>
-        <input class="opp-input" type="date" name="created_to" value="{{ request.GET.created_to|default:'' }}">
+      <div class="crm-filter-field">
+        <label>Created to</label>
+        <input class="crm-input" type="date" name="created_to" value="{{ request.GET.created_to|default:'' }}">
       </div>
 
-      <div class="opp-field">
-        <label class="opp-label">Value min</label>
-        <input class="opp-input" type="number" step="0.01" name="value_min" value="{{ request.GET.value_min|default:'' }}" placeholder="1000">
+      <div class="crm-filter-field">
+        <label>Value min</label>
+        <input class="crm-input" type="number" step="0.01" name="value_min" value="{{ request.GET.value_min|default:'' }}" placeholder="1000">
       </div>
 
-      <div class="opp-field">
-        <label class="opp-label">Value max</label>
-        <input class="opp-input" type="number" step="0.01" name="value_max" value="{{ request.GET.value_max|default:'' }}" placeholder="25000">
+      <div class="crm-filter-field">
+        <label>Value max</label>
+        <input class="crm-input" type="number" step="0.01" name="value_max" value="{{ request.GET.value_max|default:'' }}" placeholder="25000">
       </div>
 
-      <div class="opp-field">
-        <label class="opp-label">Per page</label>
-        <select class="opp-input" name="per_page">
+      <div class="crm-filter-field">
+        <label>Per page</label>
+        <select class="crm-select" name="per_page">
           <option value="20" {% if per_page|stringformat:"s" == "20" %}selected{% endif %}>20</option>
           <option value="50" {% if per_page|stringformat:"s" == "50" %}selected{% endif %}>50</option>
           <option value="100" {% if per_page|stringformat:"s" == "100" %}selected{% endif %}>100</option>
         </select>
       </div>
 
-      <div class="opp-filter-actions">
-        <button class="opp-btn opp-btn--primary" type="submit">Apply filters</button>
+      <div class="crm-filter-actions">
+        <button class="crm-btn crm-btn-primary" type="submit">Apply</button>
+        <a class="crm-btn crm-btn-muted" href="{% url 'opportunities_list' %}">Clear</a>
       </div>
     </form>
   </section>
 
-  <section class="opp-table-shell">
-    <div class="opp-table-head">
+  <section class="crm-panel is-dense">
+    <div class="crm-panel-header">
       <div>
-        <h2 class="opp-table-title">
+        <h2 class="crm-panel-title">
           Opportunity board
-          <span class="opp-sort-toggle">
-            <a
-              class="opp-sort-btn {% if request.GET.sort == 'new' or not request.GET.sort %}active{% endif %}"
-              href="?{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.stage %}stage={{ request.GET.stage|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page=1&sort=new"
-              title="Newest first"
-              aria-label="Newest first"
-            >New</a>
-            <a
-              class="opp-sort-btn {% if request.GET.sort == 'old' %}active{% endif %}"
-              href="?{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.stage %}stage={{ request.GET.stage|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page=1&sort=old"
-              title="Oldest first"
-              aria-label="Oldest first"
-            >Old</a>
-          </span>
         </h2>
-        <p class="opp-panel-note">
+        <p class="crm-panel-subtitle">
           Important sales fields are first. Open an opportunity to update stage, follow-up, notes, costing, and production handoff.
         </p>
       </div>
+
+      <div class="crm-action-group" aria-label="Sort opportunities">
+        <a
+          class="crm-btn {% if request.GET.sort == 'new' or not request.GET.sort %}crm-btn-primary{% else %}crm-btn-muted{% endif %}"
+          href="?{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.stage %}stage={{ request.GET.stage|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page=1&sort=new"
+          title="Newest first"
+          aria-label="Newest first"
+        >New</a>
+        <a
+          class="crm-btn {% if request.GET.sort == 'old' %}crm-btn-primary{% else %}crm-btn-muted{% endif %}"
+          href="?{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.stage %}stage={{ request.GET.stage|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page=1&sort=old"
+          title="Oldest first"
+          aria-label="Oldest first"
+        >Old</a>
+      </div>
     </div>
 
-    <div class="opp-table-wrap">
-      <table class="opp-table">
+    <div class="crm-table-wrap">
+      <table class="crm-table is-compact is-dense crm-table-mobile-cards">
         <thead>
           <tr>
-            <th class="opp-image-cell">Image</th>
+            <th>Image</th>
             <th>Opportunity</th>
             <th>Value</th>
             <th>Product</th>
@@ -191,22 +205,33 @@
         <tbody>
           {% for opp in page_obj %}
             <tr>
-              <td class="opp-image-cell" data-label="Image">
-                <a class="opp-product-thumb" href="{% url 'opportunity_detail' opp.pk %}" aria-label="Open {{ opp.opportunity_id }}">
+              <td data-label="Image">
+                <a class="crm-thumb is-48" href="{% url 'opportunity_detail' opp.pk %}" aria-label="Open {{ opp.opportunity_id }}">
                   {% if opp.primary_reference_image %}
-                    <img class="lead-thumb" src="{{ opp.primary_reference_image.image.url }}" alt="{{ opp.primary_reference_image.caption|default:'Product reference image' }}">
+                    <img src="{{ opp.primary_reference_image.image.url }}" alt="{{ opp.primary_reference_image.caption|default:'Product reference image' }}">
                   {% else %}
-                    <span>No img</span>
+                    <span class="crm-cell-meta">No img</span>
                   {% endif %}
                 </a>
               </td>
-              <td data-label="Opportunity" class="opp-primary-cell">
-                <div class="opp-primary">
-                  <a href="{% url 'opportunity_detail' opp.pk %}" class="opp-link">{{ opp.opportunity_id }}</a>
-                  <strong>{% if opp.lead %}{{ opp.lead.account_brand|default:"Company not set" }}{% else %}No linked lead{% endif %}</strong>
-                  <span>
+
+              <td data-label="Opportunity">
+                <div class="crm-cell-stack">
+                  <a href="{% url 'opportunity_detail' opp.pk %}" class="crm-link">{{ opp.opportunity_id }}</a>
+                  <strong class="crm-cell-title">
+                    {% if opp.lead %}
+                      {{ opp.lead.account_brand|default:"Company not set" }}
+                    {% elif opp.customer %}
+                      {{ opp.customer.account_brand|default:opp.customer.contact_name|default:"Customer" }}
+                    {% else %}
+                      Account not linked
+                    {% endif %}
+                  </strong>
+                  <span class="crm-cell-meta">
                     {% if opp.lead %}
                       {{ opp.lead.lead_id }}{% if opp.lead.contact_name %} · {{ opp.lead.contact_name }}{% endif %}
+                    {% elif opp.customer %}
+                      Customer {{ opp.customer.customer_code }}{% if opp.customer.contact_name %} · {{ opp.customer.contact_name }}{% endif %}
                     {% else %}
                       Lead unavailable
                     {% endif %}
@@ -215,49 +240,54 @@
               </td>
 
               <td data-label="Value">
-                <div class="opp-value-stack">
+                <div class="crm-cell-stack">
                   {% if opp.kpi_order_value %}
-                    <strong>BDT {{ opp.kpi_order_value|floatformat:0 }}</strong>
+                    <strong class="crm-cell-title" title="{{ opp.kpi_order_value|finance_money:opp.order_currency }}">{{ opp.kpi_order_value|compact_money:opp.order_currency }}</strong>
                   {% else %}
-                    <strong class="opp-muted">Value not set</strong>
-                  {% endif %}
-                  {% if opp.order_value_usd %}
-                    <span>USD {{ opp.order_value_usd|floatformat:0 }}</span>
+                    <strong class="crm-cell-title crm-text-muted">Value not set</strong>
                   {% endif %}
                   {% if opp.moq_units %}
-                    <span>{{ opp.moq_units }} units</span>
+                    <span class="crm-cell-meta">{{ opp.moq_units }} units</span>
                   {% endif %}
                 </div>
               </td>
 
               <td data-label="Product">
-                <div class="opp-product-stack">
-                  <strong>{{ opp.product_category|default:"Other" }}</strong>
-                  <span>{{ opp.product_type|default:"Other" }}</span>
+                <div class="crm-cell-stack">
+                  <strong class="crm-cell-title">{{ opp.product_category|default:"Other" }}</strong>
+                  <span class="crm-cell-meta">{{ opp.product_type|default:"Other" }}</span>
                   {% if opp.lead and opp.lead.primary_product_type %}
-                    <span>Lead type: {{ opp.lead.get_primary_product_type_display|default:opp.lead.primary_product_type }}</span>
+                    <span class="crm-cell-meta">Lead type: {{ opp.lead.get_primary_product_type_display|default:opp.lead.primary_product_type }}</span>
                   {% endif %}
                 </div>
               </td>
 
               <td data-label="Stage">
-                <span class="opp-stage-badge" data-stage="{{ opp.stage }}">{{ opp.stage }}</span>
-                <span class="opp-status-pill {{ opp.status_key }}">{{ opp.status_label }}</span>
+                <div class="crm-cell-stack">
+                  <span class="crm-status-pill" data-stage="{{ opp.stage }}">{{ opp.stage }}</span>
+                  <span class="crm-status-pill {{ opp.status_key }}">{{ opp.status_label }}</span>
+                </div>
               </td>
 
               <td data-label="Expected / follow up">
                 {% if opp.next_followup %}
-                  <div class="opp-date-stack">
-                    <strong>{{ opp.next_followup|date:"M j, Y" }}</strong>
-                    <span>Follow-up date</span>
+                  <div class="crm-cell-stack">
+                    <strong class="crm-cell-title">{{ opp.next_followup|date:"M j, Y" }}</strong>
+                    <span class="crm-cell-meta">Follow-up date</span>
                   </div>
                 {% else %}
-                  <span class="opp-muted">No follow-up set</span>
+                  <span class="crm-cell-meta">No follow-up set</span>
                 {% endif %}
               </td>
 
               <td data-label="Assigned">
-                {% if opp.lead and opp.lead.assigned_to %}
+                {% if opp.assigned_to %}
+                  {% if opp.assigned_to.get_full_name %}
+                    {{ opp.assigned_to.get_full_name }}
+                  {% else %}
+                    {{ opp.assigned_to.username }}
+                  {% endif %}
+                {% elif opp.lead and opp.lead.assigned_to %}
                   {% if opp.lead.assigned_to.get_full_name %}
                     {{ opp.lead.assigned_to.get_full_name }}
                   {% else %}
@@ -266,50 +296,55 @@
                 {% elif opp.lead and opp.lead.owner %}
                   {{ opp.lead.owner }}
                 {% else %}
-                  <span class="opp-muted">Unassigned</span>
+                  <span class="crm-cell-meta">Unassigned</span>
                 {% endif %}
               </td>
 
               <td data-label="Next action">
-                <div class="opp-next-action">
+                <div class="crm-cell-meta">
                   {% firstof opp.lead.recommended_next_action opp.notes "Review stage, value, and next follow-up." %}
                 </div>
               </td>
 
               <td data-label="Actions">
-                <div class="opp-row-actions">
-                  <a class="opp-btn opp-btn--tiny opp-btn--primary" href="{% url 'opportunity_detail' opp.pk %}">Open</a>
-                  <a class="opp-btn opp-btn--tiny opp-btn--ghost" href="{% url 'opportunity_edit' opp.pk %}">Edit</a>
-                  <a class="opp-btn opp-btn--tiny opp-btn--ghost" href="{% url 'cost_sheet_create_for_opportunity' opp.pk %}">Create quote</a>
-                  <a class="opp-btn opp-btn--tiny opp-btn--ghost" href="{% url 'opportunity_detail' opp.pk %}#opportunity-stage">Move stage</a>
-	                  {% if can_archive_records and not opp.is_archived %}
-	                    <form method="post" action="{% url 'opportunity_delete' opp.pk %}" style="display:inline;">
-	                      {% csrf_token %}
-	                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                        <input type="hidden" name="workflow_action" value="archive">
-	                      <button type="submit" class="opp-btn opp-btn--tiny opp-btn--ghost" onclick="return confirm('Are you sure you want to archive this record? This action will hide it from active lists but keep the history.');">Archive</button>
-	                    </form>
-                      {% if opp.can_hard_delete %}
-                        <form method="post" action="{% url 'opportunity_delete' opp.pk %}" style="display:inline;">
+                <div class="crm-table-actions">
+                  <a class="crm-btn crm-btn-primary" href="{% url 'opportunity_detail' opp.pk %}">Open</a>
+                  <details class="crm-action-menu">
+                    <summary class="crm-btn crm-btn-muted crm-action-menu-button" aria-label="More actions">...</summary>
+                    <div class="crm-action-menu-list">
+                      <a class="crm-action-menu-item" href="{% url 'opportunity_edit' opp.pk %}">Edit</a>
+                      <a class="crm-action-menu-item" href="{% url 'cost_sheet_create_for_opportunity' opp.pk %}">Create quote</a>
+                      <a class="crm-action-menu-item" href="{% url 'opportunity_detail' opp.pk %}#opportunity-stage">Move stage</a>
+                      {% if can_archive_records and not opp.is_archived %}
+                        <form method="post" action="{% url 'opportunity_delete' opp.pk %}" class="crm-action-menu-form">
                           {% csrf_token %}
                           <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                          <input type="hidden" name="workflow_action" value="delete">
-                          <button type="submit" class="opp-btn opp-btn--tiny opp-btn--ghost" onclick="return confirm('Are you sure? This action cannot be undone.');">Delete</button>
+                          <input type="hidden" name="workflow_action" value="archive">
+                          <button type="submit" class="crm-action-menu-item" onclick="return confirm('Are you sure you want to archive this record? This action will hide it from active lists but keep the history.');">Archive</button>
                         </form>
+                        {% if opp.can_hard_delete %}
+                          <form method="post" action="{% url 'opportunity_delete' opp.pk %}" class="crm-action-menu-form">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <input type="hidden" name="workflow_action" value="delete">
+                            <button type="submit" class="crm-action-menu-item is-danger" onclick="return confirm('Are you sure? This action cannot be undone.');">Delete</button>
+                          </form>
+                        {% endif %}
+                      {% elif opp.is_archived %}
+                        <span class="crm-action-menu-item">Archived</span>
                       {% endif %}
-	                  {% elif opp.is_archived %}
-	                    <span class="opp-btn opp-btn--tiny opp-btn--ghost">Archived</span>
-	                  {% endif %}
+                    </div>
+                  </details>
                 </div>
               </td>
             </tr>
           {% empty %}
             <tr>
               <td colspan="9">
-                <div class="opp-empty-state">
-                  <strong>No opportunities found</strong>
-                  <span>Try clearing filters, widening the date range, or creating a new opportunity from a qualified lead.</span>
-                  <a href="{% url 'add_opportunity' %}" class="opp-btn opp-btn--primary">Add opportunity</a>
+                <div class="crm-empty-state">
+                  <strong class="crm-cell-title">No opportunities found</strong>
+                  <span class="crm-cell-meta">Try clearing filters, widening the date range, or creating a new opportunity from a qualified lead.</span>
+                  <a href="{% url 'add_opportunity' %}" class="crm-btn crm-btn-primary">Add opportunity</a>
                 </div>
               </td>
             </tr>
@@ -318,20 +353,20 @@
       </table>
     </div>
 
-    <div class="opp-pager">
-      <div class="opp-muted">
+    <div class="crm-panel-footer">
+      <div class="crm-cell-meta">
         Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }}
       </div>
 
-      <div class="opp-pager-actions">
+      <div class="crm-action-group">
         {% if page_obj.has_previous %}
-          <a class="opp-btn opp-btn--ghost" href="?{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.stage %}stage={{ request.GET.stage|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}{% if request.GET.sort %}sort={{ request.GET.sort|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page={{ page_obj.previous_page_number }}">Prev</a>
+          <a class="crm-btn crm-btn-muted" href="?{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.stage %}stage={{ request.GET.stage|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}{% if request.GET.sort %}sort={{ request.GET.sort|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page={{ page_obj.previous_page_number }}">Prev</a>
         {% endif %}
 
-        <span class="opp-page-chip">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        <span class="crm-status-pill is-brand">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
 
         {% if page_obj.has_next %}
-          <a class="opp-btn opp-btn--ghost" href="?{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.stage %}stage={{ request.GET.stage|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}{% if request.GET.sort %}sort={{ request.GET.sort|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page={{ page_obj.next_page_number }}">Next</a>
+          <a class="crm-btn crm-btn-muted" href="?{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.stage %}stage={{ request.GET.stage|urlencode }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}{% if request.GET.sort %}sort={{ request.GET.sort|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page={{ page_obj.next_page_number }}">Next</a>
         {% endif %}
       </div>
     </div>

@@ -1,190 +1,35 @@
 {% extends "crm/base.html" %}
-{% load humanize crm_extras %}
+{% load static humanize crm_extras %}
 {% block content %}
 
-<style>
-  .pp-wrap { color:#f9fafb; }
+<link rel="stylesheet" href="{% static 'crm/ui_system.css' %}?v=reports-modernization">
+<link rel="stylesheet" href="{% static 'crm/reports_modern.css' %}?v=reports-modernization">
 
-  .pp-title{
-    color:#ffffff;
-    font-weight:900;
-    font-size:30px;
-    letter-spacing:0.3px;
-    text-shadow: 0 2px 12px rgba(0,0,0,0.75);
-  }
-
-  .pp-sub{
-    color:#f1f5f9;
-    font-weight:800;
-    font-size:14px;
-    line-height:1.5;
-  }
-
-  .pp-card{
-    background:#020617;
-    border:1px solid #475569;
-    border-radius:16px;
-    box-shadow: 0 12px 28px rgba(0,0,0,0.55);
-  }
-
-  .pp-head{ color:#facc15; font-weight:900; }
-
-  .pp-filter label{ color:#ffffff; font-weight:900; }
-  .pp-filter input{
-    background:#0b1220;
-    border:1px solid #475569;
-    color:#ffffff;
-    font-weight:900;
-  }
-  .pp-filter input:focus{
-    background:#0b1220;
-    color:#ffffff;
-    border-color:#facc15;
-    box-shadow: 0 0 0 0.2rem rgba(250,204,21,0.18);
-  }
-
-  .pp-table{
-    font-size:14px;
-    border-color:#475569;
-  }
-
-  .pp-table thead th{
-    color:#fff7c2 !important;
-    font-weight:900;
-    background:#0b1220 !important;
-    border-bottom:2px solid #475569 !important;
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    white-space: nowrap;
-  }
-
-  .pp-table tbody td{
-    color:#ffffff !important;
-    font-weight:900;
-    border-top:1px solid rgba(71,85,105,0.85) !important;
-    white-space: nowrap;
-  }
-
-  .pp-table tbody tr:nth-child(odd) td{
-    background: rgba(255,255,255,0.04) !important;
-  }
-
-  .pp-table tbody tr:hover td{
-    background: rgba(250,204,21,0.12) !important;
-  }
-
-  .pp-muted{ color:#e2e8f0 !important; font-weight:900; }
-  .pp-note{
-    color:#f1f5f9;
-    font-weight:800;
-    font-size:13px;
-    line-height:1.5;
-  }
-
-  .pp-actions{
-    display:flex;
-    flex-wrap:wrap;
-    gap:8px;
-  }
-
-  .pp-summary{
-    display:grid;
-    grid-template-columns:repeat(4, minmax(0,1fr));
-    gap:12px;
-    margin-bottom:16px;
-  }
-
-  .pp-summary-card{
-    background:linear-gradient(180deg, rgba(15,23,42,0.96), rgba(2,6,23,0.96));
-    border:1px solid #475569;
-    border-radius:16px;
-    padding:14px;
-    box-shadow:0 12px 28px rgba(0,0,0,0.45);
-  }
-
-  .pp-summary-card span{
-    display:block;
-    color:#cbd5e1;
-    font-size:11px;
-    font-weight:900;
-    letter-spacing:.08em;
-    text-transform:uppercase;
-  }
-
-  .pp-summary-card strong{
-    display:block;
-    margin-top:7px;
-    color:#ffffff;
-    font-size:22px;
-    line-height:1.15;
-    font-weight:900;
-  }
-
-  .pp-summary-card small{
-    display:block;
-    margin-top:7px;
-    color:#cbd5e1;
-    font-size:12px;
-    line-height:1.4;
-    font-weight:800;
-  }
-
-  .pp-badge{
-    font-weight:900;
-    padding:6px 10px;
-    border-radius:999px;
-  }
-
-  .pp-money{ font-variant-numeric: tabular-nums; }
-
-  /* Sorting */
-  .pp-sort{ cursor:pointer; user-select:none; }
-  .pp-sort .pp-arrow{ opacity:0.6; margin-left:6px; font-size:12px; }
-  .pp-sort[data-sort="asc"] .pp-arrow{ opacity:1; }
-  .pp-sort[data-sort="desc"] .pp-arrow{ opacity:1; }
-
-  @media (max-width:1100px){
-    .pp-summary{ grid-template-columns:repeat(2, minmax(0,1fr)); }
-  }
-
-  @media (max-width:720px){
-    .pp-summary{ grid-template-columns:1fr; }
-    .pp-actions .btn{ width:100%; }
-  }
-
-  @media print{
-    .crm-topbar,
-    .crm-dropdown-menu,
-    .pp-actions,
-    .pp-filter{
-      display:none !important;
-    }
-    .pp-card,
-    .pp-summary-card{
-      box-shadow:none !important;
-    }
-  }
-</style>
-
-<div class="container-fluid pp-wrap">
-  <div style="max-width:1500px;margin:0 auto;">
+<div class="container-fluid pp-wrap reports-modern-page" data-reports-root data-crm-density="compact">
+  <div class="reports-modern-inner">
 
     <!-- Header -->
-    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3 reports-header crm-header">
       <div>
-        <div class="pp-title">Production profit report</div>
+        <div class="pp-title">Revenue Breakdown Dashboard</div>
 
         <div class="pp-sub mt-2">
-          Revenue from Canada IN. Cost from Bangladesh OUT.
-          Swing sub type is
-          <span style="color:#facc15;">{{ SWING_SUB_TYPE|default:"Swing Charge" }}</span>.
-          Bangladesh swing is shown in BDT. Current display conversion: 1 CAD = {{ cad_to_bdt|floatformat:2|intcomma }} BDT.
+          Read-only production revenue, sewing revenue, sample revenue, and other service income.
+          Sample revenue is tracked separately and excluded from production margin.
+          Current display conversion: 1 CAD = {{ cad_to_bdt|floatformat:2|intcomma }} BDT.
         </div>
       </div>
 
       <div class="pp-actions">
         <button class="btn btn-outline-light btn-sm rounded-pill fw-bold" type="button" onclick="window.print()">Print</button>
+        <a class="btn btn-outline-light btn-sm rounded-pill fw-bold"
+           href="?year={{ filter_year }}&month={{ filter_month }}&export=pdf">
+          PDF export
+        </a>
+        <a class="btn btn-outline-light btn-sm rounded-pill fw-bold"
+           href="?year={{ filter_year }}&month={{ filter_month }}&export=xlsx">
+          Excel export
+        </a>
         <a class="btn btn-outline-light btn-sm rounded-pill fw-bold"
            href="{% url 'accounting_entry_list' %}">
           Back
@@ -192,31 +37,225 @@
       </div>
     </div>
 
+    <section class="crm-kpi-strip is-compact reports-kpi-strip" aria-label="Report KPI summary">
+      <article class="crm-kpi-card crm-kpi-horizontal">
+        <div>
+          <div class="crm-kpi-label">Revenue</div>
+          <div class="crm-kpi-value">{{ company_overview.total_revenue_cad_equiv|finance_money:"CAD" }}</div>
+          <div class="crm-kpi-note">{{ company_overview.total_revenue_bdt|finance_money:"BDT" }} BDT total</div>
+        </div>
+        <span class="crm-kpi-indicator">R</span>
+      </article>
+      <article class="crm-kpi-card crm-kpi-horizontal">
+        <div>
+          <div class="crm-kpi-label">Production</div>
+          <div class="crm-kpi-value">{{ rows|length|intcomma }}</div>
+          <div class="crm-kpi-note">Production rows in this report</div>
+        </div>
+        <span class="crm-kpi-indicator">P</span>
+      </article>
+      <article class="crm-kpi-card crm-kpi-horizontal">
+        <div>
+          <div class="crm-kpi-label">Profit</div>
+          <div class="crm-kpi-value">{{ company_overview.net_profit_cad_equiv|finance_money:"CAD" }}</div>
+          <div class="crm-kpi-note">Net after commission</div>
+        </div>
+        <span class="crm-kpi-indicator">$</span>
+      </article>
+      <article class="crm-kpi-card crm-kpi-horizontal">
+        <div>
+          <div class="crm-kpi-label">Pending</div>
+          <div class="crm-kpi-value">{{ sample_summary.balance_cad|finance_money:"CAD" }}</div>
+          <div class="crm-kpi-note">Sample balance only</div>
+        </div>
+        <span class="crm-kpi-indicator">B</span>
+      </article>
+      <article class="crm-kpi-card crm-kpi-horizontal">
+        <div>
+          <div class="crm-kpi-label">Approvals</div>
+          <div class="crm-kpi-value">Queue</div>
+          <div class="crm-kpi-note">Existing approval workflow</div>
+        </div>
+        <span class="crm-kpi-indicator">A</span>
+      </article>
+      <article class="crm-kpi-card crm-kpi-horizontal">
+        <div>
+          <div class="crm-kpi-label">Shipments</div>
+          <div class="crm-kpi-value">Ops</div>
+          <div class="crm-kpi-note">Shipment reports remain separate</div>
+        </div>
+        <span class="crm-kpi-indicator">S</span>
+      </article>
+    </section>
+
+    <nav class="crm-tabs is-compact is-sticky reports-tabs" aria-label="Report sections" role="tablist" data-reports-tabs>
+      <button type="button" class="crm-tab is-active" id="reports-tab-overview" data-reports-tab-target="overview" role="tab" aria-selected="true" aria-controls="reports-panel-overview">Overview</button>
+      <button type="button" class="crm-tab" id="reports-tab-sales" data-reports-tab-target="sales" role="tab" aria-selected="false" aria-controls="reports-panel-sales">Sales</button>
+      <button type="button" class="crm-tab" id="reports-tab-production" data-reports-tab-target="production" role="tab" aria-selected="false" aria-controls="reports-panel-production">Production <span class="crm-tab-count">{{ rows|length }}</span></button>
+      <button type="button" class="crm-tab" id="reports-tab-accounting" data-reports-tab-target="accounting" role="tab" aria-selected="false" aria-controls="reports-panel-accounting">Accounting</button>
+      <button type="button" class="crm-tab" id="reports-tab-shipments" data-reports-tab-target="shipments" role="tab" aria-selected="false" aria-controls="reports-panel-shipments">Shipments</button>
+      <button type="button" class="crm-tab" id="reports-tab-history" data-reports-tab-target="history" role="tab" aria-selected="false" aria-controls="reports-panel-history">History</button>
+    </nav>
+
+    <section class="crm-tab-panel reports-tab-panel" id="reports-panel-overview" data-reports-tab-panel="overview" role="tabpanel" aria-labelledby="reports-tab-overview">
+    <div class="mb-3 pp-head" style="font-size:18px;">Company Revenue Overview</div>
     <div class="pp-summary">
       <div class="pp-summary-card">
-        <span>Total revenue</span>
-        <strong>{{ profit_summary.total_revenue_cad|finance_money:"CAD" }}</strong>
-        <small>{{ profit_summary.order_count }} order row(s) in this period.</small>
+        <span>Total Revenue</span>
+        <strong>{{ company_overview.total_revenue_cad_equiv|finance_money:"CAD" }}</strong>
+        <small>CAD equivalent total. BDT total: {{ company_overview.total_revenue_bdt|finance_money:"BDT" }}.</small>
       </div>
       <div class="pp-summary-card">
-        <span>Total cost</span>
-        <strong>{{ profit_summary.total_cost_cad|finance_money:"CAD" }}</strong>
-        <small>Converted CAD display. Original BD total cost: {{ profit_summary.total_bd_cost_bdt|finance_money:"BDT" }}.</small>
+        <span>Total Cost</span>
+        <strong>{{ company_overview.total_cost_cad_equiv|finance_money:"CAD" }}</strong>
+        <small>CAD equivalent total. BDT total: {{ company_overview.total_cost_bdt|finance_money:"BDT" }}.</small>
       </div>
       <div class="pp-summary-card">
-        <span>Profit</span>
-        <strong>{{ profit_summary.total_profit_cad|finance_money:"CAD" }}</strong>
-        <small>Margin {{ profit_summary.margin_pct|floatformat:1 }}% across visible rows.</small>
+        <span>Gross Profit</span>
+        <strong>{{ company_overview.gross_profit_cad_equiv|finance_money:"CAD" }}</strong>
+        <small>BDT gross profit: {{ company_overview.gross_profit_bdt|finance_money:"BDT" }}.</small>
       </div>
       <div class="pp-summary-card">
-        <span>Swing / risk</span>
-        <strong>{{ profit_summary.total_swing_bdt|finance_money:"BDT" }}</strong>
-        <small>{{ profit_summary.loss_count }} loss row(s), {{ profit_summary.profitable_count }} non-loss row(s).</small>
+        <span>Sales Commission</span>
+        <strong>{{ company_overview.sales_commission_cad_equiv|finance_money:"CAD" }}</strong>
+        <small>Internal commission only. Invoice totals are not reduced.</small>
+      </div>
+      <div class="pp-summary-card">
+        <span>Net Profit After Commission</span>
+        <strong>{{ company_overview.net_profit_cad_equiv|finance_money:"CAD" }}</strong>
+        <small>Gross profit less sales commission.</small>
+      </div>
+      <div class="pp-summary-card">
+        <span>Gross Margin %</span>
+        <strong>{% if company_overview.gross_margin_pct is not None %}{{ company_overview.gross_margin_pct|floatformat:1 }}%{% else %}N/A{% endif %}</strong>
+        <small>{% if company_overview.rate_available %}CAD equivalent uses the displayed exchange rate.{% else %}Exchange rate unavailable for conversion.{% endif %}</small>
+      </div>
+    </div>
+    </section>
+
+    <section class="crm-tab-panel reports-tab-panel" id="reports-panel-production" data-reports-tab-panel="production" role="tabpanel" aria-labelledby="reports-tab-production" hidden>
+    <div class="pp-summary">
+      <div class="pp-summary-card">
+        <span>Bulk Production Revenue</span>
+        <strong>{{ bulk_summary.revenue_cad|finance_money:"CAD" }}</strong>
+        <small>Canada export revenue. Bangladesh local revenue: {{ bulk_summary.revenue_bdt|finance_money:"BDT" }}.</small>
+      </div>
+      <div class="pp-summary-card">
+        <span>Bulk Cost / Profit</span>
+        <strong>{{ bulk_summary.profit_cad|finance_money:"CAD" }}</strong>
+        <small>Cost: {{ bulk_summary.cost_cad|finance_money:"CAD" }} / {{ bulk_summary.cost_bdt|finance_money:"BDT" }}. Margin {% if bulk_summary.margin_pct is not None %}{{ bulk_summary.margin_pct|floatformat:1 }}%{% else %}N/A{% endif %}.</small>
+      </div>
+      <div class="pp-summary-card">
+        <span>Sewing Charge Revenue</span>
+        <strong>{{ sewing_summary.revenue_cad|finance_money:"CAD" }}</strong>
+        <small>Canada sewing charge. Bangladesh local sewing: {{ sewing_summary.revenue_bdt|finance_money:"BDT" }}.</small>
+      </div>
+      <div class="pp-summary-card">
+        <span>Sewing Cost / Profit</span>
+        <strong>{{ sewing_summary.profit_cad|finance_money:"CAD" }}</strong>
+        <small>Cost: {{ sewing_summary.cost_cad|finance_money:"CAD" }} / {{ sewing_summary.cost_bdt|finance_money:"BDT" }}. Margin {% if sewing_summary.margin_pct is not None %}{{ sewing_summary.margin_pct|floatformat:1 }}%{% else %}N/A{% endif %}.</small>
+      </div>
+    </div>
+    </section>
+
+    <section class="crm-tab-panel reports-tab-panel" id="reports-panel-sales" data-reports-tab-panel="sales" role="tabpanel" aria-labelledby="reports-tab-sales" hidden>
+    <div class="pp-summary">
+      <div class="pp-summary-card">
+        <span>Sample Revenue</span>
+        <strong>{{ sample_summary.revenue_cad|finance_money:"CAD" }}</strong>
+        <small>BDT sample revenue: {{ sample_summary.revenue_bdt|finance_money:"BDT" }}. Excluded from production margin.</small>
+      </div>
+      <div class="pp-summary-card">
+        <span>Sample Invoices</span>
+        <strong>{{ sample_summary.invoice_count|intcomma }}</strong>
+        <small>Pieces: {% if sample_summary.pieces_unavailable %}Unavailable{% else %}{{ sample_summary.pieces|intcomma }}{% endif %}.</small>
+      </div>
+      <div class="pp-summary-card">
+        <span>Sample Paid</span>
+        <strong>{{ sample_summary.paid_cad|finance_money:"CAD" }}</strong>
+        <small>BDT paid: {{ sample_summary.paid_bdt|finance_money:"BDT" }}.</small>
+      </div>
+      <div class="pp-summary-card">
+        <span>Sample Balance</span>
+        <strong>{{ sample_summary.balance_cad|finance_money:"CAD" }}</strong>
+        <small>BDT balance: {{ sample_summary.balance_bdt|finance_money:"BDT" }}.</small>
       </div>
     </div>
 
-    <!-- Filter -->
     <div class="card mb-3 pp-card">
+      <div class="card-header" style="border-bottom:1px solid #111827;">
+        <span class="pp-head" style="font-size:16px;">Other Revenue</span>
+      </div>
+      <div class="card-body">
+        <div class="row g-2">
+          {% for row in other_summary_rows %}
+            <div class="col-md-4">
+              <div class="pp-summary-card h-100">
+                <span>{{ row.label }}</span>
+                <strong>{{ row.total_cad|finance_money:"CAD" }}</strong>
+                <small>{{ row.total_bdt|finance_money:"BDT" }} · {{ row.count|intcomma }} invoice(s)</small>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-3 pp-card">
+      <div class="card-header" style="border-bottom:1px solid #111827;">
+        <span class="pp-head" style="font-size:16px;">Sample Revenue</span>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive" style="max-height:360px;">
+          <table class="table table-dark table-sm align-middle pp-table">
+            <thead>
+              <tr>
+                <th>Sample Invoice Number</th>
+                <th>Client</th>
+                <th>Linked Lead ID</th>
+                <th>Linked Opportunity ID</th>
+                <th>Friendly PO</th>
+                <th>Sample type</th>
+                <th class="text-end">Number of sample pieces</th>
+                <th>Currency</th>
+                <th class="text-end">Sample invoice amount</th>
+                <th class="text-end">Paid amount</th>
+                <th class="text-end">Balance</th>
+                <th>Payment status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in sample_rows %}
+                <tr>
+                  <td>{{ row.invoice_number }}</td>
+                  <td>{{ row.client|default:"Unavailable" }}</td>
+                  <td>{{ row.lead_id|default:"Unavailable" }}</td>
+                  <td>{{ row.opportunity_id|default:"Unavailable" }}</td>
+                  <td>{{ row.production_order|default:"Unavailable" }}</td>
+                  <td>{{ row.sample_type|default:"Sample" }}</td>
+                  <td class="text-end">{% if row.pieces_available %}{{ row.pieces|intcomma }}{% else %}Unavailable{% endif %}</td>
+                  <td>{{ row.currency }}</td>
+                  <td class="text-end">{{ row.revenue|finance_money:row.currency }}</td>
+                  <td class="text-end">{{ row.paid_amount|finance_money:row.currency }}</td>
+                  <td class="text-end">{{ row.balance|finance_money:row.currency }}</td>
+                  <td>{{ row.payment_status }}</td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="12" class="text-center pp-muted">No sample revenue found</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="mt-3 pp-note">
+          Sample revenue is tracked separately and excluded from production margin. Missing quantity or cost is shown as Unavailable or N/A.
+        </div>
+      </div>
+    </div>
+    </section>
+
+    <section class="crm-tab-panel reports-tab-panel" id="reports-panel-production-detail" data-reports-tab-panel="production" role="tabpanel" aria-labelledby="reports-tab-production" hidden>
+    <!-- Filter -->
+    <div class="card mb-3 pp-card reports-filter-card crm-filter-bar">
       <div class="card-body pp-filter">
         <form method="get" class="row g-3 align-items-end">
           <div class="col-sm-2">
@@ -232,7 +271,7 @@
           </div>
 
           <div class="col-sm-2">
-            <button class="btn btn-warning btn-sm w-100 rounded-pill fw-bold">
+            <button type="submit" class="btn btn-warning btn-sm w-100 rounded-pill fw-bold">
               Apply
             </button>
           </div>
@@ -264,7 +303,9 @@
                 <th class="text-end pp-sort" data-type="num">BD total cost BDT <span class="pp-arrow">↕</span></th>
 
                 <th class="text-end pp-sort" data-type="num">Cost CAD <span class="pp-arrow">↕</span></th>
-                <th class="text-end pp-sort" data-type="num">Profit CAD <span class="pp-arrow">↕</span></th>
+                <th class="text-end pp-sort" data-type="num">Gross Profit CAD <span class="pp-arrow">↕</span></th>
+                <th class="text-end pp-sort" data-type="num">Sales Commission CAD <span class="pp-arrow">↕</span></th>
+                <th class="text-end pp-sort" data-type="num">Net Profit CAD <span class="pp-arrow">↕</span></th>
                 <th class="text-end pp-sort" data-type="num">Margin % <span class="pp-arrow">↕</span></th>
               </tr>
             </thead>
@@ -325,8 +366,17 @@
                 </td>
 
                 <td class="text-end fw-bold pp-money"
-                    style="color:{% if r.profit_cad|default:0 < 0 %}#ff6b6b{% else %}#4ade80{% endif %};">
-                  {{ r.profit_cad|default:0|finance_money:"CAD" }}
+                    style="color:{% if r.gross_profit_cad|default:0 < 0 %}#ff6b6b{% else %}#4ade80{% endif %};">
+                  {{ r.gross_profit_cad|default:0|finance_money:"CAD" }}
+                </td>
+
+                <td class="text-end pp-money">
+                  {{ r.sales_commission_cad|default:0|finance_money:"CAD" }}
+                </td>
+
+                <td class="text-end fw-bold pp-money"
+                    style="color:{% if r.net_profit_cad|default:0 < 0 %}#ff6b6b{% else %}#4ade80{% endif %};">
+                  {{ r.net_profit_cad|default:0|finance_money:"CAD" }}
                 </td>
 
                 <td class="text-end fw-bold pp-money">
@@ -335,7 +385,7 @@
               </tr>
               {% empty %}
               <tr>
-                <td colspan="12" class="text-center pp-muted">
+                <td colspan="14" class="text-center pp-muted">
                   No rows found
                 </td>
               </tr>
@@ -352,12 +402,109 @@
         </div>
       </div>
     </div>
+    </section>
+
+    <section class="crm-tab-panel reports-tab-panel" id="reports-panel-accounting" data-reports-tab-panel="accounting" role="tabpanel" aria-labelledby="reports-tab-accounting" hidden>
+      <div class="card pp-card reports-link-card">
+        <div class="card-body">
+          <div class="pp-head" style="font-size:16px;">Accounting reports</div>
+          <div class="pp-note mt-2">Accounting ledgers, receivables, payables, and this production profit report continue to use their existing pages and formulas.</div>
+          <div class="pp-actions mt-3">
+            <a class="btn btn-outline-light btn-sm rounded-pill fw-bold" href="{% url 'accounting_entry_list' %}">Accounting entries</a>
+            <a class="btn btn-outline-light btn-sm rounded-pill fw-bold" href="{% url 'accounts_receivable_dashboard' %}">Receivables</a>
+            <a class="btn btn-outline-light btn-sm rounded-pill fw-bold" href="{% url 'accounts_payable_dashboard' %}">Payables</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="crm-tab-panel reports-tab-panel" id="reports-panel-shipments" data-reports-tab-panel="shipments" role="tabpanel" aria-labelledby="reports-tab-shipments" hidden>
+      <div class="card pp-card reports-link-card">
+        <div class="card-body">
+          <div class="pp-head" style="font-size:16px;">Shipment reports</div>
+          <div class="pp-note mt-2">Shipment operational pages remain separate from this financial report. No shipment counts or financial totals are recalculated here.</div>
+          <div class="pp-actions mt-3">
+            <a class="btn btn-outline-light btn-sm rounded-pill fw-bold" href="{% url 'shipment_list' %}">Shipment list</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="crm-tab-panel reports-tab-panel" id="reports-panel-history" data-reports-tab-panel="history" role="tabpanel" aria-labelledby="reports-tab-history" hidden>
+      <div class="card pp-card reports-link-card">
+        <div class="card-body">
+          <div class="pp-head" style="font-size:16px;">Report history and saved views</div>
+          <div class="pp-note mt-2">This page did not have persisted saved views in the baseline. The current tab is remembered in this browser session only.</div>
+          <details class="reports-secondary mt-3">
+            <summary>Formula notes</summary>
+            <div class="pp-note mt-2">
+              Sample revenue remains excluded from production margin. Existing export, filter, table sorting, and financial display rules are preserved.
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
 
   </div>
 </div>
 
 <script>
   (function () {
+    const tabButtons = Array.from(document.querySelectorAll("[data-reports-tab-target]"));
+    const tabPanels = Array.from(document.querySelectorAll("[data-reports-tab-panel]"));
+    const tabStorageKey = "reports-active-tab";
+
+    function setReportsTab(name, shouldFocus) {
+      if (!name || !tabButtons.length) return;
+
+      const exists = tabButtons.some(btn => btn.getAttribute("data-reports-tab-target") === name);
+      if (!exists) return;
+
+      tabButtons.forEach(btn => {
+        const active = btn.getAttribute("data-reports-tab-target") === name;
+        btn.classList.toggle("is-active", active);
+        btn.setAttribute("aria-selected", active ? "true" : "false");
+        if (active && shouldFocus) btn.focus();
+      });
+
+      tabPanels.forEach(panel => {
+        const show = panel.getAttribute("data-reports-tab-panel") === name;
+        if (show) panel.removeAttribute("hidden");
+        else panel.setAttribute("hidden", "hidden");
+      });
+
+      try { window.sessionStorage.setItem(tabStorageKey, name); } catch (e) {}
+    }
+
+    let initialTab = "";
+    if (window.location.hash && window.location.hash.indexOf("reports-panel-") === 1) {
+      initialTab = window.location.hash.replace("#reports-panel-", "").replace("-detail", "");
+    }
+    if (!initialTab) {
+      try { initialTab = window.sessionStorage.getItem(tabStorageKey) || ""; } catch (e) {}
+    }
+    setReportsTab(initialTab || "overview", false);
+
+    tabButtons.forEach(btn => {
+      btn.addEventListener("click", function () {
+        setReportsTab(btn.getAttribute("data-reports-tab-target"), false);
+      });
+    });
+
+    document.addEventListener("keydown", function (event) {
+      if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+      const current = document.activeElement;
+      if (!current || !current.matches("[data-reports-tab-target]")) return;
+
+      const index = tabButtons.indexOf(current);
+      if (index < 0) return;
+
+      const direction = event.key === "ArrowRight" ? 1 : -1;
+      const nextIndex = (index + direction + tabButtons.length) % tabButtons.length;
+      event.preventDefault();
+      setReportsTab(tabButtons[nextIndex].getAttribute("data-reports-tab-target"), true);
+    });
+
     const table = document.getElementById("ppTable");
     if (!table) return;
 

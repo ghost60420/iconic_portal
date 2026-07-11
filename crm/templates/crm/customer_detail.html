@@ -1,143 +1,221 @@
 {% extends "crm/base.html" %}
 {% load static %}
-{% block content %}
-<link rel="stylesheet" href="{% static 'crm/customer_detail.css' %}?v=customer-detail-modern-20260507">
+{% load crm_extras %}
 
-<div class="customer-detail-page">
-  <section class="customer-detail-hero">
-    <div class="customer-hero-main">
-      <div class="customer-avatar">{{ customer_initials }}</div>
-      <div>
-        <p class="customer-eyebrow">Account workspace</p>
-        <h1>{{ customer_display_name }}</h1>
-        <div class="customer-hero-meta">
-          <span>{{ customer.contact_name|default:"Contact not set" }}</span>
-          <span>{% firstof customer.city customer.shipping_city "City not set" %}</span>
-          <span>{% firstof customer.country customer.shipping_country "Country not set" %}</span>
-          <span>{{ customer.customer_code }}</span>
-        </div>
-        <div class="customer-hero-badges">
-          <span class="customer-status {{ customer_status_key }}">{{ customer_status_label }}</span>
-          <span class="customer-pill">Active opps {{ active_opps|length }}</span>
-          <span class="customer-pill">Production {{ production_active|length }}</span>
-        </div>
+{% block content %}
+<link rel="stylesheet" href="{% static 'crm/ui_system.css' %}?v=phase3-customer-detail">
+
+<div class="crm-page crm-page-wide crm-stack is-tight" data-crm-density="compact">
+  <section class="crm-header is-compact">
+    <div>
+      <p class="crm-header-kicker">Customer account</p>
+      <h1>{{ customer_display_name }}</h1>
+      <div class="crm-header-meta">
+        <span class="crm-status-pill {% if customer.is_active %}is-success{% else %}is-danger{% endif %}">{{ customer_status_label }}</span>
+        <span class="crm-status-pill">Owner: Account team</span>
+        <span class="crm-status-pill">{{ customer.contact_name|default:"Contact not set" }}</span>
+        <span class="crm-status-pill">{% firstof customer.city customer.shipping_city "City not set" %}</span>
+        <span class="crm-status-pill">{% firstof customer.country customer.shipping_country "Country not set" %}</span>
+        <span class="crm-status-pill is-brand">{{ customer.customer_code }}</span>
       </div>
     </div>
 
-    <div class="customer-hero-actions">
-      <a href="/admin/crm/customer/{{ customer.id }}/change/" class="customer-btn customer-btn--primary">Edit Customer</a>
-      <a href="{% url 'add_opportunity' %}?customer={{ customer.id }}" class="customer-btn customer-btn--ghost">Create Opportunity</a>
-      <a href="{% url 'invoice_list' %}" class="customer-btn customer-btn--ghost">View Invoices</a>
-      <a href="{% url 'production_list' %}?q={{ customer_display_name|urlencode }}&status=active" class="customer-btn customer-btn--ghost">View Production</a>
-      <a href="{% url 'customers_list' %}" class="customer-btn customer-btn--ghost">Back to Customers</a>
-      <a href="#customer-notes" class="customer-btn customer-btn--ghost">Add Note</a>
+    <div class="crm-header-actions">
+      <a href="/admin/crm/customer/{{ customer.id }}/change/" class="crm-btn crm-btn-primary">Edit Customer</a>
+      <a href="{% url 'add_opportunity' %}?customer={{ customer.id }}" class="crm-btn crm-btn-muted">Create Opportunity</a>
+      <a href="{% url 'invoice_list' %}" class="crm-btn crm-btn-muted">View Invoices</a>
+      <a href="{% url 'production_list' %}?q={{ customer_display_name|urlencode }}&status=active" class="crm-btn crm-btn-muted">View Production</a>
+      <a href="{% url 'customers_list' %}" class="crm-btn crm-btn-muted">Back to Customers</a>
+      <a href="#customer-notes" class="crm-btn crm-btn-muted" data-tab-jump="notes">Add Note</a>
+      {% if can_archive_customers and customer.is_active %}
+        <form method="post" action="{% url 'customer_archive' customer.pk %}" class="crm-action-menu-form">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{% url 'customer_detail' customer.pk %}">
+          <button type="submit" class="crm-btn crm-btn-muted" onclick="return confirm('Archive this customer? Linked records will be preserved and the customer will be hidden from the active list.');">Archive Customer</button>
+        </form>
+      {% endif %}
     </div>
   </section>
 
-  <section class="customer-summary-grid" aria-label="Account summary">
-    <article class="customer-summary-card">
-      <span>Total opportunities</span>
-      <strong>{{ opportunities|length }}</strong>
-      <small>{{ active_opps|length }} active opportunities</small>
+  {% if not customer.is_active %}
+    <section class="crm-warning-panel">
+      <strong>This customer is archived.</strong>
+      <p>Linked leads, opportunities, invoices, production orders, payments, shipments, and accounting records remain intact.</p>
+    </section>
+  {% elif can_archive_customers and customer_linked_record_labels %}
+    <section class="crm-warning-panel">
+      <strong>Archive warning</strong>
+      <p>Linked records will be preserved if this customer is archived: {{ customer_linked_record_labels|join:", " }}.</p>
+    </section>
+  {% endif %}
+
+  <section class="crm-kpi-strip is-compact" aria-label="Customer summary">
+    <article class="crm-kpi-card">
+      <div class="crm-kpi-label">Revenue</div>
+      {% for row in revenue_currency_rows %}
+        <div class="crm-kpi-value" title="{{ row.amount|finance_money:row.currency }}">{{ row.amount|compact_money:row.currency }}</div>
+      {% empty %}
+        <div class="crm-kpi-value">{{ total_revenue|floatformat:0 }}</div>
+      {% endfor %}
+      <div class="crm-kpi-note">{{ total_orders }} valued orders</div>
     </article>
-    <article class="customer-summary-card">
-      <span>Total revenue</span>
-      <strong>{{ total_revenue|floatformat:0 }}</strong>
-      <small>{{ total_orders }} valued orders</small>
+    <article class="crm-kpi-card crm-kpi-horizontal">
+      <div>
+        <div class="crm-kpi-label">Open Opportunities</div>
+        <div class="crm-kpi-value">{{ active_opps|length }}</div>
+        <div class="crm-kpi-note">{{ opportunities|length }} total opportunities</div>
+      </div>
+      <span class="crm-kpi-indicator">O</span>
     </article>
-    <article class="customer-summary-card">
-      <span>Active production</span>
-      <strong>{{ production_active|length }}</strong>
-      <small>{{ production_completed|length }} completed orders</small>
+    <article class="crm-kpi-card crm-kpi-horizontal">
+      <div>
+        <div class="crm-kpi-label">Invoices</div>
+        <div class="crm-kpi-value">{{ invoices|length }}</div>
+        <div class="crm-kpi-note">{{ unpaid_invoices|length }} unpaid</div>
+      </div>
+      <span class="crm-kpi-indicator">I</span>
     </article>
-    <article class="customer-summary-card">
-      <span>Unpaid invoices</span>
-      <strong>{{ unpaid_invoices|length }}</strong>
-      <small>{{ unpaid_invoice_total|floatformat:2 }} outstanding</small>
+    <article class="crm-kpi-card crm-kpi-horizontal">
+      <div>
+        <div class="crm-kpi-label">Production</div>
+        <div class="crm-kpi-value">{{ production_active|length }}</div>
+        <div class="crm-kpi-note">{{ production_completed|length }} completed</div>
+      </div>
+      <span class="crm-kpi-indicator">P</span>
     </article>
-    <article class="customer-summary-card">
-      <span>Invoice value</span>
-      <strong>{{ invoice_total|floatformat:0 }}</strong>
-      <small>{{ invoice_paid|floatformat:0 }} paid</small>
+    <article class="crm-kpi-card crm-kpi-horizontal">
+      <div>
+        <div class="crm-kpi-label">Shipments</div>
+        <div class="crm-kpi-value">{% if "shipments" in customer_linked_record_labels %}Linked{% else %}-{% endif %}</div>
+        <div class="crm-kpi-note">No shipment list loaded here</div>
+      </div>
+      <span class="crm-kpi-indicator">S</span>
     </article>
-    <article class="customer-summary-card">
-      <span>Last activity</span>
-      <strong>{% if last_activity %}{{ last_activity|date:"M j" }}{% else %}-{% endif %}</strong>
-      <small>{% if last_activity %}{{ last_activity|date:"Y" }}{% else %}No activity yet{% endif %}</small>
+    <article class="crm-kpi-card">
+      <div class="crm-kpi-label">Payments</div>
+      {% for row in invoice_currency_rows %}
+        <div class="crm-kpi-value" title="{{ row.paid|finance_money:row.currency }}">{{ row.paid|compact_money:row.currency }}</div>
+      {% empty %}
+        <div class="crm-kpi-value">{{ invoice_paid|floatformat:0 }}</div>
+      {% endfor %}
+      <div class="crm-kpi-note">Paid invoice value</div>
     </article>
   </section>
 
-  <section class="customer-detail-grid">
-    <div class="customer-main-column">
-      <article class="customer-card">
-        <div class="customer-section-head">
+  <section class="crm-tabbed" data-crm-tabs>
+    <nav class="crm-tabs is-compact is-sticky" aria-label="Customer detail sections" role="tablist">
+      <button type="button" class="crm-tab is-active" data-tab-target="overview" role="tab" aria-selected="true">Overview</button>
+      <button type="button" class="crm-tab" data-tab-target="leads" role="tab" aria-selected="false">Leads <span class="crm-tab-count">{{ leads|length }}</span></button>
+      <button type="button" class="crm-tab" data-tab-target="opportunities" role="tab" aria-selected="false">Opportunities <span class="crm-tab-count">{{ opportunities|length }}</span></button>
+      <button type="button" class="crm-tab" data-tab-target="production" role="tab" aria-selected="false">Production <span class="crm-tab-count">{{ production_active|length }}</span></button>
+      <button type="button" class="crm-tab" data-tab-target="invoices" role="tab" aria-selected="false">Invoices <span class="crm-tab-count">{{ invoices|length }}</span></button>
+      <button type="button" class="crm-tab" data-tab-target="shipments" role="tab" aria-selected="false">Shipments</button>
+      <button type="button" class="crm-tab" data-tab-target="payments" role="tab" aria-selected="false">Payments</button>
+      <button type="button" class="crm-tab" data-tab-target="notes" role="tab" aria-selected="false">Notes <span class="crm-tab-count">{{ notes_list|length }}</span></button>
+      <button type="button" class="crm-tab" data-tab-target="files" role="tab" aria-selected="false">Files</button>
+      <button type="button" class="crm-tab" data-tab-target="ai" role="tab" aria-selected="false">AI</button>
+      <button type="button" class="crm-tab" data-tab-target="history" role="tab" aria-selected="false">History <span class="crm-tab-count">{{ events|length }}</span></button>
+    </nav>
+
+    <div class="crm-stack">
+      <section class="crm-tab-panel crm-panel" data-tab-panel="overview" role="tabpanel">
+        <div class="crm-panel-header">
           <div>
-            <h2>Contact and company</h2>
-            <p>Primary account details for sales follow up and repeat order planning.</p>
+            <h2 class="crm-panel-title">Contact and company</h2>
+            <p class="crm-panel-subtitle">Primary account details for sales follow up and repeat order planning.</p>
+          </div>
+          <span class="crm-status-pill is-brand">Last activity {% if last_activity %}{{ last_activity|date:"M j, Y" }}{% else %}-{% endif %}</span>
+        </div>
+        <div class="crm-info-grid">
+          <div class="crm-info-tile">
+            <span class="crm-info-label">Email</span>
+            <strong class="crm-info-value">
+              {% if customer.email %}<a class="crm-link" href="mailto:{{ customer.email }}">{{ customer.email }}</a>{% else %}-{% endif %}
+            </strong>
+          </div>
+          <div class="crm-info-tile">
+            <span class="crm-info-label">Phone</span>
+            <strong class="crm-info-value">{{ customer.phone|default:"-" }}</strong>
+          </div>
+          <div class="crm-info-tile">
+            <span class="crm-info-label">Website</span>
+            <strong class="crm-info-value">
+              {% if customer.website %}<a class="crm-link" href="{{ customer.website }}" target="_blank" rel="noopener">{{ customer.website }}</a>{% else %}-{% endif %}
+            </strong>
+          </div>
+          <div class="crm-info-tile">
+            <span class="crm-info-label">Industry</span>
+            <strong class="crm-info-value">{{ customer.industry|default:"-" }}</strong>
+          </div>
+          <div class="crm-info-tile">
+            <span class="crm-info-label">Market</span>
+            <strong class="crm-info-value">{{ customer.market|default:"-" }}</strong>
+          </div>
+          <div class="crm-info-tile">
+            <span class="crm-info-label">Country / city</span>
+            <strong class="crm-info-value">{% firstof customer.country customer.shipping_country "-" %}{% if customer.city or customer.shipping_city %}, {% firstof customer.city customer.shipping_city %}{% endif %}</strong>
           </div>
         </div>
-        <div class="customer-info-grid">
-          <div>
-            <span>Email</span>
-            {% if customer.email %}
-              <strong><a href="mailto:{{ customer.email }}">{{ customer.email }}</a></strong>
-            {% else %}
-              <strong>-</strong>
-            {% endif %}
-          </div>
-          <div>
-            <span>Phone</span>
-            <strong>{{ customer.phone|default:"-" }}</strong>
-          </div>
-          <div>
-            <span>Website</span>
-            {% if customer.website %}
-              <strong><a href="{{ customer.website }}" target="_blank" rel="noopener">{{ customer.website }}</a></strong>
-            {% else %}
-              <strong>-</strong>
-            {% endif %}
-          </div>
-          <div>
-            <span>Industry</span>
-            <strong>{{ customer.industry|default:"-" }}</strong>
-          </div>
-          <div>
-            <span>Market</span>
-            <strong>{{ customer.market|default:"-" }}</strong>
-          </div>
-          <div>
-            <span>Country / city</span>
-            <strong>{% firstof customer.country customer.shipping_country "-" %}{% if customer.city or customer.shipping_city %}, {% firstof customer.city customer.shipping_city %}{% endif %}</strong>
-          </div>
-          <div class="customer-info-wide">
-            <span>Address</span>
-            <strong>
+
+        <div class="crm-grid crm-grid-2 crm-mt-sm">
+          <details class="crm-collapse">
+            <summary>Address</summary>
+            <div class="crm-collapse-body">
               {% firstof customer.address_line1 customer.shipping_address1 "" %}
               {% firstof customer.address_line2 customer.shipping_address2 "" %}
               {% firstof customer.city customer.shipping_city "" %}
               {% firstof customer.state customer.shipping_state "" %}
               {% firstof customer.postal_code customer.shipping_postcode "" %}
               {% firstof customer.country customer.shipping_country "" %}
-            </strong>
-          </div>
-          <div class="customer-info-wide">
-            <span>Company notes</span>
-            <strong>{{ customer.notes|default:"No account notes yet." }}</strong>
+            </div>
+          </details>
+          <details class="crm-collapse">
+            <summary>Company notes</summary>
+            <div class="crm-collapse-body">{{ customer.notes|default:"No account notes yet." }}</div>
+          </details>
+        </div>
+      </section>
+
+      <section class="crm-tab-panel crm-panel" data-tab-panel="leads" role="tabpanel" hidden>
+        <div class="crm-panel-header">
+          <div>
+            <h2 class="crm-panel-title">Leads</h2>
+            <p class="crm-panel-subtitle">Linked leads for this customer account.</p>
           </div>
         </div>
-      </article>
-
-      <article class="customer-card">
-        <div class="customer-section-head">
-          <div>
-            <h2>Opportunities</h2>
-            <p>Related sales opportunities, value, status, and next follow up.</p>
+        {% if leads %}
+          <div class="crm-table-wrap">
+            <table class="crm-table is-compact is-dense crm-table-mobile-cards">
+              <thead><tr><th>Lead</th><th>Contact</th><th>Email</th><th>Product</th><th>Open</th></tr></thead>
+              <tbody>
+                {% for lead in leads %}
+                  <tr class="clickable-row" data-href="{% url 'lead_detail' lead.pk %}">
+                    <td data-label="Lead"><a class="crm-link" href="{% url 'lead_detail' lead.pk %}">{{ lead.lead_id }}</a><div class="crm-cell-meta">{{ lead.account_brand|default:lead.contact_name|default:"Lead" }}</div></td>
+                    <td data-label="Contact">{{ lead.contact_name|default:"-" }}</td>
+                    <td data-label="Email">{{ lead.email|default:"-" }}</td>
+                    <td data-label="Product">{{ lead.get_primary_product_type_display|default:lead.primary_product_type|default:"-" }}</td>
+                    <td data-label="Open"><a class="crm-btn crm-btn-muted" href="{% url 'lead_detail' lead.pk %}">Open</a></td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
           </div>
-          <a href="{% url 'add_opportunity' %}?customer={{ customer.id }}" class="customer-btn customer-btn--tiny customer-btn--primary">Create Opportunity</a>
+        {% else %}
+          <div class="crm-empty-state"><strong class="crm-cell-title">No linked leads</strong><span class="crm-cell-meta">Linked leads will appear here.</span></div>
+        {% endif %}
+      </section>
+
+      <section class="crm-tab-panel crm-panel" data-tab-panel="opportunities" role="tabpanel" hidden>
+        <div class="crm-panel-header">
+          <div>
+            <h2 class="crm-panel-title">Opportunities</h2>
+            <p class="crm-panel-subtitle">Related sales opportunities, value, status, and next follow up.</p>
+          </div>
+          <a href="{% url 'add_opportunity' %}?customer={{ customer.id }}" class="crm-btn crm-btn-primary">Create Opportunity</a>
         </div>
         {% if opportunities %}
-          <div class="customer-table-wrap">
-            <table class="customer-mini-table">
+          <div class="crm-table-wrap">
+            <table class="crm-table is-compact is-dense crm-table-mobile-cards">
               <thead>
                 <tr>
                   <th>Opportunity</th>
@@ -151,281 +229,344 @@
               <tbody>
                 {% for opp in opportunities %}
                   <tr class="clickable-row" data-href="{% url 'opportunity_detail' opp.pk %}?customer={{ customer.id }}">
-                    <td>
-                      <a href="{% url 'opportunity_detail' opp.pk %}?customer={{ customer.id }}">{{ opp.opportunity_id }}</a>
-                      <span>{{ opp.product_category|default:"-" }}</span>
+                    <td data-label="Opportunity">
+                      <a class="crm-link" href="{% url 'opportunity_detail' opp.pk %}?customer={{ customer.id }}">{{ opp.opportunity_id }}</a>
+                      <div class="crm-cell-meta">{{ opp.product_category|default:"-" }}</div>
                     </td>
-                    <td><span class="customer-stage-badge">{{ opp.stage }}</span></td>
-                    <td>{% if opp.order_value %}{{ opp.order_value }}{% else %}-{% endif %}</td>
-                    {% if can_view_internal_financials %}<td>{% if opp.profit_margin_pct != None %}{{ opp.profit_margin_pct|floatformat:1 }}%{% else %}-{% endif %}</td>{% endif %}
-                    <td>{{ opp.next_followup|date:"M j, Y"|default:"-" }}</td>
-                    <td><a class="customer-btn customer-btn--tiny customer-btn--ghost" href="{% url 'opportunity_detail' opp.pk %}?customer={{ customer.id }}">Open</a></td>
+                    <td data-label="Stage"><span class="crm-status-pill" data-stage="{{ opp.stage }}">{{ opp.stage }}</span></td>
+                    <td data-label="Value">{% if opp.display_financial_value %}{{ opp.display_financial_value|finance_money:opp.display_financial_currency }}{% else %}-{% endif %}</td>
+                    {% if can_view_internal_financials %}<td data-label="Margin">{% if opp.profit_margin_pct != None %}{{ opp.profit_margin_pct|floatformat:1 }}%{% else %}-{% endif %}</td>{% endif %}
+                    <td data-label="Next follow up">{{ opp.next_followup|date:"M j, Y"|default:"-" }}</td>
+                    <td data-label="Open"><a class="crm-btn crm-btn-muted" href="{% url 'opportunity_detail' opp.pk %}?customer={{ customer.id }}">Open</a></td>
                   </tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
         {% else %}
-          <div class="customer-empty-block">
-            <strong>No opportunities yet</strong>
-            <span>Create an opportunity when this account has a new inquiry or repeat order.</span>
+          <div class="crm-empty-state">
+            <strong class="crm-cell-title">No opportunities yet</strong>
+            <span class="crm-cell-meta">Create an opportunity when this account has a new inquiry or repeat order.</span>
           </div>
         {% endif %}
-      </article>
+      </section>
 
-      <article class="customer-card">
-        <div class="customer-section-head">
+      <section class="crm-tab-panel crm-panel" data-tab-panel="production" role="tabpanel" hidden>
+        <div class="crm-panel-header">
           <div>
-            <h2>Production</h2>
-            <p>Linked active and completed production orders for this account.</p>
+            <h2 class="crm-panel-title">Production</h2>
+            <p class="crm-panel-subtitle">Linked active and completed production orders for this account.</p>
           </div>
-          <a href="{% url 'production_list' %}?q={{ customer_display_name|urlencode }}&status=active" class="customer-btn customer-btn--tiny customer-btn--ghost">View Production</a>
+          <a href="{% url 'production_list' %}?q={{ customer_display_name|urlencode }}&status=active" class="crm-btn crm-btn-muted">View Production</a>
         </div>
         {% if production_active or production_completed %}
-          <div class="customer-table-wrap">
-            <table class="customer-mini-table">
+          <div class="crm-table-wrap">
+            <table class="crm-table is-compact is-dense crm-table-mobile-cards">
               <thead>
-                <tr>
-                  <th>Order</th>
-                  <th>Status</th>
-                  <th>Quantity</th>
-                  <th>Delivery</th>
-                  <th>Updated</th>
-                  <th>Open</th>
-                </tr>
+                <tr><th>Order</th><th>Status</th><th>Quantity</th><th>Delivery</th><th>Updated</th><th>Open</th></tr>
               </thead>
               <tbody>
                 {% for order in production_active %}
                   <tr class="clickable-row" data-href="{% url 'production_detail' order.pk %}">
-                    <td><a href="{% url 'production_detail' order.pk %}">{{ order.order_code|default:order.title }}</a></td>
-                    <td><span class="customer-stage-badge active">{{ order.get_status_display }}</span></td>
-                    <td>{{ order.qty_total|default:"-" }}</td>
-                    <td>{{ order.bulk_deadline|date:"M j, Y"|default:"-" }}</td>
-                    <td>{{ order.updated_at|date:"M j, Y" }}</td>
-                    <td><a class="customer-btn customer-btn--tiny customer-btn--ghost" href="{% url 'production_detail' order.pk %}">Open</a></td>
+                    <td data-label="Order"><a class="crm-link" href="{% url 'production_detail' order.pk %}">{{ order.order_code|default:order.title }}</a></td>
+                    <td data-label="Status"><span class="crm-status-pill is-info">{{ order.get_status_display }}</span></td>
+                    <td data-label="Quantity">{{ order.qty_total|default:"-" }}</td>
+                    <td data-label="Delivery">{{ order.bulk_deadline|date:"M j, Y"|default:"-" }}</td>
+                    <td data-label="Updated">{{ order.updated_at|date:"M j, Y" }}</td>
+                    <td data-label="Open"><a class="crm-btn crm-btn-muted" href="{% url 'production_detail' order.pk %}">Open</a></td>
                   </tr>
                 {% endfor %}
                 {% for order in production_completed %}
                   <tr class="clickable-row" data-href="{% url 'production_detail' order.pk %}">
-                    <td><a href="{% url 'production_detail' order.pk %}">{{ order.order_code|default:order.title }}</a></td>
-                    <td><span class="customer-stage-badge done">{{ order.get_status_display }}</span></td>
-                    <td>{{ order.qty_total|default:"-" }}</td>
-                    <td>{{ order.bulk_deadline|date:"M j, Y"|default:"-" }}</td>
-                    <td>{{ order.updated_at|date:"M j, Y" }}</td>
-                    <td><a class="customer-btn customer-btn--tiny customer-btn--ghost" href="{% url 'production_detail' order.pk %}">Open</a></td>
+                    <td data-label="Order"><a class="crm-link" href="{% url 'production_detail' order.pk %}">{{ order.order_code|default:order.title }}</a></td>
+                    <td data-label="Status"><span class="crm-status-pill is-success">{{ order.get_status_display }}</span></td>
+                    <td data-label="Quantity">{{ order.qty_total|default:"-" }}</td>
+                    <td data-label="Delivery">{{ order.bulk_deadline|date:"M j, Y"|default:"-" }}</td>
+                    <td data-label="Updated">{{ order.updated_at|date:"M j, Y" }}</td>
+                    <td data-label="Open"><a class="crm-btn crm-btn-muted" href="{% url 'production_detail' order.pk %}">Open</a></td>
                   </tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
         {% else %}
-          <div class="customer-empty-block">
-            <strong>No production orders yet</strong>
-            <span>Production orders will appear here after an opportunity is moved into production.</span>
+          <div class="crm-empty-state">
+            <strong class="crm-cell-title">No production orders yet</strong>
+            <span class="crm-cell-meta">Production orders will appear here after an opportunity is moved into production.</span>
           </div>
         {% endif %}
-      </article>
+      </section>
 
-      <article class="customer-card">
-        <div class="customer-section-head">
+      <section class="crm-tab-panel crm-panel" data-tab-panel="invoices" role="tabpanel" hidden>
+        <div class="crm-panel-header">
           <div>
-            <h2>Invoices and finance</h2>
-            <p>Invoice status, balances, and quick links for finance follow up.</p>
+            <h2 class="crm-panel-title">Invoices</h2>
+            <p class="crm-panel-subtitle">Invoice status, balances, and quick links for finance follow up.</p>
           </div>
-          <a href="{% url 'invoice_list' %}" class="customer-btn customer-btn--tiny customer-btn--ghost">View Invoices</a>
+          <a href="{% url 'invoice_list' %}" class="crm-btn crm-btn-muted">View Invoices</a>
         </div>
         {% if invoices %}
-          <div class="customer-table-wrap">
-            <table class="customer-mini-table">
+          <div class="crm-table-wrap">
+            <table class="crm-table is-compact is-dense crm-table-mobile-cards">
               <thead>
-                <tr>
-                  <th>Invoice</th>
-                  <th>Status</th>
-                  <th>Total</th>
-                  <th>Paid</th>
-                  <th>Balance</th>
-                  <th>Due</th>
-                  <th>Open</th>
-                </tr>
+                <tr><th>Invoice</th><th>Status</th><th>Total</th><th>Paid</th><th>Balance</th><th>Due</th><th>Open</th></tr>
               </thead>
               <tbody>
                 {% for invoice in invoices %}
                   <tr class="clickable-row" data-href="{% url 'invoice_view' invoice.pk %}">
-                    <td><a href="{% url 'invoice_view' invoice.pk %}">{{ invoice.invoice_number }}</a></td>
-                    <td><span class="customer-stage-badge {{ invoice.status }}">{{ invoice.get_status_display }}</span></td>
-                    <td>{{ invoice.total_amount|floatformat:2 }} {{ invoice.currency }}</td>
-                    <td>{{ invoice.paid_amount|floatformat:2 }}</td>
-                    <td>{{ invoice.balance|floatformat:2 }}</td>
-                    <td>{{ invoice.due_date|date:"M j, Y"|default:"-" }}</td>
-                    <td><a class="customer-btn customer-btn--tiny customer-btn--ghost" href="{% url 'invoice_view' invoice.pk %}">Open</a></td>
+                    <td data-label="Invoice"><a class="crm-link" href="{% url 'invoice_view' invoice.pk %}">{{ invoice.invoice_number }}</a></td>
+                    <td data-label="Status"><span class="crm-status-pill {% if invoice.status == 'paid' %}is-success{% elif invoice.status == 'cancelled' %}is-danger{% else %}is-info{% endif %}">{{ invoice.get_status_display }}</span></td>
+                    <td data-label="Total">{{ invoice.total_amount|finance_money:invoice.currency }}</td>
+                    <td data-label="Paid">{{ invoice.paid_amount|finance_money:invoice.currency }}</td>
+                    <td data-label="Balance">{{ invoice.balance|finance_money:invoice.currency }}</td>
+                    <td data-label="Due">{{ invoice.due_date|date:"M j, Y"|default:"-" }}</td>
+                    <td data-label="Open"><a class="crm-btn crm-btn-muted" href="{% url 'invoice_view' invoice.pk %}">Open</a></td>
                   </tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
         {% else %}
-          <div class="customer-empty-block">
-            <strong>No invoices yet</strong>
-            <span>Invoices linked to this account or its production orders will show here.</span>
+          <div class="crm-empty-state">
+            <strong class="crm-cell-title">No invoices yet</strong>
+            <span class="crm-cell-meta">Invoices linked to this account or its production orders will show here.</span>
           </div>
         {% endif %}
-      </article>
-    </div>
+      </section>
 
-    <aside class="customer-side-column">
-      <article class="customer-card" id="customer-notes">
-        <div class="customer-section-head">
+      <section class="crm-tab-panel crm-panel" data-tab-panel="shipments" role="tabpanel" hidden>
+        <div class="crm-panel-header">
           <div>
-            <h2>Activity and notes</h2>
-            <p>Account notes, communication history, and recent updates.</p>
+            <h2 class="crm-panel-title">Shipments</h2>
+            <p class="crm-panel-subtitle">Customer shipment records are not loaded by the current Customer Detail view.</p>
+          </div>
+          <a href="{% url 'shipment_list' %}?q={{ customer_display_name|urlencode }}" class="crm-btn crm-btn-muted">Open Shipment List</a>
+        </div>
+        <div class="crm-empty-state">
+          <strong class="crm-cell-title">{% if "shipments" in customer_linked_record_labels %}Shipment records are linked{% else %}No shipment data loaded here{% endif %}</strong>
+          <span class="crm-cell-meta">This tab is reserved for shipment history without adding backend queries in Phase 3.</span>
+        </div>
+      </section>
+
+      <section class="crm-tab-panel crm-panel" data-tab-panel="payments" role="tabpanel" hidden>
+        <div class="crm-panel-header">
+          <div>
+            <h2 class="crm-panel-title">Payments</h2>
+            <p class="crm-panel-subtitle">Payment visibility from existing invoice paid and balance values.</p>
           </div>
         </div>
-
-        <div class="customer-notes-box">
-          {% if customer.notes %}
-            {{ customer.notes }}
-          {% else %}
-            <span class="customer-muted">No account notes yet.</span>
-          {% endif %}
-        </div>
-
-        {% if notes_list %}
-          <div class="customer-timeline">
-            {% for note in notes_list %}
-              <div class="customer-timeline-item">
-                <span>{{ note.author|default:"User" }} - {{ note.created_at|date:"M j, Y H:i" }}</span>
-                <strong>{{ note.content }}</strong>
-              </div>
-            {% endfor %}
+        {% if invoices %}
+          <div class="crm-table-wrap">
+            <table class="crm-table is-compact is-dense crm-table-mobile-cards">
+              <thead><tr><th>Invoice</th><th>Status</th><th>Paid</th><th>Balance</th><th>Due</th><th>Open</th></tr></thead>
+              <tbody>
+                {% for invoice in invoices %}
+                  <tr class="clickable-row" data-href="{% url 'invoice_view' invoice.pk %}">
+                    <td data-label="Invoice"><a class="crm-link" href="{% url 'invoice_view' invoice.pk %}">{{ invoice.invoice_number }}</a></td>
+                    <td data-label="Status"><span class="crm-status-pill {% if invoice.status == 'paid' %}is-success{% elif invoice.status == 'cancelled' %}is-danger{% else %}is-info{% endif %}">{{ invoice.get_status_display }}</span></td>
+                    <td data-label="Paid">{{ invoice.paid_amount|finance_money:invoice.currency }}</td>
+                    <td data-label="Balance">{{ invoice.balance|finance_money:invoice.currency }}</td>
+                    <td data-label="Due">{{ invoice.due_date|date:"M j, Y"|default:"-" }}</td>
+                    <td data-label="Open"><a class="crm-btn crm-btn-muted" href="{% url 'invoice_view' invoice.pk %}">Open</a></td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
           </div>
         {% else %}
-          <div class="customer-empty-inline">No quick notes yet.</div>
+          <div class="crm-empty-state"><strong class="crm-cell-title">No payment data loaded</strong><span class="crm-cell-meta">Invoice payments will appear through invoice records when available.</span></div>
         {% endif %}
+      </section>
 
-        <form method="post" class="customer-note-form">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="add_note">
-          <textarea name="note_content" rows="3" placeholder="Add a quick note"></textarea>
-          <button type="submit" class="customer-btn customer-btn--primary">Save Note</button>
-        </form>
-      </article>
-
-      <article class="customer-card">
-        <div class="customer-section-head">
+      <section class="crm-tab-panel crm-panel" data-tab-panel="notes" role="tabpanel" hidden id="customer-notes">
+        <div class="crm-panel-header">
           <div>
-            <h2>Recent updates</h2>
-            <p>Timeline events from sales and production activity.</p>
+            <h2 class="crm-panel-title">Activity and notes</h2>
+            <p class="crm-panel-subtitle">Account notes, communication history, and recent updates.</p>
+          </div>
+        </div>
+        <details class="crm-collapse">
+          <summary>Account notes</summary>
+          <div class="crm-collapse-body">
+            {% if customer.notes %}{{ customer.notes }}{% else %}<span class="crm-text-muted">No account notes yet.</span>{% endif %}
+          </div>
+        </details>
+        <div class="crm-stack crm-mt-sm">
+          {% if notes_list %}
+            <div class="crm-timeline">
+              {% for note in notes_list %}
+                <div class="crm-timeline-item">
+                  <span class="crm-timeline-meta">{{ note.author|default:"User" }} - {{ note.created_at|date:"M j, Y H:i" }}</span>
+                  <strong>{{ note.content }}</strong>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="crm-empty-state"><span class="crm-cell-meta">No quick notes yet.</span></div>
+          {% endif %}
+          <form method="post" class="crm-form-grid">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add_note">
+            <textarea class="crm-textarea" name="note_content" rows="3" placeholder="Add a quick note"></textarea>
+            <button type="submit" class="crm-btn crm-btn-primary">Save Note</button>
+          </form>
+        </div>
+      </section>
+
+      <section class="crm-tab-panel crm-panel" data-tab-panel="files" role="tabpanel" hidden>
+        <div class="crm-panel-header">
+          <div>
+            <h2 class="crm-panel-title">Files</h2>
+            <p class="crm-panel-subtitle">No customer file queryset is loaded by the current Customer Detail view.</p>
+          </div>
+        </div>
+        <div class="crm-empty-state">
+          <strong class="crm-cell-title">No customer files loaded</strong>
+          <span class="crm-cell-meta">This preserves the current backend scope and avoids new file queries in Phase 3.</span>
+        </div>
+      </section>
+
+      <section class="crm-tab-panel crm-panel" data-tab-panel="ai" role="tabpanel" hidden>
+        <div class="crm-panel-header">
+          <div>
+            <h2 class="crm-panel-title">AI assistant</h2>
+            <p class="crm-panel-subtitle">Summarize the account, suggest follow up, or draft an email.</p>
+          </div>
+        </div>
+        <div class="crm-action-group crm-justify-start">
+          <button type="button" class="crm-btn crm-btn-muted ai-chip" data-mode="overview">Analyze customer</button>
+          <button type="button" class="crm-btn crm-btn-muted ai-chip" data-mode="followup">Suggest follow up</button>
+          <button type="button" class="crm-btn crm-btn-muted ai-chip" data-mode="order_size">Predict order size</button>
+          <button type="button" class="crm-btn crm-btn-muted ai-chip" data-mode="product_ideas">Recommend products</button>
+          <button type="button" class="crm-btn crm-btn-muted ai-chip" data-mode="risk_score">Risk and potential</button>
+          <button type="button" class="crm-btn crm-btn-muted ai-chip" data-mode="full_summary">Full summary</button>
+        </div>
+        <div class="crm-note-box crm-mt-sm" id="ai-output">AI answer will appear here.</div>
+        <div class="crm-cell-meta crm-mt-xs" id="ai-status">Ready</div>
+        <div class="crm-timeline crm-mt-sm" id="ai-chat-log">
+          <div class="crm-cell-meta">AI reply history will show here.</div>
+        </div>
+        <details class="crm-collapse crm-mt-sm">
+          <summary>Email and custom prompt tools</summary>
+          <div class="crm-collapse-body">
+            <div class="crm-form-grid">
+              <div class="crm-field">
+                <label for="ai-email-purpose">Email purpose</label>
+                <input class="crm-input" id="ai-email-purpose" type="text" placeholder="Example: follow up after sample sent">
+              </div>
+              <div class="crm-field">
+                <label for="ai-email-tone">Email tone</label>
+                <select class="crm-select" id="ai-email-tone">
+                  <option value="">Friendly</option>
+                  <option value="very friendly and warm">Very friendly</option>
+                  <option value="short and direct">Short and direct</option>
+                  <option value="formal and professional">Formal</option>
+                </select>
+              </div>
+              <button type="button" class="crm-btn crm-btn-muted" id="ai-email-btn">AI write email</button>
+              <div class="crm-field">
+                <label for="ai-custom-question">Custom question</label>
+                <input class="crm-input" id="ai-custom-question" type="text" placeholder="Example: How can we upsell this client?">
+              </div>
+              <button type="button" class="crm-btn crm-btn-muted" id="ai-custom-btn">Ask</button>
+            </div>
+          </div>
+        </details>
+        <form id="customer-ai-csrf" hidden>
+          {% csrf_token %}
+        </form>
+      </section>
+
+      <section class="crm-tab-panel crm-panel" data-tab-panel="history" role="tabpanel" hidden>
+        <div class="crm-panel-header">
+          <div>
+            <h2 class="crm-panel-title">Recent updates</h2>
+            <p class="crm-panel-subtitle">Timeline events from sales and production activity.</p>
           </div>
         </div>
         {% if events %}
-          <div class="customer-timeline">
+          <div class="crm-timeline">
             {% for e in events %}
-              <div class="customer-timeline-item">
-                <span>{{ e.created_at|date:"M j, Y H:i" }}</span>
+              <div class="crm-timeline-item">
+                <time>{{ e.created_at|date:"M j, Y H:i" }}</time>
                 <strong>{{ e.title }}</strong>
                 <p>{{ e.details }}</p>
               </div>
             {% endfor %}
           </div>
         {% else %}
-          <div class="customer-empty-inline">No timeline events yet.</div>
+          <div class="crm-empty-state"><span class="crm-cell-meta">No timeline events yet.</span></div>
         {% endif %}
-      </article>
-
-      <article class="customer-card">
-        <div class="customer-section-head">
-          <div>
-            <h2>AI assistant</h2>
-            <p>Summarize the account, suggest follow up, or draft an email.</p>
+        <details class="crm-collapse crm-mt-sm">
+          <summary>Admin / raw data</summary>
+          <div class="crm-collapse-body">
+            <div class="crm-info-grid">
+              <div class="crm-info-tile">
+                <span class="crm-info-label">Customer code</span>
+                <strong class="crm-info-value">{{ customer.customer_code }}</strong>
+              </div>
+              <div class="crm-info-tile">
+                <span class="crm-info-label">Created</span>
+                <strong class="crm-info-value">{{ customer.created_date|date:"M j, Y" }}</strong>
+              </div>
+              <div class="crm-info-tile">
+                <span class="crm-info-label">Updated</span>
+                <strong class="crm-info-value">{{ customer.updated_at|date:"M j, Y H:i" }}</strong>
+              </div>
+              <div class="crm-info-tile is-wide">
+                <span class="crm-info-label">Billing address</span>
+                <strong class="crm-info-value">{{ customer.address_line1 }} {{ customer.address_line2 }} {{ customer.city }} {{ customer.state }} {{ customer.postal_code }} {{ customer.country }}</strong>
+              </div>
+              <div class="crm-info-tile is-wide">
+                <span class="crm-info-label">Shipping address</span>
+                <strong class="crm-info-value">{{ customer.shipping_name }} {{ customer.shipping_address1 }} {{ customer.shipping_address2 }} {{ customer.shipping_city }} {{ customer.shipping_state }} {{ customer.shipping_postcode }} {{ customer.shipping_country }}</strong>
+              </div>
+              <div class="crm-info-tile">
+                <span class="crm-info-label">Linked leads</span>
+                <strong class="crm-info-value">{{ leads|length }}</strong>
+              </div>
+            </div>
           </div>
-        </div>
-
-        <div class="ai-chip-row">
-          <button type="button" class="ai-chip" data-mode="overview">Analyze customer</button>
-          <button type="button" class="ai-chip" data-mode="followup">Suggest follow up</button>
-          <button type="button" class="ai-chip" data-mode="order_size">Predict order size</button>
-          <button type="button" class="ai-chip" data-mode="product_ideas">Recommend products</button>
-          <button type="button" class="ai-chip" data-mode="risk_score">Risk and potential</button>
-          <button type="button" class="ai-chip" data-mode="full_summary">Full summary</button>
-        </div>
-
-        <div class="ai-output-box" id="ai-output">AI answer will appear here.</div>
-        <div class="ai-status" id="ai-status">Ready</div>
-        <div class="ai-chat-log" id="ai-chat-log">
-          <div class="customer-muted">AI reply history will show here.</div>
-        </div>
-
-        <div class="ai-email-box">
-          <label for="ai-email-purpose">Email purpose</label>
-          <input id="ai-email-purpose" type="text" placeholder="Example: follow up after sample sent">
-
-          <label for="ai-email-tone">Email tone</label>
-          <select id="ai-email-tone">
-            <option value="">Friendly</option>
-            <option value="very friendly and warm">Very friendly</option>
-            <option value="short and direct">Short and direct</option>
-            <option value="formal and professional">Formal</option>
-          </select>
-
-          <button type="button" class="customer-btn customer-btn--ghost" id="ai-email-btn">AI write email</button>
-        </div>
-
-        <div class="ai-custom-box">
-          <label for="ai-custom-question">Custom question</label>
-          <input id="ai-custom-question" type="text" placeholder="Example: How can we upsell this client?">
-          <button type="button" class="customer-btn customer-btn--ghost" id="ai-custom-btn">Ask</button>
-        </div>
-
-        <form id="customer-ai-csrf" class="customer-hidden-form">
-          {% csrf_token %}
-        </form>
-      </article>
-
-      <details class="customer-card customer-admin-card">
-        <summary>
-          <span>Admin / raw data</span>
-          <small>Customer codes, shipping data, linked leads, and internal fields</small>
-        </summary>
-        <div class="customer-info-grid customer-admin-grid">
-          <div>
-            <span>Customer code</span>
-            <strong>{{ customer.customer_code }}</strong>
-          </div>
-          <div>
-            <span>Created</span>
-            <strong>{{ customer.created_date|date:"M j, Y" }}</strong>
-          </div>
-          <div>
-            <span>Updated</span>
-            <strong>{{ customer.updated_at|date:"M j, Y H:i" }}</strong>
-          </div>
-          <div>
-            <span>Billing address</span>
-            <strong>{{ customer.address_line1 }} {{ customer.address_line2 }} {{ customer.city }} {{ customer.state }} {{ customer.postal_code }} {{ customer.country }}</strong>
-          </div>
-          <div>
-            <span>Shipping address</span>
-            <strong>{{ customer.shipping_name }} {{ customer.shipping_address1 }} {{ customer.shipping_address2 }} {{ customer.shipping_city }} {{ customer.shipping_state }} {{ customer.shipping_postcode }} {{ customer.shipping_country }}</strong>
-          </div>
-          <div>
-            <span>Linked leads</span>
-            <strong>{{ leads|length }}</strong>
-          </div>
-        </div>
-        {% if leads %}
-          <div class="customer-lead-list">
-            {% for lead in leads %}
-              <a href="{% url 'lead_detail' lead.pk %}">{{ lead.lead_id }} - {{ lead.account_brand|default:lead.contact_name|default:"Lead" }}</a>
-            {% endfor %}
-          </div>
-        {% endif %}
-      </details>
-    </aside>
+        </details>
+      </section>
+    </div>
   </section>
 </div>
 
 <script>
 (function () {
+  function wireTabs() {
+    const root = document.querySelector("[data-crm-tabs]");
+    if (!root) {
+      return;
+    }
+    const tabs = root.querySelectorAll("[data-tab-target]");
+    const panels = root.querySelectorAll("[data-tab-panel]");
+
+    function activate(name) {
+      tabs.forEach(function (tab) {
+        const active = tab.getAttribute("data-tab-target") === name;
+        tab.classList.toggle("is-active", active);
+        tab.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      panels.forEach(function (panel) {
+        panel.hidden = panel.getAttribute("data-tab-panel") !== name;
+      });
+    }
+
+    tabs.forEach(function (tab) {
+      tab.addEventListener("click", function () {
+        activate(tab.getAttribute("data-tab-target"));
+      });
+    });
+
+    document.querySelectorAll("[data-tab-jump]").forEach(function (link) {
+      link.addEventListener("click", function () {
+        activate(link.getAttribute("data-tab-jump"));
+      });
+    });
+  }
+
   function wireRowClicks() {
     const rows = document.querySelectorAll(".clickable-row[data-href]");
     rows.forEach(function (row) {
@@ -441,6 +582,7 @@
     });
   }
 
+  wireTabs();
   wireRowClicks();
 
   function getCsrf() {
@@ -462,7 +604,7 @@
 
   function appendChat(role, text) {
     const div = document.createElement("div");
-    div.className = "customer-timeline-item";
+    div.className = "crm-timeline-item";
     div.innerHTML = "<strong>" + role + "</strong><p>" + (text || "") + "</p>";
     chatLog.appendChild(div);
     chatLog.scrollTop = chatLog.scrollHeight;
