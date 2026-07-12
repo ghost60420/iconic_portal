@@ -1,259 +1,202 @@
 {% extends "crm/base.html" %}
+{% load static %}
 {% block content %}
 
+<link rel="stylesheet" href="{% static 'crm/ui_system.css' %}?v=employee-phase-b">
+
 <style>
-  :root{
-    --bg:#020617;
-    --panel:#0b1220;
-    --panel2:#030712;
-    --line:#334155;
-    --line2:#111827;
-    --text:#f9fafb;
-    --muted:#94a3b8;
-    --gold1:#ffe39b;
-    --gold2:#e4c067;
-    --danger:#f87171;
+  .employee-modern {
+    color: var(--crm-text);
   }
-
-  .wrapx{ max-width: 980px; margin: 0 auto; color: var(--text); }
-
-  .cardx{
-    background: var(--bg);
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    box-shadow: 0 14px 34px rgba(0,0,0,0.40);
-    overflow: hidden;
+  .employee-modern .employee-tabs {
+    top: 86px;
   }
-
-  .topbar{
-    display:flex;
-    justify-content:space-between;
-    align-items:flex-start;
-    gap:12px;
-    flex-wrap:wrap;
-    margin-bottom: 14px;
-  }
-
-  .title{
-    margin:0;
-    font-weight: 900;
-    letter-spacing: 0.2px;
-    font-size: 20px;
-  }
-  .subtitle{
-    margin-top: 4px;
-    font-size: 12px;
-    color: var(--muted);
-    font-weight: 700;
-    line-height: 1.35;
-  }
-
-  .btnPill{
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
-    gap:8px;
-    padding:8px 14px;
-    border-radius:999px;
-    font-size:12px;
-    font-weight:900;
-    border:1px solid rgba(255,255,255,0.14);
-    text-decoration:none;
-    white-space:nowrap;
-    background: linear-gradient(145deg, #111827, var(--bg));
-    color: var(--text);
-    box-shadow: 0 3px 0 #020617;
-  }
-  .btnPill:hover{ filter: brightness(1.05); text-decoration:none; }
-
-  .btnGold{
-    background: linear-gradient(145deg, var(--gold1), var(--gold2));
-    color:#121212;
-    border-color:#f6d488;
-    box-shadow: 0 3px 0 #8a6b24;
-  }
-  .btnGold:hover{ filter: brightness(1.03); }
-
-  .formCard{
-    background: var(--panel);
-    border-top: 1px solid var(--line2);
-    padding: 16px;
-  }
-
-  .fieldGrid{
-    display:grid;
-    grid-template-columns: 1fr;
-    gap: 14px;
-  }
-
-  @media (min-width: 820px){
-    .fieldGrid.two{
-      grid-template-columns: 1fr 1fr;
-      gap: 14px;
-    }
-  }
-
-  .label{
-    font-size: 12px;
-    font-weight: 900;
-    color: var(--text);
-    margin-bottom: 6px;
-  }
-
-  .help{
-    margin-top: 6px;
-    font-size: 11px;
-    color: var(--muted);
-    font-weight: 700;
-    line-height: 1.35;
-  }
-
-  .err{
-    margin-top: 6px;
-    color: var(--danger);
-    font-size: 12px;
-    font-weight: 800;
-  }
-
-  input, select, textarea{
-    background: var(--panel2) !important;
-    border: 1px solid #4b5563 !important;
-    color: var(--text) !important;
-    border-radius: 12px !important;
-    padding: 10px 12px !important;
-    font-weight: 800 !important;
+  .employee-modern input,
+  .employee-modern select,
+  .employee-modern textarea {
     width: 100%;
+    min-height: var(--crm-control-height);
+    padding: 0 10px !important;
+    border: 1px solid var(--crm-border) !important;
+    border-radius: var(--crm-radius-sm) !important;
+    background: rgba(7, 11, 18, 0.9) !important;
+    color: var(--crm-text) !important;
+    font-size: 12px !important;
+    font-weight: 750 !important;
   }
-
-  input:focus, select:focus, textarea:focus{
-    outline: none !important;
-    border-color: rgba(255,227,155,0.55) !important;
-    box-shadow: 0 0 0 3px rgba(255,227,155,0.18) !important;
-  }
-
-  .checkRow{
-    display:flex;
-    align-items:center;
-    gap:10px;
-    padding: 10px 12px;
-    border: 1px solid #334155;
-    border-radius: 12px;
-    background: var(--panel2);
-  }
-
-  .checkRow input{
+  .employee-modern input[type="checkbox"] {
     width: 18px;
+    min-height: 18px;
     height: 18px;
     padding: 0 !important;
-    border-radius: 6px !important;
   }
-
-  .actions{
-    display:flex;
-    justify-content:flex-end;
-    gap:10px;
-    margin-top: 6px;
+  .employee-modern .employee-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
   }
-
-  .alertBox{
-    border: 1px solid #7f1d1d;
-    background: var(--panel2);
-    color: var(--text);
-    border-radius: 12px;
-    padding: 10px 12px;
-    font-weight: 800;
+  .employee-modern .employee-check-row {
+    display: flex;
+    min-height: var(--crm-control-height);
+    align-items: center;
+    gap: 10px;
+    padding: 7px 10px;
+    border: 1px solid var(--crm-border);
+    border-radius: var(--crm-radius-sm);
+    background: rgba(7, 11, 18, 0.78);
+    color: var(--crm-text);
     font-size: 12px;
-    margin-bottom: 12px;
+    font-weight: 800;
+  }
+  .employee-modern .employee-disabled-tab {
+    opacity: .52;
+    cursor: not-allowed;
+  }
+  .employee-modern .employee-error {
+    margin-top: 5px;
+    color: #fecdd3;
+    font-size: 11px;
+    font-weight: 800;
+  }
+  @media (max-width: 620px) {
+    .employee-modern .employee-tabs {
+      top: 0;
+    }
+    .employee-modern .employee-form-grid {
+      grid-template-columns: 1fr;
+    }
+    .employee-modern .crm-kpi-strip.is-compact {
+      display: flex;
+      overflow-x: auto;
+      gap: 8px;
+      scrollbar-width: thin;
+    }
+    .employee-modern .crm-kpi-strip.is-compact .crm-kpi-card {
+      flex: 0 0 168px;
+      min-height: 58px;
+    }
   }
 </style>
 
-<div class="container-fluid">
-  <div class="wrapx">
+<div class="crm-page employee-modern" data-crm-density="compact">
+  <section class="crm-header is-compact">
+    <div>
+      <p class="crm-header-kicker">Employee Profile</p>
+      <h1 class="crm-header-title">
+        {% if mode == "edit" or obj %}Edit Bangladesh Staff{% else %}Add Bangladesh Staff{% endif %}
+      </h1>
+      <p class="crm-header-subtitle">Keep the staff list clean and consistent. Use simple role names and monthly salary in BDT.</p>
+    </div>
+    <div class="crm-header-actions">
+      <a href="{% url 'bd_staff_list' %}" class="crm-btn">Back to Staff</a>
+      <a href="{% url 'bd_staff_month_list' %}" class="crm-btn">Payroll</a>
+    </div>
+  </section>
 
-    <div class="topbar">
+  <section class="crm-kpi-strip is-compact crm-mt-sm" aria-label="Employee profile summary">
+    <article class="crm-kpi-card crm-kpi-horizontal">
       <div>
-        <h2 class="title">
-          {% if mode == "edit" or row %}Edit Bangladesh Staff{% else %}Add Bangladesh Staff{% endif %}
-        </h2>
-        <div class="subtitle">
-          Keep the staff list clean and consistent. Use simple role names and monthly salary in BDT.
+        <div class="crm-kpi-label">Mode</div>
+        <div class="crm-kpi-value">{% if mode == "edit" or obj %}Edit{% else %}Add{% endif %}</div>
+        <div class="crm-kpi-note">Existing staff form</div>
+      </div>
+      <span class="crm-kpi-indicator">M</span>
+    </article>
+    <article class="crm-kpi-card crm-kpi-horizontal">
+      <div>
+        <div class="crm-kpi-label">Currency</div>
+        <div class="crm-kpi-value">BDT</div>
+        <div class="crm-kpi-note">Base salary remains unchanged</div>
+      </div>
+      <span class="crm-kpi-indicator">BDT</span>
+    </article>
+    <article class="crm-kpi-card crm-kpi-horizontal">
+      <div>
+        <div class="crm-kpi-label">Status</div>
+        <div class="crm-kpi-value">Profile</div>
+        <div class="crm-kpi-note">Employee record details</div>
+      </div>
+      <span class="crm-kpi-indicator">P</span>
+    </article>
+  </section>
+
+  <nav class="crm-tabs is-compact is-sticky employee-tabs crm-mt-sm" aria-label="Employee module tabs">
+    <a class="crm-tab is-active" href="{% url 'bd_staff_list' %}">Profile</a>
+    <button type="button" class="crm-tab employee-disabled-tab" aria-disabled="true">Attendance</button>
+    <a class="crm-tab" href="{% url 'bd_staff_month_list' %}">Payroll</a>
+    <button type="button" class="crm-tab employee-disabled-tab" aria-disabled="true">Performance</button>
+    <button type="button" class="crm-tab employee-disabled-tab" aria-disabled="true">Documents</button>
+    <button type="button" class="crm-tab employee-disabled-tab" aria-disabled="true">Leaves</button>
+    <button type="button" class="crm-tab employee-disabled-tab" aria-disabled="true">History</button>
+  </nav>
+
+  <section class="crm-panel crm-mt-sm">
+    <div class="crm-panel-header">
+      <div>
+        <h2 class="crm-panel-title">Profile Fields</h2>
+        <p class="crm-panel-subtitle">Existing edit form fields, validation, hidden inputs, and submit behavior are preserved.</p>
+      </div>
+    </div>
+
+    {% if form.non_field_errors %}
+      <div class="crm-warning-panel">
+        <strong>Form errors</strong>
+        <p>{{ form.non_field_errors }}</p>
+      </div>
+    {% endif %}
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      <div class="employee-form-grid">
+        <div class="crm-field">
+          <label>Name</label>
+          {{ form.name }}
+          {% for e in form.name.errors %}
+            <div class="employee-error">{{ e }}</div>
+          {% endfor %}
+        </div>
+
+        <div class="crm-field">
+          <label>Role</label>
+          {{ form.role }}
+          <div class="crm-cell-meta">Example operator, helper, cutting master, merchandiser.</div>
+          {% for e in form.role.errors %}
+            <div class="employee-error">{{ e }}</div>
+          {% endfor %}
+        </div>
+
+        <div class="crm-field">
+          <label>Base Salary BDT</label>
+          {{ form.base_salary_bdt }}
+          <div class="crm-cell-meta">Monthly base salary in BDT. Numbers only.</div>
+          {% for e in form.base_salary_bdt.errors %}
+            <div class="employee-error">{{ e }}</div>
+          {% endfor %}
+        </div>
+
+        <div class="crm-field">
+          <label>Active</label>
+          <div class="employee-check-row">
+            {{ form.is_active }}
+            <span>Is active</span>
+          </div>
+          {% for e in form.is_active.errors %}
+            <div class="employee-error">{{ e }}</div>
+          {% endfor %}
         </div>
       </div>
 
-      <a href="{% url 'bd_staff_list' %}" class="btnPill">
-        ← Back
-      </a>
-    </div>
+      {% for hidden in form.hidden_fields %}
+        {{ hidden }}
+      {% endfor %}
 
-    <div class="cardx">
-      <div class="formCard">
-
-        {% if form.non_field_errors %}
-          <div class="alertBox">
-            {{ form.non_field_errors }}
-          </div>
-        {% endif %}
-
-        <form method="post" novalidate>
-          {% csrf_token %}
-
-          <div class="fieldGrid two">
-            <div>
-              <div class="label">Name</div>
-              {{ form.name }}
-              {% for e in form.name.errors %}
-                <div class="err">{{ e }}</div>
-              {% endfor %}
-            </div>
-
-            <div>
-              <div class="label">Role</div>
-              {{ form.role }}
-              <div class="help">Example operator, helper, cutting master, merchandiser</div>
-              {% for e in form.role.errors %}
-                <div class="err">{{ e }}</div>
-              {% endfor %}
-            </div>
-          </div>
-
-          <div class="fieldGrid two" style="margin-top:14px;">
-            <div>
-              <div class="label">Base salary BDT</div>
-              {{ form.base_salary_bdt }}
-              <div class="help">Monthly base salary in BDT. Numbers only.</div>
-              {% for e in form.base_salary_bdt.errors %}
-                <div class="err">{{ e }}</div>
-              {% endfor %}
-            </div>
-
-            <div>
-              <div class="label">Active</div>
-              <div class="checkRow">
-                {{ form.is_active }}
-                <div style="font-weight:900;">Is active</div>
-              </div>
-              {% for e in form.is_active.errors %}
-                <div class="err">{{ e }}</div>
-              {% endfor %}
-            </div>
-          </div>
-
-          {% for hidden in form.hidden_fields %}
-            {{ hidden }}
-          {% endfor %}
-
-          <div class="actions" style="margin-top:14px;">
-            <button type="submit" class="btnPill btnGold" style="border:none; min-width:140px;">
-              Save
-            </button>
-          </div>
-
-        </form>
-
+      <div class="crm-panel-footer">
+        <a href="{% url 'bd_staff_list' %}" class="crm-btn">Cancel</a>
+        <button type="submit" class="crm-btn crm-btn-primary">Save</button>
       </div>
-    </div>
-
-  </div>
+    </form>
+  </section>
 </div>
 
 {% endblock %}

@@ -1,6 +1,9 @@
 {% extends "crm/base.html" %}
+{% load static %}
 {% load humanize %}
 {% block content %}
+
+<link rel="stylesheet" href="{% static 'crm/ui_system.css' %}?v=control-phase-c">
 
 <style>
   :root{
@@ -170,25 +173,58 @@
   }
 </style>
 
-<div class="ops-wrap">
-  <section class="ops-hero">
+<div class="ops-wrap crm-page crm-page-wide control-modern" data-crm-density="compact">
+  <section class="ops-hero crm-header is-compact control-header">
     <div>
       <div class="ops-kicker">AI Operations Assistant</div>
       <h1 class="ops-title">Rule-based business intelligence</h1>
       <p class="ops-sub">Internal recommendations, risks, and operational answers from CRM data only. No emails are sent and no external AI model is used in this phase.</p>
     </div>
-    <div class="ops-actions">
-      <a class="ops-btn" href="{% url 'main_dashboard' %}">CRM Dashboard</a>
+    <div class="ops-actions crm-action-group">
+      <a class="ops-btn crm-btn" href="{% url 'main_dashboard' %}">CRM Dashboard</a>
       {% if request.user.is_superuser or access_flags.can_view_ceo_tools %}
-        <a class="ops-btn" href="{% url 'ceo_dashboard' %}">CEO Dashboard</a>
+        <a class="ops-btn crm-btn" href="{% url 'ceo_dashboard' %}">CEO Dashboard</a>
       {% endif %}
       <span class="ops-badge ops-badge--{{ risk_tone }}">Risk score {{ risk_score }}/100</span>
     </div>
   </section>
 
-  <section class="ops-summary">
+  <nav class="crm-tabs is-sticky is-compact control-tabs" aria-label="Control Center sections">
+    <a class="crm-tab is-active" href="#control-overview">Overview</a>
+    <a class="crm-tab" href="#control-alerts">Alerts</a>
+    <a class="crm-tab" href="#control-operations">Operations</a>
+    <a class="crm-tab" href="#control-integrations">Integrations</a>
+    <a class="crm-tab" href="#control-automations">Automations</a>
+    <a class="crm-tab" href="#control-logs">Logs</a>
+    <a class="crm-tab" href="#control-history">History</a>
+  </nav>
+
+  <section class="crm-panel is-dense control-critical-alerts control-section-anchor" id="control-alerts" aria-label="Critical alerts">
+    <div class="crm-panel-header">
+      <div>
+        <h2 class="crm-panel-title">Critical Alerts</h2>
+        <p class="crm-panel-subtitle">Automation alerts and high-priority operational risks remain visible before the detailed queues.</p>
+      </div>
+      <span class="ops-badge ops-badge--{{ risk_tone }}">Risk {{ risk_score }}/100</span>
+    </div>
+    <div class="control-alert-strip">
+      {% for alert in automation_alerts|slice:":4" %}
+        <a class="control-alert-card" href="{{ alert.target_url|default:'#' }}">
+          <strong>{{ alert.title }}</strong>
+          <span>{{ alert.message }}</span>
+        </a>
+      {% empty %}
+        <div class="control-alert-card">
+          <strong>No urgent automation alerts</strong>
+          <span>No automation alert rows are available for your current permissions.</span>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="ops-summary crm-kpi-strip is-compact control-section-anchor" id="control-overview">
     {% for card in daily_summary %}
-      <article class="ops-card ops-card--{{ card.tone }}">
+      <article class="ops-card ops-card--{{ card.tone }} crm-kpi-card">
         <span>{{ card.label }}</span>
         <strong>{{ card.value }}</strong>
         <small>{{ card.note }}</small>
@@ -196,9 +232,34 @@
     {% endfor %}
   </section>
 
+  <section class="crm-panel is-dense control-section-anchor" id="control-integrations" aria-label="Integrations and monitoring">
+    <div class="crm-panel-header">
+      <div>
+        <h2 class="crm-panel-title">Integrations and Monitoring</h2>
+        <p class="crm-panel-subtitle">Existing AI operations, health, and executive monitor links in one compact strip.</p>
+      </div>
+    </div>
+    <div class="control-link-grid">
+      {% if request.user.is_superuser or access_flags.can_view_ceo_tools %}
+        <a class="control-link-card" href="{% url 'ceo_dashboard' %}">
+          <strong>CEO Dashboard</strong>
+          <span>Executive operating view with alerts, finance, production, and sales.</span>
+        </a>
+      {% endif %}
+      <a class="control-link-card" href="{% url 'ai_health_monitor' %}">
+        <strong>AI Health Monitor</strong>
+        <span>Provider health checks and recent AI error history.</span>
+      </a>
+      <a class="control-link-card" href="{% url 'ai_system_status' %}">
+        <strong>AI System Status</strong>
+        <span>Provider status, CRM quick signals, warnings, and logs.</span>
+      </a>
+    </div>
+  </section>
+
   <div class="ops-grid">
     <div>
-      <section class="ops-section">
+      <section class="ops-section control-section-anchor" id="control-operations">
         <div class="ops-section-head">
           <div>
             <h2 class="ops-section-title">Recommendations</h2>
@@ -220,7 +281,7 @@
         </div>
       </section>
 
-      <section class="ops-section">
+      <section class="ops-section control-section-anchor" id="control-logs">
         <div class="ops-section-head">
           <div>
             <h2 class="ops-section-title">Questions</h2>
@@ -230,8 +291,8 @@
         <form class="ops-question" method="get">
           <textarea name="question" placeholder="Example: Which invoices are overdue?">{{ question_answer.question }}</textarea>
           <div class="ops-question-actions">
-            <button class="ops-btn ops-btn--gold" type="submit">Ask</button>
-            <a class="ops-btn" href="{% url 'ai_operations_assistant' %}">Reset</a>
+            <button class="ops-btn ops-btn--gold crm-btn crm-btn-primary" type="submit">Ask</button>
+            <a class="ops-btn crm-btn" href="{% url 'ai_operations_assistant' %}">Reset</a>
           </div>
         </form>
         <div class="ops-chip-row">
@@ -263,13 +324,13 @@
     </div>
 
     <div>
-      <section class="ops-section">
-        <div class="ops-section-head">
+      <details class="ops-section crm-collapse">
+        <summary class="ops-section-head">
           <div>
             <h2 class="ops-section-title">Risks</h2>
             <div class="ops-section-note">Overdue invoices, production delays, shortages, shipments, and stale quotations.</div>
           </div>
-        </div>
+        </summary>
         <div class="ops-list">
           {% for row in risk_cards %}
             <a class="ops-item" href="{{ row.url|default:'#' }}">
@@ -283,15 +344,15 @@
             <div class="ops-empty">No active risk rows found.</div>
           {% endfor %}
         </div>
-      </section>
+      </details>
 
-      <section class="ops-section">
-        <div class="ops-section-head">
+      <details class="ops-section crm-collapse control-section-anchor" id="control-history">
+        <summary class="ops-section-head">
           <div>
             <h2 class="ops-section-title">Executive Insights</h2>
             <div class="ops-section-note">Sanitized by permission. Profit insights require internal costing access.</div>
           </div>
-        </div>
+        </summary>
         <div class="ops-list">
           {% for item in executive_insights %}
             <a class="ops-item" href="{{ item.url|default:'#' }}">
@@ -305,15 +366,15 @@
             <div class="ops-empty">No executive insight data available for your permissions.</div>
           {% endfor %}
         </div>
-      </section>
+      </details>
 
-      <section class="ops-section">
-        <div class="ops-section-head">
+      <details class="ops-section crm-collapse control-section-anchor" id="control-automations">
+        <summary class="ops-section-head">
           <div>
             <h2 class="ops-section-title">Automation Alerts</h2>
             <div class="ops-section-note">Open alerts from the CRM automation engine.</div>
           </div>
-        </div>
+        </summary>
         <div class="ops-list">
           {% for alert in automation_alerts %}
             <a class="ops-item" href="{{ alert.target_url|default:'#' }}">
@@ -327,7 +388,7 @@
             <div class="ops-empty">No automation alerts available.</div>
           {% endfor %}
         </div>
-      </section>
+      </details>
     </div>
   </div>
 </div>

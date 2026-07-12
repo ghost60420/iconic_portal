@@ -1,6 +1,8 @@
 {% extends "crm/base.html" %}
-{% load crm_extras %}
+{% load static crm_extras %}
 {% block content %}
+
+<link rel="stylesheet" href="{% static 'crm/ui_system.css' %}?v=ui-rc2-safe">
 
 <style>
   .btn-3d {
@@ -76,7 +78,7 @@
   }
 </style>
 
-<div class="container-fluid" style="color:#f9fafb;">
+<div class="container-fluid crm-modern-bridge crm-employee-bridge" data-crm-density="compact" style="color:#f9fafb;">
 
   <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <div>

@@ -1,5 +1,7 @@
 {% extends "crm/base.html" %}
+{% load static %}
 {% block content %}
+<link rel="stylesheet" href="{% static 'crm/ui_system.css' %}?v=communication-phase-d">
 
 <style>
   :root{
@@ -121,22 +123,43 @@
   }
 </style>
 
-<div class="draft-wrap">
-  <section class="draft-hero">
+<div class="comm-modern comm-draft">
+  <div class="comm-shell">
+  <section class="comm-header draft-hero">
     <div>
-      <div class="draft-kicker">Daily CEO briefing email draft</div>
-      <h1 class="draft-title">Email Draft Preview</h1>
-      <div class="draft-sub">
+      <p class="comm-kicker draft-kicker">Communication Center</p>
+      <h1 class="comm-title draft-title">Email Draft Preview</h1>
+      <div class="comm-subtitle draft-sub">
         Review and edit this draft before using it. This page does not send, queue, or save any email automatically.
       </div>
     </div>
-    <div class="draft-actions">
-      <a class="draft-btn" href="{{ briefing_url }}">Back to Briefing</a>
-      <button class="draft-btn draft-btn--gold" type="button" data-copy-target="draft-body">Copy Body</button>
+    <div class="comm-actions draft-actions">
+      <a class="comm-btn draft-btn" href="{{ briefing_url }}">Back to Briefing</a>
+      <button class="comm-btn is-primary draft-btn draft-btn--gold" type="button" data-copy-target="draft-body">Copy Body</button>
     </div>
   </section>
 
-  <div class="draft-grid">
+  <div class="comm-grid">
+    <nav class="comm-nav" aria-label="Communication navigation">
+      <a href="{% url 'email_sync_dashboard' %}"><span>Inbox</span><span class="comm-count">Email</span></a>
+      <a class="is-active" href="#draft-body"><span>Drafts</span><span class="comm-count">1</span></a>
+      <a href="#draft-body"><span>Sent</span><span class="comm-count">0</span></a>
+      <a href="#draft-body"><span>Failed</span><span class="comm-count">0</span></a>
+      <a href="#draft-body"><span>Templates</span><span class="comm-count">CEO</span></a>
+      <a href="{% url 'wa_api_inbox' %}"><span>WhatsApp</span><span class="comm-count">WA</span></a>
+      <a href="{{ briefing_url }}"><span>History</span><span class="comm-count">Brief</span></a>
+    </nav>
+
+    <main class="comm-main">
+      <section class="comm-kpis" aria-label="Draft summary">
+        <article class="comm-kpi"><span>Unread Count</span><strong>0</strong><small>Draft-only page</small></article>
+        <article class="comm-kpi"><span>Sent Today</span><strong>0</strong><small>No sending here</small></article>
+        <article class="comm-kpi"><span>Failed Today</span><strong>0</strong><small>No queue here</small></article>
+        <article class="comm-kpi"><span>Scheduled</span><strong>0</strong><small>Copy-only draft</small></article>
+        <article class="comm-kpi"><span>Pending Replies</span><strong>{{ opportunities_needing_followup }}</strong><small>Opportunity follow-ups</small></article>
+      </section>
+
+  <div class="comm-draft-grid draft-grid">
     <main class="draft-panel">
       <div class="draft-panel-head">
         <h2 class="draft-panel-title">Generated Draft</h2>
@@ -200,6 +223,9 @@
         </div>
       </section>
     </aside>
+  </div>
+    </main>
+  </div>
   </div>
 </div>
 

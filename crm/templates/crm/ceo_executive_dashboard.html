@@ -1,6 +1,8 @@
 {% extends "crm/base.html" %}
+{% load static %}
 {% load crm_extras %}
 {% block content %}
+<link rel="stylesheet" href="{% static 'crm/ui_system.css' %}?v=ui-rc2-safe">
 <style>
   .exec-ceo{max-width:1440px;margin:0 auto;color:#f8fafc}
   .exec-ceo *{box-sizing:border-box}
@@ -19,7 +21,7 @@
   @media screen and (max-width:760px){.exec-head{display:block}.exec-actions{margin-top:12px}.exec-btn{width:100%;text-align:center}.exec-grid{grid-template-columns:1fr}.exec-card{min-height:0}.exec-table th:nth-child(3),.exec-table td:nth-child(3){display:none}}
 </style>
 
-<div class="exec-ceo">
+<div class="exec-ceo crm-modern-bridge crm-dashboard-bridge">
   <header class="exec-head">
     <div><h1>CEO Executive Dashboard</h1><p>Current business position as of {{ today|date:"M j, Y" }}. Every financial amount remains in its original currency.</p></div>
     <div class="exec-actions">

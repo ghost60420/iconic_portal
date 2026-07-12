@@ -1,110 +1,109 @@
 {% extends "crm/base.html" %}
+{% load static %}
 {% block content %}
-<style>
-  .wa-events-wrap {
-    max-width: 1200px;
-    margin: 18px auto 40px auto;
-    padding: 0 16px;
-    color: #e5e7eb;
-  }
-  .wa-events-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-bottom: 14px;
-  }
-  .wa-events-title {
-    font-size: 22px;
-    font-weight: 900;
-  }
-  .wa-events-sub {
-    font-size: 12px;
-    color: #9ca3af;
-  }
-  .wa-events-table {
-    width: 100%;
-    border-collapse: collapse;
-    background: rgba(2, 6, 23, 0.6);
-    border: 1px solid rgba(148, 163, 184, 0.2);
-    border-radius: 12px;
-    overflow: hidden;
-  }
-  .wa-events-table th,
-  .wa-events-table td {
-    padding: 10px 12px;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
-    font-size: 12px;
-    text-align: left;
-    vertical-align: top;
-  }
-  .wa-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 4px 8px;
-    border-radius: 999px;
-    font-size: 10px;
-    font-weight: 900;
-    border: 1px solid rgba(148, 163, 184, 0.35);
-  }
-  .wa-badge.new { background: rgba(59, 130, 246, 0.15); color: #bfdbfe; border-color: rgba(59, 130, 246, 0.4); }
-  .wa-badge.processing { background: rgba(250, 204, 21, 0.18); color: #fef3c7; border-color: rgba(250, 204, 21, 0.45); }
-  .wa-badge.processed { background: rgba(34, 197, 94, 0.18); color: #bbf7d0; border-color: rgba(34, 197, 94, 0.45); }
-  .wa-badge.failed { background: rgba(248, 113, 113, 0.18); color: #fee2e2; border-color: rgba(248, 113, 113, 0.45); }
-  .wa-json {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-    font-size: 11px;
-    color: #cbd5f5;
-    white-space: pre-wrap;
-    background: rgba(15, 23, 42, 0.6);
-    border-radius: 8px;
-    padding: 8px;
-    margin-top: 6px;
-  }
-</style>
+<link rel="stylesheet" href="{% static 'crm/ui_system.css' %}?v=communication-phase-d">
 
-<div class="wa-events-wrap">
-  <div class="wa-events-head">
-    <div>
-      <div class="wa-events-title">Infobip Webhook Events</div>
-      <div class="wa-events-sub">Latest 50 webhook payloads and processing status.</div>
+<div class="comm-modern">
+  <div class="comm-shell">
+    <section class="comm-header">
+      <div>
+        <p class="comm-kicker">Communication Center</p>
+        <h1 class="comm-title">Message Logs</h1>
+        <div class="comm-subtitle">Latest Infobip webhook payloads and processing status.</div>
+      </div>
+      <div class="comm-actions">
+        <a class="comm-btn" href="{% url 'wa_api_inbox' %}">Back to WhatsApp</a>
+      </div>
+    </section>
+
+    <div class="comm-grid">
+      <nav class="comm-nav" aria-label="Communication navigation">
+        <a href="{% url 'email_sync_dashboard' %}"><span>Inbox</span><span class="comm-count">Email</span></a>
+        <a href="{% url 'wa_api_inbox' %}#waComposeDrop"><span>Drafts</span><span class="comm-count">0</span></a>
+        <a href="{% url 'wa_api_inbox' %}#waMessages"><span>Sent</span><span class="comm-count">WA</span></a>
+        <a href="#event-log"><span>Failed</span><span class="comm-count">Logs</span></a>
+        <a href="{% url 'wa_api_inbox' %}#templateSelect"><span>Templates</span><span class="comm-count">WA</span></a>
+        <a href="{% url 'wa_api_inbox' %}"><span>WhatsApp</span><span class="comm-count">WA</span></a>
+        <a class="is-active" href="{% url 'wa_infobip_events' %}"><span>History</span><span class="comm-count">{{ events|length }}</span></a>
+      </nav>
+
+      <main class="comm-main">
+        <section class="comm-kpis" aria-label="Webhook event summary">
+          <article class="comm-kpi">
+            <span>Unread Count</span>
+            <strong>{{ events|length }}</strong>
+            <small>Latest webhook events</small>
+          </article>
+          <article class="comm-kpi">
+            <span>Sent Today</span>
+            <strong>0</strong>
+            <small>Outbound delivery is in WhatsApp</small>
+          </article>
+          <article class="comm-kpi">
+            <span>Failed Today</span>
+            <strong>0</strong>
+            <small>See event status rows</small>
+          </article>
+          <article class="comm-kpi">
+            <span>Scheduled</span>
+            <strong>0</strong>
+            <small>No scheduling on this page</small>
+          </article>
+          <article class="comm-kpi">
+            <span>Pending Replies</span>
+            <strong>0</strong>
+            <small>Review inbox conversations</small>
+          </article>
+        </section>
+
+        <section class="comm-panel" id="event-log">
+          <div class="comm-panel-header">
+            <div>
+              <h2 class="comm-panel-title">Webhook History</h2>
+              <div class="comm-panel-note">Payload detail remains available through expandable rows.</div>
+            </div>
+            <span class="comm-status is-channel">Infobip</span>
+          </div>
+          <div class="comm-table-wrap">
+            <table class="comm-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Received</th>
+                  <th>Status</th>
+                  <th>Processed</th>
+                  <th>Error</th>
+                  <th>Payload</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for event in events %}
+                  <tr>
+                    <td data-label="ID">#{{ event.id }}</td>
+                    <td data-label="Received">{{ event.received_at|date:"Y-m-d H:i" }}</td>
+                    <td data-label="Status">
+                      <span class="comm-status {% if event.status == 'failed' %}is-failed{% elif event.status == 'processed' %}is-ok{% elif event.status == 'processing' %}is-warning{% else %}is-channel{% endif %}">{{ event.status|capfirst }}</span>
+                    </td>
+                    <td data-label="Processed">{% if event.processed_at %}{{ event.processed_at|date:"Y-m-d H:i" }}{% else %}-{% endif %}</td>
+                    <td data-label="Error">{{ event.error_message|default:"-" }}</td>
+                    <td data-label="Payload">
+                      <details>
+                        <summary class="comm-btn">View</summary>
+                        <div class="comm-json">{{ event.raw_payload }}</div>
+                      </details>
+                    </td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td data-label="Empty" colspan="6"><div class="comm-empty">No webhook events yet.</div></td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
     </div>
-    <a class="btn" href="{% url 'wa_api_inbox' %}">Back to WhatsApp</a>
   </div>
-
-  <table class="wa-events-table">
-    <thead>
-      <tr>
-        <th>ID</th>
-        <th>Received</th>
-        <th>Status</th>
-        <th>Processed</th>
-        <th>Error</th>
-        <th>Payload</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for event in events %}
-        <tr>
-          <td>#{{ event.id }}</td>
-          <td>{{ event.received_at|date:"Y-m-d H:i" }}</td>
-          <td><span class="wa-badge {{ event.status }}">{{ event.status|capfirst }}</span></td>
-          <td>{% if event.processed_at %}{{ event.processed_at|date:"Y-m-d H:i" }}{% else %}-{% endif %}</td>
-          <td>{{ event.error_message|default:"-" }}</td>
-          <td>
-            <details>
-              <summary style="cursor:pointer; color:#93c5fd;">View</summary>
-              <div class="wa-json">{{ event.raw_payload }}</div>
-            </details>
-          </td>
-        </tr>
-      {% empty %}
-        <tr>
-          <td colspan="6">No webhook events yet.</td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
 </div>
 {% endblock %}

@@ -1,7 +1,9 @@
 {% extends "crm/base.html" %}
-{% load humanize crm_extras %}
+{% load static humanize crm_extras %}
 
 {% block content %}
+<link rel="stylesheet" href="{% static 'crm/ui_system.css' %}?v=ui-rc2-safe">
+
 <style>
   :root{
     --cq-bg:#020617;
@@ -138,7 +140,7 @@
   }
 </style>
 
-<div class="cq-wrap">
+<div class="cq-wrap cq-modern crm-modern-bridge crm-approval-bridge" data-crm-density="compact">
   <section class="cq-head">
     <div>
       <h1 class="cq-title">CEO Quotation Approval Queue</h1>

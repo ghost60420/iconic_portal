@@ -1,5 +1,7 @@
 {% extends "crm/base.html" %}
+{% load static %}
 {% block content %}
+<link rel="stylesheet" href="{% static 'crm/ui_system.css' %}?v=communication-phase-d">
 <style>
   .wa-wrap{
     max-width:1400px;
@@ -14,6 +16,7 @@
     --wa-accent-2:#128c7e;
     --wa-msg-in:#202c33;
     --wa-msg-out:#005c4b;
+    --wa-text:#e9edef;
   }
   .wa-page-head{ display:flex; align-items:center; justify-content:space-between; }
   .wa-layout{
@@ -269,18 +272,64 @@
   }
 </style>
 
-<div class="container-fluid">
-  <div class="wa-wrap">
+<div class="comm-modern">
+  <div class="comm-shell">
+    <div class="wa-wrap">
     <form id="wa-csrf" style="display:none;">{% csrf_token %}</form>
-    <div class="wa-page-head">
+    <section class="comm-header wa-page-head">
       <div>
-        <div class="wa-title">WhatsApp</div>
-        <div class="wa-sub">Your team inbox for WhatsApp conversations.</div>
+        <p class="comm-kicker">Communication Center</p>
+        <h1 class="comm-title">WhatsApp Inbox</h1>
+        <div class="comm-subtitle">Team message list, live preview, templates, attachments, quick replies, and message history.</div>
       </div>
-    </div>
+      <div class="comm-actions">
+        <a class="comm-btn" href="{% url 'email_sync_dashboard' %}">Email Center</a>
+        <a class="comm-btn" href="{% url 'wa_infobip_events' %}">Message Logs</a>
+      </div>
+    </section>
     {% if infobip_restriction_banner %}
       <div class="wa-alert">{{ infobip_restriction_banner }}</div>
     {% endif %}
+
+    <div class="comm-grid">
+      <nav class="comm-nav" aria-label="Communication navigation">
+        <a href="{% url 'email_sync_dashboard' %}"><span>Inbox</span><span class="comm-count">Email</span></a>
+        <a href="#waComposeDrop"><span>Drafts</span><span class="comm-count">0</span></a>
+        <a href="#waMessages"><span>Sent</span><span class="comm-count">{% if selected_messages %}{{ selected_messages|length }}{% else %}0{% endif %}</span></a>
+        <a href="#waMessages"><span>Failed</span><span class="comm-count">0</span></a>
+        <a href="#templateSelect"><span>Templates</span><span class="comm-count">{{ infobip_templates|length }}</span></a>
+        <a class="is-active" href="{% url 'wa_api_inbox' %}"><span>WhatsApp</span><span class="comm-count">{{ threads|length }}</span></a>
+        <a href="{% url 'wa_infobip_events' %}"><span>History</span><span class="comm-count">Logs</span></a>
+      </nav>
+
+      <main class="comm-main">
+        <section class="comm-kpis" aria-label="WhatsApp communication summary">
+          <article class="comm-kpi">
+            <span>Unread Count</span>
+            <strong>{{ threads|length }}</strong>
+            <small>Conversation list</small>
+          </article>
+          <article class="comm-kpi">
+            <span>Sent Today</span>
+            <strong>{% if selected_messages %}{{ selected_messages|length }}{% else %}0{% endif %}</strong>
+            <small>Visible thread messages</small>
+          </article>
+          <article class="comm-kpi">
+            <span>Failed Today</span>
+            <strong>0</strong>
+            <small>Visible failures stay in message status</small>
+          </article>
+          <article class="comm-kpi">
+            <span>Scheduled</span>
+            <strong>{% if selected_thread and selected_thread.follow_up_date %}1{% else %}0{% endif %}</strong>
+            <small>Selected thread follow-up</small>
+          </article>
+          <article class="comm-kpi">
+            <span>Pending Replies</span>
+            <strong>{% if selected_thread and selected_thread.needs_human %}1{% else %}0{% endif %}</strong>
+            <small>Selected thread needs human</small>
+          </article>
+        </section>
 
     <div class="wa-layout" style="margin-top:12px;">
       <div class="wa-card wa-pane wa-list-pane">
@@ -613,6 +662,9 @@
         </div>
       </aside>
     </div>
+      </main>
+    </div>
+    </div>
   </div>
 </div>
 
@@ -921,8 +973,8 @@
 
   if (btnStart){
     btnStart.addEventListener("click", () => {
-      const phone = newPhone ? newPhone.value : \"\";
-      const text = newText ? newText.value : \"\";
+      const phone = newPhone ? newPhone.value : "";
+      const text = newText ? newText.value : "";
       const payload = {phone: phone, text: text};
       if (startTemplate && startTemplate.value){
         payload.template_name = startTemplate.value;
@@ -931,13 +983,13 @@
       if (startTemplateVars && startTemplateVars.value){
         payload.template_vars = startTemplateVars.value;
       }
-      post(\"/whatsapp-api/start/\", payload).then(d => {
+      post("/whatsapp-api/start/", payload).then(d => {
         if (startStatus){
-          startStatus.textContent = d.ok ? (d.queued ? \"Queued\" : \"Sent\") : (d.error || \"Failed\");
+          startStatus.textContent = d.ok ? (d.queued ? "Queued" : "Sent") : (d.error || "Failed");
         }
         if (!d.ok && status){
-          status.textContent = d.error || \"Failed\";
-          status.className = \"wa-status-msg error\";
+          status.textContent = d.error || "Failed";
+          status.className = "wa-status-msg error";
         }
         if (d.ok && d.thread_id){
           window.location.href = `/whatsapp-api/?thread=${d.thread_id}`;

@@ -1,6 +1,8 @@
 {% extends "crm/base.html" %}
-{% load tz crm_extras %}
+{% load static tz crm_extras %}
 {% block content %}
+
+<link rel="stylesheet" href="{% static 'crm/ui_system.css' %}?v=ui-rc2-safe">
 
 <style>
   .bd-wrap { max-width: 1200px; margin: 0 auto; }
@@ -18,7 +20,7 @@
   }
 </style>
 
-<div class="container-fluid bd-wrap" style="color:#f9fafb;">
+<div class="container-fluid bd-wrap crm-modern-bridge crm-employee-bridge" data-crm-density="compact" style="color:#f9fafb;">
 
   <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
     <div>
