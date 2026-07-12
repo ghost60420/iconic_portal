@@ -31,7 +31,7 @@
 <link rel="stylesheet" href="{% static 'crm/dashboard.css' %}?v=top-actions-layer-20260505">
 <link rel="stylesheet" href="{% static 'crm/ui_system.css' %}?v=ui-rc2-safe">
 
-<div class="dashboard-shell crm-modern-bridge crm-dashboard-bridge" data-dashboard-root data-density="comfortable" data-crm-density="compact">
+<div class="dashboard-shell crm-modern-bridge crm-dashboard-bridge crm-dashboard-shell" data-dashboard-root data-density="comfortable" data-crm-density="comfortable">
   <section class="dashboard-topbar">
     <div class="dashboard-brand">
       <div class="dashboard-brand-copy">
@@ -62,12 +62,11 @@
         <div class="dashboard-control-pair" aria-label="Dashboard display controls">
           <button class="dashboard-control-button" type="button" data-compact-toggle aria-pressed="false">
             <i data-lucide="panel-top"></i>
-            Compact Mode
+            <span data-density-toggle-label>Compact Mode</span>
           </button>
           <select class="dashboard-control-select" data-density-select aria-label="Dashboard density">
             <option value="comfortable">Comfortable</option>
-            <option value="cozy">Cozy</option>
-            <option value="compact">Dense</option>
+            <option value="compact">Compact</option>
           </select>
         </div>
         {% if not dashboard_layout_fixed %}

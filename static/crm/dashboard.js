@@ -4,32 +4,50 @@
 
   const densitySelect = root.querySelector("[data-density-select]");
   const compactToggle = root.querySelector("[data-compact-toggle]");
+  const compactToggleLabel = root.querySelector("[data-density-toggle-label]");
   const densityKey = "iconic.dashboard.density";
-  const compactKey = "iconic.dashboard.compact";
+  const legacyCompactKey = "iconic.dashboard.compact";
+  const allowedDensities = new Set(["comfortable", "compact"]);
+
+  function readDensity() {
+    let density = localStorage.getItem(densityKey);
+    if (!allowedDensities.has(density)) {
+      density = localStorage.getItem(legacyCompactKey) === "1" ? "compact" : root.dataset.density || "comfortable";
+    }
+    return allowedDensities.has(density) ? density : "comfortable";
+  }
 
   function applyPrefs() {
-    const density = localStorage.getItem(densityKey) || root.dataset.density || "comfortable";
-    const compact = localStorage.getItem(compactKey) === "1";
+    const density = readDensity();
+    const compact = density === "compact";
     root.dataset.density = density;
+    root.dataset.crmDensity = density;
     root.classList.toggle("is-compact", compact);
     if (densitySelect) densitySelect.value = density;
     if (compactToggle) {
       compactToggle.setAttribute("aria-pressed", compact ? "true" : "false");
       compactToggle.classList.toggle("is-active", compact);
+      compactToggle.setAttribute("title", compact ? "Switch to comfortable dashboard density" : "Switch to compact dashboard density");
+    }
+    if (compactToggleLabel) {
+      compactToggleLabel.textContent = compact ? "Comfortable Mode" : "Compact Mode";
     }
   }
 
   if (densitySelect) {
     densitySelect.addEventListener("change", function () {
-      localStorage.setItem(densityKey, densitySelect.value || "comfortable");
+      const nextDensity = allowedDensities.has(densitySelect.value) ? densitySelect.value : "comfortable";
+      localStorage.setItem(densityKey, nextDensity);
+      localStorage.removeItem(legacyCompactKey);
       applyPrefs();
     });
   }
 
   if (compactToggle) {
     compactToggle.addEventListener("click", function () {
-      const next = !(localStorage.getItem(compactKey) === "1");
-      localStorage.setItem(compactKey, next ? "1" : "0");
+      const nextDensity = readDensity() === "compact" ? "comfortable" : "compact";
+      localStorage.setItem(densityKey, nextDensity);
+      localStorage.removeItem(legacyCompactKey);
       applyPrefs();
     });
   }
