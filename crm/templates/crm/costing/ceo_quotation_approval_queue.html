@@ -126,6 +126,162 @@
     .cq-filter-action{ align-items:stretch; }
     .cq-filter-action .cq-btn{ width:100%; }
   }
+  /* Phase A: enterprise sales density pass. */
+  .cq-wrap{ max-width:1840px; width:calc(100vw - 20px); }
+  .cq-head{
+    align-items:center;
+    gap:10px;
+    padding:12px 14px;
+    border-radius:10px;
+    margin-bottom:9px;
+  }
+  .cq-title{ font-size:clamp(21px, 2vw, 30px); line-height:1.04; }
+  .cq-sub{ margin-top:4px; font-size:11px; line-height:1.28; max-width:980px; }
+  .cq-actions{ gap:6px; }
+  .cq-btn{
+    min-height:29px;
+    padding:0 9px;
+    border-radius:8px;
+    font-size:10.5px;
+  }
+  .cq-filters{
+    position:sticky;
+    top:8px;
+    z-index:4;
+    grid-template-columns:minmax(220px, 1.5fr) repeat(4, minmax(126px, .72fr)) auto auto;
+    gap:7px;
+    padding:10px;
+    border-radius:10px;
+    margin-bottom:9px;
+  }
+  .cq-field label{ margin-bottom:4px; font-size:9px; }
+  .cq-field input,
+  .cq-field select{
+    min-height:31px;
+    padding:5px 8px;
+    border-radius:7px;
+    font-size:11px;
+  }
+  .cq-table-wrap{ border-radius:10px; }
+  .cq-table{ min-width:1120px; }
+  .cq-table th,
+  .cq-table td{ padding:7px 8px; }
+  .cq-table th{
+    position:sticky;
+    top:0;
+    z-index:2;
+    background:rgba(7,17,31,.98);
+    font-size:9px;
+  }
+  .cq-table td{ font-size:11px; }
+  .cq-muted{ font-size:10px; line-height:1.24; }
+  .cq-status,
+  .cq-service-badge,
+  .cq-pricing-badge{
+    min-height:22px;
+    padding:0 7px;
+    font-size:9.5px;
+  }
+  .cq-money-label{ font-size:8.5px; }
+  .cq-row-actions{ gap:5px; min-width:190px; }
+  .cq-empty{ padding:22px; font-size:11px; }
+  @media (max-width: 980px){
+    .cq-wrap{ width:min(100% - 12px, 1840px); }
+    .cq-head{ display:grid; padding:10px; }
+    .cq-filters{
+      position:static;
+      grid-template-columns:1fr 1fr;
+      padding:9px;
+    }
+  }
+  @media (max-width: 560px){
+    .cq-filters{ grid-template-columns:1fr; }
+    .cq-actions,
+    .cq-actions .cq-btn{ width:100%; }
+  }
+  /* Phase A.5: approval queue polish, actions stay visible and compact. */
+  .cq-actions{
+    display:grid;
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+    align-content:start;
+  }
+  .cq-actions .cq-btn{
+    width:100%;
+    min-width:0;
+  }
+  .cq-head{ padding:9px 10px; }
+  .cq-title{ font-size:clamp(19px, 1.6vw, 26px); }
+  .cq-sub{ font-size:10.5px; line-height:1.2; }
+  .cq-btn{
+    min-height:24px;
+    padding:0 7px;
+    border-radius:6px;
+    font-size:9.5px;
+    line-height:1.1;
+  }
+  .crm-approval-bridge .cq-filters{
+    gap:5px;
+    padding:7px;
+  }
+  .cq-field label{ margin-bottom:2px; font-size:8.5px; }
+  .cq-field input,
+  .cq-field select{
+    min-height:27px;
+    padding:4px 6px;
+    font-size:10px;
+  }
+  .cq-table th,
+  .cq-table td{ padding:5px 6px !important; }
+  .cq-status,
+  .cq-service-badge,
+  .cq-pricing-badge{
+    min-height:19px;
+    padding:0 5px;
+    font-size:8.5px;
+  }
+  .cq-row-actions{
+    display:grid;
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+    gap:4px;
+    min-width:168px;
+  }
+  .cq-row-actions .cq-btn,
+  .cq-row-actions form,
+  .cq-row-actions button{
+    width:100%;
+    min-width:0;
+  }
+  @media (max-width: 980px){
+    .crm-approval-bridge .cq-filters{
+      grid-template-columns:repeat(2, minmax(0, 1fr)) !important;
+    }
+    .cq-filter-action .cq-btn{
+      min-height:24px;
+    }
+  }
+  @media (max-width: 560px){
+    .cq-actions{
+      grid-template-columns:repeat(2, minmax(0, 1fr)) !important;
+      width:100%;
+    }
+    .crm-approval-bridge .cq-filters{
+      grid-template-columns:repeat(2, minmax(0, 1fr));
+      gap:4px;
+      padding:6px;
+    }
+    .cq-field input,
+    .cq-field select,
+    .cq-btn{
+      min-height:22px !important;
+      padding:0 5px !important;
+      border-radius:5px !important;
+      font-size:8.5px !important;
+      line-height:1.1 !important;
+    }
+    .cq-field label{
+      font-size:8px;
+    }
+  }
   @media print{
     .crm-topbar,
     .cq-actions,

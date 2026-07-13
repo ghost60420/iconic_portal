@@ -382,6 +382,129 @@
       overflow-wrap: anywhere;
     }
   }
+
+  /* Phase A: enterprise sales density pass. */
+  .costing-form-page {
+    max-width: 1500px;
+    margin: 10px auto 32px auto;
+    padding: 0 8px;
+  }
+
+  .costing-form-page .card {
+    border-radius: 9px;
+    padding: 9px;
+  }
+
+  .costing-form-page .intro-card {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 8px;
+    padding: 10px 12px;
+  }
+
+  .costing-form-page .intro-title {
+    margin-bottom: 3px;
+    font-size: 14px;
+  }
+
+  .costing-form-page .muted,
+  .costing-form-page .field-help {
+    font-size: 10.5px;
+    line-height: 1.25;
+  }
+
+  .costing-form-page label {
+    font-size: 10.5px;
+  }
+
+  .costing-form-page input,
+  .costing-form-page select,
+  .costing-form-page textarea,
+  .quick-readonly-field {
+    min-height: 31px;
+    padding: 5px 7px;
+    border-radius: 7px;
+    font-size: 11px;
+  }
+
+  .costing-form-page textarea {
+    min-height: 64px;
+  }
+
+  .costing-type-switch,
+  .quick-costing-layout,
+  .quick-breakdown-form {
+    gap: 7px;
+    margin-bottom: 8px;
+  }
+
+  .costing-type-option,
+  .btnx {
+    min-height: 29px;
+    padding: 0 9px;
+    border-radius: 8px;
+    font-size: 10.5px;
+  }
+
+  .grid {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 7px;
+  }
+
+  .quick-breakdown-card > summary {
+    min-height: 34px;
+    padding: 0 10px;
+    font-size: 11.5px;
+  }
+
+  .quick-breakdown-body {
+    padding: 0 10px 10px;
+  }
+
+  .quick-breakdown-body .grid {
+    padding-top: 9px;
+  }
+
+  .quick-summary-row {
+    gap: 10px;
+    padding: 6px 0;
+    font-size: 11px;
+  }
+
+  .quick-summary-row strong {
+    font-size: 11.5px;
+  }
+
+  .quick-summary-dual {
+    min-width: 140px;
+  }
+
+  .quick-summary-dual span {
+    font-size: 10px;
+  }
+
+  @media (max-width: 760px) {
+    .costing-form-page {
+      margin-top: 7px;
+      padding: 0 6px;
+    }
+
+    .costing-form-page .intro-card {
+      display: grid;
+    }
+
+    .grid {
+      grid-template-columns: 1fr;
+    }
+
+    .costing-type-option,
+    .btnx {
+      width: 100%;
+      justify-content: center;
+    }
+  }
 </style>
 
 <div class="costing-form-page">

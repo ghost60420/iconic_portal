@@ -1134,3 +1134,245 @@
     white-space: normal;
   }
 }
+
+/* Phase A: enterprise sales density refinement. */
+.lead-detail-page.crm-lead-bridge {
+  width: min(1840px, calc(100vw - 48px));
+  margin: 8px auto 32px;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+.lead-detail-page.crm-lead-bridge .top-bar.lead-detail-hero {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 8px 10px !important;
+  border-radius: 9px !important;
+}
+
+.lead-detail-page.crm-lead-bridge h1 {
+  font-size: clamp(19px, 1.45vw, 24px);
+}
+
+.lead-detail-page.crm-lead-bridge .lead-detail-subtitle {
+  margin-top: 2px;
+  font-size: 10.5px;
+  line-height: 1.2;
+}
+
+.lead-detail-page.crm-lead-bridge .lead-detail-badges,
+.lead-detail-page.crm-lead-bridge .top-links,
+.lead-detail-page.crm-lead-bridge .wa-row {
+  gap: 4px;
+}
+
+.lead-detail-page.crm-lead-bridge .badge,
+.lead-detail-page.crm-lead-bridge .tag,
+.lead-detail-page.crm-lead-bridge .pill {
+  min-height: 19px;
+  padding: 0 6px;
+  font-size: 9px;
+}
+
+.lead-detail-page.crm-lead-bridge .wa-btn,
+.lead-detail-page.crm-lead-bridge .action-btn,
+.lead-detail-page.crm-lead-bridge button {
+  min-height: 27px;
+  padding: 0 7px;
+  border-radius: 6px;
+  font-size: 9.5px;
+}
+
+.lead-detail-page.crm-lead-bridge .lead-density-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.26fr);
+  gap: 7px;
+}
+
+.lead-detail-page.crm-lead-bridge .lead-density-main,
+.lead-detail-page.crm-lead-bridge .lead-density-side {
+  gap: 7px;
+}
+
+.lead-detail-page.crm-lead-bridge .lead-density-side {
+  top: 58px;
+  max-height: calc(100vh - 66px);
+}
+
+.lead-detail-page.crm-lead-bridge .lead-density-side-panel,
+.lead-detail-page.crm-lead-bridge .section,
+.lead-detail-page.crm-lead-bridge .summary-card {
+  padding: 8px !important;
+  border-radius: 7px !important;
+}
+
+.lead-detail-page.crm-lead-bridge .summary-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.lead-detail-page.crm-lead-bridge .summary-card {
+  min-height: 84px;
+}
+
+.lead-detail-page.crm-lead-bridge .summary-title,
+.lead-detail-page.crm-lead-bridge .lead-density-side-list span {
+  font-size: 8.5px;
+}
+
+.lead-detail-page.crm-lead-bridge .summary-line {
+  margin-top: 3px;
+  font-size: 12px;
+}
+
+.lead-detail-page.crm-lead-bridge .summary-sub,
+.lead-detail-page.crm-lead-bridge .small,
+.lead-detail-page.crm-lead-bridge .lead-density-side-list strong {
+  font-size: 10px;
+  line-height: 1.22;
+}
+
+.lead-detail-page.crm-lead-bridge .section-title,
+.lead-detail-page.crm-lead-bridge .lead-density-side-panel .section-title,
+.lead-detail-page.crm-lead-bridge .iconic-ai-brain-title,
+.lead-detail-page.crm-lead-bridge .iconic-ai-brain-draft-title {
+  margin-bottom: 5px;
+  font-size: 12px;
+}
+
+.lead-detail-page.crm-lead-bridge input,
+.lead-detail-page.crm-lead-bridge select,
+.lead-detail-page.crm-lead-bridge textarea {
+  min-height: 29px;
+  padding: 5px 7px;
+  border-radius: 6px;
+  font-size: 10.5px;
+}
+
+.lead-detail-page.crm-lead-bridge textarea {
+  min-height: 58px;
+}
+
+.lead-detail-page.crm-lead-bridge th,
+.lead-detail-page.crm-lead-bridge td {
+  padding: 5px 6px;
+  font-size: 10.5px;
+}
+
+.lead-detail-page.crm-lead-bridge .comment,
+.lead-detail-page.crm-lead-bridge .lead-density-side-list > div {
+  padding: 6px;
+  border-radius: 6px;
+}
+
+@media (max-width: 1180px) {
+  .lead-detail-page.crm-lead-bridge .top-bar.lead-detail-hero,
+  .lead-detail-page.crm-lead-bridge .lead-detail-hero-copy {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .lead-detail-page.crm-lead-bridge {
+    width: min(100% - 10px, 1840px);
+    margin-top: 6px;
+  }
+
+  .lead-detail-page.crm-lead-bridge .summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .lead-detail-page.crm-lead-bridge .lead-density-side {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+/* Phase A.5: detail page polish, actions stay visible. */
+.lead-detail-page.crm-lead-bridge .lead-density-actions-panel .top-links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.lead-detail-page.crm-lead-bridge .lead-density-actions-panel .top-links form,
+.lead-detail-page.crm-lead-bridge .lead-density-actions-panel .top-links .action-btn,
+.lead-detail-page.crm-lead-bridge .lead-density-actions-panel .top-links button {
+  width: 100%;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.lead-detail-page.crm-lead-bridge .lead-density-side-panel {
+  padding: 6px !important;
+}
+
+.lead-detail-page.crm-lead-bridge .lead-density-side-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.lead-detail-page.crm-lead-bridge .lead-density-side-list > div {
+  padding: 5px;
+}
+
+.lead-detail-page.crm-lead-bridge .lead-density-warning {
+  padding: 5px 6px;
+  font-size: 9.5px;
+  line-height: 1.2;
+}
+
+.lead-detail-page.crm-lead-bridge .workflow-activity-timeline,
+.lead-detail-page.crm-lead-bridge .product-reference-panel,
+.lead-detail-page.crm-lead-bridge .lead-client-notes-section,
+.lead-detail-page.crm-lead-bridge .lead-activity-section,
+.lead-detail-page.crm-lead-bridge .lead-notes-section {
+  margin-top: 7px !important;
+  margin-bottom: 7px !important;
+}
+
+.lead-detail-page.crm-lead-bridge .workflow-order-summary,
+.lead-detail-page.crm-lead-bridge .workflow-activity-timeline,
+.lead-detail-page.crm-lead-bridge .workflow-quick-nav {
+  margin: 6px 0 !important;
+  padding: 6px !important;
+}
+
+.lead-detail-page.crm-lead-bridge .workflow-order-summary-cell,
+.lead-detail-page.crm-lead-bridge .workflow-activity-step {
+  min-height: 48px !important;
+  padding: 5px !important;
+}
+
+.lead-detail-page.crm-lead-bridge .workflow-order-summary-head,
+.lead-detail-page.crm-lead-bridge .workflow-activity-timeline-head {
+  margin-bottom: 5px !important;
+}
+
+@media (max-width: 760px) {
+  .lead-detail-page.crm-lead-bridge .lead-density-side {
+    gap: 5px;
+  }
+
+  .lead-detail-page.crm-lead-bridge .lead-density-actions-panel .top-links {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 4px !important;
+  }
+
+  .lead-detail-page.crm-lead-bridge .lead-density-actions-panel .top-links .action-btn,
+  .lead-detail-page.crm-lead-bridge .lead-density-actions-panel .top-links button,
+  .lead-detail-page.crm-lead-bridge .wa-btn,
+  .lead-detail-page.crm-lead-bridge .action-btn,
+  .lead-detail-page.crm-lead-bridge button {
+    min-height: 22px !important;
+    padding: 0 5px !important;
+    border-radius: 5px !important;
+    font-size: 8.5px !important;
+    line-height: 1.1 !important;
+  }
+
+  .lead-detail-page.crm-lead-bridge .lead-density-side-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

@@ -1353,3 +1353,365 @@
     white-space: normal;
   }
 }
+
+/* Phase A: enterprise sales density refinement. */
+.opp-detail-page.crm-opportunity-bridge {
+  width: min(1840px, calc(100vw - 48px));
+  margin: 8px auto 32px;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-detail-hero {
+  padding: 8px 10px;
+  border-radius: 9px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-title {
+  font-size: clamp(19px, 1.45vw, 24px);
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-subtitle {
+  margin-top: 2px;
+  font-size: 10.5px;
+  line-height: 1.2;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-hero-badges,
+.opp-detail-page.crm-opportunity-bridge .opp-action-bar,
+.opp-detail-page.crm-opportunity-bridge .opp-panel-actions,
+.opp-detail-page.crm-opportunity-bridge .opp-row-actions,
+.opp-detail-page.crm-opportunity-bridge .ship-actions {
+  gap: 4px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-action-bar {
+  top: 58px;
+  max-width: 470px;
+  padding: 5px;
+  border-radius: 7px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-btn,
+.opp-detail-page.crm-opportunity-bridge .opp-badge,
+.opp-detail-page.crm-opportunity-bridge .opp-stage-badge,
+.opp-detail-page.crm-opportunity-bridge .opp-status-pill,
+.opp-detail-page.crm-opportunity-bridge .opp-page-chip {
+  min-height: 27px;
+  padding: 0 7px;
+  border-radius: 6px;
+  font-size: 9.5px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-snapshot-grid {
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-snapshot-card {
+  min-height: 56px;
+  padding: 7px;
+  border-radius: 7px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-snapshot-card strong,
+.opp-detail-page.crm-opportunity-bridge .opp-info-grid strong,
+.opp-detail-page.crm-opportunity-bridge .opp-costing-grid strong,
+.opp-detail-page.crm-opportunity-bridge .opp-readiness-grid strong {
+  font-size: 11.5px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-snapshot-card small,
+.opp-detail-page.crm-opportunity-bridge .opp-costing-grid small,
+.opp-detail-page.crm-opportunity-bridge .opp-readiness-grid small {
+  font-size: 9px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-workspace-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.26fr);
+  gap: 7px;
+  margin-top: 7px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-main-column,
+.opp-detail-page.crm-opportunity-bridge .opp-side-column {
+  gap: 7px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-side-column {
+  top: 58px;
+  max-height: calc(100vh - 66px);
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-panel {
+  padding: 8px;
+  border-radius: 7px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-panel-head {
+  gap: 5px;
+  margin-bottom: 5px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-panel h2 {
+  font-size: 12px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-panel h3 {
+  font-size: 11.5px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-muted {
+  font-size: 10px;
+  line-height: 1.22;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-info-grid,
+.opp-detail-page.crm-opportunity-bridge .opp-costing-grid,
+.opp-detail-page.crm-opportunity-bridge .opp-readiness-grid,
+.opp-detail-page.crm-opportunity-bridge .opp-admin-grid,
+.opp-detail-page.crm-opportunity-bridge .opp-form-grid,
+.opp-detail-page.crm-opportunity-bridge .opp-task-grid,
+.opp-detail-page.crm-opportunity-bridge .opp-document-row {
+  gap: 5px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-info-grid > div,
+.opp-detail-page.crm-opportunity-bridge .opp-costing-grid article,
+.opp-detail-page.crm-opportunity-bridge .opp-readiness-grid article,
+.opp-detail-page.crm-opportunity-bridge .opp-notes-box,
+.opp-detail-page.crm-opportunity-bridge .opp-ai-output,
+.opp-detail-page.crm-opportunity-bridge .opp-task-item,
+.opp-detail-page.crm-opportunity-bridge .opp-comment,
+.opp-detail-page.crm-opportunity-bridge .opp-file-list li,
+.opp-detail-page.crm-opportunity-bridge .opp-quick-costing-block {
+  padding: 7px;
+  border-radius: 7px;
+}
+
+.opp-detail-page.crm-opportunity-bridge input,
+.opp-detail-page.crm-opportunity-bridge select,
+.opp-detail-page.crm-opportunity-bridge textarea {
+  min-height: 29px;
+  padding: 0 7px;
+  border-radius: 6px;
+  font-size: 10.5px;
+}
+
+.opp-detail-page.crm-opportunity-bridge textarea {
+  min-height: 58px;
+  padding-top: 6px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-profit-value {
+  margin: 2px 0 5px;
+  font-size: 18px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-money-row {
+  padding: 4px 0;
+  font-size: 10px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-quick-costing-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-quick-costing-table {
+  min-width: 820px;
+  table-layout: auto;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-quick-costing-table th,
+.opp-detail-page.crm-opportunity-bridge .opp-quick-costing-table td {
+  padding: 6px 7px;
+  white-space: nowrap;
+  overflow-wrap: anywhere;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-subdetails summary,
+.opp-detail-page.crm-opportunity-bridge .opp-admin-details summary {
+  min-height: 28px;
+  padding: 6px 8px;
+  font-size: 10.5px;
+}
+
+@media (max-width: 1280px) {
+  .opp-detail-page.crm-opportunity-bridge .opp-detail-hero {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .opp-detail-page.crm-opportunity-bridge {
+    width: min(100% - 10px, 1840px);
+  }
+
+  .opp-detail-page.crm-opportunity-bridge .opp-detail-hero,
+  .opp-detail-page.crm-opportunity-bridge .opp-panel {
+    padding: 8px;
+  }
+
+  .opp-detail-page.crm-opportunity-bridge .opp-workspace-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Phase A.5: detail page polish, preserving every action and form. */
+.opp-detail-page.crm-opportunity-bridge .opp-action-bar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 4px;
+  max-width: 390px;
+  padding: 4px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-action-bar .opp-btn,
+.opp-detail-page.crm-opportunity-bridge .opp-action-bar .opp-inline-form,
+.opp-detail-page.crm-opportunity-bridge .opp-action-bar .opp-inline-form .opp-btn {
+  width: 100%;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-workspace-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 0.24fr);
+  gap: 6px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-main-column,
+.opp-detail-page.crm-opportunity-bridge .opp-side-column {
+  gap: 6px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-side-column {
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-panel,
+.opp-detail-page.crm-opportunity-bridge .opp-info-grid > div,
+.opp-detail-page.crm-opportunity-bridge .opp-costing-grid article,
+.opp-detail-page.crm-opportunity-bridge .opp-readiness-grid article,
+.opp-detail-page.crm-opportunity-bridge .opp-notes-box,
+.opp-detail-page.crm-opportunity-bridge .opp-ai-output,
+.opp-detail-page.crm-opportunity-bridge .opp-task-item,
+.opp-detail-page.crm-opportunity-bridge .opp-comment,
+.opp-detail-page.crm-opportunity-bridge .opp-file-list li,
+.opp-detail-page.crm-opportunity-bridge .opp-quick-costing-block {
+  padding: 6px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-panel-head {
+  margin-bottom: 4px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-panel h2,
+.opp-detail-page.crm-opportunity-bridge .opp-panel h3 {
+  font-size: 11.5px;
+  line-height: 1.18;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-btn,
+.opp-detail-page.crm-opportunity-bridge .opp-badge,
+.opp-detail-page.crm-opportunity-bridge .opp-stage-badge,
+.opp-detail-page.crm-opportunity-bridge .opp-status-pill,
+.opp-detail-page.crm-opportunity-bridge .opp-page-chip {
+  min-height: 24px;
+  padding: 0 6px;
+  font-size: 9px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-snapshot-grid,
+.opp-detail-page.crm-opportunity-bridge .opp-info-grid,
+.opp-detail-page.crm-opportunity-bridge .opp-costing-grid,
+.opp-detail-page.crm-opportunity-bridge .opp-readiness-grid,
+.opp-detail-page.crm-opportunity-bridge .opp-admin-grid,
+.opp-detail-page.crm-opportunity-bridge .opp-form-grid,
+.opp-detail-page.crm-opportunity-bridge .opp-task-grid,
+.opp-detail-page.crm-opportunity-bridge .opp-document-row {
+  gap: 4px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-snapshot-card {
+  min-height: 50px;
+  padding: 6px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-profit-value {
+  margin: 1px 0 3px;
+  font-size: 16px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-money-row {
+  padding: 3px 0;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-quick-costing-table th,
+.opp-detail-page.crm-opportunity-bridge .opp-quick-costing-table td {
+  padding: 5px 6px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .opp-subdetails summary,
+.opp-detail-page.crm-opportunity-bridge .opp-admin-details summary {
+  min-height: 24px;
+  padding: 5px 7px;
+  font-size: 10px;
+}
+
+.opp-detail-page.crm-opportunity-bridge .workflow-order-summary,
+.opp-detail-page.crm-opportunity-bridge .workflow-activity-timeline,
+.opp-detail-page.crm-opportunity-bridge .workflow-quick-nav {
+  margin: 6px 0 !important;
+  padding: 6px !important;
+}
+
+.opp-detail-page.crm-opportunity-bridge .workflow-order-summary-cell,
+.opp-detail-page.crm-opportunity-bridge .workflow-activity-step {
+  min-height: 48px !important;
+  padding: 5px !important;
+}
+
+.opp-detail-page.crm-opportunity-bridge .workflow-order-summary-head,
+.opp-detail-page.crm-opportunity-bridge .workflow-activity-timeline-head {
+  margin-bottom: 5px !important;
+}
+
+@media (max-width: 720px) {
+  .opp-detail-page.crm-opportunity-bridge .opp-action-bar {
+    position: sticky;
+    bottom: 6px;
+    top: auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: none;
+    width: 100%;
+    z-index: 30;
+  }
+
+  .opp-detail-page.crm-opportunity-bridge .opp-action-bar .opp-btn,
+  .opp-detail-page.crm-opportunity-bridge .opp-panel-actions .opp-btn,
+  .opp-detail-page.crm-opportunity-bridge .opp-row-actions .opp-btn,
+  .opp-detail-page.crm-opportunity-bridge .ship-actions .opp-btn {
+    min-height: 22px !important;
+    padding: 0 5px !important;
+    border-radius: 5px !important;
+    font-size: 8.5px !important;
+    line-height: 1.1 !important;
+    white-space: normal;
+  }
+
+  .opp-detail-page.crm-opportunity-bridge .opp-detail-hero,
+  .opp-detail-page.crm-opportunity-bridge .opp-panel {
+    padding: 7px;
+  }
+
+  .opp-detail-page.crm-opportunity-bridge .opp-side-column {
+    max-height: none;
+    overflow: visible;
+  }
+}
