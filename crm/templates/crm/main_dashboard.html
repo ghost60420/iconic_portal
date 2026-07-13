@@ -512,14 +512,16 @@
     </div>
   </section>
 
-  <section class="dashboard-section" id="notification-center" data-dashboard-widget="notifications" draggable="{% if dashboard_layout_fixed %}false{% else %}true{% endif %}">
-    <div class="dashboard-section-head">
+  <details class="dashboard-section dashboard-section--collapsible" id="notification-center" data-dashboard-widget="notifications" draggable="{% if dashboard_layout_fixed %}false{% else %}true{% endif %}">
+    <summary class="dashboard-section-summary">
+      <div class="dashboard-section-head">
       <div>
         <p class="dashboard-eyebrow">Notification Center</p>
         <h2>{% if automation_notifications %}Automation alerts and generated tasks{% else %}Read-only operational alerts{% endif %}</h2>
         <p>{% if automation_notifications %}Persistent CRM automation notifications with unread status, priority, and linked records.{% else %}Simple placeholders for overdue invoices, production delays, shipment updates, unpaid balances, and approvals.{% endif %}</p>
       </div>
-    </div>
+      </div>
+    </summary>
     <div class="dashboard-grid dashboard-grid--notifications">
       {% for item in dashboard_notification_items %}
         <a class="dashboard-card dashboard-notification-card dashboard-notification-card--{{ item.tone }}" href="{{ item.href }}">
@@ -584,11 +586,12 @@
         </article>
       </div>
     {% endif %}
-  </section>
+  </details>
 
   {% if can_view_order_lifecycle_profit and lifecycle_summary %}
-    <section class="dashboard-section" id="order-lifecycle-section">
-      <div class="dashboard-section-head">
+    <details class="dashboard-section dashboard-section--collapsible" id="order-lifecycle-section">
+      <summary class="dashboard-section-summary">
+        <div class="dashboard-section-head">
         <div>
           <p class="dashboard-eyebrow">Order Lifecycle</p>
           <h2>Costing to shipping workflow</h2>
@@ -598,7 +601,8 @@
           <i data-lucide="arrow-up-right"></i>
           Open costing
         </a>
-      </div>
+        </div>
+      </summary>
       <div class="dashboard-grid dashboard-grid--ops">
         <article class="dashboard-card">
           <div class="dashboard-card-head">
@@ -637,11 +641,12 @@
           </ul>
         </article>
       </div>
-    </section>
+    </details>
   {% endif %}
 
-  <section class="dashboard-section" id="sales-section">
-    <div class="dashboard-section-head">
+  <details class="dashboard-section dashboard-section--collapsible" id="sales-section">
+    <summary class="dashboard-section-summary">
+      <div class="dashboard-section-head">
       <div>
         <p class="dashboard-eyebrow">Sales Performance</p>
         <h2>Pipeline momentum and source mix</h2>
@@ -651,7 +656,8 @@
         <i data-lucide="arrow-up-right"></i>
         Open opportunities
       </a>
-    </div>
+      </div>
+    </summary>
     <div class="dashboard-grid dashboard-grid--sales">
       <article class="dashboard-card">
         <div class="dashboard-card-head">
@@ -678,10 +684,11 @@
         </div>
       </article>
     </div>
-  </section>
+  </details>
 
-  <section class="dashboard-section" id="operations-section">
-    <div class="dashboard-section-head">
+  <details class="dashboard-section dashboard-section--collapsible" id="operations-section">
+    <summary class="dashboard-section-summary">
+      <div class="dashboard-section-head">
       <div>
         <p class="dashboard-eyebrow">Operations</p>
         <h2>Production, workload, and approvals</h2>
@@ -691,7 +698,8 @@
         <i data-lucide="factory"></i>
         Production board
       </a>
-    </div>
+      </div>
+    </summary>
     <div class="dashboard-grid dashboard-grid--ops">
       <article class="dashboard-card">
         <div class="dashboard-card-head">
@@ -783,10 +791,11 @@
         </ul>
       </article>
     </div>
-  </section>
+  </details>
 
-  <section class="dashboard-section" id="lead-intelligence-section">
-    <div class="dashboard-section-head">
+  <details class="dashboard-section dashboard-section--collapsible" id="lead-intelligence-section">
+    <summary class="dashboard-section-summary">
+      <div class="dashboard-section-head">
       <div>
         <p class="dashboard-eyebrow">Lead Intelligence</p>
         <h2>Quality, source strength, and AI-read summaries</h2>
@@ -796,7 +805,8 @@
         <i data-lucide="brain-circuit"></i>
         Lead workspace
       </a>
-    </div>
+      </div>
+    </summary>
     <div class="dashboard-grid dashboard-grid--lead">
       <article class="dashboard-card">
         <div class="dashboard-card-head">
@@ -885,10 +895,11 @@
         </div>
       </article>
     </div>
-  </section>
+  </details>
 
-  <section class="dashboard-section" id="finance-section">
-    <div class="dashboard-section-head">
+  <details class="dashboard-section dashboard-section--collapsible" id="finance-section">
+    <summary class="dashboard-section-summary">
+      <div class="dashboard-section-head">
       <div>
         <p class="dashboard-eyebrow">Finance</p>
         <h2>{% if can_view_order_lifecycle_profit %}Revenue, profitability, and invoice pressure{% else %}Revenue and invoice pressure{% endif %}</h2>
@@ -898,7 +909,8 @@
         <i data-lucide="landmark"></i>
         Accounting
       </a>
-    </div>
+      </div>
+    </summary>
     <div class="dashboard-grid dashboard-grid--finance">
       <article class="dashboard-card">
         <div class="dashboard-card-head">
@@ -975,10 +987,11 @@
         {% include "crm/dashboard/_metric_card.html" with title=card.title value=card.value note=card.note trend_text=card.trend_text trend_tone=card.trend_tone accent=card.accent icon=card.icon size="compact" %}
       {% endfor %}
     </div>
-  </section>
+  </details>
 
-  <section class="dashboard-section" id="activity-section">
-    <div class="dashboard-section-head">
+  <details class="dashboard-section dashboard-section--collapsible" id="activity-section">
+    <summary class="dashboard-section-summary">
+      <div class="dashboard-section-head">
       <div>
         <p class="dashboard-eyebrow">Activity Feed</p>
         <h2>Recent movement across leads, production, AI, and clients</h2>
@@ -988,7 +1001,8 @@
         <i data-lucide="clock-3"></i>
         View recent work
       </a>
-    </div>
+      </div>
+    </summary>
     <div class="dashboard-grid dashboard-grid--activity">
       <article class="dashboard-card">
         <div class="dashboard-card-head">
@@ -1087,16 +1101,18 @@
         </ul>
       </article>
     </div>
-  </section>
+  </details>
 
-  <section class="dashboard-section">
-    <div class="dashboard-section-head">
+  <details class="dashboard-section dashboard-section--collapsible">
+    <summary class="dashboard-section-summary">
+      <div class="dashboard-section-head">
       <div>
         <p class="dashboard-eyebrow">Deep Metrics</p>
         <h2>Secondary widgets and detailed accounting</h2>
         <p>The original dashboard signals are still here, regrouped into expandable blocks so the first screen stays focused.</p>
       </div>
-    </div>
+      </div>
+    </summary>
 
     <div class="dashboard-disclosures">
       <details class="dashboard-disclosure">
@@ -1306,30 +1322,30 @@
         </div>
       </details>
     </div>
-  </section>
+  </details>
 
-  <section class="dashboard-section" data-dashboard-widget="favorites" draggable="{% if dashboard_layout_fixed %}false{% else %}true{% endif %}">
-    <div class="dashboard-section-head"><div><p class="dashboard-eyebrow">Personal Workspace</p><h2>Favorites</h2></div></div>
+  <details class="dashboard-section dashboard-section--collapsible dashboard-section--personal" data-dashboard-widget="favorites" draggable="{% if dashboard_layout_fixed %}false{% else %}true{% endif %}">
+    <summary class="dashboard-section-summary"><div class="dashboard-section-head"><div><p class="dashboard-eyebrow">Personal Workspace</p><h2>Favorites</h2></div></div></summary>
     <div class="dashboard-grid dashboard-grid--activity">
       <article class="dashboard-card"><ul class="dashboard-feed-list">
         {% for item in dashboard_favorites %}<li class="dashboard-feed-item"><strong><a href="{{ item.target_url }}">{{ item.record_label }}</a></strong><span>{{ item.record_type }}</span></li>{% empty %}<li class="dashboard-empty">Star a customer, lead, opportunity, quotation, production order, or invoice to keep it here.</li>{% endfor %}
       </ul></article>
     </div>
-  </section>
+  </details>
 
-  <section class="dashboard-section" data-dashboard-widget="recent" draggable="{% if dashboard_layout_fixed %}false{% else %}true{% endif %}">
-    <div class="dashboard-section-head"><div><p class="dashboard-eyebrow">Personal Workspace</p><h2>Recently Viewed</h2></div></div>
+  <details class="dashboard-section dashboard-section--collapsible dashboard-section--personal" data-dashboard-widget="recent" draggable="{% if dashboard_layout_fixed %}false{% else %}true{% endif %}">
+    <summary class="dashboard-section-summary"><div class="dashboard-section-head"><div><p class="dashboard-eyebrow">Personal Workspace</p><h2>Recently Viewed</h2></div></div></summary>
     <div class="dashboard-grid dashboard-grid--activity"><article class="dashboard-card"><ul class="dashboard-feed-list">
       {% for item in dashboard_recent_records %}<li class="dashboard-feed-item"><strong><a href="{{ item.target_url }}">{{ item.record_label }}</a></strong><span>{{ item.record_type }} · {{ item.viewed_at|timesince }} ago</span></li>{% empty %}<li class="dashboard-empty">Your last 20 permitted records will appear here.</li>{% endfor %}
     </ul></article></div>
-  </section>
+  </details>
 
-  <section class="dashboard-section" data-dashboard-widget="saved_filters" draggable="{% if dashboard_layout_fixed %}false{% else %}true{% endif %}">
-    <div class="dashboard-section-head"><div><p class="dashboard-eyebrow">Personal Workspace</p><h2>Saved Filters</h2></div></div>
+  <details class="dashboard-section dashboard-section--collapsible dashboard-section--personal" data-dashboard-widget="saved_filters" draggable="{% if dashboard_layout_fixed %}false{% else %}true{% endif %}">
+    <summary class="dashboard-section-summary"><div class="dashboard-section-head"><div><p class="dashboard-eyebrow">Personal Workspace</p><h2>Saved Filters</h2></div></div></summary>
     <div class="dashboard-grid dashboard-grid--activity"><article class="dashboard-card"><ul class="dashboard-feed-list">
       {% for item in dashboard_saved_filters %}<li class="dashboard-feed-item"><strong><a href="{{ item.target_url }}">{{ item.name }}</a></strong><span>{{ item.module|title }}</span></li>{% empty %}<li class="dashboard-empty">Saved list filters will appear here.</li>{% endfor %}
     </ul></article></div>
-  </section>
+  </details>
 </div>
 
 {{ chart_data|json_script:"dash-data" }}

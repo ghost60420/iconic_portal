@@ -667,7 +667,7 @@
   }
 
   const canvases = Array.from(root.querySelectorAll("canvas[data-chart]"));
-  const detailsBlocks = Array.from(root.querySelectorAll("details.dashboard-disclosure"));
+  const detailsBlocks = Array.from(root.querySelectorAll("details.dashboard-disclosure, details.dashboard-section--collapsible"));
 
   detailsBlocks.forEach(function (details) {
     details.addEventListener("toggle", function () {
