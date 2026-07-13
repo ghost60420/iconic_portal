@@ -776,6 +776,15 @@
     padding: 9px;
   }
 
+  .customer-table {
+    min-width: 0 !important;
+  }
+
+  .customer-table-wrap {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
   .customer-table td {
     grid-template-columns: 108px minmax(0, 1fr);
     gap: 8px;
