@@ -747,6 +747,11 @@
 }
 
 @media (max-width: 900px) {
+  .crm-wrapper {
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
   .customer-page {
     width: min(100% - 12px, 1840px);
     margin-top: 7px;
