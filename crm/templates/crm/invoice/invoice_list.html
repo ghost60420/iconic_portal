@@ -1,6 +1,7 @@
 {% extends "crm/base.html" %}
 {% load humanize crm_extras %}
 {% block content %}
+{% include "crm/partials/financial_density_assets.html" %}
 {% if can_archive_invoices %}<nav class="crm-archive-switch" aria-label="Invoice archive"><a href="?archive=active">Active</a><a href="?archive=archived">Archived</a><a href="?archive=all">All</a></nav>{% endif %}
 
 <style>

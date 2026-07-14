@@ -4,6 +4,8 @@
 
 {% block content %}
 
+{% include "crm/partials/financial_density_assets.html" %}
+
 {% if request.user|can_view_accounting_bd %}
 
 <div class="container-fluid" style="color:#f9fafb;">

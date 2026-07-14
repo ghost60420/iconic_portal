@@ -1,6 +1,7 @@
 {% extends "crm/base.html" %}
 
 {% block content %}
+{% include "crm/partials/financial_density_assets.html" %}
 <div style="max-width:760px;margin:32px auto;padding:24px;background:#111827;color:#f9fafb;border:1px solid rgba(255,255,255,.12);border-radius:18px;">
   <p style="letter-spacing:.12em;text-transform:uppercase;color:#fbbf24;font-weight:800;margin:0 0 8px;">Invoice Control</p>
   <h1 style="margin:0 0 8px;">Delete or void {{ invoice.invoice_number }}</h1>

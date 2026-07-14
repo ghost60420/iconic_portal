@@ -1,0 +1,680 @@
+/*
+  Phase B Financial density layer.
+  Presentation-only overrides loaded from Financial templates.
+*/
+
+.crm-wrapper {
+  padding: 10px 14px 28px;
+  overflow-x: clip;
+}
+
+.wrap,
+.acct-wrap,
+.exec-wrap,
+.ar-wrap,
+.ap-wrap,
+.pl-wrap,
+.bs-wrap,
+.cf-wrap,
+.bva-wrap,
+.kpi-wrap,
+.ff-wrap,
+.bd-wrap,
+.ca-master,
+.pp-wrap {
+  width: min(100%, 1760px) !important;
+  max-width: min(100%, 1760px) !important;
+}
+
+.head,
+.acct-head,
+.exec-hero,
+.ar-hero,
+.ap-hero,
+.pl-hero,
+.bs-hero,
+.cf-hero,
+.bva-hero,
+.kpi-hero,
+.ff-hero,
+.bd-hero,
+.ca-master-hero,
+.pp-head {
+  margin-bottom: 10px !important;
+  gap: 10px !important;
+}
+
+.exec-hero,
+.ar-hero,
+.ap-hero,
+.pl-hero,
+.bs-hero,
+.cf-hero,
+.bva-hero,
+.kpi-hero,
+.ff-hero,
+.ca-master-hero {
+  padding: 14px 16px !important;
+  border-radius: 12px !important;
+  min-height: 0 !important;
+}
+
+.title,
+.acct-title,
+.exec-title,
+.ar-title,
+.ap-title,
+.pl-title,
+.bs-title,
+.cf-title,
+.bva-title,
+.kpi-title,
+.ff-title,
+.bd-title,
+.ca-master-title,
+.pp-title {
+  font-size: clamp(20px, 1.65vw, 26px) !important;
+  line-height: 1.08 !important;
+  letter-spacing: 0 !important;
+}
+
+.sub,
+.subtitle,
+.acct-subtitle,
+.exec-sub,
+.ar-sub,
+.ap-sub,
+.pl-sub,
+.bs-sub,
+.cf-sub,
+.bva-sub,
+.kpi-sub,
+.ff-sub,
+.bd-sub,
+.ca-master-sub,
+.pp-sub {
+  margin-top: 3px !important;
+  font-size: 11px !important;
+  line-height: 1.28 !important;
+}
+
+.btnbar,
+.topbar,
+.pillbar,
+.exec-actions,
+.ar-actions,
+.ap-actions,
+.pl-actions,
+.bs-actions,
+.cf-actions,
+.bva-actions,
+.kpi-actions,
+.ff-actions,
+.bd-pillbar,
+.ca-master-actions,
+.pp-actions {
+  gap: 6px !important;
+}
+
+.pill,
+.bd-pill,
+.bd-btn,
+.exec-btn,
+.ar-btn,
+.ap-btn,
+.pl-btn,
+.bs-btn,
+.cf-btn,
+.bva-btn,
+.kpi-btn,
+.ff-btn,
+.ca-master-btn,
+.btnx,
+.btn-modern,
+.crm-btn {
+  min-height: 30px !important;
+  padding: 6px 10px !important;
+  border-radius: 7px !important;
+  font-size: 11px !important;
+  line-height: 1.1 !important;
+  box-shadow: none !important;
+}
+
+.summary-grid,
+.pay-hero,
+.exec-grid,
+.ar-grid,
+.ap-grid,
+.pl-grid,
+.bs-grid,
+.cf-grid,
+.bva-grid,
+.kpi-grid,
+.ff-grid,
+.bd-kpis,
+.ca-master-grid,
+.pp-summary {
+  gap: 8px !important;
+  margin-bottom: 10px !important;
+}
+
+.summary-card,
+.pay-kpi,
+.exec-card,
+.ar-card,
+.ap-card,
+.pl-card,
+.bs-card,
+.cf-card,
+.bva-card,
+.kpi-card,
+.ff-card,
+.bd-kpi,
+.bd-card,
+.ca-master-stat,
+.ca-master-panel,
+.pp-summary-card,
+.pp-card,
+.acct-card,
+.cardx {
+  border-radius: 10px !important;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.24) !important;
+}
+
+.summary-card,
+.pay-kpi,
+.exec-card,
+.ar-card,
+.ap-card,
+.pl-card,
+.bs-card,
+.cf-card,
+.bva-card,
+.kpi-card,
+.ff-card,
+.bd-kpi,
+.bd-card,
+.ca-master-stat,
+.pp-summary-card,
+.pp-card {
+  min-height: 0 !important;
+  padding: 10px 12px !important;
+}
+
+.summary-card span,
+.pay-kpi span,
+.exec-card span,
+.ar-card span,
+.ap-card span,
+.pl-card span,
+.bs-card span,
+.cf-card span,
+.bva-card span,
+.kpi-card span,
+.ff-card span,
+.bd-kpi-label,
+.pp-summary-card span {
+  font-size: 10px !important;
+  letter-spacing: 0.055em !important;
+}
+
+.summary-card strong,
+.pay-kpi strong,
+.exec-card strong,
+.ar-card strong,
+.ap-card strong,
+.pl-card strong,
+.bs-card strong,
+.cf-card strong,
+.bva-card strong,
+.kpi-card strong,
+.ff-card strong,
+.bd-kpi-val,
+.pp-summary-card strong {
+  margin-top: 5px !important;
+  font-size: clamp(17px, 1.35vw, 21px) !important;
+  line-height: 1.08 !important;
+}
+
+.summary-card small,
+.pay-kpi small,
+.exec-card small,
+.ar-card small,
+.ap-card small,
+.pl-card small,
+.bs-card small,
+.cf-card small,
+.bva-card small,
+.kpi-card small,
+.ff-card small,
+.pp-summary-card small {
+  margin-top: 4px !important;
+  font-size: 10.5px !important;
+  line-height: 1.25 !important;
+}
+
+.filters,
+.filter-bar,
+.exec-filter,
+.ar-filter,
+.ap-filter,
+.pl-filter,
+.bs-filter,
+.cf-filter,
+.bva-filter,
+.kpi-filter,
+.ff-filter,
+.pp-filter {
+  gap: 8px !important;
+  padding: 9px 10px !important;
+  border-radius: 10px !important;
+  background: rgba(8, 13, 22, 0.96) !important;
+  backdrop-filter: blur(10px);
+}
+
+.ctrl,
+.acct-input,
+.bd-input,
+.inp,
+.exec-field,
+.ar-field,
+.ap-field,
+.pl-field,
+.bs-field,
+.cf-field,
+.bva-field,
+.kpi-field,
+.ff-field,
+.pp-filter input,
+.pp-filter select,
+.filters input,
+.filters select,
+.filter-bar input,
+.filter-bar select {
+  min-height: 31px !important;
+  padding: 5px 8px !important;
+  border-radius: 7px !important;
+  font-size: 11px !important;
+}
+
+.pad,
+.card-body,
+.ca-master-panel-body,
+.internal-profit,
+.pay-section,
+.exec-section,
+.ar-section,
+.ap-section,
+.pl-section,
+.bs-section,
+.cf-section,
+.bva-section,
+.kpi-section,
+.ff-section {
+  padding: 10px 12px !important;
+}
+
+.internal-profit {
+  margin-bottom: 10px !important;
+  border-radius: 10px !important;
+}
+
+.internal-profit-grid,
+.exec-side-grid,
+.ar-aging,
+.ap-aging,
+.bs-side-grid,
+.cf-side-grid,
+.bva-side-grid,
+.kpi-side-grid,
+.ff-side-grid,
+.ff-card-grid,
+.ff-scenario-grid {
+  gap: 8px !important;
+}
+
+.internal-profit-cell,
+.exec-side-card,
+.ar-aging-card,
+.ap-aging-card,
+.bs-side-card,
+.cf-side-card,
+.bva-side-card,
+.kpi-health-card,
+.ff-side-card,
+.ff-card-stat,
+.ff-scenario-card {
+  padding: 8px 10px !important;
+  border-radius: 9px !important;
+}
+
+.pay-section-title,
+.exec-section-head,
+.ar-section-head,
+.ap-section-head,
+.pl-section-head,
+.bs-section-head,
+.cf-section-head,
+.bva-section-head,
+.kpi-section-head,
+.ff-section-head,
+.ca-master-panel-head {
+  padding: 8px 10px !important;
+  gap: 8px !important;
+}
+
+.pay-section-title h2,
+.exec-section-title,
+.ar-section-title,
+.ap-section-title,
+.pl-section-title,
+.bs-section-title,
+.cf-section-title,
+.bva-section-title,
+.kpi-section-title,
+.ff-section-title,
+.section-title {
+  font-size: 13px !important;
+  line-height: 1.2 !important;
+}
+
+.pay-section-title small,
+.exec-section-note,
+.ar-section-note,
+.ap-section-note,
+.pl-section-note,
+.bs-section-note,
+.cf-section-note,
+.bva-section-note,
+.kpi-section-note,
+.ff-section-note,
+.section-note {
+  font-size: 10.5px !important;
+  line-height: 1.25 !important;
+}
+
+.invoice-table-wrap,
+.table-wrap,
+.acct-table-wrap,
+.ar-table-wrap,
+.ap-table-wrap,
+.pl-table-wrap,
+.bs-table-wrap,
+.cf-table-wrap,
+.bva-table-wrap,
+.kpi-table-wrap,
+.ff-table-wrap,
+.grid-wrap,
+.ca-grid,
+.pp-table,
+.table-responsive {
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  border-radius: 10px !important;
+}
+
+table,
+.acct-table,
+.invoice-table-wrap table,
+.ar-table,
+.ap-table,
+.pl-table,
+.bs-table,
+.cf-table,
+.bva-table,
+.kpi-table,
+.ff-table,
+.bd-table,
+.pp-table table {
+  font-size: 11.5px !important;
+}
+
+th,
+td,
+.acct-table th,
+.acct-table td,
+.invoice-table-wrap th,
+.invoice-table-wrap td,
+.ar-table th,
+.ar-table td,
+.ap-table th,
+.ap-table td,
+.pl-table th,
+.pl-table td,
+.bs-table th,
+.bs-table td,
+.cf-table th,
+.cf-table td,
+.bva-table th,
+.bva-table td,
+.kpi-table th,
+.kpi-table td,
+.ff-table th,
+.ff-table td,
+.bd-table th,
+.bd-table td,
+.pp-table th,
+.pp-table td {
+  padding: 6px 8px !important;
+  line-height: 1.22 !important;
+}
+
+thead th {
+  position: static;
+  background: rgba(10, 16, 26, 0.98) !important;
+}
+
+.status,
+.badge,
+.exec-badge,
+.ar-badge,
+.ap-badge,
+.pl-badge,
+.bs-badge,
+.cf-badge,
+.bva-badge,
+.kpi-badge,
+.ff-badge,
+.pp-badge {
+  padding: 4px 7px !important;
+  border-radius: 999px !important;
+  font-size: 10px !important;
+  line-height: 1.1 !important;
+}
+
+.kv {
+  grid-template-columns: 130px 1fr !important;
+  gap: 7px 10px !important;
+  font-size: 12px !important;
+}
+
+.k {
+  font-size: 10px !important;
+}
+
+.v,
+.muted,
+.acct-small,
+.bd-help,
+.pp-muted {
+  font-size: 11px !important;
+  line-height: 1.25 !important;
+}
+
+.fileListBox,
+.warnBox,
+.pay-alert,
+.exec-warning,
+.prefillBox,
+.prefillNotice,
+.prefillWarning,
+.previewBox,
+.internalCostBox {
+  padding: 8px 10px !important;
+  border-radius: 9px !important;
+  margin-bottom: 8px !important;
+}
+
+.row.g-3,
+.row.g-2 {
+  --bs-gutter-x: 0.5rem !important;
+  --bs-gutter-y: 0.5rem !important;
+}
+
+.mb-4 {
+  margin-bottom: 0.75rem !important;
+}
+
+.mb-3 {
+  margin-bottom: 0.6rem !important;
+}
+
+.mt-3 {
+  margin-top: 0.6rem !important;
+}
+
+.py-4 {
+  padding-top: 0.75rem !important;
+  padding-bottom: 0.75rem !important;
+}
+
+@media (min-width: 1180px) {
+  .summary-grid,
+  .pay-hero,
+  .exec-grid,
+  .ar-grid,
+  .ap-grid,
+  .pl-grid,
+  .bs-grid,
+  .cf-grid,
+  .bva-grid,
+  .kpi-grid,
+  .ff-grid,
+  .bd-kpis,
+  .pp-summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .crm-wrapper {
+    padding: 8px 8px 24px;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
+  .head,
+  .acct-head,
+  .exec-hero,
+  .ar-hero,
+  .ap-hero,
+  .pl-hero,
+  .bs-hero,
+  .cf-hero,
+  .bva-hero,
+  .kpi-hero,
+  .ff-hero,
+  .bd-hero,
+  .ca-master-hero,
+  .pp-head {
+    padding: 10px !important;
+  }
+
+  .summary-grid,
+  .pay-hero,
+  .exec-grid,
+  .ar-grid,
+  .ap-grid,
+  .pl-grid,
+  .bs-grid,
+  .cf-grid,
+  .bva-grid,
+  .kpi-grid,
+  .ff-grid,
+  .bd-kpis,
+  .pp-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .pill,
+  .bd-pill,
+  .bd-btn,
+  .exec-btn,
+  .ar-btn,
+  .ap-btn,
+  .pl-btn,
+  .bs-btn,
+  .cf-btn,
+  .bva-btn,
+  .kpi-btn,
+  .ff-btn,
+  .ca-master-btn,
+  .btnx,
+  .btn-modern,
+  .crm-btn {
+    min-height: 28px !important;
+    padding: 5px 8px !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .crm-wrapper {
+    padding-inline: 6px;
+  }
+
+  .summary-grid,
+  .pay-hero,
+  .exec-grid,
+  .ar-grid,
+  .ap-grid,
+  .pl-grid,
+  .bs-grid,
+  .cf-grid,
+  .bva-grid,
+  .kpi-grid,
+  .ff-grid,
+  .bd-kpis,
+  .pp-summary {
+    grid-template-columns: 1fr !important;
+  }
+
+  .summary-card,
+  .pay-kpi,
+  .exec-card,
+  .ar-card,
+  .ap-card,
+  .pl-card,
+  .bs-card,
+  .cf-card,
+  .bva-card,
+  .kpi-card,
+  .ff-card,
+  .bd-kpi,
+  .bd-card,
+  .ca-master-stat,
+  .pp-summary-card,
+  .pp-card {
+    padding: 9px 10px !important;
+  }
+
+  .title,
+  .acct-title,
+  .exec-title,
+  .ar-title,
+  .ap-title,
+  .pl-title,
+  .bs-title,
+  .cf-title,
+  .bva-title,
+  .kpi-title,
+  .ff-title,
+  .bd-title,
+  .ca-master-title,
+  .pp-title {
+    font-size: 20px !important;
+  }
+
+  .kv {
+    grid-template-columns: 1fr !important;
+  }
+}
