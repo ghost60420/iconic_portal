@@ -3065,6 +3065,261 @@ def _customer_default_salesperson(customer):
     return None
 
 
+def _customer_address_summary(customer):
+    if not customer:
+        return ""
+    parts = [
+        customer.address_line1 or customer.shipping_address1,
+        customer.address_line2 or customer.shipping_address2,
+        customer.city or customer.shipping_city,
+        customer.state or customer.shipping_state,
+        customer.postal_code or customer.shipping_postcode,
+        customer.country or customer.shipping_country,
+    ]
+    return ", ".join(part for part in parts if part)
+
+
+_CUSTOMER_CONTEXT_UNSET = object()
+
+
+def _customer_opportunity_prefill(
+    customer,
+    *,
+    latest_lead=_CUSTOMER_CONTEXT_UNSET,
+    latest_opportunity=_CUSTOMER_CONTEXT_UNSET,
+    latest_note=_CUSTOMER_CONTEXT_UNSET,
+    default_salesperson=_CUSTOMER_CONTEXT_UNSET,
+):
+    prefill = {
+        "product_type": "",
+        "product_category": "",
+        "product_interest": "",
+        "lead_source": "",
+        "latest_customer_note": "",
+        "notes": "",
+        "address": _customer_address_summary(customer),
+        "salesperson": None if default_salesperson is _CUSTOMER_CONTEXT_UNSET else default_salesperson,
+    }
+    if not customer:
+        return prefill
+
+    if latest_lead is _CUSTOMER_CONTEXT_UNSET:
+        latest_lead = (
+            Lead.objects.filter(customer=customer)
+            .select_related("assigned_to")
+            .order_by("-created_date", "-id")
+            .first()
+        )
+    if latest_opportunity is _CUSTOMER_CONTEXT_UNSET:
+        latest_opportunity = (
+            _customer_related_opportunities(customer)
+            .order_by("-updated_at", "-id")
+            .first()
+        )
+    if default_salesperson is _CUSTOMER_CONTEXT_UNSET:
+        if latest_opportunity and latest_opportunity.assigned_to_id:
+            prefill["salesperson"] = latest_opportunity.assigned_to
+        elif latest_lead and getattr(latest_lead, "assigned_to_id", None):
+            prefill["salesperson"] = getattr(latest_lead, "assigned_to", None)
+        else:
+            prefill["salesperson"] = _customer_default_salesperson(customer)
+
+    if latest_opportunity:
+        prefill["product_type"] = latest_opportunity.product_type or ""
+        prefill["product_category"] = latest_opportunity.product_category or ""
+    if latest_lead:
+        prefill["product_interest"] = latest_lead.product_interest or ""
+        source_parts = [
+            latest_lead.source,
+            latest_lead.source_channel,
+            latest_lead.first_touch_channel,
+        ]
+        prefill["lead_source"] = " / ".join(part for part in source_parts if part)
+        prefill["product_type"] = prefill["product_type"] or latest_lead.primary_product_type or ""
+        prefill["product_category"] = prefill["product_category"] or latest_lead.product_category or ""
+
+    note_lines = [f"Created from customer {customer.customer_code}."]
+    if customer.notes:
+        note_lines.append(f"Customer notes: {customer.notes}")
+    if latest_note is _CUSTOMER_CONTEXT_UNSET:
+        latest_note = customer.notes_list.order_by("-created_at").first()
+    if latest_note:
+        latest_note_content = latest_note if isinstance(latest_note, str) else latest_note.content
+        prefill["latest_customer_note"] = latest_note_content
+        note_lines.append(f"Latest customer note: {latest_note_content}")
+    if prefill["product_interest"]:
+        note_lines.append(f"Previous product interest: {prefill['product_interest']}")
+    if prefill["address"]:
+        note_lines.append(f"Address reference: {prefill['address']}")
+    prefill["notes"] = "\n".join(note_lines)
+    return prefill
+
+
+def _customer_related_opportunities(customer):
+    if not customer:
+        return Opportunity.objects.none()
+    return (
+        Opportunity.objects
+        .filter(Q(customer=customer) | Q(lead__customer=customer))
+        .select_related("assigned_to", "lead", "customer")
+        .order_by("-updated_at", "-id")
+        .distinct()
+    )
+
+
+def _customer_opportunity_amount_and_currency(opportunity):
+    currency = (getattr(opportunity, "order_currency", "") or "CAD").upper().strip()
+    if currency not in {"CAD", "USD", "BDT"}:
+        currency = "CAD"
+    if currency == "USD" and opportunity.order_value_usd is not None:
+        return _ceo_decimal(opportunity.order_value_usd), "USD"
+    return _ceo_decimal(opportunity.order_value), currency
+
+
+def _annotated_customer_latest_lead(customer):
+    if not customer or not hasattr(customer, "context_latest_lead_source"):
+        return _CUSTOMER_CONTEXT_UNSET
+    has_context = any(
+        getattr(customer, attr, None)
+        for attr in (
+            "context_latest_lead_source",
+            "context_latest_lead_source_channel",
+            "context_latest_lead_first_touch_channel",
+            "context_latest_lead_product_interest",
+            "context_latest_lead_primary_product_type",
+            "context_latest_lead_product_category",
+            "context_latest_lead_assigned_to_id",
+        )
+    )
+    if not has_context:
+        return None
+    return SimpleNamespace(
+        source=getattr(customer, "context_latest_lead_source", "") or "",
+        source_channel=getattr(customer, "context_latest_lead_source_channel", "") or "",
+        first_touch_channel=getattr(customer, "context_latest_lead_first_touch_channel", "") or "",
+        product_interest=getattr(customer, "context_latest_lead_product_interest", "") or "",
+        primary_product_type=getattr(customer, "context_latest_lead_primary_product_type", "") or "",
+        product_category=getattr(customer, "context_latest_lead_product_category", "") or "",
+        assigned_to_id=getattr(customer, "context_latest_lead_assigned_to_id", None),
+        assigned_to=None,
+    )
+
+
+def _customer_opportunity_context(customer, *, salesperson_options=None):
+    empty_stats = {
+        "total_opportunities": 0,
+        "open_opportunities": 0,
+        "won_opportunities": 0,
+        "lost_opportunities": 0,
+        "total_revenue_rows": [],
+        "outstanding_rows": [],
+    }
+    context = {
+        "stats": empty_stats,
+        "previous_opportunities": [],
+        "active_opportunities": [],
+        "default_salesperson": None,
+        "prefill": _customer_opportunity_prefill(None),
+    }
+    if not customer:
+        return context
+
+    opportunities = list(_customer_related_opportunities(customer))
+    latest_opportunity = opportunities[0] if opportunities else None
+    latest_lead = _annotated_customer_latest_lead(customer)
+    if latest_lead is _CUSTOMER_CONTEXT_UNSET:
+        latest_lead = (
+            Lead.objects.filter(customer=customer)
+            .select_related("assigned_to")
+            .order_by("-created_date", "-id")
+            .first()
+        )
+    if hasattr(customer, "context_latest_customer_note"):
+        latest_note = getattr(customer, "context_latest_customer_note", "") or None
+    else:
+        latest_note = customer.notes_list.order_by("-created_at").first()
+    salesperson_by_id = {
+        user.pk: user for user in salesperson_options or []
+    }
+    default_salesperson = next(
+        (opportunity.assigned_to for opportunity in opportunities if opportunity.assigned_to_id),
+        None,
+    )
+    if not default_salesperson and latest_lead and getattr(latest_lead, "assigned_to_id", None):
+        default_salesperson = (
+            getattr(latest_lead, "assigned_to", None)
+            or salesperson_by_id.get(latest_lead.assigned_to_id)
+        )
+
+    revenue_totals = defaultdict(lambda: {"amount": Decimal("0")})
+    open_opportunities = []
+    won_count = 0
+    lost_count = 0
+    for opportunity in opportunities:
+        is_active_open = (
+            opportunity.is_open
+            and not opportunity.is_archived
+            and opportunity.stage not in {"Closed Won", "Closed Lost", "Shipment Complete"}
+        )
+        if is_active_open:
+            open_opportunities.append(opportunity)
+        if opportunity.stage == "Closed Won":
+            won_count += 1
+        elif opportunity.stage == "Closed Lost":
+            lost_count += 1
+        if opportunity.order_value is None and opportunity.order_value_usd is None:
+            continue
+        amount, currency_code = _customer_opportunity_amount_and_currency(opportunity)
+        revenue_totals[currency_code]["amount"] += amount
+
+    outstanding_totals = defaultdict(lambda: {"amount": Decimal("0")})
+    invoices = (
+        Invoice.objects
+        .filter(Q(customer=customer) | Q(order__customer=customer))
+        .exclude(status__in={"paid", "cancelled"})
+        .select_related("order", "customer")
+        .distinct()
+    )
+    for invoice in invoices:
+        currency_code = (invoice.currency or "").upper().strip() or "CAD"
+        outstanding_totals[currency_code]["amount"] += _ceo_decimal(invoice.balance)
+
+    previous_opportunities = []
+    for opportunity in opportunities[:8]:
+        amount, currency_code = _customer_opportunity_amount_and_currency(opportunity)
+        has_value = opportunity.order_value is not None or opportunity.order_value_usd is not None
+        previous_opportunities.append(
+            {
+                "opportunity": opportunity,
+                "amount": amount,
+                "currency": currency_code,
+                "has_value": has_value,
+                "salesperson_name": _user_display_name(opportunity.assigned_to),
+                "lead_source": getattr(opportunity.lead, "source", "") if opportunity.lead_id else "",
+            }
+        )
+
+    context["stats"] = {
+        "total_opportunities": len(opportunities),
+        "open_opportunities": len(open_opportunities),
+        "won_opportunities": won_count,
+        "lost_opportunities": lost_count,
+        "total_revenue_rows": currency_summary_rows(revenue_totals),
+        "outstanding_rows": currency_summary_rows(outstanding_totals),
+    }
+    context["previous_opportunities"] = previous_opportunities
+    context["active_opportunities"] = open_opportunities[:5]
+    context["default_salesperson"] = default_salesperson
+    context["prefill"] = _customer_opportunity_prefill(
+        customer,
+        latest_lead=latest_lead,
+        latest_opportunity=latest_opportunity,
+        latest_note=latest_note,
+        default_salesperson=default_salesperson,
+    )
+    return context
+
+
 def _record_customer_event(*, customer, event_type, title, details="", opportunity=None, production=None):
     if not customer:
         return
@@ -15358,23 +15613,48 @@ def add_opportunity(request):
     selected_customer_id = request.GET.get("customer") or ""
     selected_lead_id = request.GET.get("lead") or ""
     if selected_customer_id:
-        selected_customer = Customer.objects.filter(pk=selected_customer_id, is_archived=False).first()
+        latest_customer_lead = (
+            Lead.objects.filter(customer=OuterRef("pk"))
+            .order_by("-created_date", "-id")
+        )
+        latest_customer_note = (
+            CustomerNote.objects.filter(customer=OuterRef("pk"))
+            .order_by("-created_at")
+        )
+        selected_customer = (
+            Customer.objects
+            .filter(pk=selected_customer_id, is_archived=False)
+            .annotate(
+                context_latest_lead_source=Subquery(latest_customer_lead.values("source")[:1]),
+                context_latest_lead_source_channel=Subquery(latest_customer_lead.values("source_channel")[:1]),
+                context_latest_lead_first_touch_channel=Subquery(latest_customer_lead.values("first_touch_channel")[:1]),
+                context_latest_lead_product_interest=Subquery(latest_customer_lead.values("product_interest")[:1]),
+                context_latest_lead_primary_product_type=Subquery(latest_customer_lead.values("primary_product_type")[:1]),
+                context_latest_lead_product_category=Subquery(latest_customer_lead.values("product_category")[:1]),
+                context_latest_lead_assigned_to_id=Subquery(latest_customer_lead.values("assigned_to_id")[:1]),
+                context_latest_customer_note=Subquery(latest_customer_note.values("content")[:1]),
+            )
+            .first()
+        )
     if selected_lead_id:
         selected_lead = leads.filter(pk=selected_lead_id).select_related("customer", "assigned_to").first()
     if selected_lead and not selected_customer and selected_lead.customer_id:
         selected_customer = selected_lead.customer
+        selected_customer_id = str(selected_customer.pk)
+    customer_context = _customer_opportunity_context(
+        selected_customer,
+        salesperson_options=salesperson_options,
+    )
+    customer_prefill = customer_context["prefill"]
+    selected_product_type = customer_prefill["product_type"]
+    selected_product_category = customer_prefill["product_category"]
+    selected_notes = customer_prefill["notes"]
     default_salesperson = None
     if selected_lead and selected_lead.assigned_to_id:
         default_salesperson = selected_lead.assigned_to
     elif selected_customer:
-        default_salesperson = _customer_default_salesperson(selected_customer)
-    active_customer_opportunities = (
-        Opportunity.objects.filter(customer=selected_customer, is_open=True, is_archived=False)
-        .exclude(stage__in=["Closed Won", "Closed Lost", "Shipment Complete"])
-        .order_by("-updated_at", "-id")
-        if selected_customer
-        else Opportunity.objects.none()
-    )
+        default_salesperson = customer_context["default_salesperson"]
+    active_customer_opportunities = customer_context["active_opportunities"] if selected_customer else []
 
     if request.method == "POST":
         customer_id = request.POST.get("customer")
@@ -15476,12 +15756,19 @@ def add_opportunity(request):
         "currency_choices": Opportunity.ORDER_CURRENCY_CHOICES,
         "default_currency": "CAD",
         "salesperson_options": salesperson_options,
+        "default_salesperson": default_salesperson,
         "default_salesperson_id": getattr(default_salesperson, "pk", ""),
         "selected_customer": selected_customer,
         "selected_customer_id": selected_customer_id,
         "selected_lead": selected_lead,
         "selected_lead_id": selected_lead_id,
         "active_customer_opportunities": active_customer_opportunities,
+        "customer_prefill": customer_prefill,
+        "customer_stats": customer_context["stats"],
+        "previous_customer_opportunities": customer_context["previous_opportunities"],
+        "selected_product_type": selected_product_type,
+        "selected_product_category": selected_product_category,
+        "selected_notes": selected_notes,
     }
     return render(request, "crm/add_opportunity.html", context)
 

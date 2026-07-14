@@ -1,5 +1,5 @@
 {% extends "crm/base.html" %}
-{% load static %}
+{% load static crm_extras humanize %}
 
 {% block content %}
 
@@ -111,7 +111,8 @@
   }
 
   .opp-add-field input,
-  .opp-add-field select {
+  .opp-add-field select,
+  .opp-add-field textarea {
     width: 100%;
     min-height: 42px;
     padding: 10px 12px;
@@ -124,10 +125,17 @@
   }
 
   .opp-add-field input:focus,
-  .opp-add-field select:focus {
+  .opp-add-field select:focus,
+  .opp-add-field textarea:focus {
     outline: none;
     border-color: rgba(250, 204, 21, 0.65);
     box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.14);
+  }
+
+  .opp-add-field textarea {
+    min-height: 108px;
+    resize: vertical;
+    line-height: 1.45;
   }
 
   .opp-add-help {
@@ -210,6 +218,162 @@
     font-size: 18px;
   }
 
+  .opp-selected-customer {
+    margin-bottom: 16px;
+    border: 1px solid rgba(250, 204, 21, 0.26);
+    border-radius: 16px;
+    background:
+      linear-gradient(135deg, rgba(120, 53, 15, 0.18), rgba(2, 6, 23, 0.48)),
+      rgba(15, 23, 42, 0.82);
+    overflow: hidden;
+  }
+
+  .opp-selected-customer-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    align-items: flex-start;
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(250, 204, 21, 0.16);
+    background: rgba(2, 6, 23, 0.42);
+  }
+
+  .opp-selected-customer-header p {
+    margin: 0 0 5px;
+    color: #facc15;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .opp-selected-customer-header h2 {
+    margin: 0;
+    color: #f8fafc;
+    font-size: 18px;
+    line-height: 1.2;
+  }
+
+  .opp-selected-customer-badge {
+    flex: 0 0 auto;
+    padding: 6px 9px;
+    border: 1px solid rgba(250, 204, 21, 0.28);
+    border-radius: 999px;
+    background: rgba(250, 204, 21, 0.1);
+    color: #fde68a;
+    font-size: 11px;
+    font-weight: 900;
+  }
+
+  .opp-customer-info-grid,
+  .opp-customer-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    padding: 14px 16px 0;
+  }
+
+  .opp-customer-field,
+  .opp-customer-stat {
+    min-width: 0;
+    padding: 10px 11px;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    border-radius: 12px;
+    background: rgba(2, 6, 23, 0.48);
+  }
+
+  .opp-customer-field span,
+  .opp-customer-stat span {
+    display: block;
+    margin-bottom: 5px;
+    color: #94a3b8;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .opp-customer-field strong,
+  .opp-customer-stat strong {
+    display: block;
+    overflow-wrap: anywhere;
+    color: #f8fafc;
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  .opp-customer-field a {
+    color: #dbeafe;
+    text-decoration: none;
+  }
+
+  .opp-customer-stat strong {
+    font-size: 17px;
+  }
+
+  .opp-customer-notes {
+    margin: 10px 16px 14px;
+    padding: 11px 12px;
+    border: 1px solid rgba(96, 165, 250, 0.16);
+    border-radius: 12px;
+    background: rgba(15, 23, 42, 0.72);
+    color: #cbd5e1;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .opp-customer-notes strong {
+    display: block;
+    margin-bottom: 5px;
+    color: #bfdbfe;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .opp-previous-opps {
+    margin: 0 16px 16px;
+    overflow-x: auto;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    border-radius: 12px;
+    background: rgba(2, 6, 23, 0.38);
+  }
+
+  .opp-previous-opps table {
+    width: 100%;
+    min-width: 620px;
+    border-collapse: collapse;
+  }
+
+  .opp-previous-opps th,
+  .opp-previous-opps td {
+    padding: 9px 10px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+    color: #cbd5e1;
+    font-size: 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .opp-previous-opps th {
+    color: #dbeafe;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: rgba(15, 23, 42, 0.76);
+  }
+
+  .opp-previous-opps tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .opp-previous-opps a {
+    color: #fde68a;
+    font-weight: 900;
+    text-decoration: none;
+  }
+
   @media (max-width: 900px) {
     .opp-add-shell {
       grid-template-columns: 1fr;
@@ -219,6 +383,12 @@
   @media (max-width: 640px) {
     .opp-add-grid {
       grid-template-columns: 1fr;
+    }
+
+    .opp-customer-info-grid,
+    .opp-customer-stats-grid {
+      grid-template-columns: 1fr;
+      padding-inline: 14px;
     }
 
     .opp-add-hero,
@@ -246,6 +416,130 @@
         <p>Select the customer or lead, then capture the deal stage and product details.</p>
       </div>
       <div class="opp-add-card-body">
+        {% if selected_customer %}
+          <section class="opp-selected-customer" aria-label="Selected Customer">
+            <div class="opp-selected-customer-header">
+              <div>
+                <p>Selected Customer</p>
+                <h2>{{ selected_customer.account_brand|default:selected_customer.contact_name|default:"Customer" }}</h2>
+              </div>
+              <span class="opp-selected-customer-badge">{{ selected_customer.customer_code|default:selected_customer.id }}</span>
+            </div>
+
+            <div class="opp-customer-info-grid">
+              <div class="opp-customer-field">
+                <span>Customer ID</span>
+                <strong>{{ selected_customer.customer_code|default:selected_customer.id }}</strong>
+              </div>
+              <div class="opp-customer-field">
+                <span>Customer Name</span>
+                <strong>{{ selected_customer.contact_name|default:selected_customer.account_brand|default:"-" }}</strong>
+              </div>
+              <div class="opp-customer-field">
+                <span>Company</span>
+                <strong>{{ selected_customer.account_brand|default:"-" }}</strong>
+              </div>
+              <div class="opp-customer-field">
+                <span>Contact Person</span>
+                <strong>{{ selected_customer.contact_name|default:"-" }}</strong>
+              </div>
+              <div class="opp-customer-field">
+                <span>Email</span>
+                <strong>{% if selected_customer.email %}<a href="mailto:{{ selected_customer.email }}">{{ selected_customer.email }}</a>{% else %}-{% endif %}</strong>
+              </div>
+              <div class="opp-customer-field">
+                <span>Phone</span>
+                <strong>{{ selected_customer.phone|default:"-" }}</strong>
+              </div>
+              <div class="opp-customer-field">
+                <span>Country</span>
+                <strong>{% firstof selected_customer.country selected_customer.shipping_country selected_customer.market "-" %}</strong>
+              </div>
+              <div class="opp-customer-field">
+                <span>Assigned Salesperson</span>
+                <strong>{% if default_salesperson %}{% if default_salesperson.get_full_name %}{{ default_salesperson.get_full_name }}{% else %}{{ default_salesperson.username }}{% endif %}{% else %}-{% endif %}</strong>
+              </div>
+              <div class="opp-customer-field">
+                <span>Lead Source</span>
+                <strong>{{ customer_prefill.lead_source|default:"-" }}</strong>
+              </div>
+            </div>
+
+            <div class="opp-customer-stats-grid">
+              <div class="opp-customer-stat">
+                <span>Total Opportunities</span>
+                <strong>{{ customer_stats.total_opportunities|default:0|intcomma }}</strong>
+              </div>
+              <div class="opp-customer-stat">
+                <span>Open Opportunities</span>
+                <strong>{{ customer_stats.open_opportunities|default:0|intcomma }}</strong>
+              </div>
+              <div class="opp-customer-stat">
+                <span>Won Opportunities</span>
+                <strong>{{ customer_stats.won_opportunities|default:0|intcomma }}</strong>
+              </div>
+              <div class="opp-customer-stat">
+                <span>Lost Opportunities</span>
+                <strong>{{ customer_stats.lost_opportunities|default:0|intcomma }}</strong>
+              </div>
+              <div class="opp-customer-stat">
+                <span>Total Revenue</span>
+                {% for row in customer_stats.total_revenue_rows %}
+                  <strong title="{{ row.amount|finance_money:row.currency }}">{{ row.amount|compact_money:row.currency }}</strong>
+                {% empty %}
+                  <strong>-</strong>
+                {% endfor %}
+              </div>
+              <div class="opp-customer-stat">
+                <span>Outstanding Amount</span>
+                {% for row in customer_stats.outstanding_rows %}
+                  <strong title="{{ row.amount|finance_money:row.currency }}">{{ row.amount|compact_money:row.currency }}</strong>
+                {% empty %}
+                  <strong>-</strong>
+                {% endfor %}
+              </div>
+            </div>
+
+            <div class="opp-customer-notes">
+              <strong>Customer Notes</strong>
+              {{ selected_customer.notes|default:"No customer notes on the profile." }}
+              {% if customer_prefill.latest_customer_note %}
+                <br>Latest note: {{ customer_prefill.latest_customer_note }}
+              {% endif %}
+            </div>
+
+            {% if previous_customer_opportunities %}
+              <div class="opp-previous-opps">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Previous Opportunities</th>
+                      <th>Stage</th>
+                      <th>Product</th>
+                      <th>Value</th>
+                      <th>Salesperson</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for row in previous_customer_opportunities %}
+                      <tr>
+                        <td>
+                          <a href="{% url 'opportunity_detail' row.opportunity.pk %}">{{ row.opportunity.opportunity_id }}</a>
+                          {% if row.lead_source %}<div class="opp-add-help">Source: {{ row.lead_source }}</div>{% endif %}
+                        </td>
+                        <td>{{ row.opportunity.stage|default:"-" }}</td>
+                        <td>{{ row.opportunity.product_category|default:row.opportunity.product_type|default:"-" }}</td>
+                        <td>{% if row.has_value %}{{ row.amount|finance_money:row.currency }}{% else %}-{% endif %}</td>
+                        <td>{{ row.salesperson_name|default:"-" }}</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% endif %}
+          </section>
+        {% endif %}
+
         <div class="opp-add-grid">
           <div class="opp-add-field">
             <label for="customerSearch">Search Customer</label>
@@ -258,7 +552,7 @@
             <select name="customer" id="customerSelect">
               <option value="">Select Customer</option>
               {% for c in customers %}
-                <option value="{{ c.id }}" {% if selected_customer_id|stringformat:"s" == c.id|stringformat:"s" %}selected{% endif %}>{{ c.account_brand }} ({{ c.email }})</option>
+                <option value="{{ c.id }}" {% if selected_customer_id|stringformat:"s" == c.id|stringformat:"s" %}selected{% endif %}>{{ c.account_brand|default:c.contact_name }} ({{ c.email|default:"No email" }})</option>
               {% endfor %}
             </select>
           </div>
@@ -315,7 +609,7 @@
             <label for="product_type">Product Type</label>
             <select name="product_type" id="product_type">
               {% for value,label in type_choices %}
-                <option value="{{ value }}">{{ label }}</option>
+                <option value="{{ value }}" {% if selected_product_type == value %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
             </select>
           </div>
@@ -324,7 +618,7 @@
             <label for="product_category">Product Category</label>
             <select name="product_category" id="product_category">
               {% for value,label in category_choices %}
-                <option value="{{ value }}">{{ label }}</option>
+                <option value="{{ value }}" {% if selected_product_category == value %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
             </select>
             <div class="opp-add-help">Sports categories such as Basketball Jersey and Soccer Jersey are available here.</div>
@@ -332,7 +626,7 @@
 
           <div class="opp-add-field opp-add-field-full">
             <label for="notes">Notes Reference</label>
-            <input type="text" name="notes" id="notes" value="{% if selected_customer %}{{ selected_customer.notes|truncatechars:120 }}{% endif %}" placeholder="Project notes or customer reference">
+            <textarea name="notes" id="notes" placeholder="Project notes or customer reference">{{ selected_notes }}</textarea>
           </div>
         </div>
       </div>

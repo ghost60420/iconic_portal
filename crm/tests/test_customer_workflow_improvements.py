@@ -13,6 +13,7 @@ from crm.models import (
     CostingHeader,
     CostingLineItem,
     Customer,
+    CustomerNote,
     Invoice,
     InvoicePayment,
     Lead,
@@ -200,6 +201,7 @@ class CustomerWorkflowImprovementTests(TestCase):
             product_interest="Basketball jersey",
         )
         lead_count = Lead.objects.count()
+        customer_count = Customer.objects.count()
 
         self.client.force_login(self.sales)
         response = self.client.post(
@@ -216,6 +218,7 @@ class CustomerWorkflowImprovementTests(TestCase):
         )
         self.assertEqual(response.status_code, 302)
         self.assertEqual(Lead.objects.count(), lead_count)
+        self.assertEqual(Customer.objects.count(), customer_count)
         opportunity = Opportunity.objects.latest("id")
         self.assertIsNone(opportunity.lead)
         self.assertEqual(opportunity.customer, self.customer)
@@ -233,6 +236,105 @@ class CustomerWorkflowImprovementTests(TestCase):
         self.assertContains(response, "Sales Person")
         self.assertContains(response, existing.opportunity_id)
         self.assertContains(response, "Existing active opportunities")
+
+    def test_selected_customer_panel_shows_context_and_separate_currency_totals(self):
+        CustomerNote.objects.create(
+            customer=self.customer,
+            author="Sales",
+            content="Latest customer note for opportunity setup.",
+        )
+        Lead.objects.create(
+            customer=self.customer,
+            account_brand="Archive Brand",
+            contact_name="Alex Buyer",
+            email="alex@example.com",
+            assigned_to=self.salesperson,
+            source="Referral",
+            source_channel="LinkedIn",
+            first_touch_channel="Organic",
+            product_interest="Basketball jersey",
+            primary_product_type="Activewear",
+            product_category="Basketball Jersey",
+        )
+        Opportunity.objects.create(
+            lead=None,
+            customer=self.customer,
+            assigned_to=self.salesperson,
+            stage="Prospecting",
+            product_type="Activewear",
+            product_category="Basketball Jersey",
+            order_currency="CAD",
+            order_value=Decimal("2500.00"),
+        )
+        Opportunity.objects.create(
+            lead=None,
+            customer=self.customer,
+            assigned_to=self.salesperson,
+            stage="Closed Won",
+            product_type="Streetwear",
+            product_category="Hoodie",
+            order_currency="USD",
+            order_value=Decimal("160000.00"),
+            order_value_usd=Decimal("1200.00"),
+        )
+        Opportunity.objects.create(
+            lead=None,
+            customer=self.customer,
+            assigned_to=self.salesperson,
+            stage="Closed Lost",
+            product_type="Casualwear",
+            product_category="T Shirt",
+            order_currency="BDT",
+            order_value=Decimal("90000.00"),
+        )
+        Invoice.objects.create(
+            invoice_number="INV-CUST-CAD",
+            customer=self.customer,
+            currency="CAD",
+            subtotal=Decimal("1000.00"),
+            tax_amount=Decimal("0.00"),
+            total_amount=Decimal("1000.00"),
+            paid_amount=Decimal("400.00"),
+            status="partial",
+        )
+        Invoice.objects.create(
+            invoice_number="INV-CUST-BDT",
+            customer=self.customer,
+            currency="BDT",
+            subtotal=Decimal("50000.00"),
+            tax_amount=Decimal("0.00"),
+            total_amount=Decimal("50000.00"),
+            paid_amount=Decimal("10000.00"),
+            status="partial",
+        )
+
+        self.client.force_login(self.sales)
+        response = self.client.get(reverse("add_opportunity"), {"customer": self.customer.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Selected Customer")
+        self.assertContains(response, "Customer ID")
+        self.assertContains(response, "Archive Brand")
+        self.assertContains(response, "Sales Person")
+        self.assertContains(response, "Referral / LinkedIn / Organic")
+        self.assertContains(response, "Latest customer note for opportunity setup.")
+        self.assertContains(response, "Previous Opportunities")
+
+        stats = response.context["customer_stats"]
+        self.assertEqual(stats["total_opportunities"], 3)
+        self.assertEqual(stats["open_opportunities"], 1)
+        self.assertEqual(stats["won_opportunities"], 1)
+        self.assertEqual(stats["lost_opportunities"], 1)
+        self.assertEqual(
+            [(row["currency"], row["amount"]) for row in stats["total_revenue_rows"]],
+            [("CAD", Decimal("2500.00")), ("USD", Decimal("1200.00")), ("BDT", Decimal("90000.00"))],
+        )
+        self.assertEqual(
+            [(row["currency"], row["amount"]) for row in stats["outstanding_rows"]],
+            [("CAD", Decimal("600.00")), ("BDT", Decimal("40000.00"))],
+        )
+        self.assertEqual(len(response.context["previous_customer_opportunities"]), 3)
+        self.assertIn("Customer notes: Prefers basketball sets.", response.context["selected_notes"])
+        self.assertIn("Previous product interest: Basketball jersey", response.context["selected_notes"])
 
     def test_existing_lead_conversion_still_links_lead(self):
         lead = Lead.objects.create(
