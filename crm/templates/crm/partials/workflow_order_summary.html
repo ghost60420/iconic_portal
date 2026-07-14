@@ -130,8 +130,9 @@
         <strong>
           {% if workflow_order_summary.value_lines %}
             <span class="workflow-order-summary-money">
-              <span>{{ workflow_order_summary.value_lines.bdt }}</span>
-              <span>{{ workflow_order_summary.value_lines.cad }}</span>
+              {% if workflow_order_summary.value_lines.cad %}<span>{{ workflow_order_summary.value_lines.cad }}</span>{% endif %}
+              {% if workflow_order_summary.value_lines.bdt %}<span>{{ workflow_order_summary.value_lines.bdt }}</span>{% endif %}
+              {% if workflow_order_summary.value_lines.native %}<span>{{ workflow_order_summary.value_lines.native }}</span>{% endif %}
             </span>
           {% else %}
             {{ workflow_order_summary.value }}

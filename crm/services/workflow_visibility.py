@@ -41,6 +41,52 @@ def _money(currency, value):
     return f"{prefix}{amount:,.2f}"
 
 
+def _display_money(currency, value):
+    if value in (None, ""):
+        return ""
+    try:
+        amount = Decimal(str(value))
+    except Exception:
+        return ""
+    code = (currency or "CAD").upper()
+    if code == "BDT":
+        return f"৳{amount:,.2f}"
+    if code in {"CAD", "USD"}:
+        return f"{code} ${amount:,.2f}"
+    return f"{code} {amount:,.2f}"
+
+
+def _opportunity_sales_value_lines(opportunity):
+    if not opportunity:
+        return {}
+    currency = (getattr(opportunity, "order_currency", "") or "CAD").upper()
+    selected_amount = getattr(opportunity, "order_value_usd", None)
+    converted_bdt = getattr(opportunity, "order_value", None)
+    lines = {}
+
+    if currency == "CAD":
+        if selected_amount is not None:
+            lines["cad"] = _display_money("CAD", selected_amount)
+            if converted_bdt is not None:
+                lines["bdt"] = _display_money("BDT", converted_bdt)
+        elif converted_bdt is not None:
+            # Preserve legacy CAD rows that predate the selected-currency field.
+            lines["cad"] = _display_money("CAD", converted_bdt)
+    elif currency == "BDT":
+        amount = converted_bdt if converted_bdt is not None else selected_amount
+        if amount is not None:
+            lines["bdt"] = _display_money("BDT", amount)
+    elif currency == "USD":
+        if selected_amount is not None:
+            lines["native"] = _display_money("USD", selected_amount)
+        if converted_bdt is not None:
+            lines["bdt"] = _display_money("BDT", converted_bdt)
+    elif converted_bdt is not None:
+        lines["native"] = _display_money(currency, converted_bdt)
+
+    return lines
+
+
 def _display_name(user):
     if not user:
         return ""
@@ -443,8 +489,14 @@ def _summary_money(links, can_view_costing=False):
     if invoice:
         return _money(getattr(invoice, "currency", ""), getattr(invoice, "total_amount", None))
     opportunity = links["opportunity"]
-    if opportunity and getattr(opportunity, "order_value", None):
-        return _money(getattr(opportunity, "order_currency", "") or "BDT", opportunity.order_value)
+    opportunity_lines = _opportunity_sales_value_lines(opportunity)
+    if opportunity_lines:
+        return (
+            opportunity_lines.get("cad")
+            or opportunity_lines.get("native")
+            or opportunity_lines.get("bdt")
+            or "Value not set"
+        )
     quotation = links["quotation"]
     if can_view_costing and quotation and getattr(quotation, "quotation_number", ""):
         return f"Quote {quotation.quotation_number}"
@@ -700,6 +752,7 @@ def build_workflow_visibility_context(
         ),
         "status": _summary_status(record_type, links, lifecycle),
         "value": _summary_money(links, can_view_costing=can_view_costing),
+        "value_lines": {} if links["invoice"] else _opportunity_sales_value_lines(links["opportunity"]),
         "value_label": "Invoice value" if links["invoice"] else "Sales value",
         "date": _due_label(
             invoice=links["invoice"],

@@ -26,7 +26,12 @@ def open_pipeline_queryset(queryset=None):
 
 
 def with_pipeline_value(queryset, annotation_name="pipeline_value"):
-    """Annotate opportunities with the one display value used by pipeline surfaces."""
+    """Annotate opportunities with the shared display value used by pipeline surfaces.
+
+    Current opportunity entry stores the selected order amount in
+    ``order_value_usd`` and the BDT conversion in ``order_value``.  The field
+    name is historical, so pipeline displays must not infer USD from it.
+    """
     revenue_expression = models.ExpressionWrapper(
         F("selling_price_per_piece") * F("quantity"),
         output_field=models.DecimalField(max_digits=16, decimal_places=2),
@@ -83,7 +88,7 @@ def with_pipeline_value(queryset, annotation_name="pipeline_value"):
             "pipeline_currency": Case(
                 When(_pipeline_quick_value__isnull=False, then=F("_pipeline_quick_currency")),
                 When(_pipeline_advanced_value__isnull=False, then=F("_pipeline_advanced_currency")),
-                When(order_value_usd__isnull=False, then=models.Value("USD")),
+                When(order_value_usd__isnull=False, then=Coalesce(F("order_currency"), models.Value("CAD"))),
                 default=Coalesce(F("order_currency"), models.Value("CAD")),
                 output_field=models.CharField(max_length=10),
             ),

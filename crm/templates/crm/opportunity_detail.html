@@ -13,8 +13,11 @@
         {% if lead %}
           {{ lead.account_brand|default:"Company not set" }}
           {% if lead.contact_name %} · {{ lead.contact_name }}{% endif %}
+        {% elif customer %}
+          {{ customer.account_brand|default:customer.contact_name|default:"Customer" }}
+          {% if customer.customer_code %} · {{ customer.customer_code }}{% endif %}
         {% else %}
-          No linked lead
+          No linked customer or lead
         {% endif %}
       </p>
 
@@ -22,7 +25,7 @@
         <span class="opp-stage-badge" data-stage="{{ opportunity.stage }}">{{ opportunity.get_stage_display }}</span>
         <span class="opp-status-pill {{ opportunity.status_key }}">{{ opportunity.status_label }}</span>
         <span class="opp-badge">
-          {% if opportunity.kpi_order_value %}Pipeline {{ opportunity.kpi_order_value|finance_money:opportunity.kpi_currency }}{% else %}Pipeline value not set{% endif %}
+          {% if opportunity.kpi_order_value and opportunity.kpi_currency == "CAD" %}Pipeline {{ opportunity.kpi_order_value|finance_money:"CAD" }}{% else %}Pipeline CAD conversion unavailable{% endif %}
         </span>
         <span class="opp-badge">
           {% if lead and lead.priority %}{{ lead.priority }} priority{% else %}Priority not set{% endif %}
@@ -112,8 +115,8 @@
     </article>
     <article class="opp-snapshot-card">
       <span>Pipeline value</span>
-      <strong>{% if opportunity.kpi_order_value %}{{ opportunity.kpi_order_value|finance_money:opportunity.kpi_currency }}{% else %}Not set{% endif %}</strong>
-      <small>Shared open-pipeline source</small>
+      <strong>{% if opportunity.kpi_order_value and opportunity.kpi_currency == "CAD" %}{{ opportunity.kpi_order_value|finance_money:"CAD" }}{% else %}CAD conversion unavailable{% endif %}</strong>
+      <small>Shared CAD open-pipeline source</small>
     </article>
     <article class="opp-snapshot-card">
       <span>Next follow up</span>
@@ -651,7 +654,18 @@
           <div class="opp-profit-value {% if profit_after_shipping and profit_after_shipping < 0 %}negative{% endif %}">
             {% if total_cost_bdt %}{{ profit_after_shipping|finance_money:"BDT" }}{% else %}Cost unavailable{% endif %}
           </div>
-          <div class="opp-money-row"><span>Sales value</span><strong>{% if opportunity.kpi_order_value %}{{ opportunity.kpi_order_value|finance_money:opportunity.kpi_currency }}{% else %}—{% endif %}</strong></div>
+          <div class="opp-money-row">
+            <span>Sales value</span>
+            <strong>
+              {% if workflow_order_summary.value_lines %}
+                {% if workflow_order_summary.value_lines.cad %}{{ workflow_order_summary.value_lines.cad }}{% endif %}
+                {% if workflow_order_summary.value_lines.bdt %}<br><small>{{ workflow_order_summary.value_lines.bdt }}</small>{% endif %}
+                {% if workflow_order_summary.value_lines.native %}<br><small>{{ workflow_order_summary.value_lines.native }}</small>{% endif %}
+              {% else %}
+                —
+              {% endif %}
+            </strong>
+          </div>
           <div class="opp-money-row"><span>Total cost</span><strong>{% if total_cost_bdt %}{{ total_cost_bdt|finance_money:"BDT" }}{% else %}Cost unavailable{% endif %}</strong></div>
           <div class="opp-money-row"><span>Margin</span><strong>{% if total_cost_bdt and profit_after_shipping_percent != None %}{{ profit_after_shipping_percent|floatformat:1 }}%{% else %}Margin N/A{% endif %}</strong></div>
           <div class="opp-money-row"><span>Shipping</span><strong>{% if shipping_cost_bdt %}{{ shipping_cost_bdt|finance_money:"BDT" }}{% else %}{{ 0|finance_money:"BDT" }}{% endif %}</strong></div>

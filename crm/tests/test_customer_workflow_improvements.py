@@ -25,6 +25,7 @@ from crm.models import (
     SystemActivityLog,
 )
 from crm.services.operations_permissions import scope_production_orders, scope_sales_opportunities
+from crm.services.pipeline import with_pipeline_value
 from crm.services.sales_attribution import resolve_salesperson_for_record
 
 
@@ -316,6 +317,8 @@ class CustomerWorkflowImprovementTests(TestCase):
         self.assertContains(response, "Archive Brand")
         self.assertContains(response, "Sales Person")
         self.assertContains(response, "Referral / LinkedIn / Organic")
+        self.assertContains(response, "Previous Product Interest")
+        self.assertContains(response, "Basketball jersey")
         self.assertContains(response, "Latest customer note for opportunity setup.")
         self.assertContains(response, "Previous Opportunities")
 
@@ -335,6 +338,51 @@ class CustomerWorkflowImprovementTests(TestCase):
         self.assertEqual(len(response.context["previous_customer_opportunities"]), 3)
         self.assertIn("Customer notes: Prefers basketball sets.", response.context["selected_notes"])
         self.assertIn("Previous product interest: Basketball jersey", response.context["selected_notes"])
+
+    def test_opportunity_detail_displays_selected_currency_and_bdt_conversion(self):
+        opportunity = Opportunity.objects.create(
+            lead=None,
+            customer=self.customer,
+            assigned_to=self.salesperson,
+            stage="Prospecting",
+            product_type="Activewear",
+            product_category="Basketball Jersey",
+            order_currency="CAD",
+            order_value=Decimal("170000.00"),
+            order_value_usd=Decimal("2000.00"),
+            fx_rate_bdt_per_usd=Decimal("85.0000"),
+            moq_units=100,
+        )
+
+        pipeline_row = with_pipeline_value(Opportunity.objects.filter(pk=opportunity.pk)).get()
+        self.assertEqual(pipeline_row.pipeline_currency, "CAD")
+        self.assertEqual(pipeline_row.pipeline_value, Decimal("2000.00"))
+
+        self.client.force_login(self.sales)
+        response = self.client.get(reverse("opportunity_detail", args=[opportunity.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Pipeline CAD $2,000.00")
+        self.assertContains(response, "CAD $2,000.00")
+        self.assertContains(response, "৳170,000.00")
+        self.assertNotContains(response, "Pipeline USD $2,000.00")
+        self.assertNotContains(response, "CAD 170,000.00")
+
+    def test_customer_origin_opportunity_detail_shows_customer_context(self):
+        opportunity = Opportunity.objects.create(
+            lead=None,
+            customer=self.customer,
+            assigned_to=self.salesperson,
+            stage="Prospecting",
+            product_type="Activewear",
+            product_category="Basketball Jersey",
+        )
+
+        self.client.force_login(self.sales)
+        response = self.client.get(reverse("opportunity_detail", args=[opportunity.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Archive Brand")
+        self.assertContains(response, self.customer.customer_code)
+        self.assertNotContains(response, "No linked lead")
 
     def test_existing_lead_conversion_still_links_lead(self):
         lead = Lead.objects.create(

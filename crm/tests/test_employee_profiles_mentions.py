@@ -836,7 +836,7 @@ class SalespersonDashboardFeatureTests(TestCase):
         self.assertEqual(metrics["quotation_counts"], {"open": 2, "approved": 1})
         self.assertEqual(metrics["closing_ratio"], Decimal("66.67"))
         sales = {row["currency"]: row["amount"] for row in metrics["sales_revenue"]}
-        self.assertEqual(sales, {"CAD": Decimal("0"), "USD": Decimal("1500"), "BDT": Decimal("0")})
+        self.assertEqual(sales, {"CAD": Decimal("1000"), "USD": Decimal("500"), "BDT": Decimal("0")})
         invoices = {row["currency"]: row for row in metrics["invoice_values"]}
         self.assertEqual(invoices["CAD"]["amount"], Decimal("800"))
         self.assertEqual(invoices["USD"]["amount"], Decimal("600"))
@@ -870,7 +870,8 @@ class SalespersonDashboardFeatureTests(TestCase):
     def test_profile_page_uses_explicit_currency_labels(self):
         self.client.force_login(self.sales)
         response = self.client.get(reverse("salesperson_profile"))
-        self.assertContains(response, "USD $1,500.00")
+        self.assertContains(response, "CAD $1,000.00")
+        self.assertContains(response, "USD $500.00")
         self.assertContains(response, "CAD $800.00")
         self.assertContains(response, "৳10,000.00")
 
@@ -950,7 +951,7 @@ class TeamPerformanceDashboardTests(TestCase):
         revenue = {row["currency"]: row["amount"] for row in metrics["revenue_leaders"]}
         self.assertEqual(
             revenue,
-            {"CAD": Decimal("0"), "USD": Decimal("5000"), "BDT": Decimal("0")},
+            {"CAD": Decimal("3000"), "USD": Decimal("2000"), "BDT": Decimal("0")},
         )
         self.assertEqual(metrics["most_followups_completed"]["completed_followups"], 1)
         self.assertEqual(metrics["most_overdue_followups"]["overdue_followups"], 1)
@@ -960,8 +961,8 @@ class TeamPerformanceDashboardTests(TestCase):
     def test_team_page_uses_explicit_currency_labels(self):
         self.client.force_login(self.ceo)
         response = self.client.get(reverse("team_performance"))
-        self.assertContains(response, "CAD $0.00")
-        self.assertContains(response, "USD $5,000.00")
+        self.assertContains(response, "CAD $3,000.00")
+        self.assertContains(response, "USD $2,000.00")
         self.assertContains(response, "৳0.00")
 
     def test_team_service_has_bounded_queries(self):
