@@ -1229,7 +1229,7 @@ class MarketingSocialConnectionsTests(TestCase):
 
         def fake_content(*, account_id, **kwargs):
             if account_id == "locations/denied":
-                raise MarketingServiceError("The caller does not have permission")
+                return []
             return [
                 {
                     "external_content_id": "gbp-post:accounts/123/locations/ok/localPosts/post-1",
@@ -1249,6 +1249,11 @@ class MarketingSocialConnectionsTests(TestCase):
                 },
             ]
 
+        def fake_account_metrics(*, account_id, **kwargs):
+            if account_id == "locations/denied":
+                raise MarketingServiceError("The caller does not have permission")
+            return [{"date": date(2026, 7, 13), "impressions": 10, "reach": 2, "clicks": 1, "engagement_total": 0}]
+
         with patch(
             "marketing.management.commands.marketing_sync_google_business_daily.discover_google_business_locations",
             return_value=discovery,
@@ -1266,7 +1271,7 @@ class MarketingSocialConnectionsTests(TestCase):
             return_value=[],
         ), patch(
             "marketing.management.commands.marketing_sync_google_business_daily.fetch_google_business_account_metrics",
-            return_value=[{"date": date(2026, 7, 13), "impressions": 10, "reach": 2, "clicks": 1, "engagement_total": 0}],
+            side_effect=fake_account_metrics,
         ), patch(
             "marketing.management.commands.marketing_sync_google_business_daily.fetch_google_business_audience",
             return_value=[],
@@ -1285,6 +1290,54 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertEqual(credential.last_error, "")
         self.assertEqual(SocialContent.objects.filter(account=working).count(), 2)
         self.assertEqual(AccountMetricDaily.objects.filter(account=working).count(), 1)
+
+    def test_google_business_content_warning_does_not_block_account_metrics(self):
+        credential = OAuthCredential.objects.create(
+            platform="google",
+            account_name="iconicapparelhouse@gmail.com",
+            account_id="google-user-1",
+            is_active=True,
+        )
+        credential.set_tokens(access_token="access-token", refresh_token="refresh-token")
+        credential.save()
+
+        discovery = {
+            "accounts": [{"account_name": "accounts/123", "display_name": "Iconic Apparel House"}],
+            "locations": [
+                {
+                    "location_name": "locations/ok",
+                    "title": "Iconic apparel house company",
+                    "account_name": "accounts/123",
+                },
+            ],
+        }
+
+        with patch(
+            "marketing.management.commands.marketing_sync_google_business_daily.discover_google_business_locations",
+            return_value=discovery,
+        ), patch(
+            "marketing.management.commands.marketing_sync_google_business_daily.get_valid_access_token",
+            return_value="access-token",
+        ), patch(
+            "marketing.management.commands.marketing_sync_google_business_daily.token_for_social_account",
+            return_value="access-token",
+        ), patch(
+            "marketing.management.commands.marketing_sync_google_business_daily.fetch_google_business_content",
+            side_effect=MarketingServiceError("Google My Business API disabled"),
+        ), patch(
+            "marketing.management.commands.marketing_sync_google_business_daily.fetch_google_business_account_metrics",
+            return_value=[{"date": date(2026, 7, 13), "impressions": 10, "reach": 2, "clicks": 1, "engagement_total": 0}],
+        ), patch(
+            "marketing.management.commands.marketing_sync_google_business_daily.fetch_google_business_audience",
+            return_value=[],
+        ):
+            call_command("marketing_sync_google_business_daily")
+
+        working = SocialAccount.objects.get(platform="google_business", external_account_id="locations/ok")
+        self.assertEqual(working.last_sync_status, "ok")
+        self.assertIn("Content sync warning", working.last_sync_message)
+        self.assertEqual(AccountMetricDaily.objects.filter(account=working).count(), 1)
+        self.assertEqual(SocialContent.objects.filter(account=working).count(), 0)
 
     def test_instagram_account_metrics_parse_profile_and_insights(self):
         from marketing.services.meta import fetch_meta_account_metrics

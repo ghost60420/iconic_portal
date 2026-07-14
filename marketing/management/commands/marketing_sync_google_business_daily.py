@@ -100,35 +100,40 @@ class Command(BaseCommand):
                     start = today - timedelta(days=30)
                     end = today - timedelta(days=1)
 
-                content_rows = fetch_google_business_content(
-                    access_token=token,
-                    account_id=acct.external_account_id,
-                    start_date=start,
-                    end_date=end,
-                    business_account_name=(location_context.get(acct.external_account_id) or {}).get("account_name", ""),
-                )
-                for row in content_rows:
-                    content, _ = SocialContent.objects.update_or_create(
-                        platform=acct.platform,
-                        external_content_id=row.get("external_content_id"),
-                        defaults={
-                            "account": acct,
-                            "content_type": row.get("content_type") or "post",
-                            "title": row.get("title") or "",
-                            "message_text": row.get("message_text") or "",
-                            "permalink": row.get("permalink") or "",
-                            "published_at": row.get("published_at"),
-                        },
-                    )
-
-                    metric_rows = fetch_google_business_metrics(
+                content_warning = ""
+                try:
+                    content_rows = fetch_google_business_content(
                         access_token=token,
-                        content_id=row.get("external_content_id"),
+                        account_id=acct.external_account_id,
                         start_date=start,
                         end_date=end,
+                        business_account_name=(location_context.get(acct.external_account_id) or {}).get("account_name", ""),
                     )
-                    for metric in metric_rows:
-                        upsert_social_metric_daily(content_obj=content, payload=metric)
+                    for row in content_rows:
+                        content, _ = SocialContent.objects.update_or_create(
+                            platform=acct.platform,
+                            external_content_id=row.get("external_content_id"),
+                            defaults={
+                                "account": acct,
+                                "content_type": row.get("content_type") or "post",
+                                "title": row.get("title") or "",
+                                "message_text": row.get("message_text") or "",
+                                "permalink": row.get("permalink") or "",
+                                "published_at": row.get("published_at"),
+                            },
+                        )
+
+                        metric_rows = fetch_google_business_metrics(
+                            access_token=token,
+                            content_id=row.get("external_content_id"),
+                            start_date=start,
+                            end_date=end,
+                        )
+                        for metric in metric_rows:
+                            upsert_social_metric_daily(content_obj=content, payload=metric)
+                except MarketingServiceError as exc:
+                    content_warning = f"Content sync warning: {exc}"
+                    self.stdout.write(self.style.WARNING(f"{acct.display_name}: {content_warning}"))
 
                 account_metric_rows = fetch_google_business_account_metrics(
                     access_token=token,
@@ -152,7 +157,7 @@ class Command(BaseCommand):
                 acct.last_sync_at = synced_at
                 acct.last_successful_sync = synced_at
                 acct.last_sync_status = "ok"
-                acct.last_sync_message = ""
+                acct.last_sync_message = content_warning[:2000]
                 acct.save(update_fields=["last_sync_at", "last_successful_sync", "last_sync_status", "last_sync_message"])
                 update_connection_sync_state(acct, status="ok", synced_at=synced_at)
             except MarketingServiceError as exc:
