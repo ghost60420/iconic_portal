@@ -479,11 +479,27 @@ def list_youtube_channels(access_token: str) -> list[dict]:
     return channels
 
 
-def list_google_business_locations(access_token: str) -> list[dict]:
-    locations = []
+def list_google_business_accounts(access_token: str) -> list[dict]:
     account_payload = _request_json(GBP_ACCOUNTS_URL, access_token=access_token)
+    accounts = []
     for account in account_payload.get("accounts", []):
         account_name = account.get("name") or ""
+        if not account_name:
+            continue
+        accounts.append(
+            {
+                "account_name": account_name,
+                "account_id": _resource_id(account_name, "accounts/"),
+                "display_name": account.get("accountName") or account_name,
+            }
+        )
+    return accounts
+
+
+def _list_google_business_locations_for_accounts(access_token: str, accounts: list[dict]) -> list[dict]:
+    locations = []
+    for account in accounts:
+        account_name = account.get("account_name") or ""
         if not account_name:
             continue
         params = {
@@ -497,11 +513,26 @@ def list_google_business_locations(access_token: str) -> list[dict]:
                 locations.append(
                     {
                         "location_name": location_name,
+                        "location_id": _resource_id(location_name, "locations/"),
                         "title": location.get("title") or location_name,
-                        "account_name": account.get("accountName") or account_name,
+                        "account_name": account_name,
+                        "account_id": account.get("account_id") or _resource_id(account_name, "accounts/"),
+                        "account_display_name": account.get("display_name") or account_name,
                     }
                 )
     return locations
+
+
+def discover_google_business_locations(access_token: str) -> dict:
+    accounts = list_google_business_accounts(access_token)
+    return {
+        "accounts": accounts,
+        "locations": _list_google_business_locations_for_accounts(access_token, accounts),
+    }
+
+
+def list_google_business_locations(access_token: str) -> list[dict]:
+    return discover_google_business_locations(access_token)["locations"]
 
 
 def _safe_google_discovery(label: str, discovery_func, access_token: str) -> tuple[list[dict], str]:

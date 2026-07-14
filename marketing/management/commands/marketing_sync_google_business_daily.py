@@ -11,6 +11,11 @@ from marketing.services.google_business import (
     fetch_google_business_account_metrics,
     fetch_google_business_audience,
 )
+from marketing.services.google_oauth import (
+    discover_google_business_locations,
+    get_google_credential,
+    get_valid_access_token,
+)
 from marketing.services.upsert import (
     upsert_social_metric_daily,
     upsert_account_metric_daily,
@@ -30,11 +35,52 @@ class Command(BaseCommand):
     def _token_for_account(self, account):
         return token_for_social_account(account)
 
+    def _discover_google_business_accounts(self):
+        credential = get_google_credential()
+        if not credential:
+            self.stdout.write(self.style.WARNING("No active Google credential found for Google Business discovery."))
+            return {}
+
+        try:
+            token = get_valid_access_token(credential)
+            discovery = discover_google_business_locations(token)
+        except MarketingServiceError as exc:
+            self.stdout.write(self.style.WARNING(f"Google Business discovery failed: {exc}"))
+            return {}
+
+        location_context = {}
+        for item in discovery.get("locations", []):
+            location_name = item.get("location_name") or ""
+            if not location_name:
+                continue
+            account, _ = SocialAccount.objects.update_or_create(
+                platform="google_business",
+                external_account_id=location_name,
+                defaults={
+                    "display_name": item.get("title") or location_name,
+                    "is_active": True,
+                },
+            )
+            location_context[account.external_account_id] = item
+
+        credential.last_sync_status = "connected"
+        if "mybusiness" in (credential.last_error or "").lower() or "google business" in (credential.last_error or "").lower():
+            credential.last_error = ""
+        credential.last_synced_at = timezone.now()
+        credential.save(update_fields=["last_sync_status", "last_error", "last_synced_at", "updated_at"])
+
+        self.stdout.write(
+            f"Google Business discovery complete: {len(discovery.get('accounts', []))} account(s), "
+            f"{len(location_context)} location(s)."
+        )
+        return location_context
+
     def handle(self, *args, **options):
         if not getattr(settings, "MARKETING_SOCIAL_ENABLED", False):
             self.stdout.write("MARKETING_SOCIAL_ENABLED is off. Skipping.")
             return
 
+        location_context = self._discover_google_business_accounts()
         accounts = SocialAccount.objects.filter(is_active=True, platform="google_business")
         account_id = (options.get("account_id") or "").strip()
         if account_id:
@@ -59,6 +105,7 @@ class Command(BaseCommand):
                     account_id=acct.external_account_id,
                     start_date=start,
                     end_date=end,
+                    business_account_name=(location_context.get(acct.external_account_id) or {}).get("account_name", ""),
                 )
                 for row in content_rows:
                     content, _ = SocialContent.objects.update_or_create(

@@ -29,7 +29,7 @@ from marketing.models import (
 )
 from marketing.services.errors import MarketingServiceError
 from marketing.services.ga4 import fetch_ga4_daily
-from marketing.services.google_business import fetch_google_business_account_metrics
+from marketing.services.google_business import fetch_google_business_account_metrics, fetch_google_business_content
 from marketing.services.social_connections import run_social_connection_sync, save_social_connection
 from marketing.utils.activity import log_marketing_sync_failure
 from marketing.services.youtube import fetch_youtube_account_metrics
@@ -1126,6 +1126,51 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertEqual(rows[0]["engagement_total"], 3)
         self.assertEqual(rows[0]["impressions"], 100)
 
+    def test_google_business_content_imports_local_posts_and_reviews(self):
+        def fake_request(url, **kwargs):
+            if "/localPosts" in url:
+                return {
+                    "localPosts": [
+                        {
+                            "name": "accounts/123/locations/456/localPosts/post-1",
+                            "topicType": "STANDARD",
+                            "summary": "New apparel manufacturing update.",
+                            "searchUrl": "https://business.google.com/post/post-1",
+                            "createTime": "2026-07-10T12:30:00Z",
+                        }
+                    ]
+                }
+            if "/reviews" in url:
+                return {
+                    "reviews": [
+                        {
+                            "name": "accounts/123/locations/456/reviews/review-1",
+                            "reviewer": {"displayName": "Buyer One"},
+                            "starRating": "FIVE",
+                            "comment": "Excellent production quality.",
+                            "createTime": "2026-07-11T09:15:00Z",
+                        }
+                    ]
+                }
+            return {}
+
+        with patch("marketing.services.google_business.google_api_request_json", side_effect=fake_request):
+            rows = fetch_google_business_content(
+                access_token="token",
+                account_id="locations/456",
+                business_account_name="accounts/123",
+                start_date=date(2026, 7, 1),
+                end_date=date(2026, 7, 14),
+            )
+
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["external_content_id"], "gbp-post:accounts/123/locations/456/localPosts/post-1")
+        self.assertEqual(rows[0]["title"], "Google Business Post - Standard")
+        self.assertEqual(rows[0]["message_text"], "New apparel manufacturing update.")
+        self.assertEqual(rows[1]["external_content_id"], "gbp-review:accounts/123/locations/456/reviews/review-1")
+        self.assertEqual(rows[1]["title"], "Google Review - Five - Buyer One")
+        self.assertEqual(rows[1]["message_text"], "Excellent production quality.")
+
     def test_google_business_account_metrics_feed_dashboard_rollups(self):
         account = SocialAccount.objects.create(
             platform="google_business",
@@ -1153,6 +1198,93 @@ class MarketingSocialConnectionsTests(TestCase):
         self.assertEqual(platform_cards["google_business"]["reach"], 5)
         self.assertEqual(platform_cards["google_business"]["clicks"], 7)
         self.assertEqual(platform_cards["google_business"]["engagement_total"], 3)
+
+    def test_google_business_sync_keeps_working_location_connected_when_one_location_fails(self):
+        credential = OAuthCredential.objects.create(
+            platform="google",
+            account_name="iconicapparelhouse@gmail.com",
+            account_id="google-user-1",
+            is_active=True,
+            last_sync_status="error",
+            last_error="Google Business Profile discovery failed",
+        )
+        credential.set_tokens(access_token="access-token", refresh_token="refresh-token")
+        credential.save()
+
+        discovery = {
+            "accounts": [{"account_name": "accounts/123", "display_name": "Iconic Apparel House"}],
+            "locations": [
+                {
+                    "location_name": "locations/denied",
+                    "title": "Iconic Apparel House",
+                    "account_name": "accounts/123",
+                },
+                {
+                    "location_name": "locations/ok",
+                    "title": "Iconic apparel house company",
+                    "account_name": "accounts/123",
+                },
+            ],
+        }
+
+        def fake_content(*, account_id, **kwargs):
+            if account_id == "locations/denied":
+                raise MarketingServiceError("The caller does not have permission")
+            return [
+                {
+                    "external_content_id": "gbp-post:accounts/123/locations/ok/localPosts/post-1",
+                    "content_type": "post",
+                    "title": "Google Business Post - Standard",
+                    "message_text": "Working post",
+                    "permalink": "",
+                    "published_at": timezone.now(),
+                },
+                {
+                    "external_content_id": "gbp-review:accounts/123/locations/ok/reviews/review-1",
+                    "content_type": "post",
+                    "title": "Google Review - Five - Buyer",
+                    "message_text": "Working review",
+                    "permalink": "",
+                    "published_at": timezone.now(),
+                },
+            ]
+
+        with patch(
+            "marketing.management.commands.marketing_sync_google_business_daily.discover_google_business_locations",
+            return_value=discovery,
+        ), patch(
+            "marketing.management.commands.marketing_sync_google_business_daily.get_valid_access_token",
+            return_value="access-token",
+        ), patch(
+            "marketing.management.commands.marketing_sync_google_business_daily.token_for_social_account",
+            return_value="access-token",
+        ), patch(
+            "marketing.management.commands.marketing_sync_google_business_daily.fetch_google_business_content",
+            side_effect=fake_content,
+        ), patch(
+            "marketing.management.commands.marketing_sync_google_business_daily.fetch_google_business_metrics",
+            return_value=[],
+        ), patch(
+            "marketing.management.commands.marketing_sync_google_business_daily.fetch_google_business_account_metrics",
+            return_value=[{"date": date(2026, 7, 13), "impressions": 10, "reach": 2, "clicks": 1, "engagement_total": 0}],
+        ), patch(
+            "marketing.management.commands.marketing_sync_google_business_daily.fetch_google_business_audience",
+            return_value=[],
+        ):
+            call_command("marketing_sync_google_business_daily")
+
+        denied = SocialAccount.objects.get(platform="google_business", external_account_id="locations/denied")
+        working = SocialAccount.objects.get(platform="google_business", external_account_id="locations/ok")
+        credential.refresh_from_db()
+
+        self.assertEqual(denied.last_sync_status, "error")
+        self.assertIn("permission", denied.last_sync_message.lower())
+        self.assertEqual(working.last_sync_status, "ok")
+        self.assertTrue(working.last_successful_sync)
+        self.assertEqual(credential.last_sync_status, "connected")
+        self.assertEqual(credential.last_error, "")
+        self.assertEqual(SocialContent.objects.filter(account=working).count(), 2)
+        self.assertEqual(AccountMetricDaily.objects.filter(account=working).count(), 1)
 
     def test_instagram_account_metrics_parse_profile_and_insights(self):
         from marketing.services.meta import fetch_meta_account_metrics
