@@ -1,0 +1,686 @@
+:root {
+  --control-density-gap: 10px;
+  --control-density-pad: 12px;
+  --control-density-radius: 10px;
+  --control-density-row: 40px;
+  --control-density-btn: 31px;
+}
+
+.ceo-wrap,
+.exec-ceo,
+.ops-shell,
+.people-shell,
+.platform-page,
+.access-page,
+.comm-shell,
+.wa-wrap {
+  width: min(1680px, 100%);
+  max-width: none;
+  margin-inline: auto;
+  min-width: 0;
+}
+
+.cq-wrap,
+.bd-wrap {
+  width: min(1680px, 100%);
+  max-width: none;
+  margin-inline: auto;
+  min-width: 0;
+}
+
+.ceo-wrap *,
+.exec-ceo *,
+.ops-shell *,
+.people-shell *,
+.platform-page *,
+.access-page *,
+.comm-shell *,
+.wa-wrap * {
+  box-sizing: border-box;
+}
+
+.cq-wrap *,
+.bd-wrap * {
+  box-sizing: border-box;
+}
+
+.ceo-hero,
+.exec-head,
+.ops-head,
+.people-head,
+.platform-page-head,
+.access-hero,
+.comm-header {
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  border-radius: var(--control-density-radius);
+}
+
+.cq-head,
+.bd-wrap > .d-flex:first-of-type {
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: var(--control-density-radius);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(8, 13, 24, 0.92));
+}
+
+.ops-head,
+.people-head,
+.platform-page-head {
+  align-items: flex-start;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(8, 13, 24, 0.92));
+}
+
+.ceo-title,
+.exec-head h1,
+.ops-title,
+.people-title,
+.access-title,
+.comm-title,
+.platform-page-head h1 {
+  font-size: clamp(21px, 1.9vw, 27px);
+  line-height: 1.05;
+}
+
+.cq-title,
+.bd-wrap h3 {
+  font-size: clamp(20px, 1.8vw, 26px);
+  line-height: 1.08;
+}
+
+.ceo-sub,
+.exec-head p,
+.ops-subtitle,
+.people-subtitle,
+.access-sub,
+.comm-subtitle,
+.platform-page-head span {
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.cq-sub,
+.bd-wrap .text-muted,
+.bd-wrap .small {
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.ceo-actions,
+.ceo-filter-actions,
+.exec-actions,
+.ops-actions,
+.ops-head-actions,
+.people-actions,
+.access-hero-actions,
+.comm-actions,
+.wa-row,
+.wa-chat-actions {
+  gap: 7px;
+}
+
+.cq-actions,
+.bd-wrap .d-flex,
+.bd-wrap .row {
+  gap: 7px;
+}
+
+.ceo-btn,
+.exec-btn,
+.ops-btn,
+.people-btn,
+.access-btn,
+.comm-btn,
+.wa-btn,
+.wa-pill,
+.platform-inline-form button,
+.platform-card button {
+  min-height: var(--control-density-btn);
+  padding: 6px 10px;
+  border-radius: 8px;
+  line-height: 1.15;
+}
+
+.cq-btn,
+.bd-wrap .btn {
+  min-height: var(--control-density-btn);
+  padding: 6px 10px;
+  border-radius: 8px;
+  line-height: 1.15;
+}
+
+.ceo-filter,
+.ops-grid--filters,
+.people-directory-filters,
+.access-toolbar,
+.comm-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  gap: 8px;
+  padding: 10px;
+  margin-bottom: 10px;
+  border-radius: var(--control-density-radius);
+  backdrop-filter: blur(14px);
+}
+
+.cq-filter,
+.bd-wrap form {
+  gap: 8px;
+  padding: 10px;
+  margin-bottom: 10px;
+  border-radius: var(--control-density-radius);
+}
+
+.ceo-card,
+.exec-card,
+.ceo-section,
+.exec-panel,
+.ops-card,
+.people-card,
+.platform-card,
+.access-card,
+.access-stat,
+.comm-panel,
+.comm-kpi,
+.wa-card,
+.wa-info-card,
+.wa-alert {
+  border-radius: var(--control-density-radius);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.26);
+  min-width: 0;
+}
+
+.cq-card,
+.cq-panel,
+.bd-card {
+  border-radius: var(--control-density-radius);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.26);
+  min-width: 0;
+}
+
+.ceo-card,
+.exec-card,
+.ops-card,
+.people-card,
+.platform-card,
+.access-stat,
+.comm-panel,
+.comm-kpi,
+.wa-info-card,
+.wa-alert {
+  padding: var(--control-density-pad);
+}
+
+.cq-card,
+.cq-panel,
+.bd-card .card-body {
+  padding: var(--control-density-pad);
+}
+
+.ceo-kpis,
+.exec-grid,
+.exec-layout,
+.ceo-layout,
+.ops-grid,
+.ops-list,
+.ops-role-list,
+.ops-capability-list,
+.people-detail-grid,
+.people-form,
+.platform-two-column,
+.platform-role-grid,
+.access-summary,
+.access-list,
+.comm-grid,
+.comm-kpis,
+.wa-layout {
+  gap: var(--control-density-gap);
+}
+
+.cq-grid,
+.cq-list,
+.bd-wrap .row {
+  gap: var(--control-density-gap);
+}
+
+.ceo-card,
+.exec-card,
+.access-stat,
+.comm-kpi {
+  min-height: 78px;
+}
+
+.cq-card,
+.bd-card {
+  min-height: 74px;
+}
+
+.ceo-card strong,
+.exec-number,
+.access-stat-value,
+.comm-kpi strong,
+.platform-stat-grid strong {
+  font-size: clamp(18px, 1.7vw, 23px);
+  margin-top: 5px;
+}
+
+.cq-value,
+.bd-v {
+  font-size: clamp(18px, 1.7vw, 23px);
+  margin-top: 5px;
+}
+
+.ceo-card small,
+.exec-muted,
+.access-stat-note,
+.comm-kpi small,
+.people-muted,
+.wa-meta {
+  font-size: 10.5px;
+}
+
+.cq-note,
+.cq-k,
+.bd-k {
+  font-size: 10.5px;
+}
+
+.ceo-section {
+  margin-bottom: 10px;
+}
+
+.ceo-section-head,
+.exec-panel-head,
+.comm-panel-header,
+.ops-card-head,
+.access-card-top {
+  padding: 10px 12px;
+  gap: 8px;
+}
+
+.ceo-section-title,
+.exec-panel h2,
+.exec-card h2,
+.comm-panel-title,
+.ops-card h2,
+.ops-card h3,
+.people-name,
+.wa-title,
+.wa-list-title,
+.platform-card h2 {
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.ops-input,
+.ops-select,
+.people-input,
+.access-search input,
+.platform-inline-form input,
+.comm-input,
+.comm-select,
+.wa-input,
+.wa-select {
+  min-height: 32px;
+  border-radius: 8px;
+  padding: 7px 9px;
+  font-size: 12px;
+}
+
+.ops-filter,
+.people-field,
+.comm-field,
+.access-role-panel label {
+  gap: 4px;
+}
+
+.ops-filter,
+.ops-row-label,
+.people-field label,
+.people-directory-filters .people-field > span,
+.comm-field label,
+.platform-page-head p,
+.access-eyebrow,
+.access-stat-label {
+  font-size: 10.5px;
+}
+
+.ops-badge,
+.people-badge,
+.comm-status,
+.wa-badge,
+.access-badge {
+  min-height: 22px;
+  padding: 3px 7px;
+  border-radius: 8px;
+  line-height: 1.1;
+}
+
+.ceo-table-wrap,
+.exec-table-wrap,
+.ops-card:has(table),
+.people-table-wrap,
+.platform-card:has(table),
+.access-card,
+.comm-table-wrap {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  contain: inline-size;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ceo-table th,
+.ceo-table td,
+.exec-table th,
+.exec-table td,
+.ops-row,
+.ops-audit-row,
+.people-table th,
+.people-table td,
+.comm-table th,
+.comm-table td,
+.access-permissions,
+.access-card-actions,
+.access-card-top,
+.platform-card li {
+  padding-block: 8px;
+}
+
+.ceo-table th,
+.exec-table th,
+.ops-card table th,
+.people-table th,
+.comm-table th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
+.ops-row,
+.ops-audit-row,
+.ops-member-row,
+.ops-assign-form,
+.people-table td,
+.comm-table td,
+.platform-card li {
+  min-height: var(--control-density-row);
+}
+
+.ops-audit-row {
+  gap: 10px;
+  padding: 10px 0;
+}
+
+.ops-difference-old,
+.ops-difference-new {
+  padding: 7px;
+}
+
+.ops-empty,
+.people-empty,
+.comm-empty,
+.wa-empty {
+  padding: 18px;
+}
+
+.ops-filter-chips,
+.comm-nav {
+  position: sticky;
+  top: 0;
+  z-index: 26;
+}
+
+.ops-filter-chips {
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.ops-filter-chip,
+.comm-nav a {
+  min-height: 30px;
+  padding: 6px 9px;
+  border-radius: 8px;
+}
+
+.ops-notification-icon,
+.people-avatar--small {
+  width: 32px;
+  height: 32px;
+}
+
+.people-shell {
+  padding-inline: 12px;
+}
+
+.people-card {
+  padding: 14px;
+}
+
+.people-directory-filters {
+  grid-template-columns: minmax(220px, 2fr) repeat(4, minmax(120px, 1fr)) auto auto;
+}
+
+.access-hero {
+  padding: 12px 14px;
+}
+
+.access-summary {
+  margin-bottom: 10px;
+}
+
+.access-card-top,
+.access-permissions,
+.access-card-actions {
+  padding: 12px;
+}
+
+.access-avatar {
+  width: 38px;
+  height: 38px;
+  flex-basis: 38px;
+  border-radius: 10px;
+}
+
+.platform-card {
+  margin-bottom: 10px;
+}
+
+.platform-card ul {
+  margin: 8px 0 0;
+}
+
+.platform-role-grid article {
+  border-radius: var(--control-density-radius);
+  padding: 10px;
+}
+
+.comm-shell {
+  padding-bottom: 16px;
+}
+
+.comm-grid {
+  grid-template-columns: 196px minmax(0, 1fr);
+}
+
+.comm-nav {
+  align-self: start;
+}
+
+.comm-nav a {
+  gap: 8px;
+}
+
+.comm-kpis {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.comm-panel {
+  padding: 12px;
+}
+
+.wa-layout {
+  grid-template-columns: 290px minmax(0, 1fr) 250px;
+  min-height: 68vh;
+}
+
+.wa-pane {
+  height: 68vh;
+}
+
+.wa-pad,
+.wa-info-wrap,
+.wa-compose,
+.wa-chat-header {
+  padding: 10px;
+}
+
+.wa-list {
+  padding: 4px;
+}
+
+.wa-item {
+  padding: 7px 8px;
+  margin-bottom: 4px;
+  border-radius: 8px;
+}
+
+.wa-msg {
+  padding: 8px 10px;
+  border-radius: 10px;
+}
+
+.wa-info-avatar {
+  width: 52px;
+  height: 52px;
+}
+
+@media (max-width: 1200px) {
+  .ceo-kpis,
+  .access-summary,
+  .comm-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .comm-grid {
+    grid-template-columns: 170px minmax(0, 1fr);
+  }
+
+  .wa-layout {
+    grid-template-columns: 300px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .ceo-filter,
+  .ops-grid--filters,
+  .people-directory-filters,
+  .platform-two-column,
+  .platform-role-grid,
+  .comm-grid,
+  .wa-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .comm-nav {
+    display: flex;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .comm-nav a {
+    flex: 0 0 auto;
+  }
+
+  .wa-pane {
+    height: auto;
+  }
+
+  .wa-info-pane {
+    display: block;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --control-density-gap: 8px;
+    --control-density-pad: 10px;
+    --control-density-row: 36px;
+    --control-density-btn: 29px;
+  }
+
+  .ceo-wrap,
+  .exec-ceo,
+  .ops-shell,
+  .people-shell,
+  .platform-page,
+  .access-page,
+  .comm-shell,
+  .wa-wrap {
+    width: min(100%, calc(100vw - 12px));
+    padding-inline: 0;
+  }
+
+  .ceo-hero,
+  .ops-head,
+  .people-head,
+  .platform-page-head,
+  .access-hero,
+  .comm-header {
+    align-items: stretch;
+    padding: 10px;
+  }
+
+  .ceo-filter,
+  .ops-grid--filters,
+  .people-directory-filters,
+  .access-toolbar,
+  .comm-toolbar,
+  .ops-filter-chips,
+  .comm-nav {
+    position: static;
+  }
+
+  .ceo-kpis,
+  .access-summary,
+  .comm-kpis,
+  .platform-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ceo-actions,
+  .ops-actions,
+  .people-actions,
+  .access-hero-actions,
+  .comm-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .ceo-btn,
+  .ops-btn,
+  .people-btn,
+  .access-btn,
+  .comm-btn {
+    width: 100%;
+  }
+
+  .platform-inline-form {
+    grid-template-columns: 1fr;
+  }
+
+  .wa-layout {
+    border-radius: var(--control-density-radius);
+  }
+
+  .wa-compose-row,
+  .wa-template-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

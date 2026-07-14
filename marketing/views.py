@@ -1558,6 +1558,7 @@ def _marketing_revenue_attribution(period):
 
     opportunity_qs = (
         Opportunity.objects.filter(created_date__gte=start_date, created_date__lte=end_date)
+        .filter(lead__isnull=False)
         .exclude(lead__utm_source="")
         .select_related("lead")
         .only(
@@ -1566,24 +1567,28 @@ def _marketing_revenue_attribution(period):
             "order_value_usd",
             "created_date",
             "updated_at",
+            "lead_id",
             "lead__utm_source",
             "lead__utm_campaign",
             "lead__utm_medium",
         )
     )
     for opportunity in opportunity_qs:
-        source = _clean_utm(opportunity.lead.utm_source)
+        lead = getattr(opportunity, "lead", None)
+        if not lead:
+            continue
+        source = _clean_utm(getattr(lead, "utm_source", ""))
         platform_key = _normalize_platform_source(source)
         estimated_value = _opportunity_estimated_value(opportunity)
         if platform_key in platform_stats:
             platform_stats[platform_key]["opportunities"] += 1
             platform_stats[platform_key]["estimated_value"] += estimated_value
 
-        if _clean_utm(opportunity.lead.utm_campaign):
+        if _clean_utm(getattr(lead, "utm_campaign", "")):
             campaign_row = ensure_campaign_row(
-                utm_campaign=opportunity.lead.utm_campaign,
+                utm_campaign=lead.utm_campaign,
                 source=source,
-                medium=opportunity.lead.utm_medium,
+                medium=lead.utm_medium,
             )
             campaign_row["opportunities"] += 1
             campaign_row["estimated_value"] += estimated_value
@@ -1594,21 +1599,25 @@ def _marketing_revenue_attribution(period):
             updated_at__date__gte=start_date,
             updated_at__date__lte=end_date,
         )
+        .filter(lead__isnull=False)
         .exclude(lead__utm_source="")
         .select_related("lead")
-        .only("lead__utm_source", "lead__utm_campaign", "lead__utm_medium")
+        .only("stage", "updated_at", "lead_id", "lead__utm_source", "lead__utm_campaign", "lead__utm_medium")
     )
     for opportunity in won_qs:
-        source = _clean_utm(opportunity.lead.utm_source)
+        lead = getattr(opportunity, "lead", None)
+        if not lead:
+            continue
+        source = _clean_utm(getattr(lead, "utm_source", ""))
         platform_key = _normalize_platform_source(source)
         if platform_key in platform_stats:
             platform_stats[platform_key]["won_deals"] += 1
 
-        if _clean_utm(opportunity.lead.utm_campaign):
+        if _clean_utm(getattr(lead, "utm_campaign", "")):
             campaign_row = ensure_campaign_row(
-                utm_campaign=opportunity.lead.utm_campaign,
+                utm_campaign=lead.utm_campaign,
                 source=source,
-                medium=opportunity.lead.utm_medium,
+                medium=lead.utm_medium,
             )
             campaign_row["won_deals"] += 1
 
@@ -2589,15 +2598,15 @@ def campaign_detail(request, pk: int):
 def outreach_dashboard(request):
     _require_enabled("MARKETING_OUTREACH_ENABLED")
 
-    list_form = ContactListForm()
-    upload_form = CSVUploadForm()
-    campaign_form = OutreachCampaignForm()
-    template_form = OutreachMessageTemplateForm()
+    list_form = ContactListForm(prefix="list")
+    upload_form = CSVUploadForm(prefix="upload")
+    campaign_form = OutreachCampaignForm(prefix="campaign")
+    template_form = OutreachMessageTemplateForm(prefix="template")
 
     if request.method == "POST":
         action = request.POST.get("action")
         if action == "create_list":
-            list_form = ContactListForm(request.POST)
+            list_form = ContactListForm(request.POST, prefix="list")
             if list_form.is_valid():
                 obj = list_form.save(commit=False)
                 obj.created_by = request.user
@@ -2614,7 +2623,7 @@ def outreach_dashboard(request):
             messages.error(request, "Fix errors in list form.")
 
         elif action == "import_csv":
-            upload_form = CSVUploadForm(request.POST, request.FILES)
+            upload_form = CSVUploadForm(request.POST, request.FILES, prefix="upload")
             if upload_form.is_valid():
                 contact_list = upload_form.cleaned_data.get("contact_list")
                 stats = import_contacts_from_csv(upload_form.cleaned_data["csv_file"], contact_list=contact_list)
@@ -2632,7 +2641,7 @@ def outreach_dashboard(request):
             messages.error(request, "Upload failed. Check the file.")
 
         elif action == "create_campaign":
-            campaign_form = OutreachCampaignForm(request.POST)
+            campaign_form = OutreachCampaignForm(request.POST, prefix="campaign")
             if campaign_form.is_valid():
                 obj = campaign_form.save(commit=False)
                 obj.created_by = request.user
@@ -2650,7 +2659,7 @@ def outreach_dashboard(request):
             messages.error(request, "Fix errors in campaign form.")
 
         elif action == "create_template":
-            template_form = OutreachMessageTemplateForm(request.POST)
+            template_form = OutreachMessageTemplateForm(request.POST, prefix="template")
             campaign_id = request.POST.get("campaign_id")
             campaign = OutreachCampaign.objects.filter(pk=campaign_id).first()
             if template_form.is_valid() and campaign:

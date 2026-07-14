@@ -1,11 +1,13 @@
 from datetime import date
 from decimal import Decimal
+import re
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
+from crm.models import Opportunity
 from crm.models_access import UserAccess
 from marketing.models import (
     Contact,
@@ -149,6 +151,43 @@ class MarketingDashboardKpiTests(TestCase):
         )
         self.assertEqual(rows[6]["value"], "$20.00")
         self.assertEqual(rows[7]["value"], "+12%")
+
+
+@override_settings(MARKETING_ENABLED=True, MARKETING_OUTREACH_ENABLED=True)
+class MarketingPhaseD1RepairTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_superuser(
+            username="marketing-admin",
+            email="marketing-admin@example.com",
+            password="pass1234",
+        )
+        self.client.force_login(self.user)
+
+    def test_dashboard_and_campaigns_render_with_customer_origin_opportunity(self):
+        Opportunity.objects.create(
+            lead=None,
+            stage="Closed Won",
+            order_value=Decimal("1200.00"),
+        )
+
+        for url_name in ["marketing_dashboard", "marketing_campaigns"]:
+            with self.subTest(url_name=url_name):
+                response = self.client.get(reverse(url_name))
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, "marketing_density.css")
+
+    def test_outreach_dashboard_uses_unique_prefixed_form_ids(self):
+        response = self.client.get(reverse("marketing_outreach"))
+
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode("utf-8")
+        ids = re.findall(r'\bid="([^"]+)"', html)
+        self.assertLessEqual(ids.count("id_contact_list"), 1)
+        self.assertLessEqual(ids.count("id_name"), 1)
+        self.assertIn("id_list-name", ids)
+        self.assertIn("id_upload-contact_list", ids)
+        self.assertIn("id_campaign-name", ids)
 
 
 class MarketingInsightTests(TestCase):
