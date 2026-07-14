@@ -50,7 +50,7 @@ def _display_money(currency, value):
         return ""
     code = (currency or "CAD").upper()
     if code == "BDT":
-        return f"৳{amount:,.2f}"
+        return f"BDT ৳{amount:,.2f}"
     if code in {"CAD", "USD"}:
         return f"{code} ${amount:,.2f}"
     return f"{code} {amount:,.2f}"

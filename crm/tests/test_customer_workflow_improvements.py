@@ -363,7 +363,7 @@ class CustomerWorkflowImprovementTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Pipeline CAD $2,000.00")
         self.assertContains(response, "CAD $2,000.00")
-        self.assertContains(response, "৳170,000.00")
+        self.assertContains(response, "BDT ৳170,000.00")
         self.assertNotContains(response, "Pipeline USD $2,000.00")
         self.assertNotContains(response, "CAD 170,000.00")
 
