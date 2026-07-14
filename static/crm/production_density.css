@@ -1,0 +1,919 @@
+/*
+  Phase C Production UI density.
+  Presentation-only overrides for Production, Shipment, Order Lifecycle,
+  and Production Profit pages. No workflow, field, form, URL, or data logic.
+*/
+
+:root {
+  --prod-density-gap: 10px;
+  --prod-density-card-pad: 10px;
+  --prod-density-card-pad-lg: 12px;
+  --prod-density-row-pad: 8px;
+  --prod-density-control: 32px;
+  --prod-density-radius: 8px;
+}
+
+.production-page,
+.production-detail,
+.shipping-page,
+.shipping-detail,
+.prod-add-page,
+.prod-edit-page,
+.stage-edit-page,
+.ship-page,
+.ol-wrap,
+.pp-wrap {
+  width: min(1840px, calc(100vw - 24px));
+  max-width: none;
+  padding-top: 12px;
+}
+
+.production-page,
+.shipping-page,
+.production-detail,
+.shipping-detail {
+  padding-bottom: 34px;
+}
+
+.production-hero,
+.production-detail-hero,
+.shipping-hero,
+.shipping-detail-hero,
+.ol-hero {
+  align-items: center;
+  gap: 14px;
+  min-height: 0;
+  padding: 14px 16px;
+  border-radius: var(--prod-density-radius);
+  box-shadow: 0 14px 36px rgba(2, 6, 23, 0.34);
+}
+
+.production-hero h1,
+.shipping-hero h1,
+.production-detail-hero h1,
+.shipping-detail-hero h1,
+.ol-title {
+  font-size: clamp(24px, 3vw, 34px);
+  line-height: 1.05;
+}
+
+.production-eyebrow,
+.shipping-eyebrow,
+.ol-eyebrow {
+  margin-bottom: 4px;
+  font-size: 10px;
+}
+
+.production-subtitle,
+.shipping-subtitle,
+.production-hero-title,
+.shipping-hero-title,
+.ol-sub {
+  margin-top: 5px;
+  font-size: 12px;
+  line-height: 1.32;
+}
+
+.production-hero-meta,
+.production-hero-badges,
+.shipping-hero-meta {
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.production-hero-meta span,
+.production-hero-meta a,
+.shipping-hero-meta span,
+.production-progress-pill,
+.production-status-badge,
+.production-priority-badge,
+.shipping-status-badge,
+.shipping-priority-badge,
+.ol-status-pill {
+  min-height: 22px;
+  padding: 3px 7px;
+  font-size: 10.5px;
+  line-height: 1.1;
+}
+
+.production-hero-actions,
+.shipping-hero-actions {
+  gap: 6px;
+  width: min(560px, 100%);
+}
+
+.production-detail .production-hero-actions,
+.shipping-detail .shipping-hero-actions {
+  position: sticky;
+  top: 62px;
+  align-self: flex-start;
+  max-height: calc(100vh - 72px);
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: var(--prod-density-radius);
+  background: rgba(2, 6, 23, 0.48);
+  backdrop-filter: blur(12px);
+}
+
+.production-btn,
+.production-doc-link,
+.production-doc-static,
+.production-linked-list a,
+.shipping-btn,
+.shipping-doc-link,
+.shipping-copy-btn,
+.shipping-filter-tabs a,
+.production-filter-tabs a,
+.ol-btn,
+.prod-add-page .btn,
+.prod-edit-page .btn,
+.stage-edit-page .btn-gold,
+.stage-edit-page .btn-ghost,
+.ship-page .btn {
+  min-height: var(--prod-density-control);
+  padding: 6px 10px;
+  border-radius: 7px;
+  font-size: 11.5px;
+  line-height: 1.1;
+}
+
+.production-btn--tiny,
+.shipping-btn--tiny,
+.shipping-copy-btn,
+.ship-page .btn-small {
+  min-height: 24px;
+  padding: 4px 7px;
+  font-size: 10px;
+}
+
+.production-summary-grid,
+.shipping-summary-grid,
+.production-snapshot-grid,
+.shipping-snapshot-grid,
+.ol-summary,
+.pp-summary {
+  gap: var(--prod-density-gap);
+  margin: 10px 0;
+}
+
+.production-summary-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.shipping-summary-grid,
+.production-snapshot-grid,
+.shipping-snapshot-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.production-stat,
+.shipping-stat,
+.production-snapshot-card,
+.shipping-snapshot-card,
+.ol-kpi,
+.pp-summary-card {
+  min-height: 72px;
+  padding: var(--prod-density-card-pad);
+  border-radius: var(--prod-density-radius);
+  box-shadow: 0 12px 30px rgba(2, 6, 23, 0.28);
+}
+
+.production-stat span,
+.shipping-stat span,
+.production-snapshot-card span,
+.shipping-snapshot-card span,
+.ol-kpi span,
+.pp-summary-card span {
+  font-size: 9.5px;
+}
+
+.production-stat strong,
+.shipping-stat strong,
+.production-snapshot-card strong,
+.shipping-snapshot-card strong,
+.ol-kpi strong,
+.pp-summary-card strong {
+  margin-top: 3px;
+  font-size: clamp(17px, 1.7vw, 24px);
+  line-height: 1.08;
+}
+
+.production-stat small,
+.shipping-stat small,
+.production-snapshot-card small,
+.shipping-snapshot-card small {
+  margin-top: 4px;
+  font-size: 10.5px;
+  line-height: 1.22;
+}
+
+.production-control-grid {
+  grid-template-columns: minmax(240px, 0.75fr) minmax(280px, 1fr) minmax(240px, 0.75fr);
+  gap: var(--prod-density-gap);
+  margin: 10px 0;
+}
+
+.production-control-panel,
+.production-panel,
+.shipping-panel,
+.production-table-shell,
+.shipping-table-shell,
+.production-filters,
+.shipping-filters,
+.prod-add-card,
+.prod-edit-card,
+.stage-edit-card,
+.ship-page .card-box,
+.ol-panel {
+  padding: var(--prod-density-card-pad-lg);
+  border-radius: var(--prod-density-radius);
+  box-shadow: 0 12px 32px rgba(2, 6, 23, 0.28);
+}
+
+.production-control-head,
+.production-table-head,
+.shipping-table-head,
+.production-panel-head,
+.shipping-panel-head {
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.production-control-head h2,
+.production-table-head h2,
+.shipping-table-head h2,
+.production-panel-head h2,
+.shipping-panel-head h2,
+.ol-panel h2 {
+  font-size: 14px;
+}
+
+.production-control-head span,
+.production-table-head p,
+.shipping-table-head p,
+.production-panel-head p,
+.shipping-panel-head p,
+.ol-stage-caption {
+  font-size: 10.5px;
+  line-height: 1.25;
+}
+
+.production-control-list,
+.production-profit-grid,
+.production-pipeline-grid,
+.production-factory-grid,
+.production-main-column,
+.production-side-column,
+.shipping-main-column,
+.shipping-side-column,
+.shipping-info-grid,
+.shipping-linked-grid,
+.shipping-activity-list,
+.shipping-side-list,
+.shipping-raw-grid,
+.production-info-grid,
+.production-line-grid,
+.production-library-grid,
+.production-action-grid,
+.production-side-metrics,
+.actual-grid,
+.production-dpr-form,
+.production-upload-form,
+.production-note-form,
+.production-material-form,
+.ol-timeline {
+  gap: 7px;
+}
+
+.production-control-row,
+.production-control-empty,
+.production-pipeline-item,
+.production-factory-grid > div,
+.production-profit-grid > div,
+.shipping-info-grid > div,
+.shipping-linked-grid > article,
+.shipping-activity-list > article,
+.shipping-side-list > div,
+.shipping-raw-grid > div,
+.production-info-grid > div,
+.production-line-grid > div,
+.production-library-card,
+.production-stage-row,
+.production-stage-node,
+.production-control-stage,
+.production-timeline-item,
+.production-ops-timeline-item,
+.production-file-row,
+.production-side-metrics article,
+.ol-step {
+  padding: var(--prod-density-row-pad);
+  border-radius: var(--prod-density-radius);
+}
+
+.production-filters,
+.shipping-filters {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  grid-template-columns: minmax(220px, 1.25fr) repeat(5, minmax(128px, 0.68fr)) minmax(220px, 1.1fr) auto;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 10px;
+  backdrop-filter: blur(14px);
+}
+
+.shipping-filters {
+  grid-template-columns: minmax(220px, 1fr) minmax(140px, 180px) minmax(140px, 180px) minmax(240px, 1fr) auto;
+}
+
+.production-field,
+.shipping-field {
+  gap: 4px;
+}
+
+.production-field span,
+.shipping-field span {
+  font-size: 9.5px;
+}
+
+.production-field input,
+.production-field select,
+.shipping-field input,
+.shipping-field select,
+.shipping-status-form select,
+.prod-add-card input,
+.prod-add-card select,
+.prod-add-card textarea,
+.prod-edit-card input[type="text"],
+.prod-edit-card input[type="number"],
+.prod-edit-card input[type="date"],
+.prod-edit-card input[type="email"],
+.prod-edit-card input[type="url"],
+.prod-edit-card input[type="file"],
+.prod-edit-card select,
+.prod-edit-card textarea,
+.ship-page input,
+.ship-page select,
+.ship-page textarea,
+.stage-edit-page input,
+.stage-edit-page select,
+.stage-edit-page textarea {
+  min-height: 30px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  font-size: 12px;
+}
+
+.prod-add-card textarea,
+.prod-edit-card textarea,
+.ship-page textarea,
+.stage-edit-page textarea {
+  min-height: 58px;
+}
+
+.production-table,
+.shipping-table,
+.pp-table,
+.ol-table {
+  font-size: 11.5px;
+}
+
+.production-table th,
+.production-table td,
+.shipping-table th,
+.shipping-table td,
+.pp-table th,
+.pp-table td,
+.ol-table th,
+.ol-table td {
+  padding: 7px 8px;
+  vertical-align: middle;
+}
+
+.production-table thead th,
+.shipping-table thead th,
+.pp-table thead th,
+.ol-table th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #0b1220;
+}
+
+.production-table-wrap,
+.shipping-table-wrap,
+.table-responsive {
+  max-width: 100%;
+  overflow: auto;
+}
+
+.production-thumb {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--prod-density-radius);
+}
+
+.production-page .production-thumb {
+  width: 42px;
+  height: 42px;
+}
+
+.production-stage-strip {
+  gap: 4px;
+  min-width: 170px;
+}
+
+.production-stage-chip {
+  min-height: 20px;
+  padding: 3px 5px;
+  font-size: 9.5px;
+  line-height: 1.1;
+}
+
+.production-status-stack,
+.shipping-status-stack,
+.production-stack,
+.shipping-stack {
+  gap: 4px;
+}
+
+.production-actions,
+.shipping-actions {
+  width: 210px;
+  gap: 4px;
+}
+
+.production-progress-bar {
+  height: 6px;
+}
+
+.production-detail-grid,
+.shipping-detail-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.28fr);
+  gap: 10px;
+}
+
+.production-side-column,
+.shipping-side-column {
+  position: sticky;
+  top: 64px;
+  max-height: calc(100vh - 74px);
+  overflow: auto;
+}
+
+.production-approved-grid,
+.production-info-grid,
+.production-line-grid,
+.production-library-grid,
+.production-action-grid,
+.shipping-info-grid,
+.shipping-linked-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.production-control-tracker {
+  grid-template-columns: repeat(8, minmax(82px, 1fr));
+  gap: 6px;
+}
+
+.production-control-stage {
+  min-height: 50px;
+}
+
+.production-control-stage-top,
+.production-stage-node {
+  gap: 5px;
+}
+
+.production-control-stage strong,
+.production-stage-node strong,
+.production-info-grid strong,
+.production-line-grid strong,
+.shipping-info-grid strong,
+.shipping-linked-grid strong,
+.shipping-activity-list strong,
+.shipping-side-list strong,
+.shipping-raw-grid strong {
+  font-size: 11.5px;
+  line-height: 1.2;
+}
+
+.production-control-stage small,
+.production-control-stage span,
+.production-control-stage em,
+.production-stage-node small,
+.production-stage-row span,
+.production-stage-note,
+.production-timeline-item p,
+.production-ops-timeline-item span,
+.shipping-linked-grid small,
+.shipping-activity-list small,
+.shipping-raw-details summary small {
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.production-stage-dot,
+.ol-dot {
+  width: 7px;
+  height: 7px;
+}
+
+.production-stage-timeline {
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 6px;
+}
+
+.production-stage-node {
+  min-height: 52px;
+}
+
+.production-raw-details summary,
+.production-subdetails summary,
+.shipping-raw-details summary {
+  min-height: 30px;
+  padding: 7px 9px;
+  font-size: 11.5px;
+}
+
+.production-raw-grid,
+.shipping-raw-grid {
+  padding: 0 10px 10px;
+}
+
+.shipping-timeline {
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.shipping-timeline span {
+  min-height: 38px;
+  padding: 7px;
+  font-size: 10.5px;
+}
+
+.shipping-doc-placeholder {
+  min-height: 30px;
+  padding: 6px 10px;
+  font-size: 11px;
+}
+
+.prod-add-page,
+.prod-edit-page,
+.stage-edit-page,
+.ship-page {
+  margin-top: 12px;
+  margin-bottom: 28px;
+}
+
+.prod-add-page {
+  max-width: 1180px;
+}
+
+.prod-edit-page {
+  max-width: 1280px;
+}
+
+.stage-edit-page {
+  max-width: 960px;
+}
+
+.ship-page {
+  max-width: 980px;
+}
+
+.prod-add-header,
+.prod-edit-header,
+.stage-header-row,
+.ship-header {
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.prod-add-title,
+.prod-edit-title,
+.stage-edit-title,
+.ship-title {
+  font-size: 18px;
+}
+
+.prod-add-sub,
+.prod-edit-sub,
+.stage-edit-sub,
+.ship-sub {
+  font-size: 11.5px;
+}
+
+.prod-add-card,
+.prod-edit-card {
+  margin-bottom: 10px;
+}
+
+.prod-add-card-title,
+.prod-edit-card-title,
+.ship-page .card-title {
+  margin-bottom: 7px;
+  padding-bottom: 4px;
+  font-size: 13px;
+}
+
+.prod-add-row,
+.prod-edit-grid {
+  gap: 8px 12px;
+}
+
+.prod-add-field,
+.prod-edit-field,
+.ship-page .field-row {
+  font-size: 12px;
+}
+
+.prod-add-label,
+.prod-edit-field label,
+.ship-page label,
+.stage-form-label {
+  font-size: 10.5px;
+}
+
+.check-row {
+  min-height: 32px;
+  padding: 7px;
+  border-radius: 8px;
+}
+
+.ol-wrap {
+  padding-bottom: 34px;
+}
+
+.ol-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.ol-timeline {
+  grid-template-columns: repeat(7, minmax(92px, 1fr));
+  margin-bottom: 10px;
+}
+
+.ol-step {
+  min-height: 92px;
+}
+
+.ol-step small,
+.ol-step a {
+  margin-top: 5px;
+  font-size: 10.5px;
+}
+
+.pp-title {
+  font-size: 24px !important;
+}
+
+.pp-sub,
+.pp-note {
+  font-size: 12px !important;
+}
+
+.pp-card .card-body {
+  padding: 10px !important;
+}
+
+.pp-value {
+  font-size: 18px !important;
+}
+
+@media (max-width: 1320px) {
+  .production-summary-grid,
+  .shipping-summary-grid,
+  .production-snapshot-grid,
+  .shipping-snapshot-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .production-control-grid,
+  .production-filters,
+  .shipping-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  .production-hero,
+  .production-detail-hero,
+  .shipping-hero,
+  .shipping-detail-hero {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .production-detail .production-hero-actions,
+  .shipping-detail .shipping-hero-actions,
+  .production-side-column,
+  .shipping-side-column,
+  .production-filters,
+  .shipping-filters {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .production-detail-grid,
+  .shipping-detail-grid,
+  .production-control-grid,
+  .production-approved-grid,
+  .production-info-grid,
+  .production-line-grid,
+  .production-library-grid,
+  .production-action-grid,
+  .shipping-info-grid,
+  .shipping-linked-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .production-summary-grid,
+  .shipping-summary-grid,
+  .production-snapshot-grid,
+  .shipping-snapshot-grid,
+  .ol-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .production-table tbody,
+  .shipping-table tbody {
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .production-table tr,
+  .shipping-table tr {
+    border-radius: var(--prod-density-radius);
+  }
+
+  .production-table td,
+  .shipping-table td {
+    grid-template-columns: 108px minmax(0, 1fr);
+    gap: 7px;
+    padding: 7px;
+  }
+
+  .production-actions,
+  .shipping-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .production-actions form,
+  .shipping-actions form {
+    display: contents;
+  }
+}
+
+@media (max-width: 620px) {
+  .production-page,
+  .production-detail,
+  .shipping-page,
+  .shipping-detail,
+  .prod-add-page,
+  .prod-edit-page,
+  .stage-edit-page,
+  .ship-page,
+  .ol-wrap,
+  .pp-wrap {
+    width: min(100% - 12px, 1840px);
+    padding-top: 8px;
+  }
+
+  .production-hero,
+  .production-detail-hero,
+  .shipping-hero,
+  .shipping-detail-hero,
+  .prod-add-card,
+  .prod-edit-card,
+  .stage-edit-card,
+  .ship-page .card-box,
+  .ol-panel {
+    padding: 9px;
+  }
+
+  .production-hero h1,
+  .shipping-hero h1,
+  .production-detail-hero h1,
+  .shipping-detail-hero h1,
+  .ol-title {
+    font-size: 22px;
+  }
+
+  .production-subtitle,
+  .shipping-subtitle {
+    font-size: 11.5px;
+  }
+
+  .production-summary-grid,
+  .shipping-summary-grid,
+  .production-snapshot-grid,
+  .shipping-snapshot-grid,
+  .ol-summary,
+  .ol-timeline,
+  .pp-summary {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+
+  .production-stat,
+  .shipping-stat,
+  .production-snapshot-card,
+  .shipping-snapshot-card,
+  .ol-kpi,
+  .pp-summary-card {
+    min-height: 58px;
+    padding: 8px;
+  }
+
+  .production-stat strong,
+  .shipping-stat strong,
+  .production-snapshot-card strong,
+  .shipping-snapshot-card strong,
+  .ol-kpi strong {
+    font-size: 16px;
+  }
+
+  .production-hero-actions,
+  .shipping-hero-actions,
+  .production-filter-actions,
+  .shipping-filter-actions,
+  .production-filter-tabs,
+  .shipping-filter-tabs {
+    width: 100%;
+  }
+
+  .production-detail .production-hero-actions,
+  .shipping-detail .shipping-hero-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .production-btn,
+  .shipping-btn,
+  .production-filter-tabs a,
+  .shipping-filter-tabs a,
+  .production-doc-link,
+  .shipping-doc-link,
+  .ship-page .btn,
+  .prod-add-page .btn,
+  .prod-edit-page .btn,
+  .stage-edit-page .btn-gold,
+  .stage-edit-page .btn-ghost {
+    min-height: 27px;
+    padding: 5px 7px;
+    font-size: 10px;
+    white-space: normal;
+  }
+
+  .production-table td,
+  .shipping-table td {
+    grid-template-columns: 1fr;
+    gap: 5px;
+    padding: 7px;
+  }
+
+  .production-stage-strip,
+  .production-date-grid,
+  .shipping-date-grid,
+  .production-actions,
+  .shipping-actions {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .production-stage-strip {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .production-control-tracker {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .production-control-stage {
+    flex: 0 0 112px;
+  }
+
+  .shipping-timeline {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .shipping-timeline span {
+    flex: 0 0 118px;
+  }
+
+  .prod-style-layout,
+  .prod-add-row,
+  .prod-edit-grid {
+    grid-template-columns: 1fr;
+  }
+}

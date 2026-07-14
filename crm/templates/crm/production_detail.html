@@ -2,7 +2,7 @@
 {% load static crm_people platform_tools crm_extras %}
 {% block content %}
 <link rel="stylesheet" href="{% static 'crm/production_detail.css' %}?v=production-order-revisions-20260710">
-<link rel="stylesheet" href="{% static 'crm/ui_system.css' %}?v=ui-rc2-safe">
+{% include "crm/partials/production_density_assets.html" %}
 
 <div class="production-detail crm-modern-bridge crm-production-bridge" data-crm-density="compact">
   <section class="production-detail-hero">
@@ -409,7 +409,7 @@
           {% endfor %}
         </div>
 
-        <details class="production-subdetails" open>
+        <details class="production-subdetails">
           <summary>Stage dates and manual edits</summary>
           <div class="production-stage-table">
             {% for stage in stages %}
