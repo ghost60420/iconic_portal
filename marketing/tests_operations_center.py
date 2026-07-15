@@ -29,7 +29,7 @@ class MarketingOperationsCenterTests(TestCase):
         self.assertEqual(response.status_code, 200)
         for label in (
             "Marketing Command Dashboard", "Content Due This Week", "Content Overdue",
-            "Top Keyword Opportunities", "Platform and API Status", "Google Trends Placeholder",
+            "Top Keyword Opportunities", "Platform and API Status", "Google Trends Unavailable",
             "Marketing Task Generator", "Marketing Reports", "Waiting for API",
         ):
             self.assertContains(response, label)

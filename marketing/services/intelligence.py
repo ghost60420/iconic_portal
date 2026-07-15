@@ -333,18 +333,24 @@ def build_marketing_scores(snapshot: dict) -> list[dict]:
     website = ratio(snapshot["keywords_with_landing"], snapshot["seo_keywords"])
     google_business = min(100, snapshot["google_business_posts"] * 15 + snapshot["published_google_business_posts"] * 20)
     values = [
-        ("SEO Score", seo),
-        ("Content Score", content),
-        ("Social Score", social),
-        ("Consistency Score", consistency),
-        ("Website Score", website),
-        ("Google Business Score", google_business),
+        ("SEO Score", seo, "Planning based: SEO keyword rows and landing-page coverage."),
+        ("Content Score", content, "Planning based: published blog and video plan rows."),
+        ("Social Score", social, "Planning based: internal platform content plan coverage."),
+        ("Consistency Score", consistency, "Planning based: completed vs planned content this month."),
+        ("Website Score", website, "Planning based: keyword landing-page coverage, not GA4 traffic."),
+        ("Google Business Score", google_business, "Planning based: internal Google Business post plans, not API posts."),
     ]
-    overall = round(sum(score for _label, score in values) / len(values))
-    values.append(("Overall Marketing Health", overall))
+    overall = round(sum(score for _label, score, _basis in values) / len(values))
+    values.append(("Overall Marketing Health", overall, "Mixed planning score. Live synced performance remains on the dashboard."))
     return [
-        {"label": label, "score": score, "tone": "green" if score >= 70 else "yellow" if score >= 40 else "red"}
-        for label, score in values
+        {
+            "label": label,
+            "score": score,
+            "basis": basis,
+            "source_type": "Internal planning recommendation",
+            "tone": "green" if score >= 70 else "yellow" if score >= 40 else "red",
+        }
+        for label, score, basis in values
     ]
 
 

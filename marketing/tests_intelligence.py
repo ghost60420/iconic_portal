@@ -32,7 +32,7 @@ class MarketingIntelligenceTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Marketing Intelligence Center")
-        self.assertContains(response, "Google Trends Placeholder")
+        self.assertContains(response, "Google Trends Unavailable")
         self.assertContains(response, "SEO Keyword Planner")
         self.assertContains(response, "Data Source Status")
         urlopen.assert_not_called()

@@ -31,9 +31,9 @@ class MarketingIntelligencePhase2Tests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         for label in (
-            "Marketing Command Dashboard", "Marketing Score", "SEO Keyword Center", "AI Idea Generator",
-            "Blog Planner", "Video Planner", "Content Calendar", "Google Trends Placeholder",
-            "Competitor Watch", "Marketing AI Assistant", "Future Integration Readiness",
+            "Marketing Command Dashboard", "Marketing Score", "SEO Keyword Center", "Planning Idea Generator",
+            "Blog Planner", "Video Planner", "Content Calendar", "Google Trends Unavailable",
+            "Competitor Watch", "Marketing Planning Assistant", "Future Integration Readiness",
         ):
             with self.subTest(label=label):
                 self.assertContains(response, label)
