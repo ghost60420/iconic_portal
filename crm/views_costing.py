@@ -54,6 +54,7 @@ from .services.production_orders import (
     ProductionOrderCreationError,
     create_production_order_from_approved_quick_costing,
     create_production_order_from_approved_quotation,
+    create_production_order_from_paid_full_package_quick_costing,
 )
 from .services.workflow_visibility import build_workflow_visibility_context
 from .permissions import can_view_internal_costing
@@ -1554,6 +1555,30 @@ def quick_costing_detail(request, pk):
         quick_costing=quick_costing,
         invoice=invoice,
     )
+    invoice_is_paid = bool(invoice and getattr(invoice, "payment_status_key", "") == "paid")
+    can_move_local_sewing_to_production = (
+        not invoice
+        and quick_costing.is_bangladesh_local_sewing
+        and quick_costing.status in {QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_QUOTED}
+        and not getattr(quick_costing, "production_order", None)
+        and quick_costing._is_latest_revision
+        and _can_approve(request.user)
+    )
+    can_move_full_package_to_production = (
+        invoice_is_paid
+        and quick_costing.effective_pricing_type == QuickCosting.PRICING_FULL_PACKAGE
+        and quick_costing.status in {
+            QuickCosting.STATUS_APPROVED,
+            QuickCosting.STATUS_QUOTED,
+            QuickCosting.STATUS_INVOICED,
+            QuickCosting.STATUS_PRODUCTION,
+        }
+        and quick_costing.approved_at
+        and not getattr(quick_costing, "production_order", None)
+        and quick_costing._is_latest_revision
+        and not getattr(quick_costing.opportunity, "is_archived", False)
+        and _can_approve(request.user)
+    )
     context = {
         "quick_costing": quick_costing,
         "calc": calc,
@@ -1590,12 +1615,7 @@ def quick_costing_detail(request, pk):
             and _can_submit_quick_costing(request.user)
         ),
         "can_move_quick_to_production": (
-            not invoice
-            and quick_costing.is_bangladesh_local_sewing
-            and quick_costing.status in {QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_QUOTED}
-            and not getattr(quick_costing, "production_order", None)
-            and quick_costing._is_latest_revision
-            and _can_approve(request.user)
+            can_move_local_sewing_to_production or can_move_full_package_to_production
         ),
         "can_decide_quick_costing": (
             quick_costing._is_latest_revision
@@ -2044,30 +2064,50 @@ def quick_costing_convert_to_production(request, pk):
     if not _can_approve(request.user):
         messages.error(request, "CEO/Admin approval is required to move an order to Production.")
         return redirect("quick_costing_detail", pk=pk)
-    if not quick_costing.is_bangladesh_local_sewing:
-        messages.error(request, "This Quick Costing does not use the Bangladesh Local Sewing workflow.")
-        return redirect("quick_costing_detail", pk=pk)
     if not quick_costing.is_latest_revision:
         return _quick_latest_approved_redirect(
             request,
             quick_costing,
             "Only the latest CEO Approved Quick Costing revision can move to Production.",
         )
-    if quick_costing.status not in {QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_QUOTED} or not quick_costing.approved_at:
-        messages.error(request, "CEO approval is required before production can begin.")
-        return redirect("quick_costing_detail", pk=pk)
-    previous_status = quick_costing.status
-    try:
-        production_order, created = create_production_order_from_approved_quick_costing(
-            quick_costing,
-            user=request.user,
-        )
-    except ProductionOrderCreationError as exc:
-        messages.error(request, str(exc))
+    if quick_costing.is_bangladesh_local_sewing:
+        if quick_costing.status not in {QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_QUOTED} or not quick_costing.approved_at:
+            messages.error(request, "CEO approval is required before production can begin.")
+            return redirect("quick_costing_detail", pk=pk)
+        previous_status = quick_costing.status
+        try:
+            production_order, created = create_production_order_from_approved_quick_costing(
+                quick_costing,
+                user=request.user,
+            )
+        except ProductionOrderCreationError as exc:
+            messages.error(request, str(exc))
+            return redirect("quick_costing_detail", pk=pk)
+    elif quick_costing.effective_pricing_type == QuickCosting.PRICING_FULL_PACKAGE:
+        if quick_costing.status not in {
+            QuickCosting.STATUS_APPROVED,
+            QuickCosting.STATUS_QUOTED,
+            QuickCosting.STATUS_INVOICED,
+            QuickCosting.STATUS_PRODUCTION,
+        } or not quick_costing.approved_at:
+            messages.error(request, "CEO approval is required before production can begin.")
+            return redirect("quick_costing_detail", pk=pk)
+        previous_status = quick_costing.status
+        try:
+            production_order, created = create_production_order_from_paid_full_package_quick_costing(
+                quick_costing,
+                user=request.user,
+            )
+        except ProductionOrderCreationError as exc:
+            messages.error(request, str(exc))
+            return redirect("quick_costing_detail", pk=pk)
+    else:
+        messages.error(request, "This Quick Costing is not eligible for direct production conversion.")
         return redirect("quick_costing_detail", pk=pk)
 
-    quick_costing.status = QuickCosting.STATUS_PRODUCTION
-    quick_costing.save(update_fields=["status", "updated_at"])
+    if quick_costing.status != QuickCosting.STATUS_PRODUCTION:
+        quick_costing.status = QuickCosting.STATUS_PRODUCTION
+        quick_costing.save(update_fields=["status", "updated_at"])
     CRMAuditLog.objects.create(
         actor=_user_or_none(request.user),
         module="quick_costing",

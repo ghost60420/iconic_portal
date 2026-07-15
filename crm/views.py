@@ -116,6 +116,8 @@ from .services.operations_permissions import (
 from .services.production_orders import (
     ProductionOrderCreationError,
     create_production_order_from_approved_quotation,
+    create_production_order_from_paid_full_package_quick_costing,
+    paid_full_package_quick_costing_source_for_opportunity,
 )
 from .services.local_sewing import (
     calculate_local_sewing,
@@ -10408,6 +10410,15 @@ def production_from_opportunity(request, pk):
     except (OperationalError, ProgrammingError):
         approved_costing = None
 
+    quick_costing = None
+    quick_invoice = None
+    if not approved_costing:
+        try:
+            quick_costing, quick_invoice = paid_full_package_quick_costing_source_for_opportunity(opportunity)
+        except (OperationalError, ProgrammingError):
+            quick_costing = None
+            quick_invoice = None
+
     po = ProductionOrder.objects.filter(opportunity=opportunity).first()
     created = False
 
@@ -10415,11 +10426,18 @@ def production_from_opportunity(request, pk):
         if not can_approve_costing(request.user):
             messages.error(request, "CEO/Admin approval is required before moving an order to Production.")
             return redirect("opportunity_detail", pk=opportunity.pk)
-        if not approved_costing:
+        if not approved_costing and not quick_costing:
             messages.error(request, "A CEO-approved quotation is required before moving this opportunity to Production.")
             return redirect("opportunity_detail", pk=opportunity.pk)
         try:
-            po, created = create_production_order_from_approved_quotation(approved_costing, user=request.user)
+            if approved_costing:
+                po, created = create_production_order_from_approved_quotation(approved_costing, user=request.user)
+            else:
+                po, created = create_production_order_from_paid_full_package_quick_costing(
+                    quick_costing,
+                    invoice=quick_invoice,
+                    user=request.user,
+                )
         except ProductionOrderCreationError as exc:
             messages.error(request, str(exc))
             return redirect("opportunity_detail", pk=opportunity.pk)

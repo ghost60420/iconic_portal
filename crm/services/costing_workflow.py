@@ -489,14 +489,28 @@ def create_or_link_production_order_from_invoice(invoice, user=None):
 
             order, created = create_production_order_from_approved_quotation(costing, user=user)
         elif quick_costing:
-            if quick_costing.status != QuickCosting.STATUS_APPROVED or not quick_costing.approved_at:
-                raise CostingWorkflowError("CEO-approved Quick Costing is required before production conversion.")
-            if not quick_costing.is_latest_revision:
-                raise CostingWorkflowError("Only the latest Quick Costing revision can move to Production.")
             if quick_costing.is_bangladesh_local_sewing:
+                if quick_costing.status != QuickCosting.STATUS_APPROVED or not quick_costing.approved_at:
+                    raise CostingWorkflowError("CEO-approved Quick Costing is required before production conversion.")
+                if not quick_costing.is_latest_revision:
+                    raise CostingWorkflowError("Only the latest Quick Costing revision can move to Production.")
                 from crm.services.production_orders import create_production_order_from_approved_quick_costing
 
                 order, created = create_production_order_from_approved_quick_costing(quick_costing, user=user)
+            elif quick_costing.effective_pricing_type == QuickCosting.PRICING_FULL_PACKAGE:
+                from crm.services.production_orders import (
+                    ProductionOrderCreationError,
+                    create_production_order_from_paid_full_package_quick_costing,
+                )
+
+                try:
+                    order, created = create_production_order_from_paid_full_package_quick_costing(
+                        quick_costing,
+                        invoice=invoice,
+                        user=user,
+                    )
+                except ProductionOrderCreationError as exc:
+                    raise CostingWorkflowError(str(exc)) from exc
             else:
                 raise CostingWorkflowError("This Quick Costing invoice is not eligible for direct production conversion.")
         else:
@@ -519,12 +533,16 @@ def create_or_link_production_order_from_invoice(invoice, user=None):
                 note=order.purchase_order_number or str(order.pk),
             )
         elif quick_costing:
+            previous_status = quick_costing.status
+            if quick_costing.status != QuickCosting.STATUS_PRODUCTION:
+                quick_costing.status = QuickCosting.STATUS_PRODUCTION
+                quick_costing.save(update_fields=["status", "updated_at"])
             _quick_audit(
                 quick_costing,
                 actor=user,
                 action_type=CRMAuditLog.ACTION_CONVERTED,
                 field_name="status",
-                previous_value=quick_costing.status,
+                previous_value=previous_status,
                 new_value=QuickCosting.STATUS_PRODUCTION,
             )
         create_lifecycle_from_production(order, user=user)

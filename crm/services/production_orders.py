@@ -3,13 +3,194 @@ from decimal import Decimal
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from crm.models import CostingAuditLog, CostingHeader, ProductionOrder, ProductionStage, QuickCosting
+from crm.models import CostingAuditLog, CostingHeader, Invoice, ProductionOrder, ProductionStage, QuickCosting
 from crm.services.costing_workflow import CostingWorkflowError, get_costing_quote_amounts
 from crm.services.order_lifecycle import create_lifecycle_from_production
 
 
 class ProductionOrderCreationError(Exception):
     pass
+
+
+def _invoice_is_paid(invoice):
+    if not invoice:
+        return False
+    if getattr(invoice, "payment_status_key", "") == "paid":
+        return True
+    total = getattr(invoice, "total_amount", Decimal("0")) or Decimal("0")
+    paid = getattr(invoice, "paid_amount", Decimal("0")) or Decimal("0")
+    return total > 0 and paid >= total
+
+
+def _paid_invoice_for_quick_costing(quick_costing, invoice=None):
+    invoice_pk = getattr(invoice, "pk", None)
+    invoices = Invoice.objects.select_for_update().filter(quick_costing=quick_costing)
+    if invoice_pk:
+        invoices = invoices.filter(pk=invoice_pk)
+    for candidate in invoices.order_by("-issue_date", "-created_at", "-id"):
+        if _invoice_is_paid(candidate):
+            return candidate
+    return None
+
+
+def paid_full_package_quick_costing_source_for_opportunity(opportunity):
+    """Return the newest paid Full Package Quick Costing source for an opportunity."""
+    if not opportunity or getattr(opportunity, "is_archived", False):
+        return None, None
+    quick_costings = (
+        QuickCosting.objects.filter(
+            opportunity=opportunity,
+            approved_at__isnull=False,
+            status__in=(
+                QuickCosting.STATUS_APPROVED,
+                QuickCosting.STATUS_QUOTED,
+                QuickCosting.STATUS_INVOICED,
+                QuickCosting.STATUS_PRODUCTION,
+            ),
+        )
+        .select_related("opportunity", "opportunity__lead", "opportunity__customer", "opportunity__lead__customer")
+        .prefetch_related("invoices")
+        .order_by("-updated_at", "-id")
+    )
+    for quick_costing in quick_costings:
+        if quick_costing.effective_pricing_type != QuickCosting.PRICING_FULL_PACKAGE:
+            continue
+        if not quick_costing.is_latest_revision:
+            continue
+        paid_invoice = next((invoice for invoice in quick_costing.invoices.all() if _invoice_is_paid(invoice)), None)
+        if paid_invoice:
+            return quick_costing, paid_invoice
+    return None, None
+
+
+def _quick_costing_customer(quick_costing):
+    opportunity = quick_costing.opportunity
+    lead = getattr(opportunity, "lead", None) if opportunity else None
+    customer = getattr(opportunity, "customer", None) if opportunity else None
+    if not customer and lead:
+        customer = getattr(lead, "customer", None)
+    return customer
+
+
+def _quick_costing_approved_summary(quick_costing, summary, invoice):
+    return {
+        "pricing_type": quick_costing.effective_pricing_type,
+        "service_type": quick_costing.service_type_label,
+        "currency": quick_costing.currency or "",
+        "quantity": quick_costing.quantity,
+        "selling_price_per_piece": _decimal_text(quick_costing.selling_price_per_piece),
+        "sales_value": _decimal_text(summary.get("sales_value")),
+        "net_revenue": _decimal_text(summary.get("net_revenue")),
+        "product_production_cost_total": _decimal_text(summary.get("product_production_cost_total")),
+        "shipping_cost_total": _decimal_text(summary.get("shipping_cost_total")),
+        "other_expenses_total": _decimal_text(summary.get("other_expenses_total")),
+        "gross_profit_total": _decimal_text(summary.get("gross_profit_total")),
+        "commission_total": _decimal_text(summary.get("commission_total")),
+        "net_profit_total": _decimal_text(summary.get("net_profit_total")),
+        "invoice_number": getattr(invoice, "invoice_number", ""),
+        "invoice_total": _decimal_text(getattr(invoice, "total_amount", Decimal("0"))),
+    }
+
+
+def create_production_order_from_paid_full_package_quick_costing(quick_costing, invoice=None, user=None):
+    """Create or link one ProductionOrder for a paid Full Package Quick Costing invoice."""
+    if not quick_costing.pk:
+        raise ProductionOrderCreationError("The Quick Costing must be saved before production can begin.")
+
+    with transaction.atomic():
+        quick_costing = (
+            QuickCosting.objects.select_for_update()
+            .select_related("opportunity", "opportunity__lead", "opportunity__customer", "opportunity__lead__customer", "salesperson")
+            .get(pk=quick_costing.pk)
+        )
+        if quick_costing.effective_pricing_type != QuickCosting.PRICING_FULL_PACKAGE:
+            raise ProductionOrderCreationError("Only Full Package Quick Costing can use this production workflow.")
+        if quick_costing.status not in {
+            QuickCosting.STATUS_APPROVED,
+            QuickCosting.STATUS_QUOTED,
+            QuickCosting.STATUS_INVOICED,
+            QuickCosting.STATUS_PRODUCTION,
+        } or not quick_costing.approved_at:
+            raise ProductionOrderCreationError("CEO-approved Quick Costing is required before production conversion.")
+        if not quick_costing.is_latest_revision:
+            raise ProductionOrderCreationError("Only the latest Quick Costing revision can move to Production.")
+
+        opportunity = quick_costing.opportunity
+        if not opportunity:
+            raise ProductionOrderCreationError("The Quick Costing must be linked to an opportunity.")
+        if getattr(opportunity, "is_archived", False):
+            raise ProductionOrderCreationError("Archived opportunities cannot move to Production.")
+
+        paid_invoice = _paid_invoice_for_quick_costing(quick_costing, invoice=invoice)
+        if not paid_invoice:
+            raise ProductionOrderCreationError("A paid invoice is required before moving this Quick Costing to Production.")
+
+        existing = ProductionOrder.objects.select_for_update().filter(source_quick_costing=quick_costing).first()
+        if not existing:
+            existing = (
+                ProductionOrder.objects.select_for_update()
+                .filter(opportunity=opportunity)
+                .order_by("created_at", "id")
+                .first()
+            )
+        if existing:
+            if paid_invoice.order_id != existing.pk:
+                paid_invoice.order = existing
+                paid_invoice.save(update_fields=["order", "updated_at"])
+            create_lifecycle_from_production(existing, user=user)
+            return existing, False
+
+        summary = quick_costing.calculation_summary()
+        lead = getattr(opportunity, "lead", None)
+        customer = _quick_costing_customer(quick_costing) or getattr(paid_invoice, "customer", None)
+        total_value = getattr(paid_invoice, "total_amount", None) or summary.get("sales_value") or summary.get("revenue")
+        title = quick_costing.project_name or quick_costing.quotation_number or f"Quick Costing {quick_costing.pk}"
+        quantity = int(quick_costing.quantity or 0)
+        try:
+            order = ProductionOrder.objects.create(
+                source_quick_costing=quick_costing,
+                opportunity=opportunity,
+                lead=lead,
+                customer=customer,
+                title=title,
+                factory_location="bd",
+                order_type="fob",
+                production_order_type="sampling" if quantity <= 5 else "bulk",
+                qty_total=quantity,
+                style_name=quick_costing.project_name or "",
+                completed_quantity=0,
+                quotation_number_snapshot=quick_costing.quotation_number or "",
+                client_name_snapshot=quick_costing.buyer_name,
+                brand_name_snapshot=quick_costing.account_brand,
+                product_name_snapshot=quick_costing.project_name,
+                product_type_snapshot=quick_costing.product_type,
+                approved_currency=quick_costing.currency or getattr(paid_invoice, "currency", "") or "CAD",
+                approved_selling_price=quick_costing.selling_price_per_piece,
+                approved_total_value=total_value,
+                approved_costing_summary=_quick_costing_approved_summary(quick_costing, summary, paid_invoice),
+                approved_price_locked_at=quick_costing.approved_at,
+                assigned_production_manager=quick_costing.salesperson or getattr(opportunity, "assigned_to", None),
+                created_by=_user_or_none(user),
+                operational_status="planning",
+                notes=f"Automatically created from paid Quick Costing invoice {paid_invoice.invoice_number}.",
+            )
+        except (IntegrityError, ValueError) as exc:
+            existing = ProductionOrder.objects.filter(source_quick_costing=quick_costing).first()
+            if not existing:
+                existing = ProductionOrder.objects.filter(opportunity=opportunity).order_by("created_at", "id").first()
+            if existing:
+                if paid_invoice.order_id != existing.pk:
+                    paid_invoice.order = existing
+                    paid_invoice.save(update_fields=["order", "updated_at"])
+                create_lifecycle_from_production(existing, user=user)
+                return existing, False
+            raise ProductionOrderCreationError("Could not create the Full Package production order.") from exc
+
+        if paid_invoice.order_id != order.pk:
+            paid_invoice.order = order
+            paid_invoice.save(update_fields=["order", "updated_at"])
+        create_lifecycle_from_production(order, user=user)
+        return order, True
 
 
 def create_production_order_from_approved_quick_costing(quick_costing, user=None):
