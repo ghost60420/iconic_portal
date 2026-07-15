@@ -1,0 +1,140 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+{% include "marketing/_style.html" %}
+<style>
+  .mk-ops-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+  .mk-ops-row{display:grid;grid-template-columns:1.1fr .9fr .9fr 1fr 1fr;gap:10px;align-items:start;padding:12px;border-bottom:1px solid rgba(255,255,255,.08)}
+  .mk-ops-counts{display:flex;flex-wrap:wrap;gap:6px}
+  .mk-ops-count{border:1px solid rgba(148,163,184,.25);background:rgba(15,23,42,.7);border-radius:999px;padding:4px 8px;font-size:11px;color:#dbeafe}
+  .mk-ops-warning{border:1px solid rgba(251,191,36,.35);background:rgba(120,53,15,.25);color:#fde68a;border-radius:10px;padding:8px 10px;margin-top:8px;font-size:12px}
+  .mk-ops-feature{display:flex;justify-content:space-between;gap:8px;border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:6px 8px;margin-top:6px}
+  .mk-log-row{border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px 12px;background:rgba(255,255,255,.025);margin-bottom:8px}
+  .mk-pill-bad{border-color:rgba(248,113,113,.45);background:rgba(127,29,29,.35);color:#fecaca}
+  .mk-pill-neutral{border-color:rgba(148,163,184,.35);background:rgba(30,41,59,.35);color:#cbd5e1}
+  @media(max-width:960px){.mk-ops-row{grid-template-columns:1fr}.mk-ops-row>div{min-width:0}}
+</style>
+
+<div class="mk-container">
+  <div class="mk-header">
+    <div>
+      <div class="mk-title">Marketing Operations</div>
+      <div class="mk-sub">Sync health, API status, row counts, scheduled jobs, manual refresh, and CEO-only sync logs.</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_dashboard' %}">Dashboard</a>
+      <a class="btn btn-outline-light mk-btn" href="{% url 'marketing_connection_diagnostics' %}">Diagnostics</a>
+    </div>
+  </div>
+
+  {% include "marketing/_control_nav.html" %}
+
+  <div class="mk-ops-grid">
+    <div class="mk-metric-card">
+      <div class="mk-label">Automation Status</div>
+      <div class="mk-row-title">Scheduled Daily</div>
+      <div class="mk-hint">GA4, GSC, YouTube, Meta/Facebook/Instagram, and Google Business are scheduled in production cron.</div>
+    </div>
+    <div class="mk-metric-card">
+      <div class="mk-label">Blocked Platforms</div>
+      <div class="mk-row-title">LinkedIn / TikTok</div>
+      <div class="mk-hint">LinkedIn waits for organization approval. TikTok waits for credentials.</div>
+    </div>
+    <div class="mk-metric-card">
+      <div class="mk-label">Google Business</div>
+      <div class="mk-row-title">Partial</div>
+      <div class="mk-hint">Profile and analytics can work while reviews/posts remain API blocked.</div>
+    </div>
+  </div>
+
+  <section class="mk-card" style="margin-top:14px;">
+    <div class="mk-section-head">
+      <div>
+        <div class="mk-section-title mb-0">Platform Sync Health</div>
+        <div class="mk-sub">Zeros are shown as warnings when data is unavailable, blocked, or waiting for sync.</div>
+      </div>
+    </div>
+    <div>
+      <div class="mk-ops-row" style="font-weight:800;color:#93c5fd;">
+        <div>Platform</div>
+        <div>Sync Status</div>
+        <div>Schedule</div>
+        <div>Stored Rows</div>
+        <div>Action</div>
+      </div>
+      {% for row in platform_rows %}
+        <div class="mk-ops-row" id="{{ row.key }}">
+          <div>
+            <strong>{{ row.label }}</strong>
+            <div class="mk-hint">Latest data: {{ row.latest_data_date|date:"Y-m-d"|default:"No data available" }}</div>
+            {% if row.warning %}<div class="mk-ops-warning">{{ row.warning }}</div>{% endif %}
+            {% for feature in row.feature_statuses %}
+              <div class="mk-ops-feature">
+                <span>{{ feature.label }}</span>
+                <span class="mk-pill {% if feature.tone == 'good' %}mk-pill-good{% else %}mk-pill-warn{% endif %}">{{ feature.status }}</span>
+              </div>
+            {% endfor %}
+          </div>
+          <div>
+            <span class="mk-pill {% if row.tone == 'good' %}mk-pill-good{% elif row.tone == 'bad' %}mk-pill-bad{% elif row.tone == 'neutral' %}mk-pill-neutral{% else %}mk-pill-warn{% endif %}">
+              {{ row.status_label }}
+            </span>
+            <div class="mk-hint" style="margin-top:6px;">{{ row.api_health|default:"No API message." }}</div>
+            <div class="mk-hint">Last sync: {{ row.last_sync|date:"Y-m-d H:i"|default:"Never" }}</div>
+            <div class="mk-hint">Last successful: {{ row.last_successful_sync|date:"Y-m-d H:i"|default:"Not available" }}</div>
+          </div>
+          <div>
+            <div class="mk-row-title">{{ row.schedule_text }}</div>
+            <div class="mk-hint">Next run: {{ row.next_run|date:"Y-m-d H:i"|default:"Not scheduled" }}</div>
+          </div>
+          <div class="mk-ops-counts">
+            {% for count in row.row_counts %}
+              {% if count.value %}
+                <span class="mk-ops-count">{{ count.label }}: {{ count.value }}</span>
+              {% else %}
+                <span class="mk-ops-count">{{ count.label }}: No data available</span>
+              {% endif %}
+            {% endfor %}
+          </div>
+          <div>
+            {% if row.manual_sync and can_run_sync %}
+              <form method="post" action="{% url 'marketing_operations_sync' row.key %}">
+                {% csrf_token %}
+                <button class="btn btn-warning mk-btn" type="submit">Sync Now</button>
+              </form>
+            {% elif row.manual_sync %}
+              <span class="mk-hint">Marketing Manager or CEO required.</span>
+            {% else %}
+              <span class="mk-hint">Manual sync disabled for this platform.</span>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="mk-card" style="margin-top:14px;">
+    <div class="mk-section-head">
+      <div>
+        <div class="mk-section-title mb-0">Sync Logs</div>
+        <div class="mk-sub">Marketing sync failure and manual sync logs. Visible to CEO users only.</div>
+      </div>
+    </div>
+    {% if can_view_logs %}
+      {% for log in marketing_logs %}
+        <div class="mk-log-row">
+          <div class="d-flex justify-content-between gap-2 flex-wrap">
+            <strong>{{ log.created_at|date:"Y-m-d H:i" }} · {{ log.action }}</strong>
+            <span class="mk-pill {% if log.level == 'error' %}mk-pill-bad{% elif log.level == 'warn' %}mk-pill-warn{% else %}mk-pill-good{% endif %}">{{ log.level }}</span>
+          </div>
+          <div style="margin-top:6px;">{{ log.message }}</div>
+        </div>
+      {% empty %}
+        <div class="mk-empty-state">No marketing sync logs yet.</div>
+      {% endfor %}
+    {% else %}
+      <div class="mk-empty-state">Sync logs are restricted to CEO users.</div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

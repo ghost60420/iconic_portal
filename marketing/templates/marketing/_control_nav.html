@@ -1,5 +1,6 @@
 <div class="mk-control-nav">
   <a class="{% if request.resolver_match.url_name == 'marketing_dashboard' %}active{% endif %}" href="{% url 'marketing_dashboard' %}">Dashboard</a>
+  <a class="{% if request.resolver_match.url_name == 'marketing_operations' %}active{% endif %}" href="{% url 'marketing_operations' %}">Operations</a>
   <a class="{% if request.resolver_match.url_name == 'marketing_intelligence' %}active{% endif %}" href="{% url 'marketing_intelligence' %}">Intelligence Center</a>
   <a class="{% if request.resolver_match.url_name == 'marketing_website' or request.resolver_match.url_name == 'marketing_website_analytics' %}active{% endif %}" href="{% url 'marketing_website' %}">Website Analytics</a>
   <a class="{% if request.resolver_match.url_name == 'marketing_google_search' or request.resolver_match.url_name == 'marketing_seo' %}active{% endif %}" href="{% url 'marketing_google_search' %}">Google Search</a>

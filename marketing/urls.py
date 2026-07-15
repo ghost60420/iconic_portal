@@ -8,6 +8,7 @@ from crm.permissions import require_access
 from . import views
 from . import views_social_connections
 from . import views_intelligence
+from . import views_operations
 from .services.intelligence_permissions import intelligence_access
 
 
@@ -39,6 +40,12 @@ def intelligence_perm(view_func):
 urlpatterns = [
     path("", perm(views.marketing_home), name="marketing_home"),
     path("dashboard/", perm(views.dashboard), name="marketing_dashboard"),
+    path("operations/", perm(views_operations.marketing_operations), name="marketing_operations"),
+    path(
+        "operations/sync/<str:platform>/",
+        perm(views_operations.marketing_operations_sync),
+        name="marketing_operations_sync",
+    ),
     path("intelligence/", intelligence_perm(views_intelligence.marketing_intelligence), name="marketing_intelligence"),
     path("intelligence/keywords/<int:pk>/edit/", intelligence_perm(views_intelligence.edit_keyword), name="marketing_intelligence_keyword_edit"),
     path("intelligence/content/<int:pk>/edit/", intelligence_perm(views_intelligence.edit_content), name="marketing_intelligence_content_edit"),

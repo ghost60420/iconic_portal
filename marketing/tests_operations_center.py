@@ -5,13 +5,20 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
+from crm.models import SystemActivityLog
 from marketing.models import (
+    AccountMetricDaily,
+    AdAccount,
+    AdCampaign,
     MarketingContentIdea,
     MarketingKeywordGeneration,
     MarketingKeywordPlan,
     MarketingTask,
     MarketingTrendEntry,
+    OAuthCredential,
+    SocialAccount,
 )
 
 
@@ -196,3 +203,130 @@ class MarketingOperationsCenterTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Facebook Pages")
         self.assertContains(response, "LinkedIn Company Pages")
+
+    @override_settings(
+        MARKETING_GOOGLE_CLIENT_ID="google-client",
+        MARKETING_GOOGLE_CLIENT_SECRET="google-secret",
+        MARKETING_GOOGLE_REDIRECT_URI="https://femline.ca/api/auth/google/callback/",
+        MARKETING_META_APP_ID="meta-app",
+        MARKETING_META_APP_SECRET="meta-secret",
+        MARKETING_META_REDIRECT_URI="https://femline.ca/api/auth/meta/callback/",
+        MARKETING_LINKEDIN_CLIENT_ID="linkedin-client",
+        MARKETING_LINKEDIN_CLIENT_SECRET="linkedin-secret",
+        MARKETING_LINKEDIN_REDIRECT_URI="https://femline.ca/api/auth/linkedin/callback/",
+    )
+    def test_marketing_operations_page_renders_without_exposing_logs_to_manager(self):
+        meta = OAuthCredential.objects.create(platform="meta", account_name="Meta", is_active=True)
+        meta.set_tokens(access_token="meta-token")
+        meta.save()
+        google = OAuthCredential.objects.create(
+            platform="google",
+            account_name="Google",
+            is_active=True,
+            last_sync_status="error",
+            last_error="SERVICE_DISABLED: Google My Business API disabled",
+        )
+        google.set_tokens(access_token="google-token", refresh_token="refresh")
+        google.save()
+        linkedin = OAuthCredential.objects.create(platform="linkedin", account_name="LinkedIn", is_active=True)
+        linkedin.set_tokens(access_token="linkedin-token", refresh_token="linkedin-refresh")
+        linkedin.scopes = "openid,email,profile"
+        linkedin.save()
+        SystemActivityLog.objects.create(
+            area="marketing",
+            action="marketing_sync_failure",
+            level="error",
+            message="hidden failure log",
+        )
+
+        response = self.client.get(reverse("marketing_operations"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Marketing Operations")
+        self.assertContains(response, "Connected")
+        self.assertContains(response, "Partially Connected")
+        self.assertContains(response, "Waiting Approval")
+        self.assertContains(response, "Not Configured")
+        self.assertContains(response, "API Blocked")
+        self.assertContains(response, "Sync logs are restricted to CEO users.")
+        self.assertNotContains(response, "hidden failure log")
+
+    def test_marketing_operations_logs_visible_to_ceo_only(self):
+        ceo = get_user_model().objects.create_user(username="ceo-user")
+        ceo.groups.add(Group.objects.get_or_create(name="CEO")[0])
+        self.client.force_login(ceo)
+        SystemActivityLog.objects.create(
+            area="marketing",
+            action="marketing_manual_sync",
+            level="info",
+            message="CEO visible sync log",
+        )
+
+        response = self.client.get(reverse("marketing_operations"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "CEO visible sync log")
+
+    @patch("marketing.services.operations.call_command")
+    def test_marketing_operations_manual_sync_uses_existing_command(self, call_command_mock):
+        response = self.client.post(reverse("marketing_operations_sync", args=["ga4"]))
+
+        self.assertEqual(response.status_code, 302)
+        call_command_mock.assert_called_once()
+        self.assertEqual(call_command_mock.call_args.args[0], "marketing_sync_ga4_daily")
+        self.assertTrue(SystemActivityLog.objects.filter(action="marketing_manual_sync", level="info").exists())
+
+    @override_settings(
+        MARKETING_GOOGLE_CLIENT_ID="google-client",
+        MARKETING_GOOGLE_CLIENT_SECRET="google-secret",
+        MARKETING_GOOGLE_REDIRECT_URI="https://femline.ca/api/auth/google/callback/",
+    )
+    def test_google_business_partial_status_is_explicit(self):
+        credential = OAuthCredential.objects.create(platform="google", account_name="Google", is_active=True)
+        credential.set_tokens(access_token="token", refresh_token="refresh", expires_at=timezone.now() + timedelta(hours=1))
+        credential.save()
+        account = SocialAccount.objects.create(
+            platform="google_business",
+            external_account_id="locations/1",
+            display_name="Iconic",
+            is_active=True,
+            last_successful_sync=timezone.now(),
+            last_sync_status="ok",
+            last_sync_message="Google My Business API has not been used in project 123 before or it is disabled.",
+        )
+        AccountMetricDaily.objects.create(account=account, date=date.today(), impressions=12, clicks=3)
+
+        response = self.client.get(reverse("marketing_operations"))
+
+        self.assertContains(response, "Google Business Profile")
+        self.assertContains(response, "Profile Connected")
+        self.assertContains(response, "Analytics Working")
+        self.assertContains(response, "Reviews")
+        self.assertContains(response, "Posts")
+        self.assertContains(response, "Unavailable")
+
+    @override_settings(
+        MARKETING_META_APP_ID="meta-app",
+        MARKETING_META_APP_SECRET="meta-secret",
+        MARKETING_META_REDIRECT_URI="https://femline.ca/api/auth/meta/callback/",
+    )
+    def test_meta_ads_no_recent_activity_is_not_error(self):
+        credential = OAuthCredential.objects.create(platform="meta", account_name="Meta", is_active=True)
+        credential.set_tokens(access_token="token")
+        credential.last_sync_status = "ok"
+        credential.last_synced_at = timezone.now()
+        credential.save()
+        account = SocialAccount.objects.create(platform="meta_business", external_account_id="act_1", display_name="Ads")
+        ad_account = AdAccount.objects.create(platform_account=account, external_ad_account_id="act_1", is_active=True)
+        AdCampaign.objects.create(
+            ad_account=ad_account,
+            external_campaign_id="campaign-1",
+            name="Traffic Campaign",
+            status="ACTIVE",
+        )
+
+        response = self.client.get(reverse("marketing_operations"))
+
+        self.assertContains(response, "Meta Ads")
+        self.assertContains(response, "No Recent Ad Activity")
+        self.assertNotContains(response, "Meta Ads sync failed")
