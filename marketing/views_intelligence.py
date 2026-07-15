@@ -232,6 +232,11 @@ def _task_source_choices(keyword_items, content_items):
     return choices
 
 
+def _intelligence_source_statuses():
+    """Keep unavailable future adapters out of live intelligence source cards."""
+    return [source for source in integration_statuses() if source.key != "google_trends"]
+
+
 def _create_task(request, form):
     if not form.is_valid():
         messages.error(request, "Please correct the highlighted task fields.")
@@ -364,7 +369,12 @@ def marketing_intelligence(request):
         else None
     )
     calendar_context = _calendar_context(content_ideas, video_ideas, month_start, month_end)
-    assistant = build_assistant_answers(keywords=keyword_page.object_list, content_ideas=content_ideas, video_ideas=video_ideas)
+    assistant = build_assistant_answers(
+        keywords=keyword_page.object_list,
+        content_ideas=content_ideas,
+        video_ideas=video_ideas,
+        summary=summary,
+    )
 
     filter_params = request.GET.copy()
     filter_params.pop("page", None)
@@ -389,7 +399,7 @@ def marketing_intelligence(request):
             "calendar": calendar_context,
             "selected_month": month_start,
             "assistant_answers": assistant,
-            "integration_statuses": integration_statuses(),
+            "integration_statuses": _intelligence_source_statuses(),
             "kanban_statuses": KANBAN_STATUSES,
             "report_labels": REPORT_LABELS,
         },

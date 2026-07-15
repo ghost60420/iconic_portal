@@ -31,12 +31,15 @@ class MarketingIntelligencePhase2Tests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         for label in (
-            "Marketing Command Dashboard", "Marketing Score", "SEO Keyword Center", "Planning Idea Generator",
-            "Blog Planner", "Video Planner", "Content Calendar", "Google Trends Unavailable",
-            "Competitor Watch", "Marketing Planning Assistant", "Future Integration Readiness",
+            "Marketing Command Dashboard", "Marketing Score", "SEO Keyword Center", "Idea Generator",
+            "Blog Planner", "Video Planner", "Content Calendar", "Market Signals",
+            "Competitor Watch", "Marketing Recommendations", "Data Source Status",
         ):
             with self.subTest(label=label):
                 self.assertContains(response, label)
+        self.assertNotContains(response, "Google Trends Unavailable")
+        self.assertNotContains(response, "Marketing Planning Assistant")
+        self.assertNotContains(response, "Future Integration Readiness")
         urlopen.assert_not_called()
 
     def test_keyword_generator_saves_every_recommendation_group(self):

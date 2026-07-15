@@ -10,11 +10,20 @@ from django.urls import reverse
 from django.utils import timezone
 
 from marketing.models import (
+    AccountMetricDaily,
     MarketingCompetitor,
     MarketingContentIdea,
     MarketingKeywordPlan,
     MarketingVideoIdea,
     OAuthCredential,
+    SeoPageDaily,
+    SeoProperty,
+    SeoQueryDaily,
+    SocialAccount,
+    SocialContent,
+    SocialMetricDaily,
+    WebsitePageDaily,
+    WebsiteTrafficDaily,
 )
 from marketing.views_intelligence import marketing_intelligence
 
@@ -32,10 +41,93 @@ class MarketingIntelligenceTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Marketing Intelligence Center")
-        self.assertContains(response, "Google Trends Unavailable")
+        self.assertContains(response, "Market Signals")
         self.assertContains(response, "SEO Keyword Planner")
         self.assertContains(response, "Data Source Status")
+        self.assertNotContains(response, "Google Trends Unavailable")
+        self.assertNotContains(response, "Google Trends")
         urlopen.assert_not_called()
+
+    def test_intelligence_scores_use_synced_metric_rows(self):
+        today = timezone.localdate()
+        month_start = today.replace(day=1)
+        previous_date = month_start - timedelta(days=1)
+        property_row = SeoProperty.objects.create(name="Iconic website")
+        WebsiteTrafficDaily.objects.create(
+            property=property_row,
+            date=today,
+            channel="organic",
+            visitors=120,
+            sessions=150,
+            engaged_sessions=90,
+            conversions=4,
+        )
+        WebsiteTrafficDaily.objects.create(
+            property=property_row,
+            date=previous_date,
+            channel="organic",
+            visitors=80,
+            sessions=100,
+            engaged_sessions=40,
+        )
+        WebsitePageDaily.objects.create(property=property_row, date=today, page_path="/hoodies/", visitors=25)
+        SeoQueryDaily.objects.create(
+            property=property_row,
+            date=today,
+            query="private label hoodies",
+            page="/hoodies/",
+            clicks=12,
+            impressions=100,
+        )
+        SeoPageDaily.objects.create(property=property_row, date=today, page="/hoodies/", clicks=12, impressions=100)
+        MarketingKeywordPlan.objects.create(keyword="private label hoodies", landing_page_suggestion="/hoodies/")
+        social_account = SocialAccount.objects.create(
+            platform="instagram",
+            external_account_id="ig-1",
+            display_name="Iconic Instagram",
+        )
+        social_content = SocialContent.objects.create(
+            account=social_account,
+            platform="instagram",
+            external_content_id="ig-post-1",
+            title="Best hoodie post",
+            published_at=timezone.now(),
+        )
+        SocialMetricDaily.objects.create(
+            content=social_content,
+            date=today,
+            impressions=500,
+            reach=300,
+            likes=80,
+            comments=10,
+            shares=5,
+            clicks=20,
+        )
+        google_business = SocialAccount.objects.create(
+            platform="google_business",
+            external_account_id="gbp-1",
+            display_name="Iconic Apparel House",
+        )
+        AccountMetricDaily.objects.create(
+            account=google_business,
+            date=today,
+            impressions=1000,
+            reach=700,
+            clicks=35,
+            engagement_total=60,
+        )
+
+        response = self.client.get(reverse("marketing_intelligence"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Content Score")
+        self.assertContains(response, "Website Score")
+        self.assertContains(response, "Google Business Score")
+        self.assertContains(response, "Overall Marketing Health")
+        self.assertContains(response, "Best hoodie post")
+        self.assertContains(response, "Live Data")
+        self.assertContains(response, "Partial Data")
+        self.assertNotContains(response, "No GA4 visitor data available")
 
     def test_keyword_planner_creates_record(self):
         response = self.client.post(

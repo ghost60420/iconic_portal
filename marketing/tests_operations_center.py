@@ -30,16 +30,17 @@ class MarketingOperationsCenterTests(TestCase):
         self.client.force_login(self.manager)
 
     @patch("urllib.request.urlopen")
-    def test_command_dashboard_and_placeholders_load_without_external_calls(self, urlopen):
+    def test_command_dashboard_and_source_labels_load_without_external_calls(self, urlopen):
         response = self.client.get(reverse("marketing_intelligence"))
 
         self.assertEqual(response.status_code, 200)
         for label in (
             "Marketing Command Dashboard", "Content Due This Week", "Content Overdue",
-            "Top Keyword Opportunities", "Platform and API Status", "Google Trends Unavailable",
+            "Top Keyword Opportunities", "Platform and API Status", "Market Signals", "Unavailable Data",
             "Marketing Task Generator", "Marketing Reports", "Waiting for API",
         ):
             self.assertContains(response, label)
+        self.assertNotContains(response, "Google Trends Unavailable")
         urlopen.assert_not_called()
 
     def test_manual_google_trend_create(self):

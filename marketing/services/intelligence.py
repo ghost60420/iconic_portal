@@ -6,7 +6,19 @@ from datetime import timedelta
 from django.db import connection
 from django.utils import timezone
 
-from marketing.models import MarketingContentIdea, MarketingKeywordPlan, MarketingVideoIdea, SeoQueryDaily
+from marketing.models import (
+    AccountMetricDaily,
+    MarketingContentIdea,
+    MarketingKeywordPlan,
+    MarketingVideoIdea,
+    SeoPageDaily,
+    SeoQueryDaily,
+    SocialAccount,
+    SocialContent,
+    SocialMetricDaily,
+    WebsitePageDaily,
+    WebsiteTrafficDaily,
+)
 
 from marketing.services.oauth_connections import (
     LINKEDIN_REQUIRED_ORGANIZATION_SCOPES,
@@ -123,13 +135,6 @@ def _credential_status(key: str, label: str, credential, *, social_count: int = 
 def build_data_source_status(*, credentials_by_platform: dict, social_counts: dict, website_rows: int) -> list[dict]:
     google = credentials_by_platform.get("google")
     rows = [
-        {
-            "key": "google_trends",
-            "label": "Google Trends",
-            "status_label": "Manual framework",
-            "tone": "neutral",
-            "message": "Manual trend and keyword research is available; no external API is called.",
-        },
         _credential_status("gsc", "Google Search Console", google),
         _credential_status("google_business", "Google Business Profile", google, social_count=social_counts.get("google_business", 0)),
         {
@@ -259,6 +264,14 @@ def dashboard_snapshot(*, month_start, month_end) -> dict:
     content_table = quote(MarketingContentIdea._meta.db_table)
     video_table = quote(MarketingVideoIdea._meta.db_table)
     seo_table = quote(SeoQueryDaily._meta.db_table)
+    seo_page_table = quote(SeoPageDaily._meta.db_table)
+    website_traffic_table = quote(WebsiteTrafficDaily._meta.db_table)
+    website_page_table = quote(WebsitePageDaily._meta.db_table)
+    social_content_table = quote(SocialContent._meta.db_table)
+    social_account_table = quote(SocialAccount._meta.db_table)
+    social_metric_table = quote(SocialMetricDaily._meta.db_table)
+    account_metric_table = quote(AccountMetricDaily._meta.db_table)
+    live_social_filter = "('facebook', 'instagram', 'youtube')"
     sql = f"""
         SELECT
           (SELECT COUNT(*) FROM {keyword_table}),
@@ -284,14 +297,61 @@ def dashboard_snapshot(*, month_start, month_end) -> dict:
            + (SELECT COUNT(*) FROM {video_table} WHERE due_date >= %s AND due_date <= %s AND status NOT IN ('published', 'archived'))),
           ((SELECT COUNT(*) FROM {content_table} WHERE due_date < %s AND status NOT IN ('published', 'archived'))
            + (SELECT COUNT(*) FROM {video_table} WHERE due_date < %s AND status NOT IN ('published', 'archived'))),
-          (SELECT query FROM {seo_table} GROUP BY query ORDER BY SUM(clicks) DESC, SUM(impressions) DESC LIMIT 1)
+          (SELECT query FROM {seo_table} GROUP BY query ORDER BY SUM(clicks) DESC, SUM(impressions) DESC LIMIT 1),
+          (SELECT COALESCE(SUM(visitors), 0) FROM {website_traffic_table} WHERE date >= %s AND date < %s),
+          (SELECT COALESCE(SUM(visitors), 0) FROM {website_traffic_table} WHERE date >= %s AND date < %s),
+          (SELECT COALESCE(SUM(sessions), 0) FROM {website_traffic_table} WHERE date >= %s AND date < %s),
+          (SELECT COALESCE(SUM(engaged_sessions), 0) FROM {website_traffic_table} WHERE date >= %s AND date < %s),
+          (SELECT COALESCE(SUM(conversions), 0) FROM {website_traffic_table} WHERE date >= %s AND date < %s),
+          (SELECT COUNT(DISTINCT page_path) FROM {website_page_table} WHERE date >= %s AND date < %s AND visitors > 0),
+          (SELECT COALESCE(SUM(clicks), 0) FROM {seo_table} WHERE date >= %s AND date < %s),
+          (SELECT COALESCE(SUM(impressions), 0) FROM {seo_table} WHERE date >= %s AND date < %s),
+          (SELECT COUNT(DISTINCT page) FROM {seo_page_table} WHERE date >= %s AND date < %s AND clicks > 0),
+          (SELECT COUNT(*) FROM {social_content_table} WHERE platform IN {live_social_filter} AND published_at >= %s AND published_at < %s),
+          (SELECT COUNT(*) FROM {social_content_table} WHERE platform IN {live_social_filter} AND published_at >= %s AND published_at < %s),
+          (SELECT COUNT(DISTINCT DATE(published_at)) FROM {social_content_table} WHERE platform IN {live_social_filter} AND published_at >= %s AND published_at < %s),
+          (SELECT COALESCE(SUM(m.impressions), 0) FROM {social_metric_table} m JOIN {social_content_table} c ON c.id = m.content_id WHERE c.platform IN {live_social_filter} AND m.date >= %s AND m.date < %s),
+          (SELECT COALESCE(SUM(m.reach), 0) FROM {social_metric_table} m JOIN {social_content_table} c ON c.id = m.content_id WHERE c.platform IN {live_social_filter} AND m.date >= %s AND m.date < %s),
+          (SELECT COALESCE(SUM(m.views), 0) FROM {social_metric_table} m JOIN {social_content_table} c ON c.id = m.content_id WHERE c.platform IN {live_social_filter} AND m.date >= %s AND m.date < %s),
+          (SELECT COALESCE(SUM(m.likes + m.comments + m.shares + m.saves + m.clicks), 0) FROM {social_metric_table} m JOIN {social_content_table} c ON c.id = m.content_id WHERE c.platform IN {live_social_filter} AND m.date >= %s AND m.date < %s),
+          (SELECT c.title FROM {social_content_table} c JOIN {social_metric_table} m ON m.content_id = c.id WHERE c.platform IN {live_social_filter} AND m.date >= %s AND m.date < %s GROUP BY c.id ORDER BY SUM(m.likes + m.comments + m.shares + m.saves + m.clicks + m.views) DESC LIMIT 1),
+          (SELECT c.title FROM {social_content_table} c JOIN {social_metric_table} m ON m.content_id = c.id WHERE c.platform IN {live_social_filter} AND m.date >= %s AND m.date < %s AND (m.impressions + m.views + m.reach) > 0 GROUP BY c.id ORDER BY (SUM(m.likes + m.comments + m.shares + m.saves + m.clicks) * 1.0 / NULLIF(SUM(m.impressions + m.views + m.reach), 0)) ASC LIMIT 1),
+          (SELECT COALESCE(SUM(m.impressions), 0) FROM {account_metric_table} m JOIN {social_account_table} a ON a.id = m.account_id WHERE a.platform = 'google_business' AND m.date >= %s AND m.date < %s),
+          (SELECT COALESCE(SUM(m.reach), 0) FROM {account_metric_table} m JOIN {social_account_table} a ON a.id = m.account_id WHERE a.platform = 'google_business' AND m.date >= %s AND m.date < %s),
+          (SELECT COALESCE(SUM(m.clicks), 0) FROM {account_metric_table} m JOIN {social_account_table} a ON a.id = m.account_id WHERE a.platform = 'google_business' AND m.date >= %s AND m.date < %s),
+          (SELECT COALESCE(SUM(m.engagement_total), 0) FROM {account_metric_table} m JOIN {social_account_table} a ON a.id = m.account_id WHERE a.platform = 'google_business' AND m.date >= %s AND m.date < %s),
+          (SELECT COUNT(*) FROM {account_metric_table} m JOIN {social_account_table} a ON a.id = m.account_id WHERE a.platform = 'google_business')
     """
     today = timezone.localdate()
     week_end = today + timedelta(days=7)
+    previous_start = month_start - (month_end - month_start)
+    previous_end = month_start
     params = [
         month_start, month_end, month_start, month_end,
         month_start.date(), month_end.date(), month_start.date(), month_end.date(),
         today, week_end, today, week_end, today, today,
+        month_start.date(), month_end.date(),
+        previous_start.date(), previous_end.date(),
+        month_start.date(), month_end.date(),
+        month_start.date(), month_end.date(),
+        month_start.date(), month_end.date(),
+        month_start.date(), month_end.date(),
+        month_start.date(), month_end.date(),
+        month_start.date(), month_end.date(),
+        month_start.date(), month_end.date(),
+        month_start, month_end,
+        previous_start, previous_end,
+        month_start, month_end,
+        month_start.date(), month_end.date(),
+        month_start.date(), month_end.date(),
+        month_start.date(), month_end.date(),
+        month_start.date(), month_end.date(),
+        month_start.date(), month_end.date(),
+        month_start.date(), month_end.date(),
+        month_start.date(), month_end.date(),
+        month_start.date(), month_end.date(),
+        month_start.date(), month_end.date(),
+        month_start.date(), month_end.date(),
     ]
     with connection.cursor() as cursor:
         cursor.execute(sql, params)
@@ -302,6 +362,14 @@ def dashboard_snapshot(*, month_start, month_end) -> dict:
         "google_business_posts", "published_google_business_posts", "linkedin_posts", "instagram_posts",
         "tiktok_ideas", "email_campaigns", "completed_this_month", "planned_this_month",
         "due_this_week", "overdue", "top_keyword",
+        "website_visitors_current", "website_visitors_previous", "website_sessions_current",
+        "website_engaged_sessions_current", "website_conversions_current", "website_landing_pages_current",
+        "gsc_clicks_current", "gsc_impressions_current", "gsc_pages_current",
+        "social_posts_current", "social_posts_previous", "social_post_days_current",
+        "social_impressions_current", "social_reach_current", "social_views_current", "social_engagement_current",
+        "top_social_post", "low_social_post",
+        "gbp_impressions_current", "gbp_reach_current", "gbp_clicks_current",
+        "gbp_engagement_current", "gbp_metric_rows_total",
     ]
     snapshot = dict(zip(keys, row, strict=True))
     platform_counts = {
@@ -322,39 +390,93 @@ def build_marketing_scores(snapshot: dict) -> list[dict]:
     def ratio(part, total):
         return min(100, round((part / total) * 100)) if total else 0
 
-    seo = min(100, snapshot["seo_keywords"] * 4 + ratio(snapshot["keywords_with_landing"], snapshot["seo_keywords"]) // 2)
-    content = ratio(snapshot["published_blogs"] + snapshot["published_videos"], snapshot["content_total"] + snapshot["video_total"])
-    active_platforms = sum(
-        bool(snapshot[key])
-        for key in ("google_business_posts", "linkedin_posts", "instagram_posts", "tiktok_ideas", "email_campaigns")
-    )
-    social = min(100, active_platforms * 20)
-    consistency = ratio(snapshot["completed_this_month"], max(snapshot["planned_this_month"], 1))
-    website = ratio(snapshot["keywords_with_landing"], snapshot["seo_keywords"])
-    google_business = min(100, snapshot["google_business_posts"] * 15 + snapshot["published_google_business_posts"] * 20)
-    values = [
-        ("SEO Score", seo, "Planning based: SEO keyword rows and landing-page coverage."),
-        ("Content Score", content, "Planning based: published blog and video plan rows."),
-        ("Social Score", social, "Planning based: internal platform content plan coverage."),
-        ("Consistency Score", consistency, "Planning based: completed vs planned content this month."),
-        ("Website Score", website, "Planning based: keyword landing-page coverage, not GA4 traffic."),
-        ("Google Business Score", google_business, "Planning based: internal Google Business post plans, not API posts."),
-    ]
-    overall = round(sum(score for _label, score, _basis in values) / len(values))
-    values.append(("Overall Marketing Health", overall, "Mixed planning score. Live synced performance remains on the dashboard."))
-    return [
-        {
+    def trend_score(current, previous):
+        if not current and not previous:
+            return None
+        if not previous:
+            return 70 if current else 0
+        change = (current - previous) / max(previous, 1)
+        return max(0, min(100, round(50 + (change * 100))))
+
+    def score_row(label, score, basis, source_type="Live Data"):
+        return {
             "label": label,
-            "score": score,
+            "score": None if score is None else max(0, min(100, round(score))),
             "basis": basis,
-            "source_type": "Internal planning recommendation",
-            "tone": "green" if score >= 70 else "yellow" if score >= 40 else "red",
+            "source_type": source_type,
+            "tone": "neutral" if score is None else "green" if score >= 70 else "yellow" if score >= 40 else "red",
         }
-        for label, score, basis in values
+
+    social_distribution = ratio(snapshot["social_posts_current"], 12)
+    content_volume = ratio(snapshot["social_posts_current"], 20)
+    social_engagement_base = snapshot["social_impressions_current"] + snapshot["social_views_current"] + snapshot["social_reach_current"]
+    social_engagement = ratio(snapshot["social_engagement_current"], social_engagement_base)
+    schedule_adherence = ratio(snapshot["completed_this_month"], max(snapshot["planned_this_month"], 1))
+    posting_consistency = ratio(snapshot["social_post_days_current"], 12)
+    content_score = round((social_distribution * 0.25) + (social_engagement * 0.35) + (content_volume * 0.2) + (posting_consistency * 0.15) + (schedule_adherence * 0.05))
+    if not snapshot["social_posts_current"] and not social_engagement_base:
+        content_score = None
+
+    website_trend = trend_score(snapshot["website_visitors_current"], snapshot["website_visitors_previous"])
+    engagement_rate = ratio(snapshot["website_engaged_sessions_current"], snapshot["website_sessions_current"])
+    conversion_score = min(100, snapshot["website_conversions_current"] * 20)
+    landing_coverage = ratio(snapshot["website_landing_pages_current"] + snapshot["keywords_with_landing"], max(snapshot["seo_keywords"], 1))
+    if website_trend is None:
+        website_score = None
+    else:
+        website_score = round((website_trend * 0.35) + (conversion_score * 0.25) + (engagement_rate * 0.25) + (landing_coverage * 0.15))
+
+    gbp_activity_base = snapshot["gbp_impressions_current"] + snapshot["gbp_reach_current"]
+    if not snapshot["gbp_metric_rows_total"]:
+        google_business_score = None
+    else:
+        gbp_engagement = ratio(snapshot["gbp_clicks_current"] + snapshot["gbp_engagement_current"], gbp_activity_base)
+        gbp_volume = min(100, ratio(snapshot["gbp_metric_rows_total"], 30) + ratio(snapshot["gbp_impressions_current"], 1000) // 2)
+        google_business_score = round((gbp_volume * 0.6) + (gbp_engagement * 0.4))
+
+    if not social_engagement_base and not snapshot["social_posts_current"]:
+        social_score = None
+    else:
+        social_trend = trend_score(snapshot["social_posts_current"], snapshot["social_posts_previous"]) or 0
+        social_score = round((social_engagement * 0.45) + (social_distribution * 0.3) + (social_trend * 0.25))
+
+    consistency_score = round((schedule_adherence * 0.45) + (posting_consistency * 0.45) - min(20, snapshot["overdue"] * 5))
+    if not snapshot["planned_this_month"] and not snapshot["social_posts_current"]:
+        consistency_score = None
+
+    seo_score = None
+    if snapshot["gsc_impressions_current"] or snapshot["gsc_clicks_current"] or snapshot["seo_keywords"]:
+        gsc_click_rate = ratio(snapshot["gsc_clicks_current"], snapshot["gsc_impressions_current"])
+        seo_score = round((gsc_click_rate * 0.45) + (landing_coverage * 0.35) + (ratio(snapshot["gsc_pages_current"], max(snapshot["seo_keywords"], 1)) * 0.2))
+
+    values = [
+        score_row("SEO Score", seo_score, f"{snapshot['gsc_clicks_current']} GSC clicks, {snapshot['gsc_impressions_current']} impressions, {snapshot['gsc_pages_current']} landing pages.", "Live Data" if seo_score is not None else "Unavailable Data"),
+        score_row("Content Score", content_score, f"{snapshot['social_posts_current']} synced posts, {snapshot['social_engagement_current']} engagements, {snapshot['social_post_days_current']} posting days.", "Live Data" if content_score is not None else "Unavailable Data"),
+        score_row("Social Score", social_score, f"Facebook, Instagram, and YouTube produced {snapshot['social_impressions_current'] + snapshot['social_views_current']} impressions/views.", "Live Data" if social_score is not None else "Unavailable Data"),
+        score_row("Consistency Score", consistency_score, f"{snapshot['completed_this_month']} completed, {snapshot['planned_this_month']} planned, {snapshot['overdue']} overdue.", "Partial Data" if consistency_score is not None else "Unavailable Data"),
+        score_row("Website Score", website_score, f"{snapshot['website_visitors_current']} visitors, {snapshot['website_conversions_current']} conversions, {engagement_rate}% engagement.", "Live Data" if website_score is not None else "Unavailable Data"),
+        score_row("Google Business Score", google_business_score, f"{snapshot['gbp_metric_rows_total']} analytics rows, {snapshot['gbp_impressions_current']} impressions, {snapshot['gbp_clicks_current']} clicks.", "Partial Data" if google_business_score is not None else "Unavailable Data"),
     ]
+    weights = {
+        "SEO Score": 0.15,
+        "Content Score": 0.18,
+        "Social Score": 0.18,
+        "Consistency Score": 0.14,
+        "Website Score": 0.2,
+        "Google Business Score": 0.15,
+    }
+    available = [item for item in values if item["score"] is not None]
+    if available:
+        total_weight = sum(weights[item["label"]] for item in available)
+        overall = round(sum(item["score"] * weights[item["label"]] for item in available) / total_weight)
+        values.append(score_row("Overall Marketing Health", overall, "Weighted average of available live and partial marketing metrics.", "Live Data" if len(available) >= 4 else "Partial Data"))
+    else:
+        values.append(score_row("Overall Marketing Health", None, "No synced marketing metrics available yet.", "Unavailable Data"))
+    return values
 
 
-def build_assistant_answers(*, keywords, content_ideas, video_ideas) -> list[dict]:
+def build_assistant_answers(*, keywords, content_ideas, video_ideas, summary: dict | None = None) -> list[dict]:
+    summary = summary or {}
     keyword_list = list(keywords)
     content_list = list(content_ideas)
     video_list = list(video_ideas)
@@ -366,13 +488,30 @@ def build_assistant_answers(*, keywords, content_ideas, video_ideas) -> list[dic
     no_video = next((item for item in priority if item.keyword.casefold() not in video_keywords), None)
     no_landing = next((item for item in priority if not item.landing_page_suggestion), None)
     next_content = next((item for item in content_list if item.status not in {"published", "archived"}), None)
+    website_current = summary.get("website_visitors_current", 0)
+    website_previous = summary.get("website_visitors_previous", 0)
+    website_direction = "up" if website_current >= website_previous else "down"
+    top_post = summary.get("top_social_post") or "No top post available yet"
+    weak_post = summary.get("low_social_post") or "No low-performing post available yet"
+    website_answer = (
+        f"GA4 visitors are {website_direction}: {website_current} current vs {website_previous} previous."
+        if website_current or website_previous
+        else "No GA4 visitor data available for the selected period."
+    )
+    top_keyword = summary.get("top_keyword")
+    keyword_answer = top_keyword if top_keyword and top_keyword != "Waiting for performance data" else "No GSC keyword data available yet."
+    gbp_answer = (
+        f"Use GBP analytics: {summary.get('gbp_impressions_current', 0)} impressions, {summary.get('gbp_clicks_current', 0)} clicks, {summary.get('gbp_engagement_current', 0)} engagement actions."
+        if summary.get("gbp_metric_rows_total")
+        else "Google Business analytics unavailable for the selected period."
+    )
     return [
-        {"question": "What should we post today?", "answer": next_content.title if next_content else "Create the first approved content brief."},
-        {"question": "What keyword should we target?", "answer": target.keyword if target else "Add and prioritize an SEO keyword."},
-        {"question": "What blog should we write?", "answer": no_article.suggested_article or f"A practical guide to {no_article.keyword}" if no_article else "All tracked keywords have a blog plan."},
-        {"question": "What video should we film?", "answer": no_video.suggested_video or f"What buyers should know about {no_video.keyword}" if no_video else "All tracked keywords have a video plan."},
-        {"question": "Which landing page needs SEO?", "answer": no_landing.keyword if no_landing else "Every tracked keyword has a landing-page suggestion."},
-        {"question": "Which product has no content?", "answer": target.get_product_category_display() if target and not next_content else "Review category coverage in the content calendar."},
-        {"question": "Which keyword has no article?", "answer": no_article.keyword if no_article else "None."},
-        {"question": "Which keyword has no video?", "answer": no_video.keyword if no_video else "None."},
+        {"question": "Best performing synced post", "answer": top_post, "source_type": "Live Data" if summary.get("top_social_post") else "Unavailable Data"},
+        {"question": "Lowest performing synced post", "answer": weak_post, "source_type": "Live Data" if summary.get("low_social_post") else "Unavailable Data"},
+        {"question": "Website traffic direction", "answer": website_answer, "source_type": "Live Data" if website_current or website_previous else "Unavailable Data"},
+        {"question": "Search keyword to prioritize", "answer": keyword_answer, "source_type": "Live Data" if top_keyword and top_keyword != "Waiting for performance data" else "Unavailable Data"},
+        {"question": "Google Business action", "answer": gbp_answer, "source_type": "Partial Data" if summary.get("gbp_metric_rows_total") else "Unavailable Data"},
+        {"question": "Next content item", "answer": next_content.title if next_content else "No scheduled content item is waiting.", "source_type": "Partial Data" if next_content else "Unavailable Data"},
+        {"question": "Landing page gap", "answer": no_landing.keyword if no_landing else "Tracked keyword landing-page coverage is current.", "source_type": "Partial Data" if no_landing else "Live Data"},
+        {"question": "Video coverage gap", "answer": no_video.keyword if no_video else "Tracked keywords have video coverage.", "source_type": "Partial Data" if no_video else "Live Data"},
     ]
