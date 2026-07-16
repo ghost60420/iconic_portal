@@ -96,6 +96,11 @@ from .services.historical_dates import (
     with_invoice_reporting_date,
     with_opportunity_reporting_date,
 )
+from .services.ceo_briefing_metrics import (
+    build_open_opportunity_metrics,
+    build_production_alert_metrics,
+    build_receivable_metrics,
+)
 from .services.automation_engine import automation_dashboard_context
 from .services.operations_dashboard import operations_dashboard_context
 from .services.pipeline import (
@@ -13916,7 +13921,10 @@ def _build_daily_ceo_briefing_email_draft(context):
     opportunity_rows = context.get("open_opportunity_rows") or []
     if opportunity_rows:
         for opportunity in opportunity_rows:
-            amount = _format_money(getattr(opportunity, "order_value", None))
+            amount = (
+                getattr(opportunity, "briefing_pipeline_display", "")
+                or _format_money(getattr(opportunity, "order_value", None), getattr(opportunity, "order_currency", "CAD"))
+            )
             lines.append(
                 f"- {getattr(opportunity, 'opportunity_id', 'Opportunity')}: "
                 f"{_briefing_opportunity_customer_label(opportunity)}, "
@@ -13935,7 +13943,7 @@ def _build_daily_ceo_briefing_email_draft(context):
             product = getattr(getattr(order, "product", None), "name", "") or "No product"
             lines.append(
                 f"- {getattr(order, 'purchase_order_number', '') or getattr(order, 'title', 'Production order')}: "
-                f"{customer}, {product}, status {order.get_status_display()}, "
+                f"{customer}, {product}, status {getattr(order, 'briefing_operational_status_label', '') or order.get_status_display()}, "
                 f"deadline {_briefing_date_label(getattr(order, 'bulk_deadline', None))}, "
                 f"qty {getattr(order, 'qty_total', 0)}."
             )
@@ -13962,7 +13970,7 @@ def _build_daily_ceo_briefing_email_draft(context):
             lines.append(
                 f"- {row.get('invoice')}: {row.get('customer')}, "
                 f"due {_briefing_date_label(row.get('due_date'))}, "
-                f"balance {_format_money(row.get('balance'))}, side {row.get('side')}."
+                f"balance {row.get('balance_display') or _format_money(row.get('balance'), row.get('currency') or 'CAD')}, side {row.get('side')}."
             )
     else:
         lines.append("- No overdue invoices for this filter.")
@@ -13976,7 +13984,7 @@ def _build_daily_ceo_briefing_email_draft(context):
             f"- Period expenses: {_format_money(context.get('period_expenses'))}",
             f"- Period net cash: {_format_money(context.get('period_net_cash'))}",
             f"- Payables due soon: {_format_money(context.get('payables_due_soon'))}",
-            f"- Open receivables: {_format_money(context.get('invoice_open_total'))}",
+            f"- Open receivables: {context.get('invoice_open_display') or '-'}",
             f"- Cash warning: {'Yes' if context.get('cash_flow_warning') else 'No'}",
             "",
             "RECOMMENDED ACTIONS",
@@ -14038,81 +14046,20 @@ def _build_daily_ceo_briefing_context(request):
         .order_by("-created_date", "-id")[:10]
     )
 
-    opportunities_needing_followup_qs = (
-        open_pipeline_queryset(Opportunity.objects.all())
-        .filter(Q(next_followup__lte=date_to) | Q(next_followup__isnull=True))
-    )
-    if side:
-        opportunities_needing_followup_qs = opportunities_needing_followup_qs.filter(lead__market=side)
-    opportunities_needing_followup = opportunities_needing_followup_qs.count()
-    open_opportunities = opportunities_needing_followup_qs.aggregate(
-        count=Count("id"),
-        total=Sum("order_value"),
-    )
-    open_opportunity_rows = list(
-        opportunities_needing_followup_qs.select_related("customer", "lead")
-        .only("opportunity_id", "stage", "order_value", "next_followup", "customer__account_brand", "customer__contact_name", "lead__account_brand")
-        .order_by("next_followup", "-order_value")[:10]
-    )
+    opportunity_metrics = build_open_opportunity_metrics(side=side, date_to=date_to)
+    opportunities_needing_followup = opportunity_metrics["due_followup_count"]
+    open_opportunities = {
+        "count": opportunity_metrics["count"],
+        "rows": opportunity_metrics["pipeline_rows"],
+        "display": opportunity_metrics["pipeline_display"],
+        "zero_value_count": opportunity_metrics["zero_value_count"],
+    }
+    open_opportunity_rows = opportunity_metrics["rows"]
 
-    production_qs = ProductionOrder.objects.all()
-    if side == "CA":
-        production_qs = production_qs.filter(factory_location="ca")
-    elif side == "BD":
-        production_qs = production_qs.filter(factory_location="bd")
-    briefing_production_rows = [
-        {
-            "order": order,
-            "operational_status": get_production_operational_status(order),
-        }
-        for order in production_qs.select_related("customer", "opportunity", "product")
-        .prefetch_related("stages", "shipments")
-        .only(
-            "order_code",
-            "title",
-            "status",
-            "bulk_deadline",
-            "qty_total",
-            "factory_location",
-            "production_order_type",
-            "style_name",
-            "notes",
-            "accessories_note",
-            "extra_order_note",
-            "fabric_required_kg",
-            "fabric_received_kg",
-            "updated_at",
-            "customer__account_brand",
-            "customer__contact_name",
-            "opportunity__opportunity_id",
-            "product__name",
-        )
-    ]
-    briefing_active_rows = [
-        row for row in briefing_production_rows
-        if row["operational_status"] in OPERATIONAL_ACTIVE_STATUSES
-    ]
-    production_delays = len([
-        row for row in briefing_production_rows
-        if row["order"].bulk_deadline
-        and row["order"].bulk_deadline < today
-        and row["operational_status"] not in OPERATIONAL_FINISHED_STATUSES
-    ])
-    production_due_soon = len([
-        row for row in briefing_active_rows
-        if row["order"].bulk_deadline
-        and today <= row["order"].bulk_deadline <= today + timedelta(days=7)
-    ])
-    production_alert_rows = [
-        row["order"] for row in sorted(
-            [
-                row for row in briefing_active_rows
-                if row["order"].bulk_deadline
-                and row["order"].bulk_deadline <= today + timedelta(days=7)
-            ],
-            key=lambda row: (row["order"].bulk_deadline or date.max, row["order"].updated_at),
-        )[:10]
-    ]
+    production_metrics = build_production_alert_metrics(side=side, today=today)
+    production_delays = production_metrics["delayed_count"]
+    production_due_soon = production_metrics["due_soon_count"]
+    production_alert_rows = production_metrics["alert_rows"]
 
     shipping_qs = Shipment.objects.all()
     if side == "CA":
@@ -14129,29 +14076,16 @@ def _build_daily_ceo_briefing_context(request):
         .order_by("ship_date", "-created_at")[:10]
     )
 
+    receivable_metrics = build_receivable_metrics(side=side, today=today)
     invoice_open_total = Decimal("0")
+    invoice_open_values = receivable_metrics["outstanding_rows"]
+    invoice_open_display = receivable_metrics["outstanding_display"]
     overdue_receivables = Decimal("0")
-    overdue_invoice_count = 0
-    overdue_invoice_rows = []
-    if Invoice is not None:
-        invoice_qs = Invoice.objects.filter(is_archived=False).exclude(status__in=["paid", "cancelled"]).select_related("customer", "order", "order__customer")
-        if side:
-            invoice_qs = invoice_qs.filter(Q(invoice_region=side) | Q(invoice_region="", currency="BDT" if side == "BD" else "CAD"))
-        for invoice in invoice_qs.order_by("due_date", "-issue_date")[:1500]:
-            balance = _ceo_decimal(invoice.balance)
-            invoice_open_total += balance
-            if invoice.due_date and invoice.due_date < today:
-                overdue_invoice_count += 1
-                overdue_receivables += balance
-                overdue_invoice_rows.append(
-                    {
-                        "invoice": invoice,
-                        "customer": _briefing_customer_label(invoice.customer or getattr(invoice.order, "customer", None)),
-                        "balance": balance,
-                        "due_date": invoice.due_date,
-                        "side": _briefing_invoice_side(invoice),
-                    }
-                )
+    overdue_receivable_values = receivable_metrics["overdue_rows"]
+    overdue_receivables_display = receivable_metrics["overdue_display"]
+    overdue_receivables_cad_equivalent = receivable_metrics["overdue_cad_equivalent"]
+    overdue_invoice_count = receivable_metrics["overdue_count"]
+    overdue_invoice_rows = receivable_metrics["overdue_invoice_rows"]
 
     cad_to_bdt = _get_latest_cad_to_bdt_rate()
     accounting_qs = AccountingEntry.objects.exclude(main_type="TRANSFER").exclude(status__iexact="CANCELLED")
@@ -14181,7 +14115,7 @@ def _build_daily_ceo_briefing_context(request):
         .only("date", "status", "sub_type", "description", "currency", "amount_original", "amount_cad", "rate_to_cad")[:100]
     )
     payables_due_soon = sum((_ceo_amount_cad(entry, cad_to_bdt) for entry in payable_entries_due), Decimal("0"))
-    cash_flow_warning = current_cash + overdue_receivables - payables_due_soon < 0 or period_net_cash < 0
+    cash_flow_warning = current_cash + overdue_receivables_cad_equivalent - payables_due_soon < 0 or period_net_cash < 0
 
     top_customer_qs = with_opportunity_reporting_date(
         Opportunity.objects.select_related("customer", "lead")
@@ -14190,14 +14124,29 @@ def _build_daily_ceo_briefing_context(request):
         top_customer_qs = top_customer_qs.filter(lead__market=side)
     top_customer_rows = list(
         top_customer_qs
-        .values("customer__account_brand", "customer__contact_name", "lead__account_brand")
-        .annotate(total=Sum("order_value"), count=Count("id"))
+        .annotate(
+            top_customer_value=Coalesce(
+                F("order_value_usd"),
+                F("order_value"),
+                models.Value(Decimal("0")),
+                output_field=models.DecimalField(max_digits=16, decimal_places=2),
+            ),
+            top_customer_currency=Coalesce(
+                F("order_currency"),
+                models.Value("CAD"),
+                output_field=models.CharField(max_length=10),
+            ),
+        )
+        .values("customer__account_brand", "customer__contact_name", "lead__account_brand", "top_customer_currency")
+        .annotate(total=Sum("top_customer_value"), count=Count("id"))
         .order_by("-total", "-count")[:8]
     )
     top_customer_activity = [
         {
             "label": row.get("customer__account_brand") or row.get("customer__contact_name") or row.get("lead__account_brand") or "Unassigned customer",
             "total": _ceo_decimal(row.get("total")),
+            "currency": row.get("top_customer_currency") or "CAD",
+            "display": _format_money(row.get("total"), row.get("top_customer_currency") or "CAD"),
             "count": int(row.get("count") or 0),
         }
         for row in top_customer_rows
@@ -14240,10 +14189,10 @@ def _build_daily_ceo_briefing_context(request):
 
     executive_summary = [
         {"label": "New Leads", "value": _format_count(new_leads_total), "note": f"{high_priority_leads} high priority lead(s).", "tone": "good" if new_leads_total else "blue"},
-        {"label": "Open Follow Ups", "value": _format_count(opportunities_needing_followup), "note": "Open opportunities due or missing follow-up.", "tone": "warn" if opportunities_needing_followup else "good"},
+        {"label": "Open Opportunities", "value": _format_count(open_opportunities["count"]), "note": f"{opportunities_needing_followup} due or missing follow-up; {open_opportunities['zero_value_count']} with no value yet.", "tone": "warn" if opportunities_needing_followup else "good"},
         {"label": "Production Delays", "value": _format_count(production_delays), "note": f"{production_due_soon} production order(s) due soon.", "tone": "bad" if production_delays else "blue"},
         {"label": "Shipping Alerts", "value": _format_count(shipments_delayed + shipments_due_soon), "note": f"{shipments_delayed} delayed, {shipments_due_soon} due soon.", "tone": "warn" if shipments_delayed else "blue"},
-        {"label": "Overdue Receivables", "value": _format_money(overdue_receivables), "note": f"{overdue_invoice_count} overdue invoice(s).", "tone": "bad" if overdue_invoice_count else "good"},
+        {"label": "Overdue Receivables", "value": overdue_receivables_display, "note": f"{overdue_invoice_count} overdue invoice(s); currencies are not combined.", "tone": "bad" if overdue_invoice_count else "good"},
         {"label": "Cash Position", "value": _format_money(current_cash), "note": f"Period net cash {_format_money(period_net_cash)}.", "tone": "bad" if cash_flow_warning else "good"},
     ]
 
@@ -14257,7 +14206,7 @@ def _build_daily_ceo_briefing_context(request):
     if shipments_delayed:
         recommended_actions.append({"title": "Update delayed shipments", "detail": f"{shipments_delayed} shipment(s) are past ship date and not delivered.", "tone": "warn"})
     if overdue_invoice_count:
-        recommended_actions.append({"title": "Collect overdue receivables", "detail": f"Follow up on {overdue_invoice_count} overdue invoice(s) totaling {_format_money(overdue_receivables)}.", "tone": "bad"})
+        recommended_actions.append({"title": "Collect overdue receivables", "detail": f"Follow up on {overdue_invoice_count} overdue invoice(s) totaling {overdue_receivables_display}.", "tone": "bad"})
     if cash_flow_warning:
         recommended_actions.append({"title": "Watch cash before new commitments", "detail": f"Current cash plus overdue AR less near payables signals pressure.", "tone": "bad"})
     if not recommended_actions:
@@ -14274,7 +14223,7 @@ def _build_daily_ceo_briefing_context(request):
         },
         {
             "title": "Preserve cash discipline",
-            "detail": f"Collect {_format_money(overdue_receivables)} overdue AR before approving discretionary spending.",
+            "detail": f"Collect {overdue_receivables_display} overdue AR before approving discretionary spending.",
         },
         {
             "title": "Use marketing signals",
@@ -14316,8 +14265,12 @@ def _build_daily_ceo_briefing_context(request):
         "shipping_alert_rows": shipping_alert_rows,
         "overdue_invoice_count": overdue_invoice_count,
         "overdue_receivables": overdue_receivables,
-        "overdue_invoice_rows": overdue_invoice_rows[:10],
+        "overdue_receivable_values": overdue_receivable_values,
+        "overdue_receivables_display": overdue_receivables_display,
+        "overdue_invoice_rows": overdue_invoice_rows,
         "invoice_open_total": invoice_open_total,
+        "invoice_open_values": invoice_open_values,
+        "invoice_open_display": invoice_open_display,
         "payables_due_soon": payables_due_soon,
         "payable_entries_due": payable_entries_due[:8],
         "current_cash": current_cash,

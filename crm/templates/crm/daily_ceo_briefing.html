@@ -328,8 +328,8 @@
           </div>
           <div class="brief-mini">
             <span>Receivables</span>
-            <strong>${{ overdue_receivables|floatformat:2 }}</strong>
-            <small>{{ overdue_invoice_count }} overdue invoice(s).</small>
+            <strong>{{ overdue_receivables_display }}</strong>
+            <small>{{ overdue_invoice_count }} overdue invoice(s); currencies are not combined.</small>
           </div>
           <div class="brief-mini">
             <span>Future email support</span>
@@ -391,7 +391,7 @@
         <section class="brief-section">
           <div class="brief-section-head">
             <h2 class="brief-section-title">Open Opportunities</h2>
-            <div class="brief-section-note">{{ opportunities_needing_followup }} need attention</div>
+            <div class="brief-section-note">{{ open_opportunities.count }} active, {{ opportunities_needing_followup }} need follow-up</div>
           </div>
           <div class="brief-body">
             {% if open_opportunity_rows %}
@@ -422,7 +422,7 @@
                         </td>
                         <td><span class="brief-badge brief-badge--blue">{{ opportunity.stage }}</span></td>
                         <td>{{ opportunity.next_followup|date:"M d, Y"|default:"Needs date" }}</td>
-                        <td class="brief-right">{{ opportunity.order_value|default:0|finance_money:"CAD" }}</td>
+                        <td class="brief-right">{{ opportunity.briefing_pipeline_display }}</td>
                       </tr>
                     {% endfor %}
                   </tbody>
@@ -468,7 +468,7 @@
                             {% if order.product %} - {{ order.product.name }}{% endif %}
                           </span>
                         </td>
-                        <td><span class="brief-badge {% if order.status == 'hold' %}brief-badge--warn{% else %}brief-badge--blue{% endif %}">{{ order.get_status_display }}</span></td>
+                        <td><span class="brief-badge {% if order.briefing_is_delayed %}brief-badge--warn{% else %}brief-badge--blue{% endif %}">{{ order.briefing_operational_status_label }}</span></td>
                         <td>{{ order.get_factory_location_display }}</td>
                         <td>{{ order.bulk_deadline|date:"M d, Y"|default:"No deadline" }}</td>
                         <td class="brief-right">{{ order.qty_total }}</td>
@@ -535,7 +535,7 @@
         <section class="brief-section">
           <div class="brief-section-head">
             <h2 class="brief-section-title">Overdue Invoices</h2>
-            <div class="brief-section-note">{{ overdue_invoice_count }} overdue, ${{ overdue_receivables|floatformat:2 }} due</div>
+            <div class="brief-section-note">{{ overdue_invoice_count }} overdue, {{ overdue_receivables_display }} due</div>
           </div>
           <div class="brief-body">
             {% if overdue_invoice_rows %}
@@ -557,7 +557,7 @@
                         <td>{{ row.customer }}</td>
                         <td><span class="brief-badge brief-badge--blue">{{ row.side }}</span></td>
                         <td>{{ row.due_date|date:"M d, Y" }}</td>
-                        <td class="brief-right">${{ row.balance|floatformat:2 }}</td>
+                        <td class="brief-right">{{ row.balance_display }}</td>
                       </tr>
                     {% endfor %}
                   </tbody>
@@ -577,23 +577,23 @@
           <div class="brief-body brief-grid-2">
             <div class="brief-mini">
               <span>Current cash estimate</span>
-              <strong>${{ current_cash|floatformat:2 }}</strong>
+              <strong>{{ current_cash|finance_money:"CAD" }}</strong>
               <small>Based on existing accounting entry inflows and outflows.</small>
             </div>
             <div class="brief-mini">
               <span>Period net cash</span>
-              <strong>${{ period_net_cash|floatformat:2 }}</strong>
-              <small>Revenue ${{ period_revenue|floatformat:2 }} less expenses ${{ period_expenses|floatformat:2 }}.</small>
+              <strong>{{ period_net_cash|finance_money:"CAD" }}</strong>
+              <small>Revenue {{ period_revenue|finance_money:"CAD" }} less expenses {{ period_expenses|finance_money:"CAD" }}.</small>
             </div>
             <div class="brief-mini">
               <span>Payables due soon</span>
-              <strong>${{ payables_due_soon|floatformat:2 }}</strong>
+              <strong>{{ payables_due_soon|finance_money:"CAD" }}</strong>
               <small>Outgoing entries due in the next 7 days.</small>
             </div>
             <div class="brief-mini">
               <span>Open receivables</span>
-              <strong>${{ invoice_open_total|floatformat:2 }}</strong>
-              <small>Unpaid and partially paid invoice balance.</small>
+              <strong>{{ invoice_open_display }}</strong>
+              <small>Unpaid and partially paid invoice balance; currencies are not combined.</small>
             </div>
           </div>
         </section>
@@ -643,7 +643,7 @@
               {% for row in top_customer_activity %}
                 <div class="brief-item">
                   <strong>{{ row.label }}</strong>
-                  <p>{{ row.count }} opportunity record(s), ${{ row.total|floatformat:2 }} estimated value.</p>
+                  <p>{{ row.count }} opportunity record(s), {{ row.display }} estimated value.</p>
                 </div>
               {% endfor %}
             </div>

@@ -1,11 +1,15 @@
 from collections import defaultdict
 from decimal import Decimal
 
-from django.db.models import Count, DecimalField, ExpressionWrapper, F, Q, Sum
+from django.db.models import Count, F, Q, Sum
 from django.utils import timezone
 
 from crm.models import AccountingEntry, Invoice, ProductionOrder, Shipment
 from crm.services.ceo_approval_queue import count_ceo_approval_queue_items
+from crm.services.ceo_briefing_metrics import (
+    invoice_balance_totals_by_currency,
+    open_invoice_balance_queryset,
+)
 from crm.services.employee_identity import get_employee_identity_index, resolve_employee_identity
 from crm.services.sales_attribution import build_ceo_sales_kpis
 
@@ -43,18 +47,6 @@ def _sum_by_currency(queryset, field_name):
     return {
         row["currency"]: _decimal(row["amount"])
         for row in queryset.values("currency").annotate(amount=Sum(field_name))
-        if row.get("currency") in CURRENCIES
-    }
-
-
-def _invoice_balance_by_currency(queryset):
-    balance = ExpressionWrapper(
-        F("total_amount") - F("paid_amount"),
-        output_field=DecimalField(max_digits=16, decimal_places=2),
-    )
-    return {
-        row["currency"]: _decimal(row["amount"])
-        for row in queryset.values("currency").annotate(amount=Sum(balance))
         if row.get("currency") in CURRENCIES
     }
 
@@ -106,9 +98,10 @@ def build_ceo_executive_context():
     live_invoices = Invoice.objects.filter(is_archived=False).exclude(status="cancelled")
 
     sales_kpis = build_ceo_sales_kpis(today)
-    outstanding_ar = _invoice_balance_by_currency(
-        live_invoices.filter(total_amount__gt=F("paid_amount"))
-    )
+    outstanding_ar = {
+        row["currency"]: row["amount"]
+        for row in invoice_balance_totals_by_currency(open_invoice_balance_queryset(live_invoices))
+    }
     outstanding_ap = _sum_by_currency(
         AccountingEntry.objects.filter(direction=AccountingEntry.DIR_OUT)
         .exclude(main_type="TRANSFER")
@@ -131,7 +124,8 @@ def build_ceo_executive_context():
             late=Count(
                 "id",
                 filter=Q(bulk_deadline__lt=today)
-                & ~Q(operational_status__in=["shipped", "cancelled"]),
+                & Q(operational_status__in=ACTIVE_PRODUCTION_STATUSES)
+                & ~Q(status__in=["done", "closed_won", "closed_lost", "cancelled"]),
             ),
         )
     )
