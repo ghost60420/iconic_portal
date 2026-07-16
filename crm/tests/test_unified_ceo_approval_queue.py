@@ -18,6 +18,8 @@ from crm.models import (
     Opportunity,
     QuickCosting,
 )
+from crm.services.ceo_approval_queue import count_ceo_approval_queue_items
+from crm.services.ceo_executive import build_ceo_executive_context
 
 
 class UnifiedCEOApprovalQueueTests(TestCase):
@@ -127,6 +129,19 @@ class UnifiedCEOApprovalQueueTests(TestCase):
         quick.refresh_from_db()
         return response
 
+    def _pending_queue_rows(self):
+        self.client.force_login(self.ceo)
+        response = self.client.get(reverse("ceo_quotation_approval_queue"))
+        self.assertEqual(response.status_code, 200)
+        return response.context["rows"]
+
+    def _assert_dashboard_and_queue_count(self, expected):
+        rows = self._pending_queue_rows()
+        context = build_ceo_executive_context()
+        self.assertEqual(len(rows), expected)
+        self.assertEqual(count_ceo_approval_queue_items(), expected)
+        self.assertEqual(context["pending_ceo_approvals"], expected)
+
     def test_queue_combines_only_submitted_pending_quick_and_advanced_costings(self):
         draft = self._quick(project_name="Unsubmitted Draft")
         submitted = self._quick(project_name="Submitted Quick")
@@ -154,6 +169,86 @@ class UnifiedCEOApprovalQueueTests(TestCase):
         self.assertContains(response, "CAD $1,500.00")
         self.assertContains(response, "Submitted for CEO Approval")
         self.assertFalse(any(row["record"].pk == draft.pk and row["costing_type"] == "Quick" for row in rows))
+
+    def test_dashboard_count_matches_queue_for_one_quick_pending(self):
+        quick = self._quick(project_name="Dashboard Quick Pending")
+        self._submit_quick(quick)
+
+        self._assert_dashboard_and_queue_count(1)
+
+    def test_dashboard_count_matches_queue_for_one_advanced_pending(self):
+        self._advanced("QT20269920")
+
+        self._assert_dashboard_and_queue_count(1)
+
+    def test_dashboard_count_matches_queue_for_mixed_pending_types(self):
+        quick = self._quick(project_name="Dashboard Quick Mixed")
+        self._submit_quick(quick)
+        self._advanced("QT20269921")
+
+        rows = self._pending_queue_rows()
+        self.assertEqual(len(rows), 2)
+        self.assertEqual({row["costing_type"] for row in rows}, {"Quick", "Advanced"})
+        self.assertEqual(count_ceo_approval_queue_items(), 2)
+        self.assertEqual(build_ceo_executive_context()["pending_ceo_approvals"], 2)
+
+    def test_dashboard_count_excludes_inactive_approval_statuses(self):
+        submitted = self._quick(project_name="Only Submitted Counts")
+        self._submit_quick(submitted)
+        for status in [
+            QuickCosting.STATUS_APPROVED,
+            QuickCosting.STATUS_REJECTED,
+            QuickCosting.STATUS_RECALLED,
+            QuickCosting.STATUS_SUPERSEDED,
+        ]:
+            quick = self._quick(project_name=f"Excluded {status}", status=status)
+            quick.approval_submitted_by = self.sales
+            quick.approval_submitted_at = timezone.now()
+            quick.save(update_fields=["approval_submitted_by", "approval_submitted_at", "updated_at"])
+        self._advanced(
+            "QT20269922",
+            quotation_status=CostingHeader.QUOTATION_STATUS_APPROVED,
+        )
+        self._advanced(
+            "QT20269923",
+            quotation_status=CostingHeader.QUOTATION_STATUS_REJECTED,
+        )
+        self._advanced("QT20269924", is_archived=True)
+
+        self._assert_dashboard_and_queue_count(1)
+
+    def test_dashboard_count_updates_after_approval_workflow_actions(self):
+        approve_me = self._quick(project_name="Approve Count")
+        reject_me = self._quick(project_name="Reject Count")
+
+        self.assertEqual(count_ceo_approval_queue_items(), 0)
+        self._submit_quick(approve_me)
+        self._assert_dashboard_and_queue_count(1)
+        self._submit_quick(reject_me)
+        self._assert_dashboard_and_queue_count(2)
+
+        self.client.force_login(self.ceo)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(reverse("quick_costing_approve", args=[approve_me.pk]))
+        self._assert_dashboard_and_queue_count(1)
+
+        self.client.force_login(self.ceo)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(reverse("quick_costing_reject", args=[reject_me.pk]))
+        self._assert_dashboard_and_queue_count(0)
+
+    def test_recall_requested_counts_but_recalled_and_superseded_do_not(self):
+        recall_requested = self._quick(
+            project_name="Recall Requested Count",
+            status=QuickCosting.STATUS_RECALL_REQUESTED,
+        )
+        recall_requested.approval_submitted_by = self.sales
+        recall_requested.approval_submitted_at = timezone.now()
+        recall_requested.save(update_fields=["approval_submitted_by", "approval_submitted_at", "updated_at"])
+        self._quick(project_name="Recalled Excluded", status=QuickCosting.STATUS_RECALLED)
+        self._quick(project_name="Superseded Excluded", status=QuickCosting.STATUS_SUPERSEDED)
+
+        self._assert_dashboard_and_queue_count(1)
 
     def test_sales_user_with_accounts_role_can_submit_quick_costing(self):
         self.sales.groups.add(Group.objects.get(name="Accounts"))

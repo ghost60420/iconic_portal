@@ -48,6 +48,7 @@ from .services.costing_workflow import (
     create_invoice_from_quick_costing,
     get_costing_quote_amounts,
 )
+from .services.ceo_approval_queue import build_ceo_approval_queue_querysets
 from .services.order_lifecycle import create_lifecycle_from_costing
 from .services.operations_permissions import ROLE_SALES, ROLE_SALES_MANAGER, can_approve_costing, has_operations_role
 from .services.production_orders import (
@@ -1039,127 +1040,18 @@ def ceo_quotation_approval_queue(request):
     date_from = parse_date((request.GET.get("date_from") or "").strip())
     date_to = parse_date((request.GET.get("date_to") or "").strip())
 
-    advanced_qs = (
-        CostingHeader.objects.select_related(
-            "opportunity",
-            "opportunity__lead",
-            "opportunity__lead__assigned_to",
-            "customer",
-            "quoted_by",
-            "approved_by",
-            "quotation_approved_by",
-            "quotation_rejected_by",
-            "smv",
-        )
-        .prefetch_related("invoices", "line_items")
-        .filter(is_archived=False)
-        .exclude(quotation_number="")
-        .order_by("-quoted_at", "-updated_at", "-id")
+    queue_querysets = build_ceo_approval_queue_querysets(
+        status_filter=status_filter,
+        currency=currency,
+        search=search,
+        date_from=date_from,
+        date_to=date_to,
+        for_rows=True,
     )
-    quick_qs = (
-        QuickCosting.objects.select_related(
-            "opportunity",
-            "opportunity__assigned_to",
-            "opportunity__lead",
-            "opportunity__lead__assigned_to",
-            "salesperson",
-            "created_by",
-            "approval_submitted_by",
-            "approved_by",
-            "rejected_by",
-            "production_order",
-        )
-        .prefetch_related("invoices", "production_order__stages")
-        .filter(
-            Q(approval_submitted_at__isnull=False)
-            | ~Q(status=QuickCosting.STATUS_DRAFT)
-        )
-        .order_by("-approval_submitted_at", "-updated_at", "-id")
-    )
-
-    if currency in {"CAD", "USD", "BDT"}:
-        advanced_qs = advanced_qs.filter(currency=currency)
-        quick_qs = quick_qs.filter(currency=currency)
-    else:
-        currency = ""
-
-    if date_from:
-        advanced_qs = advanced_qs.filter(quoted_at__date__gte=date_from)
-        quick_qs = quick_qs.filter(approval_submitted_at__date__gte=date_from)
-    if date_to:
-        advanced_qs = advanced_qs.filter(quoted_at__date__lte=date_to)
-        quick_qs = quick_qs.filter(approval_submitted_at__date__lte=date_to)
-
-    if status_filter == "pending":
-        advanced_qs = advanced_qs.filter(
-            quotation_status=CostingHeader.QUOTATION_STATUS_DRAFT,
-            invoices__isnull=True,
-        )
-        quick_qs = quick_qs.filter(invoices__isnull=True).filter(
-            Q(
-                approval_submitted_at__isnull=False,
-                status__in=[QuickCosting.STATUS_SUBMITTED, QuickCosting.STATUS_DRAFT],
-            )
-            | Q(status=QuickCosting.STATUS_RECALL_REQUESTED)
-        )
-    elif status_filter == "approved":
-        advanced_qs = advanced_qs.filter(
-            quotation_status=CostingHeader.QUOTATION_STATUS_APPROVED,
-            invoices__isnull=True,
-        )
-        quick_qs = quick_qs.filter(
-            status__in=[QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_QUOTED],
-            invoices__isnull=True,
-        )
-    elif status_filter == "rejected":
-        advanced_qs = advanced_qs.filter(quotation_status=CostingHeader.QUOTATION_STATUS_REJECTED)
-        quick_qs = quick_qs.filter(status=QuickCosting.STATUS_REJECTED)
-    elif status_filter == "recall_requested":
-        advanced_qs = advanced_qs.none()
-        quick_qs = quick_qs.filter(status=QuickCosting.STATUS_RECALL_REQUESTED)
-    elif status_filter == "sent":
-        advanced_qs = advanced_qs.filter(quotation_status=CostingHeader.QUOTATION_STATUS_SENT)
-        quick_qs = quick_qs.filter(status=QuickCosting.STATUS_QUOTED)
-    elif status_filter == "accepted":
-        advanced_qs = advanced_qs.filter(quotation_status=CostingHeader.QUOTATION_STATUS_ACCEPTED)
-        quick_qs = quick_qs.none()
-    elif status_filter == "converted":
-        advanced_qs = advanced_qs.filter(invoices__isnull=False).distinct()
-        quick_qs = quick_qs.filter(
-            Q(invoices__isnull=False) | Q(status=QuickCosting.STATUS_INVOICED)
-        ).distinct()
-    elif status_filter != "all":
-        status_filter = "pending"
-        advanced_qs = advanced_qs.filter(
-            quotation_status=CostingHeader.QUOTATION_STATUS_DRAFT,
-            invoices__isnull=True,
-        )
-        quick_qs = quick_qs.filter(invoices__isnull=True).filter(
-            Q(
-                approval_submitted_at__isnull=False,
-                status__in=[QuickCosting.STATUS_SUBMITTED, QuickCosting.STATUS_DRAFT],
-            )
-            | Q(status=QuickCosting.STATUS_RECALL_REQUESTED)
-        )
-
-    if search:
-        advanced_qs = advanced_qs.filter(
-            Q(quotation_number__icontains=search)
-            | Q(opportunity__opportunity_id__icontains=search)
-            | Q(opportunity__lead__lead_id__icontains=search)
-            | Q(customer__account_brand__icontains=search)
-            | Q(customer__contact_name__icontains=search)
-            | Q(style_name__icontains=search)
-        )
-        quick_qs = quick_qs.filter(
-            Q(quotation_number__icontains=search)
-            | Q(opportunity__opportunity_id__icontains=search)
-            | Q(opportunity__lead__lead_id__icontains=search)
-            | Q(account_brand__icontains=search)
-            | Q(contact_name__icontains=search)
-            | Q(buyer_name__icontains=search)
-            | Q(project_name__icontains=search)
-        )
+    advanced_qs = queue_querysets.advanced_qs
+    quick_qs = queue_querysets.quick_qs
+    status_filter = queue_querysets.status_filter
+    currency = queue_querysets.currency
 
     rows = [_advanced_approval_queue_row(costing) for costing in advanced_qs[:200]]
     rows.extend(

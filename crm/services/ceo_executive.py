@@ -4,7 +4,8 @@ from decimal import Decimal
 from django.db.models import Count, DecimalField, ExpressionWrapper, F, Q, Sum
 from django.utils import timezone
 
-from crm.models import AccountingEntry, CostingHeader, Invoice, ProductionOrder, Shipment
+from crm.models import AccountingEntry, Invoice, ProductionOrder, Shipment
+from crm.services.ceo_approval_queue import count_ceo_approval_queue_items
 from crm.services.employee_identity import get_employee_identity_index, resolve_employee_identity
 from crm.services.sales_attribution import build_ceo_sales_kpis
 
@@ -138,10 +139,7 @@ def build_ceo_executive_context():
         key: sum(int(row[key] or 0) for row in production_groups)
         for key in ("total", "active", "late")
     }
-    pending_approvals = CostingHeader.objects.filter(
-        status="approved",
-        quotation_status=CostingHeader.QUOTATION_STATUS_DRAFT,
-    ).exclude(quotation_number="").count()
+    pending_approvals = count_ceo_approval_queue_items()
 
     top_production_managers = [
         {

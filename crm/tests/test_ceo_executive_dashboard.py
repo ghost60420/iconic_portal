@@ -87,6 +87,15 @@ class CEOExecutiveDashboardTests(TestCase):
             order_quantity=100,
             currency="CAD",
         )
+        self.pending_costing = CostingHeader.objects.create(
+            opportunity=self.opportunity,
+            customer=self.customer,
+            status="approved",
+            quotation_number="QT-CEO-PENDING",
+            quotation_status=CostingHeader.QUOTATION_STATUS_DRAFT,
+            order_quantity=100,
+            currency="CAD",
+        )
         for currency, amount, paid in [
             ("CAD", Decimal("100"), Decimal("25")),
             ("USD", Decimal("200"), Decimal("0")),
