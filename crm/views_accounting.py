@@ -52,6 +52,11 @@ from .models import (
     Product,
     ProductionOrder,
 )
+from .services.historical_dates import (
+    INVOICE_REPORTING_DATE_ALIAS,
+    apply_invoice_reporting_date_filter,
+    with_invoice_reporting_date,
+)
 
 
 def _finance_invoice_archive_scope(queryset, filters):
@@ -1364,13 +1369,10 @@ def executive_financial_dashboard(request):
     invoice_qs = _finance_invoice_archive_scope(
         Invoice.objects.exclude(status="cancelled").select_related("customer", "order", "order__customer"), filters
     )
-    if filters["date_from"]:
-        invoice_qs = invoice_qs.filter(issue_date__gte=filters["date_from"])
-    if filters["date_to"]:
-        invoice_qs = invoice_qs.filter(issue_date__lte=filters["date_to"])
+    invoice_qs = apply_invoice_reporting_date_filter(invoice_qs, filters["date_from"], filters["date_to"])
     if filters["currency"]:
         invoice_qs = invoice_qs.filter(currency=filters["currency"])
-    invoices = list(invoice_qs.order_by("due_date", "-issue_date", "-created_at"))
+    invoices = list(invoice_qs.order_by("due_date", f"-{INVOICE_REPORTING_DATE_ALIAS}", "-created_at"))
     if filters["side"]:
         invoices = [invoice for invoice in invoices if _exec_invoice_side(invoice) == filters["side"]]
 
@@ -1761,13 +1763,10 @@ def balance_sheet_dashboard(request):
     invoice_qs = _finance_invoice_archive_scope(
         Invoice.objects.exclude(status="cancelled").select_related("customer", "order", "order__customer"), filters
     )
-    if filters["date_from"]:
-        invoice_qs = invoice_qs.filter(issue_date__gte=filters["date_from"])
-    if filters["date_to"]:
-        invoice_qs = invoice_qs.filter(issue_date__lte=filters["date_to"])
+    invoice_qs = apply_invoice_reporting_date_filter(invoice_qs, filters["date_from"], filters["date_to"])
     if filters["currency"]:
         invoice_qs = invoice_qs.filter(currency=filters["currency"])
-    invoices = list(invoice_qs.order_by("due_date", "-issue_date", "-created_at"))
+    invoices = list(invoice_qs.order_by("due_date", f"-{INVOICE_REPORTING_DATE_ALIAS}", "-created_at"))
     if filters["side"]:
         invoices = [invoice for invoice in invoices if _exec_invoice_side(invoice) == filters["side"]]
     open_invoices = [invoice for invoice in invoices if _pl_decimal(invoice.balance) > 0]
@@ -2060,7 +2059,7 @@ def cash_flow_dashboard(request):
         invoice_qs = invoice_qs.filter(currency=filters["currency"])
     if filters["customer_id"]:
         invoice_qs = invoice_qs.filter(Q(customer_id=filters["customer_id"]) | Q(order__customer_id=filters["customer_id"]))
-    forecast_invoices = list(invoice_qs.order_by("due_date", "-issue_date"))
+    forecast_invoices = list(with_invoice_reporting_date(invoice_qs).order_by("due_date", f"-{INVOICE_REPORTING_DATE_ALIAS}"))
     if filters["side"]:
         forecast_invoices = [invoice for invoice in forecast_invoices if _exec_invoice_side(invoice) == filters["side"]]
     forecast_receivables = sum((_bs_invoice_balance_cad(invoice, cad_to_bdt) for invoice in forecast_invoices if _pl_decimal(invoice.balance) > 0), Decimal("0"))
@@ -2562,12 +2561,14 @@ def _kpi_ar_open(filters, date_to):
         Invoice.objects.exclude(status="cancelled").select_related("customer", "order", "order__customer"), filters
     )
     if date_to:
-        qs = qs.filter(issue_date__lte=date_to)
+        qs = apply_invoice_reporting_date_filter(qs, date_to=date_to)
+    else:
+        qs = with_invoice_reporting_date(qs)
     if filters["currency"]:
         qs = qs.filter(currency=filters["currency"])
     if filters["customer_id"]:
         qs = qs.filter(Q(customer_id=filters["customer_id"]) | Q(order__customer_id=filters["customer_id"]))
-    invoices = list(qs.order_by("due_date", "-issue_date"))
+    invoices = list(qs.order_by("due_date", f"-{INVOICE_REPORTING_DATE_ALIAS}"))
     if filters["side"]:
         invoices = [invoice for invoice in invoices if _exec_invoice_side(invoice) == filters["side"]]
     open_invoices = [invoice for invoice in invoices if _pl_decimal(invoice.balance) > 0]

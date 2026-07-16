@@ -632,6 +632,14 @@
             <label for="notes">Notes Reference</label>
             <textarea name="notes" id="notes" placeholder="Project notes or customer reference">{{ selected_notes }}</textarea>
           </div>
+
+          {% if can_edit_historical_dates %}
+            <div class="opp-add-field">
+              <label for="opportunity_date">Opportunity Date</label>
+              <input type="date" name="opportunity_date" id="opportunity_date">
+              <div class="opp-add-help">CEO/Admin only. Used for historical opportunity charts; created date stays unchanged.</div>
+            </div>
+          {% endif %}
         </div>
       </div>
     </div>

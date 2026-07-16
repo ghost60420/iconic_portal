@@ -39,6 +39,12 @@ from .services.costing_currency import CurrencyConversionError, convert_currency
 from .services.costing_workflow import CostingWorkflowError, create_or_link_production_order_from_invoice, get_costing_quote_amounts
 from .services.order_lifecycle import build_lifecycle_profit_breakdown, create_lifecycle_from_invoice
 from .services.workflow_visibility import build_workflow_visibility_context
+from .services.historical_dates import (
+    INVOICE_REPORTING_DATE_ALIAS,
+    apply_invoice_reporting_date_filter,
+    can_edit_historical_dates,
+    with_invoice_reporting_date,
+)
 from .services.operations_permissions import (
     ROLE_ADMIN,
     ROLE_ACCOUNTS,
@@ -458,10 +464,7 @@ def _parse_ar_date(value):
 
 
 def _apply_ar_invoice_filters(invoices, filters):
-    if filters["date_from"]:
-        invoices = invoices.filter(issue_date__gte=filters["date_from"])
-    if filters["date_to"]:
-        invoices = invoices.filter(issue_date__lte=filters["date_to"])
+    invoices = apply_invoice_reporting_date_filter(invoices, filters["date_from"], filters["date_to"])
     if filters["customer_id"]:
         invoices = invoices.filter(customer_id=filters["customer_id"])
     if filters["currency"]:
@@ -1545,7 +1548,7 @@ def accounts_receivable_dashboard(request):
         "all" if filters["include_archived"] else "active",
     )
     invoices_qs = _apply_ar_invoice_filters(invoices_qs, filters)
-    invoice_rows = list(invoices_qs.order_by("due_date", "-issue_date", "-created_at"))
+    invoice_rows = list(invoices_qs.order_by("due_date", f"-{INVOICE_REPORTING_DATE_ALIAS}", "-created_at"))
 
     payments_qs = InvoicePayment.objects.select_related(
         "invoice",
@@ -1752,18 +1755,14 @@ def invoice_list(request):
     if customer_id:
         invoices = invoices.filter(customer_id=customer_id)
 
-    if date_from:
-        invoices = invoices.filter(issue_date__gte=date_from)
-
-    if date_to:
-        invoices = invoices.filter(issue_date__lte=date_to)
+    invoices = apply_invoice_reporting_date_filter(invoices, date_from, date_to)
 
     if paid_filter == "paid":
         invoices = invoices.filter(status="paid")
     elif paid_filter == "unpaid":
         invoices = invoices.exclude(status="paid")
 
-    invoices = invoices.order_by("-issue_date", "-created_at")
+    invoices = invoices.order_by(f"-{INVOICE_REPORTING_DATE_ALIAS}", "-created_at")
     invoice_rows = list(invoices)
     total_amount = sum((_d(inv.total_amount) for inv in invoice_rows), Decimal("0"))
     received_amount = sum((_d(inv.paid_amount) for inv in invoice_rows), Decimal("0"))
@@ -1848,7 +1847,9 @@ def _invoice_list_by_currency(request, currency_code: str):
     q = (request.GET.get("q") or "").strip()
     status = (request.GET.get("status") or "").strip()
 
-    invoices = Invoice.objects.select_related("order", "customer").filter(currency=currency_code, is_archived=False)
+    invoices = with_invoice_reporting_date(
+        Invoice.objects.select_related("order", "customer").filter(currency=currency_code, is_archived=False)
+    )
 
     if q:
         invoices = invoices.filter(
@@ -1863,7 +1864,7 @@ def _invoice_list_by_currency(request, currency_code: str):
     if status:
         invoices = invoices.filter(status=status)
 
-    invoices = invoices.order_by("-issue_date", "-created_at")
+    invoices = invoices.order_by(f"-{INVOICE_REPORTING_DATE_ALIAS}", "-created_at")
     invoice_rows = list(invoices)
     total_amount = sum((_d(inv.total_amount) for inv in invoice_rows), Decimal("0"))
     received_amount = sum((_d(inv.paid_amount) for inv in invoice_rows), Decimal("0"))
@@ -1944,6 +1945,7 @@ def invoice_add(request):
     if local_order:
         initial.update(_local_sewing_invoice_initial(local_order))
     can_edit_internal_costs = user_can_manage_invoices and can_manage_invoice_internal_costing(request.user)
+    can_edit_historical_dates_flag = can_edit_historical_dates(request.user)
 
     if order_id:
         try:
@@ -1962,7 +1964,11 @@ def invoice_add(request):
                 f"Invoice {existing_invoice.invoice_number} already exists for this quotation. A duplicate was not created.",
             )
             return redirect("invoice_view", pk=existing_invoice.pk)
-        form = InvoiceForm(request.POST, can_edit_internal_costs=can_edit_internal_costs)
+        form = InvoiceForm(
+            request.POST,
+            can_edit_internal_costs=can_edit_internal_costs,
+            can_edit_historical_dates=can_edit_historical_dates_flag,
+        )
         if form.is_valid():
             with transaction.atomic():
                 inv = form.save(commit=False)
@@ -2027,7 +2033,11 @@ def invoice_add(request):
             messages.success(request, "Invoice created.")
             return redirect("invoice_view", pk=inv.pk)
     else:
-        form = InvoiceForm(initial=initial, can_edit_internal_costs=can_edit_internal_costs)
+        form = InvoiceForm(
+            initial=initial,
+            can_edit_internal_costs=can_edit_internal_costs,
+            can_edit_historical_dates=can_edit_historical_dates_flag,
+        )
 
     opportunity_prefill_context = (
         quotation_prefill["context"]
@@ -2040,6 +2050,7 @@ def invoice_add(request):
         "mode": "add",
         "can_manage_invoice_costing": can_edit_internal_costs,
         "can_manage_invoices": user_can_manage_invoices,
+        "can_edit_historical_dates": can_edit_historical_dates_flag,
         "opportunity_prefill": opportunity_prefill_context,
         **_invoice_form_extra_context(deposit_defaults),
     }
@@ -2055,8 +2066,13 @@ def invoice_add(request):
 def invoice_add_ca(request):
     # wrapper to force CAD
     can_edit_internal_costs = can_manage_invoice_internal_costing(request.user)
+    can_edit_historical_dates_flag = can_edit_historical_dates(request.user)
     if request.method == "POST":
-        form = InvoiceForm(request.POST, can_edit_internal_costs=can_edit_internal_costs)
+        form = InvoiceForm(
+            request.POST,
+            can_edit_internal_costs=can_edit_internal_costs,
+            can_edit_historical_dates=can_edit_historical_dates_flag,
+        )
         if form.is_valid():
             with transaction.atomic():
                 inv = form.save(commit=False)
@@ -2096,11 +2112,18 @@ def invoice_add_ca(request):
                 "deposit_percentage": _default_deposit_for("north_america", "bulk"),
             },
             can_edit_internal_costs=can_edit_internal_costs,
+            can_edit_historical_dates=can_edit_historical_dates_flag,
         )
     return render(
         request,
         "crm/invoice/invoice_form.html",
-        {"form": form, "mode": "add", "can_manage_invoice_costing": can_edit_internal_costs, **_invoice_form_extra_context()},
+        {
+            "form": form,
+            "mode": "add",
+            "can_manage_invoice_costing": can_edit_internal_costs,
+            "can_edit_historical_dates": can_edit_historical_dates_flag,
+            **_invoice_form_extra_context(),
+        },
     )
 
 
@@ -2109,10 +2132,15 @@ def invoice_add_ca(request):
 def invoice_add_bd(request):
     # wrapper to force BDT
     can_edit_internal_costs = can_manage_invoice_internal_costing(request.user)
+    can_edit_historical_dates_flag = can_edit_historical_dates(request.user)
     order_id = request.GET.get("order_id") or request.POST.get("order")
     local_order = _local_sewing_order(order_id)
     if request.method == "POST":
-        form = InvoiceForm(request.POST, can_edit_internal_costs=can_edit_internal_costs)
+        form = InvoiceForm(
+            request.POST,
+            can_edit_internal_costs=can_edit_internal_costs,
+            can_edit_historical_dates=can_edit_historical_dates_flag,
+        )
         if form.is_valid():
             with transaction.atomic():
                 inv = form.save(commit=False)
@@ -2158,11 +2186,18 @@ def invoice_add_bd(request):
         form = InvoiceForm(
             initial=initial,
             can_edit_internal_costs=can_edit_internal_costs,
+            can_edit_historical_dates=can_edit_historical_dates_flag,
         )
     return render(
         request,
         "crm/invoice/invoice_form.html",
-        {"form": form, "mode": "add", "can_manage_invoice_costing": can_edit_internal_costs, **_invoice_form_extra_context()},
+        {
+            "form": form,
+            "mode": "add",
+            "can_manage_invoice_costing": can_edit_internal_costs,
+            "can_edit_historical_dates": can_edit_historical_dates_flag,
+            **_invoice_form_extra_context(),
+        },
     )
 
 
@@ -2172,9 +2207,15 @@ def invoice_edit(request, pk):
     inv = get_object_or_404(Invoice, pk=pk)
     previous_status = inv.status
     can_edit_internal_costs = can_manage_invoice_internal_costing(request.user)
+    can_edit_historical_dates_flag = can_edit_historical_dates(request.user)
 
     if request.method == "POST":
-        form = InvoiceForm(request.POST, instance=inv, can_edit_internal_costs=can_edit_internal_costs)
+        form = InvoiceForm(
+            request.POST,
+            instance=inv,
+            can_edit_internal_costs=can_edit_internal_costs,
+            can_edit_historical_dates=can_edit_historical_dates_flag,
+        )
         if form.is_valid():
             with transaction.atomic():
                 inv2 = form.save(commit=False)
@@ -2206,7 +2247,11 @@ def invoice_edit(request, pk):
             messages.success(request, "Invoice updated.")
             return redirect("invoice_view", pk=inv.pk)
     else:
-        form = InvoiceForm(instance=inv, can_edit_internal_costs=can_edit_internal_costs)
+        form = InvoiceForm(
+            instance=inv,
+            can_edit_internal_costs=can_edit_internal_costs,
+            can_edit_historical_dates=can_edit_historical_dates_flag,
+        )
 
     display_invoice = inv if can_edit_internal_costs else _sanitize_invoice_internal_fields(inv)
     return render(
@@ -2217,6 +2262,7 @@ def invoice_edit(request, pk):
             "mode": "edit",
             "invoice": display_invoice,
             "can_manage_invoice_costing": can_edit_internal_costs,
+            "can_edit_historical_dates": can_edit_historical_dates_flag,
             **_invoice_form_extra_context(),
         },
     )
@@ -2559,6 +2605,7 @@ def invoice_pdf(request, pk):
     ]
     detail_lines = [
         f"Issue date: {inv.issue_date:%Y-%m-%d}" if inv.issue_date else "Issue date: -",
+        f"Revenue date: {inv.effective_invoice_date:%Y-%m-%d}" if inv.effective_invoice_date else "Revenue date: -",
         f"Due date: {inv.due_date:%Y-%m-%d}" if inv.due_date else "Due date: -",
         f"Currency: {currency or '-'}",
         f"Market: {context['invoice_market_label']}",

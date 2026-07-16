@@ -40,6 +40,11 @@ from crm.services.employee_identity import (
     resolve_employee_identity,
 )
 from crm.services.pipeline import CLOSED_PIPELINE_STAGES, NON_OPEN_PIPELINE_STAGES, summarize_pipeline, with_pipeline_value
+from crm.services.historical_dates import (
+    apply_invoice_reporting_date_filter,
+    apply_opportunity_reporting_date_filter,
+    invoice_reporting_date,
+)
 from crm.services.production_operational_status import (
     OPERATIONAL_ACTIVE_STATUSES,
     OPERATIONAL_STATUS_CANCELLED,
@@ -174,7 +179,7 @@ def _build_sales_chart_data(user, *, today, lead_counts, opportunity_counts, pro
         currency = (invoice.currency or "").upper()
         if currency not in CURRENCIES or invoice.status not in ISSUED_INVOICE_STATUSES:
             continue
-        issue_date = invoice.issue_date
+        issue_date = invoice_reporting_date(invoice)
         if issue_date:
             key = _month_key(issue_date)
             if key in monthly_revenue[currency]:
@@ -274,9 +279,9 @@ def _build_sales_chart_data(user, *, today, lead_counts, opportunity_counts, pro
 
     monthly_order_counts = {key: 0 for key in month_keys}
     for opportunity in opportunity_rows:
-        created_date = opportunity.get("created_date")
-        if created_date:
-            key = _month_key(created_date)
+        reporting_date = opportunity.get("opportunity_date") or opportunity.get("created_date")
+        if reporting_date:
+            key = _month_key(reporting_date)
             if key in monthly_order_counts:
                 monthly_order_counts[key] += 1
     for order in production_orders:
@@ -831,7 +836,7 @@ def build_sales_kpis(user):
     )
     opportunity_rows = list(
         with_pipeline_value(opportunities).values(
-            "id", "stage", "is_open", "created_date", "updated_at", "closed_won_at",
+            "id", "stage", "is_open", "created_date", "opportunity_date", "updated_at", "closed_won_at",
             "customer_id", "opportunity_id", "product_type", "product_category", "lead__account_brand",
             "sales_has_production", "pipeline_currency", "pipeline_value",
         )
@@ -870,7 +875,7 @@ def build_sales_kpis(user):
                 won_totals[currency]["amount"] += value
                 won_totals[currency]["count"] += 1
             closed_at = opportunity["closed_won_at"]
-            won_date = closed_at.date() if closed_at else opportunity["created_date"]
+            won_date = opportunity.get("opportunity_date") or opportunity["created_date"]
             if month_start <= won_date <= today:
                 monthly_won_totals[currency]["amount"] += value
                 monthly_won_totals[currency]["count"] += 1
@@ -954,7 +959,7 @@ def build_sales_kpis(user):
                 "total": invoice.total_amount or ZERO,
                 "paid": payment_total,
                 "balance": outstanding,
-                "issue_date": invoice.issue_date,
+                "issue_date": invoice_reporting_date(invoice),
             }
         )
     invoice_rows = [{"currency": currency, **invoice_totals[currency]} for currency in CURRENCIES]
@@ -1124,7 +1129,11 @@ def build_sales_kpis(user):
                     "currency": (row["pipeline_currency"] or "CAD").upper(),
                     "value": row["pipeline_value"] or ZERO,
                 }
-                for row in sorted(active_opportunity_rows, key=lambda item: (item["created_date"], item["id"]), reverse=True)[:10]
+                for row in sorted(
+                    active_opportunity_rows,
+                    key=lambda item: (item.get("opportunity_date") or item["created_date"], item["id"]),
+                    reverse=True,
+                )[:10]
             ],
             "production_orders": production_table_rows[:10],
             "ready_to_ship_orders": ready_to_ship_rows[:10],
@@ -1319,7 +1328,11 @@ def build_team_sales_kpis(filters=None):
         if known_opportunity_owner:
             opportunity_scope |= Q(lead__assigned_to__isnull=True) & known_opportunity_owner
         opportunity_qs = Opportunity.objects.filter(is_archived=False).filter(opportunity_scope)
-        opportunity_qs = _apply_common_date_filter(opportunity_qs, filters, "created_date")
+        opportunity_qs = apply_opportunity_reporting_date_filter(
+            opportunity_qs,
+            filters["date_from"],
+            filters["date_to"],
+        )
         if filters["market"]:
             opportunity_qs = opportunity_qs.filter(lead__market=filters["market"])
         if filters["status"]:
@@ -1458,7 +1471,7 @@ def build_team_sales_kpis(filters=None):
             | Q(order__isnull=True, opportunity__isnull=True, costing_header__isnull=False) & costing_scope
             | Q(order__isnull=True, opportunity__isnull=True, costing_header__isnull=True) & quick_scope
         )
-        invoice_qs = _apply_common_date_filter(invoice_qs, filters, "issue_date")
+        invoice_qs = apply_invoice_reporting_date_filter(invoice_qs, filters["date_from"], filters["date_to"])
         if filters["market"]:
             invoice_qs = invoice_qs.filter(
                 Q(order__lead__market=filters["market"])
@@ -1620,7 +1633,7 @@ def _ceo_invoice_kpis(queryset, *, today, month_start):
     customer_groups = defaultdict(lambda: {"count": 0, "amounts": defaultdict(Decimal)})
     salesperson_groups = defaultdict(lambda: {"count": 0, "amounts": defaultdict(Decimal)})
     identity_index = get_employee_identity_index()
-    invoices = queryset.filter(issue_date__range=(month_start, today)).select_related(
+    invoices = apply_invoice_reporting_date_filter(queryset, month_start, today).select_related(
         "customer",
         "order__lead__assigned_to",
         "order__opportunity__lead__assigned_to",
@@ -1633,7 +1646,7 @@ def _ceo_invoice_kpis(queryset, *, today, month_start):
             continue
         amount = invoice.total_amount or ZERO
         monthly_amounts[currency] += amount
-        if invoice.issue_date == today:
+        if invoice_reporting_date(invoice) == today:
             today_amounts[currency] += amount
 
         customer = invoice.customer

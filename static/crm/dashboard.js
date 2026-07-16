@@ -426,7 +426,7 @@
           labels: trendLabels,
           datasets: [
             {
-              label: "Revenue",
+              label: "Accounting Revenue",
               data: safeValues(data.revenue_daily_values, trendSize),
               borderColor: palette.green,
               backgroundColor: withAlpha(palette.green, 0.1),

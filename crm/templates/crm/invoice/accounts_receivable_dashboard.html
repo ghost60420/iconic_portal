@@ -584,7 +584,10 @@
                   <tr>
                     <td>
                       <a class="ar-link" href="{% url 'invoice_view' row.invoice.pk %}">{{ row.invoice.invoice_number }}</a>
-                      <div class="ar-muted">{{ row.invoice.issue_date|date:"Y-m-d" }}</div>
+                      <div class="ar-muted">
+                        Revenue {{ row.invoice.effective_invoice_date|date:"Y-m-d" }}
+                        {% if row.invoice.is_historical_entry %} · Historical Entry{% endif %}
+                      </div>
                     </td>
                     <td>
                       {% if row.invoice.customer %}

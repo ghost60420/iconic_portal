@@ -318,8 +318,8 @@
           <option value="unpaid" {% if paid == "unpaid" %}selected{% endif %}>Unpaid only</option>
         </select>
         {% if can_archive_invoices %}<select class="ctrl sm" name="archive"><option value="active" {% if archive_filter == 'active' %}selected{% endif %}>Active invoices</option><option value="archived" {% if archive_filter == 'archived' %}selected{% endif %}>Archived invoices</option><option value="all" {% if archive_filter == 'all' %}selected{% endif %}>All invoices</option></select>{% endif %}
-        <input class="ctrl sm" type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}" aria-label="Issue date from">
-        <input class="ctrl sm" type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}" aria-label="Issue date to">
+        <input class="ctrl sm" type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}" aria-label="Revenue date from" title="Revenue date from">
+        <input class="ctrl sm" type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}" aria-label="Revenue date to" title="Revenue date to">
         <button class="pill gold" type="submit">Apply</button>
         <a class="pill" href="{% url 'invoice_list' %}">Reset</a>
       </form>
@@ -349,6 +349,12 @@
 
                 <td class="mono">
                   {{ inv.invoice_number|default:"-" }}
+                  <div class="muted" style="font-family:Inter,system-ui,sans-serif; font-size:11px; margin-top:3px;">
+                    Revenue {{ inv.effective_invoice_date|date:"Y-m-d"|default:"-" }}
+                    {% if inv.is_historical_entry %}
+                      <span class="status partial" style="margin-left:6px;">Historical Entry</span>
+                    {% endif %}
+                  </div>
                 </td>
 
                 <td>

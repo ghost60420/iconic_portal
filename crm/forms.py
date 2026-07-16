@@ -1047,6 +1047,7 @@ class InvoiceForm(forms.ModelForm):
             "customer",
             "invoice_number",
             "issue_date",
+            "invoice_date",
             "due_date",
             "currency",
             "invoice_market",
@@ -1067,6 +1068,7 @@ class InvoiceForm(forms.ModelForm):
         widgets = {
             "invoice_number": forms.TextInput(attrs={"class": "form-control", "placeholder": "Auto if blank"}),
             "issue_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
+            "invoice_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
             "due_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
             "invoice_market": forms.Select(attrs={"class": "form-select"}),
             "invoice_type": forms.Select(attrs={"class": "form-select"}),
@@ -1085,6 +1087,7 @@ class InvoiceForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         can_edit_internal_costs = kwargs.pop("can_edit_internal_costs", False)
+        can_edit_historical_dates = kwargs.pop("can_edit_historical_dates", False)
         super().__init__(*args, **kwargs)
 
         if "invoice_number" in self.fields:
@@ -1096,6 +1099,12 @@ class InvoiceForm(forms.ModelForm):
 
         if "status" in self.fields:
             self.fields["status"].required = False
+
+        if can_edit_historical_dates:
+            if "invoice_date" in self.fields:
+                self.fields["invoice_date"].required = False
+        else:
+            self.fields.pop("invoice_date", None)
 
         for field_name in ("invoice_market", "invoice_type"):
             if field_name in self.fields:

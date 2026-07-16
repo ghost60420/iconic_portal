@@ -421,6 +421,7 @@
       <div style="font-size:18px; font-weight:900;">Invoice</div>
       <div class="line">Invoice number: <span class="mono">{{ invno }}</span></div>
       <div class="line">Issue date: {{ invoice.issue_date|date:"Y-m-d"|default:"" }}</div>
+      <div class="line">Revenue date: {{ invoice.effective_invoice_date|date:"Y-m-d"|default:"" }}</div>
       {% if invoice.customer %}
         <div class="line">Customer: {{ invoice.customer }}</div>
       {% endif %}
@@ -434,10 +435,12 @@
         <h2 class="title">Invoice {{ invno }}</h2>
         <div class="sub">
           Issue {{ invoice.issue_date|date:"Y-m-d"|default:"" }}
+          {% if invoice.effective_invoice_date %} | Revenue {{ invoice.effective_invoice_date|date:"Y-m-d" }}{% endif %}
           {% if invoice.due_date %} | Due {{ invoice.due_date|date:"Y-m-d" }}{% endif %}
           {% if cur %} | Currency {{ cur }}{% endif %}
         </div>
         {% if invoice.is_archived %}<div class="status s-cancelled">Archived</div>{% endif %}
+        {% if invoice.is_historical_entry %}<div class="status s-partial">Historical Entry</div>{% endif %}
       </div>
 
       <div class="btnbar noPrint">
@@ -841,6 +844,12 @@
 
             <div class="k">Issue date</div>
             <div class="v">{{ invoice.issue_date|date:"Y-m-d"|default:"" }}</div>
+
+            <div class="k">Revenue date</div>
+            <div class="v">
+              {{ invoice.effective_invoice_date|date:"Y-m-d"|default:"" }}
+              {% if invoice.is_historical_entry %}<span class="status s-partial">Historical Entry</span>{% endif %}
+            </div>
 
             <div class="k">Due date</div>
             <div class="v">

@@ -16,6 +16,7 @@ from django.db.models import Q
 
 from crm.models import AccountingEntry, ExchangeRate, Invoice, ProductionOrder
 from crm.services.costing_currency import CurrencyConversionError, convert_currency
+from crm.services.historical_dates import INVOICE_REPORTING_DATE_ALIAS, with_invoice_reporting_date
 
 
 ZERO = Decimal("0")
@@ -287,7 +288,7 @@ def _build_sample_row(invoice, sample_type):
         "invoice_status": (invoice.get("status") or "Unavailable").replace("_", " ").title(),
         "payment_status": _sample_payment_status(amount, paid),
         "credit_status": "Credit tracking unavailable",
-        "issue_date": invoice.get("issue_date"),
+        "issue_date": invoice.get(INVOICE_REPORTING_DATE_ALIAS) or invoice.get("issue_date"),
         "revenue_type": "sample",
     }
 
@@ -378,7 +379,7 @@ def _build_other_invoice_row(invoice, service_type):
         "source": "Invoice",
         "source_id": invoice["id"],
         "reference": invoice.get("invoice_number") or "Unavailable",
-        "date": invoice.get("issue_date"),
+        "date": invoice.get(INVOICE_REPORTING_DATE_ALIAS) or invoice.get("issue_date"),
         "service_type": service_type,
         "client": _sample_client(invoice),
         "brand": _invoice_brand(invoice),
@@ -402,7 +403,7 @@ def _build_unlinked_production_invoice_row(invoice, revenue_type):
         "source": "Invoice",
         "source_id": invoice["id"],
         "reference": invoice.get("invoice_number") or "Unavailable",
-        "date": invoice.get("issue_date"),
+        "date": invoice.get(INVOICE_REPORTING_DATE_ALIAS) or invoice.get("issue_date"),
         "client": _sample_client(invoice),
         "brand": _invoice_brand(invoice),
         "country": _invoice_country(invoice),
@@ -1082,15 +1083,14 @@ def build_production_profit_report(
     if revenue_type not in {"", *REVENUE_TYPES}:
         revenue_type = ""
     invoice_qs = (
-        Invoice.objects.filter(
-            is_archived=False,
-            **_date_filter("issue_date", year, month, start_date, end_date),
-        )
-        .exclude(status="cancelled")
+        with_invoice_reporting_date(Invoice.objects.filter(is_archived=False).exclude(status="cancelled"))
+        .filter(**_date_filter(INVOICE_REPORTING_DATE_ALIAS, year, month, start_date, end_date))
         .values(
             "id",
             "invoice_number",
             "issue_date",
+            "invoice_date",
+            INVOICE_REPORTING_DATE_ALIAS,
             "order_id",
             "costing_header_id",
             "quick_costing_id",

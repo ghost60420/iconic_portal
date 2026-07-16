@@ -452,6 +452,15 @@
                 </div>
               </div>
 
+              {% if form.invoice_date %}
+                <div class="mb-3">
+                  <label for="{{ form.invoice_date.id_for_label }}">Revenue date</label>
+                  {{ form.invoice_date }}
+                  {% if form.invoice_date.errors %}<div class="err">{{ form.invoice_date.errors }}</div>{% endif %}
+                  <div class="help">CEO/Admin only. Used for historical revenue reports; original created date stays unchanged.</div>
+                </div>
+              {% endif %}
+
               <div class="row2">
                 <div class="mb-3">
                   <label for="{{ form.invoice_market.id_for_label }}">Market</label>

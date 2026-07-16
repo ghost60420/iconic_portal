@@ -382,18 +382,26 @@
   </div>
 
   <form class="ceo-filter" method="get">
-    <div class="ceo-field">
-      <label for="days">Period</label>
-      <select id="days" name="days">
-        <option value="7" {% if filter_values.days == "7" %}selected{% endif %}>Last 7 days</option>
-        <option value="30" {% if filter_values.days == "30" %}selected{% endif %}>Last 30 days</option>
-        <option value="60" {% if filter_values.days == "60" %}selected{% endif %}>Last 60 days</option>
-        <option value="90" {% if filter_values.days == "90" %}selected{% endif %}>Last 90 days</option>
-        <option value="180" {% if filter_values.days == "180" %}selected{% endif %}>Last 180 days</option>
-      </select>
-    </div>
-    <div class="ceo-field">
-      <label for="side">Side</label>
+	    <div class="ceo-field">
+	      <label for="days">Period</label>
+	      <select id="days" name="days">
+	        <option value="7" {% if filter_values.days == "7" %}selected{% endif %}>Last 7 days</option>
+	        <option value="30" {% if filter_values.days == "30" %}selected{% endif %}>Last 30 days</option>
+	        <option value="60" {% if filter_values.days == "60" %}selected{% endif %}>Last 60 days</option>
+	        <option value="90" {% if filter_values.days == "90" %}selected{% endif %}>Last 90 days</option>
+	        <option value="180" {% if filter_values.days == "180" %}selected{% endif %}>Last 180 days</option>
+	      </select>
+	    </div>
+	    <div class="ceo-field">
+	      <label for="date_from">Reporting from</label>
+	      <input id="date_from" type="date" name="date_from" value="{{ filter_values.date_from|default:'' }}">
+	    </div>
+	    <div class="ceo-field">
+	      <label for="date_to">Reporting to</label>
+	      <input id="date_to" type="date" name="date_to" value="{{ filter_values.date_to|default:'' }}">
+	    </div>
+	    <div class="ceo-field">
+	      <label for="side">Side</label>
       <select id="side" name="side">
         {% for value,label in side_options %}
           <option value="{{ value }}" {% if filter_values.side == value %}selected{% endif %}>{{ label }}</option>
@@ -435,7 +443,7 @@
     <div class="ceo-exec-grid">
       {% if can_view_executive_financials and revenue_overview %}
         <article class="ceo-exec-card">
-          <h2>Invoice Overview</h2>
+          <h2>Invoiced Revenue Overview</h2>
           <ul class="ceo-stat-list">
             {% for row in revenue_overview.currency_rows %}
               <li class="ceo-stat"><span>{{ row.currency }} invoiced</span><strong title="{{ row.invoiced|finance_money:row.currency }}">{{ row.invoiced|compact_money:row.currency }}</strong></li>
@@ -561,7 +569,7 @@
     <div class="ceo-chart-grid">
       {% if can_view_executive_financials %}
         <div class="ceo-chart-card">
-          <h3>Monthly Revenue</h3>
+          <h3>Monthly Invoiced Revenue</h3>
           <div class="ceo-chart-shell"><canvas data-ceo-chart="monthly-revenue"></canvas></div>
         </div>
         <div class="ceo-chart-card">

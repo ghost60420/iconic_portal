@@ -69,7 +69,7 @@
     <div class="opp-panel-head">
       <div>
         <h2 class="opp-panel-title">Filters</h2>
-        <p class="opp-panel-note">Search by opportunity, brand, lead, contact, stage, or product.</p>
+        <p class="opp-panel-note">Search by opportunity, brand, lead, contact, stage, product, or historical opportunity date.</p>
       </div>
       <a class="opp-btn opp-btn--ghost" href="{% url 'opportunities_list' %}">Clear filters</a>
     </div>
@@ -114,12 +114,12 @@
       </div>
 
       <div class="opp-field">
-        <label class="opp-label">Created from</label>
+        <label class="opp-label">Opportunity date from</label>
         <input class="opp-input" type="date" name="created_from" value="{{ request.GET.created_from|default:'' }}">
       </div>
 
       <div class="opp-field">
-        <label class="opp-label">Created to</label>
+        <label class="opp-label">Opportunity date to</label>
         <input class="opp-input" type="date" name="created_to" value="{{ request.GET.created_to|default:'' }}">
       </div>
 
@@ -204,17 +204,18 @@
               </td>
               <td data-label="Opportunity" class="opp-primary-cell">
                 <div class="opp-primary">
-                  <a href="{% url 'opportunity_detail' opp.pk %}" class="opp-link">{{ opp.opportunity_id }}</a>
-                  <strong>{% if opp.lead %}{{ opp.lead.account_brand|default:"Company not set" }}{% else %}No linked lead{% endif %}</strong>
-                  <span>
-                    {% if opp.lead %}
-                      {{ opp.lead.lead_id }}{% if opp.lead.contact_name %} · {{ opp.lead.contact_name }}{% endif %}
-                    {% else %}
-                      Lead unavailable
-                    {% endif %}
-                  </span>
-                </div>
-              </td>
+	                  <a href="{% url 'opportunity_detail' opp.pk %}" class="opp-link">{{ opp.opportunity_id }}</a>
+	                  <strong>{% if opp.lead %}{{ opp.lead.account_brand|default:"Company not set" }}{% else %}No linked lead{% endif %}</strong>
+	                  <span>
+	                    {% if opp.lead %}
+	                      {{ opp.lead.lead_id }}{% if opp.lead.contact_name %} · {{ opp.lead.contact_name }}{% endif %}
+	                    {% else %}
+	                      Lead unavailable
+	                    {% endif %}
+	                  </span>
+	                  <span>Opportunity date: {{ opp.effective_opportunity_date|date:"M j, Y" }}</span>
+	                </div>
+	              </td>
 
               <td data-label="Value">
                 <div class="opp-value-stack">

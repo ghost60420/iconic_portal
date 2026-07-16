@@ -342,6 +342,13 @@
             <label for="notes">Opportunity Notes</label>
             <textarea name="notes" id="notes" rows="4">{{ opportunity.notes }}</textarea>
           </div>
+          {% if can_edit_historical_dates %}
+            <div class="opp-edit-field">
+              <label for="opportunity_date">Opportunity Date</label>
+              <input type="date" name="opportunity_date" id="opportunity_date" value="{{ opportunity.opportunity_date|date:'Y-m-d' }}">
+              <div class="opp-edit-help">CEO/Admin only. Used for historical opportunity reports; created date stays unchanged.</div>
+            </div>
+          {% endif %}
         </div>
       </section>
     </div>

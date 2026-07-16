@@ -48,16 +48,21 @@
 
     <div class="dashboard-toolbar">
       <div class="dashboard-toolbar-actions">
-        <form method="get" class="dashboard-range-form">
-          <label for="dashboard-days">Range</label>
-          <select id="dashboard-days" name="days" onchange="this.form.submit()">
-            <option value="7" {% if period_days == 7 %}selected{% endif %}>Last 7 days</option>
-            <option value="30" {% if period_days == 30 %}selected{% endif %}>Last 30 days</option>
-            <option value="60" {% if period_days == 60 %}selected{% endif %}>Last 60 days</option>
-            <option value="90" {% if period_days == 90 %}selected{% endif %}>Last 90 days</option>
-            <option value="180" {% if period_days == 180 %}selected{% endif %}>Last 180 days</option>
-          </select>
-        </form>
+	        <form method="get" class="dashboard-range-form">
+	          <label for="dashboard-days">Range</label>
+	          <select id="dashboard-days" name="days" onchange="this.form.submit()">
+	            <option value="7" {% if period_days == 7 %}selected{% endif %}>Last 7 days</option>
+	            <option value="30" {% if period_days == 30 %}selected{% endif %}>Last 30 days</option>
+	            <option value="60" {% if period_days == 60 %}selected{% endif %}>Last 60 days</option>
+	            <option value="90" {% if period_days == 90 %}selected{% endif %}>Last 90 days</option>
+	            <option value="180" {% if period_days == 180 %}selected{% endif %}>Last 180 days</option>
+	          </select>
+	          <label for="dashboard-date-from">From</label>
+	          <input id="dashboard-date-from" type="date" name="date_from" value="{{ filter_values.date_from|default:'' }}" aria-label="Dashboard reporting date from">
+	          <label for="dashboard-date-to">To</label>
+	          <input id="dashboard-date-to" type="date" name="date_to" value="{{ filter_values.date_to|default:'' }}" aria-label="Dashboard reporting date to">
+	          <button type="submit">Apply</button>
+	        </form>
 
         <div class="dashboard-control-pair" aria-label="Dashboard display controls">
           <button class="dashboard-control-button" type="button" data-compact-toggle aria-pressed="false">
@@ -902,8 +907,8 @@
       <div class="dashboard-section-head">
       <div>
         <p class="dashboard-eyebrow">Finance</p>
-        <h2>{% if can_view_order_lifecycle_profit %}Revenue, profitability, and invoice pressure{% else %}Revenue and invoice pressure{% endif %}</h2>
-        <p>{% if can_view_order_lifecycle_profit %}Financial views are grouped into one band so cash signals read cleanly without crowding operational blocks.{% else %}Some financial widgets are available only to approved internal users.{% endif %}</p>
+        <h2>{% if can_view_order_lifecycle_profit %}Accounting revenue, profitability, and invoice pressure{% else %}Accounting revenue and invoice pressure{% endif %}</h2>
+        <p>{% if can_view_order_lifecycle_profit %}Accounting-entry cash signals stay separate from historical invoice revenue reporting.{% else %}Some financial widgets are available only to approved internal users.{% endif %}</p>
       </div>
       <a class="dashboard-section-link" href="{{ accounting_url }}">
         <i data-lucide="landmark"></i>
@@ -915,8 +920,8 @@
       <article class="dashboard-card">
         <div class="dashboard-card-head">
           <div class="dashboard-card-copy">
-            <span class="dashboard-card-title">Revenue vs Expenses</span>
-            <span class="dashboard-card-note">Daily CAD totals excluding transfers.</span>
+            <span class="dashboard-card-title">Accounting Revenue vs Expenses</span>
+            <span class="dashboard-card-note">Daily CAD accounting-entry totals excluding transfers.</span>
           </div>
         </div>
         <div class="dashboard-chart-shell dashboard-chart-shell--sm is-loading" data-chart-shell>

@@ -97,6 +97,7 @@ class ProductionProfitReportTests(TestCase):
         region,
         invoice_type="bulk",
         issue_date=None,
+        invoice_date=None,
         paid_amount=Decimal("0"),
         customer=None,
         quick_costing=None,
@@ -110,6 +111,7 @@ class ProductionProfitReportTests(TestCase):
             "invoice_number": number,
             "order": order,
             "issue_date": issue_date or self.today,
+            "invoice_date": invoice_date,
             "currency": currency,
             "invoice_market": market,
             "invoice_region": region,
@@ -652,6 +654,7 @@ class ProductionProfitReportTests(TestCase):
         previous = self.sample_invoice(
             number="INV-SAMPLE-PREVIOUS",
             issue_date=previous_date,
+            invoice_date=previous_date,
         )
 
         current_ids = {row["invoice_id"] for row in self.report()["sample_rows"]}

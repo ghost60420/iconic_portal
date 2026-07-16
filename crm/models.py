@@ -1263,6 +1263,7 @@ class Opportunity(models.Model):
         unique=True,
         blank=True,
     )
+    opportunity_date = models.DateField(null=True, blank=True, db_index=True)
 
     stage = models.CharField(
         max_length=50,
@@ -1366,6 +1367,10 @@ class Opportunity(models.Model):
             "closed_lost": "Closed Lost",
         }
         return mapping.get(self.status_key, "Open")
+
+    @property
+    def effective_opportunity_date(self):
+        return self.opportunity_date or self.created_date
 
     def save(self, *args, **kwargs):
         if not self.customer and self.lead and self.lead.customer_id:
@@ -5268,6 +5273,7 @@ class Invoice(models.Model):
 
     invoice_number = models.CharField(max_length=50, unique=True)
     issue_date = models.DateField(default=timezone.now)
+    invoice_date = models.DateField(null=True, blank=True, db_index=True)
     due_date = models.DateField(null=True, blank=True)
 
     currency = models.CharField(
@@ -5370,6 +5376,18 @@ class Invoice(models.Model):
     @property
     def balance(self):
         return (self.total_amount or Decimal("0")) - (self.paid_amount or Decimal("0"))
+
+    @property
+    def effective_invoice_date(self):
+        if self.invoice_date:
+            return self.invoice_date
+        if self.created_at:
+            return self.created_at.date()
+        return self.issue_date
+
+    @property
+    def is_historical_entry(self):
+        return bool(self.invoice_date and self.created_at and self.invoice_date < self.created_at.date())
 
     @property
     def deposit_amount(self):

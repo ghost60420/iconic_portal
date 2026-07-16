@@ -89,6 +89,13 @@ from .services.product_reference_images import (
     save_reference_images_for_lead,
 )
 from .services.workflow_visibility import build_workflow_visibility_context
+from .services.historical_dates import (
+    INVOICE_REPORTING_DATE_ALIAS,
+    OPPORTUNITY_REPORTING_DATE_ALIAS,
+    can_edit_historical_dates,
+    with_invoice_reporting_date,
+    with_opportunity_reporting_date,
+)
 from .services.automation_engine import automation_dashboard_context
 from .services.operations_dashboard import operations_dashboard_context
 from .services.pipeline import (
@@ -8469,6 +8476,7 @@ def opportunity_edit(request, pk):
     selected_order_currency = (getattr(opportunity, "order_currency", "") or "CAD").upper()
     if selected_order_currency not in order_currency_keys:
         selected_order_currency = "CAD"
+    can_edit_historical_dates_flag = can_edit_historical_dates(request.user)
     account_label = (
         getattr(opportunity.lead, "account_brand", "")
         or (getattr(opportunity.customer, "account_brand", "") if opportunity.customer_id else "")
@@ -8516,6 +8524,17 @@ def opportunity_edit(request, pk):
         if order_value is not None:
             opportunity.order_value = order_value
 
+        if can_edit_historical_dates_flag:
+            opportunity_date_raw = (request.POST.get("opportunity_date") or "").strip()
+            if opportunity_date_raw:
+                opportunity_date = parse_date(opportunity_date_raw)
+                if opportunity_date is None:
+                    messages.error(request, "Please enter a valid opportunity date.")
+                    return redirect("opportunity_edit", pk=pk)
+                opportunity.opportunity_date = opportunity_date
+            else:
+                opportunity.opportunity_date = None
+
         opportunity.notes = request.POST.get("notes") or opportunity.notes
 
         opportunity.save()
@@ -8534,6 +8553,7 @@ def opportunity_edit(request, pk):
             "account_label": account_label,
             "currency_summary": _opportunity_currency_summary(opportunity),
             "bdt_per_piece": _opportunity_currency_summary(opportunity)["bdt_per_piece"],
+            "can_edit_historical_dates": can_edit_historical_dates_flag,
         },
     )
 
@@ -12070,6 +12090,49 @@ def _ceo_month_key(value):
     return value.replace(day=1)
 
 
+def _dashboard_period_from_request(request, today):
+    try:
+        period_days = int((request.GET.get("days") or "30").strip())
+    except Exception:
+        period_days = 30
+    if period_days not in (7, 30, 60, 90, 180):
+        period_days = 30
+
+    date_from_raw = (request.GET.get("date_from") or "").strip()
+    date_to_raw = (request.GET.get("date_to") or "").strip()
+    custom_from = parse_date(date_from_raw) if date_from_raw else None
+    custom_to = parse_date(date_to_raw) if date_to_raw else None
+
+    if custom_from or custom_to:
+        period_end = custom_to or today
+        start_period = custom_from or (period_end - timedelta(days=period_days - 1))
+        if start_period > period_end:
+            start_period, period_end = period_end, start_period
+        period_days = max((period_end - start_period).days + 1, 1)
+        period_label = (
+            start_period.strftime("%b %d, %Y")
+            if start_period == period_end
+            else f"{start_period.strftime('%b %d, %Y')} - {period_end.strftime('%b %d, %Y')}"
+        )
+        date_from_value = start_period.isoformat()
+        date_to_value = period_end.isoformat()
+    else:
+        period_end = today
+        start_period = period_end - timedelta(days=period_days - 1)
+        period_label = f"Last {period_days} days"
+        date_from_value = ""
+        date_to_value = ""
+
+    previous_end = start_period - timedelta(days=1)
+    previous_start = previous_end - timedelta(days=period_days - 1)
+    filter_values = {
+        "days": str(period_days if period_days in (7, 30, 60, 90, 180) else 30),
+        "date_from": date_from_value,
+        "date_to": date_to_value,
+    }
+    return period_days, start_period, period_end, previous_start, previous_end, period_label, filter_values
+
+
 def _ceo_percent(numerator, denominator):
     numerator = _ceo_decimal(numerator)
     denominator = _ceo_decimal(denominator)
@@ -12352,29 +12415,25 @@ def ceo_dashboard(request):
 @login_required
 def ceo_operations_dashboard(request):
     today = timezone.localdate()
-    try:
-        period_days = int((request.GET.get("days") or "30").strip())
-    except Exception:
-        period_days = 30
-    if period_days not in (7, 30, 60, 90, 180):
-        period_days = 30
+    period_days, start_period, period_end, previous_start, previous_end, period_label, filter_values = (
+        _dashboard_period_from_request(request, today)
+    )
 
     side = (request.GET.get("side") or "").strip().upper()
     if side not in {"", "CA", "BD"}:
         side = ""
 
-    start_period = today - timedelta(days=period_days - 1)
-    previous_end = start_period - timedelta(days=1)
-    previous_start = previous_end - timedelta(days=period_days - 1)
-    filter_values = {"days": str(period_days), "side": side}
-    period_label = f"Last {period_days} days"
+    filter_values["side"] = side
     can_view_executive_financials = can_view_lifecycle_profit(request.user)
     can_view_local_financials = can_view_local_sewing_financials(request.user)
     lead_kpi_qs = _active_lead_queryset()
     opportunity_kpi_qs = _active_opportunity_queryset()
+    opportunity_reporting_qs = with_opportunity_reporting_date(opportunity_kpi_qs)
     production_kpi_qs = _active_production_queryset()
+    opp_period_filter = {f"{OPPORTUNITY_REPORTING_DATE_ALIAS}__range": (start_period, period_end)}
+    prev_opp_period_filter = {f"{OPPORTUNITY_REPORTING_DATE_ALIAS}__range": (previous_start, previous_end)}
 
-    leads_period = lead_kpi_qs.filter(created_date__range=(start_period, today)).count()
+    leads_period = lead_kpi_qs.filter(created_date__range=(start_period, period_end)).count()
     prev_leads_period = lead_kpi_qs.filter(created_date__range=(previous_start, previous_end)).count()
     overdue_followups = lead_kpi_qs.filter(next_followup__lt=today).exclude(
         lead_status__in=["Converted", "Closed", "Disqualified", "Lost"]
@@ -12383,12 +12442,12 @@ def ceo_operations_dashboard(request):
         next_followup__range=(today, today + timedelta(days=7))
     ).exclude(lead_status__in=["Converted", "Closed", "Disqualified", "Lost"]).count()
     lead_source_rows = list(
-        lead_kpi_qs.filter(created_date__range=(start_period, today))
+        lead_kpi_qs.filter(created_date__range=(start_period, period_end))
         .values("source")
         .annotate(count=Count("id"))
         .order_by("-count")[:6]
     )
-    assignee_rows = lead_kpi_qs.filter(created_date__range=(start_period, today)).values(
+    assignee_rows = lead_kpi_qs.filter(created_date__range=(start_period, period_end)).values(
         "assigned_to_id", "owner"
     ).annotate(count=Count("id"))
     assignee_counts = defaultdict(int)
@@ -12405,18 +12464,14 @@ def ceo_operations_dashboard(request):
         for name, count in sorted(assignee_counts.items(), key=lambda item: (-item[1], item[0]))[:8]
     ]
 
-    opp_base = opportunity_kpi_qs.filter(created_date__range=(start_period, today))
+    opp_base = opportunity_reporting_qs.filter(**opp_period_filter)
     opp_period = opp_base.count()
-    prev_opp_period = opportunity_kpi_qs.filter(created_date__range=(previous_start, previous_end)).count()
+    prev_opp_period = opportunity_reporting_qs.filter(**prev_opp_period_filter).count()
     open_pipeline_qs = open_pipeline_queryset(opportunity_kpi_qs)
     open_opps = open_pipeline_qs.count()
     open_pipeline_values = _sum_opportunity_kpi_values_by_currency(open_pipeline_qs)
-    won_period = opportunity_kpi_qs.filter(
-        stage="Closed Won", updated_at__date__range=(start_period, today)
-    ).count()
-    lost_period = opportunity_kpi_qs.filter(
-        stage="Closed Lost", updated_at__date__range=(start_period, today)
-    ).count()
+    won_period = opportunity_reporting_qs.filter(stage="Closed Won", **opp_period_filter).count()
+    lost_period = opportunity_reporting_qs.filter(stage="Closed Lost", **opp_period_filter).count()
     conversion_rate = round((opp_period / leads_period) * 100, 1) if leads_period else 0
     prev_conversion_rate = round((prev_opp_period / prev_leads_period) * 100, 1) if prev_leads_period else 0
     stage_rows = list(
@@ -12424,7 +12479,7 @@ def ceo_operations_dashboard(request):
     )
     top_customer_rows = list(
         _with_opportunity_kpi_value(opportunity_kpi_qs.select_related("customer", "lead"))
-        .filter(created_date__range=(start_period, today))
+        .filter(pk__in=opp_base.values("pk"))
         .values("customer__account_brand", "customer__contact_name", "lead__account_brand", "kpi_currency")
         .annotate(total=Sum("kpi_order_value"), count=Count("id"))
         .order_by(*(["-total", "-count"] if can_view_executive_financials else ["-count"]))[:8]
@@ -12481,7 +12536,7 @@ def ceo_operations_dashboard(request):
         row for row in production_operational_rows_ceo
         if row["operational_status"] == OPERATIONAL_STATUS_SHIPPED
         and row["order"].updated_at.date() >= start_period
-        and row["order"].updated_at.date() <= today
+        and row["order"].updated_at.date() <= period_end
     ])
     production_delayed = len([
         row for row in production_operational_rows_ceo
@@ -12501,7 +12556,7 @@ def ceo_operations_dashboard(request):
         shipping_qs = shipping_qs.filter(order__factory_location="ca")
     elif side == "BD":
         shipping_qs = shipping_qs.filter(order__factory_location="bd")
-    shipments_period = shipping_qs.filter(created_at__date__range=(start_period, today)).count()
+    shipments_period = shipping_qs.filter(created_at__date__range=(start_period, period_end)).count()
     shipments_in_transit = shipping_qs.filter(status__in=["booked", "shipped", "out_for_delivery"]).count()
     shipments_delayed = shipping_qs.filter(
         ship_date__lt=today,
@@ -12515,7 +12570,7 @@ def ceo_operations_dashboard(request):
     if side:
         accounting_qs = accounting_qs.filter(side=side)
     period_entries = list(
-        accounting_qs.filter(date__range=(start_period, today)).only(
+        accounting_qs.filter(date__range=(start_period, period_end)).only(
             "date", "direction", "side", "currency", "main_type", "amount_original", "amount_cad", "rate_to_cad"
         )
     )
@@ -12543,6 +12598,8 @@ def ceo_operations_dashboard(request):
     invoice_qs = Invoice.objects.filter(is_archived=False).exclude(status="cancelled") if Invoice is not None else None
     if invoice_qs is not None and side:
         invoice_qs = invoice_qs.filter(Q(invoice_region=side) | Q(invoice_region="", currency="BDT" if side == "BD" else "CAD"))
+    if invoice_qs is not None:
+        invoice_qs = with_invoice_reporting_date(invoice_qs)
     invoice_open_total = Decimal("0")
     invoice_open_values = []
     overdue_invoice_count = 0
@@ -12562,14 +12619,14 @@ def ceo_operations_dashboard(request):
             invoice_open_values = []
             overdue_invoice_count = 0
 
-    ceo_month_keys = _ceo_month_keys(today)
+    ceo_month_keys = _ceo_month_keys(period_end)
     revenue_overview = None
     invoice_month_labels = []
     invoice_month_values = []
     invoice_month_series = []
     if can_view_executive_financials and invoice_qs is not None:
         try:
-            invoice_period = invoice_qs.filter(issue_date__range=(start_period, today))
+            invoice_period = invoice_qs.filter(**{f"{INVOICE_REPORTING_DATE_ALIAS}__range": (start_period, period_end)})
             period_totals = defaultdict(
                 lambda: {"invoiced": Decimal("0"), "paid": Decimal("0"), "outstanding": Decimal("0")}
             )
@@ -12582,10 +12639,10 @@ def ceo_operations_dashboard(request):
                 period_totals, ("invoiced", "paid", "outstanding")
             )
             invoice_month_map = defaultdict(lambda: defaultdict(lambda: Decimal("0")))
-            for invoice in invoice_qs.filter(issue_date__gte=ceo_month_keys[0]).only(
-                "issue_date", "total_amount", "currency"
+            for invoice in invoice_qs.filter(**{f"{INVOICE_REPORTING_DATE_ALIAS}__gte": ceo_month_keys[0]}).only(
+                "invoice_date", "created_at", "issue_date", "total_amount", "currency"
             ):
-                month_key = _ceo_month_key(invoice.issue_date)
+                month_key = _ceo_month_key(getattr(invoice, INVOICE_REPORTING_DATE_ALIAS, None))
                 if month_key:
                     code = (invoice.currency or "CAD").upper().strip()
                     invoice_month_map[code][month_key] += _ceo_decimal(invoice.total_amount)
@@ -12620,7 +12677,7 @@ def ceo_operations_dashboard(request):
 
     website_totals = _ceo_aggregate(
         WebsiteTrafficDaily,
-        WebsiteTrafficDaily.objects.filter(date__range=(start_period, today)) if WebsiteTrafficDaily else None,
+        WebsiteTrafficDaily.objects.filter(date__range=(start_period, period_end)) if WebsiteTrafficDaily else None,
         visitors=Sum("visitors"),
         sessions=Sum("sessions"),
         page_views=Sum("page_views"),
@@ -12628,13 +12685,13 @@ def ceo_operations_dashboard(request):
     )
     search_totals = _ceo_aggregate(
         SeoQueryDaily,
-        SeoQueryDaily.objects.filter(date__range=(start_period, today)) if SeoQueryDaily else None,
+        SeoQueryDaily.objects.filter(date__range=(start_period, period_end)) if SeoQueryDaily else None,
         clicks=Sum("clicks"),
         impressions=Sum("impressions"),
     )
     social_totals = _ceo_aggregate(
         AccountMetricDaily,
-        AccountMetricDaily.objects.filter(date__range=(start_period, today)) if AccountMetricDaily else None,
+        AccountMetricDaily.objects.filter(date__range=(start_period, period_end)) if AccountMetricDaily else None,
         engagement=Sum("engagement_total"),
         reach=Sum("reach"),
         views=Sum("views"),
@@ -12649,7 +12706,7 @@ def ceo_operations_dashboard(request):
             open_insights = InsightItem.objects.filter(status="open").count()
         if WebsitePageDaily is not None:
             top_pages = list(
-                WebsitePageDaily.objects.filter(date__range=(start_period, today))
+                WebsitePageDaily.objects.filter(date__range=(start_period, period_end))
                 .values("page_path")
                 .annotate(page_views=Sum("page_views"), visitors=Sum("visitors"))
                 .order_by("-page_views")[:6]
@@ -12670,8 +12727,8 @@ def ceo_operations_dashboard(request):
     }
     opp_month_map = {
         row["month"]: int(row["count"] or 0)
-        for row in opportunity_kpi_qs.filter(created_date__gte=month_keys[0])
-        .annotate(month=TruncMonth("created_date"))
+        for row in opportunity_reporting_qs.filter(**{f"{OPPORTUNITY_REPORTING_DATE_ALIAS}__gte": month_keys[0]})
+        .annotate(month=TruncMonth(OPPORTUNITY_REPORTING_DATE_ALIAS))
         .values("month")
         .annotate(count=Count("id"))
     }
@@ -13388,8 +13445,13 @@ def ai_executive_advisor(request):
         next_followup__range=(today, today + timedelta(days=7))
     ).exclude(lead_status__in=["Converted", "Closed", "Disqualified", "Lost"]).count()
 
-    opp_period = Opportunity.objects.filter(created_date__range=(start_period, today)).count()
-    prev_opp_period = Opportunity.objects.filter(created_date__range=(previous_start, previous_end)).count()
+    advisor_opportunity_qs = with_opportunity_reporting_date(Opportunity.objects.all())
+    opp_period = advisor_opportunity_qs.filter(
+        **{f"{OPPORTUNITY_REPORTING_DATE_ALIAS}__range": (start_period, today)}
+    ).count()
+    prev_opp_period = advisor_opportunity_qs.filter(
+        **{f"{OPPORTUNITY_REPORTING_DATE_ALIAS}__range": (previous_start, previous_end)}
+    ).count()
     open_pipeline_qs = open_pipeline_queryset(Opportunity.objects.all())
     open_pipeline_summary = summarize_pipeline(open_pipeline_qs, apply_open_definition=False)
     open_opps = open_pipeline_summary["count"]
@@ -14121,7 +14183,9 @@ def _build_daily_ceo_briefing_context(request):
     payables_due_soon = sum((_ceo_amount_cad(entry, cad_to_bdt) for entry in payable_entries_due), Decimal("0"))
     cash_flow_warning = current_cash + overdue_receivables - payables_due_soon < 0 or period_net_cash < 0
 
-    top_customer_qs = Opportunity.objects.select_related("customer", "lead").filter(created_date__range=(date_from, date_to))
+    top_customer_qs = with_opportunity_reporting_date(
+        Opportunity.objects.select_related("customer", "lead")
+    ).filter(**{f"{OPPORTUNITY_REPORTING_DATE_ALIAS}__range": (date_from, date_to)})
     if side:
         top_customer_qs = top_customer_qs.filter(lead__market=side)
     top_customer_rows = list(
@@ -14308,29 +14372,24 @@ def daily_ceo_briefing_email_draft(request):
 @login_required
 def main_dashboard(request):
     today = timezone.localdate()
-    try:
-        period_days = int((request.GET.get("days") or "30").strip())
-    except Exception:
-        period_days = 30
-    if period_days not in (7, 30, 60, 90, 180):
-        period_days = 30
-
-    start_period = today - timedelta(days=period_days - 1)
-    previous_end = start_period - timedelta(days=1)
-    previous_start = previous_end - timedelta(days=period_days - 1)
-    period_label = f"Last {period_days} days"
+    period_days, start_period, period_end, previous_start, previous_end, period_label, filter_values = (
+        _dashboard_period_from_request(request, today)
+    )
     can_view_order_lifecycle_profit = can_view_lifecycle_profit(request.user)
     lead_kpi_qs = _active_lead_queryset()
     opportunity_kpi_qs = _active_opportunity_queryset()
+    opportunity_reporting_qs = with_opportunity_reporting_date(opportunity_kpi_qs)
     production_kpi_qs = _active_production_queryset()
+    opp_period_filter = {f"{OPPORTUNITY_REPORTING_DATE_ALIAS}__range": (start_period, period_end)}
+    prev_opp_period_filter = {f"{OPPORTUNITY_REPORTING_DATE_ALIAS}__range": (previous_start, previous_end)}
 
     # Leads
     leads_today = lead_kpi_qs.filter(created_date=today).count()
-    leads_period = lead_kpi_qs.filter(created_date__range=(start_period, today)).count()
+    leads_period = lead_kpi_qs.filter(created_date__range=(start_period, period_end)).count()
     prev_leads_period = lead_kpi_qs.filter(created_date__range=(previous_start, previous_end)).count()
 
     leads_daily_qs = (
-        lead_kpi_qs.filter(created_date__range=(start_period, today))
+        lead_kpi_qs.filter(created_date__range=(start_period, period_end))
         .values("created_date")
         .annotate(c=Count("id"))
         .order_by("created_date")
@@ -14345,10 +14404,10 @@ def main_dashboard(request):
         leads_daily_values.append(int(lead_map.get(d, 0)))
 
     # Opportunities
-    opp_period = opportunity_kpi_qs.filter(created_date__range=(start_period, today)).count()
-    prev_opp_period = opportunity_kpi_qs.filter(created_date__range=(previous_start, previous_end)).count()
+    opp_period = opportunity_reporting_qs.filter(**opp_period_filter).count()
+    prev_opp_period = opportunity_reporting_qs.filter(**prev_opp_period_filter).count()
 
-    opp_stage_base = opportunity_kpi_qs.filter(created_date__range=(start_period, today))
+    opp_stage_base = opportunity_reporting_qs.filter(**opp_period_filter)
     if not opp_period:
         opp_stage_base = opportunity_kpi_qs
     opp_by_stage_qs = opp_stage_base.values("stage").annotate(c=Count("id"))
@@ -14366,31 +14425,35 @@ def main_dashboard(request):
 
     # Opp daily (for Leads vs Opportunities chart)
     opp_daily_qs = (
-        opportunity_kpi_qs.filter(created_date__range=(start_period, today))
-        .values("created_date")
+        opportunity_reporting_qs.filter(**opp_period_filter)
+        .values(OPPORTUNITY_REPORTING_DATE_ALIAS)
         .annotate(c=Count("id"))
-        .order_by("created_date")
+        .order_by(OPPORTUNITY_REPORTING_DATE_ALIAS)
     )
-    opp_map = {row["created_date"]: int(row["c"]) for row in opp_daily_qs if row.get("created_date")}
+    opp_map = {
+        row[OPPORTUNITY_REPORTING_DATE_ALIAS]: int(row["c"])
+        for row in opp_daily_qs
+        if row.get(OPPORTUNITY_REPORTING_DATE_ALIAS)
+    }
     opp_daily_values = []
     for i in range(period_days):
         d = start_period + timedelta(days=i)
         opp_daily_values.append(int(opp_map.get(d, 0)))
 
     # Win vs Loss (safe guess using stage text)
-    won_count = opportunity_kpi_qs.filter(
+    won_count = opportunity_reporting_qs.filter(
         stage__iexact="Closed Won",
-        updated_at__date__range=(start_period, today),
+        **opp_period_filter,
     ).count()
-    lost_count = opportunity_kpi_qs.filter(
+    lost_count = opportunity_reporting_qs.filter(
         stage__iexact="Closed Lost",
-        updated_at__date__range=(start_period, today),
+        **opp_period_filter,
     ).count()
     win_loss_labels = ["Won", "Lost"]
     win_loss_values = [int(won_count), int(lost_count)]
 
     # Lead status funnel (show qualification stage)
-    lead_status_base = lead_kpi_qs.filter(created_date__range=(start_period, today))
+    lead_status_base = lead_kpi_qs.filter(created_date__range=(start_period, period_end))
     if not lead_status_base.exists():
         lead_status_base = lead_kpi_qs
     lead_status_qs = lead_status_base.values("lead_status").annotate(c=Count("id"))
@@ -14511,7 +14574,7 @@ def main_dashboard(request):
     swing_cad_period = Decimal("0")
     swing_bdt_period = Decimal("0")
 
-    acc_period = [entry for entry in all_accounting_entries if entry.date and start_period <= entry.date <= today]
+    acc_period = [entry for entry in all_accounting_entries if entry.date and start_period <= entry.date <= period_end]
     for entry in acc_period:
         acc_entries_period += 1
         side = (entry.side or "").upper().strip()
@@ -14640,10 +14703,10 @@ def main_dashboard(request):
         try:
             orders_created_period = ProductionOrder.objects.filter(
                 is_archived=False,
-                created_at__date__range=(start_period, today)
+                created_at__date__range=(start_period, period_end)
             ).count()
             orders_created_qs = (
-                production_kpi_qs.filter(created_at__date__range=(start_period, today))
+                production_kpi_qs.filter(created_at__date__range=(start_period, period_end))
                 .annotate(d=TruncDate("created_at"))
                 .values("d")
                 .annotate(c=Count("id"))
@@ -14659,7 +14722,7 @@ def main_dashboard(request):
                 order for order in production_orders_for_status
                 if get_production_operational_status(order) == OPERATIONAL_STATUS_SHIPPED
                 and order.updated_at.date() >= start_period
-                and order.updated_at.date() <= today
+                and order.updated_at.date() <= period_end
             ]
             orders_processed_period = len(processed_orders)
             for order in processed_orders:
@@ -14858,12 +14921,12 @@ def main_dashboard(request):
 
     top_niches = []
     niche_rows = []
-    niche_base = opportunity_kpi_qs.filter(
+    niche_base = opportunity_reporting_qs.filter(
         stage__iexact="Closed Won",
-        updated_at__date__range=(start_period, today),
+        **opp_period_filter,
     )
     if not opp_period:
-        niche_base = opportunity_kpi_qs.filter(created_date__range=(start_period, today))
+        niche_base = opportunity_reporting_qs.filter(**opp_period_filter)
     if not niche_base.exists():
         niche_base = opportunity_kpi_qs
     niche_rows = list(
@@ -15518,6 +15581,7 @@ def main_dashboard(request):
         "payroll_month": payroll_month,
         "period_days": period_days,
         "period_label": period_label,
+        "filter_values": filter_values,
         "monthly_profit_cad": monthly_profit_cad if can_view_order_lifecycle_profit else None,
         "production_running_count": production_running_count,
         "production_hold_count": production_hold_count,
@@ -15667,6 +15731,7 @@ def add_opportunity(request):
     selected_product_type = customer_prefill["product_type"]
     selected_product_category = customer_prefill["product_category"]
     selected_notes = customer_prefill["notes"]
+    can_edit_historical_dates_flag = can_edit_historical_dates(request.user)
     default_salesperson = None
     if selected_lead and selected_lead.assigned_to_id:
         default_salesperson = selected_lead.assigned_to
@@ -15721,6 +15786,14 @@ def add_opportunity(request):
         order_value_raw = request.POST.get("order_value")
         order_value_usd_raw = request.POST.get("order_value_usd")
         fx_rate_raw = request.POST.get("fx_rate_bdt_per_usd")
+        opportunity_date = None
+        if can_edit_historical_dates_flag:
+            opportunity_date_raw = (request.POST.get("opportunity_date") or "").strip()
+            if opportunity_date_raw:
+                opportunity_date = parse_date(opportunity_date_raw)
+                if opportunity_date is None:
+                    messages.error(request, "Please enter a valid opportunity date.")
+                    return redirect("add_opportunity")
 
         moq_units = None
         if moq_units_raw:
@@ -15747,6 +15820,7 @@ def add_opportunity(request):
             order_value=order_value,
             order_value_usd=order_value_usd,
             fx_rate_bdt_per_usd=fx_rate,
+            opportunity_date=opportunity_date,
             notes=(request.POST.get("notes") or "").strip(),
         )
         if lead:
@@ -15787,6 +15861,7 @@ def add_opportunity(request):
         "selected_product_type": selected_product_type,
         "selected_product_category": selected_product_category,
         "selected_notes": selected_notes,
+        "can_edit_historical_dates": can_edit_historical_dates_flag,
     }
     return render(request, "crm/add_opportunity.html", context)
 
@@ -15863,6 +15938,7 @@ def opportunities_list(request):
     qs = Opportunity.objects.select_related("lead", "lead__assigned_to")
     qs = scope_sales_opportunities(qs, request.user)
     qs = _with_opportunity_production_flag(qs)
+    qs = with_opportunity_reporting_date(qs)
 
     if archive_filter == "archived":
         qs = qs.filter(is_archived=True)
@@ -15903,9 +15979,9 @@ def opportunities_list(request):
     created_from = parse_date(created_from_raw) if created_from_raw else None
     created_to = parse_date(created_to_raw) if created_to_raw else None
     if created_from:
-        qs = qs.filter(created_date__gte=created_from)
+        qs = qs.filter(**{f"{OPPORTUNITY_REPORTING_DATE_ALIAS}__gte": created_from})
     if created_to:
-        qs = qs.filter(created_date__lte=created_to)
+        qs = qs.filter(**{f"{OPPORTUNITY_REPORTING_DATE_ALIAS}__lte": created_to})
 
     qs = _with_opportunity_kpi_value(qs)
     value_min = _parse_money_value(value_min_raw) if value_min_raw else None
@@ -15920,9 +15996,9 @@ def opportunities_list(request):
     due_followups = qs.filter(next_followup__isnull=False, next_followup__lte=today).count()
 
     if sort == "old":
-        qs = qs.order_by("created_date", "id")
+        qs = qs.order_by(OPPORTUNITY_REPORTING_DATE_ALIAS, "id")
     else:
-        qs = qs.order_by("-created_date", "-id")
+        qs = qs.order_by(f"-{OPPORTUNITY_REPORTING_DATE_ALIAS}", "-id")
 
     paginator = Paginator(qs, per_page)
     page_number = request.GET.get("page") or 1
