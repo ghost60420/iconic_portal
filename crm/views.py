@@ -8530,9 +8530,9 @@ def opportunity_edit(request, pk):
             opportunity.order_value = order_value
 
         if can_edit_historical_dates_flag:
-            historical_entry_mode = request.POST.get("historical_entry_mode") == "on"
+            opportunity_date_raw = (request.POST.get("opportunity_date") or "").strip()
+            historical_entry_mode = request.POST.get("historical_entry_mode") == "on" or bool(opportunity_date_raw)
             if historical_entry_mode:
-                opportunity_date_raw = (request.POST.get("opportunity_date") or "").strip()
                 if not opportunity_date_raw:
                     messages.error(request, "Opportunity Date is required when Historical Entry mode is enabled.")
                     return redirect("opportunity_edit", pk=pk)
@@ -15745,9 +15745,9 @@ def add_opportunity(request):
         fx_rate_raw = request.POST.get("fx_rate_bdt_per_usd")
         opportunity_date = None
         if can_edit_historical_dates_flag:
-            historical_entry_mode = request.POST.get("historical_entry_mode") == "on"
+            opportunity_date_raw = (request.POST.get("opportunity_date") or "").strip()
+            historical_entry_mode = request.POST.get("historical_entry_mode") == "on" or bool(opportunity_date_raw)
             if historical_entry_mode:
-                opportunity_date_raw = (request.POST.get("opportunity_date") or "").strip()
                 if not opportunity_date_raw:
                     messages.error(request, "Opportunity Date is required when Historical Entry mode is enabled.")
                     return redirect("add_opportunity")

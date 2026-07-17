@@ -440,7 +440,7 @@
           {% if cur %} | Currency {{ cur }}{% endif %}
         </div>
         {% if invoice.is_archived %}<div class="status s-cancelled">Archived</div>{% endif %}
-        {% if invoice.invoice_date %}<div class="status s-partial">HISTORICAL ENTRY</div>{% endif %}
+        {% if invoice.invoice_date %}<div class="status s-partial" aria-label="Historical Entry">HISTORICAL ENTRY</div>{% endif %}
       </div>
 
       <div class="btnbar noPrint">
@@ -848,7 +848,7 @@
             <div class="k">Revenue date</div>
             <div class="v">
               {{ invoice.effective_invoice_date|date:"Y-m-d"|default:"" }}
-              {% if invoice.invoice_date %}<span class="status s-partial">HISTORICAL ENTRY</span>{% endif %}
+              {% if invoice.invoice_date %}<span class="status s-partial" aria-label="Historical Entry">HISTORICAL ENTRY</span>{% endif %}
             </div>
 
             <div class="k">Due date</div>
