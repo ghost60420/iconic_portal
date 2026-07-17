@@ -291,7 +291,7 @@ Reason:
 
 Main remaining risk:
 
-- Production has an existing inconsistent live record, so after deploying the code fix, Opportunity 182 should be repaired through the normal route or a reviewed targeted admin action. If the invoice is still partial, the route will restore the stage and will not create production.
+- The orphan scan found five additional opportunities in `Production` with no linked ProductionOrder. They are reported in `ORPHAN_PRODUCTION_OPPORTUNITIES_REPORT.md` and now show the `Broken Production State` warning, but they were not repaired in this task.
 
 ## Recommended Production Handling After Approval
 
@@ -329,7 +329,7 @@ sudo systemctl restart gunicorn.service
 Database restore should only be used if a reviewed data repair changes production data unexpectedly:
 
 ```bash
-cp /home/ec2-user/backups/opportunity_182_prod_repair_20260717_173324/db.sqlite3 /home/ec2-user/iconic_portal/db.sqlite3
+cp /home/ec2-user/backups/opportunity_182_deploy_20260717_182002/db.sqlite3 /home/ec2-user/iconic_portal/db.sqlite3
 sudo systemctl restart gunicorn.service
 ```
 
@@ -337,6 +337,28 @@ Do not restore the database for a code/template-only issue unless production dat
 
 ## Deployment Status
 
-Not deployed.
+Deployed on 2026-07-17.
 
-The exact cause is confirmed and the fix is prepared locally for review.
+Deployed branch:
+
+`codex/opportunity-182-production-repair`
+
+Deployed commit:
+
+`3192054ad8140d2e906b99a292ca95d27cf34753`
+
+Fresh deployment backup:
+
+`/home/ec2-user/backups/opportunity_182_deploy_20260717_182002`
+
+Post-deployment verification:
+
+- Opportunity 182 stage restored from `Production` to `Negotiation`.
+- Opportunity 182 has no ProductionOrder.
+- Invoice `INV00030` remains `partial`.
+- Invoice `INV00030.order_id` remains `NULL`.
+- Lifecycle 57 remains `invoice`.
+- Lifecycle 57 `production_order_id` remains `NULL`.
+- Customer, lead, opportunity, invoice, payment, and production order counts remained unchanged.
+- Move to Production attempt shows: `Invoice must be fully paid before moving to Production.`
+- Remaining orphan production opportunities show the `Broken Production State` badge.
