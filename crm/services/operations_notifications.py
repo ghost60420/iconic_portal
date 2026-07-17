@@ -26,6 +26,7 @@ from crm.services.operations_permissions import (
     scope_sales_leads,
     scope_sales_opportunities,
 )
+from crm.services.production_integrity import orphan_production_opportunities_queryset
 
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,7 @@ PERIODIC_SOURCE_PREFIXES = (
     "operations:shipment_due_today:",
     "operations:shipment_delayed:",
     "operations:invoice_overdue:",
+    "operations:broken_production_state:",
 )
 LEGACY_PERIODIC_SOURCE_PREFIXES = (
     "operations:production_due:",
@@ -464,6 +466,37 @@ def sync_operations_notifications(today=None, *, force=False):
                 target_url=_safe_reverse("production_detail", order.pk),
                 record_label=label,
                 recipient_rows=production_recipients,
+            )
+
+        ceo_recipients = _recipient_rows((ROLE_CEO,))
+        broken_opportunities = (
+            orphan_production_opportunities_queryset()
+            .select_related("customer", "lead")
+            .only("id", "opportunity_id", "customer__account_brand", "customer__contact_name", "lead__account_brand")[:100]
+        )
+        for opportunity in broken_opportunities:
+            label = opportunity.opportunity_id or f"Opportunity {opportunity.pk}"
+            customer_label = (
+                getattr(opportunity.customer, "account_brand", "")
+                or getattr(opportunity.customer, "contact_name", "")
+                or getattr(opportunity.lead, "account_brand", "")
+                or "customer unavailable"
+            )
+            active_keys |= create_operations_notification(
+                source_key=f"operations:broken_production_state:{opportunity.pk}",
+                notification_type="general",
+                title="Broken production state",
+                message=(
+                    f"{label} is marked Production for {customer_label}, "
+                    "but no linked production order exists."
+                ),
+                related_module="production",
+                record=opportunity,
+                priority="critical",
+                due_date=today,
+                target_url=_safe_reverse("opportunity_detail", opportunity.pk),
+                record_label=label,
+                recipient_rows=ceo_recipients,
             )
 
         open_shipment_statuses = ["planned", "booked"]

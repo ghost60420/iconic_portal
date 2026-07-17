@@ -1,6 +1,7 @@
 from collections import defaultdict
 from decimal import Decimal
 
+from django.db import connection
 from django.db.models import Count, F, Q, Sum
 from django.utils import timezone
 
@@ -68,6 +69,69 @@ def _cash_by_currency():
     return amounts
 
 
+def _production_groups_and_broken_count(today):
+    production_table = ProductionOrder._meta.db_table
+    opportunity_table = "crm_opportunity"
+    active_placeholders = ", ".join(["%s"] * len(ACTIVE_PRODUCTION_STATUSES))
+    sql = f"""
+        SELECT
+            assigned_production_manager_id,
+            COUNT(id) AS total,
+            SUM(CASE WHEN operational_status IN ({active_placeholders}) THEN 1 ELSE 0 END) AS active,
+            SUM(
+                CASE
+                    WHEN bulk_deadline < %s
+                     AND operational_status IN ({active_placeholders})
+                     AND status NOT IN ('done', 'closed_won', 'closed_lost', 'cancelled')
+                    THEN 1 ELSE 0
+                END
+            ) AS late,
+            0 AS broken_count
+        FROM {production_table}
+        WHERE is_archived = %s
+        GROUP BY assigned_production_manager_id
+        UNION ALL
+        SELECT
+            NULL AS assigned_production_manager_id,
+            0 AS total,
+            0 AS active,
+            0 AS late,
+            COUNT(opp.id) AS broken_count
+        FROM {opportunity_table} opp
+        WHERE opp.stage = %s
+          AND NOT EXISTS (
+              SELECT 1
+              FROM {production_table} prod
+              WHERE prod.opportunity_id = opp.id
+          )
+    """
+    params = [
+        *ACTIVE_PRODUCTION_STATUSES,
+        today,
+        *ACTIVE_PRODUCTION_STATUSES,
+        False,
+        "Production",
+    ]
+    with connection.cursor() as cursor:
+        cursor.execute(sql, params)
+        rows = cursor.fetchall()
+    production_groups = []
+    broken_count = 0
+    for assigned_id, total, active, late, row_broken_count in rows:
+        if row_broken_count:
+            broken_count += int(row_broken_count or 0)
+            continue
+        production_groups.append(
+            {
+                "assigned_production_manager_id": assigned_id,
+                "total": int(total or 0),
+                "active": int(active or 0),
+                "late": int(late or 0),
+            }
+        )
+    return production_groups, broken_count
+
+
 def _revenue_profit_by_currency(month_start, today):
     revenue = defaultdict(Decimal)
     expenses = defaultdict(Decimal)
@@ -115,20 +179,7 @@ def build_ceo_executive_context():
     current_cash = _cash_by_currency()
     revenue, profit = _revenue_profit_by_currency(month_start, today)
 
-    production_groups = list(
-        ProductionOrder.objects.filter(is_archived=False)
-        .values("assigned_production_manager_id")
-        .annotate(
-            total=Count("id"),
-            active=Count("id", filter=Q(operational_status__in=ACTIVE_PRODUCTION_STATUSES)),
-            late=Count(
-                "id",
-                filter=Q(bulk_deadline__lt=today)
-                & Q(operational_status__in=ACTIVE_PRODUCTION_STATUSES)
-                & ~Q(status__in=["done", "closed_won", "closed_lost", "cancelled"]),
-            ),
-        )
-    )
+    production_groups, broken_production_states = _production_groups_and_broken_count(today)
     production = {
         key: sum(int(row[key] or 0) for row in production_groups)
         for key in ("total", "active", "late")
@@ -174,6 +225,7 @@ def build_ceo_executive_context():
         "production_total": int(production["total"] or 0),
         "production_active": int(production["active"] or 0),
         "late_production_orders": int(production["late"] or 0),
+        "broken_production_states": broken_production_states,
         "pending_ceo_approvals": pending_approvals,
         "top_customers": sales_kpis["top_customers"],
         "top_salespeople": sales_kpis["top_salespeople"],

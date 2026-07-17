@@ -17,6 +17,7 @@ from crm.models import (
     Invoice,
     InvoicePayment,
     Lead,
+    AutomationNotification,
     Opportunity,
     OrderLifecycle,
     ProductReferenceImage,
@@ -26,8 +27,10 @@ from crm.models import (
     SystemActivityLog,
 )
 from crm.services.operations_permissions import scope_production_orders, scope_sales_opportunities
+from crm.services.operations_notifications import sync_operations_notifications
 from crm.services.order_lifecycle import create_lifecycle_from_invoice
 from crm.services.pipeline import with_pipeline_value
+from crm.services.production_integrity import broken_production_state_count
 from crm.services.sales_attribution import resolve_salesperson_for_record
 
 
@@ -662,6 +665,58 @@ class CustomerWorkflowImprovementTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Broken Production State")
         self.assertFalse(ProductionOrder.objects.filter(opportunity=opportunity).exists())
+
+    def test_broken_production_state_count_and_ceo_notification_resolve(self):
+        opportunity = Opportunity.objects.create(
+            lead=None,
+            customer=self.customer,
+            assigned_to=self.salesperson,
+            stage="Production",
+            product_type="Activewear",
+            product_category="Basketball Jersey",
+            moq_units=50,
+        )
+
+        self.assertEqual(broken_production_state_count(), 1)
+        result = sync_operations_notifications(force=True)
+
+        self.assertEqual(result["error"], "")
+        notification = AutomationNotification.objects.get(
+            source_key=f"operations:broken_production_state:{opportunity.pk}:user:{self.admin.pk}"
+        )
+        self.assertEqual(notification.priority, "critical")
+        self.assertFalse(notification.is_resolved)
+        self.assertIn(opportunity.opportunity_id, notification.message)
+
+        ProductionOrder.objects.create(
+            opportunity=opportunity,
+            customer=self.customer,
+            title="Recovered Production Order",
+            qty_total=50,
+        )
+        self.assertEqual(broken_production_state_count(), 0)
+        sync_operations_notifications(force=True)
+
+        notification.refresh_from_db()
+        self.assertTrue(notification.is_resolved)
+
+    def test_ceo_dashboard_shows_broken_production_state_count(self):
+        Opportunity.objects.create(
+            lead=None,
+            customer=self.customer,
+            assigned_to=self.salesperson,
+            stage="Production",
+            product_type="Activewear",
+            product_category="Basketball Jersey",
+            moq_units=50,
+        )
+
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse("ceo_dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Broken Production States")
+        self.assertContains(response, "<div class=\"exec-number\">1</div>", html=True)
 
     def test_stage_update_to_production_requires_real_production_order(self):
         lead, opportunity = self._lead_opportunity()
