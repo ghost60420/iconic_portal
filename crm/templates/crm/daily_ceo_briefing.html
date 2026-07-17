@@ -306,6 +306,11 @@
         <small>{{ card.note }}</small>
       </article>
     {% endfor %}
+    <article class="brief-card brief-tone-warn">
+      <span>Zero Value Opportunities</span>
+      <strong>{{ open_opportunities.zero_value_count|default:0 }}</strong>
+      <small>Active opportunities without a confirmed pipeline value.</small>
+    </article>
   </section>
 
   <div class="brief-layout">

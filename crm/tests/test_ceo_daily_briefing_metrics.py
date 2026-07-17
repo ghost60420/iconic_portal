@@ -138,6 +138,28 @@ class CEODailyBriefingMetricTests(TestCase):
         self.assertEqual({row.pk for row in metrics["rows"]}, {active.pk, zero_value.pk})
         self.assertIn("CAD $1,200.00", metrics["pipeline_display"])
 
+    def test_daily_briefing_shows_dedicated_zero_value_opportunities_card(self):
+        Opportunity.objects.create(
+            customer=self.customer,
+            stage="Prospecting",
+            is_open=True,
+            order_currency="CAD",
+            order_value_usd=Decimal("1200"),
+        )
+        Opportunity.objects.create(
+            customer=self.customer,
+            stage="Qualification",
+            is_open=True,
+            order_currency="CAD",
+        )
+
+        response = self.client.get(reverse("daily_ceo_briefing"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Zero Value Opportunities")
+        self.assertContains(response, "Active opportunities without a confirmed pipeline value.")
+        self.assertEqual(response.context["open_opportunities"]["zero_value_count"], 1)
+
     def test_completed_production_is_excluded_and_delayed_active_production_is_included(self):
         delayed_active = ProductionOrder.objects.create(
             customer=self.customer,
