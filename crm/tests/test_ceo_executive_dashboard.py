@@ -148,6 +148,7 @@ class CEOExecutiveDashboardTests(TestCase):
             "Production Orders",
             "Late Production Orders",
             "Awaiting Payment Orders",
+            "Workflow Errors",
             "Pending CEO Approvals",
             "Accounting Revenue by Currency",
             "Open Pipeline",
@@ -213,6 +214,10 @@ class CEOExecutiveDashboardTests(TestCase):
         self.assertEqual(context["awaiting_payment_count"], 1)
         self.assertEqual(context["awaiting_payment_customer_count"], 1)
         self.assertEqual(context["awaiting_payment_rows"][0]["amount"], Decimal("500"))
+        self.assertIn("workflow_errors", context)
+        self.assertIn("broken_opportunities", context)
+        self.assertIn("broken_production_links", context)
+        self.assertIn("broken_invoice_links", context)
 
     def test_context_builder_has_bounded_query_count(self):
         with CaptureQueriesContext(connection) as captured:

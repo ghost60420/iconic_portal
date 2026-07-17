@@ -11,7 +11,7 @@ from crm.services.ceo_briefing_metrics import (
     invoice_balance_totals_by_currency,
     open_invoice_balance_queryset,
 )
-from crm.services.opportunity_payment_stage import build_awaiting_payment_metrics
+from crm.services.opportunity_stage_audit import build_workflow_integrity_dashboard_metrics
 from crm.services.sales_attribution import build_ceo_sales_kpis
 
 
@@ -228,7 +228,7 @@ def build_ceo_executive_context():
     current_cash, revenue, profit = _cash_revenue_profit_by_currency(month_start, today)
 
     production_groups, broken_production_states = _production_groups_and_broken_count(today)
-    awaiting_payment_metrics = build_awaiting_payment_metrics()
+    workflow_integrity_metrics = build_workflow_integrity_dashboard_metrics()
     production = {
         key: sum(int(row[key] or 0) for row in production_groups)
         for key in ("total", "active", "late")
@@ -266,10 +266,14 @@ def build_ceo_executive_context():
         "profit_by_currency": _currency_rows(profit),
         "open_pipeline_count": sales_kpis["open_pipeline_count"],
         "open_pipeline_rows": sales_kpis["open_pipeline_rows"],
-        "awaiting_payment_count": awaiting_payment_metrics["count"],
-        "awaiting_payment_customer_count": awaiting_payment_metrics["customer_count"],
-        "awaiting_payment_rows": awaiting_payment_metrics["rows"],
-        "awaiting_payment_display": awaiting_payment_metrics["display"],
+        "awaiting_payment_count": workflow_integrity_metrics["awaiting_payment_count"],
+        "awaiting_payment_customer_count": workflow_integrity_metrics["awaiting_payment_customer_count"],
+        "awaiting_payment_rows": workflow_integrity_metrics["awaiting_payment_rows"],
+        "awaiting_payment_display": workflow_integrity_metrics["awaiting_payment_display"],
+        "workflow_errors": workflow_integrity_metrics["workflow_errors"],
+        "broken_opportunities": workflow_integrity_metrics["broken_opportunities"],
+        "broken_production_links": workflow_integrity_metrics["broken_production_links"],
+        "broken_invoice_links": workflow_integrity_metrics["broken_invoice_links"],
         "production_total": int(production["total"] or 0),
         "production_active": int(production["active"] or 0),
         "late_production_orders": int(production["late"] or 0),
