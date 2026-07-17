@@ -8530,8 +8530,12 @@ def opportunity_edit(request, pk):
             opportunity.order_value = order_value
 
         if can_edit_historical_dates_flag:
-            opportunity_date_raw = (request.POST.get("opportunity_date") or "").strip()
-            if opportunity_date_raw:
+            historical_entry_mode = request.POST.get("historical_entry_mode") == "on"
+            if historical_entry_mode:
+                opportunity_date_raw = (request.POST.get("opportunity_date") or "").strip()
+                if not opportunity_date_raw:
+                    messages.error(request, "Opportunity Date is required when Historical Entry mode is enabled.")
+                    return redirect("opportunity_edit", pk=pk)
                 opportunity_date = parse_date(opportunity_date_raw)
                 if opportunity_date is None:
                     messages.error(request, "Please enter a valid opportunity date.")
@@ -15741,8 +15745,12 @@ def add_opportunity(request):
         fx_rate_raw = request.POST.get("fx_rate_bdt_per_usd")
         opportunity_date = None
         if can_edit_historical_dates_flag:
-            opportunity_date_raw = (request.POST.get("opportunity_date") or "").strip()
-            if opportunity_date_raw:
+            historical_entry_mode = request.POST.get("historical_entry_mode") == "on"
+            if historical_entry_mode:
+                opportunity_date_raw = (request.POST.get("opportunity_date") or "").strip()
+                if not opportunity_date_raw:
+                    messages.error(request, "Opportunity Date is required when Historical Entry mode is enabled.")
+                    return redirect("add_opportunity")
                 opportunity_date = parse_date(opportunity_date_raw)
                 if opportunity_date is None:
                     messages.error(request, "Please enter a valid opportunity date.")
@@ -15870,6 +15878,7 @@ def opportunities_list(request):
     created_to_raw = (request.GET.get("created_to") or "").strip()
     value_min_raw = (request.GET.get("value_min") or "").strip()
     value_max_raw = (request.GET.get("value_max") or "").strip()
+    historical_filter = (request.GET.get("historical") or "").strip().lower()
     archive_filter = (request.GET.get("archive") or "active").strip().lower()
     status = (request.GET.get("status") or ("archived" if archive_filter == "archived" else "active")).strip().lower()
     if status == "archived":
@@ -15935,6 +15944,10 @@ def opportunities_list(request):
         qs = qs.filter(**{f"{OPPORTUNITY_REPORTING_DATE_ALIAS}__gte": created_from})
     if created_to:
         qs = qs.filter(**{f"{OPPORTUNITY_REPORTING_DATE_ALIAS}__lte": created_to})
+    if historical_filter == "only":
+        qs = qs.filter(opportunity_date__isnull=False)
+    elif historical_filter == "hide":
+        qs = qs.filter(opportunity_date__isnull=True)
 
     qs = _with_opportunity_kpi_value(qs)
     value_min = _parse_money_value(value_min_raw) if value_min_raw else None
@@ -15972,6 +15985,7 @@ def opportunities_list(request):
         "visible_count": len(page_obj.object_list),
         "archive_filter": archive_filter,
         "status_filter": status,
+        "historical_filter": historical_filter,
         "can_archive_records": _can_archive_workflow_record(request.user),
     }
     return render(request, "crm/opportunities_list.html", context)

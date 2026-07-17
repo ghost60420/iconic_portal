@@ -479,6 +479,14 @@
         Production linked only
       </label>
     </div>
+    <div class="ar-field">
+      <label for="historical">Historical entries</label>
+      <select id="historical" name="historical">
+        <option value="" {% if not filter_values.historical %}selected{% endif %}>All entries</option>
+        <option value="only" {% if filter_values.historical == "only" %}selected{% endif %}>Show Historical Entries only</option>
+        <option value="hide" {% if filter_values.historical == "hide" %}selected{% endif %}>Hide Historical Entries</option>
+      </select>
+    </div>
     <div class="ar-filter-actions">
       {% if filter_values.can_include_archived %}<label class="ar-check"><input type="checkbox" name="include_archived" value="1" {% if filter_values.include_archived %}checked{% endif %}> Include Archived</label>{% endif %}
       <button class="ar-btn ar-btn--gold" type="submit">Apply filters</button>
@@ -586,7 +594,7 @@
                       <a class="ar-link" href="{% url 'invoice_view' row.invoice.pk %}">{{ row.invoice.invoice_number }}</a>
                       <div class="ar-muted">
                         Revenue {{ row.invoice.effective_invoice_date|date:"Y-m-d" }}
-                        {% if row.invoice.is_historical_entry %} · Historical Entry{% endif %}
+                        {% if row.invoice.invoice_date %} · HISTORICAL ENTRY{% endif %}
                       </div>
                     </td>
                     <td>

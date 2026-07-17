@@ -1040,6 +1040,12 @@ class BDStaffMonthForm(forms.ModelForm):
 # Invoice form
 # --------------------------------------------------
 class InvoiceForm(forms.ModelForm):
+    historical_entry_mode = forms.BooleanField(
+        required=False,
+        label="Historical Entry",
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+    )
+
     class Meta:
         model = Invoice
         fields = [
@@ -1101,9 +1107,13 @@ class InvoiceForm(forms.ModelForm):
             self.fields["status"].required = False
 
         if can_edit_historical_dates:
+            if "historical_entry_mode" in self.fields:
+                self.fields["historical_entry_mode"].required = False
+                self.fields["historical_entry_mode"].initial = bool(getattr(self.instance, "invoice_date", None))
             if "invoice_date" in self.fields:
                 self.fields["invoice_date"].required = False
         else:
+            self.fields.pop("historical_entry_mode", None)
             self.fields.pop("invoice_date", None)
 
         for field_name in ("invoice_market", "invoice_type"):
@@ -1172,6 +1182,19 @@ class InvoiceForm(forms.ModelForm):
         if value < 0:
             return Decimal("0")
         return value
+
+    def clean(self):
+        cleaned = super().clean()
+        if "historical_entry_mode" not in self.fields:
+            return cleaned
+
+        historical_mode = cleaned.get("historical_entry_mode")
+        invoice_date = cleaned.get("invoice_date")
+        if historical_mode and not invoice_date:
+            self.add_error("invoice_date", "Invoice Date is required when Historical Entry mode is enabled.")
+        if not historical_mode:
+            cleaned["invoice_date"] = None
+        return cleaned
 
     def clean_paid_amount(self):
         return self._clean_money("paid_amount")

@@ -317,6 +317,11 @@
           <option value="paid" {% if paid == "paid" %}selected{% endif %}>Paid only</option>
           <option value="unpaid" {% if paid == "unpaid" %}selected{% endif %}>Unpaid only</option>
         </select>
+        <select class="ctrl sm" name="historical">
+          <option value="" {% if not historical_filter %}selected{% endif %}>All entries</option>
+          <option value="only" {% if historical_filter == "only" %}selected{% endif %}>Show Historical Entries only</option>
+          <option value="hide" {% if historical_filter == "hide" %}selected{% endif %}>Hide Historical Entries</option>
+        </select>
         {% if can_archive_invoices %}<select class="ctrl sm" name="archive"><option value="active" {% if archive_filter == 'active' %}selected{% endif %}>Active invoices</option><option value="archived" {% if archive_filter == 'archived' %}selected{% endif %}>Archived invoices</option><option value="all" {% if archive_filter == 'all' %}selected{% endif %}>All invoices</option></select>{% endif %}
         <input class="ctrl sm" type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}" aria-label="Revenue date from" title="Revenue date from">
         <input class="ctrl sm" type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}" aria-label="Revenue date to" title="Revenue date to">
@@ -351,8 +356,8 @@
                   {{ inv.invoice_number|default:"-" }}
                   <div class="muted" style="font-family:Inter,system-ui,sans-serif; font-size:11px; margin-top:3px;">
                     Revenue {{ inv.effective_invoice_date|date:"Y-m-d"|default:"-" }}
-                    {% if inv.is_historical_entry %}
-                      <span class="status partial" style="margin-left:6px;">Historical Entry</span>
+                    {% if inv.invoice_date %}
+                      <span class="status partial" style="margin-left:6px;">HISTORICAL ENTRY</span>
                     {% endif %}
                   </div>
                 </td>

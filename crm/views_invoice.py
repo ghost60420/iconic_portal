@@ -465,6 +465,10 @@ def _parse_ar_date(value):
 
 def _apply_ar_invoice_filters(invoices, filters):
     invoices = apply_invoice_reporting_date_filter(invoices, filters["date_from"], filters["date_to"])
+    if filters.get("historical") == "only":
+        invoices = invoices.filter(invoice_date__isnull=False)
+    elif filters.get("historical") == "hide":
+        invoices = invoices.filter(invoice_date__isnull=True)
     if filters["customer_id"]:
         invoices = invoices.filter(customer_id=filters["customer_id"])
     if filters["currency"]:
@@ -496,6 +500,10 @@ def _apply_ar_invoice_filters(invoices, filters):
 
 
 def _apply_ar_payment_filters(payments, filters):
+    if filters.get("historical") == "only":
+        payments = payments.filter(invoice__invoice_date__isnull=False)
+    elif filters.get("historical") == "hide":
+        payments = payments.filter(invoice__invoice_date__isnull=True)
     if filters["date_from"]:
         payments = payments.filter(payment_date__gte=filters["date_from"])
     if filters["date_to"]:
@@ -1529,6 +1537,7 @@ def accounts_receivable_dashboard(request):
         "currency": (request.GET.get("currency") or "").strip().upper(),
         "side": (request.GET.get("side") or "").strip().upper(),
         "production_linked": (request.GET.get("production_linked") or "") == "1",
+        "historical": (request.GET.get("historical") or "").strip().lower(),
         "include_archived": can_include_archived and (request.GET.get("include_archived") or "") == "1",
     }
     filter_values = {
@@ -1539,6 +1548,7 @@ def accounts_receivable_dashboard(request):
         "currency": filters["currency"],
         "side": filters["side"],
         "production_linked": filters["production_linked"],
+        "historical": filters["historical"],
         "include_archived": filters["include_archived"],
         "can_include_archived": can_include_archived,
     }
@@ -1725,6 +1735,7 @@ def invoice_list(request):
     currency = (request.GET.get("currency") or "").strip()
     customer_id = (request.GET.get("customer") or "").strip()
     paid_filter = (request.GET.get("paid") or "").strip()
+    historical_filter = (request.GET.get("historical") or "").strip().lower()
     archive_filter = (request.GET.get("archive") or "active").strip().lower()
     can_archive = can_archive_invoice(request.user)
     if archive_filter not in {"active", "archived", "all"}:
@@ -1756,6 +1767,10 @@ def invoice_list(request):
         invoices = invoices.filter(customer_id=customer_id)
 
     invoices = apply_invoice_reporting_date_filter(invoices, date_from, date_to)
+    if historical_filter == "only":
+        invoices = invoices.filter(invoice_date__isnull=False)
+    elif historical_filter == "hide":
+        invoices = invoices.filter(invoice_date__isnull=True)
 
     if paid_filter == "paid":
         invoices = invoices.filter(status="paid")
@@ -1822,6 +1837,7 @@ def invoice_list(request):
             "currency": currency,
             "customer": customer_id,
             "paid": paid_filter,
+            "historical_filter": historical_filter,
             "archive_filter": archive_filter,
             "can_archive_invoices": can_archive,
             "date_from": date_from,
@@ -1846,6 +1862,7 @@ def invoice_list(request):
 def _invoice_list_by_currency(request, currency_code: str):
     q = (request.GET.get("q") or "").strip()
     status = (request.GET.get("status") or "").strip()
+    historical_filter = (request.GET.get("historical") or "").strip().lower()
 
     invoices = with_invoice_reporting_date(
         Invoice.objects.select_related("order", "customer").filter(currency=currency_code, is_archived=False)
@@ -1863,6 +1880,10 @@ def _invoice_list_by_currency(request, currency_code: str):
 
     if status:
         invoices = invoices.filter(status=status)
+    if historical_filter == "only":
+        invoices = invoices.filter(invoice_date__isnull=False)
+    elif historical_filter == "hide":
+        invoices = invoices.filter(invoice_date__isnull=True)
 
     invoices = invoices.order_by(f"-{INVOICE_REPORTING_DATE_ALIAS}", "-created_at")
     invoice_rows = list(invoices)
@@ -1888,6 +1909,7 @@ def _invoice_list_by_currency(request, currency_code: str):
             "q": q,
             "status": status,
             "currency": currency_code,
+            "historical_filter": historical_filter,
             "total_amount": total_amount,
             "received_amount": received_amount,
             "unpaid_balance": unpaid_balance,

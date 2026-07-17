@@ -634,10 +634,20 @@
           </div>
 
           {% if can_edit_historical_dates %}
+            <div class="opp-add-field opp-add-field-full">
+              <label for="historical_entry_mode">
+                <input type="checkbox" name="historical_entry_mode" id="historical_entry_mode">
+                Historical Entry
+              </label>
+              <div class="opp-add-help">CEO/Admin only. Changing these dates affects reporting and revenue charts.</div>
+            </div>
             <div class="opp-add-field">
               <label for="opportunity_date">Opportunity Date</label>
               <input type="date" name="opportunity_date" id="opportunity_date">
-              <div class="opp-add-help">CEO/Admin only. Used for historical opportunity charts; created date stays unchanged.</div>
+              <div class="opp-add-help">Used for opportunity charts and reports. Original created date stays unchanged.</div>
+            </div>
+            <div class="opp-add-field opp-add-field-full">
+              <div class="opp-add-help">Future CSV import support: Customer, Opportunity Date, Invoice Date, Amount, Currency, Status.</div>
             </div>
           {% endif %}
         </div>

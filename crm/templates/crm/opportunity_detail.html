@@ -24,6 +24,9 @@
       <div class="opp-hero-badges">
         <span class="opp-stage-badge" data-stage="{{ opportunity.stage }}">{{ opportunity.get_stage_display }}</span>
         <span class="opp-status-pill {{ opportunity.status_key }}">{{ opportunity.status_label }}</span>
+        {% if opportunity.opportunity_date %}
+          <span class="opp-badge">HISTORICAL ENTRY</span>
+        {% endif %}
         <span class="opp-badge">
           {% if opportunity.kpi_order_value and opportunity.kpi_currency == "CAD" %}Pipeline {{ opportunity.kpi_order_value|finance_money:"CAD" }}{% else %}Pipeline CAD conversion unavailable{% endif %}
         </span>
