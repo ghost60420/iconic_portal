@@ -56,6 +56,10 @@
       href="?{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.stage %}stage={{ request.GET.stage|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}{% if request.GET.historical %}historical={{ request.GET.historical|urlencode }}&{% endif %}{% if request.GET.sort %}sort={{ request.GET.sort|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page=1&status=all"
     >All</a>
     <a
+      class="opp-tab {% if request.GET.status == 'awaiting_payment' %}active{% endif %}"
+      href="?{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.stage %}stage={{ request.GET.stage|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}{% if request.GET.historical %}historical={{ request.GET.historical|urlencode }}&{% endif %}{% if request.GET.sort %}sort={{ request.GET.sort|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page=1&status=awaiting_payment"
+    >Awaiting Payment</a>
+    <a
       class="opp-tab {% if request.GET.status == 'closed_won' %}active{% endif %}"
       href="?{% if request.GET.q %}q={{ request.GET.q|urlencode }}&{% endif %}{% if request.GET.stage %}stage={{ request.GET.stage|urlencode }}&{% endif %}{% if request.GET.created_from %}created_from={{ request.GET.created_from|urlencode }}&{% endif %}{% if request.GET.created_to %}created_to={{ request.GET.created_to|urlencode }}&{% endif %}{% if request.GET.value_min %}value_min={{ request.GET.value_min|urlencode }}&{% endif %}{% if request.GET.value_max %}value_max={{ request.GET.value_max|urlencode }}&{% endif %}{% if request.GET.historical %}historical={{ request.GET.historical|urlencode }}&{% endif %}{% if request.GET.sort %}sort={{ request.GET.sort|urlencode }}&{% endif %}per_page={{ per_page|stringformat:'s' }}&page=1&status=closed_won"
     >Won</a>
@@ -96,6 +100,7 @@
         <label class="opp-label">Status</label>
         <select class="opp-input" name="status">
           <option value="active" {% if status_filter == "active" or not status_filter %}selected{% endif %}>Active</option>
+          <option value="awaiting_payment" {% if status_filter == "awaiting_payment" %}selected{% endif %}>Awaiting Payment</option>
           <option value="moved_to_production" {% if status_filter == "moved_to_production" %}selected{% endif %}>Moved to Production</option>
           <option value="closed_won" {% if status_filter == "closed_won" %}selected{% endif %}>Closed Won</option>
           <option value="closed_lost" {% if status_filter == "closed_lost" %}selected{% endif %}>Closed Lost</option>

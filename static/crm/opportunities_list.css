@@ -484,6 +484,7 @@
 .opp-stage-badge[data-stage="Needs Analysis"] { border-color: rgba(34, 211, 238, 0.42); color: #cffafe; background: rgba(34, 211, 238, 0.13); }
 .opp-stage-badge[data-stage="Proposal"] { border-color: rgba(250, 204, 21, 0.42); color: #fef3c7; background: rgba(250, 204, 21, 0.13); }
 .opp-stage-badge[data-stage="Negotiation"] { border-color: rgba(251, 146, 60, 0.42); color: #ffedd5; background: rgba(251, 146, 60, 0.13); }
+.opp-stage-badge[data-stage="Awaiting Payment"] { border-color: rgba(251, 191, 36, 0.52); color: #fde68a; background: rgba(120, 53, 15, 0.18); }
 .opp-stage-badge[data-stage="Sampling"] { border-color: rgba(167, 139, 250, 0.42); color: #ede9fe; background: rgba(139, 92, 246, 0.13); }
 .opp-stage-badge[data-stage="Production"] { border-color: rgba(45, 212, 191, 0.42); color: #ccfbf1; background: rgba(45, 212, 191, 0.13); }
 .opp-stage-badge[data-stage="Shipment Complete"],

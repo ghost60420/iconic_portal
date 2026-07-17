@@ -11,7 +11,7 @@ from crm.services.ceo_briefing_metrics import (
     invoice_balance_totals_by_currency,
     open_invoice_balance_queryset,
 )
-from crm.services.employee_identity import get_employee_identity_index, resolve_employee_identity
+from crm.services.opportunity_payment_stage import build_awaiting_payment_metrics
 from crm.services.sales_attribution import build_ceo_sales_kpis
 
 
@@ -72,27 +72,40 @@ def _cash_by_currency():
 def _production_groups_and_broken_count(today):
     production_table = ProductionOrder._meta.db_table
     opportunity_table = "crm_opportunity"
+    user_table = "auth_user"
+    employee_profile_table = "crm_employeeprofile"
     active_placeholders = ", ".join(["%s"] * len(ACTIVE_PRODUCTION_STATUSES))
     sql = f"""
         SELECT
-            assigned_production_manager_id,
-            COUNT(id) AS total,
-            SUM(CASE WHEN operational_status IN ({active_placeholders}) THEN 1 ELSE 0 END) AS active,
+            prod.assigned_production_manager_id,
+            COALESCE(
+                NULLIF(profile.display_name, ''),
+                NULLIF(TRIM(manager.first_name || ' ' || manager.last_name), ''),
+                manager.username,
+                'Unassigned'
+            ) AS manager_label,
+            COUNT(prod.id) AS total,
+            SUM(CASE WHEN prod.operational_status IN ({active_placeholders}) THEN 1 ELSE 0 END) AS active,
             SUM(
                 CASE
-                    WHEN bulk_deadline < %s
-                     AND operational_status IN ({active_placeholders})
-                     AND status NOT IN ('done', 'closed_won', 'closed_lost', 'cancelled')
+                    WHEN prod.bulk_deadline < %s
+                     AND prod.operational_status IN ({active_placeholders})
+                     AND prod.status NOT IN ('done', 'closed_won', 'closed_lost', 'cancelled')
                     THEN 1 ELSE 0
                 END
             ) AS late,
             0 AS broken_count
-        FROM {production_table}
-        WHERE is_archived = %s
-        GROUP BY assigned_production_manager_id
+        FROM {production_table} prod
+        LEFT JOIN {user_table} manager
+          ON manager.id = prod.assigned_production_manager_id
+        LEFT JOIN {employee_profile_table} profile
+          ON profile.user_id = prod.assigned_production_manager_id
+        WHERE prod.is_archived = %s
+        GROUP BY prod.assigned_production_manager_id, manager_label
         UNION ALL
         SELECT
             NULL AS assigned_production_manager_id,
+            NULL AS manager_label,
             0 AS total,
             0 AS active,
             0 AS late,
@@ -117,13 +130,14 @@ def _production_groups_and_broken_count(today):
         rows = cursor.fetchall()
     production_groups = []
     broken_count = 0
-    for assigned_id, total, active, late, row_broken_count in rows:
+    for assigned_id, manager_label, total, active, late, row_broken_count in rows:
         if row_broken_count:
             broken_count += int(row_broken_count or 0)
             continue
         production_groups.append(
             {
                 "assigned_production_manager_id": assigned_id,
+                "manager_label": manager_label or "Unassigned",
                 "total": int(total or 0),
                 "active": int(active or 0),
                 "late": int(late or 0),
@@ -156,6 +170,41 @@ def _revenue_profit_by_currency(month_start, today):
     return revenue, profit
 
 
+def _cash_revenue_profit_by_currency(month_start, today):
+    cash = defaultdict(Decimal)
+    revenue = defaultdict(Decimal)
+    expenses = defaultdict(Decimal)
+    rows = (
+        AccountingEntry.objects.exclude(main_type="TRANSFER")
+        .exclude(status__iexact="CANCELLED")
+        .values("currency", "direction", "main_type")
+        .annotate(
+            amount=Sum("amount_original"),
+            monthly_amount=Sum(
+                "amount_original",
+                filter=Q(date__range=(month_start, today)),
+            ),
+        )
+    )
+    for row in rows:
+        currency = (row.get("currency") or "").upper()
+        if currency not in CURRENCIES:
+            continue
+        amount = _decimal(row["amount"])
+        monthly_amount = _decimal(row["monthly_amount"])
+        direction = row["direction"]
+        main_type = (row.get("main_type") or "").upper()
+
+        cash[currency] += amount if direction == AccountingEntry.DIR_IN else -amount
+        if direction == AccountingEntry.DIR_IN and main_type == "INCOME":
+            revenue[currency] += monthly_amount
+        elif direction == AccountingEntry.DIR_OUT and main_type in PROFIT_EXPENSE_TYPES:
+            expenses[currency] += monthly_amount
+
+    profit = {currency: revenue[currency] - expenses[currency] for currency in CURRENCIES}
+    return cash, revenue, profit
+
+
 def build_ceo_executive_context():
     today = timezone.localdate()
     month_start = today.replace(day=1)
@@ -176,10 +225,10 @@ def build_ceo_executive_context():
         ),
         "amount_original",
     )
-    current_cash = _cash_by_currency()
-    revenue, profit = _revenue_profit_by_currency(month_start, today)
+    current_cash, revenue, profit = _cash_revenue_profit_by_currency(month_start, today)
 
     production_groups, broken_production_states = _production_groups_and_broken_count(today)
+    awaiting_payment_metrics = build_awaiting_payment_metrics()
     production = {
         key: sum(int(row[key] or 0) for row in production_groups)
         for key in ("total", "active", "late")
@@ -189,6 +238,7 @@ def build_ceo_executive_context():
     top_production_managers = [
         {
             "assigned_production_manager_id": row["assigned_production_manager_id"],
+            "label": row["manager_label"],
             "count": int(row["total"] or 0),
         }
         for row in sorted(
@@ -196,12 +246,6 @@ def build_ceo_executive_context():
             key=lambda row: (-int(row["total"] or 0), row["assigned_production_manager_id"]),
         )[:5]
     ]
-    identity_index = get_employee_identity_index()
-    for row in top_production_managers:
-        row["label"] = resolve_employee_identity(
-            user_id=row["assigned_production_manager_id"],
-            index=identity_index,
-        )["canonical_name"]
 
     upcoming_shipments = list(
         Shipment.objects.filter(ship_date__gte=today)
@@ -222,6 +266,10 @@ def build_ceo_executive_context():
         "profit_by_currency": _currency_rows(profit),
         "open_pipeline_count": sales_kpis["open_pipeline_count"],
         "open_pipeline_rows": sales_kpis["open_pipeline_rows"],
+        "awaiting_payment_count": awaiting_payment_metrics["count"],
+        "awaiting_payment_customer_count": awaiting_payment_metrics["customer_count"],
+        "awaiting_payment_rows": awaiting_payment_metrics["rows"],
+        "awaiting_payment_display": awaiting_payment_metrics["display"],
         "production_total": int(production["total"] or 0),
         "production_active": int(production["active"] or 0),
         "late_production_orders": int(production["late"] or 0),

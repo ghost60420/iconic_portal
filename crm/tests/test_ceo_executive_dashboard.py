@@ -147,6 +147,7 @@ class CEOExecutiveDashboardTests(TestCase):
             "Current Cash",
             "Production Orders",
             "Late Production Orders",
+            "Awaiting Payment Orders",
             "Pending CEO Approvals",
             "Accounting Revenue by Currency",
             "Open Pipeline",
@@ -183,6 +184,35 @@ class CEOExecutiveDashboardTests(TestCase):
         self.assertEqual(context["production_total"], 1)
         self.assertEqual(context["late_production_orders"], 1)
         self.assertEqual(context["pending_ceo_approvals"], 1)
+
+    def test_context_reports_awaiting_payment_orders_separately(self):
+        opportunity = Opportunity.objects.create(
+            customer=self.customer,
+            product_type="Activewear",
+            product_category="Hoodie",
+            stage="Proposal",
+            order_currency="CAD",
+            order_value_usd=Decimal("750"),
+        )
+        Invoice.objects.create(
+            invoice_number="INV-CEO-AWAITING",
+            opportunity=opportunity,
+            customer=self.customer,
+            issue_date=self.today,
+            due_date=self.today + timedelta(days=7),
+            currency="CAD",
+            total_amount=Decimal("750"),
+            paid_amount=Decimal("250"),
+            status="partial",
+        )
+        opportunity.refresh_from_db()
+
+        context = build_ceo_executive_context()
+
+        self.assertEqual(opportunity.stage, "Awaiting Payment")
+        self.assertEqual(context["awaiting_payment_count"], 1)
+        self.assertEqual(context["awaiting_payment_customer_count"], 1)
+        self.assertEqual(context["awaiting_payment_rows"][0]["amount"], Decimal("500"))
 
     def test_context_builder_has_bounded_query_count(self):
         with CaptureQueriesContext(connection) as captured:

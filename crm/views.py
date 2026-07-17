@@ -109,6 +109,12 @@ from .services.pipeline import (
     summarize_pipeline,
     with_pipeline_value,
 )
+from .services.opportunity_payment_stage import (
+    AWAITING_PAYMENT_STAGE,
+    build_awaiting_payment_metrics,
+    opportunity_has_outstanding_invoice,
+    outstanding_balance_summary_for_opportunity,
+)
 from .services.operations_permissions import (
     active_sales_lead_q,
     available_sales_lead_q,
@@ -4659,6 +4665,7 @@ def opportunity_detail(request, pk):
     order_value_bdt = opportunity.order_value
     currency_summary = _opportunity_currency_summary(opportunity)
     bdt_per_piece = currency_summary["bdt_per_piece"]
+    outstanding_balance_summary = outstanding_balance_summary_for_opportunity(opportunity)
 
     reference_images = list(reference_images_for_opportunity(opportunity))
     primary_reference_image = reference_images[0] if reference_images else None
@@ -4736,6 +4743,7 @@ def opportunity_detail(request, pk):
         "order_value_bdt": order_value_bdt,
         "bdt_per_piece": bdt_per_piece,
         "currency_summary": currency_summary,
+        "outstanding_balance_summary": outstanding_balance_summary,
 
         # Shipping for the template
         "ship": ship,
@@ -10520,8 +10528,8 @@ def _production_payment_override_enabled(user):
 
 def _pre_production_stage_for_opportunity(opportunity):
     stage_values = {value for value, _label in Opportunity.STAGE_CHOICES}
-    if "Awaiting Payment" in stage_values:
-        return "Awaiting Payment"
+    if AWAITING_PAYMENT_STAGE in stage_values and opportunity_has_outstanding_invoice(opportunity):
+        return AWAITING_PAYMENT_STAGE
     if QuickCosting.objects.filter(opportunity=opportunity, invoices__isnull=False).exists():
         return "Negotiation"
     if CostingHeader.objects.filter(opportunity=opportunity).exists():
@@ -14149,6 +14157,7 @@ def _build_daily_ceo_briefing_context(request):
     )
 
     opportunity_metrics = build_open_opportunity_metrics(side=side, date_to=date_to)
+    awaiting_payment_metrics = build_awaiting_payment_metrics(side=side)
     opportunities_needing_followup = opportunity_metrics["due_followup_count"]
     open_opportunities = {
         "count": opportunity_metrics["count"],
@@ -14292,6 +14301,7 @@ def _build_daily_ceo_briefing_context(request):
     executive_summary = [
         {"label": "New Leads", "value": _format_count(new_leads_total), "note": f"{high_priority_leads} high priority lead(s).", "tone": "good" if new_leads_total else "blue"},
         {"label": "Open Opportunities", "value": _format_count(open_opportunities["count"]), "note": f"{opportunities_needing_followup} due or missing follow-up; {open_opportunities['zero_value_count']} with no value yet.", "tone": "warn" if opportunities_needing_followup else "good"},
+        {"label": "Customers Awaiting Payment", "value": _format_count(awaiting_payment_metrics["customer_count"]), "note": f"{awaiting_payment_metrics['count']} order(s), {awaiting_payment_metrics['display']} outstanding.", "tone": "warn" if awaiting_payment_metrics["count"] else "good"},
         {"label": "Production Delays", "value": _format_count(production_delays), "note": f"{production_due_soon} production order(s) due soon.", "tone": "bad" if production_delays else "blue"},
         {"label": "Shipping Alerts", "value": _format_count(shipments_delayed + shipments_due_soon), "note": f"{shipments_delayed} delayed, {shipments_due_soon} due soon.", "tone": "warn" if shipments_delayed else "blue"},
         {"label": "Overdue Receivables", "value": overdue_receivables_display, "note": f"{overdue_invoice_count} overdue invoice(s); currencies are not combined.", "tone": "bad" if overdue_invoice_count else "good"},
@@ -14358,6 +14368,7 @@ def _build_daily_ceo_briefing_context(request):
         "new_leads": new_leads,
         "opportunities_needing_followup": opportunities_needing_followup,
         "open_opportunities": open_opportunities,
+        "awaiting_payment_metrics": awaiting_payment_metrics,
         "open_opportunity_rows": open_opportunity_rows,
         "production_delays": production_delays,
         "production_due_soon": production_due_soon,
@@ -14932,6 +14943,7 @@ def main_dashboard(request):
     open_opportunity_qs = open_pipeline_queryset(opportunity_kpi_qs)
     open_opps = open_opportunity_qs.count()
     open_pipeline_values = _sum_opportunity_kpi_values_by_currency(open_opportunity_qs)
+    awaiting_payment_metrics = build_awaiting_payment_metrics()
     overdue_followups = lead_kpi_qs.filter(next_followup__lt=today).exclude(
         lead_status__in=["Converted", "Closed", "Disqualified", "Lost"]
     ).count()
@@ -15317,6 +15329,16 @@ def main_dashboard(request):
             "href": "#sales-section",
         },
         {
+            "title": "Awaiting Payment Orders",
+            "value": _format_count(awaiting_payment_metrics["count"]),
+            "note": f"Outstanding {awaiting_payment_metrics['display']}; currencies are not combined.",
+            "trend_text": f"{_format_count(awaiting_payment_metrics['customer_count'])} customer(s) awaiting payment",
+            "trend_tone": "down" if awaiting_payment_metrics["count"] else "flat",
+            "accent": "pipeline",
+            "icon": "receipt",
+            "href": "#finance-section",
+        },
+        {
             "title": "Lead Conversion Rate",
             "value": _format_percent(conversion_rate),
             "note": f"{_format_count(opp_period)} opportunities from {_format_count(leads_period)} leads.",
@@ -15577,6 +15599,7 @@ def main_dashboard(request):
 
         "opp_period": opp_period,
         "open_opps": open_opps,
+        "awaiting_payment_metrics": awaiting_payment_metrics,
         "conversion_rate": conversion_rate,
         "overdue_followups": overdue_followups,
 
@@ -16023,6 +16046,8 @@ def opportunities_list(request):
 
     if status in {"active", "open", ""}:
         qs = _active_opportunity_list_queryset(qs)
+    elif status == "awaiting_payment":
+        qs = qs.filter(stage=AWAITING_PAYMENT_STAGE)
     elif status == "moved_to_production":
         qs = qs.filter(Q(stage="Production") | Q(list_has_production=True)).distinct()
     elif status == "closed_won":

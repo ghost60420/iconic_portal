@@ -866,7 +866,8 @@ button.crm-tab {
 }
 
 .crm-status-pill[data-stage="Proposal"],
-.crm-status-pill[data-stage="Negotiation"] {
+.crm-status-pill[data-stage="Negotiation"],
+.crm-status-pill[data-stage="Awaiting Payment"] {
   border-color: rgba(251, 191, 36, 0.38);
   background: rgba(120, 53, 15, 0.24);
   color: #fde68a;

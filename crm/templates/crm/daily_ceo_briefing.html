@@ -337,6 +337,11 @@
             <small>{{ overdue_invoice_count }} overdue invoice(s); currencies are not combined.</small>
           </div>
           <div class="brief-mini">
+            <span>Customers Awaiting Payment</span>
+            <strong>{{ awaiting_payment_metrics.customer_count|default:0 }}</strong>
+            <small>{{ awaiting_payment_metrics.count|default:0 }} order(s), {{ awaiting_payment_metrics.display|default:"-" }} outstanding.</small>
+          </div>
+          <div class="brief-mini">
             <span>Future email support</span>
             <strong>Not sending</strong>
             <small>{{ email_future_note }}</small>

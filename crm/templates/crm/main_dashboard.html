@@ -379,6 +379,8 @@
         </div>
         <ul class="dashboard-list">
           <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Pending quotations</strong><span>{{ pending_quotations_count|intcomma }}</span></div></li>
+          <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Awaiting payment orders</strong><span>{{ awaiting_payment_metrics.count|default:0|intcomma }}</span></div></li>
+          <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Awaiting payment value</strong><span>{{ awaiting_payment_metrics.display|default:"-" }}</span></div></li>
           <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Unpaid invoices</strong><span>{{ unpaid_invoices_count|intcomma }}</span></div></li>
           <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Partial payments</strong><span>{{ partial_payments_count|intcomma }}</span></div></li>
           <li class="dashboard-list-item"><div class="dashboard-list-row"><strong>Outstanding balance</strong><span>{% for row in outstanding_invoice_values %}<span title="{{ row.amount|finance_money:row.currency }}">{{ row.amount|compact_money:row.currency }}</span>{% if not forloop.last %}<br>{% endif %}{% empty %}-{% endfor %}</span></div></li>

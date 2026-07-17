@@ -1157,6 +1157,7 @@ class Opportunity(models.Model):
         ("Needs Analysis", "Needs Analysis"),
         ("Proposal", "Proposal or Quote"),
         ("Negotiation", "Negotiation"),
+        ("Awaiting Payment", "Awaiting Payment"),
         ("Sampling", "Sampling"),
         ("Production", "Production"),
         ("Shipment Complete", "Shipment Complete"),
@@ -5371,7 +5372,14 @@ class Invoice(models.Model):
                     raise ValidationError(
                         "The invoice must retain the Production Order's approved Quick Costing."
                     )
-        return super().save(*args, **kwargs)
+        result = super().save(*args, **kwargs)
+        try:
+            from crm.services.opportunity_payment_stage import sync_opportunity_stage_from_invoice
+
+            sync_opportunity_stage_from_invoice(self)
+        except Exception:
+            pass
+        return result
 
     @property
     def balance(self):

@@ -160,6 +160,31 @@ class CEODailyBriefingMetricTests(TestCase):
         self.assertContains(response, "Active opportunities without a confirmed pipeline value.")
         self.assertEqual(response.context["open_opportunities"]["zero_value_count"], 1)
 
+    def test_daily_briefing_shows_customers_awaiting_payment_card(self):
+        opportunity = Opportunity.objects.create(
+            customer=self.customer,
+            stage="Proposal",
+            is_open=True,
+            order_currency="CAD",
+            order_value_usd=Decimal("1200"),
+        )
+        self._invoice(
+            "INV-AWAITING-PAYMENT",
+            "1200",
+            "200",
+            status="partial",
+            opportunity=opportunity,
+        )
+        opportunity.refresh_from_db()
+
+        response = self.client.get(reverse("daily_ceo_briefing"))
+
+        self.assertEqual(opportunity.stage, "Awaiting Payment")
+        self.assertContains(response, "Customers Awaiting Payment")
+        self.assertContains(response, "CAD $1,000.00")
+        self.assertEqual(response.context["awaiting_payment_metrics"]["count"], 1)
+        self.assertEqual(response.context["awaiting_payment_metrics"]["customer_count"], 1)
+
     def test_completed_production_is_excluded_and_delayed_active_production_is_included(self):
         delayed_active = ProductionOrder.objects.create(
             customer=self.customer,

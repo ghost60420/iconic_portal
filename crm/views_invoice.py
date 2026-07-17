@@ -38,6 +38,7 @@ from .permissions import can_view_internal_costing, get_access
 from .services.costing_currency import CurrencyConversionError, convert_currency, format_finance_money
 from .services.costing_workflow import CostingWorkflowError, create_or_link_production_order_from_invoice, get_costing_quote_amounts
 from .services.order_lifecycle import build_lifecycle_profit_breakdown, create_lifecycle_from_invoice
+from .services.opportunity_payment_stage import sync_opportunity_stage_from_invoice
 from .services.workflow_visibility import build_workflow_visibility_context
 from .services.historical_dates import (
     INVOICE_REPORTING_DATE_ALIAS,
@@ -2051,6 +2052,7 @@ def invoice_add(request):
                     action_type=CRMAuditLog.ACTION_CREATED,
                 )
                 create_lifecycle_from_invoice(inv, user=request.user)
+                sync_opportunity_stage_from_invoice(inv)
 
             messages.success(request, "Invoice created.")
             return redirect("invoice_view", pk=inv.pk)
@@ -2123,6 +2125,8 @@ def invoice_add_ca(request):
                     inv.status,
                     action_type=CRMAuditLog.ACTION_CREATED,
                 )
+                create_lifecycle_from_invoice(inv, user=request.user)
+                sync_opportunity_stage_from_invoice(inv)
             messages.success(request, "Invoice created.")
             return redirect("invoice_view", pk=inv.pk)
     else:
@@ -2194,6 +2198,8 @@ def invoice_add_bd(request):
                     inv.status,
                     action_type=CRMAuditLog.ACTION_CREATED,
                 )
+                create_lifecycle_from_invoice(inv, user=request.user)
+                sync_opportunity_stage_from_invoice(inv)
             messages.success(request, "Invoice created.")
             return redirect("invoice_view", pk=inv.pk)
     else:
@@ -2265,6 +2271,7 @@ def invoice_edit(request, pk):
                 form.save_m2m()
                 _audit_invoice_status_change(inv2, request.user, previous_status, inv2.status)
                 create_lifecycle_from_invoice(inv2, user=request.user)
+                sync_opportunity_stage_from_invoice(inv2)
 
             messages.success(request, "Invoice updated.")
             return redirect("invoice_view", pk=inv.pk)
@@ -3040,6 +3047,7 @@ def invoice_payment_add(request, pk):
         inv.save(update_fields=["paid_amount", "status", "updated_at"])
         _audit_invoice_status_change(inv, request.user, previous_status, inv.status)
         create_lifecycle_from_invoice(inv, user=request.user)
+        sync_opportunity_stage_from_invoice(inv)
 
     if inv.payment_status_key == "overpaid":
         messages.warning(request, "Payment saved. This invoice is now overpaid; review the balance.")
@@ -3068,6 +3076,7 @@ def invoice_approve(request, pk):
     inv.save(update_fields=["status", "approved_at", "approved_by", "updated_at"])
     _audit_invoice_status_change(inv, request.user, previous_status, inv.status)
     create_lifecycle_from_invoice(inv, user=request.user)
+    sync_opportunity_stage_from_invoice(inv)
     messages.success(request, "Invoice sent.")
     return redirect("invoice_view", pk=inv.pk)
 

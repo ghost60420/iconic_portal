@@ -29,6 +29,10 @@ from crm.models import (
 from crm.services.operations_permissions import scope_production_orders, scope_sales_opportunities
 from crm.services.operations_notifications import sync_operations_notifications
 from crm.services.order_lifecycle import create_lifecycle_from_invoice
+from crm.services.opportunity_payment_stage import (
+    build_awaiting_payment_metrics,
+    outstanding_balance_summary_for_opportunity,
+)
 from crm.services.pipeline import with_pipeline_value
 from crm.services.production_integrity import broken_production_state_count
 from crm.services.sales_attribution import resolve_salesperson_for_record
@@ -615,9 +619,9 @@ class CustomerWorkflowImprovementTests(TestCase):
         self.assertIsNone(invoice.order)
         self.assertIsNone(lifecycle.production_order)
         self.assertEqual(lifecycle.status, "invoice")
-        self.assertEqual(opportunity.stage, "Proposal")
+        self.assertEqual(opportunity.stage, "Awaiting Payment")
 
-    def test_orphan_production_stage_with_partial_invoice_is_restored(self):
+    def test_orphan_production_stage_with_partial_invoice_is_restored_to_awaiting_payment(self):
         opportunity = Opportunity.objects.create(
             lead=None,
             customer=self.customer,
@@ -646,7 +650,42 @@ class CustomerWorkflowImprovementTests(TestCase):
         lifecycle = OrderLifecycle.objects.get(invoice=invoice)
         self.assertIsNone(invoice.order)
         self.assertIsNone(lifecycle.production_order)
-        self.assertEqual(opportunity.stage, "Negotiation")
+        self.assertEqual(opportunity.stage, "Awaiting Payment")
+
+    def test_partial_invoice_sets_awaiting_payment_filter_and_balance_badge(self):
+        opportunity = Opportunity.objects.create(
+            lead=None,
+            customer=self.customer,
+            assigned_to=self.salesperson,
+            stage="Proposal",
+            product_type="Activewear",
+            product_category="Basketball Jersey",
+            moq_units=50,
+        )
+        self._full_package_quick_costing_with_invoice(
+            opportunity,
+            invoice_number="INV-QC-FULL-PACKAGE-AWAITING",
+            paid_amount=Decimal("100.00"),
+            status="partial",
+        )
+        opportunity.refresh_from_db()
+
+        self.assertEqual(opportunity.stage, "Awaiting Payment")
+        summary = outstanding_balance_summary_for_opportunity(opportunity)
+        self.assertEqual(summary["display"], "CAD $850.00")
+
+        metrics = build_awaiting_payment_metrics()
+        self.assertEqual(metrics["count"], 1)
+        self.assertEqual(metrics["customer_count"], 1)
+        self.assertEqual(metrics["display"], "CAD $850.00")
+
+        self.client.force_login(self.admin)
+        detail_response = self.client.get(reverse("opportunity_detail", args=[opportunity.pk]))
+        self.assertContains(detail_response, "Outstanding Balance: CAD $850.00")
+
+        list_response = self.client.get(reverse("opportunities_list"), {"status": "awaiting_payment"})
+        self.assertContains(list_response, opportunity.opportunity_id)
+        self.assertContains(list_response, "Awaiting Payment")
 
     def test_broken_production_state_badge_shows_without_production_order(self):
         opportunity = Opportunity.objects.create(
@@ -747,7 +786,7 @@ class CustomerWorkflowImprovementTests(TestCase):
         invoice.refresh_from_db()
         opportunity.refresh_from_db()
         self.assertIsNone(invoice.order)
-        self.assertEqual(opportunity.stage, "Proposal")
+        self.assertEqual(opportunity.stage, "Awaiting Payment")
 
     @override_settings(ALLOW_PARTIAL_PAYMENT_PRODUCTION_CEO_OVERRIDE=True)
     def test_ceo_payment_override_can_move_partial_invoice_to_production_when_enabled(self):

@@ -25,6 +25,7 @@ from crm.services.order_lifecycle import (
     create_lifecycle_from_quotation,
 )
 from crm.services.operations_permissions import can_approve_costing
+from crm.services.opportunity_payment_stage import sync_opportunity_stage_from_invoice
 
 
 DISPLAY_QUANT = Decimal("0.01")
@@ -321,6 +322,7 @@ def create_invoice_from_costing(costing, user=None):
         existing = Invoice.objects.filter(costing_header=costing).order_by("-created_at", "-id").first()
         if existing:
             create_lifecycle_from_invoice(existing, user=user)
+            sync_opportunity_stage_from_invoice(existing)
             return existing, False
 
         amounts = get_costing_quote_amounts(costing)
@@ -356,6 +358,7 @@ def create_invoice_from_costing(costing, user=None):
         )
         _audit_invoice_draft_created(invoice, actor=user)
         create_lifecycle_from_invoice(invoice, user=user)
+        sync_opportunity_stage_from_invoice(invoice)
         return invoice, True
 
 
@@ -373,6 +376,7 @@ def create_invoice_from_quick_costing(quick_costing, user=None):
         existing = Invoice.objects.filter(quick_costing=quick_costing).order_by("-created_at", "-id").first()
         if existing:
             create_lifecycle_from_invoice(existing, user=user)
+            sync_opportunity_stage_from_invoice(existing)
             return existing, False
         if not quick_costing.is_latest_revision:
             raise CostingWorkflowError("Only the latest CEO Approved Quick Costing revision can create an invoice.")
@@ -457,6 +461,7 @@ def create_invoice_from_quick_costing(quick_costing, user=None):
         quick_costing.status = QuickCosting.STATUS_INVOICED
         quick_costing.save(update_fields=["status", "updated_at"])
         create_lifecycle_from_invoice(invoice, user=user)
+        sync_opportunity_stage_from_invoice(invoice)
         return invoice, True
 
 
