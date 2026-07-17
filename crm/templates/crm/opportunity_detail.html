@@ -27,6 +27,9 @@
         {% if opportunity.opportunity_date %}
           <span class="opp-badge">HISTORICAL ENTRY</span>
         {% endif %}
+        {% if has_broken_production_state %}
+          <span class="opp-badge" style="border-color:rgba(248,113,113,0.7); color:#fecaca; background:rgba(127,29,29,0.35);">Broken Production State</span>
+        {% endif %}
         <span class="opp-badge">
           {% if opportunity.kpi_order_value and opportunity.kpi_currency == "CAD" %}Pipeline {{ opportunity.kpi_order_value|finance_money:"CAD" }}{% else %}Pipeline CAD conversion unavailable{% endif %}
         </span>
@@ -96,6 +99,19 @@
           </h2>
           <p class="opp-muted">This opportunity no longer appears in the active Opportunity List.</p>
         </div>
+      </div>
+    </section>
+  {% endif %}
+
+  {% if has_broken_production_state %}
+    <section class="opp-panel" aria-label="Broken production state warning" style="border-color:rgba(248,113,113,0.55); background:rgba(127,29,29,0.16);">
+      <div class="opp-panel-head">
+        <div>
+          <p class="opp-section-kicker">Production warning</p>
+          <h2>Broken Production State</h2>
+          <p class="opp-muted">This opportunity is marked Production but has no linked production order. Moving to Production again requires a fully paid invoice or an approved CEO override.</p>
+        </div>
+        <a href="{% url 'production_from_opportunity' opportunity.pk %}" class="opp-btn opp-btn--tiny opp-btn--primary">Review production move</a>
       </div>
     </section>
   {% endif %}

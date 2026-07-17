@@ -127,9 +127,10 @@ from .services.operations_permissions import (
 )
 from .services.production_orders import (
     ProductionOrderCreationError,
+    create_production_order_from_approved_quick_costing,
     create_production_order_from_approved_quotation,
     create_production_order_from_paid_full_package_quick_costing,
-    paid_full_package_quick_costing_source_for_opportunity,
+    full_package_quick_costing_source_for_opportunity,
 )
 from .services.local_sewing import (
     calculate_local_sewing,
@@ -4408,6 +4409,32 @@ def opportunity_detail(request, pk):
             next_followup_str = (request.POST.get("next_followup") or "").strip()
 
             stage_values = [s[0] for s in Opportunity.STAGE_CHOICES]
+            created_production_order = None
+            production_created = False
+            if new_stage == "Production" and not ProductionOrder.objects.filter(opportunity=opportunity).exists():
+                try:
+                    created_production_order, production_created = _create_or_get_production_order_for_opportunity(
+                        opportunity,
+                        request.user,
+                    )
+                    link_reference_images_to_production(
+                        opportunity=opportunity,
+                        production_order=created_production_order,
+                    )
+                except ProductionOrderCreationError as exc:
+                    restored = _restore_orphan_production_stage(opportunity)
+                    messages.error(request, str(exc))
+                    if restored:
+                        messages.info(
+                            request,
+                            f"Opportunity stage restored to {opportunity.stage} until production is created.",
+                        )
+                    return redirect("opportunity_detail", pk=opportunity.pk)
+                except Exception:
+                    logger.exception("Failed to create production order during stage update for opportunity %s", opportunity.pk)
+                    messages.error(request, "Unable to create production order right now.")
+                    return redirect("opportunity_detail", pk=opportunity.pk)
+
             if new_stage in stage_values:
                 opportunity.stage = new_stage
 
@@ -4425,6 +4452,13 @@ def opportunity_detail(request, pk):
                     lead=lead,
                     activity_type="stage_updated",
                     description=f"Opportunity stage changed to {opportunity.stage}",
+                )
+
+            if lead and production_created:
+                LeadActivity.objects.create(
+                    lead=lead,
+                    activity_type="production_created",
+                    description="Production order created from opportunity stage set to Production.",
                 )
 
             if lead and old_stage != "Production" and opportunity.stage == "Production":
@@ -4609,6 +4643,7 @@ def opportunity_detail(request, pk):
             }
 
     prod_orders = list(prod_orders_qs.order_by("-created_at", "-id"))
+    has_broken_production_state = _has_broken_production_state(opportunity, prod_orders)
 
     order_value = opportunity.order_value or 0
     total_cost_bdt = (prod_total_actual_cost or 0) + (shipping_cost_bdt or 0) if can_view_internal_financials else None
@@ -4663,7 +4698,7 @@ def opportunity_detail(request, pk):
 
         "agents": agents,
         "selected_agent": selected_agent,
-        "messages": ai_messages_qs,
+        "ai_messages": ai_messages_qs,
 
         "opp_files": opp_files,
         "opportunity_documents": opportunity_documents,
@@ -4685,6 +4720,7 @@ def opportunity_detail(request, pk):
         "prod_total_qty": prod_total_qty,
         "prod_total_reject": prod_total_reject,
         "prod_total_actual_cost": prod_total_actual_cost,
+        "has_broken_production_state": has_broken_production_state,
 
         "shipments": shipments,
         "shipping_cost_bdt": shipping_cost_bdt,
@@ -10417,6 +10453,100 @@ def production_attachment_delete(request, pk, att_pk):
     return redirect("production_detail", pk=order.pk)
 
 
+def _approved_costing_for_opportunity_production(opportunity):
+    try:
+        return CostingHeader.objects.filter(
+            opportunity=opportunity,
+            status="approved",
+            quotation_status=CostingHeader.QUOTATION_STATUS_APPROVED,
+            quotation_approved_at__isnull=False,
+        ).order_by("-updated_at", "-id").first()
+    except (OperationalError, ProgrammingError):
+        return None
+
+
+def _approved_cmt_quick_costing_for_opportunity_production(opportunity):
+    try:
+        quick_costings = (
+            QuickCosting.objects.filter(
+                opportunity=opportunity,
+                approved_at__isnull=False,
+                status=QuickCosting.STATUS_APPROVED,
+            )
+            .select_related("opportunity", "opportunity__lead", "opportunity__customer", "opportunity__lead__customer")
+            .order_by("-updated_at", "-id")
+        )
+        for quick_costing in quick_costings:
+            if quick_costing.is_latest_revision and quick_costing.is_bangladesh_local_sewing:
+                return quick_costing
+    except (OperationalError, ProgrammingError):
+        return None
+    return None
+
+
+def _create_or_get_production_order_for_opportunity(opportunity, user):
+    po = ProductionOrder.objects.filter(opportunity=opportunity).first()
+    if po:
+        return po, False
+
+    if not can_approve_costing(user):
+        raise ProductionOrderCreationError("CEO/Admin approval is required before moving an order to Production.")
+
+    approved_costing = _approved_costing_for_opportunity_production(opportunity)
+    if approved_costing:
+        return create_production_order_from_approved_quotation(approved_costing, user=user)
+
+    cmt_quick_costing = _approved_cmt_quick_costing_for_opportunity_production(opportunity)
+    if cmt_quick_costing:
+        return create_production_order_from_approved_quick_costing(cmt_quick_costing, user=user)
+
+    quick_costing, quick_invoice = full_package_quick_costing_source_for_opportunity(opportunity)
+    if quick_costing:
+        return create_production_order_from_paid_full_package_quick_costing(
+            quick_costing,
+            invoice=quick_invoice,
+            user=user,
+            allow_payment_override=_production_payment_override_enabled(user),
+        )
+
+    raise ProductionOrderCreationError("A CEO-approved quotation is required before moving this opportunity to Production.")
+
+
+def _production_payment_override_enabled(user):
+    if not getattr(settings, "ALLOW_PARTIAL_PAYMENT_PRODUCTION_CEO_OVERRIDE", False):
+        return False
+    return can_approve_costing(user)
+
+
+def _pre_production_stage_for_opportunity(opportunity):
+    stage_values = {value for value, _label in Opportunity.STAGE_CHOICES}
+    if "Awaiting Payment" in stage_values:
+        return "Awaiting Payment"
+    if QuickCosting.objects.filter(opportunity=opportunity, invoices__isnull=False).exists():
+        return "Negotiation"
+    if CostingHeader.objects.filter(opportunity=opportunity).exists():
+        return "Proposal"
+    return "Proposal"
+
+
+def _restore_orphan_production_stage(opportunity):
+    if opportunity.stage != "Production":
+        return False
+    if ProductionOrder.objects.filter(opportunity=opportunity).exists():
+        return False
+    opportunity.stage = _pre_production_stage_for_opportunity(opportunity)
+    opportunity.save(update_fields=["stage", "updated_at"])
+    return True
+
+
+def _has_broken_production_state(opportunity, production_orders=None):
+    if opportunity.stage != "Production":
+        return False
+    if production_orders is not None:
+        return not bool(production_orders)
+    return not ProductionOrder.objects.filter(opportunity=opportunity).exists()
+
+
 def production_from_opportunity(request, pk):
     """
     Open or create production order from an opportunity.
@@ -10430,55 +10560,23 @@ def production_from_opportunity(request, pk):
         customer = None
 
     try:
-        approved_costing = CostingHeader.objects.filter(
-            opportunity=opportunity,
-            status="approved",
-            quotation_status=CostingHeader.QUOTATION_STATUS_APPROVED,
-            quotation_approved_at__isnull=False,
-        ).order_by("-updated_at", "-id").first()
-    except (OperationalError, ProgrammingError):
-        approved_costing = None
+        po, created = _create_or_get_production_order_for_opportunity(opportunity, request.user)
+    except ProductionOrderCreationError as exc:
+        restored = _restore_orphan_production_stage(opportunity)
+        messages.error(request, str(exc))
+        if restored:
+            messages.info(request, f"Opportunity stage restored to {opportunity.stage} until production is created.")
+        return redirect("opportunity_detail", pk=opportunity.pk)
+    except Exception:
+        logger.exception("Failed to create production order for opportunity %s", opportunity.pk)
+        messages.error(request, "Unable to create production order right now.")
+        return redirect("opportunity_detail", pk=opportunity.pk)
 
-    quick_costing = None
-    quick_invoice = None
-    if not approved_costing:
-        try:
-            quick_costing, quick_invoice = paid_full_package_quick_costing_source_for_opportunity(opportunity)
-        except (OperationalError, ProgrammingError):
-            quick_costing = None
-            quick_invoice = None
-
-    po = ProductionOrder.objects.filter(opportunity=opportunity).first()
-    created = False
-
-    if not po:
-        if not can_approve_costing(request.user):
-            messages.error(request, "CEO/Admin approval is required before moving an order to Production.")
-            return redirect("opportunity_detail", pk=opportunity.pk)
-        if not approved_costing and not quick_costing:
-            messages.error(request, "A CEO-approved quotation is required before moving this opportunity to Production.")
-            return redirect("opportunity_detail", pk=opportunity.pk)
-        try:
-            if approved_costing:
-                po, created = create_production_order_from_approved_quotation(approved_costing, user=request.user)
-            else:
-                po, created = create_production_order_from_paid_full_package_quick_costing(
-                    quick_costing,
-                    invoice=quick_invoice,
-                    user=request.user,
-                )
-        except ProductionOrderCreationError as exc:
-            messages.error(request, str(exc))
-            return redirect("opportunity_detail", pk=opportunity.pk)
-        except Exception as exc:
-            logger.exception("Failed to create production order for opportunity %s", opportunity.pk)
-            messages.error(request, "Unable to create production order right now.")
-            return redirect("opportunity_detail", pk=opportunity.pk)
-
-    elif customer and not po.customer_id:
+    approved_costing = _approved_costing_for_opportunity_production(opportunity)
+    if customer and not po.customer_id:
         po.customer = customer
         po.save(update_fields=["customer"])
-    elif approved_costing and not po.costing_header_id:
+    if approved_costing and not po.costing_header_id:
         po.costing_header = approved_costing
         po.save(update_fields=["costing_header"])
 

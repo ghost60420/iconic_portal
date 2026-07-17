@@ -18,6 +18,7 @@ from crm.models import (
     InvoicePayment,
     Lead,
     Opportunity,
+    OrderLifecycle,
     ProductReferenceImage,
     ProductionOrder,
     QuickCosting,
@@ -138,7 +139,14 @@ class CustomerWorkflowImprovementTests(TestCase):
         )
         return costing
 
-    def _paid_full_package_quick_costing(self, opportunity, *, invoice_number="INV-QC-FULL-PACKAGE"):
+    def _full_package_quick_costing_with_invoice(
+        self,
+        opportunity,
+        *,
+        invoice_number="INV-QC-FULL-PACKAGE",
+        paid_amount=None,
+        status="paid",
+    ):
         quick = QuickCosting.objects.create(
             opportunity=opportunity,
             account_brand=self.customer.account_brand,
@@ -160,6 +168,8 @@ class CustomerWorkflowImprovementTests(TestCase):
             quoted_at=timezone.now(),
         )
         invoice_total = Decimal(quick.quantity) * quick.selling_price_per_piece
+        if paid_amount is None:
+            paid_amount = invoice_total
         invoice = Invoice.objects.create(
             quick_costing=quick,
             customer=self.customer,
@@ -168,11 +178,14 @@ class CustomerWorkflowImprovementTests(TestCase):
             currency="CAD",
             subtotal=invoice_total,
             total_amount=invoice_total,
-            paid_amount=invoice_total,
-            status="paid",
+            paid_amount=paid_amount,
+            status=status,
         )
         create_lifecycle_from_invoice(invoice, user=self.admin)
         return quick, invoice
+
+    def _paid_full_package_quick_costing(self, opportunity, *, invoice_number="INV-QC-FULL-PACKAGE"):
+        return self._full_package_quick_costing_with_invoice(opportunity, invoice_number=invoice_number)
 
     def test_customer_archive_hides_active_keeps_linked_records_and_logs(self):
         lead, opportunity = self._lead_opportunity()
@@ -557,6 +570,9 @@ class CustomerWorkflowImprovementTests(TestCase):
         self.assertEqual(order.assigned_production_manager, self.salesperson)
         invoice.refresh_from_db()
         self.assertEqual(invoice.order, order)
+        lifecycle = OrderLifecycle.objects.get(invoice=invoice)
+        self.assertEqual(lifecycle.production_order, order)
+        self.assertEqual(lifecycle.status, "production")
         opportunity.refresh_from_db()
         self.assertEqual(opportunity.stage, "Production")
         self.assertEqual(ProductionOrder.objects.filter(opportunity=opportunity).count(), 1)
@@ -564,6 +580,149 @@ class CustomerWorkflowImprovementTests(TestCase):
         duplicate_response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]))
 
         self.assertEqual(duplicate_response.status_code, 302)
+        self.assertEqual(ProductionOrder.objects.filter(opportunity=opportunity).count(), 1)
+
+    def test_full_package_quick_costing_partial_invoice_blocks_production(self):
+        opportunity = Opportunity.objects.create(
+            lead=None,
+            customer=self.customer,
+            assigned_to=self.salesperson,
+            stage="Proposal",
+            product_type="Activewear",
+            product_category="Basketball Jersey",
+            moq_units=50,
+        )
+        quick, invoice = self._full_package_quick_costing_with_invoice(
+            opportunity,
+            invoice_number="INV-QC-FULL-PACKAGE-PARTIAL",
+            paid_amount=Decimal("100.00"),
+            status="partial",
+        )
+
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Invoice must be fully paid before moving to Production.")
+        self.assertFalse(ProductionOrder.objects.filter(opportunity=opportunity).exists())
+        self.assertFalse(ProductionOrder.objects.filter(source_quick_costing=quick).exists())
+        invoice.refresh_from_db()
+        opportunity.refresh_from_db()
+        lifecycle = OrderLifecycle.objects.get(invoice=invoice)
+        self.assertIsNone(invoice.order)
+        self.assertIsNone(lifecycle.production_order)
+        self.assertEqual(lifecycle.status, "invoice")
+        self.assertEqual(opportunity.stage, "Proposal")
+
+    def test_orphan_production_stage_with_partial_invoice_is_restored(self):
+        opportunity = Opportunity.objects.create(
+            lead=None,
+            customer=self.customer,
+            assigned_to=self.salesperson,
+            stage="Production",
+            product_type="Activewear",
+            product_category="Basketball Jersey",
+            moq_units=50,
+        )
+        quick, invoice = self._full_package_quick_costing_with_invoice(
+            opportunity,
+            invoice_number="INV-QC-FULL-PACKAGE-ORPHAN",
+            paid_amount=Decimal("100.00"),
+            status="partial",
+        )
+
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Invoice must be fully paid before moving to Production.")
+        self.assertFalse(ProductionOrder.objects.filter(opportunity=opportunity).exists())
+        self.assertFalse(ProductionOrder.objects.filter(source_quick_costing=quick).exists())
+        invoice.refresh_from_db()
+        opportunity.refresh_from_db()
+        lifecycle = OrderLifecycle.objects.get(invoice=invoice)
+        self.assertIsNone(invoice.order)
+        self.assertIsNone(lifecycle.production_order)
+        self.assertEqual(opportunity.stage, "Negotiation")
+
+    def test_broken_production_state_badge_shows_without_production_order(self):
+        opportunity = Opportunity.objects.create(
+            lead=None,
+            customer=self.customer,
+            assigned_to=self.salesperson,
+            stage="Production",
+            product_type="Activewear",
+            product_category="Basketball Jersey",
+            moq_units=50,
+        )
+
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse("opportunity_detail", args=[opportunity.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Broken Production State")
+        self.assertFalse(ProductionOrder.objects.filter(opportunity=opportunity).exists())
+
+    def test_stage_update_to_production_requires_real_production_order(self):
+        lead, opportunity = self._lead_opportunity()
+        opportunity.stage = "Proposal"
+        opportunity.save(update_fields=["stage"])
+        quick, invoice = self._full_package_quick_costing_with_invoice(
+            opportunity,
+            invoice_number="INV-QC-FULL-PACKAGE-STAGE",
+            paid_amount=Decimal("100.00"),
+            status="partial",
+        )
+
+        self.client.force_login(self.admin)
+        response = self.client.post(
+            reverse("opportunity_detail", args=[opportunity.pk]),
+            {
+                "action": "update_stage",
+                "stage": "Production",
+                "is_open": "on",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Invoice must be fully paid before moving to Production.")
+        self.assertFalse(ProductionOrder.objects.filter(opportunity=opportunity).exists())
+        self.assertFalse(ProductionOrder.objects.filter(source_quick_costing=quick).exists())
+        invoice.refresh_from_db()
+        opportunity.refresh_from_db()
+        self.assertIsNone(invoice.order)
+        self.assertEqual(opportunity.stage, "Proposal")
+
+    @override_settings(ALLOW_PARTIAL_PAYMENT_PRODUCTION_CEO_OVERRIDE=True)
+    def test_ceo_payment_override_can_move_partial_invoice_to_production_when_enabled(self):
+        opportunity = Opportunity.objects.create(
+            lead=None,
+            customer=self.customer,
+            assigned_to=self.salesperson,
+            stage="Proposal",
+            product_type="Activewear",
+            product_category="Basketball Jersey",
+            moq_units=50,
+        )
+        quick, invoice = self._full_package_quick_costing_with_invoice(
+            opportunity,
+            invoice_number="INV-QC-FULL-PACKAGE-OVERRIDE",
+            paid_amount=Decimal("100.00"),
+            status="partial",
+        )
+
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]))
+
+        self.assertEqual(response.status_code, 302)
+        order = ProductionOrder.objects.get(source_quick_costing=quick)
+        invoice.refresh_from_db()
+        opportunity.refresh_from_db()
+        lifecycle = OrderLifecycle.objects.get(invoice=invoice)
+        self.assertEqual(invoice.order, order)
+        self.assertEqual(lifecycle.production_order, order)
+        self.assertEqual(opportunity.stage, "Production")
         self.assertEqual(ProductionOrder.objects.filter(opportunity=opportunity).count(), 1)
 
     def test_full_package_quick_costing_paid_invoice_moves_from_quick_detail(self):
