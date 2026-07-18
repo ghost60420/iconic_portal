@@ -145,12 +145,12 @@ class ProductionOrderFromQuotationTests(TestCase):
         self.assertEqual(second_order, first_order)
         self.assertEqual(ProductionOrder.objects.filter(source_quotation=self.costing).count(), 1)
 
-    def test_invoice_conversion_creates_production_after_deposit(self):
+    def test_invoice_conversion_creates_production_after_invoice_created(self):
         self._approve()
 
         invoice, invoice_created = create_invoice_from_costing(self.costing, user=self.ceo)
-        invoice.paid_amount = Decimal("750.00")
-        invoice.status = "partial"
+        invoice.paid_amount = Decimal("0.00")
+        invoice.status = "sent"
         invoice.deposit_percentage = Decimal("30.00")
         invoice.save(update_fields=["paid_amount", "status", "deposit_percentage", "updated_at"])
         linked_order, order_created = create_or_link_production_order_from_invoice(invoice, user=self.ceo)
@@ -160,8 +160,9 @@ class ProductionOrderFromQuotationTests(TestCase):
         self.assertEqual(ProductionOrder.objects.filter(costing_header=self.costing).count(), 1)
         invoice.refresh_from_db()
         self.assertEqual(invoice.order, linked_order)
+        self.assertEqual(invoice.balance, Decimal("2500.00"))
 
-    def test_invoice_conversion_blocks_until_required_deposit_received(self):
+    def test_invoice_conversion_does_not_require_payment(self):
         self._approve()
         invoice, invoice_created = create_invoice_from_costing(self.costing, user=self.ceo)
         invoice.paid_amount = Decimal("725.00")
@@ -169,15 +170,13 @@ class ProductionOrderFromQuotationTests(TestCase):
         invoice.deposit_percentage = Decimal("30.00")
         invoice.save(update_fields=["paid_amount", "status", "deposit_percentage", "updated_at"])
 
-        with self.assertRaisesMessage(
-            ProductionOrderCreationError,
-            "Production requires a minimum deposit of 30%. Current payment is 29%.",
-        ):
-            create_or_link_production_order_from_invoice(invoice, user=self.ceo)
+        linked_order, order_created = create_or_link_production_order_from_invoice(invoice, user=self.ceo)
 
+        self.assertTrue(invoice_created)
+        self.assertTrue(order_created)
         invoice.refresh_from_db()
-        self.assertIsNone(invoice.order)
-        self.assertFalse(ProductionOrder.objects.filter(source_quotation=self.costing).exists())
+        self.assertEqual(invoice.order, linked_order)
+        self.assertEqual(invoice.balance, Decimal("1775.00"))
 
     def test_existing_legacy_order_is_linked_instead_of_duplicated(self):
         legacy_order = ProductionOrder.objects.create(

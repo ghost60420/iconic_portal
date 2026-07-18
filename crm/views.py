@@ -4467,6 +4467,10 @@ def opportunity_detail(request, pk):
                     activity_type="production_created",
                     description="Production order created from opportunity stage set to Production.",
                 )
+            if production_created:
+                payment_progress = production_payment_progress_for_opportunity(opportunity)
+                if payment_progress.get("warning_message"):
+                    messages.warning(request, payment_progress["warning_message"])
 
             return redirect("opportunity_detail", pk=opportunity.pk)
 
@@ -10560,6 +10564,9 @@ def production_from_opportunity(request, pk):
             opportunity=opportunity,
             production=po,
         )
+        payment_progress = production_payment_progress_for_opportunity(opportunity)
+        if payment_progress.get("warning_message"):
+            messages.warning(request, payment_progress["warning_message"])
 
     return redirect("production_detail", pk=po.pk)
 

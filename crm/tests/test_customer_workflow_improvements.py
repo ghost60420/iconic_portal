@@ -655,20 +655,17 @@ class CustomerWorkflowImprovementTests(TestCase):
         self.assertEqual(duplicate_response.status_code, 302)
         self.assertEqual(ProductionOrder.objects.filter(opportunity=opportunity).count(), 1)
 
-    def test_full_package_quick_costing_deposit_threshold_payment_matrix(self):
+    def test_full_package_quick_costing_invoice_created_payment_matrix(self):
         scenarios = [
-            ("zero", Decimal("0.00"), False, "0%"),
-            ("twenty_five", Decimal("237.50"), False, "25%"),
-            ("twenty_nine", Decimal("275.50"), False, "29%"),
-            ("thirty", Decimal("285.00"), True, "30%"),
-            ("forty_nine", Decimal("465.50"), True, "49%"),
-            ("fifty", Decimal("475.00"), True, "50%"),
-            ("seventy_five", Decimal("712.50"), True, "75%"),
-            ("one_hundred", Decimal("950.00"), True, "100%"),
+            ("zero", Decimal("0.00")),
+            ("twenty_five", Decimal("237.50")),
+            ("forty_nine", Decimal("465.50")),
+            ("fifty", Decimal("475.00")),
+            ("one_hundred", Decimal("950.00")),
         ]
 
         self.client.force_login(self.admin)
-        for slug, paid_amount, should_create, payment_display in scenarios:
+        for slug, paid_amount in scenarios:
             with self.subTest(slug=slug):
                 opportunity = Opportunity.objects.create(
                     lead=None,
@@ -687,25 +684,17 @@ class CustomerWorkflowImprovementTests(TestCase):
                     deposit_percentage=Decimal("30.00"),
                 )
 
-                response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]), follow=not should_create)
+                response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]))
 
-                if should_create:
-                    self.assertEqual(response.status_code, 302)
-                    order = ProductionOrder.objects.get(source_quick_costing=quick)
-                    invoice.refresh_from_db()
-                    opportunity.refresh_from_db()
-                    self.assertEqual(invoice.order, order)
-                    self.assertEqual(invoice.paid_amount, paid_amount)
-                    self.assertEqual(invoice.balance, Decimal("950.00") - paid_amount)
-                    self.assertEqual(opportunity.stage, "Production")
-                    self.assertEqual(ProductionOrder.objects.filter(opportunity=opportunity).count(), 1)
-                else:
-                    self.assertEqual(response.status_code, 200)
-                    self.assertContains(
-                        response,
-                        f"Production requires a minimum deposit of 30%. Current payment is {payment_display}.",
-                    )
-                    self.assertFalse(ProductionOrder.objects.filter(source_quick_costing=quick).exists())
+                self.assertEqual(response.status_code, 302)
+                order = ProductionOrder.objects.get(source_quick_costing=quick)
+                invoice.refresh_from_db()
+                opportunity.refresh_from_db()
+                self.assertEqual(invoice.order, order)
+                self.assertEqual(invoice.paid_amount, paid_amount)
+                self.assertEqual(invoice.balance, Decimal("950.00") - paid_amount)
+                self.assertEqual(opportunity.stage, "Production")
+                self.assertEqual(ProductionOrder.objects.filter(opportunity=opportunity).count(), 1)
 
     def test_full_package_quick_costing_cancelled_invoice_blocks_production(self):
         opportunity = Opportunity.objects.create(
@@ -728,7 +717,7 @@ class CustomerWorkflowImprovementTests(TestCase):
         response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]), follow=True)
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Cancelled invoices cannot move to Production.")
+        self.assertContains(response, "Cancelled or void invoices cannot move to Production.")
         self.assertFalse(ProductionOrder.objects.filter(source_quick_costing=quick).exists())
 
     def test_full_package_quick_costing_zero_total_invoice_blocks_production(self):
@@ -758,7 +747,45 @@ class CustomerWorkflowImprovementTests(TestCase):
         self.assertContains(response, "Invoice total must be greater than 0 before moving to Production.")
         self.assertFalse(ProductionOrder.objects.filter(source_quick_costing=quick).exists())
 
-    def test_production_threshold_preserves_separate_invoice_currencies(self):
+    def test_full_package_quick_costing_missing_invoice_blocks_production(self):
+        opportunity = Opportunity.objects.create(
+            lead=None,
+            customer=self.customer,
+            assigned_to=self.salesperson,
+            stage="Proposal",
+            product_type="Activewear",
+            product_category="Basketball Jersey",
+            moq_units=50,
+        )
+        quick = QuickCosting.objects.create(
+            opportunity=opportunity,
+            account_brand=self.customer.account_brand,
+            buyer_name=self.customer.contact_name,
+            project_name="No Invoice Quick Costing",
+            product_type=opportunity.product_type,
+            pricing_type=QuickCosting.PRICING_FULL_PACKAGE,
+            quantity=opportunity.moq_units or 50,
+            currency="CAD",
+            fabric_cost_per_kg=Decimal("10.00"),
+            fabric_consumption_kg_per_piece=Decimal("0.5000"),
+            making_cost_per_piece=Decimal("4.00"),
+            selling_price_per_piece=Decimal("19.00"),
+            salesperson=self.salesperson,
+            status=QuickCosting.STATUS_INVOICED,
+            approved_by=self.admin,
+            approved_at=timezone.now(),
+            quotation_number="QQT-NO-INVOICE",
+            quoted_at=timezone.now(),
+        )
+
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "An invoice is required before moving to Production.")
+        self.assertFalse(ProductionOrder.objects.filter(source_quick_costing=quick).exists())
+
+    def test_production_invoice_rule_preserves_separate_invoice_currencies(self):
         scenarios = [
             ("CAD", QuickCosting.PRICING_FULL_PACKAGE),
             ("USD", QuickCosting.PRICING_FULL_PACKAGE),
@@ -804,7 +831,53 @@ class CustomerWorkflowImprovementTests(TestCase):
                 self.assertEqual(invoice.order, order)
                 self.assertEqual(order.approved_currency, currency)
 
-    def test_production_payment_requirement_calculates_remaining_deposit(self):
+    def test_payments_after_production_start_and_finish_reduce_balance_without_changing_order(self):
+        opportunity = Opportunity.objects.create(
+            lead=None,
+            customer=self.customer,
+            assigned_to=self.salesperson,
+            stage="Proposal",
+            product_type="Activewear",
+            product_category="Basketball Jersey",
+            moq_units=50,
+        )
+        _quick, invoice = self._full_package_quick_costing_with_invoice(
+            opportunity,
+            invoice_number="INV-QC-FULL-PACKAGE-LATER-PAYMENT",
+            paid_amount=Decimal("0.00"),
+            status="sent",
+        )
+
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]))
+
+        self.assertEqual(response.status_code, 302)
+        invoice.refresh_from_db()
+        order = invoice.order
+        self.assertIsNotNone(order)
+        self.assertEqual(invoice.balance, Decimal("950.00"))
+
+        invoice.paid_amount = Decimal("400.00")
+        invoice.status = "partial"
+        invoice.save(update_fields=["paid_amount", "status", "updated_at"])
+        invoice.refresh_from_db()
+        order.refresh_from_db()
+        self.assertEqual(invoice.order, order)
+        self.assertEqual(invoice.balance, Decimal("550.00"))
+        self.assertEqual(ProductionOrder.objects.filter(opportunity=opportunity).count(), 1)
+
+        order.status = "done"
+        order.save(update_fields=["status", "updated_at"])
+        invoice.paid_amount = Decimal("950.00")
+        invoice.status = "paid"
+        invoice.save(update_fields=["paid_amount", "status", "updated_at"])
+        invoice.refresh_from_db()
+        order.refresh_from_db()
+        self.assertEqual(invoice.order, order)
+        self.assertEqual(invoice.balance, Decimal("0.00"))
+        self.assertEqual(ProductionOrder.objects.filter(opportunity=opportunity).count(), 1)
+
+    def test_production_payment_requirement_is_informational_after_invoice_created(self):
         opportunity = Opportunity.objects.create(
             lead=None,
             customer=self.customer,
@@ -823,14 +896,19 @@ class CustomerWorkflowImprovementTests(TestCase):
 
         progress = production_payment_requirement(invoice)
 
-        self.assertFalse(progress["allowed"])
+        self.assertTrue(progress["allowed"])
+        self.assertEqual(progress["reason"], "invoice_created")
         self.assertEqual(progress["invoice_total_display"], "CAD $950.00")
         self.assertEqual(progress["amount_paid_display"], "CAD $100.00")
         self.assertEqual(progress["outstanding_balance_display"], "CAD $850.00")
-        self.assertEqual(progress["required_percentage_display"], "30%")
-        self.assertEqual(progress["required_amount_display"], "CAD $285.00")
         self.assertEqual(progress["paid_percentage_display"], "10.5%")
-        self.assertEqual(progress["remaining_to_start_display"], "CAD $185.00")
+        self.assertEqual(progress["required_percentage_display"], "0%")
+        self.assertEqual(progress["required_amount_display"], "CAD $0.00")
+        self.assertEqual(progress["remaining_to_start_display"], "CAD $0.00")
+        self.assertEqual(
+            progress["warning_message"],
+            "Production is starting with an outstanding invoice balance of CAD $850.00.",
+        )
 
     def test_quoted_cmt_quick_costing_paid_invoice_moves_opportunity_to_production(self):
         opportunity = Opportunity.objects.create(
@@ -869,7 +947,7 @@ class CustomerWorkflowImprovementTests(TestCase):
         self.assertEqual(duplicate_response.status_code, 302)
         self.assertEqual(ProductionOrder.objects.filter(opportunity=opportunity).count(), 1)
 
-    def test_quoted_cmt_quick_costing_partial_invoice_blocks_production(self):
+    def test_quoted_cmt_quick_costing_partial_invoice_moves_to_production(self):
         opportunity = Opportunity.objects.create(
             lead=None,
             customer=self.customer,
@@ -887,20 +965,20 @@ class CustomerWorkflowImprovementTests(TestCase):
         )
 
         self.client.force_login(self.admin)
-        response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]), follow=True)
+        response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]))
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Production requires a minimum deposit of 30%. Current payment is 20%.")
-        self.assertFalse(ProductionOrder.objects.filter(opportunity=opportunity).exists())
-        self.assertFalse(ProductionOrder.objects.filter(source_quick_costing=quick).exists())
+        self.assertEqual(response.status_code, 302)
+        order = ProductionOrder.objects.get(source_quick_costing=quick)
         invoice.refresh_from_db()
         opportunity.refresh_from_db()
         lifecycle = OrderLifecycle.objects.get(invoice=invoice)
-        self.assertIsNone(invoice.order)
-        self.assertIsNone(lifecycle.production_order)
-        self.assertEqual(opportunity.stage, "Awaiting Payment")
+        self.assertEqual(invoice.order, order)
+        self.assertEqual(invoice.paid_amount, Decimal("1000.00"))
+        self.assertEqual(invoice.balance, Decimal("4000.00"))
+        self.assertEqual(lifecycle.production_order, order)
+        self.assertEqual(opportunity.stage, "Production")
 
-    def test_full_package_quick_costing_partial_invoice_blocks_production(self):
+    def test_full_package_quick_costing_partial_invoice_moves_to_production(self):
         opportunity = Opportunity.objects.create(
             lead=None,
             customer=self.customer,
@@ -918,21 +996,21 @@ class CustomerWorkflowImprovementTests(TestCase):
         )
 
         self.client.force_login(self.admin)
-        response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]), follow=True)
+        response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]))
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Production requires a minimum deposit of 30%. Current payment is 10.5%.")
-        self.assertFalse(ProductionOrder.objects.filter(opportunity=opportunity).exists())
-        self.assertFalse(ProductionOrder.objects.filter(source_quick_costing=quick).exists())
+        self.assertEqual(response.status_code, 302)
+        order = ProductionOrder.objects.get(source_quick_costing=quick)
         invoice.refresh_from_db()
         opportunity.refresh_from_db()
         lifecycle = OrderLifecycle.objects.get(invoice=invoice)
-        self.assertIsNone(invoice.order)
-        self.assertIsNone(lifecycle.production_order)
-        self.assertEqual(lifecycle.status, "invoice")
-        self.assertEqual(opportunity.stage, "Awaiting Payment")
+        self.assertEqual(invoice.order, order)
+        self.assertEqual(invoice.paid_amount, Decimal("100.00"))
+        self.assertEqual(invoice.balance, Decimal("850.00"))
+        self.assertEqual(lifecycle.production_order, order)
+        self.assertEqual(lifecycle.status, "production")
+        self.assertEqual(opportunity.stage, "Production")
 
-    def test_orphan_production_stage_with_partial_invoice_is_restored_to_awaiting_payment(self):
+    def test_orphan_production_stage_with_partial_invoice_creates_missing_order(self):
         opportunity = Opportunity.objects.create(
             lead=None,
             customer=self.customer,
@@ -950,18 +1028,17 @@ class CustomerWorkflowImprovementTests(TestCase):
         )
 
         self.client.force_login(self.admin)
-        response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]), follow=True)
+        response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]))
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Production requires a minimum deposit of 30%. Current payment is 10.5%.")
-        self.assertFalse(ProductionOrder.objects.filter(opportunity=opportunity).exists())
-        self.assertFalse(ProductionOrder.objects.filter(source_quick_costing=quick).exists())
+        self.assertEqual(response.status_code, 302)
+        order = ProductionOrder.objects.get(source_quick_costing=quick)
         invoice.refresh_from_db()
         opportunity.refresh_from_db()
         lifecycle = OrderLifecycle.objects.get(invoice=invoice)
-        self.assertIsNone(invoice.order)
-        self.assertIsNone(lifecycle.production_order)
-        self.assertEqual(opportunity.stage, "Awaiting Payment")
+        self.assertEqual(invoice.order, order)
+        self.assertEqual(invoice.balance, Decimal("850.00"))
+        self.assertEqual(lifecycle.production_order, order)
+        self.assertEqual(opportunity.stage, "Production")
 
     def test_partial_invoice_sets_awaiting_payment_filter_and_balance_badge(self):
         opportunity = Opportunity.objects.create(
@@ -1068,7 +1145,7 @@ class CustomerWorkflowImprovementTests(TestCase):
         self.assertContains(response, "Broken Production States")
         self.assertContains(response, "<div class=\"exec-number\">1</div>", html=True)
 
-    def test_stage_update_to_production_requires_real_production_order(self):
+    def test_stage_update_to_production_creates_real_production_order(self):
         lead, opportunity = self._lead_opportunity()
         opportunity.stage = "Proposal"
         opportunity.save(update_fields=["stage"])
@@ -1091,18 +1168,18 @@ class CustomerWorkflowImprovementTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Production requires a minimum deposit of 30%. Current payment is 2.1%.")
-        self.assertFalse(ProductionOrder.objects.filter(opportunity=opportunity).exists())
-        self.assertFalse(ProductionOrder.objects.filter(source_quick_costing=quick).exists())
+        self.assertContains(response, "Production is starting with an outstanding invoice balance of CAD $4,650.00.")
+        order = ProductionOrder.objects.get(source_quick_costing=quick)
         invoice.refresh_from_db()
         opportunity.refresh_from_db()
-        self.assertIsNone(invoice.order)
-        self.assertEqual(opportunity.stage, "Awaiting Payment")
+        self.assertEqual(invoice.order, order)
+        self.assertEqual(invoice.balance, Decimal("4650.00"))
+        self.assertEqual(opportunity.stage, "Production")
 
-    def test_ceo_settings_can_reduce_deposit_threshold_for_production(self):
+    def test_ceo_deposit_settings_do_not_block_invoice_created_production(self):
         InvoiceSettings.objects.create(
-            default_bulk_deposit_percentage=Decimal("10.00"),
-            default_bd_sewing_deposit_percentage=Decimal("10.00"),
+            default_bulk_deposit_percentage=Decimal("100.00"),
+            default_bd_sewing_deposit_percentage=Decimal("100.00"),
         )
         opportunity = Opportunity.objects.create(
             lead=None,
@@ -1116,7 +1193,7 @@ class CustomerWorkflowImprovementTests(TestCase):
         quick, invoice = self._full_package_quick_costing_with_invoice(
             opportunity,
             invoice_number="INV-QC-FULL-PACKAGE-OVERRIDE",
-            paid_amount=Decimal("100.00"),
+            paid_amount=Decimal("0.00"),
             status="partial",
             deposit_percentage=Decimal("30.00"),
         )

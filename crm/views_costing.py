@@ -57,6 +57,7 @@ from .services.production_orders import (
     create_production_order_from_approved_quick_costing,
     create_production_order_from_paid_full_package_quick_costing,
 )
+from .services.production_payment import production_payment_requirement
 from .services.workflow_visibility import build_workflow_visibility_context
 from .permissions import can_view_internal_costing
 
@@ -2016,6 +2017,11 @@ def quick_costing_convert_to_production(request, pk):
         request,
         f"Production order {production_order.purchase_order_number or production_order.pk} {action}.",
     )
+    production_invoice = production_order.invoices.order_by("-issue_date", "-created_at", "-id").first()
+    if production_invoice:
+        payment_progress = production_payment_requirement(production_invoice)
+        if payment_progress.get("warning_message"):
+            messages.warning(request, payment_progress["warning_message"])
     return redirect("production_detail", pk=production_order.pk)
 
 

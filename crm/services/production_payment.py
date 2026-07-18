@@ -2,12 +2,11 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from django.db.models import Q
 
-from crm.models import Invoice, InvoiceSettings
+from crm.models import Invoice
 from crm.services.costing_currency import format_finance_money
 
 
-DEFAULT_PRODUCTION_DEPOSIT_PERCENTAGE = Decimal("30.00")
-DEFAULT_SAMPLE_PRODUCTION_DEPOSIT_PERCENTAGE = Decimal("100.00")
+INVALID_PRODUCTION_INVOICE_STATUSES = {"cancelled", "canceled", "void", "voided"}
 PERCENT_QUANT = Decimal("0.1")
 MONEY_QUANT = Decimal("0.01")
 
@@ -21,36 +20,11 @@ def decimal_or_zero(value):
         return Decimal("0")
 
 
-def clamp_percentage(value, fallback=DEFAULT_PRODUCTION_DEPOSIT_PERCENTAGE):
-    if value in ("", None):
-        value = fallback
-    value = decimal_or_zero(value)
-    if value < 0:
-        return Decimal("0.00")
-    if value > 100:
-        return Decimal("100.00")
-    return value
-
-
 def format_percentage(value):
     amount = decimal_or_zero(value).quantize(PERCENT_QUANT, rounding=ROUND_HALF_UP)
     if amount == amount.to_integral_value():
         return f"{amount.quantize(Decimal('1'))}%"
     return f"{amount}%"
-
-
-def production_deposit_percentage_for_invoice(invoice):
-    invoice_type = (getattr(invoice, "invoice_type", "") or "").strip()
-    invoice_market = (getattr(invoice, "invoice_market", "") or "").strip()
-    settings_obj = InvoiceSettings.active()
-    if invoice_type == "sample":
-        value = getattr(settings_obj, "default_sample_deposit_percentage", None) if settings_obj else None
-        return clamp_percentage(value, fallback=DEFAULT_SAMPLE_PRODUCTION_DEPOSIT_PERCENTAGE)
-    if invoice_market == "bangladesh" and invoice_type == "sewing_charge":
-        value = getattr(settings_obj, "default_bd_sewing_deposit_percentage", None) if settings_obj else None
-        return clamp_percentage(value, fallback=DEFAULT_PRODUCTION_DEPOSIT_PERCENTAGE)
-    value = getattr(settings_obj, "default_bulk_deposit_percentage", None) if settings_obj else None
-    return clamp_percentage(value, fallback=DEFAULT_PRODUCTION_DEPOSIT_PERCENTAGE)
 
 
 def invoice_queryset_for_opportunity(opportunity):
@@ -87,7 +61,7 @@ def production_payment_requirement(invoice):
     if outstanding < 0:
         outstanding = Decimal("0.00")
 
-    required_percentage = production_deposit_percentage_for_invoice(invoice)
+    required_percentage = Decimal("0.00")
     required_amount = (total * required_percentage / Decimal("100")).quantize(MONEY_QUANT, rounding=ROUND_HALF_UP)
     paid_percentage = Decimal("0.0")
     if total > 0:
@@ -114,28 +88,27 @@ def production_payment_requirement(invoice):
         "paid_percentage_display": format_percentage(paid_percentage),
         "required_percentage_display": format_percentage(required_percentage),
         "remaining_to_start_display": format_finance_money(remaining_to_start, currency),
+        "warning_message": "",
+        "payment_required_for_production": False,
     }
 
     if getattr(invoice, "is_archived", False):
         base.update(reason="archived_invoice", message="Archived invoices cannot move to Production.")
         return base
-    if (getattr(invoice, "status", "") or "").lower() == "cancelled":
-        base.update(reason="cancelled_invoice", message="Cancelled invoices cannot move to Production.")
+    if (getattr(invoice, "status", "") or "").lower() in INVALID_PRODUCTION_INVOICE_STATUSES:
+        base.update(reason="cancelled_invoice", message="Cancelled or void invoices cannot move to Production.")
         return base
     if total <= 0:
         base.update(reason="zero_invoice_total", message="Invoice total must be greater than 0 before moving to Production.")
         return base
-    if paid >= required_amount:
-        base.update(allowed=True, reason="deposit_met", message="")
-        return base
 
-    base.update(
-        reason="deposit_not_met",
-        message=(
-            "Production requires a minimum deposit of "
-            f"{base['required_percentage_display']}. Current payment is {base['paid_percentage_display']}."
-        ),
-    )
+    warning_message = ""
+    if outstanding > 0:
+        warning_message = (
+            "Production is starting with an outstanding invoice balance of "
+            f"{base['outstanding_balance_display']}."
+        )
+    base.update(allowed=True, reason="invoice_created", message="", warning_message=warning_message)
     return base
 
 

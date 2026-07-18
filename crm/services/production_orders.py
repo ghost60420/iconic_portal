@@ -93,7 +93,7 @@ def full_package_quick_costing_source_for_opportunity(opportunity):
 
 
 def paid_full_package_quick_costing_source_for_opportunity(opportunity):
-    """Return the newest deposit-eligible Full Package Quick Costing source for an opportunity."""
+    """Return the newest invoice-backed Full Package Quick Costing source for an opportunity."""
     quick_costing, invoice = full_package_quick_costing_source_for_opportunity(opportunity)
     if quick_costing and select_production_payment_invoice([invoice])[0]:
         return quick_costing, invoice
@@ -134,7 +134,7 @@ def create_production_order_from_paid_full_package_quick_costing(
     invoice=None,
     user=None,
 ):
-    """Create or link one ProductionOrder for a deposit-eligible Full Package Quick Costing invoice."""
+    """Create or link one ProductionOrder for an invoice-backed Full Package Quick Costing."""
     if not quick_costing.pk:
         raise ProductionOrderCreationError("The Quick Costing must be saved before production can begin.")
 
