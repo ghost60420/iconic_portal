@@ -1,6 +1,5 @@
 from decimal import Decimal, ROUND_HALF_UP
 
-from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import Sum
 from django.utils import timezone
@@ -11,6 +10,7 @@ from crm.models import (
     CostingHeader,
     CRMAuditLog,
     Invoice,
+    InvoiceSettings,
     ProductionOrder,
     QuickCosting,
 )
@@ -30,6 +30,8 @@ from crm.services.opportunity_payment_stage import sync_opportunity_stage_from_i
 
 
 DISPLAY_QUANT = Decimal("0.01")
+DEFAULT_PRODUCTION_DEPOSIT_PERCENTAGE = Decimal("30.00")
+DEFAULT_SAMPLE_DEPOSIT_PERCENTAGE = Decimal("100.00")
 
 
 class CostingWorkflowError(Exception):
@@ -51,6 +53,29 @@ def _money(value):
     return _d(value).quantize(DISPLAY_QUANT, rounding=ROUND_HALF_UP)
 
 
+def _clamp_percentage(value, fallback):
+    if value in ("", None):
+        value = fallback
+    value = _d(value)
+    if value < 0:
+        return Decimal("0.00")
+    if value > 100:
+        return Decimal("100.00")
+    return value
+
+
+def _default_invoice_deposit_percentage(*, invoice_type="bulk", invoice_market="north_america"):
+    settings_obj = InvoiceSettings.active()
+    if invoice_type == "sample":
+        value = getattr(settings_obj, "default_sample_deposit_percentage", None) if settings_obj else None
+        return _clamp_percentage(value, DEFAULT_SAMPLE_DEPOSIT_PERCENTAGE)
+    if invoice_market == "bangladesh" and invoice_type == "sewing_charge":
+        value = getattr(settings_obj, "default_bd_sewing_deposit_percentage", None) if settings_obj else None
+        return _clamp_percentage(value, DEFAULT_PRODUCTION_DEPOSIT_PERCENTAGE)
+    value = getattr(settings_obj, "default_bulk_deposit_percentage", None) if settings_obj else None
+    return _clamp_percentage(value, DEFAULT_PRODUCTION_DEPOSIT_PERCENTAGE)
+
+
 def _user_or_none(user):
     return user if user and getattr(user, "is_authenticated", False) else None
 
@@ -66,13 +91,6 @@ def _quick_audit(quick_costing, *, actor, action_type, field_name, previous_valu
         previous_value=str(previous_value or ""),
         new_value=str(new_value or ""),
         target_url=f"/costing/quick/{quick_costing.pk}/",
-    )
-
-
-def _production_payment_override_enabled(user):
-    return bool(
-        getattr(settings, "ALLOW_PARTIAL_PAYMENT_PRODUCTION_CEO_OVERRIDE", False)
-        and can_approve_costing(user)
     )
 
 
@@ -345,7 +363,10 @@ def create_invoice_from_costing(costing, user=None):
             invoice_region=_invoice_region_for_costing(costing),
             invoice_market="bangladesh" if _invoice_region_for_costing(costing) == "BD" else "north_america",
             invoice_type="bulk",
-            deposit_percentage=Decimal("50.00"),
+            deposit_percentage=_default_invoice_deposit_percentage(
+                invoice_type="bulk",
+                invoice_market="bangladesh" if _invoice_region_for_costing(costing) == "BD" else "north_america",
+            ),
             subtotal=_money(amounts["order_total"]),
             shipping_amount=Decimal("0"),
             discount_amount=Decimal("0"),
@@ -416,11 +437,7 @@ def create_invoice_from_quick_costing(quick_costing, user=None):
             if quick_costing.is_bangladesh_local_sewing
             else ("sample" if quick_costing.costing_purpose == QuickCosting.PURPOSE_SAMPLE else "bulk")
         )
-        deposit_percentage = (
-            Decimal("0")
-            if invoice_type == "sewing_charge"
-            else (Decimal("100.00") if invoice_type == "sample" else Decimal("50.00"))
-        )
+        deposit_percentage = _default_invoice_deposit_percentage(invoice_type=invoice_type, invoice_market=market)
         opportunity = quick_costing.opportunity
         lead = getattr(opportunity, "lead", None) if opportunity else None
         customer = None
@@ -429,10 +446,6 @@ def create_invoice_from_quick_costing(quick_costing, user=None):
         if not customer and lead:
             customer = getattr(lead, "customer", None)
         production_order = getattr(quick_costing, "production_order", None)
-        if quick_costing.is_bangladesh_local_sewing and not production_order:
-            raise CostingWorkflowError(
-                "Create the approved Bangladesh Local Sewing production order before invoicing."
-            )
         if not customer and production_order:
             customer = production_order.customer
 
@@ -500,7 +513,7 @@ def create_or_link_production_order_from_invoice(invoice, user=None):
                 raise CostingWorkflowError("CEO-approved quotation is required before production conversion.")
             from crm.services.production_orders import create_production_order_from_approved_quotation
 
-            order, created = create_production_order_from_approved_quotation(costing, user=user)
+            order, created = create_production_order_from_approved_quotation(costing, user=user, invoice=invoice)
         elif quick_costing:
             if quick_costing.is_bangladesh_local_sewing:
                 from crm.services.production_orders import (
@@ -519,7 +532,6 @@ def create_or_link_production_order_from_invoice(invoice, user=None):
                         quick_costing,
                         invoice=invoice,
                         user=user,
-                        allow_payment_override=_production_payment_override_enabled(user),
                     )
                 except ProductionOrderCreationError as exc:
                     raise CostingWorkflowError(str(exc)) from exc

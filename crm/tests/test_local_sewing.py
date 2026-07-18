@@ -51,6 +51,31 @@ class LocalSewingApprovalGateTests(TestCase):
         values.update(overrides)
         return QuickCosting.objects.create(**values)
 
+    def invoice_for_quick(
+        self,
+        quick,
+        *,
+        invoice_number="INV-CMT-THRESHOLD",
+        paid_amount=None,
+        status="partial",
+        deposit_percentage=Decimal("30.00"),
+    ):
+        total = Decimal(quick.quantity or 0) * Decimal(quick.sewing_charge_per_piece_bdt or 0)
+        if paid_amount is None:
+            paid_amount = total * deposit_percentage / Decimal("100")
+        return Invoice.objects.create(
+            quick_costing=quick,
+            invoice_number=invoice_number,
+            currency="BDT",
+            invoice_market="bangladesh",
+            invoice_type="sewing_charge",
+            subtotal=total,
+            total_amount=total,
+            paid_amount=paid_amount,
+            status=status,
+            deposit_percentage=deposit_percentage,
+        )
+
     def cmt_form_data(self, **overrides):
         values = {
             "costing_type": "quick",
@@ -112,6 +137,7 @@ class LocalSewingApprovalGateTests(TestCase):
         quick.refresh_from_db()
         self.assertEqual(quick.status, QuickCosting.STATUS_APPROVED)
         self.assertFalse(ProductionOrder.objects.filter(source_quick_costing=quick).exists())
+        self.invoice_for_quick(quick, invoice_number="INV-CMT-APPROVAL", paid_amount=Decimal("5000.00"))
 
         move_response = self.client.post(reverse("quick_costing_convert_to_production", args=[quick.pk]))
         self.assertEqual(move_response.status_code, 302)
@@ -188,6 +214,7 @@ class LocalSewingApprovalGateTests(TestCase):
         self.assertEqual(quick.status, QuickCosting.STATUS_APPROVED)
         self.assertEqual(quick.approved_by, ceo)
         self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 0)
+        self.invoice_for_quick(quick, invoice_number="INV-CMT-SALES-CREATOR", paid_amount=Decimal("5000.00"))
         move_response = self.client.post(reverse("quick_costing_convert_to_production", args=[quick.pk]))
         self.assertEqual(move_response.status_code, 302)
         self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 1)
@@ -240,9 +267,6 @@ class LocalSewingApprovalGateTests(TestCase):
             duplicate = self.client.post(reverse("quick_costing_approve", args=[quick.pk]))
         self.assertEqual(duplicate.status_code, 302)
         self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 0)
-        move = self.client.post(reverse("quick_costing_convert_to_production", args=[quick.pk]))
-        self.assertEqual(move.status_code, 302)
-        self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 1)
 
         quotation = self.client.post(reverse("quick_costing_convert_to_quotation", args=[quick.pk]))
         self.assertEqual(quotation.status_code, 302)
@@ -252,8 +276,17 @@ class LocalSewingApprovalGateTests(TestCase):
         self.assertEqual(invoice_response.status_code, 302)
         invoice = Invoice.objects.get(quick_costing=quick)
         self.assertEqual(invoice.currency, "BDT")
-        self.assertEqual(invoice.order.source_quick_costing, quick)
+        self.assertIsNone(invoice.order)
         self.assertEqual(AccountingEntry.objects.count(), 0)
+        invoice.paid_amount = Decimal("5000.00")
+        invoice.status = "partial"
+        invoice.save(update_fields=["paid_amount", "status", "updated_at"])
+
+        move = self.client.post(reverse("quick_costing_convert_to_production", args=[quick.pk]))
+        self.assertEqual(move.status_code, 302)
+        self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 1)
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.order.source_quick_costing, quick)
 
     def test_explicit_costing_approver_creator_uses_manual_approval_gate(self):
         approver = get_user_model().objects.create_user(
@@ -283,6 +316,7 @@ class LocalSewingApprovalGateTests(TestCase):
         self.assertEqual(quick.status, QuickCosting.STATUS_APPROVED)
         self.assertEqual(quick.approved_by, approver)
         self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 0)
+        self.invoice_for_quick(quick, invoice_number="INV-CMT-EXPLICIT-APPROVER", paid_amount=Decimal("5000.00"))
         self.client.post(reverse("quick_costing_convert_to_production", args=[quick.pk]))
         self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 1)
         queue = self.client.get(reverse("ceo_quotation_approval_queue"), {"status": "all"})
@@ -333,18 +367,17 @@ class LocalSewingApprovalGateTests(TestCase):
         self.assertEqual(quick.approved_by, creator)
         self.assertIsNotNone(quick.approved_at)
         self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 0)
+        self.invoice_for_quick(quick, invoice_number="INV-CMT-SELF-APPROVER", paid_amount=Decimal("5000.00"))
         self.client.post(reverse("quick_costing_convert_to_production", args=[quick.pk]))
         self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 1)
         queue = self.client.get(reverse("ceo_quotation_approval_queue"))
         self.assertFalse(any(row["record"].pk == quick.pk for row in queue.context["rows"]))
 
-    def test_local_sewing_invoice_requires_production_and_accounting_waits_for_payment(self):
+    def test_local_sewing_invoice_precedes_production_and_accounting_waits_for_payment(self):
         quick = self.quick(
             status=QuickCosting.STATUS_APPROVED,
             approved_at=timezone.now(),
         )
-        order, created = create_production_order_from_approved_quick_costing(quick)
-        self.assertTrue(created)
         quick.quotation_number = "Q-CMT-001"
         quick.quoted_at = timezone.now()
         quick.status = QuickCosting.STATUS_QUOTED
@@ -353,11 +386,19 @@ class LocalSewingApprovalGateTests(TestCase):
         invoice, invoice_created = create_invoice_from_quick_costing(quick)
 
         self.assertTrue(invoice_created)
-        self.assertEqual(invoice.order, order)
+        self.assertIsNone(invoice.order)
         self.assertEqual(invoice.currency, "BDT")
         self.assertEqual(invoice.invoice_type, "sewing_charge")
         self.assertEqual(invoice.subtotal, Decimal("10000.00"))
         self.assertEqual(AccountingEntry.objects.count(), 0)
+        invoice.paid_amount = Decimal("5000.00")
+        invoice.status = "partial"
+        invoice.save(update_fields=["paid_amount", "status", "updated_at"])
+
+        order, created = create_production_order_from_approved_quick_costing(quick, invoice=invoice)
+        self.assertTrue(created)
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.order, order)
 
     def test_quoted_local_sewing_paid_invoice_can_create_production(self):
         quick = self.quick(
@@ -406,16 +447,21 @@ class LocalSewingApprovalGateTests(TestCase):
             total_amount=Decimal("10000.00"),
             paid_amount=Decimal("2500.00"),
             status="partial",
+            deposit_percentage=Decimal("30.00"),
         )
 
-        with self.assertRaisesMessage(ProductionOrderCreationError, "Invoice must be fully paid"):
+        with self.assertRaisesMessage(
+            ProductionOrderCreationError,
+            "Production requires a minimum deposit of 30%. Current payment is 25%.",
+        ):
             create_production_order_from_approved_quick_costing(quick, invoice=invoice)
 
         self.assertFalse(ProductionOrder.objects.filter(source_quick_costing=quick).exists())
 
     def test_local_sewing_invoice_cannot_bypass_approved_quick_costing_link(self):
         quick = self.quick(status=QuickCosting.STATUS_APPROVED, approved_at=timezone.now())
-        order, _ = create_production_order_from_approved_quick_costing(quick)
+        invoice = self.invoice_for_quick(quick, invoice_number="INV-CMT-BYPASS-SOURCE", paid_amount=Decimal("5000.00"))
+        order, _ = create_production_order_from_approved_quick_costing(quick, invoice=invoice)
         with self.assertRaisesMessage(ValidationError, "must retain"):
             Invoice.objects.create(
                 order=order,

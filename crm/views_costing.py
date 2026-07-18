@@ -55,7 +55,6 @@ from .services.production_orders import (
     QUICK_COSTING_PRODUCTION_SOURCE_STATUSES,
     ProductionOrderCreationError,
     create_production_order_from_approved_quick_costing,
-    create_production_order_from_approved_quotation,
     create_production_order_from_paid_full_package_quick_costing,
 )
 from .services.workflow_visibility import build_workflow_visibility_context
@@ -1972,7 +1971,6 @@ def quick_costing_convert_to_production(request, pk):
             production_order, created = create_production_order_from_approved_quick_costing(
                 quick_costing,
                 user=request.user,
-                allow_payment_override=getattr(settings, "ALLOW_PARTIAL_PAYMENT_PRODUCTION_CEO_OVERRIDE", False),
             )
         except ProductionOrderCreationError as exc:
             messages.error(request, str(exc))
@@ -2873,18 +2871,16 @@ def cost_sheet_quotation_approve(request, pk):
                 action="quotation_approved",
                 changed_by=_user_or_none(request.user),
             )
-            production_order, created = create_production_order_from_approved_quotation(
-                costing,
-                user=request.user,
-            )
     except ProductionOrderCreationError as exc:
         messages.error(request, f"Quotation approval was not completed: {exc}")
         return redirect("cost_sheet_client_quotation", pk=pk)
 
-    action = "created" if created else "linked"
     messages.success(
         request,
-        f"Quotation {costing.quotation_number} approved. Production order {production_order.purchase_order_number} {action}.",
+        (
+            f"Quotation {costing.quotation_number} approved. "
+            "Create the invoice and collect the required deposit before moving this order to Production."
+        ),
     )
     return redirect("cost_sheet_client_quotation", pk=pk)
 

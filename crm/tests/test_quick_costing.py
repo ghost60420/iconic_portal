@@ -1273,8 +1273,21 @@ class QuickCostingTests(TestCase):
         production_quick.approved_by = admin
         production_quick.approved_at = timezone.now()
         production_quick.save(update_fields=["approved_by", "approved_at", "updated_at"])
+        production_invoice = Invoice.objects.create(
+            quick_costing=production_quick,
+            invoice_number="INV-RECALL-PRODUCTION-BLOCK",
+            currency="BDT",
+            invoice_market="bangladesh",
+            invoice_type="sewing_charge",
+            subtotal=Decimal("15000.00"),
+            total_amount=Decimal("15000.00"),
+            paid_amount=Decimal("7500.00"),
+            status="partial",
+            deposit_percentage=Decimal("30.00"),
+        )
         production_order, _created = create_production_order_from_approved_quick_costing(
             production_quick,
+            invoice=production_invoice,
             user=admin,
         )
 
@@ -1300,8 +1313,21 @@ class QuickCostingTests(TestCase):
         quick.approved_by = admin
         quick.approved_at = timezone.now()
         quick.save(update_fields=["approved_by", "approved_at", "updated_at"])
+        invoice = Invoice.objects.create(
+            quick_costing=quick,
+            invoice_number="INV-PRODUCTION-REVISION-DISPLAY",
+            currency="BDT",
+            invoice_market="bangladesh",
+            invoice_type="sewing_charge",
+            subtotal=Decimal("15000.00"),
+            total_amount=Decimal("15000.00"),
+            paid_amount=Decimal("7500.00"),
+            status="partial",
+            deposit_percentage=Decimal("30.00"),
+        )
         production_order, _created = create_production_order_from_approved_quick_costing(
             quick,
+            invoice=invoice,
             user=admin,
         )
 

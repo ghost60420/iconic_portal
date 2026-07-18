@@ -12,6 +12,7 @@ from django.utils import timezone
 from crm.models import CostingHeader, CostingLineItem, Customer, Invoice, Lead, Opportunity, ProductionOrder
 from crm.production_forms import ProductionOrderForm
 from crm.services.costing_workflow import create_invoice_from_costing, create_or_link_production_order_from_invoice
+from crm.services.production_orders import ProductionOrderCreationError
 from crm.views import production_list
 
 
@@ -88,12 +89,24 @@ class ProductionOrderFromQuotationTests(TestCase):
     def _approve(self):
         return self.client.post(reverse("cost_sheet_quotation_approve", args=[self.costing.pk]))
 
-    def test_ceo_approval_creates_production_order_with_locked_snapshot(self):
+    def _approve_invoice_and_create_production(self, *, paid_amount=Decimal("750.00"), status="partial"):
         response = self._approve()
-
         self.assertEqual(response.status_code, 302)
+        invoice, invoice_created = create_invoice_from_costing(self.costing, user=self.ceo)
+        self.assertTrue(invoice_created)
+        invoice.paid_amount = paid_amount
+        invoice.status = status
+        invoice.deposit_percentage = Decimal("30.00")
+        invoice.save(update_fields=["paid_amount", "status", "deposit_percentage", "updated_at"])
+        order, created = create_or_link_production_order_from_invoice(invoice, user=self.ceo)
+        invoice.refresh_from_db()
+        return invoice, order, created
+
+    def test_deposit_received_creates_production_order_with_locked_snapshot(self):
+        invoice, order, created = self._approve_invoice_and_create_production()
+
         self.costing.refresh_from_db()
-        order = ProductionOrder.objects.get(source_quotation=self.costing)
+        self.assertTrue(created)
         self.assertEqual(self.costing.quotation_status, CostingHeader.QUOTATION_STATUS_APPROVED)
         self.assertEqual(order.costing_header, self.costing)
         self.assertEqual(order.quotation_number_snapshot, "QT20260077")
@@ -114,30 +127,57 @@ class ProductionOrderFromQuotationTests(TestCase):
         self.assertEqual(order.assigned_production_manager, self.manager)
         self.assertEqual(order.created_by, self.ceo)
         self.assertIsNotNone(order.approved_price_locked_at)
-        self.assertFalse(Invoice.objects.filter(costing_header=self.costing).exists())
+        self.assertEqual(invoice.order, order)
+        self.assertEqual(invoice.paid_amount, Decimal("750.00"))
+        self.assertEqual(invoice.balance, Decimal("1750.00"))
 
     def test_repeated_approval_does_not_create_duplicate_order(self):
         self._approve()
-        first_order = ProductionOrder.objects.get(source_quotation=self.costing)
+        self.assertFalse(ProductionOrder.objects.filter(source_quotation=self.costing).exists())
 
         self._approve()
 
+        self.assertFalse(ProductionOrder.objects.filter(source_quotation=self.costing).exists())
+        invoice, first_order, first_created = self._approve_invoice_and_create_production()
+        second_order, second_created = create_or_link_production_order_from_invoice(invoice, user=self.ceo)
+        self.assertTrue(first_created)
+        self.assertFalse(second_created)
+        self.assertEqual(second_order, first_order)
         self.assertEqual(ProductionOrder.objects.filter(source_quotation=self.costing).count(), 1)
-        self.assertEqual(ProductionOrder.objects.get(source_quotation=self.costing), first_order)
 
-    def test_invoice_conversion_reuses_auto_created_production_order(self):
+    def test_invoice_conversion_creates_production_after_deposit(self):
         self._approve()
-        approved_order = ProductionOrder.objects.get(source_quotation=self.costing)
 
         invoice, invoice_created = create_invoice_from_costing(self.costing, user=self.ceo)
+        invoice.paid_amount = Decimal("750.00")
+        invoice.status = "partial"
+        invoice.deposit_percentage = Decimal("30.00")
+        invoice.save(update_fields=["paid_amount", "status", "deposit_percentage", "updated_at"])
         linked_order, order_created = create_or_link_production_order_from_invoice(invoice, user=self.ceo)
 
         self.assertTrue(invoice_created)
-        self.assertFalse(order_created)
-        self.assertEqual(linked_order, approved_order)
+        self.assertTrue(order_created)
         self.assertEqual(ProductionOrder.objects.filter(costing_header=self.costing).count(), 1)
         invoice.refresh_from_db()
-        self.assertEqual(invoice.order, approved_order)
+        self.assertEqual(invoice.order, linked_order)
+
+    def test_invoice_conversion_blocks_until_required_deposit_received(self):
+        self._approve()
+        invoice, invoice_created = create_invoice_from_costing(self.costing, user=self.ceo)
+        invoice.paid_amount = Decimal("725.00")
+        invoice.status = "partial"
+        invoice.deposit_percentage = Decimal("30.00")
+        invoice.save(update_fields=["paid_amount", "status", "deposit_percentage", "updated_at"])
+
+        with self.assertRaisesMessage(
+            ProductionOrderCreationError,
+            "Production requires a minimum deposit of 30%. Current payment is 29%.",
+        ):
+            create_or_link_production_order_from_invoice(invoice, user=self.ceo)
+
+        invoice.refresh_from_db()
+        self.assertIsNone(invoice.order)
+        self.assertFalse(ProductionOrder.objects.filter(source_quotation=self.costing).exists())
 
     def test_existing_legacy_order_is_linked_instead_of_duplicated(self):
         legacy_order = ProductionOrder.objects.create(
@@ -149,6 +189,12 @@ class ProductionOrderFromQuotationTests(TestCase):
         )
 
         self._approve()
+        invoice, _invoice_created = create_invoice_from_costing(self.costing, user=self.ceo)
+        invoice.paid_amount = Decimal("750.00")
+        invoice.status = "partial"
+        invoice.deposit_percentage = Decimal("30.00")
+        invoice.save(update_fields=["paid_amount", "status", "deposit_percentage", "updated_at"])
+        create_or_link_production_order_from_invoice(invoice, user=self.ceo)
 
         legacy_order.refresh_from_db()
         self.assertEqual(ProductionOrder.objects.filter(costing_header=self.costing).count(), 1)
@@ -156,8 +202,7 @@ class ProductionOrderFromQuotationTests(TestCase):
         self.assertEqual(legacy_order.approved_selling_price, Decimal("25.0000"))
 
     def test_approved_snapshot_cannot_be_changed_after_creation(self):
-        self._approve()
-        order = ProductionOrder.objects.get(source_quotation=self.costing)
+        _invoice, order, _created = self._approve_invoice_and_create_production()
 
         order.approved_selling_price = Decimal("99.00")
         with self.assertRaisesMessage(ValidationError, "Approved quotation pricing"):
@@ -171,8 +216,7 @@ class ProductionOrderFromQuotationTests(TestCase):
         self.assertEqual(order.notes, "Production-only note")
 
     def test_approved_snapshot_stays_locked_if_source_quotation_is_deleted(self):
-        self._approve()
-        order = ProductionOrder.objects.get(source_quotation=self.costing)
+        _invoice, order, _created = self._approve_invoice_and_create_production()
 
         self.costing.delete()
         order.refresh_from_db()
@@ -183,15 +227,24 @@ class ProductionOrderFromQuotationTests(TestCase):
         with self.assertRaisesMessage(ValidationError, "Approved quotation pricing"):
             order.save()
 
-    def test_approval_rolls_back_when_production_snapshot_is_invalid(self):
-        self.costing.order_quantity = 0
-        self.costing.save(update_fields=["order_quantity", "updated_at"])
-
+    def test_production_creation_blocks_when_snapshot_is_invalid(self):
         response = self._approve()
 
         self.assertEqual(response.status_code, 302)
         self.costing.refresh_from_db()
-        self.assertEqual(self.costing.quotation_status, CostingHeader.QUOTATION_STATUS_DRAFT)
+        self.assertEqual(self.costing.quotation_status, CostingHeader.QUOTATION_STATUS_APPROVED)
+        invoice, _invoice_created = create_invoice_from_costing(self.costing, user=self.ceo)
+        self.costing.order_quantity = 0
+        self.costing.save(update_fields=["order_quantity", "updated_at"])
+        invoice.paid_amount = Decimal("750.00")
+        invoice.status = "partial"
+        invoice.deposit_percentage = Decimal("30.00")
+        invoice.save(update_fields=["paid_amount", "status", "deposit_percentage", "updated_at"])
+        with self.assertRaisesMessage(
+            ProductionOrderCreationError,
+            "Order quantity must be greater than 0 before conversion.",
+        ):
+            create_or_link_production_order_from_invoice(invoice, user=self.ceo)
         self.assertFalse(ProductionOrder.objects.filter(source_quotation=self.costing).exists())
 
     def test_production_form_exposes_manager_but_not_approved_values(self):
@@ -203,8 +256,7 @@ class ProductionOrderFromQuotationTests(TestCase):
             self.assertNotIn(field_name.removesuffix("_id"), form.fields)
 
     def test_production_detail_displays_approved_quotation_snapshot(self):
-        self._approve()
-        order = ProductionOrder.objects.get(source_quotation=self.costing)
+        _invoice, order, _created = self._approve_invoice_and_create_production()
 
         response = self.client.get(reverse("production_detail", args=[order.pk]))
 

@@ -334,6 +334,9 @@
 
         <section class="invoice-settings-card">
           <h3>Deposit Defaults</h3>
+          <p class="qr-note">
+            These percentages are also used as the required paid deposit before a quotation or quick costing can move to Production. Bulk and CMT production default to 30%. Values are limited to 0-100%.
+          </p>
           <div class="settings-row">
             <div class="field-block">
               <label for="{{ form.default_sample_deposit_percentage.id_for_label }}">{{ form.default_sample_deposit_percentage.label }}</label>

@@ -1173,14 +1173,16 @@ class InvoiceForm(forms.ModelForm):
             if invoice_type == "sample":
                 return getattr(settings_obj, "default_sample_deposit_percentage", None) or Decimal("100")
             if invoice_market == "bangladesh" and invoice_type == "sewing_charge":
-                return getattr(settings_obj, "default_bd_sewing_deposit_percentage", None) or Decimal("50")
-            return getattr(settings_obj, "default_bulk_deposit_percentage", None) or Decimal("50")
+                return getattr(settings_obj, "default_bd_sewing_deposit_percentage", None) or Decimal("30")
+            return getattr(settings_obj, "default_bulk_deposit_percentage", None) or Decimal("30")
         try:
             value = Decimal(str(value))
         except Exception:
             return Decimal("50")
         if value < 0:
             return Decimal("0")
+        if value > 100:
+            return Decimal("100")
         return value
 
     def clean(self):
@@ -1315,10 +1317,10 @@ class InvoiceSettingsForm(forms.ModelForm):
         return self._clean_percentage("default_sample_deposit_percentage", "100.00")
 
     def clean_default_bulk_deposit_percentage(self):
-        return self._clean_percentage("default_bulk_deposit_percentage", "50.00")
+        return self._clean_percentage("default_bulk_deposit_percentage", "30.00")
 
     def clean_default_bd_sewing_deposit_percentage(self):
-        return self._clean_percentage("default_bd_sewing_deposit_percentage", "50.00")
+        return self._clean_percentage("default_bd_sewing_deposit_percentage", "30.00")
 
 
 class InvoicePaymentForm(forms.ModelForm):

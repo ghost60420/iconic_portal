@@ -115,6 +115,7 @@ from .services.opportunity_payment_stage import (
     opportunity_has_outstanding_invoice,
     outstanding_balance_summary_for_opportunity,
 )
+from .services.production_payment import production_payment_progress_for_opportunity
 from .services.operations_permissions import (
     active_sales_lead_q,
     available_sales_lead_q,
@@ -4411,7 +4412,6 @@ def opportunity_detail(request, pk):
 
         # Update stage
         if action == "update_stage":
-            old_stage = opportunity.stage
             new_stage = (request.POST.get("stage") or "").strip()
             next_followup_str = (request.POST.get("next_followup") or "").strip()
 
@@ -4467,50 +4467,6 @@ def opportunity_detail(request, pk):
                     activity_type="production_created",
                     description="Production order created from opportunity stage set to Production.",
                 )
-
-            if lead and old_stage != "Production" and opportunity.stage == "Production":
-                has_po = ProductionOrder.objects.filter(opportunity=opportunity).exists()
-                if not has_po:
-                    po_title = f"{lead.account_brand} production for {opportunity.opportunity_id}"
-                    qty_guess = opportunity.moq_units
-                    if not qty_guess and lead.order_quantity:
-                        raw_qty = str(lead.order_quantity or "").strip()
-                        qty_match = re.search(r"\d+(?:\.\d+)?", raw_qty.replace(",", ""))
-                        if qty_match:
-                            qty_guess = int(Decimal(qty_match.group(0)))
-                        else:
-                            message = (
-                                "Production order was not created because the lead order "
-                                f"quantity is invalid: {raw_qty}."
-                            )
-                            messages.error(request, message)
-                            LeadActivity.objects.create(
-                                lead=lead,
-                                activity_type="production_error",
-                                description=message,
-                            )
-                            return redirect("opportunity_detail", pk=opportunity.pk)
-                    qty_guess = qty_guess or 0
-                    try:
-                        po = ProductionOrder.objects.create(
-                            opportunity=opportunity,
-                            title=po_title,
-                            qty_total=qty_guess,
-                            cost_sheet_active=active_cost_sheet,
-                            costing_header=costing_header if costing_header and costing_header.status == "approved" else None,
-                        )
-                        link_reference_images_to_production(opportunity=opportunity, production_order=po)
-                        LeadActivity.objects.create(
-                            lead=lead,
-                            activity_type="production_created",
-                            description="Auto work order created from opportunity stage set to Production.",
-                        )
-                    except Exception:
-                        LeadActivity.objects.create(
-                            lead=lead,
-                            activity_type="production_error",
-                            description="Tried to auto create work order but model fields need check.",
-                        )
 
             return redirect("opportunity_detail", pk=opportunity.pk)
 
@@ -4667,6 +4623,7 @@ def opportunity_detail(request, pk):
     currency_summary = _opportunity_currency_summary(opportunity)
     bdt_per_piece = currency_summary["bdt_per_piece"]
     outstanding_balance_summary = outstanding_balance_summary_for_opportunity(opportunity)
+    production_payment_progress = production_payment_progress_for_opportunity(opportunity)
 
     reference_images = list(reference_images_for_opportunity(opportunity))
     primary_reference_image = reference_images[0] if reference_images else None
@@ -4745,6 +4702,7 @@ def opportunity_detail(request, pk):
         "bdt_per_piece": bdt_per_piece,
         "currency_summary": currency_summary,
         "outstanding_balance_summary": outstanding_balance_summary,
+        "production_payment_progress": production_payment_progress,
 
         # Shipping for the template
         "ship": ship,
@@ -10510,7 +10468,6 @@ def _create_or_get_production_order_for_opportunity(opportunity, user):
         return create_production_order_from_approved_quick_costing(
             cmt_quick_costing,
             user=user,
-            allow_payment_override=_production_payment_override_enabled(user),
         )
 
     quick_costing, quick_invoice = full_package_quick_costing_source_for_opportunity(opportunity)
@@ -10519,16 +10476,9 @@ def _create_or_get_production_order_for_opportunity(opportunity, user):
             quick_costing,
             invoice=quick_invoice,
             user=user,
-            allow_payment_override=_production_payment_override_enabled(user),
         )
 
     raise ProductionOrderCreationError("A CEO-approved quotation is required before moving this opportunity to Production.")
-
-
-def _production_payment_override_enabled(user):
-    if not getattr(settings, "ALLOW_PARTIAL_PAYMENT_PRODUCTION_CEO_OVERRIDE", False):
-        return False
-    return can_approve_costing(user)
 
 
 def _pre_production_stage_for_opportunity(opportunity):

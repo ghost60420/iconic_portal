@@ -97,6 +97,10 @@ class CostingInvoiceWorkflowTests(TestCase):
         self.assertEqual(invoice.sewing_charge, Decimal("40.00"))
         self.assertEqual(invoice.other_internal_cost, Decimal("100.00"))
         self.assertEqual(invoice.estimated_gross_profit, Decimal("110.00"))
+        invoice.paid_amount = Decimal("75.00")
+        invoice.status = "partial"
+        invoice.deposit_percentage = Decimal("30.00")
+        invoice.save(update_fields=["paid_amount", "status", "deposit_percentage", "updated_at"])
 
         order, created_order = create_or_link_production_order_from_invoice(invoice, user=self.user)
         invoice.refresh_from_db()

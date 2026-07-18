@@ -112,10 +112,56 @@
         <div>
           <p class="opp-section-kicker">Production warning</p>
           <h2>Broken Production State</h2>
-          <p class="opp-muted">This opportunity is marked Production but has no linked production order. Moving to Production again requires a fully paid invoice or an approved CEO override.</p>
+          <p class="opp-muted">This opportunity is marked Production but has no linked production order. Moving to Production requires an active invoice and the configured deposit threshold.</p>
         </div>
         <a href="{% url 'production_from_opportunity' opportunity.pk %}" class="opp-btn opp-btn--tiny opp-btn--primary">Review production move</a>
       </div>
+    </section>
+  {% endif %}
+
+  {% if production_payment_progress and not prod_orders %}
+    <section class="opp-panel" aria-label="Production payment progress" style="{% if production_payment_progress.allowed %}border-color:rgba(34,197,94,0.45); background:rgba(34,197,94,0.08);{% else %}border-color:rgba(251,191,36,0.45); background:rgba(120,53,15,0.14);{% endif %}">
+      <div class="opp-panel-head">
+        <div>
+          <p class="opp-section-kicker">Production payment gate</p>
+          <h2>{% if production_payment_progress.allowed %}Deposit requirement met{% else %}Deposit required before Production{% endif %}</h2>
+          {% if production_payment_progress.message %}
+            <p class="opp-muted">{{ production_payment_progress.message }}</p>
+          {% else %}
+            <p class="opp-muted">The required deposit has been received. Moving to Production will keep any remaining balance open in Accounts Receivable.</p>
+          {% endif %}
+        </div>
+        <a href="{% url 'production_from_opportunity' opportunity.pk %}" class="opp-btn opp-btn--tiny {% if production_payment_progress.allowed %}opp-btn--primary{% else %}opp-btn--ghost{% endif %}">Move to Production</a>
+      </div>
+      {% if production_payment_progress.invoice %}
+        <div class="opp-info-grid">
+          <div>
+            <span>Invoice total</span>
+            <strong>{{ production_payment_progress.invoice_total_display }}</strong>
+          </div>
+          <div>
+            <span>Amount paid</span>
+            <strong>{{ production_payment_progress.amount_paid_display }}</strong>
+          </div>
+          <div>
+            <span>Outstanding balance</span>
+            <strong>{{ production_payment_progress.outstanding_balance_display }}</strong>
+          </div>
+          <div>
+            <span>Required deposit</span>
+            <strong>{{ production_payment_progress.required_amount_display }}</strong>
+            <small>{{ production_payment_progress.required_percentage_display }}</small>
+          </div>
+          <div>
+            <span>Paid percentage</span>
+            <strong>{{ production_payment_progress.paid_percentage_display }}</strong>
+          </div>
+          <div>
+            <span>Remaining to start</span>
+            <strong>{{ production_payment_progress.remaining_to_start_display }}</strong>
+          </div>
+        </div>
+      {% endif %}
     </section>
   {% endif %}
 
