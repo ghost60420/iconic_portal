@@ -14,6 +14,7 @@
   .exec-card h2,.exec-panel h2{font-size:13px;margin:0;color:#d8dce3}.exec-card .exec-number{font-size:27px;font-weight:900;margin-top:14px}
   .exec-money{display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-top:1px solid #292e37;font-size:12px}.exec-money:first-of-type{margin-top:9px}.exec-money span{color:#9da4af}.exec-money strong{white-space:nowrap}
   .exec-card--alert{border-color:#8b2f39}.exec-card--warn{border-color:#806613}.exec-card--good{border-color:#286241}
+  .crm-integrity-lines{display:grid;gap:7px;margin-top:10px}.crm-integrity-line{display:flex;justify-content:space-between;gap:8px;border-top:1px solid #292e37;padding-top:7px;font-size:12px}.crm-integrity-line span{color:#9da4af}.crm-integrity-pill{border:1px solid #475569;border-radius:999px;padding:2px 8px;font-weight:900;font-size:11px}.crm-integrity-pill--green{border-color:#22c55e;color:#bbf7d0;background:rgba(34,197,94,.12)}.crm-integrity-pill--yellow{border-color:#eab308;color:#fef3c7;background:rgba(234,179,8,.13)}.crm-integrity-pill--red{border-color:#ef4444;color:#fecaca;background:rgba(239,68,68,.13)}.crm-integrity-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.crm-integrity-actions a{font-size:11px;color:#e5e7eb;border:1px solid #374151;border-radius:6px;padding:5px 7px;text-decoration:none;background:#171a20}
   .exec-layout{display:grid;grid-template-columns:1fr 1fr;gap:10px}.exec-panel{overflow:hidden;margin-bottom:10px}.exec-panel-head{padding:12px 14px;border-bottom:1px solid #292e37;display:flex;justify-content:space-between;gap:10px}.exec-panel-head small{color:#9299a5}
   .exec-table-wrap{overflow-x:auto}.exec-table{width:100%;border-collapse:collapse;min-width:480px}.exec-table th,.exec-table td{padding:10px 12px;border-bottom:1px solid #272c34;text-align:left;font-size:12px}.exec-table th{color:#9da4af;background:#171a20}.exec-right{text-align:right!important}.exec-muted{color:#949ba7}.exec-empty{padding:18px;color:#9299a5;text-align:center;font-size:12px}
   .exec-money-stack{display:grid;gap:2px}.exec-money-stack span{white-space:nowrap}
@@ -41,7 +42,23 @@
     <article class="exec-card exec-card--good"><h2>Production Orders</h2><div class="exec-number">{{ production_total }}</div><div class="exec-muted">{{ production_active }} active</div></article>
     <article class="exec-card {% if late_production_orders %}exec-card--alert{% else %}exec-card--good{% endif %}"><h2>Late Production Orders</h2><div class="exec-number">{{ late_production_orders }}</div><div class="exec-muted">Past delivery date and not shipped</div></article>
     <article class="exec-card {% if broken_production_states %}exec-card--alert{% else %}exec-card--good{% endif %}"><h2>Broken Production States</h2><div class="exec-number">{{ broken_production_states }}</div><div class="exec-muted">Opportunities marked Production without a production order</div></article>
-    <article class="exec-card {% if workflow_errors %}exec-card--alert{% else %}exec-card--good{% endif %}"><h2>Workflow Errors</h2><div class="exec-number">{{ workflow_errors }}</div><div class="exec-money"><span>Broken Opportunities</span><strong>{{ broken_opportunities }}</strong></div><div class="exec-money"><span>Broken Production Links</span><strong>{{ broken_production_links }}</strong></div><div class="exec-money"><span>Broken Invoice Links</span><strong>{{ broken_invoice_links }}</strong></div></article>
+    <article class="exec-card {% if workflow_errors > 5 %}exec-card--alert{% elif workflow_errors %}exec-card--warn{% else %}exec-card--good{% endif %}">
+      <h2>CRM Integrity Status</h2>
+      <div class="exec-number">{{ workflow_errors }}</div>
+      <div class="crm-integrity-lines">
+        <div class="crm-integrity-line"><span>Workflow Errors</span><strong class="crm-integrity-pill crm-integrity-pill--{{ crm_integrity_status.workflow_errors_health }}">{{ workflow_errors }}</strong></div>
+        <div class="crm-integrity-line"><span>Broken Opportunities</span><strong class="crm-integrity-pill crm-integrity-pill--{{ crm_integrity_status.broken_opportunities_health }}">{{ broken_opportunities }}</strong></div>
+        <div class="crm-integrity-line"><span>Broken Production Links</span><strong class="crm-integrity-pill crm-integrity-pill--{{ crm_integrity_status.broken_production_links_health }}">{{ broken_production_links }}</strong></div>
+        <div class="crm-integrity-line"><span>Broken Invoice Links</span><strong class="crm-integrity-pill crm-integrity-pill--{{ crm_integrity_status.broken_invoice_links_health }}">{{ broken_invoice_links }}</strong></div>
+        <div class="crm-integrity-line"><span>Legacy Test Records</span><strong class="crm-integrity-pill crm-integrity-pill--{{ crm_integrity_status.legacy_test_records_health }}">{{ legacy_test_records }}</strong></div>
+      </div>
+      <div class="exec-muted" style="margin-top:8px;">Last Audit Time: {% if last_integrity_audit_time %}{{ last_integrity_audit_time|date:"M j, Y H:i" }}{% else %}Not recorded yet{% endif %}</div>
+      <div class="crm-integrity-actions" aria-label="CRM integrity CSV exports">
+        <a href="{% url 'crm_integrity_export_csv' %}?filter=broken">Broken CSV</a>
+        <a href="{% url 'crm_integrity_export_csv' %}?filter=repairable">Repairable CSV</a>
+        <a href="{% url 'crm_integrity_export_csv' %}?filter=legacy">Legacy CSV</a>
+      </div>
+    </article>
     <article class="exec-card {% if pending_ceo_approvals %}exec-card--warn{% else %}exec-card--good{% endif %}"><h2>Pending CEO Approvals</h2><div class="exec-number">{{ pending_ceo_approvals }}</div><div class="exec-muted">Quick and advanced costings awaiting CEO decision</div></article>
     <article class="exec-card"><h2>Canada Export Revenue</h2>{% for row in canada_export_revenue_rows %}<div class="exec-money"><span>{{ row.currency }}</span><strong>{{ row.amount|finance_money:row.currency }}</strong></div>{% empty %}<div class="exec-muted">No approved export value</div>{% endfor %}</article>
     <article class="exec-card"><h2>Bangladesh Sewing Revenue</h2><div class="exec-number">{{ local_sewing_summary.total_sewing_revenue|finance_money:"BDT" }}</div><div class="exec-muted">Native BDT order value</div></article>

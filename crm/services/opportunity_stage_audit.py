@@ -1,16 +1,22 @@
+import csv
+import io
+import re
 from collections import Counter, defaultdict
 from decimal import Decimal
 from pathlib import Path
 
 from django.contrib.contenttypes.models import ContentType
 from django.db import connection
+from django.db.models import Q
 from django.urls import reverse
+from django.utils.dateparse import parse_datetime
 from django.utils import timezone
 
 from crm.models import (
     AutomationNotification,
     CostingHeader,
     Invoice,
+    OrderLifecycle,
     Opportunity,
     ProductionOrder,
     QuickCosting,
@@ -37,6 +43,277 @@ REPORT_CATEGORIES = (
     COMPLETED_CATEGORY,
     ARCHIVED_CATEGORY,
 )
+DETAIL_REPORT_SECTIONS = (
+    ("broken_production_links", "Broken Production Links"),
+    ("broken_invoice_links", "Broken Invoice Links"),
+    ("stage_mismatches", "Stage Mismatches"),
+    ("shipment_completion_mismatches", "Shipment Completion Mismatches"),
+    ("awaiting_payment_errors", "Awaiting Payment Errors"),
+    ("legacy_test_data", "Legacy Test Data"),
+)
+REPAIR_SAFE_AUTO_FIX = "SAFE_AUTO_FIX"
+REPAIR_MANUAL_REVIEW = "MANUAL_REVIEW"
+REPAIR_IGNORE_LEGACY_TEST = "IGNORE_LEGACY_TEST"
+AUDIT_NOTIFICATION_SOURCE_KEY = "opportunity-stage-audit:summary:ceo"
+LEGACY_TEST_RE = re.compile(
+    r"(^|[^a-z0-9])(test|demo|dummy|sandbox|example|qa record|legacy test)([^a-z0-9]|$)",
+    re.IGNORECASE,
+)
+CSV_COLUMNS = (
+    "section",
+    "warning_code",
+    "repair_classification",
+    "opportunity_id",
+    "opportunity_number",
+    "customer_name",
+    "current_stage",
+    "expected_stage",
+    "invoice_id",
+    "invoice_status",
+    "outstanding_balance",
+    "production_order_id",
+    "shipment_id",
+    "lifecycle_id",
+    "assigned_salesperson",
+    "created_date",
+    "historical_entry_status",
+    "legacy_test_status",
+    "reason_for_failure",
+    "recommended_repair_action",
+)
+
+
+def _safe_text(value):
+    return str(value or "").strip()
+
+
+def _display_user(user):
+    if not user:
+        return ""
+    full_name = _safe_text(getattr(user, "get_full_name", lambda: "")())
+    return full_name or _safe_text(getattr(user, "username", "")) or _safe_text(getattr(user, "email", ""))
+
+
+def _date_display(value):
+    if not value:
+        return ""
+    if hasattr(value, "date"):
+        value = value.date()
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)
+
+
+def _join_ids(values):
+    clean = []
+    for value in values or []:
+        if value in (None, ""):
+            continue
+        text = str(value)
+        if text not in clean:
+            clean.append(text)
+    return ", ".join(clean)
+
+
+def _customer_label(opportunity):
+    customer = getattr(opportunity, "customer", None)
+    lead_customer = getattr(getattr(opportunity, "lead", None), "customer", None)
+    source = customer or lead_customer
+    if not source:
+        return ""
+    label = (
+        _safe_text(getattr(source, "account_brand", ""))
+        or _safe_text(getattr(source, "contact_name", ""))
+        or _safe_text(getattr(source, "customer_code", ""))
+    )
+    if source == lead_customer and not customer:
+        return f"{label} (via lead)" if label else "Linked lead customer"
+    return label
+
+
+def _legacy_test_reason(opportunity):
+    customer = getattr(opportunity, "customer", None)
+    lead = getattr(opportunity, "lead", None)
+    lead_customer = getattr(lead, "customer", None)
+    values = [
+        ("opportunity number", getattr(opportunity, "opportunity_id", "")),
+        ("opportunity notes", getattr(opportunity, "notes", "")),
+        ("product type", getattr(opportunity, "product_type", "")),
+        ("product category", getattr(opportunity, "product_category", "")),
+        ("customer brand", getattr(customer, "account_brand", "")),
+        ("customer contact", getattr(customer, "contact_name", "")),
+        ("customer email", getattr(customer, "email", "")),
+        ("lead brand", getattr(lead, "account_brand", "")),
+        ("lead contact", getattr(lead, "contact_name", "")),
+        ("lead email", getattr(lead, "email", "")),
+        ("lead customer brand", getattr(lead_customer, "account_brand", "")),
+        ("lead customer contact", getattr(lead_customer, "contact_name", "")),
+    ]
+    for label, value in values:
+        text = _safe_text(value)
+        if text and LEGACY_TEST_RE.search(text):
+            return f"{label} contains legacy/test marker"
+    return ""
+
+
+def _is_historical_entry(opportunity, invoices):
+    if getattr(opportunity, "opportunity_date", None):
+        return True
+    return any(getattr(invoice, "is_historical_entry", False) for invoice in invoices)
+
+
+def _historical_entry_status(opportunity, invoices):
+    parts = []
+    if getattr(opportunity, "opportunity_date", None):
+        parts.append(f"Opportunity Date {_date_display(opportunity.opportunity_date)}")
+    invoice_dates = [
+        f"{invoice.invoice_number or invoice.pk}: {_date_display(invoice.invoice_date)}"
+        for invoice in invoices
+        if getattr(invoice, "is_historical_entry", False)
+    ]
+    if invoice_dates:
+        parts.append("Historical invoice date " + "; ".join(invoice_dates))
+    return "Yes - " + " | ".join(parts) if parts else "No"
+
+
+def _warning_section(code):
+    if code == "legacy_test_candidate":
+        return "legacy_test_data"
+    if code in {"production_stage_incorrect", "production_link_missing", "duplicate_production_links"}:
+        return "broken_production_links"
+    if code in {"invoice_link_missing", "invoice_link_conflict"}:
+        return "broken_invoice_links"
+    if code == "completed_stage_incorrect":
+        return "shipment_completion_mismatches"
+    if code in {"invoice_stage_incorrect", "awaiting_payment_invalid", "negotiation_has_invoice"}:
+        return "awaiting_payment_errors"
+    return "stage_mismatches"
+
+
+def _health_color(value):
+    value = int(value or 0)
+    if value <= 0:
+        return "green"
+    if value <= 5:
+        return "yellow"
+    return "red"
+
+
+def _parse_database_datetime(value):
+    if not value:
+        return None
+    if hasattr(value, "isoformat"):
+        return value
+    return parse_datetime(str(value))
+
+
+def _format_balance_for_invoices(invoices):
+    open_balance_totals = defaultdict(lambda: {"amount": Decimal("0")})
+    for invoice in invoices:
+        balance = invoice_open_balance(invoice)
+        if balance <= 0:
+            continue
+        currency = (invoice.currency or "CAD").upper()
+        open_balance_totals[currency]["amount"] += balance
+    balance_rows = currency_summary_rows(open_balance_totals)
+    return " / ".join(
+        format_finance_money(row["amount"], row["currency"]) for row in balance_rows
+    ) or "-"
+
+
+def _costing_type_for_opportunity(costing_types):
+    if not costing_types:
+        return ""
+    return " / ".join(sorted(costing_types))
+
+
+def _recommended_action(code, row):
+    expected = row.get("expected_category") or ""
+    current = row.get("current_stage") or ""
+    if code == "production_link_missing":
+        if row.get("open_invoice_count"):
+            return "Dry-run recommendation: keep no ProductionOrder and move opportunity to Awaiting Payment after approval."
+        return "Dry-run recommendation: review paid invoice/costing source before creating or linking a ProductionOrder."
+    if code == "production_stage_incorrect":
+        return f"Dry-run recommendation: set opportunity stage to {expected} if linked production order is valid."
+    if code == "duplicate_production_links":
+        return "Dry-run recommendation: manual review required; choose the valid ProductionOrder link before any repair."
+    if code == "invoice_stage_incorrect":
+        return "Dry-run recommendation: set opportunity stage to Awaiting Payment because an open invoice balance exists and no production order is linked."
+    if code == "awaiting_payment_invalid":
+        return "Dry-run recommendation: review invoice balance and production links before moving out of Awaiting Payment."
+    if code == "completed_stage_incorrect":
+        return "Dry-run recommendation: set opportunity stage to Completed after confirming the completed shipment is final."
+    if code == "proposal_has_downstream_records":
+        return f"Dry-run recommendation: move opportunity from {current or 'current stage'} to {expected} after confirming downstream records."
+    if code == "negotiation_has_invoice":
+        return "Dry-run recommendation: move opportunity to Awaiting Payment if invoice has a balance, otherwise review lifecycle state."
+    if code == "missing_customer":
+        return "Dry-run recommendation: manually link the correct Customer; do not create a duplicate customer."
+    if code in {"invoice_link_missing", "invoice_link_conflict"}:
+        return "Dry-run recommendation: manually review invoice source links before attaching to an opportunity."
+    if code == "legacy_test_candidate":
+        return "Dry-run recommendation: ignore for operational repair unless CEO confirms this record is real production data."
+    return f"Dry-run recommendation: review and align stage to {expected or 'the expected workflow state'}."
+
+
+def _repair_classification(code, row):
+    if row.get("legacy_test_reason") or code == "legacy_test_candidate":
+        return REPAIR_IGNORE_LEGACY_TEST
+    if code in {
+        "invoice_stage_incorrect",
+        "production_stage_incorrect",
+        "completed_stage_incorrect",
+        "proposal_has_downstream_records",
+        "negotiation_has_invoice",
+    }:
+        return REPAIR_SAFE_AUTO_FIX
+    return REPAIR_MANUAL_REVIEW
+
+
+def _record_from_warning(warning, row=None, invoice=None):
+    row = row or {}
+    invoice_ids = row.get("invoice_ids") or []
+    invoice_statuses = row.get("invoice_statuses") or []
+    if invoice is not None:
+        invoice_ids = [invoice.pk]
+        invoice_statuses = [invoice.status]
+    code = warning["code"]
+    record = {
+        "section": _warning_section(code),
+        "warning_code": code,
+        "opportunity_id": row.get("id") or "",
+        "opportunity_number": row.get("opportunity_number") or warning.get("opportunity_number") or "",
+        "customer_name": row.get("customer") or "",
+        "current_stage": row.get("current_stage") or warning.get("stage") or "",
+        "expected_stage": row.get("expected_category") or "",
+        "invoice_id": _join_ids(invoice_ids),
+        "invoice_status": _join_ids(invoice_statuses),
+        "outstanding_balance": row.get("outstanding_balance") or "",
+        "production_order_id": _join_ids(row.get("production_order_ids") or []),
+        "shipment_id": _join_ids(row.get("shipment_ids") or []),
+        "lifecycle_id": _join_ids(row.get("lifecycle_ids") or []),
+        "assigned_salesperson": row.get("assigned_salesperson") or "",
+        "created_date": row.get("created_date") or "",
+        "historical_entry_status": row.get("historical_entry_status") or "No",
+        "legacy_test_status": row.get("legacy_test_status") or "No",
+        "legacy_test_reason": row.get("legacy_test_reason") or "",
+        "reason_for_failure": warning["message"],
+    }
+    record["repair_classification"] = _repair_classification(code, row)
+    record["recommended_repair_action"] = _recommended_action(code, row)
+    return record
+
+
+def _filter_detail_records(records, filter_mode):
+    filter_mode = (filter_mode or "all").strip().lower()
+    if filter_mode in {"", "all"}:
+        return list(records)
+    if filter_mode == "broken":
+        return [record for record in records if record["warning_code"] != "legacy_test_candidate"]
+    if filter_mode == "legacy":
+        return [record for record in records if record["repair_classification"] == REPAIR_IGNORE_LEGACY_TEST]
+    if filter_mode == "repairable":
+        return [record for record in records if record["repair_classification"] == REPAIR_SAFE_AUTO_FIX]
+    raise ValueError("Unknown integrity filter. Use all, broken, legacy, or repairable.")
 
 
 def _resolved_opportunity_ids_for_invoice(invoice):
@@ -99,6 +376,7 @@ def _global_warning(code, message, *, severity="warning", record_id=None):
         "severity": severity,
         "opportunity_id": None,
         "opportunity_number": f"Invoice {record_id}" if record_id else "",
+        "record_id": record_id,
         "stage": "",
         "message": message,
         "target_url": "",
@@ -107,44 +385,73 @@ def _global_warning(code, message, *, severity="warning", record_id=None):
 
 def build_opportunity_stage_audit():
     opportunities = list(
-        Opportunity.objects.select_related("customer", "lead", "lead__customer")
+        Opportunity.objects.select_related("customer", "lead", "lead__customer", "assigned_to", "lead__assigned_to")
         .order_by("id")
     )
     opportunity_ids = [opportunity.pk for opportunity in opportunities]
 
     quotation_counts = Counter()
+    costing_types_by_opp = defaultdict(set)
     if opportunity_ids:
-        for row in (
+        for opportunity_id, costing_id, quotation_number in (
             CostingHeader.objects.filter(opportunity_id__in=opportunity_ids, is_archived=False)
             .exclude(quotation_number="")
-            .values_list("opportunity_id", flat=True)
+            .values_list("opportunity_id", "id", "quotation_number")
         ):
-            quotation_counts[row] += 1
-        for row in (
+            quotation_counts[opportunity_id] += 1
+            costing_types_by_opp[opportunity_id].add(f"Advanced Costing #{costing_id}")
+        for opportunity_id, quick_id, quotation_number, pricing_type in (
             QuickCosting.objects.filter(opportunity_id__in=opportunity_ids)
             .exclude(quotation_number="")
-            .values_list("opportunity_id", flat=True)
+            .values_list("opportunity_id", "id", "quotation_number", "pricing_type")
         ):
-            quotation_counts[row] += 1
+            quotation_counts[opportunity_id] += 1
+            label = "Quick Costing"
+            if pricing_type:
+                label = f"{label} ({pricing_type})"
+            costing_types_by_opp[opportunity_id].add(f"{label} #{quick_id}")
+        for opportunity_id, costing_id in (
+            CostingHeader.objects.filter(opportunity_id__in=opportunity_ids, is_archived=False)
+            .filter(quotation_number="")
+            .values_list("opportunity_id", "id")
+        ):
+            costing_types_by_opp[opportunity_id].add(f"Advanced Costing #{costing_id}")
+        for opportunity_id, quick_id, pricing_type in (
+            QuickCosting.objects.filter(opportunity_id__in=opportunity_ids)
+            .filter(quotation_number="")
+            .values_list("opportunity_id", "id", "pricing_type")
+        ):
+            label = "Quick Costing"
+            if pricing_type:
+                label = f"{label} ({pricing_type})"
+            costing_types_by_opp[opportunity_id].add(f"{label} #{quick_id}")
 
     production_ids_by_opp = defaultdict(list)
+    production_ids = []
     for production in ProductionOrder.objects.filter(
         opportunity_id__in=opportunity_ids,
         is_archived=False,
-    ).only("id", "opportunity_id"):
+    ).only("id", "opportunity_id", "source_quick_costing_id", "costing_header_id"):
         production_ids_by_opp[production.opportunity_id].append(production.pk)
+        production_ids.append(production.pk)
 
+    shipment_ids_by_opp = defaultdict(list)
     completed_shipments_by_opp = defaultdict(list)
-    completed_shipments = (
-        Shipment.objects.filter(status="delivered")
-        | Shipment.objects.filter(delivered_at__isnull=False)
-    )
-    for shipment in completed_shipments.select_related("order").only("id", "opportunity_id", "order__opportunity_id"):
+    shipment_ids = []
+    shipments = Shipment.objects.filter(
+        Q(opportunity_id__in=opportunity_ids) | Q(order__opportunity_id__in=opportunity_ids)
+    ).select_related("order").only("id", "status", "delivered_at", "opportunity_id", "order__opportunity_id")
+    for shipment in shipments:
         opportunity_id = shipment.opportunity_id or getattr(shipment.order, "opportunity_id", None)
         if opportunity_id:
-            completed_shipments_by_opp[opportunity_id].append(shipment.pk)
+            if shipment.pk not in shipment_ids_by_opp[opportunity_id]:
+                shipment_ids_by_opp[opportunity_id].append(shipment.pk)
+            shipment_ids.append(shipment.pk)
+            if shipment.status == "delivered" or shipment.delivered_at:
+                completed_shipments_by_opp[opportunity_id].append(shipment.pk)
 
     invoices_by_opp = defaultdict(list)
+    invoice_by_id = {}
     invoice_link_warnings = []
     invoices = (
         Invoice.objects.select_related(
@@ -158,6 +465,7 @@ def build_opportunity_stage_audit():
         .order_by("id")
     )
     for invoice in invoices:
+        invoice_by_id[invoice.pk] = invoice
         resolved_ids = _resolved_opportunity_ids_for_invoice(invoice)
         if not resolved_ids:
             invoice_link_warnings.append(
@@ -182,22 +490,41 @@ def build_opportunity_stage_audit():
             if opportunity_id in opportunity_ids:
                 invoices_by_opp[opportunity_id].append(invoice)
 
+    invoice_ids = list(invoice_by_id)
+    lifecycles_by_opp = defaultdict(list)
+    lifecycles_by_invoice = defaultdict(list)
+    lifecycle_filters = Q()
+    if opportunity_ids:
+        lifecycle_filters |= Q(opportunity_id__in=opportunity_ids)
+    if invoice_ids:
+        lifecycle_filters |= Q(invoice_id__in=invoice_ids)
+    if production_ids:
+        lifecycle_filters |= Q(production_order_id__in=production_ids)
+    if shipment_ids:
+        lifecycle_filters |= Q(shipping_record_id__in=shipment_ids)
+    if lifecycle_filters:
+        for lifecycle in OrderLifecycle.objects.filter(lifecycle_filters).only(
+            "id",
+            "opportunity_id",
+            "invoice_id",
+            "production_order_id",
+            "shipping_record_id",
+        ):
+            if lifecycle.opportunity_id:
+                lifecycles_by_opp[lifecycle.opportunity_id].append(lifecycle.pk)
+            if lifecycle.invoice_id:
+                lifecycles_by_invoice[lifecycle.invoice_id].append(lifecycle.pk)
+
     rows = []
     warnings = list(invoice_link_warnings)
     category_counts = Counter({category: 0 for category in REPORT_CATEGORIES})
     warning_counts = Counter()
+    legacy_test_records = 0
 
     for opportunity in opportunities:
         invoices = invoices_by_opp.get(opportunity.pk, [])
         open_invoices = [invoice for invoice in invoices if invoice_open_balance(invoice) > 0]
-        open_balance_totals = defaultdict(lambda: {"amount": Decimal("0")})
-        for invoice in open_invoices:
-            currency = (invoice.currency or "CAD").upper()
-            open_balance_totals[currency]["amount"] += invoice_open_balance(invoice)
-        balance_rows = currency_summary_rows(open_balance_totals)
-        balance_display = " / ".join(
-            format_finance_money(row["amount"], row["currency"]) for row in balance_rows
-        ) or "-"
+        balance_display = _format_balance_for_invoices(open_invoices)
 
         quotation_count = quotation_counts[opportunity.pk]
         invoice_count = len({invoice.pk for invoice in invoices})
@@ -218,6 +545,10 @@ def build_opportunity_stage_audit():
             target_url = reverse("opportunity_detail", args=[opportunity.pk])
         except Exception:
             target_url = ""
+        salesperson = opportunity.assigned_to or getattr(opportunity.lead, "assigned_to", None)
+        legacy_test_reason = _legacy_test_reason(opportunity)
+        if legacy_test_reason:
+            legacy_test_records += 1
 
         if not opportunity.customer_id:
             warnings.append(
@@ -314,20 +645,30 @@ def build_opportunity_stage_audit():
             {
                 "id": opportunity.pk,
                 "opportunity_number": opportunity.opportunity_id,
-                "customer": (
-                    getattr(opportunity.customer, "account_brand", "")
-                    or getattr(opportunity.customer, "contact_name", "")
-                    or ""
-                ),
+                "customer": _customer_label(opportunity),
                 "current_stage": opportunity.stage,
                 "current_category": current_category,
                 "expected_category": expected_category,
                 "quotation_count": quotation_count,
                 "invoice_count": invoice_count,
                 "open_invoice_count": open_invoice_count,
+                "invoice_ids": sorted({invoice.pk for invoice in invoices}),
+                "invoice_numbers": [invoice.invoice_number for invoice in invoices],
+                "invoice_statuses": sorted({invoice.status for invoice in invoices}),
                 "outstanding_balance": balance_display,
                 "production_count": production_count,
+                "production_order_ids": production_ids_by_opp.get(opportunity.pk, []),
+                "shipment_ids": shipment_ids_by_opp.get(opportunity.pk, []),
                 "completed_shipment_count": completed_shipment_count,
+                "completed_shipment_ids": completed_shipments_by_opp.get(opportunity.pk, []),
+                "lifecycle_ids": sorted(set(lifecycles_by_opp.get(opportunity.pk, []))),
+                "assigned_salesperson": _display_user(salesperson),
+                "created_date": _date_display(opportunity.created_date),
+                "historical_entry_status": _historical_entry_status(opportunity, invoices),
+                "historical_entry": _is_historical_entry(opportunity, invoices),
+                "legacy_test_status": f"Yes - {legacy_test_reason}" if legacy_test_reason else "No",
+                "legacy_test_reason": legacy_test_reason,
+                "costing_type": _costing_type_for_opportunity(costing_types_by_opp.get(opportunity.pk)),
                 "archived": opportunity.is_archived,
                 "customer_missing": not bool(opportunity.customer_id),
                 "target_url": target_url,
@@ -356,13 +697,53 @@ def build_opportunity_stage_audit():
         "broken_opportunities": len(broken_opportunity_ids),
         "broken_production_links": broken_production_links,
         "broken_invoice_links": broken_invoice_links,
+        "legacy_test_records": legacy_test_records,
         "category_counts": dict(category_counts),
         "warning_counts": dict(warning_counts),
     }
+    row_by_opp = {row["id"]: row for row in rows}
+    detail_records = []
+    for warning in warnings:
+        invoice = invoice_by_id.get(warning.get("record_id"))
+        row = row_by_opp.get(warning.get("opportunity_id"))
+        detail_record = _record_from_warning(warning, row=row, invoice=invoice)
+        if invoice is not None:
+            detail_record.update(
+                {
+                    "invoice_id": str(invoice.pk),
+                    "invoice_status": invoice.status,
+                    "outstanding_balance": _format_balance_for_invoices([invoice]),
+                    "lifecycle_id": _join_ids(lifecycles_by_invoice.get(invoice.pk, [])),
+                    "created_date": _date_display(getattr(invoice, "created_at", None)),
+                    "historical_entry_status": (
+                        f"Yes - Historical invoice date {_date_display(invoice.invoice_date)}"
+                        if getattr(invoice, "is_historical_entry", False)
+                        else "No"
+                    ),
+                }
+            )
+        detail_records.append(detail_record)
+    for row in rows:
+        if row.get("legacy_test_reason"):
+            detail_records.append(
+                _record_from_warning(
+                    {
+                        "code": "legacy_test_candidate",
+                        "severity": "information",
+                        "opportunity_id": row["id"],
+                        "opportunity_number": row["opportunity_number"],
+                        "stage": row["current_stage"],
+                        "message": row["legacy_test_reason"],
+                        "target_url": row["target_url"],
+                    },
+                    row=row,
+                )
+            )
     return {
         "generated_at": timezone.now(),
         "rows": rows,
         "warnings": warnings,
+        "detail_records": detail_records,
         "metrics": metrics,
     }
 
@@ -374,6 +755,9 @@ def build_workflow_integrity_dashboard_metrics():
     quick_table = QuickCosting._meta.db_table
     costing_table = CostingHeader._meta.db_table
     shipment_table = Shipment._meta.db_table
+    customer_table = "crm_customer"
+    lead_table = "crm_lead"
+    notification_table = AutomationNotification._meta.db_table
     sql = f"""
         WITH prod_by_opp AS (
             SELECT opportunity_id AS opp_id, COUNT(*) AS prod_count
@@ -493,6 +877,16 @@ def build_workflow_integrity_dashboard_metrics():
         opp_flags AS (
             SELECT
                 opp.id,
+                CASE
+                    WHEN (
+                        LOWER(' ' || COALESCE(opp.opportunity_id, '') || ' ' || COALESCE(opp.notes, '') || ' ' || COALESCE(customer.account_brand, '') || ' ' || COALESCE(customer.contact_name, '') || ' ' || COALESCE(customer.email, '') || ' ' || COALESCE(lead.account_brand, '') || ' ' || COALESCE(lead.contact_name, '') || ' ' || COALESCE(lead.email, '') || ' ') LIKE '%% test %%'
+                        OR LOWER(' ' || COALESCE(opp.opportunity_id, '') || ' ' || COALESCE(opp.notes, '') || ' ' || COALESCE(customer.account_brand, '') || ' ' || COALESCE(customer.contact_name, '') || ' ' || COALESCE(customer.email, '') || ' ' || COALESCE(lead.account_brand, '') || ' ' || COALESCE(lead.contact_name, '') || ' ' || COALESCE(lead.email, '') || ' ') LIKE '%% demo %%'
+                        OR LOWER(' ' || COALESCE(opp.opportunity_id, '') || ' ' || COALESCE(opp.notes, '') || ' ' || COALESCE(customer.account_brand, '') || ' ' || COALESCE(customer.contact_name, '') || ' ' || COALESCE(customer.email, '') || ' ' || COALESCE(lead.account_brand, '') || ' ' || COALESCE(lead.contact_name, '') || ' ' || COALESCE(lead.email, '') || ' ') LIKE '%% dummy %%'
+                        OR LOWER(' ' || COALESCE(opp.opportunity_id, '') || ' ' || COALESCE(opp.notes, '') || ' ' || COALESCE(customer.account_brand, '') || ' ' || COALESCE(customer.contact_name, '') || ' ' || COALESCE(customer.email, '') || ' ' || COALESCE(lead.account_brand, '') || ' ' || COALESCE(lead.contact_name, '') || ' ' || COALESCE(lead.email, '') || ' ') LIKE '%% sandbox %%'
+                        OR LOWER(' ' || COALESCE(opp.opportunity_id, '') || ' ' || COALESCE(opp.notes, '') || ' ' || COALESCE(customer.account_brand, '') || ' ' || COALESCE(customer.contact_name, '') || ' ' || COALESCE(customer.email, '') || ' ' || COALESCE(lead.account_brand, '') || ' ' || COALESCE(lead.contact_name, '') || ' ' || COALESCE(lead.email, '') || ' ') LIKE '%% example %%'
+                    )
+                    THEN 1 ELSE 0
+                END AS legacy_test_candidate,
                 CASE WHEN opp.customer_id IS NULL THEN 1 ELSE 0 END AS missing_customer,
                 CASE WHEN opp.is_archived = 0 AND COALESCE(inv.open_invoice_count, 0) > 0 AND COALESCE(prod.prod_count, 0) = 0 AND opp.stage <> %s THEN 1 ELSE 0 END AS invoice_stage_incorrect,
                 CASE WHEN opp.is_archived = 0 AND opp.stage = %s AND NOT (COALESCE(inv.open_invoice_count, 0) > 0 AND COALESCE(prod.prod_count, 0) = 0) THEN 1 ELSE 0 END AS awaiting_payment_invalid,
@@ -507,6 +901,8 @@ def build_workflow_integrity_dashboard_metrics():
             LEFT JOIN invoices_by_opp inv ON inv.opp_id = opp.id
             LEFT JOIN quotes_by_opp quote ON quote.opp_id = opp.id
             LEFT JOIN delivered_by_opp delivered ON delivered.opp_id = opp.id
+            LEFT JOIN {customer_table} customer ON customer.id = opp.customer_id
+            LEFT JOIN {lead_table} lead ON lead.id = opp.lead_id
         )
         SELECT
             COALESCE(SUM(
@@ -539,12 +935,26 @@ def build_workflow_integrity_dashboard_metrics():
             COALESCE((SELECT customer_count FROM awaiting_summary), 0) AS awaiting_payment_customer_count,
             COALESCE((SELECT SUM(amount) FROM awaiting_by_currency WHERE currency = 'CAD'), 0) AS awaiting_cad,
             COALESCE((SELECT SUM(amount) FROM awaiting_by_currency WHERE currency = 'USD'), 0) AS awaiting_usd,
-            COALESCE((SELECT SUM(amount) FROM awaiting_by_currency WHERE currency = 'BDT'), 0) AS awaiting_bdt
+            COALESCE((SELECT SUM(amount) FROM awaiting_by_currency WHERE currency = 'BDT'), 0) AS awaiting_bdt,
+            COALESCE(SUM(legacy_test_candidate), 0) AS legacy_test_records,
+            (
+                SELECT MAX(updated_at)
+                FROM {notification_table}
+                WHERE source_key = %s
+            ) AS last_audit_time
         FROM opp_flags
     """
     with connection.cursor() as cursor:
-        cursor.execute(sql, [AWAITING_PAYMENT_STAGE, AWAITING_PAYMENT_STAGE, AWAITING_PAYMENT_STAGE])
-        row = cursor.fetchone() or [0] * 9
+        cursor.execute(
+            sql,
+            [
+                AWAITING_PAYMENT_STAGE,
+                AWAITING_PAYMENT_STAGE,
+                AWAITING_PAYMENT_STAGE,
+                AUDIT_NOTIFICATION_SOURCE_KEY,
+            ],
+        )
+        row = cursor.fetchone() or [0] * 11
     totals = {
         "CAD": {"amount": decimal_or_zero(row[6])},
         "USD": {"amount": decimal_or_zero(row[7])},
@@ -555,11 +965,24 @@ def build_workflow_integrity_dashboard_metrics():
     for currency_row in rows:
         currency_row["display"] = format_finance_money(currency_row["amount"], currency_row["currency"])
     display = " / ".join(currency_row["display"] for currency_row in rows) or "-"
+    last_audit_time = _parse_database_datetime(row[10])
+    workflow_errors = int(row[0] or 0)
+    broken_opportunities = int(row[1] or 0)
+    broken_production_links = int(row[2] or 0)
+    broken_invoice_links = int(row[3] or 0)
+    legacy_test_records = int(row[9] or 0)
     return {
-        "workflow_errors": int(row[0] or 0),
-        "broken_opportunities": int(row[1] or 0),
-        "broken_production_links": int(row[2] or 0),
-        "broken_invoice_links": int(row[3] or 0),
+        "workflow_errors": workflow_errors,
+        "broken_opportunities": broken_opportunities,
+        "broken_production_links": broken_production_links,
+        "broken_invoice_links": broken_invoice_links,
+        "legacy_test_records": legacy_test_records,
+        "last_audit_time": last_audit_time,
+        "workflow_errors_health": _health_color(workflow_errors),
+        "broken_opportunities_health": _health_color(broken_opportunities),
+        "broken_production_links_health": _health_color(broken_production_links),
+        "broken_invoice_links_health": _health_color(broken_invoice_links),
+        "legacy_test_records_health": _health_color(legacy_test_records),
         "awaiting_payment_count": int(row[4] or 0),
         "awaiting_payment_customer_count": int(row[5] or 0),
         "awaiting_payment_rows": rows,
@@ -658,6 +1081,114 @@ def render_opportunity_stage_audit_markdown(audit):
     return "\n".join(lines)
 
 
+def _markdown_value(value):
+    text = str(value if value is not None else "")
+    return text.replace("\n", " ").replace("|", "\\|")
+
+
+def _detail_records_for_section(audit, section_key):
+    return [record for record in audit.get("detail_records", []) if record["section"] == section_key]
+
+
+def render_crm_data_integrity_details_markdown(audit):
+    generated_at = audit["generated_at"].strftime("%Y-%m-%d %H:%M:%S %Z")
+    metrics = audit["metrics"]
+    lines = [
+        "# CRM Data Integrity Details",
+        "",
+        f"Generated at: {generated_at}",
+        "",
+        "Reporting-only audit. No opportunity, invoice, payment, production, accounting, or shipment records were repaired by this report.",
+        "",
+        "## Summary",
+        "",
+        f"- Workflow Errors: {metrics['workflow_errors']}",
+        f"- Broken Opportunities: {metrics['broken_opportunities']}",
+        f"- Broken Production Links: {metrics['broken_production_links']}",
+        f"- Broken Invoice Links: {metrics['broken_invoice_links']}",
+        f"- Legacy Test Records: {metrics.get('legacy_test_records', 0)}",
+        "",
+        "## Dry-Run Repair Commands",
+        "",
+        "These commands are reporting-only by default. Do not execute repair actions without CEO/Admin approval.",
+        "",
+        "```bash",
+        "python manage.py repair_opportunity_stages --dry-run",
+        "python manage.py repair_invoice_links --dry-run",
+        "python manage.py repair_production_links --dry-run",
+        "python manage.py repair_shipment_completion --dry-run",
+        "```",
+        "",
+        "## Repair Classifications",
+        "",
+        f"- {REPAIR_SAFE_AUTO_FIX}: likely mechanical repair after approval.",
+        f"- {REPAIR_MANUAL_REVIEW}: human review required before any data change.",
+        f"- {REPAIR_IGNORE_LEGACY_TEST}: likely legacy/test record; exclude from operational repair unless confirmed real.",
+        "",
+    ]
+    headers = [
+        "Opportunity ID",
+        "Opportunity Number",
+        "Customer Name",
+        "Current Stage",
+        "Expected Stage",
+        "Invoice ID",
+        "Invoice Status",
+        "Outstanding Balance",
+        "Production Order ID",
+        "Shipment ID",
+        "Lifecycle ID",
+        "Assigned Salesperson",
+        "Created Date",
+        "Historical Entry",
+        "Legacy Test",
+        "Repair Class",
+        "Reason for Failure",
+        "Recommended Repair Action",
+    ]
+    for section_key, section_title in DETAIL_REPORT_SECTIONS:
+        records = _detail_records_for_section(audit, section_key)
+        lines.extend([f"## {section_title}", ""])
+        if not records:
+            lines.extend(["No records found.", ""])
+            continue
+        lines.append("| " + " | ".join(headers) + " |")
+        lines.append("| " + " | ".join(["---"] * len(headers)) + " |")
+        for record in records:
+            values = [
+                record["opportunity_id"],
+                record["opportunity_number"],
+                record["customer_name"],
+                record["current_stage"],
+                record["expected_stage"],
+                record["invoice_id"],
+                record["invoice_status"],
+                record["outstanding_balance"],
+                record["production_order_id"],
+                record["shipment_id"],
+                record["lifecycle_id"],
+                record["assigned_salesperson"],
+                record["created_date"],
+                record["historical_entry_status"],
+                record["legacy_test_status"],
+                record["repair_classification"],
+                record["reason_for_failure"],
+                record["recommended_repair_action"],
+            ]
+            lines.append("| " + " | ".join(_markdown_value(value) for value in values) + " |")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def render_crm_integrity_csv(audit, *, filter_mode="broken"):
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=CSV_COLUMNS, extrasaction="ignore")
+    writer.writeheader()
+    for record in _filter_detail_records(audit.get("detail_records", []), filter_mode):
+        writer.writerow({column: record.get(column, "") for column in CSV_COLUMNS})
+    return output.getvalue()
+
+
 def write_opportunity_stage_audit_report(path, audit=None):
     audit = audit or build_opportunity_stage_audit()
     output_path = Path(path)
@@ -665,9 +1196,38 @@ def write_opportunity_stage_audit_report(path, audit=None):
     return output_path
 
 
+def write_crm_data_integrity_details(path, audit=None):
+    audit = audit or build_opportunity_stage_audit()
+    output_path = Path(path)
+    output_path.write_text(render_crm_data_integrity_details_markdown(audit), encoding="utf-8")
+    return output_path
+
+
+def write_crm_integrity_csv(path, audit=None, *, filter_mode="broken"):
+    audit = audit or build_opportunity_stage_audit()
+    output_path = Path(path)
+    output_path.write_text(render_crm_integrity_csv(audit, filter_mode=filter_mode), encoding="utf-8")
+    return output_path
+
+
+def build_repair_command_preview(command_name, *, filter_codes=None):
+    audit = build_opportunity_stage_audit()
+    records = audit.get("detail_records", [])
+    if filter_codes:
+        records = [record for record in records if record["warning_code"] in filter_codes]
+    records = [record for record in records if record["repair_classification"] != REPAIR_IGNORE_LEGACY_TEST]
+    return {
+        "command": command_name,
+        "dry_run": True,
+        "records": records,
+        "count": len(records),
+        "generated_at": audit["generated_at"],
+    }
+
+
 def sync_opportunity_stage_audit_notification(audit):
     metrics = audit["metrics"]
-    source_key = "opportunity-stage-audit:summary:ceo"
+    source_key = AUDIT_NOTIFICATION_SOURCE_KEY
     queryset = AutomationNotification.objects.filter(source_key=source_key)
     if metrics["workflow_errors"] <= 0:
         queryset.update(is_resolved=True, resolved_at=timezone.now())

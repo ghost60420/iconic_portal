@@ -148,7 +148,9 @@ class CEOExecutiveDashboardTests(TestCase):
             "Production Orders",
             "Late Production Orders",
             "Awaiting Payment Orders",
+            "CRM Integrity Status",
             "Workflow Errors",
+            "Legacy Test Records",
             "Pending CEO Approvals",
             "Accounting Revenue by Currency",
             "Open Pipeline",
@@ -218,12 +220,35 @@ class CEOExecutiveDashboardTests(TestCase):
         self.assertIn("broken_opportunities", context)
         self.assertIn("broken_production_links", context)
         self.assertIn("broken_invoice_links", context)
+        self.assertIn("legacy_test_records", context)
+        self.assertIn("crm_integrity_status", context)
 
     def test_context_builder_has_bounded_query_count(self):
         with CaptureQueriesContext(connection) as captured:
             build_ceo_executive_context()
 
         self.assertLessEqual(len(captured), 10)
+
+    def test_crm_integrity_csv_export_is_ceo_only_and_filterable(self):
+        Invoice.objects.create(
+            invoice_number="INV-CEO-INTEGRITY",
+            customer=self.customer,
+            issue_date=self.today,
+            due_date=self.today + timedelta(days=7),
+            currency="CAD",
+            total_amount=Decimal("750"),
+            paid_amount=Decimal("250"),
+            status="partial",
+        )
+
+        response = self.client.get(reverse("crm_integrity_export_csv"), {"filter": "broken"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "text/csv")
+        content = response.content.decode("utf-8")
+        self.assertIn("opportunity_id", content)
+        self.assertIn("MANUAL_REVIEW", content)
+        self.assertIn("invoice_link_missing", content)
 
     def test_detailed_operations_dashboard_remains_available(self):
         response = self.client.get(reverse("ceo_operations_dashboard"))

@@ -13,6 +13,7 @@ from . import views_accounting as acc
 from . import views_access as access
 from . import views_costing as costing
 from . import views_iconic_ai_brain as iconic_ai_brain
+from . import views_integrity as integrity
 from . import views_order_lifecycle as lifecycle
 from . import views_operations as operations
 from . import views_people as people
@@ -110,6 +111,7 @@ urlpatterns = [
     path("settings/", platform.crm_settings, name="crm_settings"),
     path("ceo-dashboard/", ceo_perm(views.ceo_dashboard), name="ceo_dashboard"),
     path("ceo-dashboard/operations/", ceo_perm(views.ceo_operations_dashboard), name="ceo_operations_dashboard"),
+    path("ceo-dashboard/crm-integrity/export.csv/", ceo_perm(integrity.crm_integrity_export_csv), name="crm_integrity_export_csv"),
     path("ceo/quotation-approvals/", login_required(costing.ceo_quotation_approval_queue), name="ceo_quotation_approval_queue"),
     path("ai-operations-assistant/", ai_ops_perm(ai_ops.ai_operations_assistant), name="ai_operations_assistant"),
     path("ai-executive-advisor/", ceo_perm(views.ai_executive_advisor), name="ai_executive_advisor"),

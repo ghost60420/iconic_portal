@@ -1,4 +1,5 @@
 from decimal import Decimal
+from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -10,6 +11,7 @@ from crm.models import AutomationNotification, Customer, Invoice, Opportunity, P
 from crm.services.opportunity_stage_audit import (
     build_opportunity_stage_audit,
     build_workflow_integrity_dashboard_metrics,
+    render_crm_integrity_csv,
     sync_opportunity_stage_audit_notification,
 )
 
@@ -133,14 +135,83 @@ class OpportunityStageAuditTests(TestCase):
 
         with TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "OPPORTUNITY_STAGE_AUDIT_REPORT.md"
-            call_command("audit_opportunity_stages", "--notify", "--output", str(output))
+            details = Path(tmpdir) / "CRM_DATA_INTEGRITY_DETAILS.md"
+            csv_output = Path(tmpdir) / "crm_integrity_export.csv"
+            call_command(
+                "audit_opportunity_stages",
+                "--notify",
+                "--output",
+                str(output),
+                "--details-output",
+                str(details),
+                "--csv-output",
+                str(csv_output),
+            )
             content = output.read_text(encoding="utf-8")
+            details_content = details.read_text(encoding="utf-8")
+            csv_content = csv_output.read_text(encoding="utf-8")
 
         self.assertIn("# Opportunity Stage Audit Report", content)
         self.assertIn("invoice_stage_incorrect", content)
+        self.assertIn("# CRM Data Integrity Details", details_content)
+        self.assertIn("repair_opportunity_stages --dry-run", details_content)
+        self.assertIn("SAFE_AUTO_FIX", details_content)
+        self.assertIn("opportunity_id", csv_content)
         self.assertTrue(
             AutomationNotification.objects.filter(
                 source_key="opportunity-stage-audit:summary:ceo",
                 is_resolved=False,
             ).exists()
         )
+
+    def test_detail_records_and_csv_filters_include_repair_classifications(self):
+        repairable = self._opportunity(stage="Proposal")
+        self._invoice(repairable, total="500", paid="100")
+        Opportunity.objects.filter(pk=repairable.pk).update(stage="Proposal")
+        legacy_customer = Customer.objects.create(account_brand="Demo Test Customer")
+        Opportunity.objects.create(
+            customer=legacy_customer,
+            stage="Proposal",
+            product_type="Activewear",
+            product_category="Hoodie",
+        )
+
+        audit = build_opportunity_stage_audit()
+        records = audit["detail_records"]
+        classes = {record["repair_classification"] for record in records}
+
+        self.assertIn("SAFE_AUTO_FIX", classes)
+        self.assertIn("IGNORE_LEGACY_TEST", classes)
+        self.assertEqual(audit["metrics"]["legacy_test_records"], 1)
+        self.assertIn("invoice_stage_incorrect", render_crm_integrity_csv(audit, filter_mode="broken"))
+        self.assertIn("legacy_test_candidate", render_crm_integrity_csv(audit, filter_mode="legacy"))
+        self.assertIn("SAFE_AUTO_FIX", render_crm_integrity_csv(audit, filter_mode="repairable"))
+
+    def test_repair_commands_are_dry_run_only(self):
+        opportunity = self._opportunity(stage="Proposal")
+        invoice = self._invoice(opportunity, total="500", paid="100")
+        Opportunity.objects.filter(pk=opportunity.pk).update(stage="Proposal")
+        before = {
+            "opportunity_stage": Opportunity.objects.get(pk=opportunity.pk).stage,
+            "invoice_count": Invoice.objects.count(),
+            "production_count": ProductionOrder.objects.count(),
+            "shipment_count": Shipment.objects.count(),
+        }
+
+        for command in [
+            "repair_opportunity_stages",
+            "repair_invoice_links",
+            "repair_production_links",
+            "repair_shipment_completion",
+        ]:
+            out = StringIO()
+            call_command(command, "--dry-run", stdout=out)
+            self.assertIn("DRY RUN ONLY", out.getvalue())
+
+        opportunity.refresh_from_db()
+        invoice.refresh_from_db()
+        self.assertEqual(opportunity.stage, before["opportunity_stage"])
+        self.assertEqual(Invoice.objects.count(), before["invoice_count"])
+        self.assertEqual(ProductionOrder.objects.count(), before["production_count"])
+        self.assertEqual(Shipment.objects.count(), before["shipment_count"])
+        self.assertEqual(invoice.paid_amount, Decimal("100"))
