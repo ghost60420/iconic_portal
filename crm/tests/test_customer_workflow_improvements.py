@@ -194,6 +194,53 @@ class CustomerWorkflowImprovementTests(TestCase):
     def _paid_full_package_quick_costing(self, opportunity, *, invoice_number="INV-QC-FULL-PACKAGE"):
         return self._full_package_quick_costing_with_invoice(opportunity, invoice_number=invoice_number)
 
+    def _cmt_quick_costing_with_invoice(
+        self,
+        opportunity,
+        *,
+        invoice_number="INV-QC-CMT",
+        paid_amount=None,
+        invoice_status="paid",
+        quick_status=None,
+    ):
+        quick = QuickCosting.objects.create(
+            opportunity=opportunity,
+            account_brand=self.customer.account_brand,
+            buyer_name=self.customer.contact_name,
+            project_name="Quoted CMT Quick Costing",
+            product_type="Other",
+            pricing_type=QuickCosting.PRICING_CMT,
+            quantity=opportunity.moq_units or 50,
+            currency="BDT",
+            sewing_charge_per_piece_bdt=Decimal("100.00"),
+            sewing_cost_per_piece_bdt=Decimal("70.00"),
+            extra_local_cost_bdt=Decimal("500.00"),
+            salesperson=self.salesperson,
+            status=quick_status or QuickCosting.STATUS_QUOTED,
+            approved_by=self.admin,
+            approved_at=timezone.now(),
+            quotation_number=f"QQT-{invoice_number}",
+            quoted_at=timezone.now(),
+        )
+        invoice_total = Decimal(quick.quantity) * quick.sewing_charge_per_piece_bdt
+        if paid_amount is None:
+            paid_amount = invoice_total
+        invoice = Invoice.objects.create(
+            quick_costing=quick,
+            customer=self.customer,
+            opportunity=opportunity,
+            invoice_number=invoice_number,
+            currency="BDT",
+            invoice_market="bangladesh",
+            invoice_type="sewing_charge",
+            subtotal=invoice_total,
+            total_amount=invoice_total,
+            paid_amount=paid_amount,
+            status=invoice_status,
+        )
+        create_lifecycle_from_invoice(invoice, user=self.admin)
+        return quick, invoice
+
     def test_customer_archive_hides_active_keeps_linked_records_and_logs(self):
         lead, opportunity = self._lead_opportunity()
         order = ProductionOrder.objects.create(
@@ -588,6 +635,74 @@ class CustomerWorkflowImprovementTests(TestCase):
 
         self.assertEqual(duplicate_response.status_code, 302)
         self.assertEqual(ProductionOrder.objects.filter(opportunity=opportunity).count(), 1)
+
+    def test_quoted_cmt_quick_costing_paid_invoice_moves_opportunity_to_production(self):
+        opportunity = Opportunity.objects.create(
+            lead=None,
+            customer=self.customer,
+            assigned_to=self.salesperson,
+            stage="Proposal",
+            product_type="Other",
+            product_category="Sewing",
+            moq_units=50,
+        )
+        quick, invoice = self._cmt_quick_costing_with_invoice(
+            opportunity,
+            invoice_number="INV-QC-CMT-QUOTED-PAID",
+        )
+
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]))
+
+        self.assertEqual(response.status_code, 302)
+        order = ProductionOrder.objects.get(source_quick_costing=quick)
+        self.assertEqual(response["Location"], reverse("production_detail", args=[order.pk]))
+        self.assertEqual(order.order_type, "sewing_charge")
+        self.assertEqual(order.factory_location, "bd")
+        self.assertEqual(order.approved_currency, "BDT")
+        self.assertEqual(order.approved_total_value, Decimal("5000.0000"))
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.order, order)
+        lifecycle = OrderLifecycle.objects.get(invoice=invoice)
+        self.assertEqual(lifecycle.production_order, order)
+        opportunity.refresh_from_db()
+        self.assertEqual(opportunity.stage, "Production")
+
+        duplicate_response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]))
+
+        self.assertEqual(duplicate_response.status_code, 302)
+        self.assertEqual(ProductionOrder.objects.filter(opportunity=opportunity).count(), 1)
+
+    def test_quoted_cmt_quick_costing_partial_invoice_blocks_production(self):
+        opportunity = Opportunity.objects.create(
+            lead=None,
+            customer=self.customer,
+            assigned_to=self.salesperson,
+            stage="Proposal",
+            product_type="Other",
+            product_category="Sewing",
+            moq_units=50,
+        )
+        quick, invoice = self._cmt_quick_costing_with_invoice(
+            opportunity,
+            invoice_number="INV-QC-CMT-QUOTED-PARTIAL",
+            paid_amount=Decimal("1000.00"),
+            invoice_status="partial",
+        )
+
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse("production_from_opportunity", args=[opportunity.pk]), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Invoice must be fully paid before moving to Production.")
+        self.assertFalse(ProductionOrder.objects.filter(opportunity=opportunity).exists())
+        self.assertFalse(ProductionOrder.objects.filter(source_quick_costing=quick).exists())
+        invoice.refresh_from_db()
+        opportunity.refresh_from_db()
+        lifecycle = OrderLifecycle.objects.get(invoice=invoice)
+        self.assertIsNone(invoice.order)
+        self.assertIsNone(lifecycle.production_order)
+        self.assertEqual(opportunity.stage, "Awaiting Payment")
 
     def test_full_package_quick_costing_partial_invoice_blocks_production(self):
         opportunity = Opportunity.objects.create(

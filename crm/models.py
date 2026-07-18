@@ -4533,7 +4533,12 @@ class ProductionOrder(models.Model):
                 )
             if source.effective_pricing_type != QuickCosting.PRICING_CMT:
                 raise ValidationError("The source Quick Costing must use CMT / Sewing Only pricing.")
-            if source.status != QuickCosting.STATUS_APPROVED:
+            if source.status not in {
+                QuickCosting.STATUS_APPROVED,
+                QuickCosting.STATUS_QUOTED,
+                QuickCosting.STATUS_INVOICED,
+                QuickCosting.STATUS_PRODUCTION,
+            }:
                 raise ValidationError("The source Quick Costing must be CEO approved.")
 
         supplied_order_code = (self.order_code or "").strip()

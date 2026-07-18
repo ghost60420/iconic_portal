@@ -132,6 +132,7 @@ from .services.operations_permissions import (
     scope_sales_opportunities,
 )
 from .services.production_orders import (
+    QUICK_COSTING_PRODUCTION_SOURCE_STATUSES,
     ProductionOrderCreationError,
     create_production_order_from_approved_quick_costing,
     create_production_order_from_approved_quotation,
@@ -10479,7 +10480,7 @@ def _approved_cmt_quick_costing_for_opportunity_production(opportunity):
             QuickCosting.objects.filter(
                 opportunity=opportunity,
                 approved_at__isnull=False,
-                status=QuickCosting.STATUS_APPROVED,
+                status__in=QUICK_COSTING_PRODUCTION_SOURCE_STATUSES,
             )
             .select_related("opportunity", "opportunity__lead", "opportunity__customer", "opportunity__lead__customer")
             .order_by("-updated_at", "-id")
@@ -10506,7 +10507,11 @@ def _create_or_get_production_order_for_opportunity(opportunity, user):
 
     cmt_quick_costing = _approved_cmt_quick_costing_for_opportunity_production(opportunity)
     if cmt_quick_costing:
-        return create_production_order_from_approved_quick_costing(cmt_quick_costing, user=user)
+        return create_production_order_from_approved_quick_costing(
+            cmt_quick_costing,
+            user=user,
+            allow_payment_override=_production_payment_override_enabled(user),
+        )
 
     quick_costing, quick_invoice = full_package_quick_costing_source_for_opportunity(opportunity)
     if quick_costing:

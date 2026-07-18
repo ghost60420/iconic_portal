@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from crm.models import CostingAuditLog, CostingHeader, Invoice, ProductionOrder, ProductionStage, QuickCosting
@@ -10,6 +11,22 @@ from crm.services.order_lifecycle import create_lifecycle_from_production
 
 class ProductionOrderCreationError(Exception):
     pass
+
+
+QUICK_COSTING_PRODUCTION_SOURCE_STATUSES = (
+    QuickCosting.STATUS_APPROVED,
+    QuickCosting.STATUS_QUOTED,
+    QuickCosting.STATUS_INVOICED,
+    QuickCosting.STATUS_PRODUCTION,
+)
+
+
+def is_quick_costing_production_source(quick_costing):
+    return bool(
+        quick_costing
+        and quick_costing.status in QUICK_COSTING_PRODUCTION_SOURCE_STATUSES
+        and quick_costing.approved_at
+    )
 
 
 def _invoice_is_paid(invoice):
@@ -41,6 +58,28 @@ def _invoice_for_quick_costing(quick_costing, invoice=None):
     return invoices.order_by("-issue_date", "-created_at", "-id").first()
 
 
+def _invoice_candidates_for_cmt_quick_costing(quick_costing, invoice=None):
+    invoice_pk = getattr(invoice, "pk", None)
+    query = Q(quick_costing=quick_costing)
+    if getattr(quick_costing, "opportunity_id", None):
+        query |= Q(opportunity_id=quick_costing.opportunity_id)
+    invoices = Invoice.objects.select_for_update().filter(query)
+    if invoice_pk:
+        invoices = invoices.filter(pk=invoice_pk)
+    return invoices.distinct().order_by("-issue_date", "-created_at", "-id")
+
+
+def _paid_invoice_for_cmt_quick_costing(quick_costing, invoice=None):
+    for candidate in _invoice_candidates_for_cmt_quick_costing(quick_costing, invoice=invoice):
+        if _invoice_is_paid(candidate):
+            return candidate
+    return None
+
+
+def _invoice_for_cmt_quick_costing(quick_costing, invoice=None):
+    return _invoice_candidates_for_cmt_quick_costing(quick_costing, invoice=invoice).first()
+
+
 def full_package_quick_costing_source_for_opportunity(opportunity):
     """Return the newest Full Package Quick Costing source and newest invoice for an opportunity."""
     if not opportunity or getattr(opportunity, "is_archived", False):
@@ -49,12 +88,7 @@ def full_package_quick_costing_source_for_opportunity(opportunity):
         QuickCosting.objects.filter(
             opportunity=opportunity,
             approved_at__isnull=False,
-            status__in=(
-                QuickCosting.STATUS_APPROVED,
-                QuickCosting.STATUS_QUOTED,
-                QuickCosting.STATUS_INVOICED,
-                QuickCosting.STATUS_PRODUCTION,
-            ),
+            status__in=QUICK_COSTING_PRODUCTION_SOURCE_STATUSES,
         )
         .select_related("opportunity", "opportunity__lead", "opportunity__customer", "opportunity__lead__customer")
         .prefetch_related("invoices")
@@ -126,12 +160,7 @@ def create_production_order_from_paid_full_package_quick_costing(
         )
         if quick_costing.effective_pricing_type != QuickCosting.PRICING_FULL_PACKAGE:
             raise ProductionOrderCreationError("Only Full Package Quick Costing can use this production workflow.")
-        if quick_costing.status not in {
-            QuickCosting.STATUS_APPROVED,
-            QuickCosting.STATUS_QUOTED,
-            QuickCosting.STATUS_INVOICED,
-            QuickCosting.STATUS_PRODUCTION,
-        } or not quick_costing.approved_at:
+        if not is_quick_costing_production_source(quick_costing):
             raise ProductionOrderCreationError("CEO-approved Quick Costing is required before production conversion.")
         if not quick_costing.is_latest_revision:
             raise ProductionOrderCreationError("Only the latest Quick Costing revision can move to Production.")
@@ -216,7 +245,13 @@ def create_production_order_from_paid_full_package_quick_costing(
         return order, True
 
 
-def create_production_order_from_approved_quick_costing(quick_costing, user=None):
+def create_production_order_from_approved_quick_costing(
+    quick_costing,
+    user=None,
+    *,
+    invoice=None,
+    allow_payment_override=False,
+):
     """Create the single Bangladesh Local Sewing order for an approved CMT Quick Costing."""
     if not quick_costing.pk:
         raise ProductionOrderCreationError("The Quick Costing must be saved before production can begin.")
@@ -229,21 +264,37 @@ def create_production_order_from_approved_quick_costing(quick_costing, user=None
         )
         if quick_costing.effective_pricing_type != QuickCosting.PRICING_CMT:
             raise ProductionOrderCreationError("Only CMT / Sewing Only Quick Costing creates local sewing production.")
-        if quick_costing.status != QuickCosting.STATUS_APPROVED or not quick_costing.approved_at:
+        if not is_quick_costing_production_source(quick_costing):
             raise ProductionOrderCreationError("CEO approval is required before production can begin.")
         if not quick_costing.is_latest_revision:
             raise ProductionOrderCreationError("Only the latest Quick Costing revision can move to Production.")
+        opportunity = quick_costing.opportunity
+        if opportunity and getattr(opportunity, "is_archived", False):
+            raise ProductionOrderCreationError("Archived opportunities cannot move to Production.")
         if quick_costing.currency != "BDT":
             raise ProductionOrderCreationError("Bangladesh Local Sewing must use BDT.")
         if not quick_costing.sewing_charge_per_piece_bdt or quick_costing.sewing_charge_per_piece_bdt <= 0:
             raise ProductionOrderCreationError("A positive sewing charge is required before production.")
 
         existing = ProductionOrder.objects.filter(source_quick_costing=quick_costing).first()
+        if not existing and opportunity:
+            existing = ProductionOrder.objects.filter(opportunity=opportunity).order_by("created_at", "id").first()
+        production_invoice = _paid_invoice_for_cmt_quick_costing(quick_costing, invoice=invoice)
+        if not production_invoice:
+            candidate_invoice = _invoice_for_cmt_quick_costing(quick_costing, invoice=invoice)
+            if candidate_invoice:
+                if allow_payment_override:
+                    production_invoice = candidate_invoice
+                else:
+                    raise ProductionOrderCreationError("Invoice must be fully paid before moving to Production.")
         if existing:
+            if production_invoice and production_invoice.order_id != existing.pk:
+                production_invoice.order = existing
+                production_invoice.save(update_fields=["order", "updated_at"])
+            create_lifecycle_from_production(existing, user=user)
             return existing, False
 
         summary = quick_costing.calculation_summary()
-        opportunity = quick_costing.opportunity
         lead = getattr(opportunity, "lead", None) if opportunity else None
         customer = getattr(opportunity, "customer", None) if opportunity else None
         if not customer and lead:
@@ -291,10 +342,19 @@ def create_production_order_from_approved_quick_costing(quick_costing, user=None
             )
         except (IntegrityError, ValueError) as exc:
             existing = ProductionOrder.objects.filter(source_quick_costing=quick_costing).first()
+            if not existing and opportunity:
+                existing = ProductionOrder.objects.filter(opportunity=opportunity).order_by("created_at", "id").first()
             if existing:
+                if production_invoice and production_invoice.order_id != existing.pk:
+                    production_invoice.order = existing
+                    production_invoice.save(update_fields=["order", "updated_at"])
+                create_lifecycle_from_production(existing, user=user)
                 return existing, False
             raise ProductionOrderCreationError("Could not create the local sewing production order.") from exc
 
+        if production_invoice and production_invoice.order_id != order.pk:
+            production_invoice.order = order
+            production_invoice.save(update_fields=["order", "updated_at"])
         ProductionStage.objects.get_or_create(
             order=order,
             stage_key="sewing",

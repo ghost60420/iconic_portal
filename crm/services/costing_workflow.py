@@ -1,5 +1,6 @@
 from decimal import Decimal, ROUND_HALF_UP
 
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import Sum
 from django.utils import timezone
@@ -65,6 +66,13 @@ def _quick_audit(quick_costing, *, actor, action_type, field_name, previous_valu
         previous_value=str(previous_value or ""),
         new_value=str(new_value or ""),
         target_url=f"/costing/quick/{quick_costing.pk}/",
+    )
+
+
+def _production_payment_override_enabled(user):
+    return bool(
+        getattr(settings, "ALLOW_PARTIAL_PAYMENT_PRODUCTION_CEO_OVERRIDE", False)
+        and can_approve_costing(user)
     )
 
 
@@ -495,13 +503,26 @@ def create_or_link_production_order_from_invoice(invoice, user=None):
             order, created = create_production_order_from_approved_quotation(costing, user=user)
         elif quick_costing:
             if quick_costing.is_bangladesh_local_sewing:
-                if quick_costing.status != QuickCosting.STATUS_APPROVED or not quick_costing.approved_at:
+                from crm.services.production_orders import (
+                    QUICK_COSTING_PRODUCTION_SOURCE_STATUSES,
+                    ProductionOrderCreationError,
+                    create_production_order_from_approved_quick_costing,
+                )
+
+                if quick_costing.status not in QUICK_COSTING_PRODUCTION_SOURCE_STATUSES or not quick_costing.approved_at:
                     raise CostingWorkflowError("CEO-approved Quick Costing is required before production conversion.")
                 if not quick_costing.is_latest_revision:
                     raise CostingWorkflowError("Only the latest Quick Costing revision can move to Production.")
-                from crm.services.production_orders import create_production_order_from_approved_quick_costing
 
-                order, created = create_production_order_from_approved_quick_costing(quick_costing, user=user)
+                try:
+                    order, created = create_production_order_from_approved_quick_costing(
+                        quick_costing,
+                        invoice=invoice,
+                        user=user,
+                        allow_payment_override=_production_payment_override_enabled(user),
+                    )
+                except ProductionOrderCreationError as exc:
+                    raise CostingWorkflowError(str(exc)) from exc
             elif quick_costing.effective_pricing_type == QuickCosting.PRICING_FULL_PACKAGE:
                 from crm.services.production_orders import (
                     ProductionOrderCreationError,

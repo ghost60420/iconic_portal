@@ -359,6 +359,60 @@ class LocalSewingApprovalGateTests(TestCase):
         self.assertEqual(invoice.subtotal, Decimal("10000.00"))
         self.assertEqual(AccountingEntry.objects.count(), 0)
 
+    def test_quoted_local_sewing_paid_invoice_can_create_production(self):
+        quick = self.quick(
+            status=QuickCosting.STATUS_QUOTED,
+            approved_at=timezone.now(),
+            quotation_number="Q-CMT-PAID",
+            quoted_at=timezone.now(),
+        )
+        invoice = Invoice.objects.create(
+            quick_costing=quick,
+            invoice_number="INV-CMT-PAID",
+            currency="BDT",
+            invoice_market="bangladesh",
+            invoice_type="sewing_charge",
+            subtotal=Decimal("10000.00"),
+            total_amount=Decimal("10000.00"),
+            paid_amount=Decimal("10000.00"),
+            status="paid",
+        )
+
+        order, created = create_production_order_from_approved_quick_costing(quick, invoice=invoice)
+
+        self.assertTrue(created)
+        self.assertEqual(order.source_quick_costing, quick)
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.order, order)
+        duplicate, duplicate_created = create_production_order_from_approved_quick_costing(quick, invoice=invoice)
+        self.assertFalse(duplicate_created)
+        self.assertEqual(duplicate, order)
+        self.assertEqual(ProductionOrder.objects.filter(source_quick_costing=quick).count(), 1)
+
+    def test_quoted_local_sewing_partial_invoice_blocks_production(self):
+        quick = self.quick(
+            status=QuickCosting.STATUS_QUOTED,
+            approved_at=timezone.now(),
+            quotation_number="Q-CMT-PARTIAL",
+            quoted_at=timezone.now(),
+        )
+        invoice = Invoice.objects.create(
+            quick_costing=quick,
+            invoice_number="INV-CMT-PARTIAL",
+            currency="BDT",
+            invoice_market="bangladesh",
+            invoice_type="sewing_charge",
+            subtotal=Decimal("10000.00"),
+            total_amount=Decimal("10000.00"),
+            paid_amount=Decimal("2500.00"),
+            status="partial",
+        )
+
+        with self.assertRaisesMessage(ProductionOrderCreationError, "Invoice must be fully paid"):
+            create_production_order_from_approved_quick_costing(quick, invoice=invoice)
+
+        self.assertFalse(ProductionOrder.objects.filter(source_quick_costing=quick).exists())
+
     def test_local_sewing_invoice_cannot_bypass_approved_quick_costing_link(self):
         quick = self.quick(status=QuickCosting.STATUS_APPROVED, approved_at=timezone.now())
         order, _ = create_production_order_from_approved_quick_costing(quick)

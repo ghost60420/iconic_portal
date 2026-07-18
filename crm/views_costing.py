@@ -52,6 +52,7 @@ from .services.ceo_approval_queue import build_ceo_approval_queue_querysets
 from .services.order_lifecycle import create_lifecycle_from_costing
 from .services.operations_permissions import ROLE_SALES, ROLE_SALES_MANAGER, can_approve_costing, has_operations_role
 from .services.production_orders import (
+    QUICK_COSTING_PRODUCTION_SOURCE_STATUSES,
     ProductionOrderCreationError,
     create_production_order_from_approved_quick_costing,
     create_production_order_from_approved_quotation,
@@ -1963,7 +1964,7 @@ def quick_costing_convert_to_production(request, pk):
             "Only the latest CEO Approved Quick Costing revision can move to Production.",
         )
     if quick_costing.is_bangladesh_local_sewing:
-        if quick_costing.status not in {QuickCosting.STATUS_APPROVED, QuickCosting.STATUS_QUOTED} or not quick_costing.approved_at:
+        if quick_costing.status not in QUICK_COSTING_PRODUCTION_SOURCE_STATUSES or not quick_costing.approved_at:
             messages.error(request, "CEO approval is required before production can begin.")
             return redirect("quick_costing_detail", pk=pk)
         previous_status = quick_costing.status
@@ -1971,6 +1972,7 @@ def quick_costing_convert_to_production(request, pk):
             production_order, created = create_production_order_from_approved_quick_costing(
                 quick_costing,
                 user=request.user,
+                allow_payment_override=getattr(settings, "ALLOW_PARTIAL_PAYMENT_PRODUCTION_CEO_OVERRIDE", False),
             )
         except ProductionOrderCreationError as exc:
             messages.error(request, str(exc))
