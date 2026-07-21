@@ -380,6 +380,7 @@ urlpatterns = [
     path("invoices/<int:pk>/client/", acc_any(inv.invoice_client_view), name="invoice_client_view"),
     path("invoices/<int:pk>/pdf/", acc_any(inv.invoice_pdf), name="invoice_pdf"),
     path("invoices/<int:pk>/payments/add/", acc_any(inv.invoice_payment_add), name="invoice_payment_add"),
+    path("invoices/<int:pk>/payments/<int:payment_pk>/delete/", login_required(inv.invoice_payment_delete), name="invoice_payment_delete"),
     path("invoices/<int:pk>/edit/", acc_any(inv.invoice_edit), name="invoice_edit"),
     path("invoices/<int:pk>/approve/", acc_any(getattr(inv, "invoice_approve", inv.invoice_view)), name="invoice_approve"),
     path("invoices/<int:pk>/convert/production/", acc_any(inv.invoice_convert_to_production_order), name="invoice_convert_to_production_order"),

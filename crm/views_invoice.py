@@ -1,6 +1,7 @@
 # crm/views_invoice.py
 
 import io
+import json
 from collections import defaultdict
 from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
@@ -240,6 +241,16 @@ def can_void_or_delete_invoice(user):
     return bool(user.is_superuser or has_operations_role(user, ROLE_CEO, ROLE_ADMIN))
 
 
+def can_delete_invoice_payment(user):
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    if has_operations_role(user, ROLE_CEO, ROLE_ADMIN, ROLE_ACCOUNTS, ROLE_FINANCE):
+        return True
+    return False
+
+
 def _invoice_archive_scope(queryset, archive_filter="active"):
     if archive_filter == "all":
         return queryset
@@ -436,6 +447,37 @@ def _sync_invoice_payment_status(inv: Invoice) -> None:
         inv.status = "paid"
     elif total > 0:
         inv.status = "partial"
+
+
+def _payment_delete_audit_payload(payment: InvoicePayment, invoice: Invoice, reason: str, user) -> dict:
+    return {
+        "deleted_payment_id": payment.pk,
+        "invoice_id": invoice.pk,
+        "invoice_number": invoice.invoice_number,
+        "original_amount": str(_money(payment.amount)),
+        "currency": payment.currency,
+        "payment_date": str(payment.payment_date) if payment.payment_date else "",
+        "payment_method": payment.get_payment_method_display(),
+        "deleted_by": getattr(user, "username", "") if user and getattr(user, "is_authenticated", False) else "",
+        "deleted_time": timezone.now().isoformat(),
+        "deletion_reason": reason,
+        "accounting_entry_id": payment.accounting_entry_id,
+    }
+
+
+def _audit_invoice_payment_delete(payment: InvoicePayment, invoice: Invoice, user, reason: str) -> None:
+    payload = _payment_delete_audit_payload(payment, invoice, reason, user)
+    CRMAuditLog.objects.create(
+        actor=user if user and getattr(user, "is_authenticated", False) else None,
+        module="invoice_payment",
+        record_id=str(payment.pk),
+        record_label=f"{invoice.invoice_number} payment {payment.pk}",
+        action_type=CRMAuditLog.ACTION_DELETED,
+        field_name="payment",
+        previous_value=json.dumps(payload, sort_keys=True),
+        new_value=reason,
+        target_url=reverse("invoice_view", args=[invoice.pk]),
+    )
 
 
 def _audit_invoice_status_change(invoice: Invoice, user, old_status, new_status, *, action_type=None) -> None:
@@ -2373,6 +2415,7 @@ def invoice_view(request, pk):
             "crm_refs": _invoice_crm_references(inv),
             "deposit_terms": _invoice_deposit_terms(inv),
             "can_manage_invoices": user_can_manage_invoices,
+            "can_delete_invoice_payments": can_delete_invoice_payment(request.user),
             "can_archive_invoice": user_can_manage_invoices and can_archive_invoice(request.user),
             "can_void_or_delete_invoice": user_can_manage_invoices and can_void_or_delete_invoice(request.user),
             "invoice_has_payments": bool(payment_history or _d(inv.paid_amount) > 0),
@@ -2974,6 +3017,7 @@ def invoice_payment_add(request, pk):
                 "legacy_paid_amount": legacy_paid_amount,
                 "is_payment_month_closed": _is_accounting_month_closed(timezone.localdate(), _invoice_payment_side(inv)),
                 "can_manage_invoice_costing": can_view_invoice_costing,
+                "can_delete_invoice_payments": can_delete_invoice_payment(request.user),
             },
         )
 
@@ -3006,6 +3050,7 @@ def invoice_payment_add(request, pk):
                 "legacy_paid_amount": legacy_paid_amount,
                 "is_payment_month_closed": True,
                 "can_manage_invoice_costing": can_view_invoice_costing,
+                "can_delete_invoice_payments": can_delete_invoice_payment(request.user),
             },
         )
 
@@ -3053,6 +3098,75 @@ def invoice_payment_add(request, pk):
         messages.warning(request, "Payment saved. This invoice is now overpaid; review the balance.")
     else:
         messages.success(request, "Payment received and accounting entry saved.")
+    return redirect("invoice_view", pk=inv.pk)
+
+
+@login_required
+@require_POST
+def invoice_payment_delete(request, pk, payment_pk):
+    inv = get_object_or_404(Invoice.objects.select_related("order", "customer"), pk=pk)
+    if not can_delete_invoice_payment(request.user):
+        return HttpResponseForbidden("Accounting access is required to delete invoice payments.")
+
+    reason = (request.POST.get("delete_reason") or "").strip()
+    if not reason:
+        messages.error(request, "A deletion reason is required before removing a payment.")
+        return redirect("invoice_view", pk=inv.pk)
+
+    payment = (
+        InvoicePayment.objects.select_related("invoice", "accounting_entry", "production_order", "created_by")
+        .filter(pk=payment_pk, invoice=inv)
+        .first()
+    )
+    if payment is None:
+        messages.warning(request, "Payment was already removed. Invoice totals were not changed again.")
+        return redirect("invoice_view", pk=inv.pk)
+
+    accounting_entry = payment.accounting_entry
+    locked_date = accounting_entry.date if accounting_entry else payment.payment_date
+    locked_side = accounting_entry.side if accounting_entry else payment.side
+    if _is_accounting_month_closed(locked_date, locked_side):
+        messages.error(
+            request,
+            "This payment is in a locked accounting period. Create a reversal entry instead.",
+        )
+        return redirect("invoice_view", pk=inv.pk)
+
+    if accounting_entry and accounting_entry.invoice_payments.exclude(pk=payment.pk).exists():
+        messages.error(
+            request,
+            "This payment shares an accounting entry with another payment. Review the accounting entry before deleting.",
+        )
+        return redirect("invoice_view", pk=inv.pk)
+
+    with transaction.atomic():
+        previous_status = inv.status
+        previous_paid = _d(inv.paid_amount)
+        payment_amount = _d(payment.amount)
+
+        if accounting_entry:
+            AccountingEntryAudit.objects.create(
+                entry=accounting_entry,
+                action="DELETE",
+                changed_by=request.user if request.user.is_authenticated else None,
+                before_data=_entry_snapshot(accounting_entry),
+                note=f"Deleted invoice payment {payment.pk}",
+            )
+
+        _audit_invoice_payment_delete(payment, inv, request.user, reason)
+
+        payment.delete()
+        if accounting_entry:
+            accounting_entry.delete()
+
+        inv.paid_amount = _money(max(previous_paid - payment_amount, Decimal("0")))
+        _sync_invoice_payment_status(inv)
+        inv.updated_at = timezone.now()
+        inv.save(update_fields=["paid_amount", "status", "updated_at"])
+        _audit_invoice_status_change(inv, request.user, previous_status, inv.status)
+        sync_opportunity_stage_from_invoice(inv)
+
+    messages.success(request, "Payment deleted. Invoice balance and financial reports were updated.")
     return redirect("invoice_view", pk=inv.pk)
 
 

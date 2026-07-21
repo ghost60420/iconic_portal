@@ -199,6 +199,32 @@
     font-weight:800;
     line-height:1.4;
   }
+  .pay-delete-form{
+    display:grid;
+    gap:6px;
+    min-width:220px;
+  }
+  .pay-delete-form input{
+    min-height:34px;
+    padding:7px 9px;
+    border-radius:10px;
+    border:1px solid rgba(148,163,184,0.35);
+    background:rgba(2,6,23,0.86);
+    color:var(--text);
+    font-size:12px;
+    font-weight:700;
+  }
+  .pay-delete-form button{
+    min-height:32px;
+    border:1px solid rgba(248,113,113,0.45);
+    border-radius:10px;
+    background:rgba(127,29,29,0.78);
+    color:#fecaca;
+    font-size:12px;
+    font-weight:900;
+    cursor:pointer;
+  }
+  .pay-delete-form button:hover{ filter:brightness(1.08); }
 
   .internal-profit{
     margin-bottom:12px;
@@ -755,6 +781,7 @@
                   <th class="right">Amount</th>
                   <th class="right">BDT value</th>
                   <th>Notes</th>
+                  {% if can_delete_invoice_payments %}<th>Action</th>{% endif %}
                 </tr>
               </thead>
               <tbody>
@@ -779,6 +806,26 @@
                     <td class="right">Original: {{ payment.amount|finance_money:payment.currency }}</td>
                     <td class="right">Converted: {{ payment.amount_bdt|finance_money:"BDT" }}</td>
                     <td>{{ payment.notes|default:"—" }}</td>
+                    {% if can_delete_invoice_payments %}
+                      <td>
+                        <form class="pay-delete-form" method="post" action="{% url 'invoice_payment_delete' invoice.pk payment.pk %}">
+                          {% csrf_token %}
+                          <input
+                            type="text"
+                            name="delete_reason"
+                            required
+                            minlength="8"
+                            placeholder="Deletion reason"
+                            autocomplete="off"
+                            aria-label="Deletion reason for payment {{ payment.pk }}"
+                          >
+                          <button
+                            type="submit"
+                            onclick="return confirm('Delete this payment?\n\nAmount: {{ payment.amount|finance_money:payment.currency|escapejs }}\nDate: {{ payment.payment_date|date:'Y-m-d'|escapejs }}\nMethod: {{ payment.get_payment_method_display|escapejs }}\n\nThis will update the invoice balance and financial reports.');"
+                          >Delete</button>
+                        </form>
+                      </td>
+                    {% endif %}
                   </tr>
                 {% endfor %}
               </tbody>
