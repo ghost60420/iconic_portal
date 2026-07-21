@@ -1,0 +1,141 @@
+{% extends "crm/base.html" %}
+{% load crm_extras %}
+
+{% block content %}
+{% include "crm/partials/financial_density_assets.html" %}
+
+<style>
+  .payment-audit-wrap{
+    max-width:1180px;
+    margin:0 auto;
+    color:#f8fafc;
+  }
+  .payment-audit-head{
+    display:flex;
+    justify-content:space-between;
+    gap:12px;
+    align-items:flex-start;
+    flex-wrap:wrap;
+    margin-bottom:14px;
+  }
+  .payment-audit-title{
+    margin:0;
+    font-size:24px;
+    line-height:1.15;
+    font-weight:900;
+  }
+  .payment-audit-sub{
+    margin-top:4px;
+    color:#94a3b8;
+    font-size:12px;
+    font-weight:800;
+  }
+  .payment-audit-card{
+    border:1px solid rgba(148,163,184,0.24);
+    border-radius:16px;
+    background:linear-gradient(180deg, rgba(15,23,42,0.92), rgba(2,6,23,0.94));
+    box-shadow:0 16px 34px rgba(0,0,0,0.38);
+    overflow:hidden;
+  }
+  .payment-audit-table-wrap{ overflow-x:auto; }
+  .payment-audit-table{
+    width:100%;
+    border-collapse:collapse;
+    min-width:860px;
+    font-size:13px;
+  }
+  .payment-audit-table th,
+  .payment-audit-table td{
+    padding:10px 12px;
+    border-bottom:1px solid rgba(148,163,184,0.16);
+    vertical-align:top;
+  }
+  .payment-audit-table th{
+    position:sticky;
+    top:0;
+    z-index:1;
+    background:#0f172a;
+    color:#cbd5e1;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    font-weight:900;
+  }
+  .payment-audit-table td{
+    color:#e5e7eb;
+    font-weight:750;
+  }
+  .payment-audit-table a{
+    color:#fde68a;
+    font-weight:900;
+    text-decoration:none;
+  }
+  .payment-audit-table a:hover{ text-decoration:underline; }
+  .payment-audit-right{ text-align:right; white-space:nowrap; }
+  .payment-audit-reason{
+    max-width:320px;
+    color:#f8fafc;
+  }
+  .payment-audit-empty{
+    padding:22px;
+    color:#94a3b8;
+    font-weight:800;
+  }
+  @media (max-width: 640px){
+    .payment-audit-title{ font-size:20px; }
+    .payment-audit-table th,
+    .payment-audit-table td{ padding:9px 10px; }
+  }
+</style>
+
+<div class="payment-audit-wrap">
+  <div class="payment-audit-head">
+    <div>
+      <h1 class="payment-audit-title">Payment Audit</h1>
+      <div class="payment-audit-sub">Deleted invoice payments with reason and audit metadata.</div>
+    </div>
+    <a class="crm-btn-secondary" href="{% url 'accounts_receivable_dashboard' %}">Accounts Receivable</a>
+  </div>
+
+  <div class="payment-audit-card">
+    {% if audit_rows %}
+      <div class="payment-audit-table-wrap">
+        <table class="payment-audit-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Invoice</th>
+              <th>Payment ID</th>
+              <th class="payment-audit-right">Amount</th>
+              <th>Deleted By</th>
+              <th>Reason</th>
+              <th>Deleted Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in audit_rows %}
+              <tr>
+                <td>{{ row.date|default:"—" }}</td>
+                <td>
+                  {% if row.invoice_id %}
+                    <a href="{% url 'invoice_view' row.invoice_id %}">{{ row.invoice_number|default:row.invoice_id }}</a>
+                  {% else %}
+                    {{ row.invoice_number|default:"—" }}
+                  {% endif %}
+                </td>
+                <td>{{ row.payment_id|default:"—" }}</td>
+                <td class="payment-audit-right">{{ row.amount_display }}</td>
+                <td>{{ row.deleted_by|default:"Unknown" }}</td>
+                <td class="payment-audit-reason">{{ row.reason|default:"—" }}</td>
+                <td>{{ row.deleted_time|date:"Y-m-d H:i" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="payment-audit-empty">No deleted payment audit records yet.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

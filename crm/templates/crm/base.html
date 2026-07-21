@@ -589,6 +589,7 @@
     {% url 'wa_api_inbox' as whatsapp_url %}
     {% url 'accounting_home' as acc_home_url %}
     {% url 'accounts_receivable_dashboard' as ar_dashboard_url %}
+    {% url 'payment_audit_log' as payment_audit_url %}
     {% url 'accounts_payable_dashboard' as ap_dashboard_url %}
     {% url 'profit_loss_dashboard' as profit_loss_url %}
     {% url 'executive_financial_dashboard' as executive_dashboard_url %}
@@ -654,7 +655,7 @@
 
         {% if can_costing and can_internal or can_acc_ca or can_acc_bd %}
           <div class="crm-dropdown" id="financialDropdown">
-            <a href="{% if can_acc_ca and acc_home_url or can_acc_bd and acc_home_url %}{{ acc_home_url }}{% elif can_acc_ca and invoice_list_url or can_acc_bd and invoice_list_url %}{{ invoice_list_url }}{% elif can_costing and can_internal and cost_url %}{{ cost_url }}{% else %}#{% endif %}" class="crm-nav-item hot {% if current_url == 'cost_sheet_list' or current_url == 'cost_sheet_dashboard' or current_url == 'invoice_list' or current_url == 'invoice_list_ca' or current_url == 'invoice_add' or current_url == 'accounting_home' or current_url == 'accounting_bd_daily' or current_url == 'accounting_bd_grid' or current_url == 'accounting_bd_dashboard' or current_url == 'accounting_ca_master' or current_url == 'accounting_entry_list' or current_url == 'profit_loss_dashboard' or current_url == 'accounts_receivable_dashboard' or current_url == 'accounts_payable_dashboard' or current_url == 'executive_financial_dashboard' or current_url == 'accounting_reports' %}active{% endif %}" id="financialBtn" aria-haspopup="true" aria-expanded="false">
+            <a href="{% if can_acc_ca and acc_home_url or can_acc_bd and acc_home_url %}{{ acc_home_url }}{% elif can_acc_ca and invoice_list_url or can_acc_bd and invoice_list_url %}{{ invoice_list_url }}{% elif can_costing and can_internal and cost_url %}{{ cost_url }}{% else %}#{% endif %}" class="crm-nav-item hot {% if current_url == 'cost_sheet_list' or current_url == 'cost_sheet_dashboard' or current_url == 'invoice_list' or current_url == 'invoice_list_ca' or current_url == 'invoice_add' or current_url == 'accounting_home' or current_url == 'accounting_bd_daily' or current_url == 'accounting_bd_grid' or current_url == 'accounting_bd_dashboard' or current_url == 'accounting_ca_master' or current_url == 'accounting_entry_list' or current_url == 'profit_loss_dashboard' or current_url == 'accounts_receivable_dashboard' or current_url == 'payment_audit_log' or current_url == 'accounts_payable_dashboard' or current_url == 'executive_financial_dashboard' or current_url == 'accounting_reports' %}active{% endif %}" id="financialBtn" aria-haspopup="true" aria-expanded="false">
               <span>💰</span><strong>Financial</strong>
             </a>
             <div class="crm-dropdown-menu" role="menu">
@@ -663,6 +664,7 @@
                 {% if invoice_list_url %}<a class="crm-dd-item" href="{{ invoice_list_url }}">Invoices</a>{% endif %}
                 {% if acc_home_url %}<a class="crm-dd-item" href="{{ acc_home_url }}">Accounts</a>{% endif %}
                 {% if executive_dashboard_url %}<a class="crm-dd-item" href="{{ executive_dashboard_url }}">Finance Dashboard</a>{% endif %}
+                {% if payment_audit_url %}<a class="crm-dd-item" href="{{ payment_audit_url }}">Payment Audit</a>{% endif %}
               {% endif %}
               {% if can_acc_bd %}
                 <div class="crm-nested-submenu">

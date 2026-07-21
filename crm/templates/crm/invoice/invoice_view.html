@@ -200,31 +200,30 @@
     line-height:1.4;
   }
   .pay-delete-form{
-    display:grid;
-    gap:6px;
-    min-width:220px;
+    display:inline-flex;
+    justify-content:flex-end;
+    margin:0;
   }
-  .pay-delete-form input{
-    min-height:34px;
-    padding:7px 9px;
-    border-radius:10px;
-    border:1px solid rgba(148,163,184,0.35);
-    background:rgba(2,6,23,0.86);
-    color:var(--text);
-    font-size:12px;
-    font-weight:700;
-  }
-  .pay-delete-form button{
-    min-height:32px;
-    border:1px solid rgba(248,113,113,0.45);
-    border-radius:10px;
+  .pay-trash-button{
+    width:30px;
+    height:30px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    border:1px solid rgba(248,113,113,0.55);
+    border-radius:9px;
     background:rgba(127,29,29,0.78);
     color:#fecaca;
-    font-size:12px;
+    font-size:14px;
     font-weight:900;
     cursor:pointer;
+    line-height:1;
   }
-  .pay-delete-form button:hover{ filter:brightness(1.08); }
+  .pay-trash-button:hover{ filter:brightness(1.12); background:rgba(153,27,27,0.92); }
+  .pay-trash-button:focus-visible{
+    outline:none;
+    box-shadow:0 0 0 3px rgba(248,113,113,0.24);
+  }
 
   .internal-profit{
     margin-bottom:12px;
@@ -554,19 +553,19 @@
 
         <div class="pay-kpi">
           <span>Amount received</span>
-          <strong>{{ invoice.paid_amount|default_if_none:0|finance_money:cur }}</strong>
-          <small>{% if legacy_paid_amount %}Includes legacy received amount: {{ legacy_paid_amount|finance_money:cur }}.{% else %}From recorded payment entries.{% endif %}</small>
+          <strong data-invoice-paid-display>{{ invoice.paid_amount|default_if_none:0|finance_money:cur }}</strong>
+          <small data-invoice-paid-help>{% if legacy_paid_amount %}Includes legacy received amount: {{ legacy_paid_amount|finance_money:cur }}.{% else %}From recorded payment entries.{% endif %}</small>
         </div>
 
         <div class="pay-kpi">
           <span>Balance due</span>
-          <strong>{{ invoice.balance|default_if_none:0|finance_money:cur }}</strong>
-          <small>{% if pay_key == "overpaid" %}Overpayment needs finance review.{% else %}Remaining unpaid invoice balance.{% endif %}</small>
+          <strong data-invoice-balance-display>{{ invoice.balance|default_if_none:0|finance_money:cur }}</strong>
+          <small data-invoice-balance-help>{% if pay_key == "overpaid" %}Overpayment needs finance review.{% else %}Remaining unpaid invoice balance.{% endif %}</small>
         </div>
 
         <div class="pay-kpi">
           <span>Payment status</span>
-          <strong>
+          <strong data-invoice-payment-status>
             <span class="status s-{{ pay_key }}">{{ invoice.payment_status_label }}</span>
           </strong>
           <small>{% if invoice.order %}Production: {{ invoice.order.purchase_order_number|default:invoice.order }}{% else %}No production order linked.{% endif %}</small>
@@ -757,83 +756,8 @@
     {% endif %}
 
     <div class="cardx pay-section">
-      <div class="pad">
-        <div class="pay-section-title">
-          <span>Payment history</span>
-          <span class="sub">{{ payment_history|length }} payment record(s)</span>
-        </div>
-
-        {% if legacy_paid_amount %}
-          <div class="pay-alert pay-alert--warn">
-            This invoice has {{ legacy_paid_amount|finance_money:cur }} recorded before payment history was enabled.
-          </div>
-        {% endif %}
-
-        {% if payment_history %}
-          <div style="overflow-x:auto;">
-            <table class="pay-history">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Method</th>
-                  <th>Production</th>
-                  <th>Accounting entry</th>
-                  <th class="right">Amount</th>
-                  <th class="right">BDT value</th>
-                  <th>Notes</th>
-                  {% if can_delete_invoice_payments %}<th>Action</th>{% endif %}
-                </tr>
-              </thead>
-              <tbody>
-                {% for payment in payment_history %}
-                  <tr>
-                    <td>{{ payment.payment_date|date:"Y-m-d" }}</td>
-                    <td>{{ payment.get_payment_method_display }}</td>
-                    <td>
-                      {% if payment.production_order %}
-                        <a class="v" href="{% url 'production_detail' payment.production_order.pk %}">{{ payment.production_order.purchase_order_number|default:payment.production_order }}</a>
-                      {% else %}
-                        —
-                      {% endif %}
-                    </td>
-                    <td>
-                      {% if payment.accounting_entry %}
-                        <a class="v" href="{% url 'accounting_entry_edit' payment.accounting_entry.pk %}">Entry #{{ payment.accounting_entry.pk }}</a>
-                      {% else %}
-                        —
-                      {% endif %}
-                    </td>
-                    <td class="right">Original: {{ payment.amount|finance_money:payment.currency }}</td>
-                    <td class="right">Converted: {{ payment.amount_bdt|finance_money:"BDT" }}</td>
-                    <td>{{ payment.notes|default:"—" }}</td>
-                    {% if can_delete_invoice_payments %}
-                      <td>
-                        <form class="pay-delete-form" method="post" action="{% url 'invoice_payment_delete' invoice.pk payment.pk %}">
-                          {% csrf_token %}
-                          <input
-                            type="text"
-                            name="delete_reason"
-                            required
-                            minlength="8"
-                            placeholder="Deletion reason"
-                            autocomplete="off"
-                            aria-label="Deletion reason for payment {{ payment.pk }}"
-                          >
-                          <button
-                            type="submit"
-                            onclick="return confirm('Delete this payment?\n\nAmount: {{ payment.amount|finance_money:payment.currency|escapejs }}\nDate: {{ payment.payment_date|date:'Y-m-d'|escapejs }}\nMethod: {{ payment.get_payment_method_display|escapejs }}\n\nThis will update the invoice balance and financial reports.');"
-                          >Delete</button>
-                        </form>
-                      </td>
-                    {% endif %}
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        {% else %}
-          <div class="pay-help">No payment history recorded yet.</div>
-        {% endif %}
+      <div class="pad" id="payment-history-panel">
+        {% include "crm/invoice/partials/payment_history_table.html" %}
       </div>
     </div>
 
@@ -905,12 +829,12 @@
 
             <div class="k">Paid amount</div>
             <div class="v">
-              {{ invoice.paid_amount|default_if_none:0|finance_money:cur }}
+              <span data-invoice-paid-display>{{ invoice.paid_amount|default_if_none:0|finance_money:cur }}</span>
             </div>
 
             <div class="k">Balance</div>
             <div class="v">
-              {{ invoice.balance|default_if_none:0|finance_money:cur }}
+              <span data-invoice-balance-display>{{ invoice.balance|default_if_none:0|finance_money:cur }}</span>
             </div>
           </div>
 
@@ -974,4 +898,95 @@
 {% endwith %}
 
 {% record_timeline_panel "invoices" invoice.pk %}
+<script>
+  (function () {
+    function setTextAll(selector, text) {
+      document.querySelectorAll(selector).forEach(function (node) {
+        node.textContent = text;
+      });
+    }
+
+    function escapeHtml(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    document.addEventListener("submit", async function (event) {
+      const form = event.target.closest(".js-payment-delete-form");
+      if (!form) return;
+
+      event.preventDefault();
+
+      const amount = form.dataset.paymentAmount || "";
+      const date = form.dataset.paymentDate || "";
+      const method = form.dataset.paymentMethod || "";
+      const promptText = [
+        "Delete this payment?",
+        "",
+        "Amount: " + amount,
+        "Date: " + date,
+        "Method: " + method,
+        "",
+        "This will update the invoice balance and financial reports.",
+        "",
+        "Enter deletion reason:"
+      ].join("\n");
+      const reason = window.prompt(promptText, "");
+      if (reason === null) return;
+      const trimmedReason = reason.trim();
+      if (!trimmedReason) {
+        window.alert("Deletion reason is required.");
+        return;
+      }
+
+      const reasonField = form.querySelector('input[name="delete_reason"]');
+      if (reasonField) reasonField.value = trimmedReason;
+
+      const button = form.querySelector("button");
+      if (button) button.disabled = true;
+
+      try {
+        const response = await fetch(form.action, {
+          method: "POST",
+          body: new FormData(form),
+          headers: {"X-Requested-With": "XMLHttpRequest"}
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          window.alert(payload.error || "Payment could not be deleted.");
+          return;
+        }
+
+        if (payload.invoice) {
+          setTextAll("[data-invoice-paid-display]", payload.invoice.paid_display || "");
+          setTextAll("[data-invoice-balance-display]", payload.invoice.balance_display || "");
+          setTextAll("[data-invoice-balance-help]", payload.invoice.balance_help || "");
+          const paidHelp = payload.invoice.legacy_paid_display
+            ? "Includes legacy received amount: " + payload.invoice.legacy_paid_display + "."
+            : "From recorded payment entries.";
+          setTextAll("[data-invoice-paid-help]", paidHelp);
+
+          const statusTarget = document.querySelector("[data-invoice-payment-status]");
+          if (statusTarget) {
+            const key = String(payload.invoice.status_key || "unknown").replace(/[^a-z0-9_-]/gi, "");
+            statusTarget.innerHTML = '<span class="status s-' + key + '">' + escapeHtml(payload.invoice.status_label || "") + "</span>";
+          }
+        }
+
+        const panel = document.getElementById("payment-history-panel");
+        if (panel && payload.payment_history_html) {
+          panel.innerHTML = payload.payment_history_html;
+        }
+      } catch (error) {
+        form.submit();
+      } finally {
+        if (button) button.disabled = false;
+      }
+    });
+  })();
+</script>
 {% endblock %}

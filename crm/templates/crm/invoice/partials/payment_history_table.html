@@ -1,0 +1,81 @@
+{% load crm_extras %}
+
+<div class="pay-section-title">
+  <span>Payment history</span>
+  <span class="sub">{{ payment_history|length }} payment record(s)</span>
+</div>
+
+{% if legacy_paid_amount %}
+  <div class="pay-alert pay-alert--warn">
+    This invoice has {{ legacy_paid_amount|finance_money:cur }} recorded before payment history was enabled.
+  </div>
+{% endif %}
+
+{% if payment_history %}
+  <div style="overflow-x:auto;">
+    <table class="pay-history">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Method</th>
+          <th>Production</th>
+          <th>Accounting entry</th>
+          <th class="right">Amount</th>
+          <th class="right">BDT value</th>
+          <th>Notes</th>
+          {% if can_delete_invoice_payments %}<th class="right">Action</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for payment in payment_history %}
+          <tr data-payment-row="{{ payment.pk }}">
+            <td>{{ payment.payment_date|date:"Y-m-d" }}</td>
+            <td>{{ payment.get_payment_method_display }}</td>
+            <td>
+              {% if payment.production_order %}
+                <a class="v" href="{% url 'production_detail' payment.production_order.pk %}">{{ payment.production_order.purchase_order_number|default:payment.production_order }}</a>
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td>
+              {% if payment.accounting_entry %}
+                <a class="v" href="{% url 'accounting_entry_edit' payment.accounting_entry.pk %}">Entry #{{ payment.accounting_entry.pk }}</a>
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td class="right">Original: {{ payment.amount|finance_money:payment.currency }}</td>
+            <td class="right">Converted: {{ payment.amount_bdt|finance_money:"BDT" }}</td>
+            <td>{{ payment.notes|default:"—" }}</td>
+            {% if can_delete_invoice_payments %}
+              <td class="right">
+                <form
+                  class="pay-delete-form js-payment-delete-form"
+                  method="post"
+                  action="{% url 'invoice_payment_delete' invoice.pk payment.pk %}"
+                  data-payment-amount="{{ payment.amount|finance_money:payment.currency }}"
+                  data-payment-date="{{ payment.payment_date|date:'Y-m-d' }}"
+                  data-payment-method="{{ payment.get_payment_method_display }}"
+                >
+                  {% csrf_token %}
+                  <input type="hidden" name="delete_reason" value="">
+                  <button
+                    type="submit"
+                    class="pay-trash-button"
+                    aria-label="Delete payment {{ payment.pk }}"
+                    title="Delete payment"
+                  >
+                    <span aria-hidden="true">🗑</span>
+                  </button>
+                </form>
+              </td>
+            {% endif %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="pay-help">No payment history recorded yet.</div>
+{% endif %}

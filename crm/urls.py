@@ -366,6 +366,7 @@ urlpatterns = [
 
     # Invoices
     path("accounting/accounts-receivable/", acc_any(inv.accounts_receivable_dashboard), name="accounts_receivable_dashboard"),
+    path("accounting/payment-audit/", acc_any(inv.payment_audit_log), name="payment_audit_log"),
     path("invoices/", acc_any(inv.invoice_list), name="invoice_list"),
     path("invoices/ca/", acc_any(getattr(inv, "invoice_list_ca", inv.invoice_list)), name="invoice_list_ca"),
     path("invoices/bd/", acc_any(getattr(inv, "invoice_list_bd", inv.invoice_list)), name="invoice_list_bd"),

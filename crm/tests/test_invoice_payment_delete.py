@@ -204,10 +204,49 @@ class InvoicePaymentDeleteTests(TestCase):
 
         self.client.force_login(self.ceo)
         response = self.client.get(reverse("invoice_view", args=[invoice.pk]))
-        self.assertContains(response, "Deletion reason")
-        self.assertContains(response, "Delete this payment?")
+        self.assertContains(response, 'class="pay-delete-form js-payment-delete-form"')
+        self.assertContains(response, 'aria-label="Delete payment')
+        self.assertContains(response, "Enter deletion reason:")
 
         self.client.force_login(self.sales)
         response = self.client.get(reverse("invoice_view", args=[invoice.pk]))
-        self.assertNotContains(response, "Deletion reason")
-        self.assertNotContains(response, "Delete this payment?")
+        self.assertNotContains(response, 'class="pay-delete-form js-payment-delete-form"')
+        self.assertNotContains(response, 'aria-label="Delete payment')
+
+    def test_ajax_delete_returns_refreshed_invoice_totals_and_payment_history(self):
+        invoice = self._invoice(total=Decimal("700.00"), paid=Decimal("1400.00"), status="paid")
+        keep = self._payment(invoice, amount=Decimal("700.00"))
+        delete = self._payment(invoice, amount=Decimal("700.00"))
+        self.client.force_login(self.ceo)
+
+        response = self.client.post(
+            reverse("invoice_payment_delete", args=[invoice.pk, delete.pk]),
+            {"delete_reason": "Duplicate payment entered by mistake."},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["invoice"]["paid_display"], "CAD $700.00")
+        self.assertEqual(payload["invoice"]["balance_display"], "CAD $0.00")
+        self.assertEqual(payload["invoice"]["status_key"], "paid")
+        self.assertEqual(payload["invoice"]["payment_count"], 1)
+        self.assertIn(f'data-payment-row="{keep.pk}"', payload["payment_history_html"])
+        self.assertNotIn(f'data-payment-row="{delete.pk}"', payload["payment_history_html"])
+
+    def test_payment_audit_log_page_lists_deleted_payment(self):
+        invoice = self._invoice(paid=Decimal("250.00"), status="partial")
+        payment = self._payment(invoice, amount=Decimal("250.00"))
+
+        self._delete(invoice, payment, reason="Duplicate payment entered by mistake.")
+
+        self.client.force_login(self.accounts)
+        response = self.client.get(reverse("payment_audit_log"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Payment Audit")
+        self.assertContains(response, invoice.invoice_number)
+        self.assertContains(response, str(payment.pk))
+        self.assertContains(response, "CAD $250.00")
+        self.assertContains(response, "Duplicate payment entered by mistake.")
