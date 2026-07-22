@@ -1,6 +1,6 @@
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from io import BytesIO
+from io import BytesIO, StringIO
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -33,7 +33,11 @@ from crm.models import (
 from crm.models_access import UserAccess
 from crm.services.automation_engine import automation_dashboard_context
 from crm.services.operations_dashboard import operations_dashboard_context
-from crm.services.operations_notifications import sync_operations_notifications, visible_notifications
+from crm.services.operations_notifications import (
+    notify_production_order_created,
+    sync_operations_notifications,
+    visible_notifications,
+)
 from crm.views_costing import _can_approve
 from crm.views_operations import _group_notifications
 
@@ -101,6 +105,138 @@ class DashboardPerformanceGuardTests(OperationsControlBase):
 
 
 class NotificationCenterTests(OperationsControlBase):
+    def test_superuser_notifications_are_recipient_scoped(self):
+        superuser = self.User.objects.create_superuser("ops-superuser", password="test-pass")
+        own = AutomationNotification.objects.create(
+            source_key="test:superuser:own",
+            title="Production Order created",
+            notification_type="production_created",
+            rule_type="production",
+            message="PO-DUPE is ready for production planning.",
+            assigned_user=superuser,
+        )
+        other = AutomationNotification.objects.create(
+            source_key="test:superuser:other",
+            title="Production Order created",
+            notification_type="production_created",
+            rule_type="production",
+            message="PO-DUPE is ready for production planning.",
+            assigned_user=self.production,
+        )
+
+        visible_ids = set(visible_notifications(superuser).values_list("id", flat=True))
+        self.assertIn(own.pk, visible_ids)
+        self.assertNotIn(other.pk, visible_ids)
+        self.assertEqual(
+            visible_notifications(superuser).filter(message="PO-DUPE is ready for production planning.").count(),
+            1,
+        )
+
+    def test_production_ready_notification_reuses_opportunity_business_key(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            order = ProductionOrder.objects.create(
+                title="Event Order",
+                order_code="PO-EVENT-KEY",
+                opportunity=self.opportunity,
+                lead=self.lead,
+                assigned_production_manager=self.production,
+                created_by=self.sales_other,
+            )
+
+        source_key = f"operations:production_ready:opportunity:{self.opportunity.pk}:user:{self.production.pk}"
+        self.assertTrue(AutomationNotification.objects.filter(source_key=source_key).exists())
+        first_count = AutomationNotification.objects.filter(
+            notification_type="production_created",
+            assigned_user=self.production,
+            message="PO-EVENT-KEY is ready for production planning.",
+        ).count()
+
+        notify_production_order_created(order)
+
+        self.assertEqual(
+            AutomationNotification.objects.filter(
+                notification_type="production_created",
+                assigned_user=self.production,
+                message="PO-EVENT-KEY is ready for production planning.",
+            ).count(),
+            first_count,
+        )
+
+    def test_production_ready_reemit_resolves_legacy_recipient_key(self):
+        order = ProductionOrder.objects.create(
+            title="Legacy Event Order",
+            order_code="PO-LEGACY-EVENT",
+            opportunity=self.opportunity,
+            lead=self.lead,
+            assigned_production_manager=self.production,
+            created_by=self.sales_other,
+        )
+        legacy = AutomationNotification.objects.create(
+            source_key=f"operations:production_created:{order.pk}:user:{self.production.pk}",
+            title="Production Order created",
+            notification_type="production_created",
+            rule_type="production",
+            message="PO-LEGACY-EVENT is ready for production planning.",
+            assigned_user=self.production,
+            record_content_type=ContentType.objects.get_for_model(ProductionOrder),
+            record_object_id=order.pk,
+            target_url=reverse("production_detail", args=[order.pk]),
+        )
+
+        notify_production_order_created(order)
+
+        legacy.refresh_from_db()
+        self.assertTrue(legacy.is_resolved)
+        self.assertEqual(
+            visible_notifications(self.production)
+            .filter(message="PO-LEGACY-EVENT is ready for production planning.")
+            .count(),
+            1,
+        )
+
+    def test_cleanup_duplicate_notifications_keeps_oldest_and_preserves_unread(self):
+        order = ProductionOrder.objects.create(
+            title="Cleanup Event Order",
+            order_code="PO-CLEANUP-EVENT",
+            assigned_production_manager=self.production,
+        )
+        content_type = ContentType.objects.get_for_model(ProductionOrder)
+        oldest = AutomationNotification.objects.create(
+            source_key="test:cleanup:oldest",
+            title="Production Order created",
+            notification_type="production_created",
+            rule_type="production",
+            message="PO-CLEANUP-EVENT is ready for production planning.",
+            is_read=True,
+            read_at=timezone.now(),
+            assigned_user=self.production,
+            record_content_type=content_type,
+            record_object_id=order.pk,
+            target_url=reverse("production_detail", args=[order.pk]),
+        )
+        duplicate = AutomationNotification.objects.create(
+            source_key="test:cleanup:duplicate",
+            title="Production Order created",
+            notification_type="production_created",
+            rule_type="production",
+            message="PO-CLEANUP-EVENT is ready for production planning.",
+            is_read=False,
+            assigned_user=self.production,
+            record_content_type=content_type,
+            record_object_id=order.pk,
+            target_url=reverse("production_detail", args=[order.pk]),
+        )
+
+        output = StringIO()
+        call_command("cleanup_duplicate_notifications", "--apply", stdout=output)
+
+        oldest.refresh_from_db()
+        self.assertTrue(AutomationNotification.objects.filter(pk=oldest.pk).exists())
+        self.assertFalse(AutomationNotification.objects.filter(pk=duplicate.pk).exists())
+        self.assertFalse(oldest.is_read)
+        self.assertIsNone(oldest.read_at)
+        self.assertIn("Deleted 1 duplicate notification row", output.getvalue())
+
     def test_quotation_submission_notifies_ceo_only(self):
         costing = CostingHeader.objects.create(
             opportunity=self.opportunity,

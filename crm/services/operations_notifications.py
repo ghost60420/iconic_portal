@@ -127,6 +127,38 @@ def _clear_header_cache(user_ids):
             cache.delete(f"crm-header-unread:{user_id}")
 
 
+def _resolve_replaced_recipient_notifications(source_key, active_keys):
+    if not source_key or not active_keys:
+        return
+    stale = (
+        AutomationNotification.objects.filter(
+            source_key__startswith=f"{source_key}:",
+            is_resolved=False,
+        )
+        .exclude(source_key__in=active_keys)
+    )
+    user_ids = list(
+        stale.exclude(assigned_user_id=None)
+        .values_list("assigned_user_id", flat=True)
+        .distinct()
+    )
+    role_names = list(
+        stale.exclude(assigned_role="")
+        .values_list("assigned_role", flat=True)
+        .distinct()
+    )
+    if role_names:
+        User = get_user_model()
+        user_ids.extend(
+            User.objects.filter(Q(groups__name__in=role_names) | Q(is_superuser=True))
+            .values_list("id", flat=True)
+            .distinct()
+        )
+    updated = stale.update(is_resolved=True, resolved_at=timezone.now())
+    if updated:
+        _clear_header_cache(user_ids)
+
+
 def create_operations_notification(
     *,
     source_key,
@@ -141,6 +173,7 @@ def create_operations_notification(
     target_url="",
     record_label="",
     recipient_rows=None,
+    replaced_source_keys=(),
 ):
     content_type = ContentType.objects.get_for_model(record, for_concrete_model=False) if record else None
     object_id = record.pk if record else None
@@ -172,6 +205,10 @@ def create_operations_notification(
             },
         )
         touched_users.append(getattr(user, "pk", None))
+    _resolve_replaced_recipient_notifications(source_key, active_keys)
+    for replaced_source_key in replaced_source_keys:
+        if replaced_source_key != source_key:
+            _resolve_replaced_recipient_notifications(replaced_source_key, active_keys)
     _clear_header_cache(touched_users)
     return active_keys
 
@@ -292,8 +329,12 @@ def notify_production_order_created(order):
         roles=(ROLE_PRODUCTION,),
         exclude_user=order.created_by,
     )
+    if order.opportunity_id:
+        source_key = f"operations:production_ready:opportunity:{order.opportunity_id}"
+    else:
+        source_key = f"operations:production_ready:order:{order.pk}"
     return create_operations_notification(
-        source_key=f"operations:production_created:{order.pk}",
+        source_key=source_key,
         notification_type="production_created",
         title="Production Order created",
         message=f"{label} is ready for production planning.",
@@ -304,6 +345,7 @@ def notify_production_order_created(order):
         target_url=_safe_reverse("production_detail", order.pk),
         record_label=label,
         recipient_rows=recipients,
+        replaced_source_keys=(f"operations:production_created:{order.pk}",),
     )
 
 
@@ -581,8 +623,6 @@ def visible_notifications(user):
     )
     if not user or not getattr(user, "is_authenticated", False):
         return AutomationNotification.objects.none()
-    if getattr(user, "is_superuser", False):
-        return base
     roles = operations_role_names(user)
     legacy_rule_types = {"general"}
     if can_access_operations_module(user, "leads"):
@@ -598,6 +638,8 @@ def visible_notifications(user):
         for module in ("quotations", "production", "invoices")
     ):
         legacy_rule_types.add("lifecycle")
+    if can_access_operations_module(user, "quotations"):
+        legacy_rule_types.add("quick_costing")
     queryset = base.filter(rule_type__in=legacy_rule_types).filter(
         Q(assigned_user=user)
         | Q(assigned_user__isnull=True, assigned_role__in=roles)
