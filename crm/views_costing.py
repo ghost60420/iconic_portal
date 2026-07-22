@@ -58,6 +58,7 @@ from .services.production_orders import (
     create_production_order_from_paid_full_package_quick_costing,
 )
 from .services.production_payment import production_payment_requirement
+from .services.product_reference_images import reference_images_for_opportunity
 from .services.workflow_visibility import build_workflow_visibility_context
 from .permissions import can_view_internal_costing
 
@@ -593,11 +594,14 @@ def _quotation_context(costing, user=None):
     quote_is_approved = costing.quotation_status == CostingHeader.QUOTATION_STATUS_APPROVED
     invoice = costing.invoices.select_related("order").order_by("-created_at", "-id").first()
     converted = bool(invoice)
+    reference_images = list(reference_images_for_opportunity(costing.opportunity))
     return {
         "costing": costing,
         "amounts": amounts,
         "invoice": invoice,
         "converted": converted,
+        "reference_images": reference_images,
+        "primary_reference_image": reference_images[0] if reference_images else None,
         "company": _quotation_company(),
         "terms": DEFAULT_QUOTATION_TERMS,
         "can_approve_quotation": _can_approve(user),
@@ -1472,11 +1476,14 @@ def quick_costing_detail(request, pk):
         and not getattr(quick_costing.opportunity, "is_archived", False)
         and _can_approve(request.user)
     )
+    reference_images = list(reference_images_for_opportunity(quick_costing.opportunity))
     context = {
         "quick_costing": quick_costing,
         "calc": calc,
         "invoice": invoice,
         "production_order": getattr(quick_costing, "production_order", None),
+        "reference_images": reference_images,
+        "primary_reference_image": reference_images[0] if reference_images else None,
         "latest_revision": latest_revision,
         "latest_approved_revision": latest_approved_revision,
         "is_latest_revision": quick_costing._is_latest_revision,
@@ -2106,10 +2113,13 @@ def quick_costing_client_quotation(request, pk):
         quotation=quick_costing,
         invoice=invoice,
     )
+    reference_images = list(reference_images_for_opportunity(quick_costing.opportunity))
     context = {
         "quick_costing": quick_costing,
         "calc": calc,
         "invoice": invoice,
+        "reference_images": reference_images,
+        "primary_reference_image": reference_images[0] if reference_images else None,
         "company": _quotation_company(),
         "prepared_by": _display_user(quick_costing.quoted_by or quick_costing.created_by),
         "approval_status_label": _quick_approval_status_label(quick_costing),
@@ -2699,10 +2709,13 @@ def cost_sheet_detail(request, pk):
         production_order=workflow["production_order"],
         lifecycle=workflow["lifecycle"],
     )
+    reference_images = list(reference_images_for_opportunity(costing.opportunity))
 
     context = {
         "costing": costing,
         "calc": calc,
+        "reference_images": reference_images,
+        "primary_reference_image": reference_images[0] if reference_images else None,
         "margin_tone": margin_tone,
         "form": form,
         "smv_form": smv_form,

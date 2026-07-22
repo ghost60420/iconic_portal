@@ -73,6 +73,7 @@ from .services.production_operational_status import (
     sync_operational_status,
 )
 from .services.product_reference_images import (
+    REFERENCE_IMAGE_SLOTS,
     attach_primary_reference_images_to_leads,
     attach_primary_reference_images_to_opportunities,
     attach_primary_reference_images_to_production_orders,
@@ -87,6 +88,8 @@ from .services.product_reference_images import (
     reference_images_for_opportunity,
     reference_images_for_production,
     save_reference_images_for_lead,
+    save_reference_images_for_opportunity,
+    validate_reference_image_payload,
 )
 from .services.workflow_visibility import build_workflow_visibility_context
 from .services.historical_dates import (
@@ -2272,7 +2275,15 @@ def add_lead(request):
                 return render(
                     request,
                     "crm/lead_form.html",
-                    {"form": form, "duplicate_leads": duplicates, "confirm_required": True},
+                    {
+                        "form": form,
+                        "duplicate_leads": duplicates,
+                        "confirm_required": True,
+                        "reference_image_slots": [
+                            {"slot": slot, "reference": None}
+                            for slot in REFERENCE_IMAGE_SLOTS
+                        ],
+                    },
                 )
 
             customer = _find_or_create_customer_for_lead(lead)
@@ -2319,16 +2330,28 @@ def add_lead(request):
     else:
         form = LeadForm()
 
-    return render(request, "crm/lead_form.html", {"form": form})
+    return render(
+        request,
+        "crm/lead_form.html",
+        {
+            "form": form,
+            "reference_image_slots": [
+                {"slot": slot, "reference": None}
+                for slot in REFERENCE_IMAGE_SLOTS
+            ],
+        },
+    )
 
 
 @require_POST
 def lead_reference_images_update(request, pk):
     lead = get_object_or_404(Lead, pk=pk)
+    reference_payload = reference_image_payload_from_request(request)
+    remove_requested = any(item.get("remove") for item in reference_payload)
     try:
         _saved_images, upload_count = save_reference_images_for_lead(
             lead,
-            reference_image_payload_from_request(request),
+            reference_payload,
             request.user,
         )
     except ValidationError as exc:
@@ -2344,7 +2367,10 @@ def lead_reference_images_update(request, pk):
         )
         messages.success(request, "Product reference images updated.")
     else:
-        messages.success(request, "Product reference captions updated.")
+        messages.success(
+            request,
+            "Product reference images removed." if remove_requested else "Product reference captions updated.",
+        )
     return redirect("lead_detail", pk=lead.pk)
 
 
@@ -3275,16 +3301,18 @@ def _customer_opportunity_context(customer, *, salesperson_options=None):
         )
 
     revenue_totals = defaultdict(lambda: {"amount": Decimal("0")})
+    open_opportunity_ids = set(
+        _active_opportunity_list_queryset(
+            _with_opportunity_production_flag(
+                Opportunity.objects.filter(pk__in=[opportunity.pk for opportunity in opportunities])
+            )
+        ).values_list("pk", flat=True)
+    )
     open_opportunities = []
     won_count = 0
     lost_count = 0
     for opportunity in opportunities:
-        is_active_open = (
-            opportunity.is_open
-            and not opportunity.is_archived
-            and opportunity.stage not in {"Closed Won", "Closed Lost", "Shipment Complete"}
-        )
-        if is_active_open:
+        if opportunity.pk in open_opportunity_ids:
             open_opportunities.append(opportunity)
         if opportunity.stage == "Closed Won":
             won_count += 1
@@ -3941,7 +3969,7 @@ def _lead_detail_impl(request, pk):
     reference_images_by_slot = {image.slot: image for image in reference_images}
     reference_image_slots = [
         {"slot": slot, "reference": reference_images_by_slot.get(slot)}
-        for slot in (1, 2, 3)
+        for slot in REFERENCE_IMAGE_SLOTS
     ]
     workflow_visibility = build_workflow_visibility_context(
         "lead",
@@ -5163,7 +5191,7 @@ def customer_detail(request, pk):
 
     opportunities = _with_opportunity_kpi_value(
         Opportunity.objects.filter(Q(customer=customer) | Q(lead__customer=customer))
-        .select_related("lead")
+        .select_related("lead", "customer", "assigned_to")
         .order_by("-updated_at", "-id")
         .distinct()
     )
@@ -5182,7 +5210,7 @@ def customer_detail(request, pk):
                 messages.success(request, "Note added.")
             return redirect("customer_detail", pk=pk)
 
-    active_opps = open_pipeline_queryset(opportunities)
+    active_opps = _active_opportunity_list_queryset(_with_opportunity_production_flag(opportunities))
 
     accounting_revenue_qs = (
         AccountingEntry.objects.exclude(main_type="TRANSFER")
@@ -8494,8 +8522,22 @@ def opportunity_edit(request, pk):
         or (getattr(opportunity.customer, "account_brand", "") if opportunity.customer_id else "")
         or "Not linked"
     )
+    reference_images = list(reference_images_for_opportunity(opportunity))
+    reference_images_by_slot = {image.slot: image for image in reference_images}
+    reference_image_slots = [
+        {"slot": slot, "reference": reference_images_by_slot.get(slot)}
+        for slot in REFERENCE_IMAGE_SLOTS
+    ]
 
     if request.method == "POST":
+        reference_payload = reference_image_payload_from_request(request)
+        if any(item.get("image") for item in reference_payload):
+            try:
+                validate_reference_image_payload(reference_payload)
+            except ValidationError as exc:
+                messages.error(request, "; ".join(exc.messages) if hasattr(exc, "messages") else str(exc))
+                return redirect("opportunity_edit", pk=pk)
+
         # very basic safe update
         product_type = request.POST.get("product_type") or opportunity.product_type
         product_category = request.POST.get("product_category") or opportunity.product_category
@@ -8554,6 +8596,12 @@ def opportunity_edit(request, pk):
         opportunity.notes = request.POST.get("notes") or opportunity.notes
 
         opportunity.save()
+        try:
+            save_reference_images_for_opportunity(opportunity, reference_payload, request.user)
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages) if hasattr(exc, "messages") else str(exc))
+            return redirect("opportunity_edit", pk=pk)
+
         messages.success(request, "Opportunity updated.")
         return redirect("opportunity_detail", pk=pk)
 
@@ -8570,6 +8618,7 @@ def opportunity_edit(request, pk):
             "currency_summary": _opportunity_currency_summary(opportunity),
             "bdt_per_piece": _opportunity_currency_summary(opportunity)["bdt_per_piece"],
             "can_edit_historical_dates": can_edit_historical_dates_flag,
+            "reference_image_slots": reference_image_slots,
         },
     )
 
@@ -12258,8 +12307,10 @@ def _active_opportunity_list_queryset(qs, production_flag="list_has_production")
         qs = _with_opportunity_production_flag(qs, production_flag)
     return (
         open_pipeline_queryset(qs)
+        .filter(Q(lead__isnull=False) | Q(customer__isnull=False))
         .filter(**{production_flag: False})
         .exclude(stage="Production")
+        .distinct()
     )
 
 
@@ -15783,6 +15834,8 @@ def add_opportunity(request):
         customer_id = request.POST.get("customer")
         lead_id = request.POST.get("lead")
         assigned_to_id = request.POST.get("assigned_to")
+        reference_payload = reference_image_payload_from_request(request)
+        reference_has_upload = any(item.get("image") for item in reference_payload)
 
         customer = None
         lead = None
@@ -15796,6 +15849,13 @@ def add_opportunity(request):
         if not lead and not customer:
             messages.error(request, "Please select a lead or a customer.")
             return redirect("add_opportunity")
+
+        if reference_has_upload:
+            try:
+                validate_reference_image_payload(reference_payload)
+            except ValidationError as exc:
+                messages.error(request, "; ".join(exc.messages) if hasattr(exc, "messages") else str(exc))
+                return redirect("add_opportunity")
 
         if lead:
             if lead.customer_id:
@@ -15868,10 +15928,22 @@ def add_opportunity(request):
             notes=(request.POST.get("notes") or "").strip(),
         )
         if lead:
+            if reference_has_upload:
+                save_reference_images_for_lead(
+                    lead,
+                    [item for item in reference_payload if item.get("image")],
+                    request.user,
+                )
+            link_reference_images_to_opportunity(lead, opp)
             lead.lead_status = "Converted"
             lead.save(update_fields=["lead_status"])
+        elif reference_has_upload:
+            save_reference_images_for_opportunity(opp, reference_payload, request.user)
 
-        messages.success(request, "Opportunity created.")
+        messages.success(
+            request,
+            "Opportunity created with reference images." if reference_has_upload else "Opportunity created.",
+        )
 
         _record_customer_event(
             customer=customer,
@@ -15906,6 +15978,10 @@ def add_opportunity(request):
         "selected_product_category": selected_product_category,
         "selected_notes": selected_notes,
         "can_edit_historical_dates": can_edit_historical_dates_flag,
+        "reference_image_slots": [
+            {"slot": slot, "reference": None}
+            for slot in REFERENCE_IMAGE_SLOTS
+        ],
     }
     return render(request, "crm/add_opportunity.html", context)
 
@@ -15980,7 +16056,7 @@ def opportunities_list(request):
         per_page = 50
 
     active_stages = _active_opportunity_stages()
-    qs = Opportunity.objects.select_related("lead", "lead__assigned_to")
+    qs = Opportunity.objects.select_related("lead", "lead__assigned_to", "customer", "assigned_to")
     qs = scope_sales_opportunities(qs, request.user)
     qs = _with_opportunity_production_flag(qs)
     qs = with_opportunity_reporting_date(qs)
@@ -16001,6 +16077,9 @@ def opportunities_list(request):
             | Q(lead__account_brand__icontains=q)
             | Q(lead__contact_name__icontains=q)
             | Q(lead__email__icontains=q)
+            | Q(customer__account_brand__icontains=q)
+            | Q(customer__contact_name__icontains=q)
+            | Q(customer__email__icontains=q)
         )
 
     if stage:

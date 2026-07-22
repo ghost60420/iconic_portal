@@ -853,6 +853,9 @@
 </style>
 
 <div class="quick-detail-page">
+  {% if reference_images %}
+    {% include "crm/partials/product_reference_images.html" %}
+  {% endif %}
   <section class="quick-detail-hero">
     <div>
       <p class="quick-eyebrow">Quick Costing</p>

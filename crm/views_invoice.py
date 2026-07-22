@@ -41,6 +41,7 @@ from .services.costing_currency import CurrencyConversionError, convert_currency
 from .services.costing_workflow import CostingWorkflowError, create_or_link_production_order_from_invoice, get_costing_quote_amounts
 from .services.order_lifecycle import build_lifecycle_profit_breakdown, create_lifecycle_from_invoice
 from .services.opportunity_payment_stage import sync_opportunity_stage_from_invoice
+from .services.product_reference_images import reference_images_for_opportunity, reference_images_for_production
 from .services.workflow_visibility import build_workflow_visibility_context
 from .services.historical_dates import (
     INVOICE_REPORTING_DATE_ALIAS,
@@ -1560,11 +1561,14 @@ def _invoice_client_context(inv: Invoice, user=None) -> dict:
     region = _invoice_region(inv)
     line_items = _invoice_line_items(inv)
     is_bd_sewing_charge_invoice = market == "bangladesh" and invoice_type == "sewing_charge"
+    reference_images = _invoice_reference_images(inv)
     inv = _sanitize_invoice_internal_fields(inv)
     return {
         "invoice": inv,
         "company": _invoice_company(region),
         "line_items": line_items,
+        "reference_images": reference_images,
+        "primary_reference_image": reference_images[0] if reference_images else None,
         "sewing_summary": _invoice_sewing_summary(line_items) if is_bd_sewing_charge_invoice else None,
         "payment_status": _invoice_payment_status(inv),
         "policy_text": _invoice_policy_text(inv),
@@ -1582,6 +1586,26 @@ def _invoice_client_context(inv: Invoice, user=None) -> dict:
         "is_bulk_invoice": invoice_type == "bulk",
         "is_bd_sewing_charge_invoice": is_bd_sewing_charge_invoice,
     }
+
+
+def _invoice_reference_images(inv: Invoice):
+    order = getattr(inv, "order", None)
+    if order:
+        images = list(reference_images_for_production(order))
+        if images:
+            return images
+
+    opportunity = getattr(inv, "opportunity", None)
+    if not opportunity and getattr(inv, "quick_costing", None):
+        opportunity = getattr(inv.quick_costing, "opportunity", None)
+    if not opportunity and getattr(inv, "costing_header", None):
+        opportunity = getattr(inv.costing_header, "opportunity", None)
+    if not opportunity and order:
+        opportunity = getattr(order, "opportunity", None)
+
+    if opportunity:
+        return list(reference_images_for_opportunity(opportunity))
+    return []
 
 
 def _invoice_client_template(inv: Invoice) -> str:
@@ -2441,8 +2465,13 @@ def invoice_view(request, pk):
     inv = get_object_or_404(
         Invoice.objects.select_related(
             "order",
+            "order__opportunity",
+            "order__lead",
             "customer",
+            "opportunity",
+            "opportunity__lead",
             "costing_header",
+            "costing_header__opportunity",
             "quick_costing",
             "quick_costing__opportunity",
             "quick_costing__opportunity__lead",
@@ -2478,6 +2507,7 @@ def invoice_view(request, pk):
         if getattr(inv, "quick_costing", None)
         else None
     )
+    reference_images = _invoice_reference_images(inv)
 
     initial = {
         "payment_date": timezone.localdate(),
@@ -2494,6 +2524,8 @@ def invoice_view(request, pk):
             "invoice": display_invoice,
             "payment_form": InvoicePaymentForm(invoice=inv, initial=initial),
             **payment_context,
+            "reference_images": reference_images,
+            "primary_reference_image": reference_images[0] if reference_images else None,
             "is_payment_month_closed": _is_accounting_month_closed(timezone.localdate(), _invoice_payment_side(inv)),
             "can_manage_invoice_costing": can_view_invoice_costing,
             "lifecycle": lifecycle,

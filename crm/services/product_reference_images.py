@@ -1,11 +1,19 @@
+import io
+import os
+
 from django.core.exceptions import ValidationError
+from django.core.files.base import ContentFile
 from django.db.models import Q
+from PIL import Image, ImageOps
 
 from crm.models import ProductReferenceImage
 
 
-MAX_REFERENCE_IMAGES = 3
-REFERENCE_IMAGE_SLOTS = (1, 2, 3)
+MAX_REFERENCE_IMAGES = 6
+REFERENCE_IMAGE_SLOTS = tuple(range(1, MAX_REFERENCE_IMAGES + 1))
+MAX_REFERENCE_IMAGE_UPLOAD_BYTES = 8 * 1024 * 1024
+MAX_REFERENCE_IMAGE_DIMENSION = 1800
+REFERENCE_IMAGE_ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 
 def _request_user(user):
@@ -20,6 +28,7 @@ def reference_image_payload_from_cleaned_data(cleaned_data):
             "slot": slot,
             "image": cleaned_data.get(f"reference_image_{slot}"),
             "caption": cleaned_data.get(f"reference_caption_{slot}", ""),
+            "remove": False,
         }
         for slot in REFERENCE_IMAGE_SLOTS
     ]
@@ -31,51 +40,167 @@ def reference_image_payload_from_request(request):
             "slot": slot,
             "image": request.FILES.get(f"reference_image_{slot}"),
             "caption": request.POST.get(f"reference_caption_{slot}", ""),
+            "remove": request.POST.get(f"reference_remove_{slot}") == "1",
         }
         for slot in REFERENCE_IMAGE_SLOTS
     ]
 
 
-def save_reference_images_for_lead(lead, payload, user=None):
+def _validate_slot(slot):
+    if slot not in REFERENCE_IMAGE_SLOTS:
+        raise ValidationError(f"Only {MAX_REFERENCE_IMAGES} product reference images are allowed.")
+
+
+def _validate_reference_image_file(image, slot):
+    if not image:
+        return
+
+    extension = os.path.splitext(image.name or "")[1].lower()
+    if extension not in ProductReferenceImage.ALLOWED_EXTENSIONS:
+        raise ValidationError(f"Image {slot}: upload a JPG, PNG, or WEBP image.")
+
+    content_type = (getattr(image, "content_type", "") or "").lower()
+    if content_type and content_type not in REFERENCE_IMAGE_ALLOWED_CONTENT_TYPES:
+        raise ValidationError(f"Image {slot}: upload a JPG, PNG, or WEBP image.")
+
+    size = getattr(image, "size", 0) or 0
+    if size > MAX_REFERENCE_IMAGE_UPLOAD_BYTES:
+        limit_mb = MAX_REFERENCE_IMAGE_UPLOAD_BYTES // (1024 * 1024)
+        raise ValidationError(f"Image {slot}: file size must be {limit_mb}MB or smaller.")
+
+    try:
+        image.seek(0)
+        with Image.open(image) as img:
+            img.verify()
+    except Exception as exc:
+        raise ValidationError(f"Image {slot}: upload a valid image file.") from exc
+    finally:
+        try:
+            image.seek(0)
+        except Exception:
+            pass
+
+
+def validate_reference_image_payload(payload):
+    for item in payload:
+        slot = int(item.get("slot") or 0)
+        _validate_slot(slot)
+        _validate_reference_image_file(item.get("image"), slot)
+
+
+def _prepared_reference_image(image, slot):
+    _validate_reference_image_file(image, slot)
+
+    extension = os.path.splitext(image.name or "")[1].lower()
+    output_format = "JPEG"
+    output_extension = ".jpg"
+    if extension == ".png":
+        output_format = "PNG"
+        output_extension = ".png"
+    elif extension == ".webp":
+        output_format = "WEBP"
+        output_extension = ".webp"
+
+    image.seek(0)
+    with Image.open(image) as img:
+        img = ImageOps.exif_transpose(img)
+        if max(img.size) > MAX_REFERENCE_IMAGE_DIMENSION:
+            img.thumbnail(
+                (MAX_REFERENCE_IMAGE_DIMENSION, MAX_REFERENCE_IMAGE_DIMENSION),
+                Image.Resampling.LANCZOS,
+            )
+
+        if output_format in {"JPEG", "WEBP"} and img.mode not in {"RGB", "L"}:
+            img = img.convert("RGB")
+
+        buffer = io.BytesIO()
+        save_kwargs = {"optimize": True}
+        if output_format in {"JPEG", "WEBP"}:
+            save_kwargs["quality"] = 82
+        img.save(buffer, format=output_format, **save_kwargs)
+
+    base_name = os.path.splitext(os.path.basename(image.name or f"reference_{slot}"))[0]
+    safe_base = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in base_name).strip("_")
+    safe_base = safe_base or f"reference_{slot}"
+    return ContentFile(buffer.getvalue(), name=f"{safe_base}{output_extension}")
+
+
+def _owner_filter(owner_field, owner):
+    return {owner_field: owner}
+
+
+def _save_reference_images(owner_field, owner, payload, user=None, *, extra_fields=None):
     saved_images = []
     upload_count = 0
+    remove_count = 0
     acting_user = _request_user(user)
+    extra_fields = extra_fields or {}
 
     for item in payload:
         slot = int(item.get("slot") or 0)
-        if slot not in REFERENCE_IMAGE_SLOTS:
-            raise ValidationError("Only three product reference images are allowed.")
+        _validate_slot(slot)
 
         image = item.get("image")
         caption = (item.get("caption") or "").strip()
-        existing = ProductReferenceImage.objects.filter(lead=lead, slot=slot).first()
+        remove = bool(item.get("remove"))
+        existing = ProductReferenceImage.objects.filter(slot=slot, **_owner_filter(owner_field, owner)).first()
+
+        if remove:
+            if existing:
+                if existing.image:
+                    existing.image.delete(save=False)
+                existing.delete()
+                remove_count += 1
+            continue
 
         if image:
+            prepared_image = _prepared_reference_image(image, slot)
             upload_count += 1
-            existing_opportunity = getattr(existing, "opportunity", None)
-            existing_production_order = getattr(existing, "production_order", None)
             if existing and existing.image:
                 existing.image.delete(save=False)
-                existing.delete()
 
-            reference_image = ProductReferenceImage.objects.create(
-                lead=lead,
-                opportunity=existing_opportunity,
-                production_order=existing_production_order,
-                slot=slot,
-                image=image,
-                caption=caption,
-                uploaded_by=acting_user,
-            )
-            saved_images.append(reference_image)
+            if existing:
+                existing.image = prepared_image
+                existing.caption = caption
+                existing.uploaded_by = acting_user
+                for field, value in extra_fields.items():
+                    setattr(existing, field, value)
+                existing.save()
+                saved_images.append(existing)
+            else:
+                reference_image = ProductReferenceImage.objects.create(
+                    slot=slot,
+                    image=prepared_image,
+                    caption=caption,
+                    uploaded_by=acting_user,
+                    **{owner_field: owner},
+                    **extra_fields,
+                )
+                saved_images.append(reference_image)
         elif existing and caption != existing.caption:
             existing.caption = caption
             existing.save(update_fields=["caption"])
             saved_images.append(existing)
 
-    if ProductReferenceImage.objects.filter(lead=lead).count() > MAX_REFERENCE_IMAGES:
-        raise ValidationError("Only three product reference images are allowed.")
+    if ProductReferenceImage.objects.filter(**_owner_filter(owner_field, owner)).count() > MAX_REFERENCE_IMAGES:
+        raise ValidationError(f"Only {MAX_REFERENCE_IMAGES} product reference images are allowed.")
 
+    return saved_images, upload_count, remove_count
+
+
+def save_reference_images_for_lead(lead, payload, user=None):
+    saved_images, upload_count, _remove_count = _save_reference_images("lead", lead, payload, user=user)
+    return saved_images, upload_count
+
+
+def save_reference_images_for_opportunity(opportunity, payload, user=None):
+    saved_images, upload_count, _remove_count = _save_reference_images(
+        "opportunity",
+        opportunity,
+        payload,
+        user=user,
+        extra_fields={"lead": getattr(opportunity, "lead", None)},
+    )
     return saved_images, upload_count
 
 

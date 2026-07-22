@@ -325,6 +325,9 @@
 <link rel="stylesheet" href="{% static 'crm/costing_detail.css' %}?v=costing-detail-modern-20260506">
 
 <div class="costing-detail">
+  {% if reference_images %}
+    {% include "crm/partials/product_reference_images.html" %}
+  {% endif %}
   <section class="costing-detail-hero">
     <div class="costing-hero-copy">
       <p class="costing-eyebrow">Pricing workspace</p>

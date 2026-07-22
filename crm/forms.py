@@ -102,6 +102,39 @@ class LeadForm(forms.ModelForm):
         max_length=160,
         widget=forms.TextInput(attrs={"placeholder": "Style 3 Sweatpant"}),
     )
+    reference_image_4 = forms.ImageField(
+        required=False,
+        label="Image 4",
+        widget=forms.ClearableFileInput(attrs={"accept": ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"}),
+    )
+    reference_caption_4 = forms.CharField(
+        required=False,
+        label="Caption / style name 4",
+        max_length=160,
+        widget=forms.TextInput(attrs={"placeholder": "Style 4"}),
+    )
+    reference_image_5 = forms.ImageField(
+        required=False,
+        label="Image 5",
+        widget=forms.ClearableFileInput(attrs={"accept": ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"}),
+    )
+    reference_caption_5 = forms.CharField(
+        required=False,
+        label="Caption / style name 5",
+        max_length=160,
+        widget=forms.TextInput(attrs={"placeholder": "Style 5"}),
+    )
+    reference_image_6 = forms.ImageField(
+        required=False,
+        label="Image 6",
+        widget=forms.ClearableFileInput(attrs={"accept": ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"}),
+    )
+    reference_caption_6 = forms.CharField(
+        required=False,
+        label="Caption / style name 6",
+        max_length=160,
+        widget=forms.TextInput(attrs={"placeholder": "Style 6"}),
+    )
 
     class Meta:
         model = Lead
@@ -218,6 +251,8 @@ class LeadForm(forms.ModelForm):
         extension = "." + image.name.rsplit(".", 1)[-1].lower() if "." in image.name else ""
         if extension not in ProductReferenceImage.ALLOWED_EXTENSIONS:
             raise ValidationError("Upload a JPG, PNG, or WEBP image.")
+        if getattr(image, "size", 0) and image.size > ProductReferenceImage.MAX_UPLOAD_SIZE_BYTES:
+            raise ValidationError("Reference image file size must be 8MB or smaller.")
         return image
 
     def clean_reference_image_1(self):
@@ -228,6 +263,15 @@ class LeadForm(forms.ModelForm):
 
     def clean_reference_image_3(self):
         return self._clean_reference_image("reference_image_3")
+
+    def clean_reference_image_4(self):
+        return self._clean_reference_image("reference_image_4")
+
+    def clean_reference_image_5(self):
+        return self._clean_reference_image("reference_image_5")
+
+    def clean_reference_image_6(self):
+        return self._clean_reference_image("reference_image_6")
 
 
 # --------------------------------------------------

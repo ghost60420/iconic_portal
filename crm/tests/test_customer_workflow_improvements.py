@@ -1,3 +1,4 @@
+import io
 import shutil
 import tempfile
 from decimal import Decimal
@@ -8,6 +9,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
+from PIL import Image
 
 from crm.models import (
     CostingHeader,
@@ -88,7 +90,12 @@ class CustomerWorkflowImprovementTests(TestCase):
         )
 
     def _image(self, name="snapshot.jpg"):
-        return SimpleUploadedFile(name, b"reference-image", content_type="image/jpeg")
+        ext = name.rsplit(".", 1)[-1].lower() if "." in name else "jpg"
+        image_format = {"jpg": "JPEG", "jpeg": "JPEG", "png": "PNG", "webp": "WEBP"}.get(ext, "JPEG")
+        content_type = {"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp"}[image_format]
+        buffer = io.BytesIO()
+        Image.new("RGB", (12, 12), color=(14, 165, 233)).save(buffer, format=image_format)
+        return SimpleUploadedFile(name, buffer.getvalue(), content_type=content_type)
 
     def _lead_opportunity(self):
         lead = Lead.objects.create(
@@ -325,6 +332,7 @@ class CustomerWorkflowImprovementTests(TestCase):
                 "product_type": "Activewear",
                 "product_category": "Basketball Jersey",
                 "moq_units": "500",
+                "order_currency": "CAD",
                 "notes": "Customer repeat project.",
             },
         )
@@ -336,8 +344,48 @@ class CustomerWorkflowImprovementTests(TestCase):
         self.assertEqual(opportunity.customer, self.customer)
         self.assertEqual(opportunity.assigned_to, self.salesperson)
         self.assertIn("Customer repeat project.", opportunity.notes)
-        self.assertEqual(self.client.get(reverse("customer_detail", args=[self.customer.pk])).status_code, 200)
-        self.assertEqual(self.client.get(reverse("opportunity_detail", args=[opportunity.pk])).status_code, 200)
+        self.assertEqual(ProductReferenceImage.objects.filter(opportunity=opportunity).count(), 0)
+
+        customer_response = self.client.get(reverse("customer_detail", args=[self.customer.pk]))
+        self.assertEqual(customer_response.status_code, 200)
+        self.assertContains(customer_response, opportunity.opportunity_id)
+
+        detail_response = self.client.get(reverse("opportunity_detail", args=[opportunity.pk]))
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertContains(detail_response, "Basketball Jersey")
+
+        list_response = self.client.get(reverse("opportunities_list"))
+        self.assertEqual(list_response.status_code, 200)
+        self.assertContains(list_response, opportunity.opportunity_id)
+
+    def test_create_customer_opportunity_with_six_reference_images(self):
+        self.client.force_login(self.sales)
+        payload = {
+            "customer": self.customer.pk,
+            "assigned_to": self.salesperson.pk,
+            "stage": "Prospecting",
+            "product_type": "Activewear",
+            "product_category": "Basketball Jersey",
+            "moq_units": "600",
+            "order_currency": "CAD",
+            "notes": "Six image project.",
+        }
+        for slot in range(1, 7):
+            payload[f"reference_image_{slot}"] = self._image(f"customer-{slot}.jpg")
+            payload[f"reference_caption_{slot}"] = f"Customer Style {slot}"
+
+        response = self.client.post(reverse("add_opportunity"), payload)
+        self.assertEqual(response.status_code, 302)
+        opportunity = Opportunity.objects.latest("id")
+
+        images = list(ProductReferenceImage.objects.filter(opportunity=opportunity).order_by("slot"))
+        self.assertEqual(len(images), 6)
+        self.assertEqual([image.caption for image in images], [f"Customer Style {slot}" for slot in range(1, 7)])
+        self.assertTrue(all(image.lead_id is None for image in images))
+
+        self.assertContains(self.client.get(reverse("opportunity_detail", args=[opportunity.pk])), "Customer Style 6")
+        self.assertContains(self.client.get(reverse("customer_detail", args=[self.customer.pk])), opportunity.opportunity_id)
+        self.assertContains(self.client.get(reverse("opportunities_list")), opportunity.opportunity_id)
 
     def test_customer_opportunity_form_warns_about_active_opportunities(self):
         _lead, existing = self._lead_opportunity()

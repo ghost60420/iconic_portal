@@ -687,11 +687,15 @@ class Lead(models.Model):
 
 class ProductReferenceImage(models.Model):
     ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+    MAX_IMAGES_PER_PROJECT = 6
+    MAX_UPLOAD_SIZE_BYTES = 8 * 1024 * 1024
 
     lead = models.ForeignKey(
         Lead,
         related_name="product_reference_images",
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
     )
     opportunity = models.ForeignKey(
         "Opportunity",
@@ -723,6 +727,11 @@ class ProductReferenceImage(models.Model):
         ordering = ["slot", "uploaded_at", "id"]
         constraints = [
             models.UniqueConstraint(fields=["lead", "slot"], name="uniq_product_reference_image_lead_slot"),
+            models.UniqueConstraint(
+                fields=["opportunity", "slot"],
+                condition=models.Q(opportunity__isnull=False),
+                name="uniq_product_reference_image_opportunity_slot",
+            ),
         ]
         indexes = [
             models.Index(fields=["lead", "slot"]),
@@ -732,21 +741,30 @@ class ProductReferenceImage(models.Model):
 
     def clean(self):
         super().clean()
-        if self.slot not in (1, 2, 3):
-            raise ValidationError({"slot": "Only three product reference images are allowed."})
+        if self.slot not in range(1, self.MAX_IMAGES_PER_PROJECT + 1):
+            raise ValidationError({"slot": "Only six product reference images are allowed."})
+
+        if not (self.lead_id or self.opportunity_id or self.production_order_id):
+            raise ValidationError("Reference image must be linked to a lead, opportunity, or production order.")
 
         if self.image:
             extension = os.path.splitext(self.image.name or "")[1].lower()
             if extension not in self.ALLOWED_EXTENSIONS:
                 raise ValidationError({"image": "Upload a JPG, PNG, or WEBP image."})
+            if getattr(self.image, "size", 0) and self.image.size > self.MAX_UPLOAD_SIZE_BYTES:
+                raise ValidationError({"image": "Reference image file size must be 8MB or smaller."})
 
-        if self.opportunity_id and self.lead_id and self.opportunity.lead_id != self.lead_id:
+        if self.opportunity_id and self.lead_id and self.opportunity.lead_id and self.opportunity.lead_id != self.lead_id:
             raise ValidationError({"opportunity": "Reference image opportunity must belong to the same lead."})
 
         if self.production_order_id and self.lead_id:
             order_lead_id = getattr(self.production_order, "lead_id", None)
             if order_lead_id and order_lead_id != self.lead_id:
                 raise ValidationError({"production_order": "Reference image production order must belong to the same lead."})
+        if self.production_order_id and self.opportunity_id:
+            order_opportunity_id = getattr(self.production_order, "opportunity_id", None)
+            if order_opportunity_id and order_opportunity_id != self.opportunity_id:
+                raise ValidationError({"production_order": "Reference image production order must belong to the same opportunity."})
 
     def save(self, *args, **kwargs):
         self.full_clean()
@@ -754,7 +772,8 @@ class ProductReferenceImage(models.Model):
 
     def __str__(self):
         label = self.caption or f"Reference image {self.slot}"
-        return f"{label} for {self.lead}"
+        owner = self.lead or self.opportunity or self.production_order or "Unlinked project"
+        return f"{label} for {owner}"
 
 
 # ----------------------------

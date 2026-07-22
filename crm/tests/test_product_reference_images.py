@@ -1,3 +1,4 @@
+import io
 import shutil
 import tempfile
 
@@ -6,8 +7,9 @@ from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from PIL import Image
 
-from crm.models import Lead, Opportunity, ProductReferenceImage, ProductionOrder
+from crm.models import Customer, Lead, Opportunity, ProductReferenceImage, ProductionOrder
 from crm.services.product_reference_images import (
     link_reference_images_to_opportunity,
     link_reference_images_to_production,
@@ -16,6 +18,7 @@ from crm.services.product_reference_images import (
     reference_images_for_opportunity,
     reference_images_for_production,
     save_reference_images_for_lead,
+    save_reference_images_for_opportunity,
 )
 
 
@@ -30,7 +33,12 @@ class ProductReferenceImageTests(TestCase):
         shutil.rmtree(MEDIA_ROOT, ignore_errors=True)
 
     def _image(self, name):
-        return SimpleUploadedFile(name, b"reference-image", content_type="image/jpeg")
+        ext = name.rsplit(".", 1)[-1].lower() if "." in name else "jpg"
+        image_format = {"jpg": "JPEG", "jpeg": "JPEG", "png": "PNG", "webp": "WEBP"}.get(ext, "JPEG")
+        content_type = {"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp"}[image_format]
+        buffer = io.BytesIO()
+        Image.new("RGB", (12, 12), color=(38, 99, 235)).save(buffer, format=image_format)
+        return SimpleUploadedFile(name, buffer.getvalue(), content_type=content_type)
 
     def _lead(self, **overrides):
         values = {
@@ -124,6 +132,121 @@ class ProductReferenceImageTests(TestCase):
         link_reference_images_to_production(opportunity=opportunity, production_order=production)
         self.assertEqual(len(reference_images_for_production(production)), 3)
 
+    def test_six_reference_images_are_allowed_and_seventh_is_blocked(self):
+        lead = self._lead()
+        save_reference_images_for_lead(
+            lead,
+            [
+                {"slot": slot, "image": self._image(f"style-{slot}.jpg"), "caption": f"Style {slot}"}
+                for slot in range(1, 7)
+            ],
+        )
+
+        self.assertEqual(ProductReferenceImage.objects.filter(lead=lead).count(), 6)
+        self.assertEqual(len(reference_images_for_lead := list(lead.product_reference_images.order_by("slot"))), 6)
+        self.assertEqual(reference_images_for_lead[-1].caption, "Style 6")
+
+        with self.assertRaises(ValidationError):
+            ProductReferenceImage.objects.create(
+                lead=lead,
+                slot=7,
+                image=self._image("style-7.jpg"),
+            )
+
+    def test_replace_image_four_only_and_remove_image_five_only(self):
+        lead = self._lead()
+        save_reference_images_for_lead(
+            lead,
+            [
+                {"slot": slot, "image": self._image(f"before-{slot}.jpg"), "caption": f"Before {slot}"}
+                for slot in range(1, 7)
+            ],
+        )
+        before = {image.slot: (image.pk, image.image.name, image.caption) for image in ProductReferenceImage.objects.filter(lead=lead)}
+
+        save_reference_images_for_lead(
+            lead,
+            [{"slot": 4, "image": self._image("after-4.jpg"), "caption": "After 4"}],
+        )
+        after_replace = {image.slot: (image.pk, image.image.name, image.caption) for image in ProductReferenceImage.objects.filter(lead=lead)}
+
+        self.assertEqual(after_replace[1], before[1])
+        self.assertEqual(after_replace[2], before[2])
+        self.assertEqual(after_replace[3], before[3])
+        self.assertEqual(after_replace[5], before[5])
+        self.assertEqual(after_replace[6], before[6])
+        self.assertEqual(after_replace[4][0], before[4][0])
+        self.assertIn("after-4", after_replace[4][1])
+        self.assertEqual(after_replace[4][2], "After 4")
+
+        save_reference_images_for_lead(
+            lead,
+            [{"slot": 5, "image": None, "caption": "", "remove": True}],
+        )
+
+        self.assertFalse(ProductReferenceImage.objects.filter(lead=lead, slot=5).exists())
+        self.assertEqual(ProductReferenceImage.objects.filter(lead=lead).count(), 5)
+        self.assertTrue(ProductReferenceImage.objects.filter(lead=lead, slot=4).exists())
+
+    def test_invalid_type_and_large_file_are_blocked(self):
+        lead = self._lead()
+        with self.assertRaises(ValidationError):
+            save_reference_images_for_lead(
+                lead,
+                [{"slot": 1, "image": SimpleUploadedFile("bad.gif", b"bad", content_type="image/gif"), "caption": ""}],
+            )
+
+        with self.assertRaises(ValidationError):
+            save_reference_images_for_lead(
+                lead,
+                [
+                    {
+                        "slot": 1,
+                        "image": SimpleUploadedFile(
+                            "large.jpg",
+                            b"0" * (ProductReferenceImage.MAX_UPLOAD_SIZE_BYTES + 1),
+                            content_type="image/jpeg",
+                        ),
+                        "caption": "",
+                    }
+                ],
+            )
+
+        self.assertEqual(ProductReferenceImage.objects.filter(lead=lead).count(), 0)
+
+    def test_opportunity_only_reference_images_flow_to_production_without_duplicates(self):
+        customer = Customer.objects.create(account_brand="Direct Customer", contact_name="Buyer")
+        opportunity = Opportunity.objects.create(
+            lead=None,
+            customer=customer,
+            stage="Prospecting",
+            product_category="Hoodie",
+            product_type="Streetwear",
+            moq_units=300,
+        )
+        save_reference_images_for_opportunity(
+            opportunity,
+            [
+                {"slot": slot, "image": self._image(f"direct-{slot}.jpg"), "caption": f"Direct {slot}"}
+                for slot in range(1, 7)
+            ],
+        )
+        before_ids = list(ProductReferenceImage.objects.filter(opportunity=opportunity).order_by("slot").values_list("id", flat=True))
+
+        production = ProductionOrder.objects.create(
+            title="Direct production",
+            order_code="PO-DIRECT-REF",
+            customer=customer,
+            opportunity=opportunity,
+            qty_total=300,
+        )
+        link_reference_images_to_production(opportunity=opportunity, production_order=production)
+        after_ids = [image.id for image in reference_images_for_production(production)]
+
+        self.assertEqual(after_ids, before_ids)
+        self.assertEqual(ProductReferenceImage.objects.count(), 6)
+        self.assertEqual(ProductReferenceImage.objects.filter(production_order=production).count(), 6)
+
     def test_opportunity_snapshot_appears_on_opportunity_detail(self):
         user = get_user_model().objects.create_superuser("snapshot-admin", "snapshot@example.com", "pass")
         lead = self._lead()
@@ -140,6 +263,101 @@ class ProductReferenceImageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Opportunity Snapshot")
         self.assertContains(response, "opportunity-detail")
+
+    def test_opportunity_edit_shows_existing_six_image_controls(self):
+        user = get_user_model().objects.create_superuser("opportunity-edit-admin", "opp-edit@example.com", "pass")
+        customer = Customer.objects.create(account_brand="Edit Customer", contact_name="Buyer")
+        opportunity = Opportunity.objects.create(
+            customer=customer,
+            stage="Proposal",
+            product_category="Hoodie",
+            product_type="Streetwear",
+            moq_units=300,
+        )
+        save_reference_images_for_opportunity(
+            opportunity,
+            [
+                {"slot": slot, "image": self._image(f"edit-existing-{slot}.jpg"), "caption": f"Edit Style {slot}"}
+                for slot in range(1, 7)
+            ],
+        )
+
+        self.client.force_login(user)
+        response = self.client.get(reverse("opportunity_edit", args=[opportunity.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'enctype="multipart/form-data"')
+        for slot in range(1, 7):
+            self.assertContains(response, f'reference_image_{slot}')
+            self.assertContains(response, f'reference_caption_{slot}')
+            self.assertContains(response, f'reference_remove_{slot}')
+            self.assertContains(response, f"Edit Style {slot}")
+            self.assertContains(response, f"edit-existing-{slot}")
+
+    def test_opportunity_edit_replaces_slot_four_and_removes_slot_five_only(self):
+        user = get_user_model().objects.create_superuser("opportunity-edit-save-admin", "opp-edit-save@example.com", "pass")
+        customer = Customer.objects.create(account_brand="Edit Save Customer", contact_name="Buyer")
+        opportunity = Opportunity.objects.create(
+            customer=customer,
+            stage="Proposal",
+            product_category="Hoodie",
+            product_type="Streetwear",
+            moq_units=300,
+            order_currency="CAD",
+            order_value_usd="7500.00",
+            fx_rate_bdt_per_usd="85.0000",
+            notes="Before image edit",
+        )
+        save_reference_images_for_opportunity(
+            opportunity,
+            [
+                {"slot": slot, "image": self._image(f"before-edit-{slot}.jpg"), "caption": f"Before Edit {slot}"}
+                for slot in range(1, 7)
+            ],
+        )
+        before = {
+            image.slot: (image.pk, image.image.name, image.caption)
+            for image in ProductReferenceImage.objects.filter(opportunity=opportunity)
+        }
+
+        self.client.force_login(user)
+        response = self.client.post(
+            reverse("opportunity_edit", args=[opportunity.pk]),
+            {
+                "product_type": "Streetwear",
+                "product_category": "Hoodie",
+                "moq_units": "300",
+                "order_currency": "CAD",
+                "order_value_usd": "7500.00",
+                "fx_rate_bdt_per_usd": "85.0000",
+                "notes": "After image edit",
+                "reference_caption_1": "Before Edit 1",
+                "reference_caption_2": "Before Edit 2",
+                "reference_caption_3": "Before Edit 3",
+                "reference_caption_4": "After Edit 4",
+                "reference_caption_5": "Before Edit 5",
+                "reference_caption_6": "Before Edit 6",
+                "reference_image_4": self._image("after-edit-4.jpg"),
+                "reference_remove_5": "1",
+            },
+        )
+
+        self.assertRedirects(response, reverse("opportunity_detail", args=[opportunity.pk]))
+        after = {
+            image.slot: (image.pk, image.image.name, image.caption)
+            for image in ProductReferenceImage.objects.filter(opportunity=opportunity)
+        }
+
+        self.assertEqual(after[1], before[1])
+        self.assertEqual(after[2], before[2])
+        self.assertEqual(after[3], before[3])
+        self.assertEqual(after[6], before[6])
+        self.assertNotIn(5, after)
+        self.assertEqual(after[4][0], before[4][0])
+        self.assertIn("after-edit-4", after[4][1])
+        self.assertEqual(after[4][2], "After Edit 4")
+        opportunity.refresh_from_db()
+        self.assertEqual(opportunity.notes, "After image edit")
 
     def test_production_without_own_snapshot_uses_linked_opportunity_snapshot(self):
         lead = self._lead()
@@ -308,12 +526,18 @@ class ProductReferenceImageTests(TestCase):
         self.assertContains(response, "Using Opportunity snapshot")
         self.assertContains(response, "production-detail-fallback")
 
-    def test_more_than_three_reference_image_slots_are_blocked(self):
+    def test_more_than_six_reference_image_slots_are_blocked(self):
         lead = Lead.objects.create(account_brand="Slot Test", lead_type="outbound")
+        ProductReferenceImage.objects.create(
+            lead=lead,
+            slot=6,
+            image=self._image("slot-six.jpg"),
+            caption="Slot six",
+        )
         with self.assertRaises(ValidationError):
             ProductReferenceImage.objects.create(
                 lead=lead,
-                slot=4,
+                slot=7,
                 image=self._image("extra.jpg"),
                 caption="Extra",
             )

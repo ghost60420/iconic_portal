@@ -458,25 +458,10 @@
 
   <section class="section" aria-label="Update Product Reference Images">
     <h2 class="section-title">Add or Replace Reference Images</h2>
-    <p class="small">Upload up to 3 JPG, PNG, or WEBP images. Existing slots are replaced only when a new file is selected.</p>
+    <p class="small">Upload up to six JPG, PNG, or WEBP images. Existing slots are replaced only when a new file is selected.</p>
     <form method="post" action="{% url 'lead_reference_images_update' lead.pk %}" enctype="multipart/form-data">
       {% csrf_token %}
-      <div class="summary-grid">
-        {% for slot_info in reference_image_slots %}
-          <div class="summary-card">
-            <div class="summary-title">Image {{ slot_info.slot }}</div>
-            {% if slot_info.reference %}
-              <div class="summary-sub">Current: {{ slot_info.reference.caption|default:"Reference image" }}</div>
-            {% else %}
-              <div class="summary-sub">Current: empty</div>
-            {% endif %}
-            <label for="reference_image_{{ slot_info.slot }}">Upload image</label>
-            <input id="reference_image_{{ slot_info.slot }}" type="file" name="reference_image_{{ slot_info.slot }}" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">
-            <label for="reference_caption_{{ slot_info.slot }}">Caption / style name</label>
-            <input id="reference_caption_{{ slot_info.slot }}" type="text" name="reference_caption_{{ slot_info.slot }}" maxlength="160" value="{{ slot_info.reference.caption|default:'' }}" placeholder="Style {{ slot_info.slot }}">
-          </div>
-        {% endfor %}
-      </div>
+      {% include "crm/partials/reference_image_upload_grid.html" with reference_upload_title="Product Reference Images" reference_upload_help="Upload up to six optional JPG, PNG, or WEBP references. Each image can be replaced or removed independently." allow_reference_remove=True %}
       <div style="margin-top:12px;">
         <button type="submit">Save Reference Images</button>
       </div>

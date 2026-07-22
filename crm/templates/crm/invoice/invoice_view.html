@@ -441,6 +441,9 @@
 {% with cur=invoice.currency|default:"USD" invno=invoice.invoice_number|default:"" %}
 <div class="container-fluid crm-modern-bridge crm-invoice-bridge" data-crm-density="compact">
   <div class="wrap">
+    {% if reference_images %}
+      {% include "crm/partials/product_reference_images.html" %}
+    {% endif %}
 
     <div class="printHeader">
       <div style="font-size:18px; font-weight:900;">Invoice</div>

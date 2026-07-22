@@ -281,7 +281,7 @@
     </div>
   </section>
 
-  <form method="post" class="opp-edit-shell">
+  <form method="post" class="opp-edit-shell" enctype="multipart/form-data">
     {% csrf_token %}
 
     <div class="opp-edit-main">
@@ -356,6 +356,16 @@
               <div class="opp-edit-help">Used for historical opportunity reports; created date stays unchanged.</div>
             </div>
           {% endif %}
+        </div>
+      </section>
+
+      <section class="opp-edit-card">
+        <div class="opp-edit-card-header">
+          <h2>Product Reference Images</h2>
+          <p>Replace, caption, or remove the six shared project images without changing untouched slots.</p>
+        </div>
+        <div class="opp-edit-card-body">
+          {% include "crm/partials/reference_image_upload_grid.html" with reference_upload_title="Product Reference Images" reference_upload_help="Upload replacements or edit captions for up to six JPG, PNG, or WEBP references. Existing images remain unless changed or removed." allow_reference_remove=True %}
         </div>
       </section>
     </div>

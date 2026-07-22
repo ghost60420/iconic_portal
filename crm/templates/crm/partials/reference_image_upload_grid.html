@@ -1,0 +1,185 @@
+<section class="crm-ref-upload-panel" aria-label="Reference image uploads">
+  <style>
+    .crm-ref-upload-panel {
+      margin-top: 16px;
+      padding: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 12px;
+      background: rgba(2, 6, 23, 0.42);
+    }
+    .crm-ref-upload-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .crm-ref-upload-head h2 {
+      margin: 0;
+      color: #f8fafc;
+      font-size: 16px;
+      font-weight: 900;
+    }
+    .crm-ref-upload-head p {
+      margin: 4px 0 0;
+      color: #94a3b8;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .crm-ref-upload-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .crm-ref-upload-card {
+      min-width: 0;
+      padding: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.72);
+    }
+    .crm-ref-upload-preview {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      overflow: hidden;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 8px;
+      background: #020617;
+      color: #64748b;
+      font-size: 12px;
+      font-weight: 900;
+      text-decoration: none;
+    }
+    .crm-ref-upload-preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .crm-ref-upload-card label {
+      display: block;
+      margin-top: 9px;
+      margin-bottom: 5px;
+      color: #dbeafe;
+      font-size: 11px;
+      font-weight: 900;
+    }
+    .crm-ref-upload-card input[type="file"],
+    .crm-ref-upload-card input[type="text"] {
+      width: 100%;
+      min-height: 38px;
+      padding: 8px 9px;
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      border-radius: 8px;
+      background: rgba(2, 6, 23, 0.84);
+      color: #f8fafc;
+      font-size: 12px;
+      box-sizing: border-box;
+    }
+    .crm-ref-upload-remove {
+      display: inline-flex !important;
+      align-items: center;
+      gap: 7px;
+      margin-top: 9px !important;
+      color: #fecaca !important;
+      font-size: 11px !important;
+      font-weight: 900 !important;
+    }
+    .crm-ref-upload-remove input {
+      width: auto !important;
+      min-height: auto !important;
+      margin: 0 !important;
+    }
+    .crm-ref-upload-rules {
+      display: block;
+      margin-top: 8px;
+      color: #94a3b8;
+      font-size: 10px;
+      line-height: 1.35;
+    }
+    @media (max-width: 900px) {
+      .crm-ref-upload-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    @media (max-width: 560px) {
+      .crm-ref-upload-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+
+  <div class="crm-ref-upload-head">
+    <div>
+      <h2>{{ reference_upload_title|default:"Product Reference Images" }}</h2>
+      <p>{{ reference_upload_help|default:"Upload 1 to 6 optional JPG, PNG, or WEBP references. Each image can have its own caption or style name." }}</p>
+    </div>
+  </div>
+
+  <div class="crm-ref-upload-grid">
+    {% for slot_info in reference_image_slots %}
+      <article class="crm-ref-upload-card">
+        {% if slot_info.reference and slot_info.reference.image %}
+          <a class="crm-ref-upload-preview" href="{{ slot_info.reference.image.url }}" target="_blank" rel="noopener" aria-label="Open reference image {{ slot_info.slot }}">
+            <img src="{{ slot_info.reference.image.url }}" alt="{{ slot_info.reference.caption|default:'Product reference image' }}">
+          </a>
+        {% else %}
+          <div class="crm-ref-upload-preview">Image {{ slot_info.slot }}</div>
+        {% endif %}
+
+        <label for="reference_image_{{ slot_info.slot }}">{% if slot_info.reference %}Upload replacement{% else %}Upload image{% endif %}</label>
+        <input id="reference_image_{{ slot_info.slot }}" type="file" name="reference_image_{{ slot_info.slot }}" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">
+
+        <label for="reference_caption_{{ slot_info.slot }}">Caption / style name</label>
+        <input id="reference_caption_{{ slot_info.slot }}" type="text" name="reference_caption_{{ slot_info.slot }}" maxlength="160" value="{{ slot_info.reference.caption|default:'' }}" placeholder="Style {{ slot_info.slot }}">
+
+        {% if allow_reference_remove and slot_info.reference %}
+          <label class="crm-ref-upload-remove" for="reference_remove_{{ slot_info.slot }}">
+            <input id="reference_remove_{{ slot_info.slot }}" type="checkbox" name="reference_remove_{{ slot_info.slot }}" value="1">
+            Remove image {{ slot_info.slot }}
+          </label>
+        {% endif %}
+
+        <span class="crm-ref-upload-rules">JPG, PNG, WEBP. Max 8MB. Large images are resized safely.</span>
+      </article>
+    {% endfor %}
+  </div>
+
+  <script>
+    (function () {
+      document.querySelectorAll(".crm-ref-upload-card input[type='file']").forEach(function (input) {
+        if (input.dataset.crmRefPreviewBound === "1") {
+          return;
+        }
+        input.dataset.crmRefPreviewBound = "1";
+        input.addEventListener("change", function () {
+          var file = input.files && input.files[0];
+          if (!file || !file.type || file.type.indexOf("image/") !== 0) {
+            return;
+          }
+          var card = input.closest(".crm-ref-upload-card");
+          if (!card) {
+            return;
+          }
+          var preview = card.querySelector(".crm-ref-upload-preview");
+          if (!preview) {
+            return;
+          }
+          var url = URL.createObjectURL(file);
+          preview.innerHTML = "";
+          var img = document.createElement("img");
+          img.alt = file.name || "Selected reference image";
+          img.src = url;
+          img.onload = function () {
+            URL.revokeObjectURL(url);
+          };
+          preview.appendChild(img);
+        });
+      });
+    })();
+  </script>
+</section>
