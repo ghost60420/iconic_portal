@@ -96,6 +96,22 @@ class ProductionPurchaseOrderDisplayTests(TestCase):
         self.assertContains(detail_response, "Internal Order ID")
         self.assertContains(detail_response, self.INTERNAL_ORDER_ID)
 
+    def test_stage_progress_tracker_shows_edit_stage_for_all_visual_cards(self):
+        response = self.client.get(reverse("production_detail", args=[self.order.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        cards = list(response.context["production_visual_stages"])
+        self.assertEqual(
+            [card.label for card in cards],
+            ["Sampling", "Fabric", "Cutting", "Printing", "Sewing", "QC", "Packing", "Shipping"],
+        )
+        self.assertTrue(all(card.edit_url for card in cards))
+        self.assertContains(response, "Edit stage", count=8)
+
+        inferred_edit_url = reverse("production_edit", args=[self.order.pk])
+        self.assertEqual(cards[1].edit_url, inferred_edit_url)
+        self.assertEqual(cards[3].edit_url, inferred_edit_url)
+
     def test_production_list_search_accepts_purchase_order_number_and_internal_id(self):
         for query in (self.PURCHASE_ORDER_NUMBER, self.INTERNAL_ORDER_ID):
             response = self.client.get(

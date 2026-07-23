@@ -375,9 +375,7 @@
               <small>{{ card.status_label }}</small>
               <span>{{ card.date|date:"M j, Y"|default:"No timestamp" }}</span>
               <em>{{ card.assigned_to }}</em>
-              {% if card.stage %}
-                <a href="{% url 'production_stage_edit' card.stage.id %}">Edit stage</a>
-              {% endif %}
+              <a href="{{ card.edit_url }}">Edit stage</a>
             </article>
           {% endfor %}
         </div>
@@ -437,7 +435,7 @@
         </details>
       </article>
 
-      <article class="production-panel">
+      <article class="production-panel production-lines-panel">
         <div class="production-panel-head">
           <div>
             <h2>Production Lines</h2>
@@ -604,7 +602,7 @@
         </details>
       </article>
 
-      <article class="production-panel">
+      <article class="production-panel production-daily-panel">
         <div class="production-panel-head">
           <div>
             <h2>Daily Production Updates</h2>
@@ -624,15 +622,7 @@
           </article>
           <article>
             <span>QC notes</span>
-            <strong>
-              {% for stage in stages %}
-                {% if stage.stage_key == "qc" %}
-                  {{ stage.notes|default:"No QC notes yet." }}
-                {% endif %}
-              {% empty %}
-                No QC stage available.
-              {% endfor %}
-            </strong>
+            <strong>{% for stage in stages %}{% if stage.stage_key == "qc" %}{{ stage.notes|default:"No QC notes yet."|linebreaksbr }}{% endif %}{% empty %}No QC stage available.{% endfor %}</strong>
           </article>
         </div>
 

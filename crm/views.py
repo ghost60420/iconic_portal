@@ -2701,7 +2701,7 @@ def _production_any_stage_done(stage_lookup, keys):
     return any(stage_lookup.get(key) and stage_lookup[key].status == "done" for key in keys)
 
 
-def _production_stage_card(label, key, status, *, date_value=None, assigned_to=None, note="", stage=None):
+def _production_stage_card(label, key, status, *, date_value=None, assigned_to=None, note="", stage=None, edit_url=""):
     if stage:
         status = stage.status or status
         date_value = stage.actual_end or stage.actual_start or stage.planned_end or stage.planned_start
@@ -2709,6 +2709,7 @@ def _production_stage_card(label, key, status, *, date_value=None, assigned_to=N
         label = stage.display_name or label
         if stage.is_late and status != "done":
             status = "delay"
+        edit_url = reverse("production_stage_edit", args=[stage.pk])
 
     return SimpleNamespace(
         key=key,
@@ -2719,6 +2720,7 @@ def _production_stage_card(label, key, status, *, date_value=None, assigned_to=N
         assigned_to=assigned_to or "Factory team",
         note=note,
         stage=stage,
+        edit_url=edit_url,
     )
 
 
@@ -2739,6 +2741,7 @@ def _production_visual_stages(order, stages, shipments=None):
     shipments = shipments or []
     stage_lookup = _production_stage_lookup(stages)
     assigned_to = _production_assignee_label(order)
+    inferred_stage_edit_url = reverse("production_edit", args=[order.pk])
     cards = []
 
     sampling_stage = stage_lookup.get("sampling") or stage_lookup.get("development")
@@ -2766,6 +2769,7 @@ def _production_visual_stages(order, stages, shipments=None):
             date_value=getattr(order, "updated_at", None) if fabric_status != "planned" else None,
             assigned_to=assigned_to,
             note=fabric_note,
+            edit_url=inferred_stage_edit_url,
         )
     )
 
@@ -2797,6 +2801,7 @@ def _production_visual_stages(order, stages, shipments=None):
             date_value=print_date,
             assigned_to=assigned_to,
             note=print_note,
+            edit_url=inferred_stage_edit_url,
         )
     )
 
@@ -2826,8 +2831,8 @@ def _production_visual_stages(order, stages, shipments=None):
         shipment_date = None
     cards.append(
         _production_stage_card(
-            "Shipment",
-            "shipment",
+            "Shipping",
+            "shipping",
             shipment_status,
             date_value=shipment_date,
             assigned_to=assigned_to,
