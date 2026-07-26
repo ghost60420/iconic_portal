@@ -11382,6 +11382,25 @@ def _shipment_notify_requested(request):
     return (request.POST.get("notify_customer") or "").strip().lower() in {"1", "on", "true", "yes"}
 
 
+def _can_edit_shipment_eta(user):
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    if getattr(user, "is_superuser", False) or getattr(user, "is_staff", False):
+        return True
+    try:
+        from .models_access import UserAccess
+
+        access = UserAccess.objects.filter(user=user).first()
+    except Exception:
+        return False
+    if not access:
+        return False
+    return any(
+        bool(getattr(access, flag, False))
+        for flag in ("can_view_ceo_tools", "can_production", "can_shipping")
+    )
+
+
 def _queue_shipment_status_notification(shipment, status_key, *, force=False):
     email_to, _name = shipment_email_target(shipment)
     if not email_to:
@@ -11597,13 +11616,20 @@ def shipment_add(request):
     If your ShipmentForm includes order or production_order, it will show.
     """
     can_edit_internal_costing = can_view_lifecycle_profit(request.user)
+    can_edit_estimated_delivery_date = _can_edit_shipment_eta(request.user)
     if request.method == "POST":
-        form = ShipmentForm(request.POST, can_edit_internal_costing=can_edit_internal_costing)
+        form = ShipmentForm(
+            request.POST,
+            can_edit_internal_costing=can_edit_internal_costing,
+            can_edit_estimated_delivery_date=can_edit_estimated_delivery_date,
+        )
         if form.is_valid():
             shipment = form.save(commit=False)
             rate = form.cleaned_data.get("rate_bdt_per_cad")
             if rate not in [None, ""]:
                 shipment.rate_bdt_per_cad = rate
+            if shipment.status == "delivered" and not shipment.delivered_at:
+                shipment.delivered_at = timezone.now()
             blocked_response = _block_inactive_quick_revision_shipment(request, shipment)
             if blocked_response:
                 return blocked_response
@@ -11628,12 +11654,14 @@ def shipment_add(request):
                 "order": None,
                 "order_field": ORDER_FIELD,
                 "can_view_shipping_costs": can_edit_internal_costing,
+                "can_edit_estimated_delivery_date": can_edit_estimated_delivery_date,
             },
         )
 
     form = ShipmentForm(
         initial={"ship_date": timezone.localdate()},
         can_edit_internal_costing=can_edit_internal_costing,
+        can_edit_estimated_delivery_date=can_edit_estimated_delivery_date,
     )
     return render(
         request,
@@ -11644,6 +11672,7 @@ def shipment_add(request):
             "order": None,
             "order_field": ORDER_FIELD,
             "can_view_shipping_costs": can_edit_internal_costing,
+            "can_edit_estimated_delivery_date": can_edit_estimated_delivery_date,
         },
     )
 
@@ -11724,6 +11753,7 @@ def shipment_detail(request, pk):
             product_reference_images[0] if product_reference_images else None,
         )
     can_view_shipping_costs = can_view_lifecycle_profit(request.user)
+    can_edit_estimated_delivery_date = _can_edit_shipment_eta(request.user)
     workflow_visibility = build_workflow_visibility_context(
         "shipping",
         user=request.user,
@@ -11734,6 +11764,24 @@ def shipment_detail(request, pk):
     )
     if request.method == "POST":
         action = (request.POST.get("action") or "").strip()
+        if action == "update_eta":
+            if not can_edit_estimated_delivery_date:
+                return HttpResponseForbidden("No access")
+            eta_value = (request.POST.get("estimated_delivery_date") or "").strip()
+            if eta_value:
+                try:
+                    estimated_delivery_date = date.fromisoformat(eta_value)
+                except ValueError:
+                    messages.error(request, "Enter a valid estimated delivery date.")
+                    return redirect("shipment_detail", pk=pk)
+            else:
+                estimated_delivery_date = None
+            Shipment.objects.filter(pk=shipment.pk).update(
+                estimated_delivery_date=estimated_delivery_date,
+                updated_at=timezone.now(),
+            )
+            messages.success(request, "Estimated delivery date updated.")
+            return redirect("shipment_detail", pk=pk)
         if action == "update_status":
             new_status = (request.POST.get("status") or "").strip()
             if new_status:
@@ -11763,6 +11811,7 @@ def shipment_detail(request, pk):
             "product_snapshot": product_snapshot,
             "product_reference_images": product_reference_images,
             "can_view_shipping_costs": can_view_shipping_costs,
+            "can_edit_estimated_delivery_date": can_edit_estimated_delivery_date,
             **workflow_visibility,
         },
     )
@@ -11771,12 +11820,14 @@ def shipment_detail(request, pk):
 def shipment_edit(request, pk):
     shipment = get_object_or_404(Shipment, pk=pk)
     can_edit_internal_costing = can_view_lifecycle_profit(request.user)
+    can_edit_estimated_delivery_date = _can_edit_shipment_eta(request.user)
 
     if request.method == "POST":
         form = ShipmentForm(
             request.POST,
             instance=shipment,
             can_edit_internal_costing=can_edit_internal_costing,
+            can_edit_estimated_delivery_date=can_edit_estimated_delivery_date,
         )
         if form.is_valid():
             old_status = shipment.status
@@ -11784,6 +11835,8 @@ def shipment_edit(request, pk):
             rate = form.cleaned_data.get("rate_bdt_per_cad")
             if rate not in [None, ""]:
                 shipment.rate_bdt_per_cad = rate
+            if shipment.status == "delivered" and old_status != "delivered" and not shipment.delivered_at:
+                shipment.delivered_at = timezone.now()
             shipment.save()
             _sync_production_after_delivered_shipment(shipment)
             _handle_shipment_status_change(
@@ -11807,10 +11860,15 @@ def shipment_edit(request, pk):
                 "order": getattr(shipment, ORDER_FIELD, None) if ORDER_FIELD else None,
                 "order_field": ORDER_FIELD,
                 "can_view_shipping_costs": can_edit_internal_costing,
+                "can_edit_estimated_delivery_date": can_edit_estimated_delivery_date,
             },
         )
 
-    form = ShipmentForm(instance=shipment, can_edit_internal_costing=can_edit_internal_costing)
+    form = ShipmentForm(
+        instance=shipment,
+        can_edit_internal_costing=can_edit_internal_costing,
+        can_edit_estimated_delivery_date=can_edit_estimated_delivery_date,
+    )
     return render(
         request,
         "crm/shipment_form.html",
@@ -11821,6 +11879,7 @@ def shipment_edit(request, pk):
             "order": getattr(shipment, ORDER_FIELD, None) if ORDER_FIELD else None,
             "order_field": ORDER_FIELD,
             "can_view_shipping_costs": can_edit_internal_costing,
+            "can_edit_estimated_delivery_date": can_edit_estimated_delivery_date,
         },
     )
 
@@ -11844,9 +11903,14 @@ def shipping_add_for_opportunity(request, pk):
     opportunity = get_object_or_404(Opportunity, pk=pk)
     customer = getattr(opportunity, "customer", None)
     can_edit_internal_costing = can_view_lifecycle_profit(request.user)
+    can_edit_estimated_delivery_date = _can_edit_shipment_eta(request.user)
 
     if request.method == "POST":
-        form = ShipmentForm(request.POST, can_edit_internal_costing=can_edit_internal_costing)
+        form = ShipmentForm(
+            request.POST,
+            can_edit_internal_costing=can_edit_internal_costing,
+            can_edit_estimated_delivery_date=can_edit_estimated_delivery_date,
+        )
         if form.is_valid():
             shipment = form.save(commit=False)
             rate = form.cleaned_data.get("rate_bdt_per_cad")
@@ -11860,6 +11924,8 @@ def shipping_add_for_opportunity(request, pk):
 
             if not shipment.ship_date:
                 shipment.ship_date = timezone.localdate()
+            if shipment.status == "delivered" and not shipment.delivered_at:
+                shipment.delivered_at = timezone.now()
 
             shipment.save()
             _sync_production_after_delivered_shipment(shipment)
@@ -11884,6 +11950,7 @@ def shipping_add_for_opportunity(request, pk):
                 "order": None,
                 "order_field": ORDER_FIELD,
                 "can_view_shipping_costs": can_edit_internal_costing,
+                "can_edit_estimated_delivery_date": can_edit_estimated_delivery_date,
             },
         )
 
@@ -11891,7 +11958,11 @@ def shipping_add_for_opportunity(request, pk):
     if customer and "customer" in form_fields(ShipmentForm):
         initial["customer"] = customer
 
-    form = ShipmentForm(initial=initial, can_edit_internal_costing=can_edit_internal_costing)
+    form = ShipmentForm(
+        initial=initial,
+        can_edit_internal_costing=can_edit_internal_costing,
+        can_edit_estimated_delivery_date=can_edit_estimated_delivery_date,
+    )
     return render(
         request,
         "crm/shipment_form.html",
@@ -11902,6 +11973,7 @@ def shipping_add_for_opportunity(request, pk):
             "order": None,
             "order_field": ORDER_FIELD,
             "can_view_shipping_costs": can_edit_internal_costing,
+            "can_edit_estimated_delivery_date": can_edit_estimated_delivery_date,
         },
     )
 
@@ -11913,13 +11985,18 @@ def shipping_add_for_order(request, pk):
     """
     order = get_object_or_404(ProductionOrder, pk=pk)
     can_edit_internal_costing = can_view_lifecycle_profit(request.user)
+    can_edit_estimated_delivery_date = _can_edit_shipment_eta(request.user)
 
     if ORDER_FIELD is None:
         messages.error(request, "Shipment model has no order link field.")
         return redirect("production_detail", pk=order.pk)
 
     if request.method == "POST":
-        form = ShipmentForm(request.POST, can_edit_internal_costing=can_edit_internal_costing)
+        form = ShipmentForm(
+            request.POST,
+            can_edit_internal_costing=can_edit_internal_costing,
+            can_edit_estimated_delivery_date=can_edit_estimated_delivery_date,
+        )
         if form.is_valid():
             shipment = form.save(commit=False)
 
@@ -11934,6 +12011,8 @@ def shipping_add_for_order(request, pk):
 
             if not shipment.ship_date:
                 shipment.ship_date = timezone.localdate()
+            if shipment.status == "delivered" and not shipment.delivered_at:
+                shipment.delivered_at = timezone.now()
 
             blocked_response = _block_inactive_quick_revision_shipment(request, shipment, order=order)
             if blocked_response:
@@ -11967,6 +12046,7 @@ def shipping_add_for_order(request, pk):
                 "is_edit": False,
                 "order_field": ORDER_FIELD,
                 "can_view_shipping_costs": can_edit_internal_costing,
+                "can_edit_estimated_delivery_date": can_edit_estimated_delivery_date,
             },
         )
 
@@ -11977,7 +12057,11 @@ def shipping_add_for_order(request, pk):
     if "opportunity" in form_fields(ShipmentForm):
         initial["opportunity"] = getattr(order, "opportunity", None)
 
-    form = ShipmentForm(initial=initial, can_edit_internal_costing=can_edit_internal_costing)
+    form = ShipmentForm(
+        initial=initial,
+        can_edit_internal_costing=can_edit_internal_costing,
+        can_edit_estimated_delivery_date=can_edit_estimated_delivery_date,
+    )
     return render(
         request,
         "crm/shipment_form.html",
@@ -11987,6 +12071,7 @@ def shipping_add_for_order(request, pk):
             "is_edit": False,
             "order_field": ORDER_FIELD,
             "can_view_shipping_costs": can_edit_internal_costing,
+            "can_edit_estimated_delivery_date": can_edit_estimated_delivery_date,
         },
     )
 

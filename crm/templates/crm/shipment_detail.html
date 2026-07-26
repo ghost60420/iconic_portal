@@ -79,13 +79,18 @@
     </article>
     <article class="shipping-snapshot-card">
       <span>Estimated delivery</span>
-      <strong>-</strong>
-      <small>No ETA field on shipment record</small>
+      <strong>{{ shipment.estimated_delivery_date|date:"M j"|default:"-" }}</strong>
+      <small>{% if shipment.estimated_delivery_date %}{{ shipment.estimated_delivery_date|date:"Y" }}{% else %}Not set{% endif %}</small>
     </article>
     <article class="shipping-snapshot-card">
       <span>Delivered date</span>
-      <strong>{{ shipment.delivered_at|date:"M j"|default:"-" }}</strong>
-      <small>{% if shipment.delivered_at %}{{ shipment.delivered_at|date:"Y H:i" }}{% else %}Not delivered yet{% endif %}</small>
+      {% if shipment.status == "delivered" and shipment.delivered_at %}
+        <strong>{{ shipment.delivered_at|date:"M j" }}</strong>
+        <small>{{ shipment.delivered_at|date:"Y H:i" }}</small>
+      {% else %}
+        <strong>-</strong>
+        <small>&nbsp;</small>
+      {% endif %}
     </article>
   </section>
 
@@ -219,8 +224,24 @@
             </strong>
           </div>
           <div>
+            <span>Delivery ETA</span>
+            <strong>{{ shipment.estimated_delivery_date|date:"M j, Y"|default:"Not set" }}</strong>
+            {% if can_edit_estimated_delivery_date %}
+              <form method="post" class="shipping-inline-form" style="margin-top:8px;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="update_eta">
+                <input type="date" name="estimated_delivery_date" value="{{ shipment.estimated_delivery_date|date:'Y-m-d' }}" aria-label="Estimated delivery date">
+                <button type="submit" class="shipping-btn shipping-btn--tiny shipping-btn--primary">Save ETA</button>
+              </form>
+            {% endif %}
+          </div>
+          <div>
             <span>Delivered at</span>
-            <strong>{{ shipment.delivered_at|date:"M j, Y H:i"|default:"-" }}</strong>
+            {% if shipment.status == "delivered" and shipment.delivered_at %}
+              <strong>{{ shipment.delivered_at|date:"M j, Y H:i" }}</strong>
+            {% else %}
+              <strong></strong>
+            {% endif %}
           </div>
           <div>
             <span>Destination city</span>

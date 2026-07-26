@@ -6,7 +6,7 @@ import re
 
 from django.conf import settings
 from django.contrib import messages
-from django.db.models import Avg, Count, Sum, Q
+from django.db.models import Avg, Count, DecimalField, Sum, Q, Value
 from django.db.models.functions import Coalesce
 from django.http import Http404, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
@@ -76,6 +76,14 @@ PLATFORM_CARD_CONFIG = [
 
 PLATFORM_CARD_LABELS = {item["key"]: item["label"] for item in PLATFORM_CARD_CONFIG}
 NO_DATA_AVAILABLE = "No data available"
+
+
+def _ad_spend_zero_value():
+    return Value(Decimal("0.00"), output_field=DecimalField(max_digits=14, decimal_places=2))
+
+
+def _ad_spend_output_field():
+    return DecimalField(max_digits=14, decimal_places=2)
 
 
 def _require_enabled(flag_name: str | None = None):
@@ -431,9 +439,13 @@ def _ad_conversions_count(start_date, end_date):
 def _ad_spend_total(start_date, end_date):
     return (
         AdMetricDaily.objects.filter(date__gte=start_date, date__lte=end_date).aggregate(
-            spend=Coalesce(Sum("spend"), Decimal("0"))
+            spend=Coalesce(
+                Sum("spend"),
+                _ad_spend_zero_value(),
+                output_field=_ad_spend_output_field(),
+            )
         )
-    ).get("spend") or Decimal("0")
+    ).get("spend") or Decimal("0.00")
 
 
 def _format_money(value):
@@ -928,7 +940,11 @@ def _platform_comparison(start_date, end_date):
     content_count_map = {row["platform"]: row["post_count"] for row in content_count_rows}
     ad_metric_qs = AdMetricDaily.objects.filter(date__gte=start_date, date__lte=end_date)
     ad_totals = ad_metric_qs.aggregate(
-        spend=Coalesce(Sum("spend"), Decimal("0")),
+        spend=Coalesce(
+            Sum("spend"),
+            _ad_spend_zero_value(),
+            output_field=_ad_spend_output_field(),
+        ),
         impressions=Coalesce(Sum("impressions"), 0),
         clicks=Coalesce(Sum("clicks"), 0),
         conversions=Coalesce(Sum("conversions"), 0),
@@ -2359,7 +2375,11 @@ def ads_overview(request):
     campaign_rows = (
         AdCampaign.objects.all()
         .annotate(
-            spend=Coalesce(Sum("daily_metrics__spend", filter=Q(daily_metrics__date__gte=since)), 0),
+            spend=Coalesce(
+                Sum("daily_metrics__spend", filter=Q(daily_metrics__date__gte=since)),
+                _ad_spend_zero_value(),
+                output_field=_ad_spend_output_field(),
+            ),
             impressions=Coalesce(Sum("daily_metrics__impressions", filter=Q(daily_metrics__date__gte=since)), 0),
             clicks=Coalesce(Sum("daily_metrics__clicks", filter=Q(daily_metrics__date__gte=since)), 0),
             conversions=Coalesce(Sum("daily_metrics__conversions", filter=Q(daily_metrics__date__gte=since)), 0),

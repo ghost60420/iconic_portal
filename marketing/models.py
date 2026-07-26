@@ -46,6 +46,14 @@ class SeoProperty(models.Model):
     last_sync_at = models.DateTimeField(null=True, blank=True)
     last_sync_status = models.CharField(max_length=30, blank=True, default="")
     last_sync_message = models.TextField(blank=True, default="")
+    last_gsc_sync_at = models.DateTimeField(null=True, blank=True)
+    last_gsc_sync_status = models.CharField(max_length=30, blank=True, default="")
+    last_gsc_sync_message = models.TextField(blank=True, default="")
+    last_ga4_sync_at = models.DateTimeField(null=True, blank=True)
+    last_ga4_sync_status = models.CharField(max_length=30, blank=True, default="")
+    last_ga4_sync_message = models.TextField(blank=True, default="")
+    google_account_email = models.EmailField(blank=True, default="")
+    google_account_id = models.CharField(max_length=120, blank=True, default="")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -111,10 +119,13 @@ class SeoPageDaily(models.Model):
 class WebsiteTrafficDaily(models.Model):
     property = models.ForeignKey(SeoProperty, on_delete=models.CASCADE, related_name="traffic_days")
     date = models.DateField(db_index=True)
+    row_type = models.CharField(max_length=20, blank=True, default="source", db_index=True)
     channel = models.CharField(max_length=80, blank=True, default="", db_index=True)
     source = models.CharField(max_length=120, blank=True, default="")
     medium = models.CharField(max_length=120, blank=True, default="")
     campaign = models.CharField(max_length=160, blank=True, default="")
+    country = models.CharField(max_length=80, blank=True, default="", db_index=True)
+    device = models.CharField(max_length=40, blank=True, default="", db_index=True)
 
     visitors = models.PositiveIntegerField(default=0)
     sessions = models.PositiveIntegerField(default=0)
@@ -123,20 +134,33 @@ class WebsiteTrafficDaily(models.Model):
     events = models.PositiveIntegerField(default=0)
     conversions = models.PositiveIntegerField(default=0)
     engagement_rate = models.DecimalField(max_digits=6, decimal_places=4, default=Decimal("0"))
+    bounce_rate = models.DecimalField(max_digits=6, decimal_places=4, default=Decimal("0"))
     avg_engagement_seconds = models.PositiveIntegerField(default=0)
+    avg_session_duration_seconds = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ("-date", "channel", "source")
+        ordering = ("-date", "row_type", "channel", "source")
         constraints = [
             models.UniqueConstraint(
-                fields=["property", "date", "channel", "source", "medium", "campaign"],
+                fields=[
+                    "property",
+                    "date",
+                    "row_type",
+                    "channel",
+                    "source",
+                    "medium",
+                    "campaign",
+                    "country",
+                    "device",
+                ],
                 name="website_traffic_daily_unique",
             )
         ]
         indexes = [
             models.Index(fields=["property", "date"]),
-            models.Index(fields=["channel", "source"]),
+            models.Index(fields=["row_type", "channel", "source"]),
+            models.Index(fields=["row_type", "country", "device"]),
         ]
 
     def __str__(self) -> str:

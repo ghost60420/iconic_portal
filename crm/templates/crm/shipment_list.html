@@ -190,11 +190,15 @@
                       </div>
                       <div>
                         <span>ETA</span>
-                        <strong>Not set</strong>
+                        <strong>{{ s.estimated_delivery_date|date:"M j, Y"|default:"Not set" }}</strong>
                       </div>
                       <div>
                         <span>Delivered</span>
-                        <strong>{{ s.delivered_at|date:"M j, Y"|default:"-" }}</strong>
+                        {% if s.status == "delivered" and s.delivered_at %}
+                          <strong>{{ s.delivered_at|date:"M j, Y" }}</strong>
+                        {% else %}
+                          <strong></strong>
+                        {% endif %}
                       </div>
                     </div>
                   </td>

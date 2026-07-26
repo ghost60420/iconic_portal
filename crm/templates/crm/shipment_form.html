@@ -278,6 +278,15 @@
           <label>Ship date</label>
           {{ form.ship_date }}
         </div>
+        <div class="col-md-4 field-row">
+          <label>Estimated delivery date</label>
+          {{ form.estimated_delivery_date }}
+          {% if form.estimated_delivery_date.errors %}
+            <ul class="errorlist">
+              {% for err in form.estimated_delivery_date.errors %}<li>{{ err }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+        </div>
       </div>
 
       <div class="row">

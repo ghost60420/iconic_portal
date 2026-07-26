@@ -805,6 +805,7 @@ class ShipmentForm(forms.ModelForm):
             "carrier",
             "tracking_number",
             "ship_date",
+            "estimated_delivery_date",
             "shipment_type",
             "status",
             "box_count",
@@ -813,9 +814,13 @@ class ShipmentForm(forms.ModelForm):
             "cost_cad",
             "notes",
         ]
+        widgets = {
+            "estimated_delivery_date": forms.DateInput(attrs={"type": "date"}),
+        }
 
     def __init__(self, *args, **kwargs):
         can_edit_internal_costing = kwargs.pop("can_edit_internal_costing", False)
+        can_edit_estimated_delivery_date = kwargs.pop("can_edit_estimated_delivery_date", True)
         super().__init__(*args, **kwargs)
 
         if not can_edit_internal_costing:
@@ -844,6 +849,12 @@ class ShipmentForm(forms.ModelForm):
         for f in ["box_count", "total_weight_kg", "cost_bdt", "cost_cad"]:
             if f in self.fields:
                 self.fields[f].required = False
+
+        if "estimated_delivery_date" in self.fields:
+            self.fields["estimated_delivery_date"].required = False
+            self.fields["estimated_delivery_date"].label = "Estimated delivery date"
+            if not can_edit_estimated_delivery_date:
+                self.fields["estimated_delivery_date"].disabled = True
 
         if not self.initial.get("rate_bdt_per_cad"):
             r = _latest_rate_bdt_per_cad()

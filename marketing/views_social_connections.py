@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.contrib import messages
 from django.core.management import call_command
-from django.db.models import Sum
+from django.db.models import DecimalField, Sum, Value
 from django.db.models.functions import Coalesce
 from django.http import Http404, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -62,6 +62,14 @@ from marketing.services.social_connections import (
     save_social_connection,
     social_connection_queryset,
 )
+
+
+def _ad_spend_zero_value():
+    return Value(Decimal("0.00"), output_field=DecimalField(max_digits=14, decimal_places=2))
+
+
+def _ad_spend_output_field():
+    return DecimalField(max_digits=14, decimal_places=2)
 
 
 def _require_enabled():
@@ -210,7 +218,11 @@ def _diagnostic_metric_snapshot(platform: str) -> list[dict]:
         ]
     if platform == "meta_ads":
         totals = AdMetricDaily.objects.filter(date__gte=since).aggregate(
-            spend=Coalesce(Sum("spend"), Decimal("0")),
+            spend=Coalesce(
+                Sum("spend"),
+                _ad_spend_zero_value(),
+                output_field=_ad_spend_output_field(),
+            ),
             impressions=Coalesce(Sum("impressions"), 0),
             clicks=Coalesce(Sum("clicks"), 0),
             conversions=Coalesce(Sum("conversions"), 0),

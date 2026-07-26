@@ -93,6 +93,7 @@ urlpatterns = [
     path("insights/<int:pk>/", perm(views.insight_update), name="marketing_insight_update"),
     path("workflow/", perm(views.weekly_workflow), name="marketing_workflow"),
     path("website/", perm(views.website_analytics), name="marketing_website"),
+    path("analytics/", perm(views.website_analytics), name="marketing_analytics"),
     path("website-analytics/", perm(views.website_analytics), name="marketing_website_analytics"),
     path("google-search/", perm(views.google_search_performance), name="marketing_google_search"),
     path("seo/", perm(views.seo_overview), name="marketing_seo"),
