@@ -9,7 +9,7 @@ from datetime import timedelta, date
 from decimal import Decimal
 from types import SimpleNamespace
 from django.apps import apps
-from django.db.models import Count, Exists, F, Sum, Q, Max, OuterRef, Prefetch, Subquery, prefetch_related_objects
+from django.db.models import Count, Exists, F, Sum, Q, Max, Min, OuterRef, Prefetch, Subquery, prefetch_related_objects
 from django.db import models
 from django.conf import settings
 try:
@@ -28,6 +28,7 @@ from django.http import HttpResponse, HttpResponseForbidden, JsonResponse, Http4
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import NoReverseMatch, reverse
 from django.contrib.auth import get_user_model
+from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
@@ -90,6 +91,13 @@ from .services.product_reference_images import (
     save_reference_images_for_lead,
     save_reference_images_for_opportunity,
     validate_reference_image_payload,
+)
+from .services.living_catalog import (
+    CATALOG_IMAGE_FIELDS,
+    catalog_cover_url,
+    catalog_image_count,
+    catalog_image_names,
+    catalog_image_slots,
 )
 from .services.workflow_visibility import build_workflow_visibility_context
 from .services.historical_dates import (
@@ -250,8 +258,11 @@ from .forms import (
     ProductForm,
     FabricForm,
     AccessoryForm,
+    ACCESSORY_TYPE_CHOICES,
     TrimForm,
+    TRIM_TYPE_CHOICES,
     ThreadForm,
+    THREAD_TYPE_CHOICES,
     LibraryAttachmentForm,
 )
 from .forms_costing import ActualCostEntryForm
@@ -298,6 +309,7 @@ from .models import (
     SurfaceMaster,
     HandfeelMaster,
     LibraryAttachment,
+    LivingCatalogAudit,
     ProductionOrder,
     ProductionProgressPhoto,
     ProductionStage,
@@ -5566,627 +5578,389 @@ def customer_ai_insight(request, pk):
 
 
 # ===================================================
-# PRODUCT LIBRARY AND AI
+# LIVING CATALOG LIBRARY
 # ===================================================
 
-def products_list(request):
-    qs = Product.objects.all().order_by("-created_at")
+def _truthy(value):
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
-    q = request.GET.get("q") or ""
-    product_type = request.GET.get("product_type") or ""
-    product_category = request.GET.get("product_category") or ""
 
-    if q:
-        qs = qs.filter(name__icontains=q)
+def _catalog_profile(user):
+    try:
+        return getattr(user, "employee_profile", None)
+    except Exception:
+        return None
 
-    if product_type:
-        qs = qs.filter(product_type=product_type)
 
-    if product_category:
-        qs = qs.filter(product_category=product_category)
+def _catalog_profile_value(user, field):
+    profile = _catalog_profile(user)
+    return (getattr(profile, field, "") or "").strip().lower() if profile else ""
 
-    context = {
-        "products": qs,
-        "q": q,
-        "product_type": product_type,
-        "product_category": product_category,
+
+def _catalog_access(user):
+    try:
+        return getattr(user, "access", None)
+    except Exception:
+        return None
+
+
+def _can_view_catalog_internal(user):
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    access = _catalog_access(user)
+    if access and (getattr(access, "can_view_internal_costing", False) or getattr(access, "can_view_ceo_tools", False)):
+        return True
+    position = _catalog_profile_value(user, "position")
+    department = _catalog_profile_value(user, "department")
+    return position in {"ceo", "director", "accounts_manager", "accountant"} or department == "accounts"
+
+
+def _is_catalog_marketing_user(user):
+    return _catalog_profile_value(user, "department") == "marketing"
+
+
+def _is_catalog_sales_user(user):
+    position = _catalog_profile_value(user, "position")
+    department = _catalog_profile_value(user, "department")
+    return department == "sales" or position in {"sales_manager", "sales_executive"}
+
+
+def _can_edit_catalog_item(user):
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    if _is_catalog_sales_user(user) or _is_catalog_marketing_user(user):
+        return False
+    access = _catalog_access(user)
+    position = _catalog_profile_value(user, "position")
+    if access and getattr(access, "can_view_ceo_tools", False):
+        return True
+    if position in {"ceo", "director", "general_manager", "operations_manager", "production_manager", "merchandising_manager"}:
+        return True
+    return bool(user.is_staff and access and getattr(access, "can_library", False))
+
+
+def _can_archive_catalog_item(user):
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    access = _catalog_access(user)
+    position = _catalog_profile_value(user, "position")
+    if access and getattr(access, "can_view_ceo_tools", False):
+        return True
+    return position in {"ceo", "director", "general_manager", "operations_manager", "production_manager"}
+
+
+def _catalog_add_value(target, label, value):
+    if value is None:
+        return
+    text = str(value).strip()
+    if text:
+        target.append({"label": label, "value": value})
+
+
+def _format_catalog_money(value):
+    if value in (None, ""):
+        return ""
+    return f"CAD {value}"
+
+
+def _catalog_status_choices(model):
+    return list(model._meta.get_field("status").choices)
+
+
+def _catalog_choice_options(choices):
+    return [(value, label) for value, label in choices if value]
+
+
+CATALOG_CONFIG = {
+    "products": {
+        "section": "products",
+        "singular": "product",
+        "plural": "Products",
+        "model": Product,
+        "form": ProductForm,
+        "list_url": "products_list",
+        "add_url": "product_add",
+        "detail_url": "product_detail",
+        "edit_url": "product_edit",
+        "presentation_url": "product_presentation",
+        "ai_url": "product_ai_suggest",
+        "default_status": "Available",
+        "type_field": "product_type",
         "type_choices": Opportunity.PRODUCT_TYPE_CHOICES,
-        "category_choices": Opportunity.PRODUCT_CATEGORY_CHOICES,
-    }
-    return render(request, "crm/products_list.html", context)
+        "category_field": "product_category",
+        "colour_field": "main_colour",
+        "search_fields": ["name", "product_type", "product_category", "main_colour", "available_colours", "tags", "short_description", "default_fabric", "main_fabric__name"],
+        "required_fields": ["name", "product_type", "product_category", "main_fabric", "main_decoration", "short_description", "status"],
+        "optional_fields": ["fit", "main_colour", "available_colours", "size_range", "default_moq", "notes", "tags", "accessories", "trims", "threads"],
+        "more_fields": ["product_code", "default_gsm", "default_fabric", "is_active"],
+        "internal_fields": ["internal_cost", "suggested_selling_price", "internal_notes", "default_price"],
+        "descriptions": "Styles, default specs, decorations, and linked materials.",
+    },
+    "fabrics": {
+        "section": "fabrics",
+        "singular": "fabric",
+        "plural": "Fabrics",
+        "model": Fabric,
+        "form": FabricForm,
+        "list_url": "fabrics_list",
+        "add_url": "fabric_add",
+        "detail_url": "fabric_detail",
+        "edit_url": "fabric_edit",
+        "presentation_url": "fabric_presentation",
+        "ai_url": "fabric_ai_suggest",
+        "default_status": "Available",
+        "type_field": "fabric_type",
+        "colour_field": "color_options",
+        "search_fields": ["name", "fabric_group", "fabric_type", "composition", "gsm", "color_options", "best_use", "tags"],
+        "required_fields": ["name", "composition", "gsm", "best_use", "status"],
+        "optional_fields": ["fabric_type", "stretch_type", "color_options", "notes", "tags"],
+        "more_fields": ["fabric_code", "fabric_group", "weave", "knit_structure", "construction", "surface", "handfeel", "drape", "warmth", "weight_class", "breathability", "sheerness", "shrinkage", "durability", "is_active"],
+        "internal_fields": ["internal_cost", "suggested_selling_price", "internal_notes", "price_per_kg", "price_per_meter"],
+        "descriptions": "Composition, GSM, stretch, and best-use guidance.",
+    },
+    "accessories": {
+        "section": "accessories",
+        "singular": "accessory",
+        "plural": "Accessories",
+        "model": Accessory,
+        "form": AccessoryForm,
+        "list_url": "accessories_list",
+        "add_url": "accessory_add",
+        "detail_url": "accessory_detail",
+        "edit_url": "accessory_edit",
+        "presentation_url": "accessory_presentation",
+        "ai_url": "accessory_ai_suggest",
+        "default_status": "Available",
+        "type_field": "accessory_type",
+        "type_choices": ACCESSORY_TYPE_CHOICES,
+        "colour_field": "color",
+        "search_fields": ["name", "accessory_type", "color", "material", "best_use", "tags"],
+        "required_fields": ["name", "accessory_type", "color", "status"],
+        "optional_fields": ["material", "best_use", "notes", "tags"],
+        "more_fields": ["accessory_code", "size", "finish", "is_active"],
+        "internal_fields": ["internal_cost", "suggested_selling_price", "internal_notes", "supplier", "price_per_unit"],
+        "descriptions": "Zippers, buttons, labels, packaging, and other accessories.",
+    },
+    "trims": {
+        "section": "trims",
+        "singular": "trim",
+        "plural": "Trims",
+        "model": Trim,
+        "form": TrimForm,
+        "list_url": "trims_list",
+        "add_url": "trim_add",
+        "detail_url": "trim_detail",
+        "edit_url": "trim_edit",
+        "presentation_url": "trim_presentation",
+        "ai_url": "trim_ai_suggest",
+        "default_status": "Available",
+        "type_field": "trim_type",
+        "type_choices": TRIM_TYPE_CHOICES,
+        "colour_field": "color",
+        "search_fields": ["name", "trim_type", "color", "material", "best_use", "tags"],
+        "required_fields": ["name", "trim_type", "color", "status"],
+        "optional_fields": ["material", "best_use", "notes", "tags"],
+        "more_fields": ["trim_code", "width", "is_active"],
+        "internal_fields": ["internal_cost", "suggested_selling_price", "internal_notes", "price_per_meter"],
+        "descriptions": "Ribs, elastic, drawcord, webbing, tape, binding, and piping.",
+    },
+    "threads": {
+        "section": "threads",
+        "singular": "thread",
+        "plural": "Threads",
+        "model": ThreadOption,
+        "form": ThreadForm,
+        "list_url": "threads_list",
+        "add_url": "thread_add",
+        "detail_url": "thread_detail",
+        "edit_url": "thread_edit",
+        "presentation_url": "thread_presentation",
+        "ai_url": "thread_ai_suggest",
+        "default_status": "Available",
+        "type_field": "thread_type",
+        "type_choices": THREAD_TYPE_CHOICES,
+        "colour_field": "color",
+        "search_fields": ["name", "thread_type", "thread_code", "color", "best_use", "tags", "use_for"],
+        "required_fields": ["name", "thread_type", "color", "status"],
+        "optional_fields": ["thread_code", "best_use", "notes", "tags"],
+        "more_fields": ["count", "use_for", "brand", "is_active"],
+        "internal_fields": ["internal_cost", "suggested_selling_price", "internal_notes", "price_per_cone"],
+        "descriptions": "Sewing, overlock, embroidery, topstitch, and elastic threads.",
+    },
+}
 
 
-def product_add(request):
-    if request.method == "POST":
-        form = ProductForm(request.POST, request.FILES)
-        if form.is_valid():
-            product = form.save()
-
-            if product.product_type:
-                ProductTypeMaster.objects.get_or_create(
-                    name=product.product_type.strip(),
-                    defaults={"is_active": True},
-                )
-            if product.product_category:
-                ProductCategoryMaster.objects.get_or_create(
-                    name=product.product_category.strip(),
-                    defaults={"is_active": True},
-                )
-            if product.default_fabric:
-                FabricNameMaster.objects.get_or_create(
-                    name=product.default_fabric.strip(),
-                    defaults={"is_active": True},
-                )
-            if product.default_gsm:
-                GSMRangeMaster.objects.get_or_create(
-                    name=product.default_gsm.strip(),
-                    defaults={"is_active": True},
-                )
-
-            return redirect("product_detail", pk=product.pk)
-    else:
-        form = ProductForm()
-
-    type_master = ProductTypeMaster.objects.filter(is_active=True).order_by("name")
-    category_master = ProductCategoryMaster.objects.filter(is_active=True).order_by("name")
-    fabric_master = FabricNameMaster.objects.filter(is_active=True).order_by("name")
-    gsm_master = GSMRangeMaster.objects.filter(is_active=True).order_by("name")
-
-    context = {
-        "form": form,
-        "mode": "add",
-        "type_master": type_master,
-        "category_master": category_master,
-        "fabric_master": fabric_master,
-        "gsm_master": gsm_master,
-    }
-    return render(request, "crm/product_form.html", context)
+def _catalog_config(section):
+    config = CATALOG_CONFIG.get(section)
+    if not config:
+        raise Http404("Unknown catalog section.")
+    return config
 
 
-def product_edit(request, pk):
-    product = get_object_or_404(Product, pk=pk)
-
-    if request.method == "POST":
-        form = ProductForm(request.POST, request.FILES, instance=product)
-        if form.is_valid():
-            product = form.save()
-
-            if product.product_type:
-                ProductTypeMaster.objects.get_or_create(
-                    name=product.product_type.strip(),
-                    defaults={"is_active": True},
-                )
-            if product.product_category:
-                ProductCategoryMaster.objects.get_or_create(
-                    name=product.product_category.strip(),
-                    defaults={"is_active": True},
-                )
-            if product.default_fabric:
-                FabricNameMaster.objects.get_or_create(
-                    name=product.default_fabric.strip(),
-                    defaults={"is_active": True},
-                )
-            if product.default_gsm:
-                GSMRangeMaster.objects.get_or_create(
-                    name=product.default_gsm.strip(),
-                    defaults={"is_active": True},
-                )
-
-            return redirect("product_detail", pk=product.pk)
-    else:
-        form = ProductForm(instance=product)
-
-    type_master = ProductTypeMaster.objects.filter(is_active=True).order_by("name")
-    category_master = ProductCategoryMaster.objects.filter(is_active=True).order_by("name")
-    fabric_master = FabricNameMaster.objects.filter(is_active=True).order_by("name")
-    gsm_master = GSMRangeMaster.objects.filter(is_active=True).order_by("name")
-
-    context = {
-        "form": form,
-        "mode": "edit",
-        "product": product,
-        "type_master": type_master,
-        "category_master": category_master,
-        "fabric_master": fabric_master,
-        "gsm_master": gsm_master,
-    }
-    return render(request, "crm/product_form.html", context)
+def _catalog_queryset(config, *, with_related=True):
+    qs = config["model"].objects.all()
+    if config["section"] == "products":
+        qs = qs.select_related("main_fabric")
+        if with_related:
+            qs = qs.prefetch_related("accessories", "trims", "threads")
+    return qs
 
 
-def product_detail(request, pk):
-    product = get_object_or_404(Product, pk=pk)
-
-    context = {
-        "product": product,
-    }
-    return render(request, "crm/product_detail.html", context)
-
-
-@require_POST
-def product_ai_detail(request, pk):
-    """
-    AI helper for a single product.
-    It uses product fields and saves answers into product.notes.
-    """
-    product = get_object_or_404(Product, pk=pk)
-    mode = request.POST.get("mode", "summary").strip() or "summary"
-    user_text = request.POST.get("user_text", "")
-
-    base_info = (
-        f"Product code: {product.product_code}. "
-        f"Name: {product.name}. "
-        f"Type: {product.product_type}. "
-        f"Category: {product.product_category}. "
-        f"Default GSM: {product.default_gsm}. "
-        f"Default fabric: {product.default_fabric}. "
-        f"Default MOQ: {product.default_moq}. "
-        f"Default price: {product.default_price}. "
-    )
-
-    if mode == "summary":
-        user_prompt = (
-            "Give a short summary of this product for internal use. "
-            "Cover the key fabric, GSM, price level, and when we should offer it. "
-            "Use 4 to 6 lines. "
-            + base_info
-        )
-    elif mode == "use_cases":
-        user_prompt = (
-            "Suggest use cases and target customers for this product. "
-            "Mention season, age group, and selling angle. "
-            "Use short bullet style lines. "
-            + base_info
-        )
-    elif mode == "costing":
-        user_prompt = (
-            "Think like a merchandiser. Give a costing view for this product. "
-            "Talk about fabric weight, estimated fabric cost band, work level, "
-            "and what price range we can position for small to medium brands. "
-            + base_info
-        )
-    elif mode == "bundle":
-        user_prompt = (
-            "Suggest simple bundle or collection ideas where this product is the hero. "
-            "Include 3 to 5 ideas with product names and set concepts. "
-            + base_info
-        )
-    elif mode == "email":
-        user_prompt = (
-            "Write a short email paragraph we can send to a client who is looking for this type "
-            "of product. Focus on benefits and why our factory is a good fit. "
-            + base_info
-        )
-    elif mode == "spec":
-        user_prompt = (
-            "List key spec points the team must confirm before sampling or production for this product. "
-            "Use bullet style points. "
-            + base_info
-        )
-    elif mode == "chat" and user_text:
-        user_prompt = (
-            "You are a senior apparel merchandiser and product developer. "
-            "Answer the question about this product. "
-            f"Question: {user_text} "
-            + base_info
-        )
-    else:
-        user_prompt = (
-            "Give a short helpful note about this product for internal use. "
-            + base_info
-        )
-
-    try:
-        resp = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a senior apparel merchandiser and production planner "
-                        "for a clothing factory. Keep answers short and practical."
-                    ),
-                },
-                {"role": "user", "content": user_prompt},
-            ],
-        )
-        ai_text = resp.choices[0].message.content or ""
-    except Exception as e:
-        return JsonResponse({"ok": False, "error": str(e)})
-
-    header = f"\n\n[AI {mode}]\n"
-    product.notes = (product.notes or "") + header + ai_text
-    product.save(update_fields=["notes"])
-
-    return JsonResponse({"ok": True, "text": ai_text})
+def _visible_catalog_queryset(config, user, *, include_archived=True, with_related=True):
+    qs = _catalog_queryset(config, with_related=with_related)
+    if _is_catalog_marketing_user(user):
+        if config["section"] == "products":
+            qs = qs.filter(status__in=["Available", "Sample Available"])
+        else:
+            qs = qs.filter(status="Available")
+    if not include_archived:
+        qs = qs.exclude(status="Archived").filter(is_active=True)
+    return qs
 
 
-@require_POST
-def product_ai_suggest(request):
-    """
-    Small AI helper for the product form.
-    Used by product_form.html with fetch.
-    """
-    name = request.POST.get("name", "").strip()
-    product_type = request.POST.get("product_type", "").strip()
-    product_category = request.POST.get("product_category", "").strip()
-    default_gsm = request.POST.get("default_gsm", "").strip()
-    default_fabric = request.POST.get("default_fabric", "").strip()
-    notes = request.POST.get("notes", "").strip()
-
-    if not name:
-        return JsonResponse(
-            {"ok": False, "error": "Please add a product name first."}
-        )
-
-    info = (
-        f"Name: {name}. "
-        f"Type: {product_type or 'not set'}. "
-        f"Category: {product_category or 'not set'}. "
-        f"Default GSM: {default_gsm or 'not set'}. "
-        f"Default fabric: {default_fabric or 'not set'}. "
-        f"Notes: {notes or 'not given'}."
-    )
-
-    prompt = (
-        "You help a clothing factory set up a product library.\n"
-        "Based on this product info, give short and clear suggestions.\n"
-        "Return 5 to 7 short lines:\n"
-        "- Target customer and use case\n"
-        "- Suggested fabric and GSM range\n"
-        "- Fit and key design points\n"
-        "- Recommended MOQ range\n"
-        "- Price band idea (low, medium, high)\n"
-        "- Any extra notes for production team\n\n"
-        f"Product info: {info}"
-    )
-
-    try:
-        resp = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a senior apparel product developer."},
-                {"role": "user", "content": prompt},
-            ],
-        )
-        ai_text = resp.choices[0].message.content
-        return JsonResponse({"ok": True, "suggestion": ai_text})
-    except Exception as e:
-        return JsonResponse({"ok": False, "error": str(e)})
+def _catalog_search_q(config, value):
+    query = Q()
+    for field_name in config["search_fields"]:
+        query |= Q(**{f"{field_name}__icontains": value})
+    return query
 
 
-# ===================================================
-# FABRIC LIBRARY AND AI
-# ===================================================
-
-@require_POST
-def fabric_ai_suggest(request):
-    name = request.POST.get("name", "").strip()
-    group = request.POST.get("group", "").strip()
-    fabric_type = request.POST.get("fabric_type", "").strip()
-
-    if not name:
-        return JsonResponse(
-            {"ok": False, "error": "Please type a fabric name first."}
-        )
-
-    user_info = (
-        f"Name: {name}. "
-        f"Group: {group or 'not set'}. "
-        f"Type: {fabric_type or 'not set'}."
-    )
-
-    prompt = (
-        "You are a senior textile technician helping a clothing factory team.\n"
-        "Based on the fabric data below, give short helpful suggestions.\n"
-        "Return:\n"
-        "- Likely composition\n"
-        "- GSM range\n"
-        "- Stretch level\n"
-        "- Hand feel\n"
-        "- Best uses\n"
-        "- Price level (low, medium, high)\n\n"
-        "Keep it very short, 4 to 6 lines.\n\n"
-        f"Fabric info: {user_info}"
-    )
-
-    try:
-        resp = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a textile expert."},
-                {"role": "user", "content": prompt},
-            ],
-        )
-
-        ai_text = resp.choices[0].message.content
-
-        return JsonResponse({"ok": True, "suggestion": ai_text})
-
-    except Exception as e:
-        return JsonResponse({"ok": False, "error": str(e)})
-
-
-@require_POST
-def fabric_ai_focus(request, pk):
-    fabric = get_object_or_404(Fabric, pk=pk)
-
-    info = (
-        f"Name: {fabric.name}. "
-        f"Group: {fabric.fabric_group or 'not set'}. "
-        f"Type: {fabric.fabric_type or 'not set'}. "
-        f"Structure: {fabric.knit_structure or fabric.weave or 'not set'}. "
-        f"Composition: {fabric.composition or 'not set'}. "
-        f"GSM: {fabric.gsm or 'not set'}. "
-        f"Stretch: {fabric.stretch_type or 'not set'}. "
-        f"Surface: {fabric.surface or 'not set'}. "
-        f"Handfeel: {fabric.handfeel or 'not set'}. "
-        f"Drape: {fabric.drape or 'not set'}. "
-        f"Weight class: {fabric.weight_class or 'not set'}. "
-        f"Warmth: {fabric.warmth or 'not set'}. "
-        f"Breathability: {fabric.breathability or 'not set'}. "
-        f"Sheerness: {fabric.sheerness or 'not set'}. "
-        f"Durability: {fabric.durability or 'not set'}. "
-        f"Typical uses: {getattr(fabric, 'typical_uses', '') or 'not set'}."
-    )
-
-    prompt = (
-        "You are a senior textile technician in a garment factory.\n"
-        "Based on the fabric data below, answer in short points:\n"
-        "- Best product types to use this fabric for\n"
-        "- Main pros and cons\n"
-        "- Care and washing tips\n"
-        "- Pricing notes for buyers\n"
-        "- Any risk or warning for production\n"
-        "Keep answer under 10 lines.\n\n"
-        f"Fabric data: {info}"
-    )
-
-    try:
-        resp = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a textile expert for a clothing factory."},
-                {"role": "user", "content": prompt},
-            ],
-        )
-        ai_text = resp.choices[0].message.content
-        return JsonResponse({"ok": True, "suggestion": ai_text})
-    except Exception as e:
-        return JsonResponse({"ok": False, "error": str(e)})
-
-
-def fabrics_list(request):
-    qs = Fabric.objects.all().order_by("-created_at")
-
-    q = request.GET.get("q") or ""
-    fabric_group = request.GET.get("fabric_group") or ""
-    fabric_type = request.GET.get("fabric_type") or ""
+def _apply_catalog_filters(qs, config, request):
+    q = (request.GET.get("q") or "").strip()
+    item_type = (request.GET.get("type") or request.GET.get(config.get("type_field", "")) or "").strip()
+    status = (request.GET.get("status") or "").strip()
+    colour = (request.GET.get("colour") or request.GET.get("color") or "").strip()
+    category = (request.GET.get("category") or "").strip()
+    fabric = (request.GET.get("fabric") or "").strip()
+    decoration = (request.GET.get("decoration") or "").strip()
 
     if q:
-        qs = qs.filter(name__icontains=q)
+        qs = qs.filter(_catalog_search_q(config, q)).distinct()
+    if item_type and config.get("type_field"):
+        qs = qs.filter(**{f"{config['type_field']}__icontains": item_type})
+    if status:
+        qs = qs.filter(status=status)
+    elif request.GET.get("show") != "all":
+        qs = qs.exclude(status="Archived").filter(is_active=True)
+    if colour and config.get("colour_field"):
+        qs = qs.filter(**{f"{config['colour_field']}__icontains": colour})
+    if category and config.get("category_field"):
+        qs = qs.filter(**{f"{config['category_field']}__icontains": category})
+    if fabric and config["section"] == "products":
+        fabric_q = Q(main_fabric__name__icontains=fabric) | Q(default_fabric__icontains=fabric)
+        if fabric.isdigit():
+            fabric_q |= Q(main_fabric_id=fabric)
+        qs = qs.filter(fabric_q)
+    if decoration and config["section"] == "products":
+        qs = qs.filter(main_decoration=decoration)
+    return qs
 
-    if fabric_group:
-        qs = qs.filter(fabric_group__icontains=fabric_group)
 
-    if fabric_type:
-        qs = qs.filter(fabric_type__icontains=fabric_type)
+def _catalog_item_title(obj):
+    return getattr(obj, "name", "") or str(obj)
 
-    context = {
-        "fabrics": qs,
-        "q": q,
-        "fabric_group": fabric_group,
-        "fabric_type": fabric_type,
+
+def _catalog_item_type(obj, config):
+    field_name = config.get("type_field")
+    return getattr(obj, field_name, "") if field_name else ""
+
+
+def _catalog_item_colour(obj, config):
+    field_name = config.get("colour_field")
+    return getattr(obj, field_name, "") if field_name else ""
+
+
+def _catalog_useful_detail(obj, config):
+    if config["section"] == "products":
+        fabric = getattr(obj, "main_fabric", None)
+        return getattr(fabric, "name", "") or getattr(obj, "default_fabric", "") or getattr(obj, "main_decoration", "")
+    if config["section"] == "fabrics":
+        return getattr(obj, "gsm", "") or getattr(obj, "composition", "") or getattr(obj, "best_use", "")
+    return getattr(obj, "best_use", "") or getattr(obj, "material", "") or getattr(obj, "color", "")
+
+
+def _catalog_card(obj, config):
+    return {
+        "object": obj,
+        "name": _catalog_item_title(obj),
+        "type": _catalog_item_type(obj, config),
+        "category": getattr(obj, config.get("category_field", ""), "") if config.get("category_field") else "",
+        "colour": _catalog_item_colour(obj, config),
+        "detail": _catalog_useful_detail(obj, config),
+        "status": getattr(obj, "status", ""),
+        "cover_url": catalog_cover_url(obj),
+        "image_count": catalog_image_count(obj),
+        "detail_url": reverse(config["detail_url"], args=[obj.pk]),
     }
-    return render(request, "crm/fabric_list.html", context)
 
 
-def fabric_add(request):
-    if request.method == "POST":
-        form = FabricForm(request.POST, request.FILES)
-        if form.is_valid():
-            fabric = form.save()
-            sync_fabric_masters(fabric)
-            return redirect("fabric_detail", pk=fabric.pk)
-    else:
-        form = FabricForm()
-
-    context = {
-        "form": form,
-        "mode": "add",
-        "fabric": None,
-        "fabric_groups": FabricGroupMaster.objects.all(),
-        "fabric_types": FabricTypeMaster.objects.all(),
-        "knit_structures": KnitStructureMaster.objects.all(),
-        "weaves": WeaveMaster.objects.all(),
-        "surfaces": SurfaceMaster.objects.all(),
-        "handfeels": HandfeelMaster.objects.all(),
+def _catalog_filter_context(config):
+    type_options = _catalog_choice_options(config.get("type_choices", []))
+    return {
+        "type_options": type_options,
+        "status_options": _catalog_status_choices(config["model"]),
+        "category_options": Opportunity.PRODUCT_CATEGORY_CHOICES if config["section"] == "products" else [],
+        "decoration_options": Product._meta.get_field("main_decoration").choices if config["section"] == "products" else [],
     }
-    return render(request, "crm/fabric_form.html", context)
 
 
-def fabric_edit(request, pk):
-    fabric = get_object_or_404(Fabric, pk=pk)
-
-    if request.method == "POST":
-        form = FabricForm(request.POST, request.FILES, instance=fabric)
-        if form.is_valid():
-            fabric = form.save()
-            sync_fabric_masters(fabric)
-            return redirect("fabric_detail", pk=fabric.pk)
-    else:
-        form = FabricForm(instance=fabric)
-
-    context = {
-        "form": form,
-        "mode": "edit",
-        "fabric": fabric,
-        "fabric_groups": FabricGroupMaster.objects.all(),
-        "fabric_types": FabricTypeMaster.objects.all(),
-        "knit_structures": KnitStructureMaster.objects.all(),
-        "weaves": WeaveMaster.objects.all(),
-        "surfaces": SurfaceMaster.objects.all(),
-        "handfeels": HandfeelMaster.objects.all(),
-    }
-    return render(request, "crm/fabric_form.html", context)
+def _catalog_bound_fields(form, field_names):
+    return [form[field_name] for field_name in field_names if field_name in form.fields]
 
 
-@require_POST
-def fabric_ai_detail(request, pk):
-    fabric = get_object_or_404(Fabric, pk=pk)
-
-    mode = request.POST.get("mode", "summary")
-    user_text = request.POST.get("user_text", "").strip()
-    compare_text = request.POST.get("compare_text", "").strip()
-
-    info_parts = [
-        f"Name: {fabric.name}",
-        f"Code: {fabric.fabric_code}",
-        f"Group: {fabric.fabric_group or 'not set'}",
-        f"Type: {fabric.fabric_type or 'not set'}",
-        f"Weave: {fabric.weave or 'not set'}",
-        f"Knit structure: {fabric.knit_structure or 'not set'}",
-        f"Construction: {fabric.construction or 'not set'}",
-        f"Composition: {fabric.composition or 'not set'}",
-        f"GSM: {fabric.gsm or 'not set'}",
-        f"Stretch: {fabric.stretch_type or 'not set'}",
-        f"Surface: {fabric.surface or 'not set'}",
-        f"Handfeel: {fabric.handfeel or 'not set'}",
-        f"Drape: {fabric.drape or 'not set'}",
-        f"Warmth: {fabric.warmth or 'not set'}",
-        f"Weight class: {fabric.weight_class or 'not set'}",
-        f"Breathability: {fabric.breathability or 'not set'}",
-        f"Sheerness: {fabric.sheerness or 'not set'}",
-        f"Shrinkage: {fabric.shrinkage or 'not set'}",
-        f"Durability: {fabric.durability or 'not set'}",
-        f"Colors: {fabric.color_options or 'not set'}",
+def _catalog_form_sections(form, config, can_view_internal):
+    sections = [
+        {"title": "Required", "fields": _catalog_bound_fields(form, config["required_fields"])},
+        {"title": "Optional", "fields": _catalog_bound_fields(form, config["optional_fields"])},
+        {"title": "More Details", "fields": _catalog_bound_fields(form, config["more_fields"]), "collapsed": True},
     ]
+    if can_view_internal:
+        sections.append({"title": "Internal Only", "fields": _catalog_bound_fields(form, config["internal_fields"]), "collapsed": True, "internal": True})
+    return [section for section in sections if section["fields"]]
 
-    if fabric.price_per_kg:
-        info_parts.append(f"Price per kg: {fabric.price_per_kg}")
-    if fabric.price_per_meter:
-        info_parts.append(f"Price per meter: {fabric.price_per_meter}")
 
-    fabric_info = "\n".join(info_parts)
-
-    if mode == "summary":
-        task = (
-            "Give a very short summary of this fabric for internal use. "
-            "Two or three short lines. No marketing style, only clear facts."
-        )
-    elif mode == "use_cases":
-        task = (
-            "Suggest the best end uses for this fabric. "
-            "List three to six idea lines that are clear for a garment factory."
-        )
-    elif mode == "ideal_products":
-        task = (
-            "Suggest ideal product types and garment styles that this fabric is good for. "
-            "Think like a clothing factory that does activewear, streetwear, kids, and corporate."
-        )
-    elif mode == "costing":
-        task = (
-            "Give a simple costing view. Explain if this fabric feels low, medium, or high cost, "
-            "and how a factory should think about margin and MOQ when using it."
-        )
-    elif mode == "properties":
-        task = (
-            "Explain the key properties of this fabric in simple language. "
-            "Focus on stretch, handfeel, warmth, drape, and care points."
-        )
-    elif mode == "compare":
-        other = compare_text or "Another generic fabric used for similar end use."
-        task = (
-            "Compare this fabric with the other fabric given. "
-            "Explain pros and cons for each and when to pick one over the other.\n\n"
-            f"Other fabric: {other}"
-        )
-    elif mode == "bom":
-        task = (
-            "Suggest a simple bill of material idea using this fabric as main body. "
-            "Include fabric main body, rib or cuff, lining if needed, and basic trims."
-        )
-    elif mode == "moq_lead":
-        task = (
-            "Suggest a simple view of MOQ and lead time a factory might use with this fabric. "
-            "Keep it in two to four short lines."
-        )
+def _sync_catalog_status(obj, user=None):
+    status = getattr(obj, "status", "") or ""
+    if status == "Archived":
+        obj.is_active = False
+        if not obj.archived_at:
+            obj.archived_at = timezone.now()
+        if user and getattr(user, "is_authenticated", False) and not obj.archived_by_id:
+            obj.archived_by = user
     else:
-        if not user_text:
-            return JsonResponse(
-                {"ok": False, "error": "Please type a question for AI."}
-            )
-        task = (
-            "You are a senior textile expert helping a garment factory. "
-            "Answer the user question based on the fabric info below.\n\n"
-            f"User question: {user_text}"
-        )
-
-    prompt = (
-        "Fabric info:\n"
-        f"{fabric_info}\n\n"
-        "Task:\n"
-        f"{task}\n\n"
-        "Answer in short clear English. Use bullet points if helpful."
-    )
-
-    try:
-        resp = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a textile expert for a clothing factory."},
-                {"role": "user", "content": prompt},
-            ],
-        )
-        ai_text = resp.choices[0].message.content or ""
-    except Exception as e:
-        return JsonResponse(
-            {"ok": False, "error": f"AI error: {str(e)}"}
-        )
-
-    save_modes = {
-        "summary": "AI summary",
-        "use_cases": "AI use cases",
-        "ideal_products": "AI ideal products",
-        "costing": "AI costing view",
-        "properties": "AI properties",
-        "compare": "AI compare",
-        "bom": "AI BOM",
-        "moq_lead": "AI MOQ and lead time",
-        "chat": "AI chat note",
-    }
-
-    label = save_modes.get(mode, "AI note")
-    note_block = f"\n\n[{label}] \n{ai_text}".strip()
-
-    if fabric.notes:
-        fabric.notes = f"{fabric.notes.rstrip()}\n\n{note_block}"
-    else:
-        fabric.notes = note_block
-    fabric.save()
-
-    return JsonResponse({"ok": True, "text": ai_text})
+        obj.is_active = True
+        obj.archived_at = None
+        obj.archived_by = None
 
 
-def fabric_detail(request, pk):
-    fabric = get_object_or_404(Fabric, pk=pk)
+def _apply_catalog_image_removals(obj, post_data, files_data):
+    for _slot, field_name in CATALOG_IMAGE_FIELDS:
+        if _truthy(post_data.get(f"remove_{field_name}")) and field_name not in files_data:
+            setattr(obj, field_name, "")
 
-    context = {
-        "fabric": fabric,
-    }
-    return render(request, "crm/fabric_detail.html", context)
+
+def _sync_product_masters(product):
+    if product.product_type:
+        ProductTypeMaster.objects.get_or_create(name=product.product_type.strip(), defaults={"is_active": True})
+    if product.product_category:
+        ProductCategoryMaster.objects.get_or_create(name=product.product_category.strip(), defaults={"is_active": True})
+    if product.default_fabric:
+        FabricNameMaster.objects.get_or_create(name=product.default_fabric.strip(), defaults={"is_active": True})
+    if product.default_gsm:
+        GSMRangeMaster.objects.get_or_create(name=product.default_gsm.strip(), defaults={"is_active": True})
 
 
 def sync_fabric_masters(fabric):
-    """Make sure new values are stored in master tables."""
     def upsert(model_cls, value):
-        if not value:
-            return
-        v = value.strip()
-        if not v:
-            return
-        exists = model_cls.objects.filter(name__iexact=v).first()
-        if not exists:
-            model_cls.objects.create(name=v)
+        value = (value or "").strip()
+        if value and not model_cls.objects.filter(name__iexact=value).exists():
+            model_cls.objects.create(name=value)
 
     upsert(FabricGroupMaster, fabric.fabric_group)
     upsert(FabricTypeMaster, fabric.fabric_type)
@@ -6196,372 +5970,544 @@ def sync_fabric_masters(fabric):
     upsert(HandfeelMaster, fabric.handfeel)
 
 
-# ===================================================
-# ACCESSORY LIBRARY AND AI
-# ===================================================
+def _catalog_after_save(obj, config):
+    if config["section"] == "products":
+        _sync_product_masters(obj)
+    elif config["section"] == "fabrics":
+        sync_fabric_masters(obj)
 
-@require_POST
-def accessory_ai_suggest(request):
-    name = request.POST.get("name", "").strip()
-    acc_type = request.POST.get("accessory_type", "").strip()
-    color = request.POST.get("color", "").strip()
 
-    if not name:
-        return JsonResponse({"ok": False, "error": "Please type a name first."})
-
-    prompt = (
-        "You are a textile and garment accessories expert.\n"
-        "Based on the data below, suggest:\n"
-        "- Material\n"
-        "- Best use case\n"
-        "- Durability level\n"
-        "- Price level (low, medium, high)\n"
-        "- Short production notes\n"
-        "Keep answer under 6 lines.\n\n"
-        f"Accessory name: {name}\n"
-        f"Type: {acc_type or 'not specified'}\n"
-        f"Color: {color or 'not specified'}"
+def _log_catalog_audit(obj, config, action, user, summary=""):
+    LivingCatalogAudit.objects.create(
+        content_type=ContentType.objects.get_for_model(obj.__class__),
+        object_id=obj.pk,
+        item_type=config["singular"],
+        action=action,
+        summary=summary[:255],
+        actor=user if user and user.is_authenticated else None,
     )
 
+
+def _log_catalog_image_audits(obj, config, before_images, user):
+    after_images = catalog_image_names(obj)
+    for slot, field_name in CATALOG_IMAGE_FIELDS:
+        before = before_images.get(field_name, "")
+        after = after_images.get(field_name, "")
+        if not before and after:
+            _log_catalog_audit(obj, config, LivingCatalogAudit.ACTION_IMAGE_ADDED, user, f"Image {slot} added")
+        elif before and not after:
+            _log_catalog_audit(obj, config, LivingCatalogAudit.ACTION_IMAGE_REMOVED, user, f"Image {slot} removed")
+        elif before and after and before != after:
+            _log_catalog_audit(obj, config, LivingCatalogAudit.ACTION_IMAGE_REPLACED, user, f"Image {slot} replaced")
+
+
+def _fabric_preview_payload():
+    payload = []
+    for fabric in Fabric.objects.filter(is_active=True).exclude(status="Archived").order_by("name")[:500]:
+        payload.append(
+            {
+                "id": fabric.pk,
+                "name": fabric.name,
+                "composition": fabric.composition,
+                "gsm": fabric.gsm,
+                "image_url": catalog_cover_url(fabric),
+            }
+        )
+    return payload
+
+
+def _catalog_form_context(request, config, form, mode, obj=None):
+    can_view_internal = _can_view_catalog_internal(request.user)
+    raw_slots = catalog_image_slots(obj) if obj else [{"slot": slot, "field_name": field_name, "url": "", "has_image": False} for slot, field_name in CATALOG_IMAGE_FIELDS]
+    image_fields = []
+    for slot in raw_slots:
+        field_name = slot["field_name"]
+        image_fields.append(
+            {
+                **slot,
+                "field": form[field_name] if field_name in form.fields else None,
+                "clear_name": f"{field_name}-clear",
+            }
+        )
+    context = {
+        "catalog": config,
+        "form": form,
+        "mode": mode,
+        "item": obj,
+        "item_type": _catalog_item_type(obj, config),
+        "image_slots": raw_slots,
+        "image_fields": image_fields,
+        "form_sections": _catalog_form_sections(form, config, can_view_internal),
+        "can_view_internal": can_view_internal,
+        "can_edit": _can_edit_catalog_item(request.user),
+        "fabric_preview_json": json.dumps(_fabric_preview_payload()) if config["section"] == "products" else "[]",
+        "ai_url": reverse(config["ai_url"]) if config.get("ai_url") else "",
+    }
+    return context
+
+
+def _catalog_add(request, section):
+    config = _catalog_config(section)
+    if not _can_edit_catalog_item(request.user):
+        return HttpResponseForbidden("No access")
+
+    if request.method == "POST":
+        form = config["form"](request.POST, request.FILES, can_view_internal=_can_view_catalog_internal(request.user))
+        if form.is_valid():
+            obj = form.save(commit=False)
+            _apply_catalog_image_removals(obj, request.POST, request.FILES)
+            _sync_catalog_status(obj, request.user)
+            obj.save()
+            form.save_m2m()
+            _catalog_after_save(obj, config)
+            _log_catalog_audit(obj, config, LivingCatalogAudit.ACTION_CREATED, request.user, "Record created")
+            _log_catalog_image_audits(obj, config, {field_name: "" for _, field_name in CATALOG_IMAGE_FIELDS}, request.user)
+            messages.success(request, f"{config['singular'].title()} saved.")
+            return redirect(config["detail_url"], pk=obj.pk)
+    else:
+        form = config["form"](can_view_internal=_can_view_catalog_internal(request.user))
+
+    return render(request, "crm/living_catalog_form.html", _catalog_form_context(request, config, form, "add"))
+
+
+def _catalog_edit(request, section, pk):
+    config = _catalog_config(section)
+    if not _can_edit_catalog_item(request.user):
+        return HttpResponseForbidden("No access")
+    obj = get_object_or_404(_visible_catalog_queryset(config, request.user), pk=pk)
+
+    if request.method == "POST":
+        before_images = catalog_image_names(obj)
+        before_status = getattr(obj, "status", "")
+        form = config["form"](request.POST, request.FILES, instance=obj, can_view_internal=_can_view_catalog_internal(request.user))
+        if form.is_valid():
+            obj = form.save(commit=False)
+            _apply_catalog_image_removals(obj, request.POST, request.FILES)
+            _sync_catalog_status(obj, request.user)
+            obj.save()
+            form.save_m2m()
+            _catalog_after_save(obj, config)
+            _log_catalog_audit(obj, config, LivingCatalogAudit.ACTION_EDITED, request.user, "Record edited")
+            _log_catalog_image_audits(obj, config, before_images, request.user)
+            if before_status != getattr(obj, "status", ""):
+                _log_catalog_audit(obj, config, LivingCatalogAudit.ACTION_STATUS_CHANGED, request.user, f"Status changed from {before_status or 'blank'} to {obj.status or 'blank'}")
+            messages.success(request, f"{config['singular'].title()} updated.")
+            return redirect(config["detail_url"], pk=obj.pk)
+    else:
+        form = config["form"](instance=obj, can_view_internal=_can_view_catalog_internal(request.user))
+
+    return render(request, "crm/living_catalog_form.html", _catalog_form_context(request, config, form, "edit", obj))
+
+
+def _catalog_public_details(obj, config):
+    fields = []
+    if config["section"] == "products":
+        fabric = getattr(obj, "main_fabric", None)
+        _catalog_add_value(fields, "Main fabric", getattr(fabric, "name", "") or getattr(obj, "default_fabric", ""))
+        _catalog_add_value(fields, "Composition", getattr(fabric, "composition", ""))
+        _catalog_add_value(fields, "GSM", getattr(fabric, "gsm", "") or getattr(obj, "default_gsm", ""))
+        _catalog_add_value(fields, "Decoration", getattr(obj, "main_decoration", ""))
+        _catalog_add_value(fields, "Fit", getattr(obj, "fit", ""))
+        _catalog_add_value(fields, "Size range", getattr(obj, "size_range", ""))
+        _catalog_add_value(fields, "MOQ", getattr(obj, "default_moq", ""))
+        _catalog_add_value(fields, "Short description", getattr(obj, "short_description", ""))
+        _catalog_add_value(fields, "Colours", getattr(obj, "available_colours", "") or getattr(obj, "main_colour", ""))
+    elif config["section"] == "fabrics":
+        for label, attr in (("Composition", "composition"), ("GSM", "gsm"), ("Best use", "best_use"), ("Fabric type", "fabric_type"), ("Stretch", "stretch_type"), ("Colour", "color_options"), ("Notes", "notes")):
+            _catalog_add_value(fields, label, getattr(obj, attr, ""))
+    elif config["section"] == "accessories":
+        for label, attr in (("Type", "accessory_type"), ("Colour", "color"), ("Material", "material"), ("Best use", "best_use"), ("Notes", "notes")):
+            _catalog_add_value(fields, label, getattr(obj, attr, ""))
+    elif config["section"] == "trims":
+        for label, attr in (("Type", "trim_type"), ("Colour", "color"), ("Material", "material"), ("Best use", "best_use"), ("Notes", "notes")):
+            _catalog_add_value(fields, label, getattr(obj, attr, ""))
+    elif config["section"] == "threads":
+        for label, attr in (("Type", "thread_type"), ("Colour", "color"), ("Thread code", "thread_code"), ("Best use", "best_use"), ("Notes", "notes")):
+            _catalog_add_value(fields, label, getattr(obj, attr, ""))
+    _catalog_add_value(fields, "Tags", getattr(obj, "tags", ""))
+    return fields
+
+
+def _catalog_internal_details(obj, config):
+    fields = []
+    _catalog_add_value(fields, "Internal cost", _format_catalog_money(getattr(obj, "internal_cost", None)))
+    _catalog_add_value(fields, "Suggested selling price", _format_catalog_money(getattr(obj, "suggested_selling_price", None)))
+    _catalog_add_value(fields, "Internal notes", getattr(obj, "internal_notes", ""))
+    if config["section"] == "products":
+        _catalog_add_value(fields, "Legacy default price", _format_catalog_money(getattr(obj, "default_price", None)))
+    elif config["section"] == "fabrics":
+        _catalog_add_value(fields, "Legacy price per kg", _format_catalog_money(getattr(obj, "price_per_kg", None)))
+        _catalog_add_value(fields, "Legacy price per meter", _format_catalog_money(getattr(obj, "price_per_meter", None)))
+    elif config["section"] == "accessories":
+        _catalog_add_value(fields, "Private supplier", getattr(obj, "supplier", ""))
+        _catalog_add_value(fields, "Legacy price per unit", _format_catalog_money(getattr(obj, "price_per_unit", None)))
+    elif config["section"] == "trims":
+        _catalog_add_value(fields, "Legacy price per meter", _format_catalog_money(getattr(obj, "price_per_meter", None)))
+    elif config["section"] == "threads":
+        _catalog_add_value(fields, "Legacy price per cone", _format_catalog_money(getattr(obj, "price_per_cone", None)))
+    return fields
+
+
+def _related_material_card(obj, config):
+    return {
+        "name": _catalog_item_title(obj),
+        "type": _catalog_item_type(obj, config),
+        "detail": _catalog_useful_detail(obj, config),
+        "cover_url": catalog_cover_url(obj),
+        "url": reverse(config["detail_url"], args=[obj.pk]),
+    }
+
+
+def _product_related_materials(product):
+    materials = []
+    fabric = getattr(product, "main_fabric", None)
+    if fabric:
+        materials.append({"title": "Fabric", "items": [_related_material_card(fabric, CATALOG_CONFIG["fabrics"])]})
+    accessories = [_related_material_card(item, CATALOG_CONFIG["accessories"]) for item in product.accessories.all()]
+    trims = [_related_material_card(item, CATALOG_CONFIG["trims"]) for item in product.trims.all()]
+    threads = [_related_material_card(item, CATALOG_CONFIG["threads"]) for item in product.threads.all()]
+    for title, items in (("Accessories", accessories), ("Trims", trims), ("Threads", threads)):
+        if items:
+            materials.append({"title": title, "items": items})
+    return materials
+
+
+def _catalog_detail_context(request, config, obj, *, presentation=False):
+    can_view_internal = False if presentation else _can_view_catalog_internal(request.user)
+    context = {
+        "catalog": config,
+        "item": obj,
+        "image_slots": catalog_image_slots(obj),
+        "image_count": catalog_image_count(obj),
+        "public_details": _catalog_public_details(obj, config),
+        "internal_details": _catalog_internal_details(obj, config) if can_view_internal else [],
+        "related_materials": _product_related_materials(obj) if config["section"] == "products" else [],
+        "can_view_internal": can_view_internal,
+        "can_edit": False if presentation else _can_edit_catalog_item(request.user),
+        "can_archive": False if presentation else _can_archive_catalog_item(request.user),
+        "presentation": presentation,
+        "presentation_url": reverse(config["presentation_url"], args=[obj.pk]),
+        "edit_url": reverse(config["edit_url"], args=[obj.pk]),
+        "list_url": reverse(config["list_url"]),
+        "safe_json_url": reverse("library_item_safe_json", args=[config["section"], obj.pk]),
+    }
+    return context
+
+
+def _catalog_detail(request, section, pk):
+    config = _catalog_config(section)
+    obj = get_object_or_404(_visible_catalog_queryset(config, request.user), pk=pk)
+    return render(request, "crm/living_catalog_detail.html", _catalog_detail_context(request, config, obj))
+
+
+def _presentation_neighbor_urls(config, obj, user):
+    qs = config["model"].objects.exclude(status="Archived").filter(is_active=True)
+    if _is_catalog_marketing_user(user):
+        if config["section"] == "products":
+            qs = qs.filter(status__in=["Available", "Sample Available"])
+        else:
+            qs = qs.filter(status="Available")
+    neighbors = qs.aggregate(
+        previous_pk=Max("pk", filter=Q(pk__lt=obj.pk)),
+        next_pk=Min("pk", filter=Q(pk__gt=obj.pk)),
+    )
+    return {
+        "previous_url": reverse(config["presentation_url"], args=[neighbors["previous_pk"]]) if neighbors["previous_pk"] else "",
+        "next_url": reverse(config["presentation_url"], args=[neighbors["next_pk"]]) if neighbors["next_pk"] else "",
+    }
+
+
+def _catalog_presentation(request, section, pk):
+    config = _catalog_config(section)
+    obj = get_object_or_404(_visible_catalog_queryset(config, request.user, include_archived=False), pk=pk)
+    context = _catalog_detail_context(request, config, obj, presentation=True)
+    context.update(_presentation_neighbor_urls(config, obj, request.user))
+    return render(request, "crm/living_catalog_presentation.html", context)
+
+
+def _catalog_public_payload(obj, config):
+    return {
+        "id": obj.pk,
+        "section": config["section"],
+        "name": _catalog_item_title(obj),
+        "type": _catalog_item_type(obj, config),
+        "category": getattr(obj, config.get("category_field", ""), "") if config.get("category_field") else "",
+        "colour": _catalog_item_colour(obj, config),
+        "status": getattr(obj, "status", ""),
+        "image_count": catalog_image_count(obj),
+        "images": [{"slot": slot["slot"], "url": slot["url"]} for slot in catalog_image_slots(obj) if slot["url"]],
+        "details": _catalog_public_details(obj, config),
+        "related_materials": _product_related_materials(obj) if config["section"] == "products" else [],
+    }
+
+
+def library_item_safe_json(request, section, pk):
+    config = _catalog_config(section)
+    obj = get_object_or_404(_visible_catalog_queryset(config, request.user), pk=pk)
+    return JsonResponse(_catalog_public_payload(obj, config))
+
+
+@require_POST
+def catalog_archive(request, section, pk):
+    config = _catalog_config(section)
+    if not _can_archive_catalog_item(request.user):
+        return HttpResponseForbidden("No access")
+    obj = get_object_or_404(_visible_catalog_queryset(config, request.user), pk=pk)
+    obj.status = "Archived"
+    obj.is_active = False
+    obj.archived_at = timezone.now()
+    obj.archived_by = request.user if request.user.is_authenticated else None
+    obj.save(update_fields=["status", "is_active", "archived_at", "archived_by", "updated_at"])
+    _log_catalog_audit(obj, config, LivingCatalogAudit.ACTION_ARCHIVED, request.user, "Record archived")
+    messages.success(request, f"{config['singular'].title()} archived.")
+    return redirect(config["detail_url"], pk=obj.pk)
+
+
+@require_POST
+def catalog_restore(request, section, pk):
+    config = _catalog_config(section)
+    if not _can_archive_catalog_item(request.user):
+        return HttpResponseForbidden("No access")
+    obj = get_object_or_404(_visible_catalog_queryset(config, request.user), pk=pk)
+    obj.status = config["default_status"]
+    obj.is_active = True
+    obj.archived_at = None
+    obj.archived_by = None
+    obj.save(update_fields=["status", "is_active", "archived_at", "archived_by", "updated_at"])
+    _log_catalog_audit(obj, config, LivingCatalogAudit.ACTION_RESTORED, request.user, "Record restored")
+    messages.success(request, f"{config['singular'].title()} restored.")
+    return redirect(config["detail_url"], pk=obj.pk)
+
+
+def _catalog_list(request, section):
+    config = _catalog_config(section)
+    qs = _visible_catalog_queryset(config, request.user, with_related=False)
+    qs = _apply_catalog_filters(qs, config, request).order_by("-updated_at", "-id")
+    view_mode = (request.GET.get("view") or "card").strip().lower()
+    if view_mode not in {"card", "table"}:
+        view_mode = "card"
+
+    paginator = Paginator(qs, 48)
+    page_obj = paginator.get_page(request.GET.get("page") or 1)
+    rows = [_catalog_card(obj, config) for obj in page_obj.object_list]
+    context = {
+        "catalog": config,
+        "rows": rows,
+        "page_obj": page_obj,
+        "view_mode": view_mode,
+        "q": request.GET.get("q", ""),
+        "selected_type": request.GET.get("type", ""),
+        "selected_status": request.GET.get("status", ""),
+        "selected_colour": request.GET.get("colour", "") or request.GET.get("color", ""),
+        "selected_category": request.GET.get("category", ""),
+        "selected_fabric": request.GET.get("fabric", ""),
+        "selected_decoration": request.GET.get("decoration", ""),
+        "can_edit": _can_edit_catalog_item(request.user),
+    }
+    context.update(_catalog_filter_context(config))
+    return render(request, "crm/living_catalog_list.html", context)
+
+
+def _catalog_ai_response(prompt, system_prompt):
+    if client is None:
+        return JsonResponse({"ok": False, "error": "AI is not configured."})
     try:
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are an accessory expert."},
-                {"role": "user", "content": prompt}
-            ]
+            messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}],
         )
-        ai_text = resp.choices[0].message.content
-        return JsonResponse({"ok": True, "suggestion": ai_text})
-
+        ai_text = resp.choices[0].message.content or ""
+        return JsonResponse({"ok": True, "suggestion": ai_text, "text": ai_text})
     except Exception as e:
         return JsonResponse({"ok": False, "error": str(e)})
 
 
+def products_list(request):
+    return _catalog_list(request, "products")
+
+
+def product_add(request):
+    return _catalog_add(request, "products")
+
+
+def product_edit(request, pk):
+    return _catalog_edit(request, "products", pk)
+
+
+def product_detail(request, pk):
+    return _catalog_detail(request, "products", pk)
+
+
+def product_presentation(request, pk):
+    return _catalog_presentation(request, "products", pk)
+
+
+@require_POST
+def product_ai_detail(request, pk):
+    product = get_object_or_404(Product.objects.select_related("main_fabric"), pk=pk)
+    prompt = (
+        "Suggest a short description, recommended GSM, recommended fabric, decoration, best use, and tags. "
+        "Do not include internal pricing and do not say anything was saved.\n\n"
+        f"Product: {product.name}. Type: {product.product_type}. Category: {product.product_category}. "
+        f"Fabric: {getattr(product.main_fabric, 'name', '') or product.default_fabric}. Decoration: {product.main_decoration}."
+    )
+    return _catalog_ai_response(prompt, "You are a senior apparel product developer. Keep suggestions short and review-ready.")
+
+
+@require_POST
+def product_ai_suggest(request):
+    name = request.POST.get("name", "").strip()
+    if not name:
+        return JsonResponse({"ok": False, "error": "Please add a product name first."})
+    prompt = (
+        "Suggest a short description, recommended GSM, recommended fabric, decoration, best use, and tags. "
+        "Do not include pricing.\n\n"
+        f"Name: {name}. Type: {request.POST.get('product_type', '').strip()}. Category: {request.POST.get('product_category', '').strip()}."
+    )
+    return _catalog_ai_response(prompt, "You are a senior apparel product developer. Keep it concise.")
+
+
+def fabrics_list(request):
+    return _catalog_list(request, "fabrics")
+
+
+def fabric_add(request):
+    return _catalog_add(request, "fabrics")
+
+
+def fabric_edit(request, pk):
+    return _catalog_edit(request, "fabrics", pk)
+
+
+def fabric_detail(request, pk):
+    return _catalog_detail(request, "fabrics", pk)
+
+
+def fabric_presentation(request, pk):
+    return _catalog_presentation(request, "fabrics", pk)
+
+
+@require_POST
+def fabric_ai_suggest(request):
+    name = request.POST.get("name", "").strip()
+    if not name:
+        return JsonResponse({"ok": False, "error": "Please type a fabric name first."})
+    prompt = (
+        "Suggest likely composition, recommended GSM, stretch, best use, and tags. Do not include pricing.\n\n"
+        f"Fabric: {name}. Type: {request.POST.get('fabric_type', '').strip()}. Best use: {request.POST.get('best_use', '').strip()}."
+    )
+    return _catalog_ai_response(prompt, "You are a textile expert for a garment factory. Keep it concise.")
+
+
+@require_POST
+def fabric_ai_detail(request, pk):
+    fabric = get_object_or_404(Fabric, pk=pk)
+    prompt = (
+        "Suggest best use, recommended products, care risks, and tags. Do not include pricing and do not save anything.\n\n"
+        f"Fabric: {fabric.name}. Composition: {fabric.composition}. GSM: {fabric.gsm}."
+    )
+    return _catalog_ai_response(prompt, "You are a textile expert for a garment factory. Keep it concise.")
+
+
+@require_POST
+def fabric_ai_focus(request, pk):
+    return fabric_ai_detail(request, pk)
+
+
 def accessories_list(request):
-    qs = Accessory.objects.all().order_by("-created_at")
-
-    q = request.GET.get("q") or ""
-    accessory_type = request.GET.get("accessory_type") or ""
-    color = request.GET.get("color") or ""
-
-    if q:
-        qs = qs.filter(name__icontains=q)
-    if accessory_type:
-        qs = qs.filter(accessory_type__icontains=accessory_type)
-    if color:
-        qs = qs.filter(color__icontains=color)
-
-    context = {
-        "accessories": qs,
-        "q": q,
-        "accessory_type": accessory_type,
-        "color": color,
-    }
-    return render(request, "crm/accessory_list.html", context)
-
-
-def _accessory_basics():
-    qs = Accessory.objects.all()
-
-    type_list = (
-        qs.exclude(accessory_type="")
-        .values_list("accessory_type", flat=True)
-        .distinct()
-        .order_by("accessory_type")
-    )
-    size_list = (
-        qs.exclude(size="")
-        .values_list("size", flat=True)
-        .distinct()
-        .order_by("size")
-    )
-    color_list = (
-        qs.exclude(color="")
-        .values_list("color", flat=True)
-        .distinct()
-        .order_by("color")
-    )
-    material_list = (
-        qs.exclude(material="")
-        .values_list("material", flat=True)
-        .distinct()
-        .order_by("material")
-    )
-    finish_list = (
-        qs.exclude(finish="")
-        .values_list("finish", flat=True)
-        .distinct()
-        .order_by("finish")
-    )
-    supplier_list = (
-        qs.exclude(supplier="")
-        .values_list("supplier", flat=True)
-        .distinct()
-        .order_by("supplier")
-    )
-
-    return {
-        "acc_type_list": type_list,
-        "acc_size_list": size_list,
-        "acc_color_list": color_list,
-        "acc_material_list": material_list,
-        "acc_finish_list": finish_list,
-        "acc_supplier_list": supplier_list,
-    }
+    return _catalog_list(request, "accessories")
 
 
 def accessory_add(request):
-    if request.method == "POST":
-        form = AccessoryForm(request.POST, request.FILES)
-        if form.is_valid():
-            form.save()
-            return redirect("accessories_list")
-    else:
-        form = AccessoryForm()
-
-    context = {"form": form, "mode": "add"}
-    context.update(_accessory_basics())
-    return render(request, "crm/accessory_form.html", context)
+    return _catalog_add(request, "accessories")
 
 
 def accessory_edit(request, pk):
-    accessory = get_object_or_404(Accessory, pk=pk)
-
-    if request.method == "POST":
-        form = AccessoryForm(request.POST, request.FILES, instance=accessory)
-        if form.is_valid():
-            form.save()
-            return redirect("accessory_detail", pk=pk)
-    else:
-        form = AccessoryForm(instance=accessory)
-
-    context = {"form": form, "mode": "edit", "accessory": accessory}
-    context.update(_accessory_basics())
-    return render(request, "crm/accessory_form.html", context)
+    return _catalog_edit(request, "accessories", pk)
 
 
 def accessory_detail(request, pk):
-    accessory = get_object_or_404(Accessory, pk=pk)
-    context = {
-        "accessory": accessory,
-    }
-    return render(request, "crm/accessory_detail.html", context)
+    return _catalog_detail(request, "accessories", pk)
 
 
-# ===================================================
-# TRIM LIBRARY AND AI
-# ===================================================
+def accessory_presentation(request, pk):
+    return _catalog_presentation(request, "accessories", pk)
+
+
+@require_POST
+def accessory_ai_suggest(request):
+    name = request.POST.get("name", "").strip()
+    if not name:
+        return JsonResponse({"ok": False, "error": "Please type a name first."})
+    prompt = (
+        "Suggest material, best use, short description, and tags. Do not include pricing.\n\n"
+        f"Accessory: {name}. Type: {request.POST.get('accessory_type', '').strip()}. Colour: {request.POST.get('color', '').strip()}."
+    )
+    return _catalog_ai_response(prompt, "You are an apparel accessories expert. Keep it concise.")
+
 
 def trims_list(request):
-    qs = Trim.objects.all().order_by("-created_at")
-
-    q = request.GET.get("q") or ""
-    trim_type = request.GET.get("trim_type") or ""
-    color = request.GET.get("color") or ""
-
-    if q:
-        qs = qs.filter(name__icontains=q)
-    if trim_type:
-        qs = qs.filter(trim_type__icontains=trim_type)
-    if color:
-        qs = qs.filter(color__icontains=color)
-
-    context = {
-        "trims": qs,
-        "q": q,
-        "trim_type": trim_type,
-        "color": color,
-    }
-    return render(request, "crm/trim_list.html", context)
-
-
-def _trim_basics():
-    qs = Trim.objects.all()
-
-    type_list = (
-        qs.exclude(trim_type="")
-        .values_list("trim_type", flat=True)
-        .distinct()
-        .order_by("trim_type")
-    )
-    width_list = (
-        qs.exclude(width="")
-        .values_list("width", flat=True)
-        .distinct()
-        .order_by("width")
-    )
-    color_list = (
-        qs.exclude(color="")
-        .values_list("color", flat=True)
-        .distinct()
-        .order_by("color")
-    )
-    material_list = (
-        qs.exclude(material="")
-        .values_list("material", flat=True)
-        .distinct()
-        .order_by("material")
-    )
-
-    return {
-        "trim_type_list": type_list,
-        "trim_width_list": width_list,
-        "trim_color_list": color_list,
-        "trim_material_list": material_list,
-    }
+    return _catalog_list(request, "trims")
 
 
 def trim_add(request):
-    if request.method == "POST":
-        form = TrimForm(request.POST, request.FILES)
-        if form.is_valid():
-            form.save()
-            return redirect("trims_list")
-    else:
-        form = TrimForm()
-
-    context = {"form": form, "mode": "add"}
-    context.update(_trim_basics())
-    return render(request, "crm/trim_form.html", context)
+    return _catalog_add(request, "trims")
 
 
 def trim_edit(request, pk):
-    trim = get_object_or_404(Trim, pk=pk)
-
-    if request.method == "POST":
-        form = TrimForm(request.POST, request.FILES, instance=trim)
-        if form.is_valid():
-            form.save()
-            return redirect("trim_detail", pk=pk)
-    else:
-        form = TrimForm(instance=trim)
-
-    context = {"form": form, "mode": "edit", "trim": trim}
-    context.update(_trim_basics())
-    return render(request, "crm/trim_form.html", context)
+    return _catalog_edit(request, "trims", pk)
 
 
 def trim_detail(request, pk):
-    trim = get_object_or_404(Trim, pk=pk)
-    context = {
-        "trim": trim,
-    }
-    return render(request, "crm/trim_detail.html", context)
+    return _catalog_detail(request, "trims", pk)
+
+
+def trim_presentation(request, pk):
+    return _catalog_presentation(request, "trims", pk)
 
 
 @require_POST
 def trim_ai_suggest(request):
     name = request.POST.get("name", "").strip()
-    trim_type = request.POST.get("trim_type", "").strip()
-    material = request.POST.get("material", "").strip()
-    width = request.POST.get("width", "").strip()
-
     if not name:
-        return JsonResponse(
-            {"ok": False, "error": "Please type a trim name first."}
-        )
-
-    trim_info = (
-        f"Name: {name}. "
-        f"Type: {trim_type or 'not set'}. "
-        f"Material: {material or 'not set'}. "
-        f"Width: {width or 'not set'}."
-    )
-
+        return JsonResponse({"ok": False, "error": "Please type a trim name first."})
     prompt = (
-        "You are a senior garment trim expert helping a clothing factory team.\n"
-        "Based on the trim data below, give short useful suggestions.\n"
-        "Return:\n"
-        "- Best use cases\n"
-        "- Sewing or application notes\n"
-        "- Durability and care notes\n"
-        "- Price level (low, medium, high)\n\n"
-        "Keep it very short, 4 to 6 lines.\n\n"
-        f"Trim info: {trim_info}"
+        "Suggest material, best use, short description, and tags. Do not include pricing.\n\n"
+        f"Trim: {name}. Type: {request.POST.get('trim_type', '').strip()}. Colour: {request.POST.get('color', '').strip()}."
     )
+    return _catalog_ai_response(prompt, "You are a garment trim expert. Keep it concise.")
 
-    try:
-        resp = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a trim and accessories expert."},
-                {"role": "user", "content": prompt},
-            ],
-        )
-
-        ai_text = resp.choices[0].message.content
-        return JsonResponse({"ok": True, "suggestion": ai_text})
-    except Exception as e:
-        return JsonResponse({"ok": False, "error": str(e)})
-
-
-# ===================================================
-# THREAD LIBRARY
-# ===================================================
 
 def threads_list(request):
-    qs = ThreadOption.objects.all().order_by("-created_at")
-
-    q = request.GET.get("q") or ""
-    thread_type = request.GET.get("thread_type") or ""
-    color = request.GET.get("color") or ""
-
-    if q:
-        qs = qs.filter(name__icontains=q)
-    if thread_type:
-        qs = qs.filter(thread_type__icontains=thread_type)
-    if color:
-        qs = qs.filter(color__icontains=color)
-
-    context = {
-        "threads": qs,
-        "q": q,
-        "thread_type": thread_type,
-        "color": color,
-    }
-    return render(request, "crm/thread_list.html", context)
+    return _catalog_list(request, "threads")
 
 
 def thread_add(request):
-    if request.method == "POST":
-        form = ThreadOptionForm(request.POST, request.FILES)
-        if form.is_valid():
-            thread = form.save()
-            return redirect("thread_detail", pk=thread.pk)
-    else:
-        form = ThreadOptionForm()
-
-    return render(request, "crm/thread_form.html", {"form": form, "mode": "add"})
+    return _catalog_add(request, "threads")
 
 
 def thread_edit(request, pk):
-    thread = get_object_or_404(ThreadOption, pk=pk)
-
-    if request.method == "POST":
-        form = ThreadOptionForm(request.POST, request.FILES, instance=thread)
-        if form.is_valid():
-            form.save()
-            return redirect("thread_detail", pk=thread.pk)
-    else:
-        form = ThreadOptionForm(instance=thread)
-
-    context = {
-        "form": form,
-        "mode": "edit",
-        "thread": thread,
-    }
-    return render(request, "crm/thread_form.html", context)
+    return _catalog_edit(request, "threads", pk)
 
 
 def thread_detail(request, pk):
-    thread = get_object_or_404(ThreadOption, pk=pk)
-    context = {
-        "thread": thread,
-    }
-    return render(request, "crm/thread_detail.html", context)
+    return _catalog_detail(request, "threads", pk)
 
 
+def thread_presentation(request, pk):
+    return _catalog_presentation(request, "threads", pk)
+
+
+@require_POST
+def thread_ai_suggest(request):
+    name = request.POST.get("name", "").strip()
+    if not name:
+        return JsonResponse({"ok": False, "error": "Please type a thread name first."})
+    prompt = (
+        "Suggest best use, recommended product use, short description, and tags. Do not include pricing.\n\n"
+        f"Thread: {name}. Type: {request.POST.get('thread_type', '').strip()}. Colour: {request.POST.get('color', '').strip()}."
+    )
+    return _catalog_ai_response(prompt, "You are a garment thread expert. Keep it concise.")
 
 
 
@@ -16083,6 +16029,8 @@ def library_home(request):
         action = (request.POST.get("action") or "").strip()
 
         if action == "upload_attachment":
+            if not _can_edit_catalog_item(request.user):
+                return HttpResponseForbidden("No access")
             form = LibraryAttachmentForm(request.POST, request.FILES)
             if form.is_valid():
                 attachment = form.save(commit=False)
@@ -16094,6 +16042,8 @@ def library_home(request):
             return redirect("library_home")
 
         if action == "delete_attachment":
+            if not _can_archive_catalog_item(request.user):
+                return HttpResponseForbidden("No access")
             attach_id = (request.POST.get("attachment_id") or "").strip()
             if attach_id:
                 LibraryAttachment.objects.filter(pk=attach_id).delete()
@@ -16101,18 +16051,53 @@ def library_home(request):
             return redirect("library_home")
 
     attachments = LibraryAttachment.objects.all().order_by("-uploaded_at", "-id")
+    q = (request.GET.get("q") or "").strip()
+
+    section_cards = []
+    search_groups = []
+    for key in ("products", "fabrics", "accessories", "trims", "threads"):
+        config = CATALOG_CONFIG[key]
+        active_qs = _visible_catalog_queryset(config, request.user, include_archived=False, with_related=False).order_by("-updated_at", "-id")
+        summary = active_qs.aggregate(
+            count=Count("pk"),
+            cover_1=Max("image"),
+            cover_2=Max("image_2"),
+            cover_3=Max("image_3"),
+        )
+        cover_path = summary.get("cover_1") or summary.get("cover_2") or summary.get("cover_3") or ""
+        section_cards.append(
+            {
+                "catalog": config,
+                "count": summary.get("count") or 0,
+                "cover_url": f"{settings.MEDIA_URL}{cover_path}" if cover_path else "",
+                "description": config["descriptions"],
+                "list_url": reverse(config["list_url"]),
+                "add_url": reverse(config["add_url"]),
+            }
+        )
+        if q:
+            rows = [
+                _catalog_card(obj, config)
+                for obj in active_qs.filter(_catalog_search_q(config, q)).distinct()[:5]
+            ]
+            if rows:
+                search_groups.append({"catalog": config, "rows": rows})
 
     context = {
-        "product_count": Product.objects.count(),
-        "fabric_count": Fabric.objects.count(),
-        "accessory_count": Accessory.objects.count(),
-        "trim_count": Trim.objects.count(),
-        "thread_count": ThreadOption.objects.count(),
+        "product_count": section_cards[0]["count"],
+        "fabric_count": section_cards[1]["count"],
+        "accessory_count": section_cards[2]["count"],
+        "trim_count": section_cards[3]["count"],
+        "thread_count": section_cards[4]["count"],
+        "section_cards": section_cards,
+        "q": q,
+        "search_groups": search_groups,
         "attachments": attachments[:50],
         "attachment_form": LibraryAttachmentForm(),
+        "can_edit": _can_edit_catalog_item(request.user),
+        "can_archive": _can_archive_catalog_item(request.user),
     }
     return render(request, "crm/library_home.html", context)
-
 
 from django.shortcuts import render
 from django.core.paginator import Paginator

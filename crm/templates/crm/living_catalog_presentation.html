@@ -1,0 +1,120 @@
+{% extends "crm/base.html" %}
+{% block content %}
+<style>
+  body{background:#070b10}
+  .lp-page{min-height:calc(100vh - 80px);color:#f8fafc;padding:18px}
+  .lp-shell{max-width:1280px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(360px,.75fr);gap:18px;align-items:start}
+  .lp-gallery{background:#0d151e;border:1px solid #263241;border-radius:8px;padding:12px}
+  .lp-main{height:min(68vh,720px);background:#141f2b;border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#94a3b8}
+  .lp-main img{width:100%;height:100%;object-fit:contain}
+  .lp-thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+  .lp-thumb{height:92px;border:1px solid #263241;border-radius:8px;background:#141f2b;overflow:hidden;color:#94a3b8;display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .lp-thumb img{width:100%;height:100%;object-fit:cover}
+  .lp-info{background:#0d151e;border:1px solid #263241;border-radius:8px;padding:18px}
+  .lp-title{font-size:38px;line-height:1.05;font-weight:900;letter-spacing:0;margin:0;color:#fff}
+  .lp-meta{font-size:15px;color:#a7b0be;margin-top:9px}
+  .lp-status{display:inline-flex;margin-top:16px;border:1px solid #334155;background:#111c27;border-radius:8px;padding:6px 9px;color:#d9b86d;font-size:13px;font-weight:900}
+  .lp-details{margin-top:18px;display:grid;gap:9px}
+  .lp-detail{border-top:1px solid #263241;padding-top:9px}
+  .lp-label{font-size:11px;text-transform:uppercase;color:#a7b0be;font-weight:900;letter-spacing:0}
+  .lp-value{font-size:15px;color:#fff;margin-top:5px;white-space:pre-wrap}
+  .lp-related{margin-top:18px}
+  .lp-related-title{font-size:15px;font-weight:900;color:#fff;margin:14px 0 8px}
+  .lp-related-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:8px}
+  .lp-related-card{border:1px solid #263241;border-radius:8px;background:#111c27;overflow:hidden;color:#f8fafc;text-decoration:none}
+  .lp-related-img{aspect-ratio:4/3;background:#141f2b;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:11px;overflow:hidden}
+  .lp-related-img img{width:100%;height:100%;object-fit:cover}
+  .lp-related-body{padding:8px}
+  .lp-related-name{font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lp-muted{color:#a7b0be;font-size:12px;margin-top:4px}
+  .lp-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}
+  .lp-btn{display:inline-flex;align-items:center;justify-content:center;border:1px solid #334155;background:#17212d;color:#f8fafc;border-radius:8px;padding:10px 12px;font-size:13px;font-weight:900;text-decoration:none;cursor:pointer;min-height:40px}
+  .lp-btn:hover{border-color:#b9903a;color:#fff;background:#1f2a37}
+  .lp-btn-primary{background:#1d4d4f;border-color:#2b7371;color:#effffd}
+  @media (max-width:980px){.lp-shell{grid-template-columns:1fr}.lp-main{height:52vh}.lp-title{font-size:30px}}
+  @media (max-width:620px){.lp-page{padding:10px}.lp-main{height:42vh}.lp-thumbs{grid-template-columns:1fr 1fr 1fr}.lp-thumb{height:70px}.lp-actions{flex-direction:column}.lp-btn{width:100%}}
+</style>
+
+<div class="lp-page">
+  <div class="lp-shell">
+    <section class="lp-gallery">
+      <div class="lp-main" id="lp-main-image">
+        {% if image_slots.0.url %}<img src="{{ image_slots.0.url }}" alt="{{ item.name }}">{% else %}<span>No image</span>{% endif %}
+      </div>
+      <div class="lp-thumbs">
+        {% for img in image_slots %}
+          <button type="button" class="lp-thumb" data-gallery-src="{{ img.url }}">
+            {% if img.url %}<img src="{{ img.url }}" alt="Image {{ img.slot }}">{% else %}{{ img.slot }} of 3{% endif %}
+          </button>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="lp-info">
+      <h1 class="lp-title">{{ item.name }}</h1>
+      <div class="lp-meta">
+        {% if catalog.section == "products" %}{{ item.product_category }}{% else %}{{ item_type }}{% endif %}
+        {% if item.main_decoration %} · {{ item.main_decoration }}{% endif %}
+      </div>
+      <div class="lp-status">{{ item.status }}</div>
+
+      {% if public_details %}
+        <div class="lp-details">
+          {% for detail in public_details %}
+            <div class="lp-detail">
+              <div class="lp-label">{{ detail.label }}</div>
+              <div class="lp-value">{{ detail.value }}</div>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      {% if related_materials %}
+        <div class="lp-related">
+          {% for group in related_materials %}
+            <div class="lp-related-title">{{ group.title }}</div>
+            <div class="lp-related-grid">
+              {% for material in group.items %}
+                <div class="lp-related-card">
+                  <div class="lp-related-img">{% if material.cover_url %}<img src="{{ material.cover_url }}" alt="{{ material.name }}">{% else %}No image{% endif %}</div>
+                  <div class="lp-related-body">
+                    <div class="lp-related-name">{{ material.name }}</div>
+                    <div class="lp-muted">{{ material.type }}</div>
+                    <div class="lp-muted">{{ material.detail }}</div>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <div class="lp-actions">
+        <a class="lp-btn" href="{{ list_url }}">Back</a>
+        {% if previous_url %}<a class="lp-btn" href="{{ previous_url }}">Previous</a>{% endif %}
+        {% if next_url %}<a class="lp-btn" href="{{ next_url }}">Next</a>{% endif %}
+        <button type="button" class="lp-btn lp-btn-primary" id="lp-fullscreen">Full Screen</button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+  (function(){
+    var main = document.getElementById("lp-main-image");
+    document.querySelectorAll("[data-gallery-src]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var src = btn.getAttribute("data-gallery-src");
+        if (src && main) main.innerHTML = "<img src='" + src + "' alt=''>";
+      });
+    });
+    var full = document.getElementById("lp-fullscreen");
+    if (full) {
+      full.addEventListener("click", function(){
+        var root = document.documentElement;
+        if (root.requestFullscreen) root.requestFullscreen();
+      });
+    }
+  })();
+</script>
+{% endblock %}

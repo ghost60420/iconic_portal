@@ -75,6 +75,10 @@ def costing_perm(view_func):
     return login_required(require_access("can_costing")(require_access("can_view_internal_costing")(view_func)))
 
 
+def library_perm(view_func):
+    return login_required(require_any_access("can_library", "can_view_ceo_tools")(view_func))
+
+
 urlpatterns = [
     path("", home_redirect, name="home"),
     path("accounts/", include("django.contrib.auth.urls")),
@@ -226,44 +230,53 @@ urlpatterns = [
     path("inventory/ai-overview/", perm("can_ai", views.inventory_ai_overview), name="inventory_ai_overview"),
 
     # Library
-    path("library/", login_required(views.library_home), name="library_home"),
+    path("library/", library_perm(views.library_home), name="library_home"),
+    path("library/<str:section>/<int:pk>/safe.json", library_perm(views.library_item_safe_json), name="library_item_safe_json"),
+    path("library/<str:section>/<int:pk>/archive/", library_perm(views.catalog_archive), name="catalog_archive"),
+    path("library/<str:section>/<int:pk>/restore/", library_perm(views.catalog_restore), name="catalog_restore"),
 
     # Products
-    path("library/products/", login_required(views.products_list), name="products_list"),
-    path("library/products/add/", login_required(views.product_add), name="product_add"),
-    path("library/products/<int:pk>/", login_required(views.product_detail), name="product_detail"),
-    path("library/products/<int:pk>/edit/", login_required(views.product_edit), name="product_edit"),
-    path("library/products/<int:pk>/ai/", login_required(views.product_ai_detail), name="product_ai_detail"),
-    path("library/products/ai-suggest/", login_required(views.product_ai_suggest), name="product_ai_suggest"),
+    path("library/products/", library_perm(views.products_list), name="products_list"),
+    path("library/products/add/", library_perm(views.product_add), name="product_add"),
+    path("library/products/<int:pk>/", library_perm(views.product_detail), name="product_detail"),
+    path("library/products/<int:pk>/edit/", library_perm(views.product_edit), name="product_edit"),
+    path("library/products/<int:pk>/presentation/", library_perm(views.product_presentation), name="product_presentation"),
+    path("library/products/<int:pk>/ai/", library_perm(views.product_ai_detail), name="product_ai_detail"),
+    path("library/products/ai-suggest/", library_perm(views.product_ai_suggest), name="product_ai_suggest"),
 
     # Fabrics
-    path("library/fabrics/", login_required(views.fabrics_list), name="fabrics_list"),
-    path("library/fabrics/add/", login_required(views.fabric_add), name="fabric_add"),
-    path("library/fabrics/<int:pk>/", login_required(views.fabric_detail), name="fabric_detail"),
-    path("library/fabrics/<int:pk>/edit/", login_required(views.fabric_edit), name="fabric_edit"),
-    path("library/fabrics/<int:pk>/ai/", login_required(views.fabric_ai_detail), name="fabric_ai_detail"),
-    path("library/fabrics/ai-suggest/", login_required(views.fabric_ai_suggest), name="fabric_ai_suggest"),
-    path("library/fabrics/ai-focus/<int:pk>/", login_required(views.fabric_ai_focus), name="fabric_ai_focus"),
+    path("library/fabrics/", library_perm(views.fabrics_list), name="fabrics_list"),
+    path("library/fabrics/add/", library_perm(views.fabric_add), name="fabric_add"),
+    path("library/fabrics/<int:pk>/", library_perm(views.fabric_detail), name="fabric_detail"),
+    path("library/fabrics/<int:pk>/edit/", library_perm(views.fabric_edit), name="fabric_edit"),
+    path("library/fabrics/<int:pk>/presentation/", library_perm(views.fabric_presentation), name="fabric_presentation"),
+    path("library/fabrics/<int:pk>/ai/", library_perm(views.fabric_ai_detail), name="fabric_ai_detail"),
+    path("library/fabrics/ai-suggest/", library_perm(views.fabric_ai_suggest), name="fabric_ai_suggest"),
+    path("library/fabrics/ai-focus/<int:pk>/", library_perm(views.fabric_ai_focus), name="fabric_ai_focus"),
 
     # Accessories
-    path("library/accessories/", login_required(views.accessories_list), name="accessories_list"),
-    path("library/accessories/add/", login_required(views.accessory_add), name="accessory_add"),
-    path("library/accessories/<int:pk>/", login_required(views.accessory_detail), name="accessory_detail"),
-    path("library/accessories/<int:pk>/edit/", login_required(views.accessory_edit), name="accessory_edit"),
-    path("library/accessories/ai-suggest/", login_required(views.accessory_ai_suggest), name="accessory_ai_suggest"),
+    path("library/accessories/", library_perm(views.accessories_list), name="accessories_list"),
+    path("library/accessories/add/", library_perm(views.accessory_add), name="accessory_add"),
+    path("library/accessories/<int:pk>/", library_perm(views.accessory_detail), name="accessory_detail"),
+    path("library/accessories/<int:pk>/edit/", library_perm(views.accessory_edit), name="accessory_edit"),
+    path("library/accessories/<int:pk>/presentation/", library_perm(views.accessory_presentation), name="accessory_presentation"),
+    path("library/accessories/ai-suggest/", library_perm(views.accessory_ai_suggest), name="accessory_ai_suggest"),
 
     # Trims
-    path("library/trims/", login_required(views.trims_list), name="trims_list"),
-    path("library/trims/add/", login_required(views.trim_add), name="trim_add"),
-    path("library/trims/<int:pk>/", login_required(views.trim_detail), name="trim_detail"),
-    path("library/trims/<int:pk>/edit/", login_required(views.trim_edit), name="trim_edit"),
-    path("library/trims/ai-suggest/", login_required(views.trim_ai_suggest), name="trim_ai_suggest"),
+    path("library/trims/", library_perm(views.trims_list), name="trims_list"),
+    path("library/trims/add/", library_perm(views.trim_add), name="trim_add"),
+    path("library/trims/<int:pk>/", library_perm(views.trim_detail), name="trim_detail"),
+    path("library/trims/<int:pk>/edit/", library_perm(views.trim_edit), name="trim_edit"),
+    path("library/trims/<int:pk>/presentation/", library_perm(views.trim_presentation), name="trim_presentation"),
+    path("library/trims/ai-suggest/", library_perm(views.trim_ai_suggest), name="trim_ai_suggest"),
 
     # Threads
-    path("library/threads/", login_required(views.threads_list), name="threads_list"),
-    path("library/threads/add/", login_required(views.thread_add), name="thread_add"),
-    path("library/threads/<int:pk>/", login_required(views.thread_detail), name="thread_detail"),
-    path("library/threads/<int:pk>/edit/", login_required(views.thread_edit), name="thread_edit"),
+    path("library/threads/", library_perm(views.threads_list), name="threads_list"),
+    path("library/threads/add/", library_perm(views.thread_add), name="thread_add"),
+    path("library/threads/<int:pk>/", library_perm(views.thread_detail), name="thread_detail"),
+    path("library/threads/<int:pk>/edit/", library_perm(views.thread_edit), name="thread_edit"),
+    path("library/threads/<int:pk>/presentation/", library_perm(views.thread_presentation), name="thread_presentation"),
+    path("library/threads/ai-suggest/", library_perm(views.thread_ai_suggest), name="thread_ai_suggest"),
 
     path("world-dashboard/", login_required(views.world_dashboard), name="world_dashboard"),
     path("world-tools/", login_required(views.world_tools), name="world_tools"),

@@ -42,6 +42,7 @@ from .models import (
     LibraryAttachment,
     lead_product_interest_choices,
 )
+from .services.living_catalog import CATALOG_IMAGE_FIELDS, prepare_catalog_image
 
 # --------------------------------------------------
 # Shared multi file widgets
@@ -318,7 +319,79 @@ class QuickOutboundLeadForm(forms.ModelForm):
 # --------------------------------------------------
 # Library forms
 # --------------------------------------------------
-class ProductForm(forms.ModelForm):
+ACCESSORY_TYPE_CHOICES = [
+    ("", "Select type"),
+    ("Zipper", "Zipper"),
+    ("Button", "Button"),
+    ("Snap", "Snap"),
+    ("Buckle", "Buckle"),
+    ("Patch", "Patch"),
+    ("Label", "Label"),
+    ("Hang Tag", "Hang Tag"),
+    ("Packaging", "Packaging"),
+    ("Drawcord End", "Drawcord End"),
+    ("Other", "Other"),
+]
+
+TRIM_TYPE_CHOICES = [
+    ("", "Select type"),
+    ("Neck Rib", "Neck Rib"),
+    ("Cuff Rib", "Cuff Rib"),
+    ("Waist Rib", "Waist Rib"),
+    ("Elastic", "Elastic"),
+    ("Drawcord", "Drawcord"),
+    ("Tape", "Tape"),
+    ("Binding", "Binding"),
+    ("Webbing", "Webbing"),
+    ("Piping", "Piping"),
+    ("Other", "Other"),
+]
+
+THREAD_TYPE_CHOICES = [
+    ("", "Select type"),
+    ("Sewing Thread", "Sewing Thread"),
+    ("Overlock Thread", "Overlock Thread"),
+    ("Embroidery Thread", "Embroidery Thread"),
+    ("Topstitch Thread", "Topstitch Thread"),
+    ("Elastic Thread", "Elastic Thread"),
+    ("Other", "Other"),
+]
+
+
+class CatalogImageFormMixin:
+    image_widget_attrs = {
+        "accept": ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp",
+        "class": "catalog-file-input",
+    }
+
+    def __init__(self, *args, **kwargs):
+        self.can_view_internal = kwargs.pop("can_view_internal", False)
+        super().__init__(*args, **kwargs)
+        for _slot, field_name in CATALOG_IMAGE_FIELDS:
+            if field_name in self.fields:
+                self.fields[field_name].widget = forms.FileInput(attrs=self.image_widget_attrs)
+                self.fields[field_name].required = False
+        for field in self.fields.values():
+            css_class = field.widget.attrs.get("class", "")
+            field.widget.attrs["class"] = f"{css_class} catalog-input".strip()
+
+    def _clean_catalog_image(self, field_name, slot):
+        image = self.cleaned_data.get(field_name)
+        if not image:
+            return image
+        return prepare_catalog_image(image, slot)
+
+    def clean_image(self):
+        return self._clean_catalog_image("image", 1)
+
+    def clean_image_2(self):
+        return self._clean_catalog_image("image_2", 2)
+
+    def clean_image_3(self):
+        return self._clean_catalog_image("image_3", 3)
+
+
+class ProductForm(CatalogImageFormMixin, forms.ModelForm):
     class Meta:
         model = Product
         fields = [
@@ -326,30 +399,85 @@ class ProductForm(forms.ModelForm):
             "name",
             "product_type",
             "product_category",
+            "main_fabric",
+            "main_decoration",
+            "short_description",
+            "status",
+            "image",
+            "image_2",
+            "image_3",
+            "fit",
+            "main_colour",
+            "available_colours",
+            "size_range",
+            "default_moq",
+            "notes",
+            "tags",
+            "accessories",
+            "trims",
+            "threads",
             "default_gsm",
             "default_fabric",
-            "default_moq",
             "default_price",
-            "image",
-            "notes",
+            "internal_cost",
+            "suggested_selling_price",
+            "internal_notes",
             "is_active",
         ]
+        widgets = {
+            "short_description": forms.Textarea(attrs={"rows": 3}),
+            "notes": forms.Textarea(attrs={"rows": 3}),
+            "internal_notes": forms.Textarea(attrs={"rows": 3}),
+            "accessories": forms.SelectMultiple(attrs={"size": 6}),
+            "trims": forms.SelectMultiple(attrs={"size": 6}),
+            "threads": forms.SelectMultiple(attrs={"size": 6}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["name"].label = "Product name"
+        self.fields["product_type"].label = "Product type"
+        self.fields["product_category"].label = "Category"
+        self.fields["main_fabric"].label = "Main fabric"
+        self.fields["main_fabric"].queryset = Fabric.objects.filter(is_active=True).order_by("name")
+        self.fields["main_fabric"].required = True
+        self.fields["main_decoration"].label = "Main decoration"
+        self.fields["main_decoration"].required = True
+        self.fields["short_description"].required = True
+        self.fields["status"].required = True
+        self.fields["default_moq"].label = "MOQ"
+        self.fields["main_colour"].label = "Main colour"
+        self.fields["available_colours"].label = "Available colours"
+        self.fields["accessories"].queryset = Accessory.objects.filter(is_active=True).order_by("name")
+        self.fields["trims"].queryset = Trim.objects.filter(is_active=True).order_by("name")
+        self.fields["threads"].queryset = ThreadOption.objects.filter(is_active=True).order_by("name")
+        if not self.can_view_internal:
+            for field_name in ("default_price", "internal_cost", "suggested_selling_price", "internal_notes"):
+                self.fields.pop(field_name, None)
 
 
-class FabricForm(forms.ModelForm):
+class FabricForm(CatalogImageFormMixin, forms.ModelForm):
     class Meta:
         model = Fabric
         fields = [
             "fabric_code",
             "name",
-            "fabric_group",
+            "composition",
+            "gsm",
+            "best_use",
+            "status",
+            "image",
+            "image_2",
+            "image_3",
             "fabric_type",
+            "stretch_type",
+            "color_options",
+            "notes",
+            "tags",
+            "fabric_group",
             "weave",
             "knit_structure",
             "construction",
-            "composition",
-            "gsm",
-            "stretch_type",
             "surface",
             "handfeel",
             "drape",
@@ -359,76 +487,156 @@ class FabricForm(forms.ModelForm):
             "sheerness",
             "shrinkage",
             "durability",
-            "color_options",
             "price_per_kg",
             "price_per_meter",
-            "image",
-            "notes",
+            "internal_cost",
+            "suggested_selling_price",
+            "internal_notes",
             "is_active",
         ]
+        widgets = {
+            "notes": forms.Textarea(attrs={"rows": 3}),
+            "internal_notes": forms.Textarea(attrs={"rows": 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["name"].label = "Fabric name"
+        self.fields["best_use"].label = "Best use"
+        for field_name in ("name", "composition", "gsm", "best_use", "status"):
+            self.fields[field_name].required = True
+        self.fields["color_options"].label = "Colour"
+        self.fields["stretch_type"].label = "Stretch"
+        if not self.can_view_internal:
+            for field_name in ("price_per_kg", "price_per_meter", "internal_cost", "suggested_selling_price", "internal_notes"):
+                self.fields.pop(field_name, None)
 
 
-class AccessoryForm(forms.ModelForm):
+class AccessoryForm(CatalogImageFormMixin, forms.ModelForm):
+    accessory_type = forms.ChoiceField(choices=ACCESSORY_TYPE_CHOICES, required=True)
+
     class Meta:
         model = Accessory
         fields = [
             "accessory_code",
             "name",
             "accessory_type",
-            "size",
             "color",
+            "status",
+            "image",
+            "image_2",
+            "image_3",
             "material",
+            "best_use",
+            "notes",
+            "tags",
+            "size",
             "finish",
             "supplier",
             "price_per_unit",
-            "image",
-            "notes",
+            "internal_cost",
+            "suggested_selling_price",
+            "internal_notes",
             "is_active",
         ]
+        widgets = {
+            "notes": forms.Textarea(attrs={"rows": 3}),
+            "internal_notes": forms.Textarea(attrs={"rows": 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field_name in ("name", "accessory_type", "color", "status"):
+            self.fields[field_name].required = True
+        self.fields["color"].label = "Colour"
+        self.fields["best_use"].label = "Best use"
+        if not self.can_view_internal:
+            for field_name in ("supplier", "price_per_unit", "internal_cost", "suggested_selling_price", "internal_notes"):
+                self.fields.pop(field_name, None)
 
 
-class TrimForm(forms.ModelForm):
+class TrimForm(CatalogImageFormMixin, forms.ModelForm):
+    trim_type = forms.ChoiceField(choices=TRIM_TYPE_CHOICES, required=True)
+
     class Meta:
         model = Trim
         fields = [
             "trim_code",
             "name",
             "trim_type",
-            "width",
             "color",
-            "material",
-            "price_per_meter",
+            "status",
             "image",
+            "image_2",
+            "image_3",
+            "material",
+            "best_use",
             "notes",
+            "tags",
+            "width",
+            "price_per_meter",
+            "internal_cost",
+            "suggested_selling_price",
+            "internal_notes",
             "is_active",
         ]
+        widgets = {
+            "notes": forms.Textarea(attrs={"rows": 3}),
+            "internal_notes": forms.Textarea(attrs={"rows": 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field_name in ("name", "trim_type", "color", "status"):
+            self.fields[field_name].required = True
+        self.fields["color"].label = "Colour"
+        self.fields["best_use"].label = "Best use"
+        if not self.can_view_internal:
+            for field_name in ("price_per_meter", "internal_cost", "suggested_selling_price", "internal_notes"):
+                self.fields.pop(field_name, None)
 
 
-class ThreadForm(forms.ModelForm):
+class ThreadForm(CatalogImageFormMixin, forms.ModelForm):
+    thread_type = forms.ChoiceField(choices=THREAD_TYPE_CHOICES, required=True)
+
     class Meta:
         model = ThreadOption
         fields = [
             "thread_code",
             "name",
             "thread_type",
-            "count",
             "color",
-            "brand",
-            "use_for",
-            "price_per_cone",
+            "status",
             "image",
+            "image_2",
+            "image_3",
+            "best_use",
             "notes",
+            "tags",
+            "count",
+            "use_for",
+            "brand",
+            "price_per_cone",
+            "internal_cost",
+            "suggested_selling_price",
+            "internal_notes",
             "is_active",
         ]
         widgets = {
-            "notes": forms.Textarea(attrs={"rows": 3, "class": "form-control"}),
+            "notes": forms.Textarea(attrs={"rows": 3}),
+            "internal_notes": forms.Textarea(attrs={"rows": 3}),
         }
 
-    def clean_email(self):
-        v = (self.cleaned_data.get("email") or "").strip().lower()
-        if v and "@" not in v:
-            raise forms.ValidationError("Email is not valid.")
-        return v
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field_name in ("name", "thread_type", "color", "status"):
+            self.fields[field_name].required = True
+        self.fields["color"].label = "Colour"
+        self.fields["use_for"].label = "Legacy use field"
+        self.fields["best_use"].label = "Best use"
+        if not self.can_view_internal:
+            for field_name in ("price_per_cone", "internal_cost", "suggested_selling_price", "internal_notes"):
+                self.fields.pop(field_name, None)
 
 
 # --------------------------------------------------

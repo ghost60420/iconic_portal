@@ -1,0 +1,312 @@
+{% extends "crm/base.html" %}
+{% block content %}
+<style>
+  .lc-page{max-width:1160px;margin:18px auto 42px;padding:0 14px;color:#f8fafc}
+  .lc-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+  .lc-title{margin:0;font-size:23px;font-weight:900;letter-spacing:0;color:#fff}
+  .lc-sub{margin-top:4px;color:#a7b0be;font-size:13px}
+  .lc-btn{display:inline-flex;align-items:center;justify-content:center;border:1px solid #334155;background:#17212d;color:#f8fafc;border-radius:8px;padding:9px 12px;font-size:13px;font-weight:800;text-decoration:none;cursor:pointer;min-height:38px}
+  .lc-btn:hover{border-color:#b9903a;color:#fff;background:#1f2a37}
+  .lc-btn-primary{background:#1d4d4f;border-color:#2b7371;color:#effffd}
+  .lc-layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:14px;align-items:start}
+  .lc-panel{background:#0f1720;border:1px solid #263241;border-radius:8px;padding:14px}
+  .lc-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .lc-field label{display:block;color:#a7b0be;font-size:12px;font-weight:800;margin-bottom:5px}
+  .lc-field input,.lc-field select,.lc-field textarea{width:100%;background:#0b1118;border:1px solid #263241;border-radius:8px;color:#f8fafc;padding:9px 10px;font-size:13px}
+  .lc-field select[multiple]{min-height:138px}
+  .lc-errors{margin-top:5px;color:#fecaca;font-size:12px}
+  .lc-section-title{font-size:15px;font-weight:900;color:#fff;margin-bottom:10px}
+  .lc-details{margin-top:12px}
+  .lc-details summary{cursor:pointer;font-weight:900;color:#fff;border:1px solid #263241;background:#101820;border-radius:8px;padding:10px}
+  .lc-details[open] summary{border-color:#3c5961}
+  .lc-details-body{margin-top:10px}
+  .lc-internal summary{color:#f5d27a}
+  .lc-images{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+  .lc-slot{border:1px solid #263241;border-radius:8px;background:#101820;overflow:hidden}
+  .lc-preview{aspect-ratio:4/3;background:#17212d;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:12px;overflow:hidden}
+  .lc-preview img{width:100%;height:100%;object-fit:cover}
+  .lc-slot-body{padding:9px}
+  .lc-slot-top{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:7px;color:#a7b0be;font-size:12px;font-weight:900}
+  .lc-file{display:none}
+  .lc-slot-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}
+  .lc-drop{border:1px dashed #3b4a5e;border-radius:8px;padding:8px;color:#a7b0be;font-size:12px;text-align:center;min-height:38px;display:flex;align-items:center;justify-content:center}
+  .lc-drop.is-drag{border-color:#2b7371;background:#122b2d}
+  .lc-count{margin-top:8px;color:#a7b0be;font-size:12px}
+  .lc-fabric-preview{display:grid;grid-template-columns:74px 1fr;gap:10px;align-items:center;background:#101820;border:1px solid #263241;border-radius:8px;padding:9px;margin-top:10px}
+  .lc-fabric-img{width:74px;height:74px;border-radius:8px;background:#17212d;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:11px;overflow:hidden}
+  .lc-fabric-img img{width:100%;height:100%;object-fit:cover}
+  .lc-muted{color:#a7b0be;font-size:12px}
+  .lc-ai-output{margin-top:10px;background:#0b1118;border:1px solid #263241;border-radius:8px;color:#f8fafc;min-height:88px;padding:10px;white-space:pre-wrap;font-size:13px}
+  .lc-search-select{margin-bottom:6px}
+  @media (max-width:980px){.lc-layout{grid-template-columns:1fr}.lc-images{grid-template-columns:1fr 1fr}}
+  @media (max-width:620px){.lc-grid,.lc-images{grid-template-columns:1fr}.lc-slot-actions{grid-template-columns:1fr}}
+</style>
+
+<div class="lc-page">
+  <div class="lc-head">
+    <div>
+      <h1 class="lc-title">{% if mode == "edit" %}Edit {{ catalog.singular|title }}{% else %}Add {{ catalog.singular|title }}{% endif %}</h1>
+      <div class="lc-sub">{{ catalog.descriptions }}</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <a class="lc-btn" href="{% url catalog.list_url %}">Back</a>
+      {% if item %}<a class="lc-btn" href="{% url catalog.detail_url item.pk %}">View</a>{% endif %}
+    </div>
+  </div>
+
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div class="lc-layout">
+      <main>
+        <section class="lc-panel">
+          <div class="lc-section-title">Images</div>
+          <div class="lc-images" id="catalog-image-grid">
+            {% for img in image_fields %}
+              <div class="lc-slot" data-image-slot data-has-current="{% if img.has_image %}1{% else %}0{% endif %}">
+                <div class="lc-preview" data-preview>
+                  {% if img.url %}<img src="{{ img.url }}" alt="Image {{ img.slot }}">{% else %}<span>No image</span>{% endif %}
+                </div>
+                <div class="lc-slot-body">
+                  <div class="lc-slot-top"><span>{{ img.slot }} of 3</span><span data-slot-state>{% if img.has_image %}Saved{% else %}Empty{% endif %}</span></div>
+                  <div class="lc-drop" data-drop>Drop image here</div>
+                  {% if img.field %}{{ img.field }}{% endif %}
+                  <input type="hidden" name="remove_{{ img.field_name }}" value="0" data-remove-input>
+                  <div class="lc-slot-actions">
+                    <button type="button" class="lc-btn" data-replace>Replace</button>
+                    <button type="button" class="lc-btn" data-remove>Remove</button>
+                  </div>
+                  {% if img.field.errors %}<div class="lc-errors">{{ img.field.errors }}</div>{% endif %}
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+          <div class="lc-count" id="catalog-image-count">0 of 3 images</div>
+        </section>
+
+        {% for section in form_sections %}
+          {% if section.collapsed %}
+            <details class="lc-details {% if section.internal %}lc-internal{% endif %}">
+              <summary>{{ section.title }}</summary>
+              <div class="lc-details-body lc-grid">
+                {% for field in section.fields %}
+                  <div class="lc-field">
+                    {{ field.label_tag }}
+                    {{ field }}
+                    {% if field.help_text %}<div class="lc-muted">{{ field.help_text }}</div>{% endif %}
+                    {% if field.errors %}<div class="lc-errors">{{ field.errors }}</div>{% endif %}
+                  </div>
+                {% endfor %}
+              </div>
+            </details>
+          {% else %}
+            <section class="lc-panel" style="margin-top:12px;">
+              <div class="lc-section-title">{{ section.title }}</div>
+              <div class="lc-grid">
+                {% for field in section.fields %}
+                  <div class="lc-field">
+                    {{ field.label_tag }}
+                    {{ field }}
+                    {% if field.help_text %}<div class="lc-muted">{{ field.help_text }}</div>{% endif %}
+                    {% if field.errors %}<div class="lc-errors">{{ field.errors }}</div>{% endif %}
+                  </div>
+                {% endfor %}
+              </div>
+            </section>
+          {% endif %}
+        {% endfor %}
+
+        {% if form.non_field_errors %}
+          <div class="lc-errors" style="margin-top:12px;">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;flex-wrap:wrap;">
+          <button type="submit" class="lc-btn lc-btn-primary">Save {{ catalog.singular|title }}</button>
+        </div>
+      </main>
+
+      <aside>
+        {% if catalog.section == "products" %}
+          <section class="lc-panel">
+            <div class="lc-section-title">Fabric Preview</div>
+            <div class="lc-fabric-preview" id="fabric-preview">
+              <div class="lc-fabric-img" data-fabric-image>No image</div>
+              <div>
+                <div style="font-weight:900;color:#fff;" data-fabric-name>Select fabric</div>
+                <div class="lc-muted" data-fabric-composition></div>
+                <div class="lc-muted" data-fabric-gsm></div>
+              </div>
+            </div>
+          </section>
+        {% endif %}
+
+        <section class="lc-panel" style="margin-top:12px;">
+          <div class="lc-section-title">AI Suggestions</div>
+          <button type="button" class="lc-btn lc-btn-primary" id="catalog-ai-btn">Suggest</button>
+          <button type="button" class="lc-btn" id="catalog-ai-apply">Apply</button>
+          <div class="lc-ai-output" id="catalog-ai-output">Suggestions will appear here for review.</div>
+        </section>
+      </aside>
+    </div>
+  </form>
+</div>
+
+<script type="application/json" id="fabric-preview-data">{{ fabric_preview_json|safe }}</script>
+<script>
+  (function(){
+    function updateImageCount(){
+      var count = 0;
+      document.querySelectorAll("[data-image-slot]").forEach(function(slot){
+        var has = slot.getAttribute("data-has-current") === "1";
+        var input = slot.querySelector("input[type='file']");
+        var removeInput = slot.querySelector("[data-remove-input]");
+        if (removeInput && removeInput.value === "1") has = false;
+        if (input && input.files && input.files.length) has = true;
+        if (has) count += 1;
+        var state = slot.querySelector("[data-slot-state]");
+        if (state) state.textContent = has ? "Ready" : "Empty";
+      });
+      var counter = document.getElementById("catalog-image-count");
+      if (counter) counter.textContent = count + " of 3 images";
+    }
+
+    function previewFile(slot, file){
+      var preview = slot.querySelector("[data-preview]");
+      if (!preview || !file) return;
+      var img = document.createElement("img");
+      img.alt = "Selected image";
+      img.src = URL.createObjectURL(file);
+      preview.innerHTML = "";
+      preview.appendChild(img);
+      var removeInput = slot.querySelector("[data-remove-input]");
+      if (removeInput) removeInput.value = "0";
+      updateImageCount();
+    }
+
+    document.querySelectorAll("[data-image-slot]").forEach(function(slot){
+      var input = slot.querySelector("input[type='file']");
+      var drop = slot.querySelector("[data-drop]");
+      var replace = slot.querySelector("[data-replace]");
+      var remove = slot.querySelector("[data-remove]");
+      if (input) {
+        input.classList.add("lc-file");
+        input.addEventListener("change", function(){
+          if (input.files && input.files[0]) previewFile(slot, input.files[0]);
+        });
+      }
+      if (replace && input) replace.addEventListener("click", function(){ input.click(); });
+      if (remove) remove.addEventListener("click", function(){
+        var removeInput = slot.querySelector("[data-remove-input]");
+        var preview = slot.querySelector("[data-preview]");
+        if (removeInput) removeInput.value = "1";
+        if (input) input.value = "";
+        if (preview) preview.innerHTML = "<span>No image</span>";
+        updateImageCount();
+      });
+      if (drop && input) {
+        ["dragenter","dragover"].forEach(function(evtName){
+          drop.addEventListener(evtName, function(evt){ evt.preventDefault(); drop.classList.add("is-drag"); });
+        });
+        ["dragleave","drop"].forEach(function(evtName){
+          drop.addEventListener(evtName, function(evt){ evt.preventDefault(); drop.classList.remove("is-drag"); });
+        });
+        drop.addEventListener("drop", function(evt){
+          if (!evt.dataTransfer || !evt.dataTransfer.files.length) return;
+          input.files = evt.dataTransfer.files;
+          previewFile(slot, evt.dataTransfer.files[0]);
+        });
+      }
+    });
+    updateImageCount();
+
+    function addSelectSearch(select){
+      if (!select || select.dataset.searchReady) return;
+      select.dataset.searchReady = "1";
+      var search = document.createElement("input");
+      search.type = "search";
+      search.placeholder = "Search options";
+      search.className = "catalog-input lc-search-select";
+      select.parentNode.insertBefore(search, select);
+      var options = Array.prototype.slice.call(select.options).map(function(option){
+        return {option: option, text: option.text.toLowerCase()};
+      });
+      search.addEventListener("input", function(){
+        var q = search.value.toLowerCase();
+        options.forEach(function(entry){ entry.option.hidden = q && entry.text.indexOf(q) === -1; });
+      });
+    }
+    ["main_fabric","accessories","trims","threads"].forEach(function(name){
+      addSelectSearch(document.querySelector("select[name='" + name + "']"));
+    });
+
+    var fabricSelect = document.querySelector("select[name='main_fabric']");
+    if (fabricSelect) {
+      var dataNode = document.getElementById("fabric-preview-data");
+      var fabricData = [];
+      try { fabricData = JSON.parse(dataNode.textContent || "[]"); } catch(e) { fabricData = []; }
+      function renderFabric(){
+        var selected = fabricData.find(function(item){ return String(item.id) === String(fabricSelect.value); });
+        var imgBox = document.querySelector("[data-fabric-image]");
+        var nameBox = document.querySelector("[data-fabric-name]");
+        var compBox = document.querySelector("[data-fabric-composition]");
+        var gsmBox = document.querySelector("[data-fabric-gsm]");
+        if (!selected) {
+          if (imgBox) imgBox.textContent = "No image";
+          if (nameBox) nameBox.textContent = "Select fabric";
+          if (compBox) compBox.textContent = "";
+          if (gsmBox) gsmBox.textContent = "";
+          return;
+        }
+        if (imgBox) imgBox.innerHTML = selected.image_url ? "<img src='" + selected.image_url + "' alt=''>" : "No image";
+        if (nameBox) nameBox.textContent = selected.name || "";
+        if (compBox) compBox.textContent = selected.composition || "";
+        if (gsmBox) gsmBox.textContent = selected.gsm ? selected.gsm + " GSM" : "";
+      }
+      fabricSelect.addEventListener("change", renderFabric);
+      renderFabric();
+    }
+
+    var aiBtn = document.getElementById("catalog-ai-btn");
+    var aiApply = document.getElementById("catalog-ai-apply");
+    var aiOut = document.getElementById("catalog-ai-output");
+    function csrf(){
+      var node = document.querySelector("input[name='csrfmiddlewaretoken']");
+      return node ? node.value : "";
+    }
+    function val(name){
+      var node = document.querySelector("[name='" + name + "']");
+      return node ? node.value : "";
+    }
+    if (aiBtn && aiOut) {
+      aiBtn.addEventListener("click", function(){
+        aiOut.textContent = "Thinking...";
+        fetch("{{ ai_url }}", {
+          method: "POST",
+          headers: {"Content-Type":"application/x-www-form-urlencoded","X-CSRFToken": csrf()},
+          body: new URLSearchParams({
+            name: val("name"),
+            product_type: val("product_type"),
+            product_category: val("product_category"),
+            fabric_type: val("fabric_type"),
+            accessory_type: val("accessory_type"),
+            trim_type: val("trim_type"),
+            thread_type: val("thread_type"),
+            color: val("color"),
+            best_use: val("best_use")
+          })
+        }).then(function(res){ return res.json(); }).then(function(data){
+          aiOut.textContent = data.ok ? (data.suggestion || data.text || "") : (data.error || "AI could not suggest.");
+        }).catch(function(){ aiOut.textContent = "AI request failed."; });
+      });
+    }
+    if (aiApply && aiOut) {
+      aiApply.addEventListener("click", function(){
+        var target = document.querySelector("[name='short_description']") || document.querySelector("[name='best_use']") || document.querySelector("[name='notes']");
+        if (target && aiOut.textContent && aiOut.textContent !== "Suggestions will appear here for review.") {
+          target.value = aiOut.textContent;
+          target.dispatchEvent(new Event("input", {bubbles:true}));
+        }
+      });
+    }
+  })();
+</script>
+{% endblock %}
