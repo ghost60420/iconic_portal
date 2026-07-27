@@ -487,9 +487,12 @@
               <div class="access-groups">
                 {% for group in row.grouped_fields %}
                   <section class="access-group">
-                    <div class="access-group-title">{{ group.0 }}</div>
+                    <div class="access-group-title">{{ group.title }}</div>
+                    {% if group.note %}
+                      <div class="access-help" style="margin-bottom:8px;">{{ group.note }}</div>
+                    {% endif %}
                     <div class="access-group-grid">
-                      {% for field in group.1 %}
+                      {% for field in group.fields %}
                         <label class="access-toggle">
                           {{ field }}
                           <span>{{ field.label }}</span>

@@ -26,7 +26,13 @@ class UserAccessForm(forms.ModelForm):
             "can_accounting_bd",
             "can_accounting_ca",
             "can_library",
+            "can_add_library",
             "can_edit_library",
+            "can_upload_library_images",
+            "can_remove_library_images",
+            "can_archive_library",
+            "can_use_library_presentation",
+            "can_view_library_pricing",
         ]
         widgets = {
             "role": forms.Select(attrs={"class": "form-select"}),
@@ -49,14 +55,22 @@ class UserAccessForm(forms.ModelForm):
             "can_view_ceo_tools": "CEO tools",
             "can_accounting_bd": "Accounting BD",
             "can_accounting_ca": "Accounting CA",
-            "can_library": "Library",
-            "can_edit_library": "Library edit",
+            "can_library": "View Library",
+            "can_add_library": "Add Library Items",
+            "can_edit_library": "Edit Library Items",
+            "can_upload_library_images": "Upload Images",
+            "can_remove_library_images": "Remove Images",
+            "can_archive_library": "Archive and Restore",
+            "can_use_library_presentation": "Use Presentation Mode",
+            "can_view_library_pricing": "View Internal Pricing",
         }
         help_texts = {
             "can_accounting_ca": "CA accounting is never allowed for BD users.",
             "can_view_internal_costing": "Allows viewing costing profit, margin, internal costs, and lifecycle profit metrics.",
             "can_view_ceo_tools": "Restricts CEO Dashboard, AI Executive Advisor, and Daily Briefing access.",
-            "can_edit_library": "Allows adding and editing Library records, including image upload, replacement, and removal.",
+            "can_upload_library_images": "Allows adding and replacing images on records the user may add or edit.",
+            "can_remove_library_images": "Allows removing images from records the user may edit.",
+            "can_view_library_pricing": "Allows viewing Library internal cost, suggested selling price, and internal notes.",
         }
 
     def __init__(self, *args, **kwargs):
@@ -94,5 +108,19 @@ class UserAccessForm(forms.ModelForm):
         # Hard rule: BD cannot have CA accounting
         if cleaned.get("role") == UserAccess.ROLE_BD:
             cleaned["can_accounting_ca"] = False
+
+        if any(
+            cleaned.get(field_name)
+            for field_name in (
+                "can_add_library",
+                "can_edit_library",
+                "can_upload_library_images",
+                "can_remove_library_images",
+                "can_archive_library",
+                "can_use_library_presentation",
+                "can_view_library_pricing",
+            )
+        ):
+            cleaned["can_library"] = True
 
         return cleaned

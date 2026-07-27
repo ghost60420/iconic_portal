@@ -43,7 +43,13 @@ class UserAccess(models.Model):
     can_accounting_bd = models.BooleanField(default=True)
     can_accounting_ca = models.BooleanField(default=False)
     can_library = models.BooleanField(default=False)
+    can_add_library = models.BooleanField(default=False)
     can_edit_library = models.BooleanField(default=False)
+    can_upload_library_images = models.BooleanField(default=False)
+    can_remove_library_images = models.BooleanField(default=False)
+    can_archive_library = models.BooleanField(default=False)
+    can_use_library_presentation = models.BooleanField(default=False)
+    can_view_library_pricing = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -69,6 +75,14 @@ class UserAccess(models.Model):
         if self.user_id and self.user.is_superuser:
             self.can_view_ceo_tools = True
             self.can_view_internal_costing = True
+            self.can_library = True
+            self.can_add_library = True
+            self.can_edit_library = True
+            self.can_upload_library_images = True
+            self.can_remove_library_images = True
+            self.can_archive_library = True
+            self.can_use_library_presentation = True
+            self.can_view_library_pricing = True
 
     def save(self, *args, **kwargs):
         self.clean()

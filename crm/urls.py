@@ -4,6 +4,7 @@ from functools import wraps
 from django.urls import path, include
 from django.shortcuts import redirect
 from django.contrib.auth.decorators import login_required
+from django.http import HttpResponseForbidden
 
 from . import views
 from . import views_ai as ai
@@ -77,21 +78,12 @@ def costing_perm(view_func):
 
 
 def library_perm(view_func):
-    guarded_view = require_any_access("can_library", "can_view_ceo_tools")(view_func)
-
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
         user = request.user
-        if user.is_authenticated:
-            if views._can_edit_catalog_item(user):
-                return view_func(request, *args, **kwargs)
-            try:
-                access = getattr(user, "access", None)
-            except Exception:
-                access = None
-            if access and getattr(access, "can_library", False):
-                return view_func(request, *args, **kwargs)
-        return guarded_view(request, *args, **kwargs)
+        if user.is_authenticated and views._can_open_catalog_module(user):
+            return view_func(request, *args, **kwargs)
+        return HttpResponseForbidden("No access")
 
     return login_required(wrapper)
 

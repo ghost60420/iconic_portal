@@ -1,16 +1,39 @@
 # crm/views_access.py
 
+import json
+import logging
+
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db.models import Q
 from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 
 from .forms_access import UserAccessForm
+from .models import CRMAuditLog
 from .models_access import UserAccess
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
+
+LIBRARY_PERMISSION_FIELDS = (
+    "can_library",
+    "can_add_library",
+    "can_edit_library",
+    "can_upload_library_images",
+    "can_remove_library_images",
+    "can_archive_library",
+    "can_use_library_presentation",
+    "can_view_library_pricing",
+)
+
+LIBRARY_PERMISSION_FIELD_GROUP = {
+    "title": "Library Permissions",
+    "fields": list(LIBRARY_PERMISSION_FIELDS),
+    "note": "Controls access to Products, Fabrics, Accessories, Trims, Threads, images, Presentation Mode, and internal pricing.",
+}
 
 
 def is_admin_user(user):
@@ -23,6 +46,29 @@ def is_admin_user(user):
     except Exception:
         access = None
     return bool(access and getattr(access, "can_view_ceo_tools", False))
+
+
+def _library_permission_snapshot(access):
+    return {field_name: bool(getattr(access, field_name, False)) for field_name in LIBRARY_PERMISSION_FIELDS}
+
+
+def _write_library_permission_audit(actor, target_user, before, after):
+    if before == after:
+        return
+    try:
+        CRMAuditLog.objects.create(
+            actor=actor if actor and actor.is_authenticated else None,
+            module="library_permissions",
+            record_id=str(target_user.pk),
+            record_label=target_user.get_username()[:220],
+            action_type=CRMAuditLog.ACTION_UPDATED,
+            field_name="library_permissions",
+            previous_value=json.dumps(before, sort_keys=True),
+            new_value=json.dumps(after, sort_keys=True),
+            target_url=reverse("access_edit", args=[target_user.pk]),
+        )
+    except Exception:
+        logger.exception("Library permission audit write failed; permission save was preserved")
 
 
 @login_required
@@ -40,6 +86,7 @@ def access_list(request):
             return HttpResponseForbidden("No access")
 
         original_ceo_tools_access = access.can_view_ceo_tools
+        before_library_permissions = _library_permission_snapshot(access)
         form = UserAccessForm(
             request.POST,
             instance=access,
@@ -53,6 +100,12 @@ def access_list(request):
             if obj.role == UserAccess.ROLE_BD:
                 obj.can_accounting_ca = False
             obj.save()
+            _write_library_permission_audit(
+                request.user,
+                target_user,
+                before_library_permissions,
+                _library_permission_snapshot(obj),
+            )
             messages.success(request, f"Access updated for {target_user.username}.")
             return redirect("access_list")
 
@@ -67,11 +120,12 @@ def access_list(request):
     users = users_qs.select_related("access")
 
     field_groups = [
-        ("Core", ["can_leads", "can_opportunities", "can_customers", "can_calendar"]),
-        ("Operations", ["can_inventory", "can_library", "can_edit_library", "can_production", "can_shipping"]),
-        ("Engagement", ["can_ai", "can_marketing", "can_whatsapp"]),
-        ("Costing", ["can_costing", "can_view_internal_costing", "can_costing_approve"]),
-        ("Admin / Accounting", ["can_view_ceo_tools", "can_accounting_bd", "can_accounting_ca"]),
+        {"title": "Core", "fields": ["can_leads", "can_opportunities", "can_customers", "can_calendar"], "note": ""},
+        LIBRARY_PERMISSION_FIELD_GROUP,
+        {"title": "Operations", "fields": ["can_inventory", "can_production", "can_shipping"], "note": ""},
+        {"title": "Engagement", "fields": ["can_ai", "can_marketing", "can_whatsapp"], "note": ""},
+        {"title": "Costing", "fields": ["can_costing", "can_view_internal_costing", "can_costing_approve"], "note": ""},
+        {"title": "Admin / Accounting", "fields": ["can_view_ceo_tools", "can_accounting_bd", "can_accounting_ca"], "note": ""},
     ]
 
     rows = []
@@ -92,12 +146,12 @@ def access_list(request):
                 field.disabled = True
 
         grouped_fields = []
-        for group_label, field_names in field_groups:
+        for group in field_groups:
             items = []
-            for field_name in field_names:
+            for field_name in group["fields"]:
                 if field_name in form.fields:
                     items.append(form[field_name])
-            grouped_fields.append((group_label, items))
+            grouped_fields.append({"title": group["title"], "fields": items, "note": group.get("note", "")})
 
         rows.append(
             {
@@ -137,6 +191,7 @@ def access_edit(request, user_id):
 
     if request.method == "POST":
         original_ceo_tools_access = access.can_view_ceo_tools
+        before_library_permissions = _library_permission_snapshot(access)
         form = UserAccessForm(
             request.POST,
             instance=access,
@@ -152,6 +207,12 @@ def access_edit(request, user_id):
                 obj.can_accounting_ca = False
 
             obj.save()
+            _write_library_permission_audit(
+                request.user,
+                target_user,
+                before_library_permissions,
+                _library_permission_snapshot(obj),
+            )
             return redirect("access_list")
     else:
         form = UserAccessForm(instance=access, can_manage_ceo_tools=request.user.is_superuser)

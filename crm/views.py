@@ -5618,17 +5618,72 @@ def _catalog_access(user):
         return None
 
 
-def _can_view_catalog_internal(user):
+LIBRARY_PERMISSION_FIELDS = (
+    "can_library",
+    "can_add_library",
+    "can_edit_library",
+    "can_upload_library_images",
+    "can_remove_library_images",
+    "can_archive_library",
+    "can_use_library_presentation",
+    "can_view_library_pricing",
+)
+
+
+def _catalog_access_flag(user, field_name):
     if not user or not user.is_authenticated:
         return False
     if user.is_superuser:
         return True
     access = _catalog_access(user)
-    if access and (getattr(access, "can_view_internal_costing", False) or getattr(access, "can_view_ceo_tools", False)):
+    return bool(access and getattr(access, field_name, False))
+
+
+def _can_view_catalog_item(user):
+    if _catalog_access_flag(user, "can_library"):
         return True
-    position = _catalog_profile_value(user, "position")
-    department = _catalog_profile_value(user, "department")
-    return position in {"ceo", "director", "accounts_manager", "accountant"} or department == "accounts"
+    access = _catalog_access(user)
+    return bool(
+        access
+        and any(getattr(access, field_name, False) for field_name in LIBRARY_PERMISSION_FIELDS if field_name != "can_library")
+    )
+
+
+def _can_open_catalog_module(user):
+    return _can_view_catalog_item(user)
+
+
+def _can_add_catalog_item(user):
+    return _catalog_access_flag(user, "can_add_library")
+
+
+def _can_edit_catalog_item(user):
+    return _catalog_access_flag(user, "can_edit_library")
+
+
+def _can_upload_catalog_images(user):
+    return _catalog_access_flag(user, "can_upload_library_images")
+
+
+def _can_remove_catalog_images(user):
+    return _catalog_access_flag(user, "can_remove_library_images")
+
+
+def _can_archive_catalog_item(user):
+    return _catalog_access_flag(user, "can_archive_library")
+
+
+def _can_use_catalog_presentation(user):
+    return _catalog_access_flag(user, "can_use_library_presentation")
+
+
+def _can_view_catalog_internal(user):
+    if _catalog_access_flag(user, "can_view_library_pricing"):
+        return True
+    access = _catalog_access(user)
+    if access and not any(getattr(access, field_name, False) for field_name in LIBRARY_PERMISSION_FIELDS):
+        return bool(getattr(access, "can_view_internal_costing", False) or getattr(access, "can_view_ceo_tools", False))
+    return False
 
 
 def _is_catalog_marketing_user(user):
@@ -5648,39 +5703,6 @@ def _is_catalog_accounts_user(user):
     department = _catalog_profile_value(user, "department")
     groups = _catalog_group_names(user)
     return department == "accounts" or position in {"accounts_manager", "accountant"} or bool(groups.intersection({"accounts", "finance"}))
-
-
-def _can_edit_catalog_item(user):
-    if not user or not user.is_authenticated:
-        return False
-    if user.is_superuser:
-        return True
-    access = _catalog_access(user)
-    position = _catalog_profile_value(user, "position")
-    groups = _catalog_group_names(user)
-    if access and getattr(access, "can_edit_library", False):
-        return True
-    if position in {"ceo", "director", "production_manager", "factory_manager", "approved_manager"}:
-        return True
-    if groups.intersection({"ceo", "super admin", "director", "production manager", "factory manager", "approved manager"}):
-        return True
-    if _is_catalog_sales_user(user) or _is_catalog_marketing_user(user) or _is_catalog_accounts_user(user):
-        return False
-    if access and getattr(access, "can_view_ceo_tools", False):
-        return True
-    return False
-
-
-def _can_archive_catalog_item(user):
-    if not user or not user.is_authenticated:
-        return False
-    if user.is_superuser:
-        return True
-    access = _catalog_access(user)
-    position = _catalog_profile_value(user, "position")
-    if access and getattr(access, "can_view_ceo_tools", False):
-        return True
-    return position in {"ceo", "director", "general_manager", "operations_manager", "production_manager"}
 
 
 def _catalog_add_value(target, label, value):
@@ -5973,6 +5995,14 @@ def _apply_catalog_image_removals(obj, post_data, files_data):
             setattr(obj, field_name, "")
 
 
+def _request_has_catalog_image_upload(files_data):
+    return any(field_name in files_data for _slot, field_name in CATALOG_IMAGE_FIELDS)
+
+
+def _request_has_catalog_image_removal(post_data):
+    return any(_truthy(post_data.get(f"remove_{field_name}")) for _slot, field_name in CATALOG_IMAGE_FIELDS)
+
+
 def _sync_product_masters(product):
     if product.product_type:
         ProductTypeMaster.objects.get_or_create(name=product.product_type.strip(), defaults={"is_active": True})
@@ -6061,6 +6091,8 @@ def _selected_form_fabric(form, obj=None):
 
 def _catalog_form_context(request, config, form, mode, obj=None):
     can_view_internal = _can_view_catalog_internal(request.user)
+    can_upload_images = _can_upload_catalog_images(request.user)
+    can_remove_images = _can_remove_catalog_images(request.user)
     raw_slots = catalog_image_slots(obj) if obj else [{"slot": slot, "field_name": field_name, "url": "", "has_image": False} for slot, field_name in CATALOG_IMAGE_FIELDS]
     image_fields = []
     for slot in raw_slots:
@@ -6068,7 +6100,7 @@ def _catalog_form_context(request, config, form, mode, obj=None):
         image_fields.append(
             {
                 **slot,
-                "field": form[field_name] if field_name in form.fields else None,
+                "field": form[field_name] if can_upload_images and field_name in form.fields else None,
                 "clear_name": f"{field_name}-clear",
             }
         )
@@ -6088,6 +6120,8 @@ def _catalog_form_context(request, config, form, mode, obj=None):
         "form_sections": _catalog_form_sections(form, config, can_view_internal),
         "can_view_internal": can_view_internal,
         "can_edit": _can_edit_catalog_item(request.user),
+        "can_upload_images": can_upload_images,
+        "can_remove_images": can_remove_images,
         "fabric_preview_json": json.dumps(_fabric_preview_payload()) if config["section"] == "products" else "[]",
         "fabric_section": {
             "main_fabric": form["main_fabric"],
@@ -6110,10 +6144,12 @@ def _catalog_form_context(request, config, form, mode, obj=None):
 
 def _catalog_add(request, section):
     config = _catalog_config(section)
-    if not _can_edit_catalog_item(request.user):
+    if not _can_add_catalog_item(request.user):
         return HttpResponseForbidden("No access")
 
     if request.method == "POST":
+        if _request_has_catalog_image_upload(request.FILES) and not _can_upload_catalog_images(request.user):
+            return HttpResponseForbidden("No access")
         form = config["form"](request.POST, request.FILES, can_view_internal=_can_view_catalog_internal(request.user))
         if form.is_valid():
             with transaction.atomic():
@@ -6140,6 +6176,10 @@ def _catalog_edit(request, section, pk):
     obj = get_object_or_404(_visible_catalog_queryset(config, request.user), pk=pk)
 
     if request.method == "POST":
+        if _request_has_catalog_image_upload(request.FILES) and not _can_upload_catalog_images(request.user):
+            return HttpResponseForbidden("No access")
+        if _request_has_catalog_image_removal(request.POST) and not _can_remove_catalog_images(request.user):
+            return HttpResponseForbidden("No access")
         before_images = catalog_image_names(obj)
         before_status = getattr(obj, "status", "")
         form = config["form"](request.POST, request.FILES, instance=obj, can_view_internal=_can_view_catalog_internal(request.user))
@@ -6250,6 +6290,7 @@ def _catalog_detail_context(request, config, obj, *, presentation=False):
         "can_view_internal": can_view_internal,
         "can_edit": False if presentation else _can_edit_catalog_item(request.user),
         "can_archive": False if presentation else _can_archive_catalog_item(request.user),
+        "can_presentation": False if presentation else _can_use_catalog_presentation(request.user),
         "presentation": presentation,
         "presentation_url": reverse(config["presentation_url"], args=[obj.pk]),
         "edit_url": reverse(config["edit_url"], args=[obj.pk]),
@@ -6261,6 +6302,8 @@ def _catalog_detail_context(request, config, obj, *, presentation=False):
 
 def _catalog_detail(request, section, pk):
     config = _catalog_config(section)
+    if not _can_view_catalog_item(request.user):
+        return HttpResponseForbidden("No access")
     obj = get_object_or_404(_visible_catalog_queryset(config, request.user), pk=pk)
     return render(request, "crm/living_catalog_detail.html", _catalog_detail_context(request, config, obj))
 
@@ -6284,6 +6327,8 @@ def _presentation_neighbor_urls(config, obj, user):
 
 def _catalog_presentation(request, section, pk):
     config = _catalog_config(section)
+    if not _can_use_catalog_presentation(request.user):
+        return HttpResponseForbidden("No access")
     obj = get_object_or_404(_visible_catalog_queryset(config, request.user, include_archived=False), pk=pk)
     context = _catalog_detail_context(request, config, obj, presentation=True)
     context.update(_presentation_neighbor_urls(config, obj, request.user))
@@ -6308,6 +6353,8 @@ def _catalog_public_payload(obj, config):
 
 def library_item_safe_json(request, section, pk):
     config = _catalog_config(section)
+    if not _can_view_catalog_item(request.user):
+        return HttpResponseForbidden("No access")
     obj = get_object_or_404(_visible_catalog_queryset(config, request.user), pk=pk)
     return JsonResponse(_catalog_public_payload(obj, config))
 
@@ -6346,6 +6393,8 @@ def catalog_restore(request, section, pk):
 
 def _catalog_list(request, section):
     config = _catalog_config(section)
+    if not _can_view_catalog_item(request.user):
+        return HttpResponseForbidden("No access")
     qs = _visible_catalog_queryset(config, request.user, with_related=False)
     qs = _apply_catalog_filters(qs, config, request).order_by("-updated_at", "-id")
     view_mode = (request.GET.get("view") or "card").strip().lower()
@@ -6368,6 +6417,7 @@ def _catalog_list(request, section):
         "selected_fabric": request.GET.get("fabric", ""),
         "selected_decoration": request.GET.get("decoration", ""),
         "can_edit": _can_edit_catalog_item(request.user),
+        "can_add": _can_add_catalog_item(request.user),
     }
     context.update(_catalog_filter_context(config))
     return render(request, "crm/living_catalog_list.html", context)
@@ -16090,6 +16140,8 @@ def add_opportunity(request):
 
 @login_required
 def library_home(request):
+    if not _can_view_catalog_item(request.user):
+        return HttpResponseForbidden("No access")
     if request.method == "POST":
         action = (request.POST.get("action") or "").strip()
 
@@ -16159,6 +16211,7 @@ def library_home(request):
         "search_groups": search_groups,
         "attachments": attachments[:50],
         "attachment_form": LibraryAttachmentForm(),
+        "can_add": _can_add_catalog_item(request.user),
         "can_edit": _can_edit_catalog_item(request.user),
         "can_archive": _can_archive_catalog_item(request.user),
     }

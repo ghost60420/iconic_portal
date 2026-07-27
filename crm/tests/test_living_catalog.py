@@ -11,7 +11,7 @@ from django.urls import reverse
 from PIL import Image
 
 from crm.forms import ProductForm
-from crm.models import Accessory, Fabric, LivingCatalogAudit, Product, ThreadOption, Trim
+from crm.models import Accessory, CRMAuditLog, Fabric, LivingCatalogAudit, Product, ThreadOption, Trim
 from crm.models_access import UserAccess
 from crm.services.living_catalog import MAX_CATALOG_IMAGE_UPLOAD_BYTES, validate_catalog_image_file
 
@@ -37,23 +37,95 @@ class LivingCatalogTests(TestCase):
         self.admin = User.objects.create_superuser("catalog-admin", "admin@example.com", "pass")
         self.client.force_login(self.admin)
 
-    def _grant_library(self, user, *, internal=False, edit=False, department=None, position=None):
+    def _library_permission_defaults(self, *, department="", position=""):
+        department = (department or "").strip().lower()
+        position = (position or "").strip().lower()
+        defaults = {
+            "view": False,
+            "add": False,
+            "edit": False,
+            "upload": False,
+            "remove": False,
+            "archive": False,
+            "presentation": False,
+            "pricing": False,
+        }
+        if position == "ceo":
+            return {key: True for key in defaults}
+        if position == "director":
+            return {key: True for key in defaults}
+        if position in {"production_manager", "factory_manager", "approved_manager"}:
+            defaults.update(view=True, add=True, edit=True, upload=True, remove=True, presentation=True)
+        elif department == "sales" or position in {"sales_manager", "sales_executive"}:
+            defaults.update(view=True, presentation=True)
+        elif department == "accounts" or position in {"accounts_manager", "accountant"}:
+            defaults.update(view=True, pricing=True)
+        elif department == "marketing":
+            defaults.update(view=True, presentation=True)
+        return defaults
+
+    def _grant_library(
+        self,
+        user,
+        *,
+        internal=False,
+        edit=None,
+        department=None,
+        position=None,
+        view=None,
+        add=None,
+        upload=None,
+        remove=None,
+        archive=None,
+        presentation=None,
+        pricing=None,
+    ):
+        department_value = department if department is not None else ("accounts" if internal else "sales")
+        position_value = position if position is not None else ("accounts_manager" if internal else "sales_executive")
+        defaults = self._library_permission_defaults(department=department_value, position=position_value)
+        if edit is not None:
+            defaults["edit"] = edit
+            if edit:
+                defaults.update(view=True, add=True, upload=True)
+        if internal:
+            defaults["pricing"] = True
+        overrides = {
+            "view": view,
+            "add": add,
+            "upload": upload,
+            "remove": remove,
+            "archive": archive,
+            "presentation": presentation,
+            "pricing": pricing,
+        }
+        for key, value in overrides.items():
+            if value is not None:
+                defaults[key] = value
+        if any(defaults[key] for key in defaults if key != "view"):
+            defaults["view"] = True
+
         access, _ = UserAccess.objects.get_or_create(user=user)
-        access.can_library = True
-        access.can_edit_library = edit
+        access.can_library = defaults["view"]
+        access.can_add_library = defaults["add"]
+        access.can_edit_library = defaults["edit"]
+        access.can_upload_library_images = defaults["upload"]
+        access.can_remove_library_images = defaults["remove"]
+        access.can_archive_library = defaults["archive"]
+        access.can_use_library_presentation = defaults["presentation"]
+        access.can_view_library_pricing = defaults["pricing"]
         access.can_view_internal_costing = internal
         access.save()
         profile = getattr(user, "employee_profile", None)
         if profile:
             profile.display_name = user.username
-            profile.department = department if department is not None else ("sales" if not internal else "accounts")
-            profile.position = position if position is not None else ("sales_executive" if not internal else "accounts_manager")
+            profile.department = department_value
+            profile.position = position_value
             profile.save()
 
-    def _library_user(self, username, *, internal=False, edit=False, department="sales", position="sales_executive"):
+    def _library_user(self, username, *, internal=False, edit=None, department="sales", position="sales_executive", **permissions):
         User = get_user_model()
         user = User.objects.create_user(username, f"{username}@example.com", "pass")
-        self._grant_library(user, internal=internal, edit=edit, department=department, position=position)
+        self._grant_library(user, internal=internal, edit=edit, department=department, position=position, **permissions)
         return user
 
     def _fabric(self):
@@ -508,12 +580,69 @@ class LivingCatalogTests(TestCase):
         form_response = self.client.get(reverse("product_add"))
         self.assertEqual(form_response.status_code, 403)
 
+    def test_role_default_library_permissions_are_enforced(self):
+        fabric = self._fabric()
+        product = Product.objects.create(
+            name="Role Default Product",
+            product_type="Streetwear",
+            product_category="Hoodie",
+            main_fabric=fabric,
+            main_decoration="Embroidery",
+            short_description="Role default product.",
+            status="Available",
+            internal_cost="123.45",
+        )
+        hidden_product = Product.objects.create(
+            name="Role Default Development Product",
+            product_type="Streetwear",
+            product_category="Hoodie",
+            main_fabric=fabric,
+            main_decoration="Embroidery",
+            short_description="Marketing should not see this.",
+            status="Development",
+        )
+
+        director = self._library_user("catalog-director-default", department="management", position="director")
+        self.client.force_login(director)
+        archive = self.client.post(reverse("catalog_archive", args=["products", product.pk]), follow=True)
+        self.assertEqual(archive.status_code, 200)
+        product.refresh_from_db()
+        self.assertEqual(product.status, "Archived")
+        restore = self.client.post(reverse("catalog_restore", args=["products", product.pk]), follow=True)
+        self.assertEqual(restore.status_code, 200)
+        product.refresh_from_db()
+        self.assertEqual(product.status, "Available")
+
+        sales = self._library_user("catalog-sales-default", department="sales", position="sales_executive")
+        self.client.force_login(sales)
+        self.assertEqual(self.client.get(reverse("product_detail", args=[product.pk])).status_code, 200)
+        self.assertEqual(self.client.get(reverse("product_presentation", args=[product.pk])).status_code, 200)
+        self.assertEqual(self.client.get(reverse("product_add")).status_code, 403)
+        self.assertEqual(self.client.get(reverse("product_edit", args=[product.pk])).status_code, 403)
+
+        accounts = self._library_user("catalog-accounts-default", internal=True, department="accounts", position="accountant")
+        self.client.force_login(accounts)
+        accounts_detail = self.client.get(reverse("product_detail", args=[product.pk]))
+        self.assertContains(accounts_detail, "Internal Only")
+        self.assertContains(accounts_detail, "CAD 123.45")
+        self.assertEqual(
+            self.client.post(
+                reverse("product_add"),
+                data={**self._product_post_data(fabric), "name": "Accounts Upload Blocked", "image": image_upload("accounts.jpg")},
+            ).status_code,
+            403,
+        )
+
+        marketing = self._library_user("catalog-marketing-default", department="marketing", position="staff")
+        self.client.force_login(marketing)
+        marketing_list = self.client.get(reverse("products_list"))
+        self.assertContains(marketing_list, product.name)
+        self.assertNotContains(marketing_list, hidden_product.name)
+        self.assertEqual(self.client.get(reverse("product_presentation", args=[product.pk])).status_code, 200)
+
     def test_library_image_upload_allowed_for_approved_roles_and_edit_permission(self):
         fabric = self._fabric()
         User = get_user_model()
-        director_group, _ = Group.objects.get_or_create(name="Director")
-        director_group_user = User.objects.create_user("catalog-director-group", "catalog-director-group@example.com", "pass")
-        director_group_user.groups.add(director_group)
         sales_group, _ = Group.objects.get_or_create(name="Sales")
         flagged_sales = self._library_user("catalog-flagged-sales", edit=True, department="sales", position="sales_executive")
         flagged_sales.groups.add(sales_group)
@@ -521,7 +650,6 @@ class LivingCatalogTests(TestCase):
             self._library_user("catalog-ceo", department="management", position="ceo"),
             User.objects.create_superuser("catalog-super-admin", "catalog-super-admin@example.com", "pass"),
             self._library_user("catalog-director", department="management", position="director"),
-            director_group_user,
             self._library_user("catalog-production-manager", department="production", position="production_manager"),
             self._library_user("catalog-factory-manager", department="production", position="factory_manager"),
             self._library_user("catalog-approved-manager", department="management", position="approved_manager"),
@@ -593,6 +721,77 @@ class LivingCatalogTests(TestCase):
         self.assertNotEqual(product.image_2.name, original_slot_2)
         self.assertFalse(product.image_3)
 
+    def test_image_permissions_are_checked_separately_from_item_edit(self):
+        fabric = self._fabric()
+        editor = self._library_user(
+            "catalog-editor-no-image",
+            department="production",
+            position="staff",
+            view=True,
+            add=True,
+            edit=True,
+            upload=False,
+            remove=False,
+            presentation=True,
+        )
+        self.client.force_login(editor)
+
+        create_response = self.client.post(
+            reverse("product_add"),
+            data={**self._product_post_data(fabric), "name": "Text Only Product"},
+            follow=True,
+        )
+        self.assertEqual(create_response.status_code, 200)
+        product = Product.objects.get(name="Text Only Product")
+
+        upload_response = self.client.post(
+            reverse("product_edit", args=[product.pk]),
+            data={**self._product_post_data(fabric), "name": product.name, "image": image_upload("blocked.jpg")},
+        )
+        self.assertEqual(upload_response.status_code, 403)
+        product.refresh_from_db()
+        self.assertFalse(product.image)
+
+        product.image.save("existing.jpg", image_upload("existing.jpg"), save=True)
+        remove_response = self.client.post(
+            reverse("product_edit", args=[product.pk]),
+            data={**self._product_post_data(fabric), "name": product.name, "remove_image": "1"},
+        )
+        self.assertEqual(remove_response.status_code, 403)
+        product.refresh_from_db()
+        self.assertTrue(product.image)
+
+    def test_current_can_edit_library_users_keep_mapped_add_edit_upload_access(self):
+        fabric = self._fabric()
+        legacy_editor = self._library_user(
+            "catalog-legacy-editor",
+            department="production",
+            position="staff",
+            view=True,
+            add=True,
+            edit=True,
+            upload=True,
+            remove=False,
+            archive=False,
+            presentation=True,
+        )
+        self.client.force_login(legacy_editor)
+
+        response = self.client.post(
+            reverse("product_add"),
+            data={**self._product_post_data(fabric), "name": "Legacy Editor Upload", "image": image_upload("legacy-editor.jpg")},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        product = Product.objects.get(name="Legacy Editor Upload")
+        self.assertTrue(product.image)
+        remove_response = self.client.post(
+            reverse("product_edit", args=[product.pk]),
+            data={**self._product_post_data(fabric), "name": product.name, "remove_image": "1"},
+        )
+        self.assertEqual(remove_response.status_code, 403)
+
     def test_library_view_only_users_cannot_upload_by_form_or_direct_request(self):
         records = self._legacy_catalog_records()
         product = records["products"]
@@ -611,7 +810,7 @@ class LivingCatalogTests(TestCase):
             blocked_sales,
             blocked_accounts,
             blocked_marketing,
-            self._library_user("catalog-blocked-viewer", department="production", position="staff"),
+            self._library_user("catalog-blocked-viewer", department="production", position="staff", view=True),
         ]
 
         for user in blocked_users:
@@ -649,12 +848,23 @@ class LivingCatalogTests(TestCase):
                 product.refresh_from_db()
                 self.assertEqual(product.image.name, original_image)
 
-    def test_library_edit_permission_is_available_on_existing_access_page(self):
+    def test_library_permission_section_is_available_on_existing_access_page(self):
         response = self.client.get(reverse("access_list"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Library edit")
-        self.assertContains(response, "can_edit_library")
+        self.assertContains(response, "Library Permissions")
+        self.assertContains(response, "Controls access to Products, Fabrics, Accessories, Trims, Threads, images, Presentation Mode, and internal pricing.")
+        for label in (
+            "View Library",
+            "Add Library Items",
+            "Edit Library Items",
+            "Upload Images",
+            "Remove Images",
+            "Archive and Restore",
+            "Use Presentation Mode",
+            "View Internal Pricing",
+        ):
+            self.assertContains(response, label)
 
     def test_ceo_tools_user_can_manage_library_edit_permission_without_superuser_access(self):
         ceo = self._library_user("catalog-ceo-access", department="management", position="ceo")
@@ -666,7 +876,7 @@ class LivingCatalogTests(TestCase):
         response = self.client.get(reverse("access_list"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Library edit")
+        self.assertContains(response, "Library Permissions")
         self.assertContains(response, "Only superusers can grant or remove CEO tools access.")
 
         post_response = self.client.post(
@@ -675,14 +885,26 @@ class LivingCatalogTests(TestCase):
                 "user_id": str(target.pk),
                 f"user_{target.pk}-role": UserAccess.ROLE_BD,
                 f"user_{target.pk}-can_library": "on",
+                f"user_{target.pk}-can_add_library": "on",
                 f"user_{target.pk}-can_edit_library": "on",
+                f"user_{target.pk}-can_upload_library_images": "on",
             },
             follow=True,
         )
         self.assertEqual(post_response.status_code, 200)
         target.access.refresh_from_db()
+        self.assertTrue(target.access.can_library)
+        self.assertTrue(target.access.can_add_library)
         self.assertTrue(target.access.can_edit_library)
+        self.assertTrue(target.access.can_upload_library_images)
         self.assertFalse(target.access.can_view_ceo_tools)
+        self.assertTrue(
+            CRMAuditLog.objects.filter(
+                module="library_permissions",
+                record_id=str(target.pk),
+                field_name="library_permissions",
+            ).exists()
+        )
 
     def test_user_without_library_permission_cannot_open_current_library_urls(self):
         User = get_user_model()

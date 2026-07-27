@@ -44,7 +44,7 @@
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <a class="lc-btn" href="{% url 'library_home' %}">Library Home</a>
-      {% if can_edit %}<a class="lc-btn lc-btn-primary" href="{% url catalog.add_url %}">Add New</a>{% endif %}
+      {% if can_add %}<a class="lc-btn lc-btn-primary" href="{% url catalog.add_url %}">Add New</a>{% endif %}
     </div>
   </div>
 

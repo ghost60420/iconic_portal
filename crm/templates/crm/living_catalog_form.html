@@ -78,13 +78,17 @@
                 </div>
                 <div class="lc-slot-body">
                   <div class="lc-slot-top"><span>{{ img.slot }} of 3</span><span data-slot-state>{% if img.has_image %}Saved{% else %}Empty{% endif %}</span></div>
-                  <div class="lc-drop" data-drop>Drop image here</div>
+                  {% if can_upload_images %}<div class="lc-drop" data-drop>Drop image here</div>{% endif %}
                   {% if img.field %}{{ img.field }}{% endif %}
-                  <input type="hidden" name="remove_{{ img.field_name }}" value="0" data-remove-input>
-                  <div class="lc-slot-actions">
-                    <button type="button" class="lc-btn" data-replace>Replace</button>
-                    <button type="button" class="lc-btn" data-remove>Remove</button>
-                  </div>
+                  {% if can_remove_images %}<input type="hidden" name="remove_{{ img.field_name }}" value="0" data-remove-input>{% endif %}
+                  {% if can_upload_images or can_remove_images %}
+                    <div class="lc-slot-actions">
+                      {% if can_upload_images %}<button type="button" class="lc-btn" data-replace>Replace</button>{% endif %}
+                      {% if can_remove_images %}<button type="button" class="lc-btn" data-remove>Remove</button>{% endif %}
+                    </div>
+                  {% else %}
+                    <div class="lc-muted">Image controls are read only for this user.</div>
+                  {% endif %}
                   {% if img.field.errors %}<div class="lc-errors">{{ img.field.errors }}</div>{% endif %}
                 </div>
               </div>

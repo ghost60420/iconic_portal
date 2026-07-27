@@ -72,7 +72,7 @@
           <div class="lc-desc">{{ card.description }}</div>
           <div class="lc-actions">
             <a class="lc-btn" href="{{ card.list_url }}">Open Catalog</a>
-            {% if can_edit %}<a class="lc-btn lc-btn-primary" href="{{ card.add_url }}">Add New</a>{% endif %}
+            {% if can_add %}<a class="lc-btn lc-btn-primary" href="{{ card.add_url }}">Add New</a>{% endif %}
           </div>
         </div>
       </section>

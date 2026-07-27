@@ -62,7 +62,7 @@
       <div class="lc-actions">
         <a class="lc-btn" href="{{ list_url }}">Back</a>
         {% if can_edit %}<a class="lc-btn lc-btn-primary" href="{{ edit_url }}">Edit</a>{% endif %}
-        <a class="lc-btn lc-btn-primary" href="{{ presentation_url }}">Presentation Mode</a>
+        {% if can_presentation %}<a class="lc-btn lc-btn-primary" href="{{ presentation_url }}">Presentation Mode</a>{% endif %}
         {% if can_archive and item.status != "Archived" %}
           <form method="post" action="{% url 'catalog_archive' catalog.section item.pk %}">
             {% csrf_token %}
