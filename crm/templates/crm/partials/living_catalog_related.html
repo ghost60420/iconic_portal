@@ -1,0 +1,26 @@
+{% if related_materials %}
+  <section class="lc-section lc-related-section">
+    <div class="lc-section-title">{% if catalog.section == "products" %}Related Materials{% else %}Related Products{% endif %}</div>
+    {% for group in related_materials %}
+      <div class="lc-related-group-title">{{ group.title }}</div>
+      <div class="lc-related">
+        {% for material in group.items %}
+          <a class="lc-related-card" href="{{ material.url }}">
+            <div class="lc-related-img">
+              {% if material.cover_url %}
+                <img src="{{ material.cover_url }}" alt="{{ material.name }}">
+              {% else %}
+                <span>No image</span>
+              {% endif %}
+            </div>
+            <div class="lc-related-body">
+              <div class="lc-related-name">{{ material.name }}</div>
+              {% if material.type %}<div class="lc-muted">{{ material.type }}</div>{% endif %}
+              {% if material.detail %}<div class="lc-muted">{{ material.detail }}</div>{% endif %}
+            </div>
+          </a>
+        {% endfor %}
+      </div>
+    {% endfor %}
+  </section>
+{% endif %}

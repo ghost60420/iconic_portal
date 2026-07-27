@@ -1,0 +1,41 @@
+<section class="lc-gallery lc-showroom-gallery" data-catalog-gallery>
+  <button type="button" class="lc-main-img" data-gallery-open aria-label="Open image gallery">
+    {% if image_slots.0.url %}
+      <img src="{{ image_slots.0.url }}" alt="{{ item.name }}" data-gallery-main>
+    {% else %}
+      <span>No image</span>
+    {% endif %}
+  </button>
+
+  <div class="lc-thumbs">
+    {% for img in image_slots %}
+      <button type="button" class="lc-thumb{% if forloop.first and img.url %} active{% endif %}" data-gallery-src="{{ img.url }}" data-gallery-index="{{ forloop.counter0 }}" {% if not img.url %}disabled{% endif %} aria-label="Show image {{ img.slot }}">
+        {% if img.url %}
+          <img src="{{ img.url }}" alt="{{ item.name }} image {{ img.slot }}">
+        {% else %}
+          <span>{{ img.slot }} of 3</span>
+        {% endif %}
+      </button>
+    {% endfor %}
+  </div>
+
+  <div class="lc-gallery-foot">
+    <span>{{ image_count }} of 3 images</span>
+    {% if image_count %}
+      <button type="button" class="lc-gallery-link" data-gallery-open>Enlarge</button>
+    {% endif %}
+  </div>
+
+  <div class="lc-lightbox" data-gallery-lightbox hidden>
+    <button type="button" class="lc-lightbox-close" data-gallery-close aria-label="Close image gallery">Close</button>
+    <button type="button" class="lc-lightbox-nav lc-lightbox-prev" data-gallery-prev aria-label="Previous image">Previous</button>
+    <div class="lc-lightbox-stage" data-gallery-stage>
+      {% if image_slots.0.url %}
+        <img src="{{ image_slots.0.url }}" alt="{{ item.name }}" data-gallery-lightbox-img>
+      {% else %}
+        <span>No image</span>
+      {% endif %}
+    </div>
+    <button type="button" class="lc-lightbox-nav lc-lightbox-next" data-gallery-next aria-label="Next image">Next</button>
+  </div>
+</section>

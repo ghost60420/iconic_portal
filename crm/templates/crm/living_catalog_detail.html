@@ -1,30 +1,40 @@
 {% extends "crm/base.html" %}
 {% block content %}
 <style>
-  .lc-page{max-width:1180px;margin:18px auto 42px;padding:0 14px;color:#f8fafc}
-  .lc-head{display:grid;grid-template-columns:420px 1fr;gap:16px;align-items:start}
-  .lc-gallery{background:#0f1720;border:1px solid #263241;border-radius:8px;padding:10px}
-  .lc-main-img{aspect-ratio:4/3;background:#17212d;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#94a3b8}
-  .lc-main-img img{width:100%;height:100%;object-fit:cover}
+  .lc-page{max-width:1200px;margin:18px auto 44px;padding:0 14px;color:#f8fafc}
+  .lc-head{display:grid;grid-template-columns:420px 1fr;gap:18px;align-items:start}
+  .lc-gallery{background:#0f1720;border:1px solid #2f3947;border-radius:8px;padding:10px;box-shadow:0 18px 40px rgba(0,0,0,.18)}
+  .lc-main-img{width:100%;aspect-ratio:4/3;background:#17212d;border:0;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#94a3b8;cursor:pointer;padding:0}
+  .lc-main-img img{width:100%;height:100%;object-fit:cover;display:block}
   .lc-thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
-  .lc-thumb{aspect-ratio:4/3;border:1px solid #263241;background:#17212d;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:11px;cursor:pointer}
+  .lc-thumb{aspect-ratio:4/3;border:1px solid #2f3947;background:#17212d;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:11px;cursor:pointer;padding:0}
+  .lc-thumb.active{border-color:#d9b86d;box-shadow:0 0 0 2px rgba(217,184,109,.18)}
+  .lc-thumb:disabled{cursor:default;opacity:.72}
   .lc-thumb img{width:100%;height:100%;object-fit:cover}
-  .lc-title{font-size:27px;font-weight:900;letter-spacing:0;margin:0;color:#fff}
-  .lc-meta{color:#a7b0be;margin-top:7px;font-size:14px}
-  .lc-status{display:inline-flex;margin-top:12px;border:1px solid #334155;background:#111c27;border-radius:8px;padding:5px 8px;color:#d9b86d;font-size:12px;font-weight:900}
-  .lc-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
-  .lc-btn{display:inline-flex;align-items:center;justify-content:center;border:1px solid #334155;background:#17212d;color:#f8fafc;border-radius:8px;padding:9px 12px;font-size:13px;font-weight:800;text-decoration:none;cursor:pointer;min-height:38px}
-  .lc-btn:hover{border-color:#b9903a;color:#fff;background:#1f2a37}
-  .lc-btn-primary{background:#1d4d4f;border-color:#2b7371;color:#effffd}
-  .lc-section{margin-top:14px;background:#0f1720;border:1px solid #263241;border-radius:8px;padding:14px}
-  .lc-section-title{font-size:15px;font-weight:900;color:#fff;margin-bottom:10px}
+  .lc-gallery-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:9px;color:#a7b0be;font-size:12px}
+  .lc-gallery-link{border:0;background:none;color:#f0cc75;font-weight:900;cursor:pointer;padding:0}
+  .lc-hero{background:linear-gradient(180deg,#111923,#0b1118);border:1px solid #2f3947;border-radius:8px;padding:18px;min-height:100%}
+  .lc-title{font-size:30px;font-weight:900;letter-spacing:0;margin:0;color:#fff;line-height:1.08}
+  .lc-meta{color:#aeb7c4;margin-top:8px;font-size:14px}
+  .lc-status{display:inline-flex;margin-top:14px;border:1px solid #5a4822;background:#241d10;border-radius:8px;padding:5px 8px;color:#f0cc75;font-size:12px;font-weight:900;white-space:nowrap}
+  .lc-status-available{border-color:#2e6659;background:#102922;color:#8be0c5}
+  .lc-status-archived,.lc-status-not-available{border-color:#5b3440;background:#2a1219;color:#f3a6b8}
+  .lc-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:17px}
+  .lc-btn{display:inline-flex;align-items:center;justify-content:center;border:1px solid #344252;background:#17212d;color:#f8fafc;border-radius:8px;padding:9px 12px;font-size:13px;font-weight:800;text-decoration:none;cursor:pointer;min-height:38px}
+  .lc-btn:hover{border-color:#d9b86d;color:#fff;background:#1f2a37}
+  .lc-btn-primary{background:#21474a;border-color:#2e7676;color:#effffd}
+  .lc-section{margin-top:16px;background:#0f1720;border:1px solid #2f3947;border-radius:8px;padding:15px}
+  .lc-section-title{font-size:15px;font-weight:900;color:#fff;margin-bottom:11px}
   .lc-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .lc-detail{background:#101820;border:1px solid #263241;border-radius:8px;padding:10px;min-width:0}
+  .lc-detail:first-child{grid-column:1/-1}
   .lc-label{font-size:11px;text-transform:uppercase;letter-spacing:0;color:#a7b0be;font-weight:900}
-  .lc-value{margin-top:5px;color:#fff;font-size:14px;white-space:pre-wrap}
+  .lc-value{margin-top:5px;color:#fff;font-size:14px;white-space:pre-wrap;line-height:1.45}
+  .lc-related-group-title{color:#d9b86d;font-size:12px;font-weight:900;margin:13px 0 8px}
   .lc-related{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
-  .lc-related-card{display:grid;grid-template-columns:58px 1fr;gap:10px;border:1px solid #263241;border-radius:8px;background:#101820;padding:8px;color:#f8fafc;text-decoration:none;min-width:0}
-  .lc-related-img{width:58px;height:58px;border-radius:8px;background:#17212d;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:11px;overflow:hidden}
+  .lc-related-card{display:grid;grid-template-columns:66px 1fr;gap:10px;border:1px solid #263241;border-radius:8px;background:#101820;padding:8px;color:#f8fafc;text-decoration:none;min-width:0}
+  .lc-related-card:hover{border-color:#d9b86d;background:#141f2b}
+  .lc-related-img{width:66px;height:66px;border-radius:8px;background:#17212d;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:11px;overflow:hidden}
   .lc-related-img img{width:100%;height:100%;object-fit:cover}
   .lc-related-name{font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .lc-muted{color:#a7b0be;font-size:12px;margin-top:4px}
@@ -33,36 +43,34 @@
   .lc-audit{width:100%;border-collapse:collapse;font-size:12px;min-width:620px}
   .lc-audit th,.lc-audit td{padding:8px;border-bottom:1px solid #263241;text-align:left}
   .lc-audit th{color:#d9b86d;text-transform:uppercase;letter-spacing:0}
-  @media (max-width:900px){.lc-head{grid-template-columns:1fr}.lc-detail-grid{grid-template-columns:1fr}}
+  .lc-lightbox{position:fixed;inset:0;background:rgba(2,6,12,.92);z-index:9999;display:none;align-items:center;justify-content:center;padding:54px 72px}
+  .lc-lightbox.open{display:flex}
+  .lc-lightbox-stage{max-width:100%;max-height:100%;display:flex;align-items:center;justify-content:center;color:#94a3b8}
+  .lc-lightbox-stage img{max-width:100%;max-height:calc(100vh - 120px);object-fit:contain;border-radius:8px}
+  .lc-lightbox-close,.lc-lightbox-nav{position:fixed;border:1px solid #344252;background:#17212d;color:#f8fafc;border-radius:8px;padding:10px 12px;font-size:13px;font-weight:900;cursor:pointer}
+  .lc-lightbox-close{top:16px;right:16px}
+  .lc-lightbox-prev{left:16px;top:50%}
+  .lc-lightbox-next{right:16px;top:50%}
+  body.lc-lightbox-open{overflow:hidden}
+  @media (max-width:900px){.lc-head{grid-template-columns:1fr}.lc-detail-grid{grid-template-columns:1fr}.lc-detail:first-child{grid-column:auto}}
+  @media (max-width:620px){.lc-page{padding:0 10px}.lc-actions{flex-direction:column}.lc-btn{width:100%}.lc-lightbox{padding:54px 12px}.lc-lightbox-prev,.lc-lightbox-next{top:auto;bottom:16px}.lc-lightbox-prev{left:12px}.lc-lightbox-next{right:12px}}
 </style>
 
 <div class="lc-page">
   <div class="lc-head">
-    <section class="lc-gallery">
-      <div class="lc-main-img" id="lc-main-image">
-        {% if image_slots.0.url %}<img src="{{ image_slots.0.url }}" alt="{{ item.name }}">{% else %}<span>No image</span>{% endif %}
-      </div>
-      <div class="lc-thumbs">
-        {% for img in image_slots %}
-          <button type="button" class="lc-thumb" data-gallery-src="{{ img.url }}">
-            {% if img.url %}<img src="{{ img.url }}" alt="Image {{ img.slot }}">{% else %}{{ img.slot }} of 3{% endif %}
-          </button>
-        {% endfor %}
-      </div>
-      <div class="lc-muted" style="margin-top:8px;">{{ image_count }} of 3 images</div>
-    </section>
+    {% include "crm/partials/living_catalog_gallery.html" %}
 
-    <section>
+    <section class="lc-hero">
       <h1 class="lc-title">{{ item.name }}</h1>
       <div class="lc-meta">
         {% if catalog.section == "products" %}{{ item.product_category }}{% else %}{{ item_type }}{% endif %}
         {% if item.main_decoration %} · {{ item.main_decoration }}{% endif %}
       </div>
-      <div class="lc-status">{{ item.status }}</div>
+      {% include "crm/partials/living_catalog_status.html" with status=item.status %}
       <div class="lc-actions">
         <a class="lc-btn" href="{{ list_url }}">Back</a>
-        {% if can_edit %}<a class="lc-btn lc-btn-primary" href="{{ edit_url }}">Edit</a>{% endif %}
         {% if can_presentation %}<a class="lc-btn lc-btn-primary" href="{{ presentation_url }}">Presentation Mode</a>{% endif %}
+        {% if can_edit %}<a class="lc-btn lc-btn-primary" href="{{ edit_url }}">Edit</a>{% endif %}
         {% if can_archive and item.status != "Archived" %}
           <form method="post" action="{% url 'catalog_archive' catalog.section item.pk %}">
             {% csrf_token %}
@@ -92,26 +100,7 @@
     </section>
   {% endif %}
 
-  {% if related_materials %}
-    <section class="lc-section">
-      <div class="lc-section-title">Related Materials</div>
-      {% for group in related_materials %}
-        <div class="lc-muted" style="margin:12px 0 8px;">{{ group.title }}</div>
-        <div class="lc-related">
-          {% for material in group.items %}
-            <a class="lc-related-card" href="{{ material.url }}">
-              <div class="lc-related-img">{% if material.cover_url %}<img src="{{ material.cover_url }}" alt="{{ material.name }}">{% else %}No image{% endif %}</div>
-              <div>
-                <div class="lc-related-name">{{ material.name }}</div>
-                <div class="lc-muted">{{ material.type }}</div>
-                <div class="lc-muted">{{ material.detail }}</div>
-              </div>
-            </a>
-          {% endfor %}
-        </div>
-      {% endfor %}
-    </section>
-  {% endif %}
+  {% include "crm/partials/living_catalog_related.html" %}
 
   {% if internal_details %}
     <section class="lc-section">
@@ -150,15 +139,5 @@
   {% endif %}
 </div>
 
-<script>
-  (function(){
-    var main = document.getElementById("lc-main-image");
-    document.querySelectorAll("[data-gallery-src]").forEach(function(btn){
-      btn.addEventListener("click", function(){
-        var src = btn.getAttribute("data-gallery-src");
-        if (src && main) main.innerHTML = "<img src='" + src + "' alt=''>";
-      });
-    });
-  })();
-</script>
+{% include "crm/partials/living_catalog_gallery_script.html" %}
 {% endblock %}

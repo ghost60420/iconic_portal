@@ -306,6 +306,142 @@ class LivingCatalogTests(TestCase):
             self.assertEqual(edit_response.status_code, 200)
             self.assertContains(edit_response, obj.name)
 
+    def test_showroom_card_view_renders_useful_details_without_private_pricing(self):
+        fabric = Fabric.objects.create(
+            name="Sports Mesh",
+            fabric_type="Mesh",
+            composition="100% Polyester",
+            gsm="180",
+            best_use="Performance shorts",
+            status="Available",
+        )
+        Product.objects.create(
+            name="Performance Shorts",
+            product_type="Activewear",
+            product_category="Shorts",
+            main_fabric=fabric,
+            main_decoration="Sublimation",
+            short_description="Lightweight training shorts.",
+            status="Available",
+            internal_cost="12.50",
+            internal_notes="Private costing",
+        )
+
+        response = self.client.get(reverse("products_list"))
+
+        self.assertContains(response, "lc-showroom-card")
+        self.assertContains(response, "Performance Shorts")
+        self.assertContains(response, "Activewear")
+        self.assertContains(response, "Mesh | 180 GSM")
+        self.assertContains(response, "Sublimation")
+        self.assertContains(response, "Available")
+        self.assertNotContains(response, "12.50")
+        self.assertNotContains(response, "Private costing")
+
+    def test_gallery_lightbox_controls_render_on_detail_and_presentation(self):
+        fabric = self._fabric()
+        product = Product.objects.create(
+            name="Gallery Product",
+            product_type="Streetwear",
+            product_category="Hoodie",
+            main_fabric=fabric,
+            main_decoration="Embroidery",
+            short_description="Gallery-ready product.",
+            status="Available",
+        )
+        product.image.save("gallery-one.jpg", image_upload("gallery-one.jpg"), save=True)
+        product.image_2.save("gallery-two.jpg", image_upload("gallery-two.jpg"), save=True)
+        product.image_3.save("gallery-three.jpg", image_upload("gallery-three.jpg"), save=True)
+
+        detail = self.client.get(reverse("product_detail", args=[product.pk]))
+        self.assertContains(detail, "data-catalog-gallery")
+        self.assertContains(detail, "data-gallery-lightbox")
+        self.assertContains(detail, "data-gallery-prev")
+        self.assertContains(detail, "data-gallery-next")
+        self.assertContains(detail, "Enlarge")
+        self.assertContains(detail, product.image_2.url)
+        self.assertContains(detail, product.image_3.url)
+
+        presentation = self.client.get(reverse("product_presentation", args=[product.pk]))
+        self.assertContains(presentation, "Exit Presentation")
+        self.assertContains(presentation, "Full Screen")
+        self.assertContains(presentation, "data-gallery-lightbox")
+        self.assertContains(presentation, "data-gallery-prev")
+        self.assertContains(presentation, "data-gallery-next")
+        self.assertNotContains(presentation, "crm-nav-item")
+
+    def test_search_and_filters_use_fabric_specs_gsm_and_decoration(self):
+        fabric = Fabric.objects.create(
+            name="Sports Mesh",
+            fabric_type="Mesh",
+            composition="100% Polyester",
+            gsm="180",
+            best_use="Activewear",
+            status="Available",
+        )
+        product = Product.objects.create(
+            name="Searchable Performance Shorts",
+            product_type="Activewear",
+            product_category="Shorts",
+            main_fabric=fabric,
+            main_decoration="Sublimation",
+            short_description="Searchable by linked fabric specs.",
+            status="Available",
+            main_colour="Navy",
+            tags="summer",
+        )
+
+        checks = [
+            (reverse("products_list"), {"q": "100% Polyester"}),
+            (reverse("products_list"), {"q": "180"}),
+            (reverse("products_list"), {"q": "Sublimation"}),
+            (reverse("products_list"), {"fabric": "Mesh"}),
+            (reverse("products_list"), {"gsm": "180"}),
+            (reverse("products_list"), {"decoration": "Sublimation"}),
+        ]
+        for url, params in checks:
+            with self.subTest(params=params):
+                response = self.client.get(url, params)
+                self.assertContains(response, product.name)
+
+        fabric_by_composition = self.client.get(reverse("fabrics_list"), {"composition": "Polyester"})
+        self.assertContains(fabric_by_composition, fabric.name)
+        fabric_by_gsm = self.client.get(reverse("fabrics_list"), {"gsm": "180"})
+        self.assertContains(fabric_by_gsm, fabric.name)
+
+    def test_related_materials_and_reverse_related_products_render(self):
+        fabric = self._fabric()
+        accessory, trim, thread = self._materials()
+        product = Product.objects.create(
+            name="Related Product",
+            product_type="Streetwear",
+            product_category="Hoodie",
+            main_fabric=fabric,
+            main_decoration="Embroidery",
+            short_description="Related material product.",
+            status="Available",
+        )
+        product.accessories.add(accessory)
+        product.trims.add(trim)
+        product.threads.add(thread)
+
+        product_detail = self.client.get(reverse("product_detail", args=[product.pk]))
+        self.assertContains(product_detail, "Related Materials")
+        self.assertContains(product_detail, fabric.name)
+        self.assertContains(product_detail, accessory.name)
+        self.assertContains(product_detail, trim.name)
+        self.assertContains(product_detail, thread.name)
+
+        fabric_detail = self.client.get(reverse("fabric_detail", args=[fabric.pk]))
+        self.assertContains(fabric_detail, "Products using this fabric")
+        self.assertContains(fabric_detail, product.name)
+
+        for obj, url_name in ((accessory, "accessory_detail"), (trim, "trim_detail"), (thread, "thread_detail")):
+            with self.subTest(section=url_name):
+                response = self.client.get(reverse(url_name, args=[obj.pk]))
+                self.assertContains(response, "Related products")
+                self.assertContains(response, product.name)
+
     def test_required_fields_match_approved_living_catalog_scope(self):
         form = ProductForm(can_view_internal=False)
 
@@ -568,6 +704,8 @@ class LivingCatalogTests(TestCase):
         view_response = self.client.get(reverse("product_detail", args=[product.pk]))
         self.assertEqual(view_response.status_code, 200)
         self.assertNotContains(view_response, "Internal Only")
+        self.assertNotContains(view_response, reverse("product_edit", args=[product.pk]))
+        self.assertNotContains(view_response, "Archive this record?")
 
         edit_response = self.client.get(reverse("product_edit", args=[product.pk]))
         self.assertEqual(edit_response.status_code, 403)

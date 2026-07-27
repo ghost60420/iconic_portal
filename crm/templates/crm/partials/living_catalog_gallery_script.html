@@ -1,0 +1,75 @@
+<script>
+  (function(){
+    document.querySelectorAll("[data-catalog-gallery]").forEach(function(gallery){
+      var main = gallery.querySelector("[data-gallery-main]");
+      var mainButton = gallery.querySelector("[data-gallery-open]");
+      var thumbs = Array.prototype.slice.call(gallery.querySelectorAll("[data-gallery-src]"));
+      var lightbox = gallery.querySelector("[data-gallery-lightbox]");
+      var lightboxImg = gallery.querySelector("[data-gallery-lightbox-img]");
+      var closeButton = gallery.querySelector("[data-gallery-close]");
+      var previousButton = gallery.querySelector("[data-gallery-prev]");
+      var nextButton = gallery.querySelector("[data-gallery-next]");
+      var urls = thumbs.map(function(btn){ return btn.getAttribute("data-gallery-src"); }).filter(Boolean);
+      var current = 0;
+      var touchStartX = 0;
+
+      function setImage(index){
+        if (!urls.length) return;
+        current = (index + urls.length) % urls.length;
+        var src = urls[current];
+        if (main) main.setAttribute("src", src);
+        if (lightboxImg) lightboxImg.setAttribute("src", src);
+        thumbs.forEach(function(btn){
+          btn.classList.toggle("active", btn.getAttribute("data-gallery-src") === src);
+        });
+      }
+
+      function openLightbox(){
+        if (!lightbox || !urls.length) return;
+        lightbox.hidden = false;
+        lightbox.classList.add("open");
+        document.body.classList.add("lc-lightbox-open");
+        setImage(current);
+      }
+
+      function closeLightbox(){
+        if (!lightbox) return;
+        lightbox.hidden = true;
+        lightbox.classList.remove("open");
+        document.body.classList.remove("lc-lightbox-open");
+      }
+
+      thumbs.forEach(function(btn, index){
+        btn.addEventListener("click", function(){
+          if (btn.getAttribute("data-gallery-src")) setImage(index);
+        });
+      });
+
+      gallery.querySelectorAll("[data-gallery-open]").forEach(function(btn){
+        btn.addEventListener("click", openLightbox);
+      });
+      if (closeButton) closeButton.addEventListener("click", closeLightbox);
+      if (previousButton) previousButton.addEventListener("click", function(){ setImage(current - 1); });
+      if (nextButton) nextButton.addEventListener("click", function(){ setImage(current + 1); });
+      if (lightbox) {
+        lightbox.addEventListener("click", function(event){
+          if (event.target === lightbox) closeLightbox();
+        });
+        lightbox.addEventListener("touchstart", function(event){
+          touchStartX = event.changedTouches[0].screenX;
+        }, {passive:true});
+        lightbox.addEventListener("touchend", function(event){
+          var diff = event.changedTouches[0].screenX - touchStartX;
+          if (Math.abs(diff) > 40) setImage(current + (diff < 0 ? 1 : -1));
+        }, {passive:true});
+      }
+      document.addEventListener("keydown", function(event){
+        if (!lightbox || lightbox.hidden) return;
+        if (event.key === "Escape") closeLightbox();
+        if (event.key === "ArrowLeft") setImage(current - 1);
+        if (event.key === "ArrowRight") setImage(current + 1);
+      });
+      if (mainButton && !urls.length) mainButton.disabled = true;
+    });
+  })();
+</script>

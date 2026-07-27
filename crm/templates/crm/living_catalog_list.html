@@ -1,39 +1,45 @@
 {% extends "crm/base.html" %}
 {% block content %}
 <style>
-  .lc-page{max-width:1220px;margin:18px auto 42px;padding:0 14px;color:#f8fafc}
-  .lc-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:12px}
-  .lc-title{margin:0;font-size:23px;font-weight:900;letter-spacing:0;color:#fff}
-  .lc-sub{margin-top:4px;color:#a7b0be;font-size:13px}
-  .lc-toolbar{background:#0f1720;border:1px solid #263241;border-radius:8px;padding:12px;margin-bottom:14px}
-  .lc-filters{display:grid;grid-template-columns:2fr repeat(4,minmax(130px,1fr));gap:8px;align-items:end}
-  .lc-filter label{display:block;margin-bottom:5px;color:#a7b0be;font-size:12px;font-weight:800}
-  .lc-filter input,.lc-filter select{width:100%;background:#0b1118;border:1px solid #263241;border-radius:8px;color:#f8fafc;padding:9px 10px;font-size:13px}
+  .lc-page{max-width:1240px;margin:18px auto 44px;padding:0 14px;color:#f8fafc}
+  .lc-head{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+  .lc-title{margin:0;font-size:25px;font-weight:900;letter-spacing:0;color:#fff}
+  .lc-sub{margin-top:5px;color:#aeb7c4;font-size:13px;max-width:720px}
+  .lc-toolbar{background:linear-gradient(180deg,#111923,#0b1118);border:1px solid #2f3947;border-radius:8px;padding:12px;margin-bottom:14px;box-shadow:0 18px 44px rgba(0,0,0,.2)}
+  .lc-filters{display:grid;grid-template-columns:minmax(220px,2fr) repeat(4,minmax(120px,1fr));gap:9px;align-items:end}
+  .lc-filter label{display:block;margin-bottom:5px;color:#aeb7c4;font-size:12px;font-weight:800}
+  .lc-filter input,.lc-filter select{width:100%;background:#080d13;border:1px solid #2d3846;border-radius:8px;color:#f8fafc;padding:10px 11px;font-size:13px;min-height:40px}
+  .lc-filter input:focus,.lc-filter select:focus{outline:2px solid rgba(217,184,109,.25);border-color:#b9903a}
   .lc-filter-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-  .lc-btn{display:inline-flex;align-items:center;justify-content:center;border:1px solid #334155;background:#17212d;color:#f8fafc;border-radius:8px;padding:9px 12px;font-size:13px;font-weight:800;text-decoration:none;cursor:pointer;min-height:38px}
-  .lc-btn:hover{border-color:#b9903a;color:#fff;background:#1f2a37}
-  .lc-btn-primary{background:#1d4d4f;border-color:#2b7371;color:#effffd}
-  .lc-view-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
-  .lc-view-tabs .active{border-color:#2b7371;background:#173d40}
-  .lc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
-  .lc-card{background:#0f1720;border:1px solid #263241;border-radius:8px;overflow:hidden;min-width:0}
+  .lc-btn{display:inline-flex;align-items:center;justify-content:center;border:1px solid #344252;background:#17212d;color:#f8fafc;border-radius:8px;padding:9px 12px;font-size:13px;font-weight:800;text-decoration:none;cursor:pointer;min-height:38px}
+  .lc-btn:hover{border-color:#d9b86d;color:#fff;background:#1f2a37}
+  .lc-btn-primary{background:#21474a;border-color:#2e7676;color:#effffd}
+  .lc-view-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:13px}
+  .lc-view-tabs .active{border-color:#d9b86d;background:#2d2514;color:#fff}
+  .lc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+  .lc-card{background:#0f1720;border:1px solid #2f3947;border-radius:8px;overflow:hidden;min-width:0;box-shadow:0 18px 40px rgba(0,0,0,.16)}
   .lc-cover{aspect-ratio:4/3;background:#17212d;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:12px;overflow:hidden}
-  .lc-cover img{width:100%;height:100%;object-fit:cover}
-  .lc-body{padding:12px}
-  .lc-name{font-size:15px;font-weight:900;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .lc-meta{font-size:12px;color:#b8c1cd;margin-top:5px;min-height:17px}
-  .lc-card-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:12px}
-  .lc-status{display:inline-flex;border:1px solid #334155;background:#111c27;border-radius:8px;padding:4px 7px;color:#d9b86d;font-size:11px;font-weight:900}
-  .lc-table-wrap{overflow:auto;background:#0f1720;border:1px solid #263241;border-radius:8px}
-  .lc-table{width:100%;border-collapse:collapse;font-size:13px;min-width:850px}
-  .lc-table th,.lc-table td{padding:10px;border-bottom:1px solid #263241;text-align:left;vertical-align:middle}
+  .lc-cover img{width:100%;height:100%;object-fit:cover;display:block}
+  .lc-body{padding:13px}
+  .lc-card-topline{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:start}
+  .lc-name{font-size:16px;font-weight:900;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lc-meta{font-size:12px;color:#d9b86d;margin-top:6px;font-weight:800;min-height:17px}
+  .lc-card-detail{font-size:13px;color:#d6dde7;margin-top:5px;min-height:18px}
+  .lc-card-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:13px}
+  .lc-image-count{color:#8f9aaa;font-size:12px}
+  .lc-status{display:inline-flex;border:1px solid #5a4822;background:#241d10;border-radius:8px;padding:4px 7px;color:#f0cc75;font-size:11px;font-weight:900;white-space:nowrap}
+  .lc-status-available{border-color:#2e6659;background:#102922;color:#8be0c5}
+  .lc-status-archived,.lc-status-not-available{border-color:#5b3440;background:#2a1219;color:#f3a6b8}
+  .lc-table-wrap{overflow:auto;background:#0f1720;border:1px solid #2f3947;border-radius:8px}
+  .lc-table{width:100%;border-collapse:collapse;font-size:13px;min-width:900px}
+  .lc-table th,.lc-table td{padding:11px;border-bottom:1px solid #263241;text-align:left;vertical-align:middle}
   .lc-table th{color:#d9b86d;font-size:11px;text-transform:uppercase;letter-spacing:0;background:#101820}
-  .lc-thumb{width:54px;height:54px;border-radius:8px;background:#17212d;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:11px}
+  .lc-thumb{width:58px;height:58px;border-radius:8px;background:#17212d;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:11px}
   .lc-thumb img{width:100%;height:100%;object-fit:cover}
-  .lc-empty{background:#0f1720;border:1px dashed #334155;border-radius:8px;padding:18px;color:#a7b0be}
-  .lc-pager{display:flex;gap:8px;justify-content:flex-end;align-items:center;margin-top:14px;color:#a7b0be;font-size:12px}
-  @media (max-width:980px){.lc-filters{grid-template-columns:1fr 1fr}.lc-filter:first-child{grid-column:1/-1}}
-  @media (max-width:640px){.lc-filters{grid-template-columns:1fr}.lc-head{align-items:flex-start}.lc-card-foot{align-items:stretch;flex-direction:column}.lc-btn{width:100%}}
+  .lc-empty{background:#0f1720;border:1px dashed #3d4a5b;border-radius:8px;padding:22px;color:#a7b0be}
+  .lc-pager{display:flex;gap:8px;justify-content:flex-end;align-items:center;margin-top:14px;color:#a7b0be;font-size:12px;flex-wrap:wrap}
+  @media (max-width:980px){.lc-filters{grid-template-columns:1fr 1fr}.lc-filter:first-child{grid-column:1/-1}.lc-grid{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}}
+  @media (max-width:640px){.lc-page{padding:0 10px}.lc-filters{grid-template-columns:1fr}.lc-head{align-items:flex-start}.lc-card-foot{align-items:stretch;flex-direction:column}.lc-btn{width:100%}.lc-grid{grid-template-columns:1fr}}
 </style>
 
 <div class="lc-page">
@@ -52,7 +58,7 @@
     <div class="lc-filters">
       <div class="lc-filter">
         <label>Search</label>
-        <input type="search" name="q" value="{{ q }}" placeholder="Name, type, category, colour, tags">
+        <input type="search" name="q" value="{{ q }}" placeholder="Name, type, fabric, GSM, decoration, colour, tags">
       </div>
       <div class="lc-filter">
         <label>Type</label>
@@ -88,7 +94,11 @@
         </div>
         <div class="lc-filter">
           <label>Fabric</label>
-          <input type="search" name="fabric" value="{{ selected_fabric }}" placeholder="Fabric name">
+          <input type="search" name="fabric" value="{{ selected_fabric }}" placeholder="Fabric name or type">
+        </div>
+        <div class="lc-filter">
+          <label>GSM</label>
+          <input type="search" name="gsm" value="{{ selected_gsm }}" placeholder="180">
         </div>
         <div class="lc-filter">
           <label>Decoration</label>
@@ -98,6 +108,15 @@
               <option value="{{ value }}" {% if selected_decoration == value %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
+        </div>
+      {% elif catalog.section == "fabrics" %}
+        <div class="lc-filter">
+          <label>Composition</label>
+          <input type="search" name="composition" value="{{ selected_composition }}" placeholder="Cotton, polyester">
+        </div>
+        <div class="lc-filter">
+          <label>GSM</label>
+          <input type="search" name="gsm" value="{{ selected_gsm }}" placeholder="400">
         </div>
       {% endif %}
     </div>
@@ -109,15 +128,15 @@
   </form>
 
   <div class="lc-view-tabs">
-    <a class="lc-btn {% if view_mode == 'card' %}active{% endif %}" href="?q={{ q }}&type={{ selected_type }}&status={{ selected_status }}&colour={{ selected_colour }}&category={{ selected_category }}&fabric={{ selected_fabric }}&decoration={{ selected_decoration }}&view=card">Card View</a>
-    <a class="lc-btn {% if view_mode == 'table' %}active{% endif %}" href="?q={{ q }}&type={{ selected_type }}&status={{ selected_status }}&colour={{ selected_colour }}&category={{ selected_category }}&fabric={{ selected_fabric }}&decoration={{ selected_decoration }}&view=table">Table View</a>
+    <a class="lc-btn {% if view_mode == 'card' %}active{% endif %}" href="?q={{ q }}&type={{ selected_type }}&status={{ selected_status }}&colour={{ selected_colour }}&category={{ selected_category }}&fabric={{ selected_fabric }}&gsm={{ selected_gsm }}&composition={{ selected_composition }}&decoration={{ selected_decoration }}&view=card">Card View</a>
+    <a class="lc-btn {% if view_mode == 'table' %}active{% endif %}" href="?q={{ q }}&type={{ selected_type }}&status={{ selected_status }}&colour={{ selected_colour }}&category={{ selected_category }}&fabric={{ selected_fabric }}&gsm={{ selected_gsm }}&composition={{ selected_composition }}&decoration={{ selected_decoration }}&view=table">Table View</a>
   </div>
 
   {% if rows %}
     {% if view_mode == "table" %}
       <div class="lc-table-wrap">
         <table class="lc-table">
-          <thead><tr><th>Image</th><th>Name</th><th>Type</th>{% if catalog.section == "products" %}<th>Category</th>{% endif %}<th>Detail</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Image</th><th>Name</th><th>Type</th>{% if catalog.section == "products" %}<th>Category</th>{% endif %}<th>Details</th><th>Status</th><th></th></tr></thead>
           <tbody>
             {% for row in rows %}
               <tr>
@@ -125,8 +144,8 @@
                 <td><strong>{{ row.name }}</strong></td>
                 <td>{{ row.type|default:"" }}</td>
                 {% if catalog.section == "products" %}<td>{{ row.category|default:"" }}</td>{% endif %}
-                <td>{{ row.detail|default:"" }}</td>
-                <td><span class="lc-status">{{ row.status }}</span></td>
+                <td>{% for detail in row.details %}<div>{{ detail }}</div>{% endfor %}</td>
+                <td>{% include "crm/partials/living_catalog_status.html" with status=row.status %}</td>
                 <td><a class="lc-btn" href="{{ row.detail_url }}">View</a></td>
               </tr>
             {% endfor %}
@@ -136,18 +155,7 @@
     {% else %}
       <div class="lc-grid">
         {% for row in rows %}
-          <article class="lc-card">
-            <div class="lc-cover">{% if row.cover_url %}<img src="{{ row.cover_url }}" alt="{{ row.name }}">{% else %}No image{% endif %}</div>
-            <div class="lc-body">
-              <div class="lc-name">{{ row.name }}</div>
-              <div class="lc-meta">{{ row.type|default:row.category }}</div>
-              <div class="lc-meta">{{ row.detail }}</div>
-              <div class="lc-card-foot">
-                <span class="lc-status">{{ row.status }}</span>
-                <a class="lc-btn" href="{{ row.detail_url }}">View</a>
-              </div>
-            </div>
-          </article>
+          {% include "crm/partials/living_catalog_card.html" %}
         {% endfor %}
       </div>
     {% endif %}
@@ -157,9 +165,9 @@
 
   {% if page_obj.has_other_pages %}
     <div class="lc-pager">
-      {% if page_obj.has_previous %}<a class="lc-btn" href="?page={{ page_obj.previous_page_number }}&q={{ q }}&type={{ selected_type }}&status={{ selected_status }}&colour={{ selected_colour }}&category={{ selected_category }}&fabric={{ selected_fabric }}&decoration={{ selected_decoration }}&view={{ view_mode }}">Previous</a>{% endif %}
+      {% if page_obj.has_previous %}<a class="lc-btn" href="?page={{ page_obj.previous_page_number }}&q={{ q }}&type={{ selected_type }}&status={{ selected_status }}&colour={{ selected_colour }}&category={{ selected_category }}&fabric={{ selected_fabric }}&gsm={{ selected_gsm }}&composition={{ selected_composition }}&decoration={{ selected_decoration }}&view={{ view_mode }}">Previous</a>{% endif %}
       <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
-      {% if page_obj.has_next %}<a class="lc-btn" href="?page={{ page_obj.next_page_number }}&q={{ q }}&type={{ selected_type }}&status={{ selected_status }}&colour={{ selected_colour }}&category={{ selected_category }}&fabric={{ selected_fabric }}&decoration={{ selected_decoration }}&view={{ view_mode }}">Next</a>{% endif %}
+      {% if page_obj.has_next %}<a class="lc-btn" href="?page={{ page_obj.next_page_number }}&q={{ q }}&type={{ selected_type }}&status={{ selected_status }}&colour={{ selected_colour }}&category={{ selected_category }}&fabric={{ selected_fabric }}&gsm={{ selected_gsm }}&composition={{ selected_composition }}&decoration={{ selected_decoration }}&view={{ view_mode }}">Next</a>{% endif %}
     </div>
   {% endif %}
 </div>

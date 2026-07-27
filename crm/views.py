@@ -5745,7 +5745,23 @@ CATALOG_CONFIG = {
         "type_choices": Opportunity.PRODUCT_TYPE_CHOICES,
         "category_field": "product_category",
         "colour_field": "main_colour",
-        "search_fields": ["name", "product_type", "product_category", "main_colour", "available_colours", "tags", "short_description", "default_fabric", "main_fabric__name"],
+        "search_fields": [
+            "name",
+            "product_type",
+            "product_category",
+            "main_colour",
+            "available_colours",
+            "tags",
+            "short_description",
+            "default_fabric",
+            "default_gsm",
+            "main_decoration",
+            "status",
+            "main_fabric__name",
+            "main_fabric__fabric_type",
+            "main_fabric__composition",
+            "main_fabric__gsm",
+        ],
         "required_fields": ["name", "product_type", "product_category", "main_decoration", "short_description", "status"],
         "optional_fields": ["fit", "main_colour", "available_colours", "size_range", "default_moq", "notes", "tags", "accessories", "trims", "threads"],
         "more_fields": ["product_code", "is_active"],
@@ -5767,7 +5783,7 @@ CATALOG_CONFIG = {
         "default_status": "Available",
         "type_field": "fabric_type",
         "colour_field": "color_options",
-        "search_fields": ["name", "fabric_group", "fabric_type", "composition", "gsm", "color_options", "best_use", "tags"],
+        "search_fields": ["name", "fabric_group", "fabric_type", "composition", "gsm", "color_options", "best_use", "status", "tags"],
         "required_fields": ["name", "composition", "gsm", "best_use", "status"],
         "optional_fields": ["fabric_type", "stretch_type", "color_options", "notes", "tags"],
         "more_fields": ["fabric_code", "fabric_group", "weave", "knit_structure", "construction", "surface", "handfeel", "drape", "warmth", "weight_class", "breathability", "sheerness", "shrinkage", "durability", "is_active"],
@@ -5790,7 +5806,7 @@ CATALOG_CONFIG = {
         "type_field": "accessory_type",
         "type_choices": ACCESSORY_TYPE_CHOICES,
         "colour_field": "color",
-        "search_fields": ["name", "accessory_type", "color", "material", "best_use", "tags"],
+        "search_fields": ["name", "accessory_type", "color", "material", "best_use", "status", "tags"],
         "required_fields": ["name", "accessory_type", "color", "status"],
         "optional_fields": ["material", "best_use", "notes", "tags"],
         "more_fields": ["accessory_code", "size", "finish", "is_active"],
@@ -5813,7 +5829,7 @@ CATALOG_CONFIG = {
         "type_field": "trim_type",
         "type_choices": TRIM_TYPE_CHOICES,
         "colour_field": "color",
-        "search_fields": ["name", "trim_type", "color", "material", "best_use", "tags"],
+        "search_fields": ["name", "trim_type", "color", "material", "best_use", "status", "tags"],
         "required_fields": ["name", "trim_type", "color", "status"],
         "optional_fields": ["material", "best_use", "notes", "tags"],
         "more_fields": ["trim_code", "width", "is_active"],
@@ -5836,7 +5852,7 @@ CATALOG_CONFIG = {
         "type_field": "thread_type",
         "type_choices": THREAD_TYPE_CHOICES,
         "colour_field": "color",
-        "search_fields": ["name", "thread_type", "thread_code", "color", "best_use", "tags", "use_for"],
+        "search_fields": ["name", "thread_type", "thread_code", "color", "best_use", "status", "tags", "use_for"],
         "required_fields": ["name", "thread_type", "color", "status"],
         "optional_fields": ["thread_code", "best_use", "notes", "tags"],
         "more_fields": ["count", "use_for", "brand", "is_active"],
@@ -5889,6 +5905,8 @@ def _apply_catalog_filters(qs, config, request):
     category = (request.GET.get("category") or "").strip()
     fabric = (request.GET.get("fabric") or "").strip()
     decoration = (request.GET.get("decoration") or "").strip()
+    gsm = (request.GET.get("gsm") or "").strip()
+    composition = (request.GET.get("composition") or "").strip()
 
     if q:
         qs = qs.filter(_catalog_search_q(config, q)).distinct()
@@ -5903,12 +5921,29 @@ def _apply_catalog_filters(qs, config, request):
     if category and config.get("category_field"):
         qs = qs.filter(**{f"{config['category_field']}__icontains": category})
     if fabric and config["section"] == "products":
-        fabric_q = Q(main_fabric__name__icontains=fabric) | Q(default_fabric__icontains=fabric)
+        fabric_q = (
+            Q(main_fabric__name__icontains=fabric)
+            | Q(main_fabric__fabric_type__icontains=fabric)
+            | Q(main_fabric__composition__icontains=fabric)
+            | Q(main_fabric__gsm__icontains=fabric)
+            | Q(default_fabric__icontains=fabric)
+            | Q(default_gsm__icontains=fabric)
+        )
         if fabric.isdigit():
             fabric_q |= Q(main_fabric_id=fabric)
         qs = qs.filter(fabric_q)
     if decoration and config["section"] == "products":
         qs = qs.filter(main_decoration=decoration)
+    if gsm:
+        if config["section"] == "products":
+            qs = qs.filter(Q(main_fabric__gsm__icontains=gsm) | Q(default_gsm__icontains=gsm))
+        elif config["section"] == "fabrics":
+            qs = qs.filter(gsm__icontains=gsm)
+    if composition:
+        if config["section"] == "products":
+            qs = qs.filter(main_fabric__composition__icontains=composition)
+        elif config["section"] == "fabrics":
+            qs = qs.filter(composition__icontains=composition)
     return qs
 
 
@@ -5926,13 +5961,39 @@ def _catalog_item_colour(obj, config):
     return getattr(obj, field_name, "") if field_name else ""
 
 
-def _catalog_useful_detail(obj, config):
+def _catalog_gsm_label(value):
+    value = str(value or "").strip()
+    if not value:
+        return ""
+    return value if "gsm" in value.lower() else f"{value} GSM"
+
+
+def _catalog_clean_parts(*values):
+    return [str(value).strip() for value in values if str(value or "").strip()]
+
+
+def _catalog_card_details(obj, config):
     if config["section"] == "products":
         fabric = getattr(obj, "main_fabric", None)
-        return getattr(fabric, "name", "") or getattr(obj, "default_fabric", "") or getattr(obj, "main_decoration", "")
+        fabric_name = getattr(fabric, "fabric_type", "") or getattr(fabric, "name", "") or getattr(obj, "default_fabric", "")
+        fabric_gsm = _catalog_gsm_label(getattr(fabric, "gsm", "") or getattr(obj, "default_gsm", ""))
+        return [
+            detail
+            for detail in (
+                " | ".join(_catalog_clean_parts(fabric_name, fabric_gsm)),
+                getattr(obj, "main_decoration", ""),
+            )
+            if detail
+        ][:2]
     if config["section"] == "fabrics":
-        return getattr(obj, "gsm", "") or getattr(obj, "composition", "") or getattr(obj, "best_use", "")
-    return getattr(obj, "best_use", "") or getattr(obj, "material", "") or getattr(obj, "color", "")
+        return _catalog_clean_parts(getattr(obj, "composition", ""), _catalog_gsm_label(getattr(obj, "gsm", "")))[:2]
+    if config["section"] == "threads":
+        return _catalog_clean_parts(getattr(obj, "color", ""), getattr(obj, "thread_code", ""), getattr(obj, "best_use", ""))[:2]
+    return _catalog_clean_parts(getattr(obj, "color", ""), getattr(obj, "material", ""), getattr(obj, "best_use", ""))[:2]
+
+
+def _catalog_useful_detail(obj, config):
+    return " · ".join(_catalog_card_details(obj, config))
 
 
 def _catalog_card(obj, config):
@@ -5943,6 +6004,7 @@ def _catalog_card(obj, config):
         "category": getattr(obj, config.get("category_field", ""), "") if config.get("category_field") else "",
         "colour": _catalog_item_colour(obj, config),
         "detail": _catalog_useful_detail(obj, config),
+        "details": _catalog_card_details(obj, config),
         "status": getattr(obj, "status", ""),
         "cover_url": catalog_cover_url(obj),
         "image_count": catalog_image_count(obj),
@@ -6207,18 +6269,20 @@ def _catalog_public_details(obj, config):
     fields = []
     if config["section"] == "products":
         fabric = getattr(obj, "main_fabric", None)
+        _catalog_add_value(fields, "Short description", getattr(obj, "short_description", ""))
+        _catalog_add_value(fields, "Product type", getattr(obj, "product_type", ""))
         _catalog_add_value(fields, "Main fabric", getattr(fabric, "name", "") or getattr(obj, "default_fabric", ""))
         _catalog_add_value(fields, "Fabric type", getattr(fabric, "fabric_type", ""))
         _catalog_add_value(fields, "Composition", getattr(fabric, "composition", ""))
         _catalog_add_value(fields, "GSM", getattr(fabric, "gsm", "") or getattr(obj, "default_gsm", ""))
         _catalog_add_value(fields, "Decoration", getattr(obj, "main_decoration", ""))
         _catalog_add_value(fields, "Fit", getattr(obj, "fit", ""))
+        _catalog_add_value(fields, "Main colour", getattr(obj, "main_colour", ""))
+        _catalog_add_value(fields, "Available colours", getattr(obj, "available_colours", ""))
         _catalog_add_value(fields, "Size range", getattr(obj, "size_range", ""))
         _catalog_add_value(fields, "MOQ", getattr(obj, "default_moq", ""))
-        _catalog_add_value(fields, "Short description", getattr(obj, "short_description", ""))
-        _catalog_add_value(fields, "Colours", getattr(obj, "available_colours", "") or getattr(obj, "main_colour", ""))
     elif config["section"] == "fabrics":
-        for label, attr in (("Composition", "composition"), ("GSM", "gsm"), ("Best use", "best_use"), ("Fabric type", "fabric_type"), ("Stretch", "stretch_type"), ("Colour", "color_options"), ("Notes", "notes")):
+        for label, attr in (("Fabric type", "fabric_type"), ("Composition", "composition"), ("GSM", "gsm"), ("Stretch", "stretch_type"), ("Colour", "color_options"), ("Best use", "best_use"), ("Notes", "notes")):
             _catalog_add_value(fields, label, getattr(obj, attr, ""))
     elif config["section"] == "accessories":
         for label, attr in (("Type", "accessory_type"), ("Colour", "color"), ("Material", "material"), ("Best use", "best_use"), ("Notes", "notes")):
@@ -6277,22 +6341,39 @@ def _product_related_materials(product):
     return materials
 
 
+def _catalog_related_products(obj, config):
+    if config["section"] == "products":
+        return []
+    qs = getattr(obj, "catalog_products", Product.objects.none()).exclude(status="Archived").filter(is_active=True)
+    qs = qs.select_related("main_fabric").order_by("-updated_at", "-id")[:24]
+    items = [_related_material_card(product, CATALOG_CONFIG["products"]) for product in qs]
+    if not items:
+        return []
+    title = "Products using this fabric" if config["section"] == "fabrics" else "Related products"
+    return [{"title": title, "items": items}]
+
+
 def _catalog_detail_context(request, config, obj, *, presentation=False):
     can_view_internal = False if presentation else _can_view_catalog_internal(request.user)
+    product_materials = _product_related_materials(obj) if config["section"] == "products" else []
+    related_products = _catalog_related_products(obj, config)
     context = {
         "catalog": config,
         "item": obj,
+        "item_type": _catalog_item_type(obj, config),
+        "item_category": getattr(obj, config.get("category_field", ""), "") if config.get("category_field") else "",
         "image_slots": catalog_image_slots(obj),
         "image_count": catalog_image_count(obj),
         "public_details": _catalog_public_details(obj, config),
         "internal_details": _catalog_internal_details(obj, config) if can_view_internal else [],
-        "related_materials": _product_related_materials(obj) if config["section"] == "products" else [],
+        "related_materials": product_materials or related_products,
         "can_view_internal": can_view_internal,
         "can_edit": False if presentation else _can_edit_catalog_item(request.user),
         "can_archive": False if presentation else _can_archive_catalog_item(request.user),
         "can_presentation": False if presentation else _can_use_catalog_presentation(request.user),
         "presentation": presentation,
         "presentation_url": reverse(config["presentation_url"], args=[obj.pk]),
+        "detail_url": reverse(config["detail_url"], args=[obj.pk]),
         "edit_url": reverse(config["edit_url"], args=[obj.pk]),
         "list_url": reverse(config["list_url"]),
         "safe_json_url": reverse("library_item_safe_json", args=[config["section"], obj.pk]),
@@ -6308,20 +6389,34 @@ def _catalog_detail(request, section, pk):
     return render(request, "crm/living_catalog_detail.html", _catalog_detail_context(request, config, obj))
 
 
-def _presentation_neighbor_urls(config, obj, user):
+def _presentation_neighbor_queryset(config, user):
     qs = config["model"].objects.exclude(status="Archived").filter(is_active=True)
     if _is_catalog_marketing_user(user):
         if config["section"] == "products":
             qs = qs.filter(status__in=["Available", "Sample Available"])
         else:
             qs = qs.filter(status="Available")
-    neighbors = qs.aggregate(
-        previous_pk=Max("pk", filter=Q(pk__lt=obj.pk)),
-        next_pk=Min("pk", filter=Q(pk__gt=obj.pk)),
+    return qs
+
+
+def _with_presentation_neighbors(qs, config, user):
+    neighbor_qs = _presentation_neighbor_queryset(config, user)
+    return qs.annotate(
+        previous_presentation_pk=Subquery(
+            neighbor_qs.filter(pk__lt=OuterRef("pk")).order_by("-pk").values("pk")[:1]
+        ),
+        next_presentation_pk=Subquery(
+            neighbor_qs.filter(pk__gt=OuterRef("pk")).order_by("pk").values("pk")[:1]
+        ),
     )
+
+
+def _presentation_neighbor_urls(config, obj):
+    previous_pk = getattr(obj, "previous_presentation_pk", None)
+    next_pk = getattr(obj, "next_presentation_pk", None)
     return {
-        "previous_url": reverse(config["presentation_url"], args=[neighbors["previous_pk"]]) if neighbors["previous_pk"] else "",
-        "next_url": reverse(config["presentation_url"], args=[neighbors["next_pk"]]) if neighbors["next_pk"] else "",
+        "previous_url": reverse(config["presentation_url"], args=[previous_pk]) if previous_pk else "",
+        "next_url": reverse(config["presentation_url"], args=[next_pk]) if next_pk else "",
     }
 
 
@@ -6329,9 +6424,10 @@ def _catalog_presentation(request, section, pk):
     config = _catalog_config(section)
     if not _can_use_catalog_presentation(request.user):
         return HttpResponseForbidden("No access")
-    obj = get_object_or_404(_visible_catalog_queryset(config, request.user, include_archived=False), pk=pk)
+    qs = _visible_catalog_queryset(config, request.user, include_archived=False)
+    obj = get_object_or_404(_with_presentation_neighbors(qs, config, request.user), pk=pk)
     context = _catalog_detail_context(request, config, obj, presentation=True)
-    context.update(_presentation_neighbor_urls(config, obj, request.user))
+    context.update(_presentation_neighbor_urls(config, obj))
     return render(request, "crm/living_catalog_presentation.html", context)
 
 
@@ -6347,7 +6443,7 @@ def _catalog_public_payload(obj, config):
         "image_count": catalog_image_count(obj),
         "images": [{"slot": slot["slot"], "url": slot["url"]} for slot in catalog_image_slots(obj) if slot["url"]],
         "details": _catalog_public_details(obj, config),
-        "related_materials": _product_related_materials(obj) if config["section"] == "products" else [],
+        "related_materials": _product_related_materials(obj) if config["section"] == "products" else _catalog_related_products(obj, config),
     }
 
 
@@ -6416,6 +6512,8 @@ def _catalog_list(request, section):
         "selected_category": request.GET.get("category", ""),
         "selected_fabric": request.GET.get("fabric", ""),
         "selected_decoration": request.GET.get("decoration", ""),
+        "selected_gsm": request.GET.get("gsm", ""),
+        "selected_composition": request.GET.get("composition", ""),
         "can_edit": _can_edit_catalog_item(request.user),
         "can_add": _can_add_catalog_item(request.user),
     }

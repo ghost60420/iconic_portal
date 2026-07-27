@@ -1,0 +1,25 @@
+<article class="lc-card lc-showroom-card">
+  <div class="lc-cover">
+    {% if row.cover_url %}
+      <img src="{{ row.cover_url }}" alt="{{ row.name }}">
+    {% else %}
+      <span>No image</span>
+    {% endif %}
+  </div>
+  <div class="lc-body">
+    <div class="lc-card-topline">
+      <div class="lc-name">{{ row.name }}</div>
+      {% include "crm/partials/living_catalog_status.html" with status=row.status %}
+    </div>
+    {% if row.type or row.category %}
+      <div class="lc-meta">{{ row.type|default:row.category }}</div>
+    {% endif %}
+    {% for detail in row.details %}
+      <div class="lc-card-detail">{{ detail }}</div>
+    {% endfor %}
+    <div class="lc-card-foot">
+      <span class="lc-image-count">{{ row.image_count }} of 3 images</span>
+      <a class="lc-btn" href="{{ row.detail_url }}">View</a>
+    </div>
+  </div>
+</article>
