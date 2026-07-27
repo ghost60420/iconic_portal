@@ -357,6 +357,52 @@ THREAD_TYPE_CHOICES = [
     ("Other", "Other"),
 ]
 
+FABRIC_TYPE_CHOICES = [
+    ("", "Select fabric type"),
+    ("Mesh", "Mesh"),
+    ("Single Jersey", "Single Jersey"),
+    ("French Terry", "French Terry"),
+    ("Fleece", "Fleece"),
+    ("Rib", "Rib"),
+    ("Interlock", "Interlock"),
+    ("Pique", "Pique"),
+    ("Tricot", "Tricot"),
+    ("Woven", "Woven"),
+    ("Denim", "Denim"),
+    ("Other", "Other"),
+]
+
+
+def _format_gsm_label(value):
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    return text if text.lower().endswith("gsm") else f"{text} GSM"
+
+
+def _clean_positive_gsm(value):
+    text = str(value or "").strip()
+    if text.lower().endswith("gsm"):
+        text = text[:-3].strip()
+    if not text:
+        return ""
+    if not text.isdigit() or int(text) <= 0:
+        raise ValidationError("Enter GSM as a positive whole number.")
+    return str(int(text))
+
+
+class FabricModelChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        parts = [obj.name]
+        if obj.fabric_type and obj.fabric_type.strip().lower() != obj.name.strip().lower():
+            parts.append(obj.fabric_type)
+        if obj.composition:
+            parts.append(obj.composition)
+        gsm = _format_gsm_label(obj.gsm)
+        if gsm:
+            parts.append(gsm)
+        return " | ".join(part for part in parts if part)
+
 
 class CatalogImageFormMixin:
     image_widget_attrs = {
@@ -392,6 +438,23 @@ class CatalogImageFormMixin:
 
 
 class ProductForm(CatalogImageFormMixin, forms.ModelForm):
+    main_fabric = FabricModelChoiceField(
+        queryset=Fabric.objects.none(),
+        required=False,
+        empty_label="Select a fabric",
+    )
+    use_temporary_fabric = forms.BooleanField(required=False, widget=forms.HiddenInput)
+    new_fabric_name = forms.CharField(label="Fabric name", max_length=200, required=False)
+    new_fabric_type = forms.ChoiceField(label="Fabric type", choices=FABRIC_TYPE_CHOICES, required=False)
+    new_fabric_gsm = forms.IntegerField(
+        label="GSM",
+        min_value=1,
+        required=False,
+        widget=forms.NumberInput(attrs={"min": 1, "step": 1}),
+        error_messages={"min_value": "Enter GSM as a positive whole number.", "invalid": "Enter GSM as a positive whole number."},
+    )
+    new_fabric_composition = forms.CharField(label="Composition", max_length=200, required=False)
+
     class Meta:
         model = Product
         fields = [
@@ -416,8 +479,6 @@ class ProductForm(CatalogImageFormMixin, forms.ModelForm):
             "accessories",
             "trims",
             "threads",
-            "default_gsm",
-            "default_fabric",
             "default_price",
             "internal_cost",
             "suggested_selling_price",
@@ -439,8 +500,7 @@ class ProductForm(CatalogImageFormMixin, forms.ModelForm):
         self.fields["product_type"].label = "Product type"
         self.fields["product_category"].label = "Category"
         self.fields["main_fabric"].label = "Main fabric"
-        self.fields["main_fabric"].queryset = Fabric.objects.filter(is_active=True).order_by("name")
-        self.fields["main_fabric"].required = True
+        self.fields["main_fabric"].queryset = Fabric.objects.filter(is_active=True).exclude(status="Archived").order_by("name")
         self.fields["main_decoration"].label = "Main decoration"
         self.fields["main_decoration"].required = True
         self.fields["short_description"].required = True
@@ -455,8 +515,94 @@ class ProductForm(CatalogImageFormMixin, forms.ModelForm):
             for field_name in ("default_price", "internal_cost", "suggested_selling_price", "internal_notes"):
                 self.fields.pop(field_name, None)
 
+    def clean(self):
+        cleaned = super().clean()
+        use_temporary = cleaned.get("use_temporary_fabric")
+        main_fabric = cleaned.get("main_fabric")
+        has_legacy_fabric = bool(getattr(self.instance, "pk", None) and getattr(self.instance, "default_fabric", ""))
+
+        self._new_fabric_data = None
+        if use_temporary:
+            required_fields = (
+                ("new_fabric_name", "Enter the fabric name."),
+                ("new_fabric_type", "Select the fabric type."),
+                ("new_fabric_gsm", "Enter GSM as a positive whole number."),
+                ("new_fabric_composition", "Enter the fabric composition."),
+            )
+            for field_name, message in required_fields:
+                if not cleaned.get(field_name):
+                    self.add_error(field_name, message)
+            if not any(self.errors.get(field_name) for field_name, _message in required_fields):
+                self._new_fabric_data = {
+                    "name": cleaned["new_fabric_name"].strip(),
+                    "fabric_type": cleaned["new_fabric_type"],
+                    "gsm": str(cleaned["new_fabric_gsm"]),
+                    "composition": cleaned["new_fabric_composition"].strip(),
+                }
+                cleaned["main_fabric"] = None
+            return cleaned
+
+        if not main_fabric and not has_legacy_fabric:
+            self.add_error("main_fabric", "Select a fabric or use Add new fabric.")
+        return cleaned
+
+    def _resolve_new_fabric(self):
+        if not self._new_fabric_data:
+            return None
+        data = self._new_fabric_data
+        existing = (
+            Fabric.objects.filter(
+                is_active=True,
+                name__iexact=data["name"],
+                composition__iexact=data["composition"],
+                gsm=data["gsm"],
+                fabric_type=data["fabric_type"],
+            )
+            .exclude(status="Archived")
+            .first()
+        )
+        if existing:
+            return existing
+        return Fabric.objects.create(
+            name=data["name"],
+            fabric_type=data["fabric_type"],
+            gsm=data["gsm"],
+            composition=data["composition"],
+            best_use="Product catalog",
+            status="Available",
+        )
+
+    def _resolve_legacy_fabric(self):
+        if not getattr(self.instance, "pk", None):
+            return None
+        legacy_name = (getattr(self.instance, "default_fabric", "") or "").strip()
+        if not legacy_name:
+            return None
+        matches = list(
+            Fabric.objects.filter(is_active=True, name__iexact=legacy_name)
+            .exclude(status="Archived")
+            .order_by("pk")[:2]
+        )
+        return matches[0] if len(matches) == 1 else None
+
+    def save(self, commit=True):
+        product = super().save(commit=False)
+        new_fabric = self._resolve_new_fabric()
+        if new_fabric:
+            product.main_fabric = new_fabric
+        elif not product.main_fabric_id:
+            legacy_fabric = self._resolve_legacy_fabric()
+            if legacy_fabric:
+                product.main_fabric = legacy_fabric
+        if commit:
+            product.save()
+            self.save_m2m()
+        return product
+
 
 class FabricForm(CatalogImageFormMixin, forms.ModelForm):
+    fabric_type = forms.ChoiceField(choices=FABRIC_TYPE_CHOICES, required=False)
+
     class Meta:
         model = Fabric
         fields = [
@@ -505,11 +651,18 @@ class FabricForm(CatalogImageFormMixin, forms.ModelForm):
         self.fields["best_use"].label = "Best use"
         for field_name in ("name", "composition", "gsm", "best_use", "status"):
             self.fields[field_name].required = True
+        current_fabric_type = (getattr(self.instance, "fabric_type", "") or self.initial.get("fabric_type") or "").strip()
+        if current_fabric_type and current_fabric_type not in dict(FABRIC_TYPE_CHOICES):
+            self.fields["fabric_type"].choices = list(FABRIC_TYPE_CHOICES) + [(current_fabric_type, current_fabric_type)]
+        self.fields["gsm"].widget = forms.NumberInput(attrs={"min": 1, "step": 1})
         self.fields["color_options"].label = "Colour"
         self.fields["stretch_type"].label = "Stretch"
         if not self.can_view_internal:
             for field_name in ("price_per_kg", "price_per_meter", "internal_cost", "suggested_selling_price", "internal_notes"):
                 self.fields.pop(field_name, None)
+
+    def clean_gsm(self):
+        return _clean_positive_gsm(self.cleaned_data.get("gsm"))
 
 
 class AccessoryForm(CatalogImageFormMixin, forms.ModelForm):

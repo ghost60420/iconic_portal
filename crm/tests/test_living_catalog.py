@@ -51,6 +51,7 @@ class LivingCatalogTests(TestCase):
     def _fabric(self):
         return Fabric.objects.create(
             name="Heavy French Terry",
+            fabric_type="French Terry",
             composition="80% Cotton, 20% Polyester",
             gsm="400",
             best_use="Hoodies",
@@ -114,6 +115,47 @@ class LivingCatalogTests(TestCase):
             "internal_notes": "Private margin note",
         }
 
+    def test_product_main_fabric_dropdown_has_useful_labels_without_dash_option(self):
+        Fabric.objects.create(
+            name="Mesh",
+            fabric_type="Mesh",
+            composition="100% Polyester",
+            gsm="180",
+            best_use="Sportswear",
+            status="Available",
+        )
+
+        form = ProductForm(can_view_internal=False)
+        choices = [(str(value), label) for value, label in form.fields["main_fabric"].choices]
+        labels = [label for _value, label in choices]
+
+        self.assertEqual(labels[0], "Select a fabric")
+        self.assertIn("Mesh | 100% Polyester | 180 GSM", labels)
+        self.assertNotIn("---------", labels)
+
+    def test_product_add_form_renders_single_main_fabric_section_with_details(self):
+        fabric = self._fabric()
+
+        response = self.client.get(reverse("product_add"))
+        html = response.content.decode()
+        main_fabric_name = html.find('name="main_fabric"')
+        main_fabric_select_start = html.rfind("<select", 0, main_fabric_name)
+        main_fabric_select_end = html.find("</select>", main_fabric_name) + len("</select>")
+        main_fabric_select = html[main_fabric_select_start:main_fabric_select_end]
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(html.count('name="main_fabric"'), 1)
+        self.assertContains(response, "Main Fabric")
+        self.assertContains(response, "Select a fabric")
+        self.assertContains(response, "Fabric Type")
+        self.assertContains(response, "GSM")
+        self.assertContains(response, "Composition")
+        self.assertContains(response, fabric.fabric_type)
+        self.assertContains(response, fabric.gsm)
+        self.assertContains(response, fabric.composition)
+        self.assertNotIn("---------", main_fabric_select)
+        self.assertNotContains(response, '"main_fabric","accessories"')
+
     def test_product_create_three_images_related_material_and_resize(self):
         fabric = self._fabric()
         accessory, trim, thread = self._materials()
@@ -143,6 +185,7 @@ class LivingCatalogTests(TestCase):
 
         self.assertContains(response, "80% Cotton, 20% Polyester")
         self.assertContains(response, "400")
+        self.assertContains(response, "French Terry")
         self.assertEqual(
             LivingCatalogAudit.objects.filter(
                 item_type="product",
@@ -195,7 +238,10 @@ class LivingCatalogTests(TestCase):
             "short_description",
             "status",
         ):
-            self.assertTrue(form.fields[field_name].required)
+            if field_name == "main_fabric":
+                self.assertFalse(form.fields[field_name].required)
+            else:
+                self.assertTrue(form.fields[field_name].required)
 
         for field_name in (
             "fit",
@@ -211,6 +257,105 @@ class LivingCatalogTests(TestCase):
         self.assertNotIn("internal_cost", form.fields)
         self.assertNotIn("suggested_selling_price", form.fields)
         self.assertNotIn("internal_notes", form.fields)
+
+    def test_product_saves_with_temporary_fabric_details(self):
+        response = self.client.post(
+            reverse("product_add"),
+            data={
+                "name": "Mesh Training Tee",
+                "product_type": "Activewear",
+                "product_category": "T Shirt",
+                "main_decoration": "Screen Print",
+                "short_description": "Training tee with temporary fabric details.",
+                "status": "Available",
+                "use_temporary_fabric": "1",
+                "new_fabric_name": "Performance Mesh",
+                "new_fabric_type": "Mesh",
+                "new_fabric_gsm": "180",
+                "new_fabric_composition": "100% Polyester",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        product = Product.objects.get(name="Mesh Training Tee")
+        self.assertIsNotNone(product.main_fabric)
+        self.assertEqual(product.main_fabric.name, "Performance Mesh")
+        self.assertEqual(product.main_fabric.fabric_type, "Mesh")
+        self.assertEqual(product.main_fabric.gsm, "180")
+        self.assertEqual(product.main_fabric.composition, "100% Polyester")
+        self.assertContains(response, "Mesh")
+        self.assertContains(response, "180")
+        self.assertContains(response, "100% Polyester")
+
+    def test_product_requires_fabric_selection_or_complete_temporary_details(self):
+        response = self.client.post(
+            reverse("product_add"),
+            data={
+                "name": "Missing Fabric Hoodie",
+                "product_type": "Streetwear",
+                "product_category": "Hoodie",
+                "main_decoration": "Embroidery",
+                "short_description": "Missing fabric should not save.",
+                "status": "Available",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Product.objects.filter(name="Missing Fabric Hoodie").exists())
+        self.assertContains(response, "Select a fabric or use Add new fabric.")
+
+        incomplete = self.client.post(
+            reverse("product_add"),
+            data={
+                "name": "Incomplete Temp Fabric Hoodie",
+                "product_type": "Streetwear",
+                "product_category": "Hoodie",
+                "main_decoration": "Embroidery",
+                "short_description": "Incomplete fabric should not save.",
+                "status": "Available",
+                "use_temporary_fabric": "1",
+                "new_fabric_name": "Partial Fabric",
+                "new_fabric_gsm": "200",
+            },
+        )
+        self.assertContains(incomplete, "Select the fabric type.")
+        self.assertContains(incomplete, "Enter the fabric composition.")
+
+    def test_existing_product_fabric_text_still_displays_and_remains_editable(self):
+        product = Product.objects.create(
+            name="Legacy Text Fabric Product",
+            product_type="Streetwear",
+            product_category="Hoodie",
+            default_fabric="Legacy cotton",
+            default_gsm="360",
+            main_decoration="Embroidery",
+            short_description="Existing text fabric product.",
+            status="Available",
+        )
+
+        detail = self.client.get(reverse("product_detail", args=[product.pk]))
+        self.assertContains(detail, "Legacy cotton")
+        self.assertContains(detail, "360")
+
+        edit = self.client.post(
+            reverse("product_edit", args=[product.pk]),
+            data={
+                "name": "Legacy Text Fabric Product",
+                "product_type": "Streetwear",
+                "product_category": "Hoodie",
+                "main_decoration": "Embroidery",
+                "short_description": "Updated text fabric product.",
+                "status": "Available",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(edit.status_code, 200)
+        product.refresh_from_db()
+        self.assertEqual(product.default_fabric, "Legacy cotton")
+        self.assertEqual(product.default_gsm, "360")
+        self.assertEqual(product.short_description, "Updated text fabric product.")
 
     def test_image_replace_and_remove_records_audit_without_deleting_record(self):
         fabric = self._fabric()
@@ -392,6 +537,27 @@ class LivingCatalogTests(TestCase):
         self.assertContains(presentation_response, "grid-template-columns:minmax(0,1.25fr) minmax(360px,.75fr)")
         self.assertContains(presentation_response, "@media (max-width:980px)")
         self.assertContains(presentation_response, "@media (max-width:620px)")
+
+    def test_presentation_mode_displays_fabric_type_gsm_and_composition(self):
+        fabric = self._fabric()
+        product = Product.objects.create(
+            name="Presentation Fabric Product",
+            product_type="Streetwear",
+            product_category="Hoodie",
+            main_fabric=fabric,
+            main_decoration="Embroidery",
+            short_description="Client safe product text.",
+            status="Available",
+        )
+
+        response = self.client.get(reverse("product_presentation", args=[product.pk]))
+
+        self.assertContains(response, "Fabric type")
+        self.assertContains(response, "French Terry")
+        self.assertContains(response, "GSM")
+        self.assertContains(response, "400")
+        self.assertContains(response, "Composition")
+        self.assertContains(response, "80% Cotton, 20% Polyester")
 
     def test_invalid_and_oversized_uploads_are_rejected(self):
         fabric = self._fabric()

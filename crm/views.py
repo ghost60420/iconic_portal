@@ -5696,9 +5696,9 @@ CATALOG_CONFIG = {
         "category_field": "product_category",
         "colour_field": "main_colour",
         "search_fields": ["name", "product_type", "product_category", "main_colour", "available_colours", "tags", "short_description", "default_fabric", "main_fabric__name"],
-        "required_fields": ["name", "product_type", "product_category", "main_fabric", "main_decoration", "short_description", "status"],
+        "required_fields": ["name", "product_type", "product_category", "main_decoration", "short_description", "status"],
         "optional_fields": ["fit", "main_colour", "available_colours", "size_range", "default_moq", "notes", "tags", "accessories", "trims", "threads"],
-        "more_fields": ["product_code", "default_gsm", "default_fabric", "is_active"],
+        "more_fields": ["product_code", "is_active"],
         "internal_fields": ["internal_cost", "suggested_selling_price", "internal_notes", "default_price"],
         "descriptions": "Styles, default specs, decorations, and linked materials.",
     },
@@ -6008,12 +6008,27 @@ def _fabric_preview_payload():
             {
                 "id": fabric.pk,
                 "name": fabric.name,
+                "fabric_type": fabric.fabric_type,
                 "composition": fabric.composition,
                 "gsm": fabric.gsm,
                 "image_url": catalog_cover_url(fabric),
             }
         )
     return payload
+
+
+def _selected_form_fabric(form, obj=None):
+    selected_pk = ""
+    if form.is_bound:
+        selected_pk = form.data.get("main_fabric") or ""
+    elif obj is not None:
+        selected_pk = getattr(obj, "main_fabric_id", "") or ""
+    if not selected_pk:
+        return None
+    try:
+        return Fabric.objects.filter(pk=selected_pk).first()
+    except (TypeError, ValueError):
+        return None
 
 
 def _catalog_form_context(request, config, form, mode, obj=None):
@@ -6029,6 +6044,11 @@ def _catalog_form_context(request, config, form, mode, obj=None):
                 "clear_name": f"{field_name}-clear",
             }
         )
+    selected_fabric = _selected_form_fabric(form, obj) if config["section"] == "products" else None
+    temporary_fabric_open = (
+        form.is_bound
+        and _truthy(form.data.get("use_temporary_fabric"))
+    )
     context = {
         "catalog": config,
         "form": form,
@@ -6041,6 +6061,20 @@ def _catalog_form_context(request, config, form, mode, obj=None):
         "can_view_internal": can_view_internal,
         "can_edit": _can_edit_catalog_item(request.user),
         "fabric_preview_json": json.dumps(_fabric_preview_payload()) if config["section"] == "products" else "[]",
+        "fabric_section": {
+            "main_fabric": form["main_fabric"],
+            "use_temporary_fabric": form["use_temporary_fabric"],
+            "new_fabric_fields": [
+                form["new_fabric_name"],
+                form["new_fabric_type"],
+                form["new_fabric_gsm"],
+                form["new_fabric_composition"],
+            ],
+            "selected_fabric": selected_fabric,
+            "legacy_fabric_name": getattr(obj, "default_fabric", "") if obj and not selected_fabric else "",
+            "legacy_fabric_gsm": getattr(obj, "default_gsm", "") if obj and not selected_fabric else "",
+            "temporary_open": temporary_fabric_open,
+        } if config["section"] == "products" else None,
         "ai_url": reverse(config["ai_url"]) if config.get("ai_url") else "",
     }
     return context
@@ -6054,14 +6088,15 @@ def _catalog_add(request, section):
     if request.method == "POST":
         form = config["form"](request.POST, request.FILES, can_view_internal=_can_view_catalog_internal(request.user))
         if form.is_valid():
-            obj = form.save(commit=False)
-            _apply_catalog_image_removals(obj, request.POST, request.FILES)
-            _sync_catalog_status(obj, request.user)
-            obj.save()
-            form.save_m2m()
-            _catalog_after_save(obj, config)
-            _log_catalog_audit(obj, config, LivingCatalogAudit.ACTION_CREATED, request.user, "Record created")
-            _log_catalog_image_audits(obj, config, {field_name: "" for _, field_name in CATALOG_IMAGE_FIELDS}, request.user)
+            with transaction.atomic():
+                obj = form.save(commit=False)
+                _apply_catalog_image_removals(obj, request.POST, request.FILES)
+                _sync_catalog_status(obj, request.user)
+                obj.save()
+                form.save_m2m()
+                _catalog_after_save(obj, config)
+                _log_catalog_audit(obj, config, LivingCatalogAudit.ACTION_CREATED, request.user, "Record created")
+                _log_catalog_image_audits(obj, config, {field_name: "" for _, field_name in CATALOG_IMAGE_FIELDS}, request.user)
             messages.success(request, f"{config['singular'].title()} saved.")
             return redirect(config["detail_url"], pk=obj.pk)
     else:
@@ -6081,16 +6116,17 @@ def _catalog_edit(request, section, pk):
         before_status = getattr(obj, "status", "")
         form = config["form"](request.POST, request.FILES, instance=obj, can_view_internal=_can_view_catalog_internal(request.user))
         if form.is_valid():
-            obj = form.save(commit=False)
-            _apply_catalog_image_removals(obj, request.POST, request.FILES)
-            _sync_catalog_status(obj, request.user)
-            obj.save()
-            form.save_m2m()
-            _catalog_after_save(obj, config)
-            _log_catalog_audit(obj, config, LivingCatalogAudit.ACTION_EDITED, request.user, "Record edited")
-            _log_catalog_image_audits(obj, config, before_images, request.user)
-            if before_status != getattr(obj, "status", ""):
-                _log_catalog_audit(obj, config, LivingCatalogAudit.ACTION_STATUS_CHANGED, request.user, f"Status changed from {before_status or 'blank'} to {obj.status or 'blank'}")
+            with transaction.atomic():
+                obj = form.save(commit=False)
+                _apply_catalog_image_removals(obj, request.POST, request.FILES)
+                _sync_catalog_status(obj, request.user)
+                obj.save()
+                form.save_m2m()
+                _catalog_after_save(obj, config)
+                _log_catalog_audit(obj, config, LivingCatalogAudit.ACTION_EDITED, request.user, "Record edited")
+                _log_catalog_image_audits(obj, config, before_images, request.user)
+                if before_status != getattr(obj, "status", ""):
+                    _log_catalog_audit(obj, config, LivingCatalogAudit.ACTION_STATUS_CHANGED, request.user, f"Status changed from {before_status or 'blank'} to {obj.status or 'blank'}")
             messages.success(request, f"{config['singular'].title()} updated.")
             return redirect(config["detail_url"], pk=obj.pk)
     else:
@@ -6104,6 +6140,7 @@ def _catalog_public_details(obj, config):
     if config["section"] == "products":
         fabric = getattr(obj, "main_fabric", None)
         _catalog_add_value(fields, "Main fabric", getattr(fabric, "name", "") or getattr(obj, "default_fabric", ""))
+        _catalog_add_value(fields, "Fabric type", getattr(fabric, "fabric_type", ""))
         _catalog_add_value(fields, "Composition", getattr(fabric, "composition", ""))
         _catalog_add_value(fields, "GSM", getattr(fabric, "gsm", "") or getattr(obj, "default_gsm", ""))
         _catalog_add_value(fields, "Decoration", getattr(obj, "main_decoration", ""))
