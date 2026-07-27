@@ -2778,6 +2778,44 @@ class CostSheetAudit(models.Model):
 # -----------------------------------
 
 
+PRODUCT_STATUS_CHOICES = [
+    ("Available", "Available"),
+    ("Sample Available", "Sample Available"),
+    ("Development", "Development"),
+    ("Previously Produced", "Previously Produced"),
+    ("Archived", "Archived"),
+]
+
+FABRIC_STATUS_CHOICES = [
+    ("Available", "Available"),
+    ("Special Order", "Special Order"),
+    ("Development", "Development"),
+    ("Not Available", "Not Available"),
+    ("Archived", "Archived"),
+]
+
+MATERIAL_STATUS_CHOICES = [
+    ("Available", "Available"),
+    ("Special Order", "Special Order"),
+    ("Development", "Development"),
+    ("Not Available", "Not Available"),
+    ("Archived", "Archived"),
+]
+
+DECORATION_CHOICES = [
+    ("Screen Print", "Screen Print"),
+    ("DTF", "DTF"),
+    ("Embroidery", "Embroidery"),
+    ("Puff Print", "Puff Print"),
+    ("Silicone Print", "Silicone Print"),
+    ("Applique", "Applique"),
+    ("Sublimation", "Sublimation"),
+    ("Heat Transfer", "Heat Transfer"),
+    ("None", "None"),
+    ("Other", "Other"),
+]
+
+
 class Product(models.Model):
     product_code = models.CharField(max_length=50, unique=True, blank=True)
     name = models.CharField(max_length=200)
@@ -2802,16 +2840,47 @@ class Product(models.Model):
         null=True,
         blank=True,
     )
+    main_fabric = models.ForeignKey(
+        "Fabric",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="catalog_products",
+    )
+    accessories = models.ManyToManyField("Accessory", blank=True, related_name="catalog_products")
+    trims = models.ManyToManyField("Trim", blank=True, related_name="catalog_products")
+    threads = models.ManyToManyField("ThreadOption", blank=True, related_name="catalog_products")
+    main_decoration = models.CharField(max_length=50, choices=DECORATION_CHOICES, default="None", blank=True)
+    short_description = models.TextField(blank=True, default="")
+    fit = models.CharField(max_length=100, blank=True, default="")
+    main_colour = models.CharField(max_length=100, blank=True, default="")
+    available_colours = models.CharField(max_length=255, blank=True, default="")
+    size_range = models.CharField(max_length=120, blank=True, default="")
+    tags = models.CharField(max_length=255, blank=True, default="")
+    status = models.CharField(max_length=40, choices=PRODUCT_STATUS_CHOICES, default="Available", db_index=True)
+    internal_cost = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    suggested_selling_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    internal_notes = models.TextField(blank=True, default="")
 
     image = models.ImageField(
         upload_to="product_images/",
         null=True,
         blank=True,
     )
+    image_2 = models.ImageField(upload_to="product_images/", null=True, blank=True)
+    image_3 = models.ImageField(upload_to="product_images/", null=True, blank=True)
 
     notes = models.TextField(blank=True)
 
     is_active = models.BooleanField(default=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="archived_catalog_products",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -2823,6 +2892,10 @@ class Product(models.Model):
 
     def __str__(self):
         return f"{self.product_code} - {self.name}"
+
+    @property
+    def cover_image(self):
+        return self.image or self.image_2 or self.image_3
 
 
 class ProductTypeMaster(models.Model):
@@ -2976,6 +3049,9 @@ class Fabric(models.Model):
     construction = models.CharField(max_length=200, blank=True)
     composition = models.CharField(max_length=200, blank=True)
     gsm = models.CharField(max_length=50, blank=True)
+    best_use = models.CharField(max_length=200, blank=True, default="")
+    tags = models.CharField(max_length=255, blank=True, default="")
+    status = models.CharField(max_length=40, choices=FABRIC_STATUS_CHOICES, default="Available", db_index=True)
 
     stretch_type = models.CharField(max_length=100, blank=True)
     surface = models.CharField(max_length=100, blank=True)
@@ -3002,9 +3078,22 @@ class Fabric(models.Model):
         null=True,
         blank=True,
     )
+    image_2 = models.ImageField(upload_to="fabric_images/", null=True, blank=True)
+    image_3 = models.ImageField(upload_to="fabric_images/", null=True, blank=True)
 
     notes = models.TextField(blank=True)
+    internal_cost = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    suggested_selling_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    internal_notes = models.TextField(blank=True, default="")
     is_active = models.BooleanField(default=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="archived_catalog_fabrics",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -3017,6 +3106,10 @@ class Fabric(models.Model):
     def __str__(self):
         return f"{self.fabric_code} - {self.name}"
 
+    @property
+    def cover_image(self):
+        return self.image or self.image_2 or self.image_3
+
 
 class Accessory(models.Model):
     accessory_code = models.CharField(max_length=50, unique=True, blank=True)
@@ -3027,6 +3120,9 @@ class Accessory(models.Model):
     color = models.CharField(max_length=100, blank=True)
     material = models.CharField(max_length=100, blank=True)
     finish = models.CharField(max_length=100, blank=True)
+    best_use = models.CharField(max_length=200, blank=True, default="")
+    tags = models.CharField(max_length=255, blank=True, default="")
+    status = models.CharField(max_length=40, choices=MATERIAL_STATUS_CHOICES, default="Available", db_index=True)
 
     supplier = models.CharField(max_length=200, blank=True)
     price_per_unit = models.DecimalField(
@@ -3038,9 +3134,22 @@ class Accessory(models.Model):
         null=True,
         blank=True,
     )
+    image_2 = models.ImageField(upload_to="accessory_images/", null=True, blank=True)
+    image_3 = models.ImageField(upload_to="accessory_images/", null=True, blank=True)
 
     notes = models.TextField(blank=True)
+    internal_cost = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    suggested_selling_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    internal_notes = models.TextField(blank=True, default="")
     is_active = models.BooleanField(default=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="archived_catalog_accessories",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -3053,6 +3162,10 @@ class Accessory(models.Model):
     def __str__(self):
         return f"{self.accessory_code} - {self.name}"
 
+    @property
+    def cover_image(self):
+        return self.image or self.image_2 or self.image_3
+
 
 class Trim(models.Model):
     trim_code = models.CharField(max_length=50, unique=True, blank=True)
@@ -3062,6 +3175,9 @@ class Trim(models.Model):
     width = models.CharField(max_length=50, blank=True)
     color = models.CharField(max_length=100, blank=True)
     material = models.CharField(max_length=100, blank=True)
+    best_use = models.CharField(max_length=200, blank=True, default="")
+    tags = models.CharField(max_length=255, blank=True, default="")
+    status = models.CharField(max_length=40, choices=MATERIAL_STATUS_CHOICES, default="Available", db_index=True)
 
     price_per_meter = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True
@@ -3072,9 +3188,22 @@ class Trim(models.Model):
         null=True,
         blank=True,
     )
+    image_2 = models.ImageField(upload_to="trim_images/", null=True, blank=True)
+    image_3 = models.ImageField(upload_to="trim_images/", null=True, blank=True)
 
     notes = models.TextField(blank=True)
+    internal_cost = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    suggested_selling_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    internal_notes = models.TextField(blank=True, default="")
     is_active = models.BooleanField(default=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="archived_catalog_trims",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -3087,6 +3216,10 @@ class Trim(models.Model):
     def __str__(self):
         return f"{self.trim_code} - {self.name}"
 
+    @property
+    def cover_image(self):
+        return self.image or self.image_2 or self.image_3
+
 
 class ThreadOption(models.Model):
     thread_code = models.CharField(max_length=50, unique=True, blank=True)
@@ -3097,6 +3230,9 @@ class ThreadOption(models.Model):
     color = models.CharField(max_length=100, blank=True)
     brand = models.CharField(max_length=100, blank=True)
     use_for = models.CharField(max_length=200, blank=True)
+    best_use = models.CharField(max_length=200, blank=True, default="")
+    tags = models.CharField(max_length=255, blank=True, default="")
+    status = models.CharField(max_length=40, choices=MATERIAL_STATUS_CHOICES, default="Available", db_index=True)
 
     price_per_cone = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True
@@ -3107,9 +3243,22 @@ class ThreadOption(models.Model):
         null=True,
         blank=True,
     )
+    image_2 = models.ImageField(upload_to="thread_images/", null=True, blank=True)
+    image_3 = models.ImageField(upload_to="thread_images/", null=True, blank=True)
 
     notes = models.TextField(blank=True)
+    internal_cost = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    suggested_selling_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    internal_notes = models.TextField(blank=True, default="")
     is_active = models.BooleanField(default=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="archived_catalog_threads",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -3121,6 +3270,56 @@ class ThreadOption(models.Model):
 
     def __str__(self):
         return f"{self.thread_code} - {self.name}"
+
+    @property
+    def cover_image(self):
+        return self.image or self.image_2 or self.image_3
+
+
+class LivingCatalogAudit(models.Model):
+    ACTION_CREATED = "created"
+    ACTION_EDITED = "edited"
+    ACTION_IMAGE_ADDED = "image_added"
+    ACTION_IMAGE_REPLACED = "image_replaced"
+    ACTION_IMAGE_REMOVED = "image_removed"
+    ACTION_STATUS_CHANGED = "status_changed"
+    ACTION_ARCHIVED = "archived"
+    ACTION_RESTORED = "restored"
+    ACTION_CHOICES = [
+        (ACTION_CREATED, "Record created"),
+        (ACTION_EDITED, "Record edited"),
+        (ACTION_IMAGE_ADDED, "Image added"),
+        (ACTION_IMAGE_REPLACED, "Image replaced"),
+        (ACTION_IMAGE_REMOVED, "Image removed"),
+        (ACTION_STATUS_CHANGED, "Status changed"),
+        (ACTION_ARCHIVED, "Record archived"),
+        (ACTION_RESTORED, "Record restored"),
+    ]
+
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveBigIntegerField()
+    item = GenericForeignKey("content_type", "object_id")
+    item_type = models.CharField(max_length=40, db_index=True)
+    action = models.CharField(max_length=32, choices=ACTION_CHOICES, db_index=True)
+    summary = models.CharField(max_length=255, blank=True, default="")
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="living_catalog_audits",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["item_type", "object_id", "-created_at"]),
+            models.Index(fields=["action", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.item_type} {self.object_id} {self.get_action_display()}"
 
 
 # -----------------------------------

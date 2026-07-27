@@ -1,330 +1,157 @@
 {% extends "crm/base.html" %}
 {% block content %}
 <style>
-  :root{
-    --bg:#060606;
-    --panel:#0b0d10;
-    --panel2:#0f172a;
-    --border:#2a2f38;
-    --text:#f8f9fa;
-    --muted:#a8b0bd;
-    --gold1:#ffe39b;
-    --gold2:#e4c067;
-  }
-
-  .lib-wrap{
-    max-width: 1200px;
-    margin: 18px auto 40px auto;
-    padding: 0 10px;
-    color: var(--text);
-  }
-
-  .lib-header{
-    display:flex;
-    justify-content:space-between;
-    align-items:flex-start;
-    gap:12px;
-    flex-wrap:wrap;
-    margin-bottom: 16px;
-  }
-
-  .lib-title{
-    font-size: 24px;
-    font-weight: 900;
-    color: #fff;
-    margin: 0;
-    letter-spacing: 0.2px;
-  }
-
-  .lib-sub{
-    margin-top: 4px;
-    font-size: 13px;
-    color: var(--muted);
-  }
-
-  .lib-grid{
-    display:grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 12px;
-  }
-
-  .lib-card{
-    background: linear-gradient(180deg, rgba(15,23,42,0.55), rgba(2,6,23,0.65));
-    border: 1px solid rgba(148,163,184,0.22);
-    border-radius: 16px;
-    padding: 14px;
-    box-shadow: 0 18px 40px rgba(0,0,0,0.45);
-  }
-
-  .lib-card-title{
-    font-size: 14px;
-    font-weight: 900;
-    color: var(--gold1);
-    margin-bottom: 6px;
-  }
-
-  .lib-card-count{
-    font-size: 22px;
-    font-weight: 900;
-    color: #fff;
-  }
-
-  .lib-card-sub{
-    font-size: 12px;
-    color: var(--muted);
-    margin-top: 4px;
-  }
-
-  .lib-actions{
-    margin-top: 10px;
-    display:flex;
-    gap:8px;
-    flex-wrap:wrap;
-  }
-
-  .btn{
-    display:inline-flex;
-    align-items:center;
-    gap:8px;
-    padding: 9px 12px;
-    border-radius: 999px;
-    font-size: 13px;
-    font-weight: 900;
-    border: 1px solid rgba(255,255,255,0.12);
-    background: rgba(255,255,255,0.04);
-    color: #f3f4f6;
-    cursor:pointer;
-    user-select:none;
-    line-height: 1;
-    transition: transform 120ms ease, background 120ms ease, border-color 120ms ease, color 120ms ease;
-    text-decoration:none;
-    white-space:nowrap;
-  }
-
-  .btn:hover{
-    transform: translateY(-1px);
-    background: rgba(255,255,255,0.06);
-    border-color: rgba(245, 213, 128, 0.32);
-    color: var(--gold1);
-  }
-
-  .btn-gold{
-    border-color: rgba(255, 227, 155, 0.30);
-    background: rgba(245, 213, 128, 0.16);
-    color: var(--gold1);
-    box-shadow: 0 10px 22px rgba(255, 209, 120, 0.10);
-  }
-
-  .lib-section{
-    margin-top: 16px;
-  }
-
-  .lib-section-title{
-    font-size: 16px;
-    font-weight: 900;
-    color: #fff;
-    margin-bottom: 8px;
-  }
-
-  .lib-form-grid{
-    display:grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 10px;
-  }
-
-  .lib-field label{
-    font-size: 11px;
-    color: rgba(248,249,250,0.60);
-    font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: 0.2px;
-  }
-
-  .lib-field input,
-  .lib-field select,
-  .lib-field textarea{
-    width: 100%;
-    background: rgba(255,255,255,0.04);
-    color: var(--text);
-    border: 1px solid rgba(255,255,255,0.12);
-    padding: 9px 10px;
-    border-radius: 12px;
-    font-size: 13px;
-    font-weight: 700;
-    outline: none;
-  }
-
-  .lib-table{
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 12px;
-  }
-
-  .lib-table th,
-  .lib-table td{
-    border-bottom: 1px solid rgba(255,255,255,0.10);
-    padding: 8px 6px;
-    text-align: left;
-  }
-
-  .lib-table th{
-    color: var(--gold1);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    font-size: 11px;
-  }
-
-  .muted{
-    color: var(--muted);
-    font-size: 12px;
-  }
-
-  .lib-badge{
-    display:inline-flex;
-    padding: 4px 8px;
-    border-radius: 999px;
-    border: 1px solid rgba(255,255,255,0.12);
-    font-size: 11px;
-    font-weight: 900;
-    color: #fff;
-  }
+  .lc-page{max-width:1220px;margin:18px auto 42px;padding:0 14px;color:#f8fafc}
+  .lc-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px}
+  .lc-title{margin:0;font-size:24px;font-weight:900;letter-spacing:0;color:#ffffff}
+  .lc-sub{margin-top:4px;color:#a7b0be;font-size:13px}
+  .lc-search{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#101820;border:1px solid #263241;border-radius:8px;padding:10px;margin-bottom:14px}
+  .lc-search input{min-width:280px;flex:1;background:#0b1118;border:1px solid #263241;border-radius:8px;color:#f8fafc;padding:10px 12px;font-size:14px}
+  .lc-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid #334155;background:#17212d;color:#f8fafc;border-radius:8px;padding:9px 12px;font-size:13px;font-weight:800;text-decoration:none;cursor:pointer;min-height:38px}
+  .lc-btn:hover{border-color:#b9903a;color:#fff;background:#1f2a37}
+  .lc-btn-primary{background:#1d4d4f;border-color:#2b7371;color:#effffd}
+  .lc-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+  .lc-card{background:#0f1720;border:1px solid #263241;border-radius:8px;overflow:hidden;min-width:0}
+  .lc-cover{height:132px;background:#17212d;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:12px;overflow:hidden}
+  .lc-cover img{width:100%;height:100%;object-fit:cover;display:block}
+  .lc-body{padding:12px}
+  .lc-card-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+  .lc-card-title{font-size:16px;font-weight:900;color:#fff}
+  .lc-count{font-size:12px;font-weight:900;color:#d9b86d;border:1px solid #52452c;background:#221d13;border-radius:8px;padding:4px 7px;white-space:nowrap}
+  .lc-desc{margin-top:7px;min-height:38px;color:#b8c1cd;font-size:12px;line-height:1.45}
+  .lc-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+  .lc-section{margin-top:16px;background:#0f1720;border:1px solid #263241;border-radius:8px;padding:14px}
+  .lc-section-title{font-size:15px;font-weight:900;color:#fff;margin-bottom:10px}
+  .lc-result-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+  .lc-result{display:grid;grid-template-columns:58px 1fr;gap:10px;border:1px solid #263241;border-radius:8px;background:#111c27;padding:8px;min-width:0}
+  .lc-thumb{width:58px;height:58px;border-radius:8px;background:#17212d;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:11px}
+  .lc-thumb img{width:100%;height:100%;object-fit:cover}
+  .lc-name{font-weight:900;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lc-meta{font-size:12px;color:#a7b0be;margin-top:4px}
+  .lc-doc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+  .lc-field label{display:block;color:#a7b0be;font-size:12px;font-weight:800;margin-bottom:5px}
+  .lc-field input,.lc-field select,.lc-field textarea{width:100%;background:#0b1118;border:1px solid #263241;border-radius:8px;color:#f8fafc;padding:9px 10px}
+  .lc-table-wrap{overflow:auto}
+  .lc-table{width:100%;border-collapse:collapse;font-size:13px;min-width:720px}
+  .lc-table th,.lc-table td{padding:9px;border-bottom:1px solid #263241;text-align:left;vertical-align:top}
+  .lc-table th{color:#d9b86d;font-size:11px;text-transform:uppercase;letter-spacing:0}
+  .lc-muted{color:#a7b0be;font-size:12px}
+  @media (max-width:1100px){.lc-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+  @media (max-width:760px){.lc-grid{grid-template-columns:1fr}.lc-search input{min-width:0}.lc-actions{grid-template-columns:1fr}.lc-cover{height:170px}}
 </style>
 
-<div class="lib-wrap">
-  <div class="lib-header">
+<div class="lc-page">
+  <div class="lc-head">
     <div>
-      <h1 class="lib-title">Library hub</h1>
-      <div class="lib-sub">Manage product references, material libraries, and factory catalogs in one place.</div>
+      <h1 class="lc-title">Living Catalog</h1>
+      <div class="lc-sub">Products, fabrics, accessories, trims, and threads.</div>
     </div>
   </div>
 
-  <div class="lib-grid">
-    <div class="lib-card">
-      <div class="lib-card-title">Products</div>
-      <div class="lib-card-count">{{ product_count }}</div>
-      <div class="lib-card-sub">Styles, categories, and default specs.</div>
-      <div class="lib-actions">
-        <a class="btn" href="{% url 'products_list' %}">Open list</a>
-        <a class="btn btn-gold" href="{% url 'product_add' %}">Add product</a>
-      </div>
-    </div>
+  <form method="get" class="lc-search">
+    <input type="search" name="q" value="{{ q }}" placeholder="Search name, type, category, colour, or tags">
+    <button type="submit" class="lc-btn lc-btn-primary">Search</button>
+    <a class="lc-btn" href="{% url 'library_home' %}">Clear Filters</a>
+  </form>
 
-    <div class="lib-card">
-      <div class="lib-card-title">Fabrics</div>
-      <div class="lib-card-count">{{ fabric_count }}</div>
-      <div class="lib-card-sub">GSM, composition, and finishes.</div>
-      <div class="lib-actions">
-        <a class="btn" href="{% url 'fabrics_list' %}">Open list</a>
-        <a class="btn btn-gold" href="{% url 'fabric_add' %}">Add fabric</a>
-      </div>
-    </div>
-
-    <div class="lib-card">
-      <div class="lib-card-title">Accessories</div>
-      <div class="lib-card-count">{{ accessory_count }}</div>
-      <div class="lib-card-sub">Zippers, buttons, labels.</div>
-      <div class="lib-actions">
-        <a class="btn" href="{% url 'accessories_list' %}">Open list</a>
-        <a class="btn btn-gold" href="{% url 'accessory_add' %}">Add accessory</a>
-      </div>
-    </div>
-
-    <div class="lib-card">
-      <div class="lib-card-title">Trims</div>
-      <div class="lib-card-count">{{ trim_count }}</div>
-      <div class="lib-card-sub">Neck tape, elastics, drawcord.</div>
-      <div class="lib-actions">
-        <a class="btn" href="{% url 'trims_list' %}">Open list</a>
-        <a class="btn btn-gold" href="{% url 'trim_add' %}">Add trim</a>
-      </div>
-    </div>
-
-    <div class="lib-card">
-      <div class="lib-card-title">Threads</div>
-      <div class="lib-card-count">{{ thread_count }}</div>
-      <div class="lib-card-sub">Thread types, colors, and counts.</div>
-      <div class="lib-actions">
-        <a class="btn" href="{% url 'threads_list' %}">Open list</a>
-        <a class="btn btn-gold" href="{% url 'thread_add' %}">Add thread</a>
-      </div>
-    </div>
+  <div class="lc-grid">
+    {% for card in section_cards %}
+      <section class="lc-card">
+        <div class="lc-cover">
+          {% if card.cover_url %}
+            <img src="{{ card.cover_url }}" alt="{{ card.catalog.plural }}">
+          {% else %}
+            <span>No image</span>
+          {% endif %}
+        </div>
+        <div class="lc-body">
+          <div class="lc-card-top">
+            <div class="lc-card-title">{{ card.catalog.plural }}</div>
+            <div class="lc-count">{{ card.count }} active</div>
+          </div>
+          <div class="lc-desc">{{ card.description }}</div>
+          <div class="lc-actions">
+            <a class="lc-btn" href="{{ card.list_url }}">Open Catalog</a>
+            {% if can_edit %}<a class="lc-btn lc-btn-primary" href="{{ card.add_url }}">Add New</a>{% endif %}
+          </div>
+        </div>
+      </section>
+    {% endfor %}
   </div>
 
-  <div class="lib-section">
-    <div class="lib-card">
-      <div class="lib-card-title">Factory catalogs and documents</div>
-      <div class="lib-sub">Upload catalogs, spec sheets, compliance docs, and pricing references.</div>
+  {% if q %}
+    <section class="lc-section">
+      <div class="lc-section-title">Search Results</div>
+      {% if search_groups %}
+        {% for group in search_groups %}
+          <div class="lc-muted" style="margin:10px 0 8px;">{{ group.catalog.plural }}</div>
+          <div class="lc-result-grid">
+            {% for row in group.rows %}
+              <a class="lc-result" href="{{ row.detail_url }}">
+                <div class="lc-thumb">{% if row.cover_url %}<img src="{{ row.cover_url }}" alt="{{ row.name }}">{% else %}No image{% endif %}</div>
+                <div>
+                  <div class="lc-name">{{ row.name }}</div>
+                  <div class="lc-meta">{{ row.type|default:row.category }}</div>
+                  <div class="lc-meta">{{ row.detail }}</div>
+                </div>
+              </a>
+            {% endfor %}
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="lc-muted">No catalog records matched this search.</div>
+      {% endif %}
+    </section>
+  {% endif %}
 
-      <form method="post" enctype="multipart/form-data" style="margin-top:10px;">
+  {% if can_edit %}
+    <section class="lc-section">
+      <div class="lc-section-title">Library Documents</div>
+      <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
         <input type="hidden" name="action" value="upload_attachment">
-
-        <div class="lib-form-grid">
-          <div class="lib-field">
-            <label>Title</label>
-            {{ attachment_form.title }}
-          </div>
-          <div class="lib-field">
-            <label>Category</label>
-            {{ attachment_form.category }}
-          </div>
-          <div class="lib-field">
-            <label>File</label>
-            {{ attachment_form.file }}
-          </div>
-          <div class="lib-field" style="grid-column:1 / -1;">
-            <label>Note</label>
-            {{ attachment_form.note }}
-          </div>
+        <div class="lc-doc-grid">
+          <div class="lc-field"><label>Title</label>{{ attachment_form.title }}</div>
+          <div class="lc-field"><label>Category</label>{{ attachment_form.category }}</div>
+          <div class="lc-field"><label>File</label>{{ attachment_form.file }}</div>
+          <div class="lc-field"><label>Note</label>{{ attachment_form.note }}</div>
         </div>
-
-        <div style="margin-top:10px; display:flex; gap:8px; align-items:center;">
-          <button type="submit" class="btn btn-gold">Upload document</button>
-          <span class="muted">Accepted: PDF, XLSX, DOCX, images, and ZIP archives.</span>
-        </div>
+        <div style="margin-top:10px;"><button type="submit" class="lc-btn lc-btn-primary">Upload Document</button></div>
       </form>
-    </div>
-  </div>
+    </section>
+  {% endif %}
 
-  <div class="lib-section">
-    <div class="lib-card">
-      <div class="lib-card-title">Recent library documents</div>
-      {% if attachments %}
-        <table class="lib-table">
-          <thead>
-            <tr>
-              <th>Title</th>
-              <th>Category</th>
-              <th>File</th>
-              <th>Uploaded</th>
-              <th>Note</th>
-              <th></th>
-            </tr>
-          </thead>
+  <section class="lc-section">
+    <div class="lc-section-title">Recent Library Documents</div>
+    {% if attachments %}
+      <div class="lc-table-wrap">
+        <table class="lc-table">
+          <thead><tr><th>Title</th><th>Category</th><th>Uploaded</th><th>Note</th><th></th></tr></thead>
           <tbody>
             {% for doc in attachments %}
               <tr>
-                <td>{{ doc.title|default:doc.original_name }}</td>
-                <td><span class="lib-badge">{{ doc.get_category_display }}</span></td>
-                <td><a href="{{ doc.file.url }}" target="_blank">Download</a></td>
+                <td><a href="{{ doc.file.url }}" target="_blank">{{ doc.title|default:doc.original_name }}</a></td>
+                <td>{{ doc.get_category_display }}</td>
                 <td>{{ doc.uploaded_at|date:"Y-m-d H:i" }}</td>
-                <td class="muted">{{ doc.note|default:"-" }}</td>
+                <td class="lc-muted">{{ doc.note|default:"" }}</td>
                 <td>
-                  <form method="post" style="display:inline;">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="delete_attachment">
-                    <input type="hidden" name="attachment_id" value="{{ doc.id }}">
-                    <button type="submit" class="btn" onclick="return confirm('Remove this document?');">Delete</button>
-                  </form>
+                  {% if can_archive %}
+                    <form method="post">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="delete_attachment">
+                      <input type="hidden" name="attachment_id" value="{{ doc.id }}">
+                      <button type="submit" class="lc-btn" onclick="return confirm('Remove this document?');">Delete</button>
+                    </form>
+                  {% endif %}
                 </td>
               </tr>
             {% endfor %}
           </tbody>
         </table>
-      {% else %}
-        <div class="muted" style="margin-top:10px;">No library documents uploaded yet.</div>
-      {% endif %}
-    </div>
-  </div>
+      </div>
+    {% else %}
+      <div class="lc-muted">No library documents uploaded yet.</div>
+    {% endif %}
+  </section>
 </div>
 {% endblock %}
