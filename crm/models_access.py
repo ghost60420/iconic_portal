@@ -43,6 +43,7 @@ class UserAccess(models.Model):
     can_accounting_bd = models.BooleanField(default=True)
     can_accounting_ca = models.BooleanField(default=False)
     can_library = models.BooleanField(default=False)
+    can_edit_library = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

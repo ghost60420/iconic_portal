@@ -5597,6 +5597,20 @@ def _catalog_profile_value(user, field):
     return (getattr(profile, field, "") or "").strip().lower() if profile else ""
 
 
+def _catalog_group_names(user):
+    if not user or not getattr(user, "is_authenticated", False):
+        return set()
+    cached = getattr(user, "_catalog_group_names_cached", None)
+    if cached is not None:
+        return cached
+    try:
+        names = {group.name.strip().lower() for group in user.groups.all()}
+    except Exception:
+        names = set()
+    user._catalog_group_names_cached = names
+    return names
+
+
 def _catalog_access(user):
     try:
         return getattr(user, "access", None)
@@ -5618,13 +5632,22 @@ def _can_view_catalog_internal(user):
 
 
 def _is_catalog_marketing_user(user):
-    return _catalog_profile_value(user, "department") == "marketing"
+    groups = _catalog_group_names(user)
+    return _catalog_profile_value(user, "department") == "marketing" or "marketing" in groups
 
 
 def _is_catalog_sales_user(user):
     position = _catalog_profile_value(user, "position")
     department = _catalog_profile_value(user, "department")
-    return department == "sales" or position in {"sales_manager", "sales_executive"}
+    groups = _catalog_group_names(user)
+    return department == "sales" or position in {"sales_manager", "sales_executive"} or bool(groups.intersection({"sales", "sales manager"}))
+
+
+def _is_catalog_accounts_user(user):
+    position = _catalog_profile_value(user, "position")
+    department = _catalog_profile_value(user, "department")
+    groups = _catalog_group_names(user)
+    return department == "accounts" or position in {"accounts_manager", "accountant"} or bool(groups.intersection({"accounts", "finance"}))
 
 
 def _can_edit_catalog_item(user):
@@ -5632,15 +5655,20 @@ def _can_edit_catalog_item(user):
         return False
     if user.is_superuser:
         return True
-    if _is_catalog_sales_user(user) or _is_catalog_marketing_user(user):
-        return False
     access = _catalog_access(user)
     position = _catalog_profile_value(user, "position")
+    groups = _catalog_group_names(user)
+    if access and getattr(access, "can_edit_library", False):
+        return True
+    if position in {"ceo", "director", "production_manager", "factory_manager", "approved_manager"}:
+        return True
+    if groups.intersection({"ceo", "super admin", "director", "production manager", "factory manager", "approved manager"}):
+        return True
+    if _is_catalog_sales_user(user) or _is_catalog_marketing_user(user) or _is_catalog_accounts_user(user):
+        return False
     if access and getattr(access, "can_view_ceo_tools", False):
         return True
-    if position in {"ceo", "director", "general_manager", "operations_manager", "production_manager", "merchandising_manager"}:
-        return True
-    return bool(user.is_staff and access and getattr(access, "can_library", False))
+    return False
 
 
 def _can_archive_catalog_item(user):

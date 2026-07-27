@@ -14,7 +14,15 @@ User = get_user_model()
 
 
 def is_admin_user(user):
-    return user.is_authenticated and (user.is_superuser or user.is_staff)
+    if not user.is_authenticated:
+        return False
+    if user.is_superuser or user.is_staff:
+        return True
+    try:
+        access = getattr(user, "access", None)
+    except Exception:
+        access = None
+    return bool(access and getattr(access, "can_view_ceo_tools", False))
 
 
 @login_required
@@ -60,7 +68,7 @@ def access_list(request):
 
     field_groups = [
         ("Core", ["can_leads", "can_opportunities", "can_customers", "can_calendar"]),
-        ("Operations", ["can_inventory", "can_library", "can_production", "can_shipping"]),
+        ("Operations", ["can_inventory", "can_library", "can_edit_library", "can_production", "can_shipping"]),
         ("Engagement", ["can_ai", "can_marketing", "can_whatsapp"]),
         ("Costing", ["can_costing", "can_view_internal_costing", "can_costing_approve"]),
         ("Admin / Accounting", ["can_view_ceo_tools", "can_accounting_bd", "can_accounting_ca"]),

@@ -26,6 +26,7 @@ class UserAccessForm(forms.ModelForm):
             "can_accounting_bd",
             "can_accounting_ca",
             "can_library",
+            "can_edit_library",
         ]
         widgets = {
             "role": forms.Select(attrs={"class": "form-select"}),
@@ -49,11 +50,13 @@ class UserAccessForm(forms.ModelForm):
             "can_accounting_bd": "Accounting BD",
             "can_accounting_ca": "Accounting CA",
             "can_library": "Library",
+            "can_edit_library": "Library edit",
         }
         help_texts = {
             "can_accounting_ca": "CA accounting is never allowed for BD users.",
             "can_view_internal_costing": "Allows viewing costing profit, margin, internal costs, and lifecycle profit metrics.",
             "can_view_ceo_tools": "Restricts CEO Dashboard, AI Executive Advisor, and Daily Briefing access.",
+            "can_edit_library": "Allows adding and editing Library records, including image upload, replacement, and removal.",
         }
 
     def __init__(self, *args, **kwargs):
