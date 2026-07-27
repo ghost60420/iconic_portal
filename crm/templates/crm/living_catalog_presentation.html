@@ -1,7 +1,13 @@
-{% extends "crm/base.html" %}
-{% block content %}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ item.name }} Presentation</title>
 <style>
-  body{background:#070b10}
+  *{box-sizing:border-box}
+  body{margin:0;background:#070b10;font-family:Arial,sans-serif}
+  a{color:inherit}
   .lp-page{min-height:calc(100vh - 80px);color:#f8fafc;padding:18px}
   .lp-shell{max-width:1280px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(360px,.75fr);gap:18px;align-items:start}
   .lp-gallery{background:#0d151e;border:1px solid #263241;border-radius:8px;padding:12px}
@@ -34,6 +40,8 @@
   @media (max-width:980px){.lp-shell{grid-template-columns:1fr}.lp-main{height:52vh}.lp-title{font-size:30px}}
   @media (max-width:620px){.lp-page{padding:10px}.lp-main{height:42vh}.lp-thumbs{grid-template-columns:1fr 1fr 1fr}.lp-thumb{height:70px}.lp-actions{flex-direction:column}.lp-btn{width:100%}}
 </style>
+</head>
+<body>
 
 <div class="lp-page">
   <div class="lp-shell">
@@ -117,4 +125,5 @@
     }
   })();
 </script>
-{% endblock %}
+</body>
+</html>

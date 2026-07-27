@@ -322,6 +322,8 @@ class LivingCatalogTests(TestCase):
         self.assertContains(first_response, reverse("product_presentation", args=[second.pk]))
         self.assertNotContains(first_response, "Edit")
         self.assertNotContains(first_response, "Internal Only")
+        self.assertNotContains(first_response, "Audit")
+        self.assertNotContains(first_response, self.admin.username)
         self.assertNotContains(first_response, "100.00")
         self.assertNotContains(first_response, "Private note")
 
