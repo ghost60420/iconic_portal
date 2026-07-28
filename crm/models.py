@@ -25,6 +25,10 @@ from .models_kpi import (
     KPISettings,
     KPITemplateVersion,
 )
+from .models_kpi_assignments import (
+    EmployeeKPIRoleAssignment,
+    EmployeeKPIRoleAssignmentHistory,
+)
 from .services.costing_currency import CurrencyConversionError, convert_currency
 
 class BDMonthlyTarget(models.Model):

@@ -2,15 +2,17 @@
 
 ## Status
 
-- Stage: 2 - foundation models and migration
-- Working branch: `feature/kpi-stage-2-models`
+- Current stage: 3 - employee KPI role assignment foundation
+- Working branch: `feature/kpi-stage-3-employee-assignments`
+- Stage 3 base commit: `6e2460524d7ddb46f5f2ef359f3731d9043337fc`
 - Baseline tag: `kpi-baseline-20260728`
 - Baseline commit: `a9c2881f195e6608205e096552f4ce030200e9bd`
 - Production and AWS were not accessed.
 
-This stage adds only the versioned KPI template foundation. It does not add
-employee assignments, review records, scoring, bonus records, pages, routes,
-notifications, or seeded role templates.
+Stage 2 added the versioned KPI template foundation. Stage 3 adds employee
+assignment and immutable assignment-history tables plus a transactional service
+layer. It does not add review records, scoring, bonus calculations, pages,
+routes, notifications, or seeded employee assignments.
 
 ## Design Boundary
 
@@ -147,17 +149,56 @@ After role templates or settings are created in later stages, rolling back
 rollback. At that point, prefer an additive corrective migration or application
 rollback that leaves the schema intact.
 
+## Stage 3 Assignment Foundation
+
+`EmployeeKPIRoleAssignment` connects an existing `EmployeeProfile` to an
+independent `KPIRoleTemplate`. It stores a decimal role weight, optional
+manager, effective dates, active/archive state, bonus eligibility, notes,
+creator/updater identity, timestamps, and an incrementing assignment version.
+It does not reference login groups or `UserAccess`.
+
+`EmployeeKPIRoleAssignmentHistory` stores an append-only old/new snapshot for
+every create and update, including manager, weight, dates, active/archive
+state, bonus eligibility, actor, reason, and assignment version. Assignment and
+history deletion are blocked by the model layer.
+
+The assignment service:
+
+- Creates one `100.00` role or an atomic set of roles totaling `100.00`
+- Atomically reweights several roles
+- Deactivates and archives without deleting history
+- Lists effective assignments for today or a supplied date
+- Calculates and validates effective role weight
+- Resolves the applicable manager and template set
+- Filters bonus-eligible assignments without calculating a bonus
+- Detects incomplete, overweight, and duplicate-template overlaps
+
+An employee may have no effective assignments. If one or more active,
+non-archived assignments cover a date, their combined weight must be exactly
+`100.00`. Future and expired rows are evaluated only inside their date ranges.
+
+Migration `crm.0193_kpi_employee_role_assignments` depends on `crm.0192` and
+creates only:
+
+1. `crm_employeekpiroleassignment`
+2. `crm_employeekpiroleassignmenthistory`
+
+The migration has no data operation, seed, rename, deletion, or protected-table
+alteration. It was tested on fresh and populated databases and through rollback
+to `crm.0192` and reapplication. The protected-data signature remained
+`19ad00265555f261cf0711a0aac817114ac6e8e26b9fa5df96f792d32e643d13`.
+The full regression result is `797 of 797` tests passed.
+
 ## Deferred Stages
 
-- Stage 3: seed and verify version 1 role templates
-- Stage 4: employee KPI role assignments and exact active-role weight rules
-- Stage 5: employee Performance tab
-- Stage 6: entry, evidence, comments, approval, locking, and unlock workflow
-- Stage 7: individual, role, employee, team, and company score calculations
-- Stage 8: separate KPI bonus review records and approval
-- Stage 9: server authorization and immutable audit events
-- Stage 10: dashboard, reports, exports, and KPI notifications
+- Stage 4: calculation engine
+- Later stage: seed and verify approved version 1 role templates
+- Later stage: employee Performance tab
+- Later stage: entry, evidence, comments, approval, locking, and unlock workflow
+- Later stage: separate KPI bonus review records and approval
+- Later stage: server authorization and audit-event integration
+- Later stage: dashboard, reports, exports, and KPI notifications
 
-No deferred model or workflow is represented by a placeholder table in Stage 2.
-Custom authorization codenames and all permission checks are deferred to Stage
-9 so this foundation migration does not change the current authorization model.
+No deferred model or workflow is represented by a placeholder table. Custom
+authorization codenames and all KPI permission checks remain deferred, so
+Stages 2 and 3 do not change the current authorization model.
