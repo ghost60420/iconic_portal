@@ -83,6 +83,13 @@ Calendar background-email pattern and applies an eight-second bounded SMTP
 timeout outside the HTTP request. Reminder state is saved only after successful
 delivery; timeout/failure preserves the unsent state.
 
+Deployment:
+
+- Source branch: `calendar-504-hotfix`
+- Production branch: `living-catalog-production-deployment`
+- Hotfix commit: `490df39 Prevent Calendar SMTP request timeouts`
+- Deployed: 2026-07-28 17:17:05 UTC
+
 Files changed:
 
 - `crm/views.py`
@@ -103,7 +110,22 @@ Pre-deployment:
 - Focused Calendar tests: 7 PASS
 - `git diff --check`: PASS
 
-Post-deployment verification is pending.
+Post-deployment:
+
+- Production `python manage.py check`: PASS
+- Main Dashboard: HTTP 200, 401.40 ms
+- Calendar: HTTP 200, 474.14 ms while the reminder sender was deliberately
+  mocked to take five seconds
+- Shipments list: HTTP 200, 43.97 ms
+- Shipping detail: HTTP 200, 45.12 ms
+- Production list: HTTP 200, 214.85 ms
+- Production detail: HTTP 200, 111.35 ms
+- Calendar queries: 12
+- Slowest Calendar database query: 2 ms
+- Calendar N+1 result: no repeated query shapes
+- SQLite read/lock check: PASS
+- New Gunicorn errors after restart: none
+- New Nginx upstream errors after restart: none
 
 ## Data Safety Baseline
 
@@ -119,17 +141,24 @@ Post-deployment verification is pending.
 
 These counts must remain unchanged after deployment.
 
+Post-deployment counts matched the baseline exactly for every listed model.
+Calendar event count remained 197. The verification sender was mocked, so no
+Calendar event or reminder field was changed by the verification requests.
+
 ## Services Restarted
 
-None at the time this report was created. The controlled recovery plan restarts
-Gunicorn only after deploying the focused hotfix. Nginx will not be restarted.
+Gunicorn was restarted once at 2026-07-28 17:17:05 UTC.
+
+Nginx, Redis, Celery, the database, and all unrelated services were not
+restarted.
 
 ## Calendar Response Time
 
 - Before: repeated Nginx 504 responses; Gunicorn workers blocked up to 120
   seconds before forced timeout.
 - Application path without SMTP: 0.514 seconds.
-- After: pending controlled hotfix deployment and live verification.
+- After: HTTP 200 in 0.474 seconds while a five-second reminder sender ran
+  outside the request path.
 
 ## Remaining Risks
 
@@ -142,6 +171,6 @@ Gunicorn only after deploying the focused hotfix. Nginx will not be restarted.
 
 ## Final Status
 
-**RECOVERY IN PROGRESS**
+**CRM PERFORMANCE RESTORED**
 
 FedEx deployment remains stopped. Migration `crm.0192` remains unapplied.
