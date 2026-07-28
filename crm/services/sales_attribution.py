@@ -1159,20 +1159,80 @@ def build_sales_kpis(user):
 
 
 def build_employee_sales_statistics(user):
-    """Canonical compact employee statistics derived from the KPI service."""
-    metrics = build_sales_kpis(user)
+    """Build only the compact metrics rendered on an employee profile."""
+    lead_count = Lead.objects.filter(lead_ownership_q(user)).count()
+    opportunity_rows = list(
+        with_pipeline_value(
+            Opportunity.objects.filter(is_archived=False)
+            .filter(lead_ownership_q(user, "lead__"))
+            .annotate(
+                sales_has_production=_opportunity_has_production_annotation()
+            )
+        ).values(
+            "stage",
+            "is_open",
+            "sales_has_production",
+            "pipeline_currency",
+            "pipeline_value",
+        )
+    )
+    open_opportunity_count = sum(
+        _is_active_opportunity_row(row) for row in opportunity_rows
+    )
+    won_opportunity_count = 0
+    lost_opportunity_count = 0
+    won_totals = _empty_rows()
+    for opportunity in opportunity_rows:
+        if opportunity["stage"] == "Closed Won":
+            won_opportunity_count += 1
+            currency = (opportunity["pipeline_currency"] or "CAD").upper()
+            if currency in won_totals:
+                won_totals[currency]["amount"] += (
+                    opportunity["pipeline_value"] or ZERO
+                )
+                won_totals[currency]["count"] += 1
+        elif opportunity["stage"] == "Closed Lost":
+            lost_opportunity_count += 1
+
+    completed_opportunity_count = won_opportunity_count + lost_opportunity_count
+    closing_ratio = (
+        (
+            Decimal(won_opportunity_count)
+            / Decimal(completed_opportunity_count)
+            * Decimal("100")
+        ).quantize(Decimal("0.01"))
+        if completed_opportunity_count
+        else ZERO
+    )
+    revenue_rows = [
+        {"currency": currency, **won_totals[currency]}
+        for currency in CURRENCIES
+    ]
+    invoice_rows = _rows(
+        Invoice.objects.filter(
+            invoice_ownership_q(user),
+            is_archived=False,
+            status__in=ISSUED_INVOICE_STATUSES,
+        )
+        .values("currency")
+        .annotate(amount=Sum("total_amount"), count=Count("id"))
+    )
+    production_order_count = ProductionOrder.objects.filter(
+        production_ownership_q(user),
+        is_archived=False,
+    ).count()
     last_activity = LeadActivity.objects.filter(
         Q(user=user) | Q(lead__assigned_to=user)
     ).aggregate(last=Max("created_at"))["last"]
     return {
-        "leads": metrics["lead_counts"]["total"],
-        "open_opportunities": metrics["opportunity_counts"]["open"],
-        "won_opportunities": metrics["opportunity_counts"]["won"],
-        "production_orders": metrics["production_counts"]["total"],
-        "invoices": sum(row["count"] for row in metrics["invoice_values"]),
-        "revenue": metrics["sales_revenue"],
-        "closing_ratio": metrics["closing_ratio"],
-        "average_deal_size": metrics["average_deal_value"],
+        "leads": lead_count,
+        "open_opportunities": open_opportunity_count,
+        "won_opportunities": won_opportunity_count,
+        "production_orders": production_order_count,
+        "invoices": sum(row["count"] for row in invoice_rows),
+        "revenue": revenue_rows,
+        "closing_ratio": closing_ratio,
+        "average_deal_size": revenue_rows,
         "last_activity": last_activity,
     }
 

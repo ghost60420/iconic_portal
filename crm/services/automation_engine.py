@@ -758,12 +758,34 @@ def automation_dashboard_context(user, *, sync=True, limit=12):
             .order_by("is_read", "-priority_rank", "-updated_at")
         )
         notifications = list(notifications_qs[:limit])
-        unread_count = notifications_qs.filter(is_read=False).count()
 
         summary_rows = list(
             notifications_qs.values("rule_type")
-            .annotate(count=models.Count("id"))
+            .annotate(
+                count=models.Count("id"),
+                unread_count=models.Count(
+                    "id",
+                    filter=Q(is_read=False),
+                ),
+                executive_count=models.Count(
+                    "id",
+                    filter=Q(priority__in=["critical", "high"]),
+                ),
+                critical_count=models.Count(
+                    "id",
+                    filter=Q(priority="critical"),
+                ),
+            )
             .order_by("-count")
+        )
+        unread_count = sum(
+            int(row["unread_count"] or 0) for row in summary_rows
+        )
+        executive_count = sum(
+            int(row["executive_count"] or 0) for row in summary_rows
+        )
+        has_critical = any(
+            int(row["critical_count"] or 0) for row in summary_rows
         )
         notification_cards = [
             {
@@ -791,9 +813,15 @@ def automation_dashboard_context(user, *, sync=True, limit=12):
             .filter(rule__rule_type__in=visible_rule_types)
             .filter(Q(notification__isnull=True) | Q(notification__is_resolved=False))
             .select_related("rule", "notification", "record_content_type")
+            .annotate(
+                dashboard_total=models.Window(
+                    expression=models.Count("id"),
+                )
+            )
             .order_by("due_date", "-updated_at")
         )
         tasks = list(tasks_qs[:8])
+        task_count = int(tasks[0].dashboard_total or 0) if tasks else 0
 
         executive_qs = notifications_qs.filter(priority__in=["critical", "high"])
         orders_attention = list(executive_qs.filter(rule_type__in=["production", "lifecycle"])[:6])
@@ -803,9 +831,9 @@ def automation_dashboard_context(user, *, sync=True, limit=12):
         executive_cards = [
             {
                 "title": "Top Risks",
-                "count": executive_qs.count(),
+                "count": executive_count,
                 "detail": "Critical and high-priority automation alerts.",
-                "tone": "bad" if executive_qs.filter(priority="critical").exists() else "warn",
+                "tone": "bad" if has_critical else "warn",
             },
             {
                 "title": "Orders Needing Attention",
@@ -832,7 +860,7 @@ def automation_dashboard_context(user, *, sync=True, limit=12):
             "automation_notification_cards": notification_cards,
             "automation_tasks": tasks,
             "automation_unread_count": unread_count,
-            "automation_task_count": tasks_qs.count(),
+            "automation_task_count": task_count,
             "executive_automation_cards": executive_cards,
             "orders_needing_attention": orders_attention,
             "overdue_payment_notifications": overdue_payments,

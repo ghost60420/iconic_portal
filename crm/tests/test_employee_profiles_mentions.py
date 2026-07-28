@@ -31,7 +31,11 @@ from crm.services.chatter_mentions import notify_chatter_mentions
 from crm.services.employee_profiles import build_employee_timeline, employee_audit, set_employee_roles
 from crm.services.operations_permissions import can_access_operations_module
 from crm.permissions import role_flag_decision
-from crm.services.sales_profiles import build_salesperson_profile, build_team_performance
+from crm.services.sales_profiles import (
+    build_employee_sales_statistics,
+    build_salesperson_profile,
+    build_team_performance,
+)
 from crm.templatetags.crm_people import highlight_mentions
 
 
@@ -844,6 +848,33 @@ class SalespersonDashboardFeatureTests(TestCase):
         paid = {row["currency"]: row["amount"] for row in metrics["paid_invoice_values"]}
         self.assertEqual(paid, {"CAD": Decimal("0"), "USD": Decimal("0"), "BDT": Decimal("0")})
         self.assertEqual(metrics["paid_invoice_count"], 3)
+
+        with CaptureQueriesContext(connection) as employee_queries:
+            employee_metrics = build_employee_sales_statistics(self.sales)
+        self.assertLessEqual(len(employee_queries), 5)
+        self.assertEqual(employee_metrics["leads"], metrics["lead_counts"]["total"])
+        self.assertEqual(
+            employee_metrics["open_opportunities"],
+            metrics["opportunity_counts"]["open"],
+        )
+        self.assertEqual(
+            employee_metrics["won_opportunities"],
+            metrics["opportunity_counts"]["won"],
+        )
+        self.assertEqual(
+            employee_metrics["production_orders"],
+            metrics["production_counts"]["total"],
+        )
+        self.assertEqual(
+            employee_metrics["invoices"],
+            sum(row["count"] for row in metrics["invoice_values"]),
+        )
+        self.assertEqual(employee_metrics["revenue"], metrics["sales_revenue"])
+        self.assertEqual(employee_metrics["closing_ratio"], metrics["closing_ratio"])
+        self.assertEqual(
+            employee_metrics["average_deal_size"],
+            metrics["average_deal_value"],
+        )
 
     def test_closed_won_timestamp_is_set_once(self):
         opportunity = Opportunity.objects.create(

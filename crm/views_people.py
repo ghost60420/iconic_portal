@@ -35,7 +35,6 @@ from crm.services.operations_permissions import (
     ROLE_CEO,
     ROLE_SALES,
     has_operations_role,
-    operations_group_names,
 )
 from crm.services.sales_attribution import (
     build_employee_sales_statistics,
@@ -217,7 +216,9 @@ def employee_edit(request, user_id):
     )
     target_user = profile.user
     if target_user.pk == request.user.pk:
-        target_user._operations_group_names = operations_group_names(request.user)
+        target_user._operations_group_names = {
+            role.name.casefold() for role in target_user.groups.all()
+        }
     if target_user.is_superuser and not request.user.is_superuser:
         return HttpResponseForbidden("Only a superuser can edit another superuser account.")
     original_snapshot = _profile_snapshot(profile)
@@ -272,6 +273,16 @@ def employee_edit(request, user_id):
         .order_by("display_name", "user__username")
     )
     organization_by_user = {item.user_id: item for item in organization}
+    if request.method == "GET":
+        manager_field = form.fields["manager"]
+        manager_field.choices = [("", manager_field.empty_label)] + [
+            (item.user_id, manager_field.label_from_instance(item.user))
+            for item in organization
+            if item.user_id != target_user.pk
+            and item.user.is_active
+            and not item.is_archived
+            and item.status in EmployeeProfile.MENTIONABLE_STATUSES
+        ]
     management_chain = []
     cursor = profile
     visited = set()

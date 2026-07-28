@@ -14696,17 +14696,62 @@ def main_dashboard(request):
     prev_opp_period_filter = {f"{OPPORTUNITY_REPORTING_DATE_ALIAS}__range": (previous_start, previous_end)}
 
     # Leads
-    leads_today = lead_kpi_qs.filter(created_date=today).count()
-    leads_period = lead_kpi_qs.filter(created_date__range=(start_period, period_end)).count()
-    prev_leads_period = lead_kpi_qs.filter(created_date__range=(previous_start, previous_end)).count()
-
-    leads_daily_qs = (
-        lead_kpi_qs.filter(created_date__range=(start_period, period_end))
-        .values("created_date")
-        .annotate(c=Count("id"))
-        .order_by("created_date")
+    inactive_followup_statuses = ["Converted", "Closed", "Disqualified", "Lost"]
+    lead_period_counts = lead_kpi_qs.aggregate(
+        today=Count("id", filter=Q(created_date=today)),
+        current=Count("id", filter=Q(created_date__range=(start_period, period_end))),
+        previous=Count("id", filter=Q(created_date__range=(previous_start, previous_end))),
+        new=Count("id", filter=Q(lead_status="New")),
+        overdue_followups=Count(
+            "id",
+            filter=Q(next_followup__lt=today)
+            & ~Q(lead_status__in=inactive_followup_statuses),
+        ),
+        due_soon_followups=Count(
+            "id",
+            filter=Q(
+                next_followup__gte=today,
+                next_followup__lte=today + timedelta(days=7),
+            )
+            & ~Q(lead_status__in=inactive_followup_statuses),
+        ),
+        fit_q1=Count("id", filter=Q(brand_fit_score__lte=24)),
+        fit_q2=Count(
+            "id",
+            filter=Q(brand_fit_score__gte=25, brand_fit_score__lte=49),
+        ),
+        fit_q3=Count(
+            "id",
+            filter=Q(brand_fit_score__gte=50, brand_fit_score__lte=74),
+        ),
+        fit_q4=Count("id", filter=Q(brand_fit_score__gte=75)),
     )
-    lead_map = {row["created_date"]: int(row["c"]) for row in leads_daily_qs if row.get("created_date")}
+    leads_today = int(lead_period_counts["today"] or 0)
+    leads_period = int(lead_period_counts["current"] or 0)
+    prev_leads_period = int(lead_period_counts["previous"] or 0)
+    new_leads_count = int(lead_period_counts["new"] or 0)
+    overdue_followups = int(lead_period_counts["overdue_followups"] or 0)
+    due_soon_followups = int(lead_period_counts["due_soon_followups"] or 0)
+    lead_fit_values = [
+        int(lead_period_counts["fit_q1"] or 0),
+        int(lead_period_counts["fit_q2"] or 0),
+        int(lead_period_counts["fit_q3"] or 0),
+        int(lead_period_counts["fit_q4"] or 0),
+    ]
+
+    lead_map = {}
+    if leads_period:
+        leads_daily_qs = (
+            lead_kpi_qs.filter(created_date__range=(start_period, period_end))
+            .values("created_date")
+            .annotate(c=Count("id"))
+            .order_by("created_date")
+        )
+        lead_map = {
+            row["created_date"]: int(row["c"])
+            for row in leads_daily_qs
+            if row.get("created_date")
+        }
 
     leads_daily_labels = []
     leads_daily_values = []
@@ -14716,14 +14761,44 @@ def main_dashboard(request):
         leads_daily_values.append(int(lead_map.get(d, 0)))
 
     # Opportunities
-    opp_period = opportunity_reporting_qs.filter(**opp_period_filter).count()
-    prev_opp_period = opportunity_reporting_qs.filter(**prev_opp_period_filter).count()
+    opportunity_period_counts = opportunity_reporting_qs.aggregate(
+        current=Count("id", filter=Q(**opp_period_filter), distinct=True),
+        previous=Count("id", filter=Q(**prev_opp_period_filter), distinct=True),
+        won=Count(
+            "id",
+            filter=Q(stage__iexact="Closed Won", **opp_period_filter),
+            distinct=True,
+        ),
+        lost=Count(
+            "id",
+            filter=Q(stage__iexact="Closed Lost", **opp_period_filter),
+            distinct=True,
+        ),
+    )
+    opp_period = int(opportunity_period_counts["current"] or 0)
+    prev_opp_period = int(opportunity_period_counts["previous"] or 0)
+    won_count = int(opportunity_period_counts["won"] or 0)
+    lost_count = int(opportunity_period_counts["lost"] or 0)
 
-    opp_stage_base = opportunity_reporting_qs.filter(**opp_period_filter)
-    if not opp_period:
-        opp_stage_base = opportunity_kpi_qs
-    opp_by_stage_qs = opp_stage_base.values("stage").annotate(c=Count("id"))
-    opp_stage_map = {row.get("stage") or "Unknown": int(row.get("c") or 0) for row in opp_by_stage_qs}
+    opp_stage_map = Counter()
+    opp_map = Counter()
+    if opp_period:
+        opportunity_chart_rows = list(
+            opportunity_reporting_qs.filter(**opp_period_filter)
+            .values(OPPORTUNITY_REPORTING_DATE_ALIAS, "stage")
+            .annotate(c=Count("id"))
+        )
+        for row in opportunity_chart_rows:
+            count = int(row.get("c") or 0)
+            opp_stage_map[row.get("stage") or "Unknown"] += count
+            reporting_date = row.get(OPPORTUNITY_REPORTING_DATE_ALIAS)
+            if reporting_date:
+                opp_map[reporting_date] += count
+    else:
+        for row in opportunity_kpi_qs.values("stage").annotate(c=Count("id")):
+            opp_stage_map[row.get("stage") or "Unknown"] += int(
+                row.get("c") or 0
+            )
     opp_stage_labels = []
     opp_stage_values = []
     for st, _ in Opportunity.STAGE_CHOICES:
@@ -14736,40 +14811,36 @@ def main_dashboard(request):
             opp_stage_values.append(int(count))
 
     # Opp daily (for Leads vs Opportunities chart)
-    opp_daily_qs = (
-        opportunity_reporting_qs.filter(**opp_period_filter)
-        .values(OPPORTUNITY_REPORTING_DATE_ALIAS)
-        .annotate(c=Count("id"))
-        .order_by(OPPORTUNITY_REPORTING_DATE_ALIAS)
-    )
-    opp_map = {
-        row[OPPORTUNITY_REPORTING_DATE_ALIAS]: int(row["c"])
-        for row in opp_daily_qs
-        if row.get(OPPORTUNITY_REPORTING_DATE_ALIAS)
-    }
     opp_daily_values = []
     for i in range(period_days):
         d = start_period + timedelta(days=i)
         opp_daily_values.append(int(opp_map.get(d, 0)))
 
     # Win vs Loss (safe guess using stage text)
-    won_count = opportunity_reporting_qs.filter(
-        stage__iexact="Closed Won",
-        **opp_period_filter,
-    ).count()
-    lost_count = opportunity_reporting_qs.filter(
-        stage__iexact="Closed Lost",
-        **opp_period_filter,
-    ).count()
     win_loss_labels = ["Won", "Lost"]
     win_loss_values = [int(won_count), int(lost_count)]
 
     # Lead status funnel (show qualification stage)
-    lead_status_base = lead_kpi_qs.filter(created_date__range=(start_period, period_end))
-    if not lead_status_base.exists():
-        lead_status_base = lead_kpi_qs
-    lead_status_qs = lead_status_base.values("lead_status").annotate(c=Count("id"))
-    lead_status_map = {row.get("lead_status") or "Unknown": int(row.get("c") or 0) for row in lead_status_qs}
+    lead_dimension_rows = list(
+        lead_kpi_qs.values("source", "priority", "market", "lead_status").annotate(
+            c=Count("id"),
+            period_c=Count(
+                "id",
+                filter=Q(created_date__range=(start_period, period_end)),
+            ),
+        )
+    )
+    lead_source_map = Counter()
+    lead_priority_map = Counter()
+    lead_market_map = Counter()
+    lead_status_map = Counter()
+    for row in lead_dimension_rows:
+        count = int(row.get("c") or 0)
+        status_count = int(row.get("period_c") or 0) if leads_period else count
+        lead_source_map[(row.get("source") or "Unknown").strip() or "Unknown"] += count
+        lead_priority_map[row.get("priority") or "Unknown"] += count
+        lead_market_map[row.get("market") or "Unknown"] += count
+        lead_status_map[row.get("lead_status") or "Unknown"] += status_count
     lead_status_labels = []
     lead_status_values = []
     for st, _ in LEAD_STATUS_CHOICES:
@@ -15013,10 +15084,6 @@ def main_dashboard(request):
     production_orders_for_status = None
     if ProductionOrder is not None:
         try:
-            orders_created_period = ProductionOrder.objects.filter(
-                is_archived=False,
-                created_at__date__range=(start_period, period_end)
-            ).count()
             orders_created_qs = (
                 production_kpi_qs.filter(created_at__date__range=(start_period, period_end))
                 .annotate(d=TruncDate("created_at"))
@@ -15027,6 +15094,7 @@ def main_dashboard(request):
             orders_created_map = {
                 row["d"]: int(row["c"]) for row in orders_created_qs if row.get("d")
             }
+            orders_created_period = sum(orders_created_map.values())
             production_orders_for_status = list(
                 production_kpi_qs.prefetch_related("stages", "shipments")
             )
@@ -15095,21 +15163,35 @@ def main_dashboard(request):
     )
 
     # Payroll
-    payroll_year = today.year
-    payroll_month = today.month
+    payroll_period = (
+        BDStaffMonth.objects.annotate(
+            current_period_priority=Case(
+                When(year=today.year, month=today.month, then=models.Value(1)),
+                default=models.Value(0),
+                output_field=IntegerField(),
+            )
+        )
+        .order_by("-current_period_priority", "-year", "-month")
+        .values("year", "month")
+        .first()
+    )
+    payroll_year = payroll_period["year"] if payroll_period else today.year
+    payroll_month = payroll_period["month"] if payroll_period else today.month
     pm = BDStaffMonth.objects.filter(year=payroll_year, month=payroll_month)
-    if not pm.exists():
-        latest_pm = BDStaffMonth.objects.order_by("-year", "-month").first()
-        if latest_pm:
-            payroll_year = latest_pm.year
-            payroll_month = latest_pm.month
-            pm = BDStaffMonth.objects.filter(year=payroll_year, month=payroll_month)
-    payroll_total = _to_float(pm.aggregate(s=Sum("final_pay_bdt"))["s"])
-    payroll_ot = _to_float(pm.aggregate(s=Sum("overtime_total_bdt"))["s"])
-    payroll_bonus = _to_float(pm.aggregate(s=Sum("bonus_bdt"))["s"])
-    payroll_deduction = _to_float(pm.aggregate(s=Sum("deduction_bdt"))["s"])
-    payroll_paid = pm.filter(is_paid=True).count()
-    payroll_unpaid = pm.filter(is_paid=False).count()
+    payroll_summary = pm.aggregate(
+        total=Sum("final_pay_bdt"),
+        overtime=Sum("overtime_total_bdt"),
+        bonus=Sum("bonus_bdt"),
+        deduction=Sum("deduction_bdt"),
+        paid=Count("id", filter=Q(is_paid=True)),
+        unpaid=Count("id", filter=Q(is_paid=False)),
+    )
+    payroll_total = _to_float(payroll_summary["total"])
+    payroll_ot = _to_float(payroll_summary["overtime"])
+    payroll_bonus = _to_float(payroll_summary["bonus"])
+    payroll_deduction = _to_float(payroll_summary["deduction"])
+    payroll_paid = int(payroll_summary["paid"] or 0)
+    payroll_unpaid = int(payroll_summary["unpaid"] or 0)
 
     # Production status (optional)
     production_operational_rows = []
@@ -15147,24 +15229,52 @@ def main_dashboard(request):
     ship_shipped = [0]
     ship_pending = [0]
     ship_delayed = [0]
+    shipped_this_month_count = 0
     if Shipment is not None:
         try:
-            shipped = Shipment.objects.filter(status__in=["shipped", "out_for_delivery", "delivered"]).count()
-            pending = Shipment.objects.filter(status__in=["planned", "booked"]).count()
-            delayed = Shipment.objects.filter(ship_date__lt=today).exclude(
-                status__in=["delivered", "cancelled"]
-            ).count()
+            shipping_summary = Shipment.objects.aggregate(
+                shipped=Count(
+                    "id",
+                    filter=Q(status__in=["shipped", "out_for_delivery", "delivered"]),
+                ),
+                pending=Count("id", filter=Q(status__in=["planned", "booked"])),
+                delayed=Count(
+                    "id",
+                    filter=Q(ship_date__lt=today)
+                    & ~Q(status__in=["delivered", "cancelled"]),
+                ),
+                shipped_this_month=Count(
+                    "id",
+                    filter=Q(
+                        ship_date__gte=current_month_start,
+                        status__in=["shipped", "out_for_delivery", "delivered"],
+                    ),
+                ),
+            )
+            shipped = shipping_summary["shipped"]
+            pending = shipping_summary["pending"]
+            delayed = shipping_summary["delayed"]
             ship_shipped = [int(shipped)]
             ship_pending = [int(pending)]
             ship_delayed = [int(delayed)]
+            shipped_this_month_count = int(
+                shipping_summary["shipped_this_month"] or 0
+            )
         except Exception:
             pass
 
     # Lead sources, market, priority
-    lead_source_qs = lead_kpi_qs.values("source").annotate(c=Count("id")).order_by("-c")
-    lead_source_labels, lead_source_values = _top_buckets(lead_source_qs, "source", limit=6)
+    lead_source_rows = [
+        {"source": label, "c": count}
+        for label, count in sorted(
+            lead_source_map.items(),
+            key=lambda item: (-item[1], item[0]),
+        )
+    ]
+    lead_source_labels, lead_source_values = _top_buckets(
+        lead_source_rows, "source", limit=6
+    )
 
-    lead_priority_map = {row.get("priority") or "Unknown": int(row.get("c") or 0) for row in lead_kpi_qs.values("priority").annotate(c=Count("id"))}
     lead_priority_labels = []
     lead_priority_values = []
     for p, _ in PRIORITY_CHOICES:
@@ -15175,7 +15285,6 @@ def main_dashboard(request):
             lead_priority_labels.append(p)
             lead_priority_values.append(int(cnt))
 
-    lead_market_map = {row.get("market") or "Unknown": int(row.get("c") or 0) for row in lead_kpi_qs.values("market").annotate(c=Count("id"))}
     lead_market_labels = []
     lead_market_values = []
     for m, _ in Lead.MARKET_CHOICES:
@@ -15187,16 +15296,19 @@ def main_dashboard(request):
             lead_market_values.append(int(cnt))
 
     open_opportunity_qs = open_pipeline_queryset(opportunity_kpi_qs)
-    open_opps = open_opportunity_qs.count()
-    open_pipeline_values = _sum_opportunity_kpi_values_by_currency(open_opportunity_qs)
+    try:
+        open_pipeline_summary = summarize_pipeline(
+            open_opportunity_qs,
+            apply_open_definition=False,
+        )
+        open_opps = open_pipeline_summary["count"]
+        open_pipeline_values = open_pipeline_summary["rows"]
+    except (OperationalError, ProgrammingError):
+        open_opps = open_opportunity_qs.count()
+        open_pipeline_values = _sum_opportunity_kpi_values_by_currency(
+            open_opportunity_qs
+        )
     awaiting_payment_metrics = build_awaiting_payment_metrics()
-    overdue_followups = lead_kpi_qs.filter(next_followup__lt=today).exclude(
-        lead_status__in=["Converted", "Closed", "Disqualified", "Lost"]
-    ).count()
-    due_soon_followups = lead_kpi_qs.filter(
-        next_followup__gte=today,
-        next_followup__lte=today + timedelta(days=7),
-    ).exclude(lead_status__in=["Converted", "Closed", "Disqualified", "Lost"]).count()
     conversion_rate = 0.0
     if leads_period > 0:
         conversion_rate = round((opp_period / leads_period) * 100, 1)
@@ -15204,19 +15316,7 @@ def main_dashboard(request):
     if prev_leads_period > 0:
         prev_conversion_rate = round((prev_opp_period / prev_leads_period) * 100, 1)
 
-    fit_buckets = lead_kpi_qs.aggregate(
-        q1=Count("id", filter=Q(brand_fit_score__lte=24)),
-        q2=Count("id", filter=Q(brand_fit_score__gte=25, brand_fit_score__lte=49)),
-        q3=Count("id", filter=Q(brand_fit_score__gte=50, brand_fit_score__lte=74)),
-        q4=Count("id", filter=Q(brand_fit_score__gte=75)),
-    )
     lead_fit_labels = ["0-24", "25-49", "50-74", "75-100"]
-    lead_fit_values = [
-        int(fit_buckets.get("q1") or 0),
-        int(fit_buckets.get("q2") or 0),
-        int(fit_buckets.get("q3") or 0),
-        int(fit_buckets.get("q4") or 0),
-    ]
 
     lead_source_total = sum(lead_source_values)
     lead_source_breakdown = []
@@ -15238,9 +15338,9 @@ def main_dashboard(request):
         stage__iexact="Closed Won",
         **opp_period_filter,
     )
-    if not opp_period:
+    if not won_count and opp_period:
         niche_base = opportunity_reporting_qs.filter(**opp_period_filter)
-    if not niche_base.exists():
+    elif not opp_period:
         niche_base = opportunity_kpi_qs
     niche_rows = list(
         niche_base.values("product_type").annotate(c=Count("id")).order_by("-c")
@@ -15321,30 +15421,77 @@ def main_dashboard(request):
     invoice_status_values = [0, 0, 0, 0]
     if Invoice is not None:
         try:
-            invoice_counts = Invoice.objects.filter(is_archived=False).aggregate(
-                draft=Count("id", filter=Q(status="draft")),
-                sent=Count("id", filter=Q(status="sent")),
-                partial=Count("id", filter=Q(status="partial")),
-                paid=Count("id", filter=Q(status="paid")),
+            open_balance = Case(
+                When(
+                    ~Q(status__in=["paid", "cancelled"]),
+                    then=Coalesce(F("total_amount"), Decimal("0"))
+                    - Coalesce(F("paid_amount"), Decimal("0")),
+                ),
+                default=Decimal("0"),
+                output_field=models.DecimalField(
+                    max_digits=16,
+                    decimal_places=2,
+                ),
             )
+            invoice_summary_rows = list(
+                Invoice.objects.filter(is_archived=False)
+                .values("currency")
+                .annotate(
+                    draft=Count("id", filter=Q(status="draft")),
+                    sent=Count("id", filter=Q(status="sent")),
+                    partial=Count("id", filter=Q(status="partial")),
+                    paid=Count("id", filter=Q(status="paid")),
+                    overdue=Count(
+                        "id",
+                        filter=~Q(status__in=["paid", "cancelled"])
+                        & Q(due_date__lt=today),
+                    ),
+                    unpaid=Count(
+                        "id",
+                        filter=~Q(status__in=["paid", "cancelled"])
+                        & Q(paid_amount__lte=0),
+                    ),
+                    pending_approvals=Count(
+                        "id",
+                        filter=Q(invoice_status="DRAFT"),
+                    ),
+                    outstanding=Sum(open_balance),
+                )
+            )
+            invoice_counts = {
+                key: sum(int(row.get(key) or 0) for row in invoice_summary_rows)
+                for key in (
+                    "draft",
+                    "sent",
+                    "partial",
+                    "paid",
+                    "overdue",
+                    "unpaid",
+                    "pending_approvals",
+                )
+            }
             invoice_status_values = [
                 int(invoice_counts.get("draft") or 0),
                 int(invoice_counts.get("sent") or 0),
                 int(invoice_counts.get("partial") or 0),
                 int(invoice_counts.get("paid") or 0),
             ]
+            overdue_invoices_count = int(invoice_counts.get("overdue") or 0)
+            unpaid_invoices_count = int(invoice_counts.get("unpaid") or 0)
+            partial_payments_count = int(invoice_counts.get("partial") or 0)
+            pending_invoice_approvals = int(
+                invoice_counts.get("pending_approvals") or 0
+            )
             open_invoice_base = Invoice.objects.filter(is_archived=False).exclude(status__in=["paid", "cancelled"])
             outstanding_totals = defaultdict(lambda: {"amount": Decimal("0")})
-            for invoice in open_invoice_base.only("total_amount", "paid_amount", "currency"):
-                code = (invoice.currency or "CAD").upper().strip()
-                outstanding_totals[code]["amount"] += _ceo_decimal(invoice.balance)
+            for row in invoice_summary_rows:
+                code = (row.get("currency") or "CAD").upper().strip()
+                outstanding_totals[code]["amount"] += _ceo_decimal(
+                    row.get("outstanding")
+                )
             outstanding_invoice_values = currency_summary_rows(outstanding_totals)
             if len(outstanding_invoice_values) == 1:
                 outstanding_invoices_total = outstanding_invoice_values[0]["amount"]
-            overdue_invoices_count = open_invoice_base.filter(due_date__lt=today).count()
-            unpaid_invoices_count = open_invoice_base.filter(paid_amount__lte=0).count()
-            partial_payments_count = Invoice.objects.filter(is_archived=False, status="partial").count()
-            pending_invoice_approvals = Invoice.objects.filter(is_archived=False, invoice_status="DRAFT").count()
             outstanding_invoices = list(
                 open_invoice_base.select_related("customer", "order").order_by("due_date", "-issue_date")[:5]
             )
@@ -15356,7 +15503,6 @@ def main_dashboard(request):
         except Exception:
             pass
 
-    new_leads_count = lead_kpi_qs.filter(lead_status="New").count()
     customer_count = Customer.objects.count()
     pending_quotations_count = CostingHeader.objects.filter(status="approved").filter(
         Q(quotation_number="") | Q(quotation_number__isnull=True)
@@ -15373,7 +15519,6 @@ def main_dashboard(request):
     active_production_units_count = 0
     completed_production_count = 0
     production_completion_percent = 0
-    shipped_this_month_count = 0
     if ProductionOrder is not None:
         try:
             active_production_rows = [
@@ -15425,15 +15570,6 @@ def main_dashboard(request):
             active_production_units_count = 0
             completed_production_count = 0
             production_completion_percent = 0
-    if Shipment is not None:
-        try:
-            shipped_this_month_count = Shipment.objects.filter(
-                ship_date__gte=current_month_start,
-                status__in=["shipped", "out_for_delivery", "delivered"],
-            ).count()
-        except Exception:
-            shipped_this_month_count = 0
-
     lifecycle_workflow_summary = {
         "active_order_lifecycles": 0,
         "waiting_for_payment": 0,
@@ -15830,7 +15966,7 @@ def main_dashboard(request):
                 "active_order_lifecycles": lifecycle_summary["active_orders"],
                 "waiting_for_payment": lifecycle_summary["orders_waiting_payment"],
                 "in_production": lifecycle_summary["orders_in_production"],
-                "shipping": OrderLifecycle.objects.filter(status="shipping").exclude(status__in=["completed", "cancelled"]).count(),
+                "shipping": lifecycle_summary["orders_in_shipping"],
             }
         except Exception:
             logger.exception("main_dashboard: failed to build order lifecycle summary")

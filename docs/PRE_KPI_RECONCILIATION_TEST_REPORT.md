@@ -4,7 +4,8 @@
 
 - Test date: 2026-07-28
 - Branch: `chore/pre-kpi-reconciliation`
-- Commit: `1084fc99be3fade235ca0bfa73673a3a44b7ff3e`
+- Approved base commit: `1084fc99be3fade235ca0bfa73673a3a44b7ff3e`
+- Standalone database repair commit: `cf46cf9`
 - Source base: `origin/calendar-504-hotfix`
 - Production/AWS access: not used
 - KPI code: not created
@@ -23,9 +24,9 @@
 - Every source primary key remains present. Source business-table counts are
   unchanged.
 - Targeted affected suite: 103 of 103 passed.
-- Full suite: **760 of 760 passed in 311.101 seconds**.
-- Populated warm queries improved from 18 to 16 for employee profile and from
-  92 to 77 for the main dashboard.
+- Stage 1.5 full suite: **760 of 760 passed in 309.382 seconds**.
+- Populated warm queries improved from 18 to 14 for Employee Profile and from
+  92 to 48 for the Main Dashboard.
 
 The detailed failures below are the initial audit baseline and are retained as
 historical evidence. They are superseded by this executed repair.
@@ -111,10 +112,10 @@ Command:
 python3 manage.py test --settings=iconic_site.settings_testdb --verbosity 1
 ```
 
-Result:
+Stage 1.5 result:
 
 ```text
-Ran 760 tests in 311.101s
+Ran 760 tests in 309.382s
 OK
 ```
 
@@ -206,28 +207,41 @@ production measurements.
 | Production list | 13.77 ms | 9.39 ms | 4 | 4 | HTTP 200 |
 | Invoice list | 8.91 ms | 5.42 ms | 8 | 8 | HTTP 200 |
 
-### Repaired populated database
+### Stage 1.5 repaired populated database
 
-| Screen | Before warm queries | After warm queries | Result |
-|---|---:|---:|---|
-| Employee profile | 18 | 16 | HTTP 200 |
-| Main dashboard | 92 | 77 | HTTP 200 |
+Measurements use the same populated repair copy and an authenticated
+superuser. Cold is the first request after clearing the process-local cache.
+Warm time is the median of five subsequent requests.
+
+| Screen | Before cold | After cold | Before warm | After warm |
+|---|---:|---:|---:|---:|
+| Employee Profile queries | 21 | 17 | 18 | 14 |
+| Employee Profile response | 78.58 ms | 63.50 ms | 25.78 ms | 17.01 ms |
+| Main Dashboard queries | 94 | 50 | 92 | 48 |
+| Main Dashboard response | 100.28 ms | 89.22 ms | 44.98 ms | 35.74 ms |
 
 Findings:
 
 - Employee profile exceeds the eight-query detail-page budget.
 - Main dashboard exceeds the ten-query dashboard budget.
 - The final measurements use the repaired populated database copy.
+- The compact Employee Profile sales summary has a five-query regression
+  bound and returns the same counts, native-currency revenue, and closing
+  ratio as the canonical sales KPI service.
+- Repeated lead, opportunity, invoice, payroll, shipment, lifecycle, and
+  automation counts now use shared aggregates or already-loaded rows.
+- Query normalization found no row-driven repeated query pattern on either
+  page. The remaining repeated automation queries are fixed category queries,
+  not N+1 iteration.
 - Existing bounded-query tests passed for employee list/roles, lead queues,
   operations/CEO/sales services, notifications, and several reports.
 - Production and invoice list growth were not scale-tested in this stage.
-- Filtered aggregates removed repeated lead, payroll, shipment, and lifecycle
-  count queries; the employee form reuses prefetched role and manager data.
 
 ## Final Test Decision
 
 Populated forward migration, rollback/reapply, data-integrity, and all 760
-regression tests pass. The remaining query-budget work is documented but does
-not block the completed database repair.
+regression tests pass. The repaired database is installed only in the
+reconciliation worktree, the original database checksum remains unchanged,
+and the remaining query-budget gap is documented.
 
 **SAFE TO START KPI STAGE 2**

@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 
-from django.db.models import F, Q, Sum
+from django.db.models import Q, Sum, prefetch_related_objects
 from django.utils import timezone
 
 from crm.models import ActualCostEntry, ExchangeRate, Invoice, OrderLifecycle, Shipment
@@ -612,22 +612,53 @@ def lifecycle_dashboard_metrics():
     lifecycles = OrderLifecycle.objects.select_related(
         "invoice", "costing", "quotation", "production_order", "shipping_record"
     )
-    active = lifecycles.exclude(status__in=["completed", "cancelled"])
     today = timezone.localdate()
     month_start = today.replace(day=1)
+    lifecycle_rows = list(lifecycles)
+    production_orders = [
+        lifecycle.production_order
+        for lifecycle in lifecycle_rows
+        if lifecycle.status == "production" and lifecycle.production_order_id
+    ]
+    prefetch_related_objects(production_orders, "stages", "shipments")
     ready_to_ship_count = 0
-    ready_lifecycles = (
-        active.filter(status="production", production_order__isnull=False)
-        .select_related("production_order")
-        .prefetch_related("production_order__stages", "production_order__shipments")
-    )
-    for lifecycle in ready_lifecycles:
+    for lifecycle in lifecycle_rows:
+        if lifecycle.status != "production" or not lifecycle.production_order_id:
+            continue
         if get_production_operational_status(lifecycle.production_order) == OPERATIONAL_STATUS_READY_TO_SHIP:
             ready_to_ship_count += 1
 
     totals_by_currency = {}
+    status_counts = {
+        "active": 0,
+        "costing": 0,
+        "quotation": 0,
+        "payment": 0,
+        "production": 0,
+        "shipping": 0,
+        "completed_month": 0,
+    }
 
-    for lifecycle in lifecycles.iterator():
+    for lifecycle in lifecycle_rows:
+        is_active = lifecycle.status not in {"completed", "cancelled"}
+        if is_active:
+            status_counts["active"] += 1
+            if lifecycle.status in {"costing", "quotation", "production", "shipping"}:
+                status_counts[lifecycle.status] += 1
+            invoice = lifecycle.invoice
+            if (
+                invoice
+                and invoice.total_amount is not None
+                and invoice.paid_amount is not None
+                and invoice.total_amount > invoice.paid_amount
+            ):
+                status_counts["payment"] += 1
+        elif (
+            lifecycle.status == "completed"
+            and lifecycle.updated_at.date() >= month_start
+        ):
+            status_counts["completed_month"] += 1
+
         currency = lifecycle_currency(lifecycle)
         if not currency:
             continue
@@ -648,15 +679,15 @@ def lifecycle_dashboard_metrics():
             row["profit"] / row["invoice_value"] * Decimal("100")
         ) if row["invoice_value"] > 0 else Decimal("0")
     single_currency = currency_rows[0] if len(currency_rows) == 1 else None
-
     return {
-        "active_orders": active.count(),
-        "orders_in_costing": active.filter(status="costing").count(),
-        "orders_waiting_quotation": active.filter(status="quotation").count(),
-        "orders_waiting_payment": active.filter(invoice__total_amount__gt=F("invoice__paid_amount")).count(),
-        "orders_in_production": active.filter(status="production").count(),
+        "active_orders": status_counts["active"],
+        "orders_in_costing": status_counts["costing"],
+        "orders_waiting_quotation": status_counts["quotation"],
+        "orders_waiting_payment": status_counts["payment"],
+        "orders_in_production": status_counts["production"],
+        "orders_in_shipping": status_counts["shipping"],
         "orders_ready_to_ship": ready_to_ship_count,
-        "completed_this_month": lifecycles.filter(status="completed", updated_at__date__gte=month_start).count(),
+        "completed_this_month": status_counts["completed_month"],
         "currency_rows": currency_rows,
         "total_invoice_value": _money(single_currency["invoice_value"]) if single_currency else Decimal("0"),
         "estimated_profit": _money(single_currency["profit"]) if single_currency else Decimal("0"),
