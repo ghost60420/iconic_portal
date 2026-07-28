@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core import mail
@@ -7,6 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from crm.models import Event
+from crm.services.calendar_notifications import send_calendar_reminder_email
 
 
 @override_settings(
@@ -159,3 +161,54 @@ class CalendarInviteReminderTests(TestCase):
         response = self.client.get(reverse("calendar_list"))
         reminder_ids = [item.pk for item in response.context["upcoming_reminders"]]
         self.assertNotIn(event.pk, reminder_ids)
+
+    def test_calendar_page_queues_due_reminder_without_inline_smtp(self):
+        event = Event.objects.create(
+            title="Queued Calendar Reminder",
+            start_datetime=timezone.now() + timedelta(minutes=10),
+            assigned_to_email="owner@example.com",
+            reminder_minutes_before=60,
+            created_by=self.creator,
+        )
+        self.client.force_login(self.creator)
+
+        with patch("crm.views.queue_calendar_reminder_email") as queue_reminder:
+            response = self.client.get(reverse("calendar_list"))
+
+        self.assertEqual(response.status_code, 200)
+        queue_reminder.assert_called_once_with(event.pk)
+        event.refresh_from_db()
+        self.assertFalse(event.reminder_sent)
+
+    def test_calendar_reminder_marks_sent_only_after_delivery(self):
+        event = Event.objects.create(
+            title="Successful Calendar Reminder",
+            start_datetime=timezone.now() + timedelta(minutes=10),
+            assigned_to_email="owner@example.com",
+            reminder_minutes_before=60,
+            created_by=self.creator,
+        )
+
+        sent = send_calendar_reminder_email(event.pk)
+
+        self.assertTrue(sent)
+        event.refresh_from_db()
+        self.assertTrue(event.reminder_sent)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("Reminder: Successful Calendar Reminder", mail.outbox[0].subject)
+
+    def test_calendar_reminder_timeout_preserves_unsent_state(self):
+        event = Event.objects.create(
+            title="Timed Out Calendar Reminder",
+            start_datetime=timezone.now() + timedelta(minutes=10),
+            assigned_to_email="owner@example.com",
+            reminder_minutes_before=60,
+            created_by=self.creator,
+        )
+
+        with patch("crm.services.calendar_notifications.EmailMessage.send", side_effect=TimeoutError):
+            sent = send_calendar_reminder_email(event.pk)
+
+        self.assertFalse(sent)
+        event.refresh_from_db()
+        self.assertFalse(event.reminder_sent)

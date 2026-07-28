@@ -3,9 +3,11 @@ import re
 import threading
 
 from django.conf import settings
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.mail import EmailMessage, get_connection
 from django.core.validators import validate_email
+from django.db import close_old_connections
 from django.utils import timezone
 
 from crm.models import Event
@@ -199,5 +201,86 @@ def queue_calendar_invite_email(event_id, *, action="created"):
         kwargs={"event_id": event_id, "action": action},
         daemon=True,
     )
+    worker.start()
+    return True
+
+
+def send_calendar_reminder_email(event_id):
+    close_old_connections()
+    try:
+        event = (
+            Event.objects.filter(
+                pk=event_id,
+                reminder_minutes_before__isnull=False,
+                reminder_sent=False,
+            )
+            .exclude(assigned_to_email__isnull=True)
+            .exclude(assigned_to_email="")
+            .first()
+        )
+        if not event or not event.start_datetime:
+            return False
+
+        minutes_to_start = (event.start_datetime - timezone.now()).total_seconds() / 60.0
+        if not 0 <= minutes_to_start <= (event.reminder_minutes_before or 0):
+            return False
+
+        try:
+            timeout = int(
+                getattr(
+                    settings,
+                    "CALENDAR_REMINDER_EMAIL_TIMEOUT",
+                    getattr(settings, "CALENDAR_EMAIL_TIMEOUT", getattr(settings, "EMAIL_TIMEOUT", 8)),
+                )
+                or 8
+            )
+        except (TypeError, ValueError):
+            timeout = 8
+
+        local_start = timezone.localtime(event.start_datetime)
+        message = EmailMessage(
+            f"Reminder: {event.title}",
+            f"Event starts at {local_start}.\n\nNote: {event.note or ''}",
+            getattr(settings, "DEFAULT_FROM_EMAIL", None),
+            [event.assigned_to_email],
+            connection=get_connection(timeout=timeout),
+        )
+        sent_count = message.send(fail_silently=False)
+        if not sent_count:
+            logger.warning("Calendar reminder email not sent", extra={"event_id": event_id})
+            return False
+
+        Event.objects.filter(pk=event_id, reminder_sent=False).update(reminder_sent=True)
+        logger.info("Calendar reminder email sent", extra={"event_id": event_id})
+        return True
+    except Exception:
+        logger.exception("Calendar reminder email failed", extra={"event_id": event_id})
+        return False
+    finally:
+        close_old_connections()
+
+
+def queue_calendar_reminder_email(event_id):
+    lock_key = f"calendar-reminder-email:{event_id}"
+    try:
+        if not cache.add(lock_key, "1", timeout=60):
+            return False
+    except Exception:
+        logger.exception("Calendar reminder queue lock failed", extra={"event_id": event_id})
+        return False
+
+    if not getattr(settings, "CALENDAR_REMINDERS_ASYNC", True):
+        try:
+            return send_calendar_reminder_email(event_id)
+        finally:
+            cache.delete(lock_key)
+
+    def _send():
+        try:
+            send_calendar_reminder_email(event_id)
+        finally:
+            cache.delete(lock_key)
+
+    worker = threading.Thread(target=_send, daemon=True)
     worker.start()
     return True

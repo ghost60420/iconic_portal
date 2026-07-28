@@ -177,6 +177,7 @@ from .services.employee_identity import (
 from .services.calendar_notifications import (
     calendar_event_signature,
     queue_calendar_invite_email,
+    queue_calendar_reminder_email,
 )
 
 def _parse_decimal(value):
@@ -7615,7 +7616,7 @@ def _queue_calendar_email_after_commit(event, action):
 # ==============================
 def send_due_event_reminders():
     """
-    Send reminder emails for events that are close.
+    Queue reminder emails for events that are close.
     Uses reminder_minutes_before and assigned_to_email.
     """
     now = timezone.now()
@@ -7637,24 +7638,7 @@ def send_due_event_reminders():
         minutes_to_start = delta.total_seconds() / 60.0
 
         if 0 <= minutes_to_start <= (ev.reminder_minutes_before or 0):
-            subject = f"Reminder: {ev.title}"
-            msg_note = ev.note or ""
-            message = f"Event starts at {timezone.localtime(ev.start_datetime)}.\n\nNote: {msg_note}"
-            recipient = [ev.assigned_to_email]
-
-            try:
-                send_mail(
-                    subject,
-                    message,
-                    getattr(settings, "DEFAULT_FROM_EMAIL", None),
-                    recipient,
-                    fail_silently=True,
-                )
-                ev.reminder_sent = True
-                ev.save(update_fields=["reminder_sent"])
-            except Exception:
-                # keep silent so calendar page never breaks
-                pass
+            queue_calendar_reminder_email(ev.pk)
 
 
 # ==============================
