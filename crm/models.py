@@ -19,6 +19,12 @@ from .models_platform import (
     UserDashboardPreference,
 )
 from .models_employee import EmployeeIdSequence, EmployeeProfile
+from .models_kpi import (
+    KPIItemDefinition,
+    KPIRoleTemplate,
+    KPISettings,
+    KPITemplateVersion,
+)
 from .services.costing_currency import CurrencyConversionError, convert_currency
 
 class BDMonthlyTarget(models.Model):

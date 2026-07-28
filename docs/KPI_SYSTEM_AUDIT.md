@@ -14,12 +14,16 @@ work on the reconciled branch and repaired database copy:
 - The unapproved FedEx automation migration remains excluded; approved FedEx
   carrier/link behavior is tested.
 - The full result is **760 of 760 tests passed**.
-- Employee profile queries improved from 18 to 16 and the populated main
-  dashboard from 92 to 77. These remain performance debt, but the requested
+- Employee profile warm queries improved from 18 to 14 and the populated main
+  dashboard from 92 to 48. These remain performance debt, but the requested
   database and regression gates pass.
 
-**SAFE TO START KPI STAGE 2** on `chore/pre-kpi-reconciliation` using the
-repaired development database copy.
+The tested baseline is commit `a9c2881` with annotated tag
+`kpi-baseline-20260728`. Stage 2 starts from that tag on
+`feature/kpi-stage-2-models`.
+
+**SAFE TO START KPI STAGE 2** from the tested baseline using isolated database
+copies.
 
 Deployment remains **NOT SAFE TO DEPLOY**. No production or AWS action was
 performed.
