@@ -597,11 +597,15 @@ class CustomerWorkflowImprovementTests(TestCase):
         self.assertContains(response, "S-XL")
 
     def test_shipment_without_links_still_renders(self):
-        shipment = Shipment.objects.create(carrier="dhl", tracking_number="EMPTY123", status="planned")
+        shipment = Shipment.objects.create(carrier="fedex", tracking_number="EMPTY123", status="planned")
         self.client.force_login(self.sales)
         response = self.client.get(reverse("shipment_detail", args=[shipment.pk]))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "No snapshot uploaded")
+        self.assertContains(
+            response,
+            "https://www.fedex.com/fedextrack/?tracknumbers=EMPTY123",
+        )
 
     def test_customer_origin_opportunity_supports_quick_costing_invoice_and_production(self):
         opportunity = Opportunity.objects.create(

@@ -223,7 +223,7 @@ class MarketingIntelligenceTests(TestCase):
         self.assertEqual(record.status, "watching")
 
     def test_marketing_calendar_shows_due_content(self):
-        due_date = date.today() + timedelta(days=7)
+        due_date = timezone.localdate() + timedelta(days=7)
         MarketingContentIdea.objects.create(
             title="Scheduled LinkedIn manufacturing guide",
             content_type="linkedin_post",
@@ -233,7 +233,10 @@ class MarketingIntelligenceTests(TestCase):
             assigned_to=self.user,
         )
 
-        response = self.client.get(reverse("marketing_intelligence"))
+        response = self.client.get(
+            reverse("marketing_intelligence"),
+            {"month": due_date.strftime("%Y-%m")},
+        )
 
         self.assertContains(response, "Scheduled LinkedIn manufacturing guide")
         self.assertContains(response, due_date.strftime("%Y-%m-%d"))
