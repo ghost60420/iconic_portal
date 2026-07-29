@@ -86,3 +86,22 @@ recipient-specific in both the view and service. Destination pages recheck
 their existing server authorization; an action URL does not grant access.
 Stage 9 changes no groups, permission fields, middleware, or external delivery
 permissions.
+
+## Stage 10 Policy And Assignment Administration
+
+| Capability | Employee | Manager | Director | HR | Accounts | CEO | Super Admin |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Prepare policy drafts | No | No | No | No | No | Yes | Yes |
+| Submit own policy draft | No | No | No | No | No | Yes | Yes |
+| Approve or publish policy | No | No | No | No | No | Yes | Yes |
+| Retire policy | No | No | No | No | No | Yes | Yes |
+| Create successor version | No | No | No | No | No | Yes | Yes |
+| Preview employee assignments | No | No | No | No | No | Yes | Yes |
+| Save inactive assignment draft | No | No | No | No | No | Yes | Yes |
+| Activate assignment set | No | No | No | No | No | Yes | Yes |
+| View bonus money by Stage 10 authority | No | No | No | No | No | No change | No change |
+
+Stage 10 exposes no new URL or API. Administration is through bounded
+management commands and service checks. Accounts access does not imply policy
+editing, KPI assignment, or bonus visibility. Existing review, dashboard,
+report, notification, and action-link services continue to enforce scope.

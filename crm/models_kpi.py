@@ -515,8 +515,24 @@ class KPISettings(models.Model):
             )
 
     def save(self, *args, **kwargs):
+        policy_service = kwargs.pop("policy_service", False)
+        if self.pk and not policy_service:
+            approval = getattr(self, "release_approval", None)
+            if approval and approval.status in {"published", "retired"}:
+                raise ValidationError(
+                    "Published and retired KPI settings are immutable. "
+                    "Create a new version."
+                )
         self.full_clean()
         return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        approval = getattr(self, "release_approval", None)
+        if approval and approval.status in {"published", "retired"}:
+            raise ValidationError(
+                "Published and retired KPI settings cannot be deleted."
+            )
+        return super().delete(*args, **kwargs)
 
     def __str__(self):
         suffix = " (active)" if self.is_active else ""

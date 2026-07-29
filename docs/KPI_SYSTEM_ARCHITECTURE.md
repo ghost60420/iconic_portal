@@ -2,9 +2,9 @@
 
 ## Status
 
-- Current stage: 8 - Executive Intelligence and Analytics
-- Working branch: `feature/kpi-stage-8-executive-intelligence`
-- Stage 8 base commit: `eedc9bb0d965294be86f5aefbc814159df53b828`
+- Current stage: 10 - Final Integration and Deployment Preparation
+- Working branch: `feature/kpi-stage-10-final-integration`
+- Stage 10 base commit: `911cb1ee32735ed360cc56e7c6b03de98956812a`
 - Baseline tag: `kpi-baseline-20260728`
 - Baseline commit: `a9c2881f195e6608205e096552f4ce030200e9bd`
 - Production and AWS were not accessed.
@@ -18,7 +18,10 @@ evaluation and immutable calculation snapshots. Stage 7 added one adaptive,
 read-only dashboard with server-scoped, independently loaded widgets. Stage 8
 adds snapshot-only executive intelligence, role-scoped analytics, signed
 actions, configurable intelligence rules, and secure PDF, Excel, CSV, and
-print reports.
+print reports. Stage 9 adds CRM-only, deduplicated notification automation.
+Stage 10 adds draft policy preparation, cross-policy approval governance,
+explicit assignment administration, release testing, and deployment
+documentation. It does not activate policies or automation.
 
 ## Design Boundary
 
@@ -298,6 +301,42 @@ query logic.
 Stage 7 adds no models, migrations, tables, permissions, public endpoints,
 database writes, review transitions, or bonus calculations. PDF, Excel, CSV,
 and print are disabled capability interfaces for Stage 8.
+
+## Stages 8 And 9
+
+Stage 8 reads approved review and bonus snapshots through the existing
+dashboard and intelligence services. It adds configurable intelligence rules,
+server-scoped actions, data-quality warnings, and permission-controlled PDF,
+Excel, CSV, and print exports. It never recalculates approved history.
+
+Stage 9 reuses the existing CRM notification inbox. Notification events store
+source, rule, recipient, severity, action, and deduplication metadata, while
+bounded automation runs record retries and sanitized failures. No email, SMS,
+WhatsApp, provider, payroll, or payment integration is included.
+
+## Stage 10 Release Governance
+
+`KPIPolicyApproval` is a service-controlled envelope around one template,
+settings, bonus-weight, bonus-rule, intelligence, or notification version. Its
+states are Draft, Under Review, Approved, Published, and Retired. Database
+constraints require exactly one correctly typed target and paired actor/time
+fields. Normal update and deletion paths are blocked.
+
+`crm.services.kpi_release` is the only Stage 10 transition service. It:
+
+- Creates the 15 approved role-template definitions as Draft version 1.
+- Creates inactive status, bonus, intelligence, and notification drafts.
+- Requires an executive actor for approval, publication, retirement, policy
+  versioning, assignment preview, and assignment activation.
+- Creates successor Draft versions without changing published source records.
+- Saves employee role assignments as inactive drafts and activates only an
+  explicitly confirmed exact-100-percent set backed by effective published
+  templates.
+
+Migration `crm.0198_kpi_release_governance` creates only
+`crm_kpipolicyapproval`, its six protected policy relationships, actor
+relationships, one lookup index, and five integrity constraints. No policy or
+employee data is seeded by the migration.
 
 ## Stage 8 Executive Intelligence
 

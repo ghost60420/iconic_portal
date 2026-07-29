@@ -46,6 +46,7 @@ from .models_kpi_notifications import (
     KPINotificationEvent,
     KPINotificationRule,
 )
+from .models_kpi_release import KPIPolicyApproval
 from .services.costing_currency import CurrencyConversionError, convert_currency
 
 class BDMonthlyTarget(models.Model):

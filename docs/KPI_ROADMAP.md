@@ -10,11 +10,12 @@
 | 6 | Bonus and Incentive Engine | Complete |
 | 7 | Role-based KPI dashboards | Complete |
 | 8 | Executive Intelligence, analytics, and secure reports | Complete |
-| 9 | Notifications and automation | Current |
-| 10 | Final testing and controlled deployment preparation | Not started |
+| 9 | Notifications and automation | Complete |
+| 10 | Final testing and controlled deployment preparation | Current |
 
-Stage 10 must not start until Stage 9 notification scope, deduplication,
-escalation, retries, audit, query budgets, migrations, and full regression
-pass. Stage 10 must include final security, rollback, monitoring, and
-deployment approval; completing a development stage is not deployment
-approval.
+Stage 10 automated integration, policy-draft creation, migration, rollback,
+restore, and regression work is complete. Human UAT, a recent sanitized
+production-copy rehearsal, current production-commit confirmation, CEO
+approval, monitoring ownership, and a deployment window remain open. No
+release-candidate tag or deployment is permitted until those gates are
+recorded as passed.

@@ -87,3 +87,10 @@ Stage 8 cache keys add the rule generation and intelligence version. Cached
 service widgets can return with zero database queries. Large lists use the
 shared pagination partial, and every independent fragment has loading, empty,
 and failure states.
+
+## Stage 10 Compatibility
+
+Stage 10 adds no widget, chart, route, asset, or client-side calculation. The
+existing Stage 7 and Stage 8 registries remain unchanged. Draft policy setup
+cannot affect widget results because dashboards and intelligence read only
+effective published policies and immutable approved snapshots.
