@@ -103,6 +103,11 @@ urlpatterns = [
     path("notifications/read-all/", operations.notification_mark_all_read, name="notification_mark_all_read"),
     path("notifications/read-selected/", operations.notification_mark_selected_read, name="notification_mark_selected_read"),
     path("notifications/delete-read/", operations.notification_delete_read, name="notification_delete_read"),
+    path(
+        "notifications/kpi/<int:event_id>/dismiss/",
+        operations.kpi_notification_dismiss,
+        name="kpi_notification_dismiss",
+    ),
     path("search/", operations.global_search, name="global_search"),
     path("search/suggestions/", operations.global_search_suggestions, name="global_search_suggestions"),
     path("operations/queue/<slug:queue_key>/", operations.operations_queue, name="operations_queue"),

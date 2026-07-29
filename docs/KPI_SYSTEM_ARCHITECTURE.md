@@ -324,10 +324,31 @@ contains no seed, data operation, rename, deletion, or protected-table change.
 Fresh, populated, rollback, and reapply checks passed without changing
 protected counts or ID ranges.
 
+## Stage 9 Notifications and Automation
+
+Stage 9 reuses the existing `AutomationNotification` inbox. A versioned
+`KPINotificationRule` and child escalation rules configure event types,
+reminder offsets, schedules, recipients, severity, retries, batch size, and
+lookback. No final company policy is seeded.
+
+`crm.services.kpi_automation` reads Stage 5 review state and approved
+snapshots, Stage 6 immutable bonus calculations, and Stage 8 intelligence
+results. It does not call the Stage 4 engine or change a source record.
+`crm.services.kpi_notifications` creates recipient-specific CRM notifications
+and immutable `KPINotificationEvent` metadata using stable deduplication keys.
+
+Daily, weekly, monthly, quarterly, and annual evaluations run through a
+bounded management command. Every run stores counters, retries, timestamps,
+and sanitized failure state. There is no external provider, uncontrolled
+process, or installed scheduler.
+
+Migration `crm.0197_kpi_notifications_automation` creates only four Stage 9
+tables. It has no data operation, seed, deletion, rename, or protected-table
+change.
+
 ## Deferred Stages
 
 - Later stage: seed and verify approved version 1 role templates
-- Stage 9: KPI notifications and separately approved automation
 - Stage 10: final testing and controlled deployment preparation
 - Later stage: separate final bonus approval and payment workflow
 - Later stage: evidence file handling and authorized unlock workflow

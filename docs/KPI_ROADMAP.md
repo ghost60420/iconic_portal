@@ -9,11 +9,12 @@
 | 5 | Performance reviews and immutable snapshots | Complete |
 | 6 | Bonus and Incentive Engine | Complete |
 | 7 | Role-based KPI dashboards | Complete |
-| 8 | Executive Intelligence, analytics, and secure reports | Current |
-| 9 | Notifications and automation | Not started |
+| 8 | Executive Intelligence, analytics, and secure reports | Complete |
+| 9 | Notifications and automation | Current |
 | 10 | Final testing and controlled deployment preparation | Not started |
 
-Stage 9 must not start until Stage 8 role scope, exports, data quality, query
-budgets, migrations, and full regression pass. Stage 10 must include final
-security, rollback, monitoring, and deployment approval; completing a
-development stage is not deployment approval.
+Stage 10 must not start until Stage 9 notification scope, deduplication,
+escalation, retries, audit, query budgets, migrations, and full regression
+pass. Stage 10 must include final security, rollback, monitoring, and
+deployment approval; completing a development stage is not deployment
+approval.

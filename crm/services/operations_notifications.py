@@ -62,9 +62,14 @@ NOTIFICATION_ICON_SYMBOLS = {
 
 
 def prepare_notification_display(item):
-    item.icon_symbol = "🔴" if item.priority == "critical" else NOTIFICATION_ICON_SYMBOLS.get(
-        item.notification_type, "⏰"
-    )
+    if item.source_key.startswith("kpi:"):
+        item.icon_symbol = "KPI"
+    else:
+        item.icon_symbol = (
+            "🔴"
+            if item.priority == "critical"
+            else NOTIFICATION_ICON_SYMBOLS.get(item.notification_type, "⏰")
+        )
     item.age_label = relative_time_label(item.created_at)
     item.open_url = reverse("notification_open", args=[item.pk])
     return item

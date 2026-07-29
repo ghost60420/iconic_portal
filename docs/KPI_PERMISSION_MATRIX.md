@@ -69,3 +69,20 @@ Every Stage 8 page, widget, report, and action route requires authentication.
 The service applies employee, manager, and department scope before filters.
 Signed action links are rechecked against current server authorization. HR
 scope does not imply financial bonus-amount access.
+
+## Stage 9 Notification Matrix
+
+| Capability | Employee | Manager | Director | HR | CEO | Super Admin |
+| --- | --- | --- | --- | --- | --- | --- |
+| View KPI notifications | Own only | Assigned alerts | Department alerts | HR alerts | Company alerts | Company alerts |
+| View retained notification history | Own only | Own only | Own only | Own only | Own only | Own only |
+| Mark read or dismiss | Own only | Own only | Own only | Own only | Own only | Own only |
+| See bonus amount in an alert | No | No | No | No | No | No |
+| Follow an action link | Own scope | Assigned team | Department | HR scope | All authorized | All authorized |
+| Publish notification rules | No | No | No | No | Yes | Yes |
+
+Every Stage 9 route requires authentication. Notification visibility is
+recipient-specific in both the view and service. Destination pages recheck
+their existing server authorization; an action URL does not grant access.
+Stage 9 changes no groups, permission fields, middleware, or external delivery
+permissions.

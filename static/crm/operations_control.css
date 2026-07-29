@@ -56,6 +56,8 @@
 .ops-notification-search{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;margin-bottom:12px}
 .ops-notification-link{color:#fff;text-decoration:none}.ops-notification-link:hover{color:var(--ops-gold-soft)}
 .ops-notification-record{margin-top:5px;color:var(--ops-gold-soft);font-size:12px;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ops-notification-card--kpi{border-left:3px solid var(--ops-gold)}
+.ops-notification-dismiss{align-self:flex-start;min-height:34px;padding:7px 10px}
 .ops-search-form{position:relative}
 .ops-search-input-wrap{position:relative}
 .ops-search-input-wrap>.ops-actions{flex-wrap:nowrap}

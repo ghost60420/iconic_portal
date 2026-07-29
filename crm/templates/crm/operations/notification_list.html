@@ -51,24 +51,44 @@
         <h2 id="notification-group-{{ forloop.counter }}" class="ops-group-title">{{ group_label }}</h2>
         <div class="ops-list">
           {% for item in notifications %}
-            <article class="ops-card ops-notification-card {% if not item.is_read %}ops-card--unread{% endif %}">
+            <article class="ops-card ops-notification-card {% if not item.is_read %}ops-card--unread{% endif %} {% if item.kpi_event %}ops-notification-card--kpi{% endif %}">
               <div class="ops-card-head">
                 <div class="ops-notification-main">
                   <label class="ops-notification-select" aria-label="Select notification {{ item.pk }}">
-                    <input type="checkbox" name="notification_ids" value="{{ item.pk }}" data-notification-checkbox>
+                    <input type="checkbox" name="notification_ids" value="{{ item.pk }}" data-notification-checkbox {% if item.is_resolved %}disabled{% endif %}>
                   </label>
                   <span class="ops-notification-icon" aria-hidden="true">{{ item.icon_symbol }}</span>
                   <div>
                     <div class="ops-actions">
                       <span class="ops-badge ops-badge--{{ item.priority }}">{{ item.get_priority_display }}</span>
-                      <span class="ops-badge">{{ item.get_notification_type_display }}</span>
+                      {% if item.kpi_event %}
+                        <span class="ops-badge">KPI</span>
+                        <span class="ops-badge">{{ item.kpi_event.get_notification_type_display }}</span>
+                        {% if item.kpi_event.is_dismissed %}<span class="ops-badge">Dismissed</span>{% endif %}
+                      {% else %}
+                        <span class="ops-badge">{{ item.get_notification_type_display }}</span>
+                      {% endif %}
                       <span class="ops-age">{{ item.age_label }}</span>
                     </div>
-                    <h3><a class="ops-notification-link" href="{{ item.open_url }}">{{ item.title }}</a></h3>
+                    <h3>
+                      {% if item.is_resolved %}
+                        {{ item.title }}
+                      {% else %}
+                        <a class="ops-notification-link" href="{{ item.open_url }}">{{ item.title }}</a>
+                      {% endif %}
+                    </h3>
                     <p>{{ item.message|truncatechars:120 }}</p>
                     {% if item.record_label %}<div class="ops-notification-record">{{ item.record_label }}</div>{% endif %}
                   </div>
                 </div>
+                {% if item.kpi_event and not item.kpi_event.is_dismissed %}
+                  <button
+                    class="ops-btn ops-notification-dismiss"
+                    type="submit"
+                    formaction="{% url 'kpi_notification_dismiss' item.kpi_event.pk %}"
+                    formmethod="post"
+                  >Dismiss</button>
+                {% endif %}
               </div>
               <div class="ops-meta">
                 <span>Notification #{{ item.pk }}</span>
@@ -76,6 +96,8 @@
                 {% if item.record_label %}<span>{{ item.record_label }}</span>{% endif %}
                 {% if item.assigned_user %}<span>Assigned to {{ item.assigned_user|employee_name }}</span>{% elif item.assigned_role %}<span>Assigned to {{ item.assigned_role }}</span>{% endif %}
                 {% if item.due_date %}<span>Due {{ item.due_date|date:"M d, Y" }}</span>{% endif %}
+                {% if item.kpi_event.related_employee %}<span>Employee {{ item.kpi_event.related_employee.user|employee_name }}</span>{% endif %}
+                {% if item.kpi_event.related_department_name %}<span>{{ item.kpi_event.related_department_name }}</span>{% endif %}
               </div>
             </article>
           {% endfor %}

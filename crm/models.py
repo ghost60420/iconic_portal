@@ -40,6 +40,12 @@ from .models_kpi_bonus import (
     KPIBonusWeightProfile,
 )
 from .models_kpi_intelligence import KPIIntelligenceRuleSet
+from .models_kpi_notifications import (
+    KPIAutomationRun,
+    KPIEscalationRule,
+    KPINotificationEvent,
+    KPINotificationRule,
+)
 from .services.costing_currency import CurrencyConversionError, convert_currency
 
 class BDMonthlyTarget(models.Model):

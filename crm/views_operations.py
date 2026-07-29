@@ -29,6 +29,13 @@ from crm.models import (
     RecentlyViewedRecord,
 )
 from crm.services.costing_currency import format_finance_money
+from crm.services.kpi_notifications import (
+    KPINotificationPermissionError,
+    dismiss_kpi_notification,
+    record_kpi_notifications_read,
+    record_kpi_notifications_viewed,
+    visible_kpi_notification_history,
+)
 from crm.services.operations_notifications import (
     filter_notifications_by_search,
     notification_priority_order,
@@ -62,6 +69,8 @@ NOTIFICATION_FILTERS = (
     ("production", "Production"),
     ("invoices", "Invoices"),
     ("shipments", "Shipments"),
+    ("kpi", "KPI"),
+    ("kpi_history", "KPI History"),
 )
 
 
@@ -128,8 +137,19 @@ def notification_list(request):
     read_status = (request.GET.get("status") or "").strip()
     search_query = (request.GET.get("q") or "").strip()
     show_older = request.GET.get("older") == "1"
-    base_queryset = visible_notifications(request.user)
-    queryset = base_queryset.select_related("assigned_user", "record_content_type")
+    active_base_queryset = visible_notifications(request.user)
+    base_queryset = (
+        visible_kpi_notification_history(request.user)
+        if selected_filter == "kpi_history"
+        else active_base_queryset
+    )
+    queryset = base_queryset.select_related(
+        "assigned_user",
+        "record_content_type",
+        "kpi_event",
+        "kpi_event__related_employee__user",
+        "kpi_event__related_manager",
+    )
     if selected_filter == "unread":
         queryset = queryset.filter(is_read=False)
     elif selected_filter in {"critical", "high", "normal", "information"}:
@@ -146,6 +166,10 @@ def notification_list(request):
         queryset = queryset.filter(notification_type="invoice_overdue")
     elif selected_filter == "shipments":
         queryset = queryset.filter(notification_type__in=["shipment_due", "shipment_delayed"])
+    elif selected_filter == "kpi":
+        queryset = queryset.filter(source_key__startswith="kpi:")
+    elif selected_filter == "kpi_history":
+        queryset = queryset.filter(source_key__startswith="kpi:")
     if notification_type:
         queryset = queryset.filter(notification_type=notification_type)
     if priority:
@@ -171,7 +195,7 @@ def notification_list(request):
             "notification_type": notification_type,
             "priority": priority,
             "read_status": read_status,
-            "unread_count": base_queryset.filter(is_read=False).count(),
+            "unread_count": active_base_queryset.filter(is_read=False).count(),
             "type_choices": AutomationNotification.TYPE_CHOICES,
             "priority_choices": AutomationNotification.PRIORITY_CHOICES,
             "show_older": show_older,
@@ -187,6 +211,7 @@ def notification_list(request):
 @login_required
 def notification_open(request, pk):
     notification = get_object_or_404(visible_notifications(request.user), pk=pk)
+    record_kpi_notifications_viewed(request.user, (notification.pk,))
     target_url = notification.target_url or reverse("notification_list")
     if not url_has_allowed_host_and_scheme(
         target_url,
@@ -201,6 +226,7 @@ def notification_open(request, pk):
         notification.read_at = timezone.now()
         notification.save(update_fields=["is_read", "read_at", "updated_at"])
         cache.delete(f"crm-header-unread:{request.user.pk}")
+        record_kpi_notifications_read(request.user, (notification.pk,))
     return redirect(target_url)
 
 
@@ -213,16 +239,22 @@ def notification_mark_read(request, pk):
         notification.read_at = timezone.now()
         notification.save(update_fields=["is_read", "read_at", "updated_at"])
         cache.delete(f"crm-header-unread:{request.user.pk}")
+        record_kpi_notifications_read(request.user, (notification.pk,))
     return redirect(_safe_next_url(request, "notification_list"))
 
 
 @login_required
 @require_POST
 def notification_mark_all_read(request):
-    updated = visible_notifications(request.user).filter(is_read=False).update(
+    unread = visible_notifications(request.user).filter(is_read=False)
+    kpi_ids = list(
+        unread.filter(source_key__startswith="kpi:").values_list("pk", flat=True)
+    )
+    updated = unread.update(
         is_read=True,
         read_at=timezone.now(),
     )
+    record_kpi_notifications_read(request.user, kpi_ids)
     cache.delete(f"crm-header-unread:{request.user.pk}")
     messages.success(request, f"Marked {updated} notification(s) as read.")
     return redirect(_safe_next_url(request, "notification_list"))
@@ -235,10 +267,18 @@ def notification_mark_selected_read(request):
     if not selected_ids:
         messages.warning(request, "Select at least one notification.")
         return redirect(_safe_next_url(request, "notification_list"))
-    updated = visible_notifications(request.user).filter(pk__in=selected_ids, is_read=False).update(
+    unread = visible_notifications(request.user).filter(
+        pk__in=selected_ids,
+        is_read=False,
+    )
+    kpi_ids = list(
+        unread.filter(source_key__startswith="kpi:").values_list("pk", flat=True)
+    )
+    updated = unread.update(
         is_read=True,
         read_at=timezone.now(),
     )
+    record_kpi_notifications_read(request.user, kpi_ids)
     cache.delete(f"crm-header-unread:{request.user.pk}")
     messages.success(request, f"Marked {updated} selected notification(s) as read.")
     return redirect(_safe_next_url(request, "notification_list"))
@@ -251,11 +291,32 @@ def notification_delete_read(request):
     if not selected_ids:
         messages.warning(request, "No visible read notifications were selected for deletion.")
         return redirect(_safe_next_url(request, "notification_list"))
-    queryset = visible_notifications(request.user).filter(pk__in=selected_ids, is_read=True)
+    queryset = visible_notifications(request.user).filter(
+        pk__in=selected_ids,
+        is_read=True,
+    )
+    retained_count = queryset.filter(source_key__startswith="kpi:").count()
+    queryset = queryset.exclude(source_key__startswith="kpi:")
     deleted_count = queryset.count()
     queryset.delete()
     cache.delete(f"crm-header-unread:{request.user.pk}")
     messages.success(request, f"Deleted {deleted_count} read notification(s).")
+    if retained_count:
+        messages.info(
+            request,
+            f"Retained {retained_count} KPI notification(s) in history.",
+        )
+    return redirect(_safe_next_url(request, "notification_list"))
+
+
+@login_required
+@require_POST
+def kpi_notification_dismiss(request, event_id):
+    try:
+        dismiss_kpi_notification(event_id, actor=request.user)
+    except KPINotificationPermissionError:
+        return HttpResponseForbidden("This KPI notification is not available.")
+    messages.success(request, "KPI notification dismissed and retained in history.")
     return redirect(_safe_next_url(request, "notification_list"))
 
 
