@@ -4,16 +4,16 @@ Mark each item with owner, date, evidence, and PASS or FAIL.
 
 ## Release Identity
 
-- [ ] Current production commit confirmed
+- [x] Current production commit confirmed as `1084fc99be3fade235ca0bfa73673a3a44b7ff3e`
 - [x] Stage 10 commit included as `0775935ab470deb0d8702e965d03d24e8fb65589`
 - [ ] Release-candidate tag points to reviewed commit
 - [ ] Worktree and deployment source are clean
-- [ ] No private or database files are tracked
+- [x] No private or database files remain in the candidate index
 
-The current branch has only intended Stage 11 documentation changes plus two
-pre-existing untracked historical reconciliation documents. Thirteen SQLite
-backup artifacts from the initial commit remain tracked. This blocks release
-until an approved security remediation is complete.
+The 13 initial-commit SQLite artifacts have verified owner-only external
+copies, remain preserved locally, and are removed from future tracking. Git
+history was not rewritten. Two pre-existing untracked historical
+reconciliation documents remain untouched.
 
 ## Policies
 
@@ -30,6 +30,7 @@ until an approved security remediation is complete.
 
 - [ ] Recent sanitized production copy available
 - [ ] Production-size rehearsal passed
+- [x] Live SQLite online backup and isolated restore mechanism verified
 - [x] Copied-development backup checksum verified
 - [x] Copied-development restore verified
 - [x] Fresh and copied-development forward migration passed
@@ -57,9 +58,9 @@ checks passed. The unchecked UAT rows require named human testers.
 
 ## Operations
 
-- [ ] AWS host confirmed
-- [ ] Project directory confirmed
-- [ ] Service name confirmed
+- [x] AWS host confirmed as `ec2-user@femline.ca`
+- [x] Project directory confirmed as `/home/ec2-user/iconic_portal`
+- [x] Service name confirmed as `gunicorn.service`
 - [ ] Deployment window selected
 - [ ] Monitoring owner assigned
 - [ ] Error alert path tested
@@ -72,8 +73,8 @@ checks passed. The unchecked UAT rows require named human testers.
 
 ## Current Decision
 
-`NOT SAFE FOR PRODUCTION DEPLOYMENT`: human UAT, recent sanitized
-production-size rehearsal, production identity, legacy tracked database
-artifact remediation, production security configuration, capacity,
-monitoring ownership, CEO approval, deployment window, and release-candidate
-tag are not complete.
+`NOT SAFE FOR PRODUCTION DEPLOYMENT`: human UAT, a recent sanitized
+production-size rehearsal, production security environment activation,
+monitoring ownership and alert tests, backup encryption/retention ownership,
+CEO approval, deployment window, production rollback timing, and the
+release-candidate tag are not complete.

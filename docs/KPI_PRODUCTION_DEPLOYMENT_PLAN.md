@@ -2,12 +2,43 @@
 
 ## Status
 
-This is a preparation plan. It has not been executed. AWS host, project
-directory, service name, production database path, current production commit,
-deployment window, and responsible operators are not confirmed and must not be
-guessed.
+This is a preparation plan. It has not been executed. Read-only checks confirm
+the host, project directory, service, database path, and production commit.
+The deployment window and responsible operators remain unconfirmed and must
+not be guessed.
 
 Stage 11 decision: `NOT SAFE FOR PRODUCTION DEPLOYMENT`.
+
+## Confirmed Read-Only Values
+
+- Host: `ec2-user@femline.ca`
+- Project directory: `/home/ec2-user/iconic_portal`
+- Application service: `gunicorn.service`
+- Database: SQLite at `/home/ec2-user/iconic_portal/db.sqlite3`
+- Current production branch: `living-catalog-production-deployment`
+- Current production commit:
+  `1084fc99be3fade235ca0bfa73673a3a44b7ff3e`
+
+These values are evidence, not deployment approval.
+
+## Deployment Window Proposal
+
+No window is selected or activated.
+
+| Field | Proposed value |
+| --- | --- |
+| Date | TBD, requires approval |
+| Start time | TBD, requires approval |
+| Expected duration | NOT TESTED on production-sized sanitized data |
+| Expected downtime | NOT TESTED |
+| Deployment owner | Unassigned |
+| Database owner | Unassigned |
+| Test owner | Unassigned |
+| Rollback owner | Unassigned |
+| Monitoring owner | Unassigned |
+| CEO approval | Not recorded |
+| Team notification | Not prepared |
+| Rollback decision deadline | TBD after rehearsal timing |
 
 ## Required Inputs
 
@@ -122,3 +153,16 @@ counts.
 
 These timings do not estimate production downtime. A recent sanitized
 production-size rehearsal is still required.
+
+## Final Gate Closure Evidence
+
+- Full CRM suite: 969 of 969 passed.
+- KPI suite: 206 of 206 passed.
+- Fresh migration/rollback/reapply: 49.920s / 0.707s / 0.380s.
+- Populated development migration/rollback/reapply:
+  7.040s / 0.742s / 0.305s.
+- Production online backup/isolated restore: 294ms / 263ms.
+- Exact production commit and environment paths: confirmed read-only.
+- Human UAT, sanitized production-sized rehearsal, named owners, CEO approval,
+  security environment activation, monitoring alerts, and deployment window:
+  incomplete.

@@ -82,3 +82,21 @@ On copied development databases:
 - Local copied-development restore: `0.003094s`
 
 Production restore time is unknown until the sanitized production rehearsal.
+
+## Final Gate Backup Evidence
+
+The current 119,758,848-byte production SQLite database was backed up online
+to an isolated owner-only directory and restored to a separate file without
+altering the live database:
+
+- Backup time: `294ms`
+- Restore time: `263ms`
+- Backup and restore SHA-256: exact match
+- Integrity: `ok`
+- Foreign-key violations: `0`
+- Schema and table-count manifests: exact match
+
+This verifies the mechanism only. Production migration rollback time,
+application rollback time, off-host recovery, encryption, retention, owners,
+and recovery-time approval still require the sanitized production-sized
+rehearsal and operational signoff.

@@ -7,6 +7,14 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
+
+def _flag(name: str, default: bool = False) -> bool:
+    val = os.getenv(name)
+    if val is None:
+        return default
+    return val.strip().lower() in {"1", "true", "yes", "on"}
+
+
 # ======================
 # Core Django settings
 # ======================
@@ -40,6 +48,23 @@ CSRF_TRUSTED_ORIGINS = [
     "https://femline.ca",
     "https://www.femline.ca",
 ]
+_extra_csrf_origins = os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "")
+if _extra_csrf_origins:
+    CSRF_TRUSTED_ORIGINS.extend(
+        origin.strip() for origin in _extra_csrf_origins.split(",") if origin.strip()
+    )
+    CSRF_TRUSTED_ORIGINS = list(dict.fromkeys(CSRF_TRUSTED_ORIGINS))
+
+# Production transport controls are explicit so local requests retain their
+# current behavior. Stage 11 requires these values in the production environment.
+SECURE_SSL_REDIRECT = _flag("DJANGO_SECURE_SSL_REDIRECT")
+SESSION_COOKIE_SECURE = _flag("DJANGO_SESSION_COOKIE_SECURE")
+CSRF_COOKIE_SECURE = _flag("DJANGO_CSRF_COOKIE_SECURE")
+SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", "0"))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = _flag("DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS")
+SECURE_HSTS_PRELOAD = _flag("DJANGO_SECURE_HSTS_PRELOAD")
+if _flag("DJANGO_TRUST_X_FORWARDED_PROTO"):
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # ======================
 # Applications
@@ -194,13 +219,6 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
 # ======================
 # Marketing feature flags
 # ======================
-
-def _flag(name: str, default: bool = False) -> bool:
-    val = os.getenv(name)
-    if val is None:
-        return default
-    return val.strip().lower() in {"1", "true", "yes", "on"}
-
 
 MARKETING_ENABLED = _flag("MARKETING_ENABLED", default=DEBUG)
 MARKETING_SEO_ENABLED = _flag("MARKETING_SEO_ENABLED", default=False)
