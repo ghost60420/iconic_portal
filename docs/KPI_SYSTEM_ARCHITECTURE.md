@@ -2,17 +2,18 @@
 
 ## Status
 
-- Current stage: 3 - employee KPI role assignment foundation
-- Working branch: `feature/kpi-stage-3-employee-assignments`
-- Stage 3 base commit: `6e2460524d7ddb46f5f2ef359f3731d9043337fc`
+- Current stage: 4 - KPI calculation engine
+- Working branch: `feature/kpi-stage-4-calculation-engine`
+- Stage 4 base commit: `1e0b7713ea50e975d416a4fa8d65ddde1a6c7f83`
 - Baseline tag: `kpi-baseline-20260728`
 - Baseline commit: `a9c2881f195e6608205e096552f4ce030200e9bd`
 - Production and AWS were not accessed.
 
-Stage 2 added the versioned KPI template foundation. Stage 3 adds employee
+Stage 2 added the versioned KPI template foundation. Stage 3 added employee
 assignment and immutable assignment-history tables plus a transactional service
-layer. It does not add review records, scoring, bonus calculations, pages,
-routes, notifications, or seeded employee assignments.
+layer. Stage 4 adds a read-only, versioned calculation engine. It does not add
+review records, bonus calculations, pages, routes, notifications, or seeded
+employee assignments.
 
 ## Design Boundary
 
@@ -189,11 +190,41 @@ to `crm.0192` and reapplication. The protected-data signature remained
 `19ad00265555f261cf0711a0aac817114ac6e8e26b9fa5df96f792d32e643d13`.
 The full regression result is `797 of 797` tests passed.
 
+## Stage 4 Calculation Engine
+
+`crm.services.kpi_calculation_engine` is the single source of truth for KPI
+item, template, employee-role, and multi-role employee scores.
+
+The engine:
+
+- Uses `Decimal` arithmetic and returns immutable structured results
+- Supports percentage, count, currency, boolean, manual, duration, and decimal
+  measurements
+- Applies explicit higher-is-better, lower-is-better, or exact-target formulas
+- Requires template and employee weights to total exactly `100`
+- Reads aggregate status ranges from the active `KPISettings` version
+- Uses versioned item ranges for item-level statuses
+- Preserves calculated scores when Critical Red forces the final status to Red
+- Carries formula, engine, template, assignment, review-date, and range versions
+- Resolves historical assignments and immutable template versions by date
+- Rejects ambiguous historical template-version schedules
+- Performs no database writes
+
+The complete model-backed employee calculation is bounded to four queries for
+both one-role and three-role cases. Pure calculations use zero queries.
+Reusing one engine caches immutable template definitions and reduces a repeated
+calculation to two queries. The full Stage 4 regression result is `823 of 823`
+tests passed in `367.520s`.
+
+Stage 4 creates no migration or result table. The later review workflow must
+persist the engine's immutable `as_dict()` snapshot so approved history is
+never recalculated against a newer formula, assignment, template, or settings
+version.
+
 ## Deferred Stages
 
-- Stage 4: calculation engine
+- Stage 5: employee Performance UI using the Stage 4 engine
 - Later stage: seed and verify approved version 1 role templates
-- Later stage: employee Performance tab
 - Later stage: entry, evidence, comments, approval, locking, and unlock workflow
 - Later stage: separate KPI bonus review records and approval
 - Later stage: server authorization and audit-event integration
