@@ -34,6 +34,11 @@ from .models_kpi_reviews import (
     KPIReviewItemEntry,
     KPIReviewTransition,
 )
+from .models_kpi_bonus import (
+    KPIBonusCalculation,
+    KPIBonusRuleSet,
+    KPIBonusWeightProfile,
+)
 from .services.costing_currency import CurrencyConversionError, convert_currency
 
 class BDMonthlyTarget(models.Model):

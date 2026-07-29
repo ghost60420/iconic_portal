@@ -2,9 +2,9 @@
 
 ## Status
 
-- Current stage: 5 - Performance UI and review workflow
-- Working branch: `feature/kpi-stage-5-performance-ui`
-- Stage 5 base commit: `aa3354d35d1d76b463730e828513d235c8c8821c`
+- Current stage: 6 - Bonus and incentive engine
+- Working branch: `feature/kpi-stage-6-bonus-engine`
+- Stage 6 base commit: `197b50c5d18e4223d86ab75b0f8423cd6744906a`
 - Baseline tag: `kpi-baseline-20260728`
 - Baseline commit: `a9c2881f195e6608205e096552f4ce030200e9bd`
 - Production and AWS were not accessed.
@@ -13,8 +13,9 @@ Stage 2 added the versioned KPI template foundation. Stage 3 added employee
 assignment and immutable assignment-history tables plus a transactional service
 layer. Stage 4 added the read-only, versioned calculation engine. Stage 5 adds
 permission-controlled performance views, review records, workflow history, and
-immutable approval snapshots. It does not add bonus calculations, notifications,
-or seeded employee assignments.
+immutable approval snapshots. Stage 6 adds database-configured bonus evaluation
+and immutable calculation snapshots. It does not expose bonus pages, approve or
+pay bonuses, connect payroll, or seed company policies.
 
 ## Design Boundary
 
@@ -250,12 +251,38 @@ Migration `crm.0194_kpi_performance_reviews` creates only the three Stage 5
 tables, their indexes, and period/uniqueness constraints. It has no data
 operation and changes no existing table.
 
+## Stage 6 Bonus Engine
+
+`KPIBonusWeightProfile` versions individual, team, and company weights plus a
+free-form team scope. `KPIBonusRuleSet` versions score, attendance, Critical Red,
+employee-status, payout floor/cap, currency, effective-date, and approval
+requirements. Published versions are immutable.
+
+`crm.services.kpi_bonus` reads scores only from digest-verified Stage 5 approved
+snapshots. It never calls the Stage 4 engine or reads live KPI item values.
+Stage 3 immutable assignment-history versions supply the `bonus_eligible` flag
+that was not embedded in the Stage 5 definition snapshot. Eligible role scores
+are taken from the approved Stage 4 role result and normalized by their frozen
+role weights.
+
+Final calculations are stored separately in `KPIBonusCalculation`. Each review
+may have one immutable historical result containing the source snapshot IDs and
+digests, rule and weight versions, formula and engine versions, review date,
+employee, manager, department, configured team scope, component scores,
+eligibility reasons, and estimated capped/floored amount. Repeated creation
+returns the verified historical record instead of recalculating it.
+
+Migration `crm.0195_kpi_bonus_engine` creates only the three Stage 6 tables,
+their indexes, and configuration constraints. It has no seed, data operation,
+protected-table alteration, payment field, or payroll/commission relationship.
+
 ## Deferred Stages
 
 - Later stage: seed and verify approved version 1 role templates
-- Later stage: separate KPI bonus review records and approval
+- Stage 7: KPI dashboards and authorized reporting
+- Later stage: separate final bonus approval and payment workflow
 - Later stage: evidence file handling and authorized unlock workflow
-- Later stage: dashboard, reports, exports, and KPI notifications
+- Later stage: exports and KPI notifications
 
 No deferred model or workflow is represented by a placeholder table. Custom
 authorization codenames remain deferred; Stage 5 reuses current organization
