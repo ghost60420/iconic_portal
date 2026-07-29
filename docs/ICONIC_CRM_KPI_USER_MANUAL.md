@@ -293,6 +293,21 @@ separate approval, a verified backup, and a tested rollback.
 
 ## Screenshot Status
 
-No screenshots are included because browser control was unavailable during
-Stage 10 preparation. Human UAT must add redacted screenshots before deployment
-approval.
+Stage 11 recorded synthetic desktop and mobile screenshots outside Git at
+`/tmp/iconic_kpi_stage11_20260729/screenshots`. They verify automated layout
+and scope behavior but do not contain human acceptance. Named UAT testers must
+still record redacted screenshots, comments, role, device, and completion time
+before deployment approval.
+
+## 26. Release And Support
+
+The KPI platform must remain inactive until the approved template, status,
+bonus, intelligence, and notification policy versions are Published. Publishing
+policies, activating assignments, installing scheduler entries, enabling
+notifications, exposing bonus values, connecting payroll, and deploying are
+separate authorized actions.
+
+For support, record the user role, time, page, record identifier, policy and
+snapshot versions, expected result, actual result, and a redacted screenshot.
+Do not include credentials, private comments, full report rows, evidence files,
+or bonus values in normal logs or tickets.

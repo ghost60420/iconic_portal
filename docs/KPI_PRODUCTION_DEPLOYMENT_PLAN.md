@@ -7,6 +7,8 @@ directory, service name, production database path, current production commit,
 deployment window, and responsible operators are not confirmed and must not be
 guessed.
 
+Stage 11 decision: `NOT SAFE FOR PRODUCTION DEPLOYMENT`.
+
 ## Required Inputs
 
 Record all values before approval:
@@ -35,6 +37,10 @@ python3 manage.py migrate --plan
 
 Stop if the worktree is dirty, the commit/tag differs, the migration plan
 contains an unexpected operation, or the production commit is not recorded.
+Also stop when tracked database artifacts remain in the candidate tree, disk
+headroom is below the approved migration and backup requirement, deploy checks
+report unresolved security warnings, or health metadata and alert ownership
+are unconfigured.
 
 ## Backup
 
@@ -104,3 +110,15 @@ Stop and roll back for lost records, changed IDs, foreign-key violations,
 permission exposure, bonus exposure, unexpected notifications, broken
 protected workflows, failed health checks, or materially increased query
 counts.
+
+## Stage 11 Local Evidence
+
+- Fresh migration through `crm.0198`: 55.954s.
+- Copied-development migration `0191` through `0198`: 6.704s.
+- Protected count and primary-key digest mismatches: 0.
+- SQLite integrity: `ok`; foreign-key violations: 0.
+- Rollback `0198` to `0197`: 0.960s; reapply: 0.461s.
+- Exact-checksum copied-development restore: 0.003094s.
+
+These timings do not estimate production downtime. A recent sanitized
+production-size rehearsal is still required.

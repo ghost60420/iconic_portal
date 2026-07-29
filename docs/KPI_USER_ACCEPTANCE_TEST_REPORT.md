@@ -3,8 +3,13 @@
 ## Status
 
 Human UAT is `NOT TESTED`. Automated permission and workflow tests cannot
-replace named business-user acceptance. Browser control was unavailable in
-this execution session, so no screenshots were recorded.
+replace named business-user acceptance.
+
+Stage 11 completed an automated Playwright rehearsal with synthetic users on
+an isolated database. It is supporting evidence only, not human acceptance.
+Desktop scope passed for Employee, Manager, Director, HR, Accounts, CEO, and
+Super Admin. Mobile rendering passed for Employee, Manager, and CEO at
+390 x 844 with no document overflow.
 
 ## Test Data
 
@@ -23,16 +28,48 @@ Do not use real private notes, bonus values, or production credentials.
 
 ## Role Results
 
-| Role | Result | Required evidence |
-| --- | --- | --- |
-| Employee, one role | NOT TESTED | Own-only Performance, history, notification, protected link |
-| Employee, three roles | NOT TESTED | Correct roles, weights, snapshot, dashboard |
-| Manager | NOT TESTED | Assigned-team queue, save, submit, comments, no approval |
-| Director | NOT TESTED | Department scope, approve/reject/lock, no unrelated team |
-| HR | NOT TESTED | Approved employee scope, no bonus money |
-| Accounts | NOT TESTED | Existing finance access, no KPI policy/edit/bonus authority |
-| CEO | NOT TESTED | Full authorized dashboards, reports, policy workflow |
-| Super Admin | NOT TESTED | Full controlled access and audit visibility |
+| Role | Human result | Automated browser result | Required human evidence |
+| --- | --- | --- | --- |
+| Employee, one role | NOT TESTED | PASS | Own-only Performance, history, notification, protected link |
+| Employee, three roles | NOT TESTED | Automated assignment/regression tests only | Named user and browser evidence |
+| Manager | NOT TESTED | PASS | Assigned-team queue, save, submit, comments, no approval |
+| Director | NOT TESTED | PASS | Department scope, approve/reject/lock, no unrelated team |
+| HR | NOT TESTED | PASS | Approved employee scope, no bonus money |
+| Accounts | NOT TESTED | PASS | Existing finance access, no KPI policy/edit/bonus authority |
+| CEO | NOT TESTED | PASS | Full authorized dashboards, reports, policy workflow |
+| Super Admin | NOT TESTED | PASS | Full controlled access and audit visibility |
+
+## Automated Evidence
+
+The isolated Stage 11 lifecycle passed role assignment, Draft save, submit,
+review, rejection, correction, resubmission, approval, locking, immutable
+snapshot verification, bonus eligibility, CRM notification generation,
+dashboard and Intelligence loading, PDF/Excel/CSV/print exports, and assignment
+archival with history preserved.
+
+Employee and Accounts requests for unrelated records and executive exports
+returned `403`. Manager and Director unrelated-scope requests returned `403`.
+Authorized executive exports returned the expected content types.
+
+Redacted synthetic screenshots are stored outside the repository at
+`/tmp/iconic_kpi_stage11_20260729/screenshots`. No screenshot, synthetic
+database, password manifest, or private record was committed.
+
+## Human Evidence Record
+
+For each named tester record:
+
+| Field | Value |
+| --- | --- |
+| Tester | |
+| Role | |
+| Date and completion time | |
+| Browser and device | |
+| Approved UAT database | |
+| Result | NOT TESTED |
+| Comments | |
+| Redacted screenshot references | |
+| Defect references | |
 
 ## Workflow Script
 
@@ -67,3 +104,6 @@ Private employee values must be redacted from shared evidence.
 Every role and workflow must pass without a Critical or High defect. Any
 permission exposure, historical mutation, bonus exposure, or protected-module
 regression blocks deployment.
+
+Human UAT remains a release blocker. Synthetic automation cannot change a
+Human result from `NOT TESTED` to PASS.

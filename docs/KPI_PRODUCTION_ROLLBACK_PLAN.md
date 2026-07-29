@@ -73,10 +73,12 @@ On copied development databases:
 - Reapply `0198`: PASS
 - Integrity check: `ok`
 - Foreign-key check: PASS
-- Restore seeded backup: PASS
+- Protected count and primary-key digest mismatches: `0`
+- Restore copied-development backup: PASS
 - Restored checksum:
-  `6e84198d48baf41a67fcd79eca0018fc20bdd5db5ecb9fbad406344178998bb6`
-- Restored approval rows: `20`
-- Rollback and reapply duration: `1.99s`
+  `ac0c3e3eda99cce10d69a475fe87f71741a835bdd70d96bf6b8ceec2a7669073`
+- Stage 11 rollback: `0.960s`
+- Stage 11 reapply: `0.461s`
+- Local copied-development restore: `0.003094s`
 
 Production restore time is unknown until the sanitized production rehearsal.
