@@ -556,6 +556,7 @@
   {% can_manage_role_assignments request.user as can_manage_roles_access %}
   {% has_sales_profile request.user as has_sales_profile_access %}
   {% can_view_team_dashboard request.user as can_view_team_dashboard_access %}
+  {% can_open_performance_reviews request.user as can_open_performance_reviews_access %}
 
   {% if request.user.is_authenticated %}
 
@@ -618,6 +619,8 @@
     {% url 'employee_list' as employee_list_url %}
     {% url 'salesperson_profile' as salesperson_profile_url %}
     {% url 'team_performance' as team_performance_url %}
+    {% url 'employee_performance' request.user.pk as my_performance_url %}
+    {% url 'kpi_review_list' as kpi_review_list_url %}
 
     {% url 'library_home' as library_home_url %}
     {% url 'products_list' as products_url %}
@@ -781,7 +784,7 @@
           </a>
           <div class="crm-dropdown-menu" role="menu">
             <div class="crm-dd-title">People, Reports & Settings</div>
-            <div class="crm-nested-submenu"><button type="button" class="crm-submenu-toggle" aria-expanded="false"><span>People</span><span class="crm-submenu-caret">›</span></button><div class="crm-submenu-panel" role="menu">{% if can_manage_people_access and employee_list_url %}<a class="crm-dd-item" href="{{ employee_list_url }}">Employees</a>{% endif %}{% if can_manage_roles_access and role_management_url %}<a class="crm-dd-item" href="{{ role_management_url }}">Roles</a>{% endif %}{% if notification_list_url %}<a class="crm-dd-item" href="{{ notification_list_url }}">Notifications</a>{% endif %}{% if can_ceo_tools and crm_audit_log_url %}<a class="crm-dd-item" href="{{ crm_audit_log_url }}">Audit Log</a>{% endif %}</div></div>
+            <div class="crm-nested-submenu"><button type="button" class="crm-submenu-toggle" aria-expanded="false"><span>People</span><span class="crm-submenu-caret">›</span></button><div class="crm-submenu-panel" role="menu">{% if my_performance_url %}<a class="crm-dd-item" href="{{ my_performance_url }}">My Performance</a>{% endif %}{% if can_open_performance_reviews_access and kpi_review_list_url %}<a class="crm-dd-item" href="{{ kpi_review_list_url }}">Performance Reviews</a>{% endif %}{% if can_manage_people_access and employee_list_url %}<a class="crm-dd-item" href="{{ employee_list_url }}">Employees</a>{% endif %}{% if can_manage_roles_access and role_management_url %}<a class="crm-dd-item" href="{{ role_management_url }}">Roles</a>{% endif %}{% if notification_list_url %}<a class="crm-dd-item" href="{{ notification_list_url }}">Notifications</a>{% endif %}{% if can_ceo_tools and crm_audit_log_url %}<a class="crm-dd-item" href="{{ crm_audit_log_url }}">Audit Log</a>{% endif %}</div></div>
             {% if can_ceo_tools or can_acc_ca or can_acc_bd %}<div class="crm-nested-submenu"><button type="button" class="crm-submenu-toggle" aria-expanded="false"><span>Reports</span><span class="crm-submenu-caret">›</span></button><div class="crm-submenu-panel" role="menu">{% if kpi_scorecard_url %}<a class="crm-dd-item" href="{{ kpi_scorecard_url }}">KPI</a>{% endif %}{% if profit_loss_url %}<a class="crm-dd-item" href="{{ profit_loss_url }}">Profit</a>{% endif %}{% if can_ceo_tools and crm_audit_log_url %}<a class="crm-dd-item" href="{{ crm_audit_log_url }}">Activity</a>{% endif %}</div></div>{% endif %}
             <div class="crm-nested-submenu"><button type="button" class="crm-submenu-toggle" aria-expanded="false"><span>Settings</span><span class="crm-submenu-caret">›</span></button><div class="crm-submenu-panel" role="menu">{% if library_home_url %}<a class="crm-dd-item" href="{{ library_home_url }}">Lists</a>{% endif %}{% if access_url %}<a class="crm-dd-item" href="{{ access_url }}">Users</a>{% endif %}{% if can_manage_roles_access and role_management_url %}<a class="crm-dd-item" href="{{ role_management_url }}">Permissions</a>{% endif %}{% if request.user.is_superuser and admin_url %}<a class="crm-dd-item" href="{{ admin_url }}">System Admin</a>{% endif %}{% if world_tools_url %}<a class="crm-dd-item" href="{{ world_tools_url }}">World Tools</a>{% endif %}</div></div>
             {% if can_manage_roles_access %}<a class="crm-dd-item" href="{% url 'crm_settings' %}">CRM Settings</a>{% endif %}

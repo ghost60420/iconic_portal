@@ -12,6 +12,7 @@ from crm.services.employee_profiles import (
     employee_display_name,
 )
 from crm.services.employee_identity import resolve_lead_owner
+from crm.services.kpi_review_permissions import can_open_kpi_review_queue
 from crm.services.operations_permissions import ROLE_SALES, has_operations_role
 
 
@@ -58,6 +59,11 @@ def has_sales_profile(user):
 @register.simple_tag
 def can_view_team_dashboard(user):
     return can_view_team_performance(user)
+
+
+@register.simple_tag
+def can_open_performance_reviews(user):
+    return can_open_kpi_review_queue(user)
 
 
 @register.filter(needs_autoescape=True)

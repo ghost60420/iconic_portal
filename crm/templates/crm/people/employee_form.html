@@ -1,12 +1,17 @@
 {% extends "crm/base.html" %}
 {% load static crm_people crm_extras %}
 {% block content %}
+{% can_open_performance_reviews request.user as can_open_performance_reviews %}
 <link rel="stylesheet" href="{% static 'crm/people.css' %}">
 {% include "crm/control_density_assets.html" %}
 <main class="people-shell">
   <header class="people-head"><div class="people-identity">{% if not creating %}{% if profile.profile_photo %}<img class="people-avatar" src="{{ profile.profile_photo.url }}" alt="">{% else %}<span class="people-avatar">{{ profile.initials }}</span>{% endif %}{% endif %}<div><p class="people-eyebrow">People & Access</p><h1 class="people-title">{% if creating %}New Employee{% else %}{{ profile.public_name }}{% endif %}</h1>{% if not creating %}<p class="people-employee-number">{{ profile.employee_id }}{% if profile.is_archived %} · Archived{% endif %}</p>{% endif %}<p class="people-subtitle">Positions describe company structure. Permission roles control CRM access and can be combined.</p></div></div><div class="people-actions"><a class="people-btn" href="{% url 'employee_list' %}">Employees</a>{% if target_user.is_active and target_is_sales and not profile.is_archived %}<a class="people-btn" href="{% url 'salesperson_profile_user' target_user.pk %}">Sales Profile</a>{% endif %}</div></header>
 
   {% if not creating %}
+    <nav class="people-profile-tabs" aria-label="Employee profile sections">
+      <a class="people-profile-tab is-active" href="{% url 'employee_edit' target_user.pk %}" aria-current="page">Profile</a>
+      {% if can_open_performance_reviews %}<a class="people-profile-tab" href="{% url 'employee_performance' target_user.pk %}">Performance</a>{% endif %}
+    </nav>
     <section class="people-card employee-profile-card">
       <div class="employee-profile-card__identity">{% if profile.profile_photo %}<img class="people-avatar" src="{{ profile.profile_photo.url }}" alt="">{% else %}<span class="people-avatar">{{ profile.initials }}</span>{% endif %}<div><strong>{{ profile.public_name }}</strong><span>{{ profile.employee_id }} · {{ profile.position_name }}</span><small>{{ profile.department_name }}</small></div></div>
       <dl class="employee-profile-facts">

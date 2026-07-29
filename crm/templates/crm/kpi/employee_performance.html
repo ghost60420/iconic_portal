@@ -1,0 +1,131 @@
+{% extends "crm/base.html" %}
+{% load static crm_people %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'crm/people.css' %}">
+<link rel="stylesheet" href="{% static 'crm/kpi_performance.css' %}">
+{% include "crm/control_density_assets.html" %}
+<main class="people-shell kpi-shell">
+  <header class="people-head">
+    <div class="people-identity">
+      {% if employee.profile_photo %}<img class="people-avatar" src="{{ employee.profile_photo.url }}" alt="">{% else %}<span class="people-avatar">{{ employee.initials }}</span>{% endif %}
+      <div>
+        <p class="people-eyebrow">Employee Performance</p>
+        <h1 class="people-title">{{ employee.public_name }}</h1>
+        <p class="people-employee-number">{{ employee.employee_id }} · {{ employee.position_name|default:"Position not assigned" }}</p>
+      </div>
+    </div>
+    <div class="people-actions">
+      {% if can_open_review_queue %}<a class="people-btn" href="{% url 'kpi_review_list' %}">Review Queue</a>{% endif %}
+      {% if can_open_profile %}<a class="people-btn" href="{% url 'employee_list' %}">Employees</a>{% endif %}
+    </div>
+  </header>
+
+  <nav class="people-profile-tabs" aria-label="Employee profile sections">
+    {% if can_open_profile %}<a class="people-profile-tab" href="{% url 'employee_edit' employee.user_id %}">Profile</a>{% endif %}
+    <a class="people-profile-tab is-active" href="{% url 'employee_performance' employee.user_id %}" aria-current="page">Performance</a>
+  </nav>
+
+  <section class="kpi-metric-grid" aria-label="Current KPI result">
+    <div class="kpi-metric">
+      <span>Current KPI Score</span>
+      <strong>{% if latest_result %}{{ latest_result.score|floatformat:2 }}{% else %}-{% endif %}</strong>
+    </div>
+    <div class="kpi-metric">
+      <span>Current Status</span>
+      {% if latest_result.status %}<strong class="kpi-status kpi-status--{{ latest_result.status }}">{{ latest_result.status|title }}</strong>{% else %}<strong>Not reviewed</strong>{% endif %}
+    </div>
+    <div class="kpi-metric">
+      <span>Weighted Score</span>
+      <strong>{% if latest_result %}{{ latest_result.weighted_score|floatformat:2 }}{% else %}-{% endif %}</strong>
+    </div>
+    <div class="kpi-metric">
+      <span>Review Status</span>
+      <strong>{% if latest_review %}{{ latest_review.get_status_display }}{% else %}Not started{% endif %}</strong>
+    </div>
+  </section>
+
+  <section class="kpi-grid kpi-grid--two">
+    <div class="kpi-panel">
+      <div class="kpi-panel-head"><h2>Current Assignments</h2><span>{{ current_assignments|length }} role{{ current_assignments|length|pluralize }}</span></div>
+      <div class="kpi-table-wrap">
+        <table class="kpi-table">
+          <thead><tr><th>Role</th><th>Weight</th><th>Manager</th><th>Version</th></tr></thead>
+          <tbody>
+            {% for assignment in current_assignments %}
+              <tr>
+                <td data-label="Role">{{ assignment.kpi_template.name }}</td>
+                <td data-label="Weight">{{ assignment.role_weight|floatformat:2 }}%</td>
+                <td data-label="Manager">{% if assignment.manager %}{{ assignment.manager|employee_name }}{% else %}None{% endif %}</td>
+                <td data-label="Version">{{ assignment.assignment_version }}</td>
+              </tr>
+            {% empty %}<tr><td colspan="4" class="kpi-empty">No current KPI roles.</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="kpi-panel">
+      <div class="kpi-panel-head"><h2>Latest Review</h2>{% if latest_completed %}<a href="{% url 'kpi_review_detail' latest_completed.pk %}">Open</a>{% endif %}</div>
+      <dl class="kpi-facts">
+        <div><dt>Period</dt><dd>{% if latest_completed %}{{ latest_completed.get_period_type_display }} · {{ latest_completed.period_start|date:"M j, Y" }} to {{ latest_completed.period_end|date:"M j, Y" }}{% else %}Not available{% endif %}</dd></div>
+        <div><dt>Last Completed</dt><dd>{% if latest_completed %}{{ latest_completed.approved_at|date:"M j, Y H:i" }}{% else %}Not available{% endif %}</dd></div>
+        <div><dt>Assigned Manager</dt><dd>{% if assigned_manager %}{{ assigned_manager|employee_name }}{% elif current_assignments %}Multiple or unassigned{% else %}Not assigned{% endif %}</dd></div>
+        <div><dt>Calculation Version</dt><dd>{{ latest_result.calculation_version|default:"Not available" }}</dd></div>
+        <div><dt>Formula Version</dt><dd>{{ latest_result.formula_version|default:"Not available" }}</dd></div>
+        <div><dt>Review Date</dt><dd>{{ latest_result.review_date|default:"Not available" }}</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="kpi-panel">
+    <div class="kpi-panel-head"><h2>Role Breakdown</h2><span>Stored approved result</span></div>
+    <div class="kpi-table-wrap">
+      <table class="kpi-table">
+        <thead><tr><th>Role</th><th>Score</th><th>Role Weight</th><th>Weighted Score</th><th>Status</th><th>Template</th><th>Assignment</th></tr></thead>
+        <tbody>
+          {% for role in latest_roles %}
+            <tr>
+              <td data-label="Role">{{ role.template_name }}</td>
+              <td data-label="Score">{{ role.score|floatformat:2 }}</td>
+              <td data-label="Role Weight">{{ role.weight|floatformat:2 }}%</td>
+              <td data-label="Weighted Score">{{ role.weighted_score|floatformat:2 }}</td>
+              <td data-label="Status"><span class="kpi-status kpi-status--{{ role.status }}">{{ role.status|title }}</span></td>
+              <td data-label="Template">v{{ role.template_version }}</td>
+              <td data-label="Assignment">v{{ role.assignment_version }}</td>
+            </tr>
+          {% empty %}<tr><td colspan="7" class="kpi-empty">No approved role results.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="kpi-panel">
+    <div class="kpi-panel-head"><h2>Review History</h2><span>Completed reviews</span></div>
+    <div class="kpi-table-wrap">
+      <table class="kpi-table">
+        <thead><tr><th>Review Date</th><th>Period</th><th>Manager</th><th>Score</th><th>Status</th><th>Approval</th><th></th></tr></thead>
+        <tbody>
+          {% for review in history_page %}
+            <tr>
+              <td data-label="Review Date">{{ review.review_date|date:"M j, Y" }}</td>
+              <td data-label="Period">{{ review.get_period_type_display }}</td>
+              <td data-label="Manager">{% if review.manager %}{{ review.manager|employee_name }}{% else %}None{% endif %}</td>
+              <td data-label="Score">{{ review.result_snapshot.score|floatformat:2 }}</td>
+              <td data-label="Status"><span class="kpi-status kpi-status--{{ review.result_snapshot.status }}">{{ review.result_snapshot.status|title }}</span></td>
+              <td data-label="Approval">{{ review.get_status_display }}</td>
+              <td data-label="Action"><a class="kpi-link" href="{% url 'kpi_review_detail' review.pk %}">View</a></td>
+            </tr>
+          {% empty %}<tr><td colspan="7" class="kpi-empty">No completed reviews.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if history_page.has_previous or history_page.has_next %}
+      <nav class="people-pagination" aria-label="Performance history pages">
+        {% if history_page.has_previous %}<a class="people-btn" href="?page={{ history_page.previous_page_number }}">Previous</a>{% endif %}
+        <span>Page {{ history_page.number }}</span>
+        {% if history_page.has_next %}<a class="people-btn" href="?page={{ history_page.next_page_number }}">Next</a>{% endif %}
+      </nav>
+    {% endif %}
+  </section>
+</main>
+{% endblock %}

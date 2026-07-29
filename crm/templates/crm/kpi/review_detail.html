@@ -1,0 +1,148 @@
+{% extends "crm/base.html" %}
+{% load static crm_people %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'crm/people.css' %}">
+<link rel="stylesheet" href="{% static 'crm/kpi_performance.css' %}">
+{% include "crm/control_density_assets.html" %}
+<main class="people-shell kpi-shell">
+  <header class="people-head">
+    <div>
+      <p class="people-eyebrow">{{ review.get_period_type_display }} Performance Review</p>
+      <h1 class="people-title">{{ review.employee.public_name }}</h1>
+      <p class="people-subtitle">{{ review.period_start|date:"M j, Y" }} to {{ review.period_end|date:"M j, Y" }} · Review date {{ review.review_date|date:"M j, Y" }}</p>
+    </div>
+    <div class="people-actions">
+      <span class="kpi-workflow kpi-workflow--{{ review.status }}">{{ review.get_status_display }}</span>
+      <a class="people-btn" href="{% url 'employee_performance' review.employee.user_id %}">Performance</a>
+      {% if can_manage_review or can_approve_review %}<a class="people-btn" href="{% url 'kpi_review_list' %}">Review Queue</a>{% endif %}
+    </div>
+  </header>
+
+  <section class="kpi-metric-grid">
+    <div class="kpi-metric"><span>Overall Score</span><strong>{% if result %}{{ result.score|floatformat:2 }}{% else %}-{% endif %}</strong></div>
+    <div class="kpi-metric"><span>KPI Status</span>{% if result.status %}<strong class="kpi-status kpi-status--{{ result.status }}">{{ result.status|title }}</strong>{% else %}<strong>Pending</strong>{% endif %}</div>
+    <div class="kpi-metric"><span>Manager</span><strong class="kpi-metric-text">{% if review.manager %}{{ review.manager|employee_name }}{% else %}Not assigned{% endif %}</strong></div>
+    <div class="kpi-metric"><span>Formula Version</span><strong>{{ result.formula_version|default:"-" }}</strong></div>
+  </section>
+
+  {% if entry_form %}
+    <form method="post" action="{% url 'kpi_review_save' review.pk %}">
+      {% csrf_token %}
+      <section class="kpi-panel">
+        <div class="kpi-panel-head"><h2>KPI Results</h2><span>Draft</span></div>
+        <div class="kpi-table-wrap">
+          <table class="kpi-table kpi-entry-table">
+            <thead><tr><th>Role / KPI</th><th>Target</th><th>Weight</th><th>Actual</th><th>Critical Red</th><th>Comment</th></tr></thead>
+            <tbody>
+              {% for row in entry_form.entry_rows %}
+                <tr>
+                  <td data-label="Role / KPI"><strong>{{ row.item.name }}</strong><small>{{ row.role.template_name }} · {{ row.item.measurement.measurement_type|title }}</small></td>
+                  <td data-label="Target">{{ row.item.measurement.target|default:"Manual score" }}</td>
+                  <td data-label="Weight">{{ row.item.weight|floatformat:2 }}%</td>
+                  <td data-label="Actual">{{ row.actual }}{% for error in row.actual.errors %}<small class="kpi-error">{{ error }}</small>{% endfor %}</td>
+                  <td data-label="Critical Red">
+                    <label class="kpi-check">{{ row.critical }}<span>Critical</span></label>
+                    {{ row.critical_trigger }}{{ row.critical_reason }}
+                    {% for error in row.critical_trigger.errors %}<small class="kpi-error">{{ error }}</small>{% endfor %}
+                    {% for error in row.critical_reason.errors %}<small class="kpi-error">{{ error }}</small>{% endfor %}
+                  </td>
+                  <td data-label="Comment">{{ row.comment }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section class="kpi-panel kpi-comment-panel">
+        <label for="{{ entry_form.manager_comment.id_for_label }}">Manager Comment</label>
+        {{ entry_form.manager_comment }}
+        <div class="people-actions">
+          <button class="people-btn" name="intent" value="save" type="submit">Save Draft</button>
+          <button class="people-btn people-btn--gold" name="intent" value="submit" type="submit">Submit Review</button>
+        </div>
+      </section>
+    </form>
+  {% else %}
+    <section class="kpi-panel">
+      <div class="kpi-panel-head"><h2>KPI Values</h2><span>Read only</span></div>
+      <div class="kpi-table-wrap">
+        <table class="kpi-table">
+          <thead><tr><th>Role</th><th>KPI</th><th>Actual</th><th>Critical Red</th><th>Comment</th></tr></thead>
+          <tbody>
+            {% for entry in display_entries %}
+              <tr>
+                <td data-label="Role">{{ entry.role_name }}</td>
+                <td data-label="KPI">{{ entry.kpi_name }}</td>
+                <td data-label="Actual">{{ entry.actual_value|default_if_none:"-"|floatformat:2 }}</td>
+                <td data-label="Critical Red">{% if entry.critical_red %}<span class="kpi-status kpi-status--red">Yes</span><small>{{ entry.critical_trigger }} · {{ entry.critical_reason }}</small>{% else %}No{% endif %}</td>
+                <td data-label="Comment">{{ entry.item_comment|default:"-" }}</td>
+              </tr>
+            {% empty %}<tr><td colspan="5" class="kpi-empty">No KPI entries.</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% endif %}
+
+  {% if role_results %}
+    <section class="kpi-panel">
+      <div class="kpi-panel-head"><h2>Role Results</h2><span>Calculation engine result</span></div>
+      <div class="kpi-table-wrap">
+        <table class="kpi-table">
+          <thead><tr><th>Role</th><th>Score</th><th>Weight</th><th>Weighted Score</th><th>Status</th><th>Template</th><th>Assignment</th></tr></thead>
+          <tbody>
+            {% for role in role_results %}
+              <tr>
+                <td data-label="Role">{{ role.template_name }}</td>
+                <td data-label="Score">{{ role.score|floatformat:2 }}</td>
+                <td data-label="Weight">{{ role.weight|floatformat:2 }}%</td>
+                <td data-label="Weighted Score">{{ role.weighted_score|floatformat:2 }}</td>
+                <td data-label="Status"><span class="kpi-status kpi-status--{{ role.status }}">{{ role.status|title }}</span></td>
+                <td data-label="Template">v{{ role.template_version }}</td>
+                <td data-label="Assignment">v{{ role.assignment_version }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% endif %}
+
+  <section class="kpi-grid kpi-grid--two">
+    <div class="kpi-panel">
+      <div class="kpi-panel-head"><h2>Review Details</h2>{% if snapshot_valid is not None %}<span class="{% if snapshot_valid %}kpi-integrity--valid{% else %}kpi-integrity--invalid{% endif %}">{% if snapshot_valid %}Snapshot verified{% else %}Snapshot mismatch{% endif %}</span>{% endif %}</div>
+      <dl class="kpi-facts">
+        <div><dt>Template Version</dt><dd>{% for role in review.definition_snapshot.roles %}{{ role.template_name }} v{{ role.template_version }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</dd></div>
+        <div><dt>Assignment Version</dt><dd>{% for role in review.definition_snapshot.roles %}{{ role.template_name }} v{{ role.assignment_version }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</dd></div>
+        <div><dt>Calculation Version</dt><dd>{{ result.calculation_version|default:"Not calculated" }}</dd></div>
+        <div><dt>Critical Red</dt><dd>{% if result.critical_red %}Yes{% else %}No{% endif %}</dd></div>
+        <div><dt>Manager Comment</dt><dd>{{ review.manager_comment|default:"None" }}</dd></div>
+        <div><dt>Approval Comment</dt><dd>{{ review.approval_comment|default:"None" }}</dd></div>
+      </dl>
+    </div>
+
+    <div class="kpi-panel">
+      <div class="kpi-panel-head"><h2>Approval History</h2><span>{{ review.transitions.all|length }} events</span></div>
+      <ol class="kpi-timeline">
+        {% for transition in review.transitions.all %}
+          <li>
+            <span class="kpi-timeline-dot"></span>
+            <div><strong>{{ transition.get_action_display }}</strong><small>{{ transition.created_at|date:"M j, Y H:i" }}{% if transition.actor %} · {{ transition.actor|employee_name }}{% endif %}</small>{% if transition.comment %}<p>{{ transition.comment }}</p>{% endif %}</div>
+          </li>
+        {% empty %}<li class="kpi-empty">No approval history.</li>{% endfor %}
+      </ol>
+    </div>
+  </section>
+
+  {% if review.status == "submitted" and can_approve_review %}
+    <section class="kpi-decision-bar"><form method="post" action="{% url 'kpi_review_start' review.pk %}">{% csrf_token %}<button class="people-btn people-btn--gold" type="submit">Start Review</button></form></section>
+  {% elif review.status == "under_review" and can_approve_review %}
+    <section class="kpi-grid kpi-grid--two">
+      <form class="kpi-panel kpi-comment-panel" method="post" action="{% url 'kpi_review_approve' review.pk %}">{% csrf_token %}<label for="{{ decision_form.comment.id_for_label }}">Approval Comment</label>{{ decision_form.comment }}<button class="people-btn people-btn--gold" type="submit">Approve Review</button></form>
+      <form class="kpi-panel kpi-comment-panel" method="post" action="{% url 'kpi_review_reject' review.pk %}">{% csrf_token %}<label for="{{ reject_form.comment.id_for_label }}">Rejection Comment</label>{{ reject_form.comment }}<button class="people-btn people-btn--danger" type="submit">Reject Review</button></form>
+    </section>
+  {% elif review.status == "approved" and can_lock_review %}
+    <section class="kpi-decision-bar"><form method="post" action="{% url 'kpi_review_lock' review.pk %}">{% csrf_token %}<button class="people-btn" type="submit">Lock Review</button></form></section>
+  {% endif %}
+</main>
+{% endblock %}

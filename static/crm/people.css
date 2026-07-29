@@ -1,4 +1,5 @@
 .people-shell{max-width:1240px;margin:20px auto 48px;padding:0 16px;color:#f8fafc}
+.people-profile-tabs{display:flex;gap:4px;border-bottom:1px solid #2b2e34;margin:0 0 16px}.people-profile-tab{padding:10px 14px;color:#aeb6c4;font-size:13px;font-weight:850;text-decoration:none;border-bottom:2px solid transparent}.people-profile-tab:hover,.people-profile-tab.is-active{color:#f8fafc;border-bottom-color:#d6b45a}
 .people-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-end;margin-bottom:18px}
 .people-eyebrow{margin:0 0 5px;color:#d6b45a;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.08em}
 .people-title{margin:0;font-size:30px;line-height:1.15}.people-subtitle{margin:7px 0 0;color:#aeb6c4;max-width:720px}

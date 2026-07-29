@@ -2,18 +2,19 @@
 
 ## Status
 
-- Current stage: 4 - KPI calculation engine
-- Working branch: `feature/kpi-stage-4-calculation-engine`
-- Stage 4 base commit: `1e0b7713ea50e975d416a4fa8d65ddde1a6c7f83`
+- Current stage: 5 - Performance UI and review workflow
+- Working branch: `feature/kpi-stage-5-performance-ui`
+- Stage 5 base commit: `aa3354d35d1d76b463730e828513d235c8c8821c`
 - Baseline tag: `kpi-baseline-20260728`
 - Baseline commit: `a9c2881f195e6608205e096552f4ce030200e9bd`
 - Production and AWS were not accessed.
 
 Stage 2 added the versioned KPI template foundation. Stage 3 added employee
 assignment and immutable assignment-history tables plus a transactional service
-layer. Stage 4 adds a read-only, versioned calculation engine. It does not add
-review records, bonus calculations, pages, routes, notifications, or seeded
-employee assignments.
+layer. Stage 4 added the read-only, versioned calculation engine. Stage 5 adds
+permission-controlled performance views, review records, workflow history, and
+immutable approval snapshots. It does not add bonus calculations, notifications,
+or seeded employee assignments.
 
 ## Design Boundary
 
@@ -221,15 +222,41 @@ persist the engine's immutable `as_dict()` snapshot so approved history is
 never recalculated against a newer formula, assignment, template, or settings
 version.
 
+## Stage 5 Performance Reviews
+
+`KPIReview` owns a monthly, quarterly, or annual employee review and its
+workflow state. `KPIReviewItemEntry` stores manager-entered actual values and
+Critical Red evidence. `KPIReviewTransition` is an append-only approval history
+created only by the review service.
+
+The review service freezes the effective Stage 3 assignments, effective Stage
+2 template versions, item definitions, weights, status ranges, and manager at
+creation. Draft calculation and approval call the Stage 4
+`KPICalculationEngine`; views contain no score formula. Approval stores the
+engine result, frozen definition, entered values, comments, Critical Red data,
+and approver identity in one digest-protected JSON snapshot. Approved and
+locked records are read only, and historical pages render the stored snapshot
+without recalculation.
+
+Permission checks are performed in both views and workflow services:
+
+- Employee: own approved or locked history only
+- Manager: assigned employees and Draft submission, never approval
+- Director: own department, approval and locking, never self-approval
+- HR: read-only access to all reviews
+- CEO and Super Admin: all non-self workflow actions
+
+Migration `crm.0194_kpi_performance_reviews` creates only the three Stage 5
+tables, their indexes, and period/uniqueness constraints. It has no data
+operation and changes no existing table.
+
 ## Deferred Stages
 
-- Stage 5: employee Performance UI using the Stage 4 engine
 - Later stage: seed and verify approved version 1 role templates
-- Later stage: entry, evidence, comments, approval, locking, and unlock workflow
 - Later stage: separate KPI bonus review records and approval
-- Later stage: server authorization and audit-event integration
+- Later stage: evidence file handling and authorized unlock workflow
 - Later stage: dashboard, reports, exports, and KPI notifications
 
 No deferred model or workflow is represented by a placeholder table. Custom
-authorization codenames and all KPI permission checks remain deferred, so
-Stages 2 and 3 do not change the current authorization model.
+authorization codenames remain deferred; Stage 5 reuses current organization
+roles without changing the authorization schema or middleware.

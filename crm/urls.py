@@ -19,6 +19,7 @@ from . import views_integrity as integrity
 from . import views_order_lifecycle as lifecycle
 from . import views_operations as operations
 from . import views_people as people
+from . import views_kpi_reviews as kpi_reviews
 from . import views_platform as platform
 
 try:
@@ -108,12 +109,57 @@ urlpatterns = [
     path("employees/", people.employee_list, name="employee_list"),
     path("employees/new/", people.employee_create, name="employee_create"),
     path("employees/<int:user_id>/edit/", people.employee_edit, name="employee_edit"),
+    path(
+        "employees/<int:user_id>/performance/",
+        kpi_reviews.employee_performance,
+        name="employee_performance",
+    ),
     path("employees/<int:user_id>/deactivate/", people.employee_deactivate, name="employee_deactivate"),
     path("employees/<int:user_id>/archive/", people.employee_archive, name="employee_archive"),
     path("employees/<int:user_id>/restore/", people.employee_restore, name="employee_restore"),
     path("sales/profile/", people.salesperson_profile, name="salesperson_profile"),
     path("sales/profile/<int:user_id>/", people.salesperson_profile, name="salesperson_profile_user"),
     path("sales/team/", people.team_performance, name="team_performance"),
+    path(
+        "performance/reviews/",
+        kpi_reviews.kpi_review_list,
+        name="kpi_review_list",
+    ),
+    path(
+        "performance/reviews/<int:pk>/",
+        kpi_reviews.kpi_review_detail,
+        name="kpi_review_detail",
+    ),
+    path(
+        "performance/reviews/<int:pk>/save/",
+        kpi_reviews.kpi_review_save,
+        name="kpi_review_save",
+    ),
+    path(
+        "performance/reviews/<int:pk>/submit/",
+        kpi_reviews.kpi_review_submit,
+        name="kpi_review_submit",
+    ),
+    path(
+        "performance/reviews/<int:pk>/start/",
+        kpi_reviews.kpi_review_start,
+        name="kpi_review_start",
+    ),
+    path(
+        "performance/reviews/<int:pk>/approve/",
+        kpi_reviews.kpi_review_approve,
+        name="kpi_review_approve",
+    ),
+    path(
+        "performance/reviews/<int:pk>/reject/",
+        kpi_reviews.kpi_review_reject,
+        name="kpi_review_reject",
+    ),
+    path(
+        "performance/reviews/<int:pk>/lock/",
+        kpi_reviews.kpi_review_lock,
+        name="kpi_review_lock",
+    ),
     path("chatter/mentions/", people.mention_suggestions_view, name="mention_suggestions"),
     path("dashboard/preferences/", platform.dashboard_preferences, name="dashboard_preferences"),
     path("filters/save/", platform.saved_filter_save, name="saved_filter_save"),

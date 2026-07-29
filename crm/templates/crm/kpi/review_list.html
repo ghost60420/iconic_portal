@@ -1,0 +1,64 @@
+{% extends "crm/base.html" %}
+{% load static crm_people %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'crm/people.css' %}">
+<link rel="stylesheet" href="{% static 'crm/kpi_performance.css' %}">
+{% include "crm/control_density_assets.html" %}
+<main class="people-shell kpi-shell">
+  <header class="people-head">
+    <div><p class="people-eyebrow">Employee Performance</p><h1 class="people-title">Performance Reviews</h1><p class="people-subtitle">Assigned reviews, approval state, and completed results.</p></div>
+  </header>
+
+  {% if show_create_form %}
+    <section class="kpi-panel">
+      <div class="kpi-panel-head"><h2>Open Review</h2></div>
+      <form class="kpi-create-form" method="post">{% csrf_token %}
+        {% for field in create_form.visible_fields %}
+          <label><span>{{ field.label }}</span>{{ field }}{% for error in field.errors %}<small class="kpi-error">{{ error }}</small>{% endfor %}</label>
+        {% endfor %}
+        {% for error in create_form.non_field_errors %}<div class="kpi-error kpi-create-error">{{ error }}</div>{% endfor %}
+        <button class="people-btn people-btn--gold" type="submit">Open Draft</button>
+      </form>
+    </section>
+  {% endif %}
+
+  <section class="kpi-panel">
+    <div class="kpi-panel-head">
+      <h2>Review Queue</h2>
+      <form class="kpi-status-filter" method="get">
+        <label for="kpi-status-filter">Status</label>
+        <select class="kpi-input" id="kpi-status-filter" name="status" onchange="this.form.submit()">
+          <option value="">All statuses</option>
+          {% for value, label in status_choices %}<option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </form>
+    </div>
+    <div class="kpi-table-wrap">
+      <table class="kpi-table">
+        <thead><tr><th>Employee</th><th>Period</th><th>Manager</th><th>Score</th><th>KPI Status</th><th>Workflow</th><th>Updated</th><th></th></tr></thead>
+        <tbody>
+          {% for review in reviews_page %}
+            <tr>
+              <td data-label="Employee"><strong>{{ review.employee.public_name }}</strong><small>{{ review.employee.employee_id }}</small></td>
+              <td data-label="Period">{{ review.get_period_type_display }}<small>{{ review.period_start|date:"M j" }} - {{ review.period_end|date:"M j, Y" }}</small></td>
+              <td data-label="Manager">{% if review.manager %}{{ review.manager|employee_name }}{% else %}None{% endif %}</td>
+              <td data-label="Score">{% if review.result_snapshot %}{{ review.result_snapshot.score|floatformat:2 }}{% else %}-{% endif %}</td>
+              <td data-label="KPI Status">{% if review.result_snapshot.status %}<span class="kpi-status kpi-status--{{ review.result_snapshot.status }}">{{ review.result_snapshot.status|title }}</span>{% else %}Pending{% endif %}</td>
+              <td data-label="Workflow"><span class="kpi-workflow kpi-workflow--{{ review.status }}">{{ review.get_status_display }}</span></td>
+              <td data-label="Updated">{{ review.updated_at|date:"M j, Y H:i" }}</td>
+              <td data-label="Action"><a class="kpi-link" href="{% url 'kpi_review_detail' review.pk %}">Open</a></td>
+            </tr>
+          {% empty %}<tr><td colspan="8" class="kpi-empty">No reviews match this queue.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if reviews_page.paginator.num_pages > 1 %}
+      <nav class="people-pagination" aria-label="Review queue pages">
+        {% if reviews_page.has_previous %}<a class="people-btn" href="?status={{ status_filter }}&page={{ reviews_page.previous_page_number }}">Previous</a>{% endif %}
+        <span>Page {{ reviews_page.number }} of {{ reviews_page.paginator.num_pages }}</span>
+        {% if reviews_page.has_next %}<a class="people-btn" href="?status={{ status_filter }}&page={{ reviews_page.next_page_number }}">Next</a>{% endif %}
+      </nav>
+    {% endif %}
+  </section>
+</main>
+{% endblock %}

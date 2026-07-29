@@ -1,12 +1,14 @@
 {% extends "crm/base.html" %}
 {% load static crm_people %}
 {% block content %}
+{% can_open_performance_reviews request.user as can_open_performance_reviews %}
 <link rel="stylesheet" href="{% static 'crm/people.css' %}">
 {% include "crm/control_density_assets.html" %}
 <main class="people-shell">
   <header class="people-head">
     <div><p class="people-eyebrow">People & Access</p><h1 class="people-title">Employee Directory</h1><p class="people-subtitle">Search company structure, employment status, reporting lines, and permission roles.</p></div>
     <div class="people-actions">
+      {% if can_open_performance_reviews %}<a class="people-btn" href="{% url 'kpi_review_list' %}">Performance Reviews</a>{% endif %}
       {% if can_view_team_performance %}<a class="people-btn" href="{% url 'team_performance' %}">Team Performance</a>{% endif %}
       {% if can_manage_roles %}<a class="people-btn" href="{% url 'role_management' %}">Manage Roles</a>{% endif %}
       <a class="people-btn people-btn--gold" href="{% url 'employee_create' %}">New Employee</a>
@@ -30,7 +32,7 @@
           <td data-label="Manager">{% if profile.manager %}{{ profile.manager|employee_name }}{% else %}<span class="people-muted">None</span>{% endif %}</td>
           <td data-label="Roles"><div class="people-roles">{% for role in profile.user.groups.all %}<span class="people-badge">{{ role.name }}</span>{% empty %}<span class="people-muted">No roles</span>{% endfor %}</div></td>
           <td data-label="Status"><span class="people-badge people-badge--{{ profile.status }}">{{ profile.get_status_display }}</span>{% if profile.is_archived %}<span class="people-badge people-badge--off">Archived</span>{% elif not profile.user.is_active %}<span class="people-badge people-badge--off">CRM access disabled</span>{% endif %}<div class="people-muted">Last login: {{ profile.user.last_login|date:"M j, Y H:i"|default:"Never" }}</div><div class="people-muted">Joined: {{ profile.user.date_joined|date:"M j, Y" }}</div></td>
-          <td data-label="Action"><div class="people-actions"><a class="people-btn" href="{% url 'employee_edit' profile.user_id %}">View</a>{% if can_archive_employees %}{% if profile.is_archived %}<form method="post" action="{% url 'employee_restore' profile.user_id %}" onsubmit="return confirm('Restore this employee to the inactive employee directory?');">{% csrf_token %}<button class="people-btn" type="submit">Restore</button></form>{% else %}<form method="post" action="{% url 'employee_archive' profile.user_id %}" onsubmit="return confirm('Archive this employee? Their ID and historical records will be preserved.');">{% csrf_token %}<button class="people-btn people-btn--danger" type="submit">Archive</button></form>{% endif %}{% endif %}</div></td>
+          <td data-label="Action"><div class="people-actions"><a class="people-btn" href="{% url 'employee_edit' profile.user_id %}">View</a>{% if can_open_performance_reviews %}<a class="people-btn" href="{% url 'employee_performance' profile.user_id %}">Performance</a>{% endif %}{% if can_archive_employees %}{% if profile.is_archived %}<form method="post" action="{% url 'employee_restore' profile.user_id %}" onsubmit="return confirm('Restore this employee to the inactive employee directory?');">{% csrf_token %}<button class="people-btn" type="submit">Restore</button></form>{% else %}<form method="post" action="{% url 'employee_archive' profile.user_id %}" onsubmit="return confirm('Archive this employee? Their ID and historical records will be preserved.');">{% csrf_token %}<button class="people-btn people-btn--danger" type="submit">Archive</button></form>{% endif %}{% endif %}</div></td>
         </tr>{% empty %}<tr><td colspan="7"><div class="people-empty">No employees match these filters.</div></td></tr>{% endfor %}
       </tbody></table>
     </div>
