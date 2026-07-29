@@ -1,0 +1,192 @@
+<header class="kpi7-widget-header">
+  <h2>{{ widget_title }}</h2>
+  <span title="Snapshot generated {{ widget.generated_at }}">Updated</span>
+</header>
+
+{% if widget.kind == "empty" %}
+  <div class="kpi7-empty">{{ widget.message }}</div>
+
+{% elif widget.kind == "employee-score" %}
+  <div class="kpi7-score-layout">
+    <div class="kpi7-gauge" style="--score:{{ widget.score|default:0 }}">
+      <div><strong>{{ widget.score|default:"-" }}</strong><span>Overall score</span></div>
+    </div>
+    <dl class="kpi7-metric-list">
+      <div><dt>Status</dt><dd><span class="kpi7-status kpi7-status--{{ widget.status }}">{{ widget.status|default:"Not reviewed"|title }}</span></dd></div>
+      <div><dt>Individual KPI</dt><dd>{{ widget.individual_completion|default:"-" }}{% if widget.individual_completion %}%{% endif %}</dd></div>
+      <div><dt>Team KPI</dt><dd>{{ widget.team_completion|default:"-" }}{% if widget.team_completion %}%{% endif %}</dd></div>
+      <div><dt>Bonus eligibility</dt><dd>{{ widget.bonus_eligibility }}</dd></div>
+      <div><dt>Review</dt><dd>{{ widget.review_status }}</dd></div>
+      <div><dt>Manager</dt><dd>{{ widget.manager }}</dd></div>
+      <div><dt>Period</dt><dd>{{ widget.review_period }}</dd></div>
+      <div><dt>Previous</dt><dd>{% if widget.previous_change %}{{ widget.previous_change }}{% else %}-{% endif %}</dd></div>
+    </dl>
+  </div>
+  <div class="kpi7-progress-block">
+    <div><span>Goal completion</span><strong>{{ widget.goal_completion|default:"0.00" }}%</strong></div>
+    <div class="kpi7-progress"><span style="width:{{ widget.goal_completion|default:0 }}%"></span></div>
+  </div>
+
+{% elif widget.kind == "summary" or widget.kind == "executive-summary" %}
+  <div class="kpi7-summary-grid">
+    <div><span>Average KPI</span><strong>{{ widget.score|default:"-" }}</strong></div>
+    <div><span>Employees</span><strong>{{ widget.employee_count }}</strong></div>
+    <div class="is-green"><span>Green</span><strong>{{ widget.green }}</strong></div>
+    <div class="is-yellow"><span>Yellow</span><strong>{{ widget.yellow }}</strong></div>
+    <div class="is-red"><span>Red</span><strong>{{ widget.red }}</strong></div>
+    <div><span>Completion</span><strong>{{ widget.completion }}%</strong></div>
+  </div>
+  <div class="kpi7-status-distribution" aria-label="KPI status distribution">
+    {% if widget.employee_count %}
+      <span class="is-green" style="flex:{{ widget.green }}"></span>
+      <span class="is-yellow" style="flex:{{ widget.yellow }}"></span>
+      <span class="is-red" style="flex:{{ widget.red }}"></span>
+    {% else %}
+      <span class="is-empty"></span>
+    {% endif %}
+  </div>
+
+{% elif widget.kind == "progress" %}
+  <div class="kpi7-progress-list">
+    {% for row in widget.rows %}
+      <div>
+        <div class="kpi7-progress-label">
+          <span>{{ row.name }}</span>
+          <strong>{{ row.score|default:"-" }}</strong>
+        </div>
+        <div class="kpi7-progress"><span class="is-{{ row.status }}" style="width:{{ row.score|default:0 }}%"></span></div>
+        <small>{{ row.weight|default:"-" }}% role weight · {{ row.weighted_score|default:"-" }} weighted</small>
+      </div>
+    {% empty %}<div class="kpi7-empty">No approved role results.</div>{% endfor %}
+  </div>
+
+{% elif widget.kind == "trend" %}
+  <div class="kpi7-chart-grid">
+    <section>
+      <h3>Monthly</h3>
+      {{ widget.series.monthly|json_script:"kpi7-monthly-series" }}
+      <canvas data-kpi-chart data-series-id="kpi7-monthly-series" aria-label="Monthly KPI trend"></canvas>
+    </section>
+    <section>
+      <h3>Quarterly</h3>
+      {{ widget.series.quarterly|json_script:"kpi7-quarterly-series" }}
+      <canvas data-kpi-chart data-series-id="kpi7-quarterly-series" aria-label="Quarterly KPI trend"></canvas>
+    </section>
+    <section>
+      <h3>Annual</h3>
+      {{ widget.series.annual|json_script:"kpi7-annual-series" }}
+      <canvas data-kpi-chart data-series-id="kpi7-annual-series" aria-label="Annual KPI trend"></canvas>
+    </section>
+  </div>
+
+{% elif widget.kind == "leaderboard" %}
+  <div class="kpi7-table-pair">
+    <section>
+      <h3>Top 10</h3>
+      <ol class="kpi7-ranking">
+        {% for row in widget.top %}
+          <li><span>{{ row.employee }}<small>{{ row.department }}</small></span><strong>{{ row.score }}</strong></li>
+        {% empty %}<li class="kpi7-empty">No approved results.</li>{% endfor %}
+      </ol>
+    </section>
+    <section>
+      <h3>Bottom 10</h3>
+      <ol class="kpi7-ranking kpi7-ranking--risk">
+        {% for row in widget.bottom %}
+          <li><span>{{ row.employee }}<small>{{ row.department }}</small></span><strong>{{ row.score }}</strong></li>
+        {% empty %}<li class="kpi7-empty">No approved results.</li>{% endfor %}
+      </ol>
+    </section>
+  </div>
+
+{% elif widget.kind == "review-queue" %}
+  <div class="kpi7-queue-metrics">
+    <div><span>Pending</span><strong>{{ widget.pending }}</strong></div>
+    <div><span>Completed</span><strong>{{ widget.completed }}</strong></div>
+    <div><span>Missing</span><strong>{{ widget.missing }}</strong></div>
+    <div><span>Late</span><strong>{{ widget.late }}</strong></div>
+    <div><span>Upcoming</span><strong>{{ widget.upcoming }}</strong></div>
+    <div><span>Workload</span><strong>{{ widget.workload }}</strong></div>
+  </div>
+  <div class="kpi7-table-wrap">
+    <table>
+      <thead><tr><th>Employee</th><th>Manager</th><th>Status</th><th>Due</th><th></th></tr></thead>
+      <tbody>
+        {% for row in widget.rows %}
+          <tr>
+            <td data-label="Employee">{{ row.employee }}</td>
+            <td data-label="Manager">{{ row.manager }}</td>
+            <td data-label="Status">{{ row.status_label }}</td>
+            <td data-label="Due" {% if row.late %}class="is-late"{% endif %}>{{ row.period_end }}</td>
+            <td data-label="Action"><a href="{% url 'kpi_review_detail' row.id %}" title="Open review" aria-label="Open {{ row.employee }} review"><i data-lucide="arrow-up-right"></i></a></td>
+          </tr>
+        {% empty %}<tr><td colspan="5" class="kpi7-empty">Review queue is clear.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+{% elif widget.kind == "bar-chart" or widget.kind == "manager-summary" %}
+  <div class="kpi7-bar-list">
+    {% for row in widget.rows %}
+      <div>
+        <div><span>{{ row.name }}</span><strong>{{ row.score|default:"-" }}</strong></div>
+        <div class="kpi7-progress"><span style="width:{{ row.score|default:0 }}%"></span></div>
+        <small>{% if row.employees is not None %}{{ row.employees }} employee{{ row.employees|pluralize }}{% else %}{{ row.reviews }} review{{ row.reviews|pluralize }}{% endif %}</small>
+      </div>
+    {% empty %}<div class="kpi7-empty">No approved results.</div>{% endfor %}
+  </div>
+
+{% elif widget.kind == "location-summary" %}
+  <div class="kpi7-location-grid">
+    {% for row in widget.rows %}
+      <div>
+        <span>{{ row.name }}</span>
+        <strong>{{ row.score|default:"-" }}</strong>
+        <small>{{ row.employees }} employee{{ row.employees|pluralize }}</small>
+      </div>
+    {% endfor %}
+  </div>
+
+{% elif widget.kind == "risk-list" %}
+  <ul class="kpi7-risk-list">
+    {% for row in widget.rows %}
+      <li>
+        <span class="kpi7-risk-icon"><i data-lucide="{% if row.critical %}octagon-alert{% else %}triangle-alert{% endif %}"></i></span>
+        <span><strong>{{ row.employee|default:row.name }}</strong><small>{{ row.department|default:row.role }}</small></span>
+        <span class="kpi7-status kpi7-status--{{ row.status }}">{{ row.score|default:"-" }}</span>
+      </li>
+    {% empty %}<li class="kpi7-empty">{{ widget.empty_message }}</li>{% endfor %}
+  </ul>
+
+{% elif widget.kind == "bonus-summary" %}
+  <div class="kpi7-donut-layout">
+    <div class="kpi7-donut" style="--eligible-percent:{{ widget.eligible_percent }}"><strong>{{ widget.eligible }}</strong><span>Eligible</span></div>
+    <dl class="kpi7-metric-list">
+      <div><dt>Eligible</dt><dd>{{ widget.eligible }}</dd></div>
+      <div><dt>Not eligible</dt><dd>{{ widget.not_eligible }}</dd></div>
+      <div><dt>Blocked</dt><dd>{{ widget.blocked }}</dd></div>
+      <div><dt>Pending</dt><dd>{{ widget.pending }}</dd></div>
+    </dl>
+  </div>
+
+{% elif widget.kind == "bonus-forecast" %}
+  <div class="kpi7-forecast">
+    <div><span>Eligible employees</span><strong>{{ widget.eligible }}</strong></div>
+    <div><span>Attendance impact</span><strong>{{ widget.attendance_impact|default:"-" }}{% if widget.attendance_impact %}%{% endif %}</strong></div>
+    {% for total in widget.currency_totals %}
+      <div><span>{{ total.currency }} forecast</span><strong>{{ total.amount }}</strong></div>
+    {% empty %}<div><span>Forecast</span><strong>Pending</strong></div>{% endfor %}
+  </div>
+
+{% elif widget.kind == "health" %}
+  <div class="kpi7-health-grid">
+    {% for row in widget.rows %}
+      <div>
+        <span class="kpi7-status-dot is-{{ row.status }}"></span>
+        <span>{{ row.name }}</span>
+        <strong>{{ row.score|default:"-" }}</strong>
+        <small>{{ row.employees }} employee{{ row.employees|pluralize }}</small>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}

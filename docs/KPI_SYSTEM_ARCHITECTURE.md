@@ -2,20 +2,22 @@
 
 ## Status
 
-- Current stage: 6 - Bonus and incentive engine
-- Working branch: `feature/kpi-stage-6-bonus-engine`
-- Stage 6 base commit: `197b50c5d18e4223d86ab75b0f8423cd6744906a`
+- Current stage: 7 - Role-based KPI dashboards
+- Working branch: `feature/kpi-stage-7-dashboards`
+- Stage 7 base commit: `4053c77f77c32c96c89ffdff9d84daf67f2dea07`
 - Baseline tag: `kpi-baseline-20260728`
 - Baseline commit: `a9c2881f195e6608205e096552f4ce030200e9bd`
 - Production and AWS were not accessed.
 
 Stage 2 added the versioned KPI template foundation. Stage 3 added employee
 assignment and immutable assignment-history tables plus a transactional service
-layer. Stage 4 added the read-only, versioned calculation engine. Stage 5 adds
+layer. Stage 4 added the read-only, versioned calculation engine. Stage 5 added
 permission-controlled performance views, review records, workflow history, and
-immutable approval snapshots. Stage 6 adds database-configured bonus evaluation
-and immutable calculation snapshots. It does not expose bonus pages, approve or
-pay bonuses, connect payroll, or seed company policies.
+immutable approval snapshots. Stage 6 added database-configured bonus
+evaluation and immutable calculation snapshots. Stage 7 adds one adaptive,
+read-only dashboard with server-scoped, independently loaded widgets. It does
+not approve or pay bonuses, connect payroll, seed company policies, or generate
+exports.
 
 ## Design Boundary
 
@@ -276,10 +278,30 @@ Migration `crm.0195_kpi_bonus_engine` creates only the three Stage 6 tables,
 their indexes, and configuration constraints. It has no seed, data operation,
 protected-table alteration, payment field, or payroll/commission relationship.
 
+## Stage 7 KPI Dashboards
+
+`crm.services.kpi_dashboard` is the shared read service for employee, manager,
+director, HR, CEO, and Super Admin dashboards. It reuses Stage 5 visibility
+querysets and digest verification. Score, status, role, trend, ranking, risk,
+completion, and health values are aggregated only from approved or locked
+review snapshots. Stage 6 immutable results provide authorized bonus
+eligibility and executive forecast values. The Stage 4 engine is not called.
+
+One adaptive dashboard shell lazy-loads reusable widgets from authenticated
+fragment routes. Widget access is enforced by a server-side audience registry,
+and cache entries are isolated by user, audience, widget, and normalized
+filters. The filter service covers employee, role, department, location,
+period, month, quarter, year, manager, and stored status without duplicating
+query logic.
+
+Stage 7 adds no models, migrations, tables, permissions, public endpoints,
+database writes, review transitions, or bonus calculations. PDF, Excel, CSV,
+and print are disabled capability interfaces for Stage 8.
+
 ## Deferred Stages
 
 - Later stage: seed and verify approved version 1 role templates
-- Stage 7: KPI dashboards and authorized reporting
+- Stage 8: authorized reporting, export generation, and analytics
 - Later stage: separate final bonus approval and payment workflow
 - Later stage: evidence file handling and authorized unlock workflow
 - Later stage: exports and KPI notifications

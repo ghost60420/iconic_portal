@@ -1,0 +1,141 @@
+{% extends "crm/base.html" %}
+{% load static %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'crm/kpi_dashboard.css' %}">
+<main class="kpi7-shell" data-kpi-dashboard>
+  <header class="kpi7-header">
+    <div>
+      <p class="kpi7-eyebrow">{{ audience|title }} view</p>
+      <h1>KPI Dashboard</h1>
+      <p class="kpi7-subtitle">Approved performance snapshots</p>
+    </div>
+    <div class="kpi7-header-actions">
+      {% if audience != "employee" %}
+        <a class="kpi7-icon-button" href="{% url 'kpi_review_list' %}" title="Review queue" aria-label="Review queue">
+          <i data-lucide="clipboard-check"></i>
+        </a>
+      {% endif %}
+      <details class="kpi7-export-menu">
+        <summary class="kpi7-icon-button" title="Export options" aria-label="Export options">
+          <i data-lucide="download"></i>
+        </summary>
+        <div class="kpi7-export-options">
+          {% for interface in exports %}
+            <button type="button" disabled title="{{ interface.label }} export is not enabled">{{ interface.label }}</button>
+          {% endfor %}
+        </div>
+      </details>
+    </div>
+  </header>
+
+  <form class="kpi7-filters" method="get" aria-label="KPI dashboard filters">
+    {% if employees|length > 1 %}
+      <label>
+        <span>Employee</span>
+        <select name="employee" class="crm-searchable-select">
+          <option value="">All visible</option>
+          {% for option in employees %}<option value="{{ option.id }}" {% if filters.employee_id == option.id %}selected{% endif %}>{{ option.name }}</option>{% endfor %}
+        </select>
+      </label>
+    {% endif %}
+    <label>
+      <span>Role</span>
+      <select name="role">
+        <option value="">All roles</option>
+        {% for option in roles %}<option value="{{ option.id }}" {% if filters.role_id == option.id %}selected{% endif %}>{{ option.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>
+      <span>Department</span>
+      <select name="department">
+        <option value="">All departments</option>
+        {% for option in departments %}<option value="{{ option.code }}" {% if filters.department == option.code %}selected{% endif %}>{{ option.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>
+      <span>Location</span>
+      <select name="location">
+        <option value="">All locations</option>
+        {% for option in locations %}<option value="{{ option.code }}" {% if filters.location == option.code %}selected{% endif %}>{{ option.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>
+      <span>Review period</span>
+      <select name="period">
+        <option value="">All periods</option>
+        {% for option in periods %}<option value="{{ option.code }}" {% if filters.period_type == option.code %}selected{% endif %}>{{ option.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>
+      <span>Month</span>
+      <select name="month">
+        <option value="">All months</option>
+        <option value="1" {% if filters.month == 1 %}selected{% endif %}>January</option>
+        <option value="2" {% if filters.month == 2 %}selected{% endif %}>February</option>
+        <option value="3" {% if filters.month == 3 %}selected{% endif %}>March</option>
+        <option value="4" {% if filters.month == 4 %}selected{% endif %}>April</option>
+        <option value="5" {% if filters.month == 5 %}selected{% endif %}>May</option>
+        <option value="6" {% if filters.month == 6 %}selected{% endif %}>June</option>
+        <option value="7" {% if filters.month == 7 %}selected{% endif %}>July</option>
+        <option value="8" {% if filters.month == 8 %}selected{% endif %}>August</option>
+        <option value="9" {% if filters.month == 9 %}selected{% endif %}>September</option>
+        <option value="10" {% if filters.month == 10 %}selected{% endif %}>October</option>
+        <option value="11" {% if filters.month == 11 %}selected{% endif %}>November</option>
+        <option value="12" {% if filters.month == 12 %}selected{% endif %}>December</option>
+      </select>
+    </label>
+    <label>
+      <span>Quarter</span>
+      <select name="quarter">
+        <option value="">All quarters</option>
+        {% for number in "1234" %}<option value="{{ number }}" {% if filters.quarter|stringformat:"s" == number %}selected{% endif %}>Q{{ number }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>
+      <span>Year</span>
+      <input type="number" name="year" min="2000" max="2200" value="{{ filters.year }}">
+    </label>
+    {% if managers %}
+      <label>
+        <span>Manager</span>
+        <select name="manager" class="crm-searchable-select">
+          <option value="">All managers</option>
+          {% for option in managers %}<option value="{{ option.id }}" {% if filters.manager_id == option.id %}selected{% endif %}>{{ option.name }}</option>{% endfor %}
+        </select>
+      </label>
+    {% endif %}
+    <label>
+      <span>Status</span>
+      <select name="status">
+        <option value="">All statuses</option>
+        {% for option in statuses %}<option value="{{ option.code }}" {% if filters.status == option.code %}selected{% endif %}>{{ option.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <div class="kpi7-filter-actions">
+      <button class="kpi7-command" type="submit"><i data-lucide="filter"></i><span>Apply</span></button>
+      <a class="kpi7-icon-button" href="{% url 'kpi_dashboard' %}" title="Clear filters" aria-label="Clear filters"><i data-lucide="rotate-ccw"></i></a>
+    </div>
+  </form>
+
+  <section class="kpi7-widget-grid" aria-live="polite">
+    {% for dashboard_widget in dashboard_widgets %}
+      <article
+        class="kpi7-widget kpi7-widget--{{ dashboard_widget.size }}"
+        data-kpi-widget
+        data-widget-slug="{{ dashboard_widget.slug }}"
+        data-widget-url="{% url 'kpi_dashboard_widget' dashboard_widget.slug %}"
+        aria-label="{{ dashboard_widget.title }}"
+      >
+        <header class="kpi7-widget-header">
+          <h2>{{ dashboard_widget.title }}</h2>
+        </header>
+        <div class="kpi7-loading" role="status">
+          <span></span><span></span><span></span>
+        </div>
+      </article>
+    {% endfor %}
+  </section>
+</main>
+<script defer src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<script defer src="{% static 'crm/kpi_dashboard.js' %}"></script>
+{% endblock %}

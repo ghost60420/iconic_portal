@@ -19,6 +19,7 @@ from . import views_integrity as integrity
 from . import views_order_lifecycle as lifecycle
 from . import views_operations as operations
 from . import views_people as people
+from . import views_kpi_dashboard as kpi_dashboard
 from . import views_kpi_reviews as kpi_reviews
 from . import views_platform as platform
 
@@ -120,6 +121,21 @@ urlpatterns = [
     path("sales/profile/", people.salesperson_profile, name="salesperson_profile"),
     path("sales/profile/<int:user_id>/", people.salesperson_profile, name="salesperson_profile_user"),
     path("sales/team/", people.team_performance, name="team_performance"),
+    path(
+        "performance/dashboard/",
+        kpi_dashboard.kpi_dashboard,
+        name="kpi_dashboard",
+    ),
+    path(
+        "performance/dashboard/widgets/<slug:slug>/",
+        kpi_dashboard.kpi_dashboard_widget,
+        name="kpi_dashboard_widget",
+    ),
+    path(
+        "performance/dashboard/export-capabilities/",
+        kpi_dashboard.kpi_dashboard_export_capabilities,
+        name="kpi_dashboard_export_capabilities",
+    ),
     path(
         "performance/reviews/",
         kpi_reviews.kpi_review_list,
