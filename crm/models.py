@@ -39,6 +39,7 @@ from .models_kpi_bonus import (
     KPIBonusRuleSet,
     KPIBonusWeightProfile,
 )
+from .models_kpi_intelligence import KPIIntelligenceRuleSet
 from .services.costing_currency import CurrencyConversionError, convert_currency
 
 class BDMonthlyTarget(models.Model):

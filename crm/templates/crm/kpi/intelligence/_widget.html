@@ -1,0 +1,213 @@
+<header class="kpi8-widget-header">
+  <h2>{{ widget_title }}</h2>
+  {% if widget.rule_version %}<span>Rules v{{ widget.rule_version }}</span>{% endif %}
+</header>
+
+{% if widget.kind == "configuration-required" %}
+  <div class="kpi8-empty"><i data-lucide="settings"></i><span>{{ widget.message }}</span></div>
+
+{% elif widget.kind == "company-health" %}
+  <div class="kpi8-health-layout">
+    <div class="kpi8-health-score is-{{ widget.status }}">
+      <strong>{{ widget.score|default:"-" }}</strong>
+      <span>{{ widget.status|default:"Unavailable"|title }}</span>
+    </div>
+    <div class="kpi8-health-metrics">
+      <div><span>Overall KPI</span><strong>{{ widget.overall_kpi|default:"-" }}</strong></div>
+      <div><span>Review completion</span><strong>{{ widget.review_completion|default:"-" }}{% if widget.review_completion %}%{% endif %}</strong></div>
+      <div><span>Bonus readiness</span><strong>{{ widget.bonus_readiness|default:"-" }}{% if widget.bonus_readiness %}%{% endif %}</strong></div>
+      <div><span>Improvement</span><strong>{{ widget.employee_improvement|default:"Insufficient History" }}</strong></div>
+      <div class="is-green"><span>Green</span><strong>{{ widget.green }}</strong></div>
+      <div class="is-yellow"><span>Yellow</span><strong>{{ widget.yellow }}</strong></div>
+      <div class="is-red"><span>Red</span><strong>{{ widget.red }}</strong></div>
+      <div class="is-red"><span>Critical Red</span><strong>{{ widget.critical_red }}</strong></div>
+    </div>
+  </div>
+  <div class="kpi8-component-list">
+    {% for component in widget.components %}
+      <div>
+        <span>{{ component.name }}</span>
+        <div><i style="width:{% if component.available %}{{ component.value }}{% else %}0{% endif %}%"></i></div>
+        <strong>{% if component.available %}{{ component.value }}{% else %}Missing{% endif %}</strong>
+      </div>
+    {% endfor %}
+  </div>
+  {% if widget.warnings %}<ul class="kpi8-inline-warnings">{% for warning in widget.warnings %}<li>{{ warning }}</li>{% endfor %}</ul>{% endif %}
+
+{% elif widget.kind == "insights" %}
+  <div class="kpi8-insight-list kpi8-insight-list--{{ widget.tone }}">
+    {% for row in widget.rows %}
+      <section>
+        <span class="kpi8-insight-icon"><i data-lucide="{% if widget.tone == 'red' %}octagon-alert{% elif widget.tone == 'yellow' %}triangle-alert{% else %}circle-check{% endif %}"></i></span>
+        <div>
+          <h3>{{ row.title }}</h3>
+          <p>{{ row.summary }}</p>
+          <small>{{ row.department }}{% if row.supporting_value %} · {{ row.supporting_value }}{% endif %}{% if row.change_percentage %} · {{ row.change_percentage }}{% endif %}</small>
+        </div>
+        {% if row.action_link %}<a href="{{ row.action_link }}" title="{{ row.recommended_action }}" aria-label="{{ row.recommended_action }}"><i data-lucide="arrow-up-right"></i></a>{% endif %}
+      </section>
+    {% empty %}<div class="kpi8-empty">No {{ widget.tone|title }} intelligence items in this scope.</div>{% endfor %}
+  </div>
+  {% include "crm/kpi/intelligence/_widget_pagination.html" %}
+
+{% elif widget.kind == "department-analytics" %}
+  <div class="kpi8-table-wrap">
+    <table>
+      <thead><tr><th>Department</th><th>Current</th><th>Previous</th><th>Trend</th><th>G/Y/R</th><th>Completion</th><th>Strength</th><th>Risk</th><th></th></tr></thead>
+      <tbody>
+        {% for row in widget.rows %}
+          <tr>
+            <td data-label="Department"><strong>{{ row.name }}</strong></td>
+            <td data-label="Current">{{ row.current_score|default:"-" }}</td>
+            <td data-label="Previous">{{ row.previous_score|default:"-" }}</td>
+            <td data-label="Trend"><span class="kpi8-status is-{{ row.trend.status }}">{{ row.trend.direction|title }}</span></td>
+            <td data-label="G/Y/R">{{ row.green }}/{{ row.yellow }}/{{ row.red }}</td>
+            <td data-label="Completion">{{ row.review_completion|default:"-" }}%</td>
+            <td data-label="Strength">{{ row.top_strength|default:"-" }}</td>
+            <td data-label="Risk">{{ row.main_risk|default:"-" }}</td>
+            <td data-label="Action"><a href="{{ row.action_link }}" title="{{ row.recommended_action }}" aria-label="Open {{ row.name }} dashboard"><i data-lucide="arrow-up-right"></i></a></td>
+          </tr>
+        {% empty %}<tr><td colspan="9" class="kpi8-empty">No approved department results.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+{% elif widget.kind == "manager-analytics" %}
+  <div class="kpi8-manager-grid">
+    {% for row in widget.rows %}
+      <section>
+        <header><div><strong>{{ row.manager }}</strong><span>Manager</span></div>{% if row.action_link %}<a href="{{ row.action_link }}" aria-label="Open {{ row.manager }} team dashboard"><i data-lucide="arrow-up-right"></i></a>{% endif %}</header>
+        <dl>
+          <div><dt>Team average</dt><dd>{{ row.team_average|default:"-" }}</dd></div>
+          <div><dt>Completion</dt><dd>{{ row.review_completion|default:"-" }}%</dd></div>
+          <div><dt>Overdue</dt><dd>{{ row.overdue_reviews }}</dd></div>
+          <div><dt>Workload</dt><dd><span class="kpi8-status is-{{ row.workload_status }}">{{ row.workload }}</span></dd></div>
+          <div><dt>Green / Yellow / Red</dt><dd>{{ row.green }} / {{ row.yellow }} / {{ row.red }}</dd></div>
+          <div><dt>Team change</dt><dd>{{ row.team_improvement|default:"Insufficient History" }}</dd></div>
+        </dl>
+      </section>
+    {% empty %}<div class="kpi8-empty">No manager analytics are available.</div>{% endfor %}
+  </div>
+
+{% elif widget.kind == "employee-analytics" %}
+  <div class="kpi8-employee-list">
+    {% for row in widget.rows %}
+      <section>
+        <header>
+          <div><strong>{{ row.employee }}</strong><span>{{ row.review_date }}</span></div>
+          <span class="kpi8-status is-{{ row.status }}">{{ row.current_score }}</span>
+        </header>
+        <dl>
+          <div><dt>Previous</dt><dd>{{ row.previous_score|default:"-" }}</dd></div>
+          <div><dt>Change</dt><dd>{{ row.change|default:"Insufficient History" }}</dd></div>
+          <div><dt>Strongest KPI</dt><dd>{{ row.strongest_kpi|default:"-" }}</dd></div>
+          <div><dt>Needs improvement</dt><dd>{{ row.improvement_kpi|default:"-" }}</dd></div>
+        </dl>
+        {% for comment in row.approved_comments %}<p>{{ comment }}</p>{% endfor %}
+        <footer><span>{{ row.suggested_action }}</span><a href="{{ row.action_link }}" aria-label="Open {{ row.employee }} performance"><i data-lucide="arrow-up-right"></i></a></footer>
+      </section>
+    {% empty %}<div class="kpi8-empty">No approved employee analytics are available.</div>{% endfor %}
+  </div>
+  {% include "crm/kpi/intelligence/_widget_pagination.html" %}
+
+{% elif widget.kind == "bonus-readiness" %}
+  <div class="kpi8-summary-strip">
+    <div class="is-green"><span>Eligible</span><strong>{{ widget.eligible }}</strong></div>
+    <div><span>Not eligible</span><strong>{{ widget.not_eligible }}</strong></div>
+    <div class="is-yellow"><span>Pending</span><strong>{{ widget.pending }}</strong></div>
+    <div class="is-red"><span>Blocked</span><strong>{{ widget.blocked }}</strong></div>
+  </div>
+  <div class="kpi8-table-wrap">
+    <table>
+      <thead><tr><th>Employee</th><th>Status</th><th>Reason</th><th>Critical Red</th><th>Rule</th>{% if widget.amounts_visible %}<th>Authorized estimate</th>{% endif %}<th></th></tr></thead>
+      <tbody>
+        {% for row in widget.rows %}
+          <tr>
+            <td data-label="Employee">{{ row.employee }}</td>
+            <td data-label="Status"><span class="kpi8-status is-{% if row.status == 'eligible' %}green{% elif row.status == 'blocked' %}red{% else %}yellow{% endif %}">{{ row.status|title }}</span></td>
+            <td data-label="Reason">{{ row.reason }}</td>
+            <td data-label="Critical Red">{% if row.critical_red %}Yes{% else %}No{% endif %}</td>
+            <td data-label="Rule">{{ row.rule_version|default:"-" }}</td>
+            {% if widget.amounts_visible %}<td data-label="Authorized estimate">{{ row.amount|default:"-" }}</td>{% endif %}
+            <td data-label="Action"><a href="{{ row.action_link }}" aria-label="Open source review"><i data-lucide="arrow-up-right"></i></a></td>
+          </tr>
+        {% empty %}<tr><td colspan="7" class="kpi8-empty">No approved bonus results are available.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "crm/kpi/intelligence/_widget_pagination.html" %}
+
+{% elif widget.kind == "review-completion" %}
+  <div class="kpi8-review-layout">
+    <div class="kpi8-ring" style="--value:{{ widget.completion|default:0 }}"><strong>{{ widget.completion|default:"-" }}%</strong><span>Target {{ widget.target }}%</span></div>
+    <div class="kpi8-summary-strip">
+      <div class="is-green"><span>Completed</span><strong>{{ widget.completed }}</strong></div>
+      <div><span>Open</span><strong>{{ widget.open }}</strong></div>
+      <div class="is-yellow"><span>Missing</span><strong>{{ widget.missing }}</strong></div>
+      <div class="is-red"><span>Overdue</span><strong>{{ widget.overdue }}</strong></div>
+    </div>
+  </div>
+  {% if widget.queue_link %}<a class="kpi8-text-action" href="{{ widget.queue_link }}"><span>Open review queue</span><i data-lucide="arrow-right"></i></a>{% endif %}
+
+{% elif widget.kind == "trends" %}
+  <div class="kpi8-trends">
+    <section>
+      <header><div><strong>Monthly</strong><span>{{ widget.monthly.analysis.direction|title }}</span></div><span class="kpi8-status is-{{ widget.monthly.analysis.status }}">{{ widget.monthly.analysis.difference|default:"-" }}</span></header>
+      {{ widget.monthly.points|json_script:"kpi8-monthly-points" }}
+      <canvas data-kpi-intelligence-chart data-series-id="kpi8-monthly-points" aria-label="Monthly KPI intelligence trend"></canvas>
+      <small>{{ widget.monthly.analysis.data_quality_warning }}</small>
+    </section>
+    <section>
+      <header><div><strong>Quarterly</strong><span>{{ widget.quarterly.analysis.direction|title }}</span></div><span class="kpi8-status is-{{ widget.quarterly.analysis.status }}">{{ widget.quarterly.analysis.difference|default:"-" }}</span></header>
+      {{ widget.quarterly.points|json_script:"kpi8-quarterly-points" }}
+      <canvas data-kpi-intelligence-chart data-series-id="kpi8-quarterly-points" aria-label="Quarterly KPI intelligence trend"></canvas>
+      <small>{{ widget.quarterly.analysis.data_quality_warning }}</small>
+    </section>
+    <section>
+      <header><div><strong>Annual</strong><span>{{ widget.annual.analysis.direction|title }}</span></div><span class="kpi8-status is-{{ widget.annual.analysis.status }}">{{ widget.annual.analysis.difference|default:"-" }}</span></header>
+      {{ widget.annual.points|json_script:"kpi8-annual-points" }}
+      <canvas data-kpi-intelligence-chart data-series-id="kpi8-annual-points" aria-label="Annual KPI intelligence trend"></canvas>
+      <small>{{ widget.annual.analysis.data_quality_warning }}</small>
+    </section>
+  </div>
+
+{% elif widget.kind == "location-analytics" %}
+  <div class="kpi8-location-grid">
+    {% for row in widget.rows %}
+      <section>
+        <header><strong>{{ row.name }}</strong><span>{{ row.score|default:"-" }}</span></header>
+        <dl>
+          <div><dt>Review completion</dt><dd>{{ row.review_completion|default:"-" }}%</dd></div>
+          <div><dt>Department average</dt><dd>{{ row.department_average|default:"-" }}</dd></div>
+          <div><dt>Green / Yellow / Red</dt><dd>{{ row.green }} / {{ row.yellow }} / {{ row.red }}</dd></div>
+          <div><dt>Critical Red</dt><dd>{{ row.critical_red }}</dd></div>
+          <div><dt>Trend</dt><dd>{{ row.trend.direction|title }}</dd></div>
+          <div><dt>Bonus ready</dt><dd>{{ row.bonus_ready }}</dd></div>
+        </dl>
+      </section>
+    {% endfor %}
+  </div>
+
+{% elif widget.kind == "actions" %}
+  <ol class="kpi8-actions">
+    {% for row in widget.rows %}
+      <li>
+        <span>{{ row.priority }}</span>
+        <div><strong>{{ row.title }}</strong><p>{{ row.recommended_action }}</p></div>
+        <a href="{{ row.action_link }}" aria-label="{{ row.recommended_action }}"><i data-lucide="arrow-up-right"></i></a>
+      </li>
+    {% empty %}<li class="kpi8-empty">No immediate action is required.</li>{% endfor %}
+  </ol>
+  {% include "crm/kpi/intelligence/_widget_pagination.html" %}
+
+{% elif widget.kind == "data-quality" %}
+  {% if widget.complete %}
+    <div class="kpi8-quality-ok"><i data-lucide="badge-check"></i><span>Available KPI intelligence data passed the quality checks.</span></div>
+  {% else %}
+    <div class="kpi8-quality-list">
+      {% for row in widget.warnings %}
+        <section><i data-lucide="circle-alert"></i><div><strong>{{ row.message }}</strong><span>{{ row.code }}</span></div><b>{{ row.count }}</b></section>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endif %}

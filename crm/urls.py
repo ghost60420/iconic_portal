@@ -20,6 +20,7 @@ from . import views_order_lifecycle as lifecycle
 from . import views_operations as operations
 from . import views_people as people
 from . import views_kpi_dashboard as kpi_dashboard
+from . import views_kpi_intelligence as kpi_intelligence
 from . import views_kpi_reviews as kpi_reviews
 from . import views_platform as platform
 
@@ -135,6 +136,26 @@ urlpatterns = [
         "performance/dashboard/export-capabilities/",
         kpi_dashboard.kpi_dashboard_export_capabilities,
         name="kpi_dashboard_export_capabilities",
+    ),
+    path(
+        "kpi/intelligence/",
+        kpi_intelligence.kpi_intelligence,
+        name="kpi_intelligence",
+    ),
+    path(
+        "kpi/intelligence/widgets/<slug:slug>/",
+        kpi_intelligence.kpi_intelligence_widget,
+        name="kpi_intelligence_widget",
+    ),
+    path(
+        "kpi/intelligence/reports/<slug:report_type>/<slug:export_format>/",
+        kpi_intelligence.kpi_intelligence_report,
+        name="kpi_intelligence_report",
+    ),
+    path(
+        "kpi/intelligence/actions/<str:token>/",
+        kpi_intelligence.kpi_intelligence_action,
+        name="kpi_intelligence_action",
     ),
     path(
         "performance/reviews/",

@@ -1,0 +1,7 @@
+{% if widget.has_previous or widget.has_next %}
+  <nav class="kpi8-pagination" aria-label="{{ widget_title }} pages">
+    <button type="button" data-kpi8-page="{{ widget.previous_page }}" {% if not widget.has_previous %}disabled{% endif %} aria-label="Previous page"><i data-lucide="chevron-left"></i></button>
+    <span>Page {{ widget.page }}</span>
+    <button type="button" data-kpi8-page="{{ widget.next_page }}" {% if not widget.has_next %}disabled{% endif %} aria-label="Next page"><i data-lucide="chevron-right"></i></button>
+  </nav>
+{% endif %}

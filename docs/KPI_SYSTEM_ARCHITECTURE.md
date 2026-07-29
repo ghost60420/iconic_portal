@@ -2,9 +2,9 @@
 
 ## Status
 
-- Current stage: 7 - Role-based KPI dashboards
-- Working branch: `feature/kpi-stage-7-dashboards`
-- Stage 7 base commit: `4053c77f77c32c96c89ffdff9d84daf67f2dea07`
+- Current stage: 8 - Executive Intelligence and Analytics
+- Working branch: `feature/kpi-stage-8-executive-intelligence`
+- Stage 8 base commit: `eedc9bb0d965294be86f5aefbc814159df53b828`
 - Baseline tag: `kpi-baseline-20260728`
 - Baseline commit: `a9c2881f195e6608205e096552f4ce030200e9bd`
 - Production and AWS were not accessed.
@@ -14,10 +14,11 @@ assignment and immutable assignment-history tables plus a transactional service
 layer. Stage 4 added the read-only, versioned calculation engine. Stage 5 added
 permission-controlled performance views, review records, workflow history, and
 immutable approval snapshots. Stage 6 added database-configured bonus
-evaluation and immutable calculation snapshots. Stage 7 adds one adaptive,
-read-only dashboard with server-scoped, independently loaded widgets. It does
-not approve or pay bonuses, connect payroll, seed company policies, or generate
-exports.
+evaluation and immutable calculation snapshots. Stage 7 added one adaptive,
+read-only dashboard with server-scoped, independently loaded widgets. Stage 8
+adds snapshot-only executive intelligence, role-scoped analytics, signed
+actions, configurable intelligence rules, and secure PDF, Excel, CSV, and
+print reports.
 
 ## Design Boundary
 
@@ -298,13 +299,38 @@ Stage 7 adds no models, migrations, tables, permissions, public endpoints,
 database writes, review transitions, or bonus calculations. PDF, Excel, CSV,
 and print are disabled capability interfaces for Stage 8.
 
+## Stage 8 Executive Intelligence
+
+`crm.services.kpi_intelligence` extends the Stage 7 read architecture. It
+consumes digest-verified Stage 5 approved snapshots, immutable Stage 6 bonus
+results, and Stage 7 scoping/filter services. It never calls the Stage 4
+calculation engine and never recalculates approved history.
+
+The Intelligence Center uses an audience registry and independently loaded
+widgets for company health, Red/Yellow/Green intelligence, department,
+manager, employee, review, trend, location, bonus-readiness, action, and data
+quality summaries. Signed action links are reauthorized on the server.
+`crm.services.kpi_reporting` builds the same authorized evidence into PDF,
+Excel, CSV, and print reports with HTML and spreadsheet-formula sanitization.
+
+`KPIIntelligenceRuleSet` is a versioned, effective-dated policy model for
+thresholds, alert severity, trend sufficiency, workload, review completion,
+and company-health component weights. Published versions are immutable and
+publication is restricted to CEO or Super Admin through the service.
+
+Migration `crm.0196_kpi_intelligence_rules` creates only
+`crm_kpiintelligenceruleset`, its lookup index, and validation constraints. It
+contains no seed, data operation, rename, deletion, or protected-table change.
+Fresh, populated, rollback, and reapply checks passed without changing
+protected counts or ID ranges.
+
 ## Deferred Stages
 
 - Later stage: seed and verify approved version 1 role templates
-- Stage 8: authorized reporting, export generation, and analytics
+- Stage 9: KPI notifications and separately approved automation
+- Stage 10: final testing and controlled deployment preparation
 - Later stage: separate final bonus approval and payment workflow
 - Later stage: evidence file handling and authorized unlock workflow
-- Later stage: exports and KPI notifications
 
 No deferred model or workflow is represented by a placeholder table. Custom
 authorization codenames remain deferred; Stage 5 reuses current organization

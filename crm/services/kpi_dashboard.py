@@ -246,7 +246,8 @@ def dashboard_widgets(user):
     return WIDGETS[dashboard_audience(user)]
 
 
-def _scoped_reviews(user, audience):
+def scoped_dashboard_reviews(user, audience=None):
+    audience = audience or dashboard_audience(user)
     reviews = visible_kpi_reviews(user)
     if audience == AUDIENCE_EMPLOYEE:
         return reviews.filter(employee__user=user)
@@ -255,7 +256,8 @@ def _scoped_reviews(user, audience):
     return reviews
 
 
-def _scoped_employees(user, audience, *, as_of=None):
+def scoped_dashboard_employees(user, audience=None, *, as_of=None):
+    audience = audience or dashboard_audience(user)
     if audience == AUDIENCE_EMPLOYEE:
         return EmployeeProfile.objects.select_related(
             "user",
@@ -264,6 +266,10 @@ def _scoped_employees(user, audience, *, as_of=None):
             "position_ref",
         ).filter(user=user, is_archived=False)
     return visible_kpi_employees(user, as_of=as_of).select_related("user__access")
+
+
+_scoped_reviews = scoped_dashboard_reviews
+_scoped_employees = scoped_dashboard_employees
 
 
 def _date_bounds(filters):
@@ -445,6 +451,11 @@ def _snapshot_rows(user, audience, filters):
             }
         )
     return rows, invalid
+
+
+def approved_dashboard_snapshot_rows(user, filters, *, audience=None):
+    audience = audience or dashboard_audience(user)
+    return _snapshot_rows(user, audience, filters)
 
 
 def _latest_rows(rows):

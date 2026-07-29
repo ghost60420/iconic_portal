@@ -46,3 +46,26 @@ against a server-side role registry. Each route requires authentication.
 Employee, manager, and director filters can only narrow their existing scope;
 they cannot expand it. Stage 7 adds no role, permission, middleware, or public
 API.
+
+## Stage 8 Intelligence and Report Matrix
+
+| Capability | Employee | Manager | Director | HR | CEO | Super Admin |
+| --- | --- | --- | --- | --- | --- | --- |
+| Open Intelligence Center | Own view | Assigned team | Department | HR scope | All | All |
+| View Red/Yellow/Green intelligence | Own only | Assigned team | Department | HR scope | All | All |
+| View employee analytics | Own only | Assigned team | Department | HR scope | All | All |
+| View manager analytics | No | Own team/workload | Department | HR scope | All | All |
+| View department analytics | No | No | Department | HR scope | All | All |
+| View Canada/Bangladesh comparison | No | No | No | No | Yes | Yes |
+| View bonus readiness state | Own state without amount | Assigned state without amount | No amount | No amount | All authorized | All authorized |
+| View bonus amount | No | No | No | No | Yes | Yes |
+| Use intelligence action links | Own allowed targets | Assigned targets | Department targets | HR targets | All authorized | All authorized |
+| Export employee performance | Own only | Assigned team | Department | HR scope | All | All |
+| Export department/manager reports | No | Assigned team only | Department | HR scope | All | All |
+| Export executive/bonus reports | No | No | No | No | Yes | Yes |
+| Publish intelligence rules | No | No | No | No | Yes | Yes |
+
+Every Stage 8 page, widget, report, and action route requires authentication.
+The service applies employee, manager, and department scope before filters.
+Signed action links are rechecked against current server authorization. HR
+scope does not imply financial bonus-amount access.
