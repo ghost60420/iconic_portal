@@ -1,0 +1,24 @@
+[Unit]
+Description=Iconic KPI private staging
+After=network.target
+
+[Service]
+Type=notify
+User=ec2-user
+Group=ec2-user
+WorkingDirectory=/home/ec2-user/iconic_kpi_staging
+EnvironmentFile=/home/ec2-user/iconic_kpi_staging/config/staging.env
+ExecStart=/home/ec2-user/iconic_kpi_staging/venv/bin/gunicorn \
+    --workers 2 \
+    --timeout 120 \
+    --bind 127.0.0.1:8011 \
+    --access-logfile /home/ec2-user/iconic_kpi_staging/var/log/gunicorn-access.log \
+    --error-logfile /home/ec2-user/iconic_kpi_staging/var/log/gunicorn-error.log \
+    iconic_site.wsgi:application
+Restart=on-failure
+RestartSec=5
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
