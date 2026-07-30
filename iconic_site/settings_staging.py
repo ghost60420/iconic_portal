@@ -6,6 +6,10 @@ from .settings import *  # noqa: F401,F403
 
 KPI_STAGING = True
 DEBUG = False
+KPI_STAGING_UAT_MENU_ENABLED = True
+KPI_STAGING_UAT_REVIEW_ID = int(
+    os.environ.get("KPI_STAGING_UAT_REVIEW_ID", "7")
+)
 
 _staging_host = os.environ["KPI_STAGING_HOST"].strip()
 _staging_origin = f"https://{_staging_host}"
@@ -28,6 +32,10 @@ SITE_BASE_URL = _staging_origin
 DATABASES["default"]["NAME"] = _staging_database
 STATIC_ROOT = _staging_static_root
 MEDIA_ROOT = _staging_media_root
+
+TEMPLATES[0]["OPTIONS"]["context_processors"].append(
+    "crm.context_processors.kpi_staging_uat"
+)
 
 SECURE_SSL_REDIRECT = True
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

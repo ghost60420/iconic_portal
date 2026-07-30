@@ -1,0 +1,26 @@
+<section class="kpi-staging-uat" aria-label="Private KPI staging UAT navigation">
+  <div class="kpi-staging-uat__warning" role="status">NOT PRODUCTION</div>
+  <div class="kpi-staging-uat__header">
+    <div>
+      <span class="kpi-staging-uat__label">Environment</span>
+      <strong>{{ kpi_staging_uat.environment }}</strong>
+    </div>
+    <div>
+      <span class="kpi-staging-uat__label">Logged-in role</span>
+      <strong>{{ kpi_staging_uat.role_label }}</strong>
+    </div>
+  </div>
+  <nav class="kpi-staging-uat__links" aria-label="CEO KPI UAT pages">
+    {% if kpi_dashboard_url %}<a href="{{ kpi_dashboard_url }}">Dashboard</a>{% endif %}
+    {% if my_performance_url %}<a href="{{ my_performance_url }}">My Performance</a>{% endif %}
+    {% if can_manage_kpi_setup_access and kpi_assignment_management_url %}<a href="{{ kpi_assignment_management_url }}">KPI Assignments</a>{% endif %}
+    {% if can_open_performance_reviews_access and kpi_review_list_url %}<a href="{{ kpi_review_list_url }}">Review Queue</a>{% endif %}
+    {% if can_open_performance_reviews_access and kpi_staging_uat.review_detail_url %}<a href="{{ kpi_staging_uat.review_detail_url }}">Review Detail</a>{% endif %}
+    {% if can_manage_kpi_setup_access and kpi_dashboard_url %}<a href="{{ kpi_dashboard_url }}">Executive Dashboard</a>{% endif %}
+    {% if kpi_intelligence_url %}<a href="{{ kpi_intelligence_url }}">Intelligence Center</a>{% endif %}
+    {% if kpi_intelligence_url %}<a href="{{ kpi_intelligence_url }}#bonus-readiness">Bonus Readiness</a>{% endif %}
+    {% if kpi_intelligence_url %}<a href="{{ kpi_intelligence_url }}#reports">KPI Reports</a>{% endif %}
+    {% if notification_list_url %}<a href="{{ notification_list_url }}">Notifications</a>{% endif %}
+    {% if can_manage_kpi_setup_access and kpi_policy_management_url %}<a href="{{ kpi_policy_management_url }}">KPI Policies</a>{% endif %}
+  </nav>
+</section>

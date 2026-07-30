@@ -1,3 +1,5 @@
+from django.conf import settings
+from django.urls import reverse
 from django.db.utils import OperationalError, ProgrammingError
 from django.db.models import Count, Q, Window
 from django.core.cache import cache
@@ -9,7 +11,75 @@ from crm.services.operations_notifications import (
     visible_notifications,
 )
 from crm.models import FavoriteRecord
+from crm.services.operations_permissions import operations_role_names
 from crm.services.platform_tools import RECORD_CONFIGS, can_manage_archives, descriptor_from_request
+
+
+KPI_STAGING_UAT_ROUTES = {
+    "employee_performance",
+    "kpi_assignment_management",
+    "kpi_dashboard",
+    "kpi_dashboard_widget",
+    "kpi_intelligence",
+    "kpi_intelligence_widget",
+    "kpi_policy_management",
+    "kpi_review_detail",
+    "kpi_review_list",
+    "notification_list",
+}
+KPI_STAGING_UAT_ROLE_ORDER = (
+    "CEO",
+    "Director",
+    "Manager",
+    "HR",
+    "Accounts",
+    "Finance",
+    "Admin",
+    "Sales Manager",
+    "Sales",
+    "Production",
+    "Merchandising",
+    "Merchandiser",
+    "QC",
+    "Warehouse",
+    "Supervisor",
+    "Read Only",
+)
+
+
+def _kpi_staging_uat_role_label(user):
+    if user.is_superuser:
+        return "CEO / Super Admin"
+    roles = operations_role_names(user)
+    ordered = [role for role in KPI_STAGING_UAT_ROLE_ORDER if role in roles]
+    return " / ".join(ordered) if ordered else "Employee"
+
+
+def kpi_staging_uat(request):
+    user = getattr(request, "user", None)
+    route_name = getattr(getattr(request, "resolver_match", None), "url_name", "")
+    if not (
+        getattr(settings, "KPI_STAGING", False)
+        and getattr(settings, "KPI_STAGING_UAT_MENU_ENABLED", False)
+        and user
+        and getattr(user, "is_authenticated", False)
+        and route_name in KPI_STAGING_UAT_ROUTES
+    ):
+        return {}
+
+    review_id = int(getattr(settings, "KPI_STAGING_UAT_REVIEW_ID", 0) or 0)
+    return {
+        "kpi_staging_uat": {
+            "enabled": True,
+            "environment": "PRIVATE KPI STAGING",
+            "role_label": _kpi_staging_uat_role_label(user),
+            "review_detail_url": (
+                reverse("kpi_review_detail", args=[review_id])
+                if review_id
+                else ""
+            ),
+        }
+    }
 
 
 def operations_header(request):
