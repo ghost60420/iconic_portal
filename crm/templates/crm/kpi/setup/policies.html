@@ -1,0 +1,67 @@
+{% extends "crm/base.html" %}
+{% load static %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'crm/people.css' %}">
+<link rel="stylesheet" href="{% static 'crm/kpi_performance.css' %}">
+<link rel="stylesheet" href="{% static 'crm/kpi_setup.css' %}">
+<main class="people-shell kpi-shell">
+  <header class="people-head">
+    <div>
+      <p class="people-eyebrow">KPI Administration</p>
+      <h1 class="people-title">KPI Policies</h1>
+    </div>
+    <div class="people-actions">
+      <a class="people-btn" href="{% url 'kpi_assignment_management' %}">Assignments</a>
+      <a class="people-btn" href="{% url 'kpi_dashboard' %}">Dashboard</a>
+    </div>
+  </header>
+
+  <section class="kpi-setup-summary" aria-label="Policy status summary">
+    <div><span>Draft</span><strong>{{ status_counts.draft }}</strong></div>
+    <div><span>Under Review</span><strong>{{ status_counts.under_review }}</strong></div>
+    <div><span>Approved</span><strong>{{ status_counts.approved }}</strong></div>
+    <div><span>Published</span><strong>{{ status_counts.published }}</strong></div>
+    <div><span>Retired</span><strong>{{ status_counts.retired }}</strong></div>
+  </section>
+
+  <section class="kpi-panel">
+    <div class="kpi-table-wrap">
+      <table class="kpi-table">
+        <thead><tr><th>Policy</th><th>Type</th><th>Status</th><th>Owner</th><th>Updated</th><th>Controlled action</th></tr></thead>
+        <tbody>
+          {% for policy in policies %}
+            <tr>
+              <td data-label="Policy"><strong>{{ policy.target_label }}</strong></td>
+              <td data-label="Type">{{ policy.get_policy_type_display }}</td>
+              <td data-label="Status"><span class="kpi-workflow kpi-workflow--{{ policy.status }}">{{ policy.get_status_display }}</span></td>
+              <td data-label="Owner">{% if policy.created_by %}{{ policy.created_by.get_full_name|default:policy.created_by.username }}{% else %}-{% endif %}</td>
+              <td data-label="Updated">{{ policy.updated_at|date:"M j, Y H:i" }}</td>
+              <td data-label="Controlled action">
+                <form class="kpi-policy-action" method="post">{% csrf_token %}
+                  <input type="hidden" name="policy_id" value="{{ policy.pk }}">
+                  {% if policy.status == "draft" %}
+                    <input name="reason" maxlength="500" placeholder="Review reason" required>
+                    <button class="people-btn" name="action" value="submit" type="submit">Submit</button>
+                  {% elif policy.status == "under_review" %}
+                    <input name="reason" maxlength="500" placeholder="Approval reason" required>
+                    <button class="people-btn people-btn--gold" name="action" value="approve" type="submit">Approve</button>
+                  {% elif policy.status == "approved" %}
+                    <button class="people-btn people-btn--gold" name="action" value="publish" type="submit">Publish</button>
+                  {% elif policy.status == "published" %}
+                    <input name="reason" maxlength="500" placeholder="Retirement reason" required>
+                    <button class="people-btn" name="action" value="retire" type="submit">Retire</button>
+                  {% else %}
+                    <span class="people-muted">History retained</span>
+                  {% endif %}
+                </form>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6" class="kpi-empty">No KPI policies have been prepared.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+{% endblock %}

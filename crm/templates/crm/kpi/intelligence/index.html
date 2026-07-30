@@ -14,7 +14,7 @@
       <a class="kpi8-icon-button" href="{% url 'kpi_dashboard' %}" title="KPI dashboard" aria-label="KPI dashboard">
         <i data-lucide="layout-dashboard"></i>
       </a>
-      <details class="kpi8-report-menu">
+      <details class="kpi8-report-menu" id="reports">
         <summary class="kpi8-command"><i data-lucide="file-down"></i><span>Reports</span></summary>
         <div>
           {% for report in reports %}
@@ -115,6 +115,7 @@
   <section class="kpi8-grid" aria-live="polite">
     {% for intelligence_widget in intelligence_widgets %}
       <article
+        id="{{ intelligence_widget.slug }}"
         class="kpi8-widget kpi8-widget--{{ intelligence_widget.size }}"
         data-kpi-intelligence-widget
         data-widget-slug="{{ intelligence_widget.slug }}"
@@ -127,6 +128,6 @@
     {% endfor %}
   </section>
 </main>
-<script defer src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<script defer src="{% static 'vendor/lucide/lucide.min.js' %}"></script>
 <script defer src="{% static 'crm/kpi_intelligence.js' %}"></script>
 {% endblock %}

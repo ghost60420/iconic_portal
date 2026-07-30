@@ -1,0 +1,96 @@
+{% extends "crm/base.html" %}
+{% load static %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'crm/people.css' %}">
+<link rel="stylesheet" href="{% static 'crm/kpi_performance.css' %}">
+<link rel="stylesheet" href="{% static 'crm/kpi_setup.css' %}">
+<main class="people-shell kpi-shell">
+  <header class="people-head">
+    <div>
+      <p class="people-eyebrow">KPI Administration</p>
+      <h1 class="people-title">KPI Assignments</h1>
+    </div>
+    <div class="people-actions">
+      <a class="people-btn" href="{% url 'kpi_policy_management' %}">Policies</a>
+      <a class="people-btn" href="{% url 'kpi_review_list' %}">Review Queue</a>
+    </div>
+  </header>
+
+  <section class="kpi-panel">
+    <form class="kpi-assignment-builder" method="post">{% csrf_token %}
+      <div class="kpi-assignment-basics">
+        <label><span>Employee</span><select name="employee" required>
+          <option value="">Select employee</option>
+          {% for profile in employees %}<option value="{{ profile.pk }}" {% if selected_employee.pk == profile.pk or posted.employee == profile.pk|stringformat:"s" %}selected{% endif %}>{{ profile.public_name }} · {{ profile.employee_id }}</option>{% endfor %}
+        </select></label>
+        <label><span>Start date</span><input type="date" name="start_date" value="{{ posted.start_date|default:default_start_date }}" required></label>
+      </div>
+      <div class="kpi-assignment-roles">
+        {% for role_row in role_rows %}
+          <fieldset>
+            <legend>Role {{ role_row.number }}</legend>
+            <label><span>KPI role template</span><select name="role_{{ role_row.number }}_template">
+              <option value="">Not assigned</option>
+              {% for template in templates %}<option value="{{ template.pk }}" {% if role_row.template == template.pk|stringformat:"s" %}selected{% endif %}>{{ template.name }}</option>{% endfor %}
+            </select></label>
+            <label><span>Role weight</span><input type="number" min="0.01" max="100" step="0.01" name="role_{{ role_row.number }}_weight" value="{{ role_row.weight }}" placeholder="0.00"></label>
+            <label><span>Manager</span><select name="role_{{ role_row.number }}_manager">
+              <option value="">No direct manager</option>
+              {% for manager in managers %}<option value="{{ manager.user_id }}" {% if role_row.manager == manager.user_id|stringformat:"s" %}selected{% endif %}>{{ manager.public_name }}</option>{% endfor %}
+            </select></label>
+            <label class="kpi-setup-check"><input type="checkbox" name="role_{{ role_row.number }}_bonus" {% if role_row.bonus %}checked{% endif %}><span>Bonus eligible</span></label>
+            <label><span>Notes</span><textarea name="role_{{ role_row.number }}_notes" rows="2">{{ role_row.notes }}</textarea></label>
+          </fieldset>
+        {% endfor %}
+      </div>
+      <div class="people-actions">
+        <button class="people-btn" name="action" value="preview" type="submit">Preview</button>
+        <button class="people-btn people-btn--gold" name="action" value="save_draft" type="submit">Save Draft</button>
+      </div>
+    </form>
+  </section>
+
+  {% if preview %}
+    <section class="kpi-panel kpi-preview-panel">
+      <div class="kpi-panel-head"><h2>Assignment Preview</h2><strong>{{ preview.total_weight|floatformat:2 }}%</strong></div>
+      {% for role in preview.roles %}
+        <article>
+          <header><strong>{{ role.template.name }}</strong><span>{{ role.role_weight|floatformat:2 }}%</span></header>
+          <p>{% if role.manager %}Manager: {{ role.manager.get_full_name|default:role.manager.username }}{% else %}No direct manager{% endif %}</p>
+          <ul>{% for item in role.items %}<li><span>{{ item.name }}</span><strong>{{ item.weight|floatformat:2 }}%</strong></li>{% endfor %}</ul>
+        </article>
+      {% endfor %}
+    </section>
+  {% endif %}
+
+  {% if selected_employee %}
+    <section class="kpi-panel">
+      <div class="kpi-panel-head"><h2>{{ selected_employee.public_name }} Assignments</h2></div>
+      <form method="post">{% csrf_token %}<input type="hidden" name="employee" value="{{ selected_employee.pk }}">
+        <div class="kpi-table-wrap">
+          <table class="kpi-table">
+            <thead><tr><th></th><th>Role</th><th>Weight</th><th>Manager</th><th>Effective</th><th>Status</th><th>Bonus</th></tr></thead>
+            <tbody>
+              {% for assignment in assignments %}
+                <tr>
+                  <td>{% if not assignment.is_active and not assignment.is_archived %}<input type="checkbox" name="assignment_ids" value="{{ assignment.pk }}" aria-label="Select {{ assignment.kpi_template.name }} draft">{% endif %}</td>
+                  <td data-label="Role">{{ assignment.kpi_template.name }}</td>
+                  <td data-label="Weight">{{ assignment.role_weight|floatformat:2 }}%</td>
+                  <td data-label="Manager">{% if assignment.manager %}{{ assignment.manager.get_full_name|default:assignment.manager.username }}{% else %}None{% endif %}</td>
+                  <td data-label="Effective">{{ assignment.start_date|date:"M j, Y" }}{% if assignment.end_date %} - {{ assignment.end_date|date:"M j, Y" }}{% endif %}</td>
+                  <td data-label="Status">{% if assignment.is_archived %}Archived{% elif assignment.is_active %}Active{% else %}Draft / inactive{% endif %}</td>
+                  <td data-label="Bonus">{% if assignment.bonus_eligible %}Eligible{% else %}Not eligible{% endif %}</td>
+                </tr>
+              {% empty %}<tr><td colspan="7" class="kpi-empty">No assignments for this employee.</td></tr>{% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="kpi-activate-row">
+          <input name="reason" maxlength="500" placeholder="Activation reason" required>
+          <button class="people-btn people-btn--gold" name="action" value="activate" type="submit">Activate Selected Drafts</button>
+        </div>
+      </form>
+    </section>
+  {% endif %}
+</main>
+{% endblock %}

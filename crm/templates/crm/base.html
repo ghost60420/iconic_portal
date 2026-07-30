@@ -557,6 +557,7 @@
   {% has_sales_profile request.user as has_sales_profile_access %}
   {% can_view_team_dashboard request.user as can_view_team_dashboard_access %}
   {% can_open_performance_reviews request.user as can_open_performance_reviews_access %}
+  {% can_manage_kpi_setup request.user as can_manage_kpi_setup_access %}
 
   {% if request.user.is_authenticated %}
 
@@ -621,6 +622,10 @@
     {% url 'team_performance' as team_performance_url %}
     {% url 'employee_performance' request.user.pk as my_performance_url %}
     {% url 'kpi_review_list' as kpi_review_list_url %}
+    {% url 'kpi_dashboard' as kpi_dashboard_url %}
+    {% url 'kpi_intelligence' as kpi_intelligence_url %}
+    {% url 'kpi_assignment_management' as kpi_assignment_management_url %}
+    {% url 'kpi_policy_management' as kpi_policy_management_url %}
 
     {% url 'library_home' as library_home_url %}
     {% url 'products_list' as products_url %}
@@ -638,6 +643,24 @@
         {% elif leads_url %}
           <a href="{{ leads_url }}" class="crm-nav-item primary"><span>🏠</span><strong>CRM</strong></a>
         {% endif %}
+
+        <div class="crm-dropdown" id="kpiPerformanceDropdown">
+          <a href="{{ kpi_dashboard_url }}" class="crm-nav-item hot {% if current_url == 'kpi_dashboard' or current_url == 'kpi_dashboard_widget' or current_url == 'employee_performance' or current_url == 'kpi_review_list' or current_url == 'kpi_review_detail' or current_url == 'kpi_intelligence' or current_url == 'kpi_intelligence_widget' or current_url == 'kpi_assignment_management' or current_url == 'kpi_policy_management' %}active{% endif %}" id="kpiPerformanceBtn" aria-haspopup="true" aria-expanded="false">
+            <span>📊</span><strong>KPI &amp; Performance</strong>
+          </a>
+          <div class="crm-dropdown-menu" role="menu">
+            <div class="crm-dd-title">KPI &amp; Performance</div>
+            {% if my_performance_url %}<a class="crm-dd-item" href="{{ my_performance_url }}">My Performance</a>{% endif %}
+            {% if kpi_dashboard_url %}<a class="crm-dd-item" href="{{ kpi_dashboard_url }}">{% if can_manage_kpi_setup_access %}Executive Dashboard{% else %}KPI Dashboard{% endif %}</a>{% endif %}
+            {% if can_open_performance_reviews_access and kpi_review_list_url %}<a class="crm-dd-item" href="{{ kpi_review_list_url }}">Review Queue</a>{% endif %}
+            {% if kpi_intelligence_url %}<a class="crm-dd-item" href="{{ kpi_intelligence_url }}">Intelligence Center</a>{% endif %}
+            {% if kpi_intelligence_url %}<a class="crm-dd-item" href="{{ kpi_intelligence_url }}#bonus-readiness">Bonus Readiness</a>{% endif %}
+            {% if kpi_intelligence_url %}<a class="crm-dd-item" href="{{ kpi_intelligence_url }}#reports">KPI Reports</a>{% endif %}
+            {% if notification_list_url %}<a class="crm-dd-item" href="{{ notification_list_url }}">KPI Notifications</a>{% endif %}
+            {% if can_manage_kpi_setup_access and kpi_assignment_management_url %}<a class="crm-dd-item" href="{{ kpi_assignment_management_url }}">KPI Assignments</a>{% endif %}
+            {% if can_manage_kpi_setup_access and kpi_policy_management_url %}<a class="crm-dd-item" href="{{ kpi_policy_management_url }}">KPI Policies</a>{% endif %}
+          </div>
+        </div>
 
         {% if can_leads or can_opps or can_customers %}
           <div class="crm-dropdown" id="salesDropdown">

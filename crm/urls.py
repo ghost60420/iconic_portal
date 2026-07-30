@@ -22,6 +22,7 @@ from . import views_people as people
 from . import views_kpi_dashboard as kpi_dashboard
 from . import views_kpi_intelligence as kpi_intelligence
 from . import views_kpi_reviews as kpi_reviews
+from . import views_kpi_setup as kpi_setup
 from . import views_platform as platform
 
 try:
@@ -201,6 +202,16 @@ urlpatterns = [
         "performance/reviews/<int:pk>/lock/",
         kpi_reviews.kpi_review_lock,
         name="kpi_review_lock",
+    ),
+    path(
+        "kpi/setup/assignments/",
+        kpi_setup.kpi_assignment_management,
+        name="kpi_assignment_management",
+    ),
+    path(
+        "kpi/setup/policies/",
+        kpi_setup.kpi_policy_management,
+        name="kpi_policy_management",
     ),
     path("chatter/mentions/", people.mention_suggestions_view, name="mention_suggestions"),
     path("dashboard/preferences/", platform.dashboard_preferences, name="dashboard_preferences"),

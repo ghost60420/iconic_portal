@@ -1,0 +1,152 @@
+.kpi-setup-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.kpi-setup-summary > div {
+  min-height: 76px;
+  padding: 14px;
+  border: 1px solid #2c333d;
+  border-radius: 8px;
+  background: #0f1217;
+}
+
+.kpi-setup-summary span,
+.kpi-assignment-builder label > span {
+  display: block;
+  margin-bottom: 6px;
+  color: #a9b3c2;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.kpi-setup-summary strong {
+  color: #f4f6f8;
+  font-size: 24px;
+}
+
+.kpi-policy-action,
+.kpi-activate-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kpi-policy-action input,
+.kpi-activate-row input,
+.kpi-assignment-builder input,
+.kpi-assignment-builder select,
+.kpi-assignment-builder textarea {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  padding: 8px 10px;
+  color: #17202a;
+}
+
+.kpi-policy-action input {
+  min-width: 170px;
+}
+
+.kpi-assignment-basics {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) minmax(180px, 1fr);
+  gap: 12px;
+}
+
+.kpi-assignment-roles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.kpi-assignment-roles fieldset {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+}
+
+.kpi-assignment-roles legend {
+  padding: 0 6px;
+  font-weight: 800;
+}
+
+.kpi-assignment-roles label {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.kpi-assignment-roles .kpi-setup-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kpi-assignment-roles .kpi-setup-check input {
+  width: 18px;
+  min-height: 18px;
+}
+
+.kpi-assignment-roles .kpi-setup-check span {
+  margin: 0;
+}
+
+.kpi-preview-panel article {
+  padding: 12px 0;
+  border-top: 1px solid #e5e9ef;
+}
+
+.kpi-preview-panel article header,
+.kpi-preview-panel li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.kpi-preview-panel ul {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kpi-preview-panel li {
+  padding: 5px 0;
+}
+
+.kpi-activate-row {
+  justify-content: flex-end;
+  padding-top: 14px;
+}
+
+.kpi-activate-row input {
+  max-width: 420px;
+}
+
+@media (max-width: 900px) {
+  .kpi-setup-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .kpi-assignment-roles {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .kpi-assignment-basics,
+  .kpi-setup-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .kpi-policy-action,
+  .kpi-activate-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
