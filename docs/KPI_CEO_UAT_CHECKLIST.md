@@ -1,4 +1,4 @@
-# KPI CEO Development UAT Checklist
+# KPI CEO Staging UAT Checklist
 
 ## UAT Control
 
@@ -10,9 +10,41 @@
 - New features: prohibited during UAT unless a verified Critical defect cannot
   be resolved without one and the CEO explicitly approves the scope
 - Bug tracker: `docs/KPI_CEO_UAT_BUG_TRACKER.md`
+- Manual test order: `docs/KPI_CEO_UAT_TEST_ORDER.md`
 
 Use only staging test accounts and staging test data. Mark exactly one of Pass or
 Fail for every test. Record a bug ID in Notes for every failure.
+
+Automated test evidence is separate from CEO UAT. It must never change a manual
+status. Only the CEO may confirm `PASS` or `APPROVED`.
+
+## Manual UAT Status
+
+Allowed values: `NOT TESTED`, `PASS`, `FAIL`, `NEEDS CHANGE`,
+`RETEST REQUIRED`, `APPROVED`.
+
+| Test area | CEO UAT status | Notes / bug ID |
+| --- | --- | --- |
+| Dashboard | NOT TESTED | |
+| Employee Performance | NOT TESTED | |
+| KPI Assignment | NOT TESTED | |
+| KPI Review | NOT TESTED | |
+| Manager Approval | NOT TESTED | |
+| Director Approval | NOT TESTED | |
+| HR Review | NOT TESTED | |
+| Bonus Readiness | NOT TESTED | |
+| Executive Dashboard | NOT TESTED | |
+| Executive Intelligence | NOT TESTED | |
+| KPI Reports | NOT TESTED | |
+| PDF Export | NOT TESTED | |
+| Excel Export | NOT TESTED | |
+| CSV Export | NOT TESTED | |
+| Notifications | NOT TESTED | |
+| Mobile layout | NOT TESTED | |
+| Tablet layout | NOT TESTED | |
+| Desktop layout | NOT TESTED | |
+| Role permissions | NOT TESTED | |
+| Navigation | NOT TESTED | |
 
 ## Test Roles
 
