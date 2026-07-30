@@ -128,3 +128,15 @@ class KPIStagingSettingsTests(TestCase):
     )
     def test_uat_context_is_limited_to_kpi_pages(self):
         self.assertEqual(kpi_staging_uat(self._request("main_dashboard")), {})
+
+    @override_settings(
+        KPI_STAGING=True,
+        KPI_STAGING_UAT_MENU_ENABLED=True,
+        KPI_STAGING_UAT_REVIEW_ID=7,
+    )
+    def test_uat_context_includes_print_report_page(self):
+        payload = kpi_staging_uat(
+            self._request("kpi_intelligence_report")
+        )
+
+        self.assertTrue(payload["kpi_staging_uat"]["enabled"])

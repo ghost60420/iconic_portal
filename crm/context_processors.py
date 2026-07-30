@@ -21,6 +21,7 @@ KPI_STAGING_UAT_ROUTES = {
     "kpi_dashboard",
     "kpi_dashboard_widget",
     "kpi_intelligence",
+    "kpi_intelligence_report",
     "kpi_intelligence_widget",
     "kpi_policy_management",
     "kpi_review_detail",

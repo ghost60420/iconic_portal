@@ -1,14 +1,27 @@
+{% load static %}
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ report.title }}</title>
+  {% if kpi_staging_uat.enabled %}
+    <link rel="stylesheet" href="{% static 'crm/kpi_staging_uat.css' %}">
+  {% endif %}
   <style>
     body{font-family:Arial,sans-serif;color:#17191d;margin:28px;font-size:12px}header{border-bottom:4px solid #d6b45a;padding-bottom:14px;margin-bottom:18px}h1{margin:0 0 5px;font-size:24px}p{margin:4px 0;color:#555}dl{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:15px 0}dl div{border:1px solid #ddd;padding:9px}dt{font-size:9px;text-transform:uppercase;color:#666}dd{margin:4px 0 0;font-weight:bold}table{width:100%;border-collapse:collapse;margin:18px 0}th,td{border:1px solid #ccc;padding:7px;text-align:left;vertical-align:top}th{background:#d6b45a}.note{border-top:1px solid #bbb;padding-top:10px}.print-command{position:fixed;right:20px;top:20px;border:0;background:#111;color:#fff;padding:10px 14px;cursor:pointer}@media print{body{margin:0}.print-command{display:none}@page{size:landscape;margin:12mm}}
   </style>
 </head>
 <body>
+  {% if kpi_staging_uat.enabled %}
+    <section class="kpi-staging-uat" aria-label="Private KPI staging warning">
+      <div class="kpi-staging-uat__warning">NOT PRODUCTION</div>
+      <div class="kpi-staging-uat__header">
+        <div><span class="kpi-staging-uat__label">Environment</span><strong>{{ kpi_staging_uat.environment }}</strong></div>
+        <div><span class="kpi-staging-uat__label">Logged-in role</span><strong>{{ kpi_staging_uat.role_label }}</strong></div>
+      </div>
+    </section>
+  {% endif %}
   <button class="print-command" type="button" onclick="window.print()">Print</button>
   <header>
     <h1>{{ report.title }}</h1>
