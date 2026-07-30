@@ -160,7 +160,7 @@
 
   .exec-grid{
     display:grid;
-    grid-template-columns:repeat(12, minmax(0,1fr));
+    grid-template-columns:repeat(12, minmax(0,1fr)) !important;
     grid-template-areas:
       "monthly monthly monthly monthly monthly monthly monthly side side side side side"
       "quick quick quick quick quick quick quick quick quick quick quick quick"
@@ -469,7 +469,7 @@
     .exec-collection-card{ grid-template-columns:repeat(3,minmax(0,1fr)); }
     .exec-collection-total{ grid-column:1 / -1; }
     .exec-grid{
-      grid-template-columns:1fr;
+      grid-template-columns:1fr !important;
       grid-template-areas:
         "monthly"
         "side"
