@@ -5894,6 +5894,297 @@ class InvoicePayment(models.Model):
         return f"{self.invoice.invoice_number} payment {self.amount} {self.currency}"
 
 
+class ReceivableEvent(models.Model):
+    KIND_CASH_RECEIPT = "CASH_RECEIPT"
+    KIND_CREDIT_NOTE = "CREDIT_NOTE"
+    KIND_REFUND = "REFUND"
+    KIND_OPENING_RECEIPT = "OPENING_RECEIPT"
+    KIND_ADJUSTMENT = "ADJUSTMENT"
+    KIND_REVERSAL = "REVERSAL"
+    KIND_CHOICES = [
+        (KIND_CASH_RECEIPT, "Cash receipt"),
+        (KIND_CREDIT_NOTE, "Credit note"),
+        (KIND_REFUND, "Refund"),
+        (KIND_OPENING_RECEIPT, "Opening receipt"),
+        (KIND_ADJUSTMENT, "Adjustment"),
+        (KIND_REVERSAL, "Reversal"),
+    ]
+
+    STATE_DRAFT = "DRAFT"
+    STATE_POSTED = "POSTED"
+    STATE_REVERSED = "REVERSED"
+    STATE_CHOICES = [
+        (STATE_DRAFT, "Draft"),
+        (STATE_POSTED, "Posted"),
+        (STATE_REVERSED, "Reversed"),
+    ]
+
+    CURRENCY_CHOICES = [
+        ("CAD", "CAD"),
+        ("USD", "USD"),
+        ("BDT", "BDT"),
+    ]
+
+    customer = models.ForeignKey(
+        "Customer",
+        on_delete=models.PROTECT,
+        related_name="receivable_events",
+    )
+    legacy_invoice_payment = models.OneToOneField(
+        "InvoicePayment",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="receivable_event",
+    )
+    accounting_entry = models.OneToOneField(
+        "AccountingEntry",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="receivable_event",
+    )
+    reverses_event = models.OneToOneField(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="reversed_by_event",
+    )
+
+    kind = models.CharField(max_length=24, choices=KIND_CHOICES, db_index=True)
+    state = models.CharField(max_length=12, choices=STATE_CHOICES, default=STATE_DRAFT, db_index=True)
+    event_date = models.DateField(db_index=True)
+    effective_date = models.DateField(db_index=True)
+    posted_at = models.DateTimeField(null=True, blank=True, db_index=True)
+
+    native_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    currency = models.CharField(max_length=3, choices=CURRENCY_CHOICES)
+    rate_to_cad = models.DecimalField(max_digits=14, decimal_places=6, default=Decimal("0"))
+    rate_to_bdt = models.DecimalField(max_digits=14, decimal_places=6, default=Decimal("0"))
+    amount_cad = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+    amount_bdt = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+
+    external_reference = models.CharField(max_length=120, blank=True, default="", db_index=True)
+    idempotency_key = models.CharField(max_length=120, unique=True)
+    reason = models.TextField(blank=True, default="")
+    evidence_reference = models.CharField(max_length=255, blank=True, default="")
+    migration_batch = models.CharField(max_length=120, blank=True, default="", db_index=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="created_receivable_events",
+    )
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="approved_receivable_events",
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-effective_date", "-id"]
+        indexes = [
+            models.Index(fields=["state", "kind", "effective_date"], name="crm_recev_state_kind_idx"),
+            models.Index(fields=["customer", "currency", "state"], name="crm_recev_customer_idx"),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(native_amount=Decimal("0")),
+                name="crm_recev_native_nonzero",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(rate_to_cad__gte=0, rate_to_bdt__gte=0),
+                name="crm_recev_rates_nonnegative",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        self.currency = (self.currency or "").upper().strip()
+        amount = self.native_amount or Decimal("0")
+        if amount == 0:
+            raise ValidationError({"native_amount": "Receivable event amount cannot be zero."})
+        if self.kind != self.KIND_ADJUSTMENT and amount < 0:
+            raise ValidationError({"native_amount": "Only adjustment events may use a negative native amount."})
+        if self.reverses_event_id and self.reverses_event_id == self.pk:
+            raise ValidationError({"reverses_event": "A receivable event cannot reverse itself."})
+        if self.kind == self.KIND_REVERSAL and not self.reverses_event_id:
+            raise ValidationError({"reverses_event": "A reversal must reference the event it reverses."})
+        if self.kind != self.KIND_REVERSAL and self.reverses_event_id:
+            raise ValidationError({"reverses_event": "Only reversal events may reference another event."})
+        if self.state in {self.STATE_POSTED, self.STATE_REVERSED}:
+            if not self.posted_at:
+                raise ValidationError({"posted_at": "Posted receivable events require a posting timestamp."})
+            if not self.approved_at:
+                raise ValidationError({"approved_at": "Posted receivable events require approval metadata."})
+            if not self.approved_by_id:
+                raise ValidationError({"approved_by": "Posted receivable events require an approver."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        if self.pk:
+            previous = type(self).objects.filter(pk=self.pk).values(
+                "state",
+                "customer_id",
+                "legacy_invoice_payment_id",
+                "accounting_entry_id",
+                "reverses_event_id",
+                "kind",
+                "event_date",
+                "effective_date",
+                "native_amount",
+                "currency",
+                "rate_to_cad",
+                "rate_to_bdt",
+                "amount_cad",
+                "amount_bdt",
+                "external_reference",
+                "idempotency_key",
+                "reason",
+                "evidence_reference",
+                "migration_batch",
+            ).first()
+            if previous and previous["state"] in {self.STATE_POSTED, self.STATE_REVERSED}:
+                changed = [
+                    field
+                    for field, old_value in previous.items()
+                    if field != "state" and old_value != getattr(self, field)
+                ]
+                if changed or self.state != previous["state"]:
+                    raise ValidationError("Posted receivable events are immutable; create a reversal instead.")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.state != self.STATE_DRAFT:
+            raise ValidationError("Posted receivable events cannot be deleted; create a reversal instead.")
+        return super().delete(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.kind} {self.native_amount} {self.currency} ({self.state})"
+
+
+class ReceivableAllocation(models.Model):
+    STATE_DRAFT = "DRAFT"
+    STATE_POSTED = "POSTED"
+    STATE_REVERSED = "REVERSED"
+    STATE_CHOICES = [
+        (STATE_DRAFT, "Draft"),
+        (STATE_POSTED, "Posted"),
+        (STATE_REVERSED, "Reversed"),
+    ]
+
+    event = models.ForeignKey(
+        "ReceivableEvent",
+        on_delete=models.PROTECT,
+        related_name="allocations",
+    )
+    invoice = models.ForeignKey(
+        "Invoice",
+        on_delete=models.PROTECT,
+        related_name="receivable_allocations",
+    )
+    reverses_allocation = models.OneToOneField(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="reversed_by_allocation",
+    )
+    state = models.CharField(max_length=12, choices=STATE_CHOICES, default=STATE_DRAFT, db_index=True)
+    signed_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    currency = models.CharField(max_length=3, choices=ReceivableEvent.CURRENCY_CHOICES)
+    allocation_date = models.DateField(db_index=True)
+    posted_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    idempotency_key = models.CharField(max_length=120, unique=True)
+    reason = models.TextField(blank=True, default="")
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="created_receivable_allocations",
+    )
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="approved_receivable_allocations",
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-allocation_date", "-id"]
+        indexes = [
+            models.Index(fields=["invoice", "state", "allocation_date"], name="crm_reca_invoice_idx"),
+            models.Index(fields=["event", "state"], name="crm_reca_event_idx"),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(signed_amount=Decimal("0")),
+                name="crm_reca_amount_nonzero",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        self.currency = (self.currency or "").upper().strip()
+        if (self.signed_amount or Decimal("0")) == 0:
+            raise ValidationError({"signed_amount": "Receivable allocation amount cannot be zero."})
+        if self.reverses_allocation_id and self.reverses_allocation_id == self.pk:
+            raise ValidationError({"reverses_allocation": "A receivable allocation cannot reverse itself."})
+        if self.state in {self.STATE_POSTED, self.STATE_REVERSED}:
+            if not self.posted_at:
+                raise ValidationError({"posted_at": "Posted receivable allocations require a posting timestamp."})
+            if not self.approved_at:
+                raise ValidationError({"approved_at": "Posted receivable allocations require approval metadata."})
+            if not self.approved_by_id:
+                raise ValidationError({"approved_by": "Posted receivable allocations require an approver."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        if self.pk:
+            previous = type(self).objects.filter(pk=self.pk).values(
+                "state",
+                "event_id",
+                "invoice_id",
+                "reverses_allocation_id",
+                "signed_amount",
+                "currency",
+                "allocation_date",
+                "idempotency_key",
+                "reason",
+            ).first()
+            if previous and previous["state"] in {self.STATE_POSTED, self.STATE_REVERSED}:
+                changed = [
+                    field
+                    for field, old_value in previous.items()
+                    if field != "state" and old_value != getattr(self, field)
+                ]
+                if changed or self.state != previous["state"]:
+                    raise ValidationError("Posted receivable allocations are immutable; create a reversal instead.")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.state != self.STATE_DRAFT:
+            raise ValidationError("Posted receivable allocations cannot be deleted; create a reversal instead.")
+        return super().delete(*args, **kwargs)
+
+    def __str__(self):
+        return f"Invoice {self.invoice_id}: {self.signed_amount} {self.currency} ({self.state})"
+
+
 class SalesCommission(models.Model):
     """Invoice-backed salesperson commission; ownership resolves through the invoice Lead."""
 
